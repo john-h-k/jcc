@@ -2,6 +2,9 @@
 #include "alloc.h"
 #include "lex.h"
 #include "log.h"
+#include "util.h"
+#include "vector.h"
+
 #include <string.h>
 
 struct parser {
@@ -126,6 +129,7 @@ bool parse_compoundstmt(struct parser *parser, struct ast_compoundstmt *compound
   consume_token(parser->lexer, close_brace);
 
   compound_stmt->stmts = stmts;
+  compound_stmt->num_stmts = stmts_count;
 
   return true;
 }
@@ -253,6 +257,9 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
 struct parse_result parse(struct parser *parser) {
   struct lexer *lexer = parser->lexer;
 
+  struct vector *defs = vector_create(sizeof(struct ast_funcdef));
+  struct vector *decls = vector_create(sizeof(struct ast_funcdecl));
+
   while (true) {
     if (lexer_at_eof(lexer)) {
       info("EOF reached by lexer");
@@ -263,17 +270,32 @@ struct parse_result parse(struct parser *parser) {
     struct ast_funcdef func_def;
     if (parse_funcdecl(parser, &func_decl)) {
       info("found func declaration '%s'", associated_text(lexer, &func_decl.sig.name));
+      vector_push_back(decls, &func_decl);
     } else if (parse_funcdef(parser, &func_def)) {
       info("found func definition '%s'", associated_text(lexer, &func_def.sig.name));
+      vector_push_back(defs, &func_def);
     } else if (!lexer_at_eof(lexer)) {
       // parser failed
       err("parser finished at position %d", get_position(lexer).idx);
       break;
     }
   }
+
+  struct ast_translationunit translation_unit;
+  translation_unit.func_defs = nonnull_malloc(vector_byte_size(defs));
+  translation_unit.num_func_defs = vector_length(defs);
+  vector_copy_to(defs, translation_unit.func_defs);
+  vector_free(&defs);
+
+  translation_unit.func_decls = nonnull_malloc(vector_byte_size(decls));
+  translation_unit.num_func_decls = vector_length(decls);
+  vector_copy_to(decls, translation_unit.func_decls);
+  vector_free(&decls);
    
-  struct parse_result result = { 0 };
-  UNUSED_ARG(result);
+  struct parse_result result = {
+    .translation_unit = translation_unit
+  };
+
   return result;
 }
 

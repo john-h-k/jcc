@@ -62,6 +62,7 @@ struct ast_stmt {
 
 struct ast_compoundstmt {
   struct ast_stmt* stmts;
+  size_t num_stmts;
 };
 
 struct ast_funcdef {
@@ -75,7 +76,10 @@ struct ast_funcdecl {
 
 struct ast_translationunit {
   struct ast_funcdef* func_defs;
+  size_t num_func_defs;
+
   struct ast_funcdecl* func_decls;
+  size_t num_func_decls;
 };
 
 struct parser;
@@ -86,7 +90,7 @@ enum parser_create_result {
 };
 
 struct parse_result {
-  struct ast_translationunit* translation_unit;
+  struct ast_translationunit translation_unit;
 };
 
 enum parser_create_result create_parser(const char *program, struct parser **parser);
