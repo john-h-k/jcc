@@ -9,15 +9,28 @@ struct parser {
   struct lexer *lexer;
 };
 
-enum parser_create_result create_parser(struct lexer *lexer, struct parser **parser) {
+enum parser_create_result create_parser(const char *program, struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   create_arena_allocator(&p->arena);
-  p->lexer = lexer;
+  if (create_lexer(program, &p->lexer) != LEX_STATUS_SUCCESS) {
+    err("failed to create lexer");
+    return PARSER_CREATE_RESULT_FAILURE;
+  }
 
   *parser = p;
 
   return PARSER_CREATE_RESULT_SUCCESS;
+}
+
+void free_parser(struct parser **parser) {
+  free_lexer(&(*parser)->lexer);
+  
+  free_arena_allocator(&(*parser)->arena);
+  (*parser)->arena = NULL;
+  free(*parser);
+
+  *parser = NULL;
 }
 
 bool parse_expr(struct parser *parser, struct ast_expr *expr) {

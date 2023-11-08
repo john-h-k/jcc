@@ -28,8 +28,8 @@ void create_arena_allocator(struct arena_allocator **allocator) {
   *allocator = p;
 }
 
-void free_arena_allocator(struct arena_allocator *allocator) {
-  struct arena *arena = allocator->first;
+void free_arena_allocator(struct arena_allocator **allocator) {
+  struct arena *arena = (*allocator)->first;
 
   while (arena) {
     free(arena->block);
@@ -37,7 +37,8 @@ void free_arena_allocator(struct arena_allocator *allocator) {
     arena = arena->next;
   }
   
-  free(allocator);
+  free(*allocator);
+  *allocator = NULL;
 }
 
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);

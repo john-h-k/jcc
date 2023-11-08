@@ -1,9 +1,20 @@
+#include "compiler.h"
 #include "lex.h"
 #include "log.h"
+#include "macos/mach-o.h"
 #include "parse.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+enum parse_args_result {
+  PARSE_ARGS_RESULT_SUCCESS = 0,
+  PARSE_ARGS_RESULT_NO_SOURCES = 1
+};
+
+enum parse_args_result parse_args(int argc, char **argv,
+                                  struct compile_args *args,
+                                  const char ***sources, size_t *num_sources);
 
 char *readfile(const char *path) {
   FILE *f = fopen(path, "r");
@@ -24,78 +35,64 @@ char *readfile(const char *path) {
   return content;
 }
 
-struct compile_args {
-  int num_sources;
-  const char **sources;
-};
-
-enum parse_args_result { PARSE_ARGS_RESULT_SUCCESS = 0 };
-
-enum parse_args_result parse_args(int argc, char **argv,
-                                  struct compile_args *args) {
-  args->num_sources = argc - 1;
-  args->sources = nonnull_malloc(sizeof(*args->sources) * args->num_sources);
-
-  for (int i = 1; i < argc; i++) {
-    args->sources[i - 1] = argv[i];
-  }
-
-  return PARSE_ARGS_RESULT_SUCCESS;
-}
-
-enum compile_source_result {
-  COMPILE_SOURCE_RESULT_SUCCESS = 0,
-  COMPILE_SOURCE_RESULT_BAD_FILE
-};
-
-enum compile_source_result compile_source(struct compile_args *args,
-                                          int source_idx);
-
 int main(int argc, char **argv) {
   info("parsing command line args");
 
   struct compile_args args;
-  if (parse_args(argc, argv, &args) != PARSE_ARGS_RESULT_SUCCESS) {
+  const char **sources;
+  size_t num_sources;
+  if (parse_args(argc, argv, &args, &sources, &num_sources) !=
+      PARSE_ARGS_RESULT_SUCCESS) {
     fprintf(stderr, "%s\n", "parsing command line args failed");
     return -1;
   }
 
   info("beginning compilation stage...");
-  for (int i = 0; i < args.num_sources; i++) {
-    if (compile_source(&args, i) != COMPILE_SOURCE_RESULT_SUCCESS) {
+  for (size_t i = 0; i < num_sources; i++) {
+    info("compiling source file \"%s\"", sources[i]);
+
+    const char *source = readfile(sources[i]);
+
+    if (!source) {
+      err("source file \"%s\" could not be read!", sources[i]);
+      return COMPILE_RESULT_BAD_FILE;
+    }
+
+    struct compiler *compiler;
+    if (create_compiler(source, &args, &compiler) !=
+        COMPILER_CREATE_RESULT_SUCCESS) {
+      err("failed to create compiler");
+      return -1;
+    }
+
+    if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
+      err("compilation failed!");
+      return -1;
     }
   }
 
   info("finished compilation!");
 }
 
-enum compile_source_result compile_source(struct compile_args *args,
-                                          int source_idx) {
-  const char *source_path = args->sources[source_idx];
+enum parse_args_result parse_args(int argc, char **argv,
+                                  struct compile_args *args,
+                                  const char ***sources, size_t *num_sources) {
 
-  info("compiling source file \"%s\"", source_path);
+  // should always be true as argv[0] is program namr
+  invariant_assert(argc > 0, "argc must be >0");
 
-  const char *source = readfile(source_path);
+  *num_sources = (size_t)(argc - 1);
 
-  if (!source) {
-    err("source file \"%s\" could not be read!", source_path);
-    return COMPILE_SOURCE_RESULT_BAD_FILE;
+  if (num_sources == 0) {
+    return PARSE_ARGS_RESULT_NO_SOURCES;
   }
   
-  struct lexer *lexer;
-  if (create_lexer(source, &lexer) != LEX_STATUS_SUCCESS) {
-    fprintf(stderr, "%s\n", "lexing failed");
-    exit(-1);
+  *sources = nonnull_malloc(sizeof(*sources) * *num_sources);
+
+  for (size_t i = 0; i < *num_sources; i++) {
+    (*sources)[i] = argv[i + 1];
   }
 
-  struct parser *parser;
-  if (create_parser(lexer, &parser) != PARSER_CREATE_RESULT_SUCCESS) {
-    fprintf(stderr, "%s\n", "lexing failed");
-    exit(-1);
-  }
-
-  struct parse_result result = parse(parser);
-  (void)result;
-
-  return COMPILE_SOURCE_RESULT_SUCCESS;
+  UNUSED_ARG(args);
+  return PARSE_ARGS_RESULT_SUCCESS;
 }

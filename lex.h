@@ -62,6 +62,7 @@ struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
 enum lex_status create_lexer(const char *program, struct lexer **lexer);
+void free_lexer(struct lexer **lexer);
 
 enum peek_token_result {
   PEEK_TOKEN_RESULT_SUCCESS,

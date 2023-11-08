@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdnoreturn.h>
 
 #define ROUND_UP(value, pow2) ((value) + ((pow2) - 1)) & ~((pow2) - 1)
 #define UNUSED_ARG(arg) (void)(arg);
