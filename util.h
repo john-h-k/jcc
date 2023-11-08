@@ -30,6 +30,17 @@ static inline void invariant_assert(bool b, const char *msg) {
   }
 }
 
+#if NDEBUG
+static inline void debug_assert(bool, const char *) {}
+#else
+static inline void debug_assert(bool b, const char *msg) {
+  if (!b) {
+    fprintf(stderr, "debug_assertion failed, program exiting: %s\n", msg);
+    exit(-1);
+  }
+}
+#endif
+
 static inline void *nonnull_malloc(size_t size) {
   void *ptr = malloc(size);
 

@@ -1,9 +1,11 @@
 #include "compiler.h"
 #include "lex.h"
+#include "vector.h"
 #include "log.h"
 #include "macos/mach-o.h"
 #include "parse.h"
 #include "util.h"
+#include "link.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,6 +49,8 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
+
   info("beginning compilation stage...");
   for (size_t i = 0; i < num_sources; i++) {
     info("compiling source file \"%s\"", sources[i]);
@@ -58,8 +62,14 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
+    char* output = nonnull_malloc(strlen(sources[i]) + strlen(".obj"));
+    strcpy(output, sources[i]);
+    strcat(output, ".obj");
+
+    objects[i] = output;
+
     struct compiler *compiler;
-    if (create_compiler(source, &args, &compiler) !=
+    if (create_compiler(source, output, &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;
@@ -69,6 +79,21 @@ int main(int argc, char **argv) {
       err("compilation failed!");
       return -1;
     }
+  }
+
+  struct link_args link_args = {
+    .objects = (const char **)objects,
+    .num_objects = num_sources,
+    .output = "a.out"
+  };
+
+  if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
+    err("link failed");
+    exit(-1);
+  }
+
+  for (size_t i = 0; i < num_sources; i++) {
+    free(objects[i]);
   }
 
   info("finished compilation!");
@@ -93,6 +118,6 @@ enum parse_args_result parse_args(int argc, char **argv,
     (*sources)[i] = argv[i + 1];
   }
 
-  UNUSED_ARG(args);
+  args->target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
   return PARSE_ARGS_RESULT_SUCCESS;
 }
