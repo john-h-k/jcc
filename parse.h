@@ -81,16 +81,16 @@ struct ast_translationunit {
 struct parser;
 
 enum parser_create_result {
-  PARSER_CREATE_RESULT_SUCCESS
+  PARSER_CREATE_RESULT_SUCCESS,
+  PARSER_CREATE_RESULT_FAILURE
 };
-
-enum parser_create_result create_parser(struct lexer *lexer, struct parser **parser);
 
 struct parse_result {
   struct ast_translationunit* translation_unit;
 };
 
+enum parser_create_result create_parser(const char *program, struct parser **parser);
 struct parse_result parse(struct parser *parser);
-
+void free_parser(struct parser** parser);
 
 #endif

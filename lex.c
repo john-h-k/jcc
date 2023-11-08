@@ -35,6 +35,14 @@ enum lex_status create_lexer(const char *program, struct lexer **lexer) {
   return LEX_STATUS_SUCCESS;
 }
 
+void free_lexer(struct lexer **lexer) {
+  free_arena_allocator(&(*lexer)->arena);
+  (*lexer)->arena = NULL;
+  free(*lexer);
+
+  *lexer = NULL;
+}
+
 bool valid_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
 }
