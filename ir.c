@@ -73,12 +73,29 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ast_cnst *cnst) {
   return op;
 }
 
+struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ast_rvalue *rvalue) {
+  switch (rvalue->ty) {
+  case AST_RVALUE_TY_CNST:
+    return build_ir_for_cnst(irb, &rvalue->cnst);
+  case AST_RVALUE_TY_BINARY_OP:
+    return build_ir_for_binary_op(irb, &rvalue->binary_op);
+  }
+}
+
+struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ast_lvalue *lvalue) {
+  // switch (lvalue->ty) {
+  // }
+  UNUSED_ARG(irb);
+  UNUSED_ARG(lvalue);
+  todo("build_ir_for_lvalue");
+}
+
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr) {
   switch (expr->ty) {
-  case AST_EXPR_TY_CNST:
-    return build_ir_for_cnst(irb, &expr->cnst);
-  case AST_EXPR_TY_BINARY_OP:
-    return build_ir_for_binary_op(irb, &expr->binary_op);
+  case AST_EXPR_TY_RVALUE:
+    return build_ir_for_rvalue(irb, &expr->rvalue);
+  case AST_EXPR_TY_LVALUE:
+    return build_ir_for_lvalue(irb, &expr->lvalue);
   }
 }
 

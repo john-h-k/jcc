@@ -36,10 +36,6 @@ void free_parser(struct parser **parser) {
   *parser = NULL;
 }
 
-enum ast_atom_ty {
-  AST_ATOM_TY_CNST,
-};
-
 enum ast_associativity {
   AST_ASSOCIATIVITY_NONE,
   AST_ASSOCIATIVITY_LEFT,
@@ -109,8 +105,8 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
 
     cnst.value = atoi(associated_text(parser->lexer, &token));
     
-    expr->ty = AST_EXPR_TY_CNST;
-    expr->cnst = cnst;
+    expr->rvalue.ty = AST_RVALUE_TY_CNST;
+    expr->rvalue.cnst = cnst;
 
     consume_token(parser->lexer, token);
     return true;
@@ -154,8 +150,8 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     // so we need to in-place modify `expr`
     struct ast_expr lhs = *expr;
     
-    expr->ty = AST_EXPR_TY_BINARY_OP;
-    struct ast_binary_op *binary_op = &expr->binary_op;
+    expr->ty = AST_EXPR_TY_RVALUE;
+    struct ast_binary_op *binary_op = &expr->rvalue.binary_op;
     binary_op->ty = info.ty;
 
     binary_op->lhs = alloc(parser->arena, sizeof(*binary_op->lhs));
@@ -163,9 +159,6 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
 
     binary_op->rhs = alloc(parser->arena, sizeof(*binary_op->rhs));
     *binary_op->rhs = rhs;
-
-    err("%d", binary_op->lhs->ty);
-    err("%d", binary_op->rhs->ty);
   }
 }
 

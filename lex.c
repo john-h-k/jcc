@@ -223,6 +223,7 @@ const char *token_name(struct lexer *lexer, struct token *token) {
   switch (token->ty) {
   CASE_RET(LEX_TOKEN_TYPE_WHITESPACE)
 
+  CASE_RET(LEX_TOKEN_TYPE_OP_ASSG)
   CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
   CASE_RET(LEX_TOKEN_TYPE_OP_SUB)
   CASE_RET(LEX_TOKEN_TYPE_OP_MUL)
