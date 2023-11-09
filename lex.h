@@ -19,6 +19,8 @@ enum lex_token_type {
 
   /* Operators */
 
+  LEX_TOKEN_TYPE_OP_ASSG,  // +
+
   LEX_TOKEN_TYPE_OP_ADD,  // +
   LEX_TOKEN_TYPE_OP_SUB,  // -
   LEX_TOKEN_TYPE_OP_MUL,  // *

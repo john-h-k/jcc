@@ -54,17 +54,45 @@ struct ast_binary_op {
   struct ast_expr* rhs;
 };
 
+struct ast_lvalue {
+  void* PLACEHOLDER;
+};
+
+enum ast_rvalue_ty {
+  AST_RVALUE_TY_CNST,
+  AST_RVALUE_TY_BINARY_OP,
+};
+
+struct ast_rvalue {
+  enum ast_rvalue_ty ty;
+
+  union {
+    struct ast_cnst cnst;
+    struct ast_binary_op binary_op;
+  };
+};
+
+struct ast_assg {
+  struct ast_lvalue lvalue;
+  struct ast_expr* expr;
+};
+
 enum ast_expr_ty {
-  AST_EXPR_TY_CNST,
-  AST_EXPR_TY_BINARY_OP,
+  AST_EXPR_TY_LVALUE,
+  AST_EXPR_TY_RVALUE
 };
 
 struct ast_expr {
   enum ast_expr_ty ty;
   union {
-    struct ast_cnst cnst;
-    struct ast_binary_op binary_op;
+    struct ast_lvalue lvalue;
+    struct ast_rvalue rvalue;
   };
+};
+
+struct ast_decl {
+  struct ast_tyref ty;
+  struct token identifier;
 };
 
 enum ast_stmt_ty {

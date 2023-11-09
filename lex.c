@@ -142,6 +142,10 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
     break;
 
+  case '=':
+    ty = LEX_TOKEN_TYPE_OP_ASSG;
+    next_col(&end);
+    break;
   case '+':
     ty = LEX_TOKEN_TYPE_OP_ADD;
     next_col(&end);
