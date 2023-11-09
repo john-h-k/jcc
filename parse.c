@@ -36,7 +36,69 @@ void free_parser(struct parser **parser) {
   *parser = NULL;
 }
 
-bool parse_expr(struct parser *parser, struct ast_expr *expr) {
+enum ast_atom_ty {
+  AST_ATOM_TY_CNST,
+};
+
+enum ast_associativity {
+  AST_ASSOCIATIVITY_NONE,
+  AST_ASSOCIATIVITY_LEFT,
+  AST_ASSOCIATIVITY_RIGHT,
+};
+
+struct ast_op_info {
+  enum ast_binary_op_ty ty;
+  enum ast_associativity associativity;
+  unsigned precedence;
+};
+
+struct ast_op_info op_info(enum ast_binary_op_ty ty) {
+  struct ast_op_info info = { .ty = ty };
+
+  switch (ty) {
+  case AST_BINARY_OP_TY_ADD:
+  case AST_BINARY_OP_TY_SUB:
+    info.precedence = 1;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_MUL:
+  case AST_BINARY_OP_TY_DIV:
+  case AST_BINARY_OP_TY_QUOT:
+    info.precedence = 2;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  default:
+    unreachable("invalid `ast_binary_op_ty`");
+  }
+
+  return info;
+}
+
+bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
+  switch (token->ty) {
+  case LEX_TOKEN_TYPE_OP_ADD:
+    *info = op_info(AST_BINARY_OP_TY_ADD);
+    return true;
+  case LEX_TOKEN_TYPE_OP_SUB:
+    *info = op_info(AST_BINARY_OP_TY_SUB);
+    return true;
+  case LEX_TOKEN_TYPE_OP_MUL:
+    *info = op_info(AST_BINARY_OP_TY_MUL);
+    return true;
+  case LEX_TOKEN_TYPE_OP_DIV:
+    *info = op_info(AST_BINARY_OP_TY_DIV);
+    return true;
+  case LEX_TOKEN_TYPE_OP_QUOT:
+    *info = op_info(AST_BINARY_OP_TY_QUOT);
+    return true;
+  default:
+    // not an op
+    return false;
+  }
+}
+
+// parses an expression that does _not_ involve binary operators
+bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -46,7 +108,7 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
     struct ast_cnst cnst;
 
     cnst.value = atoi(associated_text(parser->lexer, &token));
-
+    
     expr->ty = AST_EXPR_TY_CNST;
     expr->cnst = cnst;
 
@@ -56,6 +118,59 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 
   backtrack(parser->lexer, pos);
   return false;
+}
+
+bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence, struct ast_expr* expr) {
+  if (!parse_atom(parser, expr)) {
+    return false;
+  }
+  
+  // TODO: make iterative
+  while (true) {
+    struct token lookahead;
+    peek_token(parser->lexer, &lookahead);
+    struct ast_op_info info;
+    err("lookahead ty %d", lookahead.ty);
+
+    if (!op_info_for_token(&lookahead, &info) || info.precedence <= min_precedence) {
+      err("Exiting");
+      return true;
+    }
+
+    consume_token(parser->lexer, lookahead);
+
+    debug_assert(info.associativity != AST_ASSOCIATIVITY_NONE, "only operators with associativity should reach here!");
+    unsigned next_min_precedence;
+    if (info.associativity == AST_ASSOCIATIVITY_LEFT) {
+      next_min_precedence = min_precedence + 1;
+    } else {
+      next_min_precedence = min_precedence;
+    }
+
+    struct ast_expr rhs;
+    parse_expr_precedence_aware(parser, next_min_precedence, &rhs);
+
+    // slightly odd design where `expr` now contains lhs and `rhs` contains `rhs`
+    // so we need to in-place modify `expr`
+    struct ast_expr lhs = *expr;
+    
+    expr->ty = AST_EXPR_TY_BINARY_OP;
+    struct ast_binary_op *binary_op = &expr->binary_op;
+    binary_op->ty = info.ty;
+
+    binary_op->lhs = alloc(parser->arena, sizeof(*binary_op->lhs));
+    *binary_op->lhs = lhs;
+
+    binary_op->rhs = alloc(parser->arena, sizeof(*binary_op->rhs));
+    *binary_op->rhs = rhs;
+
+    err("%d", binary_op->lhs->ty);
+    err("%d", binary_op->rhs->ty);
+  }
+}
+
+bool parse_expr(struct parser *parser, struct ast_expr *expr) {
+  return parse_expr_precedence_aware(parser, 0, expr);
 }
 
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {

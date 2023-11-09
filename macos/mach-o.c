@@ -14,7 +14,6 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
 
     switch (args->target_arch) {
     case COMPILE_TARGET_ARCH_MACOS_ARM64:
-      err("hi");
       header.cputype = CPU_TYPE_ARM64;
       header.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
       break;
@@ -70,8 +69,6 @@ void write_segment_command(FILE *file, const struct macho_args* args) {
     section.reserved2 = 0;
     section.reserved3 = 0;
 
-    err("sec size %d", section.size);
-
     struct symtab_command symtab;
     memset(&symtab, 0, sizeof(symtab));
     symtab.cmd = LC_SYMTAB;
@@ -101,12 +98,8 @@ void write_segment_command(FILE *file, const struct macho_args* args) {
     fwrite(&symtab, sizeof(symtab), 1, file);
     fwrite(&version, sizeof(version), 1, file);
 
-    // size_t pos = ftell(file);
-    // err("pos is %zu and expected is %zu", pos, section.offset);
-    // fseek(file, section.offset, SEEK_SET);
     fwrite(args->data, 1, args->len_data, file);
 
-    // err("pos is %zu and expected is %zu", ftell(file), symtab.symoff);
     fseek(file, symtab.symoff, SEEK_SET);
     for (size_t i = 0; i < args->num_symbols; i++) {
         struct symbol *symbol = &args->symbols[i];
@@ -124,10 +117,8 @@ void write_segment_command(FILE *file, const struct macho_args* args) {
     char null = 0;
     fwrite(&null, sizeof(null), 1, file);
 
-    // err("pos is %zu and expected is %zu", ftell(file), symtab.stroff);
     for (size_t i = 0; i < args->num_symbols; i++) {
         struct symbol *symbol = &args->symbols[i];
-        err("writing symbol %s", symbol->name);
         fwrite(symbol->name, strlen(symbol->name) + 1, 1, file);
     }    
 }

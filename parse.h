@@ -38,14 +38,32 @@ struct ast_cnst {
   int value;
 };
 
+struct ast_expr;
+
+enum ast_binary_op_ty {
+  AST_BINARY_OP_TY_ADD,
+  AST_BINARY_OP_TY_SUB,
+  AST_BINARY_OP_TY_MUL,
+  AST_BINARY_OP_TY_DIV,
+  AST_BINARY_OP_TY_QUOT
+};
+
+struct ast_binary_op {
+  enum ast_binary_op_ty ty;
+  struct ast_expr* lhs;
+  struct ast_expr* rhs;
+};
+
 enum ast_expr_ty {
   AST_EXPR_TY_CNST,
+  AST_EXPR_TY_BINARY_OP,
 };
 
 struct ast_expr {
   enum ast_expr_ty ty;
   union {
     struct ast_cnst cnst;
+    struct ast_binary_op binary_op;
   };
 };
 

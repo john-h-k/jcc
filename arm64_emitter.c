@@ -100,12 +100,53 @@ void free_arm64_emitter(struct arm64_emitter **emitter) {
     | ((shift) << 22) \
     | ((N) << 21) \
     | ((Rm) << 16) \
+    | ((imm6) << 10) \
+    | ((Rn) << 5) \
+    | (Rd) \
+  )
+
+#define ADD_SUB_SHIFTED_REG(sf, op, S, shift, Rm, imm6, Rn, Rd) (uint32_t)( \
+  ((sf) << 31) \
+    | ((op) << 30) \
+    | ((S) << 29) \
+    | ((0b01011) << 24) \
+    | ((shift) << 22) \
     | ((Rm) << 16) \
     | ((imm6) << 10) \
     | ((Rn) << 5) \
     | (Rd) \
   )
 
+#define ADD_32_REG(shift, imm6, Rm, Rn, Rd) ADD_SUB_SHIFTED_REG(0, 0, 0, shift, Rm, imm6, Rn, Rd)
+#define SUB_32_REG(shift, imm6, Rm, Rn, Rd) ADD_SUB_SHIFTED_REG(0, 1, 0, shift, Rm, imm6, Rn, Rd)
+
+#define REG_2_SOURCE(sf, S, opcode, Rm, Rn, Rd) (uint32_t)( \
+  ((sf) << 31) \
+    | ((S) << 29) \
+    | (0b11010110 << 21) \
+    | ((Rm) << 16) \
+    | ((opcode) << 10) \
+    | ((Rn) << 5) \
+    | (Rd) \
+  )
+
+#define REG_3_SOURCE(sf, op54, op31, Rm, o0, Ra, Rn, Rd) (uint32_t)( \
+  ((sf) << 31) \
+    | ((op54) << 29) \
+    | (0b11011 << 24) \
+    | ((op31) << 21) \
+    | ((Rm) << 16) \
+    | ((o0) << 15) \
+    | ((Ra) << 10) \
+    | ((Rn) << 5) \
+    | (Rd) \
+  )
+
+#define MADD_32(Rm, Ra, Rn, Rd) REG_3_SOURCE(0b0, 0b00, 0b000, Rm, 0b0, Ra, Rn, Rd)
+#define MSUB_32(Rm, Ra, Rn, Rd) REG_3_SOURCE(0b0, 0b00, 0b000, Rm, 0b1, Ra, Rn, Rd)
+
+#define UDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000010, Rm, Rn, Rd)
+#define SDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000011, Rm, Rn, Rd)
 
 #define SHIFT_LSL (0b00)
 #define SHIFT_LSR (0b01)
@@ -149,6 +190,26 @@ void arm64_emit(struct arm64_emitter *emitter, uint32_t instr) {
   }
   
   emitter->block[emitter->head++] = instr;
+}
+
+void arm64_emit_add_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  arm64_emit(emitter, ADD_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
+}
+
+void arm64_emit_sub_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  arm64_emit(emitter, SUB_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
+}
+
+void arm64_emit_mul_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  arm64_emit(emitter, MADD_32(reg_rhs, ZERO_REG_IDX, reg_lhs, reg_to));
+}
+
+void arm64_emit_sdiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  arm64_emit(emitter, SDIV_32(reg_rhs, reg_lhs, reg_to));
+}
+
+void arm64_emit_udiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  arm64_emit(emitter, UDIV_32(reg_rhs, reg_lhs, reg_to));
 }
 
 void arm64_emit_mov_32(struct arm64_emitter *emitter, size_t reg_from, size_t reg_to) {
