@@ -105,6 +105,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
 
     cnst.value = atoi(associated_text(parser->lexer, &token));
     
+    expr->ty = AST_EXPR_TY_RVALUE;
     expr->rvalue.ty = AST_RVALUE_TY_CNST;
     expr->rvalue.cnst = cnst;
 
@@ -151,6 +152,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     struct ast_expr lhs = *expr;
     
     expr->ty = AST_EXPR_TY_RVALUE;
+    expr->rvalue.ty = AST_RVALUE_TY_BINARY_OP;
     struct ast_binary_op *binary_op = &expr->rvalue.binary_op;
     binary_op->ty = info.ty;
 
