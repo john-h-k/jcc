@@ -17,6 +17,14 @@ enum lex_token_type {
 
   LEX_TOKEN_TYPE_SEMICOLON,
 
+  /* Operators */
+
+  LEX_TOKEN_TYPE_OP_ADD,  // +
+  LEX_TOKEN_TYPE_OP_SUB,  // -
+  LEX_TOKEN_TYPE_OP_MUL,  // *
+  LEX_TOKEN_TYPE_OP_DIV,  // /
+  LEX_TOKEN_TYPE_OP_QUOT, // %
+
   /* Keywords */
 
   LEX_TOKEN_TYPE_KW_INT,

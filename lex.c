@@ -142,6 +142,27 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
     break;
 
+  case '+':
+    ty = LEX_TOKEN_TYPE_OP_ADD;
+    next_col(&end);
+    break;
+  case '-':
+    ty = LEX_TOKEN_TYPE_OP_SUB;
+    next_col(&end);
+    break;
+  case '*':
+    ty = LEX_TOKEN_TYPE_OP_MUL;
+    next_col(&end);
+    break;
+  case '/':
+    ty = LEX_TOKEN_TYPE_OP_DIV;
+    next_col(&end);
+    break;
+  case '%':
+    ty = LEX_TOKEN_TYPE_OP_QUOT;
+    next_col(&end);
+    break;
+
   default: {
     if (isdigit(c)) {
       ty = LEX_TOKEN_TYPE_INT_LITERAL;
@@ -190,49 +211,30 @@ const char *associated_text(struct lexer *lexer, struct token *token) {
   }
 }
 
+#define CASE_RET(name) case name: return #name;
+
 const char *token_name(struct lexer *lexer, struct token *token) {
   UNUSED_ARG(lexer);
 
-  const char *name;
-
   switch (token->ty) {
-  case LEX_TOKEN_TYPE_WHITESPACE:
-    name = "LEX_TOKEN_TYPE_WHITESPACE";
-    break;
-  case LEX_TOKEN_TYPE_INLINE_COMMENT:
-    name = "LEX_TOKEN_TYPE_INLINE_COMMENT";
-    break;
-  case LEX_TOKEN_TYPE_MULTILINE_COMMENT:
-    name = "LEX_TOKEN_TYPE_MULTILINE_COMMENT";
-    break;
-  case LEX_TOKEN_TYPE_OPEN_BRACKET:
-    name = "LEX_TOKEN_TYPE_OPEN_BRACKET";
-    break;
-  case LEX_TOKEN_TYPE_CLOSE_BRACKET:
-    name = "LEX_TOKEN_TYPE_CLOSE_BRACKET";
-    break;
-  case LEX_TOKEN_TYPE_OPEN_BRACE:
-    name = "LEX_TOKEN_TYPE_OPEN_BRACE";
-    break;
-  case LEX_TOKEN_TYPE_CLOSE_BRACE:
-    name = "LEX_TOKEN_TYPE_CLOSE_BRACE";
-    break;
-  case LEX_TOKEN_TYPE_SEMICOLON:
-    name = "LEX_TOKEN_TYPE_SEMICOLON";
-    break;
-  case LEX_TOKEN_TYPE_KW_INT:
-    name = "LEX_TOKEN_TYPE_KW_INT";
-    break;
-  case LEX_TOKEN_TYPE_KW_RETURN:
-    name = "LEX_TOKEN_TYPE_KW_RETURN";
-    break;
-  case LEX_TOKEN_TYPE_IDENTIFIER:
-    name = "LEX_TOKEN_TYPE_IDENTIFIER";
-    break;
-  case LEX_TOKEN_TYPE_INT_LITERAL:
-    name = "LEX_TOKEN_TYPE_INT_LITERAL";
-    break;
-  }
+  CASE_RET(LEX_TOKEN_TYPE_WHITESPACE)
 
-  return name;
+  CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
+  CASE_RET(LEX_TOKEN_TYPE_OP_SUB)
+  CASE_RET(LEX_TOKEN_TYPE_OP_MUL)
+  CASE_RET(LEX_TOKEN_TYPE_OP_DIV)
+  CASE_RET(LEX_TOKEN_TYPE_OP_QUOT)
+
+  CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
+  CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
+  CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
+  CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
+  CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)
+  CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACE)
+  CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
+  CASE_RET(LEX_TOKEN_TYPE_KW_INT)
+  CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
+  CASE_RET(LEX_TOKEN_TYPE_IDENTIFIER)
+  CASE_RET(LEX_TOKEN_TYPE_INT_LITERAL)
+  }
 }

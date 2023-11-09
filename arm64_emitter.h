@@ -34,6 +34,12 @@ void free_arm64_emitter(struct arm64_emitter **emitter);
 size_t arm64_emit_bytesize(struct arm64_emitter *emitter);
 void arm64_emit_copy_to(struct arm64_emitter *emitter, void* dest);
 
+void arm64_emit_sub_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to);
+void arm64_emit_add_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to);
+void arm64_emit_mul_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to);
+void arm64_emit_sdiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to);
+void arm64_emit_udiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to);
+
 void arm64_emit_load_cnst_32(struct arm64_emitter *emitter, size_t reg_idx, uint32_t cnst);
 void arm64_emit_load_cnst_64(struct arm64_emitter *emitter, size_t reg_idx, uint64_t cnst);
 void arm64_emit_mov_32(struct arm64_emitter *emitter, size_t reg_from, size_t reg_to);
