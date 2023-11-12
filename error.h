@@ -1,5 +1,5 @@
-#ifndef __ERROR_H__
-#define __ERROR_H__
+#ifndef ERROR_H
+#define ERROR_H
 
 #include "lex.h"
 

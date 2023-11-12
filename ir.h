@@ -1,5 +1,5 @@
-#ifndef __IR_H__
-#define __IR_H__
+#ifndef IR_H
+#define IR_H
 
 #include <stdlib.h>
 #include "parse.h"

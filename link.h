@@ -1,5 +1,5 @@
-#ifndef __LINKER_H__
-#define __LINKER_H__
+#ifndef LINKER_H
+#define LINKER_H
 
 #include <stdlib.h>
 #include "alloc.h"
