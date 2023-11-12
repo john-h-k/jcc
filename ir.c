@@ -6,6 +6,8 @@
 struct ir_builder {
   struct arena_allocator *arena;
 
+  
+
   struct ir_op *first;
   struct ir_op *last;
 
@@ -31,7 +33,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb) {
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr);
 
 struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
-                                     struct ast_binary_op *binary_op) {
+                                     struct ast_binaryop *binary_op) {
   struct ir_op *lhs = build_ir_for_expr(irb, binary_op->lhs);
   struct ir_op *rhs = build_ir_for_expr(irb, binary_op->rhs);
 
@@ -79,15 +81,17 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ast_rvalue *rva
     return build_ir_for_cnst(irb, &rvalue->cnst);
   case AST_RVALUE_TY_BINARY_OP:
     return build_ir_for_binary_op(irb, &rvalue->binary_op);
+  default:
+    todo("build ir for <thing>");
   }
 }
 
 struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ast_lvalue *lvalue) {
-  // switch (lvalue->ty) {
-  // }
-  UNUSED_ARG(irb);
-  UNUSED_ARG(lvalue);
-  todo("build_ir_for_lvalue");
+  switch (lvalue->ty) {
+    case AST_LVALUE_TY_VAR:
+      
+      break;
+  }
 }
 
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr) {
@@ -99,15 +103,45 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr) {
   }
 }
 
-struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt) {
-  switch (stmt->ty) {
-  case AST_STMT_TY_RET: {
-    struct ir_op *expr_op = build_ir_for_expr(irb, &stmt->ret);
+struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt);
+
+struct ir_op *build_ir_for_compoundstmt(struct ir_builder *irb, struct ast_compoundstmt *compound_stmt) {
+  struct ir_op *last;
+  for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
+    last = build_ir_for_stmt(irb, &compound_stmt->stmts[i]);
+  }
+
+  return last ? last : irb->last;
+}
+
+struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb, struct ast_jumpstmt *jump_stmt) {
+  switch (jump_stmt->ty) {
+  case AST_JUMPSTMT_TY_RETURN: {
+    struct ir_op *expr_op = build_ir_for_expr(irb, &jump_stmt->ret_expr);
 
     struct ir_op *op = alloc_ir_op(irb);
     op->ty = IR_OP_TY_RET;
     op->ret.value = expr_op;
     return op;
+  }
+  }
+}
+
+struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt) {
+  switch (stmt->ty) {
+  case AST_STMT_TY_VAR_DECL_LIST: {
+    // no IR for decl lists, IR gets built on use
+    // TODO: this won't properly propogate side effects
+    return irb->last;
+  }
+  case AST_STMT_TY_EXPR: {
+    return build_ir_for_expr(irb, &stmt->expr);
+  }
+  case AST_STMT_TY_COMPOUND: {
+    return build_ir_for_compoundstmt(irb, &stmt->compound);
+  }
+  case AST_STMT_TY_JUMP: {
+    return build_ir_for_jumpstmt(irb, &stmt->jump);
   }
   }
 }
