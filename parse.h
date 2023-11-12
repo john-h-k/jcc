@@ -1,5 +1,5 @@
-#ifndef __PARSE_H__
-#define __PARSE_H__
+#ifndef PARSE_H
+#define PARSE_H
 
 #include "util.h"
 #include "alloc.h"

@@ -1,5 +1,5 @@
-#ifndef __ARM64_LOWER_H__
-#define __ARM64_LOWER_H__
+#ifndef ARM64_LOWER_H
+#define ARM64_LOWER_H
 
 #include "ir.h"
 #include "arm64_emitter.h"

@@ -1,5 +1,5 @@
-#ifndef __COMPILER_H__
-#define __COMPILER_H__
+#ifndef COMPILER_H
+#define COMPILER_H
 
 struct compiler;
 

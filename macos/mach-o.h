@@ -1,5 +1,5 @@
-#ifndef __MACOS_MACH_O_H__
-#define __MACOS_MACH_O_H__
+#ifndef MACOS_MACH_O_H
+#define MACOS_MACH_O_H
 
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
