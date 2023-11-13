@@ -11,6 +11,8 @@
 struct parser {
   struct arena_allocator *arena;
   struct lexer *lexer;
+
+  int cur_scope;
 };
 
 enum parser_create_result create_parser(const char *program,
@@ -22,6 +24,8 @@ enum parser_create_result create_parser(const char *program,
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }
+
+  p->cur_scope = SCOPE_GLOBAL;
 
   *parser = p;
 
@@ -107,6 +111,8 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   }
   
   var->identifier = token;
+  var->scope = parser->cur_scope;
+
   consume_token(parser->lexer, token);
 
   return true;
@@ -428,6 +434,10 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   return false;
 }
 
+// Not the most elegant, but this helps prevent mismatched scope calls
+#define PARSER_NEW_SCOPE() int _you_forgot_to_call_parser_end_scope; parser->cur_scope++;
+#define PARSER_END_SCOPE() (void)_you_forgot_to_call_parser_end_scope; parser->cur_scope--;
+
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
   fprintf(stderr, "trying to parse compound stmt\n");
@@ -443,27 +453,19 @@ bool parse_compoundstmt(struct parser *parser,
 
   consume_token(parser->lexer, open_brace);
 
-  // very hacky
-  size_t stmts_len = 64;
-  size_t stmts_count = 0;
-  struct ast_stmt *stmts = alloc(parser->arena, sizeof(*stmts) * stmts_len);
+  PARSER_NEW_SCOPE();
 
+  struct vector *stmts = vector_create(sizeof(struct ast_stmt));
   struct ast_stmt stmt;
   while (parse_stmt(parser, &stmt)) {
-    debug("stmt success");
-    if (stmts_count < stmts_len) {
-      stmts[stmts_count++] = stmt;
-    } else {
-      trace("reallocing `stmts` buffer");
-      stmts_len *= 2;
-      struct ast_stmt *new_stmts =
-          alloc(parser->arena, sizeof(*stmts) * stmts_len);
-
-      memcpy(new_stmts, stmts, sizeof(*stmts) * stmts_count);
-      // no leak as lifetime tied to arena
-      stmts = new_stmts;
-    }
+    vector_push_back(stmts, &stmt);
   }
+
+  compound_stmt->stmts = alloc(parser->arena, vector_byte_size(stmts));
+  compound_stmt->num_stmts = vector_length(stmts);
+  vector_copy_to(stmts, compound_stmt->stmts);
+
+  PARSER_END_SCOPE();
 
   struct token close_brace;
 
@@ -474,9 +476,6 @@ bool parse_compoundstmt(struct parser *parser,
   }
 
   consume_token(parser->lexer, close_brace);
-
-  compound_stmt->stmts = stmts;
-  compound_stmt->num_stmts = stmts_count;
 
   return true;
 }
@@ -585,6 +584,10 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
 #define TOKEN_FMT(lexer, token)                                                \
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
+
+const char *identifier_str(struct parser *parser, const struct token *token) {
+  return associated_text(parser->lexer, token);
+}
 
 struct parse_result parse(struct parser *parser) {
   struct lexer *lexer = parser->lexer;

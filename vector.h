@@ -7,7 +7,7 @@ struct vector;
 
 struct vector *vector_create(size_t element_size);
 
-void vector_push_back(struct vector *v, void *data);
+void *vector_push_back(struct vector *v, void *data);
 size_t vector_length(struct vector *v);
 size_t vector_byte_size(struct vector *v);
 void* vector_get(struct vector *v, size_t index);

@@ -1,12 +1,51 @@
 #include "ir.h"
 #include "alloc.h"
+#include "lex.h"
 #include "parse.h"
 #include "vector.h"
 
+struct var_table_entry {
+  const char *name;
+  int scope;
+  struct ir_op *last_write;
+};
+
+struct var_table {
+  // vector of `var_table_entry`
+  // change to hash eventually?
+  struct vector *entries;
+};
+
+struct var_table var_table_create() {
+  struct var_table var_table = {
+      .entries = vector_create(sizeof(struct var_table_entry))};
+
+  return var_table;
+}
+
+struct var_table_entry *get_or_create_entry(struct var_table *var_table,
+                                            const char *name, int scope) {
+  // O(n) scan, not great
+  size_t num_vars = vector_length(var_table->entries);
+  for (size_t i = 0; i < num_vars; i++) {
+    struct var_table_entry *entry = vector_get(var_table->entries, i);
+
+    if (entry->scope == scope && strcmp(entry->name, name) == 0) {
+      return entry;
+    }
+  }
+
+  struct var_table_entry entry = {
+      .name = name, .scope = scope, .last_write = NULL};
+
+  return vector_push_back(var_table->entries, &entry);
+}
+
 struct ir_builder {
+  struct parser *parser;
   struct arena_allocator *arena;
 
-  
+  struct var_table var_table;
 
   struct ir_op *first;
   struct ir_op *last;
@@ -75,7 +114,8 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ast_cnst *cnst) {
   return op;
 }
 
-struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ast_rvalue *rvalue) {
+struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
+                                  struct ast_rvalue *rvalue) {
   switch (rvalue->ty) {
   case AST_RVALUE_TY_CNST:
     return build_ir_for_cnst(irb, &rvalue->cnst);
@@ -86,11 +126,12 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ast_rvalue *rva
   }
 }
 
-struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ast_lvalue *lvalue) {
+struct ir_op *build_ir_for_lvalue(struct ir_builder *irb,
+                                  struct ast_lvalue *lvalue) {
   switch (lvalue->ty) {
-    case AST_LVALUE_TY_VAR:
-      
-      break;
+  case AST_LVALUE_TY_VAR:
+    todo(__FUNCTION__);
+    break;
   }
 }
 
@@ -105,7 +146,9 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr) {
 
 struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt);
 
-struct ir_op *build_ir_for_compoundstmt(struct ir_builder *irb, struct ast_compoundstmt *compound_stmt) {
+struct ir_op *
+build_ir_for_compoundstmt(struct ir_builder *irb,
+                          struct ast_compoundstmt *compound_stmt) {
   struct ir_op *last;
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
     last = build_ir_for_stmt(irb, &compound_stmt->stmts[i]);
@@ -114,7 +157,8 @@ struct ir_op *build_ir_for_compoundstmt(struct ir_builder *irb, struct ast_compo
   return last ? last : irb->last;
 }
 
-struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb, struct ast_jumpstmt *jump_stmt) {
+struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb,
+                                    struct ast_jumpstmt *jump_stmt) {
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN: {
     struct ir_op *expr_op = build_ir_for_expr(irb, &jump_stmt->ret_expr);
@@ -127,12 +171,29 @@ struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb, struct ast_jumpstmt 
   }
 }
 
+struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
+                                       struct ast_vardecllist *var_decl_list) {
+  for (size_t i = 0; i < var_decl_list->num_decls; i++) {
+    struct ast_vardecl *decl = &var_decl_list->decls[i];
+
+    struct var_table_entry *entry = get_or_create_entry(
+        &irb->var_table,
+        identifier_str(irb->parser, &decl->var.identifier), decl->var.scope);
+
+    if (decl->ty == AST_VARDECL_TY_DECL) {
+      continue;
+    }
+
+    entry->last_write = build_ir_for_expr(irb, &decl->assg_expr);
+  }
+
+  return irb->last;
+}
+
 struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt) {
   switch (stmt->ty) {
   case AST_STMT_TY_VAR_DECL_LIST: {
-    // no IR for decl lists, IR gets built on use
-    // TODO: this won't properly propogate side effects
-    return irb->last;
+    return build_ir_for_vardecllist(irb, &stmt->var_decl_list);
   }
   case AST_STMT_TY_EXPR: {
     return build_ir_for_expr(irb, &stmt->expr);
@@ -146,10 +207,14 @@ struct ir_op *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt) {
   }
 }
 
-struct ir_function build_ir_for_function(struct arena_allocator *arena,
+struct ir_function build_ir_for_function(struct parser *parser,
+                                         struct arena_allocator *arena,
                                          struct ast_funcdef *def) {
-  struct ir_builder builder = {
-      .arena = arena, .first = NULL, .last = NULL, .last_id = 0};
+  struct ir_builder builder = {.parser = parser,
+                               .arena = arena,
+                               .first = NULL,
+                               .last = NULL,
+                               .last_id = 0};
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {
     build_ir_for_stmt(&builder, &def->body.stmts[i]);

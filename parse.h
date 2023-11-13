@@ -6,6 +6,8 @@
 #include "log.h"
 #include "lex.h"
 
+#define SCOPE_GLOBAL (-1)
+
 /* Well known types - keywords (`int`, `unsigned`, etc) */
 
 enum well_known_ty {
@@ -70,6 +72,7 @@ struct ast_binaryop {
 
 struct ast_var {
   struct token identifier;
+  int scope;
 };
 
 /* Compound expr - comma seperated expressions with well-defined order of execution */
@@ -145,6 +148,8 @@ enum ast_vardecl_ty {
 struct ast_vardecl {
   enum ast_vardecl_ty ty;
   struct ast_var var;
+
+  int scope;
 
   union {
     struct ast_expr assg_expr;
@@ -238,6 +243,8 @@ struct parse_result {
 enum parser_create_result create_parser(const char *program, struct parser **parser);
 struct parse_result parse(struct parser *parser);
 void free_parser(struct parser** parser);
+
+const char *identifier_str(struct parser *parser, const struct token *token);
 
 void debug_print_ast(struct parser *parser, struct ast_translationunit *translation_unit);
 

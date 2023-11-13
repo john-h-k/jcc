@@ -201,7 +201,7 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
   return PEEK_TOKEN_RESULT_SUCCESS;
 }
 
-const char *associated_text(struct lexer *lexer, struct token *token) {
+const char *associated_text(struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TYPE_IDENTIFIER:
   case LEX_TOKEN_TYPE_INT_LITERAL: {
