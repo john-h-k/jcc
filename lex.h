@@ -30,7 +30,12 @@ enum lex_token_type {
 
   /* Keywords */
 
+  LEX_TOKEN_TYPE_KW_CHAR,
+  LEX_TOKEN_TYPE_KW_SHORT,
   LEX_TOKEN_TYPE_KW_INT,
+  LEX_TOKEN_TYPE_KW_LONG,
+  LEX_TOKEN_TYPE_KW_SIGNED,
+  LEX_TOKEN_TYPE_KW_UNSIGNED,
   LEX_TOKEN_TYPE_KW_RETURN,
 
   // LEX_TOKEN_TYPE_KW_STRUCT,
@@ -38,7 +43,21 @@ enum lex_token_type {
   // LEX_TOKEN_TYPE_KW_UNION,
 
   LEX_TOKEN_TYPE_IDENTIFIER,
-  LEX_TOKEN_TYPE_INT_LITERAL
+
+  /* Literals (all suffixes are case-insensitive) */
+  
+  LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL,         // 'a'
+
+  // Note: `lex.c` relies on `unsigned` being `signed + 1`
+
+  LEX_TOKEN_TYPE_SIGNED_INT_LITERAL,         // 10
+  LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL,       // 10u
+
+  LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL,        // 10l
+  LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL,      // 10ul or 10lu
+
+  LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL,   // 10ll
+  LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL, // 10ull or 10llu
 };
 
 enum lex_status {
@@ -87,5 +106,6 @@ void consume_token(struct lexer *lexer, struct token token);
 // * `token.ty == LEX_TOKEN_TYPE_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TYPE_IDENTIFIER`, this returns the identifier
 const char *associated_text(struct lexer* lexer, const struct token *token);
+const char *token_name(struct lexer *lexer, struct token *token);
 
 #endif

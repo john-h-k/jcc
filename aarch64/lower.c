@@ -16,8 +16,11 @@ void lower_binary_op(struct aarch64_emitter *emitter, uint32_t lhs_reg,
   case IR_OP_BINARY_OP_TY_MUL:
     aarch64_emit_mul_32(emitter, lhs_reg, rhs_reg, reg);
     break;
-  case IR_OP_BINARY_OP_TY_DIV:
+  case IR_OP_BINARY_OP_TY_SDIV:
     aarch64_emit_sdiv_32(emitter, lhs_reg, rhs_reg, reg);
+    break;
+  case IR_OP_BINARY_OP_TY_UDIV:
+    aarch64_emit_udiv_32(emitter, lhs_reg, rhs_reg, reg);
     break;
   default:
     todo("unsupported op");

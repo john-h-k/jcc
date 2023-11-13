@@ -26,7 +26,8 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_ADD,
   IR_OP_BINARY_OP_TY_SUB,
   IR_OP_BINARY_OP_TY_MUL,
-  IR_OP_BINARY_OP_TY_DIV,
+  IR_OP_BINARY_OP_TY_SDIV,
+  IR_OP_BINARY_OP_TY_UDIV,
   IR_OP_BINARY_OP_TY_QUOT,
 };
 
@@ -36,9 +37,18 @@ struct ir_op_binary_op {
   struct ir_op *rhs;
 };
 
+enum ir_op_var_ty {
+  IR_OP_VAR_TY_I32,
+  IR_OP_VAR_TY_U32
+};
+
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
+
+  enum ir_op_var_ty var_ty;
+  
   struct ir_op *pred;
   struct ir_op *succ;
   union {

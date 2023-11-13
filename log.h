@@ -4,6 +4,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifdef NLOG
+#define DEF_LOG_FN(NAME, _PREFIX) static inline void NAME(const char *format, ...) { (void)format; }
+#else
 #define DEF_LOG_FN(NAME, PREFIX) static inline void NAME(const char *format, ...) { \
   va_list v; \
   va_start(v, format); \
@@ -12,6 +15,7 @@
   fprintf(stderr, "\n"); \
   va_end(v); \
 }
+#endif
 
 #define PR_RESET  "\x1B[0m"
 #define PR_RED  "\x1B[31m"
@@ -32,7 +36,7 @@ DEF_LOG_FN(trace, PR_WHITE "TRACE")
 
 #define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
 #define _GENERIC_DBG_FORMAT_SPECIFIER(val) _Generic((val), \
-  const char *: _DBG_FORMAT_STR(val, "%s"), \
+  char *: _DBG_FORMAT_STR(val, "%s"), \
   int: _DBG_FORMAT_STR(val, "%d"), \
   size_t: _DBG_FORMAT_STR(val, "%zu"), \
   float: _DBG_FORMAT_STR(val, "%f"), \

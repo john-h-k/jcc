@@ -11,7 +11,22 @@
 /* Well known types - keywords (`int`, `unsigned`, etc) */
 
 enum well_known_ty {
-  WELL_KNOWN_TY_INT
+  // parser.c relies on the unsigned variant being the signed variant +1
+  WELL_KNOWN_TY_ASCII_CHAR,
+  WELL_KNOWN_TY_SIGNED_CHAR,
+  WELL_KNOWN_TY_UNSIGNED_CHAR,
+
+  WELL_KNOWN_TY_SIGNED_SHORT,
+  WELL_KNOWN_TY_UNSIGNED_SHORT,
+
+  WELL_KNOWN_TY_SIGNED_INT,
+  WELL_KNOWN_TY_UNSIGNED_INT,
+
+  WELL_KNOWN_TY_SIGNED_LONG,
+  WELL_KNOWN_TY_UNSIGNED_LONG,
+
+  WELL_KNOWN_TY_SIGNED_LONG_LONG,
+  WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 };
 
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or `<keyword>` */
@@ -47,7 +62,8 @@ struct ast_funcsig {
 /* Constant values (literals) */
 
 struct ast_cnst {
-  int value;
+  enum well_known_ty cnst_ty;
+  unsigned long long value;
 };
 
 /* Binary expressions - `a <OP> b` */
