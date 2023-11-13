@@ -1,8 +1,8 @@
 #ifndef IR_H
 #define IR_H
 
-#include <stdlib.h>
 #include "parse.h"
+#include <stdlib.h>
 
 enum ir_op_ty {
   IR_OP_TY_PHI,
@@ -10,7 +10,7 @@ enum ir_op_ty {
   IR_OP_TY_CNST,
 
   IR_OP_TY_BINARY_OP,
-  
+
   IR_OP_TY_RET
 };
 
@@ -55,7 +55,9 @@ struct ir_function {
   size_t op_count;
 };
 
-struct ir_function build_ir_for_function(struct arena_allocator *arena, struct ast_funcdef *def);
+struct ir_function
+build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
+                      struct arena_allocator *arena, struct ast_funcdef *def);
 
 void debug_print_ir(struct ir_op *ir);
 

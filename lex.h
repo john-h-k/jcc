@@ -94,6 +94,6 @@ void consume_token(struct lexer *lexer, struct token token);
 // e.g
 // * `token.ty == LEX_TOKEN_TYPE_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TYPE_IDENTIFIER`, this returns the identifier
-const char *associated_text(struct lexer* lexer, struct token *token);
+const char *associated_text(struct lexer* lexer, const struct token *token);
 
 #endif

@@ -37,7 +37,7 @@ void vector_expand(struct vector *v) {
   v->capacity = new_capacity;
 }
 
-void vector_push_back(struct vector *v, void *data) {
+void *vector_push_back(struct vector *v, void *data) {
   if (v->len >= v->capacity) {
     vector_expand(v);
   }
@@ -46,6 +46,8 @@ void vector_push_back(struct vector *v, void *data) {
 
   memcpy(&v->data[v->len * v->element_size], data, v->element_size);
   v->len++;
+
+  return &v->data[v->len - 1];
 }
 
 size_t vector_length(struct vector *v) {
