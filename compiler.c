@@ -23,7 +23,7 @@ enum compiler_create_result create_compiler(const char *program, const char *out
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
-
+  
   if (create_parser(program, &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -38,6 +38,8 @@ enum compiler_create_result create_compiler(const char *program, const char *out
 }
 
 enum compile_result compile(struct compiler* compiler) {
+  BEGIN_STAGE("LEX + PARSE");
+
   struct parse_result result = parse(compiler->parser);
 
   // for (size_t i = 0; i < result.translation_unit.num_func_defs; i++) {
@@ -45,9 +47,14 @@ enum compile_result compile(struct compiler* compiler) {
     todo("multiple funcs");
   }
 
-  struct ir_function ir = build_ir_for_function(compiler->arena, &result.translation_unit.func_defs[0]);
+  BEGIN_STAGE("IR BUILD");
+
+  struct ir_function ir = build_ir_for_function(compiler->parser, compiler->arena, &result.translation_unit.func_defs[0]);
 
   debug_print_ir(ir.start);
+
+  BEGIN_STAGE("LOWERING");
+
   struct lower_result r = lower(compiler->arena, &ir);
 
   struct symbol symbol = {
@@ -64,6 +71,8 @@ enum compile_result compile(struct compiler* compiler) {
     .symbols = &symbol,
     .num_symbols = 1,  
   };
+
+  BEGIN_STAGE("OBJECT FILE");
 
   write_macho(&args);
 

@@ -109,7 +109,7 @@ enum ast_rvalue_ty {
   AST_RVALUE_TY_CNST,
   AST_RVALUE_TY_BINARY_OP,
   // AST_RVALUE_TY_COMPOUNDEXPR,
-  // AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`, they themselves evaluate to an rvalue (unlike in C++)
+  AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`, they themselves evaluate to an rvalue (unlike in C++)
 };
 
 struct ast_rvalue {

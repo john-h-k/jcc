@@ -14,29 +14,35 @@ struct var_table {
   // vector of `var_table_entry`
   // change to hash eventually?
   struct vector *entries;
+
+  // needed for accessing AST text
+  struct parser *parser;
 };
 
-struct var_table var_table_create() {
+struct var_table var_table_create(struct parser *parser) {
   struct var_table var_table = {
-      .entries = vector_create(sizeof(struct var_table_entry))};
+      .entries = vector_create(sizeof(struct var_table_entry)),
+      .parser = parser};
 
   return var_table;
 }
 
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
-                                            const char *name, int scope) {
+                                            const struct ast_var *var) {
   // O(n) scan, not great
+  const char *name = identifier_str(var_table->parser, &var->identifier);
+  
   size_t num_vars = vector_length(var_table->entries);
   for (size_t i = 0; i < num_vars; i++) {
     struct var_table_entry *entry = vector_get(var_table->entries, i);
 
-    if (entry->scope == scope && strcmp(entry->name, name) == 0) {
+    if (entry->scope == var->scope && strcmp(entry->name, name) == 0) {
       return entry;
     }
   }
 
   struct var_table_entry entry = {
-      .name = name, .scope = scope, .last_write = NULL};
+      .name = name, .scope = var->scope, .last_write = NULL};
 
   return vector_push_back(var_table->entries, &entry);
 }
@@ -114,11 +120,26 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ast_cnst *cnst) {
   return op;
 }
 
+struct ir_op *build_ir_for_assg(struct ir_builder *irb,
+                                  struct ast_assg *assg) {
+  switch (assg->lvalue.ty) {
+    case AST_LVALUE_TY_VAR: {
+      struct var_table_entry *entry =
+          get_or_create_entry(&irb->var_table, &assg->lvalue.var);
+    
+      entry->last_write = build_ir_for_expr(irb, assg->expr);
+      return entry->last_write;
+    }
+  }
+}
+  
 struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
                                   struct ast_rvalue *rvalue) {
   switch (rvalue->ty) {
   case AST_RVALUE_TY_CNST:
     return build_ir_for_cnst(irb, &rvalue->cnst);
+  case AST_RVALUE_TY_ASSG:
+      return build_ir_for_assg(irb, rvalue->assg);
   case AST_RVALUE_TY_BINARY_OP:
     return build_ir_for_binary_op(irb, &rvalue->binary_op);
   default:
@@ -129,9 +150,17 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
 struct ir_op *build_ir_for_lvalue(struct ir_builder *irb,
                                   struct ast_lvalue *lvalue) {
   switch (lvalue->ty) {
-  case AST_LVALUE_TY_VAR:
-    todo(__FUNCTION__);
-    break;
+  case AST_LVALUE_TY_VAR: {
+    // this is when we are _reading_ from the var
+    struct var_table_entry *entry =
+        get_or_create_entry(&irb->var_table, &lvalue->var);
+
+    if (!entry->last_write) {
+      err("undefined behaviour - reading from unassigned variable '%s'", entry->name);
+    }
+      
+    return entry->last_write;
+  }
   }
 }
 
@@ -177,8 +206,7 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
     struct var_table_entry *entry = get_or_create_entry(
-        &irb->var_table,
-        identifier_str(irb->parser, &decl->var.identifier), decl->var.scope);
+        &irb->var_table, &decl->var);
 
     if (decl->ty == AST_VARDECL_TY_DECL) {
       continue;
@@ -212,6 +240,7 @@ struct ir_function build_ir_for_function(struct parser *parser,
                                          struct ast_funcdef *def) {
   struct ir_builder builder = {.parser = parser,
                                .arena = arena,
+                               .var_table = var_table_create(parser),
                                .first = NULL,
                                .last = NULL,
                                .last_id = 0};

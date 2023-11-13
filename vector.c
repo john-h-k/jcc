@@ -44,10 +44,11 @@ void *vector_push_back(struct vector *v, void *data) {
 
   debug_assert(v->capacity > v->len, "vector did not expand properly");
 
-  memcpy(&v->data[v->len * v->element_size], data, v->element_size);
+  void *end = &v->data[v->len * v->element_size];
+  memcpy(end, data, v->element_size);
   v->len++;
 
-  return &v->data[v->len - 1];
+  return end;
 }
 
 size_t vector_length(struct vector *v) {

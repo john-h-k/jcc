@@ -92,6 +92,10 @@ void consume_token(struct lexer *lexer, struct token token) {
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
+  // needed to skip whitespace
+  struct token token;
+  peek_token(lexer, &token);
+
   return lexer->pos.idx >= lexer->len;
 }
 
@@ -141,6 +145,10 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
     ty = LEX_TOKEN_TYPE_SEMICOLON;
     next_col(&end);
     break;
+  case ',':
+    ty = LEX_TOKEN_TYPE_COMMA;
+    next_col(&end);
+    break;
 
   case '=':
     ty = LEX_TOKEN_TYPE_OP_ASSG;
@@ -187,7 +195,7 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
       // keyword
       ty = refine_ty(lexer, start, end);
     } else {
-      unreachable("unknown!");
+      unreachable("lexer hit an unknown token!");
     }
   }
   }
@@ -245,13 +253,15 @@ const char *token_name(struct lexer *lexer, struct token *token) {
   CASE_RET(LEX_TOKEN_TYPE_OP_DIV)
   CASE_RET(LEX_TOKEN_TYPE_OP_QUOT)
 
+  CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
+  CASE_RET(LEX_TOKEN_TYPE_COMMA)
+
   CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
   CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)
   CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACE)
-  CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
   CASE_RET(LEX_TOKEN_TYPE_KW_INT)
   CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
   CASE_RET(LEX_TOKEN_TYPE_IDENTIFIER)

@@ -135,7 +135,55 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return false;
 }
 
+bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue);
+
+bool parse_expr(struct parser *parser, struct ast_expr *expr);
+
+bool parse_assg(struct parser *parser, struct ast_assg *assg) {
+  struct text_pos pos = get_position(parser->lexer);
+  debug("trying assg");
+
+  struct ast_lvalue lvalue;
+  if (!parse_lvalue(parser, &lvalue)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  debug("lvalue");
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_OP_ASSG) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  debug("assg");
+
+  consume_token(parser->lexer, token);
+
+  struct ast_expr expr;
+  if (!parse_expr(parser, &expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  debug("found expr");
+
+  assg->lvalue = lvalue;
+  assg->expr = alloc(parser->arena, sizeof(*assg->expr));
+  *assg->expr = expr;
+
+  return true;
+}
+
 bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
+  struct ast_assg assg;
+  if (parse_assg(parser, &assg)) {
+    rvalue->ty = AST_RVALUE_TY_ASSG;
+    rvalue->assg = alloc(parser->arena, sizeof(*rvalue->assg));
+    *rvalue->assg = assg;
+    return true;
+  }
+
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
     rvalue->ty = AST_RVALUE_TY_CNST;
@@ -150,13 +198,6 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   //   return true;
   // }
   
-  // struct ast_assg assg;
-  // if (parse_assg(parser, &assg)) {
-  //   rvalue->ty = AST_RVALUE_TY_ASSG;
-  //   rvalue->assg = assg;
-  //   return true;
-  // }
-
   return false;
 }
 
@@ -173,18 +214,17 @@ bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
 
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_expr *expr) {
-  struct ast_lvalue lvalue;
-
-  if (parse_lvalue(parser, &lvalue)) {
-    expr->ty = AST_EXPR_TY_LVALUE;
-    expr->lvalue = lvalue;
-    return true;
-  }
-
   struct ast_rvalue rvalue;
   if (parse_rvalue_atom(parser, &rvalue)) {
     expr->ty = AST_EXPR_TY_RVALUE;
     expr->rvalue = rvalue;
+    return true;
+  }
+
+  struct ast_lvalue lvalue;
+  if (parse_lvalue(parser, &lvalue)) {
+    expr->ty = AST_EXPR_TY_LVALUE;
+    expr->lvalue = lvalue;
     return true;
   }
 
@@ -202,7 +242,6 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     struct token lookahead;
     peek_token(parser->lexer, &lookahead);
     struct ast_op_info info;
-    err("lookahead ty %d", lookahead.ty);
 
     if (!op_info_for_token(&lookahead, &info) ||
         info.precedence <= min_precedence) {
@@ -298,8 +337,6 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   if (!parse_var(parser, &var)) {
     return false;
   }
-
-  debug("is a var decl!");
   
   var_decl->var = var;
 
@@ -312,11 +349,12 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
     backtrack(parser->lexer, post_var_pos);
 
     var_decl->ty = AST_VARDECL_TY_DECL;
+
+    trace("normal decl");
     return true;
   }
 
   consume_token(parser->lexer, token);
-  debug("is a var decl with assg!");
 
   struct ast_expr expr;
   if (!parse_expr(parser, &expr)) {
@@ -327,7 +365,6 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
     return false;
   }
 
-  debug("found expr!");
   var_decl->ty = AST_VARDECL_TY_DECL_WITH_ASSG;
   var_decl->assg_expr = expr;
   return true;
@@ -346,18 +383,19 @@ bool parse_vardecllist(struct parser *parser,
   struct ast_vardecl var_decl;
   while (parse_vardecl(parser, &var_decl)) {
     vector_push_back(decls, &var_decl);
+
+    struct token token;
+    peek_token(parser->lexer, &token);
+
+    if (token.ty == LEX_TOKEN_TYPE_COMMA) {
+      // another decl
+      consume_token(parser->lexer, token);
+      continue;
+    } else if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+      consume_token(parser->lexer, token);
+      break;
+    }
   }
-
-  debug("found all statements");
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-
-  if (token.ty != LEX_TOKEN_TYPE_SEMICOLON) {
-    return false;
-  }
-
-  consume_token(parser->lexer, token);
 
   struct ast_vardecl *new_decls = alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
@@ -418,16 +456,22 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
   struct ast_expr expr;
   if (parse_expr(parser, &expr)) {
-    stmt->ty = AST_STMT_TY_EXPR;
-    stmt->expr = expr;
-    return true;
+    struct token token;
+    peek_token(parser->lexer, &token);
+
+    if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+      consume_token(parser->lexer, token);
+
+      stmt->ty = AST_STMT_TY_EXPR;
+      stmt->expr = expr;
+      return true;
+    }
   }
 
   struct ast_vardecllist var_decl_list;
   if (parse_vardecllist(parser, &var_decl_list)) {
     stmt->ty = AST_STMT_TY_VAR_DECL_LIST;
     stmt->var_decl_list = var_decl_list;
-    debug("found var decl list");
     return true;
   }
 
@@ -702,12 +746,16 @@ DEBUG_FUNC(binaryop, binary_op) {
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_ADD:
     AST_PRINTZ("ADD");
+    break;
   case AST_BINARY_OP_TY_SUB:
     AST_PRINTZ("SUB");
+    break;
   case AST_BINARY_OP_TY_MUL:
     AST_PRINTZ("MUL");
+    break;
   case AST_BINARY_OP_TY_DIV:
     AST_PRINTZ("DIV");
+    break;
   case AST_BINARY_OP_TY_QUOT:
     AST_PRINTZ("QUOT");
     break;
@@ -740,8 +788,12 @@ DEBUG_FUNC(assg, assg) {
   AST_PRINTZ("ASSIGNMENT");
   INDENT();
   DEBUG_CALL(lvalue, &assg->lvalue);
-  AST_PRINTZ("=");
+
+  AST_PRINTZ("ASSIGNED");
+  INDENT();
   DEBUG_CALL(expr, assg->expr);
+  UNINDENT();
+
   UNINDENT();
 }
 
@@ -749,6 +801,9 @@ DEBUG_FUNC(rvalue, rvalue) {
   switch (rvalue->ty) {
   case AST_RVALUE_TY_CNST:
     DEBUG_CALL(cnst, &rvalue->cnst);
+    break;
+  case AST_RVALUE_TY_ASSG:
+    DEBUG_CALL(assg, rvalue->assg);
     break;
   case AST_RVALUE_TY_BINARY_OP:
     DEBUG_CALL(binaryop, &rvalue->binary_op);
