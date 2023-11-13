@@ -16,6 +16,7 @@ enum lex_token_type {
   LEX_TOKEN_TYPE_CLOSE_BRACE,    // }
 
   LEX_TOKEN_TYPE_SEMICOLON,
+  LEX_TOKEN_TYPE_COMMA,
 
   /* Operators */
 
