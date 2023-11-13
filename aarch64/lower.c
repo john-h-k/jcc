@@ -3,7 +3,9 @@
 
 #define RETURN_REG (0)
 
-void lower_binary_op(struct arm64_emitter *emitter, uint32_t lhs_reg, uint32_t rhs_reg, uint32_t reg, struct ir_op_binary_op *op) {
+void lower_binary_op(struct arm64_emitter *emitter, uint32_t lhs_reg,
+                     uint32_t rhs_reg, uint32_t reg,
+                     struct ir_op_binary_op *op) {
   switch (op->ty) {
   case IR_OP_BINARY_OP_TY_ADD:
     arm64_emit_add_32(emitter, lhs_reg, rhs_reg, reg);
@@ -19,10 +21,19 @@ void lower_binary_op(struct arm64_emitter *emitter, uint32_t lhs_reg, uint32_t r
     break;
   default:
     todo("unsupported op");
-  // case IR_OP_BINARY_OP_TY_QUOT:
-  //   arm64_emit_quot_32(emitter, lhs_reg, rhs_reg, reg);
-  //   break;
+    // case IR_OP_BINARY_OP_TY_QUOT:
+    //   arm64_emit_quot_32(emitter, lhs_reg, rhs_reg, reg);
+    //   break;
   }
+}
+
+const char *mangle(struct arena_allocator *arena, const char *name) {
+  char *dest = alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+
+  dest[0] = '_';
+  strcpy(dest + 1, name);
+
+  return dest;
 }
 
 struct lower_result lower(struct arena_allocator *arena,
@@ -82,7 +93,8 @@ struct lower_result lower(struct arena_allocator *arena,
 
   free_arm64_emitter(&emitter);
 
-  struct lower_result result = {.code = data, .len_code = len};
+  struct lower_result result = {
+      .name = mangle(arena, func->name), .code = data, .len_code = len};
 
   return result;
 }

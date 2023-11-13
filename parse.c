@@ -339,6 +339,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   }
   
   var_decl->var = var;
+  var_decl->scope = parser->cur_scope;
 
   struct text_pos post_var_pos = get_position(parser->lexer);
   struct token token;
@@ -403,6 +404,8 @@ bool parse_vardecllist(struct parser *parser,
   var_decl_list->var_ty = tyref;
   var_decl_list->num_decls = vector_length(decls);
   var_decl_list->decls = new_decls;
+
+  vector_free(&decls);
 
   return true;
 }
@@ -508,6 +511,7 @@ bool parse_compoundstmt(struct parser *parser,
   compound_stmt->stmts = alloc(parser->arena, vector_byte_size(stmts));
   compound_stmt->num_stmts = vector_length(stmts);
   vector_copy_to(stmts, compound_stmt->stmts);
+  vector_free(&stmts);
 
   PARSER_END_SCOPE();
 
@@ -672,8 +676,6 @@ struct parse_result parse(struct parser *parser) {
   translation_unit.num_func_decls = vector_length(decls);
   vector_copy_to(decls, translation_unit.func_decls);
   vector_free(&decls);
-
-  debug_print_ast(parser, &translation_unit);
 
   struct parse_result result = {.translation_unit = translation_unit};
 
