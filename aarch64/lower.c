@@ -1,5 +1,5 @@
-#include "arm64_lower.h"
-#include "ir.h"
+#include "lower.h"
+#include "../ir.h"
 
 #define RETURN_REG (0)
 

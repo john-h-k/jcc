@@ -1,8 +1,8 @@
-#ifndef ARM64_LOWER_H
-#define ARM64_LOWER_H
+#ifndef AARCH64_LOWER_H
+#define AARCH64_LOWER_H
 
-#include "ir.h"
-#include "arm64_emitter.h"
+#include "../ir.h"
+#include "emitter.h"
 
 struct lower_result {
   void* code;
