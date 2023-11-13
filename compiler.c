@@ -6,7 +6,7 @@
 #include "lex.h"
 #include "parse.h"
 #include "ir.h"
-#include "arm64_lower.h"
+#include "aarch64/lower.h"
 #include "macos/mach-o.h"
 #include <stdio.h>
 

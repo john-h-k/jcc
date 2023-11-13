@@ -1,5 +1,5 @@
-#ifndef ARM64_EMITTER_H
-#define ARM64_EMITTER_H
+#ifndef AARCH64_EMITTER_H
+#define AARCH64_EMITTER_H
 
 #include <stdlib.h>
 

@@ -1,7 +1,7 @@
-#include "arm64_emitter.h"
+#include "emitter.h"
 
-#include "alloc.h"
-#include "util.h"
+#include "../alloc.h"
+#include "../util.h"
 #include <stdlib.h>
 
 struct arm64_emitter {
