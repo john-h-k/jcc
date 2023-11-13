@@ -20,6 +20,7 @@ struct var_table {
 };
 
 struct var_table var_table_create(struct parser *parser) {
+  // known memory leak here, no `free` function atm
   struct var_table var_table = {
       .entries = vector_create(sizeof(struct var_table_entry)),
       .parser = parser};
@@ -27,24 +28,43 @@ struct var_table var_table_create(struct parser *parser) {
   return var_table;
 }
 
-struct var_table_entry *get_or_create_entry(struct var_table *var_table,
-                                            const struct ast_var *var) {
-  // O(n) scan, not great
+struct var_table_entry *create_entry(struct var_table *var_table, const struct ast_var *var) {
   const char *name = identifier_str(var_table->parser, &var->identifier);
-  
-  size_t num_vars = vector_length(var_table->entries);
-  for (size_t i = 0; i < num_vars; i++) {
-    struct var_table_entry *entry = vector_get(var_table->entries, i);
-
-    if (entry->scope == var->scope && strcmp(entry->name, name) == 0) {
-      return entry;
-    }
-  }
-
   struct var_table_entry entry = {
       .name = name, .scope = var->scope, .last_write = NULL};
 
   return vector_push_back(var_table->entries, &entry);
+}
+
+struct var_table_entry *get_or_create_entry(struct var_table *var_table,
+                                            const struct ast_var *var) {
+  // super inefficient, TODO: make efficient
+  // does linear scan for entry at current scope, if that fails, tries at higher scope, until scope is global
+  // then creates new entry
+
+  const char *name = identifier_str(var_table->parser, &var->identifier);
+  size_t num_vars = vector_length(var_table->entries);
+
+  for (int scope = var->scope; scope >= SCOPE_GLOBAL; scope--) {
+    trace("trying to find var '%s' at scope '%d' (var has scope '%d')", name, scope, var->scope);
+
+    for (size_t i = 0; i < num_vars; i++) {
+      struct var_table_entry *entry = vector_get(var_table->entries, i);
+
+      if (entry->scope == scope && strcmp(entry->name, name) == 0) {
+        trace("found var at scope '%d'", scope);
+        return entry;
+      }
+    }
+
+    if (scope != SCOPE_GLOBAL) {
+      trace("failed! trying at next scope up");
+    }
+  }
+
+  trace("couldn't find variable, creating new entry '%s' with scope '%d'", name, var->scope);
+  
+  return create_entry(var_table, var);
 }
 
 struct ir_builder {
@@ -205,7 +225,8 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
   for (size_t i = 0; i < var_decl_list->num_decls; i++) {
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
-    struct var_table_entry *entry = get_or_create_entry(
+    // a decl is _always_ a new entry (it may shadow)
+    struct var_table_entry *entry = create_entry(
         &irb->var_table, &decl->var);
 
     if (decl->ty == AST_VARDECL_TY_DECL) {
@@ -250,6 +271,7 @@ struct ir_function build_ir_for_function(struct parser *parser,
   }
 
   struct ir_function func = {
+      .name = identifier_str(parser, &def->sig.name),
       .start = builder.first,
       .end = builder.last,
       .op_count = builder.last->id // i think?

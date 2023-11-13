@@ -5,7 +5,8 @@
 #include "emitter.h"
 
 struct lower_result {
-  void* code;
+  const char *name;
+  void *code;
   size_t len_code;
 };
 
