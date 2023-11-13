@@ -214,6 +214,31 @@ bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
 
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  // parenthesised expression
+  if (token.ty == LEX_TOKEN_TYPE_OPEN_BRACKET) {
+    consume_token(parser->lexer, token);
+
+    struct ast_expr sub_expr;
+    if (parse_expr(parser, &sub_expr)) {
+      struct token token;
+      peek_token(parser->lexer, &token);
+      
+      if (token.ty == LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+        consume_token(parser->lexer, token);
+        *expr = sub_expr;
+
+        return true;
+      }
+    }
+
+    backtrack(parser->lexer, pos);
+  }
+
   struct ast_rvalue rvalue;
   if (parse_rvalue_atom(parser, &rvalue)) {
     expr->ty = AST_EXPR_TY_RVALUE;
