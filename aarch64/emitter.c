@@ -4,7 +4,7 @@
 #include "../util.h"
 #include <stdlib.h>
 
-struct arm64_emitter {
+struct aarch64_emitter {
   uint32_t *block;
   size_t len;
   size_t head;
@@ -12,7 +12,7 @@ struct arm64_emitter {
 
 #define BLOCK_SIZE 4096
 
-void create_arm64_emitter(struct arm64_emitter **emitter) {
+void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
 
   (*emitter)->block = nonnull_malloc(BLOCK_SIZE);
@@ -20,15 +20,15 @@ void create_arm64_emitter(struct arm64_emitter **emitter) {
   (*emitter)->head = 0;
 }
 
-size_t arm64_emit_bytesize(struct arm64_emitter *emitter) {
+size_t aarch64_emit_bytesize(struct aarch64_emitter *emitter) {
   return emitter->head * sizeof(*emitter->block);
 }
 
-void arm64_emit_copy_to(struct arm64_emitter *emitter, void* dest) {
+void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void* dest) {
   memcpy(dest, emitter->block, emitter->head * sizeof(*emitter->block));
 }
 
-void free_arm64_emitter(struct arm64_emitter **emitter) {
+void free_aarch64_emitter(struct aarch64_emitter **emitter) {
   free((*emitter)->block);
   
   free(*emitter);
@@ -184,7 +184,7 @@ void free_arm64_emitter(struct arm64_emitter **emitter) {
 
 #define RET(Rn) UNCOND_BRANCH_REG(0b0010, 0b11111, 0b000000, Rn, 00000)
 
-void arm64_emit(struct arm64_emitter *emitter, uint32_t instr) {
+void aarch64_emit(struct aarch64_emitter *emitter, uint32_t instr) {
   if (emitter->head >= emitter->len) {
     todo("emitter reached size limit");
   }
@@ -192,47 +192,47 @@ void arm64_emit(struct arm64_emitter *emitter, uint32_t instr) {
   emitter->block[emitter->head++] = instr;
 }
 
-void arm64_emit_add_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
-  arm64_emit(emitter, ADD_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
+void aarch64_emit_add_32(struct aarch64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  aarch64_emit(emitter, ADD_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
 }
 
-void arm64_emit_sub_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
-  arm64_emit(emitter, SUB_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
+void aarch64_emit_sub_32(struct aarch64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  aarch64_emit(emitter, SUB_32_REG(0, 0, reg_rhs, reg_lhs, reg_to));
 }
 
-void arm64_emit_mul_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
-  arm64_emit(emitter, MADD_32(reg_rhs, ZERO_REG_IDX, reg_lhs, reg_to));
+void aarch64_emit_mul_32(struct aarch64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  aarch64_emit(emitter, MADD_32(reg_rhs, ZERO_REG_IDX, reg_lhs, reg_to));
 }
 
-void arm64_emit_sdiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
-  arm64_emit(emitter, SDIV_32(reg_rhs, reg_lhs, reg_to));
+void aarch64_emit_sdiv_32(struct aarch64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  aarch64_emit(emitter, SDIV_32(reg_rhs, reg_lhs, reg_to));
 }
 
-void arm64_emit_udiv_32(struct arm64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
-  arm64_emit(emitter, UDIV_32(reg_rhs, reg_lhs, reg_to));
+void aarch64_emit_udiv_32(struct aarch64_emitter *emitter, size_t reg_lhs, size_t reg_rhs, size_t reg_to) {
+  aarch64_emit(emitter, UDIV_32(reg_rhs, reg_lhs, reg_to));
 }
 
-void arm64_emit_mov_32(struct arm64_emitter *emitter, size_t reg_from, size_t reg_to) {
-  arm64_emit(emitter, MOV_32_REG(reg_from, reg_to));
+void aarch64_emit_mov_32(struct aarch64_emitter *emitter, size_t reg_from, size_t reg_to) {
+  aarch64_emit(emitter, MOV_32_REG(reg_from, reg_to));
 }
 
-void arm64_emit_mov_64(struct arm64_emitter *emitter, size_t reg_from, size_t reg_to) {
-  arm64_emit(emitter, MOV_64_REG(reg_from, reg_to));
+void aarch64_emit_mov_64(struct aarch64_emitter *emitter, size_t reg_from, size_t reg_to) {
+  aarch64_emit(emitter, MOV_64_REG(reg_from, reg_to));
 }
 
-void arm64_emit_load_cnst_64(struct arm64_emitter *emitter, size_t reg_idx, uint64_t cnst) {
+void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter, size_t reg_idx, uint64_t cnst) {
   switch (cnst) {
   case 0: {
-    arm64_emit(emitter, MOV_64_REG(ZERO_REG_IDX, reg_idx));
+    aarch64_emit(emitter, MOV_64_REG(ZERO_REG_IDX, reg_idx));
     break;
   }
   case -1: {
-    arm64_emit(emitter, MOVN_64_REG(ZERO_REG_IDX, reg_idx));
+    aarch64_emit(emitter, MOVN_64_REG(ZERO_REG_IDX, reg_idx));
     break;
   }
   default: {
     if (cnst <= UINT16_MAX) {
-      arm64_emit(emitter, MOVZ_64(/* no shift */ 0, (uint16_t)cnst, reg_idx));
+      aarch64_emit(emitter, MOVZ_64(/* no shift */ 0, (uint16_t)cnst, reg_idx));
       break;
     } else {
       todo("mov cnst > 2^16");
@@ -241,19 +241,19 @@ void arm64_emit_load_cnst_64(struct arm64_emitter *emitter, size_t reg_idx, uint
   }
 }
 
-void arm64_emit_load_cnst_32(struct arm64_emitter *emitter, size_t reg_idx, uint32_t cnst) {
+void aarch64_emit_load_cnst_32(struct aarch64_emitter *emitter, size_t reg_idx, uint32_t cnst) {
   switch (cnst) {
   case 0: {
-    arm64_emit(emitter, MOV_32_REG(ZERO_REG_IDX, reg_idx));
+    aarch64_emit(emitter, MOV_32_REG(ZERO_REG_IDX, reg_idx));
     break;
   }
   case -1: {
-    arm64_emit(emitter, MOVN_32_REG(ZERO_REG_IDX, reg_idx));
+    aarch64_emit(emitter, MOVN_32_REG(ZERO_REG_IDX, reg_idx));
     break;
   }
   default: {
     if (cnst <= UINT16_MAX) {
-      arm64_emit(emitter, MOVZ_32(/* no shift */ 0, (uint16_t)cnst, reg_idx));
+      aarch64_emit(emitter, MOVZ_32(/* no shift */ 0, (uint16_t)cnst, reg_idx));
       break;
     } else {
       todo("mov cnst > 2^16");
@@ -262,6 +262,6 @@ void arm64_emit_load_cnst_32(struct arm64_emitter *emitter, size_t reg_idx, uint
   }
 }
 
-void arm64_emit_ret(struct arm64_emitter *emitter) {
-  arm64_emit(emitter, RET(/* normal reg for return address */ 30));
+void aarch64_emit_ret(struct aarch64_emitter *emitter) {
+  aarch64_emit(emitter, RET(/* normal reg for return address */ 30));
 }
