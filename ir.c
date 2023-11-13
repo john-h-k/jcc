@@ -121,7 +121,8 @@ struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
     b->ty = IR_OP_BINARY_OP_TY_MUL;
     break;
   case AST_BINARY_OP_TY_DIV:
-    b->ty = IR_OP_BINARY_OP_TY_DIV;
+
+    b->ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
   case AST_BINARY_OP_TY_QUOT:
     b->ty = IR_OP_BINARY_OP_TY_QUOT;
@@ -274,7 +275,7 @@ struct ir_function build_ir_for_function(struct parser *parser,
       .name = identifier_str(parser, &def->sig.name),
       .start = builder.first,
       .end = builder.last,
-      .op_count = builder.last->id // i think?
+      .op_count = builder.last ? builder.last->id : 0 // i think?
   };
 
   return func;
@@ -288,7 +289,8 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "-";
   case IR_OP_BINARY_OP_TY_MUL:
     return "*";
-  case IR_OP_BINARY_OP_TY_DIV:
+  case IR_OP_BINARY_OP_TY_SDIV:
+  case IR_OP_BINARY_OP_TY_UDIV:
     return "/";
   case IR_OP_BINARY_OP_TY_QUOT:
     return "%";

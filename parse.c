@@ -109,7 +109,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  
+
   var->identifier = token;
   var->scope = parser->cur_scope;
 
@@ -118,14 +118,74 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return true;
 }
 
+bool is_literal_token(enum lex_token_type tok_ty, enum well_known_ty *well_known_ty) {
+  switch (tok_ty) {
+  case LEX_TOKEN_TYPE_WHITESPACE:
+  case LEX_TOKEN_TYPE_INLINE_COMMENT:
+  case LEX_TOKEN_TYPE_MULTILINE_COMMENT:
+  case LEX_TOKEN_TYPE_OPEN_BRACKET:
+  case LEX_TOKEN_TYPE_CLOSE_BRACKET:
+  case LEX_TOKEN_TYPE_OPEN_BRACE:
+  case LEX_TOKEN_TYPE_CLOSE_BRACE:
+  case LEX_TOKEN_TYPE_SEMICOLON:
+  case LEX_TOKEN_TYPE_COMMA:
+  case LEX_TOKEN_TYPE_OP_ASSG:
+  case LEX_TOKEN_TYPE_OP_ADD:
+  case LEX_TOKEN_TYPE_OP_SUB:
+  case LEX_TOKEN_TYPE_OP_MUL:
+  case LEX_TOKEN_TYPE_OP_DIV:
+  case LEX_TOKEN_TYPE_OP_QUOT:
+  case LEX_TOKEN_TYPE_KW_CHAR:
+  case LEX_TOKEN_TYPE_KW_SHORT:
+  case LEX_TOKEN_TYPE_KW_INT:
+  case LEX_TOKEN_TYPE_KW_LONG:
+  case LEX_TOKEN_TYPE_KW_UNSIGNED:
+  case LEX_TOKEN_TYPE_KW_SIGNED:
+  case LEX_TOKEN_TYPE_KW_RETURN:
+  case LEX_TOKEN_TYPE_IDENTIFIER:
+    return false;
+
+  case LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_ASCII_CHAR;
+    return true;
+
+  case LEX_TOKEN_TYPE_SIGNED_INT_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_SIGNED_INT;
+    return true;
+
+  case LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_INT;
+    return true;
+
+  case LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG;
+    return true;
+
+  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG;
+    return true;
+
+  case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+    return true;
+
+  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL:
+    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
+    return true;
+  }
+}
+
 bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TYPE_INT_LITERAL) {
-    cnst->value = atoi(associated_text(parser->lexer, &token));
+  enum well_known_ty wkt;
+  if (is_literal_token(token.ty, &wkt)) {
+    // TODO: handle unrepresentedly large values
+    cnst->cnst_ty = wkt;
+    cnst->value = atoll(associated_text(parser->lexer, &token));
 
     consume_token(parser->lexer, token);
     return true;
@@ -197,7 +257,7 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   //   rvalue->compound_expr = compound_expr;
   //   return true;
   // }
-  
+
   return false;
 }
 
@@ -227,7 +287,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
     if (parse_expr(parser, &sub_expr)) {
       struct token token;
       peek_token(parser->lexer, &token);
-      
+
       if (token.ty == LEX_TOKEN_TYPE_CLOSE_BRACKET) {
         consume_token(parser->lexer, token);
         *expr = sub_expr;
@@ -334,6 +394,55 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 //   }
 // }
 
+// used when parsing type names, as `short int` is equivalent to `short`
+void skip_int_token_if_present(struct parser *parser) {
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  if (token.ty == LEX_TOKEN_TYPE_KW_INT) {
+    consume_token(parser->lexer, token);
+  }
+}
+
+bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  switch (token.ty) {
+    case LEX_TOKEN_TYPE_KW_CHAR:
+      consume_token(parser->lexer, token);
+      *wkt = WELL_KNOWN_TY_ASCII_CHAR;
+      return true;
+    case LEX_TOKEN_TYPE_KW_SHORT:
+      consume_token(parser->lexer, token);
+      *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
+      skip_int_token_if_present(parser);
+      return true;
+    case LEX_TOKEN_TYPE_KW_INT:
+      debug("seen int!!!");
+      consume_token(parser->lexer, token);
+      *wkt = WELL_KNOWN_TY_SIGNED_INT;
+      return true;
+    case LEX_TOKEN_TYPE_KW_LONG: {
+      err("seen long");
+      consume_token(parser->lexer, token);
+
+      struct token maybe_other_long;
+      peek_token(parser->lexer, &maybe_other_long);
+
+      if (token.ty == LEX_TOKEN_TYPE_KW_LONG) {
+        *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+      } else {
+        *wkt = WELL_KNOWN_TY_SIGNED_LONG;
+      }
+
+      skip_int_token_if_present(parser);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
 
 bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
@@ -341,17 +450,43 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
   struct token token;
   peek_token(parser->lexer, &token);
 
-  if (token.ty == LEX_TOKEN_TYPE_KW_INT) {
-    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
-    ty_ref->well_known = WELL_KNOWN_TY_INT;
+  bool seen_unsigned = false;
+  bool seen_signed = false;  
+  if (token.ty == LEX_TOKEN_TYPE_KW_SIGNED) {
+    seen_signed = true;
 
     consume_token(parser->lexer, token);
+  } else if (token.ty == LEX_TOKEN_TYPE_KW_UNSIGNED) {
+    err("seen unsigned");
+    seen_unsigned = true;
 
-    return true;
+    consume_token(parser->lexer, token);
   }
 
-  backtrack(parser->lexer, pos);
-  return false;
+  bool enough_type_info = seen_signed || seen_unsigned; // `signed` or `unsigned` is a type in itself
+  
+  enum well_known_ty wkt;
+  if (!parse_integer_size_name(parser, &wkt)) {
+    if (enough_type_info) {
+      wkt = seen_signed ? WELL_KNOWN_TY_SIGNED_INT : WELL_KNOWN_TY_UNSIGNED_INT;
+    } else {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+  } else {
+    if (seen_unsigned) {
+      // unsigned variants are signed variants + 1
+      wkt++;
+    } else if (!seen_signed && !seen_unsigned && wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
+      // no explicit sign or unsign, so ASCII CHAR
+      wkt = WELL_KNOWN_TY_ASCII_CHAR;
+    }
+  }
+
+  ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+  ty_ref->well_known = wkt;
+
+  return true;
 }
 
 bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
@@ -362,7 +497,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   if (!parse_var(parser, &var)) {
     return false;
   }
-  
+
   var_decl->var = var;
   var_decl->scope = parser->cur_scope;
 
@@ -397,7 +532,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
 }
 
 bool parse_vardecllist(struct parser *parser,
-                         struct ast_vardecllist *var_decl_list) {
+                       struct ast_vardecllist *var_decl_list) {
   fprintf(stderr, "trying decl list\n");
   struct ast_tyref tyref;
   if (!parse_tyref(parser, &tyref)) {
@@ -408,11 +543,13 @@ bool parse_vardecllist(struct parser *parser,
 
   struct ast_vardecl var_decl;
   while (parse_vardecl(parser, &var_decl)) {
+    debug("found vardecl");
     vector_push_back(decls, &var_decl);
 
     struct token token;
     peek_token(parser->lexer, &token);
 
+    err("end of %s", token_name(parser->lexer, &token));
     if (token.ty == LEX_TOKEN_TYPE_COMMA) {
       // another decl
       consume_token(parser->lexer, token);
@@ -421,6 +558,11 @@ bool parse_vardecllist(struct parser *parser,
       consume_token(parser->lexer, token);
       break;
     }
+  }
+
+  if (vector_length(decls) == 0) {
+    vector_free(&decls);
+    return false;
   }
 
   struct ast_vardecl *new_decls = alloc(parser->arena, vector_byte_size(decls));
@@ -481,7 +623,8 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     stmt->compound = compound_stmt;
     return true;
   }
-
+  
+  struct text_pos pos = get_position(parser->lexer);
   struct ast_expr expr;
   if (parse_expr(parser, &expr)) {
     struct token token;
@@ -494,6 +637,8 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
       stmt->expr = expr;
       return true;
     }
+
+    backtrack(parser->lexer, pos);
   }
 
   struct ast_vardecllist var_decl_list;
@@ -507,12 +652,16 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 }
 
 // Not the most elegant, but this helps prevent mismatched scope calls
-#define PARSER_NEW_SCOPE() int _you_forgot_to_call_parser_end_scope; parser->cur_scope++;
-#define PARSER_END_SCOPE() (void)_you_forgot_to_call_parser_end_scope; parser->cur_scope--;
+#define PARSER_NEW_SCOPE()                                                     \
+  int _you_forgot_to_call_parser_end_scope;                                    \
+  parser->cur_scope++;
+#define PARSER_END_SCOPE()                                                     \
+  (void)_you_forgot_to_call_parser_end_scope;                                  \
+  parser->cur_scope--;
 
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
-  fprintf(stderr, "trying to parse compound stmt\n");
+  fprintf(stderr, "trying to parse compound stmt depth %d\n", parser->cur_scope);
   struct text_pos pos = get_position(parser->lexer);
 
   struct token open_brace;
@@ -712,11 +861,14 @@ struct ast_printstate {
   int indent;
 };
 
-#define DEBUG_FUNC(ty, name) void debug_print_##ty (struct ast_printstate *state, struct ast_##ty *name)
+#define DEBUG_FUNC(ty, name)                                                   \
+  void debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
 #define DEBUG_CALL(ty, val) debug_print_##ty(state, val)
 
-#define AST_PRINT_SAMELINE_Z(fmt) fprintf(stderr, "%*s" fmt, state->indent * 4, "")
-#define AST_PRINT_SAMELINE(fmt, ...) fprintf(stderr, "%*s" fmt, state->indent * 4, "", __VA_ARGS__)
+#define AST_PRINT_SAMELINE_Z(fmt)                                              \
+  fprintf(stderr, "%*s" fmt, state->indent * 4, "")
+#define AST_PRINT_SAMELINE(fmt, ...)                                           \
+  fprintf(stderr, "%*s" fmt, state->indent * 4, "", __VA_ARGS__)
 
 #define AST_PRINTZ(fmt) AST_PRINT_SAMELINE_Z(fmt "\n")
 #define AST_PRINT(fmt, ...) AST_PRINT_SAMELINE(fmt "\n", __VA_ARGS__)
@@ -727,34 +879,64 @@ struct ast_printstate {
 DEBUG_FUNC(tyref, ty_ref) {
   switch (ty_ref->ty) {
   case AST_TYREF_TY_WELL_KNOWN:
-    switch (ty_ref->well_known) {      
-    case WELL_KNOWN_TY_INT:
+    switch (ty_ref->well_known) {
+    case WELL_KNOWN_TY_ASCII_CHAR:
+      AST_PRINTZ("char");
+      break;
+    case WELL_KNOWN_TY_SIGNED_CHAR:
+      AST_PRINTZ("signed char");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_CHAR:
+      AST_PRINTZ("unsigned char");
+      break;
+    case WELL_KNOWN_TY_SIGNED_SHORT:
+      AST_PRINTZ("short");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_SHORT:
+      AST_PRINTZ("unsigned short");
+      break;
+    case WELL_KNOWN_TY_SIGNED_INT:
       AST_PRINTZ("int");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_INT:
+      AST_PRINTZ("unsigned int");
+      break;
+    case WELL_KNOWN_TY_SIGNED_LONG:
+      AST_PRINTZ("long");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_LONG:
+      AST_PRINTZ("unsigned long");
+      break;
+    case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+      AST_PRINTZ("long long");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+      AST_PRINTZ("unsigned long long");
       break;
     }
 
     break;
-  // case AST_TYREF_TY_TYPEDEF_NAME:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_STRUCT:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_UNION:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_ENUM:
-  //   <#code#>
-  //   break;
+    // case AST_TYREF_TY_TYPEDEF_NAME:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_STRUCT:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_UNION:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_ENUM:
+    //   <#code#>
+    //   break;
   }
 }
-
 
 DEBUG_FUNC(compoundstmt, compound_stmt);
 DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
-  AST_PRINT("VARIABLE '%s'", associated_text(state->parser->lexer, &var->identifier));
+  AST_PRINT("VARIABLE '%s'",
+            associated_text(state->parser->lexer, &var->identifier));
 }
 
 DEBUG_FUNC(lvalue, lvalue) {
@@ -765,11 +947,9 @@ DEBUG_FUNC(lvalue, lvalue) {
   }
 }
 
-DEBUG_FUNC(cnst, cnst) {
-  AST_PRINT("CONSTANT '%d'", cnst->value);
-}
+DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
 
-DEBUG_FUNC(binaryop, binary_op) {  
+DEBUG_FUNC(binaryop, binary_op) {
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_ADD:
     AST_PRINTZ("ADD");
@@ -835,12 +1015,12 @@ DEBUG_FUNC(rvalue, rvalue) {
   case AST_RVALUE_TY_BINARY_OP:
     DEBUG_CALL(binaryop, &rvalue->binary_op);
     break;
-  // case AST_RVALUE_TY_COMPOUNDEXPR:
-  //   DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
-  //   break;
-  // case AST_RVALUE_TY_ASSG:
-  //   DEBUG_CALL(assg, rvalue->assg);
-  //   break;
+    // case AST_RVALUE_TY_COMPOUNDEXPR:
+    //   DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
+    //   break;
+    // case AST_RVALUE_TY_ASSG:
+    //   DEBUG_CALL(assg, rvalue->assg);
+    //   break;
   }
 }
 
@@ -889,7 +1069,6 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     UNINDENT();
     break;
   }
-
 }
 
 DEBUG_FUNC(stmt, stmt) {
@@ -927,11 +1106,11 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(arglist, arg_list) {
   AST_PRINTZ("ARGLIST:");
   INDENT();
-  
+
   UNUSED_ARG(arg_list);
   // TODO
   AST_PRINTZ("void");
-  
+
   UNINDENT();
 }
 
@@ -958,16 +1137,14 @@ DEBUG_FUNC(funcdecl, func_decl) {
   DEBUG_CALL(funcsig, &func_decl->sig);
 }
 
-void debug_print_ast(struct parser *parser, struct ast_translationunit *translation_unit) {
-  struct ast_printstate state_ = {
-    .indent = 0,
-    .parser = parser
-  };
+void debug_print_ast(struct parser *parser,
+                     struct ast_translationunit *translation_unit) {
+  struct ast_printstate state_ = {.indent = 0, .parser = parser};
 
   struct ast_printstate *state = &state_;
 
   AST_PRINTZ("PRINTING AST");
-  
+
   for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
     DEBUG_CALL(funcdecl, &translation_unit->func_decls[i]);
   }

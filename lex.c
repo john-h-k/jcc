@@ -62,9 +62,17 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
   size_t len = text_pos_len(start, end);
   debug("testing '%*.*s' for kw", len, len, &lexer->text[start.idx]);
 
+  #define KEYWORD(kw, ty) { kw , sizeof( kw ) - 1, ty }
+
   static struct keyword keywords[] = {
-      {"return", sizeof("return") - 1, LEX_TOKEN_TYPE_KW_RETURN},
-      {"int", sizeof("int") - 1, LEX_TOKEN_TYPE_KW_INT}};
+    KEYWORD("return", LEX_TOKEN_TYPE_KW_RETURN),
+    KEYWORD("char", LEX_TOKEN_TYPE_KW_CHAR),
+    KEYWORD("short", LEX_TOKEN_TYPE_KW_SHORT),
+    KEYWORD("int", LEX_TOKEN_TYPE_KW_INT),
+    KEYWORD("long", LEX_TOKEN_TYPE_KW_LONG),
+    KEYWORD("unsigned", LEX_TOKEN_TYPE_KW_UNSIGNED),
+    KEYWORD("signed", LEX_TOKEN_TYPE_KW_SIGNED),
+  };
 
   for (size_t i = 0; i < sizeof(keywords) / sizeof(*keywords); i++) {
     if (len == keywords[i].len &&
@@ -177,12 +185,42 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
 
   default: {
     if (isdigit(c)) {
-      ty = LEX_TOKEN_TYPE_INT_LITERAL;
+      ty = LEX_TOKEN_TYPE_SIGNED_INT_LITERAL;
 
       for (size_t i = end.idx; i < lexer->len && isdigit(lexer->text[i]);
            i++) {
         next_col(&end);
       }
+
+      bool is_unsigned = false;
+
+      while (end.idx + 1 < lexer->len) {
+          debug("current pos %d", end.idx);
+          switch (tolower(lexer->text[end.idx + 1])) {
+            case 'u':
+              debug("found u!");
+              is_unsigned = true;
+              next_col(&end);
+              continue;
+            case 'l':
+              debug("found l!");
+              if (end.idx + 2 < lexer->len && tolower(lexer->text[end.idx + 1]) == 'l') {
+                ty = LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL;
+              } else {
+                ty = LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL;
+              }
+              next_col(&end);
+              continue;
+            default:
+              break;
+          }
+
+          break;
+      }
+
+      if (is_unsigned) {
+        ty++;
+      }   
     } else if (valid_first_identifier_char(c)) {
       ty = LEX_TOKEN_TYPE_IDENTIFIER;
 
@@ -227,7 +265,13 @@ void next_line(struct text_pos *pos) {
 const char *associated_text(struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TYPE_IDENTIFIER:
-  case LEX_TOKEN_TYPE_INT_LITERAL: {
+  case LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL:
+  case LEX_TOKEN_TYPE_SIGNED_INT_LITERAL:
+  case LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL:
+  case LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
+  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL: {
     size_t len = text_pos_len(token->start, token->end);
     char *p = alloc(lexer->arena, len);
     memcpy(p, &lexer->text[token->start.idx], len);
@@ -256,15 +300,31 @@ const char *token_name(struct lexer *lexer, struct token *token) {
   CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
   CASE_RET(LEX_TOKEN_TYPE_COMMA)
 
+  CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
+  CASE_RET(LEX_TOKEN_TYPE_KW_CHAR)
+  CASE_RET(LEX_TOKEN_TYPE_KW_SHORT)
+  CASE_RET(LEX_TOKEN_TYPE_KW_INT)
+  CASE_RET(LEX_TOKEN_TYPE_KW_LONG)
+  CASE_RET(LEX_TOKEN_TYPE_KW_SIGNED)
+  CASE_RET(LEX_TOKEN_TYPE_KW_UNSIGNED)
+
   CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
   CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)
   CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACE)
-  CASE_RET(LEX_TOKEN_TYPE_KW_INT)
-  CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
   CASE_RET(LEX_TOKEN_TYPE_IDENTIFIER)
-  CASE_RET(LEX_TOKEN_TYPE_INT_LITERAL)
+
+  CASE_RET(LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL)
+
+  CASE_RET(LEX_TOKEN_TYPE_SIGNED_INT_LITERAL)
+  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL)
+
+  CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL)
+  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL)
+
+  CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL)
+  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL)
   }
 }

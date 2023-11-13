@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdnoreturn.h>
+#include <signal.h>
 
 #define ROUND_UP(value, pow2) ((value) + ((pow2) - 1)) & ~((pow2) - 1)
 #define UNUSED_ARG(arg) (void)(arg);
@@ -13,12 +14,14 @@
 [[ noreturn ]]
 static inline void todo(const char *msg) {
   fprintf(stderr, "`todo` hit, program exiting: %s\n", msg);
+  raise(SIGINT);
   exit(-2);
 }
 
 [[ noreturn ]]
 static inline void unreachable(const char *msg) {
   fprintf(stderr, "`unreachable` hit, program exiting: %s\n", msg);
+  raise(SIGINT);
   exit(-2);
 }
 
@@ -26,6 +29,7 @@ static inline void unreachable(const char *msg) {
 static inline void invariant_assert(bool b, const char *msg) {
   if (!b) {
     fprintf(stderr, "invariant_assertion failed, program exiting: %s\n", msg);
+    raise(SIGINT);
     exit(-1);
   }
 }
@@ -36,6 +40,7 @@ static inline void debug_assert(bool, const char *) {}
 static inline void debug_assert(bool b, const char *msg) {
   if (!b) {
     fprintf(stderr, "debug_assertion failed, program exiting: %s\n", msg);
+    raise(SIGINT);
     exit(-1);
   }
 }
