@@ -201,6 +201,21 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
   return PEEK_TOKEN_RESULT_SUCCESS;
 }
 
+int text_pos_len(struct text_pos start, struct text_pos end) {
+  return end.idx - start.idx;
+}
+
+void next_col(struct text_pos *pos) {
+  pos->idx++;
+  pos->col++;
+}
+
+void next_line(struct text_pos *pos) {
+  pos->idx++;
+  pos->line++;
+  pos->col = 0;
+}
+
 const char *associated_text(struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TYPE_IDENTIFIER:

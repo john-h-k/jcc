@@ -50,20 +50,11 @@ struct text_pos {
   size_t col;
 };
 
-static inline int text_pos_len(struct text_pos start, struct text_pos end) {
-  return end.idx - start.idx;
-}
+int text_pos_len(struct text_pos start, struct text_pos end);
 
-static inline void next_col(struct text_pos *pos) {
-  pos->idx++;
-  pos->col++;
-}
+void next_col(struct text_pos *pos);
 
-static inline void next_line(struct text_pos *pos) {
-  pos->idx++;
-  pos->line++;
-  pos->col = 0;
-}
+void next_line(struct text_pos *pos);
 
 struct token {
   struct text_pos start;
