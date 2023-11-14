@@ -1,31 +1,35 @@
 #include "compiler.h"
+#include "aarch64/lower.h"
 #include "alloc.h"
+#include "disasm.h"
+#include "ir.h"
+#include "lex.h"
+#include "log.h"
+#include "macos/mach-o.h"
 #include "parse.h"
 #include "util.h"
-#include "log.h"
-#include "lex.h"
-#include "parse.h"
-#include "ir.h"
 #include "vector.h"
-#include "aarch64/lower.h"
-#include "macos/mach-o.h"
 #include <stdio.h>
 
 struct compiler {
-  struct arena_allocator* arena;
+  struct arena_allocator *arena;
 
   struct compile_args args;
-  struct parser* parser;
+  struct parser *parser;
 
   char *output;
 };
 
-enum compiler_create_result create_compiler(const char *program, const char *output, const struct compile_args *args, struct compiler **compiler) {
+enum compiler_create_result create_compiler(const char *program,
+                                            const char *output,
+                                            const struct compile_args *args,
+                                            struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
-  
-  if (create_parser(program, &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
+
+  if (create_parser(program, &(*compiler)->parser) !=
+      PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
@@ -40,7 +44,7 @@ enum compiler_create_result create_compiler(const char *program, const char *out
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
-enum compile_result compile(struct compiler* compiler) {
+enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("LEX + PARSE");
 
   struct parse_result result = parse(compiler->parser);
@@ -52,11 +56,17 @@ enum compile_result compile(struct compiler* compiler) {
   struct vector *lower_results = vector_create(sizeof(struct lower_result));
   struct vector *symbols = vector_create(sizeof(struct symbol));
   size_t total_size = 0;
-  
+
   for (size_t i = 0; i < result.translation_unit.num_func_defs; i++) {
+    struct ast_funcdef *def = &result.translation_unit.func_defs[i];
+
     BEGIN_STAGE("IR BUILD");
 
-    struct ir_function ir = build_ir_for_function(compiler->parser, compiler->arena, &result.translation_unit.func_defs[0]);
+    info("compiling function %s",
+         identifier_str(compiler->parser, &def->sig.name));
+
+    struct ir_function ir =
+        build_ir_for_function(compiler->parser, compiler->arena, def);
 
     BEGIN_STAGE("IR");
 
@@ -66,18 +76,16 @@ enum compile_result compile(struct compiler* compiler) {
 
     struct lower_result result = lower(compiler->arena, &ir);
 
+    debug("symbol %s, value %d", result.name, total_size);
     struct symbol symbol = {
-      .name = result.name,
-      .section = 1,
-      .value = total_size
-    };
+        .name = result.name, .section = 1, .value = total_size};
 
     total_size += ROUND_UP(result.len_code, AARCH64_FUNCTION_ALIGNMENT);
     vector_push_back(lower_results, &result);
 
     vector_push_back(symbols, &symbol);
   }
-  
+
   char *code = alloc(compiler->arena, total_size);
   char *head = code;
 
@@ -89,12 +97,12 @@ enum compile_result compile(struct compiler* compiler) {
   }
 
   struct macho_args args = {
-    .compile_args = &compiler->args,
-    .output = compiler->output,
-    .data = code,
-    .len_data = total_size,
-    .symbols = vector_get(symbols, 0),
-    .num_symbols = vector_length(symbols),  
+      .compile_args = &compiler->args,
+      .output = compiler->output,
+      .data = code,
+      .len_data = total_size,
+      .symbols = vector_get(symbols, 0),
+      .num_symbols = vector_length(symbols),
   };
 
   BEGIN_STAGE("OBJECT FILE");
@@ -103,6 +111,10 @@ enum compile_result compile(struct compiler* compiler) {
 
   vector_free(&lower_results);
   vector_free(&symbols);
+
+  BEGIN_STAGE("DISASSEMBLY");
+
+  debug_disasm(args.output);
 
   return COMPILE_RESULT_SUCCESS;
 }

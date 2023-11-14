@@ -10,10 +10,13 @@ set(
   alloc.c
 
   compiler.c
+  diagnostics.c
   lex.c
   parse.c
   ir.c
   link.c
+  disasm.c
+  var_table.c
 
   aarch64/lower.c
   aarch64/emitter.c

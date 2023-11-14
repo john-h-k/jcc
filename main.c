@@ -1,11 +1,11 @@
 #include "compiler.h"
 #include "lex.h"
-#include "vector.h"
+#include "link.h"
 #include "log.h"
 #include "macos/mach-o.h"
 #include "parse.h"
 #include "util.h"
-#include "link.h"
+#include "vector.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
-    char* output = nonnull_malloc(strlen(sources[i]) + strlen(".obj"));
+    char *output = nonnull_malloc(strlen(sources[i]) + strlen(".obj"));
     strcpy(output, sources[i]);
     strcat(output, ".obj");
 
@@ -81,11 +81,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  struct link_args link_args = {
-    .objects = (const char **)objects,
-    .num_objects = num_sources,
-    .output = "a.out"
-  };
+  struct link_args link_args = {.objects = (const char **)objects,
+                                .num_objects = num_sources,
+                                .output = "a.out"};
 
   if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
     err("link failed");
@@ -95,8 +93,6 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     free(objects[i]);
   }
-
-  info("finished compilation!");
 }
 
 enum parse_args_result parse_args(int argc, char **argv,
@@ -111,7 +107,7 @@ enum parse_args_result parse_args(int argc, char **argv,
   if (num_sources == 0) {
     return PARSE_ARGS_RESULT_NO_SOURCES;
   }
-  
+
   *sources = nonnull_malloc(sizeof(*sources) * *num_sources);
 
   for (size_t i = 0; i < *num_sources; i++) {

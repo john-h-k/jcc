@@ -1,26 +1,33 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
 #include <stdnoreturn.h>
-#include <signal.h>
+#include <string.h>
 
-#define ROUND_UP(value, pow2) ((value) + ((pow2) - 1)) & ~((pow2) - 1)
+#define ROUND_UP(value, pow2) ((value) + ((pow2)-1)) & ~((pow2)-1)
 #define UNUSED_ARG(arg) (void)(arg);
 
-[[ noreturn ]]
-static inline void todo(const char *msg) {
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+[[noreturn]] static inline void todo(const char *msg) {
   fprintf(stderr, "`todo` hit, program exiting: %s\n", msg);
   raise(SIGINT);
   exit(-2);
 }
 
-[[ noreturn ]]
-static inline void unreachable(const char *msg) {
+[[noreturn]] static inline void unreachable(const char *msg) {
   fprintf(stderr, "`unreachable` hit, program exiting: %s\n", msg);
+  raise(SIGINT);
+  exit(-2);
+}
+
+[[noreturn]] static inline void bug(const char *msg) {
+  fprintf(stderr, "`bug` hit, program exiting: %s\n", msg);
   raise(SIGINT);
   exit(-2);
 }

@@ -4,7 +4,7 @@
 #include <math.h>
 
 struct vector {
-  char* data;
+  char *data;
   size_t element_size;
   size_t len;
   size_t capacity;
@@ -12,7 +12,7 @@ struct vector {
 
 struct vector *vector_create(size_t element_size) {
   invariant_assert(element_size > 0, "`element_size` of 0 impossible for vec");
-  
+
   struct vector *v = nonnull_malloc(sizeof(*v));
 
   v->data = NULL;
@@ -25,7 +25,7 @@ struct vector *vector_create(size_t element_size) {
 
 void vector_expand(struct vector *v) {
   size_t new_capacity = v->capacity ? v->capacity * 2 : 1;
-  char* new_data = nonnull_malloc(new_capacity * v->element_size);
+  char *new_data = nonnull_malloc(new_capacity * v->element_size);
 
   memcpy(new_data, v->data, v->len * v->element_size);
 
@@ -51,20 +51,16 @@ void *vector_push_back(struct vector *v, void *data) {
   return end;
 }
 
-size_t vector_length(struct vector *v) {
-  return v->len;
-}
+size_t vector_length(struct vector *v) { return v->len; }
 
-size_t vector_byte_size(struct vector *v) {
-  return v->len * v->element_size;
-}
+size_t vector_byte_size(struct vector *v) { return v->len * v->element_size; }
 
-void* vector_get(struct vector *v, size_t index) {
+void *vector_get(struct vector *v, size_t index) {
   debug_assert(index < v->len, "index out of bounds!");
   return &v->data[index * v->element_size];
 }
 
-void vector_copy_to(struct vector *v, void* dest) {
+void vector_copy_to(struct vector *v, void *dest) {
   memcpy(dest, v->data, v->len * v->element_size);
 }
 

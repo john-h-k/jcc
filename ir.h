@@ -37,22 +37,39 @@ struct ir_op_binary_op {
   struct ir_op *rhs;
 };
 
-// IR does not have sign encoded in type (so `int` and `unsigned` are both IR_OP_VAR_TY_32)
-// and instead encodes it in operations (e.g there are different IR ops for signed and unsigned division)
-enum ir_op_var_ty {
-  IR_OP_VAR_TY_I8,
-  IR_OP_VAR_TY_I16,
-  IR_OP_VAR_TY_I32,
-  IR_OP_VAR_TY_I64,
+// IR does not have sign encoded in type (so `int` and `unsigned` are both
+// IR_OP_VAR_TY_32) and instead encodes it in operations (e.g there are
+// different IR ops for signed and unsigned division)
+enum ir_op_var_primitive_ty {
+  IR_OP_VAR_PRIMITIVE_TY_I8,
+  IR_OP_VAR_PRIMITIVE_TY_I16,
+  IR_OP_VAR_PRIMITIVE_TY_I32,
+  IR_OP_VAR_PRIMITIVE_TY_I64,
 };
 
+enum ir_op_var_ty_ty {
+  /* Primitives - integers, floats, pointers */
+  IR_OP_VAR_TY_TY_PRIMITIVE,
+
+  /* Aggregate */
+  // IR_OP_VAR_TY_TY_AGGREGATE,
+  // IR_OP_VAR_TY_TY_ARRAY,
+  // IR_OP_VAR_TY_TY_UNION,
+};
+
+struct ir_op_var_ty {
+  enum ir_op_var_ty_ty ty;
+  union {
+    enum ir_op_var_primitive_ty primitive;
+  };
+};
 
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
 
-  enum ir_op_var_ty var_ty;
-  
+  struct ir_op_var_ty var_ty;
+
   struct ir_op *pred;
   struct ir_op *succ;
   union {

@@ -1,16 +1,16 @@
 #ifndef MACOS_MACH_O_H
 #define MACOS_MACH_O_H
 
+#include "../compiler.h"
+#include <fcntl.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../compiler.h"
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 struct symbol {
   const char *name;
@@ -19,17 +19,17 @@ struct symbol {
 };
 
 struct macho_args {
-  const struct compile_args* compile_args;
+  const struct compile_args *compile_args;
 
   const char *output;
 
   const char *data;
   size_t len_data;
-  
-  struct symbol* symbols;
+
+  struct symbol *symbols;
   size_t num_symbols;
 };
 
-void write_macho(const struct macho_args* args);
+void write_macho(const struct macho_args *args);
 
 #endif

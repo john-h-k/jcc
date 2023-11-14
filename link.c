@@ -1,15 +1,17 @@
 #include "link.h"
-#include "log.h"
 #include "alloc.h"
+#include "log.h"
 #include "util.h"
 #include <string.h>
+#include <stdlib.h>
 
 enum link_result link_objects(const struct link_args *args) {
   struct arena_allocator *arena;
   create_arena_allocator(&arena);
-  
+
   // FIXME: support non `ld_classic`
-  const char *template = "ld -lSystem -syslibroot $(xcrun -sdk macosx --show-sdk-path) -ld_classic";
+  const char *template = "ld -lSystem -syslibroot $(xcrun -sdk macosx "
+                         "--show-sdk-path) -ld_classic";
 
   // super inefficient here
 
@@ -24,8 +26,8 @@ enum link_result link_objects(const struct link_args *args) {
 
   total_size += /* "-o " */ 3 + strlen(args->output);
   total_size++; // null terminator
-  
-  char* buff = alloc(arena, total_size);
+
+  char *buff = alloc(arena, total_size);
 
   size_t head = 0;
   strcpy(&buff[head], template);
@@ -44,8 +46,8 @@ enum link_result link_objects(const struct link_args *args) {
   strcpy(&buff[head], args->output);
   head += strlen(args->output);
   buff[head++] = '\0';
-  
-  debug_assert(head  == total_size, "string buffer calculations went wrong!");
+
+  debug_assert(head == total_size, "string buffer calculations went wrong!");
 
   int ret_code = system(buff);
 
