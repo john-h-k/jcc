@@ -4,7 +4,6 @@
 #include <mach-o/loader.h>
 #include <mach/machine.h>
 #include <stdio.h>
-#include <sys/_types/_seek_set.h>
 
 void write_mach_header(FILE *file, const struct compile_args *args) {
   struct mach_header_64 header;
