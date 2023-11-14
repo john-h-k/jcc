@@ -37,6 +37,10 @@ void vector_expand(struct vector *v) {
   v->capacity = new_capacity;
 }
 
+bool vector_empty(struct vector *v) {
+  return v->len == 0;
+}
+
 void *vector_push_back(struct vector *v, void *data) {
   if (v->len >= v->capacity) {
     vector_expand(v);

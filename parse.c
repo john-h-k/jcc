@@ -246,6 +246,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
 bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   struct ast_assg assg;
+  debug("trying assg");
   if (parse_assg(parser, &assg)) {
     rvalue->ty = AST_RVALUE_TY_ASSG;
     rvalue->var_ty = assg.expr->var_ty;
@@ -254,6 +255,7 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
     return true;
   }
 
+  debug("trying cnst");
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
     rvalue->ty = AST_RVALUE_TY_CNST;
@@ -266,6 +268,8 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   // struct ast_compoundexpr compound_expr;
   // if (parse_compoundexpr(parser, &compound_expr)) {
   //   rvalue->ty = AST_RVALUE_TY_COMPOUNDEXPR;
+  //   // compound expressions return their last expression
+  //   rvalue->var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
   //   rvalue->compound_expr = compound_expr;
   //   return true;
   // }
@@ -287,8 +291,10 @@ struct ast_tyref get_var_type(struct parser *parser, const struct ast_var *var) 
 }
 
 bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
+  debug("trying lvalue");
   struct ast_var var;
   if (parse_var(parser, &var)) {
+    debug("found var");
     lvalue->ty = AST_LVALUE_TY_VAR;
     lvalue->var_ty = get_var_type(parser, &var);
     lvalue->var = var;
@@ -297,6 +303,8 @@ bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
 
   return false;
 }
+
+bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound_expr);
 
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_expr *expr) {
@@ -309,14 +317,21 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   if (token.ty == LEX_TOKEN_TYPE_OPEN_BRACKET) {
     consume_token(parser->lexer, token);
 
-    struct ast_expr sub_expr;
-    if (parse_expr(parser, &sub_expr)) {
+    struct ast_compoundexpr compound_expr;
+    if (parse_compoundexpr(parser, &compound_expr)) {
       struct token token;
       peek_token(parser->lexer, &token);
 
       if (token.ty == LEX_TOKEN_TYPE_CLOSE_BRACKET) {
         consume_token(parser->lexer, token);
-        *expr = sub_expr;
+
+        // compound expressions return the last expression
+        struct ast_tyref var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+        expr->ty = AST_EXPR_TY_RVALUE;
+        expr->var_ty = var_ty;
+        expr->rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
+        expr->rvalue.var_ty = var_ty;
+        expr->rvalue.compound_expr = compound_expr;
 
         return true;
       }
@@ -325,6 +340,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
     backtrack(parser->lexer, pos);
   }
 
+  debug("trying rvalue");
   struct ast_rvalue rvalue;
   if (parse_rvalue_atom(parser, &rvalue)) {
     expr->ty = AST_EXPR_TY_RVALUE;
@@ -333,6 +349,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
     return true;
   }
 
+  debug("trying lvalue");
   struct ast_lvalue lvalue;
   if (parse_lvalue(parser, &lvalue)) {
     expr->ty = AST_EXPR_TY_LVALUE;
@@ -346,8 +363,8 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
 
 struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
-  if (lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
-      rhs->ty == AST_TYREF_TY_WELL_KNOWN) {
+  if (true || (lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
+      rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
     struct ast_tyref result_ty;
     result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
 
@@ -376,7 +393,8 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
     return result_ty;
   }
 
-  todo("`resolve_binary_op_types` for types other than well known");
+  
+  // todo("`resolve_binary_op_types` for types other than well known");
 }
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
@@ -388,6 +406,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   // TODO: make iterative
   while (true) {
     struct token lookahead;
+    debug("loop iter");
     peek_token(parser->lexer, &lookahead);
     struct ast_op_info info;
 
@@ -431,8 +450,51 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   }
 }
 
+// parse a non-compound expression
 bool parse_expr(struct parser *parser, struct ast_expr *expr) {
   return parse_expr_precedence_aware(parser, 0, expr);
+}
+
+// there are only two places you can have compound expressions
+// * at top level of a statement (e.g `a = 1, b = 2;`)
+// * within braces (e.g `(a = 1, b = 2)`)
+// so only those places call this method
+bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound_expr) {
+  struct text_pos pos = get_position(parser->lexer);
+  
+  // this could be made recursive instead
+
+  struct vector *exprs = vector_create(sizeof(struct ast_expr));
+
+  debug("BEGIN COMPOUND");
+  struct token token;
+  struct ast_expr sub_expr;
+  do {
+    if (!parse_expr(parser, &sub_expr)) {
+      backtrack(parser->lexer, pos);
+      debug("FAILED COMPOUND");
+      return false;
+    }
+    debug("found sub expr");
+
+    vector_push_back(exprs, &sub_expr);
+
+    peek_token(parser->lexer, &token);
+  } while (token.ty == LEX_TOKEN_TYPE_COMMA && /* hacky */ (consume_token(parser->lexer, token), true));
+  debug("END COMPOUND");
+
+  if (vector_empty(exprs)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  compound_expr->exprs = alloc(parser->arena, vector_byte_size(exprs));
+  compound_expr->num_exprs = vector_length(exprs);
+
+  vector_copy_to(exprs, compound_expr->exprs);
+  vector_free(&exprs);
+
+  return true;
 }
 
 // bool token_is_typename(const struct token *token) {
@@ -587,6 +649,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   consume_token(parser->lexer, token);
 
   struct ast_expr expr;
+  // we use `parse_single_expr` as compound expressions are not legal here and interfere with comma-seperated decls
   if (!parse_expr(parser, &expr)) {
     // we parsed the var but not the expr
     // just give up
@@ -699,6 +762,31 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   }
 
   struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_compoundexpr compound_expr;
+  debug("try compound expr");
+  if (parse_compoundexpr(parser, &compound_expr)) {
+    struct token token;
+    peek_token(parser->lexer, &token);
+
+    if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+      consume_token(parser->lexer, token);
+
+      // compound expressions return the last expression
+      struct ast_tyref var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+      stmt->ty = AST_STMT_TY_EXPR;
+      stmt->expr.ty = AST_EXPR_TY_RVALUE;
+      stmt->expr.var_ty = var_ty;
+      stmt->expr.rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
+      stmt->expr.rvalue.var_ty = var_ty;
+      stmt->expr.rvalue.compound_expr = compound_expr;
+
+      return true;
+    }
+
+    backtrack(parser->lexer, pos);
+  }
+
   struct ast_expr expr;
   if (parse_expr(parser, &expr)) {
     struct token token;
@@ -1096,9 +1184,9 @@ DEBUG_FUNC(rvalue, rvalue) {
   case AST_RVALUE_TY_BINARY_OP:
     DEBUG_CALL(binaryop, &rvalue->binary_op);
     break;
-    // case AST_RVALUE_TY_COMPOUNDEXPR:
-    //   DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
-    //   break;
+    case AST_RVALUE_TY_COMPOUNDEXPR:
+      DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
+      break;
     // case AST_RVALUE_TY_ASSG:
     //   DEBUG_CALL(assg, rvalue->assg);
     //   break;
