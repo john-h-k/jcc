@@ -120,6 +120,8 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
 
 bool is_literal_token(enum lex_token_type tok_ty, enum well_known_ty *well_known_ty) {
   switch (tok_ty) {
+  case LEX_TOKEN_TYPE_UNKNOWN:
+  case LEX_TOKEN_TYPE_EOF:
   case LEX_TOKEN_TYPE_WHITESPACE:
   case LEX_TOKEN_TYPE_INLINE_COMMENT:
   case LEX_TOKEN_TYPE_MULTILINE_COMMENT:

@@ -12,7 +12,8 @@
 
 enum well_known_ty {
   // parser.c relies on the unsigned variant being the signed variant +1
-  WELL_KNOWN_TY_ASCII_CHAR,
+  // ir.c relies on the sizes being ascending
+  WELL_KNOWN_TY_ASCII_CHAR = 0,
   WELL_KNOWN_TY_SIGNED_CHAR,
   WELL_KNOWN_TY_UNSIGNED_CHAR,
 
@@ -28,6 +29,9 @@ enum well_known_ty {
   WELL_KNOWN_TY_SIGNED_LONG_LONG,
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 };
+
+// signed types have odd values in the enum
+#define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 1)
 
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or `<keyword>` */
 
@@ -148,6 +152,7 @@ enum ast_expr_ty {
 
 struct ast_expr {
   enum ast_expr_ty ty;
+  struct ast_tyref var_ty;
   union {
     struct ast_lvalue lvalue;
     struct ast_rvalue rvalue;

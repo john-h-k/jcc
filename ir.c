@@ -95,6 +95,35 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb) {
   return op;
 }
 
+
+enum ir_op_var_ty ty_for_well_known_ty(enum well_known_ty wkt) {
+  switch (wkt) {
+  case WELL_KNOWN_TY_ASCII_CHAR:
+  case WELL_KNOWN_TY_SIGNED_CHAR:
+  case WELL_KNOWN_TY_UNSIGNED_CHAR:
+    return IR_OP_VAR_TY_I8;
+  case WELL_KNOWN_TY_SIGNED_SHORT:
+  case WELL_KNOWN_TY_UNSIGNED_SHORT:
+    return IR_OP_VAR_TY_I16;
+  case WELL_KNOWN_TY_SIGNED_INT:
+  case WELL_KNOWN_TY_UNSIGNED_INT:
+    return IR_OP_VAR_TY_I32;
+  case WELL_KNOWN_TY_SIGNED_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG:
+    return IR_OP_VAR_TY_I64;
+  case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+    return IR_OP_VAR_TY_I64;
+  }
+}
+
+enum ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
+  switch (ty_ref->ty) {
+  case AST_TYREF_TY_WELL_KNOWN:
+    return ty_for_well_known_ty(ty_ref->well_known);
+  }
+}
+
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr);
 
 struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
@@ -121,7 +150,6 @@ struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
     b->ty = IR_OP_BINARY_OP_TY_MUL;
     break;
   case AST_BINARY_OP_TY_DIV:
-
     b->ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
   case AST_BINARY_OP_TY_QUOT:

@@ -37,9 +37,13 @@ struct ir_op_binary_op {
   struct ir_op *rhs;
 };
 
+// IR does not have sign encoded in type (so `int` and `unsigned` are both IR_OP_VAR_TY_32)
+// and instead encodes it in operations (e.g there are different IR ops for signed and unsigned division)
 enum ir_op_var_ty {
+  IR_OP_VAR_TY_I8,
+  IR_OP_VAR_TY_I16,
   IR_OP_VAR_TY_I32,
-  IR_OP_VAR_TY_U32
+  IR_OP_VAR_TY_I64,
 };
 
 
