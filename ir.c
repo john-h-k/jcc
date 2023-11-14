@@ -1,5 +1,6 @@
 #include "ir.h"
 #include "alloc.h"
+#include "compiler.h"
 #include "lex.h"
 #include "parse.h"
 #include "util.h"
@@ -72,7 +73,7 @@ struct ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
 
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ast_expr *expr);
 
-struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
+struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
                                      struct ast_binaryop *binary_op) {
   struct ir_op *lhs = build_ir_for_expr(irb, binary_op->lhs);
   struct ir_op *rhs = build_ir_for_expr(irb, binary_op->rhs);
@@ -137,6 +138,15 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ast_assg *assg) {
   }
 }
 
+struct ir_op *build_ir_for_compoundexpr(struct ir_builder *irb,
+                                  struct ast_compoundexpr *compound_expr) {
+  for (size_t i = 0; i < compound_expr->num_exprs; i++) {
+    build_ir_for_expr(irb, &compound_expr->exprs[i]);
+  }
+
+  return irb->last;
+}
+
 struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
                                   struct ast_rvalue *rvalue) {
   switch (rvalue->ty) {
@@ -145,9 +155,9 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
   case AST_RVALUE_TY_ASSG:
     return build_ir_for_assg(irb, rvalue->assg);
   case AST_RVALUE_TY_BINARY_OP:
-    return build_ir_for_binary_op(irb, &rvalue->binary_op);
-  default:
-    todo("build ir for <thing>");
+    return build_ir_for_binaryop(irb, &rvalue->binary_op);
+  case AST_RVALUE_TY_COMPOUNDEXPR:
+    return build_ir_for_compoundexpr(irb, &rvalue->compound_expr);
   }
 }
 
