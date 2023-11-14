@@ -94,9 +94,45 @@ void backtrack(struct lexer *lexer, struct text_pos position) {
   lexer->pos = position;
 }
 
-
 void consume_token(struct lexer *lexer, struct token token) {
-  lexer->pos = token.end;
+  lexer->pos = token.span.end;
+}
+
+// it returns bool in case we hit EOF without hitting the end token
+void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
+  for (; cur_pos->idx < lexer->len && lexer->text[cur_pos->idx + 1] != '\n'; next_col(cur_pos)) {
+    // nothing
+  }
+
+  // we have either hit end of line or end of file
+  // we treat both as a valid eol
+}
+
+// attempts to find the `*/` token
+// rather than just lexing the comment itself
+// this may be marginally faster, also may not make much of a difference
+// it returns bool in case we hit EOF without hitting the end token
+bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
+  for (; /* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len; next_col(cur_pos)) {
+    // condition outside of loop just for clarity
+    if (lexer->text[cur_pos->idx] == '*' && lexer->text[cur_pos->idx + 1] == '/') {
+      // found it!
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// moves the position forward and returns true if the next char is the given char
+// else returns false
+bool try_get_char(struct lexer *lexer, struct text_pos *cur_pos, char c) {
+  if (cur_pos->idx + 1 < lexer->len && lexer->text[cur_pos->idx + 1] == c) {
+    next_col(cur_pos);
+    return true;
+  }
+
+  return false;
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
@@ -107,7 +143,7 @@ bool lexer_at_eof(struct lexer *lexer) {
   return lexer->pos.idx >= lexer->len;
 }
 
-enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
+void peek_token(struct lexer *lexer, struct token *token) {
   while (lexer->pos.idx < lexer->len && isspace(lexer->text[lexer->pos.idx])) {
     if (lexer->text[lexer->pos.idx] == '\n') {
       // skip newlines, adjust position
@@ -122,7 +158,10 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
   struct text_pos end = start;
 
   if (end.idx >= lexer->len) {
-    return PEEK_TOKEN_RESULT_EOF;
+    token->ty = LEX_TOKEN_TYPE_EOF;
+    token->span.start = start;
+    token->span.end = end;
+    return;
   }
 
   char c = lexer->text[start.idx];
@@ -175,8 +214,16 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
     break;
   case '/':
-    ty = LEX_TOKEN_TYPE_OP_DIV;
     next_col(&end);
+
+    // look for `//` and `/*` comment tokens
+    if (try_get_char(lexer, &end, '/')) {
+      ty = LEX_TOKEN_TYPE_INLINE_COMMENT;      
+    } else if (try_get_char(lexer, &end, '*')) {
+      ty = LEX_TOKEN_TYPE_MULTILINE_COMMENT;
+    }
+    
+    ty = LEX_TOKEN_TYPE_OP_DIV;
     break;
   case '%':
     ty = LEX_TOKEN_TYPE_OP_QUOT;
@@ -239,16 +286,18 @@ enum peek_token_result peek_token(struct lexer *lexer, struct token *token) {
   }
 
   token->ty = ty;
-  token->start = start;
-  token->end = end;
+  token->span.start = start;
+  token->span.end = end;
 
   debug("parse token %s\n", token_name(lexer, token));
-
-  return PEEK_TOKEN_RESULT_SUCCESS;
 }
 
 int text_pos_len(struct text_pos start, struct text_pos end) {
   return end.idx - start.idx;
+}
+
+int text_span_len(const struct text_span *span) {
+  return text_pos_len(span->start, span->end);
 }
 
 void next_col(struct text_pos *pos) {
@@ -272,9 +321,9 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   case LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL:
   case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
   case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL: {
-    size_t len = text_pos_len(token->start, token->end);
+    size_t len = text_span_len(&token->span);
     char *p = alloc(lexer->arena, len);
-    memcpy(p, &lexer->text[token->start.idx], len);
+    memcpy(p, &lexer->text[token->span.start.idx], len);
     return p;
   }
   default:
@@ -288,7 +337,12 @@ const char *token_name(struct lexer *lexer, struct token *token) {
   UNUSED_ARG(lexer);
 
   switch (token->ty) {
+  CASE_RET(LEX_TOKEN_TYPE_UNKNOWN)
+  CASE_RET(LEX_TOKEN_TYPE_EOF)
+
   CASE_RET(LEX_TOKEN_TYPE_WHITESPACE)
+  CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
+  CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
 
   CASE_RET(LEX_TOKEN_TYPE_OP_ASSG)
   CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
@@ -308,8 +362,6 @@ const char *token_name(struct lexer *lexer, struct token *token) {
   CASE_RET(LEX_TOKEN_TYPE_KW_SIGNED)
   CASE_RET(LEX_TOKEN_TYPE_KW_UNSIGNED)
 
-  CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
-  CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
   CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)

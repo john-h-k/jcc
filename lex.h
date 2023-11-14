@@ -4,6 +4,10 @@
 #include <stdlib.h>
 
 enum lex_token_type {
+  LEX_TOKEN_TYPE_UNKNOWN,
+  LEX_TOKEN_TYPE_EOF,
+
+  /* Trivia (whitespace, comments). Handled entirely by lexer */
   LEX_TOKEN_TYPE_WHITESPACE,
   LEX_TOKEN_TYPE_INLINE_COMMENT,
   LEX_TOKEN_TYPE_MULTILINE_COMMENT,
@@ -70,15 +74,20 @@ struct text_pos {
   size_t col;
 };
 
+struct text_span {
+  struct text_pos start;
+  struct text_pos end;
+};
+
 int text_pos_len(struct text_pos start, struct text_pos end);
+int text_span_len(const struct text_span *span);
 
 void next_col(struct text_pos *pos);
 
 void next_line(struct text_pos *pos);
 
 struct token {
-  struct text_pos start;
-  struct text_pos end;
+  struct text_span span;
 
   enum lex_token_type ty;
 };
@@ -89,16 +98,10 @@ bool lexer_at_eof(struct lexer *lexer);
 enum lex_status create_lexer(const char *program, struct lexer **lexer);
 void free_lexer(struct lexer **lexer);
 
-enum peek_token_result {
-  PEEK_TOKEN_RESULT_SUCCESS,
-  PEEK_TOKEN_RESULT_EOF
-};
-
 struct text_pos get_position(struct lexer *lexer);
 void backtrack(struct lexer *lexer, struct text_pos position);
 
-enum peek_token_result peek_token(struct lexer *lexer, struct token *token);
-
+void peek_token(struct lexer *lexer, struct token *token);
 void consume_token(struct lexer *lexer, struct token token);
 
 // returns the associated text for a token, or NULL
