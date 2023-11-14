@@ -2,75 +2,16 @@
 #include "alloc.h"
 #include "lex.h"
 #include "parse.h"
+#include "util.h"
+#include "var_table.h"
 #include "vector.h"
-
-struct var_table_entry {
-  const char *name;
-  int scope;
-  struct ir_op *last_write;
-};
-
-struct var_table {
-  // vector of `var_table_entry`
-  // change to hash eventually?
-  struct vector *entries;
-
-  // needed for accessing AST text
-  struct parser *parser;
-};
-
-struct var_table var_table_create(struct parser *parser) {
-  // known memory leak here, no `free` function atm
-  struct var_table var_table = {
-      .entries = vector_create(sizeof(struct var_table_entry)),
-      .parser = parser};
-
-  return var_table;
-}
-
-struct var_table_entry *create_entry(struct var_table *var_table, const struct ast_var *var) {
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  struct var_table_entry entry = {
-      .name = name, .scope = var->scope, .last_write = NULL};
-
-  return vector_push_back(var_table->entries, &entry);
-}
-
-struct var_table_entry *get_or_create_entry(struct var_table *var_table,
-                                            const struct ast_var *var) {
-  // super inefficient, TODO: make efficient
-  // does linear scan for entry at current scope, if that fails, tries at higher scope, until scope is global
-  // then creates new entry
-
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  size_t num_vars = vector_length(var_table->entries);
-
-  for (int scope = var->scope; scope >= SCOPE_GLOBAL; scope--) {
-    trace("trying to find var '%s' at scope '%d' (var has scope '%d')", name, scope, var->scope);
-
-    for (size_t i = 0; i < num_vars; i++) {
-      struct var_table_entry *entry = vector_get(var_table->entries, i);
-
-      if (entry->scope == scope && strcmp(entry->name, name) == 0) {
-        trace("found var at scope '%d'", scope);
-        return entry;
-      }
-    }
-
-    if (scope != SCOPE_GLOBAL) {
-      trace("failed! trying at next scope up");
-    }
-  }
-
-  trace("couldn't find variable, creating new entry '%s' with scope '%d'", name, var->scope);
-  
-  return create_entry(var_table, var);
-}
 
 struct ir_builder {
   struct parser *parser;
   struct arena_allocator *arena;
 
+  // `value` contains a `struct ir_op *` to the last op that wrote to this
+  // variable or NULL if it is not yet written to
   struct var_table var_table;
 
   struct ir_op *first;
@@ -95,32 +36,37 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb) {
   return op;
 }
 
-
-enum ir_op_var_ty ty_for_well_known_ty(enum well_known_ty wkt) {
+enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
   switch (wkt) {
   case WELL_KNOWN_TY_ASCII_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
-    return IR_OP_VAR_TY_I8;
+    return IR_OP_VAR_PRIMITIVE_TY_I8;
   case WELL_KNOWN_TY_SIGNED_SHORT:
   case WELL_KNOWN_TY_UNSIGNED_SHORT:
-    return IR_OP_VAR_TY_I16;
+    return IR_OP_VAR_PRIMITIVE_TY_I16;
   case WELL_KNOWN_TY_SIGNED_INT:
   case WELL_KNOWN_TY_UNSIGNED_INT:
-    return IR_OP_VAR_TY_I32;
+    return IR_OP_VAR_PRIMITIVE_TY_I32;
   case WELL_KNOWN_TY_SIGNED_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG:
-    return IR_OP_VAR_TY_I64;
+    return IR_OP_VAR_PRIMITIVE_TY_I64;
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
-    return IR_OP_VAR_TY_I64;
+    return IR_OP_VAR_PRIMITIVE_TY_I64;
   }
 }
 
-enum ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
+struct ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
   switch (ty_ref->ty) {
-  case AST_TYREF_TY_WELL_KNOWN:
-    return ty_for_well_known_ty(ty_ref->well_known);
+  case AST_TYREF_TY_UNKNOWN:
+    bug("shouldn't reach IR gen with unresolved type");
+  case AST_TYREF_TY_WELL_KNOWN: {
+    struct ir_op_var_ty ty;
+    ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
+    ty.primitive = ty_for_well_known_ty(ty_ref->well_known);
+    return ty;
+  }
   }
 }
 
@@ -133,6 +79,7 @@ struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
 
   struct ir_op *op = alloc_ir_op(irb);
   op->ty = IR_OP_TY_BINARY_OP;
+  op->var_ty = ty_for_ast_tyref(&binary_op->var_ty);
 
   struct ir_op_binary_op *b = &op->binary_op;
 
@@ -150,7 +97,14 @@ struct ir_op *build_ir_for_binary_op(struct ir_builder *irb,
     b->ty = IR_OP_BINARY_OP_TY_MUL;
     break;
   case AST_BINARY_OP_TY_DIV:
-    b->ty = IR_OP_BINARY_OP_TY_SDIV;
+    invariant_assert(binary_op->var_ty.ty == AST_TYREF_TY_WELL_KNOWN,
+                     "non primitives (/well-knowns) cannot be used in binary "
+                     "expression by point IR is reached!");
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SDIV;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_UDIV;
+    }
     break;
   case AST_BINARY_OP_TY_QUOT:
     b->ty = IR_OP_BINARY_OP_TY_QUOT;
@@ -164,31 +118,32 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ast_cnst *cnst) {
   struct ir_op *op = alloc_ir_op(irb);
 
   op->ty = IR_OP_TY_CNST;
+  op->var_ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
+  op->var_ty.primitive = ty_for_well_known_ty(cnst->cnst_ty);
   op->cnst.value = cnst->value;
 
   return op;
 }
 
-struct ir_op *build_ir_for_assg(struct ir_builder *irb,
-                                  struct ast_assg *assg) {
+struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ast_assg *assg) {
   switch (assg->lvalue.ty) {
-    case AST_LVALUE_TY_VAR: {
-      struct var_table_entry *entry =
-          get_or_create_entry(&irb->var_table, &assg->lvalue.var);
-    
-      entry->last_write = build_ir_for_expr(irb, assg->expr);
-      return entry->last_write;
-    }
+  case AST_LVALUE_TY_VAR: {
+    struct var_table_entry *entry =
+        get_or_create_entry(&irb->var_table, &assg->lvalue.var);
+
+    entry->value = build_ir_for_expr(irb, assg->expr);
+    return entry->value;
+  }
   }
 }
-  
+
 struct ir_op *build_ir_for_rvalue(struct ir_builder *irb,
                                   struct ast_rvalue *rvalue) {
   switch (rvalue->ty) {
   case AST_RVALUE_TY_CNST:
     return build_ir_for_cnst(irb, &rvalue->cnst);
   case AST_RVALUE_TY_ASSG:
-      return build_ir_for_assg(irb, rvalue->assg);
+    return build_ir_for_assg(irb, rvalue->assg);
   case AST_RVALUE_TY_BINARY_OP:
     return build_ir_for_binary_op(irb, &rvalue->binary_op);
   default:
@@ -204,11 +159,12 @@ struct ir_op *build_ir_for_lvalue(struct ir_builder *irb,
     struct var_table_entry *entry =
         get_or_create_entry(&irb->var_table, &lvalue->var);
 
-    if (!entry->last_write) {
-      err("undefined behaviour - reading from unassigned variable '%s'", entry->name);
+    if (!entry->value) {
+      err("undefined behaviour - reading from unassigned variable '%s'",
+          entry->name);
     }
-      
-    return entry->last_write;
+
+    return entry->value;
   }
   }
 }
@@ -255,14 +211,13 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
     // a decl is _always_ a new entry (it may shadow)
-    struct var_table_entry *entry = create_entry(
-        &irb->var_table, &decl->var);
+    struct var_table_entry *entry = create_entry(&irb->var_table, &decl->var);
 
     if (decl->ty == AST_VARDECL_TY_DECL) {
       continue;
     }
 
-    entry->last_write = build_ir_for_expr(irb, &decl->assg_expr);
+    entry->value = build_ir_for_expr(irb, &decl->assg_expr);
   }
 
   return irb->last;
@@ -327,6 +282,23 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
+const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
+  switch (var_ty->ty) {
+  case IR_OP_VAR_TY_TY_PRIMITIVE: {
+    switch (var_ty->primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_I8:
+      return "i8";
+    case IR_OP_VAR_PRIMITIVE_TY_I16:
+      return "i16";
+    case IR_OP_VAR_PRIMITIVE_TY_I32:
+      return "i32";
+    case IR_OP_VAR_PRIMITIVE_TY_I64:
+      return "i64";
+    }
+  }
+  }
+}
+
 void debug_print_ir(struct ir_op *ir) {
   while (ir) {
     switch (ir->ty) {
@@ -334,10 +306,12 @@ void debug_print_ir(struct ir_op *ir) {
       todo("debug PHI");
       break;
     case IR_OP_TY_CNST:
-      fprintf(stderr, "%%%zu = %zu\n", ir->id, ir->cnst.value);
+      fprintf(stderr, "%%%zu (%s) = %zu\n", ir->id, var_ty_string(&ir->var_ty),
+              ir->cnst.value);
       break;
     case IR_OP_TY_BINARY_OP:
-      fprintf(stderr, "%%%zu = %%%zu %s %%%zu\n", ir->id, ir->binary_op.lhs->id,
+      fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu\n", ir->id,
+              var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
               binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
       break;
 

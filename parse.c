@@ -4,6 +4,7 @@
 #include "log.h"
 #include "util.h"
 #include "vector.h"
+#include "var_table.h"
 
 #include <alloca.h>
 #include <string.h>
@@ -11,6 +12,10 @@
 struct parser {
   struct arena_allocator *arena;
   struct lexer *lexer;
+
+  // `value` contains a `struct ast_tyref *` to the type of the variable
+  // or NULL if the variable has been used without a declaration
+  struct var_table var_table;
 
   int cur_scope;
 };
@@ -26,6 +31,7 @@ enum parser_create_result create_parser(const char *program,
   }
 
   p->cur_scope = SCOPE_GLOBAL;
+  p->var_table = var_table_create(p);
 
   *parser = p;
 
@@ -118,7 +124,8 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return true;
 }
 
-bool is_literal_token(enum lex_token_type tok_ty, enum well_known_ty *well_known_ty) {
+bool is_literal_token(enum lex_token_type tok_ty,
+                      enum well_known_ty *well_known_ty) {
   switch (tok_ty) {
   case LEX_TOKEN_TYPE_UNKNOWN:
   case LEX_TOKEN_TYPE_EOF:
@@ -241,6 +248,7 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   struct ast_assg assg;
   if (parse_assg(parser, &assg)) {
     rvalue->ty = AST_RVALUE_TY_ASSG;
+    rvalue->var_ty = assg.expr->var_ty;
     rvalue->assg = alloc(parser->arena, sizeof(*rvalue->assg));
     *rvalue->assg = assg;
     return true;
@@ -249,6 +257,8 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
     rvalue->ty = AST_RVALUE_TY_CNST;
+    rvalue->var_ty.ty = AST_TYREF_TY_WELL_KNOWN;
+    rvalue->var_ty.well_known = cnst.cnst_ty;
     rvalue->cnst = cnst;
     return true;
   }
@@ -263,10 +273,24 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   return false;
 }
 
+struct ast_tyref get_var_type(struct parser *parser, const struct ast_var *var) {
+  struct var_table_entry *entry = get_or_create_entry(&parser->var_table, var);
+
+  if (entry->value) {
+    debug("var %s was found, type", identifier_str(parser, &var->identifier));
+    return *(struct ast_tyref *)entry->value;
+  } else {
+    debug("var %s was not found, unknown type", identifier_str(parser, &var->identifier));
+    struct ast_tyref ty_ref = { .ty = AST_TYREF_TY_UNKNOWN };
+    return ty_ref;
+  }
+}
+
 bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
   struct ast_var var;
   if (parse_var(parser, &var)) {
     lvalue->ty = AST_LVALUE_TY_VAR;
+    lvalue->var_ty = get_var_type(parser, &var);
     lvalue->var = var;
     return true;
   }
@@ -304,6 +328,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   struct ast_rvalue rvalue;
   if (parse_rvalue_atom(parser, &rvalue)) {
     expr->ty = AST_EXPR_TY_RVALUE;
+    expr->var_ty = rvalue.var_ty;
     expr->rvalue = rvalue;
     return true;
   }
@@ -311,11 +336,47 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   struct ast_lvalue lvalue;
   if (parse_lvalue(parser, &lvalue)) {
     expr->ty = AST_EXPR_TY_LVALUE;
+    expr->var_ty = lvalue.var_ty;
     expr->lvalue = lvalue;
     return true;
   }
 
   return false;
+}
+
+struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
+                                         const struct ast_tyref *rhs) {
+  if (lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
+      rhs->ty == AST_TYREF_TY_WELL_KNOWN) {
+    struct ast_tyref result_ty;
+    result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
+
+    if (lhs->well_known == rhs->well_known) {
+      // they are the same type
+      result_ty.well_known = lhs->well_known;
+    } else {
+      if (lhs->well_known == WELL_KNOWN_TY_ASCII_CHAR || rhs->well_known == WELL_KNOWN_TY_ASCII_CHAR) {
+        todo("handle ASCII CHAR signedness");
+      }
+      
+      enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs->well_known);
+      enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs->well_known);
+
+      if (signed_lhs != signed_rhs) {
+        // one is bigger than other
+        // type of expression is simply the larger type
+        result_ty.well_known = MAX(signed_lhs, signed_rhs);
+      } else {
+        // they are the same size
+        // the unsigned one is chosen (C spec dictates)
+        result_ty.well_known = WKT_MAKE_UNSIGNED(signed_lhs);
+      }
+    }
+
+    return result_ty;
+  }
+
+  todo("`resolve_binary_op_types` for types other than well known");
 }
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
@@ -353,10 +414,14 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     // `rhs` so we need to in-place modify `expr`
     struct ast_expr lhs = *expr;
 
+    struct ast_tyref result_ty = resolve_binary_op_types(&lhs.var_ty, &rhs.var_ty);
+    
     expr->ty = AST_EXPR_TY_RVALUE;
+    expr->var_ty = result_ty;
     expr->rvalue.ty = AST_RVALUE_TY_BINARY_OP;
     struct ast_binaryop *binary_op = &expr->rvalue.binary_op;
     binary_op->ty = info.ty;
+    binary_op->var_ty = result_ty;
 
     binary_op->lhs = alloc(parser->arena, sizeof(*binary_op->lhs));
     *binary_op->lhs = lhs;
@@ -411,38 +476,38 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
   peek_token(parser->lexer, &token);
 
   switch (token.ty) {
-    case LEX_TOKEN_TYPE_KW_CHAR:
-      consume_token(parser->lexer, token);
-      *wkt = WELL_KNOWN_TY_ASCII_CHAR;
-      return true;
-    case LEX_TOKEN_TYPE_KW_SHORT:
-      consume_token(parser->lexer, token);
-      *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
-      skip_int_token_if_present(parser);
-      return true;
-    case LEX_TOKEN_TYPE_KW_INT:
-      debug("seen int!!!");
-      consume_token(parser->lexer, token);
-      *wkt = WELL_KNOWN_TY_SIGNED_INT;
-      return true;
-    case LEX_TOKEN_TYPE_KW_LONG: {
-      err("seen long");
-      consume_token(parser->lexer, token);
+  case LEX_TOKEN_TYPE_KW_CHAR:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_ASCII_CHAR;
+    return true;
+  case LEX_TOKEN_TYPE_KW_SHORT:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
+    skip_int_token_if_present(parser);
+    return true;
+  case LEX_TOKEN_TYPE_KW_INT:
+    debug("seen int!!!");
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_SIGNED_INT;
+    return true;
+  case LEX_TOKEN_TYPE_KW_LONG: {
+    err("seen long");
+    consume_token(parser->lexer, token);
 
-      struct token maybe_other_long;
-      peek_token(parser->lexer, &maybe_other_long);
+    struct token maybe_other_long;
+    peek_token(parser->lexer, &maybe_other_long);
 
-      if (token.ty == LEX_TOKEN_TYPE_KW_LONG) {
-        *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
-      } else {
-        *wkt = WELL_KNOWN_TY_SIGNED_LONG;
-      }
-
-      skip_int_token_if_present(parser);
-      return true;
+    if (token.ty == LEX_TOKEN_TYPE_KW_LONG) {
+      *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+    } else {
+      *wkt = WELL_KNOWN_TY_SIGNED_LONG;
     }
-    default:
-      return false;
+
+    skip_int_token_if_present(parser);
+    return true;
+  }
+  default:
+    return false;
   }
 }
 
@@ -453,7 +518,7 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
   peek_token(parser->lexer, &token);
 
   bool seen_unsigned = false;
-  bool seen_signed = false;  
+  bool seen_signed = false;
   if (token.ty == LEX_TOKEN_TYPE_KW_SIGNED) {
     seen_signed = true;
 
@@ -465,8 +530,10 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
     consume_token(parser->lexer, token);
   }
 
-  bool enough_type_info = seen_signed || seen_unsigned; // `signed` or `unsigned` is a type in itself
-  
+  bool enough_type_info =
+      seen_signed ||
+      seen_unsigned; // `signed` or `unsigned` is a type in itself
+
   enum well_known_ty wkt;
   if (!parse_integer_size_name(parser, &wkt)) {
     if (enough_type_info) {
@@ -479,7 +546,8 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
     if (seen_unsigned) {
       // unsigned variants are signed variants + 1
       wkt++;
-    } else if (!seen_signed && !seen_unsigned && wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
+    } else if (!seen_signed && !seen_unsigned &&
+               wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
       // no explicit sign or unsign, so ASCII CHAR
       wkt = WELL_KNOWN_TY_ASCII_CHAR;
     }
@@ -501,7 +569,6 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   }
 
   var_decl->var = var;
-  var_decl->scope = parser->cur_scope;
 
   struct text_pos post_var_pos = get_position(parser->lexer);
   struct token token;
@@ -535,9 +602,8 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
 
 bool parse_vardecllist(struct parser *parser,
                        struct ast_vardecllist *var_decl_list) {
-  fprintf(stderr, "trying decl list\n");
-  struct ast_tyref tyref;
-  if (!parse_tyref(parser, &tyref)) {
+  struct ast_tyref ty_ref;
+  if (!parse_tyref(parser, &ty_ref)) {
     return false;
   }
 
@@ -545,8 +611,14 @@ bool parse_vardecllist(struct parser *parser,
 
   struct ast_vardecl var_decl;
   while (parse_vardecl(parser, &var_decl)) {
-    debug("found vardecl");
     vector_push_back(decls, &var_decl);
+
+    trace("creating var_table_entry for var name=%s, scope=%d", identifier_str(parser, &var_decl.var.identifier), var_decl.var.scope);
+    struct var_table_entry *entry = create_entry(&parser->var_table, &var_decl.var);
+
+    // copy the type ref into arena memory for lifetime simplicity
+    entry->value = alloc(parser->arena, sizeof(ty_ref));
+    *(struct ast_tyref *)entry->value = ty_ref;
 
     struct token token;
     peek_token(parser->lexer, &token);
@@ -570,7 +642,7 @@ bool parse_vardecllist(struct parser *parser,
   struct ast_vardecl *new_decls = alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
 
-  var_decl_list->var_ty = tyref;
+  var_decl_list->var_ty = ty_ref;
   var_decl_list->num_decls = vector_length(decls);
   var_decl_list->decls = new_decls;
 
@@ -625,7 +697,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     stmt->compound = compound_stmt;
     return true;
   }
-  
+
   struct text_pos pos = get_position(parser->lexer);
   struct ast_expr expr;
   if (parse_expr(parser, &expr)) {
@@ -663,7 +735,8 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
-  fprintf(stderr, "trying to parse compound stmt depth %d\n", parser->cur_scope);
+  fprintf(stderr, "trying to parse compound stmt depth %d\n",
+          parser->cur_scope);
   struct text_pos pos = get_position(parser->lexer);
 
   struct token open_brace;
@@ -878,8 +951,14 @@ struct ast_printstate {
 #define INDENT() state->indent++
 #define UNINDENT() state->indent--
 
+#define PUSH_INDENT() int tmp_indent = state->indent; state->indent = 0;
+#define POP_INDENT() state->indent = tmp_indent;
+
 DEBUG_FUNC(tyref, ty_ref) {
   switch (ty_ref->ty) {
+  case AST_TYREF_TY_UNKNOWN:
+    AST_PRINTZ("<unresolved type>");
+    break;
   case AST_TYREF_TY_WELL_KNOWN:
     switch (ty_ref->well_known) {
     case WELL_KNOWN_TY_ASCII_CHAR:
@@ -1027,6 +1106,10 @@ DEBUG_FUNC(rvalue, rvalue) {
 }
 
 DEBUG_FUNC(expr, expr) {
+  AST_PRINTZ("EXPRESSION");
+
+  INDENT();
+  DEBUG_CALL(tyref, &expr->var_ty);
   switch (expr->ty) {
   case AST_EXPR_TY_LVALUE:
     DEBUG_CALL(lvalue, &expr->lvalue);
@@ -1035,6 +1118,7 @@ DEBUG_FUNC(expr, expr) {
     DEBUG_CALL(rvalue, &expr->rvalue);
     break;
   }
+  UNINDENT();
 }
 
 DEBUG_FUNC(vardecl, var_decl) {

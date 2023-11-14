@@ -1,3 +1,1 @@
-int main() {
-  return 9 + 7;
-}
+int main() { return 9 + 7; }

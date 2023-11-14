@@ -1,3 +1,1 @@
-int main() {
-  return 88 / 10;
-}
+int main() { return 88 / 10; }

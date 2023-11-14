@@ -1,10 +1,10 @@
 #ifndef PARSE_H
 #define PARSE_H
 
-#include "util.h"
 #include "alloc.h"
-#include "log.h"
 #include "lex.h"
+#include "log.h"
+#include "util.h"
 
 #define SCOPE_GLOBAL (-1)
 
@@ -13,8 +13,8 @@
 enum well_known_ty {
   // parser.c relies on the unsigned variant being the signed variant +1
   // ir.c relies on the sizes being ascending
-  WELL_KNOWN_TY_ASCII_CHAR = 0,
-  WELL_KNOWN_TY_SIGNED_CHAR,
+  WELL_KNOWN_TY_ASCII_CHAR = -1,
+  WELL_KNOWN_TY_SIGNED_CHAR = 0,
   WELL_KNOWN_TY_UNSIGNED_CHAR,
 
   WELL_KNOWN_TY_SIGNED_SHORT,
@@ -30,12 +30,18 @@ enum well_known_ty {
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 };
 
-// signed types have odd values in the enum
-#define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 1)
+#define WKT_MAKE_SIGNED(wkt) ((wkt) == WELL_KNOWN_TY_UNSIGNED_CHAR ? WELL_KNOWN_TY_SIGNED_CHAR : ((wkt) & ~1))
+#define WKT_MAKE_UNSIGNED(wkt) ((wkt) == WELL_KNOWN_TY_SIGNED_CHAR ? WELL_KNOWN_TY_UNSIGNED_CHAR : ((wkt) | 1))
 
-/* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or `<keyword>` */
+// signed types have odd values in the enum
+#define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
+
+/* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
+ * `<keyword>` */
 
 enum ast_tyref_ty {
+  /* Used for variables that were used without declaration and similar. Usually an error */
+  AST_TYREF_TY_UNKNOWN,
   AST_TYREF_TY_WELL_KNOWN,
   // AST_TYREF_TY_TYPEDEF_NAME,
   // AST_TYREF_TY_STRUCT,
@@ -52,7 +58,7 @@ struct ast_tyref {
 };
 
 struct ast_arglist {
-  void* DUMMY;
+  void *DUMMY;
 };
 
 struct ast_funcsig {
@@ -84,8 +90,9 @@ enum ast_binary_op_ty {
 
 struct ast_binaryop {
   enum ast_binary_op_ty ty;
-  struct ast_expr* lhs;
-  struct ast_expr* rhs;
+  struct ast_tyref var_ty;
+  struct ast_expr *lhs;
+  struct ast_expr *rhs;
 };
 
 /* Variable references */
@@ -95,7 +102,8 @@ struct ast_var {
   int scope;
 };
 
-/* Compound expr - comma seperated expressions with well-defined order of execution */
+/* Compound expr - comma seperated expressions with well-defined order of
+ * execution */
 
 struct ast_compoundexpr {
   struct ast_expr *exprs;
@@ -110,13 +118,15 @@ enum ast_lvalue_ty {
 
 struct ast_lvalue {
   enum ast_lvalue_ty ty;
+  struct ast_tyref var_ty;
 
   union {
     struct ast_var var;
   };
 };
 
-// Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue> = <expr>`)
+// Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue>
+// = <expr>`)
 
 struct ast_assg {
   struct ast_lvalue lvalue;
@@ -129,26 +139,27 @@ enum ast_rvalue_ty {
   AST_RVALUE_TY_CNST,
   AST_RVALUE_TY_BINARY_OP,
   // AST_RVALUE_TY_COMPOUNDEXPR,
-  AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`, they themselves evaluate to an rvalue (unlike in C++)
+  AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
+                      // they themselves evaluate to an rvalue (unlike in C++)
 };
 
 struct ast_rvalue {
   enum ast_rvalue_ty ty;
+  struct ast_tyref var_ty;
 
   union {
     struct ast_cnst cnst;
     struct ast_binaryop binary_op;
-    struct ast_compoundexpr compound_expr; // compound assignments are *never* lvalues in C
+    struct ast_compoundexpr
+        compound_expr; // compound assignments are *never* lvalues in C
     struct ast_assg *assg;
   };
 };
 
-/* Expressions - divided into `lvalue` (can be on left hand side of assignment) and `rvalue` (not an lvalue) */
+/* Expressions - divided into `lvalue` (can be on left hand side of assignment)
+ * and `rvalue` (not an lvalue) */
 
-enum ast_expr_ty {
-  AST_EXPR_TY_LVALUE,
-  AST_EXPR_TY_RVALUE
-};
+enum ast_expr_ty { AST_EXPR_TY_LVALUE, AST_EXPR_TY_RVALUE };
 
 struct ast_expr {
   enum ast_expr_ty ty;
@@ -159,7 +170,8 @@ struct ast_expr {
   };
 };
 
-/* Variable declarations - `<typename> <comma seperated list of declarations>` where each declaration is `<name>` or `<name> = <expr>` */
+/* Variable declarations - `<typename> <comma seperated list of declarations>`
+ * where each declaration is `<name>` or `<name> = <expr>` */
 
 enum ast_vardecl_ty {
   AST_VARDECL_TY_DECL,
@@ -170,7 +182,7 @@ struct ast_vardecl {
   enum ast_vardecl_ty ty;
   struct ast_var var;
 
-  int scope;
+  // int scope;
 
   union {
     struct ast_expr assg_expr;
@@ -201,7 +213,8 @@ struct ast_jumpstmt {
   };
 };
 
-/* Statements - either declaration, labelled, expression, compound, jump, iteration, or selection */
+/* Statements - either declaration, labelled, expression, compound, jump,
+ * iteration, or selection */
 
 enum ast_stmt_ty {
   AST_STMT_TY_VAR_DECL_LIST,
@@ -215,7 +228,7 @@ enum ast_stmt_ty {
 
 struct ast_stmt;
 struct ast_compoundstmt {
-  struct ast_stmt* stmts;
+  struct ast_stmt *stmts;
   size_t num_stmts;
 };
 
@@ -243,10 +256,10 @@ struct ast_funcdecl {
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  struct ast_funcdef* func_defs;
+  struct ast_funcdef *func_defs;
   size_t num_func_defs;
 
-  struct ast_funcdecl* func_decls;
+  struct ast_funcdecl *func_decls;
   size_t num_func_decls;
 };
 
@@ -261,12 +274,14 @@ struct parse_result {
   struct ast_translationunit translation_unit;
 };
 
-enum parser_create_result create_parser(const char *program, struct parser **parser);
+enum parser_create_result create_parser(const char *program,
+                                        struct parser **parser);
 struct parse_result parse(struct parser *parser);
-void free_parser(struct parser** parser);
+void free_parser(struct parser **parser);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 
-void debug_print_ast(struct parser *parser, struct ast_translationunit *translation_unit);
+void debug_print_ast(struct parser *parser,
+                     struct ast_translationunit *translation_unit);
 
 #endif

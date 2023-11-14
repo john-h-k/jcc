@@ -1,5 +1,5 @@
-#ifndef ERROR_H
-#define ERROR_H
+#ifndef DIAGNOSTIC_H
+#define DIAGNOSTIC_H
 
 #include "lex.h"
 
@@ -26,7 +26,7 @@ struct compiler_diagnostic_id {
   size_t id;
 };
 
-struct parse_diagnostic {  
+struct parse_diagnostic {
   struct text_pos start;
   struct text_pos end;
 };

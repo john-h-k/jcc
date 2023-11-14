@@ -10,11 +10,11 @@ struct vector *vector_create(size_t element_size);
 void *vector_push_back(struct vector *v, void *data);
 size_t vector_length(struct vector *v);
 size_t vector_byte_size(struct vector *v);
-void* vector_get(struct vector *v, size_t index);
+void *vector_get(struct vector *v, size_t index);
 
-void vector_copy_to(struct vector *v, void* dest);
+void vector_copy_to(struct vector *v, void *dest);
 
-void vector_to_array(struct vector *v, void** data, size_t* len);
+void vector_to_array(struct vector *v, void **data, size_t *len);
 
 void vector_free(struct vector **v);
 

@@ -10,6 +10,7 @@ struct lower_result {
   size_t len_code;
 };
 
-struct lower_result lower(struct arena_allocator *arena, struct ir_function *func);
+struct lower_result lower(struct arena_allocator *arena,
+                          struct ir_function *func);
 
 #endif

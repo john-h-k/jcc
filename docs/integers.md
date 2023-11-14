@@ -12,3 +12,7 @@ For simplicity, JCC has a fixed size for integers across all architectures, as f
 
 These apply for both signed and unsigned (and in the case of `char`, the type without sign) types.
 
+Additionally the `char` type is simply an alias for `unsigned char`.
+
+> Note: this is the _opposite_ of the standard GCC behaviour. Should it match for portability?
+

@@ -62,21 +62,23 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
   size_t len = text_pos_len(start, end);
   debug("testing '%*.*s' for kw", len, len, &lexer->text[start.idx]);
 
-  #define KEYWORD(kw, ty) { kw , sizeof( kw ) - 1, ty }
+#define KEYWORD(kw, ty)                                                        \
+  { kw, sizeof(kw) - 1, ty }
 
   static struct keyword keywords[] = {
-    KEYWORD("return", LEX_TOKEN_TYPE_KW_RETURN),
-    KEYWORD("char", LEX_TOKEN_TYPE_KW_CHAR),
-    KEYWORD("short", LEX_TOKEN_TYPE_KW_SHORT),
-    KEYWORD("int", LEX_TOKEN_TYPE_KW_INT),
-    KEYWORD("long", LEX_TOKEN_TYPE_KW_LONG),
-    KEYWORD("unsigned", LEX_TOKEN_TYPE_KW_UNSIGNED),
-    KEYWORD("signed", LEX_TOKEN_TYPE_KW_SIGNED),
+      KEYWORD("return", LEX_TOKEN_TYPE_KW_RETURN),
+      KEYWORD("char", LEX_TOKEN_TYPE_KW_CHAR),
+      KEYWORD("short", LEX_TOKEN_TYPE_KW_SHORT),
+      KEYWORD("int", LEX_TOKEN_TYPE_KW_INT),
+      KEYWORD("long", LEX_TOKEN_TYPE_KW_LONG),
+      KEYWORD("unsigned", LEX_TOKEN_TYPE_KW_UNSIGNED),
+      KEYWORD("signed", LEX_TOKEN_TYPE_KW_SIGNED),
   };
 
   for (size_t i = 0; i < sizeof(keywords) / sizeof(*keywords); i++) {
     if (len == keywords[i].len &&
-        memcmp(&lexer->text[start.idx], keywords[i].str, keywords[i].len) == 0) {
+        memcmp(&lexer->text[start.idx], keywords[i].str, keywords[i].len) ==
+            0) {
       return keywords[i].ty;
     }
   }
@@ -86,9 +88,7 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
 
 const char *token_name(struct lexer *lexer, struct token *token);
 
-struct text_pos get_position(struct lexer *lexer) {
-  return lexer->pos;
-}
+struct text_pos get_position(struct lexer *lexer) { return lexer->pos; }
 
 void backtrack(struct lexer *lexer, struct text_pos position) {
   lexer->pos = position;
@@ -100,8 +100,13 @@ void consume_token(struct lexer *lexer, struct token token) {
 
 // it returns bool in case we hit EOF without hitting the end token
 void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
-  for (; cur_pos->idx < lexer->len && lexer->text[cur_pos->idx + 1] != '\n'; next_col(cur_pos)) {
+  for (; cur_pos->idx < lexer->len && lexer->text[cur_pos->idx] != '\n';
+       next_col(cur_pos)) {
     // nothing
+  }
+
+  if (cur_pos->idx < lexer->len) {
+    next_line(cur_pos);
   }
 
   // we have either hit end of line or end of file
@@ -113,23 +118,18 @@ void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
 // this may be marginally faster, also may not make much of a difference
 // it returns bool in case we hit EOF without hitting the end token
 bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
-  for (; /* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len; next_col(cur_pos)) {
-    // condition outside of loop just for clarity
-    if (lexer->text[cur_pos->idx] == '*' && lexer->text[cur_pos->idx + 1] == '/') {
+  while (/* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len) {
+    if (lexer->text[cur_pos->idx] == '\n') {
+      next_line(cur_pos);
+    } else if (lexer->text[cur_pos->idx] == '*' &&
+        lexer->text[cur_pos->idx + 1] == '/') {
       // found it!
+      next_col(cur_pos);
+      next_col(cur_pos);
       return true;
+    } else {
+      next_col(cur_pos);
     }
-  }
-
-  return false;
-}
-
-// moves the position forward and returns true if the next char is the given char
-// else returns false
-bool try_get_char(struct lexer *lexer, struct text_pos *cur_pos, char c) {
-  if (cur_pos->idx + 1 < lexer->len && lexer->text[cur_pos->idx + 1] == c) {
-    next_col(cur_pos);
-    return true;
   }
 
   return false;
@@ -216,13 +216,28 @@ void peek_token(struct lexer *lexer, struct token *token) {
   case '/':
     next_col(&end);
 
+    // this approach is ugly, TODO: refactor
     // look for `//` and `/*` comment tokens
-    if (try_get_char(lexer, &end, '/')) {
-      ty = LEX_TOKEN_TYPE_INLINE_COMMENT;      
-    } else if (try_get_char(lexer, &end, '*')) {
+    if (end.idx < lexer->len && lexer->text[end.idx] == '/') {
+      ty = LEX_TOKEN_TYPE_INLINE_COMMENT;
+      find_eol(lexer, &end);
+      lexer->pos = end;
+
+      // find next token
+      peek_token(lexer, token);
+      return;
+    } else if (end.idx < lexer->len && lexer->text[end.idx] == '*') {
       ty = LEX_TOKEN_TYPE_MULTILINE_COMMENT;
+      if (!try_find_comment_end(lexer, &end)) {
+        bug("handle unended /* comments");
+      }
+      lexer->pos = end;
+
+      // find next token
+      peek_token(lexer, token);
+      return;
     }
-    
+
     ty = LEX_TOKEN_TYPE_OP_DIV;
     break;
   case '%':
@@ -234,40 +249,40 @@ void peek_token(struct lexer *lexer, struct token *token) {
     if (isdigit(c)) {
       ty = LEX_TOKEN_TYPE_SIGNED_INT_LITERAL;
 
-      for (size_t i = end.idx; i < lexer->len && isdigit(lexer->text[i]);
-           i++) {
+      for (size_t i = end.idx; i < lexer->len && isdigit(lexer->text[i]); i++) {
         next_col(&end);
       }
 
       bool is_unsigned = false;
 
       while (end.idx + 1 < lexer->len) {
-          debug("current pos %d", end.idx);
-          switch (tolower(lexer->text[end.idx + 1])) {
-            case 'u':
-              debug("found u!");
-              is_unsigned = true;
-              next_col(&end);
-              continue;
-            case 'l':
-              debug("found l!");
-              if (end.idx + 2 < lexer->len && tolower(lexer->text[end.idx + 1]) == 'l') {
-                ty = LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL;
-              } else {
-                ty = LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL;
-              }
-              next_col(&end);
-              continue;
-            default:
-              break;
+        debug("current pos %d", end.idx);
+        switch (tolower(lexer->text[end.idx + 1])) {
+        case 'u':
+          debug("found u!");
+          is_unsigned = true;
+          next_col(&end);
+          continue;
+        case 'l':
+          debug("found l!");
+          if (end.idx + 2 < lexer->len &&
+              tolower(lexer->text[end.idx + 1]) == 'l') {
+            ty = LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL;
+          } else {
+            ty = LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL;
           }
-
+          next_col(&end);
+          continue;
+        default:
           break;
+        }
+
+        break;
       }
 
       if (is_unsigned) {
         ty++;
-      }   
+      }
     } else if (valid_first_identifier_char(c)) {
       ty = LEX_TOKEN_TYPE_IDENTIFIER;
 
@@ -276,8 +291,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
         next_col(&end);
       }
 
-      // slightly hacky solution - retroactively determine if identifier is a
-      // keyword
+      // slightly hacky solution - retroactively determine if identifier
+      // is a keyword
       ty = refine_ty(lexer, start, end);
     } else {
       unreachable("lexer hit an unknown token!");
@@ -331,52 +346,54 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   }
 }
 
-#define CASE_RET(name) case name: return #name;
+#define CASE_RET(name)                                                         \
+  case name:                                                                   \
+    return #name;
 
 const char *token_name(struct lexer *lexer, struct token *token) {
   UNUSED_ARG(lexer);
 
   switch (token->ty) {
-  CASE_RET(LEX_TOKEN_TYPE_UNKNOWN)
-  CASE_RET(LEX_TOKEN_TYPE_EOF)
+    CASE_RET(LEX_TOKEN_TYPE_UNKNOWN)
+    CASE_RET(LEX_TOKEN_TYPE_EOF)
 
-  CASE_RET(LEX_TOKEN_TYPE_WHITESPACE)
-  CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
-  CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
+    CASE_RET(LEX_TOKEN_TYPE_WHITESPACE)
+    CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
+    CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
 
-  CASE_RET(LEX_TOKEN_TYPE_OP_ASSG)
-  CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
-  CASE_RET(LEX_TOKEN_TYPE_OP_SUB)
-  CASE_RET(LEX_TOKEN_TYPE_OP_MUL)
-  CASE_RET(LEX_TOKEN_TYPE_OP_DIV)
-  CASE_RET(LEX_TOKEN_TYPE_OP_QUOT)
+    CASE_RET(LEX_TOKEN_TYPE_OP_ASSG)
+    CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
+    CASE_RET(LEX_TOKEN_TYPE_OP_SUB)
+    CASE_RET(LEX_TOKEN_TYPE_OP_MUL)
+    CASE_RET(LEX_TOKEN_TYPE_OP_DIV)
+    CASE_RET(LEX_TOKEN_TYPE_OP_QUOT)
 
-  CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
-  CASE_RET(LEX_TOKEN_TYPE_COMMA)
+    CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
+    CASE_RET(LEX_TOKEN_TYPE_COMMA)
 
-  CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
-  CASE_RET(LEX_TOKEN_TYPE_KW_CHAR)
-  CASE_RET(LEX_TOKEN_TYPE_KW_SHORT)
-  CASE_RET(LEX_TOKEN_TYPE_KW_INT)
-  CASE_RET(LEX_TOKEN_TYPE_KW_LONG)
-  CASE_RET(LEX_TOKEN_TYPE_KW_SIGNED)
-  CASE_RET(LEX_TOKEN_TYPE_KW_UNSIGNED)
+    CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
+    CASE_RET(LEX_TOKEN_TYPE_KW_CHAR)
+    CASE_RET(LEX_TOKEN_TYPE_KW_SHORT)
+    CASE_RET(LEX_TOKEN_TYPE_KW_INT)
+    CASE_RET(LEX_TOKEN_TYPE_KW_LONG)
+    CASE_RET(LEX_TOKEN_TYPE_KW_SIGNED)
+    CASE_RET(LEX_TOKEN_TYPE_KW_UNSIGNED)
 
-  CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
-  CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
-  CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)
-  CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACE)
-  CASE_RET(LEX_TOKEN_TYPE_IDENTIFIER)
+    CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACKET)
+    CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACKET)
+    CASE_RET(LEX_TOKEN_TYPE_OPEN_BRACE)
+    CASE_RET(LEX_TOKEN_TYPE_CLOSE_BRACE)
+    CASE_RET(LEX_TOKEN_TYPE_IDENTIFIER)
 
-  CASE_RET(LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL)
 
-  CASE_RET(LEX_TOKEN_TYPE_SIGNED_INT_LITERAL)
-  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_SIGNED_INT_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL)
 
-  CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL)
-  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL)
 
-  CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL)
-  CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL)
+    CASE_RET(LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL)
   }
 }

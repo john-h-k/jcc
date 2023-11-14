@@ -18,10 +18,7 @@ struct arena {
 };
 
 void create_arena_allocator(struct arena_allocator **allocator) {
-  struct arena_allocator value = {
-    .first = NULL,
-    .last = NULL
-  };
+  struct arena_allocator value = {.first = NULL, .last = NULL};
 
   struct arena_allocator *p = nonnull_malloc(sizeof(value));
   *p = value;
@@ -33,10 +30,10 @@ void free_arena_allocator(struct arena_allocator **allocator) {
 
   while (arena) {
     free(arena->block);
-    
+
     arena = arena->next;
   }
-  
+
   free(*allocator);
   *allocator = NULL;
 }
@@ -44,7 +41,7 @@ void free_arena_allocator(struct arena_allocator **allocator) {
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
 struct arena new_arena();
 
-void* alloc_strcpy(struct arena_allocator *allocator, const char *str) {
+void *alloc_strcpy(struct arena_allocator *allocator, const char *str) {
   size_t len = strlen(str);
 
   char *cp = alloc(allocator, len);
@@ -53,7 +50,7 @@ void* alloc_strcpy(struct arena_allocator *allocator, const char *str) {
   return cp;
 }
 
-void* alloc(struct arena_allocator *allocator, size_t size) {  
+void *alloc(struct arena_allocator *allocator, size_t size) {
   size_t aligned = ROUND_UP(size, sizeof(size_t));
 
   if (aligned > BLOCK_SIZE) {
@@ -74,17 +71,18 @@ void* alloc(struct arena_allocator *allocator, size_t size) {
     if (try_alloc_in_arena(arena, aligned, &allocation)) {
       return allocation;
     }
-    
+
     arena = arena->next;
   }
-  
+
   // need to create a new arena
   allocator->last->next = nonnull_malloc(sizeof(*allocator->last->next));
   *allocator->last->next = new_arena();
   allocator->last = allocator->last->next;
 
   void *allocation;
-  invariant_assert(try_alloc_in_arena(allocator->last, aligned, &allocation), "allocating into new arena should be infallible");
+  invariant_assert(try_alloc_in_arena(allocator->last, aligned, &allocation),
+                   "allocating into new arena should be infallible");
   return allocation;
 }
 
@@ -100,10 +98,7 @@ bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
 
 struct arena new_arena() {
   struct arena arena = {
-    .block = nonnull_malloc(BLOCK_SIZE),
-    .pos = 0,
-    .size = BLOCK_SIZE
-  };
+      .block = nonnull_malloc(BLOCK_SIZE), .pos = 0, .size = BLOCK_SIZE};
 
   return arena;
 }
