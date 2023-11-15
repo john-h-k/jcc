@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "aarch64/lower.h"
+#include "aarch64/emit.h"
 #include "alloc.h"
 #include "disasm.h"
 #include "ir.h"
@@ -53,7 +54,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   debug_print_ast(compiler->parser, &result.translation_unit);
 
-  struct vector *lower_results = vector_create(sizeof(struct lower_result));
+  struct vector *compiled_functions = vector_create(sizeof(struct compiled_function));
   struct vector *symbols = vector_create(sizeof(struct symbol));
   size_t total_size = 0;
 
@@ -65,23 +66,30 @@ enum compile_result compile(struct compiler *compiler) {
     info("compiling function %s",
          identifier_str(compiler->parser, &def->sig.name));
 
-    struct ir_function ir =
-        build_ir_for_function(compiler->parser, compiler->arena, def);
+    struct ir_builder *ir = build_ir_for_function(compiler->parser, compiler->arena, def);
 
     BEGIN_STAGE("IR");
 
-    debug_print_ir(ir.start);
+    debug_print_ir(ir->first);
 
     BEGIN_STAGE("LOWERING");
 
-    struct lower_result result = lower(compiler->arena, &ir);
+    lower(ir);
 
-    debug("symbol %s, value %d", result.name, total_size);
+    BEGIN_STAGE("POST-LOWER IR");
+
+    debug_print_ir(ir->first);
+
+    BEGIN_STAGE("EMITTING");
+    
+    struct compiled_function func = emit(ir);
+
+    debug("symbol %s, value %d", func.name, total_size);
     struct symbol symbol = {
-        .name = result.name, .section = 1, .value = total_size};
+        .name = func.name, .section = 1, .value = total_size};
 
-    total_size += ROUND_UP(result.len_code, AARCH64_FUNCTION_ALIGNMENT);
-    vector_push_back(lower_results, &result);
+    total_size += ROUND_UP(func.len_code, AARCH64_FUNCTION_ALIGNMENT);
+    vector_push_back(compiled_functions, &func);
 
     vector_push_back(symbols, &symbol);
   }
@@ -89,11 +97,11 @@ enum compile_result compile(struct compiler *compiler) {
   char *code = alloc(compiler->arena, total_size);
   char *head = code;
 
-  size_t num_results = vector_length(lower_results);
+  size_t num_results = vector_length(compiled_functions);
   for (size_t i = 0; i < num_results; i++) {
-    struct lower_result *result = vector_get(lower_results, i);
-    memcpy(head, result->code, result->len_code);
-    head += ROUND_UP(result->len_code, AARCH64_FUNCTION_ALIGNMENT);
+    struct compiled_function *func = vector_get(compiled_functions, i);
+    memcpy(head, func->code, func->len_code);
+    head += ROUND_UP(func->len_code, AARCH64_FUNCTION_ALIGNMENT);
   }
 
   struct macho_args args = {
@@ -109,7 +117,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   write_macho(&args);
 
-  vector_free(&lower_results);
+  vector_free(&compiled_functions);
   vector_free(&symbols);
 
   BEGIN_STAGE("DISASSEMBLY");

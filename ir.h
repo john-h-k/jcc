@@ -33,6 +33,14 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_UQUOT,
 };
 
+enum ir_op_sign {
+  IR_OP_SIGN_NA,
+  IR_OP_SIGN_SIGNED,
+  IR_OP_SIGN_UNSIGNED
+};
+
+enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty);
+
 struct ir_op_binary_op {
   enum ir_op_binary_op_ty ty;
   struct ir_op *lhs;
@@ -79,9 +87,28 @@ struct ir_op {
     struct ir_op_binary_op binary_op;
     struct ir_op_ret ret;
   };
+
+  void* metadata;
+};
+
+// set of ops with no SEQ_POINTs
+struct ir_stmt {
+  size_t id;
+
+  struct ir_stmt *pred;
+  struct ir_stmt *succ;
+
+  // the links between ops (`pred` & `succ`) have no significance to the compilation
+  // and are just for traversal.
+  // meaningful links between operations are with in the op data, such as `ir_op->ret.value`,
+  // which points to the op whos result is returned
+  struct ir_op *first;
+  struct ir_op *last;
 };
 
 struct ir_builder {
+  const char *name;
+
   struct parser *parser;
   struct arena_allocator *arena;
 
@@ -89,16 +116,18 @@ struct ir_builder {
   // variable or NULL if it is not yet written to
   struct var_table var_table;
 
-  struct ir_op *first;
-  struct ir_op *last;
+  struct ir_stmt *first;
+  struct ir_stmt *last;
 
+  size_t stmt_count;
   size_t op_count;
 };
 
-struct ir_function
-build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
+struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
+
+struct ir_builder *build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
                       struct arena_allocator *arena, struct ast_funcdef *def);
 
-void debug_print_ir(struct ir_op *ir);
+void debug_print_ir(struct ir_stmt *ir);
 
 #endif

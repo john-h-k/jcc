@@ -1,104 +1,103 @@
 #include "lower.h"
 #include "../ir.h"
+#include "../util.h"
 
-#define RETURN_REG (0)
+// ARM has no quotient function
+// so instead of `x = a % b` we do
+// `c = a / b; x = a - (c * b)`
+void lower_quot(struct ir_builder *func, struct ir_stmt *stmt, struct ir_op *op) {
+  debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
+                   (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
+                    op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
+               "lower_quot called on invalid op");
 
-void lower_binary_op(struct aarch64_emitter *emitter, uint32_t lhs_reg,
-                     uint32_t rhs_reg, uint32_t reg,
-                     struct ir_op_binary_op *op) {
-  switch (op->ty) {
-  case IR_OP_BINARY_OP_TY_ADD:
-    aarch64_emit_add_32(emitter, lhs_reg, rhs_reg, reg);
+  enum ir_op_binary_op_ty div_ty;
+  (void)div_ty;
+  (void)op;
+  (void)func;
+  enum ir_op_sign sign = binary_op_sign(op->binary_op.ty);
+  switch (sign) {
+  case IR_OP_SIGN_NA:
+    bug("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
     break;
-  case IR_OP_BINARY_OP_TY_SUB:
-    aarch64_emit_sub_32(emitter, lhs_reg, rhs_reg, reg);
+  case IR_OP_SIGN_SIGNED:
+    div_ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
-  case IR_OP_BINARY_OP_TY_MUL:
-    aarch64_emit_mul_32(emitter, lhs_reg, rhs_reg, reg);
+  case IR_OP_SIGN_UNSIGNED:
+    div_ty = IR_OP_BINARY_OP_TY_UDIV;
     break;
-  case IR_OP_BINARY_OP_TY_SDIV:
-    aarch64_emit_sdiv_32(emitter, lhs_reg, rhs_reg, reg);
-    break;
-  case IR_OP_BINARY_OP_TY_UDIV:
-    aarch64_emit_udiv_32(emitter, lhs_reg, rhs_reg, reg);
-    break;
-  case IR_OP_BINARY_OP_TY_SQUOT:
-  case IR_OP_BINARY_OP_TY_UQUOT:
-    bug("SQUOT and UQUOT should've been lowered to div-msub pair already");
-  default:
-    todo("unsupported op");
   }
+
+  // we could directly generate an MSUB here but we instead rely on fusing later
+
+  // c = a / b
+
+  struct ir_op *div = alloc_ir_op(func, stmt);
+  div->ty = IR_OP_TY_BINARY_OP;
+  div->var_ty = op->var_ty;
+  div->binary_op.ty = div_ty;
+  div->binary_op.lhs = op->binary_op.lhs;
+  div->binary_op.rhs = op->binary_op.rhs;
+
+  // op->pred->succ = div;
+  // div->pred = op->pred;
+
+  // y = c * b
+
+  struct ir_op *mul = alloc_ir_op(func, stmt);
+  mul->ty = IR_OP_TY_BINARY_OP;
+  mul->var_ty = op->var_ty;
+  mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+  mul->binary_op.lhs = div;
+  mul->binary_op.rhs = op->binary_op.rhs;
+
+  // mul->pred = div;
+  // div->succ = mul;
+
+  // x = a - y
+
+  // Now we replace `op` with `sub` (as `sub` is the op that actually produces
+  // the value) this preserves links, as other ops pointing to the div will now
+  // point at the sub
+  op->ty = IR_OP_TY_BINARY_OP;
+  op->var_ty = op->var_ty;
+  op->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
+  op->binary_op.lhs = op->binary_op.lhs;
+  op->binary_op.rhs = mul;
+
+  // op->pred = mul;
+  // mul->succ = op;
+
+  // err("%d -> %d", mul->id, mul->succ->id);
+  // err("%d -> %d", div->id, div->succ->id);
+  // err("%d -> %d", op->id, op->succ->id);
+
+  // func->last = last;
 }
 
-const char *mangle(struct arena_allocator *arena, const char *name) {
-  char *dest = alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+void lower(struct ir_builder *func) {
+  struct ir_stmt *stmt = func->first;
 
-  dest[0] = '_';
-  strcpy(dest + 1, name);
+  while (stmt) {
+    struct ir_op *op = stmt->first;
 
-  return dest;
-}
-
-
-struct lower_result lower(struct arena_allocator *arena,
-                          struct ir_function *func) {
-  struct aarch64_emitter *emitter;
-  create_aarch64_emitter(&emitter);
-
-  uint32_t *reg_map = nonnull_malloc(sizeof(*reg_map) * func->op_count);
-  memset(reg_map, -1, sizeof(*reg_map) * func->op_count);
-
-  uint32_t last_reg = 0;
-
-  struct ir_op *op = func->start;
-  while (op) {
-    trace("lowering op with id %d, type %d", op->id, op->ty);
-    switch (op->ty) {
-    case IR_OP_TY_CNST: {
-      uint32_t reg = last_reg++;
-      reg_map[op->id] = reg;
-      aarch64_emit_load_cnst_32(emitter, reg, op->cnst.value);
-      break;
-    }
-    case IR_OP_TY_BINARY_OP: {
-      uint32_t lhs_reg = reg_map[op->binary_op.lhs->id];
-      uint32_t rhs_reg = reg_map[op->binary_op.rhs->id];
-      invariant_assert(lhs_reg != UINT32_MAX && rhs_reg != UINT32_MAX,
-                       "bad IR, no reg");
-
-      uint32_t reg = last_reg++;
-      reg_map[op->id] = reg;
-      lower_binary_op(emitter, lhs_reg, rhs_reg, reg, &op->binary_op);
-      break;
-    }
-    case IR_OP_TY_RET: {
-      uint32_t reg = reg_map[op->ret.value->id];
-      invariant_assert(reg != UINT32_MAX, "bad IR, no reg");
-
-      if (reg != RETURN_REG) {
-        aarch64_emit_mov_32(emitter, reg, RETURN_REG);
+    while (op) {
+      debug("%zu", op->id);
+      switch (op->ty) {
+      case IR_OP_TY_PHI:
+      case IR_OP_TY_CNST:
+      case IR_OP_TY_RET:
+        break;
+      case IR_OP_TY_BINARY_OP:
+        if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
+            op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
+          lower_quot(func, stmt, op);
+        }
       }
 
-      aarch64_emit_ret(emitter);
-      break;
-    }
-    default: {
-      todo("unsupported IR OP");
-      break;
-    }
+      op = op->succ;
     }
 
-    op = op->succ;
+    stmt = stmt->succ;
   }
-
-  size_t len = aarch64_emit_bytesize(emitter);
-  void *data = alloc(arena, len);
-  aarch64_emit_copy_to(emitter, data);
-
-  free_aarch64_emitter(&emitter);
-
-  struct lower_result result = {
-      .name = mangle(arena, func->name), .code = data, .len_code = len};
-
-  return result;
 }
