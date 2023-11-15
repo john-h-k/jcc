@@ -5,16 +5,13 @@
 // ARM has no quotient function
 // so instead of `x = a % b` we do
 // `c = a / b; x = a - (c * b)`
-void lower_quot(struct ir_builder *func, struct ir_stmt *stmt, struct ir_op *op) {
+void lower_quot(struct ir_builder *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
                "lower_quot called on invalid op");
 
   enum ir_op_binary_op_ty div_ty;
-  (void)div_ty;
-  (void)op;
-  (void)func;
   enum ir_op_sign sign = binary_op_sign(op->binary_op.ty);
   switch (sign) {
   case IR_OP_SIGN_NA:
@@ -32,7 +29,7 @@ void lower_quot(struct ir_builder *func, struct ir_stmt *stmt, struct ir_op *op)
 
   // c = a / b
 
-  struct ir_op *div = alloc_ir_op(func, stmt);
+  struct ir_op *div = insert_before_ir_op(func, op);
   div->ty = IR_OP_TY_BINARY_OP;
   div->var_ty = op->var_ty;
   div->binary_op.ty = div_ty;
@@ -44,7 +41,7 @@ void lower_quot(struct ir_builder *func, struct ir_stmt *stmt, struct ir_op *op)
 
   // y = c * b
 
-  struct ir_op *mul = alloc_ir_op(func, stmt);
+  struct ir_op *mul = insert_after_ir_op(func, div);
   mul->ty = IR_OP_TY_BINARY_OP;
   mul->var_ty = op->var_ty;
   mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
@@ -82,7 +79,6 @@ void lower(struct ir_builder *func) {
     struct ir_op *op = stmt->first;
 
     while (op) {
-      debug("%zu", op->id);
       switch (op->ty) {
       case IR_OP_TY_PHI:
       case IR_OP_TY_CNST:
@@ -91,7 +87,7 @@ void lower(struct ir_builder *func) {
       case IR_OP_TY_BINARY_OP:
         if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
             op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
-          lower_quot(func, stmt, op);
+          lower_quot(func, op);
         }
       }
 
