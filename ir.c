@@ -21,6 +21,48 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
+struct ir_op *insert_before_ir_op(struct ir_builder *irb, struct ir_op* insert_before) {
+  debug_assert(insert_before, "invalid insertion point!");
+
+  struct ir_op *op = alloc(irb->arena, sizeof(*op));
+  op->id = irb->op_count++;
+  op->stmt = insert_before->stmt;
+
+  op->pred = insert_before->pred;
+  op->succ = insert_before;
+
+  if (op->pred) {
+    op->pred->succ = op;
+  } else {
+    op->stmt->first = op;
+  }
+
+  insert_before->pred = op;
+
+  return op;
+}
+
+struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after) {
+  debug_assert(insert_after, "invalid insertion point!");
+
+  struct ir_op *op = alloc(irb->arena, sizeof(*op));
+  op->id = irb->op_count++;
+  op->stmt = insert_after->stmt;
+
+  op->pred = insert_after;
+  op->succ = insert_after->succ;
+
+  if (op->succ) {
+    op->succ->pred = op;
+  } else {
+    op->stmt->last = op;
+  }
+
+  insert_after->succ = op;
+
+  return op;
+}
+
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
 
@@ -29,6 +71,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   }
 
   op->id = irb->op_count++;
+  op->stmt = stmt;
   op->pred = stmt->last;
   op->succ = NULL;
 
@@ -348,7 +391,9 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
   }
 }
 
-void debug_print_ir(struct ir_stmt *stmt) {
+void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt) {
+  debug("%zu statements", irb->stmt_count);
+
   while (stmt) {
     struct ir_op *ir = stmt->first;
     

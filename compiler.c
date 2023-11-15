@@ -70,7 +70,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("IR");
 
-    debug_print_ir(ir->first);
+    debug_print_ir(ir, ir->first);
 
     BEGIN_STAGE("LOWERING");
 
@@ -78,7 +78,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("POST-LOWER IR");
 
-    debug_print_ir(ir->first);
+    debug_print_ir(ir, ir->first);
 
     BEGIN_STAGE("EMITTING");
     

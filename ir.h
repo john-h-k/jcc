@@ -82,6 +82,7 @@ struct ir_op {
 
   struct ir_op *pred;
   struct ir_op *succ;
+  struct ir_stmt *stmt;
   union {
     struct ir_op_cnst cnst;
     struct ir_op_binary_op binary_op;
@@ -124,10 +125,12 @@ struct ir_builder {
 };
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
+struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after);
+struct ir_op *insert_before_ir_op(struct ir_builder *irb, struct ir_op* insert_before);
 
 struct ir_builder *build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
                       struct arena_allocator *arena, struct ast_funcdef *def);
 
-void debug_print_ir(struct ir_stmt *ir);
+void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt);
 
 #endif
