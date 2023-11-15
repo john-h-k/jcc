@@ -3,6 +3,7 @@
 
 #include "parse.h"
 #include <stdlib.h>
+#include "var_table.h"
 
 enum ir_op_ty {
   IR_OP_TY_PHI,
@@ -28,7 +29,8 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_MUL,
   IR_OP_BINARY_OP_TY_SDIV,
   IR_OP_BINARY_OP_TY_UDIV,
-  IR_OP_BINARY_OP_TY_QUOT,
+  IR_OP_BINARY_OP_TY_SQUOT,
+  IR_OP_BINARY_OP_TY_UQUOT,
 };
 
 struct ir_op_binary_op {
@@ -79,10 +81,17 @@ struct ir_op {
   };
 };
 
-struct ir_function {
-  const char *name;
-  struct ir_op *start;
-  struct ir_op *end;
+struct ir_builder {
+  struct parser *parser;
+  struct arena_allocator *arena;
+
+  // `value` contains a `struct ir_op *` to the last op that wrote to this
+  // variable or NULL if it is not yet written to
+  struct var_table var_table;
+
+  struct ir_op *first;
+  struct ir_op *last;
+
   size_t op_count;
 };
 

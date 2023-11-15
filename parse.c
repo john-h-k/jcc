@@ -466,22 +466,18 @@ bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound
 
   struct vector *exprs = vector_create(sizeof(struct ast_expr));
 
-  debug("BEGIN COMPOUND");
   struct token token;
   struct ast_expr sub_expr;
   do {
     if (!parse_expr(parser, &sub_expr)) {
       backtrack(parser->lexer, pos);
-      debug("FAILED COMPOUND");
       return false;
     }
-    debug("found sub expr");
 
     vector_push_back(exprs, &sub_expr);
 
     peek_token(parser->lexer, &token);
   } while (token.ty == LEX_TOKEN_TYPE_COMMA && /* hacky */ (consume_token(parser->lexer, token), true));
-  debug("END COMPOUND");
 
   if (vector_empty(exprs)) {
     backtrack(parser->lexer, pos);
@@ -496,32 +492,6 @@ bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound
 
   return true;
 }
-
-// bool token_is_typename(const struct token *token) {
-//   switch (token->ty) {
-//   case LEX_TOKEN_TYPE_KW_INT:
-//     return true;
-
-//   case LEX_TOKEN_TYPE_WHITESPACE:
-//   case LEX_TOKEN_TYPE_INLINE_COMMENT:
-//   case LEX_TOKEN_TYPE_MULTILINE_COMMENT:
-//   case LEX_TOKEN_TYPE_OPEN_BRACKET:
-//   case LEX_TOKEN_TYPE_CLOSE_BRACKET:
-//   case LEX_TOKEN_TYPE_OPEN_BRACE:
-//   case LEX_TOKEN_TYPE_CLOSE_BRACE:
-//   case LEX_TOKEN_TYPE_SEMICOLON:
-//   case LEX_TOKEN_TYPE_OP_ASSG:
-//   case LEX_TOKEN_TYPE_OP_ADD:
-//   case LEX_TOKEN_TYPE_OP_SUB:
-//   case LEX_TOKEN_TYPE_OP_MUL:
-//   case LEX_TOKEN_TYPE_OP_DIV:
-//   case LEX_TOKEN_TYPE_OP_QUOT:
-//   case LEX_TOKEN_TYPE_KW_RETURN:
-//   case LEX_TOKEN_TYPE_IDENTIFIER:
-//   case LEX_TOKEN_TYPE_INT_LITERAL:
-//     return false;
-//   }
-// }
 
 // used when parsing type names, as `short int` is equivalent to `short`
 void skip_int_token_if_present(struct parser *parser) {
@@ -548,12 +518,10 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
     skip_int_token_if_present(parser);
     return true;
   case LEX_TOKEN_TYPE_KW_INT:
-    debug("seen int!!!");
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_SIGNED_INT;
     return true;
   case LEX_TOKEN_TYPE_KW_LONG: {
-    err("seen long");
     consume_token(parser->lexer, token);
 
     struct token maybe_other_long;
@@ -586,7 +554,6 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
 
     consume_token(parser->lexer, token);
   } else if (token.ty == LEX_TOKEN_TYPE_KW_UNSIGNED) {
-    err("seen unsigned");
     seen_unsigned = true;
 
     consume_token(parser->lexer, token);
@@ -686,7 +653,6 @@ bool parse_vardecllist(struct parser *parser,
     struct token token;
     peek_token(parser->lexer, &token);
 
-    err("end of %s", token_name(parser->lexer, &token));
     if (token.ty == LEX_TOKEN_TYPE_COMMA) {
       // another decl
       consume_token(parser->lexer, token);
