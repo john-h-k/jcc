@@ -327,6 +327,10 @@ struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt)
     build_ir_for_jumpstmt(irb, ir_stmt, &stmt->jump);
     break;
   }
+  case AST_STMT_TY_SELECT: {
+    todo("IR for selects");
+    break;
+  }
   }
 
   return ir_stmt;

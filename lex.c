@@ -65,7 +65,10 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
 #define KEYWORD(kw, ty)                                                        \
   { kw, sizeof(kw) - 1, ty }
 
+  // TODO: hashify
   static struct keyword keywords[] = {
+      KEYWORD("if", LEX_TOKEN_TYPE_KW_IF),
+      KEYWORD("else", LEX_TOKEN_TYPE_KW_ELSE),
       KEYWORD("return", LEX_TOKEN_TYPE_KW_RETURN),
       KEYWORD("char", LEX_TOKEN_TYPE_KW_CHAR),
       KEYWORD("short", LEX_TOKEN_TYPE_KW_SHORT),
@@ -371,7 +374,10 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
     CASE_RET(LEX_TOKEN_TYPE_COMMA)
 
+    CASE_RET(LEX_TOKEN_TYPE_KW_IF)
+    CASE_RET(LEX_TOKEN_TYPE_KW_ELSE)
     CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)
+
     CASE_RET(LEX_TOKEN_TYPE_KW_CHAR)
     CASE_RET(LEX_TOKEN_TYPE_KW_SHORT)
     CASE_RET(LEX_TOKEN_TYPE_KW_INT)

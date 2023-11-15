@@ -36,9 +36,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   div->binary_op.lhs = op->binary_op.lhs;
   div->binary_op.rhs = op->binary_op.rhs;
 
-  // op->pred->succ = div;
-  // div->pred = op->pred;
-
   // y = c * b
 
   struct ir_op *mul = insert_after_ir_op(func, div);
@@ -47,9 +44,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
   mul->binary_op.lhs = div;
   mul->binary_op.rhs = op->binary_op.rhs;
-
-  // mul->pred = div;
-  // div->succ = mul;
 
   // x = a - y
 
@@ -61,15 +55,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
   op->binary_op.lhs = op->binary_op.lhs;
   op->binary_op.rhs = mul;
-
-  // op->pred = mul;
-  // mul->succ = op;
-
-  // err("%d -> %d", mul->id, mul->succ->id);
-  // err("%d -> %d", div->id, div->succ->id);
-  // err("%d -> %d", op->id, op->succ->id);
-
-  // func->last = last;
 }
 
 void lower(struct ir_builder *func) {

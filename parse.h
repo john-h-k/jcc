@@ -223,7 +223,39 @@ enum ast_stmt_ty {
   AST_STMT_TY_COMPOUND,
   AST_STMT_TY_JUMP,
   // AST_STMT_TY_ITER,
-  // AST_STMT_TY_SELECT,
+  AST_STMT_TY_SELECT,
+};
+
+struct ast_ifstmt {
+  struct ast_expr condition;
+  struct ast_stmt *body;
+};
+
+struct ast_ifelsestmt {
+  struct ast_expr condition;
+  struct ast_stmt *body;
+  struct ast_stmt *else_body;
+};
+
+struct ast_switchstmt {
+  struct ast_expr ctrl_var;
+  // TODO:
+};
+
+enum ast_selectstmt_ty {
+  AST_SELECTSTMT_TY_IF,
+  AST_SELECTSTMT_TY_IF_ELSE,
+  AST_SELECTSTMT_TY_SWITCH,
+};
+
+struct ast_selectstmt {
+  enum ast_selectstmt_ty ty;
+
+  union {
+    struct ast_ifstmt if_stmt;
+    struct ast_ifelsestmt if_else_stmt;
+    struct ast_switchstmt switch_stmt;
+  };
 };
 
 struct ast_stmt;
@@ -239,6 +271,7 @@ struct ast_stmt {
     struct ast_expr expr;
     struct ast_compoundstmt compound;
     struct ast_jumpstmt jump;
+    struct ast_selectstmt select;
   };
 };
 
