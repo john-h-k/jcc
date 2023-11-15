@@ -3,8 +3,8 @@
 #include "lex.h"
 #include "log.h"
 #include "util.h"
-#include "vector.h"
 #include "var_table.h"
+#include "vector.h"
 
 #include <alloca.h>
 #include <string.h>
@@ -144,6 +144,8 @@ bool is_literal_token(enum lex_token_type tok_ty,
   case LEX_TOKEN_TYPE_OP_MUL:
   case LEX_TOKEN_TYPE_OP_DIV:
   case LEX_TOKEN_TYPE_OP_QUOT:
+  case LEX_TOKEN_TYPE_KW_IF:
+  case LEX_TOKEN_TYPE_KW_ELSE:
   case LEX_TOKEN_TYPE_KW_CHAR:
   case LEX_TOKEN_TYPE_KW_SHORT:
   case LEX_TOKEN_TYPE_KW_INT:
@@ -277,15 +279,17 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   return false;
 }
 
-struct ast_tyref get_var_type(struct parser *parser, const struct ast_var *var) {
+struct ast_tyref get_var_type(struct parser *parser,
+                              const struct ast_var *var) {
   struct var_table_entry *entry = get_or_create_entry(&parser->var_table, var);
 
   if (entry->value) {
     debug("var %s was found, type", identifier_str(parser, &var->identifier));
     return *(struct ast_tyref *)entry->value;
   } else {
-    debug("var %s was not found, unknown type", identifier_str(parser, &var->identifier));
-    struct ast_tyref ty_ref = { .ty = AST_TYREF_TY_UNKNOWN };
+    debug("var %s was not found, unknown type",
+          identifier_str(parser, &var->identifier));
+    struct ast_tyref ty_ref = {.ty = AST_TYREF_TY_UNKNOWN};
     return ty_ref;
   }
 }
@@ -304,7 +308,8 @@ bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
   return false;
 }
 
-bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound_expr);
+bool parse_compoundexpr(struct parser *parser,
+                        struct ast_compoundexpr *compound_expr);
 
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_expr *expr) {
@@ -326,7 +331,8 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
         consume_token(parser->lexer, token);
 
         // compound expressions return the last expression
-        struct ast_tyref var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+        struct ast_tyref var_ty =
+            compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
         expr->ty = AST_EXPR_TY_RVALUE;
         expr->var_ty = var_ty;
         expr->rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
@@ -364,7 +370,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
 struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
   if (true || (lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
-      rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
+               rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
     struct ast_tyref result_ty;
     result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
 
@@ -372,10 +378,11 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
       // they are the same type
       result_ty.well_known = lhs->well_known;
     } else {
-      if (lhs->well_known == WELL_KNOWN_TY_ASCII_CHAR || rhs->well_known == WELL_KNOWN_TY_ASCII_CHAR) {
+      if (lhs->well_known == WELL_KNOWN_TY_ASCII_CHAR ||
+          rhs->well_known == WELL_KNOWN_TY_ASCII_CHAR) {
         todo("handle ASCII CHAR signedness");
       }
-      
+
       enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs->well_known);
       enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs->well_known);
 
@@ -393,7 +400,6 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
     return result_ty;
   }
 
-  
   // todo("`resolve_binary_op_types` for types other than well known");
 }
 
@@ -433,8 +439,9 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     // `rhs` so we need to in-place modify `expr`
     struct ast_expr lhs = *expr;
 
-    struct ast_tyref result_ty = resolve_binary_op_types(&lhs.var_ty, &rhs.var_ty);
-    
+    struct ast_tyref result_ty =
+        resolve_binary_op_types(&lhs.var_ty, &rhs.var_ty);
+
     expr->ty = AST_EXPR_TY_RVALUE;
     expr->var_ty = result_ty;
     expr->rvalue.ty = AST_RVALUE_TY_BINARY_OP;
@@ -459,9 +466,10 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 // * at top level of a statement (e.g `a = 1, b = 2;`)
 // * within braces (e.g `(a = 1, b = 2)`)
 // so only those places call this method
-bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound_expr) {
+bool parse_compoundexpr(struct parser *parser,
+                        struct ast_compoundexpr *compound_expr) {
   struct text_pos pos = get_position(parser->lexer);
-  
+
   // this could be made recursive instead
 
   struct vector *exprs = vector_create(sizeof(struct ast_expr));
@@ -477,7 +485,8 @@ bool parse_compoundexpr(struct parser *parser, struct ast_compoundexpr *compound
     vector_push_back(exprs, &sub_expr);
 
     peek_token(parser->lexer, &token);
-  } while (token.ty == LEX_TOKEN_TYPE_COMMA && /* hacky */ (consume_token(parser->lexer, token), true));
+  } while (token.ty == LEX_TOKEN_TYPE_COMMA &&
+           /* hacky */ (consume_token(parser->lexer, token), true));
 
   if (vector_empty(exprs)) {
     backtrack(parser->lexer, pos);
@@ -616,7 +625,8 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   consume_token(parser->lexer, token);
 
   struct ast_expr expr;
-  // we use `parse_single_expr` as compound expressions are not legal here and interfere with comma-seperated decls
+  // we use `parse_single_expr` as compound expressions are not legal here and
+  // interfere with comma-seperated decls
   if (!parse_expr(parser, &expr)) {
     // we parsed the var but not the expr
     // just give up
@@ -643,8 +653,10 @@ bool parse_vardecllist(struct parser *parser,
   while (parse_vardecl(parser, &var_decl)) {
     vector_push_back(decls, &var_decl);
 
-    trace("creating var_table_entry for var name=%s, scope=%d", identifier_str(parser, &var_decl.var.identifier), var_decl.var.scope);
-    struct var_table_entry *entry = create_entry(&parser->var_table, &var_decl.var);
+    trace("creating var_table_entry for var name=%s, scope=%d",
+          identifier_str(parser, &var_decl.var.identifier), var_decl.var.scope);
+    struct var_table_entry *entry =
+        create_entry(&parser->var_table, &var_decl.var);
 
     // copy the type ref into arena memory for lifetime simplicity
     entry->value = alloc(parser->arena, sizeof(ty_ref));
@@ -685,14 +697,13 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
 
   struct token token;
 
+  // FIXME: support return without expression
   peek_token(parser->lexer, &token);
   if (token.ty == LEX_TOKEN_TYPE_KW_RETURN) {
     consume_token(parser->lexer, token);
-    debug("found return stmt");
 
     struct ast_expr expr;
     if (parse_expr(parser, &expr)) {
-      debug("found expr");
       peek_token(parser->lexer, &token);
 
       if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
@@ -709,6 +720,98 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
   return false;
 }
 
+bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
+
+bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty == LEX_TOKEN_TYPE_KW_IF) {
+    consume_token(parser->lexer, token);
+
+    struct ast_expr expr;
+    struct ast_stmt stmt;
+    if (parse_expr(parser, &expr) && parse_stmt(parser, &stmt)) {
+      if_stmt->condition = expr;
+      if_stmt->body = alloc(parser->arena, sizeof(*if_stmt->body));
+      *if_stmt->body = stmt;
+      return true;
+    }
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+
+bool parse_ifelsestmt(struct parser *parser,
+                      struct ast_ifelsestmt *if_else_stmt) {
+  // parse `if {}`, then try parse `else`
+  // not perfectly efficient but more elegant
+
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_ifstmt if_stmt;
+  if (!parse_ifstmt(parser, &if_stmt)) {
+    return false;
+  }
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty == LEX_TOKEN_TYPE_KW_ELSE) {
+    consume_token(parser->lexer, token);
+
+    struct ast_stmt else_stmt;
+    if (parse_stmt(parser, &else_stmt)) {
+      if_else_stmt->condition = if_stmt.condition;
+      if_else_stmt->body = alloc(parser->arena, sizeof(*if_else_stmt->body));
+      if_else_stmt->body = if_stmt.body;
+      if_else_stmt->else_body =
+          alloc(parser->arena, sizeof(*if_else_stmt->else_body));
+      *if_else_stmt->else_body = else_stmt;
+      return true;
+    }
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+
+bool parse_switchstmt(struct parser *parser,
+                      struct ast_switchstmt *switch_stmt) {
+  UNUSED_ARG(parser);
+  UNUSED_ARG(switch_stmt);
+  return false;
+}
+
+bool parse_selectstmt(struct parser *parser,
+                      struct ast_selectstmt *select_stmt) {
+  struct ast_ifelsestmt if_else_stmt;
+  if (parse_ifelsestmt(parser, &if_else_stmt)) {
+    select_stmt->ty = AST_SELECTSTMT_TY_IF_ELSE;
+    select_stmt->if_else_stmt = if_else_stmt;
+    return true;
+  }
+
+  struct ast_ifstmt if_stmt;
+  if (parse_ifstmt(parser, &if_stmt)) {
+    select_stmt->ty = AST_SELECTSTMT_TY_IF;
+    select_stmt->if_stmt = if_stmt;
+    return true;
+  }
+
+  struct ast_switchstmt switch_stmt;
+  if (parse_switchstmt(parser, &switch_stmt)) {
+    select_stmt->ty = AST_SELECTSTMT_TY_SWITCH;
+    select_stmt->switch_stmt = switch_stmt;
+    return true;
+  }
+
+  return false;
+}
+
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
@@ -717,6 +820,13 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   if (parse_jumpstmt(parser, &jump_stmt)) {
     stmt->ty = AST_STMT_TY_JUMP;
     stmt->jump = jump_stmt;
+    return true;
+  }
+
+  struct ast_selectstmt select_stmt;
+  if (parse_selectstmt(parser, &select_stmt)) {
+    stmt->ty = AST_STMT_TY_SELECT;
+    stmt->select = select_stmt;
     return true;
   }
 
@@ -739,7 +849,8 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
       consume_token(parser->lexer, token);
 
       // compound expressions return the last expression
-      struct ast_tyref var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+      struct ast_tyref var_ty =
+          compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
       stmt->ty = AST_STMT_TY_EXPR;
       stmt->expr.ty = AST_EXPR_TY_RVALUE;
       stmt->expr.var_ty = var_ty;
@@ -1005,7 +1116,9 @@ struct ast_printstate {
 #define INDENT() state->indent++
 #define UNINDENT() state->indent--
 
-#define PUSH_INDENT() int tmp_indent = state->indent; state->indent = 0;
+#define PUSH_INDENT()                                                          \
+  int tmp_indent = state->indent;                                              \
+  state->indent = 0;
 #define POP_INDENT() state->indent = tmp_indent;
 
 DEBUG_FUNC(tyref, ty_ref) {
@@ -1150,9 +1263,9 @@ DEBUG_FUNC(rvalue, rvalue) {
   case AST_RVALUE_TY_BINARY_OP:
     DEBUG_CALL(binaryop, &rvalue->binary_op);
     break;
-    case AST_RVALUE_TY_COMPOUNDEXPR:
-      DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
-      break;
+  case AST_RVALUE_TY_COMPOUNDEXPR:
+    DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
+    break;
     // case AST_RVALUE_TY_ASSG:
     //   DEBUG_CALL(assg, rvalue->assg);
     //   break;
@@ -1200,13 +1313,59 @@ DEBUG_FUNC(vardecllist, var_decl_list) {
 }
 
 DEBUG_FUNC(jumpstmt, jump_stmt) {
-
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN:
     AST_PRINTZ("RETURN");
     INDENT();
     DEBUG_CALL(expr, &jump_stmt->ret_expr);
     UNINDENT();
+    break;
+  }
+}
+
+DEBUG_FUNC(switchstmt, switch_stmt) {
+  UNUSED_ARG(state);
+  UNUSED_ARG(switch_stmt);
+  todo("debug func for switch");
+}
+
+DEBUG_FUNC(stmt, if_stmt);
+
+DEBUG_FUNC(ifstmt, if_stmt) {
+  AST_PRINTZ("IF");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &if_stmt->condition);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, if_stmt->body);
+}
+
+DEBUG_FUNC(ifelsestmt, if_else_stmt) {
+  AST_PRINTZ("IF");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &if_else_stmt->condition);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, if_else_stmt->body);
+
+  AST_PRINTZ("ELSE");
+  DEBUG_CALL(stmt, if_else_stmt->else_body);
+}
+  
+DEBUG_FUNC(selectstmt, select_stmt) {
+  switch (select_stmt->ty) {
+  case AST_SELECTSTMT_TY_IF:
+    DEBUG_CALL(ifstmt, &select_stmt->if_stmt);
+    break;
+  case AST_SELECTSTMT_TY_IF_ELSE:
+    DEBUG_CALL(ifelsestmt, &select_stmt->if_else_stmt);
+    break;
+  case AST_SELECTSTMT_TY_SWITCH:
+    DEBUG_CALL(switchstmt, &select_stmt->switch_stmt);
     break;
   }
 }
@@ -1226,6 +1385,9 @@ DEBUG_FUNC(stmt, stmt) {
     break;
   case AST_STMT_TY_JUMP:
     DEBUG_CALL(jumpstmt, &stmt->jump);
+    break;
+  case AST_STMT_TY_SELECT:
+    DEBUG_CALL(selectstmt, &stmt->select);
     break;
   }
 
