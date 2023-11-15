@@ -19,6 +19,7 @@ set(
   var_table.c
 
   aarch64/lower.c
+  aarch64/emit.c
   aarch64/emitter.c
 
   macos/mach-o.c

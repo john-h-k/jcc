@@ -107,6 +107,11 @@ void free_aarch64_emitter(struct aarch64_emitter **emitter) {
 #define MSUB_32(Rm, Ra, Rn, Rd)                                                \
   REG_3_SOURCE(0b0, 0b00, 0b000, Rm, 0b1, Ra, Rn, Rd)
 
+#define MADD_64(Rm, Ra, Rn, Rd)                                                \
+  REG_3_SOURCE(0b1, 0b00, 0b000, Rm, 0b0, Ra, Rn, Rd)
+#define MSUB_64(Rm, Ra, Rn, Rd)                                                \
+  REG_3_SOURCE(0b1, 0b00, 0b000, Rm, 0b1, Ra, Rn, Rd)
+
 #define UDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000010, Rm, Rn, Rd)
 #define SDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000011, Rm, Rn, Rd)
 
@@ -163,6 +168,16 @@ void aarch64_emit_sub_32(struct aarch64_emitter *emitter, size_t reg_lhs,
 void aarch64_emit_mul_32(struct aarch64_emitter *emitter, size_t reg_lhs,
                          size_t reg_rhs, size_t reg_to) {
   aarch64_emit(emitter, MADD_32(reg_rhs, ZERO_REG_IDX, reg_lhs, reg_to));
+}
+
+void aarch64_emit_madd_32(struct aarch64_emitter *emitter, size_t reg_lhs,
+                         size_t reg_rhs, size_t reg_add, size_t reg_to) {
+  aarch64_emit(emitter, MADD_32(reg_rhs, reg_add, reg_lhs, reg_to));
+}
+
+void aarch64_emit_msub_32(struct aarch64_emitter *emitter, size_t reg_lhs,
+                         size_t reg_rhs, size_t reg_sub, size_t reg_to) {
+  aarch64_emit(emitter, MSUB_32(reg_rhs, reg_sub, reg_lhs, reg_to));
 }
 
 void aarch64_emit_sdiv_32(struct aarch64_emitter *emitter, size_t reg_lhs,

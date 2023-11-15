@@ -1,8 +1,9 @@
+// expected value: 5
 int main() {
-  int a = 1;
-  unsigned b = 1;
-  long c = 1;
-  unsigned long d = 1;
+  int a = 7;
+  unsigned b = 2;
+  long c = 5;
+  unsigned long d = 2;
   
   // a / b -> type `unsigned`
   // b / c -> type `long`
