@@ -4,22 +4,7 @@
 #include "lex.h"
 #include "parse.h"
 #include "util.h"
-#include "var_table.h"
 #include "vector.h"
-
-struct ir_builder {
-  struct parser *parser;
-  struct arena_allocator *arena;
-
-  // `value` contains a `struct ir_op *` to the last op that wrote to this
-  // variable or NULL if it is not yet written to
-  struct var_table var_table;
-
-  struct ir_op *first;
-  struct ir_op *last;
-
-  size_t last_id;
-};
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb) {
   struct ir_op *op = alloc(irb->arena, sizeof(struct ir_op));
@@ -29,7 +14,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb) {
     irb->last = op;
   }
 
-  op->id = irb->last_id++;
+  op->id = irb->op_count++;
   op->pred = irb->last;
   irb->last->succ = op;
   irb->last = op;
@@ -87,6 +72,10 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
   b->lhs = lhs;
   b->rhs = rhs;
 
+  invariant_assert(binary_op->var_ty.ty == AST_TYREF_TY_WELL_KNOWN,
+                   "non primitives (/well-knowns) cannot be used in binary "
+                   "expression by point IR is reached!");
+
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_ADD:
     b->ty = IR_OP_BINARY_OP_TY_ADD;
@@ -98,9 +87,6 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
     b->ty = IR_OP_BINARY_OP_TY_MUL;
     break;
   case AST_BINARY_OP_TY_DIV:
-    invariant_assert(binary_op->var_ty.ty == AST_TYREF_TY_WELL_KNOWN,
-                     "non primitives (/well-knowns) cannot be used in binary "
-                     "expression by point IR is reached!");
     if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SDIV;
     } else {
@@ -108,7 +94,11 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
     }
     break;
   case AST_BINARY_OP_TY_QUOT:
-    b->ty = IR_OP_BINARY_OP_TY_QUOT;
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SQUOT;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_UQUOT;
+    }
     break;
   }
 
@@ -283,10 +273,13 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_MUL:
     return "*";
   case IR_OP_BINARY_OP_TY_SDIV:
+    return "s/";
   case IR_OP_BINARY_OP_TY_UDIV:
-    return "/";
-  case IR_OP_BINARY_OP_TY_QUOT:
-    return "%";
+    return "u/";
+  case IR_OP_BINARY_OP_TY_SQUOT:
+    return "s%";
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    return "u%";
   default:
     return "?unknown?";
   }

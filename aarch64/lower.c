@@ -22,11 +22,11 @@ void lower_binary_op(struct aarch64_emitter *emitter, uint32_t lhs_reg,
   case IR_OP_BINARY_OP_TY_UDIV:
     aarch64_emit_udiv_32(emitter, lhs_reg, rhs_reg, reg);
     break;
+  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    bug("SQUOT and UQUOT should've been lowered to div-msub pair already");
   default:
     todo("unsupported op");
-    // case IR_OP_BINARY_OP_TY_QUOT:
-    //   aarch64_emit_quot_32(emitter, lhs_reg, rhs_reg, reg);
-    //   break;
   }
 }
 
@@ -38,6 +38,7 @@ const char *mangle(struct arena_allocator *arena, const char *name) {
 
   return dest;
 }
+
 
 struct lower_result lower(struct arena_allocator *arena,
                           struct ir_function *func) {
