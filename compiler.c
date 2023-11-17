@@ -46,6 +46,13 @@ enum compiler_create_result create_compiler(const char *program,
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
+int compare_interval_id(const void *a, const void *b) {
+  size_t a_id = ((struct interval *)a)->op_id;
+  size_t b_id = ((struct interval *)b)->op_id;
+
+  return (ssize_t)a_id - (ssize_t)b_id;
+}
+
 enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("LEX + PARSE");
 
@@ -86,13 +93,16 @@ enum compile_result compile(struct compiler *compiler) {
     struct reg_info aarch64_reg_info = { .num_regs = 30 };
     struct interval_data intervals = register_alloc(ir, aarch64_reg_info);
 
+    // we now sort the intervals so they are keyable with op_id
+    qsort(intervals.intervals, intervals.num_intervals, sizeof(*intervals.intervals), compare_interval_id);
+
     for (size_t i = 0; i < intervals.num_intervals; i++) {
       struct interval *interval = &intervals.intervals[i];
 
       debug("interval %zu (%zu -> %zu) has reg idx: %zu", interval->op_id, interval->start, interval->end, interval->reg);
     }
     
-    struct compiled_function func = emit(ir);
+    struct compiled_function func = emit(ir, intervals);
 
     debug("symbol %s, value %d", func.name, total_size);
     struct symbol symbol = {

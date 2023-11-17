@@ -129,6 +129,8 @@ struct ir_builder {
 
 typedef void (walk_op_callback)(struct ir_op*, void *metadata);
 void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
+void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
+void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after);

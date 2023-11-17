@@ -3,24 +3,41 @@
 
 #define RETURN_REG (0)
 
-void lower_binary_op(struct aarch64_emitter *emitter, uint32_t lhs_reg,
-                     uint32_t rhs_reg, uint32_t reg,
-                     struct ir_op_binary_op *op) {
-  switch (op->ty) {
+struct emit_state {
+  struct arena_allocator *arena;
+  struct aarch64_emitter *emitter;
+  struct interval_data intervals;
+};
+
+size_t get_reg_for_op(struct emit_state *state, struct ir_op *op) {
+  struct interval interval = state->intervals.intervals[op->id];
+  debug_assert(interval.op_id == op->id, "intervals was not keyed by ID");
+  return interval.reg;
+}
+
+void lower_binary_op(struct emit_state *state, struct ir_op *op) {
+  debug_assert(op->ty == IR_OP_TY_BINARY_OP, "wrong ty op to `lower_binary_op`");
+  size_t reg = get_reg_for_op(state, op);
+  size_t lhs_reg = get_reg_for_op(state, op->binary_op.lhs);
+  size_t rhs_reg = get_reg_for_op(state, op->binary_op.rhs);
+  invariant_assert(lhs_reg != UINT32_MAX && rhs_reg != UINT32_MAX,
+                   "bad IR, no reg");
+
+  switch (op->binary_op.ty) {
   case IR_OP_BINARY_OP_TY_ADD:
-    aarch64_emit_add_32(emitter, lhs_reg, rhs_reg, reg);
+    aarch64_emit_add_32(state->emitter, lhs_reg, rhs_reg, reg);
     break;
   case IR_OP_BINARY_OP_TY_SUB:
-    aarch64_emit_sub_32(emitter, lhs_reg, rhs_reg, reg);
+    aarch64_emit_sub_32(state->emitter, lhs_reg, rhs_reg, reg);
     break;
   case IR_OP_BINARY_OP_TY_MUL:
-    aarch64_emit_mul_32(emitter, lhs_reg, rhs_reg, reg);
+    aarch64_emit_mul_32(state->emitter, lhs_reg, rhs_reg, reg);
     break;
   case IR_OP_BINARY_OP_TY_SDIV:
-    aarch64_emit_sdiv_32(emitter, lhs_reg, rhs_reg, reg);
+    aarch64_emit_sdiv_32(state->emitter, lhs_reg, rhs_reg, reg);
     break;
   case IR_OP_BINARY_OP_TY_UDIV:
-    aarch64_emit_udiv_32(emitter, lhs_reg, rhs_reg, reg);
+    aarch64_emit_udiv_32(state->emitter, lhs_reg, rhs_reg, reg);
     break;
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
@@ -39,20 +56,22 @@ const char *mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-void emit_stmt(struct aarch64_emitter *emitter, struct ir_stmt *stmt, uint32_t *reg_map, uint32_t *last_reg);
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt);
 
-struct compiled_function emit(struct ir_builder *func) {
+struct compiled_function emit(struct ir_builder *func, struct interval_data intervals) {
   struct aarch64_emitter *emitter;
   create_aarch64_emitter(&emitter);
 
-  uint32_t *reg_map = nonnull_malloc(sizeof(*reg_map) * func->op_count);
-  memset(reg_map, -1, sizeof(*reg_map) * func->op_count);
 
-  uint32_t last_reg = 0;
+  struct emit_state state = {
+    .arena = func->arena,
+    .emitter = emitter,
+    .intervals = intervals
+  };
+
   struct ir_stmt *stmt = func->first;
-
   while (stmt) {
-    emit_stmt(emitter, stmt, reg_map, &last_reg);
+    emit_stmt(&state, stmt);
 
     stmt = stmt->succ;
   }
@@ -69,37 +88,29 @@ struct compiled_function emit(struct ir_builder *func) {
   return result;
 }
 
-void emit_stmt(struct aarch64_emitter *emitter, struct ir_stmt *stmt, uint32_t *reg_map, uint32_t *last_reg) {
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
   struct ir_op *op = stmt->first;
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
     case IR_OP_TY_CNST: {
-      uint32_t reg = (*last_reg)++;
-      reg_map[op->id] = reg;
-      aarch64_emit_load_cnst_32(emitter, reg, op->cnst.value);
+      size_t reg = get_reg_for_op(state, op);
+      aarch64_emit_load_cnst_32(state->emitter, reg, op->cnst.value);
       break;
     }
     case IR_OP_TY_BINARY_OP: {
-      uint32_t lhs_reg = reg_map[op->binary_op.lhs->id];
-      uint32_t rhs_reg = reg_map[op->binary_op.rhs->id];
-      invariant_assert(lhs_reg != UINT32_MAX && rhs_reg != UINT32_MAX,
-                       "bad IR, no reg");
-
-      uint32_t reg = (*last_reg)++;
-      reg_map[op->id] = reg;
-      lower_binary_op(emitter, lhs_reg, rhs_reg, reg, &op->binary_op);
+      lower_binary_op(state, op);
       break;
     }
     case IR_OP_TY_RET: {
-      uint32_t reg = reg_map[op->ret.value->id];
-      invariant_assert(reg != UINT32_MAX, "bad IR, no reg");
+      size_t value_reg = get_reg_for_op(state, op->ret.value);
+      invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
 
-      if (reg != RETURN_REG) {
-        aarch64_emit_mov_32(emitter, reg, RETURN_REG);
+      if (value_reg != RETURN_REG) {
+        aarch64_emit_mov_32(state->emitter, value_reg, RETURN_REG);
       }
 
-      aarch64_emit_ret(emitter);
+      aarch64_emit_ret(state->emitter);
       break;
     }
     default: {

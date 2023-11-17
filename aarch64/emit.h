@@ -2,6 +2,7 @@
 #define AARCH64_EMIT_H
 
 #include "../ir.h"
+#include "../lsra.h"
 
 struct compiled_function {
   const char *name;
@@ -9,6 +10,7 @@ struct compiled_function {
   size_t len_code;
 };
 
-struct compiled_function emit(struct ir_builder *func);
+// intervals MUST be sorted such that `interval[i].op_id == i` ID
+struct compiled_function emit(struct ir_builder *func, struct interval_data intervals);
 
 #endif

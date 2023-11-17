@@ -6,8 +6,6 @@
 #include "util.h"
 #include "vector.h"
 
-void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
-
 void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb, void *cb_metadata) {
   UNUSED_ARG(cnst);
   UNUSED_ARG(cb);
@@ -21,8 +19,26 @@ void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb, voi
 }
 
 void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
-  if (ret->value) {    
+  if (ret->value) {
     walk_op(ret->value, cb, cb_metadata);
+  }
+}
+
+void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+  switch (op->ty) {
+  case IR_OP_TY_PHI:
+    todo("walk phi");
+  case IR_OP_TY_CNST:
+    break;
+  case IR_OP_TY_BINARY_OP:
+    cb(op->binary_op.lhs, cb_metadata);
+    cb(op->binary_op.rhs, cb_metadata);
+    break;
+  case IR_OP_TY_RET:
+    if (op->ret.value) {
+      cb(op->ret.value, cb_metadata);
+    }
+    break;
   }
 }
 
@@ -449,10 +465,12 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
 void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt) {
   debug("%zu statements", irb->stmt_count);
 
+  size_t ctr = 0;
   while (stmt) {
     struct ir_op *ir = stmt->first;
 
     while (ir) {
+      fprintf(stderr, "%zu: ", ctr++);
       switch (ir->ty) {
       case IR_OP_TY_PHI:
         todo("debug PHI");
