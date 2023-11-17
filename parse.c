@@ -840,7 +840,6 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_compoundexpr compound_expr;
-  debug("try compound expr");
   if (parse_compoundexpr(parser, &compound_expr)) {
     struct token token;
     peek_token(parser->lexer, &token);

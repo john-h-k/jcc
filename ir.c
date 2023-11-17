@@ -6,6 +6,50 @@
 #include "util.h"
 #include "vector.h"
 
+void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
+
+void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb, void *cb_metadata) {
+  UNUSED_ARG(cnst);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb, void *cb_metadata) {
+  walk_op(binary_op->lhs, cb, cb_metadata);
+  walk_op(binary_op->rhs, cb, cb_metadata);
+}
+
+void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
+  if (ret->value) {    
+    walk_op(ret->value, cb, cb_metadata);
+  }
+}
+
+void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+  cb(op, cb_metadata);
+
+  switch (op->ty) {
+  case IR_OP_TY_PHI:
+    todo("walk phi");
+  case IR_OP_TY_CNST:
+    walk_cnst(&op->cnst, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BINARY_OP:
+    walk_binary_op(&op->binary_op, cb, cb_metadata);
+    break;
+  case IR_OP_TY_RET:
+    walk_ret(&op->ret, cb, cb_metadata);
+    break;
+  }
+}
+
+void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata) {
+  struct ir_op *op = stmt->last;
+
+  walk_op(op, cb, cb_metadata);
+}
+
 enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_ADD:
@@ -21,7 +65,8 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
-struct ir_op *insert_before_ir_op(struct ir_builder *irb, struct ir_op* insert_before) {
+struct ir_op *insert_before_ir_op(struct ir_builder *irb,
+                                  struct ir_op *insert_before) {
   debug_assert(insert_before, "invalid insertion point!");
 
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
@@ -42,7 +87,8 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb, struct ir_op* insert_b
   return op;
 }
 
-struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after) {
+struct ir_op *insert_after_ir_op(struct ir_builder *irb,
+                                 struct ir_op *insert_after) {
   debug_assert(insert_after, "invalid insertion point!");
 
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
@@ -257,7 +303,8 @@ struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 }
 
-struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_expr *expr) {
+struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_expr *expr) {
   switch (expr->ty) {
   case AST_EXPR_TY_RVALUE:
     return build_ir_for_rvalue(irb, stmt, &expr->rvalue);
@@ -266,16 +313,18 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt, st
   }
 }
 
-struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt);
+struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb,
+                                  struct ast_stmt *stmt);
 
 void build_ir_for_compoundstmt(struct ir_builder *irb,
-                          struct ast_compoundstmt *compound_stmt) {
+                               struct ast_compoundstmt *compound_stmt) {
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
     build_ir_for_stmt(irb, &compound_stmt->stmts[i]);
   }
 }
 
-struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb,struct ir_stmt *stmt,
+struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb,
+                                    struct ir_stmt *stmt,
                                     struct ast_jumpstmt *jump_stmt) {
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN: {
@@ -289,7 +338,8 @@ struct ir_op *build_ir_for_jumpstmt(struct ir_builder *irb,struct ir_stmt *stmt,
   }
 }
 
-struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,struct ir_stmt *stmt,
+struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
+                                       struct ir_stmt *stmt,
                                        struct ast_vardecllist *var_decl_list) {
   for (size_t i = 0; i < var_decl_list->num_decls; i++) {
     struct ast_vardecl *decl = &var_decl_list->decls[i];
@@ -307,7 +357,8 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,struct ir_stmt *st
   return stmt->last;
 }
 
-struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb, struct ast_stmt *stmt) {
+struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb,
+                                  struct ast_stmt *stmt) {
   struct ir_stmt *ir_stmt = alloc_ir_stmt(irb);
 
   switch (stmt->ty) {
@@ -400,15 +451,15 @@ void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt) {
 
   while (stmt) {
     struct ir_op *ir = stmt->first;
-    
+
     while (ir) {
       switch (ir->ty) {
       case IR_OP_TY_PHI:
         todo("debug PHI");
         break;
       case IR_OP_TY_CNST:
-        fprintf(stderr, "%%%zu (%s) = %zu\n", ir->id, var_ty_string(&ir->var_ty),
-                ir->cnst.value);
+        fprintf(stderr, "%%%zu (%s) = %zu\n", ir->id,
+                var_ty_string(&ir->var_ty), ir->cnst.value);
         break;
       case IR_OP_TY_BINARY_OP:
         fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu\n", ir->id,

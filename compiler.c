@@ -8,6 +8,7 @@
 #include "log.h"
 #include "macos/mach-o.h"
 #include "parse.h"
+#include "lsra.h"
 #include "util.h"
 #include "vector.h"
 #include <stdio.h>
@@ -81,6 +82,15 @@ enum compile_result compile(struct compiler *compiler) {
     debug_print_ir(ir, ir->first);
 
     BEGIN_STAGE("EMITTING");
+    
+    struct reg_info aarch64_reg_info = { .num_regs = 30 };
+    struct interval_data intervals = register_alloc(ir, aarch64_reg_info);
+
+    for (size_t i = 0; i < intervals.num_intervals; i++) {
+      struct interval *interval = &intervals.intervals[i];
+
+      debug("interval %zu (%zu -> %zu) has reg idx: %zu", interval->op_id, interval->start, interval->end, interval->reg);
+    }
     
     struct compiled_function func = emit(ir);
 
