@@ -5,6 +5,7 @@
 #include "parse.h"
 #include "util.h"
 #include "vector.h"
+#include <math.h>
 
 void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb, void *cb_metadata) {
   UNUSED_ARG(cnst);
@@ -462,32 +463,53 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
   }
 }
 
-void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt) {
-  debug("%zu statements", irb->stmt_count);
+void debug_print_op(struct ir_op *ir) {
+  switch (ir->ty) {
+  case IR_OP_TY_PHI:
+    todo("debug PHI");
+    break;
+  case IR_OP_TY_CNST:
+    fprintf(stderr, "%%%zu (%s) = %zu", ir->id,
+            var_ty_string(&ir->var_ty), ir->cnst.value);
+    break;
+  case IR_OP_TY_BINARY_OP:
+    fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
+            var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
+            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
+    break;
 
+  case IR_OP_TY_RET:
+    fprintf(stderr, "return %%%zu", ir->ret.value->id);
+    break;
+  }  
+}
+
+void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt, debug_print_op_callback *cb, void *cb_metadata) {
+  debug("%zu statements", irb->stmt_count);
+  
+  int ctr_pad = (int)log10(irb->op_count) + 1;
   size_t ctr = 0;
   while (stmt) {
     struct ir_op *ir = stmt->first;
 
-    while (ir) {
-      fprintf(stderr, "%zu: ", ctr++);
-      switch (ir->ty) {
-      case IR_OP_TY_PHI:
-        todo("debug PHI");
-        break;
-      case IR_OP_TY_CNST:
-        fprintf(stderr, "%%%zu (%s) = %zu\n", ir->id,
-                var_ty_string(&ir->var_ty), ir->cnst.value);
-        break;
-      case IR_OP_TY_BINARY_OP:
-        fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu\n", ir->id,
-                var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
-                binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
-        break;
+    int op_pad = /* guess */ 30;
 
-      case IR_OP_TY_RET:
-        fprintf(stderr, "return %%%zu\n", ir->ret.value->id);
-        break;
+    while (ir) {
+      fprintf(stderr, "%0*zu: ", ctr_pad, ctr++);
+
+      long pos = ftell(stderr);
+      debug_print_op(ir);
+      long width = ftell(stderr) - pos;
+      long pad = op_pad - width;
+
+      if (pad > 0) {
+        fprintf(stderr, "%*s", (int)pad, "");
+      }
+      
+      if (cb) {
+        fprintf(stderr, " | ");
+        cb(stderr, ir, cb_metadata);
+        fprintf(stderr, "\n");
       }
 
       ir = ir->succ;
