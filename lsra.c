@@ -14,11 +14,11 @@ void op_reached_callback(struct ir_op *op, void *cb_metadata) {
   if (interval->op_id == 0) {
     // not yet touched
     interval->op_id = op->id;
-    interval->end = SIZE_T_MAX - data->num_intervals;
+    interval->end = data->num_intervals;
     data->num_intervals++;
   } else {
     interval->op_id = op->id;
-    interval->start = SIZE_T_MAX - data->num_intervals;
+    interval->start = data->num_intervals;
   }
 }
 
@@ -31,7 +31,14 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   struct ir_stmt *stmt = irb->first;
   while (stmt) {
-    walk_stmt(stmt, op_reached_callback, &data);
+    // walk_stmt(stmt, op_reached_callback, &data);
+
+    struct ir_op *op = stmt->first;
+    while (op) {
+      op_reached_callback(op, &data);
+
+      op = op->succ;
+    }
 
     stmt = stmt->succ;
   }
