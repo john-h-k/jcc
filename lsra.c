@@ -1,4 +1,5 @@
 #include "lsra.h"
+#include "ir.h"
 #include "util.h"
 #include "vector.h"
 #include <limits.h>
@@ -6,36 +7,31 @@
 #define MARK_REG_USED(reg_pool, i) reg_pool &= ~(1 << i)
 #define MARK_REG_FREE(reg_pool, i) reg_pool |= (1 << i)
 
-void op_reached_callback(struct ir_op *op, void *cb_metadata) {
+void op_used_callback(struct ir_op *op, void *cb_metadata) {
   struct interval_data *data = cb_metadata;
 
   struct interval *interval = &data->intervals[op->id];
 
-  if (interval->op_id == 0) {
-    // not yet touched
-    interval->op_id = op->id;
-    interval->end = data->num_intervals;
-    data->num_intervals++;
-  } else {
-    interval->op_id = op->id;
-    interval->start = data->num_intervals;
-  }
+  interval->end = data->num_intervals;
 }
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
   data.intervals = alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
-  data.num_intervals = irb->op_count;
+  data.num_intervals = 0;//irb->op_count;
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
   struct ir_stmt *stmt = irb->first;
   while (stmt) {
-    // walk_stmt(stmt, op_reached_callback, &data);
-
     struct ir_op *op = stmt->first;
     while (op) {
-      op_reached_callback(op, &data);
+      struct interval *interval = &data.intervals[op->id];
+
+      interval->op_id = op->id;
+      interval->start = data.num_intervals++;
+
+      walk_op_uses(op, op_used_callback, &data);
 
       op = op->succ;
     }
@@ -74,15 +70,17 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
   size_t num_expired_intervals = 0;
   
   for (size_t i = 0; i < *num_active; i++) {
-    if (cur_interval->start <= intervals[i].end) {
+    struct interval *interval = &intervals[active[i]];
+    debug("cur interval %zu, intervals[i].end %zu", cur_interval->start, interval->end);
+    if (cur_interval->start <= interval->end) {
       return;
     }
 
     num_expired_intervals++;
 
 
-    debug("marking reg %ul free", intervals[i].reg);
-    MARK_REG_FREE(*reg_pool, intervals[i].reg);
+    debug("marking reg %ul free", interval->reg);
+    MARK_REG_FREE(*reg_pool, interval->reg);
   }
 
   // shift the active array down
@@ -90,10 +88,25 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
   num_active -= num_expired_intervals;
 }
 
+int sort_interval_by_start_point(const void *a, const void *b) {
+  size_t a_start = ((struct interval*)a)->start;
+  size_t b_start = ((struct interval*)b)->start;
+
+  if (a_start > b_start) {
+    return 1;
+  } else if (a_start < b_start) {
+    return -1;
+  } else {
+    return 0;
+  }
+}
+
 struct interval_data register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   struct interval_data data = construct_intervals(irb);
   struct interval *intervals = data.intervals;
   size_t num_intervals = data.num_intervals;
+
+  qsort(intervals, num_intervals, sizeof(*intervals), sort_interval_by_start_point);
 
   size_t *active = alloc(irb->arena, sizeof(size_t) * reg_info.num_regs);
   size_t num_active = 0;
@@ -121,14 +134,17 @@ struct interval_data register_alloc(struct ir_builder *irb, struct reg_info reg_
       MARK_REG_USED(reg_pool, free_reg);
       interval->reg = free_reg;
 
+      bool inserted= false;
       // insert into `active`, sorted by end point
-      for (size_t j = 0; j < num_active; j++) {
-        if (j + 1 == num_active || intervals[active[j + 1]].end > intervals[i].end) {
+      for (size_t j = 0; j <= num_active; j++) {
+        if (j == num_active || intervals[active[j + 1]].end > intervals[i].end) {
           active[j] = i;
           num_active++;
+          inserted = true;
           break;
         }
       }
+      invariant_assert(inserted, "didnt insert");
     }
   }
 
