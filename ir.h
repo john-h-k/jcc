@@ -104,6 +104,9 @@ struct ir_stmt {
   // meaningful links between operations are with in the op data, such as `ir_op->ret.value`,
   // which points to the op whos result is returned
   struct ir_op *first;
+
+  // last is the dominating op of the statement, and can be used as its "root". all other ops in the statement
+  // are reachable from it
   struct ir_op *last;
 };
 
@@ -123,6 +126,9 @@ struct ir_builder {
   size_t stmt_count;
   size_t op_count;
 };
+
+typedef void (walk_op_callback)(struct ir_op*, void *metadata);
+void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after);

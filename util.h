@@ -14,6 +14,15 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+static inline unsigned long tzcnt(unsigned long l) {
+#if defined(__has_builtin) && __has_builtin (__builtin_clz)
+  return __builtin_ctz(l);
+#else
+  todo("lzcnt not implemented outside of `__builtin_clz`");
+#endif
+}
+
+
 [[noreturn]] static inline void todo(const char *msg) {
   fprintf(stderr, "`todo` hit, program exiting: %s\n", msg);
   raise(SIGINT);

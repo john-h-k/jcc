@@ -17,6 +17,7 @@ set(
   link.c
   disasm.c
   var_table.c
+  lsra.c
 
   aarch64/lower.c
   aarch64/emit.c
