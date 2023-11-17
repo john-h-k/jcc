@@ -19,6 +19,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
   data.intervals = alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;//irb->op_count;
+  data.num_stack_slots = 0;
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
@@ -29,9 +30,10 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       struct interval *interval = &data.intervals[op->id];
 
       interval->op_id = op->id;
-      interval->start = data.num_intervals++;
+      interval->start = data.num_intervals;
 
       walk_op_uses(op, op_used_callback, &data);
+      data.num_intervals++;
 
       op = op->succ;
     }
@@ -42,20 +44,21 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
-void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active) {
+void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active, size_t *num_spilled) {
   // FIXME: optimise mem reads
 
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].reg = spill->reg;
     spill->reg = REG_SPILLED;
+    spill->stack_slot = (*num_spilled)++;
 
     // remove `spill`
     (*num_active)--;
 
     // insert into `active`, sorted by end point
-    for (size_t j = 0; j < *num_active; j++) {
-      if (j + 1 == *num_active || intervals[active[j + 1]].end > intervals[cur_interval].end) {
+    for (size_t j = 0; j <= *num_active; j++) {
+      if (j == *num_active || intervals[active[j + 1]].end > intervals[cur_interval].end) {
         active[j] = cur_interval;
         (*num_active)++;
         break;
@@ -63,6 +66,7 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
     }
   } else {
     intervals[cur_interval].reg = REG_SPILLED;
+    intervals[cur_interval].stack_slot = (*num_spilled)++;
   }
 }
 
@@ -73,11 +77,10 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
     struct interval *interval = &intervals[active[i]];
     debug("cur interval %zu, intervals[i].end %zu", cur_interval->start, interval->end);
     if (cur_interval->start <= interval->end) {
-      return;
+      break;
     }
 
     num_expired_intervals++;
-
 
     debug("marking reg %ul free", interval->reg);
     MARK_REG_FREE(*reg_pool, interval->reg);
@@ -119,11 +122,12 @@ struct interval_data register_alloc(struct ir_builder *irb, struct reg_info reg_
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
+    debug("%zu active", num_active);
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
     if (num_active == reg_info.num_regs) {
-      spill_at_interval(intervals, i, active, &num_active);
+      spill_at_interval(intervals, i, active, &num_active, &data.num_stack_slots);
     } else {
       debug("reg pool: %ul", reg_pool);
       unsigned long free_reg = tzcnt(reg_pool);

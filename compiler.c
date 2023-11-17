@@ -53,6 +53,17 @@ int compare_interval_id(const void *a, const void *b) {
   return (ssize_t)a_id - (ssize_t)b_id;
 }
 
+void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
+  struct interval_data *intervals = metadata;
+
+  struct interval *interval = &intervals->intervals[op->id];
+  if (interval->reg != REG_SPILLED) {
+    fprintf(file, "    register=%zu", interval->reg);
+  } else {
+    fprintf(file, "    stack slot=%zu", interval->stack_slot);
+  }
+}
+
 enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("LEX + PARSE");
 
@@ -78,7 +89,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("IR");
 
-    debug_print_ir(ir, ir->first);
+    debug_print_ir(ir, ir->first, NULL, NULL);
 
     BEGIN_STAGE("LOWERING");
 
@@ -86,11 +97,11 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("POST-LOWER IR");
 
-    debug_print_ir(ir, ir->first);
+    debug_print_ir(ir, ir->first, NULL, NULL);
 
     BEGIN_STAGE("EMITTING");
     
-    struct reg_info aarch64_reg_info = { .num_regs = 30 };
+    struct reg_info aarch64_reg_info = { .num_regs = 18 };
     struct interval_data intervals = register_alloc(ir, aarch64_reg_info);
 
     // we now sort the intervals so they are keyable with op_id
@@ -101,6 +112,8 @@ enum compile_result compile(struct compiler *compiler) {
 
       debug("interval %zu (%zu -> %zu) has reg idx: %zu", interval->op_id, interval->start, interval->end, interval->reg);
     }
+
+    debug_print_ir(ir, ir->first, print_ir_intervals, &intervals);
     
     struct compiled_function func = emit(ir, intervals);
 
