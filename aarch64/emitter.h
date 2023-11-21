@@ -109,6 +109,16 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
 
 /* Branches */
 
+size_t aarch64_emitted_count(struct aarch64_emitter *emitter);
+
+void aarch64_emit_b(struct aarch64_emitter *emitter, unsigned offset);
+void aarch64_emit_bl(struct aarch64_emitter *emitter, unsigned offset);
+
+void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset);
+void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset);
+void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset);
+void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset);
+
 void aarch64_emit_ret(struct aarch64_emitter *emitter);
 
 #endif

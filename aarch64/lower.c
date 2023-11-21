@@ -54,29 +54,36 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 }
 
 void lower(struct ir_builder *func) {
-  struct ir_stmt *stmt = func->first;
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
 
-  while (stmt) {
-    struct ir_op *op = stmt->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
 
-    while (op) {
-      switch (op->ty) {
-      case IR_OP_TY_PHI:
-      case IR_OP_TY_CNST:
-      case IR_OP_TY_RET:
-      case IR_OP_TY_STORE_LCL:
-      case IR_OP_TY_LOAD_LCL:
-        break;
-      case IR_OP_TY_BINARY_OP:
-        if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
-            op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
-          lower_quot(func, op);
+      while (op) {
+        switch (op->ty) {
+        case IR_OP_TY_PHI:
+        case IR_OP_TY_CNST:
+        case IR_OP_TY_RET:
+        case IR_OP_TY_STORE_LCL:
+        case IR_OP_TY_LOAD_LCL:
+        case IR_OP_TY_BR:
+        case IR_OP_TY_BR_COND:
+          break;
+        case IR_OP_TY_BINARY_OP:
+          if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
+              op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
+            lower_quot(func, op);
+          }
         }
+
+        op = op->succ;
       }
 
-      op = op->succ;
+      stmt = stmt->succ;
     }
 
-    stmt = stmt->succ;
+    basicblock = basicblock->succ;
   }
 }

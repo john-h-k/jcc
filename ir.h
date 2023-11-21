@@ -15,7 +15,14 @@ enum ir_op_ty {
   IR_OP_TY_STORE_LCL,
   IR_OP_TY_LOAD_LCL,
 
+  IR_OP_TY_BR,
+  IR_OP_TY_BR_COND,
   IR_OP_TY_RET
+};
+
+struct ir_op_phi {
+  struct ir_op **values;
+  size_t num_values;
 };
 
 struct ir_op_cnst {
@@ -87,6 +94,16 @@ struct ir_op_load_lcl {
   unsigned long lcl_idx;
 };
 
+struct ir_op_br_cond {
+  struct ir_op *cond;
+  struct ir_basicblock *if_true;
+  struct ir_basicblock *if_false;
+};
+
+struct ir_op_br {
+  struct ir_basicblock *target;
+};
+
 #include <limits.h>
 
 #define NO_REG (SIZE_T_MAX)
@@ -108,6 +125,9 @@ struct ir_op {
     struct ir_op_ret ret;
     struct ir_op_store_lcl store_lcl;
     struct ir_op_load_lcl load_lcl;
+    struct ir_op_br_cond br_cond;
+    struct ir_op_br br;
+    struct ir_op_phi phi;
   };
 
   // only meaningful post register-allocation
@@ -119,6 +139,8 @@ struct ir_op {
 // set of ops with no SEQ_POINTs
 struct ir_stmt {
   size_t id;
+
+  struct ir_basicblock *basicblock;
 
   struct ir_stmt *pred;
   struct ir_stmt *succ;
@@ -134,8 +156,17 @@ struct ir_stmt {
   struct ir_op *last;
 };
 
-struct stack_entry {
-  unsigned long size;
+struct ir_basicblock {
+  size_t id;
+  
+  struct ir_basicblock *pred;
+  struct ir_basicblock *succ;
+
+  struct ir_stmt *first;
+  struct ir_stmt *last;
+
+  // how many ops are before this block in the function
+  size_t function_offset;
 };
 
 struct ir_builder {
@@ -144,15 +175,15 @@ struct ir_builder {
   struct parser *parser;
   struct arena_allocator *arena;
 
-  // `value` contains a `struct ir_op *` to the last op that wrote to this
+  // `value` contains a `struct vector *` containing the last op(s) that wrote to this
   // variable or NULL if it is not yet written to
-  // this is NOT the same as the local var table (naming could be improved)
-  // which represent spilled variables
+  // it will contain multiple ops
   struct var_table var_table;
 
-  struct ir_stmt *first;
-  struct ir_stmt *last;
+  struct ir_basicblock *first;
+  struct ir_basicblock *last;
 
+  size_t basicblock_count;
   size_t stmt_count;
   size_t op_count;
 
@@ -192,7 +223,7 @@ build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
 typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
                                       void *metadata);
 
-void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
                     debug_print_op_callback *cb, void *cb_metadata);
 
 #endif

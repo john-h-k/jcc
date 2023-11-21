@@ -35,30 +35,36 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
-  struct ir_stmt *stmt = irb->first;
-  while (stmt) {
-    struct ir_op *op = stmt->first;
-    while (op) {
-      debug("constructing interval for op %zu", op->id);
-      op->lcl_idx = NO_LCL;
-      op->reg = NO_REG;
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
 
-      debug_assert(op->id < irb->op_count, "out of range!");
-      struct interval *interval = &data.intervals[op->id];
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        debug("constructing interval for op %zu", op->id);
+        op->lcl_idx = NO_LCL;
+        op->reg = NO_REG;
 
-      interval->op = op;
-      interval->start = data.num_intervals;
-      interval->end = interval->start; // this ensures intervals are still valid for unused values
-      debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
-      op->metadata = interval;
+        debug_assert(op->id < irb->op_count, "out of range!");
+        struct interval *interval = &data.intervals[op->id];
 
-      walk_op_uses(op, op_used_callback, &data);
-      data.num_intervals++;
+        interval->op = op;
+        interval->start = data.num_intervals;
+        interval->end = interval->start; // this ensures intervals are still valid for unused values
+        debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
+        op->metadata = interval;
 
-      op = op->succ;
+        walk_op_uses(op, op_used_callback, &data);
+        data.num_intervals++;
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
     }
 
-    stmt = stmt->succ;
+    basicblock = basicblock->succ;
   }
 
   return data;
@@ -156,17 +162,23 @@ void alloc_fixup_callback(struct ir_op **op, void *metadata) {
 void alloc_fixup(struct ir_builder *irb, struct interval_data *data) {
   UNUSED_ARG(data);
 
-  struct ir_stmt *stmt = irb->first;
-  while (stmt) {
-    struct ir_op *op = stmt->first;
-    while (op) {
-      struct alloc_fixup_data metadata = { .irb = irb, .consumer = op };
-      walk_op_uses(op, alloc_fixup_callback, &metadata);
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
 
-      op = op->succ;
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        struct alloc_fixup_data metadata = { .irb = irb, .consumer = op };
+        walk_op_uses(op, alloc_fixup_callback, &metadata);
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
     }
 
-    stmt = stmt->succ;
+    basicblock = basicblock->succ;
   }
 }
 

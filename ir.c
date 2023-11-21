@@ -7,6 +7,18 @@
 #include "vector.h"
 #include <math.h>
 
+void walk_br(struct ir_op_br *br, walk_op_callback *cb, void *cb_metadata) {
+  UNUSED_ARG(br);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
+                  void *cb_metadata) {
+  cb(&br_cond->cond, cb_metadata);
+}
+
 void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
                     void *cb_metadata) {
   cb(&store_lcl->value, cb_metadata);
@@ -42,8 +54,12 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
-  case IR_OP_TY_PHI:
-    todo("walk phi");
+  case IR_OP_TY_PHI: {
+    for (size_t i = 0; i < op->phi.num_values; i++) {
+      cb(&op->phi.values[i], cb_metadata);
+    }
+    break;
+  }
   case IR_OP_TY_CNST:
     break;
   case IR_OP_TY_BINARY_OP:
@@ -54,6 +70,11 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->store_lcl.value, cb_metadata);
     break;
   case IR_OP_TY_LOAD_LCL:
+    break;
+  case IR_OP_TY_BR:
+    break;
+  case IR_OP_TY_BR_COND:
+    cb(&op->br_cond.cond, cb_metadata);
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
@@ -80,6 +101,12 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_LOAD_LCL:
     walk_load_lcl(&op->load_lcl, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BR:
+    walk_br(&op->br, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BR_COND:
+    walk_br_cond(&op->br_cond, cb, cb_metadata);
     break;
   case IR_OP_TY_RET:
     walk_ret(&op->ret, cb, cb_metadata);
@@ -108,7 +135,7 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
-const struct ir_op_var_ty IR_OP_VAR_TY_NONE = { .ty = IR_OP_VAR_TY_TY_NONE };
+const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, struct ir_op *pred,
@@ -189,24 +216,47 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   return op;
 }
 
-struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb) {
+struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
+                              struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = alloc(irb->arena, sizeof(*stmt));
 
-  if (!irb->first) {
-    irb->first = stmt;
+  if (!basicblock->first) {
+    basicblock->first = stmt;
   }
 
   stmt->id = irb->stmt_count++;
-  stmt->pred = irb->last;
+  stmt->basicblock = basicblock;
+  stmt->pred = basicblock->last;
   stmt->succ = NULL;
 
-  if (irb->last) {
-    irb->last->succ = stmt;
+  if (basicblock->last) {
+    basicblock->last->succ = stmt;
   }
 
-  irb->last = stmt;
+  basicblock->last = stmt;
 
   return stmt;
+}
+
+struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
+  struct ir_basicblock *basicblock = alloc(irb->arena, sizeof(*basicblock));
+
+  if (!irb->first) {
+    irb->first = basicblock;
+  }
+
+  basicblock->id = irb->basicblock_count++;
+  basicblock->pred = irb->last;
+  basicblock->succ = NULL;
+  basicblock->function_offset = irb->op_count;
+
+  if (irb->last) {
+    irb->last->succ = basicblock;
+  }
+
+  irb->last = basicblock;
+
+  return basicblock;
 }
 
 enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
@@ -313,8 +363,14 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     struct var_table_entry *entry =
         get_or_create_entry(&irb->var_table, &assg->lvalue.var);
 
-    entry->value = build_ir_for_expr(irb, stmt, assg->expr);
-    return entry->value;
+    if (!entry->value) {
+      entry->value = vector_create(sizeof(struct ir_op *));
+    }
+      
+    struct ir_op *expr = build_ir_for_expr(irb, stmt, assg->expr);
+    vector_push_back(entry->value, &expr);
+    debug("contains %zu exprs", vector_length(entry->value));
+    return expr;
   }
   }
 }
@@ -357,7 +413,21 @@ struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ir_stmt *stmt,
           entry->name);
     }
 
-    return entry->value;
+    struct vector *exprs = entry->value;
+
+    if (vector_length(exprs) == 1) {
+      return vector_get(exprs, 0);
+    }
+
+    // must insert phi node
+    struct ir_op *phi = alloc_ir_op(irb, stmt);
+    phi->ty = IR_OP_TY_PHI;
+    phi->var_ty = (*(struct ir_op **)vector_get(exprs, 0))->var_ty;
+    phi->phi.values = alloc(irb->arena, vector_byte_size(exprs));
+    vector_copy_to(exprs, phi->phi.values);
+
+    phi->phi.num_values = vector_length(exprs);
+    return phi;
   }
   }
 }
@@ -379,6 +449,75 @@ void build_ir_for_compoundstmt(struct ir_builder *irb,
                                struct ast_compoundstmt *compound_stmt) {
   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
     build_ir_for_stmt(irb, &compound_stmt->stmts[i]);
+  }
+}
+
+void build_ir_for_if(struct ir_builder *irb, struct ir_stmt *stmt,
+                     struct ast_ifstmt *if_stmt) {
+  struct ir_op *cond = build_ir_for_expr(irb, stmt, &if_stmt->condition);
+  struct ir_op *br_cond = alloc_ir_op(irb, stmt);
+  br_cond->ty = IR_OP_TY_BR_COND;
+  br_cond->var_ty = IR_OP_VAR_TY_NONE;
+  br_cond->br_cond.cond = cond;
+
+  // basic block for if body
+  struct ir_basicblock *if_basicblock = alloc_ir_basicblock(irb);
+  build_ir_for_stmt(irb, if_stmt->body);
+  br_cond->br_cond.if_true = if_basicblock;
+
+  // basic block for *after* if body
+  struct ir_basicblock *after_basicblock = alloc_ir_basicblock(irb);
+  br_cond->br_cond.if_false = after_basicblock;
+}
+
+void build_ir_for_ifelse(struct ir_builder *irb, struct ir_stmt *stmt,
+                     struct ast_ifelsestmt *if_else_stmt) {
+  struct ir_op *cond = build_ir_for_expr(irb, stmt, &if_else_stmt->condition);
+  struct ir_op *br_cond = alloc_ir_op(irb, stmt);
+  br_cond->ty = IR_OP_TY_BR_COND;
+  br_cond->var_ty = IR_OP_VAR_TY_NONE;
+  br_cond->br_cond.cond = cond;
+
+  // basic block for if body
+  struct ir_basicblock *if_basicblock = alloc_ir_basicblock(irb);
+  build_ir_for_stmt(irb, if_else_stmt->body);
+  br_cond->br_cond.if_true = if_basicblock;
+
+  // branch to combined end
+  struct ir_op *br_after_if = alloc_ir_op(irb, if_basicblock->last);
+  br_after_if->ty = IR_OP_TY_BR;
+  br_after_if->var_ty = IR_OP_VAR_TY_NONE;
+
+  // basic block for else body
+  struct ir_basicblock *else_basicblock = alloc_ir_basicblock(irb);
+  build_ir_for_stmt(irb, if_else_stmt->else_body);
+  br_cond->br_cond.if_false = else_basicblock;
+
+  // branch to combined end
+  struct ir_op *br_after_else = alloc_ir_op(irb, else_basicblock->last);
+  br_after_else->ty = IR_OP_TY_BR;
+  br_after_else->var_ty = IR_OP_VAR_TY_NONE;
+
+  // basic block for *after* if-else
+  struct ir_basicblock *after_basicblock = alloc_ir_basicblock(irb);
+  br_after_if->br.target = after_basicblock;
+  br_after_else->br.target = after_basicblock;
+}
+
+struct ir_op *build_ir_for_selectstmt(struct ir_builder *irb,
+                                      struct ir_stmt *stmt,
+                                      struct ast_selectstmt *select_stmt) {
+  switch (select_stmt->ty) {
+  case AST_SELECTSTMT_TY_IF: {
+    build_ir_for_if(irb, stmt, &select_stmt->if_stmt);
+    return stmt->last; // TODO: this is meaningless
+  }
+  case AST_SELECTSTMT_TY_IF_ELSE:
+    build_ir_for_ifelse(irb, stmt, &select_stmt->if_else_stmt);
+    return stmt->last; // TODO: this is meaningless
+  case AST_SELECTSTMT_TY_SWITCH:
+    todo("switch IR");
+    break;
   }
 }
 
@@ -418,7 +557,8 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
 
 struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb,
                                   struct ast_stmt *stmt) {
-  struct ir_stmt *ir_stmt = alloc_ir_stmt(irb);
+  struct ir_basicblock *basicblock = irb->last;
+  struct ir_stmt *ir_stmt = alloc_ir_stmt(irb, basicblock);
 
   switch (stmt->ty) {
   case AST_STMT_TY_VAR_DECL_LIST: {
@@ -438,7 +578,7 @@ struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb,
     break;
   }
   case AST_STMT_TY_SELECT: {
-    todo("IR for selects");
+    build_ir_for_selectstmt(irb, ir_stmt, &stmt->select);
     break;
   }
   }
@@ -481,6 +621,9 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
   struct ir_builder *builder = alloc(arena, sizeof(b));
   *builder = b;
+
+  // needs at least one initial basic block
+  alloc_ir_basicblock(builder);
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {
     build_ir_for_stmt(builder, &def->body.stmts[i]);
@@ -530,12 +673,29 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
   }
 }
 
+const char *phi_string(struct ir_op_phi *phi) {
+  // just assume we don't have more than 100,000 phi inputs
+  char *buff = nonnull_malloc(phi->num_values * (6 + 2));
+  char *head = buff;
+
+  for (size_t i = 0; i < phi->num_values; i++) {
+    head += sprintf(head, "%%%zu", phi->values[i]->id);
+
+    if (i + 1 < phi->num_values) {
+      head += sprintf(head, ", ");
+    }
+  }
+
+  *head = '\0';
+  return buff;
+}
+
 void debug_print_op(struct ir_op *ir) {
   FILE *file = stderr;
 
   switch (ir->ty) {
   case IR_OP_TY_PHI:
-    todo("debug PHI");
+    fslogsl(file, "%%%zu (%s) = phi [ %s ]", ir->id, var_ty_string(&ir->var_ty), phi_string(&ir->phi));
     break;
   case IR_OP_TY_CNST:
     fslogsl(file, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),
@@ -547,13 +707,21 @@ void debug_print_op(struct ir_op *ir) {
             binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
   case IR_OP_TY_STORE_LCL:
-    fslogsl(file, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
-            ir->id, var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
+    fslogsl(file, "%%%zu (%s) = storelcl LCL(%zu), %%%zu", ir->id,
+            var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
             ir->store_lcl.value->id);
     break;
   case IR_OP_TY_LOAD_LCL:
     fslogsl(file, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
             var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
+    break;
+  case IR_OP_TY_BR:
+    fslogsl(file, "br @%zu", ir->br.target->id);
+    break;
+  case IR_OP_TY_BR_COND:
+    fslogsl(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
+            ir->br_cond.cond->id, ir->br_cond.if_true->id,
+            ir->br_cond.if_false->id);
     break;
   case IR_OP_TY_RET:
     fslogsl(file, "return %%%zu", ir->ret.value->id);
@@ -561,40 +729,48 @@ void debug_print_op(struct ir_op *ir) {
   }
 }
 
-void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
                     debug_print_op_callback *cb, void *cb_metadata) {
   debug("%zu statements", irb->stmt_count);
 
   int ctr_pad = (int)log10(irb->op_count) + 1;
   size_t ctr = 0;
-  while (stmt) {
-    struct ir_op *ir = stmt->first;
 
-    int op_pad = /* guess */ 50;
+  FILE *file = stderr;
 
-    FILE *file = stderr;
-    while (ir) {
-      fslogsl(file, "%0*zu: ", ctr_pad, ctr++);
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    fslog(file, "\nBB @ %03zu", basicblock->id);
 
-      // HACK: this shouldn't rely on the fact `log` goes to `stderr`
-      long pos = ftell(stderr);
-      debug_print_op(ir);
-      long width = ftell(stderr) - pos;
-      long pad = op_pad - width;
+    while (stmt) {
+      struct ir_op *ir = stmt->first;
 
-      if (pad > 0) {
-        fslogsl(file, "%*s", (int)pad, "");
+      int op_pad = /* guess */ 50;
+
+      while (ir) {
+        fslogsl(file, "%0*zu: ", ctr_pad, ctr++);
+
+        // HACK: this shouldn't rely on the fact `log` goes to `stderr`
+        long pos = ftell(stderr);
+        debug_print_op(ir);
+        long width = ftell(stderr) - pos;
+        long pad = op_pad - width;
+
+        if (pad > 0) {
+          fslogsl(file, "%*s", (int)pad, "");
+        }
+
+        if (cb) {
+          fslogsl(file, " | ");
+          cb(stderr, ir, cb_metadata);
+        }
+        fslogsl(file, "\n");
+
+        ir = ir->succ;
       }
 
-      if (cb) {
-        fslogsl(file, " | ");
-        cb(stderr, ir, cb_metadata);
-      }
-      fslogsl(file, "\n");
-
-      ir = ir->succ;
+      stmt = stmt->succ;
     }
-
-    stmt = stmt->succ;
+    basicblock = basicblock->succ;
   }
 }

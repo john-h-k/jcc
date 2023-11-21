@@ -728,21 +728,43 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TYPE_KW_IF) {
-    consume_token(parser->lexer, token);
+  if (token.ty != LEX_TOKEN_TYPE_KW_IF) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
 
-    struct ast_expr expr;
-    struct ast_stmt stmt;
-    if (parse_expr(parser, &expr) && parse_stmt(parser, &stmt)) {
-      if_stmt->condition = expr;
-      if_stmt->body = alloc(parser->arena, sizeof(*if_stmt->body));
-      *if_stmt->body = stmt;
-      return true;
-    }
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_expr expr;
+  err("parsing if expression");
+  if (!parse_expr(parser, &expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
   }
 
-  backtrack(parser->lexer, pos);
-  return false;
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_stmt stmt;
+  if (!parse_stmt(parser, &stmt)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  if_stmt->condition = expr;
+  if_stmt->body = alloc(parser->arena, sizeof(*if_stmt->body));
+  *if_stmt->body = stmt;
+  return true;
 }
 
 bool parse_ifelsestmt(struct parser *parser,

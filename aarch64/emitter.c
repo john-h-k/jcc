@@ -5,6 +5,8 @@
 #include "../util.h"
 #include <stdlib.h>
 
+#define FITS_IN_BITS(value, bitc) ((value & ~((1 << (bitc - 1)) - 1)) == 0)
+
 const struct aarch64_reg RETURN_REG = { 0 };
 const struct aarch64_reg ZERO_REG = { 31 };
 const struct aarch64_reg STACK_PTR_REG = { 31 };
@@ -27,6 +29,10 @@ void create_aarch64_emitter(struct aarch64_emitter **emitter) {
 
 size_t aarch64_emit_bytesize(struct aarch64_emitter *emitter) {
   return emitter->head * sizeof(*emitter->block);
+}
+
+size_t aarch64_emitted_count(struct aarch64_emitter *emitter) {
+  return emitter->head;
 }
 
 void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void *dest) {
@@ -115,7 +121,7 @@ void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter, struct aarch64_r
     break;
   }
   default: {
-    if (cnst <= UINT16_MAX) {
+    if (FITS_IN_BITS(cnst, 16)) {
       aarch64_emit(emitter, MOVZ_64(/* no shift */ 0, (uint16_t)cnst, dest.idx));
       break;
     } else {
@@ -137,7 +143,7 @@ void aarch64_emit_load_cnst_32(struct aarch64_emitter *emitter, struct aarch64_r
     break;
   }
   default: {
-    if (cnst <= UINT16_MAX) {
+    if (FITS_IN_BITS(cnst, 16)) {
       aarch64_emit(emitter, MOVZ_32(/* no shift */ 0, (uint16_t)cnst, dest.idx));
       break;
     } else {
@@ -181,4 +187,32 @@ void aarch64_emit_add_64_imm(struct aarch64_emitter *emitter,
                          struct aarch64_reg source, size_t imm,
                          struct aarch64_reg dest) {
   aarch64_emit(emitter, ADD_64_IMM(0, imm, source.idx, dest.idx));
+}
+
+void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBZ_32_IMM(offset, cmp.idx));
+}
+void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBNZ_32_IMM(offset, cmp.idx));
+}
+void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBZ_64_IMM(offset, cmp.idx));
+}
+
+void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBNZ_64_IMM(offset, cmp.idx));
+}
+
+void aarch64_emit_b(struct aarch64_emitter *emitter, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
+  aarch64_emit(emitter, B(offset));
+}
+
+void aarch64_emit_bl(struct aarch64_emitter *emitter, unsigned offset) {
+  invariant_assert(FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
+  aarch64_emit(emitter, BL(offset));
 }
