@@ -37,6 +37,9 @@ DEF_LOG_FN(trace, PR_WHITE "TRACE")
 #define BEGIN_STAGE(name)                                                      \
   fprintf(stderr, "\n\n**********  " name "  **********\n\n")
 
+#define BEGIN_SUB_STAGE(name)                                                      \
+  fprintf(stderr, "\n\n>> " name " \n\n")
+
 #define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
 #define _GENERIC_DBG_FORMAT_SPECIFIER(val)                                     \
   _Generic((val),                                                              \

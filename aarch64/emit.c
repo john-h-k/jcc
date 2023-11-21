@@ -39,18 +39,19 @@ size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
   size_t reg = op->reg;
   // if (reg == REG_SPILLED) {
   //   // registers which are dirtied but not currently in use
-  //   unsigned long in_use_regs = state->cur_op_state.read_registers | state->cur_op_state.write_registers;
-  //   unsigned long unused_bad_regs = state->need_reload_registers & ~in_use_regs;
-  //   reg = tzcnt(unused_bad_regs);
+  //   unsigned long in_use_regs = state->cur_op_state.read_registers |
+  //   state->cur_op_state.write_registers; unsigned long unused_bad_regs =
+  //   state->need_reload_registers & ~in_use_regs; reg =
+  //   tzcnt(unused_bad_regs);
 
   //   if (reg == sizeof(unused_bad_regs) * 8) {
   //     // need to pick a new register. find first one not in use
   //     reg = tzcnt(~in_use_regs);
-  //     invariant_assert(reg < sizeof(in_use_regs) * 8, "ran out of registers during allocation");
-  //     state->need_reload_registers |= (1 << reg);
+  //     invariant_assert(reg < sizeof(in_use_regs) * 8, "ran out of registers
+  //     during allocation"); state->need_reload_registers |= (1 << reg);
   //   }
   // } else {
-    
+
   // }
 
   if (usage & REG_USAGE_READ) {
@@ -60,7 +61,10 @@ size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
     state->cur_op_state.write_registers |= reg;
   }
 
-  invariant_assert(reg != REG_SPILLED, "spilled reg reached emitter; should've been handled by lower/regalloc");
+  invariant_assert(
+      reg != REG_SPILLED,
+      "spilled reg reached emitter; should've been handled by lower/regalloc");
+
   invariant_assert(reg < 18, "invalid reg for AArch64");
 
   return reg;
@@ -75,7 +79,8 @@ size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
 
 //     debug("cleaning up reg %zu", reg);
 
-//     // because registers are dirtied going up in value, we know the stack slot
+//     // because registers are dirtied going up in value, we know the stack
+//     slot
 //     // implicitly because the last dirtied reg (most significant bit) will be
 //     // the most recent extra stack slot
 
@@ -128,8 +133,6 @@ void lower_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
     bug("SQUOT and UQUOT should've been lowered to div-msub pair already");
-  default:
-    todo("unsupported op");
   }
 }
 
@@ -142,7 +145,8 @@ const char *mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size);
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
+               size_t stack_size);
 
 struct compiled_function emit(struct ir_builder *func) {
   struct aarch64_emitter *emitter;
@@ -156,7 +160,8 @@ struct compiled_function emit(struct ir_builder *func) {
   size_t stack_size = ROUND_UP(16, func->total_locals_size);
   if (stack_size) {
     // spills, so we need stack space
-    aarch64_emit_sub_64_imm(state.emitter, STACK_PTR_REG, stack_size, STACK_PTR_REG);
+    aarch64_emit_sub_64_imm(state.emitter, STACK_PTR_REG, stack_size,
+                            STACK_PTR_REG);
   }
 
   struct ir_stmt *stmt = func->first;
@@ -165,7 +170,6 @@ struct compiled_function emit(struct ir_builder *func) {
 
     stmt = stmt->succ;
   }
-  
 
   size_t len = aarch64_emit_bytesize(emitter);
   void *data = alloc(func->arena, len);
@@ -179,11 +183,32 @@ struct compiled_function emit(struct ir_builder *func) {
   return result;
 }
 
-void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size) {
+unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
+  // FIXME: only supports ints
+  UNUSED_ARG(state);
+  return lcl_idx;
+}
+
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
+               size_t stack_size) {
   struct ir_op *op = stmt->first;
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
+    case IR_OP_TY_LOAD_LCL: {
+      size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+      aarch64_emit_load_offset_32(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset(state, op->load_lcl.lcl_idx));
+      break;
+    }
+    case IR_OP_TY_STORE_LCL: {
+      size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+      aarch64_emit_store_offset_32(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset(state, op->store_lcl.lcl_idx));
+      break;
+    }
     case IR_OP_TY_CNST: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
       aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
@@ -198,7 +223,7 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size
       size_t value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
       invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
 
-      if (is_return_reg(value_reg)) {
+      if (!is_return_reg(value_reg)) {
         aarch64_emit_mov_32(state->emitter, get_reg_for_idx(value_reg),
                             RETURN_REG);
       }
@@ -206,7 +231,8 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size
       // this should really be handled somewhere else for elegance
       // but this readjusts SP as needed (epilogue)
       if (stack_size) {
-        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, stack_size, STACK_PTR_REG);
+        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, stack_size,
+                                STACK_PTR_REG);
       }
 
       aarch64_emit_ret(state->emitter);
