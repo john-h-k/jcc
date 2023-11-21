@@ -547,8 +547,8 @@ void debug_print_op(struct ir_op *ir) {
             binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
   case IR_OP_TY_STORE_LCL:
-    fprintf(stderr, "storelcl (%s), LCL(%zu), %%%zu",
-            var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
+    fprintf(stderr, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
+            ir->id, var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
             ir->store_lcl.value->id);
     break;
   case IR_OP_TY_LOAD_LCL:
@@ -570,7 +570,7 @@ void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
   while (stmt) {
     struct ir_op *ir = stmt->first;
 
-    int op_pad = /* guess */ 30;
+    int op_pad = /* guess */ 50;
 
     while (ir) {
       fprintf(stderr, "%0*zu: ", ctr_pad, ctr++);
