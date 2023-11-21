@@ -8,6 +8,9 @@
 enum ir_op_ty {
   IR_OP_TY_PHI,
 
+  // only used late in the pipeline for eliminating phi nodes
+  IR_OP_TY_MOV,
+
   IR_OP_TY_CNST,
 
   IR_OP_TY_BINARY_OP,
@@ -18,6 +21,10 @@ enum ir_op_ty {
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
   IR_OP_TY_RET
+};
+
+struct ir_op_mov {
+  struct ir_op *value;
 };
 
 struct ir_op_phi {
@@ -128,6 +135,7 @@ struct ir_op {
     struct ir_op_br_cond br_cond;
     struct ir_op_br br;
     struct ir_op_phi phi;
+    struct ir_op_mov mov;
   };
 
   // only meaningful post register-allocation

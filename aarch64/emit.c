@@ -103,6 +103,31 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
                size_t stack_size);
 
 struct compiled_function emit(struct ir_builder *func) {
+  // the first step of emitting is that we need to ensure the `function_offset` values are correct for all BBs
+  // as they may have been broken during various opt/transforming passes
+  {
+    size_t opc = 0;
+
+    struct ir_basicblock *basicblock = func->first;
+    while (basicblock) {
+      basicblock->function_offset = opc;
+      struct ir_stmt *stmt = basicblock->first;
+
+      while (stmt) {
+        struct ir_op *op = stmt->first;
+        while (op) {
+          opc++;
+          op = op->succ;
+        }
+
+        stmt = stmt->succ;
+      }
+
+      basicblock = basicblock->succ;
+    }
+    
+  }
+
   struct aarch64_emitter *emitter;
   create_aarch64_emitter(&emitter);
 
@@ -158,6 +183,19 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
+    case IR_OP_TY_MOV: {
+      size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+      size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
+      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src), get_reg_for_idx(dest));
+      break;
+    }
+    case IR_OP_TY_PHI: {
+      // TODO: ensure everything is where it should be
+      // currently we emit a `nop` to keep everything aligned
+      // ideally we should remove the phi from IR entirely earlier
+      aarch64_emit_nop(state->emitter);
+      break;
+    }
     case IR_OP_TY_LOAD_LCL: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
       aarch64_emit_load_offset_32(

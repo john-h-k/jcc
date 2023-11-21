@@ -1,3 +1,4 @@
+// expected value: 11
 int main() {
   int a;
 
@@ -7,5 +8,13 @@ int main() {
     a = 20;
   }
 
-  return a;
+  int b;
+
+  if (0) {
+    b = 5;
+  } else {
+    b = 1;
+  }
+
+  return a + b;
 }

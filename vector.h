@@ -13,6 +13,8 @@ size_t vector_length(struct vector *v);
 size_t vector_byte_size(struct vector *v);
 void *vector_get(struct vector *v, size_t index);
 
+void vector_resize(struct vector *v, size_t size);
+
 void vector_copy_to(struct vector *v, void *dest);
 
 void vector_to_array(struct vector *v, void **data, size_t *len);
