@@ -29,18 +29,14 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 
   // c = a / b
 
-  struct ir_op *div = insert_before_ir_op(func, op);
-  div->ty = IR_OP_TY_BINARY_OP;
-  div->var_ty = op->var_ty;
+  struct ir_op *div = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
   div->binary_op.ty = div_ty;
   div->binary_op.lhs = op->binary_op.lhs;
   div->binary_op.rhs = op->binary_op.rhs;
 
   // y = c * b
 
-  struct ir_op *mul = insert_after_ir_op(func, div);
-  mul->ty = IR_OP_TY_BINARY_OP;
-  mul->var_ty = op->var_ty;
+  struct ir_op *mul = insert_after_ir_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
   mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
   mul->binary_op.lhs = div;
   mul->binary_op.rhs = op->binary_op.rhs;
@@ -68,6 +64,8 @@ void lower(struct ir_builder *func) {
       case IR_OP_TY_PHI:
       case IR_OP_TY_CNST:
       case IR_OP_TY_RET:
+      case IR_OP_TY_STORE_LCL:
+      case IR_OP_TY_LOAD_LCL:
         break;
       case IR_OP_TY_BINARY_OP:
         if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||

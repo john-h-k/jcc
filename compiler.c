@@ -46,24 +46,6 @@ enum compiler_create_result create_compiler(const char *program,
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
-int compare_interval_id(const void *a, const void *b) {
-  size_t a_id = ((struct interval *)a)->op_id;
-  size_t b_id = ((struct interval *)b)->op_id;
-
-  return (ssize_t)a_id - (ssize_t)b_id;
-}
-
-void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
-  struct interval_data *intervals = metadata;
-
-  struct interval *interval = &intervals->intervals[op->id];
-  if (interval->reg != REG_SPILLED) {
-    fprintf(file, "    register=%zu", interval->reg);
-  } else {
-    fprintf(file, "    stack slot=%zu", interval->stack_slot);
-  }
-}
-
 enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("LEX + PARSE");
 
@@ -102,20 +84,9 @@ enum compile_result compile(struct compiler *compiler) {
     BEGIN_STAGE("EMITTING");
     
     struct reg_info aarch64_reg_info = { .num_regs = 18 };
-    struct interval_data intervals = register_alloc(ir, aarch64_reg_info);
-
-    // we now sort the intervals so they are keyable with op_id
-    qsort(intervals.intervals, intervals.num_intervals, sizeof(*intervals.intervals), compare_interval_id);
-
-    for (size_t i = 0; i < intervals.num_intervals; i++) {
-      struct interval *interval = &intervals.intervals[i];
-
-      debug("interval %zu (%zu -> %zu) has reg idx: %zu", interval->op_id, interval->start, interval->end, interval->reg);
-    }
-
-    debug_print_ir(ir, ir->first, print_ir_intervals, &intervals);
+    register_alloc(ir, aarch64_reg_info);
     
-    struct compiled_function func = emit(ir, intervals);
+    struct compiled_function func = emit(ir);
 
     debug("symbol %s, value %d", func.name, total_size);
     struct symbol symbol = {

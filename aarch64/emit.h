@@ -11,6 +11,6 @@ struct compiled_function {
 };
 
 // intervals MUST be sorted such that `interval[i].op_id == i` ID
-struct compiled_function emit(struct ir_builder *func, struct interval_data intervals);
+struct compiled_function emit(struct ir_builder *func);
 
 #endif

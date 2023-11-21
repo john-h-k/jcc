@@ -3,24 +3,19 @@
 #include "isa.h"
 
 struct current_op_state {
-  // additional stack slots needed on top of `interval_data.num_stack_slots`
-  size_t live_extra_stack_slots;
-
   // registers being used by the current instruction, so not possible to use
   unsigned long write_registers;
   unsigned long read_registers;
-
-  // registers that need to be reloaded
-  unsigned long need_reload_registers;
 };
 
 struct emit_state {
   struct arena_allocator *arena;
   struct aarch64_emitter *emitter;
-  struct interval_data intervals;
 
   size_t num_extra_stack_slots;
 
+  // registers that need to be reloaded
+  unsigned long need_reload_registers;
   struct current_op_state cur_op_state;
 };
 
@@ -41,67 +36,64 @@ enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
 size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
                       enum reg_usage usage) {
-  struct interval interval = state->intervals.intervals[op->id];
-  debug_assert(interval.op_id == op->id, "intervals was not keyed by ID");
+  size_t reg = op->reg;
+  // if (reg == REG_SPILLED) {
+  //   // registers which are dirtied but not currently in use
+  //   unsigned long in_use_regs = state->cur_op_state.read_registers | state->cur_op_state.write_registers;
+  //   unsigned long unused_bad_regs = state->need_reload_registers & ~in_use_regs;
+  //   reg = tzcnt(unused_bad_regs);
 
-  if (interval.reg != REG_SPILLED) {
-    return interval.reg;
+  //   if (reg == sizeof(unused_bad_regs) * 8) {
+  //     // need to pick a new register. find first one not in use
+  //     reg = tzcnt(~in_use_regs);
+  //     invariant_assert(reg < sizeof(in_use_regs) * 8, "ran out of registers during allocation");
+  //     state->need_reload_registers |= (1 << reg);
+  //   }
+  // } else {
+    
+  // }
+
+  if (usage & REG_USAGE_READ) {
+    state->cur_op_state.read_registers |= reg;
+  }
+  if (usage & REG_USAGE_WRITE) {
+    state->cur_op_state.write_registers |= reg;
   }
 
-  // naive algorithm - just use the first possible register
-  size_t reg = state->num_live_registers++;
-
-  invariant_assert(reg < 18, "oh no");
-
-  size_t store_stack_slot = state->intervals.num_stack_slots +
-                            state->cur_op_state.live_extra_stack_slots++;
-  state->num_extra_stack_slots = MAX(
-      state->num_extra_stack_slots, state->cur_op_state.live_extra_stack_slots);
-
-  debug("using store stack slot %zu, offset %zu", store_stack_slot,
-        stack_slot_offset(store_stack_slot));
-
-  invariant_assert((state->cur_op_state.need_reload_registers & (1 << reg)) ==
-                       0,
-                   "reg already dirty!");
-
-  state->cur_op_state.need_reload_registers |= (1 << reg);
-  aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
-                               get_reg_for_idx(reg), store_stack_slot);
-  aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
-                              get_reg_for_idx(reg), interval.stack_slot);
+  invariant_assert(reg != REG_SPILLED, "spilled reg reached emitter; should've been handled by lower/regalloc");
+  invariant_assert(reg < 18, "invalid reg for AArch64");
 
   return reg;
 }
 
-// reloads any variables that were evicted from registers in `get_reg_op`
-void cleanup(struct emit_state *state) {
-  while (state->cur_op_state.need_reload_registers) {
-    // finds the most-recently dirtied reg
-    size_t reg = sizeof(state->cur_op_state.need_reload_registers) * 8 - 1 -
-                 lzcnt(state->cur_op_state.need_reload_registers);
+// // reloads any variables that were evicted from registers in `get_reg_op`
+// void cleanup(struct emit_state *state) {
+//   while (state->cur_op_state.need_reload_registers) {
+//     // finds the most-recently dirtied reg
+//     size_t reg = sizeof(state->cur_op_state.need_reload_registers) * 8 - 1 -
+//                  lzcnt(state->cur_op_state.need_reload_registers);
 
-    debug("cleaning up reg %zu", reg);
+//     debug("cleaning up reg %zu", reg);
 
-    // because registers are dirtied going up in value, we know the stack slot
-    // implicitly because the last dirtied reg (most significant bit) will be
-    // the most recent extra stack slot
+//     // because registers are dirtied going up in value, we know the stack slot
+//     // implicitly because the last dirtied reg (most significant bit) will be
+//     // the most recent extra stack slot
 
-    size_t store_stack_slot = state->intervals.num_stack_slots +
-                              --state->cur_op_state.live_extra_stack_slots;
+//     size_t store_stack_slot = state->intervals.num_stack_slots +
+//                               --state->cur_op_state.live_extra_stack_slots;
 
-    aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
-                                get_reg_for_idx(reg), store_stack_slot);
+//     aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
+//                                 get_reg_for_idx(reg), store_stack_slot);
 
-    state->cur_op_state.need_reload_registers &= ~(1 << reg);
-  }
+//     state->cur_op_state.need_reload_registers &= ~(1 << reg);
+//   }
 
-  debug_assert(state->cur_op_state.live_extra_stack_slots == 0,
-               "still extra live stack slots after cleanup");
-  state->cur_op_state.need_reload_registers = 0;
-  state->cur_op_state.write_registers = 0;
-  state->cur_op_state.read_registers = 0;
-}
+//   debug_assert(state->cur_op_state.live_extra_stack_slots == 0,
+//                "still extra live stack slots after cleanup");
+//   state->cur_op_state.need_reload_registers = 0;
+//   state->cur_op_state.write_registers = 0;
+//   state->cur_op_state.read_registers = 0;
+// }
 
 void lower_binary_op(struct emit_state *state, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -150,43 +142,30 @@ const char *mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-void emit_stmt(struct emit_state *state, struct ir_stmt *stmt);
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size);
 
-struct compiled_function emit(struct ir_builder *func,
-                              struct interval_data intervals) {
+struct compiled_function emit(struct ir_builder *func) {
   struct aarch64_emitter *emitter;
   create_aarch64_emitter(&emitter);
 
   struct emit_state state = {.arena = func->arena,
                              .emitter = emitter,
-                             .intervals = intervals,
                              .num_extra_stack_slots = 0,
                              .cur_op_state = {0}};
 
-  uint32_t *stack_sub = NULL;
-  if (intervals.num_stack_slots) {
+  size_t stack_size = ROUND_UP(16, func->total_locals_size);
+  if (stack_size) {
     // spills, so we need stack space
-    stack_sub = aarch64_emit_reserved(state.emitter);
+    aarch64_emit_sub_64_imm(state.emitter, STACK_PTR_REG, stack_size, STACK_PTR_REG);
   }
 
   struct ir_stmt *stmt = func->first;
   while (stmt) {
-    emit_stmt(&state, stmt);
+    emit_stmt(&state, stmt, stack_size);
 
     stmt = stmt->succ;
   }
-
-  if (stack_sub) {
-    size_t total_stack_slots =
-        ROUND_UP(intervals.num_stack_slots + state.num_extra_stack_slots, 4);
-    // FIXME: only works for ints
-    size_t total_stack_space = 4 * total_stack_slots;
-
-    invariant_assert(total_stack_space < ((2 << 12) - 1),
-                     "too much stack space needed for single sub instr!");
-    *stack_sub =
-        SUB_64_IMM(0, total_stack_space, STACK_PTR_REG.idx, STACK_PTR_REG.idx);
-  }
+  
 
   size_t len = aarch64_emit_bytesize(emitter);
   void *data = alloc(func->arena, len);
@@ -200,7 +179,7 @@ struct compiled_function emit(struct ir_builder *func,
   return result;
 }
 
-void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
+void emit_stmt(struct emit_state *state, struct ir_stmt *stmt, size_t stack_size) {
   struct ir_op *op = stmt->first;
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
@@ -226,17 +205,8 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
 
       // this should really be handled somewhere else for elegance
       // but this readjusts SP as needed (epilogue)
-
-      if (state->intervals.num_stack_slots) {
-        size_t total_stack_slots = ROUND_UP(
-            state->intervals.num_stack_slots + state->num_extra_stack_slots, 4);
-        // FIXME: only works for ints
-        size_t total_stack_space = 4 * total_stack_slots;
-
-        invariant_assert(total_stack_space < ((2 << 12) - 1),
-                         "too much stack space needed for single sub instr!");
-        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG,
-                                total_stack_space, STACK_PTR_REG);
+      if (stack_size) {
+        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, stack_size, STACK_PTR_REG);
       }
 
       aarch64_emit_ret(state->emitter);
@@ -247,9 +217,6 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
       break;
     }
     }
-
-    // reloads any displaced registers
-    cleanup(state);
 
     op = op->succ;
   }
