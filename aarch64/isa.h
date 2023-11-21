@@ -175,6 +175,20 @@
 #define BRANCH(op0, op1, op2)                                                  \
   (uint32_t)(((op0) << 29) | (0b101 << 26) | ((op1) << 5) | (op2))
 
+#define BRANCH_IMM(op, imm26) \
+  (uint32_t)(((op) << 31) | (0b00101 << 26) | (imm26))
+
+#define B(imm26) BRANCH_IMM(0b0, imm26)
+#define BL(imm26) BRANCH_IMM(0b1, imm26)
+
+#define CMP_AND_BRANCH_IMM(sf, op, imm19, Rt) (uint32_t) \
+  (((sf) << 31) | (0b011010 << 25) | ((op) << 24) | ((imm19) << 5) | (Rt))
+
+#define CBZ_32_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b0, 0b0, imm19, Rt)
+#define CBNZ_32_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b0, 0b1, imm19, Rt)
+#define CBZ_64_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b1, 0b0, imm19, Rt)
+#define CBNZ_64_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b1, 0b1, imm19, Rt)
+
 #define UNCOND_BRANCH_REG(opc, op2, op3, Rn, op4)                              \
   BRANCH(0b110,                                                                \
          (0b1 << 20) | ((opc) << 16) | ((op2) << 11) | (op3 << 5) | (Rn), op4)

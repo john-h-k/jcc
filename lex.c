@@ -340,8 +340,9 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
   case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL: {
     size_t len = text_span_len(&token->span);
-    char *p = alloc(lexer->arena, len);
+    char *p = alloc(lexer->arena, len + 1);
     memcpy(p, &lexer->text[token->span.start.idx], len);
+    p[len] = '\0';
     return p;
   }
   default:

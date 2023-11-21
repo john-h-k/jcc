@@ -37,22 +37,6 @@ enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
                       enum reg_usage usage) {
   size_t reg = op->reg;
-  // if (reg == REG_SPILLED) {
-  //   // registers which are dirtied but not currently in use
-  //   unsigned long in_use_regs = state->cur_op_state.read_registers |
-  //   state->cur_op_state.write_registers; unsigned long unused_bad_regs =
-  //   state->need_reload_registers & ~in_use_regs; reg =
-  //   tzcnt(unused_bad_regs);
-
-  //   if (reg == sizeof(unused_bad_regs) * 8) {
-  //     // need to pick a new register. find first one not in use
-  //     reg = tzcnt(~in_use_regs);
-  //     invariant_assert(reg < sizeof(in_use_regs) * 8, "ran out of registers
-  //     during allocation"); state->need_reload_registers |= (1 << reg);
-  //   }
-  // } else {
-
-  // }
 
   if (usage & REG_USAGE_READ) {
     state->cur_op_state.read_registers |= reg;
@@ -69,36 +53,6 @@ size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
 
   return reg;
 }
-
-// // reloads any variables that were evicted from registers in `get_reg_op`
-// void cleanup(struct emit_state *state) {
-//   while (state->cur_op_state.need_reload_registers) {
-//     // finds the most-recently dirtied reg
-//     size_t reg = sizeof(state->cur_op_state.need_reload_registers) * 8 - 1 -
-//                  lzcnt(state->cur_op_state.need_reload_registers);
-
-//     debug("cleaning up reg %zu", reg);
-
-//     // because registers are dirtied going up in value, we know the stack
-//     slot
-//     // implicitly because the last dirtied reg (most significant bit) will be
-//     // the most recent extra stack slot
-
-//     size_t store_stack_slot = state->intervals.num_stack_slots +
-//                               --state->cur_op_state.live_extra_stack_slots;
-
-//     aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
-//                                 get_reg_for_idx(reg), store_stack_slot);
-
-//     state->cur_op_state.need_reload_registers &= ~(1 << reg);
-//   }
-
-//   debug_assert(state->cur_op_state.live_extra_stack_slots == 0,
-//                "still extra live stack slots after cleanup");
-//   state->cur_op_state.need_reload_registers = 0;
-//   state->cur_op_state.write_registers = 0;
-//   state->cur_op_state.read_registers = 0;
-// }
 
 void lower_binary_op(struct emit_state *state, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -164,11 +118,17 @@ struct compiled_function emit(struct ir_builder *func) {
                             STACK_PTR_REG);
   }
 
-  struct ir_stmt *stmt = func->first;
-  while (stmt) {
-    emit_stmt(&state, stmt, stack_size);
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
 
-    stmt = stmt->succ;
+    while (stmt) {
+      emit_stmt(&state, stmt, stack_size);
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
   }
 
   size_t len = aarch64_emit_bytesize(emitter);
@@ -191,6 +151,9 @@ unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
 
 void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
                size_t stack_size) {
+  // NOTE: it is important, for branch offset calculations, that each IR operation emits exactly one instruction
+  // any expansion needed other than this should have occured in lowering
+  
   struct ir_op *op = stmt->first;
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
@@ -207,6 +170,17 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       aarch64_emit_store_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
           get_lcl_stack_offset(state, op->store_lcl.lcl_idx));
+      break;
+    }
+    case IR_OP_TY_BR_COND: {
+      // we jump to the end of the block + skip this instruction
+      size_t offset = op->br_cond.if_false->function_offset - aarch64_emitted_count(state->emitter);
+      aarch64_emit_cbz_32_imm(state->emitter, get_reg_for_idx(op->br_cond.cond->reg), offset);
+      break;
+    }
+    case IR_OP_TY_BR: {
+      size_t offset = op->br.target->function_offset - aarch64_emitted_count(state->emitter);
+      aarch64_emit_b(state->emitter, offset);
       break;
     }
     case IR_OP_TY_CNST: {

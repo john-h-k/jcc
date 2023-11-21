@@ -4,11 +4,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define DECL_LOG_FN(NAME)                                              \
-  void NAME(const char *format, ...); \
-  void NAME ## sl(const char *format, ...); \
-  void f ## NAME(FILE *file, const char *format, ...); \
-  void f ## NAME ## sl(FILE *file, const char *format, ...); \
+#define DECL_LOG_FN(NAME)                                                      \
+  void NAME(const char *format, ...);                                          \
+  void NAME##sl(const char *format, ...);                                      \
+  void f##NAME(FILE *file, const char *format, ...);                           \
+  void f##NAME##sl(FILE *file, const char *format, ...);
 
 void enable_log();
 void disable_log();
@@ -21,11 +21,9 @@ DECL_LOG_FN(trace)
 
 DECL_LOG_FN(slog)
 
-#define BEGIN_STAGE(name)                                                      \
-  slog("\n\n**********  " name "  **********\n")
+#define BEGIN_STAGE(name) slog("\n\n**********  " name "  **********\n")
 
-#define BEGIN_SUB_STAGE(name)                                                      \
-  slog("\n\n>> " name " \n")
+#define BEGIN_SUB_STAGE(name) slog("\n\n>> " name " \n")
 
 #define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
 #define _GENERIC_DBG_FORMAT_SPECIFIER(val)                                     \

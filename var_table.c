@@ -15,8 +15,17 @@ struct var_table_entry *create_entry(struct var_table *var_table,
   const char *name = identifier_str(var_table->parser, &var->identifier);
   struct var_table_entry entry = {.name = name, .scope = var->scope};
 
-  return vector_push_back(var_table->entries, &entry);
+  struct var_table_entry *p = vector_push_back(var_table->entries, &entry);
+  p->value = NULL;
+  return p;
 }
+
+// to show all entries
+  // size_t num_entries = vector_length(var_table->entries);
+  // for (size_t i = 0; i < num_entries; i++) {
+  //   struct var_table_entry *entry = vector_get(var_table->entries, i);
+  //   err("%s @ %d", entry->name, entry->scope);
+  // }
 
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
                                             const struct ast_var *var) {
