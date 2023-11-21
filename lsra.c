@@ -7,7 +7,6 @@
 struct interval {
   struct ir_op *op;
   size_t op_id;
-  size_t reg;
   size_t start;
   size_t end;
 };
@@ -50,7 +49,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       interval->op = op;
       interval->op_id = op->id;
       interval->start = data.num_intervals;
-      interval->reg = NO_REG;
+      debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
+      op->metadata = interval;
 
       walk_op_uses(op, op_used_callback, &data);
       data.num_intervals++;
@@ -67,8 +67,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
-    intervals[cur_interval].reg = spill->reg;
-    spill->reg = REG_SPILLED;
+    intervals[cur_interval].op->reg = spill->op->reg;
+    spill->op->reg = REG_SPILLED;
 
     // remove `spill`
     (*num_active)--;
@@ -82,7 +82,7 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
       }
     }
   } else {
-    intervals[cur_interval].reg = REG_SPILLED;
+    intervals[cur_interval].op->reg = REG_SPILLED;
   }
 }
 
@@ -99,7 +99,7 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
     num_expired_intervals++;
 
     // debug("marking reg %ul free", interval->reg);
-    MARK_REG_FREE(*reg_pool, interval->reg);
+    MARK_REG_FREE(*reg_pool, interval->op->reg);
   }
 
   // shift the active array down 
@@ -163,21 +163,6 @@ void alloc_fixup(struct ir_builder *irb, struct interval_data *data) {
   }
 }
 
-void reg_fixup(struct ir_builder *irb, struct interval_data *data) {
-  struct ir_stmt *stmt = irb->first;
-  while (stmt) {
-    struct ir_op *op = stmt->first;
-    while (op) {
-      struct interval *interval = &data->intervals[op->id];
-      op->reg = interval->reg;
-
-      op = op->succ;
-    }
-
-    stmt = stmt->succ;
-  }
-}
-
 int compare_interval_id(const void *a, const void *b) {
   size_t a_id = ((struct interval *)a)->op_id;
   size_t b_id = ((struct interval *)b)->op_id;
@@ -187,6 +172,13 @@ int compare_interval_id(const void *a, const void *b) {
 
 void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   UNUSED_ARG(metadata);
+
+  struct interval *interval = op->metadata;
+  if (interval) {
+    fprintf(file, "start=%04zu, end=%04zu | ", interval->start, interval->end);
+  } else {
+    fprintf(file, " no associated interval found | ");
+  }
 
   switch(op->reg) {
   case NO_REG:
@@ -233,7 +225,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 
       MARK_REG_USED(reg_pool, free_reg);
       debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op_id);
-      interval->reg = free_reg;
+      interval->op->reg = free_reg;
 
       bool inserted = false;
       // insert into `active`, sorted by end point
@@ -255,8 +247,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   struct interval_data data = register_alloc_pass(irb, reg_info);
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
-  reg_fixup(irb, &data);
 
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 
@@ -266,8 +256,5 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
   
   register_alloc_pass(irb, reg_info);
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
-  reg_fixup(irb, &data);
-
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 }
