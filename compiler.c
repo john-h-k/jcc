@@ -47,6 +47,10 @@ enum compiler_create_result create_compiler(const char *program,
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
 enum compile_result compile(struct compiler *compiler) {
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PARSE)) {
+    enable_log();
+  }
+
   BEGIN_STAGE("LEX + PARSE");
 
   struct parse_result result = parse(compiler->parser);
@@ -55,6 +59,8 @@ enum compile_result compile(struct compiler *compiler) {
 
   debug_print_ast(compiler->parser, &result.translation_unit);
 
+  disable_log();
+
   struct vector *compiled_functions = vector_create(sizeof(struct compiled_function));
   struct vector *symbols = vector_create(sizeof(struct symbol));
   size_t total_size = 0;
@@ -62,33 +68,59 @@ enum compile_result compile(struct compiler *compiler) {
   for (size_t i = 0; i < result.translation_unit.num_func_defs; i++) {
     struct ast_funcdef *def = &result.translation_unit.func_defs[i];
 
-    BEGIN_STAGE("IR BUILD");
+    struct ir_builder *ir;
+    {
+      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
+        enable_log();
+      }
 
-    info("compiling function %s",
-         identifier_str(compiler->parser, &def->sig.name));
+      BEGIN_STAGE("IR BUILD");
 
-    struct ir_builder *ir = build_ir_for_function(compiler->parser, compiler->arena, def);
+      info("compiling function %s",
+           identifier_str(compiler->parser, &def->sig.name));
 
-    BEGIN_STAGE("IR");
+      ir = build_ir_for_function(compiler->parser, compiler->arena, def);
 
-    debug_print_ir(ir, ir->first, NULL, NULL);
+      BEGIN_STAGE("IR");
 
-    BEGIN_STAGE("LOWERING");
+      debug_print_ir(ir, ir->first, NULL, NULL);
 
-    lower(ir);
+      BEGIN_STAGE("LOWERING");
 
-    BEGIN_STAGE("POST-LOWER IR");
+      lower(ir);
 
-    debug_print_ir(ir, ir->first, NULL, NULL);
+      BEGIN_STAGE("POST-LOWER IR");
 
-    BEGIN_STAGE("EMITTING");
+      debug_print_ir(ir, ir->first, NULL, NULL);
+
+      disable_log();
+    }
+
+    {
+      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
+        enable_log();
+      }
+
+      BEGIN_STAGE("REGALLOC");
+
+      struct reg_info aarch64_reg_info = { .num_regs = 18 };
+      register_alloc(ir, aarch64_reg_info);
+
+      disable_log();
+    }
     
-    struct reg_info aarch64_reg_info = { .num_regs = 18 };
-    register_alloc(ir, aarch64_reg_info);
-    
-    struct compiled_function func = emit(ir);
+    struct compiled_function func;
+    {
+      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_EMIT)) {
+        enable_log();
+      }
 
-    debug("symbol %s, value %d", func.name, total_size);
+      BEGIN_STAGE("EMITTING");
+      func = emit(ir);
+
+      disable_log();
+    }
+
     struct symbol symbol = {
         .name = func.name, .section = 1, .value = total_size};
 
@@ -124,9 +156,15 @@ enum compile_result compile(struct compiler *compiler) {
   vector_free(&compiled_functions);
   vector_free(&symbols);
 
-  BEGIN_STAGE("DISASSEMBLY");
 
-  debug_disasm(args.output);
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_ASM)) {
+    enable_log();
+
+    BEGIN_STAGE("DISASSEMBLY");
+    debug_disasm(args.output);
+
+    disable_log();
+  }
 
   return COMPILE_RESULT_SUCCESS;
 }

@@ -8,6 +8,7 @@ set(
 
   vector.c
   alloc.c
+  log.c
 
   compiler.c
   diagnostics.c

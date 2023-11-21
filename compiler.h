@@ -8,8 +8,22 @@ enum compile_target_arch {
   COMPILE_TARGET_ARCH_MACOS_X86_64
 };
 
+enum compile_log_flags {
+  COMPILE_LOG_FLAGS_NONE = 0,
+  COMPILE_LOG_FLAGS_PARSE = 2,
+  COMPILE_LOG_FLAGS_IR = 4,
+  COMPILE_LOG_FLAGS_REGALLOC = 8,
+  COMPILE_LOG_FLAGS_EMIT = 16,
+  COMPILE_LOG_FLAGS_ASM = 32,
+
+  COMPILE_LOG_FLAGS_ALL = -1,
+};
+
+#define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags & flag
+
 struct compile_args {
   enum compile_target_arch target_arch;
+  enum compile_log_flags log_flags;
 };
 
 enum compiler_create_result {
