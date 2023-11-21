@@ -1,3 +1,4 @@
+// expected value: 54
 int main() {
   int a = 1, b = 7;
   int z;

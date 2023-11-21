@@ -899,8 +899,6 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
-  fprintf(stderr, "trying to parse compound stmt depth %d\n",
-          parser->cur_scope);
   struct text_pos pos = get_position(parser->lexer);
 
   struct token open_brace;
@@ -1105,9 +1103,9 @@ struct ast_printstate {
 #define DEBUG_CALL(ty, val) debug_print_##ty(state, val)
 
 #define AST_PRINT_SAMELINE_Z(fmt)                                              \
-  fprintf(stderr, "%*s" fmt, state->indent * 4, "")
+  slogsl("%*s" fmt, state->indent * 4, "")
 #define AST_PRINT_SAMELINE(fmt, ...)                                           \
-  fprintf(stderr, "%*s" fmt, state->indent * 4, "", __VA_ARGS__)
+  slogsl("%*s" fmt, state->indent * 4, "", __VA_ARGS__)
 
 #define AST_PRINTZ(fmt) AST_PRINT_SAMELINE_Z(fmt "\n")
 #define AST_PRINT(fmt, ...) AST_PRINT_SAMELINE(fmt "\n", __VA_ARGS__)

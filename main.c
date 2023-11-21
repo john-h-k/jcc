@@ -11,7 +11,8 @@
 
 enum parse_args_result {
   PARSE_ARGS_RESULT_SUCCESS = 0,
-  PARSE_ARGS_RESULT_NO_SOURCES = 1
+  PARSE_ARGS_RESULT_NO_SOURCES = 1,
+  PARSE_ARGS_RESULT_ERROR = 2,
 };
 
 enum parse_args_result parse_args(int argc, char **argv,
@@ -45,7 +46,6 @@ int main(int argc, char **argv) {
   size_t num_sources;
   if (parse_args(argc, argv, &args, &sources, &num_sources) !=
       PARSE_ARGS_RESULT_SUCCESS) {
-    fprintf(stderr, "%s\n", "parsing command line args failed");
     return -1;
   }
 
@@ -95,24 +95,69 @@ int main(int argc, char **argv) {
   }
 }
 
+const char *try_get_arg(const char *arg, const char *prefix) {
+  if (strncmp(arg, prefix, strlen(prefix)) == 0) {
+    return &arg[strlen(prefix)];
+  }
+
+  return NULL;
+}
+
+void parse_arg_error(const char *fmt, ...) {
+  va_list v;
+  va_start(v, fmt);
+  vfprintf(stderr, fmt, v);
+  fprintf(stderr, "\n");
+  va_end(v);
+}
+
+bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
+  #define LOG_FLAG(name, str) if (strcmp(flag, str) == 0) { *flags |= name; return true; }
+
+  LOG_FLAG(COMPILE_LOG_FLAGS_PARSE, "parse");
+  LOG_FLAG(COMPILE_LOG_FLAGS_IR, "ir");
+  LOG_FLAG(COMPILE_LOG_FLAGS_REGALLOC, "regalloc");
+  LOG_FLAG(COMPILE_LOG_FLAGS_EMIT, "emit");
+  LOG_FLAG(COMPILE_LOG_FLAGS_ASM, "asm");
+  LOG_FLAG(COMPILE_LOG_FLAGS_ALL, "all");
+
+  parse_arg_error("Unrecognised log flag '-L%s'", flag);
+  return false;
+}
+
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
                                   const char ***sources, size_t *num_sources) {
 
+  memset(args, 0, sizeof(*args));
+  
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
 
-  *num_sources = (size_t)(argc - 1);
+  struct vector *sources_vec = vector_create(sizeof(*argv));
+  for (size_t i = 1; i < (size_t)argc; i++) {
+    const char *arg = argv[i];
 
-  if (num_sources == 0) {
+    const char *log = try_get_arg(arg, "-L");
+    if (log) {
+      if (!parse_log_flag(log, &args->log_flags)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
+    } else {
+      vector_push_back(sources_vec, &arg);
+    }
+  }
+
+  *num_sources = vector_length(sources_vec);
+
+  if (*num_sources == 0) {
+    parse_arg_error("No sources provided!");
     return PARSE_ARGS_RESULT_NO_SOURCES;
   }
 
-  *sources = nonnull_malloc(sizeof(*sources) * *num_sources);
+  *sources = nonnull_malloc(vector_byte_size(sources_vec));
 
-  for (size_t i = 0; i < *num_sources; i++) {
-    (*sources)[i] = argv[i + 1];
-  }
+  vector_copy_to(sources_vec, *sources);
 
   args->target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
   return PARSE_ARGS_RESULT_SUCCESS;

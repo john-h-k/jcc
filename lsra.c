@@ -64,18 +64,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
-void print_active(size_t *active, size_t num_active) {
-  fprintf(stderr, "active: ");
-  for (size_t i = 0; i < num_active; i++) {
-    fprintf(stderr, "%zu, ", active[i]);
-  }
-  fprintf(stderr, "\n");
-  
-}
-
 void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active) {
-  fprintf(stderr, "SPAT\n");
-  print_active(active, *num_active);
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
@@ -100,15 +89,11 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
   } else {
     intervals[cur_interval].op->reg = REG_SPILLED;
   }
-  fprintf(stderr, "AFTER SPAT\n");
-  print_active(active, *num_active);
 }
 
 void expire_old_intervals(struct interval *intervals, struct interval *cur_interval, size_t *active, size_t *num_active, unsigned long *reg_pool) {
   size_t num_expired_intervals = 0;
   
-  fprintf(stderr, "EOT\n");
-  print_active(active, *num_active);
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
     // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start, interval->end);
@@ -127,8 +112,6 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
   debug("expired: %zu", num_expired_intervals);
   *num_active -= num_expired_intervals;
   memmove(active, &active[num_expired_intervals], sizeof(*active) * (*num_active));
-  fprintf(stderr, "AFTER EOT\n");
-  print_active(active, *num_active);
 }
 
 int sort_interval_by_start_point(const void *a, const void *b) {
@@ -200,22 +183,22 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   struct interval *interval = op->metadata;
   if (interval) {
     invariant_assert(interval->op->id == op->id, "intervals are not ID keyed");
-    fprintf(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
+    fslogsl(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
   } else {
-    fprintf(file, "no associated interval | ");
+    fslogsl(file, "no associated interval | ");
   }
 
   op->metadata = NULL;
 
   switch(op->reg) {
   case NO_REG:
-    fprintf(file, "    (UNASSIGNED)");
+    fslogsl(file, "    (UNASSIGNED)");
     break;
   case REG_SPILLED:
-    fprintf(file, "    (SPILLED)");
+    fslogsl(file, "    (SPILLED)");
     break;
   default:
-    fprintf(file, "    register=%zu", op->reg);
+    fslogsl(file, "    register=%zu", op->reg);
     break;
   }
 }

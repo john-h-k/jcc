@@ -531,30 +531,32 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
 }
 
 void debug_print_op(struct ir_op *ir) {
+  FILE *file = stderr;
+
   switch (ir->ty) {
   case IR_OP_TY_PHI:
     todo("debug PHI");
     break;
   case IR_OP_TY_CNST:
-    fprintf(stderr, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),
+    fslogsl(file, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),
             ir->cnst.value);
     break;
   case IR_OP_TY_BINARY_OP:
-    fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
+    fslogsl(file, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
             var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
             binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
   case IR_OP_TY_STORE_LCL:
-    fprintf(stderr, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
+    fslogsl(file, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
             ir->id, var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
             ir->store_lcl.value->id);
     break;
   case IR_OP_TY_LOAD_LCL:
-    fprintf(stderr, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
+    fslogsl(file, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
             var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
     break;
   case IR_OP_TY_RET:
-    fprintf(stderr, "return %%%zu", ir->ret.value->id);
+    fslogsl(file, "return %%%zu", ir->ret.value->id);
     break;
   }
 }
@@ -570,23 +572,25 @@ void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
 
     int op_pad = /* guess */ 50;
 
+    FILE *file = stderr;
     while (ir) {
-      fprintf(stderr, "%0*zu: ", ctr_pad, ctr++);
+      fslogsl(file, "%0*zu: ", ctr_pad, ctr++);
 
+      // HACK: this shouldn't rely on the fact `log` goes to `stderr`
       long pos = ftell(stderr);
       debug_print_op(ir);
       long width = ftell(stderr) - pos;
       long pad = op_pad - width;
 
       if (pad > 0) {
-        fprintf(stderr, "%*s", (int)pad, "");
+        fslogsl(file, "%*s", (int)pad, "");
       }
 
       if (cb) {
-        fprintf(stderr, " | ");
+        fslogsl(file, " | ");
         cb(stderr, ir, cb_metadata);
       }
-      fprintf(stderr, "\n");
+      fslogsl(file, "\n");
 
       ir = ir->succ;
     }

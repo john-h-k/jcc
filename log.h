@@ -4,41 +4,28 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#ifdef NLOG
-#define DEF_LOG_FN(NAME, _PREFIX)                                              \
-  static inline void NAME(const char *format, ...) { (void)format; }
-#else
-#define DEF_LOG_FN(NAME, PREFIX)                                               \
-  static inline void NAME(const char *format, ...) {                           \
-    va_list v;                                                                 \
-    va_start(v, format);                                                       \
-    fprintf(stderr, "%s: " PR_RESET, PREFIX);                                  \
-    vfprintf(stderr, format, v);                                               \
-    fprintf(stderr, "\n");                                                     \
-    va_end(v);                                                                 \
-  }
-#endif
+#define DECL_LOG_FN(NAME)                                              \
+  void NAME(const char *format, ...); \
+  void NAME ## sl(const char *format, ...); \
+  void f ## NAME(FILE *file, const char *format, ...); \
+  void f ## NAME ## sl(FILE *file, const char *format, ...); \
 
-#define PR_RESET "\x1B[0m"
-#define PR_RED "\x1B[31m"
-#define PR_GREEN "\x1B[32m"
-#define PR_YELLOW "\x1B[33m"
-#define PR_BLUE "\x1B[34m"
-#define PR_MAGENTA "\x1B[35m"
-#define PR_CYAN "\x1B[36m"
-#define PR_WHITE "\x1B[37m"
+void enable_log();
+void disable_log();
 
-DEF_LOG_FN(err, PR_RED "ERROR")
-DEF_LOG_FN(warn, PR_YELLOW "WARN")
-DEF_LOG_FN(info, PR_GREEN "INFO")
-DEF_LOG_FN(debug, PR_WHITE "DEBUG")
-DEF_LOG_FN(trace, PR_WHITE "TRACE")
+DECL_LOG_FN(err)
+DECL_LOG_FN(warn)
+DECL_LOG_FN(info)
+DECL_LOG_FN(debug)
+DECL_LOG_FN(trace)
+
+DECL_LOG_FN(slog)
 
 #define BEGIN_STAGE(name)                                                      \
-  fprintf(stderr, "\n\n**********  " name "  **********\n\n")
+  slog("\n\n**********  " name "  **********\n")
 
 #define BEGIN_SUB_STAGE(name)                                                      \
-  fprintf(stderr, "\n\n>> " name " \n\n")
+  slog("\n\n>> " name " \n")
 
 #define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
 #define _GENERIC_DBG_FORMAT_SPECIFIER(val)                                     \
