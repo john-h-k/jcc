@@ -7,6 +7,7 @@
 #include "lex.h"
 #include "log.h"
 #include "macos/mach-o.h"
+#include "passes/eliminate_phi.h"
 #include "parse.h"
 #include "lsra.h"
 #include "util.h"
@@ -105,6 +106,11 @@ enum compile_result compile(struct compiler *compiler) {
 
       struct reg_info aarch64_reg_info = { .num_regs = 18 };
       register_alloc(ir, aarch64_reg_info);
+
+      BEGIN_STAGE("ELIM PHI");
+      eliminate_phi(ir);
+
+      debug_print_ir(ir, ir->first, NULL, NULL);
 
       disable_log();
     }

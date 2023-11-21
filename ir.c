@@ -76,6 +76,8 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_BR_COND:
     cb(&op->br_cond.cond, cb_metadata);
     break;
+  case IR_OP_TY_MOV:
+    break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
       cb(&op->ret.value, cb_metadata);
@@ -90,6 +92,8 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_PHI:
     todo("walk phi");
+  case IR_OP_TY_MOV:
+    todo("walk mov");
   case IR_OP_TY_CNST:
     walk_cnst(&op->cnst, cb, cb_metadata);
     break;
@@ -368,8 +372,31 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     }
       
     struct ir_op *expr = build_ir_for_expr(irb, stmt, assg->expr);
+
+    debug_assert(expr, "null expr in assignment!");
+
+    // push back if the other writes are in blocks not dominated by here
+    // else replace
+    // FIXME: make more efficient than this dominate check
+    size_t num_exprs = vector_length(entry->value);
+    for (size_t i = 0; i < num_exprs; i++) {
+      struct ir_op **prev = (struct ir_op **)vector_get(entry->value, i);
+      struct ir_basicblock *prev_bb = (*prev)->stmt->basicblock;
+      struct ir_basicblock *head = expr->stmt->basicblock;
+      while (head) {
+        if (head == prev_bb) {
+          // does dominate, and cannot dominate any of the others here
+          *prev = expr;
+          return expr;
+        }
+        
+        head = head->pred;
+      }
+    }
+
+    // dominates nothing! add it to the pile
+      
     vector_push_back(entry->value, &expr);
-    debug("contains %zu exprs", vector_length(entry->value));
     return expr;
   }
   }
@@ -411,23 +438,29 @@ struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ir_stmt *stmt,
     if (!entry->value) {
       err("undefined behaviour - reading from unassigned variable '%s'",
           entry->name);
+      return NULL;
     }
 
     struct vector *exprs = entry->value;
 
-    if (vector_length(exprs) == 1) {
-      return vector_get(exprs, 0);
+    size_t num_exprs = vector_length(exprs);
+    trace("num exprs %zu", num_exprs);
+    if (num_exprs == 1) {
+      return *(struct ir_op **)vector_get(exprs, 0);
+    } else if (num_exprs > 1) {
+      // must insert phi node
+      trace("inserting phi node for op");
+      struct ir_op *phi = alloc_ir_op(irb, stmt);
+      phi->ty = IR_OP_TY_PHI;
+      phi->var_ty = (*(struct ir_op **)vector_get(exprs, 0))->var_ty;
+      phi->phi.values = alloc(irb->arena, vector_byte_size(exprs));
+      vector_copy_to(exprs, phi->phi.values);
+
+      phi->phi.num_values = vector_length(exprs);
+      return phi;
+    } else {
+      return NULL;
     }
-
-    // must insert phi node
-    struct ir_op *phi = alloc_ir_op(irb, stmt);
-    phi->ty = IR_OP_TY_PHI;
-    phi->var_ty = (*(struct ir_op **)vector_get(exprs, 0))->var_ty;
-    phi->phi.values = alloc(irb->arena, vector_byte_size(exprs));
-    vector_copy_to(exprs, phi->phi.values);
-
-    phi->phi.num_values = vector_length(exprs);
-    return phi;
   }
   }
 }
@@ -549,7 +582,17 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
       continue;
     }
 
-    entry->value = build_ir_for_expr(irb, stmt, &decl->assg_expr);
+    entry->value = vector_create(sizeof(struct ir_op *));
+
+    struct ir_op *expr = build_ir_for_expr(irb, stmt, &decl->assg_expr);
+    debug_assert(expr, "null expr in assignment!");
+
+    if (vector_length(entry->value) >= 1) {
+      vector_resize(entry->value, 1);
+      *(struct ir_op **)vector_get(entry->value, 0) = expr;
+    } else {
+      vector_push_back(entry->value, &expr);
+    }
   }
 
   return stmt->last;
@@ -696,6 +739,9 @@ void debug_print_op(struct ir_op *ir) {
   switch (ir->ty) {
   case IR_OP_TY_PHI:
     fslogsl(file, "%%%zu (%s) = phi [ %s ]", ir->id, var_ty_string(&ir->var_ty), phi_string(&ir->phi));
+    break;
+  case IR_OP_TY_MOV:
+    fslogsl(file, "%%%zu (%s) = %%%zu", ir->id, var_ty_string(&ir->var_ty), ir->mov.value->id);
     break;
   case IR_OP_TY_CNST:
     fslogsl(file, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),

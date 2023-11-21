@@ -20,6 +20,8 @@ set(
   var_table.c
   lsra.c
 
+  passes/eliminate_phi.c
+
   aarch64/lower.c
   aarch64/emit.c
   aarch64/emitter.c

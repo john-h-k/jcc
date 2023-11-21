@@ -55,6 +55,11 @@ void *vector_push_back(struct vector *v, const void *data) {
   return end;
 }
 
+void vector_resize(struct vector *v, size_t size) {
+  debug_assert(size <= v->len, "resizing too big");
+  v->len = size;
+}
+
 size_t vector_length(struct vector *v) { return v->len; }
 
 size_t vector_byte_size(struct vector *v) { return v->len * v->element_size; }
