@@ -15,8 +15,8 @@ struct interval_data {
   size_t num_intervals;
 };
 
-#define MARK_REG_USED(reg_pool, i) reg_pool &= ~(1 << i)
-#define MARK_REG_FREE(reg_pool, i) reg_pool |= (1 << i)
+#define MARK_REG_USED(reg_pool, i) (reg_pool) &= ~(1 << i)
+#define MARK_REG_FREE(reg_pool, i) (reg_pool) |= (1 << i)
 
 void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval_data *data = cb_metadata;
@@ -48,6 +48,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
       interval->op = op;
       interval->start = data.num_intervals;
+      interval->end = interval->start; // this ensures intervals are still valid for unused values
       debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
       op->metadata = interval;
 
@@ -63,7 +64,18 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
+void print_active(size_t *active, size_t num_active) {
+  fprintf(stderr, "active: ");
+  for (size_t i = 0; i < num_active; i++) {
+    fprintf(stderr, "%zu, ", active[i]);
+  }
+  fprintf(stderr, "\n");
+  
+}
+
 void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active) {
+  fprintf(stderr, "SPAT\n");
+  print_active(active, *num_active);
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
@@ -74,7 +86,12 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
 
     // insert into `active`, sorted by end point
     for (size_t j = 0; j <= *num_active; j++) {
-      if (j == *num_active || intervals[active[j + 1]].end > intervals[cur_interval].end) {
+      if (j == *num_active) {
+        active[j] = cur_interval;
+        (*num_active)++;
+        break;
+      } else if (intervals[active[j + 1]].end > intervals[cur_interval].end) {
+        memmove(&active[j + 1], &active[j], sizeof(*active) * (*num_active - j));
         active[j] = cur_interval;
         (*num_active)++;
         break;
@@ -83,11 +100,15 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
   } else {
     intervals[cur_interval].op->reg = REG_SPILLED;
   }
+  fprintf(stderr, "AFTER SPAT\n");
+  print_active(active, *num_active);
 }
 
 void expire_old_intervals(struct interval *intervals, struct interval *cur_interval, size_t *active, size_t *num_active, unsigned long *reg_pool) {
   size_t num_expired_intervals = 0;
   
+  fprintf(stderr, "EOT\n");
+  print_active(active, *num_active);
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
     // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start, interval->end);
@@ -97,13 +118,17 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
 
     num_expired_intervals++;
 
-    // debug("marking reg %ul free", interval->reg);
+    debug("op %zu, marking reg %ul free", interval->op->id, interval->op->reg);
     MARK_REG_FREE(*reg_pool, interval->op->reg);
   }
 
   // shift the active array down 
-  memmove(active, &active[num_expired_intervals], sizeof(*active) * (*num_active - num_expired_intervals));
+  
+  debug("expired: %zu", num_expired_intervals);
   *num_active -= num_expired_intervals;
+  memmove(active, &active[num_expired_intervals], sizeof(*active) * (*num_active));
+  fprintf(stderr, "AFTER EOT\n");
+  print_active(active, *num_active);
 }
 
 int sort_interval_by_start_point(const void *a, const void *b) {
@@ -209,38 +234,47 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
                    "LSRA does not currently support more than `sizeof(unsigned "
                    "long) * 8` register as it uses a bitmask");
 
-  unsigned long reg_pool = ULONG_MAX;
+  unsigned long reg_pool = (1 << reg_info.num_regs) - 1;
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
-    // debug("%zu active", num_active);
+    debug("%zu active", num_active);
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
+
+    if (interval->op->ty == IR_OP_TY_STORE_LCL) {
+      // stores don't need a register
+      // TODO: this logic should be more centralised and clear, not just for this op
+      continue;
+    }
 
     if (num_active == reg_info.num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
-      // debug("reg pool: %ul", reg_pool);
       unsigned long free_reg = tzcnt(reg_pool);
-      // debug("free reg: %ul", free_reg);
-      debug_assert(free_reg != sizeof(reg_pool) * 8, "reg pool unexpectedly empty!");
+      debug("active: %ul", num_active);
+      debug("reg pool: %ul", reg_pool);
+      debug("reg pool free: %ul", __builtin_popcount(reg_pool));
+      debug("free reg: %ul", free_reg);
+      debug_assert(free_reg < reg_info.num_regs, "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
       debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op->id);
       interval->op->reg = free_reg;
 
-      bool inserted = false;
       // insert into `active`, sorted by end point
       for (size_t j = 0; j <= num_active; j++) {
-        if (j == num_active || intervals[active[j + 1]].end > intervals[i].end) {
+        if (j == num_active) {
           active[j] = i;
           num_active++;
-          inserted = true;
+          break;
+        } else if (intervals[active[j + 1]].end > intervals[i].end) {
+          memmove(&active[j + 1], &active[j], sizeof(*active) * (num_active - j));
+          active[j] = i;
+          num_active++;
           break;
         }
       }
-
-      invariant_assert(inserted, "didn't insert interval!");
     }
   }
 
@@ -253,13 +287,17 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 
+  BEGIN_SUB_STAGE("SPILL HANDLING");
+
   // insert LOAD and STORE ops as needed
   alloc_fixup(irb, &data);
 
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
-  debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
+  // can't print intervals here, as `alloc_fixup` inserted new ops which don't have valid intervals yet
+  debug_print_ir(irb, irb->first, NULL, NULL);
   
-  register_alloc_pass(irb, reg_info);
+  BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
+
+  data = register_alloc_pass(irb, reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);

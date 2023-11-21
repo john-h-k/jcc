@@ -9,10 +9,7 @@
 
 void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
                     void *cb_metadata) {
-  UNUSED_ARG(store_lcl);
-  UNUSED_ARG(cb);
-  UNUSED_ARG(cb_metadata);
-  // nada
+  cb(&store_lcl->value, cb_metadata);
 }
 
 void walk_load_lcl(struct ir_op_load_lcl *load_lcl, walk_op_callback *cb,
