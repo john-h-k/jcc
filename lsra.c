@@ -6,7 +6,6 @@
 
 struct interval {
   struct ir_op *op;
-  size_t op_id;
   size_t start;
   size_t end;
 };
@@ -26,6 +25,7 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval *interval = &data->intervals[(*op)->id];
 
   interval->end = data->num_intervals;
+  debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start, interval->end);
 }
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
@@ -47,7 +47,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       struct interval *interval = &data.intervals[op->id];
 
       interval->op = op;
-      interval->op_id = op->id;
       interval->start = data.num_intervals;
       debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
       op->metadata = interval;
@@ -164,8 +163,8 @@ void alloc_fixup(struct ir_builder *irb, struct interval_data *data) {
 }
 
 int compare_interval_id(const void *a, const void *b) {
-  size_t a_id = ((struct interval *)a)->op_id;
-  size_t b_id = ((struct interval *)b)->op_id;
+  size_t a_id = ((struct interval *)a)->op->id;
+  size_t b_id = ((struct interval *)b)->op->id;
 
   return (ssize_t)a_id - (ssize_t)b_id;
 }
@@ -175,10 +174,13 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
 
   struct interval *interval = op->metadata;
   if (interval) {
-    fprintf(file, "start=%04zu, end=%04zu | ", interval->start, interval->end);
+    invariant_assert(interval->op->id == op->id, "intervals are not ID keyed");
+    fprintf(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
   } else {
-    fprintf(file, " no associated interval found | ");
+    fprintf(file, "no associated interval | ");
   }
+
+  op->metadata = NULL;
 
   switch(op->reg) {
   case NO_REG:
@@ -224,7 +226,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
       debug_assert(free_reg != sizeof(reg_pool) * 8, "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
-      debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op_id);
+      debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op->id);
       interval->op->reg = free_reg;
 
       bool inserted = false;
@@ -248,13 +250,17 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   struct interval_data data = register_alloc_pass(irb, reg_info);
 
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 
   // insert LOAD and STORE ops as needed
   alloc_fixup(irb, &data);
 
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
   
   register_alloc_pass(irb, reg_info);
+
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 }
