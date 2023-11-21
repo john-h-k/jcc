@@ -125,6 +125,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = stmt;
   op->reg = reg;
   op->lcl_idx = lcl_idx;
+  op->metadata = NULL;
 }
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
