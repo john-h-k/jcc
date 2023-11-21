@@ -2,8 +2,8 @@
 #define IR_H
 
 #include "parse.h"
-#include <stdlib.h>
 #include "var_table.h"
+#include <stdlib.h>
 
 enum ir_op_ty {
   IR_OP_TY_PHI,
@@ -11,6 +11,9 @@ enum ir_op_ty {
   IR_OP_TY_CNST,
 
   IR_OP_TY_BINARY_OP,
+
+  IR_OP_TY_STORE_LCL,
+  IR_OP_TY_LOAD_LCL,
 
   IR_OP_TY_RET
 };
@@ -33,11 +36,7 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_UQUOT,
 };
 
-enum ir_op_sign {
-  IR_OP_SIGN_NA,
-  IR_OP_SIGN_SIGNED,
-  IR_OP_SIGN_UNSIGNED
-};
+enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 
 enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty);
 
@@ -58,6 +57,9 @@ enum ir_op_var_primitive_ty {
 };
 
 enum ir_op_var_ty_ty {
+  /* Does not produce a value */
+  IR_OP_VAR_TY_TY_NONE,
+
   /* Primitives - integers, floats, pointers */
   IR_OP_VAR_TY_TY_PRIMITIVE,
 
@@ -74,6 +76,23 @@ struct ir_op_var_ty {
   };
 };
 
+const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
+
+struct ir_op_store_lcl {
+  unsigned long lcl_idx;
+  struct ir_op *value;
+};
+
+struct ir_op_load_lcl {
+  unsigned long lcl_idx;
+};
+
+#include <limits.h>
+
+#define NO_REG (SIZE_T_MAX)
+#define NO_LCL (SIZE_T_MAX)
+#define REG_SPILLED (SIZE_T_MAX - 1)
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -87,9 +106,14 @@ struct ir_op {
     struct ir_op_cnst cnst;
     struct ir_op_binary_op binary_op;
     struct ir_op_ret ret;
+    struct ir_op_store_lcl store_lcl;
+    struct ir_op_load_lcl load_lcl;
   };
 
-  void* metadata;
+  // only meaningful post register-allocation
+  unsigned long reg;
+  unsigned long lcl_idx;
+  void *metadata;
 };
 
 // set of ops with no SEQ_POINTs
@@ -99,15 +123,19 @@ struct ir_stmt {
   struct ir_stmt *pred;
   struct ir_stmt *succ;
 
-  // the links between ops (`pred` & `succ`) have no significance to the compilation
-  // and are just for traversal.
-  // meaningful links between operations are with in the op data, such as `ir_op->ret.value`,
-  // which points to the op whos result is returned
+  // the links between ops (`pred` & `succ`) have no significance to the
+  // compilation and are just for traversal. meaningful links between operations
+  // are with in the op data, such as `ir_op->ret.value`, which points to the op
+  // whos result is returned
   struct ir_op *first;
 
-  // last is the dominating op of the statement, and can be used as its "root". all other ops in the statement
-  // are reachable from it
+  // last is the dominating op of the statement, and can be used as its "root".
+  // all other ops in the statement are reachable from it
   struct ir_op *last;
+};
+
+struct stack_entry {
+  unsigned long size;
 };
 
 struct ir_builder {
@@ -118,6 +146,8 @@ struct ir_builder {
 
   // `value` contains a `struct ir_op *` to the last op that wrote to this
   // variable or NULL if it is not yet written to
+  // this is NOT the same as the local var table (naming could be improved)
+  // which represent spilled variables
   struct var_table var_table;
 
   struct ir_stmt *first;
@@ -125,23 +155,44 @@ struct ir_builder {
 
   size_t stmt_count;
   size_t op_count;
+
+  // number of stack local variables
+  size_t num_locals;
+  size_t total_locals_size;
 };
 
-typedef void (walk_op_callback)(struct ir_op*, void *metadata);
+typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
+
 void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
-struct ir_op *insert_after_ir_op(struct ir_builder *irb, struct ir_op* insert_after);
-struct ir_op *insert_before_ir_op(struct ir_builder *irb, struct ir_op* insert_before);
 
-struct ir_builder *build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
+// Helper method that ensures the essential fields in IR op are initialised
+void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
+                      struct ir_op_var_ty var_ty, struct ir_op *pred,
+                      struct ir_op *succ, struct ir_stmt *stmt,
+                      unsigned long reg, unsigned long lcl_idx);
+
+struct ir_op *insert_before_ir_op(struct ir_builder *irb,
+                                  struct ir_op *insert_before, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty);
+
+struct ir_op *insert_after_ir_op(struct ir_builder *irb,
+                                 struct ir_op *insert_after, enum ir_op_ty ty,
+                                 struct ir_op_var_ty var_ty);
+
+size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty);
+
+struct ir_builder *
+build_ir_for_function(/* needed for `associated_text */ struct parser *parser,
                       struct arena_allocator *arena, struct ast_funcdef *def);
 
+typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
+                                      void *metadata);
 
-typedef void (debug_print_op_callback)(FILE *file, struct ir_op *op, void *metadata);
-
-void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt, debug_print_op_callback *cb, void *cb_metadata);
+void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
+                    debug_print_op_callback *cb, void *cb_metadata);
 
 #endif

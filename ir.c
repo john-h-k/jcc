@@ -7,14 +7,32 @@
 #include "vector.h"
 #include <math.h>
 
-void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb, void *cb_metadata) {
+void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
+                    void *cb_metadata) {
+  UNUSED_ARG(store_lcl);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_load_lcl(struct ir_op_load_lcl *load_lcl, walk_op_callback *cb,
+                   void *cb_metadata) {
+  UNUSED_ARG(load_lcl);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb,
+               void *cb_metadata) {
   UNUSED_ARG(cnst);
   UNUSED_ARG(cb);
   UNUSED_ARG(cb_metadata);
   // nada
 }
 
-void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb, void *cb_metadata) {
+void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
+                    void *cb_metadata) {
   walk_op(binary_op->lhs, cb, cb_metadata);
   walk_op(binary_op->rhs, cb, cb_metadata);
 }
@@ -32,19 +50,24 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_CNST:
     break;
   case IR_OP_TY_BINARY_OP:
-    cb(op->binary_op.lhs, cb_metadata);
-    cb(op->binary_op.rhs, cb_metadata);
+    cb(&op->binary_op.lhs, cb_metadata);
+    cb(&op->binary_op.rhs, cb_metadata);
+    break;
+  case IR_OP_TY_STORE_LCL:
+    cb(&op->store_lcl.value, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_LCL:
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
-      cb(op->ret.value, cb_metadata);
+      cb(&op->ret.value, cb_metadata);
     }
     break;
   }
 }
 
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
-  cb(op, cb_metadata);
+  cb(&op, cb_metadata);
 
   switch (op->ty) {
   case IR_OP_TY_PHI:
@@ -54,6 +77,12 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_BINARY_OP:
     walk_binary_op(&op->binary_op, cb, cb_metadata);
+    break;
+  case IR_OP_TY_STORE_LCL:
+    walk_store_lcl(&op->store_lcl, cb, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_LCL:
+    walk_load_lcl(&op->load_lcl, cb, cb_metadata);
     break;
   case IR_OP_TY_RET:
     walk_ret(&op->ret, cb, cb_metadata);
@@ -82,16 +111,31 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
+const struct ir_op_var_ty IR_OP_VAR_TY_NONE = { .ty = IR_OP_VAR_TY_TY_NONE };
+
+void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
+                      struct ir_op_var_ty var_ty, struct ir_op *pred,
+                      struct ir_op *succ, struct ir_stmt *stmt,
+                      unsigned long reg, unsigned long lcl_idx) {
+  op->id = id;
+  op->ty = ty;
+  op->var_ty = var_ty;
+  op->pred = pred;
+  op->succ = succ;
+  op->stmt = stmt;
+  op->reg = reg;
+  op->lcl_idx = lcl_idx;
+}
+
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
-                                  struct ir_op *insert_before) {
+                                  struct ir_op *insert_before, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty) {
   debug_assert(insert_before, "invalid insertion point!");
 
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
-  op->id = irb->op_count++;
-  op->stmt = insert_before->stmt;
 
-  op->pred = insert_before->pred;
-  op->succ = insert_before;
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, insert_before->pred,
+                   insert_before, insert_before->stmt, NO_REG, NO_LCL);
 
   if (op->pred) {
     op->pred->succ = op;
@@ -105,15 +149,14 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
 }
 
 struct ir_op *insert_after_ir_op(struct ir_builder *irb,
-                                 struct ir_op *insert_after) {
+                                 struct ir_op *insert_after, enum ir_op_ty ty,
+                                 struct ir_op_var_ty var_ty) {
   debug_assert(insert_after, "invalid insertion point!");
 
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
-  op->id = irb->op_count++;
-  op->stmt = insert_after->stmt;
 
-  op->pred = insert_after;
-  op->succ = insert_after->succ;
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, insert_after,
+                   insert_after->succ, insert_after->stmt, NO_REG, NO_LCL);
 
   if (op->succ) {
     op->succ->pred = op;
@@ -126,6 +169,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
   return op;
 }
 
+// TODO: this should call `initialise_ir_op`
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
 
@@ -404,6 +448,26 @@ struct ir_stmt *build_ir_for_stmt(struct ir_builder *irb,
   return ir_stmt;
 }
 
+size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
+  UNUSED_ARG(irb);
+
+  switch (ty->ty) {
+  case IR_OP_VAR_TY_TY_NONE:
+    bug("IR_OP_VAR_TY_TY_NONE has no size");
+  case IR_OP_VAR_TY_TY_PRIMITIVE:
+    switch (ty->primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_I8:
+      return 1;
+    case IR_OP_VAR_PRIMITIVE_TY_I16:
+      return 2;
+    case IR_OP_VAR_PRIMITIVE_TY_I32:
+      return 4;
+    case IR_OP_VAR_PRIMITIVE_TY_I64:
+      return 8;
+    }
+  }
+}
+
 struct ir_builder *build_ir_for_function(struct parser *parser,
                                          struct arena_allocator *arena,
                                          struct ast_funcdef *def) {
@@ -413,7 +477,9 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
                          .var_table = var_table_create(parser),
                          .first = NULL,
                          .last = NULL,
-                         .op_count = 0};
+                         .op_count = 0,
+                         .num_locals = 0,
+                         .total_locals_size = 0};
 
   struct ir_builder *builder = alloc(arena, sizeof(b));
   *builder = b;
@@ -448,6 +514,9 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
 
 const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
+  case IR_OP_VAR_TY_TY_NONE: {
+    return "<none>";
+  }
   case IR_OP_VAR_TY_TY_PRIMITIVE: {
     switch (var_ty->primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
@@ -469,24 +538,33 @@ void debug_print_op(struct ir_op *ir) {
     todo("debug PHI");
     break;
   case IR_OP_TY_CNST:
-    fprintf(stderr, "%%%zu (%s) = %zu", ir->id,
-            var_ty_string(&ir->var_ty), ir->cnst.value);
+    fprintf(stderr, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),
+            ir->cnst.value);
     break;
   case IR_OP_TY_BINARY_OP:
     fprintf(stderr, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
             var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
             binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
-
+  case IR_OP_TY_STORE_LCL:
+    fprintf(stderr, "storelcl (%s), LCL(%zu), %%%zu",
+            var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
+            ir->store_lcl.value->id);
+    break;
+  case IR_OP_TY_LOAD_LCL:
+    fprintf(stderr, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
+            var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
+    break;
   case IR_OP_TY_RET:
     fprintf(stderr, "return %%%zu", ir->ret.value->id);
     break;
-  }  
+  }
 }
 
-void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt, debug_print_op_callback *cb, void *cb_metadata) {
+void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt,
+                    debug_print_op_callback *cb, void *cb_metadata) {
   debug("%zu statements", irb->stmt_count);
-  
+
   int ctr_pad = (int)log10(irb->op_count) + 1;
   size_t ctr = 0;
   while (stmt) {
@@ -505,12 +583,12 @@ void debug_print_ir(struct ir_builder *irb, struct ir_stmt *stmt, debug_print_op
       if (pad > 0) {
         fprintf(stderr, "%*s", (int)pad, "");
       }
-      
+
       if (cb) {
         fprintf(stderr, " | ");
         cb(stderr, ir, cb_metadata);
-        fprintf(stderr, "\n");
       }
+      fprintf(stderr, "\n");
 
       ir = ir->succ;
     }
