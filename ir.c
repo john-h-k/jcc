@@ -23,6 +23,22 @@ bool op_produces_value(enum ir_op_ty ty) {
   }
 }
 
+bool op_is_branch(enum ir_op_ty ty) {
+  switch (ty) {
+  case IR_OP_TY_BR_COND:
+  case IR_OP_TY_RET:
+  case IR_OP_TY_BR:
+    return true;
+  case IR_OP_TY_PHI:
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_CNST:
+  case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_LOAD_LCL:
+    return false;
+  }
+}
+
 void walk_br(struct ir_op_br *br, walk_op_callback *cb, void *cb_metadata) {
   UNUSED_ARG(br);
   UNUSED_ARG(cb);
@@ -172,15 +188,31 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->metadata = NULL;
 }
 
-struct ir_op *insert_before_ir_op(struct ir_builder *irb,
-                                  struct ir_op *insert_before, enum ir_op_ty ty,
-                                  struct ir_op_var_ty var_ty) {
-  debug_assert(insert_before, "invalid insertion point!");
+void detach_ir_op(struct ir_op *op) {
+  // fix links on either side of op
+  if (op->pred) {
+    op->pred->succ = op->succ;
+  } 
+  
+  if (op->succ) {
+    op->succ->pred = op->pred;
+  }
+}
 
-  struct ir_op *op = alloc(irb->arena, sizeof(*op));
+void move_after_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op* move_after) {
+  UNUSED_ARG(irb);
+  invariant_assert(op->id != move_after->id, "trying to move op after itself!");
+  invariant_assert(op->stmt == NULL || op->stmt == move_after->stmt, "moving between ir_stmts not supported");
 
-  initialise_ir_op(op, irb->op_count++, ty, var_ty, insert_before->pred,
-                   insert_before, insert_before->stmt, NO_REG, NO_LCL);
+  detach_ir_op(op);
+
+  op->stmt = move_after->stmt;
+
+  debug("move after pred %zu, succ %zu", move_after->pred ? move_after->pred->id : SIZE_T_MAX, move_after->succ ? move_after->succ->id : SIZE_T_MAX);
+
+  // now insert it
+  op->pred = move_after;
+  op->succ = move_after->succ;
 
   if (op->pred) {
     op->pred->succ = op;
@@ -188,7 +220,52 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
     op->stmt->first = op;
   }
 
-  insert_before->pred = op;
+  if (op->succ) {
+    op->succ->pred = op;
+  } else {
+    op->stmt->last = op;
+  }
+}
+
+void move_before_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op* move_before) {
+  UNUSED_ARG(irb);
+  invariant_assert(op->id != move_before->id, "trying to move op before itself!");
+  invariant_assert(op->stmt == NULL || op->stmt == move_before->stmt, "moving between ir_stmts not supported");
+
+  detach_ir_op(op);
+
+  debug("move before pred %zu, succ %zu", move_before->pred ? move_before->pred->id : SIZE_T_MAX, move_before->succ ? move_before->succ->id : SIZE_T_MAX);
+
+  op->stmt = move_before->stmt;
+
+  // now insert it
+  op->pred = move_before->pred;
+  op->succ = move_before;
+
+  if (op->pred) {
+    op->pred->succ = op;
+  } else {
+    op->stmt->first = op;
+  }
+
+  if (op->succ) {
+    op->succ->pred = op;
+  } else {
+    op->stmt->last = op;
+  }
+}
+
+struct ir_op *insert_before_ir_op(struct ir_builder *irb,
+                                  struct ir_op *insert_before, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty) {
+  debug_assert(insert_before, "invalid insertion point!");
+
+  struct ir_op *op = alloc(irb->arena, sizeof(*op));
+
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL,
+                   NULL, insert_before->stmt, NO_REG, NO_LCL);
+
+  move_before_ir_op(irb, op, insert_before);
 
   return op;
 }
@@ -200,16 +277,10 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->op_count++, ty, var_ty, insert_after,
-                   insert_after->succ, insert_after->stmt, NO_REG, NO_LCL);
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL,
+                   NULL, insert_after->stmt, NO_REG, NO_LCL);
 
-  if (op->succ) {
-    op->succ->pred = op;
-  } else {
-    op->stmt->last = op;
-  }
-
-  insert_after->succ = op;
+  move_after_ir_op(irb, op, insert_after);
 
   return op;
 }
@@ -256,6 +327,48 @@ struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
   basicblock->last = stmt;
 
   return stmt;
+}
+
+bool valid_basicblock(struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = basicblock->first;
+  while (stmt) {
+    struct ir_op *op = stmt->first;
+    while (op) {
+      if (op_is_branch(op->ty)) {
+        // it must be the *last* op
+        return op->succ == NULL && stmt->succ == NULL;
+      }
+      
+      op = op->succ;
+    }
+    
+    stmt = stmt->succ;
+  }
+
+  // we have seen no branches, this cannot be a valid basicblock
+  return false;
+}
+
+enum ir_basicblock_ty get_basicblock_successors(struct ir_basicblock *basicblock, struct ir_basicblock **first, struct ir_basicblock **second) {
+  struct ir_op *op = basicblock->last ? basicblock->last->last : NULL;
+
+  *first = NULL;
+  *second = NULL;
+
+  switch (op->ty) {
+    case IR_OP_TY_RET:
+      // returns don't have successors
+      return IR_BASICBLOCK_TY_MERGE;
+    case IR_OP_TY_BR:
+      *first = op->br.target;
+      return IR_BASICBLOCK_TY_MERGE;
+    case IR_OP_TY_BR_COND:
+      *first = op->br_cond.if_true;
+      *second = op->br_cond.if_false;
+      return IR_BASICBLOCK_TY_SPLIT;
+    default:
+      bug("basicblock ended in instruction that is not a branch");
+  }
 }
 
 struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
@@ -399,11 +512,23 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
       struct ir_op **prev = (struct ir_op **)vector_get(entry->value, i);
       struct ir_basicblock *prev_bb = (*prev)->stmt->basicblock;
       struct ir_basicblock *head = expr->stmt->basicblock;
+
+      if (head == prev_bb) {
+        // same basic block, so just replace
+        *prev = expr;
+        return expr;
+      }
+        
       while (head) {
-        if (head == prev_bb) {
-          // does dominate, and cannot dominate any of the others here
-          *prev = expr;
-          return expr;
+        if (head->pred == prev_bb) {
+          // now check if `prev_bb` actually points to `head` 
+          struct ir_basicblock *first, *second;
+          get_basicblock_successors(prev_bb, &first, &second);
+          if (first == head || second == head) {
+            // does dominate, and cannot dominate any of the others here
+            *prev = expr;
+            return expr;
+          }
         }
         
         head = head->pred;
@@ -465,7 +590,6 @@ struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ir_stmt *stmt,
       return *(struct ir_op **)vector_get(exprs, 0);
     } else if (num_exprs > 1) {
       // must insert phi node
-      trace("inserting phi node for op");
       struct ir_op *phi = alloc_ir_op(irb, stmt);
       phi->ty = IR_OP_TY_PHI;
       phi->var_ty = (*(struct ir_op **)vector_get(exprs, 0))->var_ty;
@@ -541,20 +665,26 @@ void build_ir_for_ifelse(struct ir_builder *irb, struct ir_stmt *stmt,
   build_ir_for_stmt(irb, if_else_stmt->body);
   br_cond->br_cond.if_true = if_basicblock;
 
-  // branch to combined end
-  struct ir_op *br_after_if = alloc_ir_op(irb, if_basicblock->last);
-  br_after_if->ty = IR_OP_TY_BR;
-  br_after_if->var_ty = IR_OP_VAR_TY_NONE;
+  struct ir_op *br_after_if = NULL;
+  // branch to combined end, if the block itself doesn't already end in branch
+  if (!if_basicblock->last || !op_is_branch(if_basicblock->last->last->ty)) {
+    br_after_if = alloc_ir_op(irb, if_basicblock->last);
+    br_after_if->ty = IR_OP_TY_BR;
+    br_after_if->var_ty = IR_OP_VAR_TY_NONE;
+  }
 
   // basic block for else body
   struct ir_basicblock *else_basicblock = alloc_ir_basicblock(irb);
   build_ir_for_stmt(irb, if_else_stmt->else_body);
   br_cond->br_cond.if_false = else_basicblock;
 
-  // branch to combined end
-  struct ir_op *br_after_else = alloc_ir_op(irb, else_basicblock->last);
-  br_after_else->ty = IR_OP_TY_BR;
-  br_after_else->var_ty = IR_OP_VAR_TY_NONE;
+  struct ir_op *br_after_else = NULL;
+  // branch to combined end, if the block itself doesn't already end in branch
+  if (!else_basicblock->last || !op_is_branch(else_basicblock->last->last->ty)) {
+    br_after_else = alloc_ir_op(irb, else_basicblock->last);
+    br_after_else->ty = IR_OP_TY_BR;
+    br_after_else->var_ty = IR_OP_VAR_TY_NONE;
+  }
 
   // basic block for *after* if-else
   struct ir_basicblock *after_basicblock;
@@ -567,8 +697,13 @@ void build_ir_for_ifelse(struct ir_builder *irb, struct ir_stmt *stmt,
     after_basicblock = irb->last;
   }
 
-  br_after_if->br.target = after_basicblock;
-  br_after_else->br.target = after_basicblock;
+  if (br_after_if) {
+    br_after_if->br.target = after_basicblock;
+  }
+
+  if (br_after_else) {
+    br_after_else->br.target = after_basicblock;
+  }
 }
 
 struct ir_op *build_ir_for_selectstmt(struct ir_builder *irb,
