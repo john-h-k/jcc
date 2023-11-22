@@ -24,6 +24,7 @@ enum ir_op_ty {
 };
 
 bool op_produces_value(enum ir_op_ty ty);
+bool op_is_branch(enum ir_op_ty ty);
 
 struct ir_op_mov {
   struct ir_op *value;
@@ -166,9 +167,24 @@ struct ir_stmt {
   struct ir_op *last;
 };
 
+enum ir_basicblock_ty {
+  // a split basicblock has 2 successors and occurs when there is a conditional branch
+  IR_BASICBLOCK_TY_SPLIT,
+
+  // a merge basicblock has 1 successor (but its successor will have at least 2 predecessors)
+  // and occurs when multiple basicblocks rejoin
+  IR_BASICBLOCK_TY_MERGE,
+};
+
+// ensures the basic block ends with an appropriate branch and does not contain any within it
+bool valid_basicblock(struct ir_basicblock *basicblock);
+
+enum ir_basicblock_ty get_basicblock_successors(struct ir_basicblock *basicblock, struct ir_basicblock **first, struct ir_basicblock **second);
+
 struct ir_basicblock {
   size_t id;
   
+  // these are creation order traversal methods, and do not signify edges between BBs
   struct ir_basicblock *pred;
   struct ir_basicblock *succ;
 
@@ -177,6 +193,9 @@ struct ir_basicblock {
 
   // how many ops are before this block in the function
   size_t function_offset;
+
+  // only used by regalloc
+  size_t max_interval;
 };
 
 struct ir_builder {
@@ -215,6 +234,9 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, struct ir_op *pred,
                       struct ir_op *succ, struct ir_stmt *stmt,
                       unsigned long reg, unsigned long lcl_idx);
+
+void move_after_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op* move_after);
+void move_before_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op* move_before);
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,

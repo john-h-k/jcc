@@ -25,7 +25,10 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval *interval = &data->intervals[(*op)->id];
 
   interval->end = data->num_intervals;
-  debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start, interval->end);
+
+  if (interval->op) {
+    debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start, interval->end);
+  }
 }
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
@@ -37,6 +40,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
+    basicblock->max_interval = 0;
 
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
@@ -46,11 +50,38 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         op->lcl_idx = NO_LCL;
         op->reg = NO_REG;
 
+
         debug_assert(op->id < irb->op_count, "out of range!");
         struct interval *interval = &data.intervals[op->id];
 
+        size_t start;
+
+        // special case - a phi op actually starts existing at the end of its earliest basicblock
+        if (op->ty == IR_OP_TY_PHI) {
+          start = 0; // if the phi has no values
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_basicblock *value_block = op->phi.values[i]->stmt->basicblock;
+
+            if (value_block->last && value_block->last->last) {
+              struct ir_op *last = value_block->last->last;
+
+              while (last && !op_produces_value(last->ty)) {
+                last = last->pred;
+              }
+
+              // we now have the last op in the value's basic block that contains an interval
+              invariant_assert(last, "trying to assign phi lifetime for bb but couldn't find value-producing instruction in the block");
+              
+              struct interval *value_interval = &data.intervals[last->id];
+              interval->start = MIN(interval->start, value_interval->start);
+            }
+          }
+        } else {
+          start = data.num_intervals;
+        }
+
         interval->op = op;
-        interval->start = data.num_intervals;
+        interval->start = start;
         interval->end = interval->start; // this ensures intervals are still valid for unused values
         debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
