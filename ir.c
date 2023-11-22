@@ -7,6 +7,22 @@
 #include "vector.h"
 #include <math.h>
 
+bool op_produces_value(enum ir_op_ty ty) {
+  switch (ty) {
+  case IR_OP_TY_PHI:
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_CNST:
+  case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_LOAD_LCL:
+    return true;
+  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_BR_COND:
+  case IR_OP_TY_RET:
+  case IR_OP_TY_BR:
+    return false;
+  }
+}
+
 void walk_br(struct ir_op_br *br, walk_op_callback *cb, void *cb_metadata) {
   UNUSED_ARG(br);
   UNUSED_ARG(cb);
@@ -499,7 +515,16 @@ void build_ir_for_if(struct ir_builder *irb, struct ir_stmt *stmt,
   br_cond->br_cond.if_true = if_basicblock;
 
   // basic block for *after* if body
-  struct ir_basicblock *after_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_basicblock;
+  if (irb->last->first) {
+    after_basicblock = alloc_ir_basicblock(irb);
+  } else {
+    // existing BB is empty, we can use it
+    // this makes nested if/else statements nicer as they all target the same end BB
+    // rather than a series of empty ones
+    after_basicblock = irb->last;
+  }
+
   br_cond->br_cond.if_false = after_basicblock;
 }
 
@@ -532,7 +557,16 @@ void build_ir_for_ifelse(struct ir_builder *irb, struct ir_stmt *stmt,
   br_after_else->var_ty = IR_OP_VAR_TY_NONE;
 
   // basic block for *after* if-else
-  struct ir_basicblock *after_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_basicblock;
+  if (irb->last->first) {
+    after_basicblock = alloc_ir_basicblock(irb);
+  } else {
+    // existing BB is empty, we can use it
+    // this makes nested if/else statements nicer as they all target the same end BB
+    // rather than a series of empty ones
+    after_basicblock = irb->last;
+  }
+
   br_after_if->br.target = after_basicblock;
   br_after_else->br.target = after_basicblock;
 }

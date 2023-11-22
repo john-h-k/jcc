@@ -23,6 +23,8 @@ enum ir_op_ty {
   IR_OP_TY_RET
 };
 
+bool op_produces_value(enum ir_op_ty ty);
+
 struct ir_op_mov {
   struct ir_op *value;
 };
