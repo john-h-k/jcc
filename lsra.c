@@ -237,7 +237,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
-    if (interval->op->ty == IR_OP_TY_STORE_LCL) {
+    if (!op_produces_value(interval->op->ty)) {
       // stores don't need a register
       // TODO: this logic should be more centralised and clear, not just for this op
       continue;
