@@ -770,9 +770,7 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
       struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
       struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
 
-      cond_basicblock->ty = IR_BASICBLOCK_TY_SPLIT;
-      cond_basicblock->split.true_target = body_basicblock;
-      cond_basicblock->split.false_target = after_body_basicblock;
+      make_basicblock_split(irb, cond_basicblock, body_basicblock, after_body_basicblock);
 
       struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
       struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &iter_stmt->while_stmt.condition);
@@ -788,9 +786,9 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
       struct ir_op *br = alloc_ir_op(irb, br_stmt);
       br->ty = IR_OP_TY_BR;
       br->var_ty = IR_OP_VAR_TY_NONE;
-      br->stmt->basicblock->ty = IR_BASICBLOCK_TY_MERGE;
-      br->stmt->basicblock->merge.target = cond_basicblock;
 
+      make_basicblock_merge(irb, body_basicblock, cond_basicblock);
+      
       return after_body_basicblock;
     }
   }
