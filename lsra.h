@@ -11,6 +11,7 @@ struct reg_info {
 };
 
 
+void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata);
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info);
 
 #endif

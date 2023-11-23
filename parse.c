@@ -119,6 +119,12 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   var->identifier = token;
   var->scope = parser->cur_scope;
 
+  struct var_table_entry *entry = get_entry(&parser->var_table, var);
+  if (entry) {
+    var->scope = entry->scope;
+  }
+  
+
   consume_token(parser->lexer, token);
 
   return true;
@@ -1267,8 +1273,8 @@ DEBUG_FUNC(compoundstmt, compound_stmt);
 DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
-  AST_PRINT("VARIABLE '%s'",
-            associated_text(state->parser->lexer, &var->identifier));
+  AST_PRINT("VARIABLE '%s' (SCOPE=%zu)",
+            associated_text(state->parser->lexer, &var->identifier), var->scope);
 }
 
 DEBUG_FUNC(lvalue, lvalue) {

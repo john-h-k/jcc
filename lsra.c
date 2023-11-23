@@ -24,12 +24,37 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   debug("op callback id %zu", (*op)->id);
   struct interval *interval = &data->intervals[(*op)->id];
 
-  interval->end = data->num_intervals;
+  interval->end = MAX(interval->end, data->num_intervals);
 
   if (interval->op) {
     debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start, interval->end);
   }
 }
+
+struct ir_op *last_value_producing_op(struct ir_basicblock *basicblock) {
+  struct ir_op *last_op = NULL;
+  struct ir_stmt *stmt = basicblock->last;
+  while (stmt && !last_op) {
+    struct ir_op *op = stmt->last;
+
+    while (op && !last_op) {
+      if (op_produces_value(op->ty)) {
+        last_op = op;
+      }
+
+      op = op->pred;
+    }
+
+    stmt = stmt->pred;
+  }
+  
+  // we now have the last op in the value's basic block that contains an interval
+  invariant_assert(last_op, "trying to assign phi lifetime for bb but couldn't find value-producing instruction in the block id %zu", basicblock->id);
+
+  return last_op; 
+}
+
+#define INTERVAL_END_OF_BASICBLOCK (SIZE_T_MAX)
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
@@ -50,7 +75,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         op->lcl_idx = NO_LCL;
         op->reg = NO_REG;
 
-
         debug_assert(op->id < irb->op_count, "out of range!");
         struct interval *interval = &data.intervals[op->id];
 
@@ -60,21 +84,17 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         if (op->ty == IR_OP_TY_PHI) {
           start = 0; // if the phi has no values
           for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_basicblock *value_block = op->phi.values[i]->stmt->basicblock;
+            struct ir_op *value = op->phi.values[i];
+            struct ir_basicblock *value_block = value->stmt->basicblock;
 
-            if (value_block->last && value_block->last->last) {
-              struct ir_op *last = value_block->last->last;
+            struct interval *value_interval = &data.intervals[value->id];
 
-              while (last && !op_produces_value(last->ty)) {
-                last = last->pred;
-              }
+            struct ir_op *last_op = last_value_producing_op(value_block);
+            value_interval->end = INTERVAL_END_OF_BASICBLOCK;
 
-              // we now have the last op in the value's basic block that contains an interval
-              invariant_assert(last, "trying to assign phi lifetime for bb but couldn't find value-producing instruction in the block");
-              
-              struct interval *value_interval = &data.intervals[last->id];
-              interval->start = MIN(interval->start, value_interval->start);
-            }
+            struct interval *last_interval = &data.intervals[last_op->id];
+            
+            interval->start = MIN(interval->start, last_interval->start);
           }
         } else {
           start = data.num_intervals;
@@ -82,7 +102,11 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
         interval->op = op;
         interval->start = start;
-        interval->end = interval->start; // this ensures intervals are still valid for unused values
+
+        if (interval->end < interval->start) {
+          interval->end = interval->start; // this ensures intervals are still valid for unused values
+        }
+
         debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
 
@@ -96,6 +120,15 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     }
 
     basicblock = basicblock->succ;
+  }
+
+  for (size_t i = 0; i < data.num_intervals; i++) {
+    struct interval *interval = &data.intervals[i];
+
+    if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
+      struct ir_op *last_op = last_value_producing_op(interval->op->stmt->basicblock);
+      interval->end = data.intervals[last_op->id].start;
+    }
   }
 
   return data;
@@ -326,5 +359,5 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   data = register_alloc_pass(irb, reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
-  debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
+  debug_print_ir(irb, irb->first, print_ir_intervals, NULL);
 }

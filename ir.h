@@ -31,6 +31,10 @@ struct ir_op_mov {
 };
 
 struct ir_op_phi {
+  // not elegant, but phi needs ref to var so it can build itself in `find_phi_exprs`
+  // FIXME: ?
+  struct ast_var var;
+
   struct ir_op **values;
   size_t num_values;
 };
@@ -191,6 +195,11 @@ struct ir_basicblock_split {
 struct ir_basicblock {
   size_t id;
   
+  // `value` contains a `struct vector *` containing the last op(s) that wrote to this
+  // variable or NULL if it is not yet written to
+  // it will contain multiple ops
+  struct var_table var_table;
+
   // these are creation order traversal methods, and do not signify edges between BBs
   struct ir_basicblock *pred;
   struct ir_basicblock *succ;
@@ -219,11 +228,6 @@ struct ir_builder {
 
   struct parser *parser;
   struct arena_allocator *arena;
-
-  // `value` contains a `struct vector *` containing the last op(s) that wrote to this
-  // variable or NULL if it is not yet written to
-  // it will contain multiple ops
-  struct var_table var_table;
 
   struct ir_basicblock *first;
   struct ir_basicblock *last;
