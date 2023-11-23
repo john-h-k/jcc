@@ -39,7 +39,7 @@ enum compiler_create_result create_compiler(const char *program,
 
   create_arena_allocator(&(*compiler)->arena);
 
-  (*compiler)->output = alloc((*compiler)->arena, strlen(output) + 1);
+  (*compiler)->output = arena_alloc((*compiler)->arena, strlen(output) + 1);
   strcpy((*compiler)->output, output);
 
   return COMPILER_CREATE_RESULT_SUCCESS;
@@ -136,7 +136,7 @@ enum compile_result compile(struct compiler *compiler) {
     vector_push_back(symbols, &symbol);
   }
 
-  char *code = alloc(compiler->arena, total_size);
+  char *code = arena_alloc(compiler->arena, total_size);
   char *head = code;
 
   size_t num_results = vector_length(compiled_functions);

@@ -24,7 +24,7 @@ enum lex_status create_lexer(const char *program, struct lexer **lexer) {
   struct lexer *l = nonnull_malloc(sizeof(*l));
   l->arena = arena;
   // copy out the program so lifetimes aren't tied
-  l->text = alloc_strcpy(arena, program);
+  l->text = arena_alloc_strcpy(arena, program);
   l->len = strlen(program);
   l->pos.idx = 0;
   l->pos.line = 0;
@@ -67,6 +67,7 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
 
   // TODO: hashify
   static struct keyword keywords[] = {
+      KEYWORD("while", LEX_TOKEN_TYPE_KW_WHILE),
       KEYWORD("if", LEX_TOKEN_TYPE_KW_IF),
       KEYWORD("else", LEX_TOKEN_TYPE_KW_ELSE),
       KEYWORD("return", LEX_TOKEN_TYPE_KW_RETURN),
@@ -340,7 +341,7 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
   case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL: {
     size_t len = text_span_len(&token->span);
-    char *p = alloc(lexer->arena, len + 1);
+    char *p = arena_alloc(lexer->arena, len + 1);
     memcpy(p, &lexer->text[token->span.start.idx], len);
     p[len] = '\0';
     return p;
@@ -375,6 +376,7 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
     CASE_RET(LEX_TOKEN_TYPE_COMMA)
 
+    CASE_RET(LEX_TOKEN_TYPE_KW_WHILE)
     CASE_RET(LEX_TOKEN_TYPE_KW_IF)
     CASE_RET(LEX_TOKEN_TYPE_KW_ELSE)
     CASE_RET(LEX_TOKEN_TYPE_KW_RETURN)

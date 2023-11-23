@@ -222,7 +222,7 @@ enum ast_stmt_ty {
   AST_STMT_TY_EXPR,
   AST_STMT_TY_COMPOUND,
   AST_STMT_TY_JUMP,
-  // AST_STMT_TY_ITER,
+  AST_STMT_TY_ITER,
   AST_STMT_TY_SELECT,
 };
 
@@ -264,6 +264,23 @@ struct ast_compoundstmt {
   size_t num_stmts;
 };
 
+struct ast_whilestmt {
+  struct ast_expr condition;
+  struct ast_stmt *body;
+};
+
+enum ast_iterstmt_ty {
+  AST_ITERSTMT_TY_WHILE,
+};
+
+struct ast_iterstmt {
+  enum ast_iterstmt_ty ty;
+
+  union {
+    struct ast_whilestmt while_stmt;
+  };
+};
+
 struct ast_stmt {
   enum ast_stmt_ty ty;
   union {
@@ -272,6 +289,7 @@ struct ast_stmt {
     struct ast_compoundstmt compound;
     struct ast_jumpstmt jump;
     struct ast_selectstmt select;
+    struct ast_iterstmt iter;
   };
 };
 

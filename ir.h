@@ -106,12 +106,7 @@ struct ir_op_load_lcl {
 
 struct ir_op_br_cond {
   struct ir_op *cond;
-  struct ir_basicblock *if_true;
-  struct ir_basicblock *if_false;
-};
-
-struct ir_op_br {
-  struct ir_basicblock *target;
+  // targets on `ir_basicblock`
 };
 
 #include <limits.h>
@@ -136,7 +131,7 @@ struct ir_op {
     struct ir_op_store_lcl store_lcl;
     struct ir_op_load_lcl load_lcl;
     struct ir_op_br_cond br_cond;
-    struct ir_op_br br;
+    /* br has no entry, as its target is on `ir_basicblock` and it has no condition */
     struct ir_op_phi phi;
     struct ir_op_mov mov;
   };
@@ -174,12 +169,24 @@ enum ir_basicblock_ty {
   // a merge basicblock has 1 successor (but its successor will have at least 2 predecessors)
   // and occurs when multiple basicblocks rejoin
   IR_BASICBLOCK_TY_MERGE,
+
+  // a return has no explicit successors
+  IR_BASICBLOCK_TY_RET,
 };
 
 // ensures the basic block ends with an appropriate branch and does not contain any within it
 bool valid_basicblock(struct ir_basicblock *basicblock);
 
-enum ir_basicblock_ty get_basicblock_successors(struct ir_basicblock *basicblock, struct ir_basicblock **first, struct ir_basicblock **second);
+void get_basicblock_successors(struct ir_basicblock *basicblock, struct ir_basicblock **first, struct ir_basicblock **second);
+
+struct ir_basicblock_merge {
+  struct ir_basicblock *target;
+};
+
+struct ir_basicblock_split {
+  struct ir_basicblock *true_target;
+  struct ir_basicblock *false_target;
+};
 
 struct ir_basicblock {
   size_t id;
@@ -190,6 +197,15 @@ struct ir_basicblock {
 
   struct ir_stmt *first;
   struct ir_stmt *last;
+
+  struct ir_basicblock **preds;
+  size_t num_preds;
+
+  enum ir_basicblock_ty ty;
+  union {
+    struct ir_basicblock_merge merge;
+    struct ir_basicblock_split split;
+  };
 
   // how many ops are before this block in the function
   size_t function_offset;

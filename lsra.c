@@ -33,7 +33,7 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
-  data.intervals = alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
+  data.intervals = arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
@@ -253,7 +253,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 
   qsort(intervals, num_intervals, sizeof(*intervals), sort_interval_by_start_point);
 
-  size_t *active = alloc(irb->arena, sizeof(size_t) * reg_info.num_regs);
+  size_t *active = arena_alloc(irb->arena, sizeof(size_t) * reg_info.num_regs);
   size_t num_active = 0;
 
   invariant_assert(reg_info.num_regs <= sizeof(unsigned long) * 8,
