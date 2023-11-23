@@ -27,7 +27,7 @@ enum link_result link_objects(const struct link_args *args) {
   total_size += /* "-o " */ 3 + strlen(args->output);
   total_size++; // null terminator
 
-  char *buff = alloc(arena, total_size);
+  char *buff = arena_alloc(arena, total_size);
 
   size_t head = 0;
   strcpy(&buff[head], template);

@@ -14,6 +14,8 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#define ARR_LENGTH(a) sizeof((a)) / sizeof((a)[0])
+
 static inline unsigned long tzcnt(unsigned long l) {
 #if defined(__has_builtin) && __has_builtin (__builtin_clz)
   return __builtin_ctz(l);

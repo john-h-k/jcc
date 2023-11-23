@@ -144,6 +144,7 @@ bool is_literal_token(enum lex_token_type tok_ty,
   case LEX_TOKEN_TYPE_OP_MUL:
   case LEX_TOKEN_TYPE_OP_DIV:
   case LEX_TOKEN_TYPE_OP_QUOT:
+  case LEX_TOKEN_TYPE_KW_WHILE:
   case LEX_TOKEN_TYPE_KW_IF:
   case LEX_TOKEN_TYPE_KW_ELSE:
   case LEX_TOKEN_TYPE_KW_CHAR:
@@ -240,7 +241,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   debug("found expr");
 
   assg->lvalue = lvalue;
-  assg->expr = alloc(parser->arena, sizeof(*assg->expr));
+  assg->expr = arena_alloc(parser->arena, sizeof(*assg->expr));
   *assg->expr = expr;
 
   return true;
@@ -252,7 +253,7 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   if (parse_assg(parser, &assg)) {
     rvalue->ty = AST_RVALUE_TY_ASSG;
     rvalue->var_ty = assg.expr->var_ty;
-    rvalue->assg = alloc(parser->arena, sizeof(*rvalue->assg));
+    rvalue->assg = arena_alloc(parser->arena, sizeof(*rvalue->assg));
     *rvalue->assg = assg;
     return true;
   }
@@ -449,10 +450,10 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     binary_op->ty = info.ty;
     binary_op->var_ty = result_ty;
 
-    binary_op->lhs = alloc(parser->arena, sizeof(*binary_op->lhs));
+    binary_op->lhs = arena_alloc(parser->arena, sizeof(*binary_op->lhs));
     *binary_op->lhs = lhs;
 
-    binary_op->rhs = alloc(parser->arena, sizeof(*binary_op->rhs));
+    binary_op->rhs = arena_alloc(parser->arena, sizeof(*binary_op->rhs));
     *binary_op->rhs = rhs;
   }
 }
@@ -493,7 +494,7 @@ bool parse_compoundexpr(struct parser *parser,
     return false;
   }
 
-  compound_expr->exprs = alloc(parser->arena, vector_byte_size(exprs));
+  compound_expr->exprs = arena_alloc(parser->arena, vector_byte_size(exprs));
   compound_expr->num_exprs = vector_length(exprs);
 
   vector_copy_to(exprs, compound_expr->exprs);
@@ -659,7 +660,7 @@ bool parse_vardecllist(struct parser *parser,
         create_entry(&parser->var_table, &var_decl.var);
 
     // copy the type ref into arena memory for lifetime simplicity
-    entry->value = alloc(parser->arena, sizeof(ty_ref));
+    entry->value = arena_alloc(parser->arena, sizeof(ty_ref));
     *(struct ast_tyref *)entry->value = ty_ref;
 
     struct token token;
@@ -680,7 +681,7 @@ bool parse_vardecllist(struct parser *parser,
     return false;
   }
 
-  struct ast_vardecl *new_decls = alloc(parser->arena, vector_byte_size(decls));
+  struct ast_vardecl *new_decls = arena_alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
 
   var_decl_list->var_ty = ty_ref;
@@ -762,7 +763,7 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   }
 
   if_stmt->condition = expr;
-  if_stmt->body = alloc(parser->arena, sizeof(*if_stmt->body));
+  if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
   *if_stmt->body = stmt;
   return true;
 }
@@ -788,10 +789,10 @@ bool parse_ifelsestmt(struct parser *parser,
     struct ast_stmt else_stmt;
     if (parse_stmt(parser, &else_stmt)) {
       if_else_stmt->condition = if_stmt.condition;
-      if_else_stmt->body = alloc(parser->arena, sizeof(*if_else_stmt->body));
+      if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
       if_else_stmt->body = if_stmt.body;
       if_else_stmt->else_body =
-          alloc(parser->arena, sizeof(*if_else_stmt->else_body));
+          arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
       *if_else_stmt->else_body = else_stmt;
       return true;
     }
@@ -805,6 +806,63 @@ bool parse_switchstmt(struct parser *parser,
                       struct ast_switchstmt *switch_stmt) {
   UNUSED_ARG(parser);
   UNUSED_ARG(switch_stmt);
+  return false;
+}
+
+bool parse_whilestmt(struct parser *parser,
+                      struct ast_whilestmt *while_stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_KW_WHILE) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_expr expr;
+  if (!parse_expr(parser, &expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_stmt stmt;
+  if (!parse_stmt(parser, &stmt)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  while_stmt->condition = expr;
+  while_stmt->body = arena_alloc(parser->arena, sizeof(*while_stmt->body));
+  *while_stmt->body = stmt;
+  return true;
+}
+
+bool parse_iterstmt(struct parser *parser,
+                      struct ast_iterstmt *iter_stmt) {
+  struct ast_whilestmt while_stmt;
+  if (parse_whilestmt(parser, &while_stmt)) {
+    iter_stmt->ty = AST_ITERSTMT_TY_WHILE;
+    iter_stmt->while_stmt = while_stmt;
+    return true;
+  }
+
   return false;
 }
 
@@ -849,6 +907,13 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   if (parse_selectstmt(parser, &select_stmt)) {
     stmt->ty = AST_STMT_TY_SELECT;
     stmt->select = select_stmt;
+    return true;
+  }
+
+  struct ast_iterstmt iter_stmt;
+  if (parse_iterstmt(parser, &iter_stmt)) {
+    stmt->ty = AST_STMT_TY_ITER;
+    stmt->iter = iter_stmt;
     return true;
   }
 
@@ -941,7 +1006,7 @@ bool parse_compoundstmt(struct parser *parser,
     vector_push_back(stmts, &stmt);
   }
 
-  compound_stmt->stmts = alloc(parser->arena, vector_byte_size(stmts));
+  compound_stmt->stmts = arena_alloc(parser->arena, vector_byte_size(stmts));
   compound_stmt->num_stmts = vector_length(stmts);
   vector_copy_to(stmts, compound_stmt->stmts);
   vector_free(&stmts);
@@ -1389,6 +1454,25 @@ DEBUG_FUNC(selectstmt, select_stmt) {
   }
 }
 
+DEBUG_FUNC(whilestmt, while_stmt) {
+  AST_PRINTZ("WHILE");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &while_stmt->condition);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, while_stmt->body);
+}
+
+DEBUG_FUNC(iterstmt, iter_stmt) {
+  switch (iter_stmt->ty) {
+  case AST_ITERSTMT_TY_WHILE:
+    DEBUG_CALL(whilestmt, &iter_stmt->while_stmt);
+    break;
+  }
+}
+
 DEBUG_FUNC(stmt, stmt) {
   INDENT();
 
@@ -1407,6 +1491,9 @@ DEBUG_FUNC(stmt, stmt) {
     break;
   case AST_STMT_TY_SELECT:
     DEBUG_CALL(selectstmt, &stmt->select);
+    break;
+  case AST_STMT_TY_ITER:
+    DEBUG_CALL(iterstmt, &stmt->iter);
     break;
   }
 

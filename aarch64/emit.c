@@ -91,7 +91,7 @@ void lower_binary_op(struct emit_state *state, struct ir_op *op) {
 }
 
 const char *mangle(struct arena_allocator *arena, const char *name) {
-  char *dest = alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+  char *dest = arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
   dest[0] = '_';
   strcpy(dest + 1, name);
@@ -157,7 +157,7 @@ struct compiled_function emit(struct ir_builder *func) {
   }
 
   size_t len = aarch64_emit_bytesize(emitter);
-  void *data = alloc(func->arena, len);
+  void *data = arena_alloc(func->arena, len);
   aarch64_emit_copy_to(emitter, data);
 
   free_aarch64_emitter(&emitter);
@@ -212,12 +212,17 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     }
     case IR_OP_TY_BR_COND: {
       // we jump to the end of the block + skip this instruction
-      size_t offset = op->br_cond.if_false->function_offset - aarch64_emitted_count(state->emitter);
+      struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
+      (void)true_target;
+      struct ir_basicblock *false_target = op->stmt->basicblock->split.false_target;
+
+      size_t offset = false_target->function_offset - aarch64_emitted_count(state->emitter);
       aarch64_emit_cbz_32_imm(state->emitter, get_reg_for_idx(op->br_cond.cond->reg), offset);
       break;
     }
     case IR_OP_TY_BR: {
-      size_t offset = op->br.target->function_offset - aarch64_emitted_count(state->emitter);
+      struct ir_basicblock *target = op->stmt->basicblock->merge.target;
+      size_t offset = target->function_offset - aarch64_emitted_count(state->emitter);
       aarch64_emit_b(state->emitter, offset);
       break;
     }

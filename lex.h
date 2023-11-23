@@ -34,6 +34,7 @@ enum lex_token_type {
 
   /* Keywords */
 
+  LEX_TOKEN_TYPE_KW_WHILE,
   LEX_TOKEN_TYPE_KW_IF,
   LEX_TOKEN_TYPE_KW_ELSE,
 
