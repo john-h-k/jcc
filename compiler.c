@@ -110,7 +110,7 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
 
-      debug_print_ir(ir, ir->first, NULL, NULL);
+      debug_print_ir(ir, ir->first, print_ir_intervals, NULL);
 
       disable_log();
     }

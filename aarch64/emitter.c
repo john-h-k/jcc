@@ -5,7 +5,8 @@
 #include "../util.h"
 #include <stdlib.h>
 
-#define FITS_IN_BITS(value, bitc) ((value & ~((1 << (bitc - 1)) - 1)) == 0)
+#define SIG_FITS_IN_BITS(value, bitc) ((abs((value)) & ~((1 << (bitc - 1)) - 1)) == 0)
+#define UNS_FITS_IN_BITS(value, bitc) (((value) & ~((1 << (bitc - 1)) - 1)) == 0)
 
 const struct aarch64_reg RETURN_REG = { 0 };
 const struct aarch64_reg ZERO_REG = { 31 };
@@ -121,7 +122,7 @@ void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter, struct aarch64_r
     break;
   }
   default: {
-    if (FITS_IN_BITS(cnst, 16)) {
+    if (UNS_FITS_IN_BITS(cnst, 16)) {
       aarch64_emit(emitter, MOVZ_64(/* no shift */ 0, (uint16_t)cnst, dest.idx));
       break;
     } else {
@@ -143,7 +144,7 @@ void aarch64_emit_load_cnst_32(struct aarch64_emitter *emitter, struct aarch64_r
     break;
   }
   default: {
-    if (FITS_IN_BITS(cnst, 16)) {
+    if (UNS_FITS_IN_BITS(cnst, 16)) {
       aarch64_emit(emitter, MOVZ_32(/* no shift */ 0, (uint16_t)cnst, dest.idx));
       break;
     } else {
@@ -189,30 +190,32 @@ void aarch64_emit_add_64_imm(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, ADD_64_IMM(0, imm, source.idx, dest.idx));
 }
 
-void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
-  aarch64_emit(emitter, CBZ_32_IMM(offset, cmp.idx));
+#define CLAMP_BITS(value, bitc) ((value) & ((1 << bitc) - 1))
+
+void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBZ_32_IMM(CLAMP_BITS(offset, 19), cmp.idx));
 }
-void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
-  aarch64_emit(emitter, CBNZ_32_IMM(offset, cmp.idx));
+void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBNZ_32_IMM(CLAMP_BITS(offset, 19), cmp.idx));
 }
-void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
   aarch64_emit(emitter, CBZ_64_IMM(offset, cmp.idx));
 }
 
-void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
-  aarch64_emit(emitter, CBNZ_64_IMM(offset, cmp.idx));
+void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19), "offset too big for branch instruction!");
+  aarch64_emit(emitter, CBNZ_64_IMM(CLAMP_BITS(offset, 19), cmp.idx));
 }
 
-void aarch64_emit_b(struct aarch64_emitter *emitter, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
-  aarch64_emit(emitter, B(offset));
+void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
+  aarch64_emit(emitter, B(CLAMP_BITS(offset, 26)));
 }
 
-void aarch64_emit_bl(struct aarch64_emitter *emitter, unsigned offset) {
-  invariant_assert(FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
-  aarch64_emit(emitter, BL(offset));
+void aarch64_emit_bl(struct aarch64_emitter *emitter, signed offset) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 26), "offset too big for branch instruction!");
+  aarch64_emit(emitter, BL(CLAMP_BITS(offset, 26)));
 }

@@ -1,5 +1,6 @@
 #include "alloc.h"
 #include "util.h"
+#include "log.h"
 
 #define BLOCK_SIZE 4096 * 16
 
@@ -69,6 +70,7 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   struct alloc_metadata *metadata = ((struct alloc_metadata *)ptr) - 1;
   void *new = arena_alloc(allocator, size);
 
+  debug("realloc copying %zu", metadata->size);
   memcpy(new, ptr, metadata->size);
   return new;
 }

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdnoreturn.h>
 #include <string.h>
 
@@ -17,7 +18,7 @@
 #define ARR_LENGTH(a) sizeof((a)) / sizeof((a)[0])
 
 static inline unsigned long tzcnt(unsigned long l) {
-#if defined(__has_builtin) && __has_builtin (__builtin_clz)
+#if defined(__has_builtin) && __has_builtin(__builtin_clz)
   return __builtin_ctz(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clz`");
@@ -25,47 +26,56 @@ static inline unsigned long tzcnt(unsigned long l) {
 }
 
 static inline unsigned long lzcnt(unsigned long l) {
-#if defined(__has_builtin) && __has_builtin (__builtin_clz)
+#if defined(__has_builtin) && __has_builtin(__builtin_clz)
   return __builtin_clz(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clz`");
 #endif
 }
 
+#define FMTPRINT(file, message, format)                                        \
+  do {                                                                         \
+    va_list v;                                                                 \
+    va_start(v, format);                                                       \
+    fprintf(file, message);                                                    \
+    vfprintf(file, format, v);                                                 \
+    fprintf(file, "\n");                                                       \
+    va_end(v);                                                                 \
+  } while (0);
 
-[[noreturn]] static inline void todo(const char *msg) {
-  fprintf(stderr, "`todo` hit, program exiting: %s\n", msg);
+[[noreturn]] static inline void todo(const char *msg, ...) {
+  FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
 }
 
-[[noreturn]] static inline void unreachable(const char *msg) {
-  fprintf(stderr, "`unreachable` hit, program exiting: %s\n", msg);
+[[noreturn]] static inline void unreachable(const char *msg, ...) {
+  FMTPRINT(stderr, "`unreachable` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
 }
 
-[[noreturn]] static inline void bug(const char *msg) {
-  fprintf(stderr, "`bug` hit, program exiting: %s\n", msg);
+[[noreturn]] static inline void bug(const char *msg, ...) {
+  FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
 }
 
 // present in all mode, always causes program exit if fails
-static inline void invariant_assert(bool b, const char *msg) {
+static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
-    fprintf(stderr, "invariant_assertion failed, program exiting: %s\n", msg);
+    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
     raise(SIGINT);
     exit(-1);
   }
 }
 
 #if NDEBUG
-static inline void debug_assert(bool, const char *) {}
+static inline void debug_assert(bool, const char *, ...) {}
 #else
-static inline void debug_assert(bool b, const char *msg) {
+static inline void debug_assert(bool b, const char *msg, ...) {
   if (!b) {
-    fprintf(stderr, "debug_assertion failed, program exiting: %s\n", msg);
+    FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
     raise(SIGINT);
     exit(-1);
   }
