@@ -1,6 +1,7 @@
 #include "alloc.h"
-#include "util.h"
+
 #include "log.h"
+#include "util.h"
 
 #define BLOCK_SIZE 4096 * 16
 
@@ -14,7 +15,7 @@ struct arena_allocator {
 // TODO: use this metadata to walk on free
 
 struct alloc_metadata {
-  struct arena* arena;
+  struct arena *arena;
   // the size NOT including this metadata
   size_t size;
 };
@@ -65,7 +66,7 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   if (!ptr) {
     return arena_alloc(allocator, size);
   }
-  
+
   // TODO: make this actually try to not realloc
   struct alloc_metadata *metadata = ((struct alloc_metadata *)ptr) - 1;
   void *new = arena_alloc(allocator, size);
@@ -122,7 +123,7 @@ bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
     metadata->size = size;
 
     *allocation = metadata + 1;
-    
+
     arena->pos += adj_size;
     return true;
   }
@@ -131,8 +132,11 @@ bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
 }
 
 struct arena new_arena(struct arena_allocator *allocator) {
-  struct arena arena = {
-      .allocator = allocator, .next = NULL, .block = nonnull_malloc(BLOCK_SIZE), .pos = 0, .size = BLOCK_SIZE};
+  struct arena arena = {.allocator = allocator,
+                        .next = NULL,
+                        .block = nonnull_malloc(BLOCK_SIZE),
+                        .pos = 0,
+                        .size = BLOCK_SIZE};
 
   return arena;
 }

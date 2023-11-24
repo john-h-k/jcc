@@ -2,6 +2,7 @@
 #define LINKER_H
 
 #include "alloc.h"
+
 #include <stdlib.h>
 
 struct link_args {

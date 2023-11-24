@@ -13,42 +13,23 @@
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)(((opc) << 30) | (0b011 << 27) | ((V) << 26) | ((imm19) << 5) | (Rt))
-  
-#define LDR_STR_IMM_POST_INDEX(size, VR, opc, imm9, Rn, Rt) (uint32_t)( \
-  ((size) << 30) \
-  | (0b111 << 27) \
-  | ((VR) << 26) \
-  | ((opc) << 22) \
-  | ((imm9) << 12) \
-  | (0b01 << 10) \
-  | ((Rn) << 5) \
-  | (Rt) \
-)
 
-#define LDR_STR_IMM_PRE_INDEX(size, VR, opc, imm9, Rn, Rt) (uint32_t)( \
-  ((size) << 30) \
-  | (0b111 << 27) \
-  | ((VR) << 26) \
-  | ((opc) << 22) \
-  | ((imm9) << 12) \
-  | (0b11 << 10) \
-  | ((Rn) << 5) \
-  | (Rt) \
-)
+#define LDR_STR_IMM_POST_INDEX(size, VR, opc, imm9, Rn, Rt)                    \
+  (uint32_t)(((size) << 30) | (0b111 << 27) | ((VR) << 26) | ((opc) << 22) |   \
+             ((imm9) << 12) | (0b01 << 10) | ((Rn) << 5) | (Rt))
 
-#define LDR_STR_IMM_UNSIGNED(size, VR, opc, imm12, Rn, Rt) (uint32_t)( \
-  ((size) << 30) \
-  | (0b111 << 27) \
-  | ((VR) << 26) \
-  | (0b01 << 24) \
-  | ((opc) << 22) \
-  | ((imm12) << 10) \
-  | ((Rn) << 5) \
-  | (Rt) \
-)
+#define LDR_STR_IMM_PRE_INDEX(size, VR, opc, imm9, Rn, Rt)                     \
+  (uint32_t)(((size) << 30) | (0b111 << 27) | ((VR) << 26) | ((opc) << 22) |   \
+             ((imm9) << 12) | (0b11 << 10) | ((Rn) << 5) | (Rt))
 
-#define STR_32_IMM_UNSIGNED(imm12, Rn, Rt) LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b00, imm12, Rn, Rt)
-#define LDR_32_IMM_UNSIGNED(imm12, Rn, Rt) LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b01, imm12, Rn, Rt)
+#define LDR_STR_IMM_UNSIGNED(size, VR, opc, imm12, Rn, Rt)                     \
+  (uint32_t)(((size) << 30) | (0b111 << 27) | ((VR) << 26) | (0b01 << 24) |    \
+             ((opc) << 22) | ((imm12) << 10) | ((Rn) << 5) | (Rt))
+
+#define STR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b00, imm12, Rn, Rt)
+#define LDR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b01, imm12, Rn, Rt)
 
 /* Register moves */
 
@@ -63,7 +44,6 @@
 #define MOVN_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b00, hw, imm16, Rd)
 #define MOVZ_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b10, hw, imm16, Rd)
 #define MOVK_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b11, hw, imm16, Rd)
-
 
 /* Arithmetic & logical operations (Immediate) */
 
@@ -88,25 +68,34 @@
 #define ANDS_64_IMM(immr, imms, Rn, Rd)                                        \
   LOGICAL_IMM(0b1, 0b11, 0b0, immr, imms, Rn, Rd)
 
-#define ADD_SUB_IMM_WITH_TAGS(sf, op, S, uimm6, op3, uimm4, Rn, Rd)                            \
-  (uint32_t)(((sf) << 31) | ((op) << 30) | ((S) << 29) | (0b1000110 << 22) | ((uimm6) << 16) |   \
-             ((op3) << 14) | ((uimm4) << 10) | ((Rn) << 5) | (Rd))
+#define ADD_SUB_IMM_WITH_TAGS(sf, op, S, uimm6, op3, uimm4, Rn, Rd)            \
+  (uint32_t)(((sf) << 31) | ((op) << 30) | ((S) << 29) | (0b1000110 << 22) |   \
+             ((uimm6) << 16) | ((op3) << 14) | ((uimm4) << 10) | ((Rn) << 5) | \
+             (Rd))
 
-#define ADD_SUB_IMM(sf, op, S, sh, imm12, Rn, Rd)                            \
-  (uint32_t)(((sf) << 31) | ((op) << 30) | ((S) << 29) | (0b100010 << 23) | ((sh) << 22) |   \
-             ((imm12) << 10) | ((Rn) << 5) | (Rd))
+#define ADD_SUB_IMM(sf, op, S, sh, imm12, Rn, Rd)                              \
+  (uint32_t)(((sf) << 31) | ((op) << 30) | ((S) << 29) | (0b100010 << 23) |    \
+             ((sh) << 22) | ((imm12) << 10) | ((Rn) << 5) | (Rd))
 
-#define ADD_32_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b0, 0b0, 0b0, sh, imm12, Rn, Rd)
-#define ADDS_32_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b0, 0b0, 0b1, sh, imm12, Rn, Rd)
+#define ADD_32_IMM(sh, imm12, Rn, Rd)                                          \
+  ADD_SUB_IMM(0b0, 0b0, 0b0, sh, imm12, Rn, Rd)
+#define ADDS_32_IMM(sh, imm12, Rn, Rd)                                         \
+  ADD_SUB_IMM(0b0, 0b0, 0b1, sh, imm12, Rn, Rd)
 
-#define SUB_32_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b0, 0b1, 0b0, sh, imm12, Rn, Rd)
-#define SUBS_32_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b0, 0b1, 0b1, sh, imm12, Rn, Rd)
+#define SUB_32_IMM(sh, imm12, Rn, Rd)                                          \
+  ADD_SUB_IMM(0b0, 0b1, 0b0, sh, imm12, Rn, Rd)
+#define SUBS_32_IMM(sh, imm12, Rn, Rd)                                         \
+  ADD_SUB_IMM(0b0, 0b1, 0b1, sh, imm12, Rn, Rd)
 
-#define ADD_64_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b1, 0b0, 0b0, sh, imm12, Rn, Rd)
-#define ADDS_64_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b1, 0b0, 0b1, sh, imm12, Rn, Rd)
+#define ADD_64_IMM(sh, imm12, Rn, Rd)                                          \
+  ADD_SUB_IMM(0b1, 0b0, 0b0, sh, imm12, Rn, Rd)
+#define ADDS_64_IMM(sh, imm12, Rn, Rd)                                         \
+  ADD_SUB_IMM(0b1, 0b0, 0b1, sh, imm12, Rn, Rd)
 
-#define SUB_64_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b1, 0b1, 0b0, sh, imm12, Rn, Rd)
-#define SUBS_64_IMM(sh, imm12, Rn, Rd) ADD_SUB_IMM(0b1, 0b1, 0b1, sh, imm12, Rn, Rd)
+#define SUB_64_IMM(sh, imm12, Rn, Rd)                                          \
+  ADD_SUB_IMM(0b1, 0b1, 0b0, sh, imm12, Rn, Rd)
+#define SUBS_64_IMM(sh, imm12, Rn, Rd)                                         \
+  ADD_SUB_IMM(0b1, 0b1, 0b1, sh, imm12, Rn, Rd)
 
 /* Arithmetic & logical operations (Register) */
 
@@ -175,14 +164,15 @@
 #define BRANCH(op0, op1, op2)                                                  \
   (uint32_t)(((op0) << 29) | (0b101 << 26) | ((op1) << 5) | (op2))
 
-#define BRANCH_IMM(op, imm26) \
+#define BRANCH_IMM(op, imm26)                                                  \
   (uint32_t)(((op) << 31) | (0b00101 << 26) | (imm26))
 
 #define B(imm26) BRANCH_IMM(0b0, imm26)
 #define BL(imm26) BRANCH_IMM(0b1, imm26)
 
-#define CMP_AND_BRANCH_IMM(sf, op, imm19, Rt) (uint32_t) \
-  (((sf) << 31) | (0b011010 << 25) | ((op) << 24) | ((imm19) << 5) | (Rt))
+#define CMP_AND_BRANCH_IMM(sf, op, imm19, Rt)                                  \
+  (uint32_t)(((sf) << 31) | (0b011010 << 25) | ((op) << 24) | ((imm19) << 5) | \
+             (Rt))
 
 #define CBZ_32_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b0, 0b0, imm19, Rt)
 #define CBNZ_32_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b0, 0b1, imm19, Rt)
@@ -196,4 +186,3 @@
 #define RET(Rn) UNCOND_BRANCH_REG(0b0010, 0b11111, 0b000000, Rn, 00000)
 
 #endif
-

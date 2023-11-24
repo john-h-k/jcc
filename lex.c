@@ -1,9 +1,10 @@
-#include <ctype.h>
+#include "lex.h"
 
 #include "alloc.h"
-#include "lex.h"
 #include "log.h"
 #include "util.h"
+
+#include <ctype.h>
 
 struct lexer {
   struct arena_allocator *arena;
@@ -126,7 +127,7 @@ bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
     if (lexer->text[cur_pos->idx] == '\n') {
       next_line(cur_pos);
     } else if (lexer->text[cur_pos->idx] == '*' &&
-        lexer->text[cur_pos->idx + 1] == '/') {
+               lexer->text[cur_pos->idx + 1] == '/') {
       // found it!
       next_col(cur_pos);
       next_col(cur_pos);

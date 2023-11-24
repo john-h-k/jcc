@@ -1,17 +1,19 @@
 #include "compiler.h"
-#include "aarch64/lower.h"
+
 #include "aarch64/emit.h"
+#include "aarch64/lower.h"
 #include "alloc.h"
 #include "disasm.h"
 #include "ir/build.h"
+#include "ir/eliminate_phi.h"
 #include "lex.h"
 #include "log.h"
-#include "macos/mach-o.h"
-#include "ir/eliminate_phi.h"
-#include "parse.h"
 #include "lsra.h"
+#include "macos/mach-o.h"
+#include "parse.h"
 #include "util.h"
 #include "vector.h"
+
 #include <stdio.h>
 
 struct compiler {
@@ -62,7 +64,8 @@ enum compile_result compile(struct compiler *compiler) {
 
   disable_log();
 
-  struct vector *compiled_functions = vector_create(sizeof(struct compiled_function));
+  struct vector *compiled_functions =
+      vector_create(sizeof(struct compiled_function));
   struct vector *symbols = vector_create(sizeof(struct symbol));
   size_t total_size = 0;
 
@@ -104,7 +107,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("REGALLOC");
 
-      struct reg_info aarch64_reg_info = { .num_regs = 18 };
+      struct reg_info aarch64_reg_info = {.num_regs = 18};
       register_alloc(ir, aarch64_reg_info);
 
       BEGIN_STAGE("ELIM PHI");
@@ -114,7 +117,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       disable_log();
     }
-    
+
     struct compiled_function func;
     {
       if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_EMIT)) {
@@ -161,7 +164,6 @@ enum compile_result compile(struct compiler *compiler) {
 
   vector_free(&compiled_functions);
   vector_free(&symbols);
-
 
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_ASM)) {
     enable_log();

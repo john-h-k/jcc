@@ -6,6 +6,7 @@
 #include "parse.h"
 #include "util.h"
 #include "vector.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -112,7 +113,11 @@ void parse_arg_error(const char *fmt, ...) {
 }
 
 bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
-  #define LOG_FLAG(name, str) if (strcmp(flag, str) == 0) { *flags |= name; return true; }
+#define LOG_FLAG(name, str)                                                    \
+  if (strcmp(flag, str) == 0) {                                                \
+    *flags |= name;                                                            \
+    return true;                                                               \
+  }
 
   LOG_FLAG(COMPILE_LOG_FLAGS_PARSE, "parse");
   LOG_FLAG(COMPILE_LOG_FLAGS_IR, "ir");
@@ -130,7 +135,7 @@ enum parse_args_result parse_args(int argc, char **argv,
                                   const char ***sources, size_t *num_sources) {
 
   memset(args, 0, sizeof(*args));
-  
+
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
 

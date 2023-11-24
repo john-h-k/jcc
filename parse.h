@@ -30,8 +30,12 @@ enum well_known_ty {
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 };
 
-#define WKT_MAKE_SIGNED(wkt) ((wkt) == WELL_KNOWN_TY_UNSIGNED_CHAR ? WELL_KNOWN_TY_SIGNED_CHAR : ((wkt) & ~1))
-#define WKT_MAKE_UNSIGNED(wkt) ((wkt) == WELL_KNOWN_TY_SIGNED_CHAR ? WELL_KNOWN_TY_UNSIGNED_CHAR : ((wkt) | 1))
+#define WKT_MAKE_SIGNED(wkt)                                                   \
+  ((wkt) == WELL_KNOWN_TY_UNSIGNED_CHAR ? WELL_KNOWN_TY_SIGNED_CHAR            \
+                                        : ((wkt) & ~1))
+#define WKT_MAKE_UNSIGNED(wkt)                                                 \
+  ((wkt) == WELL_KNOWN_TY_SIGNED_CHAR ? WELL_KNOWN_TY_UNSIGNED_CHAR            \
+                                      : ((wkt) | 1))
 
 // signed types have odd values in the enum
 #define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
@@ -40,7 +44,8 @@ enum well_known_ty {
  * `<keyword>` */
 
 enum ast_tyref_ty {
-  /* Used for variables that were used without declaration and similar. Usually an error */
+  /* Used for variables that were used without declaration and similar. Usually
+     an error */
   AST_TYREF_TY_UNKNOWN,
   AST_TYREF_TY_WELL_KNOWN,
   // AST_TYREF_TY_TYPEDEF_NAME,

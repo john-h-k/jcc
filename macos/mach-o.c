@@ -1,6 +1,8 @@
 #include "mach-o.h"
+
 #include "../log.h"
 #include "../util.h"
+
 #include <mach-o/loader.h>
 #include <mach/machine.h>
 #include <stdio.h>

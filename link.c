@@ -1,9 +1,11 @@
 #include "link.h"
+
 #include "alloc.h"
 #include "log.h"
 #include "util.h"
-#include <string.h>
+
 #include <stdlib.h>
+#include <string.h>
 
 enum link_result link_objects(const struct link_args *args) {
   struct arena_allocator *arena;

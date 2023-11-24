@@ -1,4 +1,5 @@
 #include "lower.h"
+
 #include "../ir/build.h"
 #include "../util.h"
 
@@ -29,26 +30,40 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 
   // c = a / b
 
-  debug("op %zu, pred %zu, succ %zu", op->id, op->pred ? op->pred->id : SIZE_T_MAX, op->succ ? op->succ->id : SIZE_T_MAX);
+  debug("op %zu, pred %zu, succ %zu", op->id,
+        op->pred ? op->pred->id : SIZE_T_MAX,
+        op->succ ? op->succ->id : SIZE_T_MAX);
 
-  struct ir_op *div = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
+  struct ir_op *div =
+      insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
   div->binary_op.ty = div_ty;
   div->binary_op.lhs = op->binary_op.lhs;
   div->binary_op.rhs = op->binary_op.rhs;
 
   // y = c * b
-  debug("op %zu, pred %zu, succ %zu", op->id, op->pred ? op->pred->id : SIZE_T_MAX, op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id, div->pred ? div->pred->id : SIZE_T_MAX, div->succ ? div->succ->id : SIZE_T_MAX);
+  debug("op %zu, pred %zu, succ %zu", op->id,
+        op->pred ? op->pred->id : SIZE_T_MAX,
+        op->succ ? op->succ->id : SIZE_T_MAX);
+  debug("div %zu, pred %zu, succ %zu", div->id,
+        div->pred ? div->pred->id : SIZE_T_MAX,
+        div->succ ? div->succ->id : SIZE_T_MAX);
 
-  struct ir_op *mul = insert_after_ir_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
+  struct ir_op *mul =
+      insert_after_ir_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
   mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
   mul->binary_op.lhs = div;
   mul->binary_op.rhs = op->binary_op.rhs;
 
   // x = a - y
-  debug("op %zu, pred %zu, succ %zu", op->id, op->pred ? op->pred->id : SIZE_T_MAX, op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id, div->pred ? div->pred->id : SIZE_T_MAX, div->succ ? div->succ->id : SIZE_T_MAX);
-  debug("mul %zu, pred %zu, succ %zu", mul->id, mul->pred ? mul->pred->id : SIZE_T_MAX, mul->succ ? mul->succ->id : SIZE_T_MAX);
+  debug("op %zu, pred %zu, succ %zu", op->id,
+        op->pred ? op->pred->id : SIZE_T_MAX,
+        op->succ ? op->succ->id : SIZE_T_MAX);
+  debug("div %zu, pred %zu, succ %zu", div->id,
+        div->pred ? div->pred->id : SIZE_T_MAX,
+        div->succ ? div->succ->id : SIZE_T_MAX);
+  debug("mul %zu, pred %zu, succ %zu", mul->id,
+        mul->pred ? mul->pred->id : SIZE_T_MAX,
+        mul->succ ? mul->succ->id : SIZE_T_MAX);
 
   // Now we replace `op` with `sub` (as `sub` is the op that actually produces
   // the value) this preserves links, as other ops pointing to the div will now
@@ -59,9 +74,15 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.lhs = op->binary_op.lhs;
   op->binary_op.rhs = mul;
 
-  debug("op %zu, pred %zu, succ %zu", op->id, op->pred ? op->pred->id : SIZE_T_MAX, op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id, div->pred ? div->pred->id : SIZE_T_MAX, div->succ ? div->succ->id : SIZE_T_MAX);
-  debug("mul %zu, pred %zu, succ %zu", mul->id, mul->pred ? mul->pred->id : SIZE_T_MAX, mul->succ ? mul->succ->id : SIZE_T_MAX);
+  debug("op %zu, pred %zu, succ %zu", op->id,
+        op->pred ? op->pred->id : SIZE_T_MAX,
+        op->succ ? op->succ->id : SIZE_T_MAX);
+  debug("div %zu, pred %zu, succ %zu", div->id,
+        div->pred ? div->pred->id : SIZE_T_MAX,
+        div->succ ? div->succ->id : SIZE_T_MAX);
+  debug("mul %zu, pred %zu, succ %zu", mul->id,
+        mul->pred ? mul->pred->id : SIZE_T_MAX,
+        mul->succ ? mul->succ->id : SIZE_T_MAX);
 }
 
 void lower(struct ir_builder *func) {

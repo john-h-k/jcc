@@ -1,4 +1,5 @@
 #include "emit.h"
+
 #include "emitter.h"
 #include "isa.h"
 
@@ -91,7 +92,8 @@ void lower_binary_op(struct emit_state *state, struct ir_op *op) {
 }
 
 const char *mangle(struct arena_allocator *arena, const char *name) {
-  char *dest = arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+  char *dest =
+      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
   dest[0] = '_';
   strcpy(dest + 1, name);
@@ -103,8 +105,9 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
                size_t stack_size);
 
 struct compiled_function emit(struct ir_builder *func) {
-  // the first step of emitting is that we need to ensure the `function_offset` values are correct for all BBs
-  // as they may have been broken during various opt/transforming passes
+  // the first step of emitting is that we need to ensure the `function_offset`
+  // values are correct for all BBs as they may have been broken during various
+  // opt/transforming passes
   {
     size_t opc = 0;
 
@@ -125,7 +128,6 @@ struct compiled_function emit(struct ir_builder *func) {
 
       basicblock = basicblock->succ;
     }
-    
   }
 
   struct aarch64_emitter *emitter;
@@ -176,9 +178,10 @@ unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
 
 void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
                size_t stack_size) {
-  // NOTE: it is important, for branch offset calculations, that each IR operation emits exactly one instruction
-  // any expansion needed other than this should have occured in lowering
-  
+  // NOTE: it is important, for branch offset calculations, that each IR
+  // operation emits exactly one instruction any expansion needed other than
+  // this should have occured in lowering
+
   struct ir_op *op = stmt->first;
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
@@ -186,7 +189,8 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     case IR_OP_TY_MOV: {
       size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
       size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
-      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src), get_reg_for_idx(dest));
+      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
+                          get_reg_for_idx(dest));
       break;
     }
     case IR_OP_TY_PHI: {
@@ -212,17 +216,22 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     }
     case IR_OP_TY_BR_COND: {
       // we jump to the end of the block + skip this instruction
-      struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
+      struct ir_basicblock *true_target =
+          op->stmt->basicblock->split.true_target;
       (void)true_target;
-      struct ir_basicblock *false_target = op->stmt->basicblock->split.false_target;
+      struct ir_basicblock *false_target =
+          op->stmt->basicblock->split.false_target;
 
-      size_t offset = false_target->function_offset - aarch64_emitted_count(state->emitter);
-      aarch64_emit_cbz_32_imm(state->emitter, get_reg_for_idx(op->br_cond.cond->reg), offset);
+      size_t offset =
+          false_target->function_offset - aarch64_emitted_count(state->emitter);
+      aarch64_emit_cbz_32_imm(state->emitter,
+                              get_reg_for_idx(op->br_cond.cond->reg), offset);
       break;
     }
     case IR_OP_TY_BR: {
       struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-      size_t offset = target->function_offset - aarch64_emitted_count(state->emitter);
+      size_t offset =
+          target->function_offset - aarch64_emitted_count(state->emitter);
       aarch64_emit_b(state->emitter, offset);
       break;
     }
