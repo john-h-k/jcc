@@ -651,9 +651,10 @@ struct ir_basicblock *build_ir_for_if(struct ir_builder *irb,
 
   // basic block for *after* if body
   struct ir_basicblock *after_if_basicblock;
-  if (irb->last->first) {
+  if (true || irb->last->first) {
     after_if_basicblock = alloc_ir_basicblock(irb);
   } else {
+    // FIXME: does not currently work
     // existing BB is empty, we can use it
     // this makes nested if/else statements nicer as they all target the same
     // end BB rather than a series of empty ones
@@ -669,11 +670,13 @@ struct ir_basicblock *build_ir_for_if(struct ir_builder *irb,
 
   build_ir_for_stmt(irb, if_basicblock, if_stmt->body);
 
-  // we add a redundant branch to keep the nice property that all BBs end in a
-  // branch
-  struct ir_op *br = alloc_ir_op(irb, if_basicblock->last);
-  br->ty = IR_OP_TY_BR;
-  br->var_ty = IR_OP_VAR_TY_NONE;
+  if (!op_is_branch(if_basicblock->last->last->ty)) {
+    // we add a redundant branch to keep the nice property that all BBs end in a
+    // branch
+    struct ir_op *br = alloc_ir_op(irb, if_basicblock->last);
+    br->ty = IR_OP_TY_BR;
+    br->var_ty = IR_OP_VAR_TY_NONE;
+  }
 
   make_basicblock_split(irb, pre_if_basicblock, if_basicblock,
                         after_if_basicblock);

@@ -70,6 +70,10 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
   }
 }
 
+static inline void breakpoint() {
+    raise(SIGINT);
+}
+
 #if NDEBUG
 static inline void debug_assert(bool, const char *, ...) {}
 #else
