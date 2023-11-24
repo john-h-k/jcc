@@ -1,8 +1,8 @@
-#ifndef IR_H
-#define IR_H
+#ifndef IR_BUILD_H
+#define IR_BUILD_H
 
-#include "parse.h"
-#include "var_table.h"
+#include "../parse.h"
+#include "../var_table.h"
 #include <stdlib.h>
 
 enum ir_op_ty {

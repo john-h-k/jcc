@@ -1,7 +1,7 @@
 #ifndef AARCH64_LOWER_H
 #define AARCH64_LOWER_H
 
-#include "../ir.h"
+#include "../ir/build.h"
 
 // performs platform specific lowering transformations to the IR
 void lower(struct ir_builder *func);

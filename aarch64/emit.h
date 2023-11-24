@@ -1,7 +1,7 @@
 #ifndef AARCH64_EMIT_H
 #define AARCH64_EMIT_H
 
-#include "../ir.h"
+#include "../ir/build.h"
 #include "../lsra.h"
 
 struct compiled_function {
