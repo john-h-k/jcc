@@ -1,11 +1,12 @@
 #!/bin/bash
 
 format() {
-  if [ $(git status --short | wc -l) != 0 ]; then
-    echo "cannot format when changes are present! commit/stash/discard first"
-    exit -1
-  fi
+  # if [ $(git status --short | wc -l) != 0 ]; then
+  #   echo "cannot format when changes are present! commit/stash/discard first"
+  #   exit -1
+  # fi
 
+  echo "Formatting..."
   fd '.*\.[hc]' . -x clang-format -style=file -i
 }
 
