@@ -1,4 +1,5 @@
 #include "var_table.h"
+
 #include "vector.h"
 
 struct var_table var_table_create(struct parser *parser) {
@@ -21,11 +22,11 @@ struct var_table_entry *create_entry(struct var_table *var_table,
 }
 
 // to show all entries
-  // size_t num_entries = vector_length(var_table->entries);
-  // for (size_t i = 0; i < num_entries; i++) {
-  //   struct var_table_entry *entry = vector_get(var_table->entries, i);
-  //   err("%s @ %d", entry->name, entry->scope);
-  // }
+// size_t num_entries = vector_length(var_table->entries);
+// for (size_t i = 0; i < num_entries; i++) {
+//   struct var_table_entry *entry = vector_get(var_table->entries, i);
+//   err("%s @ %d", entry->name, entry->scope);
+// }
 
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
                                             const struct ast_var *var) {
@@ -34,7 +35,7 @@ struct var_table_entry *get_or_create_entry(struct var_table *var_table,
   if (entry) {
     return entry;
   }
-  
+
   const char *name = identifier_str(var_table->parser, &var->identifier);
   trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
         var->scope);
@@ -43,7 +44,7 @@ struct var_table_entry *get_or_create_entry(struct var_table *var_table,
 }
 
 struct var_table_entry *get_entry(struct var_table *var_table,
-                                            const struct ast_var *var) {
+                                  const struct ast_var *var) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
@@ -70,5 +71,5 @@ struct var_table_entry *get_entry(struct var_table *var_table,
   }
 
   trace("did not find entry");
-  return NULL;  
+  return NULL;
 }

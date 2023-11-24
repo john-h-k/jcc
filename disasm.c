@@ -1,7 +1,9 @@
 #include "disasm.h"
-#include <stdlib.h>
-#include "util.h"
+
 #include "log.h"
+#include "util.h"
+
+#include <stdlib.h>
 
 void debug_disasm(const char *filename) {
   const char COMMAND[] = "objdump -d ";

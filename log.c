@@ -2,54 +2,58 @@
 
 static bool LOG_ENABLED = false;
 
-void enable_log() {
-  LOG_ENABLED = true;
-}
+void enable_log() { LOG_ENABLED = true; }
 
-void disable_log() {
-  LOG_ENABLED = false;
-}
+void disable_log() { LOG_ENABLED = false; }
 
 #ifdef NLOG
 #define DEF_LOG_FN(NAME, _PREFIX)                                              \
-  void NAME(const char *format, ...) { (void)format; } \
-  void NAME ## sl(const char *format, ...) { (void)format; } \
-  void f ## NAME(const char *format, ...) { (void)format; } \
-  void f ## NAME ## sl(const char *format, ...) { (void)format; }
+  void NAME(const char *format, ...) { (void)format; }                         \
+  void NAME##sl(const char *format, ...) { (void)format; }                     \
+  void f##NAME(const char *format, ...) { (void)format; }                      \
+  void f##NAME##sl(const char *format, ...) { (void)format; }
 #else
 #define DEF_LOG_FN(NAME, PREFIX)                                               \
-  void NAME(const char *format, ...) {                           \
-    if (!LOG_ENABLED) { return; }                                                      \
+  void NAME(const char *format, ...) {                                         \
+    if (!LOG_ENABLED) {                                                        \
+      return;                                                                  \
+    }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, "%s" PR_RESET, PREFIX);                                  \
+    fprintf(stderr, "%s" PR_RESET, PREFIX);                                    \
     vfprintf(stderr, format, v);                                               \
     fprintf(stderr, "\n");                                                     \
     va_end(v);                                                                 \
-  } \
-  void NAME ## sl(const char *format, ...) {                           \
-    if (!LOG_ENABLED) { return; }                                                      \
+  }                                                                            \
+  void NAME##sl(const char *format, ...) {                                     \
+    if (!LOG_ENABLED) {                                                        \
+      return;                                                                  \
+    }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, "%s" PR_RESET, PREFIX);                                  \
+    fprintf(stderr, "%s" PR_RESET, PREFIX);                                    \
     vfprintf(stderr, format, v);                                               \
     va_end(v);                                                                 \
-  } \
-  void f ## NAME(FILE *file, const char *format, ...) {                           \
-    if (!LOG_ENABLED) { return; }                                                      \
+  }                                                                            \
+  void f##NAME(FILE *file, const char *format, ...) {                          \
+    if (!LOG_ENABLED) {                                                        \
+      return;                                                                  \
+    }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(file, "%s" PR_RESET, PREFIX);                                  \
-    vfprintf(file, format, v);                                               \
-    fprintf(file, "\n");                                                     \
+    fprintf(file, "%s" PR_RESET, PREFIX);                                      \
+    vfprintf(file, format, v);                                                 \
+    fprintf(file, "\n");                                                       \
     va_end(v);                                                                 \
-  } \
-  void f ## NAME ## sl(FILE *file, const char *format, ...) {                           \
-    if (!LOG_ENABLED) { return; }                                                      \
+  }                                                                            \
+  void f##NAME##sl(FILE *file, const char *format, ...) {                      \
+    if (!LOG_ENABLED) {                                                        \
+      return;                                                                  \
+    }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(file, "%s" PR_RESET, PREFIX);                                  \
-    vfprintf(file, format, v);                                               \
+    fprintf(file, "%s" PR_RESET, PREFIX);                                      \
+    vfprintf(file, format, v);                                                 \
     va_end(v);                                                                 \
   }
 #endif
@@ -70,4 +74,3 @@ DEF_LOG_FN(debug, PR_WHITE "DEBUG: ")
 DEF_LOG_FN(trace, PR_WHITE "TRACE: ")
 
 DEF_LOG_FN(slog, "")
-

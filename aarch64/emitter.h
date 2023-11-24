@@ -42,20 +42,20 @@ void aarch64_emit_add_32(struct aarch64_emitter *emitter,
 /* Add & subtract (immediate) */
 
 void aarch64_emit_sub_32_imm(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, size_t imm,
-                         struct aarch64_reg dest);
+                             struct aarch64_reg source, size_t imm,
+                             struct aarch64_reg dest);
 
 void aarch64_emit_add_32_imm(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, size_t imm,
-                         struct aarch64_reg dest);
+                             struct aarch64_reg source, size_t imm,
+                             struct aarch64_reg dest);
 
 void aarch64_emit_sub_64_imm(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, size_t imm,
-                         struct aarch64_reg dest);
+                             struct aarch64_reg source, size_t imm,
+                             struct aarch64_reg dest);
 
 void aarch64_emit_add_64_imm(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, size_t imm,
-                         struct aarch64_reg dest);
+                             struct aarch64_reg source, size_t imm,
+                             struct aarch64_reg dest);
 
 /* Multiply & multiply-add */
 
@@ -114,10 +114,14 @@ size_t aarch64_emitted_count(struct aarch64_emitter *emitter);
 void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset);
 void aarch64_emit_bl(struct aarch64_emitter *emitter, signed offset);
 
-void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset);
-void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset);
-void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset);
-void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter, struct aarch64_reg cmp, signed offset);
+void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg cmp, signed offset);
+void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter,
+                              struct aarch64_reg cmp, signed offset);
+void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg cmp, signed offset);
+void aarch64_emit_cnbz_64_imm(struct aarch64_emitter *emitter,
+                              struct aarch64_reg cmp, signed offset);
 
 void aarch64_emit_ret(struct aarch64_emitter *emitter);
 

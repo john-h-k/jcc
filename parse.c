@@ -1,4 +1,5 @@
 #include "parse.h"
+
 #include "alloc.h"
 #include "lex.h"
 #include "log.h"
@@ -123,7 +124,6 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   if (entry) {
     var->scope = entry->scope;
   }
-  
 
   consume_token(parser->lexer, token);
 
@@ -687,7 +687,8 @@ bool parse_vardecllist(struct parser *parser,
     return false;
   }
 
-  struct ast_vardecl *new_decls = arena_alloc(parser->arena, vector_byte_size(decls));
+  struct ast_vardecl *new_decls =
+      arena_alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
 
   var_decl_list->var_ty = ty_ref;
@@ -795,7 +796,8 @@ bool parse_ifelsestmt(struct parser *parser,
     struct ast_stmt else_stmt;
     if (parse_stmt(parser, &else_stmt)) {
       if_else_stmt->condition = if_stmt.condition;
-      if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
+      if_else_stmt->body =
+          arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
       if_else_stmt->body = if_stmt.body;
       if_else_stmt->else_body =
           arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
@@ -815,8 +817,7 @@ bool parse_switchstmt(struct parser *parser,
   return false;
 }
 
-bool parse_whilestmt(struct parser *parser,
-                      struct ast_whilestmt *while_stmt) {
+bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -860,8 +861,7 @@ bool parse_whilestmt(struct parser *parser,
   return true;
 }
 
-bool parse_iterstmt(struct parser *parser,
-                      struct ast_iterstmt *iter_stmt) {
+bool parse_iterstmt(struct parser *parser, struct ast_iterstmt *iter_stmt) {
   struct ast_whilestmt while_stmt;
   if (parse_whilestmt(parser, &while_stmt)) {
     iter_stmt->ty = AST_ITERSTMT_TY_WHILE;
@@ -1195,8 +1195,7 @@ struct ast_printstate {
   void debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
 #define DEBUG_CALL(ty, val) debug_print_##ty(state, val)
 
-#define AST_PRINT_SAMELINE_Z(fmt)                                              \
-  slogsl("%*s" fmt, state->indent * 4, "")
+#define AST_PRINT_SAMELINE_Z(fmt) slogsl("%*s" fmt, state->indent * 4, "")
 #define AST_PRINT_SAMELINE(fmt, ...)                                           \
   slogsl("%*s" fmt, state->indent * 4, "", __VA_ARGS__)
 
@@ -1274,7 +1273,8 @@ DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
   AST_PRINT("VARIABLE '%s' (SCOPE=%zu)",
-            associated_text(state->parser->lexer, &var->identifier), var->scope);
+            associated_text(state->parser->lexer, &var->identifier),
+            var->scope);
 }
 
 DEBUG_FUNC(lvalue, lvalue) {
@@ -1445,7 +1445,7 @@ DEBUG_FUNC(ifelsestmt, if_else_stmt) {
   AST_PRINTZ("ELSE");
   DEBUG_CALL(stmt, if_else_stmt->else_body);
 }
-  
+
 DEBUG_FUNC(selectstmt, select_stmt) {
   switch (select_stmt->ty) {
   case AST_SELECTSTMT_TY_IF:

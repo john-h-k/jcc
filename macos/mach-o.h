@@ -2,6 +2,7 @@
 #define MACOS_MACH_O_H
 
 #include "../compiler.h"
+
 #include <fcntl.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>

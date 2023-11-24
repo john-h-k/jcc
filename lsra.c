@@ -1,6 +1,8 @@
 #include "lsra.h"
+
 #include "util.h"
 #include "vector.h"
+
 #include <limits.h>
 
 struct interval {
@@ -26,7 +28,8 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   interval->end = MAX(interval->end, data->num_intervals);
 
   if (interval->op) {
-    debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start, interval->end);
+    debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start,
+          interval->end);
   }
 }
 
@@ -46,18 +49,23 @@ struct ir_op *last_value_producing_op(struct ir_basicblock *basicblock) {
 
     stmt = stmt->pred;
   }
-  
-  // we now have the last op in the value's basic block that contains an interval
-  invariant_assert(last_op, "trying to assign phi lifetime for bb but couldn't find value-producing instruction in the block id %zu", basicblock->id);
 
-  return last_op; 
+  // we now have the last op in the value's basic block that contains an
+  // interval
+  invariant_assert(last_op,
+                   "trying to assign phi lifetime for bb but couldn't find "
+                   "value-producing instruction in the block id %zu",
+                   basicblock->id);
+
+  return last_op;
 }
 
 #define INTERVAL_END_OF_BASICBLOCK (SIZE_T_MAX)
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
-  data.intervals = arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
+  data.intervals =
+      arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
@@ -79,7 +87,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
         size_t start;
 
-        // special case - a phi op actually starts existing at the end of its earliest basicblock
+        // special case - a phi op actually starts existing at the end of its
+        // earliest basicblock
         if (op->ty == IR_OP_TY_PHI) {
           start = 0; // if the phi has no values
           for (size_t i = 0; i < op->phi.num_values; i++) {
@@ -92,7 +101,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
             value_interval->end = INTERVAL_END_OF_BASICBLOCK;
 
             struct interval *last_interval = &data.intervals[last_op->id];
-            
+
             interval->start = MIN(interval->start, last_interval->start);
           }
         } else {
@@ -103,10 +112,13 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         interval->start = start;
 
         if (interval->end < interval->start) {
-          interval->end = interval->start; // this ensures intervals are still valid for unused values
+          interval->end = interval->start; // this ensures intervals are still
+                                           // valid for unused values
         }
 
-        debug_assert(op->metadata == NULL, "metadata left over in op during LSRA, will be overwritten");
+        debug_assert(
+            op->metadata == NULL,
+            "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
 
         walk_op_uses(op, op_used_callback, &data);
@@ -125,7 +137,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     struct interval *interval = &data.intervals[i];
 
     if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
-      struct ir_op *last_op = last_value_producing_op(interval->op->stmt->basicblock);
+      struct ir_op *last_op =
+          last_value_producing_op(interval->op->stmt->basicblock);
       interval->end = data.intervals[last_op->id].start;
     }
   }
@@ -133,7 +146,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
-void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *active, size_t *num_active) {
+void spill_at_interval(struct interval *intervals, size_t cur_interval,
+                       size_t *active, size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
@@ -149,7 +163,8 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
         (*num_active)++;
         break;
       } else if (intervals[active[j + 1]].end > intervals[cur_interval].end) {
-        memmove(&active[j + 1], &active[j], sizeof(*active) * (*num_active - j));
+        memmove(&active[j + 1], &active[j],
+                sizeof(*active) * (*num_active - j));
         active[j] = cur_interval;
         (*num_active)++;
         break;
@@ -160,12 +175,15 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval, size_t *
   }
 }
 
-void expire_old_intervals(struct interval *intervals, struct interval *cur_interval, size_t *active, size_t *num_active, unsigned long *reg_pool) {
+void expire_old_intervals(struct interval *intervals,
+                          struct interval *cur_interval, size_t *active,
+                          size_t *num_active, unsigned long *reg_pool) {
   size_t num_expired_intervals = 0;
-  
+
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
-    // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start, interval->end);
+    // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start,
+    // interval->end);
     if (cur_interval->start <= interval->end) {
       break;
     }
@@ -176,16 +194,17 @@ void expire_old_intervals(struct interval *intervals, struct interval *cur_inter
     MARK_REG_FREE(*reg_pool, interval->op->reg);
   }
 
-  // shift the active array down 
-  
+  // shift the active array down
+
   debug("expired: %zu", num_expired_intervals);
   *num_active -= num_expired_intervals;
-  memmove(active, &active[num_expired_intervals], sizeof(*active) * (*num_active));
+  memmove(active, &active[num_expired_intervals],
+          sizeof(*active) * (*num_active));
 }
 
 int sort_interval_by_start_point(const void *a, const void *b) {
-  size_t a_start = ((struct interval*)a)->start;
-  size_t b_start = ((struct interval*)b)->start;
+  size_t a_start = ((struct interval *)a)->start;
+  size_t b_start = ((struct interval *)b)->start;
 
   if (a_start > b_start) {
     return 1;
@@ -209,13 +228,14 @@ void alloc_fixup_callback(struct ir_op **op, void *metadata) {
       (*op)->lcl_idx = data->irb->num_locals++;
       data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
-
-      struct ir_op *store = insert_after_ir_op(data->irb, *op, IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
+      struct ir_op *store = insert_after_ir_op(
+          data->irb, *op, IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
       store->store_lcl.lcl_idx = (*op)->lcl_idx;
       store->store_lcl.value = *op;
     }
-    
-    struct ir_op *load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+
+    struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
+                                             IR_OP_TY_LOAD_LCL, (*op)->var_ty);
     load->load_lcl.lcl_idx = (*op)->lcl_idx;
 
     *op = load;
@@ -232,7 +252,7 @@ void alloc_fixup(struct ir_builder *irb, struct interval_data *data) {
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        struct alloc_fixup_data metadata = { .irb = irb, .consumer = op };
+        struct alloc_fixup_data metadata = {.irb = irb, .consumer = op};
         walk_op_uses(op, alloc_fixup_callback, &metadata);
 
         op = op->succ;
@@ -265,7 +285,7 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
 
   op->metadata = NULL;
 
-  switch(op->reg) {
+  switch (op->reg) {
   case NO_REG:
     fslogsl(file, "    (UNASSIGNED)");
     break;
@@ -278,12 +298,14 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   }
 }
 
-struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info reg_info) {
+struct interval_data register_alloc_pass(struct ir_builder *irb,
+                                         struct reg_info reg_info) {
   struct interval_data data = construct_intervals(irb);
   struct interval *intervals = data.intervals;
   size_t num_intervals = data.num_intervals;
 
-  qsort(intervals, num_intervals, sizeof(*intervals), sort_interval_by_start_point);
+  qsort(intervals, num_intervals, sizeof(*intervals),
+        sort_interval_by_start_point);
 
   size_t *active = arena_alloc(irb->arena, sizeof(size_t) * reg_info.num_regs);
   size_t num_active = 0;
@@ -302,7 +324,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 
     if (!op_produces_value(interval->op->ty)) {
       // stores don't need a register
-      // TODO: this logic should be more centralised and clear, not just for this op
+      // TODO: this logic should be more centralised and clear, not just for
+      // this op
       continue;
     }
 
@@ -314,7 +337,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
       debug("reg pool: %ul", reg_pool);
       debug("reg pool free: %ul", __builtin_popcount(reg_pool));
       debug("free reg: %ul", free_reg);
-      debug_assert(free_reg < reg_info.num_regs, "reg pool unexpectedly empty!");
+      debug_assert(free_reg < reg_info.num_regs,
+                   "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
       debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op->id);
@@ -327,7 +351,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
           num_active++;
           break;
         } else if (intervals[active[j + 1]].end > intervals[i].end) {
-          memmove(&active[j + 1], &active[j], sizeof(*active) * (num_active - j));
+          memmove(&active[j + 1], &active[j],
+                  sizeof(*active) * (num_active - j));
           active[j] = i;
           num_active++;
           break;
@@ -342,7 +367,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb, struct reg_info
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   struct interval_data data = register_alloc_pass(irb, reg_info);
 
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, data.intervals);
 
   BEGIN_SUB_STAGE("SPILL HANDLING");
@@ -350,13 +376,15 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   // insert LOAD and STORE ops as needed
   alloc_fixup(irb, &data);
 
-  // can't print intervals here, as `alloc_fixup` inserted new ops which don't have valid intervals yet
+  // can't print intervals here, as `alloc_fixup` inserted new ops which don't
+  // have valid intervals yet
   debug_print_ir(irb, irb->first, NULL, NULL);
-  
+
   BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
 
   data = register_alloc_pass(irb, reg_info);
 
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals), compare_interval_id);
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        compare_interval_id);
   debug_print_ir(irb, irb->first, print_ir_intervals, NULL);
 }

@@ -19,7 +19,7 @@ enum compile_log_flags {
   COMPILE_LOG_FLAGS_ALL = -1,
 };
 
-#define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags & flag
+#define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags &flag
 
 struct compile_args {
   enum compile_target_arch target_arch;

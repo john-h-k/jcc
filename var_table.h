@@ -7,7 +7,7 @@ struct var_table_entry {
   const char *name;
   const int scope;
 
-  void* value;
+  void *value;
 };
 
 struct var_table {
@@ -21,9 +21,9 @@ struct var_table {
 
 struct var_table var_table_create(struct parser *parser);
 struct var_table_entry *create_entry(struct var_table *var_table,
-                                            const struct ast_var *var);
+                                     const struct ast_var *var);
 struct var_table_entry *get_entry(struct var_table *var_table,
-                                            const struct ast_var *var);
+                                  const struct ast_var *var);
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
                                             const struct ast_var *var);
 

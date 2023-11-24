@@ -2,10 +2,10 @@
 #define UTIL_H
 
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <stdnoreturn.h>
 #include <string.h>
 
@@ -70,9 +70,7 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
   }
 }
 
-static inline void breakpoint() {
-    raise(SIGINT);
-}
+static inline void breakpoint() { raise(SIGINT); }
 
 #if NDEBUG
 static inline void debug_assert(bool, const char *, ...) {}
