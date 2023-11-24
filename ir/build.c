@@ -1,4 +1,5 @@
 #include "build.h"
+
 #include "../alloc.h"
 #include "../compiler.h"
 #include "../lex.h"
@@ -6,6 +7,7 @@
 #include "../util.h"
 #include "../var_table.h"
 #include "../vector.h"
+
 #include <math.h>
 
 bool op_produces_value(enum ir_op_ty ty) {
@@ -733,7 +735,8 @@ struct ir_basicblock *build_ir_for_ifelse(struct ir_builder *irb,
   }
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, pre_if_basicblock);
-  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &if_else_stmt->condition);
+  struct ir_op *cond =
+      build_ir_for_expr(irb, cond_stmt, &if_else_stmt->condition);
   struct ir_op *br_cond = alloc_ir_op(irb, cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_OP_VAR_TY_NONE;
