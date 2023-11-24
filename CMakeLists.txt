@@ -14,13 +14,13 @@ set(
   diagnostics.c
   lex.c
   parse.c
-  ir.c
   link.c
   disasm.c
   var_table.c
   lsra.c
-
-  passes/eliminate_phi.c
+  
+  ir/build.c
+  ir/eliminate_phi.c
 
   aarch64/lower.c
   aarch64/emit.c

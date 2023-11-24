@@ -1,5 +1,5 @@
 #include "lower.h"
-#include "../ir.h"
+#include "../ir/build.h"
 #include "../util.h"
 
 // ARM has no quotient function

@@ -1,11 +1,11 @@
-#include "ir.h"
-#include "alloc.h"
-#include "compiler.h"
-#include "lex.h"
-#include "parse.h"
-#include "util.h"
-#include "var_table.h"
-#include "vector.h"
+#include "build.h"
+#include "../alloc.h"
+#include "../compiler.h"
+#include "../lex.h"
+#include "../parse.h"
+#include "../util.h"
+#include "../var_table.h"
+#include "../vector.h"
 #include <math.h>
 
 bool op_produces_value(enum ir_op_ty ty) {

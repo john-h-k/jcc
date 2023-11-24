@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include "alloc.h"
-#include "ir.h"
+#include "ir/build.h"
 #include <limits.h>
 
 struct reg_info {

@@ -1,5 +1,4 @@
 #include "lsra.h"
-#include "ir.h"
 #include "util.h"
 #include "vector.h"
 #include <limits.h>
