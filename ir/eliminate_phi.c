@@ -50,28 +50,38 @@ void eliminate_phi(struct ir_builder *irb) {
     struct ir_stmt *stmt = basicblock->last;
 
     if (stmt) {
-      struct ir_op *op = stmt->first;
-
-      // count then alloc just to prevent thrashing
-      size_t num_movs = 0;
-      for (struct ir_op *next_op = op; next_op && next_op->ty == IR_OP_TY_MOV; next_op = next_op->succ) {
-        num_movs++;
+      struct ir_op *op = stmt->last;
+      invariant_assert(op_is_branch(op->ty), "bb doesn't end with branch");
+      while (op && op_is_branch(op->ty)) {
+        op = op->pred;
       }
 
-      struct ir_op **movs = arena_alloc(irb->arena, sizeof(struct ir_op *) * num_movs);
-      size_t i = num_movs - 1; 
-      for (struct ir_op *next_op = op; next_op && next_op->ty == IR_OP_TY_MOV; next_op = next_op->succ, i--) {
-        movs[i] = next_op;
-      }
+      if (op) {
+        // count then alloc just to prevent thrashing
+        size_t num_movs = 0;
+        for (struct ir_op *next_op = op; next_op && next_op->ty == IR_OP_TY_MOV; next_op = next_op->pred) {
+          num_movs++;
+        }
 
-      // as this is likely to be small, just do an insertion sort
-      for (size_t i = 1; i < num_movs; i++) {
-        for (size_t j = i; j > 0 && movs[j - 1]->reg > movs[j]->reg; j--) {
-          struct ir_op *tmp = movs[j - 1];
-          movs[j - 1] = movs[j];
-          movs[j] = tmp;
+        struct ir_op **movs = arena_alloc(irb->arena, sizeof(struct ir_op *) * num_movs);
+        size_t i = num_movs - 1; 
+        for (struct ir_op *next_op = op; next_op && next_op->ty == IR_OP_TY_MOV; next_op = next_op->pred, i--) {
+          movs[i] = next_op;
+        }
+
+        // as this is likely to be small, just do an insertion sort
+        for (size_t i = 1; i < num_movs; i++) {
+          for (size_t j = i; j > 0 && movs[j - 1]->mov.value->reg > movs[j]->reg; j--) {
+            struct ir_op *tmp = movs[j - 1];
+            movs[j - 1] = movs[j];
+            movs[j] = tmp;
     
-          swap_ir_ops(irb, movs[j - 1], movs[j]);
+            swap_ir_ops(irb, movs[j - 1], movs[j]);
+          }
+        }
+
+        for (size_t i = 0; i < num_movs; i++) {
+          
         }
       }
     }

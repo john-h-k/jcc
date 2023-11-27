@@ -244,6 +244,8 @@ void detach_ir_op(struct ir_builder *irb, struct ir_op *op) {
   }
 
   op->stmt = NULL;
+  op->pred = NULL;
+  op->succ = NULL;
 }
 
 bool stmt_is_empty(struct ir_stmt *stmt) {
@@ -343,17 +345,12 @@ void rebuild_ids(struct ir_builder *irb) {
   irb->op_count = id;
 }
 
-void attach_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op *pred,
+void attach_ir_op(struct ir_builder *irb, struct ir_op *op,
+                  struct ir_stmt *stmt, struct ir_op *pred,
                   struct ir_op *succ) {
-  invariant_assert(!op->stmt, "non-detached op trying to be attached");
-
-  invariant_assert((pred && pred->stmt) || (succ && succ->stmt),
-                   "cannot attach op without stmt");
-  invariant_assert(pred == NULL || pred->stmt == NULL || succ == NULL ||
-                       succ->stmt == NULL || (pred->stmt == succ->stmt),
-                   "cannot attach op across stmts");
-
-  struct ir_stmt *stmt = pred && pred->stmt ? pred->stmt : succ->stmt;
+  invariant_assert(!op->stmt && !op->pred && !op->succ, "non-detached op trying to be attached");
+  invariant_assert((!pred || pred->succ == succ) && (!succ || succ->pred == pred), "`pred` and `succ` are not next to each other");
+  invariant_assert(stmt, "cannot attach op without stmt");
 
   irb->op_count++;
 
@@ -395,7 +392,7 @@ void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
         move_after->pred ? move_after->pred->id : SIZE_T_MAX,
         move_after->succ ? move_after->succ->id : SIZE_T_MAX);
 
-  attach_ir_op(irb, op, move_after, move_after->succ);
+  attach_ir_op(irb, op, move_after->stmt, move_after, move_after->succ);
 }
 
 void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
@@ -414,7 +411,7 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
         move_before->pred ? move_before->pred->id : SIZE_T_MAX,
         move_before->succ ? move_before->succ->id : SIZE_T_MAX);
 
-  attach_ir_op(irb, op, move_before->pred, move_before);
+  attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
@@ -453,19 +450,39 @@ void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
     return;
   }
 
-  debug_assert(left->stmt == right->stmt, "cannot swap ops across stmts");
+  // if they are next to each other, normalize to `left` being pred to `right`
+  if (right->succ == left) {
+    struct ir_op *tmp = right;
+    right = left;
+    left = tmp;
+  }
+
+  // if they are next to each other, the normal logic won't work
+  // instead, remove left and insert it after right
+  if (left->succ == right) {
+    detach_ir_op(irb, left);
+    move_after_ir_op(irb, left, right);
+    return;
+  }
+
+  invariant_assert(left && right, "can't swap op with NULL!");
+  invariant_assert(left->stmt == right->stmt, "cannot swap ops across stmts");
 
   struct ir_op *left_pred = left->pred;
   struct ir_op *left_succ = left->succ;
+  struct ir_stmt *left_stmt = left->stmt;
 
   struct ir_op *right_pred = right->pred;
   struct ir_op *right_succ = right->succ;
+  invariant_assert(right_pred->succ == right && right_pred->succ->succ == right_succ, "wtf");
+  invariant_assert(left_pred->succ == left && left_pred->succ->succ == left_succ, "wtf");
+  struct ir_stmt *right_stmt = right->stmt;
 
   detach_ir_op(irb, left);
-  attach_ir_op(irb, left, right_pred, right_succ);
-
   detach_ir_op(irb, right);
-  attach_ir_op(irb, right, left_pred, left_succ);
+
+  attach_ir_op(irb, left, right_stmt, right_pred, right_succ);
+  attach_ir_op(irb, right, left_stmt, left_pred, left_succ);
 }
 
 // TODO: this should call `initialise_ir_op`
