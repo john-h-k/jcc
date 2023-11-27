@@ -374,7 +374,7 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
 
-  debug_print_ir(stderr, irb, irb->first, print_ir_intervals, data.intervals);
+  debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
 
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
@@ -383,7 +383,7 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
   // can't print intervals here, as `alloc_fixup` inserted new ops which don't
   // have valid intervals yet
-  debug_print_ir(stderr, irb, irb->first, NULL, NULL);
+  debug_print_ir(stderr, irb, NULL, NULL);
 
   BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
 
@@ -392,5 +392,5 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
 
-  debug_print_ir(stderr, irb, irb->first, print_ir_intervals, NULL);
+  debug_print_ir(stderr, irb, print_ir_intervals, NULL);
 }

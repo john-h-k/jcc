@@ -296,6 +296,27 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
   }
 }
 
+void clear_metadata(struct ir_builder *irb) {
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        op->metadata = NULL;
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+}
+
 void rebuild_ids(struct ir_builder *irb) {
   size_t id = 0;
 
