@@ -235,9 +235,6 @@ struct ir_basicblock {
   // how many ops are before this block in the function
   size_t function_offset;
 
-  // only used by regalloc
-  size_t max_interval;
-
   void *metadata;
 };
 
