@@ -218,21 +218,28 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       // we jump to the end of the block + skip this instruction
       struct ir_basicblock *true_target =
           op->stmt->basicblock->split.true_target;
-      (void)true_target;
-      struct ir_basicblock *false_target =
-          op->stmt->basicblock->split.false_target;
 
-      size_t offset =
-          false_target->function_offset - aarch64_emitted_count(state->emitter);
-      aarch64_emit_cbz_32_imm(state->emitter,
-                              get_reg_for_idx(op->br_cond.cond->reg), offset);
+      size_t true_offset =
+          true_target->function_offset - aarch64_emitted_count(state->emitter);
+      aarch64_emit_cnbz_32_imm(state->emitter,
+                              get_reg_for_idx(op->br_cond.cond->reg), true_offset);
       break;
     }
     case IR_OP_TY_BR: {
-      struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-      size_t offset =
-          target->function_offset - aarch64_emitted_count(state->emitter);
-      aarch64_emit_b(state->emitter, offset);
+      if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
+        struct ir_basicblock *target = op->stmt->basicblock->merge.target;
+        size_t offset =
+            target->function_offset - aarch64_emitted_count(state->emitter);
+        aarch64_emit_b(state->emitter, offset);
+      } else {
+          // otherwise, this is the false branch of a SPLIT
+        struct ir_basicblock *false_target =
+            op->stmt->basicblock->split.false_target;
+
+        size_t false_offset =
+            false_target->function_offset - aarch64_emitted_count(state->emitter);
+        aarch64_emit_b(state->emitter, false_offset);
+      }
       break;
     }
     case IR_OP_TY_CNST: {

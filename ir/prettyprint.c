@@ -101,8 +101,9 @@ char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
     return arena_printf(irb->arena, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
                         var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
   case IR_OP_TY_BR:
-    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
-                     "found `br` but bb wasn't MERGE");
+    // this can happen post lowering!
+    // invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+    //                  "found `br` but bb wasn't MERGE");
     return arena_printf(irb->arena, "br @%zu",
                         ir->stmt->basicblock->merge.target->id);
   case IR_OP_TY_BR_COND:
