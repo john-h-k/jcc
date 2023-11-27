@@ -221,8 +221,8 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
 
       size_t true_offset =
           true_target->function_offset - aarch64_emitted_count(state->emitter);
-      aarch64_emit_cnbz_32_imm(state->emitter,
-                              get_reg_for_idx(op->br_cond.cond->reg), true_offset);
+      aarch64_emit_cnbz_32_imm(
+          state->emitter, get_reg_for_idx(op->br_cond.cond->reg), true_offset);
       break;
     }
     case IR_OP_TY_BR: {
@@ -232,12 +232,12 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
             target->function_offset - aarch64_emitted_count(state->emitter);
         aarch64_emit_b(state->emitter, offset);
       } else {
-          // otherwise, this is the false branch of a SPLIT
+        // otherwise, this is the false branch of a SPLIT
         struct ir_basicblock *false_target =
             op->stmt->basicblock->split.false_target;
 
-        size_t false_offset =
-            false_target->function_offset - aarch64_emitted_count(state->emitter);
+        size_t false_offset = false_target->function_offset -
+                              aarch64_emitted_count(state->emitter);
         aarch64_emit_b(state->emitter, false_offset);
       }
       break;

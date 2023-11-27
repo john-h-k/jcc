@@ -118,10 +118,7 @@ struct ast_binary_op {
   struct ast_expr *rhs;
 };
 
-enum ast_unary_op_ty {
-  AST_UNARY_OP_TY_PREFIX,
-  AST_UNARY_OP_TY_POSTFIX
-};
+enum ast_unary_op_ty { AST_UNARY_OP_TY_PREFIX, AST_UNARY_OP_TY_POSTFIX };
 
 struct ast_unary_op {
   enum ast_unary_op_ty ty;

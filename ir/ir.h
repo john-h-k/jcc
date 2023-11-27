@@ -121,10 +121,7 @@ struct ir_op_br_cond {
 #define NO_LCL (SIZE_T_MAX)
 #define REG_SPILLED (SIZE_T_MAX - 1)
 
-enum ir_op_flags {
-  IR_OP_FLAG_NONE = 0,
-  IR_OP_FLAG_MUST_SPILL = 1
-};
+enum ir_op_flags { IR_OP_FLAG_NONE = 0, IR_OP_FLAG_MUST_SPILL = 1 };
 
 struct ir_op {
   size_t id;
@@ -269,7 +266,6 @@ void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 
-
 bool stmt_is_empty(struct ir_stmt *stmt);
 bool basicblock_is_empty(struct ir_basicblock *basicblock);
 
@@ -301,8 +297,10 @@ void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
 void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
                        struct ir_op *move_before);
 
-// swaps ops but does NOT swap their uses - expressions pointing to `left` will now point to `right`
-void swap_ir_ops(struct ir_builder *irb, struct ir_op *left, struct ir_op *right);
+// swaps ops but does NOT swap their uses - expressions pointing to `left` will
+// now point to `right`
+void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
+                 struct ir_op *right);
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,

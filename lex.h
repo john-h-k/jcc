@@ -27,19 +27,18 @@ enum lex_token_ty {
   LEX_TOKEN_TYPE_OP_INC, // ++
   LEX_TOKEN_TYPE_OP_DEC, // --
 
-  LEX_TOKEN_TYPE_OP_ADD,  // +
+  LEX_TOKEN_TYPE_OP_ADD,       // +
   LEX_TOKEN_TYPE_OP_ADD_ASSG,  // +=
-  LEX_TOKEN_TYPE_OP_SUB,  // -
+  LEX_TOKEN_TYPE_OP_SUB,       // -
   LEX_TOKEN_TYPE_OP_SUB_ASSG,  // -=
-  LEX_TOKEN_TYPE_OP_MUL,  // *
+  LEX_TOKEN_TYPE_OP_MUL,       // *
   LEX_TOKEN_TYPE_OP_MUL_ASSG,  // *=
-  LEX_TOKEN_TYPE_OP_DIV,  // /
+  LEX_TOKEN_TYPE_OP_DIV,       // /
   LEX_TOKEN_TYPE_OP_DIV_ASSG,  // /=
-  LEX_TOKEN_TYPE_OP_QUOT, // %
+  LEX_TOKEN_TYPE_OP_QUOT,      // %
   LEX_TOKEN_TYPE_OP_QUOT_ASSG, // %=
 
   LEX_TOKEN_TYPE_OP_ASSG, // =
-
 
   /* Keywords */
 

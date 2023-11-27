@@ -172,7 +172,8 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   // all phis appear at the start of their bb as they execute ""
   struct ir_op *phi;
   if (stmt->basicblock->first->first) {
-    phi = insert_before_ir_op(irb, stmt->basicblock->first->first, IR_OP_TY_PHI, IR_OP_VAR_TY_NONE);
+    phi = insert_before_ir_op(irb, stmt->basicblock->first->first, IR_OP_TY_PHI,
+                              IR_OP_VAR_TY_NONE);
   } else {
     phi = alloc_ir_op(irb, stmt->basicblock->first);
     phi->ty = IR_OP_TY_PHI;
@@ -358,8 +359,8 @@ build_ir_for_selectstmt(struct ir_builder *irb,
 }
 
 struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
-                                            struct ir_basicblock *basicblock,
-                                            struct ast_whilestmt *while_stmt) {
+                                             struct ir_basicblock *basicblock,
+                                             struct ast_whilestmt *while_stmt) {
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
@@ -371,8 +372,7 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
                         after_body_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-  struct ir_op *cond =
-      build_ir_for_expr(irb, cond_stmt, &while_stmt->cond);
+  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &while_stmt->cond);
   struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -394,9 +394,10 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
   return after_body_basicblock;
 }
 
-struct ir_basicblock *build_ir_for_dowhilestmt(struct ir_builder *irb,
-                                            struct ir_basicblock *basicblock,
-                                            struct ast_dowhilestmt *do_while_stmt) {
+struct ir_basicblock *
+build_ir_for_dowhilestmt(struct ir_builder *irb,
+                         struct ir_basicblock *basicblock,
+                         struct ast_dowhilestmt *do_while_stmt) {
   struct ir_basicblock *before_body_basicblock = basicblock;
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
@@ -408,8 +409,7 @@ struct ir_basicblock *build_ir_for_dowhilestmt(struct ir_builder *irb,
                         after_cond_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-  struct ir_op *cond =
-      build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond);
+  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond);
   struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -435,7 +435,9 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
                                        struct ir_stmt *stmt,
                                        struct ast_vardecllist *var_decl_list);
 
-struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_declorexpr *decl_or_expr) {
+struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb,
+                                      struct ir_stmt *stmt,
+                                      struct ast_declorexpr *decl_or_expr) {
   if (decl_or_expr->decl) {
     return build_ir_for_vardecllist(irb, stmt, decl_or_expr->decl);
   } else if (decl_or_expr->expr) {
@@ -446,9 +448,9 @@ struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb, struct ir_stmt *st
 }
 
 struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
-                                            struct ir_basicblock *basicblock,
-                                            struct ast_forstmt *for_stmt) {
-  
+                                           struct ir_basicblock *basicblock,
+                                           struct ast_forstmt *for_stmt) {
+
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
@@ -468,8 +470,7 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
 
   if (for_stmt->cond) {
     struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-    struct ir_op *cond =
-        build_ir_for_expr(irb, cond_stmt, for_stmt->cond);
+    struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, for_stmt->cond);
     struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -480,7 +481,9 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
       build_ir_for_stmt(irb, body_basicblock, for_stmt->body);
 
   if (for_stmt->iter) {
-    invariant_assert(body_basicblock->last, "attempting to add `for` loop iter without stmt present, needs fixing");
+    invariant_assert(
+        body_basicblock->last,
+        "attempting to add `for` loop iter without stmt present, needs fixing");
     build_ir_for_expr(irb, body_basicblock->last, for_stmt->iter);
   }
 
@@ -503,11 +506,11 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
                                             struct ast_iterstmt *iter_stmt) {
   switch (iter_stmt->ty) {
   case AST_ITERSTMT_TY_WHILE:
-      return build_ir_for_whilestmt(irb, basicblock, &iter_stmt->while_stmt);
+    return build_ir_for_whilestmt(irb, basicblock, &iter_stmt->while_stmt);
   case AST_ITERSTMT_TY_DO_WHILE:
-      return build_ir_for_dowhilestmt(irb, basicblock, &iter_stmt->do_while_stmt);
+    return build_ir_for_dowhilestmt(irb, basicblock, &iter_stmt->do_while_stmt);
   case AST_ITERSTMT_TY_FOR:
-      return build_ir_for_forstmt(irb, basicblock, &iter_stmt->for_stmt);
+    return build_ir_for_forstmt(irb, basicblock, &iter_stmt->for_stmt);
   }
 }
 
@@ -584,9 +587,9 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
     return build_ir_for_iterstmt(irb, basicblock, &stmt->iter);
   }
   case AST_STMT_TY_NULL: {
-    return basicblock;   
+    return basicblock;
   }
-}
+  }
 }
 
 size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {

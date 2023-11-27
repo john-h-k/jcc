@@ -86,7 +86,8 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 }
 
 // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
-// we represent this as just the `true` part of the `br.cond`, and then a `br` after branching to the false target
+// we represent this as just the `true` part of the `br.cond`, and then a `br`
+// after branching to the false target
 void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
 }

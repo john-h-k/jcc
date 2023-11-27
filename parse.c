@@ -865,7 +865,8 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   return true;
 }
 
-bool parse_dowhilestmt(struct parser *parser, struct ast_dowhilestmt *do_while_stmt) {
+bool parse_dowhilestmt(struct parser *parser,
+                       struct ast_dowhilestmt *do_while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -911,7 +912,8 @@ bool parse_dowhilestmt(struct parser *parser, struct ast_dowhilestmt *do_while_s
   consume_token(parser->lexer, token);
 
   do_while_stmt->cond = expr;
-  do_while_stmt->body = arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
+  do_while_stmt->body =
+      arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
   *do_while_stmt->body = stmt;
   return true;
 }
@@ -928,16 +930,19 @@ bool parse_token(struct parser *parser, enum lex_token_ty ty) {
   return false;
 }
 
-bool parse_declorexpr(struct parser *parser, struct ast_declorexpr *decl_or_expr) {
+bool parse_declorexpr(struct parser *parser,
+                      struct ast_declorexpr *decl_or_expr) {
   struct ast_vardecllist var_decl_list;
   if (parse_vardecllist(parser, &var_decl_list)) {
-    decl_or_expr->decl = arena_alloc(parser->arena, sizeof(*decl_or_expr->decl));
+    decl_or_expr->decl =
+        arena_alloc(parser->arena, sizeof(*decl_or_expr->decl));
     *decl_or_expr->decl = var_decl_list;
     return true;
   }
 
   struct ast_expr expr;
-  if (parse_expr(parser, &expr) && parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+  if (parse_expr(parser, &expr) &&
+      parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
     return true;
   }
 
@@ -945,7 +950,8 @@ bool parse_declorexpr(struct parser *parser, struct ast_declorexpr *decl_or_expr
 }
 
 bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
-  if (!(parse_token(parser, LEX_TOKEN_TYPE_KW_FOR) && parse_token(parser, LEX_TOKEN_TYPE_OPEN_BRACKET))) {
+  if (!(parse_token(parser, LEX_TOKEN_TYPE_KW_FOR) &&
+        parse_token(parser, LEX_TOKEN_TYPE_OPEN_BRACKET))) {
     return false;
   }
 
@@ -1639,7 +1645,7 @@ DEBUG_FUNC(vardecllist, var_decl_list);
 DEBUG_FUNC(declorexpr, decl_or_expr) {
   if (decl_or_expr->decl) {
     DEBUG_CALL(vardecllist, decl_or_expr->decl);
-  } else if (decl_or_expr->expr ){
+  } else if (decl_or_expr->expr) {
     DEBUG_CALL(expr, decl_or_expr->expr);
   }
 }
