@@ -42,8 +42,11 @@ enum compiler_create_result create_compiler(const char *program,
 
   create_arena_allocator(&(*compiler)->arena);
 
-  (*compiler)->output = arena_alloc((*compiler)->arena, strlen(output) + 1);
+  size_t sz = strlen(output) + 1;
+  (*compiler)->output = arena_alloc((*compiler)->arena, sz);
   strcpy((*compiler)->output, output);
+  (*compiler)->output[sz] = '\0';
+
 
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
@@ -54,7 +57,7 @@ enum compile_result compile(struct compiler *compiler) {
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PARSE)) {
     enable_log();
   }
-
+  
   BEGIN_STAGE("LEX + PARSE");
 
   struct parse_result result = parse(compiler->parser);
