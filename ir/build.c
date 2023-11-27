@@ -171,11 +171,15 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   // we generate an empty phi and then after all blocks are built we insert the
   // correct values
   // all phis appear at the start of their bb as they execute ""
+  struct ir_op *phi;
+  if (stmt->basicblock->first->first) {
+    phi = insert_before_ir_op(irb, stmt->basicblock->first->first, IR_OP_TY_PHI, IR_OP_VAR_TY_NONE);
+  } else {
+    phi = alloc_ir_op(irb, stmt->basicblock->first);
+    phi->ty = IR_OP_TY_PHI;
+    phi->var_ty = IR_OP_VAR_TY_NONE;
+  }
 
-  struct ir_op *phi = alloc_ir_op(irb, stmt->basicblock->phis);
-
-  phi->ty = IR_OP_TY_PHI;
-  phi->var_ty = IR_OP_VAR_TY_NONE;
   phi->phi.var = *var;
   phi->phi.values = NULL;
   phi->phi.num_values = 0;
@@ -579,13 +583,22 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
   debug_print_ir(stderr, builder, NULL, NULL);
 
+  // now we fix up phis
+  debug("doing phi fixups");
   basicblock = builder->first;
   while (basicblock) {
-    struct ir_op *op = basicblock->phis ? basicblock->phis->first : NULL;
-    while (op) {
-      find_phi_exprs(builder, op);
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        if (op->ty == IR_OP_TY_PHI) {
+          find_phi_exprs(builder, op);
+        }
 
-      op = op->succ;
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
     }
 
     basicblock = basicblock->succ;

@@ -23,7 +23,6 @@ set(
   ir/ir.c
   ir/build.c
   ir/eliminate_phi.c
-  ir/reorder_moves.c
   ir/prettyprint.c
 
   aarch64/lower.c

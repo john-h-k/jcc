@@ -1,20 +1,15 @@
 #include "lsra.h"
 
-#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
+#include "ir/prettyprint.h"
 
 #include <limits.h>
 
 struct interval {
-  bool active;
-
   struct ir_op *op;
   size_t start;
   size_t end;
-
-  // this is the interval representative for this interval
-  struct interval *representative;
 };
 
 struct interval_data {
@@ -25,17 +20,18 @@ struct interval_data {
 #define MARK_REG_USED(reg_pool, i) (reg_pool) &= ~(1 << i)
 #define MARK_REG_FREE(reg_pool, i) (reg_pool) |= (1 << i)
 
-struct cur_interval_data {
-  struct interval_data *data;
-  struct ir_op *op;
-};
-
 void op_used_callback(struct ir_op **op, void *cb_metadata) {
-  struct cur_interval_data *cur_data = cb_metadata;
+  struct interval_data *data = cb_metadata;
 
-  struct interval *interval = &cur_data->data->intervals[(*op)->id];
+  debug("op callback id %zu", (*op)->id);
+  struct interval *interval = &data->intervals[(*op)->id];
 
-  interval->end = cur_data->op->ty == IR_OP_TY_PHI ? cur_data->op->id - 1 : cur_data->op->id;
+  interval->end = MAX(interval->end, data->num_intervals);
+
+  if (interval->op) {
+    debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start,
+          interval->end);
+  }
 }
 
 struct ir_op *last_value_producing_op(struct ir_basicblock *basicblock) {
@@ -65,35 +61,7 @@ struct ir_op *last_value_producing_op(struct ir_basicblock *basicblock) {
   return last_op;
 }
 
-struct interval *get_representative(struct interval *interval) {
-  if (interval->representative == interval) {
-    return interval;
-  }
-
-  return get_representative(interval->representative);
-}
-
-bool try_join_intervals(struct interval *l, struct interval *r) {
-  struct interval *l_rep = get_representative(l);
-  struct interval *r_rep = get_representative(r);
-
-  if (l_rep == r_rep) {
-    return true;
-  }
-
-  // TODO: add the fact that the intervals must be compatible (same reg type)
-  if (true || l_rep->end <= r_rep->start || l_rep->start >= r_rep->end) {
-    r_rep->start = MIN(l_rep->start, r_rep->start);
-    r_rep->end = MAX(l_rep->end, r_rep->end);
-   
-    l_rep->active = false;
-    l_rep->representative = r_rep;
-
-    return true;
-  } else {
-    return false;
-  }
-}
+#define INTERVAL_END_OF_BASICBLOCK (SIZE_T_MAX)
 
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
@@ -105,44 +73,58 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    struct ir_stmt *stmt = basicblock->phis;
+    basicblock->max_interval = 0;
+
+    struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
+        debug("constructing interval for op %zu", op->id);
         op->lcl_idx = NO_LCL;
         op->reg = NO_REG;
 
         debug_assert(op->id < irb->op_count, "out of range!");
-        struct interval *interval;
-        
-        interval = &data.intervals[op->id];
-        data.num_intervals++;
+        struct interval *interval = &data.intervals[op->id];
 
-        interval->active = true;
-        interval->op = op;
-        interval->representative = interval;
+        size_t start;
 
+        // special case - a phi op actually starts existing at the end of its
+        // earliest basicblock
         if (op->ty == IR_OP_TY_PHI) {
-          interval->start = op->stmt->succ->first->id;
+          start = 0; // if the phi has no values
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *value = op->phi.values[i];
+            struct ir_basicblock *value_block = value->stmt->basicblock;
+
+            struct interval *value_interval = &data.intervals[value->id];
+
+            // struct ir_op *last_op = last_value_producing_op(value_block);
+            struct ir_op *last_op = value_block->last->last;
+            value_interval->end = INTERVAL_END_OF_BASICBLOCK;
+
+            struct interval *last_interval = &data.intervals[last_op->id];
+
+            interval->start = MIN(interval->start, last_interval->start);
+          }
         } else {
-          interval->start = op->id;
+          start = data.num_intervals;
         }
 
-        interval->end = MAX(interval->end, interval->start);
-        
+        interval->op = op;
+        interval->start = start;
+
+        if (interval->end < interval->start) {
+          interval->end = interval->start; // this ensures intervals are still
+                                           // valid for unused values
+        }
+
         debug_assert(
             op->metadata == NULL,
             "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
 
-        struct cur_interval_data cur_data = {
-          .data = &data,
-          .op = op
-        };
-  
-        if (op->ty != IR_OP_TY_PHI) {
-          walk_op_uses(op, op_used_callback, &cur_data);
-        }
+        walk_op_uses(op, op_used_callback, &data);
+        data.num_intervals++;
 
         op = op->succ;
       }
@@ -153,28 +135,16 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     basicblock = basicblock->succ;
   }
 
-  debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+  for (size_t i = 0; i < data.num_intervals; i++) {
+    struct interval *interval = &data.intervals[i];
 
-  // merge phi intervals
-  basicblock = irb->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->phis;
-    struct ir_op *op = stmt->first;
-    while (op) {
-      struct interval *phi_interval = &data.intervals[op->id];
-
-      for (size_t i = 0; i < op->phi.num_values; i++) {
-        if (!try_join_intervals(&data.intervals[op->phi.values[i]->id], phi_interval)) {
-          bug("couldn't join intervals!");
-        }
-      }
-
-      op = op->succ;
+    if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
+      struct ir_op *last_op = interval->op->stmt->basicblock->last->last;
+          // last_value_producing_op(interval->op->stmt->basicblock);
+      interval->end = data.intervals[last_op->id].start;
     }
-
-    basicblock = basicblock->succ;
   }
-  
+
   return data;
 }
 
@@ -213,24 +183,22 @@ void expire_old_intervals(struct interval *intervals,
   size_t num_expired_intervals = 0;
 
   for (size_t i = 0; i < *num_active; i++) {
-    debug("%zu", i);
     struct interval *interval = &intervals[active[i]];
-
-    if (!interval->active) {
-      continue;
-    }
-    
+    // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start,
+    // interval->end);
     if (cur_interval->start <= interval->end) {
       break;
     }
 
     num_expired_intervals++;
 
+    debug("op %zu, marking reg %ul free", interval->op->id, interval->op->reg);
     MARK_REG_FREE(*reg_pool, interval->op->reg);
   }
 
   // shift the active array down
 
+  debug("expired: %zu", num_expired_intervals);
   *num_active -= num_expired_intervals;
   memmove(active, &active[num_expired_intervals],
           sizeof(*active) * (*num_active));
@@ -352,11 +320,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
+    debug("%zu active", num_active);
     struct interval *interval = &intervals[i];
-    if (!interval->active) {
-      continue;
-    }
-
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
     if (!op_produces_value(interval->op->ty)) {
@@ -370,10 +335,15 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       spill_at_interval(intervals, i, active, &num_active);
     } else {
       unsigned long free_reg = tzcnt(reg_pool);
+      debug("active: %ul", num_active);
+      debug("reg pool: %ul", reg_pool);
+      debug("reg pool free: %ul", __builtin_popcount(reg_pool));
+      debug("free reg: %ul", free_reg);
       debug_assert(free_reg < reg_info.num_regs,
                    "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
+      debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op->id);
       interval->op->reg = free_reg;
 
       // insert into `active`, sorted by end point
@@ -390,13 +360,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
           break;
         }
       }
-    }
-  }
-
-  for (size_t i = 0; i < num_intervals; i++) {
-    struct interval *interval = &intervals[i];
-    if (interval->op && !interval->active) {
-      interval->op->reg = get_representative(interval)->op->reg;
     }
   }
 
