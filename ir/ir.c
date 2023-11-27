@@ -348,8 +348,11 @@ void rebuild_ids(struct ir_builder *irb) {
 void attach_ir_op(struct ir_builder *irb, struct ir_op *op,
                   struct ir_stmt *stmt, struct ir_op *pred,
                   struct ir_op *succ) {
-  invariant_assert(!op->stmt && !op->pred && !op->succ, "non-detached op trying to be attached");
-  invariant_assert((!pred || pred->succ == succ) && (!succ || succ->pred == pred), "`pred` and `succ` are not next to each other");
+  invariant_assert(!op->stmt && !op->pred && !op->succ,
+                   "non-detached op trying to be attached");
+  invariant_assert((!pred || pred->succ == succ) &&
+                       (!succ || succ->pred == pred),
+                   "`pred` and `succ` are not next to each other");
   invariant_assert(stmt, "cannot attach op without stmt");
 
   irb->op_count++;
@@ -474,8 +477,10 @@ void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
 
   struct ir_op *right_pred = right->pred;
   struct ir_op *right_succ = right->succ;
-  invariant_assert(right_pred->succ == right && right_pred->succ->succ == right_succ, "wtf");
-  invariant_assert(left_pred->succ == left && left_pred->succ->succ == left_succ, "wtf");
+  invariant_assert(
+      right_pred->succ == right && right_pred->succ->succ == right_succ, "wtf");
+  invariant_assert(
+      left_pred->succ == left && left_pred->succ->succ == left_succ, "wtf");
   struct ir_stmt *right_stmt = right->stmt;
 
   detach_ir_op(irb, left);

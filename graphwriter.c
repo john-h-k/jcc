@@ -148,7 +148,7 @@ void edge_attr(struct graph_edge *edge, const struct graph_edge_attr *attr) {
   case GRAPH_EDGE_ATTR_TY_LABEL:
     fprintf(edge->gwr->file, " [label=%s] ", attr->label.label);
     break;
-}
+  }
 
   write_end(edge->gwr);
 }

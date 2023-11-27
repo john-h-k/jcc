@@ -1,4 +1,5 @@
 #include "eliminate_phi.h"
+
 #include "ir.h"
 #include "prettyprint.h"
 
@@ -28,8 +29,9 @@ void eliminate_phi(struct ir_builder *irb) {
                            "bb ended in non-branch instruction!");
 
           // insert juuust before the branch
-          struct ir_op *storelcl = insert_before_ir_op(irb, basicblock->last->last,
-                                                  IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
+          struct ir_op *storelcl =
+              insert_before_ir_op(irb, basicblock->last->last,
+                                  IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
           storelcl->store_lcl.value = value;
           storelcl->store_lcl.lcl_idx = lcl_idx;
 
@@ -38,7 +40,8 @@ void eliminate_phi(struct ir_builder *irb) {
         }
 
         // change the phi to a loadlcl
-        // struct ir_op *loadlcl = insert_before_ir_op(irb, first_non_phi, IR_OP_TY_LOAD_LCL, op->var_ty);
+        // struct ir_op *loadlcl = insert_before_ir_op(irb, first_non_phi,
+        // IR_OP_TY_LOAD_LCL, op->var_ty);
         struct ir_op *loadlcl = op;
         loadlcl->ty = IR_OP_TY_LOAD_LCL;
         loadlcl->load_lcl.lcl_idx = lcl_idx;

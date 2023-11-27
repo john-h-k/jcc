@@ -53,7 +53,7 @@ bool valid_first_identifier_char(char c) {
 }
 
 enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
-                              struct text_pos end) {
+                            struct text_pos end) {
   struct keyword {
     const char *str;
     size_t len;
@@ -143,7 +143,9 @@ bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
 }
 
 bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
-  debug_assert(lexer->pos.idx != pos->idx, "calling `try_consume` with `pos` the same as lexer makes no sense");
+  debug_assert(
+      lexer->pos.idx != pos->idx,
+      "calling `try_consume` with `pos` the same as lexer makes no sense");
   if (pos->idx < lexer->len && lexer->text[pos->idx] == c) {
     if (c == '\n') {
       next_line(pos);

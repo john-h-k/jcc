@@ -1,8 +1,8 @@
 #include "lsra.h"
 
+#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
-#include "ir/prettyprint.h"
 
 #include <limits.h>
 
@@ -72,10 +72,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
             "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
 
-        struct interval_callback_data cb_data = {
-          .op = op,
-          .data = &data
-        };
+        struct interval_callback_data cb_data = {.op = op, .data = &data};
 
         walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
@@ -283,7 +280,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       continue;
     }
 
-    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL || num_active == reg_info.num_regs) {
+    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL ||
+        num_active == reg_info.num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
       unsigned long free_reg = tzcnt(reg_pool);
