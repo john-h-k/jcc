@@ -130,7 +130,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return true;
 }
 
-bool is_literal_token(enum lex_token_type tok_ty,
+bool is_literal_token(enum lex_token_ty tok_ty,
                       enum well_known_ty *well_known_ty) {
   switch (tok_ty) {
   case LEX_TOKEN_TYPE_UNKNOWN:
@@ -146,10 +146,19 @@ bool is_literal_token(enum lex_token_type tok_ty,
   case LEX_TOKEN_TYPE_COMMA:
   case LEX_TOKEN_TYPE_OP_ASSG:
   case LEX_TOKEN_TYPE_OP_ADD:
+  case LEX_TOKEN_TYPE_OP_INC:
+  case LEX_TOKEN_TYPE_OP_DEC:
+  case LEX_TOKEN_TYPE_OP_ADD_ASSG:
   case LEX_TOKEN_TYPE_OP_SUB:
+  case LEX_TOKEN_TYPE_OP_SUB_ASSG:
   case LEX_TOKEN_TYPE_OP_MUL:
+  case LEX_TOKEN_TYPE_OP_MUL_ASSG:
   case LEX_TOKEN_TYPE_OP_DIV:
+  case LEX_TOKEN_TYPE_OP_DIV_ASSG:
   case LEX_TOKEN_TYPE_OP_QUOT:
+  case LEX_TOKEN_TYPE_OP_QUOT_ASSG:
+  case LEX_TOKEN_TYPE_KW_DO:
+  case LEX_TOKEN_TYPE_KW_FOR:
   case LEX_TOKEN_TYPE_KW_WHILE:
   case LEX_TOKEN_TYPE_KW_IF:
   case LEX_TOKEN_TYPE_KW_ELSE:
@@ -164,7 +173,8 @@ bool is_literal_token(enum lex_token_type tok_ty,
     return false;
 
   case LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_ASCII_CHAR;
+    // char is signed!
+    *well_known_ty = WELL_KNOWN_TY_SIGNED_CHAR;
     return true;
 
   case LEX_TOKEN_TYPE_SIGNED_INT_LITERAL:
@@ -385,11 +395,6 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
       // they are the same type
       result_ty.well_known = lhs->well_known;
     } else {
-      if (lhs->well_known == WELL_KNOWN_TY_ASCII_CHAR ||
-          rhs->well_known == WELL_KNOWN_TY_ASCII_CHAR) {
-        todo("handle ASCII CHAR signedness");
-      }
-
       enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs->well_known);
       enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs->well_known);
 
@@ -452,7 +457,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     expr->ty = AST_EXPR_TY_RVALUE;
     expr->var_ty = result_ty;
     expr->rvalue.ty = AST_RVALUE_TY_BINARY_OP;
-    struct ast_binaryop *binary_op = &expr->rvalue.binary_op;
+    struct ast_binary_op *binary_op = &expr->rvalue.binary_op;
     binary_op->ty = info.ty;
     binary_op->var_ty = result_ty;
 
@@ -526,7 +531,7 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
   switch (token.ty) {
   case LEX_TOKEN_TYPE_KW_CHAR:
     consume_token(parser->lexer, token);
-    *wkt = WELL_KNOWN_TY_ASCII_CHAR;
+    *wkt = WELL_KNOWN_TY_SIGNED_CHAR;
     return true;
   case LEX_TOKEN_TYPE_KW_SHORT:
     consume_token(parser->lexer, token);
@@ -593,8 +598,7 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
       wkt++;
     } else if (!seen_signed && !seen_unsigned &&
                wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
-      // no explicit sign or unsign, so ASCII CHAR
-      wkt = WELL_KNOWN_TY_ASCII_CHAR;
+      wkt = WELL_KNOWN_TY_SIGNED_CHAR;
     }
   }
 
@@ -855,9 +859,140 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
     return false;
   }
 
-  while_stmt->condition = expr;
+  while_stmt->cond = expr;
   while_stmt->body = arena_alloc(parser->arena, sizeof(*while_stmt->body));
   *while_stmt->body = stmt;
+  return true;
+}
+
+bool parse_dowhilestmt(struct parser *parser, struct ast_dowhilestmt *do_while_stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_KW_DO) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_stmt stmt;
+  if (!parse_stmt(parser, &stmt)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_KW_WHILE) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  struct ast_expr expr;
+  if (!parse_expr(parser, &expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  consume_token(parser->lexer, token);
+
+  do_while_stmt->cond = expr;
+  do_while_stmt->body = arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
+  *do_while_stmt->body = stmt;
+  return true;
+}
+
+bool parse_token(struct parser *parser, enum lex_token_ty ty) {
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty == ty) {
+    consume_token(parser->lexer, token);
+    return true;
+  }
+
+  return false;
+}
+
+bool parse_declorexpr(struct parser *parser, struct ast_declorexpr *decl_or_expr) {
+  struct ast_vardecllist var_decl_list;
+  if (parse_vardecllist(parser, &var_decl_list)) {
+    decl_or_expr->decl = arena_alloc(parser->arena, sizeof(*decl_or_expr->decl));
+    *decl_or_expr->decl = var_decl_list;
+    return true;
+  }
+
+  struct ast_expr expr;
+  if (parse_expr(parser, &expr) && parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
+  if (!(parse_token(parser, LEX_TOKEN_TYPE_KW_FOR) && parse_token(parser, LEX_TOKEN_TYPE_OPEN_BRACKET))) {
+    return false;
+  }
+
+  struct ast_declorexpr decl_or_expr;
+  if (parse_declorexpr(parser, &decl_or_expr)) {
+    for_stmt->init = arena_alloc(parser->arena, sizeof(*for_stmt->init));
+    *for_stmt->init = decl_or_expr;
+  } else {
+    for_stmt->init = NULL;
+  }
+
+  if (!decl_or_expr.decl && !parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+    return false;
+  }
+
+  struct ast_expr cond;
+  if (parse_expr(parser, &cond)) {
+    for_stmt->cond = arena_alloc(parser->arena, sizeof(*for_stmt->cond));
+    *for_stmt->cond = cond;
+  } else {
+    for_stmt->cond = NULL;
+  }
+
+  if (!parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+    return false;
+  }
+
+  struct ast_expr iter;
+  if (parse_expr(parser, &iter)) {
+    for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
+    *for_stmt->iter = iter;
+  } else {
+    for_stmt = NULL;
+  }
+
+  if (!parse_token(parser, LEX_TOKEN_TYPE_CLOSE_BRACKET)) {
+    return false;
+  }
+
+  struct ast_stmt body;
+  if (!parse_stmt(parser, &body)) {
+    return false;
+  }
+
+  for_stmt->body = arena_alloc(parser->arena, sizeof(*for_stmt->body));
+  *for_stmt->body = body;
+
   return true;
 }
 
@@ -866,6 +1001,20 @@ bool parse_iterstmt(struct parser *parser, struct ast_iterstmt *iter_stmt) {
   if (parse_whilestmt(parser, &while_stmt)) {
     iter_stmt->ty = AST_ITERSTMT_TY_WHILE;
     iter_stmt->while_stmt = while_stmt;
+    return true;
+  }
+
+  struct ast_dowhilestmt do_while_stmt;
+  if (parse_dowhilestmt(parser, &do_while_stmt)) {
+    iter_stmt->ty = AST_ITERSTMT_TY_DO_WHILE;
+    iter_stmt->do_while_stmt = do_while_stmt;
+    return true;
+  }
+
+  struct ast_forstmt for_stmt;
+  if (parse_forstmt(parser, &for_stmt)) {
+    iter_stmt->ty = AST_ITERSTMT_TY_FOR;
+    iter_stmt->for_stmt = for_stmt;
     return true;
   }
 
@@ -902,6 +1051,11 @@ bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
+  if (parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+    stmt->ty = AST_STMT_TY_NULL;
+    return true;
+  }
+
   struct ast_jumpstmt jump_stmt;
   if (parse_jumpstmt(parser, &jump_stmt)) {
     stmt->ty = AST_STMT_TY_JUMP;
@@ -1217,9 +1371,6 @@ DEBUG_FUNC(tyref, ty_ref) {
     break;
   case AST_TYREF_TY_WELL_KNOWN:
     switch (ty_ref->well_known) {
-    case WELL_KNOWN_TY_ASCII_CHAR:
-      AST_PRINTZ("char");
-      break;
     case WELL_KNOWN_TY_SIGNED_CHAR:
       AST_PRINTZ("signed char");
       break;
@@ -1287,7 +1438,7 @@ DEBUG_FUNC(lvalue, lvalue) {
 
 DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
 
-DEBUG_FUNC(binaryop, binary_op) {
+DEBUG_FUNC(binary_op, binary_op) {
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_ADD:
     AST_PRINTZ("ADD");
@@ -1351,7 +1502,7 @@ DEBUG_FUNC(rvalue, rvalue) {
     DEBUG_CALL(assg, rvalue->assg);
     break;
   case AST_RVALUE_TY_BINARY_OP:
-    DEBUG_CALL(binaryop, &rvalue->binary_op);
+    DEBUG_CALL(binary_op, &rvalue->binary_op);
     break;
   case AST_RVALUE_TY_COMPOUNDEXPR:
     DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
@@ -1464,17 +1615,70 @@ DEBUG_FUNC(whilestmt, while_stmt) {
   AST_PRINTZ("WHILE");
   AST_PRINTZ("CONDITION");
   INDENT();
-  DEBUG_CALL(expr, &while_stmt->condition);
+  DEBUG_CALL(expr, &while_stmt->cond);
   UNINDENT();
 
   AST_PRINTZ("BODY");
   DEBUG_CALL(stmt, while_stmt->body);
 }
 
+DEBUG_FUNC(dowhilestmt, do_while_stmt) {
+  AST_PRINTZ("DO");
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, do_while_stmt->body);
+
+  AST_PRINTZ("WHILE");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &do_while_stmt->cond);
+  UNINDENT();
+}
+
+DEBUG_FUNC(vardecllist, var_decl_list);
+
+DEBUG_FUNC(declorexpr, decl_or_expr) {
+  if (decl_or_expr->decl) {
+    DEBUG_CALL(vardecllist, decl_or_expr->decl);
+  } else if (decl_or_expr->expr ){
+    DEBUG_CALL(expr, decl_or_expr->expr);
+  }
+}
+
+DEBUG_FUNC(forstmt, for_stmt) {
+  AST_PRINTZ("FOR");
+  AST_PRINTZ("INIT");
+  INDENT();
+  if (for_stmt->init) {
+    DEBUG_CALL(declorexpr, for_stmt->init);
+  }
+  UNINDENT();
+  AST_PRINTZ("COND");
+  INDENT();
+  if (for_stmt->cond) {
+    DEBUG_CALL(expr, for_stmt->cond);
+  }
+  UNINDENT();
+  AST_PRINTZ("ITER");
+  INDENT();
+  if (for_stmt->iter) {
+    DEBUG_CALL(expr, for_stmt->iter);
+  }
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, for_stmt->body);
+}
+
 DEBUG_FUNC(iterstmt, iter_stmt) {
   switch (iter_stmt->ty) {
   case AST_ITERSTMT_TY_WHILE:
     DEBUG_CALL(whilestmt, &iter_stmt->while_stmt);
+    break;
+  case AST_ITERSTMT_TY_DO_WHILE:
+    DEBUG_CALL(dowhilestmt, &iter_stmt->do_while_stmt);
+    break;
+  case AST_ITERSTMT_TY_FOR:
+    DEBUG_CALL(forstmt, &iter_stmt->for_stmt);
     break;
   }
 }
@@ -1483,6 +1687,8 @@ DEBUG_FUNC(stmt, stmt) {
   INDENT();
 
   switch (stmt->ty) {
+  case AST_STMT_TY_NULL:
+    break;
   case AST_STMT_TY_VAR_DECL_LIST:
     DEBUG_CALL(vardecllist, &stmt->var_decl_list);
     break;

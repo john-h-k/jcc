@@ -14,7 +14,6 @@
 
 enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
   switch (wkt) {
-  case WELL_KNOWN_TY_ASCII_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
     return IR_OP_VAR_PRIMITIVE_TY_I8;
@@ -51,7 +50,7 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
                                     struct ir_stmt *stmt,
-                                    struct ast_binaryop *binary_op) {
+                                    struct ast_binary_op *binary_op) {
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, binary_op->lhs);
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, binary_op->rhs);
 
@@ -358,44 +357,157 @@ build_ir_for_selectstmt(struct ir_builder *irb,
   }
 }
 
-struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
+struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
                                             struct ir_basicblock *basicblock,
-                                            struct ast_iterstmt *iter_stmt) {
-  switch (iter_stmt->ty) {
-  case AST_ITERSTMT_TY_WHILE: {
-    struct ir_basicblock *before_cond_basicblock = basicblock;
-    struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
-    struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
-    struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
+                                            struct ast_whilestmt *while_stmt) {
+  struct ir_basicblock *before_cond_basicblock = basicblock;
+  struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
 
-    make_basicblock_merge(irb, before_cond_basicblock, cond_basicblock);
-    make_basicblock_merge(irb, body_basicblock, cond_basicblock);
-    make_basicblock_split(irb, cond_basicblock, body_basicblock,
-                          after_body_basicblock);
+  make_basicblock_merge(irb, before_cond_basicblock, cond_basicblock);
+  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_body_basicblock);
 
+  struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
+  struct ir_op *cond =
+      build_ir_for_expr(irb, cond_stmt, &while_stmt->cond);
+  struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
+  cond_br->ty = IR_OP_TY_BR_COND;
+  cond_br->var_ty = IR_OP_VAR_TY_NONE;
+  cond_br->br_cond.cond = cond;
+
+  struct ir_basicblock *body_stmt_basicblock =
+      build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
+  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+
+  struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
+  pre_cond_br->ty = IR_OP_TY_BR;
+  pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
+
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_op *br = alloc_ir_op(irb, br_stmt);
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_OP_VAR_TY_NONE;
+
+  return after_body_basicblock;
+}
+
+struct ir_basicblock *build_ir_for_dowhilestmt(struct ir_builder *irb,
+                                            struct ir_basicblock *basicblock,
+                                            struct ast_dowhilestmt *do_while_stmt) {
+  struct ir_basicblock *before_body_basicblock = basicblock;
+  struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb);
+
+  make_basicblock_merge(irb, before_body_basicblock, body_basicblock);
+  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_cond_basicblock);
+
+  struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
+  struct ir_op *cond =
+      build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond);
+  struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
+  cond_br->ty = IR_OP_TY_BR_COND;
+  cond_br->var_ty = IR_OP_VAR_TY_NONE;
+  cond_br->br_cond.cond = cond;
+
+  struct ir_basicblock *body_stmt_basicblock =
+      build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
+  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+
+  struct ir_op *pre_body_br = alloc_ir_op(irb, before_body_basicblock->last);
+  pre_body_br->ty = IR_OP_TY_BR;
+  pre_body_br->var_ty = IR_OP_VAR_TY_NONE;
+
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_op *br = alloc_ir_op(irb, br_stmt);
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_OP_VAR_TY_NONE;
+
+  return after_cond_basicblock;
+}
+
+struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
+                                       struct ir_stmt *stmt,
+                                       struct ast_vardecllist *var_decl_list);
+
+struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_declorexpr *decl_or_expr) {
+  if (decl_or_expr->decl) {
+    return build_ir_for_vardecllist(irb, stmt, decl_or_expr->decl);
+  } else if (decl_or_expr->expr) {
+    return build_ir_for_expr(irb, stmt, decl_or_expr->expr);
+  }
+
+  return NULL;
+}
+
+struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
+                                            struct ir_basicblock *basicblock,
+                                            struct ast_forstmt *for_stmt) {
+  
+  struct ir_basicblock *before_cond_basicblock = basicblock;
+  struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
+
+  make_basicblock_merge(irb, before_cond_basicblock, cond_basicblock);
+  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_body_basicblock);
+
+  if (for_stmt->init) {
+    struct ir_stmt *init_stmt = alloc_ir_stmt(irb, before_cond_basicblock);
+    build_ir_for_declorexpr(irb, init_stmt, for_stmt->init);
+  }
+
+  invariant_assert(for_stmt->cond, "for stmt without cond not yet supported");
+
+  if (for_stmt->cond) {
     struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
     struct ir_op *cond =
-        build_ir_for_expr(irb, cond_stmt, &iter_stmt->while_stmt.condition);
+        build_ir_for_expr(irb, cond_stmt, for_stmt->cond);
     struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_OP_VAR_TY_NONE;
     cond_br->br_cond.cond = cond;
-
-    struct ir_basicblock *body_stmt_basicblock =
-        build_ir_for_stmt(irb, body_basicblock, iter_stmt->while_stmt.body);
-    debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
-
-    struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
-    pre_cond_br->ty = IR_OP_TY_BR;
-    pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
-
-    struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
-    struct ir_op *br = alloc_ir_op(irb, br_stmt);
-    br->ty = IR_OP_TY_BR;
-    br->var_ty = IR_OP_VAR_TY_NONE;
-
-    return after_body_basicblock;
   }
+
+  struct ir_basicblock *body_stmt_basicblock =
+      build_ir_for_stmt(irb, body_basicblock, for_stmt->body);
+
+  if (for_stmt->iter) {
+    invariant_assert(body_basicblock->last, "attempting to add `for` loop iter without stmt present, needs fixing");
+    build_ir_for_expr(irb, body_basicblock->last, for_stmt->iter);
+  }
+
+  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+
+  struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
+  pre_cond_br->ty = IR_OP_TY_BR;
+  pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
+
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_op *br = alloc_ir_op(irb, br_stmt);
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_OP_VAR_TY_NONE;
+
+  return after_body_basicblock;
+}
+
+struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
+                                            struct ir_basicblock *basicblock,
+                                            struct ast_iterstmt *iter_stmt) {
+  switch (iter_stmt->ty) {
+  case AST_ITERSTMT_TY_WHILE:
+      return build_ir_for_whilestmt(irb, basicblock, &iter_stmt->while_stmt);
+  case AST_ITERSTMT_TY_DO_WHILE:
+      return build_ir_for_dowhilestmt(irb, basicblock, &iter_stmt->do_while_stmt);
+  case AST_ITERSTMT_TY_FOR:
+      return build_ir_for_forstmt(irb, basicblock, &iter_stmt->for_stmt);
   }
 }
 
@@ -471,7 +583,10 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
   case AST_STMT_TY_ITER: {
     return build_ir_for_iterstmt(irb, basicblock, &stmt->iter);
   }
+  case AST_STMT_TY_NULL: {
+    return basicblock;   
   }
+}
 }
 
 size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {

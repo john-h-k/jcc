@@ -28,8 +28,7 @@ bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
 struct ir_op_mov {
-  struct ir_op *dest;
-  struct ir_op *src;
+  struct ir_op *value;
 };
 
 struct ir_op_phi {
@@ -122,9 +121,16 @@ struct ir_op_br_cond {
 #define NO_LCL (SIZE_T_MAX)
 #define REG_SPILLED (SIZE_T_MAX - 1)
 
+enum ir_op_flags {
+  IR_OP_FLAG_NONE = 0,
+  IR_OP_FLAG_MUST_SPILL = 1
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
+
+  enum ir_op_flags flags;
 
   struct ir_op_var_ty var_ty;
 

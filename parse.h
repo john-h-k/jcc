@@ -13,8 +13,7 @@
 enum well_known_ty {
   // parser.c relies on the unsigned variant being the signed variant +1
   // ir.c relies on the sizes being ascending
-  WELL_KNOWN_TY_ASCII_CHAR = -1,
-  WELL_KNOWN_TY_SIGNED_CHAR = 0,
+  WELL_KNOWN_TY_SIGNED_CHAR,
   WELL_KNOWN_TY_UNSIGNED_CHAR,
 
   WELL_KNOWN_TY_SIGNED_SHORT,
@@ -30,14 +29,9 @@ enum well_known_ty {
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 };
 
-#define WKT_MAKE_SIGNED(wkt)                                                   \
-  ((wkt) == WELL_KNOWN_TY_UNSIGNED_CHAR ? WELL_KNOWN_TY_SIGNED_CHAR            \
-                                        : ((wkt) & ~1))
-#define WKT_MAKE_UNSIGNED(wkt)                                                 \
-  ((wkt) == WELL_KNOWN_TY_SIGNED_CHAR ? WELL_KNOWN_TY_UNSIGNED_CHAR            \
-                                      : ((wkt) | 1))
+#define WKT_MAKE_SIGNED(wkt) ((wkt) & ~1)
+#define WKT_MAKE_UNSIGNED(wkt) ((wkt) | 1)
 
-// signed types have odd values in the enum
 #define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
 
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
@@ -85,6 +79,30 @@ struct ast_cnst {
 
 struct ast_expr;
 
+enum ast_unary_op_prefix_ty {
+  AST_UNARY_OP_PREFIX_TY_INC,
+  AST_UNARY_OP_PREFIX_TY_DEC,
+  AST_UNARY_OP_PREFIX_TY_PLUS,
+  AST_UNARY_OP_PREFIX_TY_MINUS,
+  // AST_UNARY_OP_TY_NOT,
+  // AST_UNARY_OP_TY_SIZEOF,
+};
+
+struct ast_unary_op_prefix {
+  enum ast_unary_op_prefix_ty ty;
+  struct ast_expr *expr;
+};
+
+enum ast_unary_op_postfix_ty {
+  AST_UNARY_OP_POSTFIX_TY_INC,
+  AST_UNARY_OP_POSTFIX_TY_DEC,
+};
+
+struct ast_unary_op_postfix {
+  enum ast_unary_op_postfix_ty ty;
+  struct ast_expr *expr;
+};
+
 enum ast_binary_op_ty {
   AST_BINARY_OP_TY_ADD,
   AST_BINARY_OP_TY_SUB,
@@ -93,11 +111,24 @@ enum ast_binary_op_ty {
   AST_BINARY_OP_TY_QUOT
 };
 
-struct ast_binaryop {
+struct ast_binary_op {
   enum ast_binary_op_ty ty;
   struct ast_tyref var_ty;
   struct ast_expr *lhs;
   struct ast_expr *rhs;
+};
+
+enum ast_unary_op_ty {
+  AST_UNARY_OP_TY_PREFIX,
+  AST_UNARY_OP_TY_POSTFIX
+};
+
+struct ast_unary_op {
+  enum ast_unary_op_ty ty;
+  union {
+    struct ast_unary_op_prefix prefix;
+    struct ast_unary_op_postfix postfix;
+  };
 };
 
 /* Variable references */
@@ -154,7 +185,8 @@ struct ast_rvalue {
 
   union {
     struct ast_cnst cnst;
-    struct ast_binaryop binary_op;
+    struct ast_binary_op binary_op;
+    struct ast_unary_op unary_op;
     struct ast_compoundexpr
         compound_expr; // compound assignments are *never* lvalues in C
     struct ast_assg *assg;
@@ -222,6 +254,7 @@ struct ast_jumpstmt {
  * iteration, or selection */
 
 enum ast_stmt_ty {
+  AST_STMT_TY_NULL,
   AST_STMT_TY_VAR_DECL_LIST,
   // AST_STMT_TY_LABELLED,
   AST_STMT_TY_EXPR,
@@ -270,12 +303,31 @@ struct ast_compoundstmt {
 };
 
 struct ast_whilestmt {
-  struct ast_expr condition;
+  struct ast_expr cond;
+  struct ast_stmt *body;
+};
+
+struct ast_dowhilestmt {
+  struct ast_expr cond;
+  struct ast_stmt *body;
+};
+
+struct ast_declorexpr {
+  struct ast_vardecllist *decl;
+  struct ast_expr *expr;
+};
+
+struct ast_forstmt {
+  struct ast_declorexpr *init;
+  struct ast_expr *cond;
+  struct ast_expr *iter;
   struct ast_stmt *body;
 };
 
 enum ast_iterstmt_ty {
   AST_ITERSTMT_TY_WHILE,
+  AST_ITERSTMT_TY_DO_WHILE,
+  AST_ITERSTMT_TY_FOR,
 };
 
 struct ast_iterstmt {
@@ -283,6 +335,8 @@ struct ast_iterstmt {
 
   union {
     struct ast_whilestmt while_stmt;
+    struct ast_dowhilestmt do_while_stmt;
+    struct ast_forstmt for_stmt;
   };
 };
 

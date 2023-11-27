@@ -20,45 +20,17 @@ struct interval_data {
 #define MARK_REG_USED(reg_pool, i) (reg_pool) &= ~(1 << i)
 #define MARK_REG_FREE(reg_pool, i) (reg_pool) |= (1 << i)
 
+struct interval_callback_data {
+  struct ir_op *op;
+  struct interval_data *data;
+};
+
 void op_used_callback(struct ir_op **op, void *cb_metadata) {
-  struct interval_data *data = cb_metadata;
+  struct interval_callback_data *cb = cb_metadata;
 
-  debug("op callback id %zu", (*op)->id);
-  struct interval *interval = &data->intervals[(*op)->id];
+  struct interval *interval = &cb->data->intervals[(*op)->id];
 
-  interval->end = MAX(interval->end, data->num_intervals);
-
-  if (interval->op) {
-    debug("op=%zu, op start %zu, op end %zu", interval->op->id, interval->start,
-          interval->end);
-  }
-}
-
-struct ir_op *last_value_producing_op(struct ir_basicblock *basicblock) {
-  struct ir_op *last_op = NULL;
-  struct ir_stmt *stmt = basicblock->last;
-  while (stmt && !last_op) {
-    struct ir_op *op = stmt->last;
-
-    while (op && !last_op) {
-      if (op_produces_value(op->ty)) {
-        last_op = op;
-      }
-
-      op = op->pred;
-    }
-
-    stmt = stmt->pred;
-  }
-
-  // we now have the last op in the value's basic block that contains an
-  // interval
-  invariant_assert(last_op,
-                   "trying to assign phi lifetime for bb but couldn't find "
-                   "value-producing instruction in the block id %zu",
-                   basicblock->id);
-
-  return last_op;
+  interval->end = MAX(interval->end, cb->op->id);
 }
 
 #define INTERVAL_END_OF_BASICBLOCK (SIZE_T_MAX)
@@ -79,39 +51,16 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        debug("constructing interval for op %zu", op->id);
         op->lcl_idx = NO_LCL;
         op->reg = NO_REG;
 
         debug_assert(op->id < irb->op_count, "out of range!");
         struct interval *interval = &data.intervals[op->id];
 
-        size_t start;
-
         // special case - a phi op actually starts existing at the end of its
         // earliest basicblock
-        if (op->ty == IR_OP_TY_PHI) {
-          start = 0; // if the phi has no values
-          for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *value = op->phi.values[i];
-            struct ir_basicblock *value_block = value->stmt->basicblock;
-
-            struct interval *value_interval = &data.intervals[value->id];
-
-            // struct ir_op *last_op = last_value_producing_op(value_block);
-            struct ir_op *last_op = value_block->last->last;
-            value_interval->end = INTERVAL_END_OF_BASICBLOCK;
-
-            struct interval *last_interval = &data.intervals[last_op->id];
-
-            interval->start = MIN(interval->start, last_interval->start);
-          }
-        } else {
-          start = data.num_intervals;
-        }
-
         interval->op = op;
-        interval->start = start;
+        interval->start = op->id;
 
         if (interval->end < interval->start) {
           interval->end = interval->start; // this ensures intervals are still
@@ -123,7 +72,12 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
             "metadata left over in op during LSRA, will be overwritten");
         op->metadata = interval;
 
-        walk_op_uses(op, op_used_callback, &data);
+        struct interval_callback_data cb_data = {
+          .op = op,
+          .data = &data
+        };
+
+        walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
 
         op = op->succ;
@@ -140,7 +94,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
     if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
       struct ir_op *last_op = interval->op->stmt->basicblock->last->last;
-          // last_value_producing_op(interval->op->stmt->basicblock);
       interval->end = data.intervals[last_op->id].start;
     }
   }
@@ -192,13 +145,11 @@ void expire_old_intervals(struct interval *intervals,
 
     num_expired_intervals++;
 
-    debug("op %zu, marking reg %ul free", interval->op->id, interval->op->reg);
     MARK_REG_FREE(*reg_pool, interval->op->reg);
   }
 
   // shift the active array down
 
-  debug("expired: %zu", num_expired_intervals);
   *num_active -= num_expired_intervals;
   memmove(active, &active[num_expired_intervals],
           sizeof(*active) * (*num_active));
@@ -302,6 +253,8 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
 
 struct interval_data register_alloc_pass(struct ir_builder *irb,
                                          struct reg_info reg_info) {
+  rebuild_ids(irb);
+
   struct interval_data data = construct_intervals(irb);
   struct interval *intervals = data.intervals;
   size_t num_intervals = data.num_intervals;
@@ -320,7 +273,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
-    debug("%zu active", num_active);
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
@@ -331,19 +283,14 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       continue;
     }
 
-    if (num_active == reg_info.num_regs) {
+    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL || num_active == reg_info.num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
       unsigned long free_reg = tzcnt(reg_pool);
-      debug("active: %ul", num_active);
-      debug("reg pool: %ul", reg_pool);
-      debug("reg pool free: %ul", __builtin_popcount(reg_pool));
-      debug("free reg: %ul", free_reg);
       debug_assert(free_reg < reg_info.num_regs,
                    "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
-      debug("ASSIGNED REG %zu FOR OP %zu", free_reg, interval->op->id);
       interval->op->reg = free_reg;
 
       // insert into `active`, sorted by end point

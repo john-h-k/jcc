@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-enum lex_token_type {
+enum lex_token_ty {
   LEX_TOKEN_TYPE_UNKNOWN,
   LEX_TOKEN_TYPE_EOF,
 
@@ -24,16 +24,27 @@ enum lex_token_type {
 
   /* Operators */
 
-  LEX_TOKEN_TYPE_OP_ASSG, // +
+  LEX_TOKEN_TYPE_OP_INC, // ++
+  LEX_TOKEN_TYPE_OP_DEC, // --
 
   LEX_TOKEN_TYPE_OP_ADD,  // +
+  LEX_TOKEN_TYPE_OP_ADD_ASSG,  // +=
   LEX_TOKEN_TYPE_OP_SUB,  // -
+  LEX_TOKEN_TYPE_OP_SUB_ASSG,  // -=
   LEX_TOKEN_TYPE_OP_MUL,  // *
+  LEX_TOKEN_TYPE_OP_MUL_ASSG,  // *=
   LEX_TOKEN_TYPE_OP_DIV,  // /
+  LEX_TOKEN_TYPE_OP_DIV_ASSG,  // /=
   LEX_TOKEN_TYPE_OP_QUOT, // %
+  LEX_TOKEN_TYPE_OP_QUOT_ASSG, // %=
+
+  LEX_TOKEN_TYPE_OP_ASSG, // =
+
 
   /* Keywords */
 
+  LEX_TOKEN_TYPE_KW_FOR,
+  LEX_TOKEN_TYPE_KW_DO,
   LEX_TOKEN_TYPE_KW_WHILE,
   LEX_TOKEN_TYPE_KW_IF,
   LEX_TOKEN_TYPE_KW_ELSE,
@@ -91,7 +102,7 @@ void next_line(struct text_pos *pos);
 struct token {
   struct text_span span;
 
-  enum lex_token_type ty;
+  enum lex_token_ty ty;
 };
 
 struct lexer;
