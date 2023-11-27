@@ -6,6 +6,7 @@
 #include "disasm.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
+#include "ir/prettyprint.h"
 #include "lex.h"
 #include "log.h"
 #include "lsra.h"
@@ -112,6 +113,8 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
+
+      rebuild_ids(ir);
 
       debug_print_ir(ir, ir->first, print_ir_intervals, NULL);
 

@@ -19,8 +19,10 @@ set(
   var_table.c
   lsra.c
   
+  ir/ir.c
   ir/build.c
   ir/eliminate_phi.c
+  ir/prettyprint.c
 
   aarch64/lower.c
   aarch64/emit.c
