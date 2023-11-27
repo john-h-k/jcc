@@ -28,7 +28,8 @@ bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
 struct ir_op_mov {
-  struct ir_op *value;
+  struct ir_op *dest;
+  struct ir_op *src;
 };
 
 struct ir_op_phi {
