@@ -7,6 +7,7 @@
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/prettyprint.h"
+#include "ir/reorder_moves.h"
 #include "lex.h"
 #include "log.h"
 #include "lsra.h"
@@ -110,15 +111,17 @@ enum compile_result compile(struct compiler *compiler) {
         enable_log();
       }
 
-      BEGIN_STAGE("REGALLOC");
-
-      struct reg_info aarch64_reg_info = {.num_regs = 18};
-      register_alloc(ir, aarch64_reg_info);
-
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
 
       // rebuild_ids(ir);
+
+      BEGIN_STAGE("REGALLOC");
+
+      struct reg_info aarch64_reg_info = {.num_regs = 17};
+      register_alloc(ir, aarch64_reg_info);
+
+      reorder_moves(ir, &aarch64_reg_info);
 
       debug_print_ir(stderr, ir, print_ir_intervals, NULL);
 
