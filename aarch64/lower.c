@@ -85,6 +85,12 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
         mul->succ ? mul->succ->id : SIZE_T_MAX);
 }
 
+// AArch64 requires turning `br.cond <true> <false>` into 2 instructions
+// we represent this as just the `true` part of the `br.cond`, and then a `br` after branching to the false target
+void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
+  insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
+}
+
 void lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
@@ -101,7 +107,12 @@ void lower(struct ir_builder *func) {
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
         case IR_OP_TY_BR:
+          break;
         case IR_OP_TY_BR_COND:
+          if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
+            lower_br_cond(func, op);
+          }
+          break;
         case IR_OP_TY_MOV:
           break;
         case IR_OP_TY_BINARY_OP:
