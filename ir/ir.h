@@ -153,6 +153,7 @@ struct ir_op {
 struct ir_stmt {
   size_t id;
 
+  // a NULL bb means a pruned stmt
   struct ir_basicblock *basicblock;
 
   struct ir_stmt *pred;
@@ -208,6 +209,9 @@ struct ir_basicblock {
   // multiple ops
   struct var_table var_table;
 
+  // a NULL irb means a pruned basicblock
+  struct ir_builder *irb;
+
   // these are creation order traversal methods, and do not signify edges
   // between BBs
   struct ir_basicblock *pred;
@@ -230,6 +234,8 @@ struct ir_basicblock {
 
   // only used by regalloc
   size_t max_interval;
+
+  bool pruned;
 };
 
 struct ir_builder {
@@ -256,7 +262,25 @@ void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 
+
+bool stmt_is_empty(struct ir_stmt *stmt);
+bool basicblock_is_empty(struct ir_basicblock *basicblock);
+
+void prune_basicblocks(struct ir_builder *irb);
+void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
+
+void rebuild_ids(struct ir_builder *irb);
+
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
+
+struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
+                              struct ir_basicblock *basicblock);
+
+struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb);
+
+void add_pred_to_basicblock(struct ir_builder *irb,
+                            struct ir_basicblock *basicblock,
+                            struct ir_basicblock *pred);
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -268,6 +292,9 @@ void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
                       struct ir_op *move_after);
 void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
                        struct ir_op *move_before);
+
+// swaps ops but does NOT swap their uses - expressions pointing to `left` will now point to `right`
+void swap_ir_ops(struct ir_builder *irb, struct ir_op *left, struct ir_op *right);
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,

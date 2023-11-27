@@ -1,0 +1,574 @@
+#include "ir.h"
+
+bool op_produces_value(enum ir_op_ty ty) {
+  switch (ty) {
+  case IR_OP_TY_PHI:
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_CNST:
+  case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_LOAD_LCL:
+    return true;
+  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_BR_COND:
+  case IR_OP_TY_RET:
+  case IR_OP_TY_BR:
+    return false;
+  }
+}
+
+bool op_is_branch(enum ir_op_ty ty) {
+  switch (ty) {
+  case IR_OP_TY_BR_COND:
+  case IR_OP_TY_RET:
+  case IR_OP_TY_BR:
+    return true;
+  case IR_OP_TY_PHI:
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_CNST:
+  case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_LOAD_LCL:
+    return false;
+  }
+}
+
+void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
+                  void *cb_metadata) {
+  cb(&br_cond->cond, cb_metadata);
+}
+
+void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
+                    void *cb_metadata) {
+  cb(&store_lcl->value, cb_metadata);
+}
+
+void walk_load_lcl(struct ir_op_load_lcl *load_lcl, walk_op_callback *cb,
+                   void *cb_metadata) {
+  UNUSED_ARG(load_lcl);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb,
+               void *cb_metadata) {
+  UNUSED_ARG(cnst);
+  UNUSED_ARG(cb);
+  UNUSED_ARG(cb_metadata);
+  // nada
+}
+
+void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
+                    void *cb_metadata) {
+  walk_op(binary_op->lhs, cb, cb_metadata);
+  walk_op(binary_op->rhs, cb, cb_metadata);
+}
+
+void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
+  if (ret->value) {
+    walk_op(ret->value, cb, cb_metadata);
+  }
+}
+
+void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+  switch (op->ty) {
+  case IR_OP_TY_PHI: {
+    for (size_t i = 0; i < op->phi.num_values; i++) {
+      cb(&op->phi.values[i], cb_metadata);
+    }
+    break;
+  }
+  case IR_OP_TY_CNST:
+    break;
+  case IR_OP_TY_BINARY_OP:
+    cb(&op->binary_op.lhs, cb_metadata);
+    cb(&op->binary_op.rhs, cb_metadata);
+    break;
+  case IR_OP_TY_STORE_LCL:
+    cb(&op->store_lcl.value, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_LCL:
+    break;
+  case IR_OP_TY_BR:
+    break;
+  case IR_OP_TY_BR_COND:
+    cb(&op->br_cond.cond, cb_metadata);
+    break;
+  case IR_OP_TY_MOV:
+    break;
+  case IR_OP_TY_RET:
+    if (op->ret.value) {
+      cb(&op->ret.value, cb_metadata);
+    }
+    break;
+  }
+}
+
+void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+  cb(&op, cb_metadata);
+
+  switch (op->ty) {
+  case IR_OP_TY_PHI:
+    todo("walk phi");
+  case IR_OP_TY_MOV:
+    todo("walk mov");
+  case IR_OP_TY_CNST:
+    walk_cnst(&op->cnst, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BINARY_OP:
+    walk_binary_op(&op->binary_op, cb, cb_metadata);
+    break;
+  case IR_OP_TY_STORE_LCL:
+    walk_store_lcl(&op->store_lcl, cb, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_LCL:
+    walk_load_lcl(&op->load_lcl, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BR:
+    // nada
+    break;
+  case IR_OP_TY_BR_COND:
+    walk_br_cond(&op->br_cond, cb, cb_metadata);
+    break;
+  case IR_OP_TY_RET:
+    walk_ret(&op->ret, cb, cb_metadata);
+    break;
+  }
+}
+
+void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata) {
+  struct ir_op *op = stmt->last;
+
+  walk_op(op, cb, cb_metadata);
+}
+
+enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_ADD:
+  case IR_OP_BINARY_OP_TY_SUB:
+  case IR_OP_BINARY_OP_TY_MUL:
+    return IR_OP_SIGN_NA;
+  case IR_OP_BINARY_OP_TY_SDIV:
+  case IR_OP_BINARY_OP_TY_SQUOT:
+    return IR_OP_SIGN_SIGNED;
+  case IR_OP_BINARY_OP_TY_UDIV:
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    return IR_OP_SIGN_UNSIGNED;
+  }
+}
+
+const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
+
+void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
+                      struct ir_op_var_ty var_ty, struct ir_op *pred,
+                      struct ir_op *succ, struct ir_stmt *stmt,
+                      unsigned long reg, unsigned long lcl_idx) {
+  op->id = id;
+  op->ty = ty;
+  op->var_ty = var_ty;
+  op->pred = pred;
+  op->succ = succ;
+  op->stmt = stmt;
+  op->reg = reg;
+  op->lcl_idx = lcl_idx;
+  op->metadata = NULL;
+}
+
+void detach_ir_basicblock(struct ir_builder *irb,
+                          struct ir_basicblock *basicblock) {
+  invariant_assert(irb->basicblock_count,
+                   "`detach_ir_basicblock` would underflow basicblock count "
+                   "for `ir_builder`");
+
+  irb->basicblock_count--;
+
+  invariant_assert(!basicblock->num_preds, "trying to detach BB with preds");
+
+  // fix links on either side of basicblock
+  if (basicblock->pred) {
+    basicblock->pred->succ = basicblock->succ;
+  } else {
+    irb->first = basicblock->succ;
+  }
+
+  if (basicblock->succ) {
+    basicblock->succ->pred = basicblock->pred;
+  } else {
+    irb->last = basicblock->pred;
+  }
+
+  basicblock->irb = NULL;
+}
+
+void detach_ir_stmt(struct ir_builder *irb, struct ir_stmt *stmt) {
+  invariant_assert(
+      irb->stmt_count,
+      "`detach_ir_stmt` would underflow stmt count for `ir_builder`");
+
+  irb->stmt_count--;
+
+  // fix links on either side of stmt
+  if (stmt->pred) {
+    stmt->pred->succ = stmt->succ;
+  } else {
+    stmt->basicblock->first = stmt->succ;
+  }
+
+  if (stmt->succ) {
+    stmt->succ->pred = stmt->pred;
+  } else {
+    stmt->basicblock->last = stmt->pred;
+  }
+
+  stmt->basicblock = NULL;
+}
+
+void detach_ir_op(struct ir_builder *irb, struct ir_op *op) {
+  invariant_assert(irb->op_count,
+                   "`detach_ir_op` would underflow op count for `ir_builder`");
+  invariant_assert(op->stmt, "can't detach `op` not attached to stmt");
+
+  irb->op_count--;
+
+  // fix links on either side of op
+  if (op->pred) {
+    op->pred->succ = op->succ;
+  } else {
+    op->stmt->first = op->succ;
+  }
+
+  if (op->succ) {
+    op->succ->pred = op->pred;
+  } else {
+    op->stmt->last = op->pred;
+  }
+
+  op->stmt = NULL;
+}
+
+bool stmt_is_empty(struct ir_stmt *stmt) {
+  invariant_assert(
+      (stmt->first && stmt->last) || (!stmt->first && !stmt->last),
+      "stmt had `first` or `last` NULL but not both; this is badly formed");
+  return stmt->first;
+}
+
+bool basicblock_is_empty(struct ir_basicblock *basicblock) {
+  invariant_assert((basicblock->first && basicblock->last) ||
+                       (!basicblock->first && !basicblock->last),
+                   "basicblock had `first` or `last` NULL but not both; this "
+                   "is badly formed");
+  return basicblock->first;
+}
+
+void prune_basicblocks(struct ir_builder *irb) {
+  struct ir_basicblock *basicblock = irb->first;
+
+  while (basicblock) {
+    prune_stmts(irb, basicblock);
+
+    // save succ before we detach
+    struct ir_basicblock *succ = basicblock->succ;
+
+    if (basicblock_is_empty(basicblock)) {
+      detach_ir_basicblock(irb, basicblock);
+    }
+
+    basicblock = succ;
+  }
+}
+
+void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = basicblock->first;
+
+  while (stmt) {
+    // save succ before we detach
+    struct ir_stmt *succ = stmt->succ;
+
+    if (stmt_is_empty(stmt)) {
+      detach_ir_stmt(irb, stmt);
+    }
+
+    stmt = succ;
+  }
+}
+
+void rebuild_ids(struct ir_builder *irb) {
+  size_t id = 0;
+
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        debug("op %zu has new id %zu", op->id, id + 1);
+        op->id = id++;
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  irb->op_count = id;
+}
+
+void attach_ir_op(struct ir_builder *irb, struct ir_op *op, struct ir_op *pred,
+                  struct ir_op *succ) {
+  invariant_assert(!op->stmt, "non-detached op trying to be attached");
+
+  invariant_assert((pred && pred->stmt) || (succ && succ->stmt),
+                   "cannot attach op without stmt");
+  invariant_assert(pred == NULL || pred->stmt == NULL || succ == NULL ||
+                       succ->stmt == NULL || (pred->stmt == succ->stmt),
+                   "cannot attach op across stmts");
+
+  struct ir_stmt *stmt = pred && pred->stmt ? pred->stmt : succ->stmt;
+
+  irb->op_count++;
+
+  op->stmt = stmt;
+
+  if (op != pred) {
+    op->pred = pred;
+  }
+
+  if (op != succ) {
+    op->succ = succ;
+  }
+
+  if (op->pred) {
+    op->pred->succ = op;
+  } else {
+    op->stmt->first = op;
+  }
+
+  if (op->succ) {
+    op->succ->pred = op;
+  } else {
+    op->stmt->last = op;
+  }
+}
+
+void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
+                      struct ir_op *move_after) {
+  UNUSED_ARG(irb);
+  invariant_assert(op->id != move_after->id, "trying to move op after itself!");
+  invariant_assert(op->stmt == NULL || op->stmt == move_after->stmt,
+                   "moving between ir_stmts not supported");
+
+  if (op->stmt) {
+    detach_ir_op(irb, op);
+  }
+
+  debug("move after pred %zu, succ %zu",
+        move_after->pred ? move_after->pred->id : SIZE_T_MAX,
+        move_after->succ ? move_after->succ->id : SIZE_T_MAX);
+
+  attach_ir_op(irb, op, move_after, move_after->succ);
+}
+
+void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
+                       struct ir_op *move_before) {
+  UNUSED_ARG(irb);
+  invariant_assert(op->id != move_before->id,
+                   "trying to move op before itself!");
+  invariant_assert(op->stmt == NULL || op->stmt == move_before->stmt,
+                   "moving between ir_stmts not supported");
+
+  if (op->stmt) {
+    detach_ir_op(irb, op);
+  }
+
+  debug("move before pred %zu, succ %zu",
+        move_before->pred ? move_before->pred->id : SIZE_T_MAX,
+        move_before->succ ? move_before->succ->id : SIZE_T_MAX);
+
+  attach_ir_op(irb, op, move_before->pred, move_before);
+}
+
+struct ir_op *insert_before_ir_op(struct ir_builder *irb,
+                                  struct ir_op *insert_before, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty) {
+  debug_assert(insert_before, "invalid insertion point!");
+
+  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL, NULL, NULL, NO_REG,
+                   NO_LCL);
+
+  move_before_ir_op(irb, op, insert_before);
+
+  return op;
+}
+
+struct ir_op *insert_after_ir_op(struct ir_builder *irb,
+                                 struct ir_op *insert_after, enum ir_op_ty ty,
+                                 struct ir_op_var_ty var_ty) {
+  debug_assert(insert_after, "invalid insertion point!");
+
+  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+
+  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL, NULL, NULL, NO_REG,
+                   NO_LCL);
+
+  move_after_ir_op(irb, op, insert_after);
+
+  return op;
+}
+
+void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
+                 struct ir_op *right) {
+  if (left == right) {
+    return;
+  }
+
+  debug_assert(left->stmt == right->stmt, "cannot swap ops across stmts");
+
+  struct ir_op *left_pred = left->pred;
+  struct ir_op *left_succ = left->succ;
+
+  struct ir_op *right_pred = right->pred;
+  struct ir_op *right_succ = right->succ;
+
+  detach_ir_op(irb, left);
+  attach_ir_op(irb, left, right_pred, right_succ);
+
+  detach_ir_op(irb, right);
+  attach_ir_op(irb, right, left_pred, left_succ);
+}
+
+// TODO: this should call `initialise_ir_op`
+struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
+  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+
+  if (!stmt->first) {
+    stmt->first = op;
+  }
+
+  op->id = irb->op_count++;
+  op->stmt = stmt;
+  op->pred = stmt->last;
+  op->succ = NULL;
+
+  if (stmt->last) {
+    stmt->last->succ = op;
+  }
+
+  stmt->last = op;
+
+  return op;
+}
+
+struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
+                              struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+
+  if (!basicblock->first) {
+    basicblock->first = stmt;
+  }
+
+  stmt->id = irb->stmt_count++;
+  stmt->basicblock = basicblock;
+  stmt->pred = basicblock->last;
+  stmt->succ = NULL;
+
+  if (basicblock->last) {
+    basicblock->last->succ = stmt;
+  }
+
+  basicblock->last = stmt;
+
+  return stmt;
+}
+
+bool valid_basicblock(struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = basicblock->first;
+  while (stmt) {
+    struct ir_op *op = stmt->first;
+    while (op) {
+      if (op_is_branch(op->ty)) {
+        // it must be the *last* op
+        return op->succ == NULL && stmt->succ == NULL;
+      }
+
+      op = op->succ;
+    }
+
+    stmt = stmt->succ;
+  }
+
+  // we have seen no branches, this cannot be a valid basicblock
+  return false;
+}
+
+void add_pred_to_basicblock(struct ir_builder *irb,
+                            struct ir_basicblock *basicblock,
+                            struct ir_basicblock *pred) {
+  for (size_t i = 0; i < basicblock->num_preds; i++) {
+    if (basicblock->preds[i] == pred) {
+      // pred already present
+      return;
+    }
+  }
+
+  basicblock->num_preds++;
+  basicblock->preds =
+      arena_realloc(irb->arena, basicblock->preds,
+                    sizeof(struct ir_basicblock *) * basicblock->num_preds);
+
+  basicblock->preds[basicblock->num_preds - 1] = pred;
+}
+
+void get_basicblock_successors(struct ir_basicblock *basicblock,
+                               struct ir_basicblock **first,
+                               struct ir_basicblock **second) {
+  *first = NULL;
+  *second = NULL;
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    // returns don't have successors
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    *first = basicblock->merge.target;
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    *first = basicblock->split.true_target;
+    *second = basicblock->split.false_target;
+    break;
+  }
+}
+
+struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
+  struct ir_basicblock *basicblock =
+      arena_alloc(irb->arena, sizeof(*basicblock));
+
+  if (!irb->first) {
+    irb->first = basicblock;
+  }
+
+  basicblock->id = irb->basicblock_count++;
+  basicblock->var_table = var_table_create(irb->parser);
+  basicblock->irb = irb;
+  basicblock->pred = irb->last;
+  basicblock->succ = NULL;
+  basicblock->function_offset = irb->op_count;
+
+  basicblock->preds = NULL;
+  basicblock->num_preds = 0;
+
+  if (irb->last) {
+    irb->last->succ = basicblock;
+  }
+
+  irb->last = basicblock;
+
+  return basicblock;
+}

@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include "vector.h"
+#include "ir/prettyprint.h"
 
 #include <limits.h>
 
@@ -97,7 +98,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
             struct interval *value_interval = &data.intervals[value->id];
 
-            struct ir_op *last_op = last_value_producing_op(value_block);
+            // struct ir_op *last_op = last_value_producing_op(value_block);
+            struct ir_op *last_op = value_block->last->last;
             value_interval->end = INTERVAL_END_OF_BASICBLOCK;
 
             struct interval *last_interval = &data.intervals[last_op->id];
@@ -137,8 +139,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     struct interval *interval = &data.intervals[i];
 
     if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
-      struct ir_op *last_op =
-          last_value_producing_op(interval->op->stmt->basicblock);
+      struct ir_op *last_op = interval->op->stmt->basicblock->last->last;
+          // last_value_producing_op(interval->op->stmt->basicblock);
       interval->end = data.intervals[last_op->id].start;
     }
   }
@@ -365,6 +367,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 }
 
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
+  rebuild_ids(irb);
+
   struct interval_data data = register_alloc_pass(irb, reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
