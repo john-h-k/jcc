@@ -39,7 +39,7 @@ void eliminate_phi(struct ir_builder *irb) {
     basicblock = basicblock->succ;
   }
 
-  debug_print_ir(irb, irb->first, NULL, NULL);
+  debug_print_ir(stderr, irb, irb->first, NULL, NULL);
 
   // we now need to reorder the inserted movs so they don't overwrite each other
   // or similar

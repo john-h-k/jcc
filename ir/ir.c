@@ -250,7 +250,9 @@ bool stmt_is_empty(struct ir_stmt *stmt) {
   invariant_assert(
       (stmt->first && stmt->last) || (!stmt->first && !stmt->last),
       "stmt had `first` or `last` NULL but not both; this is badly formed");
-  return stmt->first;
+
+  // first will be NULL
+  return !stmt->first;
 }
 
 bool basicblock_is_empty(struct ir_basicblock *basicblock) {
@@ -258,7 +260,8 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock) {
                        (!basicblock->first && !basicblock->last),
                    "basicblock had `first` or `last` NULL but not both; this "
                    "is badly formed");
-  return basicblock->first;
+
+  return !basicblock->first;
 }
 
 void prune_basicblocks(struct ir_builder *irb) {
@@ -560,6 +563,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   basicblock->pred = irb->last;
   basicblock->succ = NULL;
   basicblock->function_offset = irb->op_count;
+  basicblock->metadata = NULL;
 
   basicblock->preds = NULL;
   basicblock->num_preds = 0;

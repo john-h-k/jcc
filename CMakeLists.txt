@@ -9,6 +9,7 @@ set(
   vector.c
   alloc.c
   log.c
+  graphwriter.c
 
   compiler.c
   diagnostics.c

@@ -1,4 +1,6 @@
 #include "prettyprint.h"
+#include "../graphwriter.h"
+#include "ir.h"
 #include <math.h>
 
 const char *binary_op_string(enum ir_op_binary_op_ty ty) {
@@ -59,9 +61,7 @@ const char *phi_string(struct ir_op_phi *phi) {
   return buff;
 }
 
-void debug_print_op(struct ir_op *ir) {
-  FILE *file = stderr;
-
+void debug_print_op(FILE *file, struct ir_op *ir) {
   switch (ir->ty) {
   case IR_OP_TY_PHI:
     fslogsl(file, "%%%zu (%s) = phi [ %s ]", ir->id, var_ty_string(&ir->var_ty),
@@ -107,16 +107,11 @@ void debug_print_op(struct ir_op *ir) {
   }
 }
 
-void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
-                    debug_print_op_callback *cb, void *cb_metadata) {
-  debug("%zu statements", irb->stmt_count);
-
-  int ctr_pad = (int)log10(irb->op_count) + 1;
-  size_t ctr = 0;
-
-  FILE *file = stderr;
-
-  while (basicblock) {
+void debug_print_basicblock_with_ctr(FILE *file, struct ir_builder *irb,
+                            struct ir_basicblock *basicblock,
+                            debug_print_op_callback *cb, void *cb_metadata, int ctr_pad, size_t *ctr) {
+    UNUSED_ARG(irb);
+  
     struct ir_stmt *stmt = basicblock->first;
     fslog(file, "\nBB @ %03zu", basicblock->id);
 
@@ -126,12 +121,11 @@ void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
       int op_pad = /* guess */ 50;
 
       while (ir) {
-        fslogsl(file, "%0*zu: ", ctr_pad, ctr++);
+        fslogsl(file, "%0*zu: ", ctr_pad, (*ctr)++);
 
-        // HACK: this shouldn't rely on the fact `log` goes to `stderr`
-        long pos = ftell(stderr);
-        debug_print_op(ir);
-        long width = ftell(stderr) - pos;
+        long pos = ftell(file);
+        debug_print_op(file, ir);
+        long width = ftell(file) - pos;
         long pad = op_pad - width;
 
         if (pad > 0) {
@@ -140,7 +134,7 @@ void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
 
         if (cb) {
           fslogsl(file, " | ");
-          cb(stderr, ir, cb_metadata);
+          cb(file, ir, cb_metadata);
         }
         fslogsl(file, "\n");
 
@@ -148,7 +142,69 @@ void debug_print_ir(struct ir_builder *irb, struct ir_basicblock *basicblock,
       }
 
       stmt = stmt->succ;
-    }
+    }  
+}
+
+void debug_print_basicblock(FILE *file, struct ir_builder *irb,
+                            struct ir_basicblock *basicblock,
+                            debug_print_op_callback *cb, void *cb_metadata) {
+  int ctr_pad = (int)log10(irb->op_count) + 1;
+  size_t ctr = 0;
+  debug_print_basicblock_with_ctr(file, irb, basicblock, cb, cb_metadata, ctr_pad, &ctr);
+}
+
+
+void debug_print_ir(FILE *file, struct ir_builder *irb, struct ir_basicblock *basicblock,
+                    debug_print_op_callback *cb, void *cb_metadata) {
+  int ctr_pad = (int)log10(irb->op_count) + 1;
+  size_t ctr = 0;
+
+  while (basicblock) {
+    debug_print_basicblock_with_ctr(file, irb, basicblock, cb, cb_metadata, ctr_pad, &ctr);
+    
     basicblock = basicblock->succ;
   }
+}
+
+struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb, struct ir_basicblock *basicblock, struct graphwriter *gwr) {
+  if (!basicblock->metadata) {
+    size_t digits = irb->basicblock_count ? (size_t)log10(irb->basicblock_count) : 0;
+    digits = MAX(digits, 2);
+    
+    basicblock->metadata = vertex_from_integral(gwr, basicblock->id);
+    FILE *file = begin_vertex_attr(basicblock->metadata, GRAPH_VERTEX_ATTR_TY_LABEL);
+    fprintf(file, "BB @ %0*zu\n\n", (int)digits, basicblock->id);
+    debug_print_basicblock(file, irb, basicblock, NULL, NULL);
+
+    end_vertex_attr(basicblock->metadata);
+    
+    struct graph_vertex_attr vertex_attr_rect;
+    vertex_attr_rect.ty = GRAPH_VERTEX_ATTR_TY_SHAPE;
+    vertex_attr_rect.shape = GRAPH_SHAPE_RECT;  
+
+    vertex_attr(basicblock->metadata, &vertex_attr_rect);
+  }
+
+  return basicblock->metadata;
+}
+
+void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
+  struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED, GRAPH_STRICTNESS_STRICT, file);
+
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
+    struct graph_vertex *basicblock_vertex = get_basicblock_vertex(irb, basicblock, gwr);
+
+    for (size_t i = 0; i < basicblock->num_preds; i++) {
+      struct ir_basicblock *pred = basicblock->preds[i];
+      struct graph_vertex *pred_vertex = get_basicblock_vertex(irb, pred, gwr);
+
+
+      edge(gwr, pred_vertex, basicblock_vertex);
+    }
+    
+    basicblock = basicblock->succ;
+  }
+
+  graphwriter_free(&gwr);
 }
