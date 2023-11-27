@@ -119,18 +119,7 @@ struct compiled_function emit(struct ir_builder *func) {
       while (stmt) {
         struct ir_op *op = stmt->first;
         while (op) {
-          // generates two instructions
-          switch (op->ty) {
-            case IR_OP_TY_BR_COND:
-              opc += 2;
-              break;
-            case IR_OP_TY_PHI:
-              break;
-            default:
-              opc++;
-              break;
-          }
-
+          opc++;
           op = op->succ;
         }
 
@@ -205,6 +194,10 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_PHI: {
+      // TODO: ensure everything is where it should be
+      // currently we emit a `nop` to keep everything aligned
+      // ideally we should remove the phi from IR entirely earlier
+      aarch64_emit_nop(state->emitter);
       break;
     }
     case IR_OP_TY_LOAD_LCL: {
@@ -225,17 +218,14 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       // we jump to the end of the block + skip this instruction
       struct ir_basicblock *true_target =
           op->stmt->basicblock->split.true_target;
-
+      (void)true_target;
       struct ir_basicblock *false_target =
           op->stmt->basicblock->split.false_target;
 
-      ssize_t false_offset =
-          (ssize_t)false_target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
-      ssize_t true_offset =
-          (ssize_t)true_target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
-      aarch64_emit_cnbz_32_imm(state->emitter,
-                              get_reg_for_idx(op->br_cond.cond->reg), true_offset);
-      aarch64_emit_b(state->emitter, false_offset);
+      size_t offset =
+          false_target->function_offset - aarch64_emitted_count(state->emitter);
+      aarch64_emit_cbz_32_imm(state->emitter,
+                              get_reg_for_idx(op->br_cond.cond->reg), offset);
       break;
     }
     case IR_OP_TY_BR: {
