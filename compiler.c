@@ -118,7 +118,7 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
 
-      rebuild_ids(ir);
+      // rebuild_ids(ir);
 
       debug_print_ir(stderr, ir, print_ir_intervals, NULL);
 
