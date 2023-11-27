@@ -45,8 +45,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    basicblock->max_interval = 0;
-
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;
