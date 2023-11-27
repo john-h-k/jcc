@@ -83,8 +83,8 @@ char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
                         var_ty_string(&ir->var_ty), phi_string(&ir->phi));
     break;
   case IR_OP_TY_MOV:
-    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->mov.dest->id,
-                        var_ty_string(&ir->var_ty), ir->mov.src->id);
+    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->id,
+                        var_ty_string(&ir->var_ty), ir->mov.value->id);
   case IR_OP_TY_CNST:
     return arena_printf(irb->arena, "%%%zu (%s) = %zu", ir->id,
                         var_ty_string(&ir->var_ty), ir->cnst.value);

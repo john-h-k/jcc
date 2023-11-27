@@ -494,6 +494,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   }
 
   op->id = irb->op_count++;
+  op->flags = IR_OP_FLAG_NONE;
   op->stmt = stmt;
   op->pred = stmt->last;
   op->succ = NULL;

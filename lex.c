@@ -52,12 +52,12 @@ bool valid_first_identifier_char(char c) {
   return !isdigit(c) && valid_identifier_char(c);
 }
 
-enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
+enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
                               struct text_pos end) {
   struct keyword {
     const char *str;
     size_t len;
-    enum lex_token_type ty;
+    enum lex_token_ty ty;
   };
 
   size_t len = text_pos_len(start, end);
@@ -68,6 +68,8 @@ enum lex_token_type refine_ty(struct lexer *lexer, struct text_pos start,
 
   // TODO: hashify
   static struct keyword keywords[] = {
+      KEYWORD("do", LEX_TOKEN_TYPE_KW_DO),
+      KEYWORD("for", LEX_TOKEN_TYPE_KW_FOR),
       KEYWORD("while", LEX_TOKEN_TYPE_KW_WHILE),
       KEYWORD("if", LEX_TOKEN_TYPE_KW_IF),
       KEYWORD("else", LEX_TOKEN_TYPE_KW_ELSE),
@@ -140,6 +142,21 @@ bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
   return false;
 }
 
+bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
+  debug_assert(lexer->pos.idx != pos->idx, "calling `try_consume` with `pos` the same as lexer makes no sense");
+  if (pos->idx < lexer->len && lexer->text[pos->idx] == c) {
+    if (c == '\n') {
+      next_line(pos);
+    } else {
+      next_col(pos);
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 bool lexer_at_eof(struct lexer *lexer) {
   // needed to skip whitespace
   struct token token;
@@ -173,7 +190,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
   trace("lexing char '%c'", c);
 
-  enum lex_token_type ty;
+  enum lex_token_ty ty;
   switch (c) {
   case '(':
     ty = LEX_TOKEN_TYPE_OPEN_BRACKET;
@@ -207,19 +224,40 @@ void peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
     break;
   case '+':
-    ty = LEX_TOKEN_TYPE_OP_ADD;
     next_col(&end);
+    if (try_consume(lexer, &end, '+')) {
+      ty = LEX_TOKEN_TYPE_OP_INC;
+    } else if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TYPE_OP_ADD_ASSG;
+    } else {
+      ty = LEX_TOKEN_TYPE_OP_ADD;
+    }
     break;
   case '-':
-    ty = LEX_TOKEN_TYPE_OP_SUB;
     next_col(&end);
+    if (try_consume(lexer, &end, '-')) {
+      ty = LEX_TOKEN_TYPE_OP_DEC;
+    } else if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TYPE_OP_SUB_ASSG;
+    } else {
+      ty = LEX_TOKEN_TYPE_OP_SUB;
+    }
     break;
   case '*':
-    ty = LEX_TOKEN_TYPE_OP_MUL;
     next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TYPE_OP_MUL_ASSG;
+    } else {
+      ty = LEX_TOKEN_TYPE_OP_MUL;
+    }
     break;
   case '/':
     next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TYPE_OP_DIV_ASSG;
+    } else {
+      ty = LEX_TOKEN_TYPE_OP_DIV;
+    }
 
     // this approach is ugly, TODO: refactor
     // look for `//` and `/*` comment tokens
@@ -246,8 +284,12 @@ void peek_token(struct lexer *lexer, struct token *token) {
     ty = LEX_TOKEN_TYPE_OP_DIV;
     break;
   case '%':
-    ty = LEX_TOKEN_TYPE_OP_QUOT;
     next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TYPE_OP_QUOT_ASSG;
+    } else {
+      ty = LEX_TOKEN_TYPE_OP_QUOT;
+    }
     break;
 
   default: {
@@ -367,7 +409,17 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TYPE_INLINE_COMMENT)
     CASE_RET(LEX_TOKEN_TYPE_MULTILINE_COMMENT)
 
+    CASE_RET(LEX_TOKEN_TYPE_OP_INC)
+    CASE_RET(LEX_TOKEN_TYPE_OP_DEC)
+
     CASE_RET(LEX_TOKEN_TYPE_OP_ASSG)
+
+    CASE_RET(LEX_TOKEN_TYPE_OP_ADD_ASSG)
+    CASE_RET(LEX_TOKEN_TYPE_OP_SUB_ASSG)
+    CASE_RET(LEX_TOKEN_TYPE_OP_MUL_ASSG)
+    CASE_RET(LEX_TOKEN_TYPE_OP_DIV_ASSG)
+    CASE_RET(LEX_TOKEN_TYPE_OP_QUOT_ASSG)
+
     CASE_RET(LEX_TOKEN_TYPE_OP_ADD)
     CASE_RET(LEX_TOKEN_TYPE_OP_SUB)
     CASE_RET(LEX_TOKEN_TYPE_OP_MUL)
@@ -377,6 +429,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TYPE_SEMICOLON)
     CASE_RET(LEX_TOKEN_TYPE_COMMA)
 
+    CASE_RET(LEX_TOKEN_TYPE_KW_DO)
+    CASE_RET(LEX_TOKEN_TYPE_KW_FOR)
     CASE_RET(LEX_TOKEN_TYPE_KW_WHILE)
     CASE_RET(LEX_TOKEN_TYPE_KW_IF)
     CASE_RET(LEX_TOKEN_TYPE_KW_ELSE)

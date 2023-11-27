@@ -112,11 +112,11 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("REGALLOC");
 
-      struct reg_info aarch64_reg_info = {.num_regs = 18};
-      register_alloc(ir, aarch64_reg_info);
-
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
+
+      struct reg_info aarch64_reg_info = {.num_regs = 18};
+      register_alloc(ir, aarch64_reg_info);
 
       // rebuild_ids(ir);
 
