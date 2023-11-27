@@ -235,7 +235,7 @@ struct ir_basicblock {
   // only used by regalloc
   size_t max_interval;
 
-  bool pruned;
+  void *metadata;
 };
 
 struct ir_builder {
