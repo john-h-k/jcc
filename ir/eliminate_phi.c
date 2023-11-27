@@ -27,7 +27,8 @@ void eliminate_phi(struct ir_builder *irb) {
           struct ir_op *mov = insert_before_ir_op(irb, basicblock->last->last,
                                                   IR_OP_TY_MOV, value->var_ty);
           mov->reg = op->reg;
-          mov->mov.value = value;
+          mov->mov.src = value;
+          mov->mov.dest = op;
 
           op->phi.values[i] = mov;
         }
@@ -69,20 +70,16 @@ void eliminate_phi(struct ir_builder *irb) {
           movs[i] = next_op;
         }
 
-        // as this is likely to be small, just do an insertion sort
-        for (size_t i = 1; i < num_movs; i++) {
-          for (size_t j = i; j > 0 && movs[j - 1]->mov.value->reg > movs[j]->reg; j--) {
-            struct ir_op *tmp = movs[j - 1];
-            movs[j - 1] = movs[j];
-            movs[j] = tmp;
+        // // as this is likely to be small, just do an insertion sort
+        // for (size_t i = 1; i < num_movs; i++) {
+        //   for (size_t j = i; j > 0 && movs[j - 1]->mov.value->reg > movs[j]->reg; j--) {
+        //     struct ir_op *tmp = movs[j - 1];
+        //     movs[j - 1] = movs[j];
+        //     movs[j] = tmp;
     
-            swap_ir_ops(irb, movs[j - 1], movs[j]);
-          }
-        }
-
-        for (size_t i = 0; i < num_movs; i++) {
-          
-        }
+        //     swap_ir_ops(irb, movs[j - 1], movs[j]);
+        //   }
+        // }
       }
     }
 
