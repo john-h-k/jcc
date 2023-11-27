@@ -14,6 +14,7 @@ The current design consists of 3 stages:
   * All code located in the [`ir`](ir) folder
   * IR representation structs and helper methods are in [`ir/ir.h`](ir/ir.h) and [`ir/ir.c`](ir/ir.c)
   * Pretty-printing functionality is in [`ir/prettyprint.h`](ir/prettyprint.h) and [`ir/prettyprint.c`](ir/prettyprint.c)
+    * This also includes graph-building functionality with graphviz
   * IR building
     * This stage converts the AST into an SSA IR form
     * Code is [`ir/build.h`](ir/build.h) and [`ir/build.c`](ir/build.c)
