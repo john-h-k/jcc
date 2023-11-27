@@ -60,7 +60,6 @@ void debug_print_basicblock(FILE *file, struct ir_builder *irb,
 void debug_print_ir(FILE *file, struct ir_builder *irb,
                     debug_print_op_callback *cb, void *cb_metadata);
 
-/* Debug methods that write a graphviz graph */
 
 void debug_print_ir_graph(FILE *file, struct ir_builder *irb);
 

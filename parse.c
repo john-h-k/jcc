@@ -1349,6 +1349,8 @@ struct parse_result parse(struct parser *parser) {
 struct ast_printstate {
   struct parser *parser;
   int indent;
+
+  struct graphwriter *gwr;
 };
 
 #define DEBUG_FUNC(ty, name)                                                   \

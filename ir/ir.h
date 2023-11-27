@@ -174,6 +174,14 @@ struct ir_stmt {
   struct ir_op *last;
 };
 
+// ensures the basic block ends with an appropriate branch and does not contain
+// any within it
+bool valid_basicblock(struct ir_basicblock *basicblock);
+
+void get_basicblock_successors(struct ir_basicblock *basicblock,
+                               struct ir_basicblock **first,
+                               struct ir_basicblock **second);
+
 enum ir_basicblock_ty {
   // a split basicblock has 2 successors and occurs when there is a conditional
   // branch
@@ -188,14 +196,6 @@ enum ir_basicblock_ty {
   IR_BASICBLOCK_TY_RET,
 };
 
-// ensures the basic block ends with an appropriate branch and does not contain
-// any within it
-bool valid_basicblock(struct ir_basicblock *basicblock);
-
-void get_basicblock_successors(struct ir_basicblock *basicblock,
-                               struct ir_basicblock **first,
-                               struct ir_basicblock **second);
-
 struct ir_basicblock_merge {
   struct ir_basicblock *target;
 };
@@ -209,8 +209,7 @@ struct ir_basicblock {
   size_t id;
 
   // `value` contains a `struct vector *` containing the last op(s) that wrote
-  // to this variable or NULL if it is not yet written to it will contain
-  // multiple ops
+  // to this variable or NULL if it is not yet written to
   struct var_table var_table;
 
   // a NULL irb means a pruned basicblock

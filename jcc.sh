@@ -1,4 +1,9 @@
-#!/bin/bash
+#!/bin/zsh
+
+cfg() {
+  "./$(dirname $0)/build/jcc" "$@"
+  dot -Tpng "$(dirname $0)/cfg.gv" > output.png && open output.png
+}
 
 format() {
   # if [ $(git status --short | wc -l) != 0 ]; then
