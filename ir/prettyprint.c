@@ -1,6 +1,8 @@
 #include "prettyprint.h"
+
 #include "../graphwriter.h"
 #include "ir.h"
+
 #include <math.h>
 
 const char *binary_op_string(enum ir_op_binary_op_ty ty) {
@@ -61,150 +63,282 @@ const char *phi_string(struct ir_op_phi *phi) {
   return buff;
 }
 
-void debug_print_op(FILE *file, struct ir_op *ir) {
+char *arena_printf(struct arena_allocator *arena, const char *fmt, ...) {
+  va_list v;
+  va_start(v, fmt);
+
+  size_t size = vsnprintf(NULL, 0, fmt, v);
+  char *buff = arena_alloc(arena, sizeof(*buff) * size);
+  vsprintf(buff, fmt, v);
+
+  va_end(v);
+
+  return buff;
+}
+
+char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
   switch (ir->ty) {
   case IR_OP_TY_PHI:
-    fslogsl(file, "%%%zu (%s) = phi [ %s ]", ir->id, var_ty_string(&ir->var_ty),
-            phi_string(&ir->phi));
+    return arena_printf(irb->arena, "%%%zu (%s) = phi [ %s ]", ir->id,
+                        var_ty_string(&ir->var_ty), phi_string(&ir->phi));
     break;
   case IR_OP_TY_MOV:
-    fslogsl(file, "%%%zu (%s) = %%%zu", ir->id, var_ty_string(&ir->var_ty),
-            ir->mov.value->id);
-    break;
+    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->id,
+                        var_ty_string(&ir->var_ty), ir->mov.value->id);
   case IR_OP_TY_CNST:
-    fslogsl(file, "%%%zu (%s) = %zu", ir->id, var_ty_string(&ir->var_ty),
-            ir->cnst.value);
-    break;
+    return arena_printf(irb->arena, "%%%zu (%s) = %zu", ir->id,
+                        var_ty_string(&ir->var_ty), ir->cnst.value);
   case IR_OP_TY_BINARY_OP:
-    fslogsl(file, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
-            var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
-            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
-    break;
+    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
+                        var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
+                        binary_op_string(ir->binary_op.ty),
+                        ir->binary_op.rhs->id);
   case IR_OP_TY_STORE_LCL:
-    fslogsl(file, "%%%zu (%s) = storelcl LCL(%zu), %%%zu", ir->id,
-            var_ty_string(&ir->var_ty), ir->store_lcl.lcl_idx,
-            ir->store_lcl.value->id);
-    break;
+    return arena_printf(irb->arena, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
+                        ir->id, var_ty_string(&ir->var_ty),
+                        ir->store_lcl.lcl_idx, ir->store_lcl.value->id);
   case IR_OP_TY_LOAD_LCL:
-    fslogsl(file, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
-            var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
-    break;
+    return arena_printf(irb->arena, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
+                        var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
   case IR_OP_TY_BR:
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                      "found `br` but bb wasn't MERGE");
-    fslogsl(file, "br @%zu", ir->stmt->basicblock->merge.target->id);
-    break;
+    return arena_printf(irb->arena, "br @%zu",
+                        ir->stmt->basicblock->merge.target->id);
   case IR_OP_TY_BR_COND:
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
-    fslogsl(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
-            ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
-            ir->stmt->basicblock->split.false_target->id);
-    break;
+    return arena_printf(irb->arena, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
+                        ir->br_cond.cond->id,
+                        ir->stmt->basicblock->split.true_target->id,
+                        ir->stmt->basicblock->split.false_target->id);
   case IR_OP_TY_RET:
-    fslogsl(file, "return %%%zu", ir->ret.value->id);
-    break;
+    return arena_printf(irb->arena, "return %%%zu", ir->ret.value->id);
   }
 }
 
-void debug_print_basicblock_with_ctr(FILE *file, struct ir_builder *irb,
-                            struct ir_basicblock *basicblock,
-                            debug_print_op_callback *cb, void *cb_metadata, int ctr_pad, size_t *ctr) {
-    UNUSED_ARG(irb);
-  
-    struct ir_stmt *stmt = basicblock->first;
-    fslog(file, "\nBB @ %03zu", basicblock->id);
+const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
-    while (stmt) {
-      struct ir_op *ir = stmt->first;
+struct prettyprint_file_metadata {
+  FILE *file;
+  int ctr_pad;
+  size_t ctr;
+  debug_print_op_callback *cb;
+  void *cb_metadata;
+};
 
-      int op_pad = /* guess */ 50;
+void prettyprint_begin_visit_basicblock_file(struct ir_builder *irb,
+                                             struct ir_basicblock *basicblock,
+                                             void *metadata) {
+  UNUSED_ARG(irb);
 
-      while (ir) {
-        fslogsl(file, "%0*zu: ", ctr_pad, (*ctr)++);
+  struct prettyprint_file_metadata *fm = metadata;
 
-        long pos = ftell(file);
-        debug_print_op(file, ir);
-        long width = ftell(file) - pos;
-        long pad = op_pad - width;
-
-        if (pad > 0) {
-          fslogsl(file, "%*s", (int)pad, "");
-        }
-
-        if (cb) {
-          fslogsl(file, " | ");
-          cb(file, ir, cb_metadata);
-        }
-        fslogsl(file, "\n");
-
-        ir = ir->succ;
-      }
-
-      stmt = stmt->succ;
-    }  
+  fslog(fm->file, "\nBB @ %03zu", basicblock->id);
 }
 
-void debug_print_basicblock(FILE *file, struct ir_builder *irb,
-                            struct ir_basicblock *basicblock,
-                            debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (int)log10(irb->op_count) + 1;
-  size_t ctr = 0;
-  debug_print_basicblock_with_ctr(file, irb, basicblock, cb, cb_metadata, ctr_pad, &ctr);
+void prettyprint_end_visit_basicblock_file(struct ir_builder *irb,
+                                           struct ir_basicblock *basicblock,
+                                           void *metadata) {
+  UNUSED_ARG(irb);
+  UNUSED_ARG(basicblock);
+
+  struct prettyprint_file_metadata *fm = metadata;
+
+  fslog(fm->file, "");
 }
 
+void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
+                               void *metadata) {
+  int op_pad = /* guess */ 50;
 
-void debug_print_ir(FILE *file, struct ir_builder *irb, struct ir_basicblock *basicblock,
-                    debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (int)log10(irb->op_count) + 1;
-  size_t ctr = 0;
+  struct prettyprint_file_metadata *fm = metadata;
+
+  fslogsl(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
+
+  long pos = ftell(fm->file);
+  char *op_str = debug_print_op(irb, op);
+  fprintf(fm->file, "%s", op_str);
+  long width = ftell(fm->file) - pos;
+  long pad = op_pad - width;
+
+  if (pad > 0) {
+    fslogsl(fm->file, "%*s", (int)pad, "");
+  }
+
+  if (fm->cb) {
+    fslogsl(fm->file, " | ");
+    fm->cb(fm->file, op, fm->cb_metadata);
+  }
+
+  fslogsl(fm->file, "\n");
+}
+
+const struct prettyprint_callbacks FILE_WRITER_CALLBACKS = {
+  .begin_visit_basicblock = prettyprint_begin_visit_basicblock_file,
+  .end_visit_basicblock = prettyprint_end_visit_basicblock_file,
+
+  .begin_visit_stmt = NULL,
+  .end_visit_stmt = NULL,
+
+  .visit_op = prettyprint_visit_op_file,
+};
+
+void debug_visit_stmt(struct ir_builder *irb, struct ir_stmt *stmt,
+                    const struct prettyprint_callbacks *callbacks, void *metadata) {
+  if (callbacks->begin_visit_stmt) {
+    callbacks->begin_visit_stmt(irb, stmt, metadata);
+  }
+
+  struct ir_op *op = stmt->first;
+  while (op) {
+    if (callbacks->visit_op) {
+      callbacks->visit_op(irb, op, metadata);
+    }
+
+    op = op->succ;
+  }
+
+  if (callbacks->end_visit_stmt) {
+    callbacks->end_visit_stmt(irb, stmt, metadata);
+  }
+}
+
+void debug_visit_basicblock(struct ir_builder *irb, struct ir_basicblock *basicblock,
+                    const struct prettyprint_callbacks *callbacks, void *metadata) {
+  if (callbacks->begin_visit_basicblock) {
+    callbacks->begin_visit_basicblock(irb, basicblock, metadata);
+  }
+
+  struct ir_stmt *stmt = basicblock->first;
+  while (stmt) {
+    debug_visit_stmt(irb, stmt, callbacks, metadata);
+
+    stmt = stmt->succ;
+  }
+
+  if (callbacks->end_visit_basicblock) {
+    callbacks->end_visit_basicblock(irb, basicblock, metadata);
+  }
+}
+
+void debug_visit_ir(struct ir_builder *irb,
+                    const struct prettyprint_callbacks *callbacks, void *metadata) {
+  struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {
-    debug_print_basicblock_with_ctr(file, irb, basicblock, cb, cb_metadata, ctr_pad, &ctr);
+    debug_visit_basicblock(irb, basicblock, callbacks, metadata);
     
     basicblock = basicblock->succ;
   }
 }
 
-struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb, struct ir_basicblock *basicblock, struct graphwriter *gwr) {
-  if (!basicblock->metadata) {
-    size_t digits = irb->basicblock_count ? (size_t)log10(irb->basicblock_count) : 0;
-    digits = MAX(digits, 2);
-    
-    basicblock->metadata = vertex_from_integral(gwr, basicblock->id);
-    FILE *file = begin_vertex_attr(basicblock->metadata, GRAPH_VERTEX_ATTR_TY_LABEL);
-    fprintf(file, "BB @ %0*zu\n\n", (int)digits, basicblock->id);
-    debug_print_basicblock(file, irb, basicblock, NULL, NULL);
+void debug_print_basicblock(FILE *file, struct ir_builder *irb,
+                            struct ir_basicblock *basicblock, debug_print_op_callback *cb, void *cb_metadata) {
+  int ctr_pad = (int)log10(irb->op_count) + 1;
+  size_t ctr = 0;
 
-    end_vertex_attr(basicblock->metadata);
-    
+  struct prettyprint_file_metadata metadata = {
+    .file = file,
+    .ctr_pad = ctr_pad,
+    .ctr = ctr,
+    .cb = cb,
+    .cb_metadata = cb_metadata
+  };
+  
+  debug_visit_basicblock(irb, basicblock, &FILE_WRITER_CALLBACKS, &metadata);
+}
+
+void debug_print_ir(FILE *file, struct ir_builder *irb,
+                    debug_print_op_callback *cb, void *cb_metadata) {
+  int ctr_pad = (int)log10(irb->op_count) + 1;
+  size_t ctr = 0;
+
+  struct prettyprint_file_metadata metadata = {
+    .file = file,
+    .ctr_pad = ctr_pad,
+    .ctr = ctr,
+    .cb = cb,
+    .cb_metadata = cb_metadata
+  };
+  
+  debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
+}
+
+struct print_ir_graph_metadata {
+  FILE *file;
+};
+
+void visit_op_for_graph(struct ir_builder *irb, struct ir_op *op,
+                               void *metadata) {
+  struct print_ir_graph_metadata *gm = metadata;
+
+  char *op_str = debug_print_op(irb, op);
+
+  // `\l` prints left-justified
+  fprintf(gm->file, "%s\\l", op_str);
+}
+
+struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,
+                                           struct ir_basicblock *basicblock,
+                                           struct graphwriter *gwr) {
+  if (!basicblock->metadata) {
+    size_t digits =
+        irb->basicblock_count ? (size_t)log10(irb->basicblock_count) : 0;
+    digits = MAX(digits, 2);
+
+    basicblock->metadata = vertex_from_integral(gwr, basicblock->id);
+
+    struct graph_vertex_attr vertex_attr_font;
+    vertex_attr_font.ty = GRAPH_VERTEX_ATTR_TY_FONT;
+    vertex_attr_font.font.font = "Courier";
+    vertex_attr(basicblock->metadata, &vertex_attr_font);
+
     struct graph_vertex_attr vertex_attr_rect;
     vertex_attr_rect.ty = GRAPH_VERTEX_ATTR_TY_SHAPE;
-    vertex_attr_rect.shape = GRAPH_SHAPE_RECT;  
-
+    vertex_attr_rect.shape = GRAPH_SHAPE_RECT;
     vertex_attr(basicblock->metadata, &vertex_attr_rect);
+
+    FILE *file =
+        begin_vertex_attr(basicblock->metadata, GRAPH_VERTEX_ATTR_TY_LABEL);
+
+    struct prettyprint_callbacks callbacks = {
+      .visit_op = visit_op_for_graph,
+    };
+
+    struct print_ir_graph_metadata metadata = {
+      .file = file,
+    };
+
+    fprintf(metadata.file, "BB @ %03zu\n\n", basicblock->id);
+    debug_visit_basicblock(irb, basicblock, &callbacks, &metadata);
+
+    end_vertex_attr(basicblock->metadata);
   }
 
   return basicblock->metadata;
 }
 
 void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
-  struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED, GRAPH_STRICTNESS_STRICT, file);
+  struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,
+                                               GRAPH_STRICTNESS_STRICT, file);
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    struct graph_vertex *basicblock_vertex = get_basicblock_vertex(irb, basicblock, gwr);
+    struct graph_vertex *basicblock_vertex =
+        get_basicblock_vertex(irb, basicblock, gwr);
 
     for (size_t i = 0; i < basicblock->num_preds; i++) {
       struct ir_basicblock *pred = basicblock->preds[i];
       struct graph_vertex *pred_vertex = get_basicblock_vertex(irb, pred, gwr);
 
-
       edge(gwr, pred_vertex, basicblock_vertex);
     }
-    
+
     basicblock = basicblock->succ;
   }
 
   graphwriter_free(&gwr);
+
+  clear_metadata(irb);
 }

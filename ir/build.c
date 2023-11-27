@@ -581,7 +581,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   // we may generate empty basicblocks or statements, prune them here
   prune_basicblocks(builder);
 
-  debug_print_ir(stderr, builder, builder->first, NULL, NULL);
+  debug_print_ir(stderr, builder, NULL, NULL);
 
   // now we fix up phis
   debug("doing phi fixups");

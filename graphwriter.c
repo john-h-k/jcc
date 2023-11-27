@@ -57,6 +57,7 @@ struct graphwriter *graphwriter_create(struct arena_allocator *arena,
   }
 
   fprintf(gwr->file, " {\n");
+  fprintf(gwr->file, "    graph [dpi=300]\n");
 
   return gwr;
 }
@@ -142,7 +143,7 @@ void edge_attr(struct graph_edge *edge, const struct graph_edge_attr *attr) {
     fprintf(edge->gwr->file, " [color=%s] ", attr->color.color);
     break;
   case GRAPH_EDGE_ATTR_TY_FONT:
-    fprintf(edge->gwr->file, " [font=%s] ", attr->font.font);
+    fprintf(edge->gwr->file, " [fontname=%s] ", attr->font.font);
     break;
   case GRAPH_EDGE_ATTR_TY_LABEL:
     fprintf(edge->gwr->file, " [label=%s] ", attr->label.label);
@@ -161,7 +162,7 @@ void vertex_attr(struct graph_vertex *vertex,
     fprintf(vertex->gwr->file, " [color=%s] ", attr->color.color);
     break;
   case GRAPH_VERTEX_ATTR_TY_FONT:
-    fprintf(vertex->gwr->file, " [font=%s] ", attr->font.font);
+    fprintf(vertex->gwr->file, " [fontname=%s] ", attr->font.font);
     break;
   case GRAPH_EDGE_ATTR_TY_LABEL:
     fprintf(vertex->gwr->file, " [label=%s] ", attr->label.label);
@@ -219,7 +220,7 @@ FILE *begin_vertex_attr(struct graph_vertex *vertex,
     fprintf(vertex->gwr->file, " [shape=\"");
     break;
   case GRAPH_VERTEX_ATTR_TY_LABEL:
-    fprintf(vertex->gwr->file, " [label=<");
+    fprintf(vertex->gwr->file, " [label=\"");
     break;
   }
 
@@ -227,6 +228,6 @@ FILE *begin_vertex_attr(struct graph_vertex *vertex,
 }
 
 void end_vertex_attr(struct graph_vertex *vertex) {
-  fprintf(vertex->gwr->file, ">]");
+  fprintf(vertex->gwr->file, "\"]");
   write_end(vertex->gwr);
 }

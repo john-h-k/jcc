@@ -92,7 +92,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("IR");
 
-      debug_print_ir(stderr, ir, ir->first, NULL, NULL);
+      debug_print_ir(stderr, ir, NULL, NULL);
 
       BEGIN_STAGE("LOWERING");
 
@@ -100,7 +100,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("POST-LOWER IR");
 
-      debug_print_ir(stderr, ir, ir->first, NULL, NULL);
+      debug_print_ir(stderr, ir, NULL, NULL);
 
       disable_log();
     }
@@ -120,7 +120,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       rebuild_ids(ir);
 
-      debug_print_ir(stderr, ir, ir->first, print_ir_intervals, NULL);
+      debug_print_ir(stderr, ir, print_ir_intervals, NULL);
 
       disable_log();
     }

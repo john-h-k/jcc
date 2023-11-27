@@ -269,6 +269,7 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock);
 void prune_basicblocks(struct ir_builder *irb);
 void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
 
+void clear_metadata(struct ir_builder *irb);
 void rebuild_ids(struct ir_builder *irb);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
