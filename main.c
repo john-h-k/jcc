@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
-    char *output = nonnull_malloc(strlen(sources[i]) + strlen(".obj"));
+    char *output = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
     strcpy(output, sources[i]);
     strcat(output, ".obj");
 

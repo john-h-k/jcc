@@ -159,7 +159,7 @@ void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
 
   long pos = ftell(fm->file);
   char *op_str = debug_print_op(irb, op);
-  fprintf(fm->file, "%s", op_str);
+  fslogsl(fm->file, "%s", op_str);
   long width = ftell(fm->file) - pos;
   long pad = op_pad - width;
 
