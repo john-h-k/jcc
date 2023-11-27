@@ -2,11 +2,11 @@
 
 bool op_produces_value(enum ir_op_ty ty) {
   switch (ty) {
-  case IR_OP_TY_PHI:
-  case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_LOAD_LCL:
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_PHI:
     return true;
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_BR_COND:
@@ -95,6 +95,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->br_cond.cond, cb_metadata);
     break;
   case IR_OP_TY_MOV:
+    cb(&op->mov.value, cb_metadata);
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
@@ -324,7 +325,7 @@ void rebuild_ids(struct ir_builder *irb) {
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
+    struct ir_stmt *stmt = basicblock->phis;
 
     while (stmt) {
       struct ir_op *op = stmt->first;
@@ -513,6 +514,8 @@ struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
 
   if (!basicblock->first) {
     basicblock->first = stmt;
+    basicblock->phis->succ = stmt;
+    stmt->pred = basicblock->phis;
   }
 
   stmt->id = irb->stmt_count++;
@@ -602,6 +605,14 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   basicblock->succ = NULL;
   basicblock->function_offset = irb->op_count;
   basicblock->metadata = NULL;
+
+  basicblock->phis = arena_alloc(irb->arena, sizeof(*basicblock->phis));
+  basicblock->phis->basicblock = basicblock;
+  basicblock->phis->id = irb->stmt_count++;
+  basicblock->phis->first = NULL;
+  basicblock->phis->last = NULL;
+  basicblock->phis->pred = NULL;
+  basicblock->phis->succ = NULL;  
 
   basicblock->preds = NULL;
   basicblock->num_preds = 0;

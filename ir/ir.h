@@ -28,8 +28,7 @@ bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
 struct ir_op_mov {
-  struct ir_op *dest;
-  struct ir_op *src;
+  struct ir_op *value;
 };
 
 struct ir_op_phi {
@@ -218,6 +217,8 @@ struct ir_basicblock {
   struct ir_basicblock *pred;
   struct ir_basicblock *succ;
 
+  struct ir_stmt *phis;
+
   struct ir_stmt *first;
   struct ir_stmt *last;
 
@@ -232,9 +233,6 @@ struct ir_basicblock {
 
   // how many ops are before this block in the function
   size_t function_offset;
-
-  // only used by regalloc
-  size_t max_interval;
 
   void *metadata;
 };
