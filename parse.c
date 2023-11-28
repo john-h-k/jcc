@@ -85,19 +85,19 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
 
 bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   switch (token->ty) {
-  case LEX_TOKEN_TYPE_OP_ADD:
+  case LEX_TOKEN_TY_OP_ADD:
     *info = op_info(AST_BINARY_OP_TY_ADD);
     return true;
-  case LEX_TOKEN_TYPE_OP_SUB:
+  case LEX_TOKEN_TY_OP_SUB:
     *info = op_info(AST_BINARY_OP_TY_SUB);
     return true;
-  case LEX_TOKEN_TYPE_OP_MUL:
+  case LEX_TOKEN_TY_OP_MUL:
     *info = op_info(AST_BINARY_OP_TY_MUL);
     return true;
-  case LEX_TOKEN_TYPE_OP_DIV:
+  case LEX_TOKEN_TY_OP_DIV:
     *info = op_info(AST_BINARY_OP_TY_DIV);
     return true;
-  case LEX_TOKEN_TYPE_OP_QUOT:
+  case LEX_TOKEN_TY_OP_QUOT:
     *info = op_info(AST_BINARY_OP_TY_QUOT);
     return true;
   default:
@@ -112,7 +112,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   struct token token;
   peek_token(parser->lexer, &token);
 
-  if (token.ty != LEX_TOKEN_TYPE_IDENTIFIER) {
+  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -133,71 +133,71 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
 bool is_literal_token(enum lex_token_ty tok_ty,
                       enum well_known_ty *well_known_ty) {
   switch (tok_ty) {
-  case LEX_TOKEN_TYPE_UNKNOWN:
-  case LEX_TOKEN_TYPE_EOF:
-  case LEX_TOKEN_TYPE_WHITESPACE:
-  case LEX_TOKEN_TYPE_INLINE_COMMENT:
-  case LEX_TOKEN_TYPE_MULTILINE_COMMENT:
-  case LEX_TOKEN_TYPE_OPEN_BRACKET:
-  case LEX_TOKEN_TYPE_CLOSE_BRACKET:
-  case LEX_TOKEN_TYPE_OPEN_BRACE:
-  case LEX_TOKEN_TYPE_CLOSE_BRACE:
-  case LEX_TOKEN_TYPE_SEMICOLON:
-  case LEX_TOKEN_TYPE_COMMA:
-  case LEX_TOKEN_TYPE_OP_ASSG:
-  case LEX_TOKEN_TYPE_OP_ADD:
-  case LEX_TOKEN_TYPE_OP_INC:
-  case LEX_TOKEN_TYPE_OP_DEC:
-  case LEX_TOKEN_TYPE_OP_ADD_ASSG:
-  case LEX_TOKEN_TYPE_OP_SUB:
-  case LEX_TOKEN_TYPE_OP_SUB_ASSG:
-  case LEX_TOKEN_TYPE_OP_MUL:
-  case LEX_TOKEN_TYPE_OP_MUL_ASSG:
-  case LEX_TOKEN_TYPE_OP_DIV:
-  case LEX_TOKEN_TYPE_OP_DIV_ASSG:
-  case LEX_TOKEN_TYPE_OP_QUOT:
-  case LEX_TOKEN_TYPE_OP_QUOT_ASSG:
-  case LEX_TOKEN_TYPE_KW_DO:
-  case LEX_TOKEN_TYPE_KW_FOR:
-  case LEX_TOKEN_TYPE_KW_WHILE:
-  case LEX_TOKEN_TYPE_KW_IF:
-  case LEX_TOKEN_TYPE_KW_ELSE:
-  case LEX_TOKEN_TYPE_KW_CHAR:
-  case LEX_TOKEN_TYPE_KW_SHORT:
-  case LEX_TOKEN_TYPE_KW_INT:
-  case LEX_TOKEN_TYPE_KW_LONG:
-  case LEX_TOKEN_TYPE_KW_UNSIGNED:
-  case LEX_TOKEN_TYPE_KW_SIGNED:
-  case LEX_TOKEN_TYPE_KW_RETURN:
-  case LEX_TOKEN_TYPE_IDENTIFIER:
+  case LEX_TOKEN_TY_UNKNOWN:
+  case LEX_TOKEN_TY_EOF:
+  case LEX_TOKEN_TY_WHITESPACE:
+  case LEX_TOKEN_TY_INLINE_COMMENT:
+  case LEX_TOKEN_TY_MULTILINE_COMMENT:
+  case LEX_TOKEN_TY_OPEN_BRACKET:
+  case LEX_TOKEN_TY_CLOSE_BRACKET:
+  case LEX_TOKEN_TY_OPEN_BRACE:
+  case LEX_TOKEN_TY_CLOSE_BRACE:
+  case LEX_TOKEN_TY_SEMICOLON:
+  case LEX_TOKEN_TY_COMMA:
+  case LEX_TOKEN_TY_OP_ASSG:
+  case LEX_TOKEN_TY_OP_ADD:
+  case LEX_TOKEN_TY_OP_INC:
+  case LEX_TOKEN_TY_OP_DEC:
+  case LEX_TOKEN_TY_OP_ADD_ASSG:
+  case LEX_TOKEN_TY_OP_SUB:
+  case LEX_TOKEN_TY_OP_SUB_ASSG:
+  case LEX_TOKEN_TY_OP_MUL:
+  case LEX_TOKEN_TY_OP_MUL_ASSG:
+  case LEX_TOKEN_TY_OP_DIV:
+  case LEX_TOKEN_TY_OP_DIV_ASSG:
+  case LEX_TOKEN_TY_OP_QUOT:
+  case LEX_TOKEN_TY_OP_QUOT_ASSG:
+  case LEX_TOKEN_TY_KW_DO:
+  case LEX_TOKEN_TY_KW_FOR:
+  case LEX_TOKEN_TY_KW_WHILE:
+  case LEX_TOKEN_TY_KW_IF:
+  case LEX_TOKEN_TY_KW_ELSE:
+  case LEX_TOKEN_TY_KW_CHAR:
+  case LEX_TOKEN_TY_KW_SHORT:
+  case LEX_TOKEN_TY_KW_INT:
+  case LEX_TOKEN_TY_KW_LONG:
+  case LEX_TOKEN_TY_KW_UNSIGNED:
+  case LEX_TOKEN_TY_KW_SIGNED:
+  case LEX_TOKEN_TY_KW_RETURN:
+  case LEX_TOKEN_TY_IDENTIFIER:
     return false;
 
-  case LEX_TOKEN_TYPE_ASCII_CHAR_LITERAL:
+  case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
     // char is signed!
     *well_known_ty = WELL_KNOWN_TY_SIGNED_CHAR;
     return true;
 
-  case LEX_TOKEN_TYPE_SIGNED_INT_LITERAL:
+  case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_SIGNED_INT;
     return true;
 
-  case LEX_TOKEN_TYPE_UNSIGNED_INT_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_UNSIGNED_INT;
     return true;
 
-  case LEX_TOKEN_TYPE_SIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TY_SIGNED_LONG_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG;
     return true;
 
-  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG;
     return true;
 
-  case LEX_TOKEN_TYPE_SIGNED_LONG_LONG_LITERAL:
+  case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG_LONG;
     return true;
 
-  case LEX_TOKEN_TYPE_UNSIGNED_LONG_LONG_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL:
     *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
     return true;
   }
@@ -240,7 +240,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
   struct token token;
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_OP_ASSG) {
+  if (token.ty != LEX_TOKEN_TY_OP_ASSG) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -336,7 +336,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   peek_token(parser->lexer, &token);
 
   // parenthesised expression
-  if (token.ty == LEX_TOKEN_TYPE_OPEN_BRACKET) {
+  if (token.ty == LEX_TOKEN_TY_OPEN_BRACKET) {
     consume_token(parser->lexer, token);
 
     struct ast_compoundexpr compound_expr;
@@ -344,7 +344,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
       struct token token;
       peek_token(parser->lexer, &token);
 
-      if (token.ty == LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+      if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {
         consume_token(parser->lexer, token);
 
         // compound expressions return the last expression
@@ -497,7 +497,7 @@ bool parse_compoundexpr(struct parser *parser,
     vector_push_back(exprs, &sub_expr);
 
     peek_token(parser->lexer, &token);
-  } while (token.ty == LEX_TOKEN_TYPE_COMMA &&
+  } while (token.ty == LEX_TOKEN_TY_COMMA &&
            /* hacky */ (consume_token(parser->lexer, token), true));
 
   if (vector_empty(exprs)) {
@@ -519,7 +519,7 @@ void skip_int_token_if_present(struct parser *parser) {
   struct token token;
   peek_token(parser->lexer, &token);
 
-  if (token.ty == LEX_TOKEN_TYPE_KW_INT) {
+  if (token.ty == LEX_TOKEN_TY_KW_INT) {
     consume_token(parser->lexer, token);
   }
 }
@@ -529,26 +529,26 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
   peek_token(parser->lexer, &token);
 
   switch (token.ty) {
-  case LEX_TOKEN_TYPE_KW_CHAR:
+  case LEX_TOKEN_TY_KW_CHAR:
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_SIGNED_CHAR;
     return true;
-  case LEX_TOKEN_TYPE_KW_SHORT:
+  case LEX_TOKEN_TY_KW_SHORT:
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
     skip_int_token_if_present(parser);
     return true;
-  case LEX_TOKEN_TYPE_KW_INT:
+  case LEX_TOKEN_TY_KW_INT:
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_SIGNED_INT;
     return true;
-  case LEX_TOKEN_TYPE_KW_LONG: {
+  case LEX_TOKEN_TY_KW_LONG: {
     consume_token(parser->lexer, token);
 
     struct token maybe_other_long;
     peek_token(parser->lexer, &maybe_other_long);
 
-    if (token.ty == LEX_TOKEN_TYPE_KW_LONG) {
+    if (token.ty == LEX_TOKEN_TY_KW_LONG) {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
     } else {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG;
@@ -570,11 +570,11 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
 
   bool seen_unsigned = false;
   bool seen_signed = false;
-  if (token.ty == LEX_TOKEN_TYPE_KW_SIGNED) {
+  if (token.ty == LEX_TOKEN_TY_KW_SIGNED) {
     seen_signed = true;
 
     consume_token(parser->lexer, token);
-  } else if (token.ty == LEX_TOKEN_TYPE_KW_UNSIGNED) {
+  } else if (token.ty == LEX_TOKEN_TY_KW_UNSIGNED) {
     seen_unsigned = true;
 
     consume_token(parser->lexer, token);
@@ -623,7 +623,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   struct token token;
   peek_token(parser->lexer, &token);
 
-  if (token.ty != LEX_TOKEN_TYPE_OP_ASSG) {
+  if (token.ty != LEX_TOKEN_TY_OP_ASSG) {
     // normal var decl, without assignment
     backtrack(parser->lexer, post_var_pos);
 
@@ -676,11 +676,11 @@ bool parse_vardecllist(struct parser *parser,
     struct token token;
     peek_token(parser->lexer, &token);
 
-    if (token.ty == LEX_TOKEN_TYPE_COMMA) {
+    if (token.ty == LEX_TOKEN_TY_COMMA) {
       // another decl
       consume_token(parser->lexer, token);
       continue;
-    } else if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+    } else if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
       consume_token(parser->lexer, token);
       break;
     }
@@ -711,14 +711,14 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
 
   // FIXME: support return without expression
   peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TYPE_KW_RETURN) {
+  if (token.ty == LEX_TOKEN_TY_KW_RETURN) {
     consume_token(parser->lexer, token);
 
     struct ast_expr expr;
     if (parse_expr(parser, &expr)) {
       peek_token(parser->lexer, &token);
 
-      if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+      if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
         jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
         jump_stmt->ret_expr = expr;
 
@@ -740,14 +740,14 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_KW_IF) {
+  if (token.ty != LEX_TOKEN_TY_KW_IF) {
     backtrack(parser->lexer, pos);
     return false;
   }
   consume_token(parser->lexer, token);
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -761,7 +761,7 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   }
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -794,7 +794,7 @@ bool parse_ifelsestmt(struct parser *parser,
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TYPE_KW_ELSE) {
+  if (token.ty == LEX_TOKEN_TY_KW_ELSE) {
     consume_token(parser->lexer, token);
 
     struct ast_stmt else_stmt;
@@ -827,14 +827,14 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_KW_WHILE) {
+  if (token.ty != LEX_TOKEN_TY_KW_WHILE) {
     backtrack(parser->lexer, pos);
     return false;
   }
   consume_token(parser->lexer, token);
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -847,7 +847,7 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   }
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -872,7 +872,7 @@ bool parse_dowhilestmt(struct parser *parser,
   struct token token;
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_KW_DO) {
+  if (token.ty != LEX_TOKEN_TY_KW_DO) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -885,14 +885,14 @@ bool parse_dowhilestmt(struct parser *parser,
   }
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_KW_WHILE) {
+  if (token.ty != LEX_TOKEN_TY_KW_WHILE) {
     backtrack(parser->lexer, pos);
     return false;
   }
   consume_token(parser->lexer, token);
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -905,7 +905,7 @@ bool parse_dowhilestmt(struct parser *parser,
   }
 
   peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -942,7 +942,7 @@ bool parse_declorexpr(struct parser *parser,
 
   struct ast_expr expr;
   if (parse_expr(parser, &expr) &&
-      parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     return true;
   }
 
@@ -950,8 +950,8 @@ bool parse_declorexpr(struct parser *parser,
 }
 
 bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
-  if (!(parse_token(parser, LEX_TOKEN_TYPE_KW_FOR) &&
-        parse_token(parser, LEX_TOKEN_TYPE_OPEN_BRACKET))) {
+  if (!(parse_token(parser, LEX_TOKEN_TY_KW_FOR) &&
+        parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET))) {
     return false;
   }
 
@@ -963,7 +963,7 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     for_stmt->init = NULL;
   }
 
-  if (!decl_or_expr.decl && !parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+  if (!decl_or_expr.decl && !parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     return false;
   }
 
@@ -975,7 +975,7 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     for_stmt->cond = NULL;
   }
 
-  if (!parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+  if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     return false;
   }
 
@@ -987,7 +987,7 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     for_stmt = NULL;
   }
 
-  if (!parse_token(parser, LEX_TOKEN_TYPE_CLOSE_BRACKET)) {
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     return false;
   }
 
@@ -1057,7 +1057,7 @@ bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
-  if (parse_token(parser, LEX_TOKEN_TYPE_SEMICOLON)) {
+  if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     stmt->ty = AST_STMT_TY_NULL;
     return true;
   }
@@ -1097,7 +1097,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     struct token token;
     peek_token(parser->lexer, &token);
 
-    if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
       consume_token(parser->lexer, token);
 
       // compound expressions return the last expression
@@ -1121,7 +1121,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     struct token token;
     peek_token(parser->lexer, &token);
 
-    if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
       consume_token(parser->lexer, token);
 
       stmt->ty = AST_STMT_TY_EXPR;
@@ -1157,7 +1157,7 @@ bool parse_compoundstmt(struct parser *parser,
   struct token open_brace;
 
   peek_token(parser->lexer, &open_brace);
-  if (open_brace.ty != LEX_TOKEN_TYPE_OPEN_BRACE) {
+  if (open_brace.ty != LEX_TOKEN_TY_OPEN_BRACE) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1182,7 +1182,7 @@ bool parse_compoundstmt(struct parser *parser,
   struct token close_brace;
 
   peek_token(parser->lexer, &close_brace);
-  if (close_brace.ty != LEX_TOKEN_TYPE_CLOSE_BRACE) {
+  if (close_brace.ty != LEX_TOKEN_TY_CLOSE_BRACE) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1197,7 +1197,7 @@ bool parse_identifier(struct parser *parser, struct token *token) {
 
   peek_token(parser->lexer, token);
 
-  if (token->ty == LEX_TOKEN_TYPE_IDENTIFIER) {
+  if (token->ty == LEX_TOKEN_TY_IDENTIFIER) {
     consume_token(parser->lexer, *token);
 
     return true;
@@ -1214,7 +1214,7 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 
   // TOOD: support args
   peek_token(parser->lexer, &open_bracket);
-  if (open_bracket.ty != LEX_TOKEN_TYPE_OPEN_BRACKET) {
+  if (open_bracket.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1223,7 +1223,7 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 
   struct token close_bracket;
   peek_token(parser->lexer, &close_bracket);
-  if (close_bracket.ty != LEX_TOKEN_TYPE_CLOSE_BRACKET) {
+  if (close_bracket.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1265,7 +1265,7 @@ bool parse_funcdecl(struct parser *parser, struct ast_funcdecl *func_decl) {
 
     peek_token(parser->lexer, &token);
 
-    if (token.ty == LEX_TOKEN_TYPE_SEMICOLON) {
+    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
       func_decl->sig = func_sig;
       return true;
     }

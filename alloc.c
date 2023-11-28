@@ -3,7 +3,7 @@
 #include "log.h"
 #include "util.h"
 
-#define BLOCK_SIZE 4096 * 16
+#define BLOCK_SIZE (4096 * 16)
 
 struct arena;
 
@@ -51,7 +51,7 @@ void arena_allocator_free(struct arena_allocator **allocator) {
 }
 
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
-struct arena new_arena(struct arena_allocator *allocator);
+struct arena new_arena(struct arena_allocator *allocator, size_t size);
 
 void *arena_alloc_strcpy(struct arena_allocator *allocator, const char *str) {
   size_t len = strlen(str);
@@ -71,40 +71,45 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   struct alloc_metadata *metadata = ((struct alloc_metadata *)ptr) - 1;
   void *new = arena_alloc(allocator, size);
 
-  debug("realloc copying %zu", metadata->size);
   memcpy(new, ptr, metadata->size);
   return new;
 }
 
 void *arena_alloc(struct arena_allocator *allocator, size_t size) {
-  size_t aligned = ROUND_UP(size, sizeof(size_t));
+  size_t aligned = ROUND_UP(size, sizeof(void *));
 
+  struct arena *arena;
+  size_t next_arena_size;
+  
   if (aligned > BLOCK_SIZE) {
-    todo("handle blocks > BLOCK_SIZE");
-  }
+    arena = allocator->last;
+    next_arena_size = aligned;
+  } else {
+    arena = allocator->first;
+    next_arena_size = BLOCK_SIZE;
 
-  // the allocator is created with no arenas
-  if (!allocator->first) {
-    allocator->first = nonnull_malloc(sizeof(*allocator->first));
-    *allocator->first = new_arena(allocator);
-    allocator->last = allocator->first;
-  }
+    // FIXME: not _that_ efficient as walks all the allocations
+    while (arena) {
+      void *allocation;
+      if (try_alloc_in_arena(arena, aligned, &allocation)) {
+        return allocation;
+      }
 
-  struct arena *arena = allocator->first;
-
-  while (arena) {
-    void *allocation;
-    if (try_alloc_in_arena(arena, aligned, &allocation)) {
-      return allocation;
+      arena = arena->next;
     }
-
-    arena = arena->next;
   }
 
   // need to create a new arena
-  allocator->last->next = nonnull_malloc(sizeof(*allocator->last->next));
-  *allocator->last->next = new_arena(allocator);
-  allocator->last = allocator->last->next;
+  struct arena **next;
+  if (allocator->last) {
+    next = &allocator->last->next;
+  } else {
+    next = &allocator->last;
+  }
+
+  *next = nonnull_malloc(sizeof(*allocator->last->next));
+  **next = new_arena(allocator, next_arena_size);
+  allocator->last = *next;
 
   void *allocation;
   invariant_assert(try_alloc_in_arena(allocator->last, aligned, &allocation),
@@ -115,28 +120,28 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
   size_t adj_size = size + sizeof(struct alloc_metadata);
 
-  if (arena->size - arena->pos >= adj_size) {
-    *allocation = &arena->block[arena->pos];
-
-    struct alloc_metadata *metadata = (struct alloc_metadata *)*allocation;
-    metadata->arena = arena;
-    metadata->size = size;
-
-    *allocation = metadata + 1;
-
-    arena->pos += adj_size;
-    return true;
+  if (arena->size - arena->pos < adj_size) {
+    return false;
   }
 
-  return false;
+  *allocation = &arena->block[arena->pos];
+
+  struct alloc_metadata *metadata = (struct alloc_metadata *)*allocation;
+  metadata->arena = arena;
+  metadata->size = size;
+
+  *allocation = metadata + 1;
+
+  arena->pos += adj_size;
+  return true;
 }
 
-struct arena new_arena(struct arena_allocator *allocator) {
+struct arena new_arena(struct arena_allocator *allocator, size_t size) {
   struct arena arena = {.allocator = allocator,
                         .next = NULL,
-                        .block = nonnull_malloc(BLOCK_SIZE),
+                        .block = nonnull_malloc(size),
                         .pos = 0,
-                        .size = BLOCK_SIZE};
+                        .size = size};
 
   return arena;
 }
