@@ -106,30 +106,6 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   }
 }
 
-bool parse_var(struct parser *parser, struct ast_var *var) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-
-  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  var->identifier = token;
-  var->scope = parser->cur_scope;
-
-  struct var_table_entry *entry = get_entry(&parser->var_table, var);
-  if (entry) {
-    var->scope = entry->scope;
-  }
-
-  consume_token(parser->lexer, token);
-
-  return true;
-}
-
 bool is_literal_token(enum lex_token_ty tok_ty,
                       enum well_known_ty *well_known_ty) {
   switch (tok_ty) {
@@ -203,6 +179,165 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   }
 }
 
+struct ast_tyref get_var_type(struct parser *parser,
+                              const struct ast_var *var) {
+  struct var_table_entry *entry = get_or_create_entry(&parser->var_table, var);
+
+  if (entry->value) {
+    debug("var %s was found, type", identifier_str(parser, &var->identifier));
+    return *(struct ast_tyref *)entry->value;
+  } else {
+    debug("var %s was not found, unknown type",
+          identifier_str(parser, &var->identifier));
+    struct ast_tyref ty_ref = {.ty = AST_TYREF_TY_UNKNOWN};
+    return ty_ref;
+  }
+}
+
+bool parse_token(struct parser *parser, enum lex_token_ty ty) {
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  if (token.ty == ty) {
+    consume_token(parser->lexer, token);
+    return true;
+  }
+
+  return false;
+}
+
+bool parse_identifier(struct parser *parser, struct token *token) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  peek_token(parser->lexer, token);
+
+  if (token->ty == LEX_TOKEN_TY_IDENTIFIER) {
+    consume_token(parser->lexer, *token);
+
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+// used when parsing type names, as `short int` is equivalent to `short`
+void skip_int_token_if_present(struct parser *parser) {
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  if (token.ty == LEX_TOKEN_TY_KW_INT) {
+    consume_token(parser->lexer, token);
+  }
+}
+
+bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  switch (token.ty) {
+  case LEX_TOKEN_TY_KW_CHAR:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_SIGNED_CHAR;
+    return true;
+  case LEX_TOKEN_TY_KW_SHORT:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
+    skip_int_token_if_present(parser);
+    return true;
+  case LEX_TOKEN_TY_KW_INT:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_SIGNED_INT;
+    return true;
+  case LEX_TOKEN_TY_KW_LONG: {
+    consume_token(parser->lexer, token);
+
+    struct token maybe_other_long;
+    peek_token(parser->lexer, &maybe_other_long);
+
+    if (token.ty == LEX_TOKEN_TY_KW_LONG) {
+      *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+    } else {
+      *wkt = WELL_KNOWN_TY_SIGNED_LONG;
+    }
+
+    skip_int_token_if_present(parser);
+    return true;
+  }
+  default:
+    return false;
+  }
+}
+
+bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  bool seen_unsigned = false;
+  bool seen_signed = false;
+  if (token.ty == LEX_TOKEN_TY_KW_SIGNED) {
+    seen_signed = true;
+
+    consume_token(parser->lexer, token);
+  } else if (token.ty == LEX_TOKEN_TY_KW_UNSIGNED) {
+    seen_unsigned = true;
+
+    consume_token(parser->lexer, token);
+  }
+
+  bool enough_type_info =
+      seen_signed ||
+      seen_unsigned; // `signed` or `unsigned` is a type in itself
+
+  enum well_known_ty wkt;
+  if (!parse_integer_size_name(parser, &wkt)) {
+    if (enough_type_info) {
+      wkt = seen_signed ? WELL_KNOWN_TY_SIGNED_INT : WELL_KNOWN_TY_UNSIGNED_INT;
+    } else {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+  } else {
+    if (seen_unsigned) {
+      // unsigned variants are signed variants + 1
+      wkt++;
+    } else if (!seen_signed && !seen_unsigned &&
+               wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
+      wkt = WELL_KNOWN_TY_SIGNED_CHAR;
+    }
+  }
+
+  ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+  ty_ref->well_known = wkt;
+
+  return true;
+}
+
+bool parse_var(struct parser *parser, struct ast_var *var) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  var->identifier = token;
+  var->scope = parser->cur_scope;
+
+  struct var_table_entry *entry = get_entry(&parser->var_table, var);
+  if (entry) {
+    var->scope = entry->scope;
+  }
+
+  consume_token(parser->lexer, token);
+
+  return true;
+}
+
 bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -229,32 +364,15 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
 bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   struct text_pos pos = get_position(parser->lexer);
-  debug("trying assg");
 
   struct ast_lvalue lvalue;
-  if (!parse_lvalue(parser, &lvalue)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  debug("lvalue");
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_OP_ASSG) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  debug("assg");
-
-  consume_token(parser->lexer, token);
-
   struct ast_expr expr;
-  if (!parse_expr(parser, &expr)) {
+  if (!parse_lvalue(parser, &lvalue) ||
+      !parse_token(parser, LEX_TOKEN_TY_OP_ASSG) ||
+      !parse_expr(parser, &expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-
-  debug("found expr");
 
   assg->lvalue = lvalue;
   assg->expr = arena_alloc(parser->arena, sizeof(*assg->expr));
@@ -265,22 +383,22 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
 bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   struct ast_assg assg;
-  debug("trying assg");
   if (parse_assg(parser, &assg)) {
     rvalue->ty = AST_RVALUE_TY_ASSG;
     rvalue->var_ty = assg.expr->var_ty;
     rvalue->assg = arena_alloc(parser->arena, sizeof(*rvalue->assg));
     *rvalue->assg = assg;
+
     return true;
   }
 
-  debug("trying cnst");
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
     rvalue->ty = AST_RVALUE_TY_CNST;
     rvalue->var_ty.ty = AST_TYREF_TY_WELL_KNOWN;
     rvalue->var_ty.well_known = cnst.cnst_ty;
     rvalue->cnst = cnst;
+
     return true;
   }
 
@@ -296,29 +414,13 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   return false;
 }
 
-struct ast_tyref get_var_type(struct parser *parser,
-                              const struct ast_var *var) {
-  struct var_table_entry *entry = get_or_create_entry(&parser->var_table, var);
-
-  if (entry->value) {
-    debug("var %s was found, type", identifier_str(parser, &var->identifier));
-    return *(struct ast_tyref *)entry->value;
-  } else {
-    debug("var %s was not found, unknown type",
-          identifier_str(parser, &var->identifier));
-    struct ast_tyref ty_ref = {.ty = AST_TYREF_TY_UNKNOWN};
-    return ty_ref;
-  }
-}
-
 bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
-  debug("trying lvalue");
   struct ast_var var;
   if (parse_var(parser, &var)) {
-    debug("found var");
     lvalue->ty = AST_LVALUE_TY_VAR;
     lvalue->var_ty = get_var_type(parser, &var);
     lvalue->var = var;
+
     return true;
   }
 
@@ -336,34 +438,24 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
   peek_token(parser->lexer, &token);
 
   // parenthesised expression
-  if (token.ty == LEX_TOKEN_TY_OPEN_BRACKET) {
-    consume_token(parser->lexer, token);
+  struct ast_compoundexpr compound_expr;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_compoundexpr(parser, &compound_expr) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    // compound expressions return the last expression
+    struct ast_tyref var_ty =
+        compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+    expr->ty = AST_EXPR_TY_RVALUE;
+    expr->var_ty = var_ty;
+    expr->rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
+    expr->rvalue.var_ty = var_ty;
+    expr->rvalue.compound_expr = compound_expr;
 
-    struct ast_compoundexpr compound_expr;
-    if (parse_compoundexpr(parser, &compound_expr)) {
-      struct token token;
-      peek_token(parser->lexer, &token);
-
-      if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {
-        consume_token(parser->lexer, token);
-
-        // compound expressions return the last expression
-        struct ast_tyref var_ty =
-            compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
-        expr->ty = AST_EXPR_TY_RVALUE;
-        expr->var_ty = var_ty;
-        expr->rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
-        expr->rvalue.var_ty = var_ty;
-        expr->rvalue.compound_expr = compound_expr;
-
-        return true;
-      }
-    }
-
-    backtrack(parser->lexer, pos);
+    return true;
   }
 
-  debug("trying rvalue");
+  backtrack(parser->lexer, pos);
+
   struct ast_rvalue rvalue;
   if (parse_rvalue_atom(parser, &rvalue)) {
     expr->ty = AST_EXPR_TY_RVALUE;
@@ -372,7 +464,6 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
     return true;
   }
 
-  debug("trying lvalue");
   struct ast_lvalue lvalue;
   if (parse_lvalue(parser, &lvalue)) {
     expr->ty = AST_EXPR_TY_LVALUE;
@@ -514,98 +605,18 @@ bool parse_compoundexpr(struct parser *parser,
   return true;
 }
 
-// used when parsing type names, as `short int` is equivalent to `short`
-void skip_int_token_if_present(struct parser *parser) {
-  struct token token;
-  peek_token(parser->lexer, &token);
-
-  if (token.ty == LEX_TOKEN_TY_KW_INT) {
-    consume_token(parser->lexer, token);
-  }
-}
-
-bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
-  struct token token;
-  peek_token(parser->lexer, &token);
-
-  switch (token.ty) {
-  case LEX_TOKEN_TY_KW_CHAR:
-    consume_token(parser->lexer, token);
-    *wkt = WELL_KNOWN_TY_SIGNED_CHAR;
-    return true;
-  case LEX_TOKEN_TY_KW_SHORT:
-    consume_token(parser->lexer, token);
-    *wkt = WELL_KNOWN_TY_SIGNED_SHORT;
-    skip_int_token_if_present(parser);
-    return true;
-  case LEX_TOKEN_TY_KW_INT:
-    consume_token(parser->lexer, token);
-    *wkt = WELL_KNOWN_TY_SIGNED_INT;
-    return true;
-  case LEX_TOKEN_TY_KW_LONG: {
-    consume_token(parser->lexer, token);
-
-    struct token maybe_other_long;
-    peek_token(parser->lexer, &maybe_other_long);
-
-    if (token.ty == LEX_TOKEN_TY_KW_LONG) {
-      *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
-    } else {
-      *wkt = WELL_KNOWN_TY_SIGNED_LONG;
-    }
-
-    skip_int_token_if_present(parser);
-    return true;
-  }
-  default:
-    return false;
-  }
-}
-
-bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+// parse a non-compound expression, ending with a semicolon
+bool parse_compoundexpr_with_semicolon(struct parser *parser,
+                                       struct ast_compoundexpr *compoundexpr) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
-  peek_token(parser->lexer, &token);
-
-  bool seen_unsigned = false;
-  bool seen_signed = false;
-  if (token.ty == LEX_TOKEN_TY_KW_SIGNED) {
-    seen_signed = true;
-
-    consume_token(parser->lexer, token);
-  } else if (token.ty == LEX_TOKEN_TY_KW_UNSIGNED) {
-    seen_unsigned = true;
-
-    consume_token(parser->lexer, token);
+  if (parse_compoundexpr(parser, compoundexpr) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    return true;
   }
 
-  bool enough_type_info =
-      seen_signed ||
-      seen_unsigned; // `signed` or `unsigned` is a type in itself
-
-  enum well_known_ty wkt;
-  if (!parse_integer_size_name(parser, &wkt)) {
-    if (enough_type_info) {
-      wkt = seen_signed ? WELL_KNOWN_TY_SIGNED_INT : WELL_KNOWN_TY_UNSIGNED_INT;
-    } else {
-      backtrack(parser->lexer, pos);
-      return false;
-    }
-  } else {
-    if (seen_unsigned) {
-      // unsigned variants are signed variants + 1
-      wkt++;
-    } else if (!seen_signed && !seen_unsigned &&
-               wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
-      wkt = WELL_KNOWN_TY_SIGNED_CHAR;
-    }
-  }
-
-  ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
-  ty_ref->well_known = wkt;
-
-  return true;
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
 bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
@@ -620,20 +631,16 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   var_decl->var = var;
 
   struct text_pos post_var_pos = get_position(parser->lexer);
-  struct token token;
-  peek_token(parser->lexer, &token);
 
-  if (token.ty != LEX_TOKEN_TY_OP_ASSG) {
+  if (!parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
     // normal var decl, without assignment
+    // return to where we were when we passed the var
     backtrack(parser->lexer, post_var_pos);
 
     var_decl->ty = AST_VARDECL_TY_DECL;
 
-    trace("normal decl");
     return true;
   }
-
-  consume_token(parser->lexer, token);
 
   struct ast_expr expr;
   // we use `parse_single_expr` as compound expressions are not legal here and
@@ -648,6 +655,7 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
 
   var_decl->ty = AST_VARDECL_TY_DECL_WITH_ASSG;
   var_decl->assg_expr = expr;
+
   return true;
 }
 
@@ -666,6 +674,7 @@ bool parse_vardecllist(struct parser *parser,
 
     trace("creating var_table_entry for var name=%s, scope=%d",
           identifier_str(parser, &var_decl.var.identifier), var_decl.var.scope);
+
     struct var_table_entry *entry =
         create_entry(&parser->var_table, &var_decl.var);
 
@@ -707,26 +716,17 @@ bool parse_vardecllist(struct parser *parser,
 bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
+  struct ast_expr expr;
+  if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN) &&
+      parse_expr(parser, &expr) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
+    jump_stmt->ret_expr = expr;
+
+    return true;
+  }
 
   // FIXME: support return without expression
-  peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TY_KW_RETURN) {
-    consume_token(parser->lexer, token);
-
-    struct ast_expr expr;
-    if (parse_expr(parser, &expr)) {
-      peek_token(parser->lexer, &token);
-
-      if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
-        jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
-        jump_stmt->ret_expr = expr;
-
-        consume_token(parser->lexer, token);
-        return true;
-      }
-    }
-  }
 
   backtrack(parser->lexer, pos);
   return false;
@@ -737,35 +737,22 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
 bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_KW_IF) {
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_IF) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  consume_token(parser->lexer, token);
 
   struct ast_expr expr;
-  err("parsing if expression");
   if (!parse_expr(parser, &expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
 
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
 
   struct ast_stmt stmt;
   if (!parse_stmt(parser, &stmt)) {
@@ -776,6 +763,7 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   if_stmt->condition = expr;
   if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
   *if_stmt->body = stmt;
+
   return true;
 }
 
@@ -787,31 +775,22 @@ bool parse_ifelsestmt(struct parser *parser,
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_ifstmt if_stmt;
-  if (!parse_ifstmt(parser, &if_stmt)) {
+  struct ast_stmt else_stmt;
+  if (!parse_ifstmt(parser, &if_stmt) ||
+      !parse_token(parser, LEX_TOKEN_TY_KW_ELSE) ||
+      !parse_stmt(parser, &else_stmt)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
-  struct token token;
+  if_else_stmt->condition = if_stmt.condition;
+  if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
+  if_else_stmt->body = if_stmt.body;
+  if_else_stmt->else_body =
+      arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
+  *if_else_stmt->else_body = else_stmt;
 
-  peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TY_KW_ELSE) {
-    consume_token(parser->lexer, token);
-
-    struct ast_stmt else_stmt;
-    if (parse_stmt(parser, &else_stmt)) {
-      if_else_stmt->condition = if_stmt.condition;
-      if_else_stmt->body =
-          arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
-      if_else_stmt->body = if_stmt.body;
-      if_else_stmt->else_body =
-          arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
-      *if_else_stmt->else_body = else_stmt;
-      return true;
-    }
-  }
-
-  backtrack(parser->lexer, pos);
-  return false;
+  return true;
 }
 
 bool parse_switchstmt(struct parser *parser,
@@ -824,21 +803,11 @@ bool parse_switchstmt(struct parser *parser,
 bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_KW_WHILE) {
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_WHILE) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  consume_token(parser->lexer, token);
 
   struct ast_expr expr;
   if (!parse_expr(parser, &expr)) {
@@ -846,12 +815,10 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
     return false;
   }
 
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
 
   struct ast_stmt stmt;
   if (!parse_stmt(parser, &stmt)) {
@@ -862,6 +829,7 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   while_stmt->cond = expr;
   while_stmt->body = arena_alloc(parser->arena, sizeof(*while_stmt->body));
   *while_stmt->body = stmt;
+
   return true;
 }
 
@@ -869,14 +837,10 @@ bool parse_dowhilestmt(struct parser *parser,
                        struct ast_dowhilestmt *do_while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_KW_DO) {
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_DO)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
 
   struct ast_stmt stmt;
   if (!parse_stmt(parser, &stmt)) {
@@ -884,19 +848,11 @@ bool parse_dowhilestmt(struct parser *parser,
     return false;
   }
 
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_KW_WHILE) {
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_WHILE) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  consume_token(parser->lexer, token);
 
   struct ast_expr expr;
   if (!parse_expr(parser, &expr)) {
@@ -904,34 +860,23 @@ bool parse_dowhilestmt(struct parser *parser,
     return false;
   }
 
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  consume_token(parser->lexer, token);
 
   do_while_stmt->cond = expr;
   do_while_stmt->body =
       arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
   *do_while_stmt->body = stmt;
+
   return true;
-}
-
-bool parse_token(struct parser *parser, enum lex_token_ty ty) {
-  struct token token;
-
-  peek_token(parser->lexer, &token);
-  if (token.ty == ty) {
-    consume_token(parser->lexer, token);
-    return true;
-  }
-
-  return false;
 }
 
 bool parse_declorexpr(struct parser *parser,
                       struct ast_declorexpr *decl_or_expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
   struct ast_vardecllist var_decl_list;
   if (parse_vardecllist(parser, &var_decl_list)) {
     decl_or_expr->decl =
@@ -946,15 +891,21 @@ bool parse_declorexpr(struct parser *parser,
     return true;
   }
 
+  backtrack(parser->lexer, pos);
   return false;
 }
 
 bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  // first parse the `for (`
   if (!(parse_token(parser, LEX_TOKEN_TY_KW_FOR) &&
         parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET))) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
+  // then, we look for a vardecllist or an expression, or neither
   struct ast_declorexpr decl_or_expr;
   if (parse_declorexpr(parser, &decl_or_expr)) {
     for_stmt->init = arena_alloc(parser->arena, sizeof(*for_stmt->init));
@@ -963,10 +914,14 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     for_stmt->init = NULL;
   }
 
+  // if a decl was provided, it includes semicolon.
+  // else we need a semicolon following the expression (or lack of expression)
   if (!decl_or_expr.decl && !parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
+  // parse the condition if present, else a semicolon
   struct ast_expr cond;
   if (parse_expr(parser, &cond)) {
     for_stmt->cond = arena_alloc(parser->arena, sizeof(*for_stmt->cond));
@@ -976,9 +931,11 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   }
 
   if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
+  // parse the iteration statement if present, else a semicolon
   struct ast_expr iter;
   if (parse_expr(parser, &iter)) {
     for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
@@ -988,11 +945,13 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   }
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
   struct ast_stmt body;
   if (!parse_stmt(parser, &body)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
@@ -1057,6 +1016,8 @@ bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     stmt->ty = AST_STMT_TY_NULL;
     return true;
@@ -1090,47 +1051,29 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
-  struct text_pos pos = get_position(parser->lexer);
-
   struct ast_compoundexpr compound_expr;
-  if (parse_compoundexpr(parser, &compound_expr)) {
-    struct token token;
-    peek_token(parser->lexer, &token);
+  if (parse_compoundexpr_with_semicolon(parser, &compound_expr)) {
+    // compound expressions return the last expression
+    struct ast_tyref var_ty =
+        compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
+    stmt->ty = AST_STMT_TY_EXPR;
+    stmt->expr.ty = AST_EXPR_TY_RVALUE;
+    stmt->expr.var_ty = var_ty;
+    stmt->expr.rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
+    stmt->expr.rvalue.var_ty = var_ty;
+    stmt->expr.rvalue.compound_expr = compound_expr;
 
-    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
-      consume_token(parser->lexer, token);
-
-      // compound expressions return the last expression
-      struct ast_tyref var_ty =
-          compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
-      stmt->ty = AST_STMT_TY_EXPR;
-      stmt->expr.ty = AST_EXPR_TY_RVALUE;
-      stmt->expr.var_ty = var_ty;
-      stmt->expr.rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
-      stmt->expr.rvalue.var_ty = var_ty;
-      stmt->expr.rvalue.compound_expr = compound_expr;
-
-      return true;
-    }
-
-    backtrack(parser->lexer, pos);
+    return true;
   }
 
-  struct ast_expr expr;
-  if (parse_expr(parser, &expr)) {
-    struct token token;
-    peek_token(parser->lexer, &token);
-
-    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
-      consume_token(parser->lexer, token);
-
-      stmt->ty = AST_STMT_TY_EXPR;
-      stmt->expr = expr;
-      return true;
-    }
-
-    backtrack(parser->lexer, pos);
-  }
+  // struct ast_expr expr;
+  // if (parse_expr(parser, &expr) && parse_token(parser,
+  // LEX_TOKEN_TY_SEMICOLON)) {
+  //   stmt->ty = AST_STMT_TY_EXPR;
+  //   stmt->expr = expr;
+  //   return true;
+  // }
+  // backtrack(parser->lexer, pos);
 
   struct ast_vardecllist var_decl_list;
   if (parse_vardecllist(parser, &var_decl_list)) {
@@ -1139,6 +1082,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
+  backtrack(parser->lexer, pos);
   return false;
 }
 
@@ -1154,15 +1098,10 @@ bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token open_brace;
-
-  peek_token(parser->lexer, &open_brace);
-  if (open_brace.ty != LEX_TOKEN_TY_OPEN_BRACE) {
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
     backtrack(parser->lexer, pos);
     return false;
   }
-
-  consume_token(parser->lexer, open_brace);
 
   PARSER_NEW_SCOPE();
 
@@ -1179,60 +1118,27 @@ bool parse_compoundstmt(struct parser *parser,
 
   PARSER_END_SCOPE();
 
-  struct token close_brace;
-
-  peek_token(parser->lexer, &close_brace);
-  if (close_brace.ty != LEX_TOKEN_TY_CLOSE_BRACE) {
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
     backtrack(parser->lexer, pos);
     return false;
   }
 
-  consume_token(parser->lexer, close_brace);
-
   return true;
-}
-
-bool parse_identifier(struct parser *parser, struct token *token) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  peek_token(parser->lexer, token);
-
-  if (token->ty == LEX_TOKEN_TY_IDENTIFIER) {
-    consume_token(parser->lexer, *token);
-
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
-  return false;
 }
 
 bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token open_bracket;
-
   // TOOD: support args
-  peek_token(parser->lexer, &open_bracket);
-  if (open_bracket.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
-    backtrack(parser->lexer, pos);
-    return false;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) /* && parse_arglist */ &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    // arglist has no fields yet
+    UNUSED_ARG(arg_list);
+    return true;
   }
 
-  consume_token(parser->lexer, open_bracket);
-
-  struct token close_bracket;
-  peek_token(parser->lexer, &close_bracket);
-  if (close_bracket.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  consume_token(parser->lexer, close_bracket);
-
-  // arglist has no fields yet
-  UNUSED_ARG(arg_list);
-  return true;
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
 bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
@@ -1259,16 +1165,10 @@ bool parse_funcdecl(struct parser *parser, struct ast_funcdecl *func_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_funcsig func_sig;
-
-  if (parse_funcsig(parser, &func_sig)) {
-    struct token token;
-
-    peek_token(parser->lexer, &token);
-
-    if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
-      func_decl->sig = func_sig;
-      return true;
-    }
+  if (parse_funcsig(parser, &func_sig) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    func_decl->sig = func_sig;
+    return true;
   }
 
   backtrack(parser->lexer, pos);
