@@ -28,6 +28,68 @@ uint32_t *aarch64_emit_reserved(struct aarch64_emitter *emitter);
 /* Nop */
 void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
+/* Bitfield operations (Immediate) */
+
+void aarch64_emit_sbfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_sbfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_bfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_bfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_ubfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_ubfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+/* Logical (register) */
+
+/* Logical (immediate) */
+
+void aarch64_emit_eor_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_eor_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_orr_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_orr_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_ands_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_ands_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_and_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
+void aarch64_emit_and_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest);
+
 /* Add & subtract (register) */
 
 void aarch64_emit_sub_64(struct aarch64_emitter *emitter,

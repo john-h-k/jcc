@@ -60,11 +60,26 @@
 #define MOVZ_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b10, hw, imm16, Rd)
 #define MOVK_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b11, hw, imm16, Rd)
 
+/* Bitfield operations (Immediate) */
+
+#define BITFIELD_IMM(sf, opc, N, immr, imms, Rn, Rd)                            \
+  (uint32_t)(((sf) << 31) | ((opc) << 29) | (0b100110 << 23) | ((N) << 22) |   \
+             ((immr) << 16) | ((imms) << 10) | ((Rn) << 5) | (Rd))
+
+#define SBFM_32_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b0, 0b00, 0b0, immr, imms, Rn, Rd)
+#define BFM_32_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b0, 0b10, 0b0, immr, imms, Rn, Rd)
+#define UBFM_32_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b0, 0b01, 0b0, immr, imms, Rn, Rd)
+
+#define SBFM_64_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b1, 0b00, 0b1, immr, imms, Rn, Rd)
+#define BFM_64_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b1, 0b10, 0b1, immr, imms, Rn, Rd)
+#define UBFM_64_IMM(immr, imms, Rn, Rd) BITFIELD_IMM(0b1, 0b01, 0b1, immr, imms, Rn, Rd)
+
 /* Arithmetic & logical operations (Immediate) */
 
 #define LOGICAL_IMM(sf, opc, N, immr, imms, Rn, Rd)                            \
   (uint32_t)(((sf) << 31) | ((opc) << 29) | (0b100100 << 23) | ((N) << 22) |   \
-             ((immr) << 16) | ((immr) << 10) | ((Rn) << 5) | (Rd))
+             ((immr) << 16) | ((imms) << 10) | ((Rn) << 5) | (Rd))
+
 #define AND_32_IMM(immr, imms, Rn, Rd)                                         \
   LOGICAL_IMM(0b0, 0b00, 0b0, immr, imms, Rn, Rd)
 #define ORR_32_IMM(immr, imms, Rn, Rd)                                         \

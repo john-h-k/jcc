@@ -26,6 +26,9 @@ struct parser {
   // or NULL if the variable has been used without a declaration
   struct var_table var_table;
 
+  // returns need to know which type they coerce to
+  struct ast_tyref func_ret_ty;
+
   int cur_scope;
 };
 
@@ -262,7 +265,7 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
     struct token maybe_other_long;
     peek_token(parser->lexer, &maybe_other_long);
 
-    if (token.ty == LEX_TOKEN_TY_KW_LONG) {
+    if (maybe_other_long.ty == LEX_TOKEN_TY_KW_LONG) {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
     } else {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG;
@@ -308,8 +311,7 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
     }
   } else {
     if (seen_unsigned) {
-      // unsigned variants are signed variants + 1
-      wkt++;
+      wkt = WKT_MAKE_UNSIGNED(wkt);
     } else if (!seen_signed && !seen_unsigned &&
                wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
       wkt = WELL_KNOWN_TY_SIGNED_CHAR;
@@ -729,7 +731,10 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
       parse_expr(parser, &expr) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
-    jump_stmt->ret_expr = expr;
+    jump_stmt->return_stmt.var_ty = parser->func_ret_ty;
+    jump_stmt->return_stmt.expr =
+        arena_alloc(parser->arena, sizeof(*jump_stmt->return_stmt.expr));
+    *jump_stmt->return_stmt.expr = expr;
 
     return true;
   }
@@ -1181,12 +1186,16 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct ast_funcsig func_sig;
   struct ast_compoundstmt func_body;
 
-  if (parse_funcsig(parser, &func_sig) &&
-      parse_compoundstmt(parser, &func_body)) {
-    func_def->sig = func_sig;
-    func_def->body = func_body;
+  if (parse_funcsig(parser, &func_sig)) {
+    // return statements need to know the type they coerce to
+    parser->func_ret_ty = func_sig.ret_ty;
 
-    return true;
+    if (parse_compoundstmt(parser, &func_body)) {
+      func_def->sig = func_sig;
+      func_def->body = func_body;
+
+      return true;
+    }
   }
 
   backtrack(parser->lexer, pos);
@@ -1466,7 +1475,9 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
   case AST_JUMPSTMT_TY_RETURN:
     AST_PRINTZ("RETURN");
     INDENT();
-    DEBUG_CALL(expr, &jump_stmt->ret_expr);
+    if (jump_stmt->return_stmt.expr) {
+      DEBUG_CALL(expr, jump_stmt->return_stmt.expr);
+    }
     UNINDENT();
     break;
   }
