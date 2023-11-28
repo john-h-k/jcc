@@ -5,6 +5,24 @@
 
 #include <math.h>
 
+const char *unary_op_string(enum ir_op_unary_op_ty ty) {
+  switch (ty) {
+  case IR_OP_UNARY_OP_TY_NEG:
+    return "-";
+  }
+}
+
+const char *cast_op_string(enum ir_op_cast_op_ty ty) {
+  switch (ty) {
+  case IR_OP_CAST_OP_TY_SEXT:
+    return "sext";
+  case IR_OP_CAST_OP_TY_ZEXT:
+    return "zext";
+  case IR_OP_CAST_OP_TY_TRUNCATE:
+    return "trunc";
+  }
+}
+
 const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_ADD:
@@ -93,6 +111,14 @@ char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
                         var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
                         binary_op_string(ir->binary_op.ty),
                         ir->binary_op.rhs->id);
+  case IR_OP_TY_UNARY_OP:
+    return arena_printf(
+        irb->arena, "%%%zu (%s) = %s %%%zu", ir->id, var_ty_string(&ir->var_ty),
+        unary_op_string(ir->unary_op.ty), ir->unary_op.value->id);
+  case IR_OP_TY_CAST_OP:
+    return arena_printf(irb->arena, "%%%zu (%s) = %s %%%zu", ir->id,
+                        var_ty_string(&ir->var_ty),
+                        cast_op_string(ir->cast_op.ty), ir->cast_op.value->id);
   case IR_OP_TY_STORE_LCL:
     return arena_printf(irb->arena, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
                         ir->id, var_ty_string(&ir->var_ty),

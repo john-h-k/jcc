@@ -2,14 +2,15 @@
 
 #include "../alloc.h"
 #include "../util.h"
+#include "../log.h"
 #include "isa.h"
 
 #include <stdlib.h>
 
 #define SIG_FITS_IN_BITS(value, bitc)                                          \
-  ((abs((value)) & ~((1 << (bitc - 1)) - 1)) == 0)
+  ((abs((value)) & ~((1 << (bitc)) - 1)) == 0)
 #define UNS_FITS_IN_BITS(value, bitc)                                          \
-  (((value) & ~((1 << (bitc - 1)) - 1)) == 0)
+  (((value) & ~((1 << (bitc)) - 1)) == 0)
 
 #define CLAMP_BITS(value, bitc) ((value) & ((1 << bitc) - 1))
 
@@ -70,6 +71,106 @@ uint32_t *aarch64_emit_reserved(struct aarch64_emitter *emitter) {
 /* Nop */
 void aarch64_emit_nop(struct aarch64_emitter *emitter) {
   aarch64_emit(emitter, NOP);
+}
+
+/* Bitfield operations (Immediate) */
+
+void aarch64_emit_sbfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, SBFM_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_sbfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, SBFM_64_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_bfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, BFM_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_bfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, BFM_64_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_ubfm_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, UBFM_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_ubfm_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  aarch64_emit(emitter, UBFM_64_IMM(immr, imms, source.idx, dest.idx));
+}
+
+/* Logical (register) */
+
+/* Logical (immediate) */
+
+#define VALIDATE_BITWISE_IMMS() invariant_assert(UNS_FITS_IN_BITS(immr, 6) && UNS_FITS_IN_BITS(imms, 6), "immediate too big for bitwise imm instr");
+
+void aarch64_emit_eor_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, EOR_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_eor_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, EOR_64_IMM(immr, imms, source.idx, dest.idx));
+}
+void aarch64_emit_orr_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, ORR_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_orr_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, ORR_64_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_ands_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, ANDS_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_ands_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, ANDS_64_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_and_32_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  warn("%zu immr, %zu imms", immr, imms);
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, AND_32_IMM(immr, imms, source.idx, dest.idx));
+}
+
+void aarch64_emit_and_64_imm(struct aarch64_emitter *emitter,
+                             struct aarch64_reg source, size_t immr, size_t imms,
+                             struct aarch64_reg dest) {
+  VALIDATE_BITWISE_IMMS();
+  aarch64_emit(emitter, AND_64_IMM(immr, imms, source.idx, dest.idx));
 }
 
 /* Add & subtract (register) */

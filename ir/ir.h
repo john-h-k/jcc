@@ -15,6 +15,8 @@ enum ir_op_ty {
   IR_OP_TY_CNST,
 
   IR_OP_TY_BINARY_OP,
+  IR_OP_TY_UNARY_OP,
+  IR_OP_TY_CAST_OP,
 
   IR_OP_TY_STORE_LCL,
   IR_OP_TY_LOAD_LCL,
@@ -46,6 +48,26 @@ struct ir_op_cnst {
 };
 
 struct ir_op_ret {
+  struct ir_op *value;
+};
+
+enum ir_op_cast_op_ty {
+  IR_OP_CAST_OP_TY_SEXT,
+  IR_OP_CAST_OP_TY_ZEXT,
+  IR_OP_CAST_OP_TY_TRUNCATE,
+};
+
+struct ir_op_cast_op {
+  enum ir_op_cast_op_ty ty;
+  struct ir_op *value;
+};
+
+enum ir_op_unary_op_ty {
+  IR_OP_UNARY_OP_TY_NEG,
+};
+
+struct ir_op_unary_op {
+  enum ir_op_unary_op_ty ty;
   struct ir_op *value;
 };
 
@@ -137,6 +159,8 @@ struct ir_op {
   union {
     struct ir_op_cnst cnst;
     struct ir_op_binary_op binary_op;
+    struct ir_op_unary_op unary_op;
+    struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
     struct ir_op_store_lcl store_lcl;
     struct ir_op_load_lcl load_lcl;

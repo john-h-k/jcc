@@ -232,6 +232,11 @@ struct ast_vardecllist {
 
 /* Jump statements - `return`, `break`, `continue`, `goto` */
 
+struct ast_returnstmt {
+  struct ast_tyref var_ty;
+  struct ast_expr *expr;
+};
+
 enum ast_jumpstmt_ty {
   // AST_JUMPSTMT_TY_GOTO,
   // AST_JUMPSTMT_TY_BREAK,
@@ -243,7 +248,7 @@ struct ast_jumpstmt {
   enum ast_jumpstmt_ty ty;
 
   union {
-    struct ast_expr ret_expr;
+    struct ast_returnstmt return_stmt;
   };
 };
 
@@ -385,6 +390,9 @@ enum parser_create_result parser_create(const char *program,
                                         struct parser **parser);
 struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
+
+struct ast_tyref get_var_type(struct parser *parser,
+                              const struct ast_var *var);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 

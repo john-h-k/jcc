@@ -6,6 +6,8 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_UNARY_OP:
+  case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD_LCL:
     return true;
   case IR_OP_TY_STORE_LCL:
@@ -26,6 +28,8 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
+  case IR_OP_TY_UNARY_OP:
+  case IR_OP_TY_CAST_OP:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_LOAD_LCL:
     return false;
@@ -64,6 +68,16 @@ void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
   walk_op(binary_op->rhs, cb, cb_metadata);
 }
 
+void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
+                    void *cb_metadata) {
+  walk_op(unary_op->value, cb, cb_metadata);
+}
+
+void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
+                    void *cb_metadata) {
+  walk_op(cast_op->value, cb, cb_metadata);
+}
+
 void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
   if (ret->value) {
     walk_op(ret->value, cb, cb_metadata);
@@ -83,6 +97,12 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_BINARY_OP:
     cb(&op->binary_op.lhs, cb_metadata);
     cb(&op->binary_op.rhs, cb_metadata);
+    break;
+  case IR_OP_TY_UNARY_OP:
+    cb(&op->unary_op.value, cb_metadata);
+    break;
+  case IR_OP_TY_CAST_OP:
+    cb(&op->cast_op.value, cb_metadata);
     break;
   case IR_OP_TY_STORE_LCL:
     cb(&op->store_lcl.value, cb_metadata);
@@ -118,7 +138,13 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_BINARY_OP:
     walk_binary_op(&op->binary_op, cb, cb_metadata);
     break;
-  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_UNARY_OP:
+    walk_unary_op(&op->unary_op, cb, cb_metadata);
+break;
+case IR_OP_TY_CAST_OP:
+    walk_cast_op(&op->cast_op, cb, cb_metadata);
+break;
+case IR_OP_TY_STORE_LCL:
     walk_store_lcl(&op->store_lcl, cb, cb_metadata);
     break;
   case IR_OP_TY_LOAD_LCL:

@@ -54,6 +54,8 @@ enum compiler_create_result create_compiler(const char *program,
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
 void debug_print_stage(struct ir_builder *irb, const char *name) {
+  debug_print_ir(stderr, irb, NULL, NULL);
+
   char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
   strcpy(buff, name);
   strcat(buff, ".gv");
