@@ -10,6 +10,14 @@
 #include <alloca.h>
 #include <string.h>
 
+// Not the most elegant, but this helps prevent mismatched scope calls
+#define PARSER_NEW_SCOPE()                                                     \
+  int _you_forgot_to_call_parser_end_scope;                                    \
+  parser->cur_scope++;
+#define PARSER_END_SCOPE()                                                     \
+  (void)_you_forgot_to_call_parser_end_scope;                                  \
+  parser->cur_scope--;
+
 struct parser {
   struct arena_allocator *arena;
   struct lexer *lexer;
@@ -1085,14 +1093,6 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   backtrack(parser->lexer, pos);
   return false;
 }
-
-// Not the most elegant, but this helps prevent mismatched scope calls
-#define PARSER_NEW_SCOPE()                                                     \
-  int _you_forgot_to_call_parser_end_scope;                                    \
-  parser->cur_scope++;
-#define PARSER_END_SCOPE()                                                     \
-  (void)_you_forgot_to_call_parser_end_scope;                                  \
-  parser->cur_scope--;
 
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {

@@ -301,6 +301,8 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
 void clear_metadata(struct ir_builder *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
+    basicblock->metadata = NULL;
+  
     struct ir_stmt *stmt = basicblock->first;
 
     while (stmt) {

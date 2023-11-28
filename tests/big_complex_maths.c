@@ -1,4 +1,4 @@
-// expected value: 50
+// expected value: 43
 int main() {
   int a = 7, pb = 301, pc = 2450;
 

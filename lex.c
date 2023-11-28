@@ -48,10 +48,13 @@ bool valid_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
 }
 
+/* Identifiers cannot start with digits */
 bool valid_first_identifier_char(char c) {
   return !isdigit(c) && valid_identifier_char(c);
 }
 
+/* The lexer parses identifiers, but these could be identifiers, typedef-names, or keywords.
+   This function converts identifiers into their "real" type */
 enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
                             struct text_pos end) {
   struct keyword {
@@ -61,10 +64,9 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
   };
 
   size_t len = text_pos_len(start, end);
-  debug("testing '%*.*s' for kw", len, len, &lexer->text[start.idx]);
 
-#define KEYWORD(kw, ty)                                                        \
-  { kw, sizeof(kw) - 1, ty }
+  #define KEYWORD(kw, ty)                                                        \
+    { kw, sizeof(kw) - 1, ty }
 
   // TODO: hashify
   static struct keyword keywords[] = {
@@ -82,7 +84,9 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("signed", LEX_TOKEN_TY_KW_SIGNED),
   };
 
-  for (size_t i = 0; i < sizeof(keywords) / sizeof(*keywords); i++) {
+  #undef KEYWORD
+
+  for (size_t i = 0; i < ARR_LENGTH(keywords); i++) {
     if (len == keywords[i].len &&
         memcmp(&lexer->text[start.idx], keywords[i].str, len) ==
             0) {
@@ -105,7 +109,6 @@ void consume_token(struct lexer *lexer, struct token token) {
   lexer->pos = token.span.end;
 }
 
-// it returns bool in case we hit EOF without hitting the end token
 void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
   for (; cur_pos->idx < lexer->len && lexer->text[cur_pos->idx] != '\n';
        next_col(cur_pos)) {
@@ -142,10 +145,12 @@ bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
   return false;
 }
 
+/* Attempts to consume and move forward the position if it finds char `c` */
 bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
   debug_assert(
       lexer->pos.idx != pos->idx,
       "calling `try_consume` with `pos` the same as lexer makes no sense");
+
   if (pos->idx < lexer->len && lexer->text[pos->idx] == c) {
     if (c == '\n') {
       next_line(pos);
