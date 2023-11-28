@@ -21,12 +21,12 @@ struct parser {
   int cur_scope;
 };
 
-enum parser_create_result create_parser(const char *program,
+enum parser_create_result parser_create(const char *program,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
-  create_arena_allocator(&p->arena);
-  if (create_lexer(program, &p->lexer) != LEX_STATUS_SUCCESS) {
+  arena_allocator_create(&p->arena);
+  if (lexer_create(program, &p->lexer) != LEX_STATUS_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }
@@ -39,10 +39,10 @@ enum parser_create_result create_parser(const char *program,
   return PARSER_CREATE_RESULT_SUCCESS;
 }
 
-void free_parser(struct parser **parser) {
-  free_lexer(&(*parser)->lexer);
+void parser_free(struct parser **parser) {
+  lexer_free(&(*parser)->lexer);
 
-  free_arena_allocator(&(*parser)->arena);
+  arena_allocator_free(&(*parser)->arena);
   (*parser)->arena = NULL;
   free(*parser);
 

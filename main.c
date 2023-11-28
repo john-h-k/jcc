@@ -40,6 +40,8 @@ char *readfile(const char *path) {
 }
 
 int main(int argc, char **argv) {
+  enable_log();
+
   info("parsing command line args");
 
   struct compile_args args;
@@ -67,8 +69,11 @@ int main(int argc, char **argv) {
     strcpy(output, sources[i]);
     strcat(output, ".obj");
 
+    info("compiling source file '%s' into object file '%s'", sources[i], output);
+
     objects[i] = output;
 
+    disable_log();
     struct compiler *compiler;
     if (create_compiler(source, output, &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
@@ -80,6 +85,7 @@ int main(int argc, char **argv) {
       err("compilation failed!");
       return -1;
     }
+    enable_log();
   }
 
   struct link_args link_args = {.objects = (const char **)objects,

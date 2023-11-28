@@ -18,18 +18,25 @@ struct aarch64_emitter;
 void create_aarch64_emitter(struct aarch64_emitter **emitter);
 void free_aarch64_emitter(struct aarch64_emitter **emitter);
 
+size_t aarch64_emitted_count(struct aarch64_emitter *emitter);
 size_t aarch64_emit_bytesize(struct aarch64_emitter *emitter);
 void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void *dest);
 
 /* Emits a `nop` and returns the address such that it can be modified later */
-
 uint32_t *aarch64_emit_reserved(struct aarch64_emitter *emitter);
 
 /* Nop */
-
 void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
 /* Add & subtract (register) */
+
+void aarch64_emit_sub_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
+void aarch64_emit_add_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
 
 void aarch64_emit_sub_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
@@ -59,6 +66,18 @@ void aarch64_emit_add_64_imm(struct aarch64_emitter *emitter,
 
 /* Multiply & multiply-add */
 
+void aarch64_emit_mul_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
+void aarch64_emit_madd_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg add, struct aarch64_reg dest);
+
+void aarch64_emit_msub_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg sub, struct aarch64_reg dest);
+
 void aarch64_emit_mul_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
@@ -72,6 +91,14 @@ void aarch64_emit_msub_32(struct aarch64_emitter *emitter,
                           struct aarch64_reg sub, struct aarch64_reg dest);
 
 /* Division */
+
+void aarch64_emit_sdiv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_udiv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
 
 void aarch64_emit_sdiv_32(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
@@ -91,6 +118,15 @@ void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter,
 
 /* Loads and stores */
 
+void aarch64_emit_load_offset_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest,
+                                 unsigned short offset);
+void aarch64_emit_store_offset_64(struct aarch64_emitter *emitter,
+                                  struct aarch64_reg addr,
+                                  struct aarch64_reg source,
+                                  unsigned short offset);
+
 void aarch64_emit_load_offset_32(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,
                                  struct aarch64_reg dest,
@@ -108,8 +144,6 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg source, struct aarch64_reg dest);
 
 /* Branches */
-
-size_t aarch64_emitted_count(struct aarch64_emitter *emitter);
 
 void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset);
 void aarch64_emit_bl(struct aarch64_emitter *emitter, signed offset);

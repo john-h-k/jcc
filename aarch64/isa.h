@@ -26,10 +26,25 @@
   (uint32_t)(((size) << 30) | (0b111 << 27) | ((VR) << 26) | (0b01 << 24) |    \
              ((opc) << 22) | ((imm12) << 10) | ((Rn) << 5) | (Rt))
 
+#define STR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b00, imm12, Rn, Rt)
+#define LDR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b01, imm12, Rn, Rt)
+
+#define STR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b00, imm12, Rn, Rt)
+#define LDR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b01, imm12, Rn, Rt)
+
 #define STR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b01, imm12, Rn, Rt)
+
+#define STR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b00, imm12, Rn, Rt)
+#define LDR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b01, imm12, Rn, Rt)
 
 /* Register moves */
 
@@ -110,9 +125,14 @@
              (Rd))
 
 #define ADD_32_REG(shift, imm6, Rm, Rn, Rd)                                    \
-  ADD_SUB_SHIFTED_REG(0, 0, 0, shift, Rm, imm6, Rn, Rd)
+  ADD_SUB_SHIFTED_REG(0b0, 0b0, 0b0, shift, Rm, imm6, Rn, Rd)
 #define SUB_32_REG(shift, imm6, Rm, Rn, Rd)                                    \
-  ADD_SUB_SHIFTED_REG(0, 1, 0, shift, Rm, imm6, Rn, Rd)
+  ADD_SUB_SHIFTED_REG(0b0, 0b1, 0b0, shift, Rm, imm6, Rn, Rd)
+
+#define ADD_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b1, 0b0, 0b0, shift, Rm, imm6, Rn, Rd)
+#define SUB_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b1, 0b1, 0b0, shift, Rm, imm6, Rn, Rd)
 
 #define REG_2_SOURCE(sf, S, opcode, Rm, Rn, Rd)                                \
   (uint32_t)(((sf) << 31) | ((S) << 29) | (0b11010110 << 21) | ((Rm) << 16) |  \
@@ -135,6 +155,9 @@
 
 #define UDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000010, Rm, Rn, Rd)
 #define SDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000011, Rm, Rn, Rd)
+
+#define UDIV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b000010, Rm, Rn, Rd)
+#define SDIV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b000011, Rm, Rn, Rd)
 
 #define SHIFT_LSL (0b00)
 #define SHIFT_LSR (0b01)

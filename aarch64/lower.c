@@ -108,13 +108,12 @@ void lower(struct ir_builder *func) {
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
         case IR_OP_TY_BR:
+        case IR_OP_TY_MOV:
           break;
         case IR_OP_TY_BR_COND:
           if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
             lower_br_cond(func, op);
           }
-          break;
-        case IR_OP_TY_MOV:
           break;
         case IR_OP_TY_BINARY_OP:
           if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
