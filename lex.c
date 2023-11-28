@@ -16,11 +16,11 @@ struct lexer {
   const char **associated_texts;
 };
 
-enum lex_status create_lexer(const char *program, struct lexer **lexer) {
+enum lex_status lexer_create(const char *program, struct lexer **lexer) {
   info("beginning lex stage");
 
   struct arena_allocator *arena;
-  create_arena_allocator(&arena);
+  arena_allocator_create(&arena);
 
   struct lexer *l = nonnull_malloc(sizeof(*l));
   l->arena = arena;
@@ -36,8 +36,8 @@ enum lex_status create_lexer(const char *program, struct lexer **lexer) {
   return LEX_STATUS_SUCCESS;
 }
 
-void free_lexer(struct lexer **lexer) {
-  free_arena_allocator(&(*lexer)->arena);
+void lexer_free(struct lexer **lexer) {
+  arena_allocator_free(&(*lexer)->arena);
   (*lexer)->arena = NULL;
   free(*lexer);
 

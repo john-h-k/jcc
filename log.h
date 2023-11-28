@@ -21,6 +21,8 @@ DECL_LOG_FN(trace)
 
 DECL_LOG_FN(slog)
 
+#undef DECL_LOG_FN
+
 #define BEGIN_STAGE(name) slog("\n\n**********  " name "  **********\n")
 
 #define BEGIN_SUB_STAGE(name) slog("\n\n>> " name " \n")

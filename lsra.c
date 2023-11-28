@@ -33,8 +33,10 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   interval->end = MAX(interval->end, cb->op->id);
 }
 
-#define INTERVAL_END_OF_BASICBLOCK (SIZE_T_MAX)
-
+/* Builds the intervals for each value in the SSA representation 
+     - IDs are rebuilt before calling this so that op ID can be used as an inreasing inex
+     - indexes can be non-sequential but must be increasing
+*/
 struct interval_data construct_intervals(struct ir_builder *irb) {
   struct interval_data data;
   data.intervals =
@@ -55,14 +57,13 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         debug_assert(op->id < irb->op_count, "out of range!");
         struct interval *interval = &data.intervals[op->id];
 
-        // special case - a phi op actually starts existing at the end of its
-        // earliest basicblock
         interval->op = op;
         interval->start = op->id;
 
+        // we can get intervals with an end before their start if the value is unused
+        // fix them up to be valid
         if (interval->end < interval->start) {
-          interval->end = interval->start; // this ensures intervals are still
-                                           // valid for unused values
+          interval->end = interval->start;
         }
 
         debug_assert(
@@ -82,15 +83,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     }
 
     basicblock = basicblock->succ;
-  }
-
-  for (size_t i = 0; i < data.num_intervals; i++) {
-    struct interval *interval = &data.intervals[i];
-
-    if (interval->end == INTERVAL_END_OF_BASICBLOCK) {
-      struct ir_op *last_op = interval->op->stmt->basicblock->last->last;
-      interval->end = data.intervals[last_op->id].start;
-    }
   }
 
   return data;
@@ -309,6 +301,16 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   return data;
 }
 
+/* Performs register allocation on the IR
+     - phi elimination must have occured earlier
+     - registers may be spilt to new local variables
+
+  Works via a two-pass allocation approach:
+     - first pass assigns "trivial" registers and marks which variables need spill
+     - after the first pass, we insert `storelcl` and `loadlcl` instructions with appropriate locals
+       as will be needed
+     - we then re-run allocation, which will assign all registers including those needed for spills
+*/
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   rebuild_ids(irb);
 

@@ -29,7 +29,7 @@ struct arena {
   struct arena_allocator *allocator;
 };
 
-void create_arena_allocator(struct arena_allocator **allocator) {
+void arena_allocator_create(struct arena_allocator **allocator) {
   struct arena_allocator value = {.first = NULL, .last = NULL};
 
   struct arena_allocator *p = nonnull_malloc(sizeof(value));
@@ -37,7 +37,7 @@ void create_arena_allocator(struct arena_allocator **allocator) {
   *allocator = p;
 }
 
-void free_arena_allocator(struct arena_allocator **allocator) {
+void arena_allocator_free(struct arena_allocator **allocator) {
   struct arena *arena = (*allocator)->first;
 
   while (arena) {

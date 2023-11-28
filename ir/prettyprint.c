@@ -322,6 +322,7 @@ struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,
 }
 
 void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
+  clear_metadata(irb);
   struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,
                                                GRAPH_STRICTNESS_STRICT, file);
 
@@ -341,6 +342,4 @@ void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
   }
 
   graphwriter_free(&gwr);
-
-  clear_metadata(irb);
 }

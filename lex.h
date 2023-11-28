@@ -107,8 +107,8 @@ struct token {
 struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
-enum lex_status create_lexer(const char *program, struct lexer **lexer);
-void free_lexer(struct lexer **lexer);
+enum lex_status lexer_create(const char *program, struct lexer **lexer);
+void lexer_free(struct lexer **lexer);
 
 struct text_pos get_position(struct lexer *lexer);
 void backtrack(struct lexer *lexer, struct text_pos position);

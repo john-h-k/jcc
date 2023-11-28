@@ -8,6 +8,7 @@
 #include "ir/eliminate_phi.h"
 #include "ir/prettyprint.h"
 #include "lex.h"
+#include "parse.h"
 #include "log.h"
 #include "lsra.h"
 #include "macos/mach-o.h"
@@ -34,13 +35,13 @@ enum compiler_create_result create_compiler(const char *program,
 
   (*compiler)->args = *args;
 
-  if (create_parser(program, &(*compiler)->parser) !=
+  if (parser_create(program, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  create_arena_allocator(&(*compiler)->arena);
+  arena_allocator_create(&(*compiler)->arena);
 
   size_t sz = strlen(output) + 1;
   (*compiler)->output = arena_alloc((*compiler)->arena, sz);
@@ -88,9 +89,9 @@ enum compile_result compile(struct compiler *compiler) {
 
       ir = build_ir_for_function(compiler->parser, compiler->arena, def);
 
-      FILE *ir_graph = fopen("cfg.gv", "w");
-      debug_print_ir_graph(ir_graph, ir);
-      fclose(ir_graph);
+      // FILE *ir_graph = fopen("cfg.gv", "w");
+      // debug_print_ir_graph(ir_graph, ir);
+      // fclose(ir_graph);
 
       BEGIN_STAGE("IR");
 
@@ -103,6 +104,10 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("POST-LOWER IR");
 
       debug_print_ir(stderr, ir, NULL, NULL);
+
+      FILE *ir_graph_lower = fopen("cfg_lower.gv", "w");
+      debug_print_ir_graph(ir_graph_lower, ir);
+      fclose(ir_graph_lower);
 
       disable_log();
     }
@@ -119,8 +124,6 @@ enum compile_result compile(struct compiler *compiler) {
 
       struct reg_info aarch64_reg_info = {.num_regs = 18};
       register_alloc(ir, aarch64_reg_info);
-
-      // rebuild_ids(ir);
 
       debug_print_ir(stderr, ir, print_ir_intervals, NULL);
 
@@ -187,8 +190,8 @@ enum compile_result compile(struct compiler *compiler) {
 }
 
 void free_compiler(struct compiler **compiler) {
-  free_arena_allocator(&(*compiler)->arena);
-  free_parser(&(*compiler)->parser);
+  arena_allocator_free(&(*compiler)->arena);
+  parser_free(&(*compiler)->parser);
 
   free(*compiler);
   *compiler = NULL;

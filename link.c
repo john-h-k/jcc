@@ -9,7 +9,7 @@
 
 enum link_result link_objects(const struct link_args *args) {
   struct arena_allocator *arena;
-  create_arena_allocator(&arena);
+  arena_allocator_create(&arena);
 
   // FIXME: support non `ld_classic`
   const char *template = "ld -lSystem -syslibroot $(xcrun -sdk macosx "
@@ -52,6 +52,8 @@ enum link_result link_objects(const struct link_args *args) {
   debug_assert(head == total_size, "string buffer calculations went wrong!");
 
   int ret_code = system(buff);
+
+  arena_allocator_free(&arena);
 
   if (!ret_code) {
     return LINK_RESULT_SUCCESS;

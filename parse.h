@@ -381,10 +381,10 @@ struct parse_result {
   struct ast_translationunit translation_unit;
 };
 
-enum parser_create_result create_parser(const char *program,
+enum parser_create_result parser_create(const char *program,
                                         struct parser **parser);
 struct parse_result parse(struct parser *parser);
-void free_parser(struct parser **parser);
+void parser_free(struct parser **parser);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 

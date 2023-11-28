@@ -36,7 +36,7 @@ set(
 if(MSVC)
   add_compile_option(/W4 /WX)
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wimplicit-fallthrough)
   add_compile_options(-Wno-gnu-binary-literal)
 endif()
 
