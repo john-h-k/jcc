@@ -53,6 +53,16 @@ enum compiler_create_result create_compiler(const char *program,
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 
+void debug_print_stage(struct ir_builder *irb, const char *name) {
+  char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
+  strcpy(buff, name);
+  strcat(buff, ".gv");
+  
+  FILE *ir_graph = fopen(buff, "w");
+  debug_print_ir_graph(ir_graph, irb);
+  fclose(ir_graph);
+}
+
 enum compile_result compile(struct compiler *compiler) {
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PARSE)) {
     enable_log();
@@ -89,13 +99,9 @@ enum compile_result compile(struct compiler *compiler) {
 
       ir = build_ir_for_function(compiler->parser, compiler->arena, def);
 
-      // FILE *ir_graph = fopen("cfg.gv", "w");
-      // debug_print_ir_graph(ir_graph, ir);
-      // fclose(ir_graph);
-
       BEGIN_STAGE("IR");
 
-      debug_print_ir(stderr, ir, NULL, NULL);
+      debug_print_stage(ir, "ir");
 
       BEGIN_STAGE("LOWERING");
 
@@ -103,11 +109,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("POST-LOWER IR");
 
-      debug_print_ir(stderr, ir, NULL, NULL);
-
-      FILE *ir_graph_lower = fopen("cfg_lower.gv", "w");
-      debug_print_ir_graph(ir_graph_lower, ir);
-      fclose(ir_graph_lower);
+      debug_print_stage(ir, "lower");
 
       disable_log();
     }
@@ -122,10 +124,12 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(ir);
 
+      debug_print_stage(ir, "elim_phi");
+
       struct reg_info aarch64_reg_info = {.num_regs = 18};
       register_alloc(ir, aarch64_reg_info);
 
-      debug_print_ir(stderr, ir, print_ir_intervals, NULL);
+      debug_print_stage(ir, "reg_alloc");
 
       disable_log();
     }

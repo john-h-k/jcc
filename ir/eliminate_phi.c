@@ -52,6 +52,5 @@ void eliminate_phi(struct ir_builder *irb) {
 
     basicblock = basicblock->succ;
   }
-
-  debug_print_ir(stderr, irb, NULL, NULL);
 }
+
