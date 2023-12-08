@@ -164,10 +164,6 @@ void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    if (op->reg != REG_FLAGS) {
-      todo("comparisons into register");
-    }
-
     if (is_64_bit(op)) {
       aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
                            get_reg_for_idx(rhs_reg), ZERO_REG);
@@ -226,10 +222,18 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
+enum aarch64_cond invert_cond(enum aarch64_cond cond) {
+  if (cond & 1) {
+    return cond & ~1;
+  } else {
+    return cond | 1;
+  }
+}
+
 enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
                    "`get_cond_for_op` expects a binary op");
-  
+
   switch (op->binary_op.ty) {
   case IR_OP_BINARY_OP_TY_EQ:
     return AARCH64_COND_EQ;
@@ -253,6 +257,23 @@ enum aarch64_cond get_cond_for_op(struct ir_op *op) {
     return AARCH64_COND_LE;
   default:
     bug("op was not a comparison");
+  }
+}
+
+void emit_mov_op(struct emit_state *state, struct ir_op *op) {
+  size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+
+  if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
+    binary_op_is_comparison(op->mov.value->binary_op.ty)) {
+
+    // need to move from flags
+    enum aarch64_cond cond = get_cond_for_op(op->mov.value);
+    // 32 vs 64 bit doesn't matter
+    aarch64_emit_csinc_32(state->emitter, invert_cond(cond), ZERO_REG, ZERO_REG, get_reg_for_idx(dest));
+  } else {
+    size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
+    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
+                        get_reg_for_idx(dest));
   }
 }
 
@@ -360,10 +381,7 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
     case IR_OP_TY_MOV: {
-      size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
-      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
-                          get_reg_for_idx(dest));
+      emit_mov_op(state, op);
       break;
     }
     case IR_OP_TY_PHI: {

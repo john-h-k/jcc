@@ -205,6 +205,21 @@
 #define MOVN_64_REG(Rm, Rd)                                                    \
   ORN_64_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
 
+/* Conditional selects */
+
+#define CONDITIONAL_SELECT(sf, op, S, Rm, cond, op2, Rn, Rd) \
+  (uint32_t)(((sf) << 31) | ((op) << 30) | ((S) << 29) | (0b11010100 << 21) | ((Rm) << 16) | ((cond) << 12) | ((op2) << 10) | ((Rn) << 5) | (Rd))
+
+#define CSEL_32(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b0, 0b0, 0b0, Rm, cond, 0b00, Rn, Rd)
+#define CSINC_32(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b0, 0b0, 0b0, Rm, cond, 0b01, Rn, Rd)
+#define CSINV_32(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b0, 0b1, 0b0, Rm, cond, 0b00, Rn, Rd)
+#define CSNEG_32(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b0, 0b0, 0b0, Rm, cond, 0b01, Rn, Rd)
+
+#define CSEL_64(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b1, 0b0, 0b0, Rm, cond, 0b00, Rn, Rd)
+#define CSINC_64(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b1, 0b0, 0b0, Rm, cond, 0b01, Rn, Rd)
+#define CSINV_64(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b1, 0b1, 0b0, Rm, cond, 0b00, Rn, Rd)
+#define CSNEG_64(Rm, cond, Rn, Rd) CONDITIONAL_SELECT(0b1, 0b0, 0b0, Rm, cond, 0b01, Rn, Rd)
+
 /* Branches */
 
 #define BRANCH(op0, op1, op2)                                                  \
