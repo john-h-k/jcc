@@ -25,6 +25,26 @@ const char *cast_op_string(enum ir_op_cast_op_ty ty) {
 
 const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   switch (ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+    return "==";
+  case IR_OP_BINARY_OP_TY_NEQ:
+    return "!=";
+  case IR_OP_BINARY_OP_TY_SGT:
+    return "s>";
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+    return "s>=";
+  case IR_OP_BINARY_OP_TY_UGT:
+    return "u>";
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+    return "u>=";
+  case IR_OP_BINARY_OP_TY_SLT:
+    return "s<";
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return "s<=";
+  case IR_OP_BINARY_OP_TY_ULT:
+    return "u<";
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+    return "u<=";
   case IR_OP_BINARY_OP_TY_ADD:
     return "+";
   case IR_OP_BINARY_OP_TY_SUB:
@@ -39,8 +59,6 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "s%";
   case IR_OP_BINARY_OP_TY_UQUOT:
     return "u%";
-  default:
-    return "?unknown?";
   }
 }
 

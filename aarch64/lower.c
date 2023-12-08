@@ -30,10 +30,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 
   // c = a / b
 
-  debug("op %zu, pred %zu, succ %zu", op->id,
-        op->pred ? op->pred->id : SIZE_T_MAX,
-        op->succ ? op->succ->id : SIZE_T_MAX);
-
   struct ir_op *div =
       insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
   div->binary_op.ty = div_ty;
@@ -41,12 +37,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   div->binary_op.rhs = op->binary_op.rhs;
 
   // y = c * b
-  debug("op %zu, pred %zu, succ %zu", op->id,
-        op->pred ? op->pred->id : SIZE_T_MAX,
-        op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id,
-        div->pred ? div->pred->id : SIZE_T_MAX,
-        div->succ ? div->succ->id : SIZE_T_MAX);
 
   struct ir_op *mul =
       insert_after_ir_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
@@ -55,15 +45,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   mul->binary_op.rhs = op->binary_op.rhs;
 
   // x = a - y
-  debug("op %zu, pred %zu, succ %zu", op->id,
-        op->pred ? op->pred->id : SIZE_T_MAX,
-        op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id,
-        div->pred ? div->pred->id : SIZE_T_MAX,
-        div->succ ? div->succ->id : SIZE_T_MAX);
-  debug("mul %zu, pred %zu, succ %zu", mul->id,
-        mul->pred ? mul->pred->id : SIZE_T_MAX,
-        mul->succ ? mul->succ->id : SIZE_T_MAX);
 
   // Now we replace `op` with `sub` (as `sub` is the op that actually produces
   // the value) this preserves links, as other ops pointing to the div will now
@@ -73,16 +54,6 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
   op->binary_op.lhs = op->binary_op.lhs;
   op->binary_op.rhs = mul;
-
-  debug("op %zu, pred %zu, succ %zu", op->id,
-        op->pred ? op->pred->id : SIZE_T_MAX,
-        op->succ ? op->succ->id : SIZE_T_MAX);
-  debug("div %zu, pred %zu, succ %zu", div->id,
-        div->pred ? div->pred->id : SIZE_T_MAX,
-        div->succ ? div->succ->id : SIZE_T_MAX);
-  debug("mul %zu, pred %zu, succ %zu", mul->id,
-        mul->pred ? mul->pred->id : SIZE_T_MAX,
-        mul->succ ? mul->succ->id : SIZE_T_MAX);
 }
 
 // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
@@ -90,6 +61,12 @@ void lower_quot(struct ir_builder *func, struct ir_op *op) {
 // after branching to the false target
 void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
+}
+
+void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
+  UNUSED_ARG(irb);
+  // mark it as writing to flag reg so register allocator doesn't intefere with it
+  op->reg = REG_FLAGS;
 }
 
 void lower(struct ir_builder *func) {
@@ -121,6 +98,8 @@ void lower(struct ir_builder *func) {
           if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
               op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
             lower_quot(func, op);
+          } else if (binary_op_is_comparison(op->binary_op.ty)) {
+            lower_comparison(func, op);
           }
         }
 

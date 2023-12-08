@@ -76,15 +76,27 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
   struct ast_op_info info = {.ty = ty};
 
   switch (ty) {
+  case AST_BINARY_OP_TY_EQ:
+  case AST_BINARY_OP_TY_NEQ:
+    info.precedence = 1;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_GT:
+  case AST_BINARY_OP_TY_GTEQ:
+  case AST_BINARY_OP_TY_LT:
+  case AST_BINARY_OP_TY_LTEQ:
+    info.precedence = 2;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
   case AST_BINARY_OP_TY_ADD:
   case AST_BINARY_OP_TY_SUB:
-    info.precedence = 1;
+    info.precedence = 3;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_MUL:
   case AST_BINARY_OP_TY_DIV:
   case AST_BINARY_OP_TY_QUOT:
-    info.precedence = 2;
+    info.precedence = 4;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   default:
@@ -96,6 +108,24 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
 
 bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   switch (token->ty) {
+  case LEX_TOKEN_TY_OP_EQ:
+    *info = op_info(AST_BINARY_OP_TY_EQ);
+    return true;
+  case LEX_TOKEN_TY_OP_NEQ:
+    *info = op_info(AST_BINARY_OP_TY_NEQ);
+    return true;
+  case LEX_TOKEN_TY_OP_GT:
+    *info = op_info(AST_BINARY_OP_TY_GT);
+    return true;
+  case LEX_TOKEN_TY_OP_GTEQ:
+    *info = op_info(AST_BINARY_OP_TY_GTEQ);
+    return true;
+  case LEX_TOKEN_TY_OP_LT:
+    *info = op_info(AST_BINARY_OP_TY_LT);
+    return true;
+  case LEX_TOKEN_TY_OP_LTEQ:
+    *info = op_info(AST_BINARY_OP_TY_LTEQ);
+    return true;
   case LEX_TOKEN_TY_OP_ADD:
     *info = op_info(AST_BINARY_OP_TY_ADD);
     return true;
@@ -144,6 +174,12 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_OP_DIV_ASSG:
   case LEX_TOKEN_TY_OP_QUOT:
   case LEX_TOKEN_TY_OP_QUOT_ASSG:
+  case LEX_TOKEN_TY_OP_EQ:
+  case LEX_TOKEN_TY_OP_NEQ:
+  case LEX_TOKEN_TY_OP_LT:
+  case LEX_TOKEN_TY_OP_LTEQ:
+  case LEX_TOKEN_TY_OP_GT:
+  case LEX_TOKEN_TY_OP_GTEQ:
   case LEX_TOKEN_TY_KW_DO:
   case LEX_TOKEN_TY_KW_FOR:
   case LEX_TOKEN_TY_KW_WHILE:
@@ -188,14 +224,16 @@ bool is_literal_token(enum lex_token_ty tok_ty,
     *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
     return true;
   }
+
+  unreachable("switch broke");
 }
 
 struct ast_tyref get_var_type(struct parser *parser,
                               const struct ast_var *var) {
-  struct var_table_entry *entry = get_or_create_entry(&parser->var_table, var);
+  struct var_table_entry *entry = get_or_create_entry_up_scopes(&parser->var_table, var);
 
   if (entry->value) {
-    debug("var %s was found, type", identifier_str(parser, &var->identifier));
+    debug("var %s was found", identifier_str(parser, &var->identifier));
     return *(struct ast_tyref *)entry->value;
   } else {
     debug("var %s was not found, unknown type",
@@ -338,7 +376,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   var->identifier = token;
   var->scope = parser->cur_scope;
 
-  struct var_table_entry *entry = get_entry(&parser->var_table, var);
+  struct var_table_entry *entry = get_entry_up_scopes(&parser->var_table, var);
   if (entry) {
     var->scope = entry->scope;
   }
@@ -395,7 +433,7 @@ bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
   struct ast_assg assg;
   if (parse_assg(parser, &assg)) {
     rvalue->ty = AST_RVALUE_TY_ASSG;
-    rvalue->var_ty = assg.expr->var_ty;
+    rvalue->var_ty = assg.lvalue.var_ty;
     rvalue->assg = arena_alloc(parser->arena, sizeof(*rvalue->assg));
     *rvalue->assg = assg;
 
@@ -487,7 +525,7 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
 
 struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
-  if (true || (lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
+  if ((lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
                rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
     struct ast_tyref result_ty;
     result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
@@ -510,10 +548,11 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
       }
     }
 
+    err("TY %d", result_ty.well_known);
     return result_ty;
   }
 
-  // todo("`resolve_binary_op_types` for types other than well known");
+  todo("`resolve_binary_op_types` for types other than well known");
 }
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
@@ -525,12 +564,12 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   // TODO: make iterative
   while (true) {
     struct token lookahead;
-    debug("loop iter");
     peek_token(parser->lexer, &lookahead);
+    debug("looked ahead to %s", token_name(parser->lexer, &lookahead));
     struct ast_op_info info;
 
     if (!op_info_for_token(&lookahead, &info) ||
-        info.precedence <= min_precedence) {
+        info.precedence < min_precedence) {
       return true;
     }
 
@@ -540,13 +579,13 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                  "only operators with associativity should reach here!");
     unsigned next_min_precedence;
     if (info.associativity == AST_ASSOCIATIVITY_LEFT) {
-      next_min_precedence = min_precedence + 1;
+      next_min_precedence = info.precedence + 1;
     } else {
-      next_min_precedence = min_precedence;
+      next_min_precedence = info.precedence;
     }
 
     struct ast_expr rhs;
-    parse_expr_precedence_aware(parser, next_min_precedence, &rhs);
+    invariant_assert(parse_expr_precedence_aware(parser, next_min_precedence, &rhs), "expected parse failed");
 
     // slightly odd design where `expr` now contains lhs and `rhs` contains
     // `rhs` so we need to in-place modify `expr`
@@ -637,7 +676,9 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
   if (!parse_var(parser, &var)) {
     return false;
   }
-
+  
+  // ignore any existing scope of the var
+  var.scope = parser->cur_scope;
   var_decl->var = var;
 
   struct text_pos post_var_pos = get_position(parser->lexer);
@@ -1357,6 +1398,24 @@ DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
 
 DEBUG_FUNC(binary_op, binary_op) {
   switch (binary_op->ty) {
+  case AST_BINARY_OP_TY_EQ:
+    AST_PRINTZ("EQ");
+    break;
+  case AST_BINARY_OP_TY_NEQ:
+    AST_PRINTZ("NEQ");
+    break;
+  case AST_BINARY_OP_TY_LT:
+    AST_PRINTZ("LT");
+    break;
+  case AST_BINARY_OP_TY_LTEQ:
+    AST_PRINTZ("LTEQ");
+    break;
+  case AST_BINARY_OP_TY_GT:
+    AST_PRINTZ("GT");
+    break;
+  case AST_BINARY_OP_TY_GTEQ:
+    AST_PRINTZ("GTEQ");
+    break;
   case AST_BINARY_OP_TY_ADD:
     AST_PRINTZ("ADD");
     break;

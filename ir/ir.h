@@ -72,6 +72,18 @@ struct ir_op_unary_op {
 };
 
 enum ir_op_binary_op_ty {
+  IR_OP_BINARY_OP_TY_EQ,
+  IR_OP_BINARY_OP_TY_NEQ,
+
+  IR_OP_BINARY_OP_TY_UGT,
+  IR_OP_BINARY_OP_TY_SGT,
+  IR_OP_BINARY_OP_TY_UGTEQ,
+  IR_OP_BINARY_OP_TY_SGTEQ,
+  IR_OP_BINARY_OP_TY_ULT,
+  IR_OP_BINARY_OP_TY_SLT,
+  IR_OP_BINARY_OP_TY_ULTEQ,
+  IR_OP_BINARY_OP_TY_SLTEQ,
+
   IR_OP_BINARY_OP_TY_ADD,
   IR_OP_BINARY_OP_TY_SUB,
   IR_OP_BINARY_OP_TY_MUL,
@@ -80,6 +92,8 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_SQUOT,
   IR_OP_BINARY_OP_TY_UQUOT,
 };
+
+bool binary_op_is_comparison(enum ir_op_binary_op_ty ty);
 
 enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 
@@ -139,9 +153,10 @@ struct ir_op_br_cond {
 
 #include <limits.h>
 
-#define NO_REG (SIZE_T_MAX)
 #define NO_LCL (SIZE_T_MAX)
-#define REG_SPILLED (SIZE_T_MAX - 1)
+#define NO_REG (SIZE_T_MAX)
+#define REG_SPILLED (NO_REG - 1)
+#define REG_FLAGS (REG_SPILLED - 1)
 
 enum ir_op_flags { IR_OP_FLAG_NONE = 0, IR_OP_FLAG_MUST_SPILL = 1 };
 
@@ -274,6 +289,7 @@ struct ir_builder {
   size_t basicblock_count;
   size_t stmt_count;
   size_t op_count;
+  size_t next_id;
 
   // number of stack local variables
   size_t num_locals;
@@ -308,8 +324,7 @@ void add_pred_to_basicblock(struct ir_builder *irb,
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty, struct ir_op *pred,
-                      struct ir_op *succ, struct ir_stmt *stmt,
+                      struct ir_op_var_ty var_ty,
                       unsigned long reg, unsigned long lcl_idx);
 
 void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,

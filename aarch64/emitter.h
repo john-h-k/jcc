@@ -96,7 +96,15 @@ void aarch64_emit_sub_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
 
+void aarch64_emit_subs_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
 void aarch64_emit_add_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
+void aarch64_emit_adds_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
 
@@ -104,7 +112,15 @@ void aarch64_emit_sub_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
 
+void aarch64_emit_subs_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
 void aarch64_emit_add_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest);
+
+void aarch64_emit_adds_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
 
@@ -209,6 +225,42 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
 
 void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset);
 void aarch64_emit_bl(struct aarch64_emitter *emitter, signed offset);
+
+enum aarch64_cond {
+  // always true
+  AARCH64_COND_AL = 0b1110,
+  AARCH64_COND_AL_ALT = 0b1111,
+
+  AARCH64_COND_EQ = 0b0000,
+  AARCH64_COND_NE = 0b0001,
+
+  /* signed conditions */
+  AARCH64_COND_GE = 0b1010,
+  AARCH64_COND_LT = 0b1011,
+  AARCH64_COND_GT = 0b1100,
+  AARCH64_COND_LE = 0b1101,
+
+  // signed overflow & no overflow
+  AARCH64_COND_VS = 0b0110,
+  AARCH64_COND_VC = 0b0111,
+
+  // carry set & clear
+  AARCH64_COND_CS = 0b0010,
+  AARCH64_COND_CC = 0b0011,
+
+  /* unsigned conditions */
+  AARCH64_COND_HI = 0b1000,
+  AARCH64_COND_LS = 0b1001,
+  AARCH64_COND_HS = AARCH64_COND_CS,
+  AARCH64_COND_LO = AARCH64_COND_CC,
+
+  // minus & positive or zero
+  AARCH64_COND_MI = 0b0100,
+  AARCH64_COND_PL = 0b0101,
+};
+
+void aarch64_emit_b_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond);
+void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond);
 
 void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg cmp, signed offset);
