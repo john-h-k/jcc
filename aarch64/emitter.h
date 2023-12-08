@@ -13,6 +13,39 @@ const struct aarch64_reg RETURN_REG;
 const struct aarch64_reg ZERO_REG;
 const struct aarch64_reg STACK_PTR_REG;
 
+enum aarch64_cond {
+  // always true
+  AARCH64_COND_AL = 0b1110,
+  AARCH64_COND_AL_ALT = 0b1111,
+
+  AARCH64_COND_EQ = 0b0000,
+  AARCH64_COND_NE = 0b0001,
+
+  /* signed conditions */
+  AARCH64_COND_GE = 0b1010,
+  AARCH64_COND_LT = 0b1011,
+  AARCH64_COND_GT = 0b1100,
+  AARCH64_COND_LE = 0b1101,
+
+  // signed overflow & no overflow
+  AARCH64_COND_VS = 0b0110,
+  AARCH64_COND_VC = 0b0111,
+
+  // carry set & clear
+  AARCH64_COND_CS = 0b0010,
+  AARCH64_COND_CC = 0b0011,
+
+  /* unsigned conditions */
+  AARCH64_COND_HI = 0b1000,
+  AARCH64_COND_LS = 0b1001,
+  AARCH64_COND_HS = AARCH64_COND_CS,
+  AARCH64_COND_LO = AARCH64_COND_CC,
+
+  // minus & positive or zero
+  AARCH64_COND_MI = 0b0100,
+  AARCH64_COND_PL = 0b0101,
+};
+
 struct aarch64_emitter;
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter);
@@ -221,43 +254,22 @@ void aarch64_emit_mov_32(struct aarch64_emitter *emitter,
 void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg source, struct aarch64_reg dest);
 
+/* Conditional selects */
+
+void aarch64_emit_csel_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csinc_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csinv_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csneg_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+
+void aarch64_emit_csel_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csinc_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csinv_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+void aarch64_emit_csneg_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest);
+
 /* Branches */
 
 void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset);
 void aarch64_emit_bl(struct aarch64_emitter *emitter, signed offset);
-
-enum aarch64_cond {
-  // always true
-  AARCH64_COND_AL = 0b1110,
-  AARCH64_COND_AL_ALT = 0b1111,
-
-  AARCH64_COND_EQ = 0b0000,
-  AARCH64_COND_NE = 0b0001,
-
-  /* signed conditions */
-  AARCH64_COND_GE = 0b1010,
-  AARCH64_COND_LT = 0b1011,
-  AARCH64_COND_GT = 0b1100,
-  AARCH64_COND_LE = 0b1101,
-
-  // signed overflow & no overflow
-  AARCH64_COND_VS = 0b0110,
-  AARCH64_COND_VC = 0b0111,
-
-  // carry set & clear
-  AARCH64_COND_CS = 0b0010,
-  AARCH64_COND_CC = 0b0011,
-
-  /* unsigned conditions */
-  AARCH64_COND_HI = 0b1000,
-  AARCH64_COND_LS = 0b1001,
-  AARCH64_COND_HS = AARCH64_COND_CS,
-  AARCH64_COND_LO = AARCH64_COND_CC,
-
-  // minus & positive or zero
-  AARCH64_COND_MI = 0b0100,
-  AARCH64_COND_PL = 0b0101,
-};
 
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond);
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond);

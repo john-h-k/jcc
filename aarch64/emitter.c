@@ -403,6 +403,41 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, MOV_64_REG(source.idx, dest.idx));
 }
 
+
+/* Conditional selects */
+
+void aarch64_emit_csel_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSEL_32(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csinc_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSINC_32(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csinv_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSINV_32(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csneg_32(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSNEG_32(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csel_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSEL_64(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csinc_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSINC_64(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csinv_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSINV_64(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
+void aarch64_emit_csneg_64(struct aarch64_emitter *emitter, enum aarch64_cond cond, struct aarch64_reg true_source, struct aarch64_reg false_source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, CSNEG_64(false_source.idx, cond, true_source.idx, dest.idx));
+}
+
 /* Branches */
 
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond) {
