@@ -143,11 +143,19 @@
   ADD_SUB_SHIFTED_REG(0b0, 0b0, 0b0, shift, Rm, imm6, Rn, Rd)
 #define SUB_32_REG(shift, imm6, Rm, Rn, Rd)                                    \
   ADD_SUB_SHIFTED_REG(0b0, 0b1, 0b0, shift, Rm, imm6, Rn, Rd)
+#define ADDS_32_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b0, 0b0, 0b1, shift, Rm, imm6, Rn, Rd)
+#define SUBS_32_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b0, 0b1, 0b1, shift, Rm, imm6, Rn, Rd)
 
 #define ADD_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
   ADD_SUB_SHIFTED_REG(0b1, 0b0, 0b0, shift, Rm, imm6, Rn, Rd)
 #define SUB_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
   ADD_SUB_SHIFTED_REG(0b1, 0b1, 0b0, shift, Rm, imm6, Rn, Rd)
+#define ADDS_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b1, 0b0, 0b1, shift, Rm, imm6, Rn, Rd)
+#define SUBS_64_REG(shift, imm6, Rm, Rn, Rd)                                    \
+  ADD_SUB_SHIFTED_REG(0b1, 0b1, 0b1, shift, Rm, imm6, Rn, Rd)
 
 #define REG_2_SOURCE(sf, S, opcode, Rm, Rn, Rd)                                \
   (uint32_t)(((sf) << 31) | ((S) << 29) | (0b11010110 << 21) | ((Rm) << 16) |  \
@@ -202,8 +210,14 @@
 #define BRANCH(op0, op1, op2)                                                  \
   (uint32_t)(((op0) << 29) | (0b101 << 26) | ((op1) << 5) | (op2))
 
+#define BRANCH_COND_IMM(o1, o0, imm19, cond) \
+  (uint32_t)((0b0101010 << 25) | ((o1) << 24) | ((imm19) << 5) | ((o0) << 4) | (cond))
+
 #define BRANCH_IMM(op, imm26)                                                  \
   (uint32_t)(((op) << 31) | (0b00101 << 26) | (imm26))
+
+#define B_COND(imm19, cond) BRANCH_COND_IMM(0b0, 0b0, imm19, cond)
+#define BC_COND(imm19, cond) BRANCH_COND_IMM(0b0, 0b1, imm19, cond)
 
 #define B(imm26) BRANCH_IMM(0b0, imm26)
 #define BL(imm26) BRANCH_IMM(0b1, imm26)

@@ -226,9 +226,37 @@ void peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
     break;
 
-  case '=':
-    ty = LEX_TOKEN_TY_OP_ASSG;
+  case '>':
     next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_GTEQ;
+    } else {
+      ty = LEX_TOKEN_TY_OP_GT;
+    }
+    break;
+  case '<':
+    next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_LTEQ;
+    } else {
+      ty = LEX_TOKEN_TY_OP_LT;
+    }
+    break;
+  case '!':
+    next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_NEQ;
+    } else {
+      todo("boolean not");
+    }
+    break;
+  case '=':
+    next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_EQ;
+    } else {
+      ty = LEX_TOKEN_TY_OP_ASSG;
+    }
     break;
   case '+':
     next_col(&end);
@@ -432,6 +460,12 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_OP_MUL)
     CASE_RET(LEX_TOKEN_TY_OP_DIV)
     CASE_RET(LEX_TOKEN_TY_OP_QUOT)
+    CASE_RET(LEX_TOKEN_TY_OP_EQ)
+    CASE_RET(LEX_TOKEN_TY_OP_NEQ)
+    CASE_RET(LEX_TOKEN_TY_OP_LT)
+    CASE_RET(LEX_TOKEN_TY_OP_LTEQ)
+    CASE_RET(LEX_TOKEN_TY_OP_GT)
+    CASE_RET(LEX_TOKEN_TY_OP_GTEQ)
 
     CASE_RET(LEX_TOKEN_TY_SEMICOLON)
     CASE_RET(LEX_TOKEN_TY_COMMA)

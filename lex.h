@@ -40,6 +40,13 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_OP_ASSG, // =
 
+  LEX_TOKEN_TY_OP_EQ, // ==
+  LEX_TOKEN_TY_OP_NEQ, // !=
+  LEX_TOKEN_TY_OP_LT, // <
+  LEX_TOKEN_TY_OP_LTEQ, // <=
+  LEX_TOKEN_TY_OP_GT, // >
+  LEX_TOKEN_TY_OP_GTEQ, // >=
+
   /* Keywords */
 
   LEX_TOKEN_TY_KW_FOR,

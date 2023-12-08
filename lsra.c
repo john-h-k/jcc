@@ -52,9 +52,13 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         op->lcl_idx = NO_LCL;
-        op->reg = NO_REG;
 
-        debug_assert(op->id < irb->op_count, "out of range!");
+        // reset registers unless flags because flags is never allocated
+        if (op->reg != REG_FLAGS) {
+          op->reg = NO_REG;
+        }
+
+        debug_assert(op->id < irb->op_count, "out of range! (id %zu with opcount %zu)", op->id, irb->op_count);
         struct interval *interval = &data.intervals[op->id];
 
         interval->op = op;
@@ -232,6 +236,9 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   case REG_SPILLED:
     fslogsl(file, "    (SPILLED)");
     break;
+  case REG_FLAGS:
+    fslogsl(file, "    (FLAGS)");
+    break;
   default:
     fslogsl(file, "    register=%zu", op->reg);
     break;
@@ -264,9 +271,10 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
     if (!op_produces_value(interval->op->ty)) {
-      // stores don't need a register
-      // TODO: this logic should be more centralised and clear, not just for
-      // this op
+      continue;
+    }
+
+    if (interval->op->reg == REG_FLAGS) {
       continue;
     }
 

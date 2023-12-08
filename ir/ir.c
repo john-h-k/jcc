@@ -1,5 +1,29 @@
 #include "ir.h"
 
+bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return true;
+  case IR_OP_BINARY_OP_TY_ADD:
+  case IR_OP_BINARY_OP_TY_SUB:
+  case IR_OP_BINARY_OP_TY_MUL:
+  case IR_OP_BINARY_OP_TY_SDIV:
+  case IR_OP_BINARY_OP_TY_UDIV:
+  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    return false;
+  }
+}
+
 bool op_produces_value(enum ir_op_ty ty) {
   switch (ty) {
   case IR_OP_TY_PHI:
@@ -69,12 +93,12 @@ void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
 }
 
 void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
-                    void *cb_metadata) {
+                   void *cb_metadata) {
   walk_op(unary_op->value, cb, cb_metadata);
 }
 
 void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
-                    void *cb_metadata) {
+                  void *cb_metadata) {
   walk_op(cast_op->value, cb, cb_metadata);
 }
 
@@ -140,11 +164,11 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_UNARY_OP:
     walk_unary_op(&op->unary_op, cb, cb_metadata);
-break;
-case IR_OP_TY_CAST_OP:
+    break;
+  case IR_OP_TY_CAST_OP:
     walk_cast_op(&op->cast_op, cb, cb_metadata);
-break;
-case IR_OP_TY_STORE_LCL:
+    break;
+  case IR_OP_TY_STORE_LCL:
     walk_store_lcl(&op->store_lcl, cb, cb_metadata);
     break;
   case IR_OP_TY_LOAD_LCL:
@@ -173,12 +197,22 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_ADD:
   case IR_OP_BINARY_OP_TY_SUB:
   case IR_OP_BINARY_OP_TY_MUL:
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
     return IR_OP_SIGN_NA;
   case IR_OP_BINARY_OP_TY_SDIV:
   case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
     return IR_OP_SIGN_SIGNED;
   case IR_OP_BINARY_OP_TY_UDIV:
   case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
     return IR_OP_SIGN_UNSIGNED;
   }
 }
@@ -186,15 +220,14 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty, struct ir_op *pred,
-                      struct ir_op *succ, struct ir_stmt *stmt,
-                      unsigned long reg, unsigned long lcl_idx) {
+                      struct ir_op_var_ty var_ty, unsigned long reg,
+                      unsigned long lcl_idx) {
   op->id = id;
   op->ty = ty;
   op->var_ty = var_ty;
-  op->pred = pred;
-  op->succ = succ;
-  op->stmt = stmt;
+  op->pred = NULL;
+  op->succ = NULL;
+  op->stmt = NULL;
   op->reg = reg;
   op->lcl_idx = lcl_idx;
   op->metadata = NULL;
@@ -328,7 +361,7 @@ void clear_metadata(struct ir_builder *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     basicblock->metadata = NULL;
-  
+
     struct ir_stmt *stmt = basicblock->first;
 
     while (stmt) {
@@ -348,7 +381,7 @@ void clear_metadata(struct ir_builder *irb) {
 }
 
 void rebuild_ids(struct ir_builder *irb) {
-  size_t id = 0;
+  irb->next_id = 0;
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
@@ -358,8 +391,8 @@ void rebuild_ids(struct ir_builder *irb) {
       struct ir_op *op = stmt->first;
 
       while (op) {
-        debug("op %zu has new id %zu", op->id, id + 1);
-        op->id = id++;
+        debug("op %zu has new id %zu", op->id, irb->next_id);
+        op->id = irb->next_id++;
 
         op = op->succ;
       }
@@ -369,8 +402,6 @@ void rebuild_ids(struct ir_builder *irb) {
 
     basicblock = basicblock->succ;
   }
-
-  irb->op_count = id;
 }
 
 void attach_ir_op(struct ir_builder *irb, struct ir_op *op,
@@ -452,8 +483,7 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL, NULL, NULL, NO_REG,
-                   NO_LCL);
+  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NO_LCL);
 
   move_before_ir_op(irb, op, insert_before);
 
@@ -467,8 +497,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->op_count++, ty, var_ty, NULL, NULL, NULL, NO_REG,
-                   NO_LCL);
+  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NO_LCL);
 
   move_after_ir_op(irb, op, insert_after);
 
@@ -526,7 +555,9 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
     stmt->first = op;
   }
 
-  op->id = irb->op_count++;
+  irb->op_count++;
+
+  op->id = irb->next_id++;
   op->flags = IR_OP_FLAG_NONE;
   op->stmt = stmt;
   op->pred = stmt->last;

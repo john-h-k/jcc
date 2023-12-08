@@ -181,10 +181,22 @@ void aarch64_emit_add_64(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, ADD_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
+void aarch64_emit_adds_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest) {
+  aarch64_emit(emitter, ADDS_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+}
+
 void aarch64_emit_sub_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest) {
   aarch64_emit(emitter, SUB_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_subs_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest) {
+  aarch64_emit(emitter, SUBS_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_add_32(struct aarch64_emitter *emitter,
@@ -193,10 +205,22 @@ void aarch64_emit_add_32(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, ADD_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
+void aarch64_emit_adds_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest) {
+  aarch64_emit(emitter, ADDS_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+}
+
 void aarch64_emit_sub_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest) {
   aarch64_emit(emitter, SUB_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_subs_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest) {
+  aarch64_emit(emitter, SUBS_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
 /* Add & subtract (immediate) */
@@ -380,6 +404,18 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
 }
 
 /* Branches */
+
+void aarch64_emit_b_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
+                   "offset too big for branch instruction!");
+  aarch64_emit(emitter, B_COND(CLAMP_BITS(offset, 19), cond));
+}
+
+void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, signed offset, enum aarch64_cond cond) {
+  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
+                   "offset too big for branch instruction!");
+  aarch64_emit(emitter, BC_COND(CLAMP_BITS(offset, 19), cond));
+}
 
 void aarch64_emit_b(struct aarch64_emitter *emitter, signed offset) {
   invariant_assert(SIG_FITS_IN_BITS(offset, 26),

@@ -25,12 +25,18 @@ void eliminate_phi(struct ir_builder *irb) {
           struct ir_op *value = op->phi.values[i];
           struct ir_basicblock *basicblock = value->stmt->basicblock;
 
-          invariant_assert(op_is_branch(basicblock->last->last->ty),
+          struct ir_op *last = basicblock->last->last;
+
+          invariant_assert(op_is_branch(last->ty),
                            "bb ended in non-branch instruction!");
+
+          while (last->pred && op_is_branch(last->pred->ty)) {
+            last = last->pred;
+          }
 
           // insert juuust before the branch
           struct ir_op *storelcl =
-              insert_before_ir_op(irb, basicblock->last->last,
+              insert_before_ir_op(irb, last,
                                   IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
           storelcl->store_lcl.value = value;
           storelcl->store_lcl.lcl_idx = lcl_idx;

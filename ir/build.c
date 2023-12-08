@@ -96,8 +96,11 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
                                     struct ast_binary_op *binary_op) {
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(&binary_op->var_ty);
 
-  struct ir_op *lhs = build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
-  struct ir_op *rhs = build_ir_for_expr(irb, stmt, binary_op->rhs, &binary_op->var_ty);
+  struct ir_op *lhs =
+      build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
+  struct ir_op *rhs =
+      build_ir_for_expr(irb, stmt, binary_op->rhs, &binary_op->var_ty);
+  err("building binop, lhs %zu rhs %zu", lhs->id, rhs->id);
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -113,6 +116,40 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
                    "expression by point IR is reached!");
 
   switch (binary_op->ty) {
+  case AST_BINARY_OP_TY_EQ:
+    b->ty = IR_OP_BINARY_OP_TY_EQ;
+    break;
+  case AST_BINARY_OP_TY_NEQ:
+    b->ty = IR_OP_BINARY_OP_TY_NEQ;
+    break;
+  case AST_BINARY_OP_TY_GT:
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SGT;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_UGT;
+    }
+    break;
+  case AST_BINARY_OP_TY_GTEQ:
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SGTEQ;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_UGTEQ;
+    }
+    break;
+  case AST_BINARY_OP_TY_LT:
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SLT;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_ULT;
+    }
+    break;
+  case AST_BINARY_OP_TY_LTEQ:
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SLTEQ;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_ULTEQ;
+    }
+    break;
   case AST_BINARY_OP_TY_ADD:
     b->ty = IR_OP_BINARY_OP_TY_ADD;
     break;
@@ -153,15 +190,16 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
   return op;
 }
 
-struct ir_op *
-build_ir_for_compoundexpr(struct ir_builder *irb, struct ir_stmt *stmt,
-                          struct ast_compoundexpr *compound_expr,
-                                const struct ast_tyref *ast_tyref) {
+struct ir_op *build_ir_for_compoundexpr(struct ir_builder *irb,
+                                        struct ir_stmt *stmt,
+                                        struct ast_compoundexpr *compound_expr,
+                                        const struct ast_tyref *ast_tyref) {
+  struct ir_op *op = NULL;
   for (size_t i = 0; i < compound_expr->num_exprs; i++) {
-    build_ir_for_expr(irb, stmt, &compound_expr->exprs[i], ast_tyref);
+    op = build_ir_for_expr(irb, stmt, &compound_expr->exprs[i], ast_tyref);
   }
 
-  return stmt->last;
+  return op;
 }
 
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
@@ -177,18 +215,20 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_RVALUE_TY_BINARY_OP:
     return build_ir_for_binaryop(irb, stmt, &rvalue->binary_op);
   case AST_RVALUE_TY_COMPOUNDEXPR:
-    return build_ir_for_compoundexpr(irb, stmt, &rvalue->compound_expr, &rvalue->var_ty);
+    return build_ir_for_compoundexpr(irb, stmt, &rvalue->compound_expr,
+                                     &rvalue->var_ty);
   }
 }
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
-  debug("build_ir_for_var name=%s, scope=%zu",
+  debug("build_ir_for_var bb=%zu, name=%s, scope=%zu", stmt->basicblock->id,
         identifier_str(irb->parser, &var->identifier), var->scope);
   UNUSED_ARG(stmt);
 
   // this is when we are _reading_ from the var
   struct var_table_entry *entry = get_entry(&stmt->basicblock->var_table, var);
+  debug("voila! %p -- %p", entry, entry ? entry->value : NULL);
 
   struct ir_op *expr = entry ? entry->value : NULL;
 
@@ -198,7 +238,8 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
 
   struct ast_tyref var_tyref = get_var_type(irb->parser, var);
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(&var_tyref);
-  invariant_assert(var_tyref.ty != AST_TYREF_TY_UNKNOWN, "can't have unknown tyref in phi lowering");
+  invariant_assert(var_tyref.ty != AST_TYREF_TY_UNKNOWN,
+                   "can't have unknown tyref in phi lowering");
 
   // we generate an empty phi and then after all blocks are built we insert the
   // correct values
@@ -216,6 +257,11 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   phi->phi.var = *var;
   phi->phi.values = NULL;
   phi->phi.num_values = 0;
+
+  warn("creating phi %d for name=%s, scope=%zu", phi->id,
+       identifier_str(irb->parser, &var->identifier), var->scope);
+
+  create_entry(&stmt->basicblock->var_table, var)->value = phi;
 
   return phi;
 }
@@ -242,6 +288,8 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     break;
   }
 
+  err("OP ID %zu", op->id);
+
   if (ast_tyref) {
     struct ir_op_var_ty var_ty = ty_for_ast_tyref(ast_tyref);
 
@@ -251,12 +299,12 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
       trace("ty %zu", expr->rvalue.ty);
       trace("from %zu to %zu", op->var_ty.primitive, var_ty.primitive);
       trace("from %zu to %zu", expr->var_ty.well_known, ast_tyref->well_known);
-      op = insert_ir_for_cast(
-          irb, stmt, op, &var_ty,
-          cast_ty_for_ast_tyref(&expr->var_ty, ast_tyref));
+      op = insert_ir_for_cast(irb, stmt, op, &var_ty,
+                              cast_ty_for_ast_tyref(&expr->var_ty, ast_tyref));
     }
   }
 
+  invariant_assert(op, "null op!");
   return op;
 }
 
@@ -316,7 +364,8 @@ struct ir_basicblock *build_ir_for_if(struct ir_builder *irb,
   }
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, pre_if_basicblock);
-  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &if_stmt->condition, &if_stmt->condition.var_ty);
+  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &if_stmt->condition,
+                                         &if_stmt->condition.var_ty);
   struct ir_op *br_cond = alloc_ir_op(irb, cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_OP_VAR_TY_NONE;
@@ -388,7 +437,8 @@ struct ir_basicblock *build_ir_for_ifelse(struct ir_builder *irb,
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, pre_if_basicblock);
   struct ir_op *cond =
-      build_ir_for_expr(irb, cond_stmt, &if_else_stmt->condition, &if_else_stmt->condition.var_ty);
+      build_ir_for_expr(irb, cond_stmt, &if_else_stmt->condition,
+                        &if_else_stmt->condition.var_ty);
   struct ir_op *br_cond = alloc_ir_op(irb, cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_OP_VAR_TY_NONE;
@@ -426,7 +476,8 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
                         after_body_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &while_stmt->cond, &while_stmt->cond.var_ty);
+  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &while_stmt->cond,
+                                         &while_stmt->cond.var_ty);
   struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -463,7 +514,8 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
                         after_cond_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond, &do_while_stmt->cond.var_ty);
+  struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond,
+                                         &do_while_stmt->cond.var_ty);
   struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -495,7 +547,8 @@ struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb,
   if (decl_or_expr->decl) {
     return build_ir_for_vardecllist(irb, stmt, decl_or_expr->decl);
   } else if (decl_or_expr->expr) {
-    return build_ir_for_expr(irb, stmt, decl_or_expr->expr, &decl_or_expr->expr->var_ty);
+    return build_ir_for_expr(irb, stmt, decl_or_expr->expr,
+                             &decl_or_expr->expr->var_ty);
   }
 
   return NULL;
@@ -524,7 +577,8 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
 
   if (for_stmt->cond) {
     struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
-    struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, for_stmt->cond, &for_stmt->cond->var_ty);
+    struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, for_stmt->cond,
+                                           &for_stmt->cond->var_ty);
     struct ir_op *cond_br = alloc_ir_op(irb, cond_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_OP_VAR_TY_NONE;
@@ -538,7 +592,8 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
     invariant_assert(
         body_basicblock->last,
         "attempting to add `for` loop iter without stmt present, needs fixing");
-    build_ir_for_expr(irb, body_basicblock->last, for_stmt->iter,&for_stmt->iter->var_ty);
+    build_ir_for_expr(irb, body_basicblock->last, for_stmt->iter,
+                      &for_stmt->iter->var_ty);
   }
 
   debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
@@ -575,7 +630,8 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
   case AST_JUMPSTMT_TY_RETURN: {
     struct ir_op *expr_op;
     if (jump_stmt->return_stmt.expr) {
-      expr_op = build_ir_for_expr(irb, stmt, jump_stmt->return_stmt.expr, &jump_stmt->return_stmt.var_ty);
+      expr_op = build_ir_for_expr(irb, stmt, jump_stmt->return_stmt.expr,
+                                  &jump_stmt->return_stmt.var_ty);
     } else {
       expr_op = NULL;
     }
@@ -594,19 +650,25 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
   }
 }
 
+struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
+                       struct ast_tyref *var_ty, struct ast_var *var,
+                       struct ast_expr *expr) {
+  struct ir_op *op = build_ir_for_expr(irb, stmt, expr, var_ty);
+  debug_assert(op, "null expr in assignment!");
+
+  struct var_table_entry *entry =
+      get_or_create_entry(&stmt->basicblock->var_table, var);
+
+  entry->value = op;
+  return op;
+}
+
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg) {
   switch (assg->lvalue.ty) {
   case AST_LVALUE_TY_VAR: {
-    struct var_table_entry *entry =
-        get_or_create_entry(&stmt->basicblock->var_table, &assg->lvalue.var);
-
-    struct ir_op *expr = build_ir_for_expr(irb, stmt, assg->expr, &assg->lvalue.var_ty);
-
-    debug_assert(expr, "null expr in assignment!");
-
-    entry->value = expr;
-    return expr;
+    return var_assg(irb, stmt, &assg->lvalue.var_ty, &assg->lvalue.var,
+                    assg->expr);
   }
   }
 }
@@ -614,26 +676,21 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
                                        struct ir_stmt *stmt,
                                        struct ast_vardecllist *var_decl_list) {
+  err("VARDECL");
   for (size_t i = 0; i < var_decl_list->num_decls; i++) {
     struct ast_vardecl *decl = &var_decl_list->decls[i];
-
-    // a decl is _always_ a new entry (it may shadow)
-    struct var_table_entry *entry =
-        create_entry(&stmt->basicblock->var_table, &decl->var);
 
     if (decl->ty == AST_VARDECL_TY_DECL) {
       continue;
     }
 
     // FIXME: is this right
-    trace("assg ty %zu", &decl->assg_expr.lvalue.var_ty.well_known);
-    trace("expr ty %zu", &decl->assg_expr.var_ty.well_known);
-    struct ir_op *expr = build_ir_for_expr(irb, stmt, &decl->assg_expr, &var_decl_list->var_ty);
-    debug_assert(expr, "null expr in assignment!");
-
-    entry->value = expr;
+    var_assg(irb, stmt, &var_decl_list->var_ty, &decl->var, &decl->assg_expr);
+    trace("assg ty %d", decl->assg_expr.lvalue.var_ty.well_known);
+    trace("expr ty %d", decl->assg_expr.var_ty.well_known);
   }
 
+  err("END VARDECL");
   return stmt->last;
 }
 

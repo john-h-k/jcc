@@ -104,6 +104,13 @@ struct ast_unary_op_postfix {
 };
 
 enum ast_binary_op_ty {
+  AST_BINARY_OP_TY_EQ,
+  AST_BINARY_OP_TY_NEQ,
+  AST_BINARY_OP_TY_GT,
+  AST_BINARY_OP_TY_GTEQ,
+  AST_BINARY_OP_TY_LT,
+  AST_BINARY_OP_TY_LTEQ,
+
   AST_BINARY_OP_TY_ADD,
   AST_BINARY_OP_TY_SUB,
   AST_BINARY_OP_TY_MUL,

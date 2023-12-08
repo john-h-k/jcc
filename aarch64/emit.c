@@ -28,6 +28,7 @@ unsigned short stack_slot_offset(size_t stack_slot) {
 struct aarch64_reg get_reg_for_idx(size_t idx) {
   // [w|x]18 not available
   struct aarch64_reg reg = {idx < 18 ? idx : idx + 1};
+  invariant_assert(reg.idx <= 31, "invalid reg!");
   return reg;
 }
 
@@ -38,6 +39,10 @@ enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
                       enum reg_usage usage) {
   size_t reg = op->reg;
+
+  if (reg == REG_FLAGS) {
+    return reg;
+  }
 
   if (usage & REG_USAGE_READ) {
     state->cur_op_state.read_registers |= reg;
@@ -61,14 +66,14 @@ bool is_64_bit(const struct ir_op *op) {
   return op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
-void lower_cast_op(struct emit_state *state, struct ir_op *op) {
+void emit_cast_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func, immr, imms)                                  \
   do {                                                                         \
     if (is_64_bit(op)) {                                                       \
       func##_64_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,      \
                     get_reg_for_idx(reg));                                     \
     } else {                                                                   \
-      func##_32_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,     \
+      func##_32_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,      \
                     get_reg_for_idx(reg));                                     \
     }                                                                          \
   } while (0);
@@ -108,12 +113,12 @@ void lower_cast_op(struct emit_state *state, struct ir_op *op) {
     // for understanding the immediates
     switch (op->var_ty.primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
-      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0, 0b111,
-                              get_reg_for_idx(reg));
+      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0,
+                              0b111, get_reg_for_idx(reg));
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I16:
-      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0, 0b1111,
-                              get_reg_for_idx(reg));
+      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0,
+                              0b1111, get_reg_for_idx(reg));
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I32:
       // zeroes top 32 bits
@@ -128,7 +133,7 @@ void lower_cast_op(struct emit_state *state, struct ir_op *op) {
 #undef SEL_32_OR_64_BIT_OP
 }
 
-void lower_binary_op(struct emit_state *state, struct ir_op *op) {
+void emit_binary_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func)                                              \
   do {                                                                         \
     if (is_64_bit(op)) {                                                       \
@@ -149,6 +154,28 @@ void lower_binary_op(struct emit_state *state, struct ir_op *op) {
                    "bad IR, no reg");
 
   switch (op->binary_op.ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    if (op->reg != REG_FLAGS) {
+      todo("comparisons into register");
+    }
+
+    if (is_64_bit(op)) {
+      aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
+                           get_reg_for_idx(rhs_reg), ZERO_REG);
+    } else {
+      aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
+                           get_reg_for_idx(rhs_reg), ZERO_REG);
+    }
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     SEL_32_OR_64_BIT_OP(aarch64_emit_add);
     break;
@@ -180,6 +207,71 @@ const char *mangle(struct arena_allocator *arena, const char *name) {
   strcpy(dest + 1, name);
 
   return dest;
+}
+
+void emit_br_op(struct emit_state *state, struct ir_op *op) {
+  if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
+    struct ir_basicblock *target = op->stmt->basicblock->merge.target;
+    size_t offset =
+        target->function_offset - aarch64_emitted_count(state->emitter);
+    aarch64_emit_b(state->emitter, offset);
+  } else {
+    // otherwise, this is the false branch of a SPLIT
+    struct ir_basicblock *false_target =
+        op->stmt->basicblock->split.false_target;
+
+    size_t false_offset =
+        false_target->function_offset - aarch64_emitted_count(state->emitter);
+    aarch64_emit_b(state->emitter, false_offset);
+  }
+}
+
+enum aarch64_cond get_cond_for_op(struct ir_op *op) {
+  invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
+                   "`get_cond_for_op` expects a binary op");
+  
+  switch (op->binary_op.ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+    return AARCH64_COND_EQ;
+  case IR_OP_BINARY_OP_TY_NEQ:
+    return AARCH64_COND_NE;
+  case IR_OP_BINARY_OP_TY_UGT:
+    return AARCH64_COND_HI;
+  case IR_OP_BINARY_OP_TY_SGT:
+    return AARCH64_COND_GT;
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+    return AARCH64_COND_HS;
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+    return AARCH64_COND_GE;
+  case IR_OP_BINARY_OP_TY_ULT:
+    return AARCH64_COND_LO;
+  case IR_OP_BINARY_OP_TY_SLT:
+    return AARCH64_COND_LT;
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+    return AARCH64_COND_LS;
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return AARCH64_COND_LE;
+  default:
+    bug("op was not a comparison");
+  }
+}
+
+void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
+  // we jump to the end of the block + skip this
+  // instruction
+  struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
+  size_t true_offset =
+      true_target->function_offset - aarch64_emitted_count(state->emitter);
+
+  if (op->br_cond.cond->reg == REG_FLAGS) {
+    // emit based on flags
+    enum aarch64_cond cond = get_cond_for_op(op->br_cond.cond);
+    aarch64_emit_b_cond(state->emitter, true_offset, cond);
+  } else {
+    // emit based on zero
+    aarch64_emit_cnbz_32_imm(
+        state->emitter, get_reg_for_idx(op->br_cond.cond->reg), true_offset);
+  }
 }
 
 void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
@@ -297,32 +389,11 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_BR_COND: {
-      // we jump to the end of the block + skip this
-      // instruction
-      struct ir_basicblock *true_target =
-          op->stmt->basicblock->split.true_target;
-
-      size_t true_offset =
-          true_target->function_offset - aarch64_emitted_count(state->emitter);
-      aarch64_emit_cnbz_32_imm(
-          state->emitter, get_reg_for_idx(op->br_cond.cond->reg), true_offset);
+      emit_br_cond_op(state, op);
       break;
     }
     case IR_OP_TY_BR: {
-      if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
-        struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-        size_t offset =
-            target->function_offset - aarch64_emitted_count(state->emitter);
-        aarch64_emit_b(state->emitter, offset);
-      } else {
-        // otherwise, this is the false branch of a SPLIT
-        struct ir_basicblock *false_target =
-            op->stmt->basicblock->split.false_target;
-
-        size_t false_offset = false_target->function_offset -
-                              aarch64_emitted_count(state->emitter);
-        aarch64_emit_b(state->emitter, false_offset);
-      }
+      emit_br_op(state, op);
       break;
     }
     case IR_OP_TY_CNST: {
@@ -332,11 +403,11 @@ void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_BINARY_OP: {
-      lower_binary_op(state, op);
+      emit_binary_op(state, op);
       break;
     }
     case IR_OP_TY_CAST_OP: {
-      lower_cast_op(state, op);
+      emit_cast_op(state, op);
       break;
     }
     case IR_OP_TY_RET: {
