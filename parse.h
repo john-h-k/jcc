@@ -37,11 +37,23 @@ enum well_known_ty {
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
  * `<keyword>` */
 
+struct ast_ty_pointer {
+  struct ast_tyref *underlying;
+};
+
+struct ast_ty_func {
+  struct ast_tyref *ret_var_ty;
+  struct ast_tyref *param_var_tys;
+  size_t num_param_var_tys;
+};
+
 enum ast_tyref_ty {
   /* Used for variables that were used without declaration and similar. Usually
      an error */
   AST_TYREF_TY_UNKNOWN,
   AST_TYREF_TY_WELL_KNOWN,
+  AST_TYREF_TY_FUNC,
+  AST_TYREF_TY_POINTER,
   // AST_TYREF_TY_TYPEDEF_NAME,
   // AST_TYREF_TY_STRUCT,
   // AST_TYREF_TY_UNION,
@@ -53,17 +65,30 @@ struct ast_tyref {
 
   union {
     enum well_known_ty well_known;
+    struct ast_ty_pointer pointer;
+    struct ast_ty_func func;
   };
 };
 
 struct ast_arglist {
-  void *DUMMY;
+  struct ast_expr *args;
+  size_t num_args;
+};
+
+struct ast_param {
+  struct ast_tyref var_ty;
+  struct token identifier;
+};
+
+struct ast_paramlist {
+  struct ast_param *params;
+  size_t num_params;
 };
 
 struct ast_funcsig {
   struct ast_tyref ret_ty;
   struct token name;
-  struct ast_arglist arg_list;
+  struct ast_paramlist param_list;
 
   // TODO: args
 };
@@ -139,6 +164,13 @@ struct ast_unary_op {
   };
 };
 
+struct ast_call {
+  struct ast_tyref var_ty;
+
+  struct ast_expr *target;
+  struct ast_arglist arg_list;
+};
+
 /* Variable references */
 
 struct ast_var {
@@ -185,6 +217,7 @@ enum ast_rvalue_ty {
   AST_RVALUE_TY_COMPOUNDEXPR,
   AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
                       // they themselves evaluate to an rvalue (unlike in C++)
+  AST_RVALUE_TY_CALL
 };
 
 struct ast_rvalue {
@@ -198,6 +231,7 @@ struct ast_rvalue {
     struct ast_compoundexpr
         compound_expr; // compound assignments are *never* lvalues in C
     struct ast_assg *assg;
+    struct ast_call *call;
   };
 };
 

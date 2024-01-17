@@ -46,7 +46,13 @@ struct ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
     ty.primitive = ty_for_well_known_ty(ty_ref->well_known);
     return ty;
   }
-  }
+  case AST_TYREF_TY_FUNC:
+    todo("build func tys");
+    break;
+  case AST_TYREF_TY_POINTER:
+    todo("build pointers");
+    break;
+}
 }
 
 enum ir_op_cast_op_ty cast_ty_for_ast_tyref(const struct ast_tyref *from,
@@ -230,7 +236,10 @@ struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_RVALUE_TY_COMPOUNDEXPR:
     return build_ir_for_compoundexpr(irb, stmt, &rvalue->compound_expr,
                                      &rvalue->var_ty);
-  }
+  case AST_RVALUE_TY_CALL:
+    todo("build call");
+    // return build_ir_for_call(irb, stmt, &rvalue->call);
+}
 }
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
