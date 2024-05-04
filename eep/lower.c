@@ -3,9 +3,24 @@
 #include "../ir/build.h"
 #include "../util.h"
 
-// ARM has no quotient function
-// so instead of `x = a % b` we do
-// `c = a / b; x = a - (c * b)`
+
+// ARM has no mul, div, or quot functions
+// mul:
+//   ``
+// quot:
+//   `x = a % b` -> `c = a / b; x = a - (c * b)`
+static void lower_mul(struct ir_builder *func, struct ir_op *op) {
+  UNUSED_ARG(func);
+  UNUSED_ARG(op);
+  todo("lower_mul");
+}
+
+static void lower_div(struct ir_builder *func, struct ir_op *op) {
+  UNUSED_ARG(func);
+  UNUSED_ARG(op);
+  todo("lower_div");
+}
+
 static void lower_quot(struct ir_builder *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
@@ -88,7 +103,7 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
-void aarch64_lower(struct ir_builder *func) {
+void eep_lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -117,6 +132,11 @@ void aarch64_lower(struct ir_builder *func) {
           if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
               op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
             lower_quot(func, op);
+          } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UDIV ||
+              op->binary_op.ty == IR_OP_BINARY_OP_TY_SDIV) {
+            lower_div(func, op);
+          } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_MUL) {
+            lower_mul(func, op);
           } else if (binary_op_is_comparison(op->binary_op.ty)) {
             lower_comparison(func, op);
           }

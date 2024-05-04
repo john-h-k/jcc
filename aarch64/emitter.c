@@ -1,22 +1,12 @@
 #include "emitter.h"
 
+#include "../bit_twiddle.h"
 #include "../alloc.h"
 #include "../util.h"
 #include "../log.h"
 #include "isa.h"
 
 #include <stdlib.h>
-
-#define SIG_FITS_IN_BITS(value, bitc)                                          \
-  ((abs((value)) & ~((1 << (bitc)) - 1)) == 0)
-#define UNS_FITS_IN_BITS(value, bitc)                                          \
-  (((value) & ~((1 << (bitc)) - 1)) == 0)
-
-#define CLAMP_BITS(value, bitc) ((value) & ((1 << bitc) - 1))
-
-const struct aarch64_reg RETURN_REG = {0};
-const struct aarch64_reg ZERO_REG = {31};
-const struct aarch64_reg STACK_PTR_REG = {31};
 
 struct aarch64_emitter {
   uint32_t *block;
@@ -471,7 +461,7 @@ void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, CBZ_32_IMM(CLAMP_BITS(offset, 19), cmp.idx));
 }
 
-void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter,
+void aarch64_emit_cbnz_32_imm(struct aarch64_emitter *emitter,
                               struct aarch64_reg cmp, signed offset) {
   invariant_assert(SIG_FITS_IN_BITS(offset, 19),
                    "offset too big for branch instruction!");

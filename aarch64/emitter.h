@@ -7,11 +7,15 @@ struct aarch64_reg {
   size_t idx;
 };
 
+#if defined(RETURN_REG) || defined(STACK_PTR_REG) || defined(ZERO_REG)
+#error "RETURN_REG/STACK_PTR_REG/ZERO_REG already defined. Check your includes"
+#endif
+
 // `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
 // which is relevant
-const struct aarch64_reg RETURN_REG;
-const struct aarch64_reg ZERO_REG;
-const struct aarch64_reg STACK_PTR_REG;
+#define RETURN_REG ((struct aarch64_reg) {0})
+#define ZERO_REG ((struct aarch64_reg) {31})
+#define STACK_PTR_REG ((struct aarch64_reg) {31})
 
 enum aarch64_cond {
   // always true
@@ -276,7 +280,7 @@ void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, signed offset, enum a
 
 void aarch64_emit_cbz_32_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg cmp, signed offset);
-void aarch64_emit_cnbz_32_imm(struct aarch64_emitter *emitter,
+void aarch64_emit_cbnz_32_imm(struct aarch64_emitter *emitter,
                               struct aarch64_reg cmp, signed offset);
 void aarch64_emit_cbz_64_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg cmp, signed offset);

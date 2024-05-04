@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 
-void debug_disasm(const char *filename) {
+void objdump_debug_disasm(const char *filename) {
   const char COMMAND[] = "objdump -d ";
   char *command = nonnull_malloc(sizeof COMMAND + strlen(filename) + 1);
   strcpy(command, COMMAND);

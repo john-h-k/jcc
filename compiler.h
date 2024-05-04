@@ -4,8 +4,10 @@
 struct compiler;
 
 enum compile_target_arch {
+  COMPILE_TARGET_ARCH_NATIVE,
   COMPILE_TARGET_ARCH_MACOS_ARM64,
-  COMPILE_TARGET_ARCH_MACOS_X86_64
+  COMPILE_TARGET_ARCH_MACOS_X86_64,
+  COMPILE_TARGET_ARCH_EEP
 };
 
 enum compile_log_flags {

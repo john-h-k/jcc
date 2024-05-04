@@ -39,6 +39,10 @@ char *readfile(const char *path) {
   return content;
 }
 
+bool target_needs_linking(const struct compile_args *args) {
+  return args->target_arch != COMPILE_TARGET_ARCH_EEP;
+}
+
 int main(int argc, char **argv) {
   enable_log();
 
@@ -50,6 +54,11 @@ int main(int argc, char **argv) {
   if (parse_args(argc, argv, &args, &sources, &num_sources) !=
       PARSE_ARGS_RESULT_SUCCESS) {
     return -1;
+  }
+
+  if (args.target_arch == COMPILE_TARGET_ARCH_NATIVE) {
+    printf("Compiling for native platform - assuming macOS ARM64...");
+    args.target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
   }
 
   char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
@@ -92,9 +101,12 @@ int main(int argc, char **argv) {
                                 .num_objects = num_sources,
                                 .output = "a.out"};
 
-  if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
-    err("link failed");
-    exit(-1);
+
+  if (target_needs_linking(&args)) {
+    if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
+      err("link failed");
+      exit(-1);
+    }
   }
 
   for (size_t i = 0; i < num_sources; i++) {
@@ -136,11 +148,30 @@ bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
   return false;
 }
 
+bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
+  printf("%s\n", flag);
+  if (strcmp(flag, "x64") == 0) {
+    *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
+    return true;
+  } else if (strcmp(flag, "aarch64") == 0) {
+    *arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
+    return true;
+  } else if (strcmp(flag, "eep") == 0) {
+    *arch = COMPILE_TARGET_ARCH_EEP;
+    return true;
+  }
+
+  return false;
+}
+
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
                                   const char ***sources, size_t *num_sources) {
 
   memset(args, 0, sizeof(*args));
+
+  // default to native arch
+  args->target_arch = COMPILE_TARGET_ARCH_NATIVE;
 
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
@@ -154,9 +185,21 @@ enum parse_args_result parse_args(int argc, char **argv,
       if (!parse_log_flag(log, &args->log_flags)) {
         return PARSE_ARGS_RESULT_ERROR;
       }
-    } else {
-      vector_push_back(sources_vec, &arg);
+
+      continue;
     }
+
+    const char *target = try_get_arg(arg, "-T");
+    if (target) {
+      if (!parse_target_flag(target, &args->target_arch)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
+
+      continue;
+    }
+
+    // wasn't recognised as a flag, assume source arg
+    vector_push_back(sources_vec, &arg);
   }
 
   *num_sources = vector_length(sources_vec);
@@ -170,6 +213,5 @@ enum parse_args_result parse_args(int argc, char **argv,
 
   vector_copy_to(sources_vec, *sources);
 
-  args->target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
   return PARSE_ARGS_RESULT_SUCCESS;
 }
