@@ -1,3 +1,21 @@
+# How to use EEP mode
+
+1. Compile the compiler (instructions assume macOS with clang & CMake installed)
+
+```sh
+mkdir build
+cd build
+
+cmake -DCMAKE_BUILD_TYPE=debug .. && cmake --build .
+cd ..
+```
+
+2. The compiler binary will now be `build/jcc`
+3. Run the compiler with `-Teep` flag on your file, e.g `./LOCATION_OF_JCC/build/jcc -Teep mul.c`
+4. It will output a file next to it suffixed by `.obj` which will be your EEP assembly
+5. Rename this from `.c.obj` to `.ram` and then you can import it into Issie
+
+
 # jcc
 
 JCC is designed to be a pure C11 (no dependencies) C11 compiler. 
