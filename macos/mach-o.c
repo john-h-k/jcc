@@ -1,5 +1,7 @@
 #include "mach-o.h"
 
+#include "../compiler.h"
+
 #include "../log.h"
 #include "../util.h"
 
@@ -14,6 +16,9 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   header.magic = MH_MAGIC_64;
 
   switch (args->target_arch) {
+  case COMPILE_TARGET_ARCH_NATIVE:
+    bug("NATIVE arch reached linker, should have been selected earlier");
+    break;
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
     header.cputype = CPU_TYPE_ARM64;
     header.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
@@ -22,7 +27,10 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
     header.cputype = CPU_TYPE_X86_64;
     header.cpusubtype = CPU_SUBTYPE_X86_64_ALL;
     todo("unsupported arch x86_64");
-  }
+  case COMPILE_TARGET_ARCH_EEP:
+    todo("mach-o does not support EEP");
+    break;
+}
 
   header.filetype = MH_OBJECT;
   header.ncmds = 3;
@@ -39,7 +47,7 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
-void write_segment_command(FILE *file, const struct macho_args *args) {
+void write_segment_command(FILE *file, const struct build_object_args *args) {
   struct segment_command_64 segment;
   memset(&segment, 0, sizeof(segment));
   segment.cmd = LC_SEGMENT_64;
@@ -133,7 +141,7 @@ void write_segment_command(FILE *file, const struct macho_args *args) {
   }
 }
 
-void write_macho(const struct macho_args *args) {
+void write_macho(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
   if (file == NULL) {
     perror("fopen");

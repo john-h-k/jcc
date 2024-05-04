@@ -11,7 +11,7 @@ struct current_op_state {
 
 struct emit_state {
   struct arena_allocator *arena;
-  struct aarch64_emitter *emitter;
+  struct eep_emitter *emitter;
 
   size_t num_extra_stack_slots;
 
@@ -20,14 +20,12 @@ struct emit_state {
   struct current_op_state cur_op_state;
 };
 
-static struct aarch64_reg get_reg_for_idx(size_t idx) {
-  // [w|x]18 not available
-  struct aarch64_reg reg = {idx < 18 ? idx : idx + 1};
-  invariant_assert(reg.idx <= 31, "invalid reg!");
+static bool is_return_reg(size_t idx) { return idx == RETURN_REG.idx; }
+
+struct eep_reg get_reg_for_idx(size_t idx) {
+  struct eep_reg reg = { idx };
   return reg;
 }
-
-static bool is_return_reg(size_t idx) { return idx == RETURN_REG.idx; }
 
 enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
@@ -50,94 +48,20 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
       reg != REG_SPILLED,
       "spilled reg reached emitter; should've been handled by lower/regalloc");
 
-  invariant_assert(reg < 18, "invalid reg for AArch64");
-
   return reg;
 }
 
-static bool is_64_bit(const struct ir_op *op) {
-  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                   "non-primitive passed to `is_64_bit`");
-  return op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
-}
-
 static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
-#define SEL_32_OR_64_BIT_OP(func, immr, imms)                                  \
-  do {                                                                         \
-    if (is_64_bit(op)) {                                                       \
-      func##_64_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,      \
-                    get_reg_for_idx(reg));                                     \
-    } else {                                                                   \
-      func##_32_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,      \
-                    get_reg_for_idx(reg));                                     \
-    }                                                                          \
-  } while (0);
-
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  size_t src_reg = get_reg_for_op(state, op->cast_op.value, REG_USAGE_READ);
-
-  switch (op->cast_op.ty) {
-  case IR_OP_CAST_OP_TY_SEXT:
-    invariant_assert(op->cast_op.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                     "can't sext from non-primitive");
-
-    switch (op->cast_op.value->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-      SEL_32_OR_64_BIT_OP(aarch64_emit_sbfm, 0b000000, 0b000111);
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-      SEL_32_OR_64_BIT_OP(aarch64_emit_sbfm, 0b000000, 0b001111);
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-      SEL_32_OR_64_BIT_OP(aarch64_emit_sbfm, 0b000000, 0b011111);
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-      bug("can't sext from I64");
-    }
-    break;
-  case IR_OP_CAST_OP_TY_ZEXT:
-    // `mov` zeroes top 32 bits
-    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src_reg),
-                        get_reg_for_idx(reg));
-    break;
-  case IR_OP_CAST_OP_TY_TRUNCATE:
-    invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                     "can't truncate non-primitive");
-
-    // https://kddnewton.com/2022/08/11/aarch64-bitmask-immediates.html
-    // for understanding the immediates
-    switch (op->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0,
-                              0b111, get_reg_for_idx(reg));
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-      aarch64_emit_and_32_imm(state->emitter, get_reg_for_idx(src_reg), 0b0,
-                              0b1111, get_reg_for_idx(reg));
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-      // zeroes top 32 bits
-      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src_reg),
-                          get_reg_for_idx(reg));
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-      break;
-    }
-  }
-
-#undef SEL_32_OR_64_BIT_OP
+  UNUSED_ARG(state);
+  UNUSED_ARG(op);
+  todo("cast on EEP");
 }
 
 static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
-#define SEL_32_OR_64_BIT_OP(func)                                              \
+#define EMIT_WITH_FN(func)                                                    \
   do {                                                                         \
-    if (is_64_bit(op)) {                                                       \
-      func##_64(state->emitter, get_reg_for_idx(lhs_reg),                      \
-                get_reg_for_idx(rhs_reg), get_reg_for_idx(reg));               \
-    } else {                                                                   \
-      func##_32(state->emitter, get_reg_for_idx(lhs_reg),                      \
-                get_reg_for_idx(rhs_reg), get_reg_for_idx(reg));               \
-    }                                                                          \
+    func(state->emitter, get_reg_for_idx(lhs_reg),                      \
+              get_reg_for_idx(rhs_reg), get_reg_for_idx(reg));               \
   } while (0);
 
   debug_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -159,32 +83,20 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    if (is_64_bit(op)) {
-      aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), ZERO_REG);
-    } else {
-      aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), ZERO_REG);
-    }
+    eep_emit_cmp(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(rhs_reg));
     break;
   case IR_OP_BINARY_OP_TY_ADD:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_add);
+    EMIT_WITH_FN(eep_emit_add);
     break;
   case IR_OP_BINARY_OP_TY_SUB:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_sub);
+    EMIT_WITH_FN(eep_emit_sub);
     break;
   case IR_OP_BINARY_OP_TY_MUL:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_mul);
-    break;
   case IR_OP_BINARY_OP_TY_SDIV:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_sdiv);
-    break;
   case IR_OP_BINARY_OP_TY_UDIV:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_udiv);
-    break;
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
-    bug("SQUOT and UQUOT should've been lowered to div-msub pair already");
+    bug("SQUOT, UQUOT, SDIV, UDIV, and MUL should've been lowered to already");
   }
 
 #undef SEL_32_OR_64_BIT_OP
@@ -200,52 +112,55 @@ static const char *mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-void emit_br_op(struct emit_state *state, struct ir_op *op) {
+static void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
     size_t offset =
-        target->function_offset - aarch64_emitted_count(state->emitter);
-    aarch64_emit_b(state->emitter, offset);
+        target->function_offset - eep_emitted_count(state->emitter);
+
+    eep_emit_jump(state->emitter, EEP_COND_JMP, offset);
   } else {
     // otherwise, this is the false branch of a SPLIT
     struct ir_basicblock *false_target =
         op->stmt->basicblock->split.false_target;
 
     size_t false_offset =
-        false_target->function_offset - aarch64_emitted_count(state->emitter);
-    aarch64_emit_b(state->emitter, false_offset);
+        false_target->function_offset - eep_emitted_count(state->emitter);
+    eep_emit_jump(state->emitter, EEP_COND_JMP, false_offset);
   }
 }
 
-static enum aarch64_cond invert_cond(enum aarch64_cond cond) {
-  return cond ^ 1;
-}
+// not currently used
+// static enum eep_cond invert_cond(enum eep_cond cond) {
+//   invariant_assert(cond != EEP_COND_RET && cond != EEP_COND_JSR, "can't invert JSR/RET");
+//   return cond ^ 1;
+// }
 
-static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
+static enum eep_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
                    "`get_cond_for_op` expects a binary op");
 
   switch (op->binary_op.ty) {
   case IR_OP_BINARY_OP_TY_EQ:
-    return AARCH64_COND_EQ;
+    return EEP_COND_JEQ;
   case IR_OP_BINARY_OP_TY_NEQ:
-    return AARCH64_COND_NE;
+    return EEP_COND_JNE;
   case IR_OP_BINARY_OP_TY_UGT:
-    return AARCH64_COND_HI;
+    return EEP_COND_JHI;
   case IR_OP_BINARY_OP_TY_SGT:
-    return AARCH64_COND_GT;
+    return EEP_COND_JGT;
   case IR_OP_BINARY_OP_TY_UGTEQ:
-    return AARCH64_COND_HS;
+    return EEP_COND_JCS;
   case IR_OP_BINARY_OP_TY_SGTEQ:
-    return AARCH64_COND_GE;
+    return EEP_COND_JGE;
   case IR_OP_BINARY_OP_TY_ULT:
-    return AARCH64_COND_LO;
+    return EEP_COND_JCC;
   case IR_OP_BINARY_OP_TY_SLT:
-    return AARCH64_COND_LT;
+    return EEP_COND_JLT;
   case IR_OP_BINARY_OP_TY_ULTEQ:
-    return AARCH64_COND_LS;
+    return EEP_COND_JLS;
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    return AARCH64_COND_LE;
+    return EEP_COND_JLE;
   default:
     bug("op was not a comparison");
   }
@@ -258,12 +173,12 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
     binary_op_is_comparison(op->mov.value->binary_op.ty)) {
 
     // need to move from flags
-    enum aarch64_cond cond = get_cond_for_op(op->mov.value);
-    // 32 vs 64 bit doesn't matter
-    aarch64_emit_csinc_32(state->emitter, invert_cond(cond), ZERO_REG, ZERO_REG, get_reg_for_idx(dest));
+    enum eep_cond cond = get_cond_for_op(op->mov.value);
+    UNUSED_ARG(cond);
+    todo("don't know how to extract condition codes to reg");
   } else {
     size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
-    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
+    eep_emit_mov(state->emitter, get_reg_for_idx(src),
                         get_reg_for_idx(dest));
   }
 }
@@ -273,23 +188,18 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   // instruction
   struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
   size_t true_offset =
-      true_target->function_offset - aarch64_emitted_count(state->emitter);
+      true_target->function_offset - eep_emitted_count(state->emitter);
 
-  if (op->br_cond.cond->reg == REG_FLAGS) {
-    // emit based on flags
-    enum aarch64_cond cond = get_cond_for_op(op->br_cond.cond);
-    aarch64_emit_b_cond(state->emitter, true_offset, cond);
-  } else {
-    // emit based on zero
-    aarch64_emit_cbnz_32_imm(
-        state->emitter, get_reg_for_idx(op->br_cond.cond->reg), true_offset);
-  }
+  invariant_assert(op->br_cond.cond->reg == REG_FLAGS, "non-flag jumps don't exist in EEP");
+  // emit based on flags
+  enum eep_cond cond = get_cond_for_op(op->br_cond.cond);
+  eep_emit_jump(state->emitter, cond, true_offset);
 }
 
 static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
                size_t stack_size);
 
-struct compiled_function aarch64_emit_function(struct ir_builder *func) {
+struct compiled_function eep_emit_function(struct ir_builder *func) {
   // the first step of emitting is that we need to ensure the `function_offset`
   // values are correct for all BBs as they may have been broken during various
   // opt/transforming passes
@@ -315,8 +225,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
     }
   }
 
-  struct aarch64_emitter *emitter;
-  create_aarch64_emitter(&emitter);
+  struct eep_emitter *emitter;
+  create_eep_emitter(&emitter);
 
   struct emit_state state = {.arena = func->arena,
                              .emitter = emitter,
@@ -326,8 +236,7 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   size_t stack_size = ROUND_UP(16, func->total_locals_size);
   if (stack_size) {
     // spills, so we need stack space
-    aarch64_emit_sub_64_imm(state.emitter, STACK_PTR_REG, stack_size,
-                            STACK_PTR_REG);
+    eep_emit_sub_imm(state.emitter, STACK_PTR_REG, stack_size);
   }
 
   struct ir_basicblock *basicblock = func->first;
@@ -343,11 +252,11 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
     basicblock = basicblock->succ;
   }
 
-  size_t len = aarch64_emit_bytesize(emitter);
+  size_t len = eep_emit_bytesize(emitter);
   void *data = arena_alloc(func->arena, len);
-  aarch64_emit_copy_to(emitter, data);
+  eep_emit_copy_to(emitter, data);
 
-  free_aarch64_emitter(&emitter);
+  free_eep_emitter(&emitter);
 
   struct compiled_function result = {
       .name = mangle(func->arena, func->name), .code = data, .len_code = len};
@@ -380,20 +289,23 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       // currently we emit a `nop` to keep everything aligned
       // ideally we should remove the phi from IR entirely
       // earlier
-      aarch64_emit_nop(state->emitter);
+      eep_emit_nop(state->emitter);
       break;
     }
     case IR_OP_TY_LOAD_LCL: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      aarch64_emit_load_offset_32(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset(state, op->load_lcl.lcl_idx));
+      eep_emit_load_offset(
+          state->emitter, 
+          STACK_PTR_REG, 
+          get_lcl_stack_offset(state, op->load_lcl.lcl_idx), 
+          get_reg_for_idx(reg)
+        );
       break;
     }
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
-      aarch64_emit_store_offset_32(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+      eep_emit_store_offset(
+          state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
           get_lcl_stack_offset(state, op->store_lcl.lcl_idx));
       break;
     }
@@ -407,8 +319,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     }
     case IR_OP_TY_CNST: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
-                                op->cnst.value);
+      eep_emit_mov_imm(state->emitter, op->cnst.value, get_reg_for_idx(reg));
       break;
     }
     case IR_OP_TY_BINARY_OP: {
@@ -422,20 +333,20 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     case IR_OP_TY_RET: {
       size_t value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
       invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
-
+      
       if (!is_return_reg(value_reg)) {
-        aarch64_emit_mov_32(state->emitter, get_reg_for_idx(value_reg),
+        eep_emit_mov(state->emitter, get_reg_for_idx(value_reg),
                             RETURN_REG);
       }
 
       // this should really be handled somewhere else for
       // elegance but this readjusts SP as needed (epilogue)
       if (stack_size) {
-        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, stack_size,
-                                STACK_PTR_REG);
+        eep_emit_add_imm(state->emitter, STACK_PTR_REG, stack_size);
       }
 
-      aarch64_emit_ret(state->emitter);
+      // offset ignored by RET
+      eep_emit_jump(state->emitter, EEP_COND_RET, 0);
       break;
     }
     default: {

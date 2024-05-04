@@ -1,9 +1,10 @@
 #include "compiler.h"
 
-#include "aarch64/emit.h"
-#include "aarch64/lower.h"
+#include "aarch64.h"
+#include "eep.h"
+
+#include "emit.h"
 #include "alloc.h"
-#include "disasm.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/prettyprint.h"
@@ -51,8 +52,6 @@ enum compiler_create_result create_compiler(const char *program,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-#define AARCH64_FUNCTION_ALIGNMENT (16)
-
 void debug_print_stage(struct ir_builder *irb, const char *name) {
   debug_print_ir(stderr, irb, NULL, NULL);
 
@@ -63,6 +62,22 @@ void debug_print_stage(struct ir_builder *irb, const char *name) {
   FILE *ir_graph = fopen(buff, "w");
   debug_print_ir_graph(ir_graph, irb);
   fclose(ir_graph);
+}
+
+const struct target *get_target(const struct compile_args *args) {
+  switch (args->target_arch) {
+  case COMPILE_TARGET_ARCH_NATIVE:
+    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen earlier");
+    break;
+  case COMPILE_TARGET_ARCH_MACOS_X86_64:
+    return &AARCH64_TARGET;
+  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+    todo("macOS x64 target not yet implemented");
+  case COMPILE_TARGET_ARCH_EEP:
+    return &EEP_TARGET;
+  }
+
+  bug("unexpected target in `get_target`");
 }
 
 enum compile_result compile(struct compiler *compiler) {
@@ -84,6 +99,8 @@ enum compile_result compile(struct compiler *compiler) {
       vector_create(sizeof(struct compiled_function));
   struct vector *symbols = vector_create(sizeof(struct symbol));
   size_t total_size = 0;
+
+  const struct target *target = get_target(&compiler->args);
 
   for (size_t i = 0; i < result.translation_unit.num_func_defs; i++) {
     struct ast_funcdef *def = &result.translation_unit.func_defs[i];
@@ -107,7 +124,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("LOWERING");
 
-      lower(ir);
+      target->lower(ir);
 
       BEGIN_STAGE("POST-LOWER IR");
 
@@ -128,8 +145,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       debug_print_stage(ir, "elim_phi");
 
-      struct reg_info aarch64_reg_info = {.num_regs = 18};
-      register_alloc(ir, aarch64_reg_info);
+      register_alloc(ir, target->reg_info);
 
       debug_print_stage(ir, "reg_alloc");
 
@@ -143,7 +159,8 @@ enum compile_result compile(struct compiler *compiler) {
       }
 
       BEGIN_STAGE("EMITTING");
-      func = emit(ir);
+
+      func = target->emit_function(ir);
 
       disable_log();
     }
@@ -151,7 +168,7 @@ enum compile_result compile(struct compiler *compiler) {
     struct symbol symbol = {
         .name = func.name, .section = 1, .value = total_size};
 
-    total_size += ROUND_UP(func.len_code, AARCH64_FUNCTION_ALIGNMENT);
+    total_size += ROUND_UP(func.len_code, target->function_alignment);
     vector_push_back(compiled_functions, &func);
 
     vector_push_back(symbols, &symbol);
@@ -164,10 +181,10 @@ enum compile_result compile(struct compiler *compiler) {
   for (size_t i = 0; i < num_results; i++) {
     struct compiled_function *func = vector_get(compiled_functions, i);
     memcpy(head, func->code, func->len_code);
-    head += ROUND_UP(func->len_code, AARCH64_FUNCTION_ALIGNMENT);
+    head += ROUND_UP(func->len_code, target->function_alignment);
   }
 
-  struct macho_args args = {
+  struct build_object_args args = {
       .compile_args = &compiler->args,
       .output = compiler->output,
       .data = code,
@@ -178,7 +195,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("OBJECT FILE");
 
-  write_macho(&args);
+  target->build_object(&args);
 
   vector_free(&compiled_functions);
   vector_free(&symbols);
@@ -186,9 +203,12 @@ enum compile_result compile(struct compiler *compiler) {
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_ASM)) {
     enable_log();
 
-    BEGIN_STAGE("DISASSEMBLY");
-    debug_disasm(args.output);
-
+    if (!target->debug_disasm) {
+      warn("DISASM not supported for current target");
+    } else {
+      BEGIN_STAGE("DISASSEMBLY");
+      target->debug_disasm(args.output);
+    }
     disable_log();
   }
 
