@@ -75,6 +75,19 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
   case IR_OP_VAR_TY_TY_NONE: {
     return "<none>";
   }
+  case IR_OP_VAR_TY_TY_FUNC: {
+    // FIXME: buffer vuln
+    char *buff = nonnull_malloc(100);
+    char *head = buff;
+    head += sprintf(head, "(");
+    for (size_t i = 0; i < var_ty->func.num_params; i++) {
+      head += sprintf(head, i + 1 == var_ty->func.num_params ? "%s" : "%s, ", var_ty_string(&var_ty->func.params[i]));
+    }
+    head += sprintf(head, ")");
+    head += sprintf(head, " -> %s", var_ty_string(var_ty->func.ret_ty));
+    *head = '\0';
+    return head;
+  }
   case IR_OP_VAR_TY_TY_PRIMITIVE: {
     switch (var_ty->primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
@@ -92,6 +105,7 @@ const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
 
 const char *phi_string(struct ir_op_phi *phi) {
   // just assume we don't have more than 100,000 phi inputs
+    // FIXME: buffer vuln
   char *buff = nonnull_malloc(phi->num_values * (6 + 2));
   char *head = buff;
 
@@ -99,6 +113,37 @@ const char *phi_string(struct ir_op_phi *phi) {
     head += sprintf(head, "%%%zu", phi->values[i]->id);
 
     if (i + 1 < phi->num_values) {
+      head += sprintf(head, ", ");
+    }
+  }
+
+  *head = '\0';
+  return buff;
+}
+
+const char *call_target_string(struct ir_op *target) {
+  if (target->ty == IR_OP_TY_GLB) {
+    return target->glb.global;
+  } else {
+    // FIXME: buffer vuln
+    char *buff = nonnull_malloc(1000);
+    char *head = buff;
+    head += sprintf(buff, "%%%zu", target->id);
+    *head = '\0';
+    return buff;
+  }
+}
+
+const char *call_arg_string(struct ir_op_call *call) {
+  // just assume we don't have more than 100,000 call inputs
+    // FIXME: buffer vuln
+  char *buff = nonnull_malloc(call->num_args * (6 + 2));
+  char *head = buff;
+
+  for (size_t i = 0; i < call->num_args; i++) {
+    head += sprintf(head, "%%%zu", call->args[i]->id);
+
+    if (i + 1 < call->num_args) {
       head += sprintf(head, ", ");
     }
   }
@@ -122,13 +167,23 @@ char *arena_printf(struct arena_allocator *arena, const char *fmt, ...) {
 
 char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
   switch (ir->ty) {
+  case IR_OP_TY_GLB:
+    // don't print anything for global - let the op consuming it print instead
+    return NULL;
+  case IR_OP_TY_CALL:
+    return arena_printf(irb->arena, "%%%zu (%s) = CALL %s ( %s )", ir->id,
+                        var_ty_string(&ir->var_ty), call_target_string(ir->call.target), call_arg_string(&ir->call));
   case IR_OP_TY_PHI:
     return arena_printf(irb->arena, "%%%zu (%s) = phi [ %s ]", ir->id,
                         var_ty_string(&ir->var_ty), phi_string(&ir->phi));
-    break;
   case IR_OP_TY_MOV:
-    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->id,
+    if (ir->mov.value) {
+      return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->id,
                         var_ty_string(&ir->var_ty), ir->mov.value->id);
+    } else {
+      return arena_printf(irb->arena, "%%%zu (%s) = <PARAM>", ir->id,
+                        var_ty_string(&ir->var_ty));
+    }
   case IR_OP_TY_CNST:
     return arena_printf(irb->arena, "%%%zu (%s) = %zu", ir->id,
                         var_ty_string(&ir->var_ty), ir->cnst.value);
@@ -211,6 +266,11 @@ void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
 
   long pos = ftell(fm->file);
   char *op_str = debug_print_op(irb, op);
+
+  if (!op_str) {
+    return;
+  }
+
   fslogsl(fm->file, "%s", op_str);
   long width = ftell(fm->file) - pos;
   long pad = op_pad - width;

@@ -434,23 +434,24 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return false;
 }
 
-bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue);
-
 bool parse_expr(struct parser *parser, struct ast_expr *expr);
+bool parse_above_atom(struct parser *parser, struct ast_expr *expr);
 
 bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct ast_lvalue lvalue;
+  struct ast_expr assignee;
   struct ast_expr expr;
-  if (!parse_lvalue(parser, &lvalue) ||
+  if (!parse_above_atom(parser, &assignee) ||
       !parse_token(parser, LEX_TOKEN_TY_OP_ASSG) ||
       !parse_expr(parser, &expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
 
-  assg->lvalue = lvalue;
+  assg->var_ty = assignee.var_ty;
+  assg->assignee = arena_alloc(parser->arena, sizeof(*assg->assignee));
+  *assg->assignee = assignee;
   assg->expr = arena_alloc(parser->arena, sizeof(*assg->expr));
   *assg->expr = expr;
 
@@ -484,101 +485,8 @@ struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
   return *ty->func.ret_var_ty;
 }
 
-bool parse_atom(struct parser *parser, struct ast_expr *expr);
-
-bool parse_call(struct parser *parser, struct ast_call *call) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  struct ast_expr target;
-  struct ast_arglist arg_list;
-
-  // call targets can either be a compound expression or an identifier (i think?)
-  struct ast_var var;
-  struct ast_compoundexpr compound_expr;
-  if (parse_var(parser, &var)) {
-    target.ty = AST_EXPR_TY_LVALUE;
-    target.lvalue.ty = AST_LVALUE_TY_VAR;
-    target.lvalue.var = var;
-  } else if (parse_compoundexpr(parser, &compound_expr)) {
-    target.ty = AST_EXPR_TY_RVALUE;
-    target.rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
-    target.rvalue.compound_expr = compound_expr;
-  } else {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  if (!parse_arglist(parser, &arg_list)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  call->target = arena_alloc(parser->arena, sizeof(*call->target));
-  *call->target = target;
-  call->arg_list = arg_list;
-  call->var_ty = var_ty_return_type_of(&target.var_ty);
-
-  return true;
-}
-
-bool parse_rvalue_atom(struct parser *parser, struct ast_rvalue *rvalue) {
-  struct ast_assg assg;
-  if (parse_assg(parser, &assg)) {
-    rvalue->ty = AST_RVALUE_TY_ASSG;
-    rvalue->var_ty = assg.lvalue.var_ty;
-    rvalue->assg = arena_alloc(parser->arena, sizeof(*rvalue->assg));
-    *rvalue->assg = assg;
-
-    return true;
-  }
-
-  struct ast_cnst cnst;
-  if (parse_cnst(parser, &cnst)) {
-    rvalue->ty = AST_RVALUE_TY_CNST;
-    rvalue->var_ty.ty = AST_TYREF_TY_WELL_KNOWN;
-    rvalue->var_ty.well_known = cnst.cnst_ty;
-    rvalue->cnst = cnst;
-
-    return true;
-  }
-
-  struct ast_call call;
-  if (parse_call(parser, &call)) {
-    rvalue->ty = AST_RVALUE_TY_CALL;
-    rvalue->var_ty = call.var_ty;
-    rvalue->call = arena_alloc(parser->arena, sizeof(*rvalue->call));
-    *rvalue->call = call;
-
-    return true;
-  }
-
-  // struct ast_compoundexpr compound_expr;
-  // if (parse_compoundexpr(parser, &compound_expr)) {
-  //   rvalue->ty = AST_RVALUE_TY_COMPOUNDEXPR;
-  //   // compound expressions return their last expression
-  //   rvalue->var_ty = compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
-  //   rvalue->compound_expr = compound_expr;
-  //   return true;
-  // }
-
-  return false;
-}
-
-bool parse_lvalue(struct parser *parser, struct ast_lvalue *lvalue) {
-  struct ast_var var;
-  if (parse_var(parser, &var)) {
-    lvalue->ty = AST_LVALUE_TY_VAR;
-    lvalue->var_ty = get_var_type(parser, &var);
-    lvalue->var = var;
-
-    return true;
-  }
-
-  return false;
-}
-
 // parses an expression that does _not_ involve binary operators
-bool parse_atom(struct parser *parser, struct ast_expr *expr) {
+bool parse_atom(struct parser *parser, struct ast_atom *atom) {
   err("parsing atom");
   struct text_pos pos = get_position(parser->lexer);
 
@@ -593,34 +501,61 @@ bool parse_atom(struct parser *parser, struct ast_expr *expr) {
     // compound expressions return the last expression
     struct ast_tyref var_ty =
         compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
-    expr->ty = AST_EXPR_TY_RVALUE;
-    expr->var_ty = var_ty;
-    expr->rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
-    expr->rvalue.var_ty = var_ty;
-    expr->rvalue.compound_expr = compound_expr;
+    atom->ty = AST_ATOM_TY_COMPOUNDEXPR;
+    atom->var_ty = var_ty;
+    atom->compound_expr = compound_expr;
 
     return true;
   }
 
   backtrack(parser->lexer, pos);
 
-  struct ast_rvalue rvalue;
-  if (parse_rvalue_atom(parser, &rvalue)) {
-    expr->ty = AST_EXPR_TY_RVALUE;
-    expr->var_ty = rvalue.var_ty;
-    expr->rvalue = rvalue;
+  struct ast_cnst cnst;
+  if (parse_cnst(parser, &cnst)) {
+    atom->ty = AST_ATOM_TY_CNST;
+    atom->var_ty.ty = AST_TYREF_TY_WELL_KNOWN;
+    atom->var_ty.well_known = cnst.cnst_ty;
+    atom->cnst = cnst;
+
     return true;
   }
 
-  struct ast_lvalue lvalue;
-  if (parse_lvalue(parser, &lvalue)) {
-    expr->ty = AST_EXPR_TY_LVALUE;
-    expr->var_ty = lvalue.var_ty;
-    expr->lvalue = lvalue;
+  struct ast_var var;
+  if (parse_var(parser, &var)) {
+    atom->ty = AST_ATOM_TY_VAR;
+    atom->var_ty = get_var_type(parser, &var);
+    atom->var = var;
+
     return true;
   }
 
   return false;
+}
+
+bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
+  struct ast_atom atom;
+  if (!parse_atom(parser, &atom)) {
+    return false;
+  }
+
+  struct ast_call call;
+  struct ast_arglist arg_list;
+  if (parse_arglist(parser, &arg_list)) {
+    expr->ty = AST_EXPR_TY_CALL;
+    expr->var_ty = call.var_ty;
+    expr->call = arena_alloc(parser->arena, sizeof(*expr->call));
+    expr->call->var_ty = var_ty_return_type_of(&atom.var_ty);
+    expr->call->target = arena_alloc(parser->arena, sizeof(*expr->call->target));
+    *expr->call->target = atom;
+    expr->call->arg_list = arg_list;
+
+    return true;
+  }
+
+  expr->ty = AST_EXPR_TY_ATOM;
+  expr->var_ty = atom.var_ty;
+  expr->atom = atom;
+  return true;
 }
 
 struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
@@ -659,9 +594,9 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
-  if (!parse_atom(parser, expr)) {
+  if (!parse_above_atom(parser, expr)) {
     return false;
-  }
+  }  
 
   // TODO: make iterative
   while (true) {
@@ -698,10 +633,9 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     struct ast_tyref result_ty =
         resolve_binary_op_types(&lhs.var_ty, &rhs.var_ty);
 
-    expr->ty = AST_EXPR_TY_RVALUE;
+    expr->ty = AST_EXPR_TY_BINARY_OP;
     expr->var_ty = result_ty;
-    expr->rvalue.ty = AST_RVALUE_TY_BINARY_OP;
-    struct ast_binary_op *binary_op = &expr->rvalue.binary_op;
+    struct ast_binary_op *binary_op = &expr->binary_op;
     binary_op->ty = info.ty;
     binary_op->var_ty = result_ty;
 
@@ -715,7 +649,18 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
 
 // parse a non-compound expression
 bool parse_expr(struct parser *parser, struct ast_expr *expr) {
-  err("parsing expr");
+  // assignment is lowest precedence, so we parse it here
+
+  struct ast_assg assg;
+  if (parse_assg(parser, &assg)) {
+    expr->ty = AST_EXPR_TY_ASSG;
+    expr->var_ty = assg.var_ty;
+    expr->assg = arena_alloc(parser->arena, sizeof(*expr->assg));
+    *expr->assg = assg;
+
+    return true;
+  }
+  
   return parse_expr_precedence_aware(parser, 0, expr);
 }
 
@@ -1226,11 +1171,11 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     struct ast_tyref var_ty =
         compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
     stmt->ty = AST_STMT_TY_EXPR;
-    stmt->expr.ty = AST_EXPR_TY_RVALUE;
+    stmt->expr.ty = AST_EXPR_TY_ATOM;
     stmt->expr.var_ty = var_ty;
-    stmt->expr.rvalue.ty = AST_RVALUE_TY_COMPOUNDEXPR;
-    stmt->expr.rvalue.var_ty = var_ty;
-    stmt->expr.rvalue.compound_expr = compound_expr;
+    stmt->expr.atom.ty = AST_ATOM_TY_COMPOUNDEXPR;
+    stmt->expr.atom.var_ty = var_ty;
+    stmt->expr.atom.compound_expr = compound_expr;
 
     return true;
   }
@@ -1307,7 +1252,9 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   consume_token(parser->lexer, identifier);
 
   param->var_ty = var_ty;
-  param->identifier = identifier;
+  // unique - we add one to scope for params because the parser is in global scope while the param is in the func scope
+  param->var.scope = parser->cur_scope + 1;
+  param->var.identifier = identifier;
 
   return true;
 }
@@ -1376,9 +1323,22 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
     var.identifier = identifier;
     var.scope = SCOPE_GLOBAL;
 
+    struct ast_ty_func func_ty;
+    func_ty.ret_var_ty = arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
+    *func_ty.ret_var_ty = ty_ref;
+    func_ty.num_param_var_tys = param_list.num_params;
+    func_ty.param_var_tys = arena_alloc(parser->arena, sizeof(*func_ty.param_var_tys) * param_list.num_params);
+    for (size_t i = 0; i < param_list.num_params; i++) {
+      func_ty.param_var_tys[i] = param_list.params[i].var_ty;
+    }
+
+    struct ast_tyref func_ty_ref;
+    func_ty_ref.ty = AST_TYREF_TY_FUNC;
+    func_ty_ref.func = func_ty;
+
     struct var_table_entry *entry = create_entry(&parser->var_table, &var);
     entry->value = arena_alloc(parser->arena, sizeof(ty_ref));
-    *(struct ast_tyref *)entry->value = ty_ref;
+    *(struct ast_tyref *)entry->value = func_ty_ref;
 
     return true;
   }
@@ -1415,10 +1375,10 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
     // need to add the params to the locals table
     for (size_t i = 0; i < func_sig.param_list.num_params; i++) {
       const struct ast_param *param = &func_sig.param_list.params[i];
-      err("adding param %s at %d", associated_text(parser->lexer, &param->identifier), parser->cur_scope);
+      err("adding param %s at %d", associated_text(parser->lexer, &param->var.identifier), parser->cur_scope);
 
       struct ast_var var;
-      var.identifier = param->identifier;
+      var.identifier = param->var.identifier;
       var.scope = 0;
 
       struct var_table_entry *entry = create_entry(&parser->var_table, &var);
@@ -1604,15 +1564,23 @@ DEBUG_FUNC(var, var) {
             var->scope);
 }
 
-DEBUG_FUNC(lvalue, lvalue) {
-  switch (lvalue->ty) {
-  case AST_LVALUE_TY_VAR:
-    DEBUG_CALL(var, &lvalue->var);
+DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
+
+DEBUG_FUNC(compoundexpr, compound_expr);
+
+DEBUG_FUNC(atom, atom) {
+  switch (atom->ty) {
+  case AST_ATOM_TY_VAR:
+    DEBUG_CALL(var, &atom->var);
+    break;
+  case AST_ATOM_TY_CNST:
+    DEBUG_CALL(cnst, &atom->cnst);
+    break;
+  case AST_ATOM_TY_COMPOUNDEXPR:
+    DEBUG_CALL(compoundexpr, &atom->compound_expr);
     break;
   }
 }
-
-DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
 
 DEBUG_FUNC(binary_op, binary_op) {
   switch (binary_op->ty) {
@@ -1686,7 +1654,7 @@ DEBUG_FUNC(compoundexpr, compound_expr) {
 DEBUG_FUNC(assg, assg) {
   AST_PRINTZ("ASSIGNMENT");
   INDENT();
-  DEBUG_CALL(lvalue, &assg->lvalue);
+  DEBUG_CALL(expr, assg->assignee);
 
   AST_PRINTZ("ASSIGNED");
   INDENT();
@@ -1700,9 +1668,9 @@ DEBUG_FUNC(arglist, arg_list) {
   AST_PRINTZ("ARGLIST:");
   INDENT();
 
-  UNUSED_ARG(arg_list);
-  // TODO
-  AST_PRINTZ("void");
+  for (size_t i = 0; i < arg_list->num_args; i++) {
+    DEBUG_CALL(expr, &arg_list->args[i]);
+  }
 
   UNINDENT();
 }
@@ -1711,32 +1679,9 @@ DEBUG_FUNC(call, call) {
   AST_PRINTZ("CALL");
   INDENT();
   DEBUG_CALL(tyref, &call->var_ty);
-  DEBUG_CALL(expr, call->target);
+  DEBUG_CALL(atom, call->target);
 
   DEBUG_CALL(arglist, &call->arg_list);
-}
-
-DEBUG_FUNC(rvalue, rvalue) {
-  switch (rvalue->ty) {
-  case AST_RVALUE_TY_CNST:
-    DEBUG_CALL(cnst, &rvalue->cnst);
-    break;
-  case AST_RVALUE_TY_ASSG:
-    DEBUG_CALL(assg, rvalue->assg);
-    break;
-  case AST_RVALUE_TY_CALL:
-    DEBUG_CALL(call, rvalue->call);
-    break;
-  case AST_RVALUE_TY_BINARY_OP:
-    DEBUG_CALL(binary_op, &rvalue->binary_op);
-    break;
-  case AST_RVALUE_TY_COMPOUNDEXPR:
-    DEBUG_CALL(compoundexpr, &rvalue->compound_expr);
-    break;
-    // case AST_RVALUE_TY_ASSG:
-    //   DEBUG_CALL(assg, rvalue->assg);
-    //   break;
-  }
 }
 
 DEBUG_FUNC(expr, expr) {
@@ -1745,11 +1690,17 @@ DEBUG_FUNC(expr, expr) {
   INDENT();
   DEBUG_CALL(tyref, &expr->var_ty);
   switch (expr->ty) {
-  case AST_EXPR_TY_LVALUE:
-    DEBUG_CALL(lvalue, &expr->lvalue);
+  case AST_EXPR_TY_ATOM:
+    DEBUG_CALL(atom, &expr->atom);
     break;
-  case AST_EXPR_TY_RVALUE:
-    DEBUG_CALL(rvalue, &expr->rvalue);
+  case AST_EXPR_TY_CALL:
+    DEBUG_CALL(call, expr->call);
+    break;
+  case AST_EXPR_TY_BINARY_OP:
+    DEBUG_CALL(binary_op, &expr->binary_op);
+    break;
+  case AST_EXPR_TY_ASSG:
+    DEBUG_CALL(assg, expr->assg);
     break;
   }
   UNINDENT();
@@ -1954,7 +1905,7 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   AST_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(tyref, &param->var_ty);
-  AST_PRINT(" '%s'", associated_text(state->parser->lexer, &param->identifier));
+  AST_PRINT(" '%s'", associated_text(state->parser->lexer, &param->var.identifier));
 }
 
 DEBUG_FUNC(paramlist, param_list) {

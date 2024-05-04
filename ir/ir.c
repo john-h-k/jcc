@@ -37,6 +37,8 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD_LCL:
+  case IR_OP_TY_CALL:
+  case IR_OP_TY_GLB:
     return true;
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_BR_COND:
@@ -52,6 +54,9 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
     return true;
+  // calls are NOT branches, because while they do leave, they guarantee return
+  case IR_OP_TY_CALL:
+  case IR_OP_TY_GLB:
   case IR_OP_TY_PHI:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
@@ -114,6 +119,17 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
+  case IR_OP_TY_GLB: {
+      break;
+  }
+  case IR_OP_TY_CALL: {
+    cb(&op->call.target, cb_metadata);
+    for (size_t i = 0; i < op->call.num_args; i++) {
+      cb(&op->call.args[i], cb_metadata);
+    }
+    break;
+
+  }
   case IR_OP_TY_PHI: {
     for (size_t i = 0; i < op->phi.num_values; i++) {
       cb(&op->phi.values[i], cb_metadata);
@@ -156,6 +172,10 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   cb(&op, cb_metadata);
 
   switch (op->ty) {
+  case IR_OP_TY_GLB:
+    todo("walk global");
+  case IR_OP_TY_CALL:
+    todo("walk call");
   case IR_OP_TY_PHI:
     todo("walk phi");
   case IR_OP_TY_MOV:

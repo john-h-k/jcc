@@ -13,7 +13,22 @@
 #include <math.h>
 
 bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
-  return memcmp(l, r, sizeof(*l)) == 0;
+  if (l->ty != r->ty) {
+    return false;
+  }
+
+  switch (l->ty) {
+  case IR_OP_VAR_TY_TY_NONE:
+    bug("comparing none makes no sense");
+    break;
+  case IR_OP_VAR_TY_TY_PRIMITIVE:
+    return l->primitive == r->primitive;
+  case IR_OP_VAR_TY_TY_FUNC:
+    todo("cmp func tys");
+    break;
+  }
+
+  unreachable("var_ty_eq");
 }
 
 enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
@@ -36,7 +51,7 @@ enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
   }
 }
 
-struct ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
+struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb, const struct ast_tyref *ty_ref) {
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     bug("shouldn't reach IR gen with unresolved type");
@@ -46,19 +61,38 @@ struct ir_op_var_ty ty_for_ast_tyref(const struct ast_tyref *ty_ref) {
     ty.primitive = ty_for_well_known_ty(ty_ref->well_known);
     return ty;
   }
-  case AST_TYREF_TY_FUNC:
-    todo("build func tys");
-    break;
+  case AST_TYREF_TY_FUNC: {
+    struct ir_op_var_ty ty;
+    ty.ty = IR_OP_VAR_TY_TY_FUNC;
+    ty.func.ret_ty = arena_alloc(irb->arena, sizeof(*ty.func.ret_ty));
+    *ty.func.ret_ty = ty_for_ast_tyref(irb, ty_ref->func.ret_var_ty);
+    
+    ty.func.num_params = ty_ref->func.num_param_var_tys;
+    ty.func.params = arena_alloc(irb->arena, sizeof(struct ir_op) * ty.func.num_params);
+
+    for (size_t i = 0; i < ty.func.num_params; i++) {
+      ty.func.params[i] = ty_for_ast_tyref(irb, &ty_ref->func.param_var_tys[i]);
+    }
+
+    return ty;
+  }
   case AST_TYREF_TY_POINTER:
     todo("build pointers");
     break;
-}
+  }
 }
 
-enum ir_op_cast_op_ty cast_ty_for_ast_tyref(const struct ast_tyref *from,
+struct ir_op_var_ty return_ty_for_ast_tyref(struct ir_builder *irb, const struct ast_tyref *ty_ref) {
+  invariant_assert(ty_ref->ty == AST_TYREF_TY_FUNC, "passed non-func to `return_ty_for_ast_tyref`");
+
+  struct ir_op_var_ty func_ty = ty_for_ast_tyref(irb, ty_ref);
+  return *func_ty.func.ret_ty;
+}
+
+enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb, const struct ast_tyref *from,
                                             const struct ast_tyref *to) {
-  struct ir_op_var_ty from_var_ty = ty_for_ast_tyref(from);
-  struct ir_op_var_ty to_var_ty = ty_for_ast_tyref(to);
+  struct ir_op_var_ty from_var_ty = ty_for_ast_tyref(irb, from);
+  struct ir_op_var_ty to_var_ty = ty_for_ast_tyref(irb, to);
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
@@ -100,7 +134,7 @@ struct ir_op *insert_ir_for_cast(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
                                     struct ir_stmt *stmt,
                                     struct ast_binary_op *binary_op) {
-  struct ir_op_var_ty var_ty = ty_for_ast_tyref(&binary_op->var_ty);
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &binary_op->var_ty);
 
   struct ir_op *lhs =
       build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
@@ -224,24 +258,6 @@ struct ir_op *build_ir_for_compoundexpr(struct ir_builder *irb,
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg);
 
-struct ir_op *build_ir_for_rvalue(struct ir_builder *irb, struct ir_stmt *stmt,
-                                  struct ast_rvalue *rvalue) {
-  switch (rvalue->ty) {
-  case AST_RVALUE_TY_CNST:
-    return build_ir_for_cnst(irb, stmt, &rvalue->cnst);
-  case AST_RVALUE_TY_ASSG:
-    return build_ir_for_assg(irb, stmt, rvalue->assg);
-  case AST_RVALUE_TY_BINARY_OP:
-    return build_ir_for_binaryop(irb, stmt, &rvalue->binary_op);
-  case AST_RVALUE_TY_COMPOUNDEXPR:
-    return build_ir_for_compoundexpr(irb, stmt, &rvalue->compound_expr,
-                                     &rvalue->var_ty);
-  case AST_RVALUE_TY_CALL:
-    todo("build call");
-    // return build_ir_for_call(irb, stmt, &rvalue->call);
-}
-}
-
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
   debug("build_ir_for_var bb=%zu, name=%s, scope=%zu", stmt->basicblock->id,
@@ -259,7 +275,7 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 
   struct ast_tyref var_tyref = get_var_type(irb->parser, var);
-  struct ir_op_var_ty var_ty = ty_for_ast_tyref(&var_tyref);
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
   invariant_assert(var_tyref.ty != AST_TYREF_TY_UNKNOWN,
                    "can't have unknown tyref in phi lowering");
 
@@ -288,13 +304,40 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   return phi;
 }
 
-struct ir_op *build_ir_for_lvalue(struct ir_builder *irb, struct ir_stmt *stmt,
-                                  struct ast_lvalue *lvalue) {
-  switch (lvalue->ty) {
-  case AST_LVALUE_TY_VAR: {
-    return build_ir_for_var(irb, stmt, &lvalue->var);
+struct ir_op *build_ir_for_atom(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_atom *atom,
+                                const struct ast_tyref *ast_tyref) {
+  switch (atom->ty) {
+  case AST_ATOM_TY_VAR:
+    return build_ir_for_var(irb, stmt, &atom->var);
+  case AST_ATOM_TY_CNST:
+    return build_ir_for_cnst(irb, stmt, &atom->cnst);
+  case AST_ATOM_TY_COMPOUNDEXPR:
+    return build_ir_for_compoundexpr(irb, stmt, &atom->compound_expr, ast_tyref);
   }
+}
+
+struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_expr *expr,
+                                const struct ast_tyref *ast_tyref);
+
+struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_call *call,
+                                const struct ast_tyref *ast_tyref) {
+  struct ir_op **args = arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+  for (size_t i = 0; i < call->arg_list.num_args; i++) {
+    args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
   }
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+
+  op->ty = IR_OP_TY_CALL;
+  op->var_ty = ty_for_ast_tyref(irb, &call->var_ty);
+  op->call.target = build_ir_for_atom(irb, stmt, call->target, ast_tyref);
+  op->call.num_args = call->arg_list.num_args;
+  op->call.args = args;
+
+  return op;
 }
 
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
@@ -302,27 +345,28 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 const struct ast_tyref *ast_tyref) {
   struct ir_op *op;
   switch (expr->ty) {
-  case AST_EXPR_TY_RVALUE:
-    op = build_ir_for_rvalue(irb, stmt, &expr->rvalue);
+  case AST_EXPR_TY_ATOM:
+    op = build_ir_for_atom(irb, stmt, &expr->atom, ast_tyref);
     break;
-  case AST_EXPR_TY_LVALUE:
-    op = build_ir_for_lvalue(irb, stmt, &expr->lvalue);
+  case AST_EXPR_TY_CALL:
+    op = build_ir_for_call(irb, stmt, expr->call, ast_tyref);
+    break;
+  case AST_EXPR_TY_BINARY_OP:
+    op = build_ir_for_binaryop(irb, stmt, &expr->binary_op);
+    break;
+  case AST_EXPR_TY_ASSG:
+    op = build_ir_for_assg(irb, stmt, expr->assg);
     break;
   }
 
   err("OP ID %zu", op->id);
 
   if (ast_tyref) {
-    struct ir_op_var_ty var_ty = ty_for_ast_tyref(ast_tyref);
+    struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, ast_tyref);
 
     if (!var_ty_eq(&op->var_ty, &var_ty)) {
-      trace("ty %zu", expr->ty);
-      trace("ty %zu", expr->lvalue.ty);
-      trace("ty %zu", expr->rvalue.ty);
-      trace("from %zu to %zu", op->var_ty.primitive, var_ty.primitive);
-      trace("from %zu to %zu", expr->var_ty.well_known, ast_tyref->well_known);
       op = insert_ir_for_cast(irb, stmt, op, &var_ty,
-                              cast_ty_for_ast_tyref(&expr->var_ty, ast_tyref));
+                              cast_ty_for_ast_tyref(irb, &expr->var_ty, ast_tyref));
     }
   }
 
@@ -503,8 +547,9 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
-    UNUSED_ARG(body_stmt_basicblock);
-  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (while)");
+  UNUSED_ARG(body_stmt_basicblock);
+  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb
+  // (while)");
 
   struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
   make_basicblock_split(irb, cond_basicblock, body_basicblock,
@@ -522,7 +567,8 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
   br->var_ty = IR_OP_VAR_TY_NONE;
 
   // make_basicblock_merge(irb, body_basicblock, cond_basicblock);
-  printf("body %zu, body_stmt %zu, after %zu\n", body_basicblock->id, body_stmt_basicblock->id, after_body_basicblock->id);
+  printf("body %zu, body_stmt %zu, after %zu\n", body_basicblock->id,
+         body_stmt_basicblock->id, after_body_basicblock->id);
 
   return after_body_basicblock;
 }
@@ -547,7 +593,8 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
-  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (do-while)");
+  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb
+  // (do-while)");
 
   struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb);
   make_basicblock_split(irb, cond_basicblock, body_basicblock,
@@ -591,12 +638,8 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
-  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
 
   make_basicblock_merge(irb, before_cond_basicblock, cond_basicblock);
-  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
-  make_basicblock_split(irb, cond_basicblock, body_basicblock,
-                        after_body_basicblock);
 
   if (for_stmt->init) {
     struct ir_stmt *init_stmt = alloc_ir_stmt(irb, before_cond_basicblock);
@@ -626,13 +669,19 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
                       &for_stmt->iter->var_ty);
   }
 
-  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (for)");
+  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_body_basicblock);
+  // debug_assert(body_stmt_basicblock == body_basicblock,
+  //              "stmt in wrong bb (for)");
 
   struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
   pre_cond_br->ty = IR_OP_TY_BR;
   pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
 
-  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  make_basicblock_merge(irb, body_stmt_basicblock, cond_basicblock);
+  // struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_OP_VAR_TY_NONE;
@@ -668,7 +717,7 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
 
     struct ir_op *op = alloc_ir_op(irb, stmt);
     op->ty = IR_OP_TY_RET;
-    op->var_ty = ty_for_ast_tyref(&jump_stmt->return_stmt.var_ty);
+    op->var_ty = ty_for_ast_tyref(irb, &jump_stmt->return_stmt.var_ty);
     op->ret.value = expr_op;
 
     op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
@@ -695,11 +744,12 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg) {
-  switch (assg->lvalue.ty) {
-  case AST_LVALUE_TY_VAR: {
-    return var_assg(irb, stmt, &assg->lvalue.var_ty, &assg->lvalue.var,
-                    assg->expr);
-  }
+  if (assg->assignee->ty == AST_EXPR_TY_ATOM &&
+      assg->assignee->atom.ty == AST_ATOM_TY_VAR) {
+    return var_assg(irb, stmt, &assg->assignee->var_ty,
+                    &assg->assignee->atom.var, assg->expr);
+  } else {
+    todo("non var assignments");
   }
 }
 
@@ -716,8 +766,6 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
 
     // FIXME: is this right
     var_assg(irb, stmt, &var_decl_list->var_ty, &decl->var, &decl->assg_expr);
-    trace("assg ty %d", decl->assg_expr.lvalue.var_ty.well_known);
-    trace("expr ty %d", decl->assg_expr.var_ty.well_known);
   }
 
   err("END VARDECL");
@@ -765,6 +813,9 @@ size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
   switch (ty->ty) {
   case IR_OP_VAR_TY_TY_NONE:
     bug("IR_OP_VAR_TY_TY_NONE has no size");
+  case IR_OP_VAR_TY_TY_FUNC:
+    todo("POINTER SIZE");
+    return 8;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
@@ -780,9 +831,9 @@ size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
 }
 
 void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
-                     struct ir_op *source_phi,
-                     struct ast_var *var, struct ir_basicblock *basicblock,
-                     struct ir_op ***exprs, size_t *num_exprs) {
+                     struct ir_op *source_phi, struct ast_var *var,
+                     struct ir_basicblock *basicblock, struct ir_op ***exprs,
+                     size_t *num_exprs) {
   if (!basicblock || basicblocks_visited[basicblock->id]) {
     return;
   }
@@ -814,15 +865,15 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
         if (!seen) {
           (*num_exprs)++;
-          *exprs =
-              arena_realloc(irb->arena, *exprs, sizeof(struct ir_op *) * *num_exprs);
+          *exprs = arena_realloc(irb->arena, *exprs,
+                                 sizeof(struct ir_op *) * *num_exprs);
           (*exprs)[*num_exprs - 1] = phi;
         }
       }
     } else {
       (*num_exprs)++;
-      *exprs =
-          arena_realloc(irb->arena, *exprs, sizeof(struct ir_op *) * *num_exprs);
+      *exprs = arena_realloc(irb->arena, *exprs,
+                             sizeof(struct ir_op *) * *num_exprs);
       (*exprs)[*num_exprs - 1] = (struct ir_op *)entry->value;
     }
     return;
@@ -830,8 +881,8 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
   for (size_t i = 0; i < basicblock->num_preds; i++) {
-    walk_basicblock(irb, basicblocks_visited, source_phi, var, basicblock->preds[i], exprs,
-                    num_exprs);
+    walk_basicblock(irb, basicblocks_visited, source_phi, var,
+                    basicblock->preds[i], exprs, num_exprs);
   }
 }
 
@@ -857,6 +908,10 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
   }
 
   debug("find phi exprs for op %zu", phi->id);
+
+  if (num_exprs && (exprs[0]->flags & IR_OP_FLAG_PARAM)) {
+    return;
+  }
 
   if (!num_exprs) {
     err("undefined behaviour - reading from unassigned variable '%s'",
@@ -895,8 +950,24 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
   // needs at least one initial basic block
   alloc_ir_basicblock(builder);
-
   struct ir_basicblock *basicblock = builder->first;
+  struct ir_stmt *param_stmt = alloc_ir_stmt(builder, basicblock);
+
+  // first statement is a bunch of magic MOV commands that explain to the rest of the IR that these are params
+  // this is encoded as MOV NULL with the IR_OP_FLAG_PARAM flag
+  for (size_t i = 0; i < def->sig.param_list.num_params; i++) {
+    const struct ast_param *param = &def->sig.param_list.params[i];
+
+    struct var_table_entry *entry = create_entry(&basicblock->var_table, &param->var);
+
+    struct ir_op *mov = alloc_ir_op(builder, param_stmt);
+    mov->ty = IR_OP_TY_MOV;
+    mov->var_ty = ty_for_ast_tyref(builder, &param->var_ty);
+    mov->flags |= IR_OP_FLAG_PARAM;
+    mov->mov.value = NULL;
+
+    entry->value = mov;
+  }
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {
     basicblock = build_ir_for_stmt(builder, basicblock, &def->body.stmts[i]);

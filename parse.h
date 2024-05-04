@@ -75,9 +75,16 @@ struct ast_arglist {
   size_t num_args;
 };
 
+/* Variable references */
+
+struct ast_var {
+  struct token identifier;
+  int scope;
+};
+
 struct ast_param {
   struct ast_tyref var_ty;
-  struct token identifier;
+  struct ast_var var;
 };
 
 struct ast_paramlist {
@@ -167,15 +174,8 @@ struct ast_unary_op {
 struct ast_call {
   struct ast_tyref var_ty;
 
-  struct ast_expr *target;
+  struct ast_atom *target;
   struct ast_arglist arg_list;
-};
-
-/* Variable references */
-
-struct ast_var {
-  struct token identifier;
-  int scope;
 };
 
 /* Compound expr - comma seperated expressions with well-defined order of
@@ -186,18 +186,23 @@ struct ast_compoundexpr {
   size_t num_exprs;
 };
 
-/* lvalues - variables */
+/* atom - expression which is entirely isolated and not affected by other operators in how it is parsed */
 
-enum ast_lvalue_ty {
-  AST_LVALUE_TY_VAR,
+enum ast_atom_ty {
+  AST_ATOM_TY_VAR,
+  AST_ATOM_TY_CNST,
+  AST_ATOM_TY_COMPOUNDEXPR,
 };
 
-struct ast_lvalue {
-  enum ast_lvalue_ty ty;
+struct ast_atom {
+  enum ast_atom_ty ty;
   struct ast_tyref var_ty;
 
   union {
     struct ast_var var;
+    struct ast_cnst cnst;
+    struct ast_compoundexpr
+        compound_expr; // compound assignments are *never* lvalues in C
   };
 };
 
@@ -205,47 +210,32 @@ struct ast_lvalue {
 // = <expr>`)
 
 struct ast_assg {
-  struct ast_lvalue lvalue;
-  struct ast_expr *expr;
-};
-
-/* rvalues - constants or arbitrary expressions */
-
-enum ast_rvalue_ty {
-  AST_RVALUE_TY_CNST,
-  AST_RVALUE_TY_BINARY_OP,
-  AST_RVALUE_TY_COMPOUNDEXPR,
-  AST_RVALUE_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
-                      // they themselves evaluate to an rvalue (unlike in C++)
-  AST_RVALUE_TY_CALL
-};
-
-struct ast_rvalue {
-  enum ast_rvalue_ty ty;
   struct ast_tyref var_ty;
 
-  union {
-    struct ast_cnst cnst;
-    struct ast_binary_op binary_op;
-    struct ast_unary_op unary_op;
-    struct ast_compoundexpr
-        compound_expr; // compound assignments are *never* lvalues in C
-    struct ast_assg *assg;
-    struct ast_call *call;
-  };
+  struct ast_expr *assignee;
+  struct ast_expr *expr;
 };
 
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
-enum ast_expr_ty { AST_EXPR_TY_LVALUE, AST_EXPR_TY_RVALUE };
+enum ast_expr_ty {
+  AST_EXPR_TY_ATOM,
+  AST_EXPR_TY_CALL,
+  AST_EXPR_TY_BINARY_OP,
+  AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
+                      // they themselves evaluate to an rvalue (unlike in C++)
+};
 
 struct ast_expr {
   enum ast_expr_ty ty;
   struct ast_tyref var_ty;
   union {
-    struct ast_lvalue lvalue;
-    struct ast_rvalue rvalue;
+    struct ast_atom atom;
+    struct ast_binary_op binary_op;
+    struct ast_unary_op unary_op;
+    struct ast_assg *assg;
+    struct ast_call *call;
   };
 };
 
