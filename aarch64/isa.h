@@ -176,6 +176,16 @@
 #define MSUB_64(Rm, Ra, Rn, Rd)                                                \
   REG_3_SOURCE(0b1, 0b00, 0b000, Rm, 0b1, Ra, Rn, Rd)
 
+#define LSLV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b001000, Rm, Rn, Rd)
+#define LSRV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b001001, Rm, Rn, Rd)
+#define ASRV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b001010, Rm, Rn, Rd)
+#define RORV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b001011, Rm, Rn, Rd)
+
+#define LSLV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b001000, Rm, Rn, Rd)
+#define LSRV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b001001, Rm, Rn, Rd)
+#define ASRV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b001010, Rm, Rn, Rd)
+#define RORV_64(Rm, Rn, Rd) REG_2_SOURCE(0b1, 0b0, 0b001011, Rm, Rn, Rd)
+
 #define UDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000010, Rm, Rn, Rd)
 #define SDIV_32(Rm, Rn, Rd) REG_2_SOURCE(0b0, 0b0, 0b000011, Rm, Rn, Rd)
 

@@ -231,6 +231,38 @@ void aarch64_emit_msub_32(struct aarch64_emitter *emitter,
 
 /* Division */
 
+void aarch64_emit_lslv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_lsrv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_asrv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_rorv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_lslv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_lsrv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_asrv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
+void aarch64_emit_rorv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest);
+
 void aarch64_emit_sdiv_64(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
                           struct aarch64_reg dest);

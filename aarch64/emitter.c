@@ -317,6 +317,58 @@ void aarch64_emit_msub_32(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, MSUB_32(rhs.idx, sub.idx, lhs.idx, dest.idx));
 }
 
+/* Shifts and rotates */
+
+void aarch64_emit_lslv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, LSLV_64(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_lsrv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, LSRV_64(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_asrv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, ASRV_64(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_rorv_64(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, RORV_64(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_lslv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, LSLV_32(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_lsrv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, LSRV_32(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_asrv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, ASRV_32(rhs.idx, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_rorv_32(struct aarch64_emitter *emitter,
+                          struct aarch64_reg lhs, struct aarch64_reg rhs,
+                          struct aarch64_reg dest) {
+  aarch64_emit(emitter, RORV_32(rhs.idx, lhs.idx, dest.idx));
+}
+
+
+
 /* Division */
 
 void aarch64_emit_sdiv_64(struct aarch64_emitter *emitter,
