@@ -48,7 +48,7 @@
 #define STR_OFFSET(Ra, Rb, offset) LDR_STR_OFFSET(1, Ra, Rb, offset)
 
 #define JUMP(jmpopc, offset) \
-  (uint16_t)((0b11 << 14) | ((jmpopc) << 8) | (offset))
+  (uint16_t)((0b11 << 14) | ((jmpopc) << 8) | (uint8_t)(offset))
 
 #define EXT(imm) \
   (uint16_t)((0b1101 << 12) | (imm))

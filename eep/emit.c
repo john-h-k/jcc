@@ -1,5 +1,6 @@
 #include "emit.h"
 
+#include "../bit_twiddle.h"
 #include "emitter.h"
 #include "isa.h"
 
@@ -85,6 +86,33 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLTEQ:
     eep_emit_cmp(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(rhs_reg));
     break;
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+    invariant_assert(rhs_reg == DONT_GIVE_REG, "shift RHS has been mistakenly given a register by allocator even though it must be a constant");
+    unsigned shift_imm = op->binary_op.rhs->cnst.value;
+    if (!UNS_FITS_IN_BITS(shift_imm, 4)) {
+      err("shift constant too large for eep! will be truncated");
+    }
+
+    switch (op->binary_op.ty) {
+    case IR_OP_BINARY_OP_TY_LSHIFT:
+      eep_emit_lsl(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(reg), shift_imm);
+      break;
+    case IR_OP_BINARY_OP_TY_SRSHIFT:
+      eep_emit_asr(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(reg), shift_imm);
+      break;
+    case IR_OP_BINARY_OP_TY_URSHIFT:
+      eep_emit_lsr(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(reg), shift_imm);
+      break;
+    default:
+      unreachable("broken switch");
+    }
+
+    break;
+  case IR_OP_BINARY_OP_TY_AND:
+    EMIT_WITH_FN(eep_emit_and);
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     EMIT_WITH_FN(eep_emit_add);
     break;
@@ -115,8 +143,8 @@ static const char *mangle(struct arena_allocator *arena, const char *name) {
 static void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-    size_t offset =
-        target->function_offset - eep_emitted_count(state->emitter);
+    ssize_t offset =
+        (ssize_t)target->function_offset - (ssize_t)eep_emitted_count(state->emitter);
 
     eep_emit_jump(state->emitter, EEP_COND_JMP, offset);
   } else {
@@ -124,8 +152,8 @@ static void emit_br_op(struct emit_state *state, struct ir_op *op) {
     struct ir_basicblock *false_target =
         op->stmt->basicblock->split.false_target;
 
-    size_t false_offset =
-        false_target->function_offset - eep_emitted_count(state->emitter);
+    ssize_t false_offset =
+        (ssize_t)false_target->function_offset - (ssize_t)eep_emitted_count(state->emitter);
     eep_emit_jump(state->emitter, EEP_COND_JMP, false_offset);
   }
 }
@@ -190,10 +218,17 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   size_t true_offset =
       true_target->function_offset - eep_emitted_count(state->emitter);
 
-  invariant_assert(op->br_cond.cond->reg == REG_FLAGS, "non-flag jumps don't exist in EEP");
-  // emit based on flags
-  enum eep_cond cond = get_cond_for_op(op->br_cond.cond);
-  eep_emit_jump(state->emitter, cond, true_offset);
+  if (op->br_cond.cond->reg == REG_FLAGS) {
+    // emit based on flags
+    enum eep_cond cond = get_cond_for_op(op->br_cond.cond);
+    eep_emit_jump(state->emitter, cond, true_offset);
+  } else {
+    invariant_assert(op->br_cond.cond->succ = op, "can't use zeroness of reg unless it was last instr");
+    // emit based on zero
+    eep_emit_jump(
+        state->emitter, EEP_COND_JNE, true_offset);
+    
+  }
 }
 
 static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
@@ -267,7 +302,7 @@ struct compiled_function eep_emit_function(struct ir_builder *func) {
 static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
   // FIXME: only supports ints
   UNUSED_ARG(state);
-  return lcl_idx;
+  return lcl_idx * EEP_REG_SIZE;
 }
 
 static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
@@ -304,9 +339,13 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     }
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+      size_t offset = get_lcl_stack_offset(state, op->store_lcl.lcl_idx);
+      if (!UNS_FITS_IN_BITS(offset, 4)) {
+        printf("offset %zu too large!\n", offset);
+      }
       eep_emit_store_offset(
           state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
-          get_lcl_stack_offset(state, op->store_lcl.lcl_idx));
+          offset);
       break;
     }
     case IR_OP_TY_BR_COND: {
@@ -319,7 +358,12 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     }
     case IR_OP_TY_CNST: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      eep_emit_mov_imm(state->emitter, op->cnst.value, get_reg_for_idx(reg));
+
+      if (reg == DONT_GIVE_REG) {
+        eep_emit_nop(state->emitter);
+      } else {
+        eep_emit_mov_imm(state->emitter, op->cnst.value, get_reg_for_idx(reg));
+      }
       break;
     }
     case IR_OP_TY_BINARY_OP: {

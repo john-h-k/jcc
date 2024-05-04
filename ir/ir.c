@@ -13,6 +13,10 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     return true;
+  case IR_OP_BINARY_OP_TY_AND:
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+  case IR_OP_BINARY_OP_TY_URSHIFT:
   case IR_OP_BINARY_OP_TY_ADD:
   case IR_OP_BINARY_OP_TY_SUB:
   case IR_OP_BINARY_OP_TY_MUL:
@@ -194,12 +198,15 @@ void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata) {
 
 enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   switch (ty) {
+  case IR_OP_BINARY_OP_TY_AND:
+  case IR_OP_BINARY_OP_TY_LSHIFT:
   case IR_OP_BINARY_OP_TY_ADD:
   case IR_OP_BINARY_OP_TY_SUB:
   case IR_OP_BINARY_OP_TY_MUL:
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
     return IR_OP_SIGN_NA;
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_SDIV:
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_SLT:
@@ -207,6 +214,7 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_SGT:
   case IR_OP_BINARY_OP_TY_SGTEQ:
     return IR_OP_SIGN_SIGNED;
+  case IR_OP_BINARY_OP_TY_URSHIFT:
   case IR_OP_BINARY_OP_TY_UDIV:
   case IR_OP_BINARY_OP_TY_UQUOT:
   case IR_OP_BINARY_OP_TY_ULT:

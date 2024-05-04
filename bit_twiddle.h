@@ -8,6 +8,9 @@
 
 #define CLAMP_BITS(value, bitc) ((value) & ((1 << (bitc)) - 1))
 
-#define NTH_BIT(value, bitn) ((value) & (1 << (bitn)))
+#define NTH_BIT(value, bitn) (((value) & (1 << (bitn))) >> (bitn))
+
+#define MASK(bitc) (1 << ((bitc) - 1))
+#define SIGN_EXT(value, bitc) (((value) ^ MASK(bitc)) - MASK(bitc))
 
 #endif

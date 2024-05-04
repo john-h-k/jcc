@@ -150,6 +150,19 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
       b->ty = IR_OP_BINARY_OP_TY_ULTEQ;
     }
     break;
+  case AST_BINARY_OP_TY_RSHIFT:
+    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+      b->ty = IR_OP_BINARY_OP_TY_SRSHIFT;
+    } else {
+      b->ty = IR_OP_BINARY_OP_TY_URSHIFT;
+    }
+    break;
+  case AST_BINARY_OP_TY_LSHIFT:
+    b->ty = IR_OP_BINARY_OP_TY_LSHIFT;
+    break;
+  case AST_BINARY_OP_TY_AND:
+    b->ty = IR_OP_BINARY_OP_TY_AND;
+    break;
   case AST_BINARY_OP_TY_ADD:
     b->ty = IR_OP_BINARY_OP_TY_ADD;
     break;
@@ -468,12 +481,8 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
-  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
 
   make_basicblock_merge(irb, before_cond_basicblock, cond_basicblock);
-  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
-  make_basicblock_split(irb, cond_basicblock, body_basicblock,
-                        after_body_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &while_stmt->cond,
@@ -485,16 +494,26 @@ struct ir_basicblock *build_ir_for_whilestmt(struct ir_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
-  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+    UNUSED_ARG(body_stmt_basicblock);
+  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (while)");
+
+  struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_body_basicblock);
 
   struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
   pre_cond_br->ty = IR_OP_TY_BR;
   pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
 
-  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  make_basicblock_merge(irb, body_stmt_basicblock, cond_basicblock);
+  // struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_OP_VAR_TY_NONE;
+
+  // make_basicblock_merge(irb, body_basicblock, cond_basicblock);
+  printf("body %zu, body_stmt %zu, after %zu\n", body_basicblock->id, body_stmt_basicblock->id, after_body_basicblock->id);
 
   return after_body_basicblock;
 }
@@ -523,7 +542,7 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
-  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (do-while)");
 
   struct ir_op *pre_body_br = alloc_ir_op(irb, before_body_basicblock->last);
   pre_body_br->ty = IR_OP_TY_BR;
@@ -596,7 +615,7 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
                       &for_stmt->iter->var_ty);
   }
 
-  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb");
+  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (for)");
 
   struct ir_op *pre_cond_br = alloc_ir_op(irb, before_cond_basicblock->last);
   pre_cond_br->ty = IR_OP_TY_BR;
@@ -762,10 +781,36 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   struct var_table_entry *entry = get_entry(&basicblock->var_table, var);
 
   if (entry && entry->value) {
-    (*num_exprs)++;
-    *exprs =
-        arena_realloc(irb->arena, *exprs, sizeof(struct ir_op *) * *num_exprs);
-    (*exprs)[*num_exprs - 1] = (struct ir_op *)entry->value;
+    struct ir_op *entry_op = (struct ir_op *)entry->value;
+    if (entry_op->ty == IR_OP_TY_PHI) {
+      // copy over the entries from that phi, to prevent deeply nested ones
+      // which are confusing and also bad for codegen
+
+      // FIXME: this is O(n^2), we need some sort of lookup instead
+      for (size_t i = 0; i < entry_op->phi.num_values; i++) {
+        struct ir_op *phi = entry_op->phi.values[i];
+
+        bool seen = false;
+        for (size_t j = 0; j < *num_exprs; j++) {
+          if ((*exprs)[j]->id == phi->id) {
+            seen = true;
+            break;
+          }
+        }
+
+        if (!seen) {
+          (*num_exprs)++;
+          *exprs =
+              arena_realloc(irb->arena, *exprs, sizeof(struct ir_op *) * *num_exprs);
+          (*exprs)[*num_exprs - 1] = phi;
+        }
+      }
+    } else {
+      (*num_exprs)++;
+      *exprs =
+          arena_realloc(irb->arena, *exprs, sizeof(struct ir_op *) * *num_exprs);
+      (*exprs)[*num_exprs - 1] = (struct ir_op *)entry->value;
+    }
     return;
   }
 

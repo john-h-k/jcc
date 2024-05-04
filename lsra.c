@@ -1,5 +1,6 @@
 #include "lsra.h"
 
+#include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
@@ -54,7 +55,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         op->lcl_idx = NO_LCL;
 
         // reset registers unless flags because flags is never allocated
-        if (op->reg != REG_FLAGS) {
+        if (op->reg != REG_FLAGS && op->reg != DONT_GIVE_REG) {
           op->reg = NO_REG;
         }
 
@@ -236,6 +237,9 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   case REG_SPILLED:
     fslogsl(file, "    (SPILLED)");
     break;
+  case DONT_GIVE_REG:
+    fslogsl(file, "    (DONT)");
+    break;
   case REG_FLAGS:
     fslogsl(file, "    (FLAGS)");
     break;
@@ -274,7 +278,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       continue;
     }
 
-    if (interval->op->reg == REG_FLAGS) {
+    if (interval->op->reg == REG_FLAGS || interval->op->reg == DONT_GIVE_REG) {
       continue;
     }
 
