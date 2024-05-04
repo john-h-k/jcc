@@ -21,6 +21,25 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   todo("lower_div");
 }
 
+static void lower_shift(struct ir_builder *func, struct ir_op *op) {
+  UNUSED_ARG(func);
+
+  debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
+                   (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
+                    op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT ||
+                   op->binary_op.ty == IR_OP_BINARY_OP_TY_URSHIFT),
+               "lower_shift called on invalid op");
+
+  if (op->binary_op.rhs->ty != IR_OP_TY_CNST) {
+    todo("EEP does not support shifting by variable amounts (yet...)");
+    // FIXME: exit here or smth
+    return;
+  }
+
+  // does not need a reg as will be inserted into instruction
+  op->binary_op.rhs->reg = DONT_GIVE_REG;
+}
+
 static void lower_quot(struct ir_builder *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
@@ -75,6 +94,14 @@ static void lower_quot(struct ir_builder *func, struct ir_op *op) {
 // we represent this as just the `true` part of the `br.cond`, and then a `br`
 // after branching to the false target
 static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
+  // ldr/str don't write to flags, so insert `mov <reg>, <reg>` to get flags
+  // phi does not guarantee ldr, but the optimiser can always remove it later
+  if (op->br_cond.cond->ty == IR_OP_TY_PHI) {
+    struct ir_op *mov = insert_before_ir_op(irb, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+    mov->mov.value = op->br_cond.cond;
+    op->br_cond.cond = mov;
+  }
+  
    insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
 }
 
@@ -135,6 +162,9 @@ void eep_lower(struct ir_builder *func) {
           } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UDIV ||
               op->binary_op.ty == IR_OP_BINARY_OP_TY_SDIV) {
             lower_div(func, op);
+          } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
+              op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT || op->binary_op.ty == IR_OP_BINARY_OP_TY_URSHIFT) {
+            lower_shift(func, op);
           } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_MUL) {
             lower_mul(func, op);
           } else if (binary_op_is_comparison(op->binary_op.ty)) {

@@ -76,27 +76,36 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
   struct ast_op_info info = {.ty = ty};
 
   switch (ty) {
+  case AST_BINARY_OP_TY_AND:
+    info.precedence = 1;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
   case AST_BINARY_OP_TY_EQ:
   case AST_BINARY_OP_TY_NEQ:
-    info.precedence = 1;
+    info.precedence = 2;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_GT:
   case AST_BINARY_OP_TY_GTEQ:
   case AST_BINARY_OP_TY_LT:
   case AST_BINARY_OP_TY_LTEQ:
-    info.precedence = 2;
+    info.precedence = 3;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_LSHIFT:
+  case AST_BINARY_OP_TY_RSHIFT:
+    info.precedence = 4;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_ADD:
   case AST_BINARY_OP_TY_SUB:
-    info.precedence = 3;
+    info.precedence = 5;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_MUL:
   case AST_BINARY_OP_TY_DIV:
   case AST_BINARY_OP_TY_QUOT:
-    info.precedence = 4;
+    info.precedence = 6;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   default:
@@ -125,6 +134,15 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
     return true;
   case LEX_TOKEN_TY_OP_LTEQ:
     *info = op_info(AST_BINARY_OP_TY_LTEQ);
+    return true;
+  case LEX_TOKEN_TY_OP_LSHIFT:
+    *info = op_info(AST_BINARY_OP_TY_LSHIFT);
+    return true;
+  case LEX_TOKEN_TY_OP_RSHIFT:
+    *info = op_info(AST_BINARY_OP_TY_RSHIFT);
+    return true;
+  case LEX_TOKEN_TY_OP_AND:
+    *info = op_info(AST_BINARY_OP_TY_AND);
     return true;
   case LEX_TOKEN_TY_OP_ADD:
     *info = op_info(AST_BINARY_OP_TY_ADD);
@@ -162,9 +180,15 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
   case LEX_TOKEN_TY_OP_ASSG:
-  case LEX_TOKEN_TY_OP_ADD:
   case LEX_TOKEN_TY_OP_INC:
   case LEX_TOKEN_TY_OP_DEC:
+  case LEX_TOKEN_TY_OP_RSHIFT:
+  case LEX_TOKEN_TY_OP_RSHIFT_ASSG:
+  case LEX_TOKEN_TY_OP_LSHIFT:
+  case LEX_TOKEN_TY_OP_LSHIFT_ASSG:
+  case LEX_TOKEN_TY_OP_AND:
+  case LEX_TOKEN_TY_OP_AND_ASSG:
+  case LEX_TOKEN_TY_OP_ADD:
   case LEX_TOKEN_TY_OP_ADD_ASSG:
   case LEX_TOKEN_TY_OP_SUB:
   case LEX_TOKEN_TY_OP_SUB_ASSG:
@@ -1415,6 +1439,15 @@ DEBUG_FUNC(binary_op, binary_op) {
     break;
   case AST_BINARY_OP_TY_GTEQ:
     AST_PRINTZ("GTEQ");
+    break;
+  case AST_BINARY_OP_TY_LSHIFT:
+    AST_PRINTZ("LSHIFT");
+    break;
+  case AST_BINARY_OP_TY_RSHIFT:
+    AST_PRINTZ("RSHIFT");
+    break;
+  case AST_BINARY_OP_TY_AND:
+    AST_PRINTZ("AND");
     break;
   case AST_BINARY_OP_TY_ADD:
     AST_PRINTZ("ADD");

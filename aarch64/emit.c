@@ -167,6 +167,12 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
                            get_reg_for_idx(rhs_reg), ZERO_REG);
     }
     break;
+  case IR_OP_BINARY_OP_TY_AND:
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+    todo("&, <<, and >> for AARCH64");
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     SEL_32_OR_64_BIT_OP(aarch64_emit_add);
     break;
@@ -203,16 +209,16 @@ static const char *mangle(struct arena_allocator *arena, const char *name) {
 void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-    size_t offset =
-        target->function_offset - aarch64_emitted_count(state->emitter);
+    ssize_t offset =
+        (ssize_t)target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, offset);
   } else {
     // otherwise, this is the false branch of a SPLIT
     struct ir_basicblock *false_target =
         op->stmt->basicblock->split.false_target;
 
-    size_t false_offset =
-        false_target->function_offset - aarch64_emitted_count(state->emitter);
+    ssize_t false_offset =
+        (ssize_t)false_target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, false_offset);
   }
 }

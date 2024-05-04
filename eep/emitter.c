@@ -141,10 +141,10 @@ void eep_emit_load_offset(struct eep_emitter *emitter, struct eep_reg source, in
 }
   
 void eep_emit_store_offset(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int dest_offset) {
-  eep_emit(emitter, LDR_OFFSET(source.idx, dest.idx, dest_offset));
+  eep_emit(emitter, STR_OFFSET(source.idx, dest.idx, dest_offset));
 }
 
-void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond, int offset) {
+void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond, signed char offset) {
   int jumpopc = (int)cond;
   eep_emit(emitter, JUMP(jumpopc, offset));
 }

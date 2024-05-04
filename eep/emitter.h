@@ -85,7 +85,7 @@ void eep_emit_store_direct(struct eep_emitter *emitter, struct eep_reg source, i
 void eep_emit_load_offset(struct eep_emitter *emitter, struct eep_reg source, int source_offset, struct eep_reg dest);
 void eep_emit_store_offset(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int dest_offset);
 
-void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond, int offset);
+void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond, signed char offset);
 void eep_emit_ext(struct eep_emitter *emitter, int imm);
 
 

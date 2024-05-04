@@ -8,7 +8,8 @@ int main() {
   sum = 0;
   op2_shifted = op2;
 
-  while (op1 != 0) {
+  // while (op1 != 0) {
+  while (op1) {
     if (op1 & 1) {
       sum = sum + op2_shifted;
     }

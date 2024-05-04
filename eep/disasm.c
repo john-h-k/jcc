@@ -47,20 +47,42 @@ static void disasm_instr(const char *line) {
 
   uint16_t instr = (uint16_t)wd_instr;
 
+  printf("0x%02x ", idx);
+
   if (NTH_BIT(instr, 15)) {
     // not ALU
 
     unsigned opc = instr >> 12;
-    if (opc == 0b1100) {
+    if (!NTH_BIT(instr, 14)) {
+      // load/store
+
+      unsigned mopc = NTH_BIT(instr, 13);
+      const char *name = mopc ? "STR" : "LDR";
+
+      if (NTH_BIT(instr, 8)) {
+        // direct
+        unsigned a = A(instr);
+        signed char imm = instr & 0b11111111;
+
+        printf("%s R%d, [#%d]", name, a, imm);
+      } else {
+        // offset
+        unsigned a = A(instr);
+        unsigned b = B(instr);
+        signed char imm = SIGN_EXT(instr & 0b11111, 5);
+        printf("%s R%d, [R%d, #%d]", name, a, b, imm);
+      }
+      
+    } else if (opc == 0b1100) {
       // jump
       unsigned jump_opc = (instr >> 9) & 0b111;
-      unsigned offset = instr & 0b11111111;
+      signed char offset = instr & 0b11111111;
       if (NTH_BIT(instr, 8)) {
         // negated
 
-        if (jump_opc == 7) {
-          // RET
-          printf("RET");
+        if (jump_opc == 0 || jump_opc == 7) {
+          // RET or NOOP
+          printf("%s", NEG_JUMP_OPC_NAMES[jump_opc]);
         } else {
           printf("%s %d", NEG_JUMP_OPC_NAMES[jump_opc], offset);
         }
@@ -69,7 +91,7 @@ static void disasm_instr(const char *line) {
       }
     } else if (opc == 0b1101) {
       // ext
-      unsigned imm = instr & 0b11111111;
+      signed char imm = instr & 0b11111111;
       printf("EXT %d", imm);
     } else {
       // unused
@@ -102,7 +124,7 @@ static void disasm_instr(const char *line) {
     } else if (NTH_BIT(instr, 8)) {
       // immediate
       int a = A(instr);
-      int imm = instr & 0b11111111;
+      signed char imm = instr & 0b11111111;
 
       printf("%s R%d, #%d", ALU_OPC_NAMES[alu_opc], a, imm);
     } else {
