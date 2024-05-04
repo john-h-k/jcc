@@ -140,6 +140,7 @@ void eep_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
+        case IR_OP_TY_GLB:
         case IR_OP_TY_PHI:
         case IR_OP_TY_CNST:
         case IR_OP_TY_RET:
@@ -149,6 +150,9 @@ void eep_lower(struct ir_builder *func) {
         case IR_OP_TY_MOV:
         case IR_OP_TY_UNARY_OP:
         case IR_OP_TY_CAST_OP:
+          break;
+        case IR_OP_TY_CALL:
+          todo("call");
           break;
         case IR_OP_TY_BR_COND:
           if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {

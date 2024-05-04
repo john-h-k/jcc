@@ -270,6 +270,11 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
 }
 
 static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
+  if (!op->mov.value) {
+    // dummy MOV used to indicate parameters
+    return;
+  }
+
   size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&

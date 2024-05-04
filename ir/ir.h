@@ -21,16 +21,30 @@ enum ir_op_ty {
   IR_OP_TY_STORE_LCL,
   IR_OP_TY_LOAD_LCL,
 
+  // represents a global variable or function
+  IR_OP_TY_GLB,
+
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
-  IR_OP_TY_RET
+  IR_OP_TY_RET,
+  IR_OP_TY_CALL
 };
 
 bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
+struct ir_op_glb {
+  const char *global;
+};
+
 struct ir_op_mov {
   struct ir_op *value;
+};
+
+struct ir_op_call {
+  struct ir_op *target;
+  size_t num_args;
+  struct ir_op **args;
 };
 
 struct ir_op_phi {
@@ -126,6 +140,7 @@ enum ir_op_var_ty_ty {
 
   /* Primitives - integers, floats, pointers */
   IR_OP_VAR_TY_TY_PRIMITIVE,
+  IR_OP_VAR_TY_TY_FUNC,
 
   /* Aggregate */
   // IR_OP_VAR_TY_TY_AGGREGATE,
@@ -133,10 +148,17 @@ enum ir_op_var_ty_ty {
   // IR_OP_VAR_TY_TY_UNION,
 };
 
+struct ir_op_var_func_ty {
+  struct ir_op_var_ty *ret_ty;
+  size_t num_params;
+  struct ir_op_var_ty *params;
+};
+
 struct ir_op_var_ty {
   enum ir_op_var_ty_ty ty;
   union {
     enum ir_op_var_primitive_ty primitive;
+    struct ir_op_var_func_ty func;
   };
 };
 
@@ -164,7 +186,7 @@ struct ir_op_br_cond {
 #define REG_FLAGS (REG_SPILLED - 1)
 #define DONT_GIVE_REG (REG_FLAGS - 1)
 
-enum ir_op_flags { IR_OP_FLAG_NONE = 0, IR_OP_FLAG_MUST_SPILL = 1 };
+enum ir_op_flags { IR_OP_FLAG_NONE = 0, IR_OP_FLAG_MUST_SPILL = 1, IR_OP_FLAG_PARAM = 2 };
 
 struct ir_op {
   size_t id;
@@ -178,7 +200,9 @@ struct ir_op {
   struct ir_op *succ;
   struct ir_stmt *stmt;
   union {
+    struct ir_op_glb glb;
     struct ir_op_cnst cnst;
+    struct ir_op_call call;
     struct ir_op_binary_op binary_op;
     struct ir_op_unary_op unary_op;
     struct ir_op_cast_op cast_op;
