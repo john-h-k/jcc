@@ -163,16 +163,27 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
       aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
                            get_reg_for_idx(rhs_reg), ZERO_REG);
     } else {
-      aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
+      aarch64_emit_subs_32(state->emitter, get_reg_for_idx(lhs_reg),
                            get_reg_for_idx(rhs_reg), ZERO_REG);
     }
     break;
   case IR_OP_BINARY_OP_TY_AND:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_add);
+    if (is_64_bit(op)) {
+      aarch64_emit_and_64(state->emitter, get_reg_for_idx(lhs_reg),
+                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg), SHIFT_LSL, 0);
+    } else {
+      aarch64_emit_and_32(state->emitter, get_reg_for_idx(lhs_reg),
+                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg), SHIFT_LSL, 0);
+    }
+    break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
+    SEL_32_OR_64_BIT_OP(aarch64_emit_lslv);
+    break;
   case IR_OP_BINARY_OP_TY_URSHIFT:
+    SEL_32_OR_64_BIT_OP(aarch64_emit_lsrv);
+    break;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
-    todo("&, <<, and >> for AARCH64");
+    SEL_32_OR_64_BIT_OP(aarch64_emit_asrv);
     break;
   case IR_OP_BINARY_OP_TY_ADD:
     SEL_32_OR_64_BIT_OP(aarch64_emit_add);
