@@ -11,7 +11,7 @@ cd ..
 ```
 
 2. The compiler binary will now be `build/jcc`
-3. Run the compiler with `-Teep` flag on your file, e.g `./LOCATION_OF_JCC/build/jcc -Teep mul.c`
+3. Run the compiler with `-Teep` flag on your file, e.g `./LOCATION_OF_JCC/build/jcc -Teep -Lasm mul.c` - the `-Lasm` flag will print out the EEP assembly as well
 4. It will output a file next to it suffixed by `.obj` which will be your EEP assembly
 5. Rename this from `.c.obj` to `.ram` and then you can import it into Issie
 
