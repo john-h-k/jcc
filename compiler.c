@@ -70,9 +70,9 @@ const struct target *get_target(const struct compile_args *args) {
     bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen earlier");
     break;
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    return &AARCH64_TARGET;
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
     todo("macOS x64 target not yet implemented");
+  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+    return &AARCH64_TARGET;
   case COMPILE_TARGET_ARCH_EEP:
     return &EEP_TARGET;
   }

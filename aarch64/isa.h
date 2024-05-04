@@ -129,7 +129,7 @@
 
 /* Arithmetic & logical operations (Register) */
 
-#define LOGICAL_REG(sf, opc, shift, N, Rm, imm6, Rn, Rd)                       \
+#define LOGICAL_SHIFTED_REG(sf, opc, shift, N, Rm, imm6, Rn, Rd)               \
   (uint32_t)(((sf) << 31) | ((opc) << 29) | (0b01010 << 24) |                  \
              ((shift) << 22) | ((N) << 21) | ((Rm) << 16) | ((imm6) << 10) |   \
              ((Rn) << 5) | (Rd))
@@ -187,15 +187,20 @@
 #define SHIFT_ASR (0b10)
 #define SHIFT_ROR (0b11)
 
+#define AND_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b0, 0b00, shift, 0b0, Rm, imm6, Rn, Rd)
+#define AND_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b1, 0b00, shift, 0b0, Rm, imm6, Rn, Rd)
+
 #define ORR_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
-  LOGICAL_REG(0b0, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
+  LOGICAL_SHIFTED_REG(0b0, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
 #define ORN_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
-  LOGICAL_REG(0b0, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
+  LOGICAL_SHIFTED_REG(0b0, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
 
 #define ORR_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
-  LOGICAL_REG(0b1, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
+  LOGICAL_SHIFTED_REG(0b1, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
 #define ORN_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
-  LOGICAL_REG(0b1, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
+  LOGICAL_SHIFTED_REG(0b1, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
 
 #define MOV_32_REG(Rm, Rd) ORR_32_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
 #define MOVN_32_REG(Rm, Rd)                                                    \

@@ -525,12 +525,8 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
   struct ir_basicblock *before_body_basicblock = basicblock;
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb);
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb);
-  struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb);
 
   make_basicblock_merge(irb, before_body_basicblock, body_basicblock);
-  make_basicblock_merge(irb, body_basicblock, cond_basicblock);
-  make_basicblock_split(irb, cond_basicblock, body_basicblock,
-                        after_cond_basicblock);
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, cond_stmt, &do_while_stmt->cond,
@@ -542,13 +538,19 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
-  debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (do-while)");
+  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb (do-while)");
+
+  struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb);
+  make_basicblock_split(irb, cond_basicblock, body_basicblock,
+                        after_cond_basicblock);
 
   struct ir_op *pre_body_br = alloc_ir_op(irb, before_body_basicblock->last);
   pre_body_br->ty = IR_OP_TY_BR;
   pre_body_br->var_ty = IR_OP_VAR_TY_NONE;
 
-  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  make_basicblock_merge(irb, body_stmt_basicblock, cond_basicblock);
+  // struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_basicblock);
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_OP_VAR_TY_NONE;
@@ -769,6 +771,7 @@ size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
 }
 
 void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
+                     struct ir_op *source_phi,
                      struct ast_var *var, struct ir_basicblock *basicblock,
                      struct ir_op ***exprs, size_t *num_exprs) {
   if (!basicblock || basicblocks_visited[basicblock->id]) {
@@ -782,7 +785,9 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   if (entry && entry->value) {
     struct ir_op *entry_op = (struct ir_op *)entry->value;
-    if (entry_op->ty == IR_OP_TY_PHI) {
+    // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
+    if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
+      printf("source %zu entry %zu\n", source_phi->id, entry_op->id);
       // copy over the entries from that phi, to prevent deeply nested ones
       // which are confusing and also bad for codegen
 
@@ -816,7 +821,7 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
   for (size_t i = 0; i < basicblock->num_preds; i++) {
-    walk_basicblock(irb, basicblocks_visited, var, basicblock->preds[i], exprs,
+    walk_basicblock(irb, basicblocks_visited, source_phi, var, basicblock->preds[i], exprs,
                     num_exprs);
   }
 }
@@ -838,7 +843,7 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
   size_t num_exprs = 0;
 
   for (size_t i = 0; i < phi->stmt->basicblock->num_preds; i++) {
-    walk_basicblock(irb, basicblocks_visited, &phi->phi.var,
+    walk_basicblock(irb, basicblocks_visited, phi, &phi->phi.var,
                     phi->stmt->basicblock->preds[i], &exprs, &num_exprs);
   }
 

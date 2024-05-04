@@ -168,6 +168,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     }
     break;
   case IR_OP_BINARY_OP_TY_AND:
+    SEL_32_OR_64_BIT_OP(aarch64_emit_add);
   case IR_OP_BINARY_OP_TY_LSHIFT:
   case IR_OP_BINARY_OP_TY_URSHIFT:
   case IR_OP_BINARY_OP_TY_SRSHIFT:

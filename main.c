@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   }
 
   if (args.target_arch == COMPILE_TARGET_ARCH_NATIVE) {
-    printf("Compiling for native platform - assuming macOS ARM64...");
+    info("Compiling for native platform - assuming macOS ARM64...\n");
     args.target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
   }
 

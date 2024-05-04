@@ -1,4 +1,4 @@
-
+// expected value: 35
 int main() {
   unsigned int op1, op2, op2_shifted, sum;
 
