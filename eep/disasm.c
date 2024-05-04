@@ -8,6 +8,10 @@
 
 static void disasm_instr(const char *instr);
 
+// DISCLAIMER: this was written very speedily for debugging purposes - it seems to work pretty well,
+// but there may be some slight issues with signed-immediates, and also the code is a bit spaghetti
+// I shall refactor it at some point to be easier on the eye
+
 void eep_debug_disasm(const char *filename) {
   FILE *file = fopen(filename, "r");
   if (file == NULL) {
