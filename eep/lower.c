@@ -9,9 +9,6 @@
 // quot:
 //   `x = a % b` -> `c = a / b; x = a - (c * b)`
 static void lower_mul(struct ir_builder *func, struct ir_op *op) {
-  UNUSED_ARG(func);
-  UNUSED_ARG(op);
-
   struct ir_basicblock *orig_bb = op->stmt->basicblock;  
 
   struct ir_op *op1 = op->binary_op.lhs;
