@@ -27,7 +27,7 @@ struct var_table var_table_create(struct arena_allocator *arena) {
 struct var_table_entry *create_entry(struct var_table *var_table, const char *name) {
   struct var_table_scope *last = var_table->last;
 
-  struct var_table_entry entry = { .name = name, .value = NULL };
+  struct var_table_entry entry = { .name = name, .scope = last->scope, .value = NULL };
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
   p->value = NULL;
 
@@ -55,7 +55,9 @@ void push_scope(struct var_table *var_table) {
 }
 
 void pop_scope(struct var_table *var_table) {
-  struct var_table_scope *last = var_table->last;
+  struct var_table_scope *last = var_table->last;  
+
+  debug_assert(last->scope != SCOPE_GLOBAL, "popping global scope is never correct");
 
   vector_free(&last->entries);
 
@@ -94,6 +96,7 @@ struct var_table_entry *get_entry(struct var_table *var_table, const char *name)
       struct var_table_entry *entry = vector_get(scope->entries, i);
 
       if (strcmp(entry->name, name) == 0) {
+        trace("found '%s' at scope %d", entry->name, scope->scope);
         return entry;
       }
     }

@@ -92,7 +92,7 @@ struct ast_paramlist {
 };
 
 struct ast_funcsig {
-  struct ast_tyref ret_ty;
+  struct ast_tyref var_ty;
   struct token name;
   struct ast_paramlist param_list;
 
@@ -402,6 +402,9 @@ struct ast_funcdecl {
 /* Translation unit (top level) */
 
 struct ast_translationunit {
+  // struct ast_var *globals;
+  // size_t num_globals;
+
   struct ast_funcdef *func_defs;
   size_t num_func_defs;
 

@@ -6,6 +6,8 @@ void enable_log() { LOG_ENABLED = true; }
 
 void disable_log() { LOG_ENABLED = false; }
 
+bool log_enabled() { return LOG_ENABLED; }
+
 #ifdef NLOG
 #define DEF_LOG_FN(NAME, _PREFIX)                                              \
   void NAME(const char *format, ...) { (void)format; }                         \

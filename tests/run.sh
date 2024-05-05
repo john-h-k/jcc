@@ -22,6 +22,6 @@ for file in $(find $(dirname $0) -name '*.c' -print); do
     echo "TEST PASSED"
   fi
 
-  echo "\n\n"
+  echo "\n"
 done
 

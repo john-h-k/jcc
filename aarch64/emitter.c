@@ -463,7 +463,7 @@ void aarch64_emit_load_offset_32(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,
                                  struct aarch64_reg dest,
                                  unsigned short offset) {
-  aarch64_emit(emitter, LDR_32_IMM_UNSIGNED(offset, addr.idx, dest.idx));
+  aarch64_emit(emitter, LDR_32_IMM_UNSIGNED(U32(offset), U32(addr.idx), U32(dest.idx)));
 }
 
 void aarch64_emit_store_offset_32(struct aarch64_emitter *emitter,

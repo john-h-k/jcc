@@ -46,6 +46,10 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
+  // NOTE: this logic relies on MOV <PARAM> instructions existing for all params
+  // AND being in order of params
+  size_t arg_regs = 0;
+
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -54,9 +58,13 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       while (op) {
         op->lcl_idx = NO_LCL;
 
-        // reset registers unless flags because flags is never allocated
-        if (op->reg != REG_FLAGS && op->reg != DONT_GIVE_REG) {
-          op->reg = NO_REG;
+        if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
+          op->reg = arg_regs++;
+        } else {
+          // reset registers unless flags because flags is never allocated
+          if (op->reg != REG_FLAGS && op->reg != DONT_GIVE_REG) {
+            op->reg = NO_REG;
+          }
         }
 
         debug_assert(op->id < irb->op_count, "out of range! (id %zu with opcount %zu)", op->id, irb->op_count);
@@ -129,8 +137,6 @@ void expire_old_intervals(struct interval *intervals,
 
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
-    // debug("cur interval %zu, intervals[i].end %zu", cur_interval->start,
-    // interval->end);
     if (cur_interval->start <= interval->end) {
       break;
     }
@@ -148,16 +154,33 @@ void expire_old_intervals(struct interval *intervals,
 }
 
 int sort_interval_by_start_point(const void *a, const void *b) {
-  size_t a_start = ((struct interval *)a)->start;
-  size_t b_start = ((struct interval *)b)->start;
+  struct interval *a_int = (struct interval *)a;
+  struct interval *b_int = (struct interval *)b;
+  size_t a_start = a_int->start;
+  size_t b_start = b_int->start;
 
   if (a_start > b_start) {
     return 1;
   } else if (a_start < b_start) {
     return -1;
-  } else {
-    return 0;
   }
+  
+  // put params at front, this is used for giving them the correct registers for calling conv
+  enum ir_op_flags a_flags = a_int->op->flags;
+  enum ir_op_flags b_flags = b_int->op->flags;
+  if ((a_flags & IR_OP_FLAG_PARAM) > (b_flags & IR_OP_FLAG_PARAM)) {
+    return -1;
+  } else if ((a_flags & IR_OP_FLAG_PARAM) < (b_flags & IR_OP_FLAG_PARAM)) {
+    return 1;
+  }
+
+  if (a_int->op->id > b_int->op->id) {
+    return 1;
+  } else if (a_int->op->id < b_int->op->id) {
+    return -1;
+  }
+  
+  return 0;
 }
 
 struct alloc_fixup_data {
@@ -227,8 +250,6 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   } else {
     fslogsl(file, "no associated interval | ");
   }
-
-  op->metadata = NULL;
 
   switch (op->reg) {
   case NO_REG:
@@ -331,16 +352,23 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
 
-  debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+  if (log_enabled()) {
+    debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+  }
+
+  // removes intervals from last pass
+  clear_metadata(irb);
 
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
   // insert LOAD and STORE ops as needed
   alloc_fixup(irb, &data);
 
-  // can't print intervals here, as `alloc_fixup` inserted new ops which don't
-  // have valid intervals yet
-  debug_print_ir(stderr, irb, NULL, NULL);
+  if (log_enabled()) {
+    // can't print intervals here, as `alloc_fixup` inserted new ops which don't
+    // have valid intervals yet
+    debug_print_ir(stderr, irb, NULL, NULL);
+  }
 
   BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
 
@@ -349,5 +377,7 @@ void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
 
-  debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+  if (log_enabled()) {
+    debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+  }
 }
