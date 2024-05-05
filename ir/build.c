@@ -278,15 +278,26 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   // this is when we are _reading_ from the var
   struct var_key key = get_var_key(irb->parser, var);
 
-  printf("retrieving %s with %d\n", key.name, key.scope);
   struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
 
+  // invariant_assert((ref && ref->op) || !ref, "ref present but empty?");
   struct ir_op *expr = ref ? ref->op : NULL;
 
   if (expr) {
     return expr;
   }
-  printf("didnt find...\n");
+
+  if (ref) {
+    // global
+    struct ir_op *op = alloc_ir_op(irb, stmt);
+
+    op->ty = IR_OP_TY_GLB;
+    op->var_ty = ty_for_ast_tyref(irb, &var->var_ty);
+    op->glb.global = key.name;
+
+    return op;
+  }
+  
 
   struct ast_tyref var_tyref = var->var_ty;
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
@@ -950,7 +961,8 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
 void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   struct ir_op *consumer = cb_metadata;
 
-  if (consumer->ty != IR_OP_TY_CAST_OP && op_produces_value(consumer->ty)) {
+  // TODO: validate CALL ops as well
+  if (consumer->ty != IR_OP_TY_CAST_OP && consumer->ty != IR_OP_TY_CALL && op_produces_value(consumer->ty)) {
     invariant_assert(var_ty_eq(&(*op)->var_ty, &consumer->var_ty),
                      "op %zu uses op %zu with different type!", consumer->id,
                      (*op)->id);
@@ -959,9 +971,11 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
 
 struct ir_builder *build_ir_for_function(struct parser *parser,
                                          struct arena_allocator *arena,
+                                         struct ast_translationunit *translation_unit,
                                          struct ast_funcdef *def) {
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
+                         .global_var_refs = var_refs_create(NULL),
                          .arena = arena,
                          .first = NULL,
                          .last = NULL,
@@ -975,6 +989,22 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   struct ir_op_var_ty ty = ty_for_ast_tyref(builder, &def->sig.var_ty);
   b.func_ty = ty.func;
 
+  // funcs do not necessarily have a seperate decl so we do it for defs too
+  
+  for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
+    struct ast_funcdecl *decl = &translation_unit->func_decls[i];
+    struct var_key key = { .name = identifier_str(parser, &decl->sig.name), .scope = SCOPE_GLOBAL };
+    struct var_ref *ref = var_refs_add(builder->global_var_refs, &key);
+    UNUSED_ARG(ref);
+  }
+
+  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
+    struct ast_funcdef *def = &translation_unit->func_defs[i];
+    struct var_key key = { .name = identifier_str(parser, &def->sig.name), .scope = SCOPE_GLOBAL };
+    struct var_ref *ref = var_refs_add(builder->global_var_refs, &key);
+    UNUSED_ARG(ref);
+  }
+
   // needs at least one initial basic block
   alloc_ir_basicblock(builder);
   struct ir_basicblock *basicblock = builder->first;
@@ -987,7 +1017,6 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     const struct ast_param *param = &def->sig.param_list.params[i];
 
     struct var_key key = get_var_key(builder->parser, &param->var);
-    printf("adding %s with %d\n", key.name, key.scope);
     struct var_ref *ref = var_refs_add(basicblock->var_refs, &key);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
@@ -1065,7 +1094,7 @@ struct ir_unit *build_ir_for_translationunit(
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     struct ast_funcdef *def = &translation_unit->func_defs[i];
 
-    struct ir_builder *func = build_ir_for_function(parser, arena, def);
+    struct ir_builder *func = build_ir_for_function(parser, arena, translation_unit, def);
     iru->funcs[i] = func;
   }
 

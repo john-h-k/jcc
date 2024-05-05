@@ -695,7 +695,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   }
 
   basicblock->id = irb->basicblock_count++;
-  basicblock->var_refs = var_refs_create();
+  basicblock->var_refs = var_refs_create(irb->global_var_refs);
   basicblock->irb = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;

@@ -310,6 +310,8 @@ struct ir_basicblock {
 struct ir_builder {
   const char *name;
 
+  struct var_refs *global_var_refs;
+
   struct ir_op_var_func_ty func_ty;
 
   struct parser *parser;
