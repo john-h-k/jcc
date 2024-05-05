@@ -110,9 +110,10 @@ struct graph_vertex *vertex_from_str(struct graphwriter *gwr, const char *id) {
 
 struct graph_vertex *vertex_from_integral(struct graphwriter *gwr, size_t id) {
   size_t digits = id ? (size_t)log10(id) : id;
-  char *buff = arena_alloc(gwr->arena, sizeof(*buff) * digits + 1);
+  size_t sz =  sizeof(char) * digits + 1;
+  char *buff = arena_alloc(gwr->arena, sz);
 
-  sprintf(buff, "%zu", id);
+  snprintf(buff, sz, "%zu", id);
 
   struct graph_vertex *vertex = create_vertex(gwr, buff);
   write_vertex(vertex);

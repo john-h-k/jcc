@@ -1,23 +1,36 @@
 #include "var_table.h"
 
+#include "util.h"
 #include "vector.h"
 
-struct var_table var_table_create(struct parser *parser) {
+struct var_table_scope var_table_scope_create(struct var_table_scope *prev) {
+  struct var_table_scope var_table_scope = {
+      .next = NULL,
+      .prev = prev,
+      .entries = vector_create(sizeof(struct var_table_entry)),
+      .scope = prev ? prev->scope + 1 : SCOPE_GLOBAL};
+
+  return var_table_scope;
+}
+
+struct var_table var_table_create(struct arena_allocator *arena) {
   // known memory leak here, no `free` function atm
   struct var_table var_table = {
-      .entries = vector_create(sizeof(struct var_table_entry)),
-      .parser = parser};
+      .arena = arena, .first = arena_alloc(arena, sizeof(*var_table.first)), .last = NULL};
+
+  *var_table.first = var_table_scope_create(NULL);
+  var_table.last = var_table.first;
 
   return var_table;
 }
 
-struct var_table_entry *create_entry(struct var_table *var_table,
-                                     const struct ast_var *var) {
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  struct var_table_entry entry = {.name = name, .scope = var->scope};
+struct var_table_entry *create_entry(struct var_table *var_table, const char *name) {
+  struct var_table_scope *last = var_table->last;
 
-  struct var_table_entry *p = vector_push_back(var_table->entries, &entry);
+  struct var_table_entry entry = { .name = name, .value = NULL };
+  struct var_table_entry *p = vector_push_back(last->entries, &entry);
   p->value = NULL;
+
   return p;
 }
 
@@ -28,82 +41,64 @@ struct var_table_entry *create_entry(struct var_table *var_table,
 //   err("%s @ %d", entry->name, entry->scope);
 // }
 
-struct var_table_entry *get_or_create_entry_up_scopes(struct var_table *var_table,
-                                            const struct ast_var *var) {
-  struct var_table_entry *entry = get_entry_up_scopes(var_table, var);
+int cur_scope(struct var_table *var_table) {
+  return var_table->last->scope;
+}
 
-  if (entry) {
-    return entry;
-  }
+void push_scope(struct var_table *var_table) {
+  struct var_table_scope *last = var_table->last;
 
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
-        var->scope);
+  last->next = arena_alloc(var_table->arena, sizeof(*last->next));
+  *last->next = var_table_scope_create(last);
 
-  return create_entry(var_table, var);
+  var_table->last = last->next;
+}
+
+void pop_scope(struct var_table *var_table) {
+  struct var_table_scope *last = var_table->last;
+
+  vector_free(&last->entries);
+
+  debug_assert(!last->next, "popping var_table_scope but it has a `next` entry? should be impossible");
+  
+  var_table->last = last->prev;
+
+  last->prev->next = NULL;
+  last->prev = NULL;
 }
 
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
-                                            const struct ast_var *var) {
-  struct var_table_entry *entry = get_entry(var_table, var);
+                                            const char *name) {
+  struct var_table_entry *entry = get_entry(var_table, name);
 
   if (entry) {
     return entry;
   }
 
-  const char *name = identifier_str(var_table->parser, &var->identifier);
   trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
-        var->scope);
+        var_table->last->scope);
 
-  return create_entry(var_table, var);
+  return create_entry(var_table, name);
 }
 
-struct var_table_entry *get_entry_up_scopes(struct var_table *var_table,
-                                  const struct ast_var *var) {
+struct var_table_entry *get_entry(struct var_table *var_table, const char *name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
 
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  size_t num_vars = vector_length(var_table->entries);
-
-  for (int scope = var->scope; scope >= SCOPE_GLOBAL; scope--) {
-    trace("trying to find var '%s' at scope '%d' (var has scope '%d')", name,
-          scope, var->scope);
+  struct var_table_scope *scope = var_table->last;
+  while (scope) {
+    size_t num_vars = vector_length(scope->entries);
 
     for (size_t i = 0; i < num_vars; i++) {
-      struct var_table_entry *entry = vector_get(var_table->entries, i);
+      struct var_table_entry *entry = vector_get(scope->entries, i);
 
-      if (entry->scope == scope && strcmp(entry->name, name) == 0) {
-        trace("found var at scope '%d'", scope);
+      if (strcmp(entry->name, name) == 0) {
         return entry;
       }
     }
 
-    if (scope != SCOPE_GLOBAL) {
-      trace("failed! trying at next scope up");
-    }
-  }
-
-  trace("did not find entry");
-  return NULL;
-}
-
-struct var_table_entry *get_entry(struct var_table *var_table,
-                                  const struct ast_var *var) {
-  // super inefficient, TODO: make efficient
-  // does linear scan for entry at current scope, if that fails, tries at
-  // higher scope, until scope is global then creates new entry
-
-  const char *name = identifier_str(var_table->parser, &var->identifier);
-  size_t num_vars = vector_length(var_table->entries);
-
-  for (size_t i = 0; i < num_vars; i++) {
-    struct var_table_entry *entry = vector_get(var_table->entries, i);
-
-    if (entry->scope == var->scope && strcmp(entry->name, name) == 0) {
-      return entry;
-    }
+    scope = scope->prev;
   }
 
   trace("did not find entry");

@@ -1,4 +1,5 @@
 #include "ir.h"
+#include "var_refs.h"
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   switch (ty) {
@@ -689,7 +690,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   }
 
   basicblock->id = irb->basicblock_count++;
-  basicblock->var_table = var_table_create(irb->parser);
+  basicblock->var_refs = var_refs_create();
   basicblock->irb = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;

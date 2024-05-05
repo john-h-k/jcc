@@ -22,6 +22,7 @@ set(
   
   ir/ir.c
   ir/build.c
+  ir/var_refs.c
   ir/eliminate_phi.c
   ir/prettyprint.c
 

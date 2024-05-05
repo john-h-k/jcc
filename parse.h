@@ -6,8 +6,6 @@
 #include "log.h"
 #include "util.h"
 
-#define SCOPE_GLOBAL (-1)
-
 /* Well known types - keywords (`int`, `unsigned`, etc) */
 
 enum well_known_ty {
@@ -80,6 +78,7 @@ struct ast_arglist {
 struct ast_var {
   struct token identifier;
   int scope;
+  struct ast_tyref var_ty;
 };
 
 struct ast_param {
@@ -425,9 +424,6 @@ enum parser_create_result parser_create(const char *program,
                                         struct parser **parser);
 struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
-
-struct ast_tyref get_var_type(struct parser *parser,
-                              const struct ast_var *var);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 
