@@ -4,7 +4,8 @@
 #include "../util.h"
 
 static void lower_call(struct ir_builder *func, struct ir_op *op) {
-
+  UNUSED_ARG(func);
+  UNUSED_ARG(op);
 }
 
 // ARM has no quotient function

@@ -142,18 +142,19 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("REGALLOC");
 
+      register_alloc(irb, target->reg_info);
+
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+        debug_print_stage(irb, "reg_alloc");
+      }
+
       BEGIN_STAGE("ELIM PHI");
       eliminate_phi(irb);
 
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
         debug_print_stage(irb, "elim_phi");
       }
-
-      register_alloc(irb, target->reg_info);
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
-        debug_print_stage(irb, "reg_alloc");
-      }
+      
 
       disable_log();
     }
@@ -175,7 +176,7 @@ enum compile_result compile(struct compiler *compiler) {
         .name = func.name, .section = 1, .value = total_size};
 
     total_size += ROUND_UP(func.len_code, target->function_alignment);
-    vector_push_back(compiled_functions, &irb);
+    vector_push_back(compiled_functions, &func);
 
     vector_push_back(symbols, &symbol);
   }

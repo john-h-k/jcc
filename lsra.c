@@ -34,11 +34,12 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
   interval->end = MAX(interval->end, cb->op->id);
 }
 
-/* Builds the intervals for each value in the SSA representation 
-     - IDs are rebuilt before calling this so that op ID can be used as an inreasing inex
+/* Builds the intervals for each value in the SSA representation
+     - IDs are rebuilt before calling this so that op ID can be used as an
+   inreasing inex
      - indexes can be non-sequential but must be increasing
 */
-struct interval_data construct_intervals(struct ir_builder *irb) {
+struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_lens) {
   struct interval_data data;
   data.intervals =
       arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
@@ -67,14 +68,37 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
           }
         }
 
-        debug_assert(op->id < irb->op_count, "out of range! (id %zu with opcount %zu)", op->id, irb->op_count);
+        debug_assert(op->id < irb->op_count,
+                     "out of range! (id %zu with opcount %zu)", op->id,
+                     irb->op_count);
         struct interval *interval = &data.intervals[op->id];
 
         interval->op = op;
         interval->start = op->id;
 
-        // we can get intervals with an end before their start if the value is unused
-        // fix them up to be valid
+        if (op->ty == IR_OP_TY_PHI) {
+          size_t start = op->id;
+          size_t end = op->id;
+
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *prev = op->phi.values[i];
+
+            // a phi can be dependent on itself, and in that case we still need it to be assigned a register
+            if (prev->id != op->id) {
+              prev->reg = DONT_GIVE_REG;
+            }
+
+            debug_assert(bb_lens[op->stmt->basicblock->id * irb->basicblock_count + prev->stmt->basicblock->id], "bb_len was 0");
+            start = MIN(start, prev->id);
+            end = MAX(end, bb_lens[op->stmt->basicblock->id * irb->basicblock_count + prev->stmt->basicblock->id]);
+          }
+
+          interval->start = start;
+          interval->end = end;
+        }
+
+        // we can get intervals with an end before their start if the value is
+        // unused fix them up to be valid
         if (interval->end < interval->start) {
           interval->end = interval->start;
         }
@@ -164,8 +188,9 @@ int sort_interval_by_start_point(const void *a, const void *b) {
   } else if (a_start < b_start) {
     return -1;
   }
-  
-  // put params at front, this is used for giving them the correct registers for calling conv
+
+  // put params at front, this is used for giving them the correct registers for
+  // calling conv
   enum ir_op_flags a_flags = a_int->op->flags;
   enum ir_op_flags b_flags = b_int->op->flags;
   if ((a_flags & IR_OP_FLAG_PARAM) > (b_flags & IR_OP_FLAG_PARAM)) {
@@ -179,7 +204,7 @@ int sort_interval_by_start_point(const void *a, const void *b) {
   } else if (a_int->op->id < b_int->op->id) {
     return -1;
   }
-  
+
   return 0;
 }
 
@@ -270,11 +295,116 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   }
 }
 
+// walks across the blocks to determine the end range for a phi's dependency
+static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
+                       struct ir_op *source_phi,
+                       struct ir_basicblock *basicblock) {
+
+  if (!basicblock || basicblocks_visited[basicblock->id]) {
+    return 0;
+  }
+
+  basicblocks_visited[basicblock->id] = true;
+  debug("now walking %zu", basicblock->id);
+
+  size_t this = basicblock->last->last->id;
+  printf("MARKER\n");
+  size_t target_bb = source_phi->stmt->basicblock->id;
+  printf("MARKER2\n");
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_SPLIT: {
+    // if (basicblock->split.true_target->id == target_bb) {
+    //   size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
+    //                                    basicblock->split.false_target);
+    //   return MAX(this, m_false);
+    // }
+    // if (basicblock->split.false_target->id == target_bb) {
+    //   size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,
+    //                                   basicblock->split.true_target);
+    //   return MAX(this, m_true);
+    // }
+
+    printf("MARKER3\n");
+    size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
+                                     basicblock->split.false_target);
+    size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,
+                                    basicblock->split.true_target);
+    return MAX(this, MAX(m_true, m_false));
+  }
+  case IR_BASICBLOCK_TY_MERGE:
+    printf("MARKER4\n");
+    if (basicblock->merge.target->id == target_bb) {
+      return this;
+    }
+    
+    size_t target = walk_basicblock(irb, basicblocks_visited, source_phi,
+                                     basicblock->merge.target);
+    return MAX(this, target);
+  case IR_BASICBLOCK_TY_RET:
+    printf("MARKER5\n");
+    // this means this path did *not* reach the phi
+    return 0;
+  }
+}
+
 struct interval_data register_alloc_pass(struct ir_builder *irb,
                                          struct reg_info reg_info) {
+  // first rebuild ids so they are sequential and increasing
   rebuild_ids(irb);
 
-  struct interval_data data = construct_intervals(irb);
+  // FIXME: *very* memory expensive |BBs|^2 space
+  unsigned *basicblock_max_id = arena_alloc(irb->arena, sizeof(*basicblock_max_id) *
+                                                      irb->basicblock_count *
+                                                      irb->basicblock_count);
+
+  memset(basicblock_max_id, 0,
+         sizeof(*basicblock_max_id) * irb->basicblock_count * irb->basicblock_count);
+
+  bool *basicblocks_visited = arena_alloc(
+      irb->arena, sizeof(*basicblocks_visited) * irb->basicblock_count);
+
+  // this calculates the maximum liveliness between two blocks
+  // the liveliness of a phi-dependent is `basicblock_max_id[phi->bb->id * num_bb + dependent->bb->id]`
+  // FIXME: this can be done MUCH more efficiently
+  struct ir_basicblock *basicblock = irb->first;
+  while (basicblock) {
+    printf("bb id %zu\n", basicblock->id);
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        printf("op id %zu\n", op->id);
+        if (op->ty == IR_OP_TY_PHI) {
+          printf("num %zu\n", op->phi.num_values);
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *value = op->phi.values[i];
+
+            size_t len_id = (basicblock->id * irb->basicblock_count) + value->stmt->basicblock->id;
+
+            size_t len;
+            if (basicblock_max_id[len_id]) {
+              len = basicblock_max_id[len_id];
+            } else {
+              memset(basicblocks_visited, 0,
+                     sizeof(*basicblocks_visited) * irb->basicblock_count);
+
+              len = walk_basicblock(irb, basicblocks_visited, op, value->stmt->basicblock);
+              basicblock_max_id[len_id] = len;
+            }
+          }
+        }
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  struct interval_data data = construct_intervals(irb, basicblock_max_id);
   struct interval *intervals = data.intervals;
   size_t num_intervals = data.num_intervals;
 
@@ -331,6 +461,40 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
   }
 
+  // continously fix up phi until everything has a register
+  // by just looping we don't need to worry about order
+  bool unreg_left = true;
+  while (unreg_left) {
+    unreg_left = false;
+    basicblock = irb->first;
+
+    while (basicblock) {
+      struct ir_stmt *stmt = basicblock->first;
+      while (stmt) {
+        struct ir_op *op = stmt->first;
+        while (op) {
+          if (op->ty == IR_OP_TY_PHI) {
+            if (op->reg == DONT_GIVE_REG) {
+              unreg_left = true;
+            } else {
+              for (size_t i = 0; i < op->phi.num_values; i++) {
+                struct ir_op *value = op->phi.values[i];
+                value->reg = op->reg;
+              }
+            }
+          }
+
+          op = op->succ;
+        }
+
+        stmt = stmt->succ;
+      }
+
+      basicblock = basicblock->succ;
+    }
+  }
+  
+
   return data;
 }
 
@@ -339,10 +503,12 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
      - registers may be spilt to new local variables
 
   Works via a two-pass allocation approach:
-     - first pass assigns "trivial" registers and marks which variables need spill
-     - after the first pass, we insert `storelcl` and `loadlcl` instructions with appropriate locals
-       as will be needed
-     - we then re-run allocation, which will assign all registers including those needed for spills
+     - first pass assigns "trivial" registers and marks which variables need
+  spill
+     - after the first pass, we insert `storelcl` and `loadlcl` instructions
+  with appropriate locals as will be needed
+     - we then re-run allocation, which will assign all registers including
+  those needed for spills
 */
 void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   rebuild_ids(irb);
