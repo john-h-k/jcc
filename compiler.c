@@ -142,7 +142,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("REGALLOC");
 
-      register_alloc(irb, target->reg_info);
+      lsra_register_alloc(irb, target->reg_info);
 
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
         debug_print_stage(irb, "reg_alloc");
