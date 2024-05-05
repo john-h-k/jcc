@@ -8,9 +8,15 @@
 #include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
+#include "var_refs.h"
 #include "prettyprint.h"
 
 #include <math.h>
+
+struct var_key get_var_key(struct parser *parser, const struct ast_var *var) {
+  const char *name = identifier_str(parser, &var->identifier);
+  return (struct var_key) { name, var->scope };
+}
 
 bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
   if (l->ty != r->ty) {
@@ -260,21 +266,22 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
-  debug("build_ir_for_var bb=%zu, name=%s, scope=%zu", stmt->basicblock->id,
-        identifier_str(irb->parser, &var->identifier), var->scope);
+  debug("build_ir_for_var bb=%zu, name=%s", stmt->basicblock->id,
+        identifier_str(irb->parser, &var->identifier));
   UNUSED_ARG(stmt);
 
   // this is when we are _reading_ from the var
-  struct var_table_entry *entry = get_entry(&stmt->basicblock->var_table, var);
-  debug("voila! %p -- %p", entry, entry ? entry->value : NULL);
+  struct var_key key = get_var_key(irb->parser, var);
+  struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
+  debug("voila! %p -- %p", ref, ref ? ref->op : NULL);
 
-  struct ir_op *expr = entry ? entry->value : NULL;
+  struct ir_op *expr = ref ? ref->op : NULL;
 
   if (expr) {
     return expr;
   }
 
-  struct ast_tyref var_tyref = get_var_type(irb->parser, var);
+  struct ast_tyref var_tyref = var->var_ty;
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
   invariant_assert(var_tyref.ty != AST_TYREF_TY_UNKNOWN,
                    "can't have unknown tyref in phi lowering");
@@ -296,10 +303,11 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   phi->phi.values = NULL;
   phi->phi.num_values = 0;
 
-  warn("creating phi %d for name=%s, scope=%zu", phi->id,
-       identifier_str(irb->parser, &var->identifier), var->scope);
+  warn("creating phi %d for name=%s", phi->id,
+       identifier_str(irb->parser, &var->identifier));
 
-  create_entry(&stmt->basicblock->var_table, var)->value = phi;
+  key = get_var_key(irb->parser, var);
+  var_refs_add(stmt->basicblock->var_refs, &key)->op = phi;
 
   return phi;
 }
@@ -735,10 +743,15 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *op = build_ir_for_expr(irb, stmt, expr, var_ty);
   debug_assert(op, "null expr in assignment!");
 
-  struct var_table_entry *entry =
-      get_or_create_entry(&stmt->basicblock->var_table, var);
+  struct var_key key = get_var_key(irb->parser, var);
+  struct var_ref *ref =
+      var_refs_get(stmt->basicblock->var_refs, &key);
 
-  entry->value = op;
+  if (!ref) {
+    ref = var_refs_add(stmt->basicblock->var_refs, &key);
+  }
+
+  ref->op = op;
   return op;
 }
 
@@ -841,10 +854,11 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   basicblocks_visited[basicblock->id] = true;
   debug("now walking %zu", basicblock->id);
 
-  struct var_table_entry *entry = get_entry(&basicblock->var_table, var);
+  struct var_key key = get_var_key(irb->parser, var);
+  struct var_ref *ref = var_refs_get(basicblock->var_refs, &key);
 
-  if (entry && entry->value) {
-    struct ir_op *entry_op = (struct ir_op *)entry->value;
+  if (ref && ref->op) {
+    struct ir_op *entry_op = ref->op;
     // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
     if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
       printf("source %zu entry %zu\n", source_phi->id, entry_op->id);
@@ -874,7 +888,7 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
       (*num_exprs)++;
       *exprs = arena_realloc(irb->arena, *exprs,
                              sizeof(struct ir_op *) * *num_exprs);
-      (*exprs)[*num_exprs - 1] = (struct ir_op *)entry->value;
+      (*exprs)[*num_exprs - 1] = ref->op;
     }
     return;
   }
@@ -958,7 +972,8 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   for (size_t i = 0; i < def->sig.param_list.num_params; i++) {
     const struct ast_param *param = &def->sig.param_list.params[i];
 
-    struct var_table_entry *entry = create_entry(&basicblock->var_table, &param->var);
+    struct var_key key = get_var_key(builder->parser, &param->var);
+    struct var_ref *ref = var_refs_add(basicblock->var_refs, &key);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
     mov->ty = IR_OP_TY_MOV;
@@ -966,7 +981,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     mov->flags |= IR_OP_FLAG_PARAM;
     mov->mov.value = NULL;
 
-    entry->value = mov;
+    ref->op = mov;
   }
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {

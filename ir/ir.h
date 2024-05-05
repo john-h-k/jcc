@@ -279,7 +279,7 @@ struct ir_basicblock {
 
   // `value` contains a `struct vector *` containing the last op(s) that wrote
   // to this variable or NULL if it is not yet written to
-  struct var_table var_table;
+  struct var_refs *var_refs;
 
   // a NULL irb means a pruned basicblock
   struct ir_builder *irb;
