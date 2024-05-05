@@ -88,8 +88,9 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
   case IR_OP_BINARY_OP_TY_SRSHIFT:
-  case IR_OP_BINARY_OP_TY_URSHIFT:
-    invariant_assert(rhs_reg == DONT_GIVE_REG, "shift RHS has been mistakenly given a register by allocator even though it must be a constant");
+  case IR_OP_BINARY_OP_TY_URSHIFT: {
+    // FIXME: see lower.c, this is disabled bc sometimes one is needed
+    // invariant_assert(rhs_reg == DONT_GIVE_REG, "shift RHS has been mistakenly given a register by allocator even though it must be a constant");
     unsigned shift_imm = op->binary_op.rhs->cnst.value;
     if (!UNS_FITS_IN_BITS(shift_imm, 4)) {
       err("shift constant too large for eep! will be truncated");
@@ -110,6 +111,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     }
 
     break;
+  }
   case IR_OP_BINARY_OP_TY_AND:
     EMIT_WITH_FN(eep_emit_and);
     break;

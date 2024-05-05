@@ -218,7 +218,8 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
     fprintf(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
-            ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
+            ir->br_cond.cond->id,
+            ir->stmt->basicblock->split.true_target->id,
             ir->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_RET:

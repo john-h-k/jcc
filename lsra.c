@@ -308,9 +308,7 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   debug("now walking %zu", basicblock->id);
 
   size_t this = basicblock->last->last->id;
-  printf("MARKER\n");
   size_t target_bb = source_phi->stmt->basicblock->id;
-  printf("MARKER2\n");
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_SPLIT: {
@@ -325,7 +323,6 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
     //   return MAX(this, m_true);
     // }
 
-    printf("MARKER3\n");
     size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
                                      basicblock->split.false_target);
     size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,
@@ -333,7 +330,6 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
     return MAX(this, MAX(m_true, m_false));
   }
   case IR_BASICBLOCK_TY_MERGE:
-    printf("MARKER4\n");
     if (basicblock->merge.target->id == target_bb) {
       return this;
     }
@@ -342,7 +338,6 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
                                      basicblock->merge.target);
     return MAX(this, target);
   case IR_BASICBLOCK_TY_RET:
-    printf("MARKER5\n");
     // this means this path did *not* reach the phi
     return 0;
   }
@@ -369,14 +364,11 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   // FIXME: this can be done MUCH more efficiently
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    printf("bb id %zu\n", basicblock->id);
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        printf("op id %zu\n", op->id);
         if (op->ty == IR_OP_TY_PHI) {
-          printf("num %zu\n", op->phi.num_values);
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *value = op->phi.values[i];
 
@@ -510,7 +502,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
      - we then re-run allocation, which will assign all registers including
   those needed for spills
 */
-void register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
+void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   rebuild_ids(irb);
 
   struct interval_data data = register_alloc_pass(irb, reg_info);
