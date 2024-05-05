@@ -161,7 +161,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     fprintf(file, "call ");
 
     debug_call_target_string(file, ir->call.target);
-    fprintf(file, " (");
+    fprintf(file, " ( ");
     debug_call_arg_string(file, &ir->call);
     fprintf(file, " )");
     break;

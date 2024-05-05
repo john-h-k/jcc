@@ -17,7 +17,7 @@ struct var_ref {
   struct ir_op *op;
 };
 
-struct var_refs *var_refs_create();
+struct var_refs *var_refs_create(struct var_refs *parent);
 
 struct var_ref *var_refs_get(struct var_refs *var_refs, const struct var_key *key);
 struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key);

@@ -3,11 +3,13 @@
 #include "../vector.h"
 
 struct var_refs {
+  struct var_refs *parent;
   struct vector *refs;
 };
 
-struct var_refs *var_refs_create() {  
+struct var_refs *var_refs_create(struct var_refs *parent) {  
   struct var_refs refs = {
+    .parent = parent,
     .refs = vector_create(sizeof(struct var_ref))
   };
 
@@ -31,6 +33,6 @@ struct var_ref *var_refs_get(struct var_refs *var_refs, const struct var_key *ke
     }
   }
 
-  return NULL;
+  return var_refs->parent ? var_refs_get(var_refs->parent, key) : NULL;
 }
 
