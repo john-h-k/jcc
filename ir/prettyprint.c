@@ -70,158 +70,160 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-const char *var_ty_string(const struct ir_op_var_ty *var_ty) {
+void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
-    return "<none>";
+    fprintf(file, "<none>");
+    return;
   }
   case IR_OP_VAR_TY_TY_FUNC: {
     // FIXME: buffer vuln
-    char *buff = nonnull_malloc(100);
-    char *head = buff;
-    head += sprintf(head, "(");
+    fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
-      head += sprintf(head, i + 1 == var_ty->func.num_params ? "%s" : "%s, ", var_ty_string(&var_ty->func.params[i]));
+      debug_var_ty_string(file, &var_ty->func.params[i]);
+      if (i + 1 < var_ty->func.num_params) {
+        fprintf(file, ", ");
+      }
     }
-    head += sprintf(head, ")");
-    head += sprintf(head, " -> %s", var_ty_string(var_ty->func.ret_ty));
-    *head = '\0';
-    return head;
+    fprintf(file, ")");
+    fprintf(file, " -> ");
+    debug_var_ty_string(file, var_ty->func.ret_ty);
+    return;
   }
   case IR_OP_VAR_TY_TY_PRIMITIVE: {
+    const char *name;
     switch (var_ty->primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
-      return "i8";
+      name = "i8";
+      break;
     case IR_OP_VAR_PRIMITIVE_TY_I16:
-      return "i16";
+      name = "i16";
+      break;
     case IR_OP_VAR_PRIMITIVE_TY_I32:
-      return "i32";
+      name = "i32";
+      break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
-      return "i64";
+      name = "i64";
+      break;
     }
+
+    fprintf(file, "%s", name);
+    return;
   }
   }
 }
 
-const char *phi_string(struct ir_op_phi *phi) {
+void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
   // just assume we don't have more than 100,000 phi inputs
-    // FIXME: buffer vuln
-  char *buff = nonnull_malloc(phi->num_values * (6 + 2));
-  char *head = buff;
-
+  // FIXME: buffer vuln
   for (size_t i = 0; i < phi->num_values; i++) {
-    head += sprintf(head, "%%%zu", phi->values[i]->id);
+    fprintf(file, "%%%zu", phi->values[i]->id);
 
     if (i + 1 < phi->num_values) {
-      head += sprintf(head, ", ");
+      fprintf(file, ", ");
     }
   }
-
-  *head = '\0';
-  return buff;
 }
 
-const char *call_target_string(struct ir_op *target) {
+void debug_call_target_string(FILE *file, struct ir_op *target) {
   if (target->ty == IR_OP_TY_GLB) {
-    return target->glb.global;
+    fprintf(file, "%s", target->glb.global);
   } else {
-    // FIXME: buffer vuln
-    char *buff = nonnull_malloc(1000);
-    char *head = buff;
-    head += sprintf(buff, "%%%zu", target->id);
-    *head = '\0';
-    return buff;
+    fprintf(file, "%%%zu", target->id);
   }
 }
 
-const char *call_arg_string(struct ir_op_call *call) {
-  // just assume we don't have more than 100,000 call inputs
-    // FIXME: buffer vuln
-  char *buff = nonnull_malloc(call->num_args * (6 + 2));
-  char *head = buff;
-
+void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   for (size_t i = 0; i < call->num_args; i++) {
-    head += sprintf(head, "%%%zu", call->args[i]->id);
+    fprintf(file, "%%%zu", call->args[i]->id);
 
     if (i + 1 < call->num_args) {
-      head += sprintf(head, ", ");
+      fprintf(file, ", ");
     }
   }
-
-  *head = '\0';
-  return buff;
 }
 
-char *arena_printf(struct arena_allocator *arena, const char *fmt, ...) {
-  va_list v;
-  va_start(v, fmt);
-
-  size_t size = vsnprintf(NULL, 0, fmt, v);
-  char *buff = arena_alloc(arena, sizeof(*buff) * size);
-  vsprintf(buff, fmt, v);
-
-  va_end(v);
-
-  return buff;
+void debug_lhs(FILE *file, struct ir_op *ir) {
+  fprintf(file, "%%%zu (", ir->id);
+  debug_var_ty_string(file, &ir->var_ty);
+  fprintf(file, ") = ");
 }
 
-char *debug_print_op(struct ir_builder *irb, struct ir_op *ir) {
+void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
+  UNUSED_ARG(irb);
+
   switch (ir->ty) {
   case IR_OP_TY_GLB:
     // don't print anything for global - let the op consuming it print instead
-    return NULL;
-  case IR_OP_TY_CALL:
-    return arena_printf(irb->arena, "%%%zu (%s) = CALL %s ( %s )", ir->id,
-                        var_ty_string(&ir->var_ty), call_target_string(ir->call.target), call_arg_string(&ir->call));
+    break;
+  case IR_OP_TY_CALL: {
+    debug_lhs(file, ir);
+    fprintf(file, "call ");
+
+    debug_call_target_string(file, ir->call.target);
+    fprintf(file, " (");
+    debug_call_arg_string(file, &ir->call);
+    fprintf(file, " )");
+    break;
+  }
   case IR_OP_TY_PHI:
-    return arena_printf(irb->arena, "%%%zu (%s) = phi [ %s ]", ir->id,
-                        var_ty_string(&ir->var_ty), phi_string(&ir->phi));
+    debug_lhs(file, ir);
+    fprintf(file, "phi [ ");
+    debug_phi_string(file, &ir->phi);
+    fprintf(file, " ]");
+    break;
   case IR_OP_TY_MOV:
+    debug_lhs(file, ir);
     if (ir->mov.value) {
-      return arena_printf(irb->arena, "%%%zu (%s) = %%%zu", ir->id,
-                        var_ty_string(&ir->var_ty), ir->mov.value->id);
+      fprintf(file, "%%%zu", ir->mov.value->id);
     } else {
-      return arena_printf(irb->arena, "%%%zu (%s) = <PARAM>", ir->id,
-                        var_ty_string(&ir->var_ty));
+      fprintf(file, "<PARAM>");
     }
+    break;
   case IR_OP_TY_CNST:
-    return arena_printf(irb->arena, "%%%zu (%s) = %zu", ir->id,
-                        var_ty_string(&ir->var_ty), ir->cnst.value);
+    debug_lhs(file, ir);
+    fprintf(file, "%zu", ir->cnst.value);
+    break;
   case IR_OP_TY_BINARY_OP:
-    return arena_printf(irb->arena, "%%%zu (%s) = %%%zu %s %%%zu", ir->id,
-                        var_ty_string(&ir->var_ty), ir->binary_op.lhs->id,
-                        binary_op_string(ir->binary_op.ty),
-                        ir->binary_op.rhs->id);
+    debug_lhs(file, ir);
+    fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
+            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
+    break;
   case IR_OP_TY_UNARY_OP:
-    return arena_printf(
-        irb->arena, "%%%zu (%s) = %s %%%zu", ir->id, var_ty_string(&ir->var_ty),
-        unary_op_string(ir->unary_op.ty), ir->unary_op.value->id);
+    debug_lhs(file, ir);
+    fprintf(file, "%s %%%zu", unary_op_string(ir->unary_op.ty),
+            ir->unary_op.value->id);
+    break;
   case IR_OP_TY_CAST_OP:
-    return arena_printf(irb->arena, "%%%zu (%s) = %s %%%zu", ir->id,
-                        var_ty_string(&ir->var_ty),
-                        cast_op_string(ir->cast_op.ty), ir->cast_op.value->id);
+    debug_lhs(file, ir);
+    fprintf(file, "%s %%%zu", cast_op_string(ir->cast_op.ty),
+            ir->cast_op.value->id);
+    break;
   case IR_OP_TY_STORE_LCL:
-    return arena_printf(irb->arena, "%%%zu (%s) = storelcl LCL(%zu), %%%zu",
-                        ir->id, var_ty_string(&ir->var_ty),
-                        ir->store_lcl.lcl_idx, ir->store_lcl.value->id);
+    debug_lhs(file, ir);
+    fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl_idx,
+            ir->store_lcl.value->id);
+    break;
   case IR_OP_TY_LOAD_LCL:
-    return arena_printf(irb->arena, "%%%zu = loadlcl (%s) LCL(%zu)", ir->id,
-                        var_ty_string(&ir->var_ty), ir->load_lcl.lcl_idx);
+    debug_lhs(file, ir);
+    fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl_idx);
+    break;
   case IR_OP_TY_BR:
     // this can happen post lowering!
     // invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
     //                  "found `br` but bb wasn't MERGE");
-    return arena_printf(irb->arena, "br @%zu",
-                        ir->stmt->basicblock->merge.target->id);
+    fprintf(file, "br @%zu", ir->stmt->basicblock->merge.target->id);
+    break;
   case IR_OP_TY_BR_COND:
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
-    return arena_printf(irb->arena, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
-                        ir->br_cond.cond->id,
-                        ir->stmt->basicblock->split.true_target->id,
-                        ir->stmt->basicblock->split.false_target->id);
+    fprintf(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
+            ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
+            ir->stmt->basicblock->split.false_target->id);
+    break;
   case IR_OP_TY_RET:
-    return arena_printf(irb->arena, "return %%%zu", ir->ret.value->id);
+    fprintf(file, "return %%%zu", ir->ret.value->id);
+    break;
   }
 }
 
@@ -262,29 +264,29 @@ void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
 
   struct prettyprint_file_metadata *fm = metadata;
 
-  fslogsl(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
+  fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
-  char *op_str = debug_print_op(irb, op);
+  debug_print_op(fm->file, irb, op);
 
-  if (!op_str) {
+  if (ftell(fm->file) == pos) {
+    // no line was written
     return;
   }
 
-  fslogsl(fm->file, "%s", op_str);
   long width = ftell(fm->file) - pos;
   long pad = op_pad - width;
 
   if (pad > 0) {
-    fslogsl(fm->file, "%*s", (int)pad, "");
+    fprintf(fm->file, "%*s", (int)pad, "");
   }
 
   if (fm->cb) {
-    fslogsl(fm->file, " | ");
+    fprintf(fm->file, " | ");
     fm->cb(fm->file, op, fm->cb_metadata);
   }
 
-  fslogsl(fm->file, "\n");
+  fprintf(fm->file, "\n");
 }
 
 const struct prettyprint_callbacks FILE_WRITER_CALLBACKS = {
@@ -387,10 +389,10 @@ void visit_op_for_graph(struct ir_builder *irb, struct ir_op *op,
                         void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
-  char *op_str = debug_print_op(irb, op);
+  debug_print_op(gm->file, irb, op);
 
   // `\l` prints left-justified
-  fprintf(gm->file, "%s\\l", op_str);
+  fprintf(gm->file, "\\l");
 }
 
 struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,

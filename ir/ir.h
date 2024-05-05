@@ -310,6 +310,8 @@ struct ir_basicblock {
 struct ir_builder {
   const char *name;
 
+  struct ir_op_var_func_ty func_ty;
+
   struct parser *parser;
   struct arena_allocator *arena;
 
@@ -324,6 +326,11 @@ struct ir_builder {
   // number of stack local variables
   size_t num_locals;
   size_t total_locals_size;
+};
+
+struct ir_unit {
+  struct ir_builder **funcs;
+  size_t num_funcs;
 };
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);

@@ -8,6 +8,7 @@
 
 struct var_table_entry {
   const char *name;
+  int scope;
 
   void *value;
 };

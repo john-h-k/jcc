@@ -251,8 +251,10 @@ const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, unsigned long reg,
                       unsigned long lcl_idx) {
+
   op->id = id;
   op->ty = ty;
+  op->flags = IR_OP_FLAG_NONE;
   op->var_ty = var_ty;
   op->pred = NULL;
   op->succ = NULL;
@@ -591,6 +593,9 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   op->stmt = stmt;
   op->pred = stmt->last;
   op->succ = NULL;
+  op->metadata = NULL;
+  op->reg = NO_REG;
+  op->lcl_idx = NO_LCL;
 
   if (stmt->last) {
     stmt->last->succ = op;

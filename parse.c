@@ -379,6 +379,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   struct var_table_entry *entry = get_entry(&parser->var_table, identifier_str(parser, &var->identifier));
   if (entry && entry->value) {
     var->var_ty = *(struct ast_tyref *)entry->value;
+    var->scope = entry->scope;
   }
 
   consume_token(parser->lexer, token);
@@ -805,11 +806,17 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
         arena_alloc(parser->arena, sizeof(*jump_stmt->return_stmt.expr));
     *jump_stmt->return_stmt.expr = expr;
 
-    err("pared return");
     return true;
   }
 
-  // FIXME: support return without expression
+  if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
+    jump_stmt->return_stmt.var_ty = parser->func_ret_ty;
+    jump_stmt->return_stmt.expr = NULL;
+
+    return true;
+  }
 
   backtrack(parser->lexer, pos);
   return false;
@@ -1227,8 +1234,7 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   consume_token(parser->lexer, identifier);
 
   param->var_ty = var_ty;
-  // unique - we add one to scope for params because the parser is in global scope while the param is in the func scope
-  param->var.scope = SCOPE_GLOBAL + 1;
+  param->var.scope = cur_scope(&parser->var_table);
   param->var.identifier = identifier;
 
   return true;
@@ -1236,6 +1242,8 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
 
 bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   struct text_pos pos = get_position(parser->lexer);
+
+  push_scope(&parser->var_table);
 
   // TODO: merge with parse_compoundexpr?
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
@@ -1253,6 +1261,7 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
       do {
         if (!parse_param(parser, &param)) {
           backtrack(parser->lexer, pos);
+          pop_scope(&parser->var_table);
           return false;
         }
 
@@ -1273,11 +1282,13 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
     }
 
     if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+      pop_scope(&parser->var_table);
       return true;
     }
   }
 
   backtrack(parser->lexer, pos);
+  pop_scope(&parser->var_table);
   return false;
 }
 
@@ -1290,10 +1301,6 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
 
   if (parse_tyref(parser, &ty_ref) && parse_identifier(parser, &identifier) &&
       parse_paramlist(parser, &param_list)) {
-    func_sig->name = identifier;
-    func_sig->ret_ty = ty_ref;
-    func_sig->param_list = param_list;
-
     struct ast_ty_func func_ty;
     func_ty.ret_var_ty = arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
     *func_ty.ret_var_ty = ty_ref;
@@ -1309,13 +1316,17 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
 
     struct ast_var var;
     var.identifier = identifier;
-    var.scope = SCOPE_GLOBAL;
+    var.scope = cur_scope(&parser->var_table);
     var.var_ty = func_ty_ref;
 
     const char *name = identifier_str(parser, &var.identifier);
-    struct var_table_entry *entry = create_entry(&parser->var_table, name);
+    struct var_table_entry *entry = get_or_create_entry(&parser->var_table, name);
     entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
     *(struct ast_tyref *)entry->value = var.var_ty;
+
+    func_sig->name = identifier;
+    func_sig->var_ty = func_ty_ref;
+    func_sig->param_list = param_list;
 
     return true;
   }
@@ -1345,8 +1356,10 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct ast_compoundstmt func_body;
 
   if (parse_funcsig(parser, &func_sig)) {
+    push_scope(&parser->var_table);
+
     // return statements need to know the type they coerce to
-    parser->func_ret_ty = func_sig.ret_ty;
+    parser->func_ret_ty = *func_sig.var_ty.func.ret_var_ty;
 
     // need to add the params to the locals table
     for (size_t i = 0; i < func_sig.param_list.num_params; i++) {
@@ -1354,7 +1367,8 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
 
       struct ast_var var;
       var.identifier = param->var.identifier;
-      var.scope = 0;
+      var.scope = cur_scope(&parser->var_table);
+      var.var_ty = param->var_ty;
 
       const char *name = identifier_str(parser, &var.identifier);
       struct var_table_entry *entry = create_entry(&parser->var_table, name);
@@ -1366,8 +1380,11 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
       func_def->sig = func_sig;
       func_def->body = func_body;
 
+      pop_scope(&parser->var_table);
       return true;
     }
+
+    pop_scope(&parser->var_table);
   }
 
   backtrack(parser->lexer, pos);
@@ -1534,8 +1551,8 @@ DEBUG_FUNC(compoundstmt, compound_stmt);
 DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
-  AST_PRINT("VARIABLE '%s'",
-            associated_text(state->parser->lexer, &var->identifier));
+  AST_PRINT("VARIABLE '%s' SCOPE %d",
+            associated_text(state->parser->lexer, &var->identifier), var->scope);
 }
 
 DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
@@ -1879,7 +1896,7 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   AST_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(tyref, &param->var_ty);
-  AST_PRINT(" '%s'", associated_text(state->parser->lexer, &param->var.identifier));
+  AST_PRINT(" '%s' SCOPE %d", associated_text(state->parser->lexer, &param->var.identifier), param->var.scope);
 }
 
 DEBUG_FUNC(paramlist, param_list) {
@@ -1893,7 +1910,7 @@ DEBUG_FUNC(funcsig, func_sig) {
   AST_PRINTZ("RETURNS: ");
 
   INDENT();
-  DEBUG_CALL(tyref, &func_sig->ret_ty);
+  DEBUG_CALL(tyref, func_sig->var_ty.func.ret_var_ty);
   UNINDENT();
 
   DEBUG_CALL(paramlist, &func_sig->param_list);

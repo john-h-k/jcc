@@ -149,7 +149,6 @@ bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
 }
 
 bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
-  printf("%s\n", flag);
   if (strcmp(flag, "x64") == 0) {
     *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
     return true;

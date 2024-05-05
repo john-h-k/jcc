@@ -13,6 +13,8 @@
 void enable_log();
 void disable_log();
 
+bool log_enabled();
+
 DECL_LOG_FN(err)
 DECL_LOG_FN(warn)
 DECL_LOG_FN(info)

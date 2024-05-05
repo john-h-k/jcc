@@ -91,7 +91,9 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("AST");
 
-  debug_print_ast(compiler->parser, &result.translation_unit);
+  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PARSE) {
+    debug_print_ast(compiler->parser, &result.translation_unit);
+  }
 
   disable_log();
 
@@ -102,33 +104,33 @@ enum compile_result compile(struct compiler *compiler) {
 
   const struct target *target = get_target(&compiler->args);
 
-  for (size_t i = 0; i < result.translation_unit.num_func_defs; i++) {
-    struct ast_funcdef *def = &result.translation_unit.func_defs[i];
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
+    enable_log();
+  }
 
-    struct ir_builder *ir;
+  BEGIN_STAGE("IR BUILD");
+
+  struct ir_unit *ir = build_ir_for_translationunit(compiler->parser, compiler->arena, &result.translation_unit);
+  
+  for (size_t i = 0; i < ir->num_funcs; i++) {
+    struct ir_builder *irb = ir->funcs[i];
+
     {
-      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
-        enable_log();
-      }
-
-      BEGIN_STAGE("IR BUILD");
-
-      info("compiling function %s",
-           identifier_str(compiler->parser, &def->sig.name));
-
-      ir = build_ir_for_function(compiler->parser, compiler->arena, def);
-
       BEGIN_STAGE("IR");
 
-      debug_print_stage(ir, "ir");
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+        debug_print_stage(irb, "ir");
+      }
 
       BEGIN_STAGE("LOWERING");
 
-      target->lower(ir);
+      target->lower(irb);
 
       BEGIN_STAGE("POST-LOWER IR");
 
-      debug_print_stage(ir, "lower");
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+        debug_print_stage(irb, "lower");
+      }
 
       disable_log();
     }
@@ -141,13 +143,17 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("REGALLOC");
 
       BEGIN_STAGE("ELIM PHI");
-      eliminate_phi(ir);
+      eliminate_phi(irb);
 
-      debug_print_stage(ir, "elim_phi");
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+        debug_print_stage(irb, "elim_phi");
+      }
 
-      register_alloc(ir, target->reg_info);
+      register_alloc(irb, target->reg_info);
 
-      debug_print_stage(ir, "reg_alloc");
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+        debug_print_stage(irb, "reg_alloc");
+      }
 
       disable_log();
     }
@@ -160,7 +166,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("EMITTING");
 
-      func = target->emit_function(ir);
+      func = target->emit_function(irb);
 
       disable_log();
     }
@@ -169,7 +175,7 @@ enum compile_result compile(struct compiler *compiler) {
         .name = func.name, .section = 1, .value = total_size};
 
     total_size += ROUND_UP(func.len_code, target->function_alignment);
-    vector_push_back(compiled_functions, &func);
+    vector_push_back(compiled_functions, &irb);
 
     vector_push_back(symbols, &symbol);
   }
