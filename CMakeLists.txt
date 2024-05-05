@@ -21,6 +21,7 @@ set(
   disasm.c
   var_table.c
   lsra.c
+  graphcol.c
   
   ir/ir.c
   ir/build.c
