@@ -1,4 +1,4 @@
-// expected value: 10
+// expected value: 20
 int main() {
   int a = 5;
 
@@ -6,5 +6,6 @@ int main() {
     a = 10;
   }
 
-  return a;
+  int b = a + a;
+  return b;
 }

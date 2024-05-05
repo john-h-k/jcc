@@ -934,8 +934,9 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
   size_t num_exprs = 0;
 
   for (size_t i = 0; i < phi->stmt->basicblock->num_preds; i++) {
+    struct ir_basicblock *pred = phi->stmt->basicblock->preds[i];
     walk_basicblock(irb, basicblocks_visited, phi, &phi->phi.var,
-                    phi->stmt->basicblock->preds[i], &exprs, &num_exprs);
+                    pred, &exprs, &num_exprs);
   }
 
   debug("find phi exprs for op %zu", phi->id);

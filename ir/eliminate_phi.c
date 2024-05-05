@@ -20,7 +20,7 @@ void eliminate_phi(struct ir_builder *irb) {
       }
 
       while (op && op->ty == IR_OP_TY_PHI) {
-        size_t lcl_idx = irb->num_locals++;
+        // size_t lcl_idx = irb->num_locals++;
         for (size_t i = 0; i < op->phi.num_values; i++) {
           struct ir_op *value = op->phi.values[i];
           struct ir_basicblock *basicblock = value->stmt->basicblock;
@@ -35,22 +35,30 @@ void eliminate_phi(struct ir_builder *irb) {
           }
 
           // insert juuust before the branch
-          struct ir_op *storelcl =
+          // struct ir_op *storelcl =
+          //     insert_before_ir_op(irb, last,
+          //                         IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
+          // storelcl->store_lcl.value = value;
+          // storelcl->store_lcl.lcl_idx = lcl_idx;
+          struct ir_op *mov =
               insert_before_ir_op(irb, last,
-                                  IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
-          storelcl->store_lcl.value = value;
-          storelcl->store_lcl.lcl_idx = lcl_idx;
+                                  IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+          mov->mov.value = value;
+          mov->reg = op->reg;
 
           // HACK: using spills for phi
-          op->phi.values[i] = storelcl;
+          op->phi.values[i] = mov;
         }
 
         // change the phi to a loadlcl
         // struct ir_op *loadlcl = insert_before_ir_op(irb, first_non_phi,
         // IR_OP_TY_LOAD_LCL, op->var_ty);
-        struct ir_op *loadlcl = op;
-        loadlcl->ty = IR_OP_TY_LOAD_LCL;
-        loadlcl->load_lcl.lcl_idx = lcl_idx;
+        // struct ir_op *loadlcl = op;
+        // loadlcl->ty = IR_OP_TY_LOAD_LCL;
+        // loadlcl->load_lcl.lcl_idx = lcl_idx;
+        // struct ir_op *mov = op;
+        // mov->ty = IR_OP_TY_MOV;
+        // mov->mov.value = lcl_idx;
 
         op = op->succ;
       }
