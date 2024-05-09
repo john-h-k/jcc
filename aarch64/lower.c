@@ -21,6 +21,12 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   unsigned long live_regs = op->succ ? op->succ->live_regs : 0;
   // FIXME: don't hardcode volatile count
   unsigned long live_volatile = live_regs & ((1 << 18) - 1);
+
+  // remove the call-return reg from live-volatile as we know it will be over written by end of cal
+  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
+    live_volatile &= ~(1 << op->reg);
+  }
+
   size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
 
   unsigned caller_saves = popcntl(live_volatile);
@@ -54,7 +60,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
         arena_alloc(func->arena, sizeof(*restore->custom.aarch64));
     restore->custom.aarch64->ty = AARCH64_OP_TY_RSTR_REG;
     restore->reg = i;
-    save->lcl_idx = call_slot;
+    restore->lcl_idx = call_slot;
   }
 
   // FIXME: generalise this to calling conventions
@@ -76,6 +82,8 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // FIXME: don't hardcode return reg
   size_t return_reg = 0;
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg != return_reg) {
+    size_t target_reg = op->reg;
+
     // we move the call _back_ and replace it with a mov, by swapping them
     struct ir_op *new_call = insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
     new_call->call = op->call;
@@ -83,7 +91,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
     op->ty = IR_OP_TY_MOV;
     op->mov.value = new_call;
-    op->reg = return_reg;
+    op->reg = target_reg;
   }
 }
 

@@ -183,6 +183,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, ir);
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
+      fprintf(file, " - (R%zu -> R%zu) ", ir->mov.value->reg, ir->reg);
     } else {
       fprintf(file, "<PARAM>");
     }
