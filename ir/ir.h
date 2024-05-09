@@ -27,7 +27,10 @@ enum ir_op_ty {
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
   IR_OP_TY_RET,
-  IR_OP_TY_CALL
+  IR_OP_TY_CALL,
+
+  // represents a custom instruction understood by a particular backend
+  IR_OP_TY_CUSTOM,
 };
 
 bool op_produces_value(enum ir_op_ty ty);
@@ -180,6 +183,16 @@ struct ir_op_br_cond {
 
 #include <limits.h>
 
+struct aarch64_op;
+struct eep_op;
+
+struct ir_op_custom {
+  union {
+    struct aarch64_op *aarch64;
+    struct eep_op *eep;
+  };
+};
+
 #define NO_LCL (SIZE_T_MAX)
 #define NO_REG (SIZE_T_MAX)
 #define REG_SPILLED (NO_REG - 1)
@@ -218,9 +231,12 @@ struct ir_op {
      * condition */
     struct ir_op_phi phi;
     struct ir_op_mov mov;
+    struct ir_op_custom custom;
   };
 
   // only meaningful post register-allocation
+  // `live_regs` is bitmask of all registers with values live, needed for spilling
+  unsigned long live_regs;
   unsigned long reg;
   unsigned long lcl_idx;
   void *metadata;
@@ -343,6 +359,12 @@ struct ir_builder {
   // number of stack local variables
   size_t num_locals;
   size_t total_locals_size;
+
+  // stack spaces from this can be reused, so we store them here
+  // `num_locals` is still always correct, these fields are used by `lower.c`
+  // to determine whether new locals need to be added or there are enough already
+  size_t num_call_saves;
+  size_t total_call_saves_size;
 
   // used during emitting
   size_t offset;

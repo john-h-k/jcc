@@ -353,18 +353,22 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_call *call,
                                 const struct ast_tyref *ast_tyref) {
+  // need to generate args and target IR first to keep IR in order
+
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
   }
 
+  struct ir_op *target = build_ir_for_atom(irb, stmt, call->target, ast_tyref);
+
   irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
 
   op->ty = IR_OP_TY_CALL;
   op->var_ty = ty_for_ast_tyref(irb, &call->var_ty);
-  op->call.target = build_ir_for_atom(irb, stmt, call->target, ast_tyref);
+  op->call.target = target;
   op->call.num_args = call->arg_list.num_args;
   op->call.args = args;
 
@@ -988,6 +992,8 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
                          .nonvolatile_registers_used = 0,
                          .num_locals = 0,
                          .total_locals_size = 0,
+                         .num_call_saves = 0,
+                         .total_call_saves_size = 0,
                          .offset = 0};
 
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));

@@ -15,4 +15,19 @@
 
 const struct target AARCH64_TARGET;
 
+enum aarch64_op_ty {
+  AARCH64_OP_TY_SAVE_LR,
+  AARCH64_OP_TY_RSTR_LR,
+
+  AARCH64_OP_TY_SUB_STACK,
+  AARCH64_OP_TY_ADD_STACK,
+
+  AARCH64_OP_TY_SAVE_REG,
+  AARCH64_OP_TY_RSTR_REG,
+};
+
+struct aarch64_op {
+  enum aarch64_op_ty ty;
+};
+
 #endif

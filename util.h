@@ -17,9 +17,17 @@
 
 #define ARR_LENGTH(a) (sizeof((a)) / sizeof((a)[0]))
 
+static inline unsigned long popcntl(unsigned long l) {
+#if defined(__has_builtin) && __has_builtin(__builtin_popcountl)
+  return __builtin_popcountl(l);
+#else
+  todo("lzcnt not implemented outside of `__builtin_popcountl`");
+#endif
+}
+
 static inline unsigned long tzcnt(unsigned long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_clz)
-  return __builtin_ctz(l);
+  return __builtin_ctzl(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clz`");
 #endif
@@ -27,7 +35,7 @@ static inline unsigned long tzcnt(unsigned long l) {
 
 static inline unsigned long lzcnt(unsigned long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_clz)
-  return __builtin_clz(l);
+  return __builtin_clzl(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clz`");
 #endif

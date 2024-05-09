@@ -342,9 +342,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
       size_t offset = get_lcl_stack_offset(state, op->store_lcl.lcl_idx);
-      if (!UNS_FITS_IN_BITS(offset, 4)) {
-        printf("offset %zu too large!\n", offset);
-      }
+      invariant_assert(UNS_FITS_IN_BITS(offset, 4), "offset too big!");
       eep_emit_store_offset(
           state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
           offset);
