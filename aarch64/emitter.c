@@ -367,8 +367,6 @@ void aarch64_emit_rorv_32(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, RORV_32(rhs.idx, lhs.idx, dest.idx));
 }
 
-
-
 /* Division */
 
 void aarch64_emit_sdiv_64(struct aarch64_emitter *emitter,
@@ -445,6 +443,79 @@ void aarch64_emit_load_cnst_32(struct aarch64_emitter *emitter,
 
 /* Loads and stores */
 
+void aarch64_emit_store_pair_post_index_32(struct aarch64_emitter *emitter,
+                                           struct aarch64_reg addr,
+                                           struct aarch64_reg source0,
+                                           struct aarch64_reg source1,
+                                           unsigned short offset) {
+  aarch64_emit(emitter, STP_POST_INDEX_32(CLAMP_BITS(offset, 7), source1.idx,
+                                          addr.idx, source0.idx));
+}
+
+void aarch64_emit_load_pair_post_index_32(struct aarch64_emitter *emitter,
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg dest0,
+                                          struct aarch64_reg dest1,
+                                          unsigned short offset) {
+  aarch64_emit(emitter, LDP_POST_INDEX_32(CLAMP_BITS(offset, 7), dest1.idx,
+                                          addr.idx, dest0.idx));
+}
+
+void aarch64_emit_store_pair_post_index_64(struct aarch64_emitter *emitter,
+                                           struct aarch64_reg addr,
+                                           struct aarch64_reg source0,
+                                           struct aarch64_reg source1,
+                                           unsigned short offset) {
+  aarch64_emit(emitter, STP_POST_INDEX_64(CLAMP_BITS(offset, 7), source1.idx,
+                                          addr.idx, source0.idx));
+}
+
+void aarch64_emit_load_pair_post_index_64(struct aarch64_emitter *emitter,
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg dest0,
+                                          struct aarch64_reg dest1,
+                                          unsigned short offset) {
+  aarch64_emit(emitter, LDP_POST_INDEX_64(CLAMP_BITS(offset, 7), dest1.idx,
+                                          addr.idx, dest0.idx));
+}
+
+void aarch64_emit_store_pair_pre_index_32(struct aarch64_emitter *emitter,
+                                           struct aarch64_reg addr,
+                                           struct aarch64_reg source0,
+                                           struct aarch64_reg source1,
+                                           unsigned short offset) {
+  aarch64_emit(emitter, STP_PRE_INDEX_32(CLAMP_BITS(offset, 7), source1.idx,
+                                          addr.idx, source0.idx));
+}
+
+void aarch64_emit_load_pair_pre_index_32(struct aarch64_emitter *emitter,
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg dest0,
+                                          struct aarch64_reg dest1,
+                                          unsigned short offset) {
+  aarch64_emit(emitter, LDP_PRE_INDEX_32(CLAMP_BITS(offset, 7), dest1.idx,
+                                          addr.idx, dest0.idx));
+}
+
+void aarch64_emit_store_pair_pre_index_64(struct aarch64_emitter *emitter,
+                                           struct aarch64_reg addr,
+                                           struct aarch64_reg source0,
+                                           struct aarch64_reg source1,
+                                           unsigned short offset) {
+  aarch64_emit(emitter, STP_PRE_INDEX_64(CLAMP_BITS(offset, 7), source1.idx,
+                                          addr.idx, source0.idx));
+}
+
+void aarch64_emit_load_pair_pre_index_64(struct aarch64_emitter *emitter,
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg dest0,
+                                          struct aarch64_reg dest1,
+                                          unsigned short offset) {
+  aarch64_emit(emitter, LDP_PRE_INDEX_64(CLAMP_BITS(offset, 7), dest1.idx,
+                                          addr.idx, dest0.idx));
+}
+
+
 void aarch64_emit_load_offset_64(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,
                                  struct aarch64_reg dest,
@@ -463,7 +534,8 @@ void aarch64_emit_load_offset_32(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,
                                  struct aarch64_reg dest,
                                  unsigned short offset) {
-  aarch64_emit(emitter, LDR_32_IMM_UNSIGNED(U32(offset), U32(addr.idx), U32(dest.idx)));
+  aarch64_emit(emitter,
+               LDR_32_IMM_UNSIGNED(U32(offset), U32(addr.idx), U32(dest.idx)));
 }
 
 void aarch64_emit_store_offset_32(struct aarch64_emitter *emitter,

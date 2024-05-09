@@ -186,7 +186,11 @@ struct ir_op_br_cond {
 #define REG_FLAGS (REG_SPILLED - 1)
 #define DONT_GIVE_REG (REG_FLAGS - 1)
 
-enum ir_op_flags { IR_OP_FLAG_NONE = 0, IR_OP_FLAG_MUST_SPILL = 1, IR_OP_FLAG_PARAM = 2 };
+enum ir_op_flags {
+  IR_OP_FLAG_NONE = 0,
+  IR_OP_FLAG_MUST_SPILL = 1,
+  IR_OP_FLAG_PARAM = 2,
+};
 
 struct ir_op {
   size_t id;
@@ -307,6 +311,11 @@ struct ir_basicblock {
   void *metadata;
 };
 
+enum ir_builder_flags {
+  IR_BUILDER_FLAG_NONE,
+  IR_BUILDER_FLAG_MAKES_CALL
+};
+
 struct ir_builder {
   const char *name;
 
@@ -320,14 +329,23 @@ struct ir_builder {
   struct ir_basicblock *first;
   struct ir_basicblock *last;
 
+  enum ir_builder_flags flags;
+
   size_t basicblock_count;
   size_t stmt_count;
   size_t op_count;
   size_t next_id;
 
+  // starts at index of first nonvolatile register, which is a bit odd
+  // could change or generally make nice to work with
+  unsigned long nonvolatile_registers_used;
+
   // number of stack local variables
   size_t num_locals;
   size_t total_locals_size;
+
+  // used during emitting
+  size_t offset;
 };
 
 struct ir_unit {
@@ -361,10 +379,15 @@ void add_pred_to_basicblock(struct ir_builder *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_basicblock *pred);
 
+// NOTE: does NOT connect the blocks to the end (return) block, must be done manually
+struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
+                              struct ir_op *insert_after,
+                              struct ir_basicblock *first);
+
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty,
-                      unsigned long reg, unsigned long lcl_idx);
+                      struct ir_op_var_ty var_ty, unsigned long reg,
+                      unsigned long lcl_idx);
 
 void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
                       struct ir_op *move_after);

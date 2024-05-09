@@ -16,6 +16,8 @@ struct aarch64_reg {
 #define RETURN_REG ((struct aarch64_reg) {0})
 #define ZERO_REG ((struct aarch64_reg) {31})
 #define STACK_PTR_REG ((struct aarch64_reg) {31})
+#define FRAME_PTR_REG ((struct aarch64_reg) {29})
+#define RET_PTR_REG ((struct aarch64_reg) {30})
 
 enum aarch64_cond {
   // always true
@@ -288,6 +290,55 @@ void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter,
                                struct aarch64_reg deset, uint64_t cnst);
 
 /* Loads and stores */
+
+void aarch64_emit_store_pair_post_index_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_post_index_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
+
+void aarch64_emit_store_pair_post_index_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_post_index_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
+
+void aarch64_emit_store_pair_pre_index_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_pre_index_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
+
+void aarch64_emit_store_pair_pre_index_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_pre_index_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
+
 
 void aarch64_emit_load_offset_64(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,

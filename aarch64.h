@@ -10,14 +10,9 @@
 // FIXME: this unnecessarily ties arm64 to mach-o
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
+#define AARCH64_STACK_ALIGNMENT (16)
+#define AARCH64_OP_SIZE (4)
 
-const struct target AARCH64_TARGET = {
-  (struct reg_info) {.num_regs = 18},
-  AARCH64_FUNCTION_ALIGNMENT,
-  aarch64_lower,
-  aarch64_emit_function,
-  write_macho,
-  objdump_debug_disasm
-};
+const struct target AARCH64_TARGET;
 
 #endif

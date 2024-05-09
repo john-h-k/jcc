@@ -4,6 +4,9 @@
 #include "../ir/build.h"
 
 // performs platform specific lowering transformations to the IR
-void aarch64_lower(struct ir_builder *func);
+void aarch64_pre_reg_lower(struct ir_builder *func);
+
+// does final stack bits
+void aarch64_post_reg_lower(struct ir_builder *func);
 
 #endif

@@ -15,6 +15,7 @@ struct var_key {
 struct var_ref {
   struct var_key key;
   struct ir_op *op;
+  struct ir_builder *func;
 };
 
 struct var_refs *var_refs_create(struct var_refs *parent);

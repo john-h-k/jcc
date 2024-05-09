@@ -1,4 +1,5 @@
 #include "ir.h"
+
 #include "var_refs.h"
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
@@ -121,7 +122,7 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_GLB: {
-      break;
+    break;
   }
   case IR_OP_TY_CALL: {
     cb(&op->call.target, cb_metadata);
@@ -129,7 +130,6 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
       cb(&op->call.args[i], cb_metadata);
     }
     break;
-
   }
   case IR_OP_TY_PHI: {
     for (size_t i = 0; i < op->phi.num_values; i++) {
@@ -695,7 +695,10 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   }
 
   basicblock->id = irb->basicblock_count++;
-  basicblock->var_refs = var_refs_create(irb->global_var_refs);
+  // disabled and checks are done manually now
+  // because this broke stuff by writing to global var refs (bad!)
+  // basicblock->var_refs = var_refs_create(irb->global_var_refs);
+  basicblock->var_refs = var_refs_create(NULL);
   basicblock->irb = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;
@@ -712,4 +715,51 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   irb->last = basicblock;
 
   return basicblock;
+}
+
+struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
+                                               struct ir_op *insert_after,
+                                               struct ir_basicblock *first) {
+  struct ir_basicblock *orig_bb = insert_after->stmt->basicblock;
+
+  struct ir_basicblock *end_bb = alloc_ir_basicblock(irb);
+  struct ir_stmt *end_stmt = alloc_ir_stmt(irb, end_bb);
+
+  // now move all later instructions to the end bb
+  // first break up the stmt we are in
+  end_stmt->first = insert_after->succ;
+  if (insert_after->succ) {
+    insert_after->succ->pred = NULL;
+  }
+
+  end_stmt->last = insert_after->stmt->last;
+  insert_after->stmt->last->succ = NULL;
+
+  insert_after->stmt->last = insert_after;
+  insert_after->succ = NULL;
+
+  end_stmt->succ = insert_after->stmt->succ;
+  insert_after->stmt->pred = end_stmt;
+
+  end_bb->last = insert_after->stmt == orig_bb->last ? end_stmt : orig_bb->last;
+
+  orig_bb->last = insert_after->stmt;
+  insert_after->stmt->succ = NULL;
+
+  insert_after->stmt->last = insert_after;
+  insert_after->succ = NULL;
+  printf("LAST: %zu\n", insert_after->stmt->id);
+
+  // forward block end
+  end_bb->ty = orig_bb->ty;
+  if (orig_bb->ty == IR_BASICBLOCK_TY_SPLIT) {
+    end_bb->split = orig_bb->split;
+  } else if (orig_bb->ty == IR_BASICBLOCK_TY_MERGE) {
+    end_bb->merge = orig_bb->merge;
+  }
+
+  orig_bb->ty = IR_BASICBLOCK_TY_MERGE;
+  orig_bb->merge.target = first;
+
+  return end_bb;
 }

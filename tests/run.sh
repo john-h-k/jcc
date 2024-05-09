@@ -18,6 +18,7 @@ for file in $(find $(dirname $0) -name '*.c' -print); do
   result=$?
   if [ $result -ne $expected ]; then
     echo "TEST FAILED: expected value $expected, got $result"
+    break
   else
     echo "TEST PASSED"
   fi
