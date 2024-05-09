@@ -2,6 +2,7 @@
 
 #include "emitter.h"
 #include "isa.h"
+#include "../ir/var_refs.h"
 
 struct current_op_state {
   // registers being used by the current instruction, so not possible to use
@@ -10,6 +11,7 @@ struct current_op_state {
 };
 
 struct emit_state {
+  struct ir_builder *irb;
   struct arena_allocator *arena;
   struct aarch64_emitter *emitter;
 
@@ -26,8 +28,6 @@ static struct aarch64_reg get_reg_for_idx(size_t idx) {
   invariant_assert(reg.idx <= 31, "invalid reg!");
   return reg;
 }
-
-static bool is_return_reg(size_t idx) { return idx == RETURN_REG.idx; }
 
 enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
@@ -50,7 +50,7 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
       reg != REG_SPILLED,
       "spilled reg reached emitter; should've been handled by lower/regalloc");
 
-  invariant_assert(reg < 18, "invalid reg for AArch64");
+  invariant_assert(reg < 31, "invalid reg '%zu' for AArch64", reg);
 
   return reg;
 }
@@ -59,6 +59,25 @@ static bool is_64_bit(const struct ir_op *op) {
   invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
                    "non-primitive passed to `is_64_bit`");
   return op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
+}
+
+static void emit_call(struct emit_state *state, struct ir_op *op) {
+  // FIXME: make a constant
+  int offset;
+  switch (op->call.target->ty) {
+    case IR_OP_TY_GLB: {
+      struct var_key key = { .name = op->call.target->glb.global, .scope = SCOPE_GLOBAL };
+      struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
+      int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
+      offset = (int)ref->func->offset - (int)pos;
+      break;
+    }
+    default:
+      todo("non GLB calls");
+      break;
+  }
+
+  aarch64_emit_bl(state->emitter, offset); 
 }
 
 static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
@@ -270,11 +289,6 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
 }
 
 static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
-  if (!op->mov.value) {
-    // dummy MOV used to indicate parameters
-    return;
-  }
-
   size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
@@ -309,8 +323,7 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
-               size_t stack_size);
+static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt);
 
 struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   // the first step of emitting is that we need to ensure the `function_offset`
@@ -341,24 +354,18 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   struct aarch64_emitter *emitter;
   create_aarch64_emitter(&emitter);
 
-  struct emit_state state = {.arena = func->arena,
+  struct emit_state state = {.irb = func,
+                             .arena = func->arena,
                              .emitter = emitter,
                              .num_extra_stack_slots = 0,
                              .cur_op_state = {0}};
-
-  size_t stack_size = ROUND_UP(16, func->total_locals_size);
-  if (stack_size) {
-    // spills, so we need stack space
-    aarch64_emit_sub_64_imm(state.emitter, STACK_PTR_REG, stack_size,
-                            STACK_PTR_REG);
-  }
 
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 
     while (stmt) {
-      emit_stmt(&state, stmt, stack_size);
+      emit_stmt(&state, stmt);
 
       stmt = stmt->succ;
     }
@@ -384,8 +391,32 @@ static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
   return lcl_idx;
 }
 
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
-               size_t stack_size) {
+static void emit_stack_op(struct emit_state *state, struct ir_op *op) {
+  switch (op->binary_op.ty) {
+    case IR_OP_BINARY_OP_TY_ADD:
+      aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, state->irb->total_locals_size, STACK_PTR_REG);
+      break;
+    case IR_OP_BINARY_OP_TY_SUB:
+      aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG, state->irb->total_locals_size, STACK_PTR_REG);
+      break;
+    default:
+      bug("unrecognised binary op with NULL for lhs and rhs");
+  }
+}
+
+static void emit_lr_op(struct emit_state *state, struct ir_op *op) {
+  // FIXME: the pre-indexing here is causing segfaults for some reason? we should be using it instead of stack when possible
+  if (op->mov.value) {
+    // this is the restore part
+    aarch64_emit_load_pair_pre_index_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, 0);
+  } else {
+    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, 0);
+    // aarch64_emit_mov_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, 0, FRAME_PTR_REG);
+  }
+}
+
+static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
   // NOTE: it is important, for branch offset calculations, that each IR
   // operation emits exactly one instruction any expansion needed other than
   // this should have occured in lowering
@@ -395,7 +426,13 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
     case IR_OP_TY_MOV: {
-      emit_mov_op(state, op);
+      if (op->flags & IR_OP_FLAG_PARAM) {
+        // don't need to do anything, dummy instr
+      } else if (!op->mov.value || op->mov.value->ty == IR_OP_TY_RET) {
+        emit_lr_op(state, op);
+      } else {
+        emit_mov_op(state, op);
+      }
       break;
     }
     case IR_OP_TY_PHI: {
@@ -435,34 +472,36 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_BINARY_OP: {
-      emit_binary_op(state, op);
+      if (!op->binary_op.lhs && !op->binary_op.rhs) {
+        // NULL for lhs and rhs means something special
+        emit_stack_op(state, op);
+      } else {
+        emit_binary_op(state, op);
+      }
       break;
     }
     case IR_OP_TY_CAST_OP: {
       emit_cast_op(state, op);
       break;
     }
+    case IR_OP_TY_GLB: {
+      // TODO:
+      aarch64_emit_nop(state->emitter);
+      break;
+    }
+    case IR_OP_TY_CALL: {
+      emit_call(state, op);
+      break;
+    }
     case IR_OP_TY_RET: {
       size_t value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
       invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
-
-      if (!is_return_reg(value_reg)) {
-        aarch64_emit_mov_32(state->emitter, get_reg_for_idx(value_reg),
-                            RETURN_REG);
-      }
-
-      // this should really be handled somewhere else for
-      // elegance but this readjusts SP as needed (epilogue)
-      if (stack_size) {
-        aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, stack_size,
-                                STACK_PTR_REG);
-      }
 
       aarch64_emit_ret(state->emitter);
       break;
     }
     default: {
-      todo("unsupported IR OP");
+      todo("unsupported IR OP '%zu'", op->ty);
       break;
     }
     }

@@ -15,6 +15,34 @@
              (U32(op1) << 26) /* bit 25 is zero */                             \
              | (U32(op2) << 22) | (U32(op3) << 12) | U32(op4))
 
+#define LDR_STR_PAIR_POST_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                  \
+  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
+             (U32(0b1) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |           \
+             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+
+#define LDR_STR_PAIR_PRE_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                   \
+  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
+             (U32(0b11) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |          \
+             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+
+#define STP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
+  LDR_STR_PAIR_POST_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
+  LDR_STR_PAIR_POST_INDEX(0b00, 0, 1, imm7, Rt2, Rn, Rt)
+#define STP_POST_INDEX_64(imm7, Rt2, Rn, Rt)                                   \
+  LDR_STR_PAIR_POST_INDEX(0b10, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_POST_INDEX_64(imm7, Rt2, Rn, Rt)                                   \
+  LDR_STR_PAIR_POST_INDEX(0b10, 0, 1, imm7, Rt2, Rn, Rt)
+
+#define STP_PRE_INDEX_32(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_PRE_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_PRE_INDEX_32(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_PRE_INDEX(0b00, 0, 1, imm7, Rt2, Rn, Rt)
+#define STP_PRE_INDEX_64(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_PRE_INDEX(0b10, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_PRE_INDEX_64(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_PRE_INDEX(0b10, 0, 1, imm7, Rt2, Rn, Rt)
+
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \
             (U32(imm19) << 5) | U32(Rt))
@@ -268,7 +296,7 @@
   (uint32_t)((U32(op0) << 29) | (U32(0b101) << 26) | (U32(op1) << 5) | U32(op2))
 
 #define BRANCH_COND_IMM(o1, o0, imm19, cond)                                   \
-  (uint32_t)((U32(0b0101010) << 25) | (U32(o1) << 24) | (U32(imm19) << 5) |          \
+  (uint32_t)((U32(0b0101010) << 25) | (U32(o1) << 24) | (U32(imm19) << 5) |    \
              (U32(o0) << 4) | U32(cond))
 
 #define BRANCH_IMM(op, imm26)                                                  \
@@ -281,7 +309,7 @@
 #define BL(imm26) BRANCH_IMM(0b1, imm26)
 
 #define CMP_AND_BRANCH_IMM(sf, op, imm19, Rt)                                  \
-  (uint32_t)((U32(sf) << 31) | (U32(0b011010) << 25) | (U32(op) << 24) |             \
+  (uint32_t)((U32(sf) << 31) | (U32(0b011010) << 25) | (U32(op) << 24) |       \
              (U32(imm19) << 5) | U32(Rt))
 
 #define CBZ_32_IMM(imm19, Rt) CMP_AND_BRANCH_IMM(0b0, 0b0, imm19, Rt)
@@ -291,7 +319,9 @@
 
 #define UNCOND_BRANCH_REG(opc, op2, op3, Rn, op4)                              \
   BRANCH(0b110,                                                                \
-         (U32(0b1) << 20) | (U32(opc) << 16) | (U32(op2) << 11) | (U32(op3) << 5) | U32(Rn), op4)
+         (U32(0b1) << 20) | (U32(opc) << 16) | (U32(op2) << 11) |              \
+             (U32(op3) << 5) | U32(Rn),                                        \
+         op4)
 
 #define RET(Rn) UNCOND_BRANCH_REG(0b0010, 0b11111, 0b000000, Rn, 00000)
 

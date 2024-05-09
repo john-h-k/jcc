@@ -403,14 +403,16 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   qsort(intervals, num_intervals, sizeof(*intervals),
         sort_interval_by_start_point);
 
-  size_t *active = arena_alloc(irb->arena, sizeof(size_t) * reg_info.num_regs);
+  size_t num_regs = reg_info.num_volatile + reg_info.num_nonvolatile;
+
+  size_t *active = arena_alloc(irb->arena, sizeof(size_t) * num_regs);
   size_t num_active = 0;
 
-  invariant_assert(reg_info.num_regs <= sizeof(unsigned long) * 8,
+  invariant_assert(num_regs <= sizeof(unsigned long) * 8,
                    "LSRA does not currently support more than `sizeof(unsigned "
                    "long) * 8` register as it uses a bitmask");
 
-  unsigned long reg_pool = (1 << reg_info.num_regs) - 1;
+  unsigned long reg_pool = (1 << num_regs) - 1;
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
@@ -426,14 +428,18 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
 
     if (interval->op->flags & IR_OP_FLAG_MUST_SPILL ||
-        num_active == reg_info.num_regs) {
+        num_active == num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
       unsigned long free_reg = tzcnt(reg_pool);
-      debug_assert(free_reg < reg_info.num_regs,
+      debug_assert(free_reg < num_regs,
                    "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
+      if (free_reg >= reg_info.num_volatile) {
+        irb->nonvolatile_registers_used |= (1 << free_reg);
+      }
+      
       interval->op->reg = free_reg;
 
       // insert into `active`, sorted by end point

@@ -186,8 +186,13 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_BINARY_OP:
     debug_lhs(file, ir);
-    fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
-            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
+
+    if (ir->binary_op.lhs && ir->binary_op.rhs) {
+      fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
+              binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
+    } else {
+      fprintf(file, "<NULL binop>"); // FIXME: properly print
+    }
     break;
   case IR_OP_TY_UNARY_OP:
     debug_lhs(file, ir);

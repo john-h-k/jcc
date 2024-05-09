@@ -46,8 +46,10 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   struct ir_basicblock *shift_bb = alloc_ir_basicblock(func);
   struct ir_stmt *shift_stmt = alloc_ir_stmt(func, shift_bb);
 
-  struct ir_basicblock *end_bb = alloc_ir_basicblock(func);
-  struct ir_stmt *end_stmt = alloc_ir_stmt(func, end_bb);
+  struct ir_basicblock *end_bb = insert_basicblocks_after(func, op, while_cond_bb);
+  end_bb->num_preds = 1;
+  end_bb->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
+  end_bb->preds[0] = while_cond_bb;
 
   while_cond_bb->ty = IR_BASICBLOCK_TY_SPLIT;
   while_cond_bb->split.true_target = if_cond_bb;
@@ -62,47 +64,7 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
 
   shift_bb->ty = IR_BASICBLOCK_TY_MERGE;
   shift_bb->merge.target = while_cond_bb;
-  
 
-  // now move all later instructions to the end bb
-  // first break up the stmt we are in
-  end_stmt->first = op->succ;
-  if (op->succ) {
-    op->succ->pred = NULL;
-  }
-  
-  end_stmt->last = op->stmt->last;
-  op->stmt->last->succ = NULL;
-  
-  op->stmt->last = op;
-  op->succ = NULL;
-  
-  end_stmt->succ = op->stmt->succ;
-  op->stmt->pred = end_stmt;
-  
-  end_bb->last = op->stmt == orig_bb->last ? end_stmt : orig_bb->last;
-
-  orig_bb->last = op->stmt;
-  op->stmt->succ = NULL;
-  
-  op->stmt->last = op;
-  op->succ = NULL;
-  printf("LAST: %zu\n", op->stmt->id);
-
-  end_bb->num_preds = 1;
-  end_bb->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
-  end_bb->preds[0] = while_cond_bb;
-
-  // forward block end
-  end_bb->ty = orig_bb->ty;
-  if (orig_bb->ty == IR_BASICBLOCK_TY_SPLIT) {
-    end_bb->split = orig_bb->split;
-  } else if (orig_bb->ty == IR_BASICBLOCK_TY_MERGE) {
-    end_bb->merge = orig_bb->merge;
-  }
-
-  orig_bb->ty = IR_BASICBLOCK_TY_MERGE;
-  orig_bb->merge.target = while_cond_bb;
 
   // struct ir_op *cnst_0 = alloc_ir_op(func, op->stmt);
   struct ir_op *cnst_0 = op;
@@ -195,9 +157,172 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
 }
 
 static void lower_div(struct ir_builder *func, struct ir_op *op) {
-  UNUSED_ARG(func);
-  UNUSED_ARG(op);
-  todo("lower_div");
+  struct ir_basicblock *orig_bb = op->stmt->basicblock;  
+
+  struct ir_op *op1 = op->binary_op.lhs;
+  struct ir_op *op2 = op->binary_op.rhs;
+
+  // TODO: assert same ty
+  struct ir_op_var_ty var_ty = op1->var_ty;
+
+  //     if (divisor == 0) {
+  //         return INT_MAX; // handle division by zero
+  //     }
+    
+  //     int sign = ((dividend < 0) ^ (divisor < 0)) ? -1 : 1;
+    
+  //     T absDividend = abs(dividend);
+  //     T absDivisor = abs(divisor);
+  //     T temp = 1;
+  //     T quotient = 0;
+    
+  //     while (absDividend >= absDivisor) {
+  //         absDivisor <<= 1;
+  //         temo <<= 1;
+  //     }
+
+  //     while (temp > 1) {
+  //         absDivisor >>= 1;
+  //         temp >>= 1;
+
+  //         if (absDividend >= absDivisor) {
+  //             absDivident -= absDivisor;
+  //             quotient += temp;
+  //         }
+  //     }
+    
+  //     return sign * quotient;
+
+  // 0
+
+  // struct ir_basicblock *div_zero_cond_bb = alloc_ir_basicblock(func);
+  // struct ir_stmt *div_zero_cond_stmt = alloc_ir_stmt(func, div_zero_cond_bb);
+
+  // struct ir_basicblock *div_zero_body_bb = alloc_ir_basicblock(func);
+  // struct ir_stmt *div_zero_body_stmt = alloc_ir_stmt(func, div_zero_body_bb);
+
+  
+
+  struct ir_basicblock *while_cond_bb = alloc_ir_basicblock(func);
+  struct ir_stmt *while_cond_stmt = alloc_ir_stmt(func, while_cond_bb);
+
+  struct ir_basicblock *if_cond_bb = alloc_ir_basicblock(func);
+  struct ir_stmt *if_cond_stmt = alloc_ir_stmt(func, if_cond_bb);
+
+  struct ir_basicblock *if_body_bb = alloc_ir_basicblock(func);
+  struct ir_stmt *if_body_stmt = alloc_ir_stmt(func, if_body_bb);
+
+  struct ir_basicblock *shift_bb = alloc_ir_basicblock(func);
+  struct ir_stmt *shift_stmt = alloc_ir_stmt(func, shift_bb);
+
+  struct ir_basicblock *end_bb = insert_basicblocks_after(func, op, while_cond_bb);
+  end_bb->num_preds = 1;
+  end_bb->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
+  end_bb->preds[0] = while_cond_bb;
+
+  while_cond_bb->ty = IR_BASICBLOCK_TY_SPLIT;
+  while_cond_bb->split.true_target = if_cond_bb;
+  while_cond_bb->split.false_target = end_bb;
+
+  if_cond_bb->ty = IR_BASICBLOCK_TY_SPLIT;
+  if_cond_bb->split.true_target = if_body_bb;
+  if_cond_bb->split.false_target = shift_bb;
+
+  if_body_bb->ty = IR_BASICBLOCK_TY_MERGE;
+  if_body_bb->merge.target = shift_bb;
+
+  shift_bb->ty = IR_BASICBLOCK_TY_MERGE;
+  shift_bb->merge.target = while_cond_bb;
+
+
+  // struct ir_op *cnst_0 = alloc_ir_op(func, op->stmt);
+  struct ir_op *cnst_0 = op;
+  cnst_0->ty = IR_OP_TY_CNST;
+  cnst_0->var_ty = var_ty;
+  cnst_0->cnst.value = 0;
+
+  // 1
+  struct ir_op *cnst_1 = alloc_ir_op(func, if_cond_stmt);
+  cnst_1->ty = IR_OP_TY_CNST;
+  cnst_1->var_ty = var_ty;
+  cnst_1->cnst.value = 1;
+
+  struct ir_op *op1_shifted = alloc_ir_op(func, while_cond_stmt);
+  struct ir_op *op1_shifted_r1 = alloc_ir_op(func, shift_stmt);
+  op1_shifted->ty = IR_OP_TY_PHI;
+  op1_shifted->var_ty = var_ty;
+  op1_shifted->phi.num_values = 2;
+  op1_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  op1_shifted->phi.values[0] = op1;
+  op1_shifted->phi.values[1] = op1_shifted_r1;
+
+  op1_shifted_r1->ty = IR_OP_TY_BINARY_OP;
+  op1_shifted_r1->var_ty = var_ty;
+  // FIXME: arith/logic?
+  op1_shifted_r1->binary_op.ty = IR_OP_BINARY_OP_TY_URSHIFT;
+  op1_shifted_r1->binary_op.lhs = op1_shifted;
+  op1_shifted_r1->binary_op.rhs = cnst_1;
+
+  struct ir_op *op2_shifted = alloc_ir_op(func, if_cond_stmt);
+  struct ir_op *op2_shifted_l1 = alloc_ir_op(func, shift_stmt);
+  op2_shifted->ty = IR_OP_TY_PHI;
+  op2_shifted->var_ty = var_ty;
+  op2_shifted->phi.num_values = 2;
+  op2_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op2_shifted->phi.num_values);
+  op2_shifted->phi.values[0] = op2;
+  op2_shifted->phi.values[1] = op2_shifted_l1;
+
+  op2_shifted_l1->ty = IR_OP_TY_BINARY_OP;
+  op2_shifted_l1->var_ty = var_ty;
+  op2_shifted_l1->binary_op.ty = IR_OP_BINARY_OP_TY_LSHIFT;
+  op2_shifted_l1->binary_op.lhs = op2_shifted;
+  op2_shifted_l1->binary_op.rhs = cnst_1;
+
+  struct ir_op *while_br_cond = alloc_ir_op(func, while_cond_stmt);
+  while_br_cond->ty = IR_OP_TY_BR_COND;
+  while_br_cond->var_ty = IR_OP_VAR_TY_NONE;
+  while_br_cond->br_cond.cond = op1_shifted;
+  
+  // op1 & 1
+  struct ir_op *if_cond = alloc_ir_op(func, if_cond_stmt);
+  if_cond->ty = IR_OP_TY_BINARY_OP;
+  if_cond->var_ty = var_ty;
+  if_cond->binary_op.ty = IR_OP_BINARY_OP_TY_AND;
+  if_cond->binary_op.lhs = op1_shifted;
+  if_cond->binary_op.rhs = cnst_1;
+
+  // if (op1 & 1)
+  struct ir_op *if_br_cond = alloc_ir_op(func, if_cond_stmt);
+  if_br_cond->ty = IR_OP_TY_BR_COND;
+  if_br_cond->var_ty = IR_OP_VAR_TY_NONE;
+  if_br_cond->br_cond.cond = if_cond;
+    
+  struct ir_op *sum = alloc_ir_op(func, if_body_stmt);
+  struct ir_op *sum_plus_op2shifted = alloc_ir_op(func, if_body_stmt);
+
+  // sum
+  sum->ty = IR_OP_TY_PHI;
+  sum->var_ty = var_ty;
+  sum->phi.num_values = 2;
+  sum->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  sum->phi.values[0] = cnst_0;
+  sum->phi.values[1] = sum_plus_op2shifted;
+
+  // sum + op2_shifted
+  sum_plus_op2shifted->ty = IR_OP_TY_BINARY_OP;
+  sum_plus_op2shifted->var_ty = var_ty;
+  sum_plus_op2shifted->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
+  sum_plus_op2shifted->binary_op.lhs = sum;
+  sum_plus_op2shifted->binary_op.rhs = op2_shifted;
+
+  struct ir_op *if_bb_br = alloc_ir_op(func, if_body_stmt);
+  if_bb_br->ty = IR_OP_TY_BR;
+
+  struct ir_op *shift_bb_br = alloc_ir_op(func, shift_stmt);
+  shift_bb_br->ty = IR_OP_TY_BR;
+
+  struct ir_op *orig_bb_br = alloc_ir_op(func, orig_bb->last);
+  orig_bb_br->ty = IR_OP_TY_BR;
 }
 
 static void lower_shift(struct ir_builder *func, struct ir_op *op) {
@@ -319,7 +444,7 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
 
 enum eep_lower_stage { EEP_LOWER_STAGE_QUOT, EEP_LOWER_STAGE_ALL };
 
-void eep_lower(struct ir_builder *func) {
+void eep_pre_reg_lower(struct ir_builder *func) {
   for (enum eep_lower_stage stage = EEP_LOWER_STAGE_QUOT;
        stage <= EEP_LOWER_STAGE_ALL; stage++) {
 

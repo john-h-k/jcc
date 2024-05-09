@@ -122,11 +122,13 @@ enum compile_result compile(struct compiler *compiler) {
         debug_print_stage(irb, "ir");
       }
 
-      BEGIN_STAGE("LOWERING");
+      BEGIN_STAGE("PRE REG LOWERING");
 
-      target->lower(irb);
+      if (target->pre_reg_lower) {
+        target->pre_reg_lower(irb);
+      }
 
-      BEGIN_STAGE("POST-LOWER IR");
+      BEGIN_STAGE("POST PRE REG LOWER IR");
 
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
         debug_print_stage(irb, "lower");
@@ -154,10 +156,37 @@ enum compile_result compile(struct compiler *compiler) {
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
         debug_print_stage(irb, "elim_phi");
       }
+
+      BEGIN_STAGE("POST REG LOWERING");
+
+      if (target->pre_reg_lower) {
+        target->post_reg_lower(irb);
+      }
+
+      BEGIN_STAGE("POST POST REG LOWER IR");
       
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+        debug_print_stage(irb, "post_lower");
+      }
 
       disable_log();
     }
+  }
+
+  // okay, we've now done everything except actually emit
+  // here we calculate the offsets for all the functions so we can emit calls correctly
+  size_t offset = 0;
+  for (size_t i = 0; i < ir->num_funcs; i++) {
+    struct ir_builder *irb = ir->funcs[i];
+
+    irb->offset = offset;
+    offset += irb->op_count;
+
+    offset = ROUND_UP(offset, target->function_alignment / target->op_size);
+  }
+  
+  for (size_t i = 0; i < ir->num_funcs; i++) {
+    struct ir_builder *irb = ir->funcs[i];
 
     struct compiled_function func;
     {

@@ -279,6 +279,9 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   struct var_key key = get_var_key(irb->parser, var);
 
   struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
+  if (!ref) {
+    ref = var_refs_get(irb->global_var_refs, &key);
+  }
 
   // invariant_assert((ref && ref->op) || !ref, "ref present but empty?");
   struct ir_op *expr = ref ? ref->op : NULL;
@@ -297,7 +300,6 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
 
     return op;
   }
-  
 
   struct ast_tyref var_tyref = var->var_ty;
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
@@ -357,6 +359,7 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
   }
 
+  irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
 
   op->ty = IR_OP_TY_CALL;
@@ -935,8 +938,8 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
 
   for (size_t i = 0; i < phi->stmt->basicblock->num_preds; i++) {
     struct ir_basicblock *pred = phi->stmt->basicblock->preds[i];
-    walk_basicblock(irb, basicblocks_visited, phi, &phi->phi.var,
-                    pred, &exprs, &num_exprs);
+    walk_basicblock(irb, basicblocks_visited, phi, &phi->phi.var, pred, &exprs,
+                    &num_exprs);
   }
 
   debug("find phi exprs for op %zu", phi->id);
@@ -963,48 +966,35 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   struct ir_op *consumer = cb_metadata;
 
   // TODO: validate CALL ops as well
-  if (consumer->ty != IR_OP_TY_CAST_OP && consumer->ty != IR_OP_TY_CALL && op_produces_value(consumer->ty)) {
+  if (consumer->ty != IR_OP_TY_CAST_OP && consumer->ty != IR_OP_TY_CALL &&
+      op_produces_value(consumer->ty)) {
     invariant_assert(var_ty_eq(&(*op)->var_ty, &consumer->var_ty),
                      "op %zu uses op %zu with different type!", consumer->id,
                      (*op)->id);
   }
 }
 
-struct ir_builder *build_ir_for_function(struct parser *parser,
-                                         struct arena_allocator *arena,
-                                         struct ast_translationunit *translation_unit,
-                                         struct ast_funcdef *def) {
+struct ir_builder *
+build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
+                      struct ast_funcdef *def, struct var_refs *global_var_refs) {
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
-                         .global_var_refs = var_refs_create(NULL),
+                         .global_var_refs = global_var_refs,
                          .arena = arena,
+                         .flags = IR_BUILDER_FLAG_NONE,
                          .first = NULL,
                          .last = NULL,
                          .op_count = 0,
+                         .nonvolatile_registers_used = 0,
                          .num_locals = 0,
-                         .total_locals_size = 0};
+                         .total_locals_size = 0,
+                         .offset = 0};
 
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = b;
 
   struct ir_op_var_ty ty = ty_for_ast_tyref(builder, &def->sig.var_ty);
-  b.func_ty = ty.func;
-
-  // funcs do not necessarily have a seperate decl so we do it for defs too
-  
-  for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
-    struct ast_funcdecl *decl = &translation_unit->func_decls[i];
-    struct var_key key = { .name = identifier_str(parser, &decl->sig.name), .scope = SCOPE_GLOBAL };
-    struct var_ref *ref = var_refs_add(builder->global_var_refs, &key);
-    UNUSED_ARG(ref);
-  }
-
-  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
-    struct ast_funcdef *def = &translation_unit->func_defs[i];
-    struct var_key key = { .name = identifier_str(parser, &def->sig.name), .scope = SCOPE_GLOBAL };
-    struct var_ref *ref = var_refs_add(builder->global_var_refs, &key);
-    UNUSED_ARG(ref);
-  }
+  builder->func_ty = ty.func;
 
   // needs at least one initial basic block
   alloc_ir_basicblock(builder);
@@ -1086,16 +1076,42 @@ struct ir_unit *build_ir_for_translationunit(
     struct ast_translationunit *translation_unit) {
 
   struct ir_unit u = {
-    .funcs = arena_alloc(arena, sizeof(struct ir_builder *) * translation_unit->num_func_defs),
-    .num_funcs = translation_unit->num_func_defs,
+      .funcs = arena_alloc(arena, sizeof(struct ir_builder *) *
+                                      translation_unit->num_func_defs),
+      .num_funcs = translation_unit->num_func_defs,
   };
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = u;
 
+  struct var_refs *global_var_refs = var_refs_create(NULL);
+  // funcs do not necessarily have a seperate decl so we do it for defs too
+
+  for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
+    struct ast_funcdecl *decl = &translation_unit->func_decls[i];
+    struct var_key key = {.name = identifier_str(parser, &decl->sig.name),
+                          .scope = SCOPE_GLOBAL};
+    struct var_ref *ref = var_refs_add(global_var_refs, &key);
+    UNUSED_ARG(ref);
+  }
+
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     struct ast_funcdef *def = &translation_unit->func_defs[i];
+    struct var_key key = {.name = identifier_str(parser, &def->sig.name),
+                          .scope = SCOPE_GLOBAL};
+    struct var_ref *ref = var_refs_add(global_var_refs, &key);
+    UNUSED_ARG(ref);
+  }
+  
+  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
+    struct ast_funcdef *def = &translation_unit->func_defs[i];
+    struct var_key key = {.name = identifier_str(parser, &def->sig.name),
+                          .scope = SCOPE_GLOBAL};
 
-    struct ir_builder *func = build_ir_for_function(parser, arena, translation_unit, def);
+    struct ir_builder *func =
+        build_ir_for_function(parser, arena, def, global_var_refs);
+
+    var_refs_get(global_var_refs, &key)->func = func;
+
     iru->funcs[i] = func;
   }
 

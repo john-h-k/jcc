@@ -4,6 +4,6 @@
 #include "../ir/build.h"
 
 // performs platform specific lowering transformations to the IR
-void eep_lower(struct ir_builder *func);
+void eep_pre_reg_lower(struct ir_builder *func);
 
 #endif

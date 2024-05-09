@@ -29,10 +29,12 @@ set(
   ir/eliminate_phi.c
   ir/prettyprint.c
 
+  aarch64.c
   aarch64/lower.c
   aarch64/emit.c
   aarch64/emitter.c
 
+  eep.c
   eep/lower.c
   eep/emit.c
   eep/emitter.c

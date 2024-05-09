@@ -31,7 +31,9 @@ typedef void (*debug_disasm)(const char *filename);
 struct target {
   struct reg_info reg_info;
   size_t function_alignment;
-  lower lower;
+  size_t op_size;
+  lower pre_reg_lower;
+  lower post_reg_lower;
   emit_function emit_function;
   build_object build_object;
   debug_disasm debug_disasm;
