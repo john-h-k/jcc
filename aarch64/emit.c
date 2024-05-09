@@ -1,8 +1,9 @@
 #include "emit.h"
 
+#include "../aarch64.h"
+#include "../ir/var_refs.h"
 #include "emitter.h"
 #include "isa.h"
-#include "../ir/var_refs.h"
 
 struct current_op_state {
   // registers being used by the current instruction, so not possible to use
@@ -32,7 +33,7 @@ static struct aarch64_reg get_reg_for_idx(size_t idx) {
 enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
 static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
-                      enum reg_usage usage) {
+                             enum reg_usage usage) {
   size_t reg = op->reg;
 
   if (reg == REG_FLAGS) {
@@ -65,19 +66,20 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
   // FIXME: make a constant
   int offset;
   switch (op->call.target->ty) {
-    case IR_OP_TY_GLB: {
-      struct var_key key = { .name = op->call.target->glb.global, .scope = SCOPE_GLOBAL };
-      struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
-      int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
-      offset = (int)ref->func->offset - (int)pos;
-      break;
-    }
-    default:
-      todo("non GLB calls");
-      break;
+  case IR_OP_TY_GLB: {
+    struct var_key key = {.name = op->call.target->glb.global,
+                          .scope = SCOPE_GLOBAL};
+    struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
+    int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
+    offset = (int)ref->func->offset - (int)pos;
+    break;
+  }
+  default:
+    todo("non GLB calls");
+    break;
   }
 
-  aarch64_emit_bl(state->emitter, offset); 
+  aarch64_emit_bl(state->emitter, offset);
 }
 
 static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
@@ -189,10 +191,12 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_AND:
     if (is_64_bit(op)) {
       aarch64_emit_and_64(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg), SHIFT_LSL, 0);
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
     } else {
       aarch64_emit_and_32(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg), SHIFT_LSL, 0);
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
     }
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
@@ -240,16 +244,16 @@ static const char *mangle(struct arena_allocator *arena, const char *name) {
 void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-    ssize_t offset =
-        (ssize_t)target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
+    ssize_t offset = (ssize_t)target->function_offset -
+                     (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, offset);
   } else {
     // otherwise, this is the false branch of a SPLIT
     struct ir_basicblock *false_target =
         op->stmt->basicblock->split.false_target;
 
-    ssize_t false_offset =
-        (ssize_t)false_target->function_offset - (ssize_t)aarch64_emitted_count(state->emitter);
+    ssize_t false_offset = (ssize_t)false_target->function_offset -
+                           (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, false_offset);
   }
 }
@@ -292,12 +296,13 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
   size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
-    binary_op_is_comparison(op->mov.value->binary_op.ty)) {
+      binary_op_is_comparison(op->mov.value->binary_op.ty)) {
 
     // need to move from flags
     enum aarch64_cond cond = get_cond_for_op(op->mov.value);
     // 32 vs 64 bit doesn't matter
-    aarch64_emit_csinc_32(state->emitter, invert_cond(cond), ZERO_REG, ZERO_REG, get_reg_for_idx(dest));
+    aarch64_emit_csinc_32(state->emitter, invert_cond(cond), ZERO_REG, ZERO_REG,
+                          get_reg_for_idx(dest));
   } else {
     size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
     aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
@@ -386,33 +391,47 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
 }
 
 static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
-  // FIXME: only supports ints
   UNUSED_ARG(state);
-  return lcl_idx;
+  // FIXME: only supports ints
+  // offset by 4 because we store FP/LR at the top
+  // this way it is offset enough for 32 bit ints and a bit too much for 64 bit ints
+  return lcl_idx + 4;
 }
 
-static void emit_stack_op(struct emit_state *state, struct ir_op *op) {
-  switch (op->binary_op.ty) {
-    case IR_OP_BINARY_OP_TY_ADD:
-      aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, state->irb->total_locals_size, STACK_PTR_REG);
-      break;
-    case IR_OP_BINARY_OP_TY_SUB:
-      aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG, state->irb->total_locals_size, STACK_PTR_REG);
-      break;
-    default:
-      bug("unrecognised binary op with NULL for lhs and rhs");
-  }
-}
-
-static void emit_lr_op(struct emit_state *state, struct ir_op *op) {
-  // FIXME: the pre-indexing here is causing segfaults for some reason? we should be using it instead of stack when possible
-  if (op->mov.value) {
-    // this is the restore part
-    aarch64_emit_load_pair_pre_index_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, 0);
-  } else {
-    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, 0);
-    // aarch64_emit_mov_64(state->emitter, STACK_PTR_REG, FRAME_PTR_REG);
+static void emit_custom(struct emit_state *state, struct ir_op *op) {
+  // FIXME: the pre-indexing here is causing segfaults for some reason? we
+  // should be using it instead of stack when possible
+  switch (op->custom.aarch64->ty) {
+  case AARCH64_OP_TY_SAVE_LR:
+    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG,
+                                         FRAME_PTR_REG, RET_PTR_REG, 0);
+    // also save stack pointer into frame pointer as required by ABI
+    // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
+    // so `add x29, sp, #0` is used instead
     aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, 0, FRAME_PTR_REG);
+    break;
+  case AARCH64_OP_TY_RSTR_LR:
+    aarch64_emit_load_pair_pre_index_64(state->emitter, STACK_PTR_REG,
+                                        FRAME_PTR_REG, RET_PTR_REG, 0);
+    break;
+  case AARCH64_OP_TY_SUB_STACK:
+    aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
+                            state->irb->total_locals_size, STACK_PTR_REG);
+    break;
+  case AARCH64_OP_TY_ADD_STACK:
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG,
+                            state->irb->total_locals_size, STACK_PTR_REG);
+    break;
+  case AARCH64_OP_TY_SAVE_REG:
+    aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
+                                 get_reg_for_idx(op->reg),
+                                 get_lcl_stack_offset(state, op->lcl_idx));
+    break;
+  case AARCH64_OP_TY_RSTR_REG:
+    aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
+                                get_reg_for_idx(op->reg),
+                                get_lcl_stack_offset(state, op->lcl_idx));
+    break;
   }
 }
 
@@ -425,11 +444,13 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
   while (op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
+    case IR_OP_TY_CUSTOM: {
+      emit_custom(state, op);
+      break;
+    }
     case IR_OP_TY_MOV: {
       if (op->flags & IR_OP_FLAG_PARAM) {
         // don't need to do anything, dummy instr
-      } else if (!op->mov.value || op->mov.value->ty == IR_OP_TY_RET) {
-        emit_lr_op(state, op);
       } else {
         emit_mov_op(state, op);
       }
@@ -472,12 +493,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
       break;
     }
     case IR_OP_TY_BINARY_OP: {
-      if (!op->binary_op.lhs && !op->binary_op.rhs) {
-        // NULL for lhs and rhs means something special
-        emit_stack_op(state, op);
-      } else {
-        emit_binary_op(state, op);
-      }
+      emit_binary_op(state, op);
       break;
     }
     case IR_OP_TY_CAST_OP: {

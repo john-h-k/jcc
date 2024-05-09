@@ -47,6 +47,8 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
     return false;
+  case IR_OP_TY_CUSTOM:
+    bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
@@ -68,6 +70,8 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_LOAD_LCL:
     return false;
+  case IR_OP_TY_CUSTOM:
+    bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
@@ -121,6 +125,7 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
+  case IR_OP_TY_CUSTOM:
   case IR_OP_TY_GLB: {
     break;
   }
@@ -173,6 +178,8 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   cb(&op, cb_metadata);
 
   switch (op->ty) {
+  case IR_OP_TY_CUSTOM:
+    todo("walk custom");
   case IR_OP_TY_GLB:
     todo("walk global");
   case IR_OP_TY_CALL:
@@ -261,6 +268,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl_idx = lcl_idx;
+  op->live_regs = 0;
   op->metadata = NULL;
 }
 
@@ -595,6 +603,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   op->succ = NULL;
   op->metadata = NULL;
   op->reg = NO_REG;
+  op->live_regs = 0;
   op->lcl_idx = NO_LCL;
 
   if (stmt->last) {
@@ -748,7 +757,6 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 
   insert_after->stmt->last = insert_after;
   insert_after->succ = NULL;
-  printf("LAST: %zu\n", insert_after->stmt->id);
 
   // forward block end
   end_bb->ty = orig_bb->ty;

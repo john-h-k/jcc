@@ -153,7 +153,14 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   UNUSED_ARG(irb);
 
   switch (ir->ty) {
+  case IR_OP_TY_CUSTOM:
+    debug_lhs(file, ir);
+    fprintf(file, "CUSTOM");
+    // TODO: print customs
+    break;
   case IR_OP_TY_GLB:
+    debug_lhs(file, ir);
+    fprintf(file, "GLOBAL ( %s )", ir->glb.global);
     // don't print anything for global - let the op consuming it print instead
     break;
   case IR_OP_TY_CALL: {
@@ -266,6 +273,11 @@ void prettyprint_end_visit_basicblock_file(struct ir_builder *irb,
 
 void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
                                void *metadata) {
+  // if (op->ty == IR_OP_TY_GLB) {
+  //   // TODO: stop this function needing to deal with GLB its a messy opcode
+  //   return;
+  // }
+
   int op_pad = /* guess */ 50;
 
   struct prettyprint_file_metadata *fm = metadata;

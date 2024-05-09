@@ -1,12 +1,11 @@
 #include "lower.h"
 
 #include "../aarch64.h"
+#include "../bit_twiddle.h"
 #include "../ir/build.h"
 #include "../util.h"
 
 static void lower_call(struct ir_builder *func, struct ir_op *op) {
-  UNUSED_ARG(func);
-  UNUSED_ARG(op);
   invariant_assert(op->call.target->var_ty.ty == IR_OP_VAR_TY_TY_FUNC,
                    "non-func in `lower_call`");
 
@@ -18,6 +17,46 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`lower_call` doesn't support more than 8 args yet");
 
+  // we need to save registers in-use _after_ call
+  unsigned long live_regs = op->succ ? op->succ->live_regs : 0;
+  // FIXME: don't hardcode volatile count
+  unsigned long live_volatile = live_regs & ((1 << 18) - 1);
+  size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
+
+  unsigned caller_saves = popcntl(live_volatile);
+  unsigned new_slots = caller_saves > func->num_call_saves ? caller_saves - func->num_call_saves : 0;
+
+  // TODO: we assume all saves are 8 bytes
+  func->total_call_saves_size += 8 * new_slots;
+  func->total_locals_size += 8 * new_slots;
+  func->num_locals += new_slots;
+
+  // call slots always at bottom
+  unsigned next_call_slot = func->num_locals - func->num_call_saves;
+
+  for (size_t i = 0; i < max_volatile; i++) {
+    if (!NTH_BIT(live_volatile, i)) {
+      continue;
+    }
+    unsigned call_slot = next_call_slot++;
+
+    struct ir_op *save =
+        insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+    save->custom.aarch64 =
+        arena_alloc(func->arena, sizeof(*save->custom.aarch64));
+    save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_REG;
+    save->reg = i;
+    save->lcl_idx = call_slot;
+
+    struct ir_op *restore =
+        insert_after_ir_op(func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+    restore->custom.aarch64 =
+        arena_alloc(func->arena, sizeof(*restore->custom.aarch64));
+    restore->custom.aarch64->ty = AARCH64_OP_TY_RSTR_REG;
+    restore->reg = i;
+    save->lcl_idx = call_slot;
+  }
+
   // FIXME: generalise this to calling conventions
   for (size_t i = 0; i < func_ty->num_params; i++) {
     struct ir_op_var_ty *param = &func_ty->params[i];
@@ -25,13 +64,26 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
     invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
                      "`lower_call` doesn't support non-prims");
 
-    struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *param);
-    mov->mov.value = op->call.args[i];
-    mov->reg = i;
+    size_t arg_reg = i;
+    if (op->call.args[i]->reg != arg_reg) {
+      struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *param);
+      mov->mov.value = op->call.args[i];
+      mov->reg = arg_reg;
+    }
   }
 
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
-    op->reg = 0; // ret reg
+
+  // FIXME: don't hardcode return reg
+  size_t return_reg = 0;
+  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg != return_reg) {
+    // we move the call _back_ and replace it with a mov, by swapping them
+    struct ir_op *new_call = insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
+    new_call->call = op->call;
+    new_call->reg = return_reg;
+
+    op->ty = IR_OP_TY_MOV;
+    op->mov.value = new_call;
+    op->reg = return_reg;
   }
 }
 
@@ -135,6 +187,7 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
+        case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB:
         case IR_OP_TY_PHI:
         case IR_OP_TY_CNST:
@@ -144,10 +197,8 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_MOV:
         case IR_OP_TY_UNARY_OP:
         case IR_OP_TY_RET:
-        case IR_OP_TY_CAST_OP:
-          break;
         case IR_OP_TY_CALL:
-          lower_call(func, op);
+        case IR_OP_TY_CAST_OP:
           break;
         case IR_OP_TY_BR_COND:
           if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
@@ -177,30 +228,65 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
   // TODO: hacky improve this system so it isn't a bunch of magic values
   // signalling to the emitter might need new IR layer
 
-  func->total_locals_size =
-      ROUND_UP(AARCH64_STACK_ALIGNMENT, func->total_locals_size);
-
   bool leaf = !(func->nonvolatile_registers_used || func->num_locals ||
-      func->flags & IR_BUILDER_FLAG_MAKES_CALL);
+                func->flags & IR_BUILDER_FLAG_MAKES_CALL);
 
+  // points to first save so we can use it for restore later
+  struct ir_op *saves = NULL;
   if (!leaf) {
+    struct ir_op *first_op = func->first->first->first;
+
     // for x29 and x30 as they aren't working yet with pre-indexing
     func->total_locals_size += 16;
 
-    struct ir_op *first_op = func->first->first->first;
+    unsigned long max_nonvol_used = sizeof(func->nonvolatile_registers_used) * 8 - lzcnt(func->nonvolatile_registers_used);
+    unsigned long num_saves = popcntl(func->nonvolatile_registers_used);
+    // FIXME: assumes 8 bytes
+    // unsigned first_slot = func->num_locals;
+    unsigned first_slot = (func->total_locals_size + 7) / 8;
 
+    func->num_locals += num_saves;
+    func->total_locals_size += num_saves * 8;
+    
+    for (size_t i = 0; i < max_nonvol_used; i++) {
+      // FIXME: loop should start at i=first non volatile
+      if (!NTH_BIT(func->nonvolatile_registers_used, i)) {
+        continue;
+      }
+
+      unsigned slot = first_slot++;
+      
+      struct ir_op *save =
+          insert_before_ir_op(func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+      save->custom.aarch64 =
+          arena_alloc(func->arena, sizeof(*save->custom.aarch64));
+      save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_REG;
+      save->reg = i;
+      save->lcl_idx = slot;
+
+      if (!saves) {
+        saves = save;
+      }
+    }
+
+    func->total_locals_size =
+        ROUND_UP(AARCH64_STACK_ALIGNMENT, func->total_locals_size);
+
+    first_op = func->first->first->first;
     if (func->total_locals_size) {
       struct ir_op *sub_stack = insert_before_ir_op(
-          func, first_op, IR_OP_TY_BINARY_OP, IR_OP_VAR_TY_NONE);
-      sub_stack->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
-      sub_stack->binary_op.lhs = NULL;
-      sub_stack->binary_op.rhs = NULL;
+          func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+      sub_stack->custom.aarch64 =
+          arena_alloc(func->arena, sizeof(*sub_stack->custom.aarch64));
+      sub_stack->custom.aarch64->ty = AARCH64_OP_TY_SUB_STACK;
     }
 
     // need to save x29 and x30
     struct ir_op *save =
-        insert_before_ir_op(func, first_op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
-    save->mov.value = NULL;
+        insert_before_ir_op(func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+    save->custom.aarch64 =
+        arena_alloc(func->arena, sizeof(*save->custom.aarch64));
+    save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_LR;
 
     // emitter understands the above magic-mov as it does not have the PARAM
     // flag set
@@ -215,6 +301,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
+        case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB:
         case IR_OP_TY_PHI:
         case IR_OP_TY_CNST:
@@ -224,33 +311,49 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_MOV:
         case IR_OP_TY_UNARY_OP:
         case IR_OP_TY_CAST_OP:
-        case IR_OP_TY_CALL:
         case IR_OP_TY_BR_COND:
         case IR_OP_TY_BINARY_OP:
           break;
+        case IR_OP_TY_CALL:
+          lower_call(func, op);
+          break;
         case IR_OP_TY_RET: {
-          if (!leaf) {
-            struct ir_op *restore =
-                insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
-            restore->mov.value = op;
-            // emitter understands mov pointing to ret (otherwise impossible)
-            // means restore x29/x30
-
-            if (func->total_locals_size) {
-              struct ir_op *add_stack = insert_before_ir_op(
-                  func, op, IR_OP_TY_BINARY_OP, IR_OP_VAR_TY_NONE);
-              add_stack->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
-              add_stack->binary_op.lhs = NULL;
-              add_stack->binary_op.rhs = NULL;
-            }
-          }
-
           // FIXME: don't hardcode return reg
-          if (op->reg != 0) {
+          if (op->ret.value->reg != 0) {
             struct ir_op *ret =
                 insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
             ret->mov.value = op->ret.value;
             ret->reg = 0;
+          }
+
+          if (!leaf) {
+            struct ir_op *cur_save = saves;
+
+            while (cur_save && cur_save->ty == IR_OP_TY_CUSTOM && cur_save->custom.aarch64->ty == AARCH64_OP_TY_SAVE_REG) {
+              struct ir_op *restore =
+                  insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+              restore->custom.aarch64 =
+                  arena_alloc(func->arena, sizeof(*restore->custom.aarch64));
+              restore->custom.aarch64->ty = AARCH64_OP_TY_RSTR_REG;
+              restore->reg = cur_save->reg;
+              restore->lcl_idx = cur_save->lcl_idx;
+
+              cur_save = cur_save->succ;
+            }
+
+            struct ir_op *restore_lr = insert_before_ir_op(
+                func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+            restore_lr->custom.aarch64 =
+                arena_alloc(func->arena, sizeof(*restore_lr->custom.aarch64));
+            restore_lr->custom.aarch64->ty = AARCH64_OP_TY_RSTR_LR;
+
+            if (func->total_locals_size) {
+              struct ir_op *add_stack = insert_before_ir_op(
+                  func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+              add_stack->custom.aarch64 =
+                  arena_alloc(func->arena, sizeof(*add_stack->custom.aarch64));
+              add_stack->custom.aarch64->ty = AARCH64_OP_TY_ADD_STACK;
+            }
           }
 
           break;

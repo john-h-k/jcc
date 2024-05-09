@@ -4,6 +4,7 @@
 #include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
+#include "bit_twiddle.h"
 
 #include <limits.h>
 
@@ -293,6 +294,20 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "    register=%zu", op->reg);
     break;
   }
+
+  unsigned long live_regs = interval->op->live_regs;
+  unsigned long max_live = sizeof(live_regs) * 8 - lzcnt(live_regs);
+  fslogsl(file, " - LIVE REGS (");
+  for (size_t i = 0; i < max_live; i++) {
+    if (NTH_BIT(live_regs, i)) {
+      fslogsl(file, "R%zu", i);
+
+      if (i + 1 < max_live) {
+        fslogsl(file, ", ");
+      }
+    }
+  }
+  fslogsl(file, ")");
 }
 
 // walks across the blocks to determine the end range for a phi's dependency
@@ -457,6 +472,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
         }
       }
     }
+
+    interval->op->live_regs = ~reg_pool & ((1 << num_regs) - 1);
   }
 
   // continously fix up phi until everything has a register
