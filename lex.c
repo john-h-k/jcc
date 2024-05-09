@@ -199,6 +199,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
   char c = lexer->text[start.idx];
 
   trace("lexing char '%c'", c);
+  trace("on '%.25s'\n", &lexer->text[start.idx]);
 
   enum lex_token_ty ty;
   switch (c) {

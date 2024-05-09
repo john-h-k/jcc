@@ -507,16 +507,16 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 }
 
 bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
+  printf("parsing atom\n");
   struct ast_atom atom;
   if (!parse_atom(parser, &atom)) {
     return false;
   }
 
-  struct ast_call call;
   struct ast_arglist arg_list;
   if (parse_arglist(parser, &arg_list)) {
     expr->ty = AST_EXPR_TY_CALL;
-    expr->var_ty = call.var_ty;
+    expr->var_ty = var_ty_return_type_of(&atom.var_ty);
     expr->call = arena_alloc(parser->arena, sizeof(*expr->call));
     expr->call->var_ty = var_ty_return_type_of(&atom.var_ty);
     expr->call->target = arena_alloc(parser->arena, sizeof(*expr->call->target));
@@ -570,7 +570,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
   if (!parse_above_atom(parser, expr)) {
     return false;
-  }  
+  }
 
   // TODO: make iterative
   while (true) {
