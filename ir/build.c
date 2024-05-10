@@ -62,6 +62,8 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     bug("shouldn't reach IR gen with unresolved type");
+  case AST_TYREF_TY_VOID:
+    return IR_OP_VAR_TY_NONE;
   case AST_TYREF_TY_WELL_KNOWN: {
     struct ir_op_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
@@ -297,6 +299,10 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     op->ty = IR_OP_TY_GLB;
     op->var_ty = ty_for_ast_tyref(irb, &var->var_ty);
     op->glb.global = key.name;
+
+    // add to the list of globals used for relocs
+    op->glb.succ = irb->globals;
+    irb->globals = &op->glb;
 
     return op;
   }
@@ -736,22 +742,21 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
   }
 }
 
-struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
+/* Return stmt be null when this is used to add implicit returns not in code (e.g at end of method) */
+struct ir_basicblock *build_ir_for_ret(struct ir_builder *irb,
                                             struct ir_stmt *stmt,
-                                            struct ast_jumpstmt *jump_stmt) {
-  switch (jump_stmt->ty) {
-  case AST_JUMPSTMT_TY_RETURN: {
+                                            struct ast_returnstmt *return_stmt) {
     struct ir_op *expr_op;
-    if (jump_stmt->return_stmt.expr) {
-      expr_op = build_ir_for_expr(irb, stmt, jump_stmt->return_stmt.expr,
-                                  &jump_stmt->return_stmt.var_ty);
+    if (return_stmt && return_stmt->expr) {
+      expr_op = build_ir_for_expr(irb, stmt, return_stmt->expr,
+                                  &return_stmt->var_ty);
     } else {
       expr_op = NULL;
     }
 
     struct ir_op *op = alloc_ir_op(irb, stmt);
     op->ty = IR_OP_TY_RET;
-    op->var_ty = ty_for_ast_tyref(irb, &jump_stmt->return_stmt.var_ty);
+    op->var_ty = return_stmt ? ty_for_ast_tyref(irb, &return_stmt->var_ty) : IR_OP_VAR_TY_NONE;
     op->ret.value = expr_op;
 
     op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
@@ -759,7 +764,14 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
     struct ir_basicblock *after_ret_basicblock = alloc_ir_basicblock(irb);
 
     return after_ret_basicblock;
-  }
+}
+
+struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
+                                            struct ir_stmt *stmt,
+                                            struct ast_jumpstmt *jump_stmt) {
+  switch (jump_stmt->ty) {
+  case AST_JUMPSTMT_TY_RETURN:
+      return build_ir_for_ret(irb, stmt, &jump_stmt->return_stmt);
   }
 }
 
@@ -1031,6 +1043,11 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
 
   // we may generate empty basicblocks or statements, prune them here
   prune_basicblocks(builder);
+
+  // may not end in a return, but needs to
+  if (builder->last && builder->last->last && builder->last->last->last && builder->last->last->last->ty != IR_OP_TY_RET) {
+    basicblock = build_ir_for_ret(builder, basicblock->last, NULL);
+  }
 
   if (log_enabled()) {
     debug_print_ir(stderr, builder, NULL, NULL);

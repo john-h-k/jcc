@@ -132,16 +132,6 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
 #undef SEL_32_OR_64_BIT_OP
 }
 
-static const char *mangle(struct arena_allocator *arena, const char *name) {
-  char *dest =
-      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
-
-  dest[0] = '_';
-  strcpy(dest + 1, name);
-
-  return dest;
-}
-
 static void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
@@ -296,7 +286,7 @@ struct compiled_function eep_emit_function(struct ir_builder *func) {
   free_eep_emitter(&emitter);
 
   struct compiled_function result = {
-      .name = mangle(func->arena, func->name), .code = data, .len_code = len};
+      .name = func->name, .code = data, .len_code = len};
 
   return result;
 }

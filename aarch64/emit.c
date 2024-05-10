@@ -5,6 +5,17 @@
 #include "emitter.h"
 #include "isa.h"
 
+#define WORD_SIZE (8)
+
+const char *aarch64_mangle(struct arena_allocator *arena, const char *name) {
+  char *dest =
+      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+
+  dest[0] = '_';
+  strcpy(dest + 1, name);
+
+  return dest;
+}
 struct current_op_state {
   // registers being used by the current instruction, so not possible to use
   unsigned long write_registers;
@@ -63,23 +74,33 @@ static bool is_64_bit(const struct ir_op *op) {
 }
 
 static void emit_call(struct emit_state *state, struct ir_op *op) {
-  // FIXME: make a constant
-  int offset;
   switch (op->call.target->ty) {
   case IR_OP_TY_GLB: {
-    struct var_key key = {.name = op->call.target->glb.global,
-                          .scope = SCOPE_GLOBAL};
-    struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
-    int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
-    offset = (int)ref->func->offset - (int)pos;
+    // struct var_key key = {.name = op->call.target->glb.global,
+    //                       .scope = SCOPE_GLOBAL};
+    // struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
+    // int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
+    // offset = (int)ref->func->offset - (int)pos;
+    // offset = 0;
+    // this uses relocs instead of actually calculating it
+    // FIXME: may break on 32 bit
+
+    op->call.target->glb.metadata = arena_alloc(state->arena, sizeof(struct relocation));
+    *(struct relocation *)op->call.target->glb.metadata =
+        (struct relocation){.symbol_name = aarch64_mangle(state->arena, op->call.target->glb.global),
+                            // this is not actually the address!!
+                            // this is the offset WITHIN the function
+                            // we let `compiler.c` fix up the address
+                            .address = aarch64_emit_bytesize(state->emitter),
+                            .size = 2};
+
+    aarch64_emit_bl(state->emitter, 0);
     break;
   }
   default:
     todo("non GLB calls");
     break;
   }
-
-  aarch64_emit_bl(state->emitter, offset);
 }
 
 static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
@@ -231,16 +252,6 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
 #undef SEL_32_OR_64_BIT_OP
 }
 
-static const char *mangle(struct arena_allocator *arena, const char *name) {
-  char *dest =
-      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
-
-  dest[0] = '_';
-  strcpy(dest + 1, name);
-
-  return dest;
-}
-
 void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
@@ -382,10 +393,34 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   void *data = arena_alloc(func->arena, len);
   aarch64_emit_copy_to(emitter, data);
 
+  // now deal with all the relocs which are hidden in the globals
+  struct ir_op_glb *global = func->globals;
+
+  // first pass to get number
+  size_t num_relocations = 0;
+  while (global) {
+    num_relocations += 1;
+    global = global->succ;
+  }
+
+  struct relocation *relocations =
+      arena_alloc(func->arena, sizeof(*relocations) * num_relocations);
+
+  global = func->globals;
+  size_t i = 0;
+  while (global) {
+    relocations[i++] = *(struct relocation *)global->metadata;
+
+    global = global->succ;
+  }
+
   free_aarch64_emitter(&emitter);
 
-  struct compiled_function result = {
-      .name = mangle(func->arena, func->name), .code = data, .len_code = len};
+  struct compiled_function result = {.name = aarch64_mangle(func->arena, func->name),
+                                     .code = data,
+                                     .len_code = len,
+                                     .relocations = relocations,
+                                     .num_relocations = num_relocations};
 
   return result;
 }
@@ -394,7 +429,8 @@ static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
   UNUSED_ARG(state);
   // FIXME: only supports ints
   // offset by 4 because we store FP/LR at the top
-  // this way it is offset enough for 32 bit ints and a bit too much for 64 bit ints
+  // this way it is offset enough for 32 bit ints and a bit too much for 64 bit
+  // ints
   return lcl_idx + 4;
 }
 
@@ -510,9 +546,6 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
       break;
     }
     case IR_OP_TY_RET: {
-      size_t value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
-      invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
-
       aarch64_emit_ret(state->emitter);
       break;
     }

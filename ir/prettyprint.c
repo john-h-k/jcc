@@ -236,7 +236,11 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
             ir->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_RET:
-    fprintf(file, "return %%%zu", ir->ret.value->id);
+    if (ir->ret.value) {
+      fprintf(file, "return %%%zu", ir->ret.value->id);
+    } else {
+      fprintf(file, "return");
+    }
     break;
   }
 }

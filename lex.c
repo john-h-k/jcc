@@ -76,6 +76,7 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("if", LEX_TOKEN_TY_KW_IF),
       KEYWORD("else", LEX_TOKEN_TY_KW_ELSE),
       KEYWORD("return", LEX_TOKEN_TY_KW_RETURN),
+      KEYWORD("void", LEX_TOKEN_TY_KW_VOID),
       KEYWORD("char", LEX_TOKEN_TY_KW_CHAR),
       KEYWORD("short", LEX_TOKEN_TY_KW_SHORT),
       KEYWORD("int", LEX_TOKEN_TY_KW_INT),
@@ -511,6 +512,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_ENUM)
     CASE_RET(LEX_TOKEN_TY_KW_STRUCT)
     CASE_RET(LEX_TOKEN_TY_KW_UNION)
+
+    CASE_RET(LEX_TOKEN_TY_KW_VOID)
 
     CASE_RET(LEX_TOKEN_TY_KW_CHAR)
     CASE_RET(LEX_TOKEN_TY_KW_SHORT)

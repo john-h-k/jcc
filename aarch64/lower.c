@@ -12,7 +12,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   struct ir_op_var_func_ty *func_ty = &op->call.target->var_ty.func;
 
   invariant_assert(func_ty->num_params == op->call.num_args,
-                   "mismatch of function param and arg count");
+                   "mismatch of function param (%zu) and arg (%zu) count", func_ty->num_params, op->call.num_args);
 
   invariant_assert(func_ty->num_params <= 8,
                    "`lower_call` doesn't support more than 8 args yet");
@@ -327,7 +327,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
           break;
         case IR_OP_TY_RET: {
           // FIXME: don't hardcode return reg
-          if (op->ret.value->reg != 0) {
+          if (op->ret.value && op->ret.value->reg != 0) {
             struct ir_op *ret =
                 insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
             ret->mov.value = op->ret.value;

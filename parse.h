@@ -49,6 +49,7 @@ enum ast_tyref_ty {
   /* Used for variables that were used without declaration and similar. Usually
      an error */
   AST_TYREF_TY_UNKNOWN,
+  AST_TYREF_TY_VOID,
   AST_TYREF_TY_WELL_KNOWN,
   AST_TYREF_TY_FUNC,
   AST_TYREF_TY_POINTER,
