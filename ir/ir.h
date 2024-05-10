@@ -38,6 +38,13 @@ bool op_is_branch(enum ir_op_ty ty);
 
 struct ir_op_glb {
   const char *global;
+
+  struct ir_op_glb *succ;
+
+  // ugly HACK: the globals list is just globals, so we have _another_
+  // metadata field on this as iterating globals does not give access to the containing
+  // ops metadata
+  void *metadata;
 };
 
 struct ir_op_mov {
@@ -344,6 +351,12 @@ struct ir_builder {
 
   struct ir_basicblock *first;
   struct ir_basicblock *last;
+
+  // an arbitrarily ordered list of all globals
+  // used for relocation generation
+  // this currenty ends up being a backwards list
+  // but this should not be relied on
+  struct ir_op_glb *globals;
 
   enum ir_builder_flags flags;
 

@@ -198,6 +198,7 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_WHILE:
   case LEX_TOKEN_TY_KW_IF:
   case LEX_TOKEN_TY_KW_ELSE:
+  case LEX_TOKEN_TY_KW_VOID:
   case LEX_TOKEN_TY_KW_CHAR:
   case LEX_TOKEN_TY_KW_SHORT:
   case LEX_TOKEN_TY_KW_INT:
@@ -323,6 +324,13 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
 
   struct token token;
   peek_token(parser->lexer, &token);
+
+  if (token.ty == LEX_TOKEN_TY_KW_VOID) {
+    consume_token(parser->lexer, token);
+
+    ty_ref->ty = AST_TYREF_TY_VOID;
+    return true;
+  }
 
   bool seen_unsigned = false;
   bool seen_signed = false;
@@ -507,7 +515,6 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 }
 
 bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
-  printf("parsing atom\n");
   struct ast_atom atom;
   if (!parse_atom(parser, &atom)) {
     return false;
@@ -1474,6 +1481,9 @@ DEBUG_FUNC(tyref, ty_ref) {
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     AST_PRINTZ("<unresolved type>");
+    break;
+  case AST_TYREF_TY_VOID:
+    AST_PRINTZ("VOID");
     break;
   case AST_TYREF_TY_POINTER:
     AST_PRINTZ("POINTER TO");

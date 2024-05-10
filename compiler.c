@@ -97,12 +97,40 @@ enum compile_result compile(struct compiler *compiler) {
 
   disable_log();
 
+  const struct target *target = get_target(&compiler->args);
+
+  struct vector *symbols = vector_create(sizeof(struct symbol));
+  struct vector *external_symbols = vector_create(sizeof(struct external_symbol));
+  struct vector *relocations = vector_create(sizeof(struct relocation));
+
+  // FIXME: super slow quadratic we really need a hashmap
+  for (size_t i = 0; i < result.translation_unit.num_func_decls; i++) {
+    struct ast_funcdecl *decl = &result.translation_unit.func_decls[i];
+    const char *decl_name = identifier_str(compiler->parser, &decl->sig.name);
+
+    bool defined = false;
+    for (size_t j = 0; j < result.translation_unit.num_func_defs; j++) {
+      struct ast_funcdef *def = &result.translation_unit.func_defs[j];
+      const char *def_name = identifier_str(compiler->parser, &def->sig.name);
+
+      if (strcmp(decl_name, def_name) == 0) {
+        defined = true;
+        break;
+      }
+    }
+
+    // defined symbols are pushed back after creation because only then do we know their position
+    if (!defined) {
+      const char *mangled = target->mangle(compiler->arena, decl_name);
+      struct external_symbol symbol = { .name = mangled };
+      vector_push_back(external_symbols, &symbol);
+    }
+  }
+
   struct vector *compiled_functions =
       vector_create(sizeof(struct compiled_function));
-  struct vector *symbols = vector_create(sizeof(struct symbol));
-  size_t total_size = 0;
 
-  const struct target *target = get_target(&compiler->args);
+  size_t total_size = 0;
 
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
     enable_log();
@@ -208,6 +236,13 @@ enum compile_result compile(struct compiler *compiler) {
     vector_push_back(compiled_functions, &func);
 
     vector_push_back(symbols, &symbol);
+
+    for (size_t i = 0; i < func.num_relocations; i++) {
+      // add function position to relocs
+      func.relocations[i].address += symbol.value;
+    }
+
+    vector_extend(relocations, func.relocations, func.num_relocations);
   }
 
   char *code = arena_alloc(compiler->arena, total_size);
@@ -225,8 +260,12 @@ enum compile_result compile(struct compiler *compiler) {
       .output = compiler->output,
       .data = code,
       .len_data = total_size,
-      .symbols = vector_get(symbols, 0),
+      .symbols = vector_head(symbols),
       .num_symbols = vector_length(symbols),
+      .extern_symbols = vector_head(external_symbols),
+      .num_extern_symbols = vector_length(external_symbols),
+      .relocations = vector_head(relocations),
+      .num_relocations = vector_length(relocations)
   };
 
   BEGIN_STAGE("OBJECT FILE");
