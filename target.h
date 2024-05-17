@@ -27,6 +27,9 @@ struct compiled_function {
   void *code;
   size_t len_code;
 
+  const char **strings;
+  size_t num_strings;
+
   struct relocation *relocations;
   size_t num_relocations;
 };
@@ -38,6 +41,9 @@ struct build_object_args {
 
   const char *data;
   size_t len_data;
+
+  const char **strings;
+  size_t num_strings;
 
   struct symbol *symbols;
   size_t num_symbols;

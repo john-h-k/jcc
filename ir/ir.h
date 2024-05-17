@@ -67,8 +67,18 @@ struct ir_op_phi {
   size_t num_values;
 };
 
+enum ir_op_cnst_ty {
+  IR_OP_CNST_TY_INT,
+  IR_OP_CNST_TY_STR,
+};
+
 struct ir_op_cnst {
-  size_t value;
+  enum ir_op_cnst_ty ty;
+
+  union {
+    unsigned long long int_value;
+    const char *str_value;
+  };
 };
 
 struct ir_op_ret {
@@ -142,6 +152,8 @@ enum ir_op_var_primitive_ty {
   IR_OP_VAR_PRIMITIVE_TY_I16,
   IR_OP_VAR_PRIMITIVE_TY_I32,
   IR_OP_VAR_PRIMITIVE_TY_I64,
+
+  // IR_OP_VAR_PRIMITIVE_TY_PTR,
 };
 
 enum ir_op_var_ty_ty {
@@ -151,6 +163,8 @@ enum ir_op_var_ty_ty {
   /* Primitives - integers, floats, pointers */
   IR_OP_VAR_TY_TY_PRIMITIVE,
   IR_OP_VAR_TY_TY_FUNC,
+
+  IR_OP_VAR_TY_TY_POINTER,
 
   /* Aggregate */
   // IR_OP_VAR_TY_TY_AGGREGATE,
@@ -164,11 +178,16 @@ struct ir_op_var_func_ty {
   struct ir_op_var_ty *params;
 };
 
+struct ir_op_var_pointer_ty {
+  struct ir_op_var_ty *underlying;
+};
+
 struct ir_op_var_ty {
   enum ir_op_var_ty_ty ty;
   union {
     enum ir_op_var_primitive_ty primitive;
     struct ir_op_var_func_ty func;
+    struct ir_op_var_pointer_ty pointer;
   };
 };
 
@@ -335,8 +354,8 @@ struct ir_basicblock {
 };
 
 enum ir_builder_flags {
-  IR_BUILDER_FLAG_NONE,
-  IR_BUILDER_FLAG_MAKES_CALL
+  IR_BUILDER_FLAG_NONE = 0,
+  IR_BUILDER_FLAG_MAKES_CALL = 1
 };
 
 struct ir_builder {

@@ -1,12 +1,32 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+// TODO: seperate bool/noreturn and other version-dependent stuff into its own header
+
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifndef __STDC_VERSION__ 
+#error "JCC Requires at least C99"
+#endif
+
+#define NORETURN
+
+#if __STDC_VERSION__ >= 201112L
+#undef NORETURN
 #include <stdnoreturn.h>
+
+#if __STDC_VERSION__ >= 202311L
+#define NORETURN [[noreturn]]
+#else
+#define NORETURN noreturn
+#endif
+
+#endif
+
 #include <string.h>
 
 #define ROUND_UP(value, pow2) ((value) + ((pow2)-1)) & ~((pow2)-1)
@@ -51,19 +71,19 @@ static inline unsigned long lzcnt(unsigned long l) {
     va_end(v);                                                                 \
   } while (0);
 
-[[noreturn]] static inline void todo(const char *msg, ...) {
+NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
 }
 
-[[noreturn]] static inline void unreachable(const char *msg, ...) {
+NORETURN static inline void unreachable(const char *msg, ...) {
   FMTPRINT(stderr, "`unreachable` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
 }
 
-[[noreturn]] static inline void bug(const char *msg, ...) {
+NORETURN static inline void bug(const char *msg, ...) {
   FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
   raise(SIGINT);
   exit(-2);
@@ -78,7 +98,7 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
   }
 }
 
-static inline void breakpoint() { raise(SIGINT); }
+static inline void breakpoint(void) { raise(SIGINT); }
 
 #if NDEBUG
 static inline void debug_assert(bool, const char *, ...) {}

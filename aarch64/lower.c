@@ -67,7 +67,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   for (size_t i = 0; i < func_ty->num_params; i++) {
     struct ir_op_var_ty *param = &func_ty->params[i];
 
-    invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+    invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE || param->ty == IR_OP_VAR_TY_TY_POINTER,
                      "`lower_call` doesn't support non-prims");
 
     size_t arg_reg = i;

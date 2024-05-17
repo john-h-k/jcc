@@ -2,6 +2,7 @@
 #define VECTOR_H
 
 #include <stdlib.h>
+#include "util.h"
 
 struct vector;
 

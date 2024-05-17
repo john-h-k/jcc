@@ -327,17 +327,6 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_SPLIT: {
-    // if (basicblock->split.true_target->id == target_bb) {
-    //   size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
-    //                                    basicblock->split.false_target);
-    //   return MAX(this, m_false);
-    // }
-    // if (basicblock->split.false_target->id == target_bb) {
-    //   size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,
-    //                                   basicblock->split.true_target);
-    //   return MAX(this, m_true);
-    // }
-
     size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
                                      basicblock->split.false_target);
     size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,

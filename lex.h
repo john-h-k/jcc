@@ -2,6 +2,7 @@
 #define LEX_H
 
 #include <stdlib.h>
+#include "util.h"
 
 enum lex_token_ty {
   LEX_TOKEN_TY_UNKNOWN,
@@ -61,6 +62,15 @@ enum lex_token_ty {
   LEX_TOKEN_TY_KW_IF,
   LEX_TOKEN_TY_KW_ELSE,
 
+  LEX_TOKEN_TY_KW_TYPEDEF,
+  LEX_TOKEN_TY_KW_STATIC,
+  LEX_TOKEN_TY_KW_EXTERN,
+  LEX_TOKEN_TY_KW_AUTO,
+  LEX_TOKEN_TY_KW_REGISTER,
+
+  LEX_TOKEN_TY_KW_CONST,
+  LEX_TOKEN_TY_KW_VOLATILE,
+
   LEX_TOKEN_TY_KW_VOID,
 
   LEX_TOKEN_TY_KW_CHAR,
@@ -84,6 +94,7 @@ enum lex_token_ty {
   /* Literals (all suffixes are case-insensitive) */
 
   LEX_TOKEN_TY_ASCII_CHAR_LITERAL, // 'a'
+  LEX_TOKEN_TY_ASCII_STR_LITERAL, // "foobar"
 
   // Note: `lex.c` relies on `unsigned` being `signed + 1`
 

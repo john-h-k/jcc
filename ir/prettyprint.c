@@ -76,6 +76,12 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
     fprintf(file, "<none>");
     return;
   }
+  case IR_OP_VAR_TY_TY_POINTER: {
+    fprintf(file, "PTR [ ");
+    debug_var_ty_string(file, var_ty->pointer.underlying);
+    fprintf(file, " ]");
+    return;
+  }
   case IR_OP_VAR_TY_TY_FUNC: {
     // FIXME: buffer vuln
     fprintf(file, "(");
@@ -190,17 +196,20 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_CNST:
     debug_lhs(file, ir);
-    fprintf(file, "%zu", ir->cnst.value);
+    switch (ir->cnst.ty) {
+    case IR_OP_CNST_TY_INT:
+      fprintf(file, "%llu", ir->cnst.int_value);
+      break;
+    case IR_OP_CNST_TY_STR:
+      fprintf(file, "%s", ir->cnst.str_value);
+      break;
+    }
     break;
   case IR_OP_TY_BINARY_OP:
     debug_lhs(file, ir);
 
-    if (ir->binary_op.lhs && ir->binary_op.rhs) {
-      fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
-              binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
-    } else {
-      fprintf(file, "<NULL binop>"); // FIXME: properly print
-    }
+    fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
+            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
   case IR_OP_TY_UNARY_OP:
     debug_lhs(file, ir);
@@ -392,7 +401,7 @@ void debug_print_basicblock(FILE *file, struct ir_builder *irb,
 
 void debug_print_ir(FILE *file, struct ir_builder *irb,
                     debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (int)log10(irb->op_count) + 1;
+  int ctr_pad = (irb->op_count == 0 ? 0 : (int)log10(irb->op_count)) + 1;
   size_t ctr = 0;
 
   struct prettyprint_file_metadata metadata = {.file = file,

@@ -59,8 +59,27 @@ enum ast_tyref_ty {
   // AST_TYREF_TY_ENUM,
 };
 
+enum ast_type_qualifier_flags {
+  AST_TYPE_QUALIFIER_FLAG_NONE = 0,
+  AST_TYPE_QUALIFIER_FLAG_CONST = 1,
+  AST_TYPE_QUALIFIER_FLAG_VOLATILE = 2,
+
+  AST_TYPE_QUALIFIER_FLAG_MAX = 4,
+};
+
+// enum ast_type_specifiers_flags {
+//   AST_TYPE_QUALIFIER_FLAG_NONE,
+//   AST_TYPE_QUALIFIER_FLAG_VOID,
+//   AST_TYPE_QUALIFIER_FLAG_CHAR,
+//   AST_TYPE_QUALIFIER_FLAG_SHORT,
+//   AST_TYPE_QUALIFIER_FLAG_INT,
+//   AST_TYPE_QUALIFIER_FLAG_LONG,
+// };
+
 struct ast_tyref {
   enum ast_tyref_ty ty;
+
+  enum ast_type_qualifier_flags type_qualifiers;
 
   union {
     enum well_known_ty well_known;
@@ -103,8 +122,12 @@ struct ast_funcsig {
 /* Constant values (literals) */
 
 struct ast_cnst {
-  enum well_known_ty cnst_ty;
-  unsigned long long value;
+  struct ast_tyref cnst_ty;
+
+  union {
+    unsigned long long int_value;
+    const char *str_value;
+  };
 };
 
 /* Binary expressions - `a <OP> b` */
