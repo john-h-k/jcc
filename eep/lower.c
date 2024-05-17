@@ -70,13 +70,15 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   struct ir_op *cnst_0 = op;
   cnst_0->ty = IR_OP_TY_CNST;
   cnst_0->var_ty = var_ty;
-  cnst_0->cnst.value = 0;
+  cnst_0->cnst.ty = IR_OP_CNST_TY_INT;
+  cnst_0->cnst.int_value = 0;
 
   // 1
   struct ir_op *cnst_1 = alloc_ir_op(func, if_cond_stmt);
   cnst_1->ty = IR_OP_TY_CNST;
   cnst_1->var_ty = var_ty;
-  cnst_1->cnst.value = 1;
+  cnst_1->cnst.ty = IR_OP_CNST_TY_INT;
+  cnst_1->cnst.int_value = 1;
 
   struct ir_op *op1_shifted = alloc_ir_op(func, while_cond_stmt);
   struct ir_op *op1_shifted_r1 = alloc_ir_op(func, shift_stmt);
@@ -239,13 +241,15 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   struct ir_op *cnst_0 = op;
   cnst_0->ty = IR_OP_TY_CNST;
   cnst_0->var_ty = var_ty;
-  cnst_0->cnst.value = 0;
+  cnst_0->cnst.ty = IR_OP_CNST_TY_INT;
+  cnst_0->cnst.int_value = 0;
 
   // 1
   struct ir_op *cnst_1 = alloc_ir_op(func, if_cond_stmt);
   cnst_1->ty = IR_OP_TY_CNST;
   cnst_1->var_ty = var_ty;
-  cnst_1->cnst.value = 1;
+  cnst_1->cnst.ty = IR_OP_CNST_TY_INT;
+  cnst_1->cnst.int_value = 1;
 
   struct ir_op *op1_shifted = alloc_ir_op(func, while_cond_stmt);
   struct ir_op *op1_shifted_r1 = alloc_ir_op(func, shift_stmt);

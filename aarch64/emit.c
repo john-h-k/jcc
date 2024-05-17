@@ -2,6 +2,7 @@
 
 #include "../aarch64.h"
 #include "../ir/var_refs.h"
+#include "../vector.h"
 #include "emitter.h"
 #include "isa.h"
 
@@ -26,6 +27,9 @@ struct emit_state {
   struct ir_builder *irb;
   struct arena_allocator *arena;
   struct aarch64_emitter *emitter;
+
+  struct vector *strings;
+  size_t total_str_len;
 
   size_t num_extra_stack_slots;
 
@@ -85,9 +89,11 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
     // this uses relocs instead of actually calculating it
     // FIXME: may break on 32 bit
 
-    op->call.target->glb.metadata = arena_alloc(state->arena, sizeof(struct relocation));
+    op->call.target->glb.metadata =
+        arena_alloc(state->arena, sizeof(struct relocation));
     *(struct relocation *)op->call.target->glb.metadata =
-        (struct relocation){.symbol_name = aarch64_mangle(state->arena, op->call.target->glb.global),
+        (struct relocation){.symbol_name = aarch64_mangle(
+                                state->arena, op->call.target->glb.global),
                             // this is not actually the address!!
                             // this is the offset WITHIN the function
                             // we let `compiler.c` fix up the address
@@ -339,92 +345,6 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt);
-
-struct compiled_function aarch64_emit_function(struct ir_builder *func) {
-  // the first step of emitting is that we need to ensure the `function_offset`
-  // values are correct for all BBs as they may have been broken during various
-  // opt/transforming passes
-  {
-    size_t opc = 0;
-
-    struct ir_basicblock *basicblock = func->first;
-    while (basicblock) {
-      basicblock->function_offset = opc;
-      struct ir_stmt *stmt = basicblock->first;
-
-      while (stmt) {
-        struct ir_op *op = stmt->first;
-        while (op) {
-          opc++;
-          op = op->succ;
-        }
-
-        stmt = stmt->succ;
-      }
-
-      basicblock = basicblock->succ;
-    }
-  }
-
-  struct aarch64_emitter *emitter;
-  create_aarch64_emitter(&emitter);
-
-  struct emit_state state = {.irb = func,
-                             .arena = func->arena,
-                             .emitter = emitter,
-                             .num_extra_stack_slots = 0,
-                             .cur_op_state = {0}};
-
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-
-    while (stmt) {
-      emit_stmt(&state, stmt);
-
-      stmt = stmt->succ;
-    }
-
-    basicblock = basicblock->succ;
-  }
-
-  size_t len = aarch64_emit_bytesize(emitter);
-  void *data = arena_alloc(func->arena, len);
-  aarch64_emit_copy_to(emitter, data);
-
-  // now deal with all the relocs which are hidden in the globals
-  struct ir_op_glb *global = func->globals;
-
-  // first pass to get number
-  size_t num_relocations = 0;
-  while (global) {
-    num_relocations += 1;
-    global = global->succ;
-  }
-
-  struct relocation *relocations =
-      arena_alloc(func->arena, sizeof(*relocations) * num_relocations);
-
-  global = func->globals;
-  size_t i = 0;
-  while (global) {
-    relocations[i++] = *(struct relocation *)global->metadata;
-
-    global = global->succ;
-  }
-
-  free_aarch64_emitter(&emitter);
-
-  struct compiled_function result = {.name = aarch64_mangle(func->arena, func->name),
-                                     .code = data,
-                                     .len_code = len,
-                                     .relocations = relocations,
-                                     .num_relocations = num_relocations};
-
-  return result;
-}
-
 static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
   UNUSED_ARG(state);
   // FIXME: only supports ints
@@ -524,8 +444,26 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
     }
     case IR_OP_TY_CNST: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
-                                op->cnst.value);
+
+      switch (op->cnst.ty) {
+
+      case IR_OP_CNST_TY_INT:
+        aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
+                                  op->cnst.int_value);
+        break;
+      case IR_OP_CNST_TY_STR:
+        vector_push_back(state->strings, &op->cnst.str_value);
+
+        size_t str_pos = state->total_str_len;
+
+        ssize_t offset =
+            (ssize_t)str_pos - (ssize_t)aarch64_emit_bytesize(state->emitter);
+
+        aarch64_emit_adr(state->emitter, offset, get_reg_for_idx(reg));
+
+        state->total_str_len += strlen(op->cnst.str_value) + 1;
+        break;
+      }
       break;
     }
     case IR_OP_TY_BINARY_OP: {
@@ -557,4 +495,93 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
 
     op = op->succ;
   }
+}
+
+struct compiled_function aarch64_emit_function(struct ir_builder *func) {
+  // the first step of emitting is that we need to ensure the `function_offset`
+  // values are correct for all BBs as they may have been broken during various
+  // opt/transforming passes
+  {
+    size_t opc = 0;
+
+    struct ir_basicblock *basicblock = func->first;
+    while (basicblock) {
+      basicblock->function_offset = opc;
+      struct ir_stmt *stmt = basicblock->first;
+
+      while (stmt) {
+        struct ir_op *op = stmt->first;
+        while (op) {
+          opc++;
+          op = op->succ;
+        }
+
+        stmt = stmt->succ;
+      }
+
+      basicblock = basicblock->succ;
+    }
+  }
+
+  struct aarch64_emitter *emitter;
+  create_aarch64_emitter(&emitter);
+
+  struct emit_state state = {.irb = func,
+                             .arena = func->arena,
+                             .emitter = emitter,
+                             .strings = vector_create(sizeof(const char *)),
+                             .total_str_len = 0,
+                             .num_extra_stack_slots = 0,
+                             .cur_op_state = {0}};
+
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      emit_stmt(&state, stmt);
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  size_t len = aarch64_emit_bytesize(emitter);
+  void *data = arena_alloc(func->arena, len);
+  aarch64_emit_copy_to(emitter, data);
+
+  // now deal with all the relocs which are hidden in the globals
+  struct ir_op_glb *global = func->globals;
+
+  // first pass to get number
+  size_t num_relocations = 0;
+  while (global) {
+    num_relocations += 1;
+    global = global->succ;
+  }
+
+  struct relocation *relocations =
+      arena_alloc(func->arena, sizeof(*relocations) * num_relocations);
+
+  global = func->globals;
+  size_t i = 0;
+  while (global) {
+    relocations[i++] = *(struct relocation *)global->metadata;
+
+    global = global->succ;
+  }
+
+  free_aarch64_emitter(&emitter);
+
+  struct compiled_function result = {
+      .name = aarch64_mangle(func->arena, func->name),
+      .code = data,
+      .len_code = len,
+      .relocations = relocations,
+      .strings = vector_head(state.strings),
+      .num_strings = vector_length(state.strings),
+      .num_relocations = num_relocations};
+
+  return result;
 }

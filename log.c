@@ -2,11 +2,11 @@
 
 static bool LOG_ENABLED = false;
 
-void enable_log() { LOG_ENABLED = true; }
+void enable_log(void) { LOG_ENABLED = true; }
 
-void disable_log() { LOG_ENABLED = false; }
+void disable_log(void) { LOG_ENABLED = false; }
 
-bool log_enabled() { return LOG_ENABLED; }
+bool log_enabled(void) { return LOG_ENABLED; }
 
 #ifdef NLOG
 #define DEF_LOG_FN(NAME, _PREFIX)                                              \

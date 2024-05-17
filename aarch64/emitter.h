@@ -2,6 +2,7 @@
 #define AARCH64_EMITTER_H
 
 #include <stdlib.h>
+#include <stddef.h>
 
 struct aarch64_reg {
   size_t idx;
@@ -187,6 +188,12 @@ void aarch64_emit_adds_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest);
 
+/* Addressing (immediate) */
+
+void aarch64_emit_adr(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest);
+
+void aarch64_emit_adr(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest);
+
 /* Add & subtract (immediate) */
 
 void aarch64_emit_sub_32_imm(struct aarch64_emitter *emitter,
@@ -287,7 +294,7 @@ void aarch64_emit_load_cnst_32(struct aarch64_emitter *emitter,
                                struct aarch64_reg dest, uint32_t cnst);
 
 void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter,
-                               struct aarch64_reg deset, uint64_t cnst);
+                               struct aarch64_reg deset, int64_t cnst);
 
 /* Loads and stores */
 

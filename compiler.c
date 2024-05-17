@@ -213,6 +213,7 @@ enum compile_result compile(struct compiler *compiler) {
     offset = ROUND_UP(offset, target->function_alignment / target->op_size);
   }
   
+  struct vector *strings = vector_create(sizeof(const char *));
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
 
@@ -243,6 +244,7 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     vector_extend(relocations, func.relocations, func.num_relocations);
+    vector_extend(strings, func.strings, func.num_strings);
   }
 
   char *code = arena_alloc(compiler->arena, total_size);
@@ -251,6 +253,7 @@ enum compile_result compile(struct compiler *compiler) {
   size_t num_results = vector_length(compiled_functions);
   for (size_t i = 0; i < num_results; i++) {
     struct compiled_function *func = vector_get(compiled_functions, i);
+
     memcpy(head, func->code, func->len_code);
     head += ROUND_UP(func->len_code, target->function_alignment);
   }
@@ -260,6 +263,8 @@ enum compile_result compile(struct compiler *compiler) {
       .output = compiler->output,
       .data = code,
       .len_data = total_size,
+      .strings = vector_head(strings),
+      .num_strings = vector_length(strings),
       .symbols = vector_head(symbols),
       .num_symbols = vector_length(symbols),
       .extern_symbols = vector_head(external_symbols),

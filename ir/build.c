@@ -29,6 +29,8 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
     break;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     return l->primitive == r->primitive;
+  case IR_OP_VAR_TY_TY_POINTER:
+    return var_ty_eq(l->pointer.underlying, r->pointer.underlying);
   case IR_OP_VAR_TY_TY_FUNC:
     todo("cmp func tys");
     break;
@@ -86,9 +88,16 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
 
     return ty;
   }
-  case AST_TYREF_TY_POINTER:
-    todo("build pointers");
-    break;
+  case AST_TYREF_TY_POINTER: {
+    struct ir_op_var_ty *underlying = arena_alloc(irb->arena, sizeof(*underlying));
+    *underlying = ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
+
+    struct ir_op_var_ty ty;
+    ty.ty =IR_OP_VAR_TY_TY_POINTER;
+    ty.pointer = (struct ir_op_var_pointer_ty){ .underlying = underlying };
+
+    return ty;
+  }
   }
 }
 
@@ -249,9 +258,15 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *op = alloc_ir_op(irb, stmt);
 
   op->ty = IR_OP_TY_CNST;
-  op->var_ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
-  op->var_ty.primitive = ty_for_well_known_ty(cnst->cnst_ty);
-  op->cnst.value = cnst->value;
+  op->var_ty = ty_for_ast_tyref(irb, &cnst->cnst_ty);
+
+  if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER) {
+    op->cnst.ty = IR_OP_CNST_TY_STR;
+    op->cnst.str_value = cnst->str_value;
+  } else {
+    op->cnst.ty = IR_OP_CNST_TY_INT;
+    op->cnst.int_value = cnst->int_value;
+  }
 
   return op;
 }
@@ -857,6 +872,7 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
   }
 }
 
+// FIXME: pointer size!
 size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
   UNUSED_ARG(irb);
 
@@ -864,7 +880,8 @@ size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
   case IR_OP_VAR_TY_TY_NONE:
     bug("IR_OP_VAR_TY_TY_NONE has no size");
   case IR_OP_VAR_TY_TY_FUNC:
-    todo("POINTER SIZE");
+    return 8;
+  case IR_OP_VAR_TY_TY_POINTER:
     return 8;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {

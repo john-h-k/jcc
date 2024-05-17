@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
-project(jcc)
+project(jcc C)
 set(CMAKE_C_STANDARD 23)
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
@@ -50,7 +50,7 @@ if(MSVC)
 else()
   add_link_options(-fsanitize=undefined)
   add_compile_options(-fsanitize=undefined)
-  add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wimplicit-fallthrough)
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wimplicit-fallthrough -Wstrict-prototypes)
   # TODO: remove binary literals in source
   add_compile_options(-Wno-gnu-binary-literal)
 endif()

@@ -6,6 +6,7 @@
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
+#include "bit_twiddle.h"
 
 #include <alloca.h>
 #include <string.h>
@@ -154,8 +155,9 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   }
 }
 
-bool is_literal_token(enum lex_token_ty tok_ty,
-                      enum well_known_ty *well_known_ty) {
+// FIXME: type pooling so we don't end up with lots of duplicate types
+bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
+                      struct ast_tyref *ty_ref) {
   switch (tok_ty) {
   case LEX_TOKEN_TY_UNKNOWN:
   case LEX_TOKEN_TY_EOF:
@@ -198,6 +200,13 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_WHILE:
   case LEX_TOKEN_TY_KW_IF:
   case LEX_TOKEN_TY_KW_ELSE:
+  case LEX_TOKEN_TY_KW_TYPEDEF:
+  case LEX_TOKEN_TY_KW_STATIC:
+  case LEX_TOKEN_TY_KW_EXTERN:
+  case LEX_TOKEN_TY_KW_AUTO:
+  case LEX_TOKEN_TY_KW_REGISTER:
+  case LEX_TOKEN_TY_KW_CONST:
+  case LEX_TOKEN_TY_KW_VOLATILE:
   case LEX_TOKEN_TY_KW_VOID:
   case LEX_TOKEN_TY_KW_CHAR:
   case LEX_TOKEN_TY_KW_SHORT:
@@ -212,33 +221,49 @@ bool is_literal_token(enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_IDENTIFIER:
     return false;
 
+  case LEX_TOKEN_TY_ASCII_STR_LITERAL:
+    // char is signed!
+    ty_ref->ty = AST_TYREF_TY_POINTER;
+    ty_ref->pointer.underlying =
+        arena_alloc(parser->arena, sizeof(*ty_ref->pointer.underlying));
+    *ty_ref->pointer.underlying = (struct ast_tyref){
+        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_CHAR};
+    return true;
+
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
     // char is signed!
-    *well_known_ty = WELL_KNOWN_TY_SIGNED_CHAR;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_SIGNED_CHAR;
     return true;
 
   case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_SIGNED_INT;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_SIGNED_INT;
     return true;
 
   case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_INT;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_UNSIGNED_INT;
     return true;
 
   case LEX_TOKEN_TY_SIGNED_LONG_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_SIGNED_LONG;
     return true;
 
   case LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_UNSIGNED_LONG;
     return true;
 
   case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_SIGNED_LONG_LONG;
     return true;
 
   case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL:
-    *well_known_ty = WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
     return true;
   }
 
@@ -319,7 +344,46 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
   }
 }
 
-bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+void parse_type_qualifiers(struct parser *parser,
+                           enum ast_type_qualifier_flags *flags) {
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  if (token.ty == LEX_TOKEN_TY_KW_CONST) {
+    *flags |= AST_TYPE_QUALIFIER_FLAG_CONST;
+  } else if (token.ty == LEX_TOKEN_TY_KW_VOLATILE) {
+    *flags |= AST_TYPE_QUALIFIER_FLAG_VOLATILE;
+  } else {
+    return;
+  }
+
+  consume_token(parser->lexer, token);
+  parse_type_qualifiers(parser, flags);
+}
+
+// // VOID, INT, SHORT, etc
+// // but also `struct X`, `enum X`, `union X`, and (painfully!) typedefs
+// bool parse_type_specifiers(struct parser *parser,
+//                             enum ast_type_qualifier_flags *flags) {
+//   struct token token;
+//   peek_token(parser->lexer, &token);
+
+//   switch (token.ty) {
+//     c
+//   }
+
+//   if (token.ty == LEX_TOKEN_TY_KW_CONST) {
+//     *flags |= AST_TYPE_QUALIFIER_FLAG_CONST;
+//   } else if (token.ty == LEX_TOKEN_TY_KW_VOLATILE) {
+//     *flags |= AST_TYPE_QUALIFIER_FLAG_VOLATILE;
+//   } else {
+//     return false;
+//   }
+
+//   return parse_type_specifiers(parser, flags);
+// }
+
+bool parse_wkt_integral(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -371,6 +435,38 @@ bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
   return true;
 }
 
+bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
+  if (parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
+    struct ast_tyref *underlying =
+        arena_alloc(parser->arena, sizeof(*underlying));
+    *underlying = *ty_ref;
+
+    ty_ref->ty = AST_TYREF_TY_POINTER;
+    ty_ref->pointer.underlying = underlying;
+    ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+
+    parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+
+    return true;
+  }
+
+  return false;
+}
+
+bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+
+  if (!parse_wkt_integral(parser, ty_ref)) {
+    return false;
+  }
+
+  while (parse_pointer(parser, ty_ref)) {
+    // tada
+  }
+
+  return true;
+}
+
 bool parse_var(struct parser *parser, struct ast_var *var) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -384,7 +480,8 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
 
   var->identifier = token;
 
-  struct var_table_entry *entry = get_entry(&parser->var_table, identifier_str(parser, &var->identifier));
+  struct var_table_entry *entry =
+      get_entry(&parser->var_table, identifier_str(parser, &var->identifier));
   if (entry && entry->value) {
     var->var_ty = *(struct ast_tyref *)entry->value;
     var->scope = entry->scope;
@@ -401,11 +498,16 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct token token;
 
   peek_token(parser->lexer, &token);
-  enum well_known_ty wkt;
-  if (is_literal_token(token.ty, &wkt)) {
+  struct ast_tyref ty_ref;
+  if (is_literal_token(parser, token.ty, &ty_ref)) {
     // TODO: handle unrepresentedly large values
-    cnst->cnst_ty = wkt;
-    cnst->value = atoll(associated_text(parser->lexer, &token));
+    cnst->cnst_ty = ty_ref;
+
+    if (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
+      cnst->str_value = associated_text(parser->lexer, &token);
+    } else {
+      cnst->int_value = atoll(associated_text(parser->lexer, &token));
+    }
 
     consume_token(parser->lexer, token);
     return true;
@@ -494,8 +596,7 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
     atom->ty = AST_ATOM_TY_CNST;
-    atom->var_ty.ty = AST_TYREF_TY_WELL_KNOWN;
-    atom->var_ty.well_known = cnst.cnst_ty;
+    atom->var_ty = cnst.cnst_ty;
     atom->cnst = cnst;
 
     return true;
@@ -526,7 +627,8 @@ bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
     expr->var_ty = var_ty_return_type_of(&atom.var_ty);
     expr->call = arena_alloc(parser->arena, sizeof(*expr->call));
     expr->call->var_ty = var_ty_return_type_of(&atom.var_ty);
-    expr->call->target = arena_alloc(parser->arena, sizeof(*expr->call->target));
+    expr->call->target =
+        arena_alloc(parser->arena, sizeof(*expr->call->target));
     *expr->call->target = atom;
     expr->call->arg_list = arg_list;
 
@@ -541,7 +643,9 @@ bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
 
 struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
-  debug_assert(lhs->ty != AST_TYREF_TY_UNKNOWN && rhs->ty != AST_TYREF_TY_UNKNOWN, "unknown ty in call to `resolve_binary_op_types`");
+  debug_assert(lhs->ty != AST_TYREF_TY_UNKNOWN &&
+                   rhs->ty != AST_TYREF_TY_UNKNOWN,
+               "unknown ty in call to `resolve_binary_op_types`");
 
   if ((lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
        rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
@@ -641,7 +745,7 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 
     return true;
   }
-  
+
   return parse_expr_precedence_aware(parser, 0, expr);
 }
 
@@ -763,7 +867,7 @@ bool parse_vardecllist(struct parser *parser,
           identifier_str(parser, &var_decl.var.identifier));
 
     // copy the type ref into arena memory for lifetime simplicity
-    
+
     const char *name = identifier_str(parser, &var_decl.var.identifier);
     struct var_table_entry *entry = create_entry(&parser->var_table, name);
     entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
@@ -1309,10 +1413,12 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
   if (parse_tyref(parser, &ty_ref) && parse_identifier(parser, &identifier) &&
       parse_paramlist(parser, &param_list)) {
     struct ast_ty_func func_ty;
-    func_ty.ret_var_ty = arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
+    func_ty.ret_var_ty =
+        arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
     *func_ty.ret_var_ty = ty_ref;
     func_ty.num_param_var_tys = param_list.num_params;
-    func_ty.param_var_tys = arena_alloc(parser->arena, sizeof(*func_ty.param_var_tys) * param_list.num_params);
+    func_ty.param_var_tys = arena_alloc(
+        parser->arena, sizeof(*func_ty.param_var_tys) * param_list.num_params);
     for (size_t i = 0; i < param_list.num_params; i++) {
       func_ty.param_var_tys[i] = param_list.params[i].var_ty;
     }
@@ -1327,7 +1433,8 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
     var.var_ty = func_ty_ref;
 
     const char *name = identifier_str(parser, &var.identifier);
-    struct var_table_entry *entry = get_or_create_entry(&parser->var_table, name);
+    struct var_table_entry *entry =
+        get_or_create_entry(&parser->var_table, name);
     entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
     *(struct ast_tyref *)entry->value = var.var_ty;
 
@@ -1458,9 +1565,16 @@ struct ast_printstate {
   struct graphwriter *gwr;
 };
 
+#define DEBUG_FUNC_ENUM(ty, name)                                              \
+  void debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name)
+
 #define DEBUG_FUNC(ty, name)                                                   \
   void debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
 #define DEBUG_CALL(ty, val) debug_print_##ty(state, val)
+
+#define AST_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
+#define AST_PRINT_SAMELINE_NOINDENT(fmt, ...)                                           \
+  slogsl(fmt, __VA_ARGS__)
 
 #define AST_PRINT_SAMELINE_Z(fmt) slogsl("%*s" fmt, state->indent * 4, "")
 #define AST_PRINT_SAMELINE(fmt, ...)                                           \
@@ -1470,14 +1584,28 @@ struct ast_printstate {
 #define AST_PRINT(fmt, ...) AST_PRINT_SAMELINE(fmt "\n", __VA_ARGS__)
 
 #define INDENT() state->indent++
-#define UNINDENT() state->indent--
+#define UNINDENT() do { state->indent--; debug_assert(state->indent >= 0, "indent negative!"); } while(0);
 
 #define PUSH_INDENT()                                                          \
   int tmp_indent = state->indent;                                              \
   state->indent = 0;
 #define POP_INDENT() state->indent = tmp_indent;
 
+DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
+  UNUSED_ARG(state);
+  
+  if (*type_qualifier_flags & AST_TYPE_QUALIFIER_FLAG_CONST) {
+    AST_PRINTZ("CONST");
+  }
+
+  if (*type_qualifier_flags & AST_TYPE_QUALIFIER_FLAG_VOLATILE) {
+    AST_PRINTZ("VOLATILE");
+  }
+}
+
 DEBUG_FUNC(tyref, ty_ref) {
+  DEBUG_CALL(type_qualifier_flags, &ty_ref->type_qualifiers);
+
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     AST_PRINTZ("<unresolved type>");
@@ -1562,10 +1690,18 @@ DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
   AST_PRINT("VARIABLE '%s' SCOPE %d",
-            associated_text(state->parser->lexer, &var->identifier), var->scope);
+            associated_text(state->parser->lexer, &var->identifier),
+            var->scope);
 }
 
-DEBUG_FUNC(cnst, cnst) { AST_PRINT("CONSTANT '%llu'", cnst->value); }
+DEBUG_FUNC(cnst, cnst) {
+  if (cnst->cnst_ty.ty == AST_TYREF_TY_WELL_KNOWN) {
+    AST_PRINT("CONSTANT '%llu'", cnst->int_value);
+  } else {
+    // must be string literal for now
+    AST_PRINT("CONSTANT '%s'", cnst->str_value);
+  }
+}
 
 DEBUG_FUNC(compoundexpr, compound_expr);
 
@@ -1683,6 +1819,8 @@ DEBUG_FUNC(call, call) {
   DEBUG_CALL(atom, call->target);
 
   DEBUG_CALL(arglist, &call->arg_list);
+
+  UNINDENT();
 }
 
 DEBUG_FUNC(expr, expr) {

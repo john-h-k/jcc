@@ -117,6 +117,15 @@
 #define UBFM_64_IMM(immr, imms, Rn, Rd)                                        \
   BITFIELD_IMM(0b1, 0b01, 0b1, immr, imms, Rn, Rd)
 
+/* Addressing (Immediate) */
+
+#define ADR_IMM(op, immlo, immhi, Rd)                                          \
+  (uint32_t)((U32(op) << 31) | (U32(immlo) << 29) | (U32(0b10000) << 24) |     \
+             (U32(immhi) << 5) | U32(Rd))
+
+#define ADR(immlo, immhi, Rd) ADR_IMM(0, immlo, immhi, Rd)
+#define ADRP(immlo, immhi, Rd) ADR_IMM(1, immlo, immhi, Rd)
+
 /* Arithmetic & logical operations (Immediate) */
 
 #define LOGICAL_IMM(sf, opc, N, immr, imms, Rn, Rd)                            \

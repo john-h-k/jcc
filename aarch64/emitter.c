@@ -253,6 +253,22 @@ void aarch64_emit_subs_32(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, SUBS_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
+/* Addressing (immediate) */
+
+void aarch64_emit_adr(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest) {
+  unsigned immlo = CLAMP_BITS(imm & 0b11, 2);
+  unsigned immhi = CLAMP_BITS((unsigned int)imm >> 2, 19);
+ 
+  aarch64_emit(emitter, ADR(immlo, immhi, dest.idx));
+}
+
+void aarch64_emit_adrp(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest) {
+  int immlo = imm & 0b11;
+  int immhi = imm >> 2;
+  
+  aarch64_emit(emitter, ADRP(immlo, immhi, dest.idx));
+}
+
 /* Add & subtract (immediate) */
 
 void aarch64_emit_sub_32_imm(struct aarch64_emitter *emitter,
@@ -396,7 +412,7 @@ void aarch64_emit_udiv_32(struct aarch64_emitter *emitter,
 /* Constant loading */
 
 void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter,
-                               struct aarch64_reg dest, uint64_t cnst) {
+                               struct aarch64_reg dest, int64_t cnst) {
   switch (cnst) {
   case 0: {
     aarch64_emit(emitter, MOV_64_REG(ZERO_REG.idx, dest.idx));
@@ -407,12 +423,23 @@ void aarch64_emit_load_cnst_64(struct aarch64_emitter *emitter,
     break;
   }
   default: {
-    if (UNS_FITS_IN_BITS(cnst, 16)) {
-      aarch64_emit(emitter,
-                   MOVZ_64(/* no shift */ 0, (uint16_t)cnst, dest.idx));
-      break;
+    if (cnst > 0) {
+      if (UNS_FITS_IN_BITS(cnst, 16)) {
+        aarch64_emit(emitter,
+                     MOVZ_64(/* no shift */ 0, (uint16_t)cnst, dest.idx));
+        break;
+      } else {
+        todo("mov cnst > 2^16");
+      }
+
     } else {
-      todo("mov cnst > 2^16");
+      if (SIG_FITS_IN_BITSL(cnst, 16)) {
+        aarch64_emit(emitter,
+                     MOVN_64(/* no shift */ 0, (uint16_t)(~cnst), dest.idx));
+        break;
+      } else {
+        todo("mov cnst > 2^16");
+      }
     }
   }
   }
@@ -480,41 +507,40 @@ void aarch64_emit_load_pair_post_index_64(struct aarch64_emitter *emitter,
 }
 
 void aarch64_emit_store_pair_pre_index_32(struct aarch64_emitter *emitter,
-                                           struct aarch64_reg addr,
-                                           struct aarch64_reg source0,
-                                           struct aarch64_reg source1,
-                                           unsigned short offset) {
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg source0,
+                                          struct aarch64_reg source1,
+                                          unsigned short offset) {
   aarch64_emit(emitter, STP_PRE_INDEX_32(CLAMP_BITS(offset, 7), source1.idx,
-                                          addr.idx, source0.idx));
+                                         addr.idx, source0.idx));
 }
 
 void aarch64_emit_load_pair_pre_index_32(struct aarch64_emitter *emitter,
-                                          struct aarch64_reg addr,
-                                          struct aarch64_reg dest0,
-                                          struct aarch64_reg dest1,
-                                          unsigned short offset) {
+                                         struct aarch64_reg addr,
+                                         struct aarch64_reg dest0,
+                                         struct aarch64_reg dest1,
+                                         unsigned short offset) {
   aarch64_emit(emitter, LDP_PRE_INDEX_32(CLAMP_BITS(offset, 7), dest1.idx,
-                                          addr.idx, dest0.idx));
+                                         addr.idx, dest0.idx));
 }
 
 void aarch64_emit_store_pair_pre_index_64(struct aarch64_emitter *emitter,
-                                           struct aarch64_reg addr,
-                                           struct aarch64_reg source0,
-                                           struct aarch64_reg source1,
-                                           unsigned short offset) {
+                                          struct aarch64_reg addr,
+                                          struct aarch64_reg source0,
+                                          struct aarch64_reg source1,
+                                          unsigned short offset) {
   aarch64_emit(emitter, STP_PRE_INDEX_64(CLAMP_BITS(offset, 7), source1.idx,
-                                          addr.idx, source0.idx));
+                                         addr.idx, source0.idx));
 }
 
 void aarch64_emit_load_pair_pre_index_64(struct aarch64_emitter *emitter,
-                                          struct aarch64_reg addr,
-                                          struct aarch64_reg dest0,
-                                          struct aarch64_reg dest1,
-                                          unsigned short offset) {
+                                         struct aarch64_reg addr,
+                                         struct aarch64_reg dest0,
+                                         struct aarch64_reg dest1,
+                                         unsigned short offset) {
   aarch64_emit(emitter, LDP_PRE_INDEX_64(CLAMP_BITS(offset, 7), dest1.idx,
-                                          addr.idx, dest0.idx));
+                                         addr.idx, dest0.idx));
 }
-
 
 void aarch64_emit_load_offset_64(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,

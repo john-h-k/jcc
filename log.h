@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include "util.h"
 
 #define DECL_LOG_FN(NAME)                                                      \
   void NAME(const char *format, ...);                                          \
@@ -10,10 +11,10 @@
   void f##NAME(FILE *file, const char *format, ...);                           \
   void f##NAME##sl(FILE *file, const char *format, ...);
 
-void enable_log();
-void disable_log();
+void enable_log(void);
+void disable_log(void);
 
-bool log_enabled();
+bool log_enabled(void);
 
 DECL_LOG_FN(err)
 DECL_LOG_FN(warn)

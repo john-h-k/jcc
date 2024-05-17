@@ -76,6 +76,16 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("if", LEX_TOKEN_TY_KW_IF),
       KEYWORD("else", LEX_TOKEN_TY_KW_ELSE),
       KEYWORD("return", LEX_TOKEN_TY_KW_RETURN),
+
+      KEYWORD("typedef", LEX_TOKEN_TY_KW_TYPEDEF),
+      KEYWORD("static", LEX_TOKEN_TY_KW_STATIC),
+      KEYWORD("auto", LEX_TOKEN_TY_KW_AUTO),
+      KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN),
+      KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER),
+
+      KEYWORD("const", LEX_TOKEN_TY_KW_CONST),
+      KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE),
+
       KEYWORD("void", LEX_TOKEN_TY_KW_VOID),
       KEYWORD("char", LEX_TOKEN_TY_KW_CHAR),
       KEYWORD("short", LEX_TOKEN_TY_KW_SHORT),
@@ -355,7 +365,41 @@ void peek_token(struct lexer *lexer, struct token *token) {
     break;
 
   default: {
-    if (isdigit(c)) {
+    if (c == '\'') {
+      ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
+
+      // skip first single-quote
+      next_col(&end);
+
+      // move forward while
+      bool char_escaped = false;
+      for (size_t i = end.idx; i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
+        // next char is escaped if this char is a non-escaped backslash
+        char_escaped = !char_escaped && lexer->text[i] == '\\';
+        next_col(&end);
+      }
+
+      // skip final single-quote
+      next_col(&end);
+    } else if (c == '"') {
+      // TODO: logic is same as for char, could dedupe
+      ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
+
+      // skip first double-quote
+      next_col(&end);
+
+      // move forward while
+      bool char_escaped = false;
+      for (size_t i = end.idx; i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
+        // next char is escaped if this char is a non-escaped backslash
+        char_escaped = !char_escaped && lexer->text[i] == '\\';
+        next_col(&end);
+      }
+
+      // skip final double-quote
+      next_col(&end);
+    
+    } else if (isdigit(c)) {
       ty = LEX_TOKEN_TY_SIGNED_INT_LITERAL;
 
       for (size_t i = end.idx; i < lexer->len && isdigit(lexer->text[i]); i++) {
@@ -438,6 +482,7 @@ void next_line(struct text_pos *pos) {
 const char *associated_text(struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_IDENTIFIER:
+  case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
   case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
   case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
@@ -452,7 +497,7 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
     return p;
   }
   default:
-    return NULL;
+    bug("associated text did not make sense for token ty '%d'", token->ty);
   }
 }
 
@@ -513,6 +558,15 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_STRUCT)
     CASE_RET(LEX_TOKEN_TY_KW_UNION)
 
+    CASE_RET(LEX_TOKEN_TY_KW_TYPEDEF)
+    CASE_RET(LEX_TOKEN_TY_KW_STATIC)
+    CASE_RET(LEX_TOKEN_TY_KW_EXTERN)
+    CASE_RET(LEX_TOKEN_TY_KW_AUTO)
+    CASE_RET(LEX_TOKEN_TY_KW_REGISTER)
+
+    CASE_RET(LEX_TOKEN_TY_KW_CONST)
+    CASE_RET(LEX_TOKEN_TY_KW_VOLATILE)
+
     CASE_RET(LEX_TOKEN_TY_KW_VOID)
 
     CASE_RET(LEX_TOKEN_TY_KW_CHAR)
@@ -528,6 +582,7 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_CLOSE_BRACE)
     CASE_RET(LEX_TOKEN_TY_IDENTIFIER)
 
+    CASE_RET(LEX_TOKEN_TY_ASCII_STR_LITERAL)
     CASE_RET(LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
 
     CASE_RET(LEX_TOKEN_TY_SIGNED_INT_LITERAL)
