@@ -36,8 +36,26 @@ enum ir_op_ty {
 bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
+enum ir_op_glb_ty {
+  IR_OP_GLB_TY_SYM,
+  IR_OP_GLB_TY_STR,
+};
+
+struct ir_op_glb_sym {
+  const char *name;
+};
+
+struct ir_op_glb_str {
+  const char *value;
+};
+
 struct ir_op_glb {
-  const char *global;
+  enum ir_op_glb_ty ty;
+
+  union {
+    struct ir_op_glb_sym sym;
+    struct ir_op_glb_str str;
+  };
 
   struct ir_op_glb *succ;
 

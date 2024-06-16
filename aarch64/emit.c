@@ -89,11 +89,13 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
     // this uses relocs instead of actually calculating it
     // FIXME: may break on 32 bit
 
+    invariant_assert(op->call.target->glb.ty == IR_OP_GLB_TY_SYM, "str type glb makes no sense for call");
+
     op->call.target->glb.metadata =
         arena_alloc(state->arena, sizeof(struct relocation));
     *(struct relocation *)op->call.target->glb.metadata =
         (struct relocation){.symbol_name = aarch64_mangle(
-                                state->arena, op->call.target->glb.global),
+                                state->arena, op->call.target->glb.sym.name),
                             // this is not actually the address!!
                             // this is the offset WITHIN the function
                             // we let `compiler.c` fix up the address
@@ -452,6 +454,17 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
                                   op->cnst.int_value);
         break;
       case IR_OP_CNST_TY_STR:
+        op->.target->glb.metadata =
+            arena_alloc(state->arena, sizeof(struct relocation));
+        *(struct relocation *)op->call.target->glb.metadata =
+            (struct relocation){.symbol_name = aarch64_mangle(
+                                    state->arena, op->call.target->glb.sym.name),
+                                // this is not actually the address!!
+                                // this is the offset WITHIN the function
+                                // we let `compiler.c` fix up the address
+                                .address = aarch64_emit_bytesize(state->emitter),
+                                .size = 2};
+
         vector_push_back(state->strings, &op->cnst.str_value);
 
         size_t str_pos = state->total_str_len;
