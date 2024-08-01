@@ -20,6 +20,9 @@ cd ..
 
 JCC is designed to be a pure C11 (no dependencies) C11 compiler. 
 
+## Is it sound?
+No, it is text based
+
 ## Design
 
 The current design consists of 3 stages:
