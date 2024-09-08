@@ -135,7 +135,6 @@ enum compile_result compile(struct compiler *compiler) {
 
   struct vector *symbols = vector_create(sizeof(struct symbol));
   struct vector *external_symbols = vector_create(sizeof(struct external_symbol));
-  struct vector *relocations = vector_create(sizeof(struct relocation));
 
   // FIXME: super slow quadratic we really need a hashmap
   for (size_t i = 0; i < result.translation_unit.num_func_decls; i++) {
@@ -249,6 +248,8 @@ enum compile_result compile(struct compiler *compiler) {
     offset = ROUND_UP(offset, target->function_alignment / target->op_size);
   }
   
+  size_t num_relocation_instrs = 0;
+  struct vector *relocations = vector_create(sizeof(struct relocation));
   struct vector *strings = vector_create(sizeof(const char *));
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
@@ -283,6 +284,7 @@ enum compile_result compile(struct compiler *compiler) {
       func.relocations[i].address += symbol.value;
     }
 
+    num_relocation_instrs += func.num_relocation_instrs;
     vector_extend(relocations, func.relocations, func.num_relocations);
     vector_extend(strings, func.strings, func.num_strings);
   }
@@ -299,7 +301,6 @@ enum compile_result compile(struct compiler *compiler) {
       const char *str = func->strings[j];
       const char *name = mangle_str_cnst_name(compiler->arena, func->name, j);
       struct symbol symbol = { .ty = SYMBOL_TY_STRING, .name = name, .value = str_offset };
-      printf("OFFSET %zu\n", str_offset);
 
       str_offset += strlen(str);
       vector_push_front(symbols, &symbol);
@@ -307,12 +308,6 @@ enum compile_result compile(struct compiler *compiler) {
 
     memcpy(head, func->code, func->len_code);
     head += ROUND_UP(func->len_code, target->function_alignment);
-  }
-
-  size_t l = vector_length(symbols);
-  for (size_t i = 0; i < l; i++) {
-    struct symbol *s = (struct symbol *)vector_get(symbols, i);
-    printf("symbol %s\n", s->name);
   }
 
   struct build_object_args args = {
@@ -327,7 +322,8 @@ enum compile_result compile(struct compiler *compiler) {
       .extern_symbols = vector_head(external_symbols),
       .num_extern_symbols = vector_length(external_symbols),
       .relocations = vector_head(relocations),
-      .num_relocations = vector_length(relocations)
+      .num_relocations = vector_length(relocations),
+      .num_relocation_instrs = num_relocation_instrs
   };
 
   BEGIN_STAGE("OBJECT FILE");

@@ -4,9 +4,11 @@
 #include "../log.h"
 #include "../util.h"
 
+#include <mach-o/arm64/reloc.h>
 #include <mach-o/loader.h>
 #include <mach-o/reloc.h>
 #include <mach/machine.h>
+#include <stdint.h>
 #include <stdio.h>
 
 void write_mach_header(FILE *file, const struct compile_args *args) {
@@ -74,13 +76,28 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   segment.nsects = 2;
   segment.flags = 0;
 
+  struct section_64 text;
+  memset(&text, 0, sizeof(text));
+  strcpy(text.sectname, "__text");
+  strcpy(text.segname, "__TEXT");
+  text.addr = 0;
+  text.size = args->len_data;
+  text.offset = segment.fileoff;
+  text.align = 4;
+  text.reloff = segment.fileoff + text.size + total_str_size;
+  text.nreloc = args->num_relocation_instrs;
+  text.flags = S_REGULAR | S_ATTR_PURE_INSTRUCTIONS; /*| S_ATTR_EXT_RELOC;*/
+  text.reserved1 = 0;
+  text.reserved2 = 0;
+  text.reserved3 = 0;
+
   struct section_64 cstrings;
   memset(&cstrings, 0, sizeof(cstrings));
   strcpy(cstrings.sectname, "__cstring");
   strcpy(cstrings.segname, "__TEXT");
-  cstrings.addr = 0;
+  cstrings.addr = text.size;
   cstrings.size = total_str_size;
-  cstrings.offset = segment.fileoff;
+  cstrings.offset = segment.fileoff + text.size;
   cstrings.align = 4;
   cstrings.reloff = 0; // no relocs
   cstrings.nreloc = 0;
@@ -89,29 +106,12 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   cstrings.reserved2 = 0;
   cstrings.reserved3 = 0;
 
-  struct section_64 text;
-  memset(&text, 0, sizeof(text));
-  strcpy(text.sectname, "__text");
-  strcpy(text.segname, "__TEXT");
-  text.addr = cstrings.size;
-  text.size = args->len_data;
-  text.offset =
-      segment.fileoff +
-      cstrings.size; // sizeof(struct mach_header_64) + segment.cmdsize;
-  text.align = 4;
-  text.reloff = segment.fileoff + cstrings.size + text.size;
-  text.nreloc = args->num_relocations;
-  text.flags = S_REGULAR | S_ATTR_PURE_INSTRUCTIONS; /*| S_ATTR_EXT_RELOC;*/
-  text.reserved1 = 0;
-  text.reserved2 = 0;
-  text.reserved3 = 0;
-
   struct symtab_command symtab;
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
   symtab.symoff = segment.fileoff + text.size + cstrings.size +
-                  sizeof(struct relocation_info) * args->num_relocations;
+                  sizeof(struct relocation_info) * args->num_relocation_instrs;
   debug("num symbols %d", args->num_symbols);
   symtab.nsyms = args->num_symbols + args->num_extern_symbols;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
@@ -152,8 +152,8 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   version.ntools = 0;
 
   fwrite(&segment, sizeof(segment), 1, file);
-  fwrite(&cstrings, sizeof(cstrings), 1, file);
   fwrite(&text, sizeof(text), 1, file);
+  fwrite(&cstrings, sizeof(cstrings), 1, file);
   fwrite(&symtab, sizeof(symtab), 1, file);
   fwrite(&dysymtab, sizeof(dysymtab), 1, file);
   fwrite(&version, sizeof(version), 1, file);
@@ -165,7 +165,6 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   for (size_t i = 0; i < args->num_strings; i++) {
     fwrite(args->strings[i], 1, strlen(args->strings[i]) + 1, file);
   }
-
 
   fseek(file, text.offset, SEEK_SET);
 
@@ -181,58 +180,62 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
   for (size_t i = 0; i < args->num_relocations; i++) {
     struct relocation *reloc = &args->relocations[i];
-    size_t index;
-    int external = -1;
-    enum reloc_type_generic type;
 
     switch (reloc->ty) {
-      case RELOCATION_TY_SYM:
-        external = 1;
+    case RELOCATION_TY_SINGLE: {
+      size_t index = SIZE_T_MAX;
 
-        // FIXME: lookup instead of this mess lolz
-        for (size_t i = 0; i < args->num_symbols; i++) {
-          struct symbol *symbol = &args->symbols[i];
-          if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
-            index = i;
-          }
+      // FIXME: lookup instead of this mess lolz
+      for (size_t i = 0; i < args->num_symbols; i++) {
+        struct symbol *symbol = &args->symbols[i];
+        if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
+          index = i;
         }
-
-        for (size_t i = 0; i < args->num_extern_symbols; i++) {
-          struct external_symbol *symbol = &args->extern_symbols[i];
-          if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
-            index = args->num_symbols + i;
-            external = 1;
-          }
-        }
-        type = GENERIC_RELOC_SECTDIFF; // ARM64_RELOC_BRANCH26
-        break;
-      case RELOCATION_TY_STR: {
-        external = 1;
-
-        // index = reloc->str.str_index;
-        index = reloc->str.str_index;
-        // type = 10; // ARM64_RELOC_ADDEND
-        type = 3; // ARM64_RELOC_ADDEND
-        break;
       }
 
+      for (size_t i = 0; i < args->num_extern_symbols; i++) {
+        struct external_symbol *symbol = &args->extern_symbols[i];
+        if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
+          index = args->num_symbols + i;
+        }
+      }
+
+      invariant_assert(index != SIZE_T_MAX, "could not find symbol for reloc");
+
+      struct relocation_info info = {.r_address = reloc->address,
+                                     .r_length = reloc->size,
+                                     .r_pcrel = 1,
+                                     .r_symbolnum = index,
+                                     .r_extern = 1,
+                                     .r_type = ARM64_RELOC_BRANCH26};
+
+      fwrite(&info, sizeof(info), 1, file);
+
+      break;
     }
+    case RELOCATION_TY_PAIR: {
+      size_t index = reloc->str.str_index;
 
-    invariant_assert(external != -1, "could not find symbol for reloc");
+      struct relocation_info infos[2] = {
+          {.r_address = reloc->address,
+           .r_length = reloc->size,
+           .r_pcrel = 1,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_PAGE21},
+          {.r_address = reloc->address + 4,
+           .r_length = reloc->size,
+           .r_pcrel = 0,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_PAGEOFF12},
+      };
 
-    size_t address = total_str_size + reloc->address;
-    
-    struct relocation_info info = {
-        .r_address = address,
-        .r_length = reloc->size,
-        .r_pcrel = 1, // always true ARM64
-        .r_symbolnum = index,
-        .r_extern = external,
-        // HACK: not always correct
-        .r_type = type
-    };
+      fwrite(infos, sizeof(infos), 1, file);
 
-    fwrite(&info, sizeof(info), 1, file);
+      break;
+    }
+    }
   }
 
   /* Symbol table */
@@ -244,14 +247,15 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     uint8_t n_sect;
     uint64_t n_value;
     switch (symbol->ty) {
-      case SYMBOL_TY_STRING:
-        n_sect = 1;
-        n_value = symbol->value;
-        break;
-      case SYMBOL_TY_FUNC:
-        n_sect = 2;
-        n_value = symbol->value + total_str_size;
-        break;
+    case SYMBOL_TY_FUNC:
+      n_sect = 1;
+      n_value = symbol->value;
+      break;
+    case SYMBOL_TY_STRING:
+      n_sect = 2;
+      n_value = symbol->value + args->len_data;
+      // n_value = symbol->value;
+      break;
     }
 
     struct nlist_64 nlist;
