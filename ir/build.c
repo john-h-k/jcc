@@ -1113,6 +1113,33 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
     basicblock = basicblock->succ;
   }
 
+  // handle `main` implicit return
+  if (strcmp(builder->name, "main") == 0) {
+    struct ir_basicblock *last_bb = builder->last;
+    struct ir_stmt *last_stmt = last_bb ? last_bb->last : NULL;
+    struct ir_op *last_op = last_stmt ? last_stmt->last : NULL;
+
+    if (!last_op || last_op->ty != IR_OP_TY_RET) {
+      // no return statement
+      if (!last_bb) {
+        last_bb = alloc_ir_basicblock(builder);
+      }
+      if (!last_stmt) {
+        last_stmt = alloc_ir_stmt(builder, last_bb);
+      }
+
+      struct ir_op *cnst = alloc_ir_op(builder, last_stmt);
+      cnst->ty = IR_OP_TY_CNST;
+      cnst->var_ty = (struct ir_op_var_ty){
+        .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+        .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
+      };
+
+      struct ir_op *ret = insert_after_ir_op(builder, cnst, IR_OP_TY_RET, cnst->var_ty);
+      ret->ret.value = cnst;
+    }
+  }
+
   return builder;
 }
 
