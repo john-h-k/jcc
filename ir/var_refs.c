@@ -19,7 +19,7 @@ struct var_refs *var_refs_create(struct var_refs *parent) {
 }
 
 struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key) {
-  struct var_ref ref = { .key = *key, .op = NULL, .func = NULL };
+  struct var_ref ref = { .key = *key, .ty = VAR_REF_TY_LCL, .lcl = NULL, .func = NULL };
   return (struct var_ref *)vector_push_back(var_refs->refs, &ref);
 }
 

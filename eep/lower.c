@@ -470,7 +470,7 @@ void eep_pre_reg_lower(struct ir_builder *func) {
 
             switch (op->ty) {
             case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_GLB:
+            case IR_OP_TY_GLB_REF:
             case IR_OP_TY_PHI:
             case IR_OP_TY_CNST:
             case IR_OP_TY_RET:

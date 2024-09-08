@@ -40,7 +40,7 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_CALL:
-  case IR_OP_TY_GLB:
+  case IR_OP_TY_GLB_REF:
     return true;
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_BR_COND:
@@ -60,7 +60,7 @@ bool op_is_branch(enum ir_op_ty ty) {
     return true;
   // calls are NOT branches, because while they do leave, they guarantee return
   case IR_OP_TY_CALL:
-  case IR_OP_TY_GLB:
+  case IR_OP_TY_GLB_REF:
   case IR_OP_TY_PHI:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
@@ -126,7 +126,7 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_CUSTOM:
-  case IR_OP_TY_GLB: {
+  case IR_OP_TY_GLB_REF: {
     break;
   }
   case IR_OP_TY_CALL: {
@@ -180,7 +180,7 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_CUSTOM:
     todo("walk custom");
-  case IR_OP_TY_GLB:
+  case IR_OP_TY_GLB_REF:
     todo("walk global");
   case IR_OP_TY_CALL:
     todo("walk call");
@@ -430,7 +430,6 @@ void rebuild_ids(struct ir_builder *irb) {
       struct ir_op *op = stmt->first;
 
       while (op) {
-        debug("op %zu has new id %zu", op->id, irb->next_id);
         op->id = irb->next_id++;
 
         op = op->succ;
@@ -514,6 +513,19 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
 
   attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
+
+struct ir_op *replace_ir_op(struct ir_builder *irb,
+                                  struct ir_op *op, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty) {
+  UNUSED_ARG(irb);
+  debug_assert(op, "invalid replacement point!");
+
+  op->ty = ty;
+  op->var_ty = var_ty;
+
+  return op;
+}
+
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
@@ -771,3 +783,41 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 
   return end_bb;
 }
+
+void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op, const struct ir_op_var_ty *var_ty) {
+  struct ir_op_glb_ref *glb_ref = &op->glb_ref;
+
+  op->ty = IR_OP_TY_GLB_REF;
+  op->var_ty = *var_ty;
+
+  glb_ref->ty = IR_OP_GLB_REF_TY_SYM;
+  glb_ref->sym_name = sym_name;
+  glb_ref->metadata = NULL;
+
+  glb_ref->succ = irb->global_refs;
+  irb->global_refs = glb_ref;
+}
+
+void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *op, const struct ir_op_var_ty *var_ty) {
+  struct ir_op_glb_ref *glb_ref = &op->glb_ref;
+
+  size_t index = irb->strings ? irb->strings->index_from_back + 1: 0;
+
+  struct ir_string *str = arena_alloc(irb->arena, sizeof(*str));
+  str->data = string;
+  str->index_from_back = index;
+
+  str->succ = irb->strings;
+  irb->strings = str;
+
+  op->ty = IR_OP_TY_GLB_REF;
+  op->var_ty = *var_ty;
+  
+  glb_ref->ty = IR_OP_GLB_REF_TY_STR;
+  glb_ref->string = str;
+  glb_ref->metadata = NULL;
+
+  glb_ref->succ = irb->global_refs;
+  irb->global_refs = glb_ref;
+}
+

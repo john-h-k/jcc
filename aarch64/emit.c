@@ -2,9 +2,11 @@
 
 #include "../aarch64.h"
 #include "../ir/var_refs.h"
+#include "../ir/prettyprint.h"
 #include "../vector.h"
 #include "emitter.h"
 #include "isa.h"
+#include <stdio.h>
 
 #define WORD_SIZE (8)
 
@@ -79,7 +81,7 @@ static bool is_64_bit(const struct ir_op *op) {
 
 static void emit_call(struct emit_state *state, struct ir_op *op) {
   switch (op->call.target->ty) {
-  case IR_OP_TY_GLB: {
+  case IR_OP_TY_GLB_REF: {
     // struct var_key key = {.name = op->call.target->glb.global,
     //                       .scope = SCOPE_GLOBAL};
     // struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
@@ -89,18 +91,22 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
     // this uses relocs instead of actually calculating it
     // FIXME: may break on 32 bit
 
-    invariant_assert(op->call.target->glb.ty == IR_OP_GLB_TY_SYM, "str type glb makes no sense for call");
+    struct ir_op_glb_ref *glb_ref = &op->call.target->glb_ref;
+    invariant_assert(glb_ref->ty == IR_OP_GLB_REF_TY_SYM, "only symbols make sense for call targets");
 
-    op->call.target->glb.metadata =
-        arena_alloc(state->arena, sizeof(struct relocation));
-    *(struct relocation *)op->call.target->glb.metadata =
-        (struct relocation){.symbol_name = aarch64_mangle(
-                                state->arena, op->call.target->glb.sym.name),
-                            // this is not actually the address!!
-                            // this is the offset WITHIN the function
-                            // we let `compiler.c` fix up the address
-                            .address = aarch64_emit_bytesize(state->emitter),
-                            .size = 2};
+    glb_ref->metadata = arena_alloc(state->arena, sizeof(struct relocation));
+    struct relocation *reloc = (struct relocation *)glb_ref->metadata;
+
+    reloc->ty = RELOCATION_TY_SYM;
+    // this is not actually the address!!
+    // this is the offset WITHIN the function
+    // we let `compiler.c` fix up the address
+    reloc->address = aarch64_emit_bytesize(state->emitter);
+    reloc->size = 2;
+    reloc->sym = (struct sym_relocation){
+        .symbol_name =
+            aarch64_mangle(state->arena, op->call.target->glb_ref.sym_name),
+    };
 
     aarch64_emit_bl(state->emitter, 0);
     break;
@@ -311,21 +317,80 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   }
 }
 
+static void emit_mov_glb(struct emit_state *state, struct ir_op *op,
+                         size_t dest) {
+  struct ir_op *value = op->mov.value;
+  debug_assert(value->ty == IR_OP_TY_GLB_REF,
+               "received non glb_ref op in emit_mov_glb");
+
+  value->glb_ref.metadata = arena_alloc(state->arena, sizeof(struct relocation));
+  struct relocation *reloc = (struct relocation *)value->glb_ref.metadata;
+
+  reloc->ty = RELOCATION_TY_STR;
+  // this is not actually the address!!
+  // this is the offset WITHIN the function
+  // we let `compiler.c` fix up the address
+  reloc->address = aarch64_emit_bytesize(state->emitter);
+  reloc->size = 2;
+  reloc->str = (struct str_relocation){
+    .str_index = value->glb_ref.string->index_from_back
+  };
+
+  aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(dest));
+  aarch64_emit_add_64_imm(state->emitter, get_reg_for_idx(dest), 0,
+                          get_reg_for_idx(dest));
+}
+
+static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
+                          size_t dest) {
+  struct ir_op *cnst = op->mov.value;
+  debug_assert(cnst->ty == IR_OP_TY_CNST,
+               "received non cnst op in emit_mov_cnst");
+
+  switch (cnst->cnst.ty) {
+  case IR_OP_CNST_TY_INT: {
+    size_t src = get_reg_for_op(state, cnst, REG_USAGE_READ);
+    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
+                        get_reg_for_idx(dest));
+    break;
+  }
+  case IR_OP_CNST_TY_STR:
+    unreachable("const-strings should have been removed in lower and replaced "
+                "with global refs");
+  }
+}
+
 static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
   size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
-  if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
-      binary_op_is_comparison(op->mov.value->binary_op.ty)) {
+  struct ir_op *value = op->mov.value;
+  if (value->ty == IR_OP_TY_BINARY_OP &&
+      binary_op_is_comparison(value->binary_op.ty)) {
 
     // need to move from flags
-    enum aarch64_cond cond = get_cond_for_op(op->mov.value);
+    enum aarch64_cond cond = get_cond_for_op(value);
     // 32 vs 64 bit doesn't matter
     aarch64_emit_csinc_32(state->emitter, invert_cond(cond), ZERO_REG, ZERO_REG,
                           get_reg_for_idx(dest));
-  } else {
-    size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
-    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
-                        get_reg_for_idx(dest));
+
+    return;
+  }
+
+  switch (value->ty) {
+  case IR_OP_TY_CNST:
+    emit_mov_cnst(state, op, dest);
+    break;
+  case IR_OP_TY_GLB_REF:
+    emit_mov_glb(state, op, dest);
+    break;
+  default:
+    if (is_64_bit(value)) {
+      aarch64_emit_mov_64(state->emitter, get_reg_for_idx(value->reg),
+                          get_reg_for_idx(dest));
+    } else {
+      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(value->reg),
+                          get_reg_for_idx(dest));
+    }
   }
 }
 
@@ -454,17 +519,6 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
                                   op->cnst.int_value);
         break;
       case IR_OP_CNST_TY_STR:
-        op->.target->glb.metadata =
-            arena_alloc(state->arena, sizeof(struct relocation));
-        *(struct relocation *)op->call.target->glb.metadata =
-            (struct relocation){.symbol_name = aarch64_mangle(
-                                    state->arena, op->call.target->glb.sym.name),
-                                // this is not actually the address!!
-                                // this is the offset WITHIN the function
-                                // we let `compiler.c` fix up the address
-                                .address = aarch64_emit_bytesize(state->emitter),
-                                .size = 2};
-
         vector_push_back(state->strings, &op->cnst.str_value);
 
         size_t str_pos = state->total_str_len;
@@ -487,7 +541,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
       emit_cast_op(state, op);
       break;
     }
-    case IR_OP_TY_GLB: {
+    case IR_OP_TY_GLB_REF: {
       // TODO:
       aarch64_emit_nop(state->emitter);
       break;
@@ -565,24 +619,42 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   aarch64_emit_copy_to(emitter, data);
 
   // now deal with all the relocs which are hidden in the globals
-  struct ir_op_glb *global = func->globals;
+  struct ir_op_glb_ref *global_refs = func->global_refs;
 
   // first pass to get number
   size_t num_relocations = 0;
-  while (global) {
+  while (global_refs) {
     num_relocations += 1;
-    global = global->succ;
+    global_refs = global_refs->succ;
   }
 
   struct relocation *relocations =
       arena_alloc(func->arena, sizeof(*relocations) * num_relocations);
 
-  global = func->globals;
+  global_refs = func->global_refs;
   size_t i = 0;
-  while (global) {
-    relocations[i++] = *(struct relocation *)global->metadata;
+  while (global_refs) {
+    relocations[i++] = *(struct relocation *)global_refs->metadata;
 
-    global = global->succ;
+    global_refs = global_refs->succ;
+  }
+
+  struct ir_string *strings = func->strings;
+  while (strings) {
+    vector_push_back(state.strings, &strings->data);
+
+    strings = strings->succ;
+  }
+
+  // FIXME: the vector was built backwards due to the structure of the linked-list of strings
+  // really this should be dealt with elsewhere more generally, but for now just reverse this vector
+  size_t num_strings = vector_length(state.strings);
+  for (size_t i = 0, j = num_strings ? num_strings - 1 : 0; i < j; i++, j--) {
+    struct ir_string head = *(struct ir_string *)vector_get(state.strings, i);
+    struct ir_string tail = *(struct ir_string *)vector_get(state.strings, j);
+
+    *(struct ir_string *)vector_get(state.strings, i) = tail;
+    *(struct ir_string *)vector_get(state.strings, j) = head;
   }
 
   free_aarch64_emitter(&emitter);

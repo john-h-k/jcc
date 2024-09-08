@@ -192,7 +192,7 @@ void aarch64_emit_adds_32(struct aarch64_emitter *emitter,
 
 void aarch64_emit_adr(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest);
 
-void aarch64_emit_adr(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest);
+void aarch64_emit_adrp(struct aarch64_emitter *emitter, int imm, struct aarch64_reg dest);
 
 /* Add & subtract (immediate) */
 

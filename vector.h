@@ -10,6 +10,7 @@ struct vector *vector_create(size_t element_size);
 
 void vector_extend(struct vector *v, const void *data, size_t num_elems);
 
+void *vector_push_front(struct vector *v, const void *data);
 void *vector_push_back(struct vector *v, const void *data);
 bool vector_empty(struct vector *v);
 size_t vector_length(struct vector *v);

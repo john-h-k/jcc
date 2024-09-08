@@ -14,6 +14,7 @@
 #include "lsra.h"
 #include "macos/mach-o.h"
 #include "parse.h"
+#include "target.h"
 #include "util.h"
 #include "vector.h"
 
@@ -27,6 +28,39 @@ struct compiler {
 
   char *output;
 };
+
+const char *mangle_str_cnst_name(struct arena_allocator *arena, const char *func_name, size_t id) {
+  size_t func_name_len = strlen(func_name);
+
+  size_t len = 0;
+  len += func_name_len;
+  len += 2; // surround function name with `<>` so it cannot conflict with real names
+
+  size_t id_len = num_digits(id);
+  len += id_len;
+  len += 1; // null char
+
+  char *buff = arena_alloc(arena, len);
+  size_t head = 0;
+  buff[head++] = '<';
+  strcpy(&buff[head], func_name);
+  head += func_name_len;
+  buff[head++] = '>';
+
+  size_t tail = head + id_len - 1;
+  while (tail >= head) {
+    buff[tail--] = (id % 10) + '0';
+    id /= 10;
+  }
+
+  head += id_len;
+  buff[head++] = 0;
+
+  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name", head, len);
+ 
+  return buff;
+}
+
 
 enum compiler_create_result create_compiler(const char *program,
                                             const char *output,
@@ -191,6 +225,8 @@ enum compile_result compile(struct compiler *compiler) {
         target->post_reg_lower(irb);
       }
 
+      rebuild_ids(irb);
+
       BEGIN_STAGE("POST POST REG LOWER IR");
       
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
@@ -223,6 +259,10 @@ enum compile_result compile(struct compiler *compiler) {
         enable_log();
       }
 
+      BEGIN_STAGE("PRE-EMIT");
+
+      debug_print_stage(irb, "pre_emit");
+
       BEGIN_STAGE("EMITTING");
 
       func = target->emit_function(irb);
@@ -231,7 +271,7 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     struct symbol symbol = {
-        .name = func.name, .section = 1, .value = total_size};
+        .ty = SYMBOL_TY_FUNC, .name = func.name, .value = total_size};
 
     total_size += ROUND_UP(func.len_code, target->function_alignment);
     vector_push_back(compiled_functions, &func);
@@ -251,11 +291,28 @@ enum compile_result compile(struct compiler *compiler) {
   char *head = code;
 
   size_t num_results = vector_length(compiled_functions);
+  size_t str_offset = 0;
   for (size_t i = 0; i < num_results; i++) {
     struct compiled_function *func = vector_get(compiled_functions, i);
+  
+    for (ssize_t j = func->num_strings ? func->num_strings - 1 : -1; j >= 0; j--) {
+      const char *str = func->strings[j];
+      const char *name = mangle_str_cnst_name(compiler->arena, func->name, j);
+      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .name = name, .value = str_offset };
+      printf("OFFSET %zu\n", str_offset);
+
+      str_offset += strlen(str);
+      vector_push_front(symbols, &symbol);
+    }
 
     memcpy(head, func->code, func->len_code);
     head += ROUND_UP(func->len_code, target->function_alignment);
+  }
+
+  size_t l = vector_length(symbols);
+  for (size_t i = 0; i < l; i++) {
+    struct symbol *s = (struct symbol *)vector_get(symbols, i);
+    printf("symbol %s\n", s->name);
   }
 
   struct build_object_args args = {

@@ -5,16 +5,42 @@
 #include "lsra.h"
 #include "ir/build.h"
 
-struct relocation {
+enum relocation_ty {
+  RELOCATION_TY_SYM,
+  RELOCATION_TY_STR,
+};
+
+struct sym_relocation {
   const char *symbol_name;
+};
+
+struct str_relocation {
+  // index into the strings array of `build_object_args`
+  // we should really also do this for symbols instead of the slow lookup...
+  size_t str_index;
+};
+
+struct relocation {
+  enum relocation_ty ty;
+
+  union {
+    struct sym_relocation sym;
+    struct str_relocation str;
+  };
 
   size_t address;
   size_t size;
 };
 
+enum symbol_ty {
+  SYMBOL_TY_STRING,
+  SYMBOL_TY_FUNC,
+};
+
 struct symbol {
+  enum symbol_ty ty;
+
   const char *name;
-  size_t section;
   size_t value;
 };
 
@@ -32,6 +58,11 @@ struct compiled_function {
 
   struct relocation *relocations;
   size_t num_relocations;
+};
+
+struct object_string {
+  const char *id;
+  const char *string;
 };
 
 struct build_object_args {

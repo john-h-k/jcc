@@ -53,9 +53,13 @@ void debug_visit_ir(struct ir_builder *irb,
 typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
                                       void *metadata);
 
+void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
+                    debug_print_op_callback *cb, void *cb_metadata);
+
 void debug_print_basicblock(FILE *file, struct ir_builder *irb,
                             struct ir_basicblock *basicblock,
                             debug_print_op_callback *cb, void *cb_metadata);
+
 
 void debug_print_ir(FILE *file, struct ir_builder *irb,
                     debug_print_op_callback *cb, void *cb_metadata);

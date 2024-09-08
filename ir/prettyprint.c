@@ -132,8 +132,15 @@ void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
 }
 
 void debug_call_target_string(FILE *file, struct ir_op *target) {
-  if (target->ty == IR_OP_TY_GLB) {
-    fprintf(file, "%s", target->glb.global);
+  if (target->ty == IR_OP_TY_GLB_REF) {
+    switch (target->glb_ref.ty) {
+      case IR_OP_GLB_REF_TY_STR:
+        fprintf(file, "%s", target->glb_ref.string->data);
+        break;
+      case IR_OP_GLB_REF_TY_SYM:
+        fprintf(file, "%s", target->glb_ref.sym_name);
+        break;
+    }
   } else {
     fprintf(file, "%%%zu", target->id);
   }
@@ -164,9 +171,16 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     fprintf(file, "CUSTOM");
     // TODO: print customs
     break;
-  case IR_OP_TY_GLB:
+  case IR_OP_TY_GLB_REF:
     debug_lhs(file, ir);
-    fprintf(file, "GLOBAL ( %s )", ir->glb.global);
+    switch (ir->glb_ref.ty) {
+      case IR_OP_GLB_REF_TY_STR:
+        fprintf(file, "GLOBAL_STR ( %s )", ir->glb_ref.string->data);
+        break;
+      case IR_OP_GLB_REF_TY_SYM:
+        fprintf(file, "GLOBAL_SYM ( %s )", ir->glb_ref.sym_name);
+        break;
+    }
     // don't print anything for global - let the op consuming it print instead
     break;
   case IR_OP_TY_CALL: {
@@ -387,7 +401,7 @@ void debug_visit_ir(struct ir_builder *irb,
 void debug_print_basicblock(FILE *file, struct ir_builder *irb,
                             struct ir_basicblock *basicblock,
                             debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (int)log10(irb->op_count) + 1;
+  int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
 
   struct prettyprint_file_metadata metadata = {.file = file,
@@ -399,9 +413,10 @@ void debug_print_basicblock(FILE *file, struct ir_builder *irb,
   debug_visit_basicblock(irb, basicblock, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_ir(FILE *file, struct ir_builder *irb,
+void debug_print_stmt(FILE *file, struct ir_builder* irb, struct ir_stmt *stmt,
                     debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (irb->op_count == 0 ? 0 : (int)log10(irb->op_count)) + 1;
+
+  int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
 
   struct prettyprint_file_metadata metadata = {.file = file,
@@ -410,6 +425,21 @@ void debug_print_ir(FILE *file, struct ir_builder *irb,
                                                .cb = cb,
                                                .cb_metadata = cb_metadata};
 
+  debug_visit_ir(stmt->basicblock->irb, &FILE_WRITER_CALLBACKS, &metadata);
+}
+
+void debug_print_ir(FILE *file, struct ir_builder *irb,
+                    debug_print_op_callback *cb, void *cb_metadata) {
+  int ctr_pad = (int)num_digits(irb->op_count);
+  size_t ctr = 0;
+
+  struct prettyprint_file_metadata metadata = {.file = file,
+                                               .ctr_pad = ctr_pad,
+                                               .ctr = ctr,
+                                               .cb = cb,
+                                               .cb_metadata = cb_metadata};
+
+  fprintf(file, "FUNCTION: %s\n", irb->name);
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
@@ -431,8 +461,7 @@ struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,
                                            struct ir_basicblock *basicblock,
                                            struct graphwriter *gwr) {
   if (!basicblock->metadata) {
-    size_t digits =
-        irb->basicblock_count ? (size_t)log10(irb->basicblock_count) : 0;
+    size_t digits = num_digits(irb->basicblock_count);
     digits = MAX(digits, 2);
 
     basicblock->metadata = vertex_from_integral(gwr, basicblock->id);

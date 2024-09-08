@@ -40,6 +40,20 @@ void vector_expand(struct vector *v, size_t min_size) {
 
 bool vector_empty(struct vector *v) { return v->len == 0; }
 
+void *vector_push_front(struct vector *v, const void *data) {
+  size_t length = vector_length(v);
+  vector_extend(v, NULL, 1);
+  for (size_t i = 0; i < length; i++) {
+    void *next = vector_get(v, i + 1);
+    void *curr = vector_get(v, i);
+    memcpy(next, curr, v->element_size);
+  }
+
+  void *head = vector_head(v);
+  memcpy(head, data, v->element_size);
+  return head;
+}
+
 void *vector_push_back(struct vector *v, const void *data) {
   vector_extend(v, data, 1);
 
@@ -47,9 +61,7 @@ void *vector_push_back(struct vector *v, const void *data) {
 }
 
 void vector_extend(struct vector *v, const void *data, size_t num_elems) {
-  debug_assert(data || !num_elems, "`num_elems > 0` but `data` is NULL");
-
-  if (!data || !num_elems) {
+  if (!num_elems) {
     return;
   }
   
@@ -59,8 +71,11 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
 
   debug_assert(v->capacity >= v->len + num_elems, "vector did not expand properly");
 
-  void *end = &v->data[v->len * v->element_size];
-  memcpy(end, data, v->element_size * num_elems);
+  if (data) {
+    void *end = &v->data[v->len * v->element_size];
+    memcpy(end, data, v->element_size * num_elems);
+  }
+
   v->len += num_elems;
 }  
 
