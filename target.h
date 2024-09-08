@@ -6,8 +6,8 @@
 #include "ir/build.h"
 
 enum relocation_ty {
-  RELOCATION_TY_SYM,
-  RELOCATION_TY_STR,
+  RELOCATION_TY_SINGLE,
+  RELOCATION_TY_PAIR,
 };
 
 struct sym_relocation {
@@ -58,6 +58,9 @@ struct compiled_function {
 
   struct relocation *relocations;
   size_t num_relocations;
+
+  // one relocation may be multiple instructions
+  size_t num_relocation_instrs;
 };
 
 struct object_string {
@@ -85,6 +88,7 @@ struct build_object_args {
 
   struct relocation *relocations;
   size_t num_relocations;
+  size_t num_relocation_instrs;
 };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);

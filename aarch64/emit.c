@@ -1,11 +1,12 @@
 #include "emit.h"
 
 #include "../aarch64.h"
-#include "../ir/var_refs.h"
 #include "../ir/prettyprint.h"
+#include "../ir/var_refs.h"
 #include "../vector.h"
 #include "emitter.h"
 #include "isa.h"
+
 #include <stdio.h>
 
 #define WORD_SIZE (8)
@@ -79,6 +80,17 @@ static bool is_64_bit(const struct ir_op *op) {
   return op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
+enum aarch64_relocation_ty {
+  AARCH64_RELOCATION_TY_B,
+  AARCH64_RELOCATION_TY_ADRP_ADD
+};
+
+struct aarch64_relocation {
+  enum aarch64_relocation_ty ty;
+
+  struct relocation reloc;
+};
+
 static void emit_call(struct emit_state *state, struct ir_op *op) {
   switch (op->call.target->ty) {
   case IR_OP_TY_GLB_REF: {
@@ -92,21 +104,25 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
     // FIXME: may break on 32 bit
 
     struct ir_op_glb_ref *glb_ref = &op->call.target->glb_ref;
-    invariant_assert(glb_ref->ty == IR_OP_GLB_REF_TY_SYM, "only symbols make sense for call targets");
+    invariant_assert(glb_ref->ty == IR_OP_GLB_REF_TY_SYM,
+                     "only symbols make sense for call targets");
 
-    glb_ref->metadata = arena_alloc(state->arena, sizeof(struct relocation));
-    struct relocation *reloc = (struct relocation *)glb_ref->metadata;
-
-    reloc->ty = RELOCATION_TY_SYM;
-    // this is not actually the address!!
-    // this is the offset WITHIN the function
-    // we let `compiler.c` fix up the address
-    reloc->address = aarch64_emit_bytesize(state->emitter);
-    reloc->size = 2;
-    reloc->sym = (struct sym_relocation){
-        .symbol_name =
-            aarch64_mangle(state->arena, op->call.target->glb_ref.sym_name),
-    };
+    glb_ref->metadata =
+        arena_alloc(state->arena, sizeof(struct aarch64_relocation));
+    struct aarch64_relocation *reloc =
+        (struct aarch64_relocation *)glb_ref->metadata;
+    reloc->ty = AARCH64_RELOCATION_TY_B;
+    reloc->reloc = (struct relocation){
+        // this is not actually the address!!
+        // this is the offset WITHIN the function
+        // we let `compiler.c` fix up the address
+        .ty = RELOCATION_TY_SINGLE,
+        .address = aarch64_emit_bytesize(state->emitter),
+        .size = 2,
+        .sym = (struct sym_relocation){
+            .symbol_name =
+                aarch64_mangle(state->arena, op->call.target->glb_ref.sym_name),
+        }};
 
     aarch64_emit_bl(state->emitter, 0);
     break;
@@ -323,18 +339,21 @@ static void emit_mov_glb(struct emit_state *state, struct ir_op *op,
   debug_assert(value->ty == IR_OP_TY_GLB_REF,
                "received non glb_ref op in emit_mov_glb");
 
-  value->glb_ref.metadata = arena_alloc(state->arena, sizeof(struct relocation));
-  struct relocation *reloc = (struct relocation *)value->glb_ref.metadata;
+  value->glb_ref.metadata =
+      arena_alloc(state->arena, sizeof(struct aarch64_relocation));
+  struct aarch64_relocation *reloc =
+      (struct aarch64_relocation *)value->glb_ref.metadata;
 
-  reloc->ty = RELOCATION_TY_STR;
-  // this is not actually the address!!
-  // this is the offset WITHIN the function
-  // we let `compiler.c` fix up the address
-  reloc->address = aarch64_emit_bytesize(state->emitter);
-  reloc->size = 2;
-  reloc->str = (struct str_relocation){
-    .str_index = value->glb_ref.string->index_from_back
-  };
+  reloc->ty = AARCH64_RELOCATION_TY_ADRP_ADD;
+  reloc->reloc = (struct relocation){
+      // this is not actually the address!!
+      // this is the offset WITHIN the function
+      // we let `compiler.c` fix up the address
+      .ty = RELOCATION_TY_PAIR,
+      .address = aarch64_emit_bytesize(state->emitter),
+      .size = 2,
+      .str = (struct str_relocation){
+          .str_index = value->glb_ref.string->index_from_back}};
 
   aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(dest));
   aarch64_emit_add_64_imm(state->emitter, get_reg_for_idx(dest), 0,
@@ -623,8 +642,21 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
 
   // first pass to get number
   size_t num_relocations = 0;
+  size_t num_relocation_instrs = 0;
   while (global_refs) {
-    num_relocations += 1;
+    struct aarch64_relocation *reloc = (struct aarch64_relocation *)global_refs->metadata;
+
+    num_relocations++;
+
+    switch (reloc->ty) {
+    case AARCH64_RELOCATION_TY_B:
+      num_relocation_instrs += 1;
+      break;
+    case AARCH64_RELOCATION_TY_ADRP_ADD:
+      num_relocation_instrs += 2;
+      break;
+    }
+
     global_refs = global_refs->succ;
   }
 
@@ -634,7 +666,9 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   global_refs = func->global_refs;
   size_t i = 0;
   while (global_refs) {
-    relocations[i++] = *(struct relocation *)global_refs->metadata;
+    struct aarch64_relocation *reloc = (struct aarch64_relocation *)global_refs->metadata;
+
+    relocations[i++] = reloc->reloc;
 
     global_refs = global_refs->succ;
   }
@@ -646,8 +680,9 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
     strings = strings->succ;
   }
 
-  // FIXME: the vector was built backwards due to the structure of the linked-list of strings
-  // really this should be dealt with elsewhere more generally, but for now just reverse this vector
+  // FIXME: the vector was built backwards due to the structure of the
+  // linked-list of strings really this should be dealt with elsewhere more
+  // generally, but for now just reverse this vector
   size_t num_strings = vector_length(state.strings);
   for (size_t i = 0, j = num_strings ? num_strings - 1 : 0; i < j; i++, j--) {
     struct ir_string head = *(struct ir_string *)vector_get(state.strings, i);
@@ -664,9 +699,10 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
       .code = data,
       .len_code = len,
       .relocations = relocations,
+      .num_relocations = num_relocations,
+      .num_relocation_instrs = num_relocation_instrs,
       .strings = vector_head(state.strings),
-      .num_strings = vector_length(state.strings),
-      .num_relocations = num_relocations};
+      .num_strings = vector_length(state.strings)};
 
   return result;
 }
