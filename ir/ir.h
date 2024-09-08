@@ -22,7 +22,7 @@ enum ir_op_ty {
   IR_OP_TY_LOAD_LCL,
 
   // represents a global variable or function
-  IR_OP_TY_GLB,
+  IR_OP_TY_GLB_REF,
 
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
@@ -36,28 +36,20 @@ enum ir_op_ty {
 bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
-enum ir_op_glb_ty {
-  IR_OP_GLB_TY_SYM,
-  IR_OP_GLB_TY_STR,
+enum ir_op_glb_ref_ty {
+  IR_OP_GLB_REF_TY_SYM,
+  IR_OP_GLB_REF_TY_STR,
 };
 
-struct ir_op_glb_sym {
-  const char *name;
-};
-
-struct ir_op_glb_str {
-  const char *value;
-};
-
-struct ir_op_glb {
-  enum ir_op_glb_ty ty;
+struct ir_op_glb_ref {
+  enum ir_op_glb_ref_ty ty;
 
   union {
-    struct ir_op_glb_sym sym;
-    struct ir_op_glb_str str;
+    const char* sym_name;
+    struct ir_string *string;
   };
 
-  struct ir_op_glb *succ;
+  struct ir_op_glb_ref *succ;
 
   // ugly HACK: the globals list is just globals, so we have _another_
   // metadata field on this as iterating globals does not give access to the containing
@@ -261,7 +253,7 @@ struct ir_op {
   struct ir_op *succ;
   struct ir_stmt *stmt;
   union {
-    struct ir_op_glb glb;
+    struct ir_op_glb_ref glb_ref;
     struct ir_op_cnst cnst;
     struct ir_op_call call;
     struct ir_op_binary_op binary_op;
@@ -376,6 +368,15 @@ enum ir_builder_flags {
   IR_BUILDER_FLAG_MAKES_CALL = 1
 };
 
+struct ir_string {
+  const char *data;
+
+  struct ir_string *succ;
+
+  // because the linked list is built from the end (first element), this is an index from the back
+  size_t index_from_back;
+};
+
 struct ir_builder {
   const char *name;
 
@@ -393,7 +394,11 @@ struct ir_builder {
   // used for relocation generation
   // this currenty ends up being a backwards list
   // but this should not be relied on
-  struct ir_op_glb *globals;
+  // note that globals may be "true" globals (such as symbols) but also just strings from outside the physical function body
+  struct ir_op_glb_ref *global_refs;
+
+  // linked lists containing the string literals used by the function
+  struct ir_string *strings;
 
   enum ir_builder_flags flags;
 
@@ -440,6 +445,9 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
 void clear_metadata(struct ir_builder *irb);
 void rebuild_ids(struct ir_builder *irb);
 
+void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op, const struct ir_op_var_ty *var_ty);
+void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *op, const struct ir_op_var_ty *var_ty);
+
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
 struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
@@ -470,6 +478,10 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
 // now point to `right`
 void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
                  struct ir_op *right);
+
+struct ir_op *replace_ir_op(struct ir_builder *irb,
+                                  struct ir_op *op, enum ir_op_ty ty,
+                                  struct ir_op_var_ty var_ty);
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,

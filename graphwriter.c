@@ -1,6 +1,7 @@
 #include "graphwriter.h"
 
 #include "alloc.h"
+#include "util.h"
 
 #include <math.h>
 
@@ -109,7 +110,7 @@ struct graph_vertex *vertex_from_str(struct graphwriter *gwr, const char *id) {
 }
 
 struct graph_vertex *vertex_from_integral(struct graphwriter *gwr, size_t id) {
-  size_t digits = id ? (size_t)log10(id) : id;
+  size_t digits = num_digits(id);
   size_t sz =  sizeof(char) * digits + 1;
   char *buff = arena_alloc(gwr->arena, sz);
 

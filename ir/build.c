@@ -260,7 +260,10 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
   op->ty = IR_OP_TY_CNST;
   op->var_ty = ty_for_ast_tyref(irb, &cnst->cnst_ty);
 
-  if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER) {
+  if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER && cnst->cnst_ty.pointer.underlying->ty == AST_TYREF_TY_WELL_KNOWN) {
+    enum well_known_ty wkt = cnst->cnst_ty.pointer.underlying->well_known;
+    invariant_assert(wkt == WELL_KNOWN_TY_SIGNED_CHAR || wkt == WELL_KNOWN_TY_UNSIGNED_CHAR, "expected str type");
+
     op->cnst.ty = IR_OP_CNST_TY_STR;
     op->cnst.str_value = cnst->str_value;
   } else {
@@ -301,7 +304,7 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 
   // invariant_assert((ref && ref->op) || !ref, "ref present but empty?");
-  struct ir_op *expr = ref ? ref->op : NULL;
+  struct ir_op *expr = ref && ref->ty == VAR_REF_TY_LCL ? ref->lcl : NULL;
 
   if (expr) {
     return expr;
@@ -309,15 +312,9 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
 
   if (ref) {
     // global
+    struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
     struct ir_op *op = alloc_ir_op(irb, stmt);
-
-    op->ty = IR_OP_TY_GLB;
-    op->var_ty = ty_for_ast_tyref(irb, &var->var_ty);
-    op->glb.global = key.name;
-
-    // add to the list of globals used for relocs
-    op->glb.succ = irb->globals;
-    irb->globals = &op->glb;
+    make_sym_ref(irb, key.name, op, &var_ty);
 
     return op;
   }
@@ -348,7 +345,9 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
         identifier_str(irb->parser, &var->identifier));
 
   key = get_var_key(irb->parser, var);
-  var_refs_add(stmt->basicblock->var_refs, &key)->op = phi;
+  struct var_ref *new_ref = var_refs_add(stmt->basicblock->var_refs, &key);
+  new_ref->ty = VAR_REF_TY_LCL;
+  new_ref->lcl = phi;
 
   return phi;
 }
@@ -803,7 +802,12 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     ref = var_refs_add(stmt->basicblock->var_refs, &key);
   }
 
-  ref->op = op;
+  if (ref->ty == VAR_REF_TY_LCL) {
+    ref->lcl = op;
+  } else {
+    unreachable("assignment to global not yet suppported");
+  }
+
   return op;
 }
 
@@ -911,8 +915,8 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   struct var_key key = get_var_key(irb->parser, var);
   struct var_ref *ref = var_refs_get(basicblock->var_refs, &key);
 
-  if (ref && ref->op) {
-    struct ir_op *entry_op = ref->op;
+  if (ref && ref->ty == VAR_REF_TY_LCL) {
+    struct ir_op *entry_op = ref->lcl;
     // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
     if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
       // copy over the entries from that phi, to prevent deeply nested ones
@@ -941,7 +945,7 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
       (*num_exprs)++;
       *exprs = arena_realloc(irb->arena, *exprs,
                              sizeof(struct ir_op *) * *num_exprs);
-      (*exprs)[*num_exprs - 1] = ref->op;
+      (*exprs)[*num_exprs - 1] = ref->lcl;
     }
     return;
   }
@@ -1013,6 +1017,8 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
                          .global_var_refs = global_var_refs,
+                         .global_refs = NULL,
+                         .strings = NULL,
                          .arena = arena,
                          .flags = IR_BUILDER_FLAG_NONE,
                          .first = NULL,
@@ -1051,7 +1057,7 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
     mov->flags |= IR_OP_FLAG_PARAM;
     mov->mov.value = NULL;
 
-    ref->op = mov;
+    ref->lcl = mov;
   }
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {

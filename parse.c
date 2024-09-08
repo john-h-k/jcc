@@ -1566,11 +1566,11 @@ struct ast_printstate {
 };
 
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
-  void debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name)
+  void parse_debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name)
 
 #define DEBUG_FUNC(ty, name)                                                   \
-  void debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
-#define DEBUG_CALL(ty, val) debug_print_##ty(state, val)
+  void parse_debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
+#define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
 
 #define AST_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
 #define AST_PRINT_SAMELINE_NOINDENT(fmt, ...)                                           \

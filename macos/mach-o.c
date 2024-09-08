@@ -84,7 +84,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   cstrings.align = 4;
   cstrings.reloff = 0; // no relocs
   cstrings.nreloc = 0;
-  cstrings.flags = S_CSTRING_LITERALS;
+  cstrings.flags = S_CSTRING_LITERALS; // | S_ATTR_EXT_RELOC;
   cstrings.reserved1 = 0;
   cstrings.reserved2 = 0;
   cstrings.reserved3 = 0;
@@ -183,36 +183,53 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     struct relocation *reloc = &args->relocations[i];
     size_t index;
     int external = -1;
+    enum reloc_type_generic type;
 
-    // FIXME: lookup instead of this mess lolz
-    for (size_t i = 0; i < args->num_symbols; i++) {
-      struct symbol *symbol = &args->symbols[i];
-      if (strcmp(symbol->name, reloc->symbol_name) == 0) {
-        index = i;
-        external = 0;
-      }
-    }
-
-    for (size_t i = 0; i < args->num_extern_symbols; i++) {
-      struct external_symbol *symbol = &args->extern_symbols[i];
-      if (strcmp(symbol->name, reloc->symbol_name) == 0) {
-        index = args->num_symbols + i;
+    switch (reloc->ty) {
+      case RELOCATION_TY_SYM:
         external = 1;
+
+        // FIXME: lookup instead of this mess lolz
+        for (size_t i = 0; i < args->num_symbols; i++) {
+          struct symbol *symbol = &args->symbols[i];
+          if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
+            index = i;
+          }
+        }
+
+        for (size_t i = 0; i < args->num_extern_symbols; i++) {
+          struct external_symbol *symbol = &args->extern_symbols[i];
+          if (strcmp(symbol->name, reloc->sym.symbol_name) == 0) {
+            index = args->num_symbols + i;
+            external = 1;
+          }
+        }
+        type = GENERIC_RELOC_SECTDIFF; // ARM64_RELOC_BRANCH26
+        break;
+      case RELOCATION_TY_STR: {
+        external = 1;
+
+        // index = reloc->str.str_index;
+        index = reloc->str.str_index;
+        // type = 10; // ARM64_RELOC_ADDEND
+        type = 3; // ARM64_RELOC_ADDEND
+        break;
       }
+
     }
 
     invariant_assert(external != -1, "could not find symbol for reloc");
 
-    printf("RELOC ADDRESS %zu, EXTERN %d, SYM %zu\n", reloc->address, external,
-           index);
+    size_t address = total_str_size + reloc->address;
+    
     struct relocation_info info = {
-        .r_address = reloc->address,
+        .r_address = address,
         .r_length = reloc->size,
         .r_pcrel = 1, // always true ARM64
         .r_symbolnum = index,
-        .r_extern = 1, // external,
+        .r_extern = external,
         // HACK: not always correct
-        .r_type = GENERIC_RELOC_SECTDIFF // ARM64_RELOC_BRANCH26
+        .r_type = type
     };
 
     fwrite(&info, sizeof(info), 1, file);
@@ -224,13 +241,25 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   for (size_t i = 0; i < args->num_symbols; i++) {
     struct symbol *symbol = &args->symbols[i];
 
+    uint8_t n_sect;
+    uint64_t n_value;
+    switch (symbol->ty) {
+      case SYMBOL_TY_STRING:
+        n_sect = 1;
+        n_value = symbol->value;
+        break;
+      case SYMBOL_TY_FUNC:
+        n_sect = 2;
+        n_value = symbol->value + total_str_size;
+        break;
+    }
+
     struct nlist_64 nlist;
     nlist.n_un.n_strx = str_off;
     nlist.n_type = N_SECT | N_EXT;
-    // TODO: section is ignored
-    nlist.n_sect = 2;
+    nlist.n_sect = n_sect;
     nlist.n_desc = REFERENCE_FLAG_PRIVATE_UNDEFINED_LAZY;
-    nlist.n_value = symbol->value + total_str_size;
+    nlist.n_value = n_value;
 
     str_off += strlen(symbol->name) + 1;
     fwrite(&nlist, sizeof(nlist), 1, file);

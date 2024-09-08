@@ -4,6 +4,8 @@
 #include "../bit_twiddle.h"
 #include "../ir/build.h"
 #include "../util.h"
+#include "../ir/var_refs.h"
+#include <math.h>
 
 static void lower_call(struct ir_builder *func, struct ir_op *op) {
   invariant_assert(op->call.target->var_ty.ty == IR_OP_VAR_TY_TY_FUNC,
@@ -196,9 +198,25 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
       while (op) {
         switch (op->ty) {
         case IR_OP_TY_CUSTOM:
-        case IR_OP_TY_GLB:
+        case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
-        case IR_OP_TY_CNST:
+        case IR_OP_TY_CNST: {
+          if (op->cnst.ty != IR_OP_CNST_TY_STR) {
+            break;
+          }
+
+          const char *data = op->cnst.str_value;
+          
+          struct ir_op *ref = insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
+          make_string_ref(func, data, ref, &ref->var_ty);
+
+          // TODO: dedup locals rather than just adding new one
+          // replace cnst with glb
+          replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
+          op->mov.value = ref;
+
+          break;
+        }
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
         case IR_OP_TY_BR:
@@ -310,7 +328,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
       while (op) {
         switch (op->ty) {
         case IR_OP_TY_CUSTOM:
-        case IR_OP_TY_GLB:
+        case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
         case IR_OP_TY_CNST:
         case IR_OP_TY_STORE_LCL:
@@ -332,6 +350,8 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
                 insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
             ret->mov.value = op->ret.value;
             ret->reg = 0;
+
+            op->ret.value = ret;
           }
 
           if (!leaf) {

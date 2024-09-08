@@ -12,10 +12,23 @@ struct var_key {
   int scope;
 };
 
+enum var_ref_ty {
+  VAR_REF_TY_LCL,
+  VAR_REF_TY_GLB
+};
+
 struct var_ref {
+  enum var_ref_ty ty;
+
   struct var_key key;
-  struct ir_op *op;
+
+  // potentially null - the func associated with this var ref
   struct ir_builder *func;
+
+  union {
+    struct ir_op *lcl;
+    struct ir_string *glb;
+  };
 };
 
 struct var_refs *var_refs_create(struct var_refs *parent);

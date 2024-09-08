@@ -3,6 +3,7 @@
 
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own header
 
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -36,6 +37,10 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 #define ARR_LENGTH(a) (sizeof((a)) / sizeof((a)[0]))
+
+static inline size_t num_digits(size_t num) {
+  return (num ? (size_t)log10(num) : 0) + 1;
+}
 
 static inline unsigned long popcntl(unsigned long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_popcountl)
