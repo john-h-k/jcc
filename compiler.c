@@ -262,7 +262,9 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("PRE-EMIT");
 
-      debug_print_stage(irb, "pre_emit");
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
+        debug_print_stage(irb, "pre_emit");
+      }
 
       BEGIN_STAGE("EMITTING");
 
