@@ -591,7 +591,6 @@ struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
 
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_atom *atom) {
-  err("parsing atom");
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -691,7 +690,6 @@ struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
       }
     }
 
-    err("TY %d", result_ty.well_known);
     return result_ty;
   }
 
@@ -778,7 +776,6 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 // compound expr
 bool parse_compoundexpr(struct parser *parser,
                         struct ast_compoundexpr *compound_expr) {
-  err("parsing compound");
   struct text_pos pos = get_position(parser->lexer);
 
   // this could be made recursive instead
