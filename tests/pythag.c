@@ -12,8 +12,10 @@ int main() {
 
   puts("Side 1: ");
   putchar(a + 48);
+  putchar(10);
   puts("Side 2: ");
   putchar(b + 48);
+  putchar(10);
 
   int r = a * a + b * b;
   puts("Side 3 squared: ");

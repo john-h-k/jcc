@@ -29,8 +29,12 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   }
 
   unsigned long live_regs = succ->live_regs;
+
   // FIXME: don't hardcode volatile count
-  unsigned long live_volatile = live_regs & ((1 << 18) - 1);
+  // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC registers
+  size_t volatile_reg_count = 18;
+
+  unsigned long live_volatile = live_regs & ((1 << volatile_reg_count) - 1);
 
   // if the return reg is used by the call then remove the call-return reg
   // from live-volatile as we know it will be over written by end of call
@@ -85,17 +89,40 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   }
 
   // FIXME: generalise this to calling conventions
-  for (size_t i = 0; i < func_ty->num_params; i++) {
-    struct ir_op_var_ty *param = &func_ty->params[i];
 
-    invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE || param->ty == IR_OP_VAR_TY_TY_POINTER,
-                     "`lower_call` doesn't support non-prims");
+  // now we need to move each argument into its correct register
+  // it is possible there are no spare registers for this, and so we may need to do a swap
+  
+  if (func_ty->num_params) {
+    unsigned long free_regs = ~op->live_regs & ~((1 << func_ty->num_params) - 1);
+    size_t free_vol_reg = tzcnt(free_regs);
 
-    size_t arg_reg = i;
-    if (op->call.args[i]->reg != arg_reg) {
-      struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *param);
-      mov->mov.value = op->call.args[i];
-      mov->reg = arg_reg;
+    if (free_vol_reg >= volatile_reg_count) {
+      todo("argument moving when no free registers");
+    }
+
+    struct ir_op *mov_to_vol = insert_before_ir_op(func, op, IR_OP_TY_MOV, func_ty->params[0]);
+    mov_to_vol->mov.value = op->call.args[0];
+    mov_to_vol->reg = free_vol_reg;
+
+    for (size_t head = 0; head < func_ty->num_params; head++) {
+      size_t i = func_ty->num_params - 1 - head;
+      struct ir_op_var_ty *param = &func_ty->params[i];
+
+      invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE || param->ty == IR_OP_VAR_TY_TY_POINTER,
+                       "`lower_call` doesn't support non-prims");
+
+      size_t arg_reg = i;
+      if (i == 0 || op->call.args[i]->reg != arg_reg) {
+        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *param);
+
+        if (i == 0) {
+          mov->mov.value = mov_to_vol;
+        } else {
+          mov->mov.value = op->call.args[i];
+        }
+        mov->reg = arg_reg;
+      }
     }
   }
 
