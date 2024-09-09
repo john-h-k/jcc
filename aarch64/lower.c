@@ -7,6 +7,12 @@
 #include "../ir/var_refs.h"
 #include <math.h>
 
+// as we add a bunch of new nodes around, `live_regs` can get lost
+// we early preserve it in this metadata for use in `lower_call`
+struct ir_lower_call_metadata {
+  unsigned long post_call_live_regs;
+};
+
 static void lower_call(struct ir_builder *func, struct ir_op *op) {
   invariant_assert(op->call.target->var_ty.ty == IR_OP_VAR_TY_TY_FUNC,
                    "non-func in `lower_call`");
@@ -19,16 +25,8 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`lower_call` doesn't support more than 8 args yet");
 
-  // we need to save registers in-use _after_ call
-  struct ir_op *succ = op->succ;
-  if (!succ && op->stmt->succ) {
-    // call is end of stmt, get live from next stmt
-    // a call can not be the final op of the final stmt of a basicblock
-    // as that must be a br/ret
-    succ = op->stmt->succ->first;
-  }
-
-  unsigned long live_regs = succ->live_regs;
+  struct ir_lower_call_metadata *metadata = (struct ir_lower_call_metadata *)op->metadata;
+  unsigned long live_regs = metadata->post_call_live_regs;
 
   // FIXME: don't hardcode volatile count
   // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC registers
@@ -284,6 +282,42 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
   // TODO: hacky improve this system so it isn't a bunch of magic values
   // signalling to the emitter might need new IR layer
 
+  // first we need to insert the metadata we want
+  // currently this is just on call nodes
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        if (op->ty == IR_OP_TY_CALL) {
+            // we need to save registers in-use _after_ call
+            struct ir_op *succ = op->succ;
+            if (!succ && op->stmt->succ) {
+              // call is end of stmt, get live from next stmt
+              // a call can not be the final op of the final stmt of a basicblock
+              // as that must be a br/ret
+              succ = op->stmt->succ->first;
+            }
+
+            op->metadata = arena_alloc(func->arena, sizeof(struct ir_lower_call_metadata));
+            *(struct ir_lower_call_metadata *)op->metadata = (struct ir_lower_call_metadata){
+              .post_call_live_regs = succ->live_regs
+            };
+        }
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+  
+
   bool leaf = !(func->nonvolatile_registers_used || func->num_locals ||
                 func->flags & IR_BUILDER_FLAG_MAKES_CALL);
 
@@ -354,7 +388,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
     // flag set
   }
 
-  struct ir_basicblock *basicblock = func->first;
+  basicblock = func->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 

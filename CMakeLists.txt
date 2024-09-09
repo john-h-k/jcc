@@ -18,6 +18,7 @@ set(
   lex.c
   parse.c
   link.c
+  liveness.c
   disasm.c
   var_table.c
   lsra.c
