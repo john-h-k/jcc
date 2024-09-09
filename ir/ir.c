@@ -488,10 +488,6 @@ void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
     detach_ir_op(irb, op);
   }
 
-  debug("move after pred %zu, succ %zu",
-        move_after->pred ? move_after->pred->id : SIZE_T_MAX,
-        move_after->succ ? move_after->succ->id : SIZE_T_MAX);
-
   attach_ir_op(irb, op, move_after->stmt, move_after, move_after->succ);
 }
 
@@ -506,10 +502,6 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
   if (op->stmt) {
     detach_ir_op(irb, op);
   }
-
-  debug("move before pred %zu, succ %zu",
-        move_before->pred ? move_before->pred->id : SIZE_T_MAX,
-        move_before->succ ? move_before->succ->id : SIZE_T_MAX);
 
   attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
