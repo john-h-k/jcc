@@ -163,7 +163,6 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
       build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
   struct ir_op *rhs =
       build_ir_for_expr(irb, stmt, binary_op->rhs, &binary_op->var_ty);
-  err("building binop, lhs %zu rhs %zu", lhs->id, rhs->id);
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -295,8 +294,6 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
-  debug("build_ir_for_var bb=%zu, name=%s", stmt->basicblock->id,
-        identifier_str(irb->parser, &var->identifier));
   UNUSED_ARG(stmt);
 
   // this is when we are _reading_ from the var
@@ -914,7 +911,6 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   }
 
   basicblocks_visited[basicblock->id] = true;
-  debug("now walking %zu", basicblock->id);
 
   struct var_key key = get_var_key(irb->parser, var);
   struct var_ref *ref = var_refs_get(basicblock->var_refs, &key);
@@ -982,8 +978,6 @@ void find_phi_exprs(struct ir_builder *irb, struct ir_op *phi) {
     walk_basicblock(irb, basicblocks_visited, phi, &phi->phi.var, pred, &exprs,
                     &num_exprs);
   }
-
-  debug("find phi exprs for op %zu", phi->id);
 
   if (num_exprs && (exprs[0]->flags & IR_OP_FLAG_PARAM)) {
     return;
