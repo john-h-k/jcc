@@ -20,13 +20,30 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
                    "`lower_call` doesn't support more than 8 args yet");
 
   // we need to save registers in-use _after_ call
-  unsigned long live_regs = op->succ ? op->succ->live_regs : 0;
+  struct ir_op *succ = op->succ;
+  if (!succ && op->stmt->succ) {
+    // call is end of stmt, get live from next stmt
+    // a call can not be the final op of the final stmt of a basicblock
+    // as that must be a br/ret
+    succ = op->stmt->succ->first;
+  }
+
+  unsigned long live_regs = succ->live_regs;
   // FIXME: don't hardcode volatile count
   unsigned long live_volatile = live_regs & ((1 << 18) - 1);
 
-  // remove the call-return reg from live-volatile as we know it will be over written by end of cal
+  // if the return reg is used by the call then remove the call-return reg
+  // from live-volatile as we know it will be over written by end of call
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
     live_volatile &= ~(1 << op->reg);
+
+    struct ir_op *ret_mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
+    ret_mov->mov.value = op;
+    ret_mov->reg = op->reg;
+
+    // swap so usages point at mov
+    // not needed but makes IR cleaner
+    swap_ir_ops(func, op, ret_mov);
   }
 
   size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
@@ -43,9 +60,11 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   unsigned next_call_slot = func->num_locals - func->num_call_saves;
 
   for (size_t i = 0; i < max_volatile; i++) {
-    if (!NTH_BIT(live_volatile, i)) {
+    if (!NTH_BIT(live_volatile, i) || i == op->reg) {
+      // if not a live-volatile register or the register used by the actual call, skip
       continue;
     }
+
     unsigned call_slot = next_call_slot++;
 
     struct ir_op *save =

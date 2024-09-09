@@ -215,7 +215,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
       fprintf(file, "%llu", ir->cnst.int_value);
       break;
     case IR_OP_CNST_TY_STR:
-      fprintf(file, "%s", ir->cnst.str_value);
+      fprintf(file, "\"%s\"", ir->cnst.str_value);
       break;
     }
     break;
