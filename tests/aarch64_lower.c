@@ -1,5 +1,5 @@
 // expected value: 5
-// ignore the slightly weird cod
+// ignore the slightly weird code
 // - it helps generate clearer IR for explaining lowering
 int main() {
   int a = 10, b = 7;
