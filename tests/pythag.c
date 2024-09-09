@@ -10,13 +10,17 @@ int main() {
   int a = getchar() - 48;
   int b = getchar() - 48;
 
+  puts("Side 1: ");
+  putchar(a + 48);
+  puts("Side 2: ");
+  putchar(b + 48);
+
   int r = a * a + b * b;
-  puts("sqrt(");
-  // while (r) {
-  //   int c = r % 10;
-  //   putchar(c + 48);
-  //   r = r / 10;
-  // }
-  putchar(r + 48);
-  puts(")");
+  puts("Side 3 squared: ");
+  while (r) {
+    int c = r % 10;
+    putchar(c + 48);
+    r = r / 10;
+  }
+  return 0;
 }

@@ -200,23 +200,7 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
-        case IR_OP_TY_CNST: {
-          if (op->cnst.ty != IR_OP_CNST_TY_STR) {
-            break;
-          }
-
-          const char *data = op->cnst.str_value;
-          
-          struct ir_op *ref = insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
-          make_string_ref(func, data, ref, &ref->var_ty);
-
-          // TODO: dedup locals rather than just adding new one
-          // replace cnst with glb
-          replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
-          op->mov.value = ref;
-
-          break;
-        }
+        case IR_OP_TY_CNST:
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
         case IR_OP_TY_BR:
@@ -314,6 +298,12 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
         arena_alloc(func->arena, sizeof(*save->custom.aarch64));
     save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_LR;
 
+    struct ir_op *save_add_64 =
+        insert_before_ir_op(func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+    save_add_64->custom.aarch64 =
+        arena_alloc(func->arena, sizeof(*save_add_64->custom.aarch64));
+    save_add_64->custom.aarch64->ty = AARCH64_OP_TY_SAVE_LR_ADD_64;
+
     // emitter understands the above magic-mov as it does not have the PARAM
     // flag set
   }
@@ -327,10 +317,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
-        case IR_OP_TY_CUSTOM:
-        case IR_OP_TY_GLB_REF:
-        case IR_OP_TY_PHI:
-        case IR_OP_TY_CNST:
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
         case IR_OP_TY_BR:
@@ -338,8 +324,43 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_UNARY_OP:
         case IR_OP_TY_CAST_OP:
         case IR_OP_TY_BR_COND:
+        case IR_OP_TY_GLB_REF:
         case IR_OP_TY_BINARY_OP:
+        case IR_OP_TY_CUSTOM:
+        case IR_OP_TY_PHI:
           break;
+
+        case IR_OP_TY_CNST: {
+          if (op->cnst.ty != IR_OP_CNST_TY_STR) {
+            break;
+          }
+
+          const char *data = op->cnst.str_value;
+          
+          // first insert a GLB_REF to instruct that a reloc must be created
+          struct ir_op *ref = insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
+          make_string_ref(func, data, ref, &ref->var_ty);
+
+          // now insert the pair needed to generate the actual address
+          struct ir_op *page = insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, op->var_ty);
+          page->reg = op->reg;
+          page->custom.aarch64 = arena_alloc(func->arena, sizeof(*page->custom.aarch64));
+          page->custom.aarch64->ty = AARCH64_OP_TY_PAGE;
+          page->custom.aarch64->page = (struct aarch64_op_page){
+            .glb_ref = ref
+          };
+
+          struct ir_op *page_off = op;
+          replace_ir_op(func, page_off, IR_OP_TY_CUSTOM, op->var_ty);
+          page_off->reg = op->reg;
+          page_off->custom.aarch64 = arena_alloc(func->arena, sizeof(*page_off->custom.aarch64));
+          page_off->custom.aarch64->ty = AARCH64_OP_TY_PAGE_OFF;
+          page_off->custom.aarch64->page_off = (struct aarch64_op_page_off){
+            .glb_ref = ref
+          };
+
+          break;
+        }
         case IR_OP_TY_CALL:
           lower_call(func, op);
           break;
