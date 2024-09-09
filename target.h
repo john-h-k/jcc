@@ -37,8 +37,15 @@ enum symbol_ty {
   SYMBOL_TY_FUNC,
 };
 
+enum symbol_visibility {
+  SYMBOL_VISIBILITY_PRIVATE,
+  SYMBOL_VISIBILITY_GLOBAL,
+};
+
 struct symbol {
   enum symbol_ty ty;
+
+  enum symbol_visibility visibility;
 
   const char *name;
   size_t value;

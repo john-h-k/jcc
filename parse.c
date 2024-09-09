@@ -559,17 +559,27 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_compoundexpr compound_expr;
-  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
-      !parse_compoundexpr(parser, &compound_expr) ||
-      !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
-    backtrack(parser->lexer, pos);
-    return false;
+
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_compoundexpr(parser, &compound_expr) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    arg_list->args = compound_expr.exprs;
+    arg_list->num_args = compound_expr.num_exprs;
+
+    return true;
+  }
+  
+  backtrack(parser->lexer, pos);
+
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    arg_list->args = NULL;
+    arg_list->num_args = 0;
+
+    return true;
   }
 
-  arg_list->args = compound_expr.exprs;
-  arg_list->num_args = compound_expr.num_exprs;
-
-  return true;
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
 struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {

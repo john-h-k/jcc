@@ -38,8 +38,8 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   header.ncmds = 4;
   header.sizeofcmds =
       sizeof(struct segment_command_64) + sizeof(struct section_64) +
-      sizeof(struct section_64) + sizeof(struct symtab_command) +
-      sizeof(struct dysymtab_command) + sizeof(struct build_version_command);
+      sizeof(struct section_64) + sizeof(struct build_version_command) + sizeof(struct symtab_command) +
+      sizeof(struct dysymtab_command);
   header.flags = 0;
 
   fwrite(&header, sizeof(header), 1, file);
@@ -98,7 +98,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   cstrings.addr = text.size;
   cstrings.size = total_str_size;
   cstrings.offset = segment.fileoff + text.size;
-  cstrings.align = 4;
+  cstrings.align = 0;
   cstrings.reloff = 0; // no relocs
   cstrings.nreloc = 0;
   cstrings.flags = S_CSTRING_LITERALS; // | S_ATTR_EXT_RELOC;
@@ -106,6 +106,14 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   cstrings.reserved2 = 0;
   cstrings.reserved3 = 0;
 
+  struct build_version_command version;
+  version.cmd = LC_BUILD_VERSION;
+  version.cmdsize = sizeof(version);
+  version.platform = PLATFORM_MACOS;
+  version.minos = ENCODE_MINOS(12, 0, 0);
+  version.sdk = ENCODE_SDK(0, 0, 0);
+  version.ntools = 0;
+  
   struct symtab_command symtab;
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
@@ -143,20 +151,12 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   dysymtab.iundefsym = args->num_symbols;
   dysymtab.nundefsym = args->num_extern_symbols;
 
-  struct build_version_command version;
-  version.cmd = LC_BUILD_VERSION;
-  version.cmdsize = sizeof(version);
-  version.platform = PLATFORM_MACOS;
-  version.minos = ENCODE_MINOS(12, 0, 0);
-  version.sdk = ENCODE_SDK(0, 0, 0);
-  version.ntools = 0;
-
   fwrite(&segment, sizeof(segment), 1, file);
   fwrite(&text, sizeof(text), 1, file);
   fwrite(&cstrings, sizeof(cstrings), 1, file);
+  fwrite(&version, sizeof(version), 1, file);
   fwrite(&symtab, sizeof(symtab), 1, file);
   fwrite(&dysymtab, sizeof(dysymtab), 1, file);
-  fwrite(&version, sizeof(version), 1, file);
 
   /* C Strings */
 
@@ -240,12 +240,15 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
   /* Symbol table */
 
+  fseek(file, symtab.symoff, SEEK_SET);
+
   size_t str_off = 1; // first index is just a `null` char
   for (size_t i = 0; i < args->num_symbols; i++) {
     struct symbol *symbol = &args->symbols[i];
 
     uint8_t n_sect;
     uint64_t n_value;
+    uint8_t n_type;
     switch (symbol->ty) {
     case SYMBOL_TY_FUNC:
       n_sect = 1;
@@ -254,15 +257,23 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     case SYMBOL_TY_STRING:
       n_sect = 2;
       n_value = symbol->value + args->len_data;
-      // n_value = symbol->value;
+      break;
+    }
+
+    switch (symbol->visibility) {
+    case SYMBOL_VISIBILITY_GLOBAL:
+      n_type = N_SECT | N_EXT;
+      break;
+    case SYMBOL_VISIBILITY_PRIVATE:
+      n_type = N_SECT;
       break;
     }
 
     struct nlist_64 nlist;
     nlist.n_un.n_strx = str_off;
-    nlist.n_type = N_SECT | N_EXT;
+    nlist.n_type = n_type;
     nlist.n_sect = n_sect;
-    nlist.n_desc = REFERENCE_FLAG_PRIVATE_UNDEFINED_LAZY;
+    nlist.n_desc = 0;
     nlist.n_value = n_value;
 
     str_off += strlen(symbol->name) + 1;
@@ -274,10 +285,9 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
     struct nlist_64 nlist;
     nlist.n_un.n_strx = str_off;
-    nlist.n_type = N_UNDF;
+    nlist.n_type = N_UNDF | N_EXT;
     nlist.n_sect = NO_SECT;
-    // should this be lazy or non lazy i am unsure
-    nlist.n_desc = REFERENCE_FLAG_UNDEFINED_LAZY | REFERENCED_DYNAMICALLY;
+    nlist.n_desc = 0;
     nlist.n_value = 0;
 
     str_off += strlen(symbol->name) + 1;

@@ -789,6 +789,7 @@ void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op
 
   op->ty = IR_OP_TY_GLB_REF;
   op->var_ty = *var_ty;
+  op->reg = DONT_GIVE_REG;
 
   glb_ref->ty = IR_OP_GLB_REF_TY_SYM;
   glb_ref->sym_name = sym_name;

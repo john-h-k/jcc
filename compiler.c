@@ -30,27 +30,41 @@ struct compiler {
 };
 
 const char *mangle_str_cnst_name(struct arena_allocator *arena, const char *func_name, size_t id) {
+  // TODO: this should all really be handled by the mach-o file
+  func_name = "str";
   size_t func_name_len = strlen(func_name);
 
   size_t len = 0;
   len += func_name_len;
-  len += 2; // surround function name with `<>` so it cannot conflict with real names
+  len += 2; // strlen("l_"), required for local symbols
+  len += 1; // surround function name with `.` so it cannot conflict with real names
 
-  size_t id_len = num_digits(id);
+  if (id) {
+    len += 1; // extra "." before id
+  }
+
+  size_t id_len = id ? num_digits(id) : 0;
   len += id_len;
-  len += 1; // null char
 
+  len += 1; // null char
   char *buff = arena_alloc(arena, len);
   size_t head = 0;
-  buff[head++] = '<';
+
+  strcpy(&buff[head], "l_");
+  head += strlen("l_");
+
+  buff[head++] = '.';
   strcpy(&buff[head], func_name);
   head += func_name_len;
-  buff[head++] = '>';
 
-  size_t tail = head + id_len - 1;
-  while (tail >= head) {
-    buff[tail--] = (id % 10) + '0';
-    id /= 10;
+  if (id) {
+    buff[head++] = '.';
+
+    size_t tail = head + id_len - 1;
+    while (tail >= head) {
+      buff[tail--] = (id % 10) + '0';
+      id /= 10;
+    }
   }
 
   head += id_len;
@@ -274,7 +288,7 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     struct symbol symbol = {
-        .ty = SYMBOL_TY_FUNC, .name = func.name, .value = total_size};
+        .ty = SYMBOL_TY_FUNC, .visibility = SYMBOL_VISIBILITY_GLOBAL, .name = func.name, .value = total_size};
 
     total_size += ROUND_UP(func.len_code, target->function_alignment);
     vector_push_back(compiled_functions, &func);
@@ -296,15 +310,18 @@ enum compile_result compile(struct compiler *compiler) {
 
   size_t num_results = vector_length(compiled_functions);
   size_t str_offset = 0;
+
   for (size_t i = 0; i < num_results; i++) {
     struct compiled_function *func = vector_get(compiled_functions, i);
   
-    for (ssize_t j = func->num_strings ? func->num_strings - 1 : -1; j >= 0; j--) {
-      const char *str = func->strings[j];
-      const char *name = mangle_str_cnst_name(compiler->arena, func->name, j);
-      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .name = name, .value = str_offset };
+    for (size_t j = 0; j < func->num_strings; j++) {
+      size_t idx = func->num_strings - 1 - j;
+      const char *str = func->strings[idx];
+      const char *name = mangle_str_cnst_name(compiler->arena, func->name, idx);
+      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .visibility = SYMBOL_VISIBILITY_PRIVATE, .name = name, .value = str_offset };
 
-      str_offset += strlen(str);
+      // FIXME: this is hacky and should be handled elsewhere
+      str_offset += strlen(str) + 1; // null char
       vector_push_front(symbols, &symbol);
     }
 
