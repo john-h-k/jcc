@@ -43,10 +43,11 @@ bool vector_empty(struct vector *v) { return v->len == 0; }
 void *vector_push_front(struct vector *v, const void *data) {
   size_t length = vector_length(v);
   vector_extend(v, NULL, 1);
-  for (size_t i = 0; i < length; i++) {
-    void *next = vector_get(v, i + 1);
+
+  for (size_t i = length; i > 0; i--) {
     void *curr = vector_get(v, i);
-    memcpy(next, curr, v->element_size);
+    void *prev = vector_get(v, i - 1);
+    memcpy(curr, prev, v->element_size);
   }
 
   void *head = vector_head(v);

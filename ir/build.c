@@ -825,7 +825,6 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
                                        struct ir_stmt *stmt,
                                        struct ast_vardecllist *var_decl_list) {
-  err("VARDECL");
   for (size_t i = 0; i < var_decl_list->num_decls; i++) {
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
@@ -837,7 +836,6 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     var_assg(irb, stmt, &var_decl_list->var_ty, &decl->var, &decl->assg_expr);
   }
 
-  err("END VARDECL");
   return stmt->last;
 }
 
@@ -1070,6 +1068,19 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
   // may not end in a return, but needs to
   if (builder->last && builder->last->last && builder->last->last->last && builder->last->last->last->ty != IR_OP_TY_RET) {
     basicblock = build_ir_for_ret(builder, basicblock->last, NULL);
+
+    if (strcmp(builder->name, "main") == 0) {
+      debug("adding implicit return 0");
+      struct ir_op *cnst = alloc_ir_op(builder, basicblock->pred->last);
+      cnst->ty = IR_OP_TY_CNST;
+      cnst->var_ty = (struct ir_op_var_ty){
+        .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+        .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
+      };
+      cnst->cnst.int_value = 0;
+
+      basicblock->pred->last->last->ret.value = cnst;
+    }
   }
 
   if (log_enabled()) {
@@ -1111,33 +1122,6 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
     }
 
     basicblock = basicblock->succ;
-  }
-
-  // handle `main` implicit return
-  if (strcmp(builder->name, "main") == 0) {
-    struct ir_basicblock *last_bb = builder->last;
-    struct ir_stmt *last_stmt = last_bb ? last_bb->last : NULL;
-    struct ir_op *last_op = last_stmt ? last_stmt->last : NULL;
-
-    if (!last_op || last_op->ty != IR_OP_TY_RET) {
-      // no return statement
-      if (!last_bb) {
-        last_bb = alloc_ir_basicblock(builder);
-      }
-      if (!last_stmt) {
-        last_stmt = alloc_ir_stmt(builder, last_bb);
-      }
-
-      struct ir_op *cnst = alloc_ir_op(builder, last_stmt);
-      cnst->ty = IR_OP_TY_CNST;
-      cnst->var_ty = (struct ir_op_var_ty){
-        .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-        .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
-      };
-
-      struct ir_op *ret = insert_after_ir_op(builder, cnst, IR_OP_TY_RET, cnst->var_ty);
-      ret->ret.value = cnst;
-    }
   }
 
   return builder;

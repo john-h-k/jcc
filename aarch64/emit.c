@@ -75,9 +75,10 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
 }
 
 static bool is_64_bit(const struct ir_op *op) {
-  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                   "non-primitive passed to `is_64_bit`");
-  return op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
+  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE || op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER,
+                   "non-primitive/pointer passed to `is_64_bit`");
+
+  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
 enum aarch64_relocation_ty {
@@ -683,13 +684,16 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   // FIXME: the vector was built backwards due to the structure of the
   // linked-list of strings really this should be dealt with elsewhere more
   // generally, but for now just reverse this vector
-  size_t num_strings = vector_length(state.strings);
-  for (size_t i = 0, j = num_strings ? num_strings - 1 : 0; i < j; i++, j--) {
-    struct ir_string head = *(struct ir_string *)vector_get(state.strings, i);
-    struct ir_string tail = *(struct ir_string *)vector_get(state.strings, j);
 
-    *(struct ir_string *)vector_get(state.strings, i) = tail;
-    *(struct ir_string *)vector_get(state.strings, j) = head;
+  // turn the `struct ir_string`s into normal strings
+  struct vector *string_vec = vector_create(sizeof(const char *));
+
+  size_t num_strings = vector_length(state.strings);
+  for (size_t i = 0; i < num_strings; i++) {
+    size_t idx = num_strings - 1 - i;
+    struct ir_string string = *(struct ir_string *)vector_get(state.strings, idx);
+
+    vector_push_back(string_vec, &string.data);
   }
 
   free_aarch64_emitter(&emitter);
@@ -701,8 +705,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
       .relocations = relocations,
       .num_relocations = num_relocations,
       .num_relocation_instrs = num_relocation_instrs,
-      .strings = vector_head(state.strings),
-      .num_strings = vector_length(state.strings)};
+      .strings = vector_head(string_vec),
+      .num_strings = vector_length(string_vec)};
 
   return result;
 }
