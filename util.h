@@ -10,6 +10,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __has_feature
+#define HAS_FEATURE(name) __has_feature(name)
+#else
+#define HAS_FEATURE(name) 0
+#endif
+ 
+
+#if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) || defined(__SANITIZE_MEMORY__)
+#define MSAN 1
+#else
+#define MSAN 0
+#endif
+
+#if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) || defined(__SANITIZE_ADDRESS__)
+#define ASAN 1
+#else
+#define ASAN 0
+#endif
+
+#if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) || defined(__SANITIZE_HWADDRESS__)
+#define HWASAN 1
+#else
+#define HWASAN 0
+#endif
+
+#if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) || defined(__SANITIZE_THREAD__)
+#define TSAN 1
+#else
+#define TSAN 0
+#endif
+
+#if HAS_FEATURE(undefined_behavior_sanitizer) || defined(UNDEFINED_BEHAVIOR_SANITIZER)
+#define UBSAN 1
+#else
+#define UBSAN 0
+#endif
+
+#if ASAN || MSAN || TSAN || UBSAN
+#define SANITIZER_PRINT_STACK_TRACE
+#include "sanitizer/common_interface_defs.h"  // __sanitizer_print_stack_trace
+#endif
+
 #ifndef __STDC_VERSION__ 
 #error "JCC Requires at least C99"
 #endif
@@ -76,30 +118,32 @@ static inline unsigned long lzcnt(unsigned long l) {
     va_end(v);                                                                 \
   } while (0);
 
+#ifdef SANITIZER_PRINT_STACK_TRACE
+#define EXIT_FAIL(code) __sanitizer_print_stack_trace(); raise(SIGINT); exit(code);
+#else
+#define EXIT_FAIL(code) raise(SIGINT); exit(code);
+#endif
+  
 NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
-  raise(SIGINT);
-  exit(-2);
+  EXIT_FAIL(-2);
 }
 
 NORETURN static inline void unreachable(const char *msg, ...) {
   FMTPRINT(stderr, "`unreachable` hit, program exiting: ", msg);
-  raise(SIGINT);
-  exit(-2);
+  EXIT_FAIL(-2);
 }
 
 NORETURN static inline void bug(const char *msg, ...) {
   FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
-  raise(SIGINT);
-  exit(-2);
+  EXIT_FAIL(-2);
 }
 
 // present in all mode, always causes program exit if fails
 static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
-    raise(SIGINT);
-    exit(-1);
+    EXIT_FAIL(-1);
   }
 }
 
@@ -111,8 +155,7 @@ static inline void debug_assert(bool, const char *, ...) {}
 static inline void debug_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
-    raise(SIGINT);
-    exit(-1);
+    EXIT_FAIL(-1);
   }
 }
 #endif

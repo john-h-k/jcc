@@ -16,7 +16,10 @@
 const struct target AARCH64_TARGET;
 
 enum aarch64_op_ty {
+  // Saving LR has two steps - one instr per op so we have two ops for it
   AARCH64_OP_TY_SAVE_LR,
+  AARCH64_OP_TY_SAVE_LR_ADD_64,
+
   AARCH64_OP_TY_RSTR_LR,
 
   AARCH64_OP_TY_SUB_STACK,
@@ -24,10 +27,26 @@ enum aarch64_op_ty {
 
   AARCH64_OP_TY_SAVE_REG,
   AARCH64_OP_TY_RSTR_REG,
+
+  AARCH64_OP_TY_PAGE,
+  AARCH64_OP_TY_PAGE_OFF,
+};
+
+struct aarch64_op_page {
+  struct ir_op *glb_ref;
+};
+
+struct aarch64_op_page_off {
+  struct ir_op *glb_ref;
 };
 
 struct aarch64_op {
   enum aarch64_op_ty ty;
+
+  union {
+    struct aarch64_op_page page;
+    struct aarch64_op_page_off page_off;
+  };
 };
 
 #endif

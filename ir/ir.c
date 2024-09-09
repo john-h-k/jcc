@@ -566,6 +566,7 @@ void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
     struct ir_op *tmp = right;
     right = left;
     left = tmp;
+    printf("normalized\n");
   }
 
   // if they are next to each other, the normal logic won't work

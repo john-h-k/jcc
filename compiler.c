@@ -263,6 +263,7 @@ enum compile_result compile(struct compiler *compiler) {
   }
   
   size_t num_relocation_instrs = 0;
+  size_t total_str_bytes = 0;
   struct vector *relocations = vector_create(sizeof(struct relocation));
   struct vector *strings = vector_create(sizeof(const char *));
   for (size_t i = 0; i < ir->num_funcs; i++) {
@@ -309,22 +310,22 @@ enum compile_result compile(struct compiler *compiler) {
   char *head = code;
 
   size_t num_results = vector_length(compiled_functions);
-  size_t str_offset = 0;
 
   for (size_t i = 0; i < num_results; i++) {
     struct compiled_function *func = vector_get(compiled_functions, i);
-  
-    for (size_t j = 0; j < func->num_strings; j++) {
-      size_t idx = func->num_strings - 1 - j;
-      const char *str = func->strings[idx];
-      const char *name = mangle_str_cnst_name(compiler->arena, func->name, idx);
-      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .visibility = SYMBOL_VISIBILITY_PRIVATE, .name = name, .value = str_offset };
+
+    // must be done here so all string symbols are after func symbols
+    // this will be fixed
+    for (size_t i = 0; i < func->num_strings; i++) {
+      const char *str = func->strings[i];
+      const char *name = mangle_str_cnst_name(compiler->arena, func->name, i);
+      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .visibility = SYMBOL_VISIBILITY_PRIVATE, .name = name, .value = total_str_bytes };
 
       // FIXME: this is hacky and should be handled elsewhere
-      str_offset += strlen(str) + 1; // null char
-      vector_push_front(symbols, &symbol);
-    }
-
+      total_str_bytes += strlen(str) + 1; // null char
+      vector_push_back(symbols, &symbol);
+    }    
+  
     memcpy(head, func->code, func->len_code);
     head += ROUND_UP(func->len_code, target->function_alignment);
   }

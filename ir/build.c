@@ -89,12 +89,13 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
     return ty;
   }
   case AST_TYREF_TY_POINTER: {
-    struct ir_op_var_ty *underlying = arena_alloc(irb->arena, sizeof(*underlying));
+    struct ir_op_var_ty *underlying =
+        arena_alloc(irb->arena, sizeof(*underlying));
     *underlying = ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
 
     struct ir_op_var_ty ty;
-    ty.ty =IR_OP_VAR_TY_TY_POINTER;
-    ty.pointer = (struct ir_op_var_pointer_ty){ .underlying = underlying };
+    ty.ty = IR_OP_VAR_TY_TY_POINTER;
+    ty.pointer = (struct ir_op_var_pointer_ty){.underlying = underlying};
 
     return ty;
   }
@@ -260,9 +261,12 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
   op->ty = IR_OP_TY_CNST;
   op->var_ty = ty_for_ast_tyref(irb, &cnst->cnst_ty);
 
-  if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER && cnst->cnst_ty.pointer.underlying->ty == AST_TYREF_TY_WELL_KNOWN) {
+  if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER &&
+      cnst->cnst_ty.pointer.underlying->ty == AST_TYREF_TY_WELL_KNOWN) {
     enum well_known_ty wkt = cnst->cnst_ty.pointer.underlying->well_known;
-    invariant_assert(wkt == WELL_KNOWN_TY_SIGNED_CHAR || wkt == WELL_KNOWN_TY_UNSIGNED_CHAR, "expected str type");
+    invariant_assert(wkt == WELL_KNOWN_TY_SIGNED_CHAR ||
+                         wkt == WELL_KNOWN_TY_UNSIGNED_CHAR,
+                     "expected str type");
 
     op->cnst.ty = IR_OP_CNST_TY_STR;
     op->cnst.str_value = cnst->str_value;
@@ -756,28 +760,30 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
   }
 }
 
-/* Return stmt be null when this is used to add implicit returns not in code (e.g at end of method) */
+/* Return stmt be null when this is used to add implicit returns not in code
+ * (e.g at end of method) */
 struct ir_basicblock *build_ir_for_ret(struct ir_builder *irb,
-                                            struct ir_stmt *stmt,
-                                            struct ast_returnstmt *return_stmt) {
-    struct ir_op *expr_op;
-    if (return_stmt && return_stmt->expr) {
-      expr_op = build_ir_for_expr(irb, stmt, return_stmt->expr,
-                                  &return_stmt->var_ty);
-    } else {
-      expr_op = NULL;
-    }
+                                       struct ir_stmt *stmt,
+                                       struct ast_returnstmt *return_stmt) {
+  struct ir_op *expr_op;
+  if (return_stmt && return_stmt->expr) {
+    expr_op =
+        build_ir_for_expr(irb, stmt, return_stmt->expr, &return_stmt->var_ty);
+  } else {
+    expr_op = NULL;
+  }
 
-    struct ir_op *op = alloc_ir_op(irb, stmt);
-    op->ty = IR_OP_TY_RET;
-    op->var_ty = return_stmt ? ty_for_ast_tyref(irb, &return_stmt->var_ty) : IR_OP_VAR_TY_NONE;
-    op->ret.value = expr_op;
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_RET;
+  op->var_ty = return_stmt ? ty_for_ast_tyref(irb, &return_stmt->var_ty)
+                           : IR_OP_VAR_TY_NONE;
+  op->ret.value = expr_op;
 
-    op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
+  op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
 
-    struct ir_basicblock *after_ret_basicblock = alloc_ir_basicblock(irb);
+  struct ir_basicblock *after_ret_basicblock = alloc_ir_basicblock(irb);
 
-    return after_ret_basicblock;
+  return after_ret_basicblock;
 }
 
 struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
@@ -785,7 +791,7 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
                                             struct ast_jumpstmt *jump_stmt) {
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN:
-      return build_ir_for_ret(irb, stmt, &jump_stmt->return_stmt);
+    return build_ir_for_ret(irb, stmt, &jump_stmt->return_stmt);
   }
 }
 
@@ -1009,9 +1015,10 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-struct ir_builder *
-build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
-                      struct ast_funcdef *def, struct var_refs *global_var_refs) {
+struct ir_builder *build_ir_for_function(struct parser *parser,
+                                         struct arena_allocator *arena,
+                                         struct ast_funcdef *def,
+                                         struct var_refs *global_var_refs) {
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
                          .global_var_refs = global_var_refs,
@@ -1062,26 +1069,47 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
     basicblock = build_ir_for_stmt(builder, basicblock, &def->body.stmts[i]);
   }
 
+  debug_print_ir(stderr, builder, NULL, NULL);
+
   // we may generate empty basicblocks or statements, prune them here
   prune_basicblocks(builder);
 
-  // may not end in a return, but needs to
-  if (builder->last && builder->last->last && builder->last->last->last && builder->last->last->last->ty != IR_OP_TY_RET) {
-    basicblock = build_ir_for_ret(builder, basicblock->last, NULL);
+  // may not end in a return, but needs to to be well-formed IR
+  struct ir_basicblock *last_bb = builder->last;
+  if (!last_bb) {
+    last_bb = alloc_ir_basicblock(builder);
+  }
 
+  struct ir_stmt *last_stmt = last_bb->last;
+  if (!last_stmt) {
+    last_stmt = alloc_ir_stmt(builder, last_bb);
+  }
+  
+  struct ir_op *last_op = last_stmt->last;
+
+  if (!last_op || last_op->ty != IR_OP_TY_RET) {
+    struct ir_op *return_value = NULL;
+    
     if (strcmp(builder->name, "main") == 0) {
       debug("adding implicit return 0");
-      struct ir_op *cnst = alloc_ir_op(builder, basicblock->pred->last);
+
+      struct ir_op *cnst = alloc_ir_op(builder, last_stmt);
       cnst->ty = IR_OP_TY_CNST;
       cnst->var_ty = (struct ir_op_var_ty){
-        .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-        .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
+          .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+          .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
       };
       cnst->cnst.int_value = 0;
 
-      basicblock->pred->last->last->ret.value = cnst;
+      return_value = cnst;
     }
+
+    basicblock = build_ir_for_ret(builder, last_stmt, NULL);
+    debug_assert(last_stmt->last->ty == IR_OP_TY_RET, "expected ret after call to build ret");
+    last_stmt->last->ret.value = return_value;
   }
+
+  // do we need to prune again? i do not think so
 
   if (log_enabled()) {
     debug_print_ir(stderr, builder, NULL, NULL);
@@ -1158,7 +1186,7 @@ struct ir_unit *build_ir_for_translationunit(
     struct var_ref *ref = var_refs_add(global_var_refs, &key);
     UNUSED_ARG(ref);
   }
-  
+
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     struct ast_funcdef *def = &translation_unit->func_defs[i];
     struct var_key key = {.name = identifier_str(parser, &def->sig.name),

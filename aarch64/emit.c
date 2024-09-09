@@ -288,6 +288,9 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
     ssize_t offset = (ssize_t)target->function_offset -
                      (ssize_t)aarch64_emitted_count(state->emitter);
+    printf("merge id %zu\n", target->id);
+    printf("self id %zu\n", op->stmt->basicblock->id);
+    printf("merge offset %zd\n", (ssize_t)offset);
     aarch64_emit_b(state->emitter, offset);
   } else {
     // otherwise, this is the false branch of a SPLIT
@@ -297,6 +300,7 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
     ssize_t false_offset = (ssize_t)false_target->function_offset -
                            (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, false_offset);
+    printf("false offset %zd\n", false_offset);
   }
 }
 
@@ -334,9 +338,9 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   }
 }
 
-static void emit_mov_glb(struct emit_state *state, struct ir_op *op,
-                         size_t dest) {
-  struct ir_op *value = op->mov.value;
+static void emit_page(struct emit_state *state, struct ir_op *op) {
+
+  struct ir_op *value = op->custom.aarch64->page.glb_ref;
   debug_assert(value->ty == IR_OP_TY_GLB_REF,
                "received non glb_ref op in emit_mov_glb");
 
@@ -356,9 +360,15 @@ static void emit_mov_glb(struct emit_state *state, struct ir_op *op,
       .str = (struct str_relocation){
           .str_index = value->glb_ref.string->index_from_back}};
 
-  aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(dest));
-  aarch64_emit_add_64_imm(state->emitter, get_reg_for_idx(dest), 0,
-                          get_reg_for_idx(dest));
+  aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(op->reg));
+}
+
+static void emit_pageoff(struct emit_state *state, struct ir_op *op) {
+  invariant_assert(op->pred->ty == IR_OP_TY_CUSTOM && op->pred->custom.aarch64->ty == AARCH64_OP_TY_PAGE, "non PAGE instruction proceeded PAGE_OFF");
+  // the page instruction has already created the reloc
+  aarch64_emit_add_64_imm(state->emitter, get_reg_for_idx(op->reg), 0,
+                          get_reg_for_idx(op->reg));
+
 }
 
 static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
@@ -399,9 +409,6 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
   switch (value->ty) {
   case IR_OP_TY_CNST:
     emit_mov_cnst(state, op, dest);
-    break;
-  case IR_OP_TY_GLB_REF:
-    emit_mov_glb(state, op, dest);
     break;
   default:
     if (is_64_bit(value)) {
@@ -448,6 +455,8 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   case AARCH64_OP_TY_SAVE_LR:
     aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG,
                                          FRAME_PTR_REG, RET_PTR_REG, 0);
+    break;
+  case AARCH64_OP_TY_SAVE_LR_ADD_64:
     // also save stack pointer into frame pointer as required by ABI
     // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
     // so `add x29, sp, #0` is used instead
@@ -475,16 +484,16 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
                                 get_reg_for_idx(op->reg),
                                 get_lcl_stack_offset(state, op->lcl_idx));
     break;
+  case AARCH64_OP_TY_PAGE:
+    emit_page(state, op);
+    break;
+  case AARCH64_OP_TY_PAGE_OFF:
+    emit_pageoff(state, op);
+    break;
   }
 }
 
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
-  // NOTE: it is important, for branch offset calculations, that each IR
-  // operation emits exactly one instruction any expansion needed other than
-  // this should have occured in lowering
-
-  struct ir_op *op = stmt->first;
-  while (op) {
+static void emit_op(struct emit_state *state, struct ir_op *op) {
     trace("lowering op with id %d, type %d", op->id, op->ty);
     switch (op->ty) {
     case IR_OP_TY_CUSTOM: {
@@ -578,7 +587,21 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
       todo("unsupported IR OP '%zu'", op->ty);
       break;
     }
-    }
+  }
+}
+
+static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
+  // NOTE: it is important, for branch offset calculations, that each IR
+  // operation emits exactly one instruction any expansion needed other than
+  // this should have occured in lowering
+
+  struct ir_op *op = stmt->first;
+  while (op) {
+    size_t emitted = aarch64_emitted_count(state->emitter);
+    emit_op(state, op);
+
+    size_t generated_instrs = aarch64_emitted_count(state->emitter) - emitted;
+    debug_assert(generated_instrs == 1, "expected op to generate exactly 1 instruction but it generated %zu", generated_instrs);
 
     op = op->succ;
   }
