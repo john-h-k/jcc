@@ -1,5 +1,6 @@
 #include "lsra.h"
 
+#include "compiler.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "util.h"
@@ -123,6 +124,39 @@ struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_le
     basicblock = basicblock->succ;
   }
 
+  // now we need to find all ops which are used by phi and expand their range to be at least the range of the phi
+  basicblock = irb->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        if (op->ty == IR_OP_TY_PHI) {
+          struct interval *interval = &data.intervals[op->id];
+
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *dependent = op->phi.values[i];
+
+            // a phi can be dependent on itself, and in that case we still need it to be assigned a register
+            if (dependent->id != op->id) {
+              dependent->reg = DONT_GIVE_REG;
+            }
+
+            struct interval *dependent_interval = &data.intervals[dependent->id];
+            dependent_interval->start = MIN(dependent_interval->start, interval->start);
+            dependent_interval->end = MAX(dependent_interval->end, interval->end);
+          }
+        }
+
+        op = op->succ;    
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
   return data;
 }
 
@@ -142,7 +176,7 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval,
         active[j] = cur_interval;
         (*num_active)++;
         break;
-      } else if (intervals[active[j + 1]].end > intervals[cur_interval].end) {
+      } else if (intervals[active[j]].end > intervals[cur_interval].end) {
         memmove(&active[j + 1], &active[j],
                 sizeof(*active) * (*num_active - j));
         active[j] = cur_interval;
@@ -162,7 +196,7 @@ void expire_old_intervals(struct interval *intervals,
 
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
-    if (cur_interval->start <= interval->end) {
+    if (interval->end > cur_interval->start) {
       break;
     }
 
@@ -266,6 +300,22 @@ int compare_interval_id(const void *a, const void *b) {
   return (ssize_t)a_id - (ssize_t)b_id;
 }
 
+void print_live_regs(FILE *file, unsigned long live_regs) {
+  unsigned long max_live = sizeof(live_regs) * 8 - lzcnt(live_regs);
+  fslogsl(file, " - LIVE REGS (");
+  for (size_t i = 0; i < max_live; i++) {
+    if (NTH_BIT(live_regs, i)) {
+      fslogsl(file, "R%zu", i);
+
+      if (i + 1 < max_live) {
+        fslogsl(file, ", ");
+      }
+    }
+  }
+  fslogsl(file, ")");
+}
+
+
 void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   UNUSED_ARG(metadata);
 
@@ -296,18 +346,7 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   }
 
   unsigned long live_regs = interval->op->live_regs;
-  unsigned long max_live = sizeof(live_regs) * 8 - lzcnt(live_regs);
-  fslogsl(file, " - LIVE REGS (");
-  for (size_t i = 0; i < max_live; i++) {
-    if (NTH_BIT(live_regs, i)) {
-      fslogsl(file, "R%zu", i);
-
-      if (i + 1 < max_live) {
-        fslogsl(file, ", ");
-      }
-    }
-  }
-  fslogsl(file, ")");
+  print_live_regs(file, live_regs);
 }
 
 // walks across the blocks to determine the end range for a phi's dependency
@@ -423,9 +462,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
-    if (!op_produces_value(interval->op->ty)) {
-      continue;
-    }
+    // update live_regs early in case the op is not value producing/marked DONT_GIVE_REG and we back out
+    interval->op->live_regs = ~reg_pool & ((1 << num_regs) - 1);
 
     if (interval->op->reg == REG_FLAGS || interval->op->reg == DONT_GIVE_REG) {
       continue;
@@ -435,6 +473,10 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
         num_active == num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
+      if (interval->op->reg == REG_FLAGS || interval->op->reg == DONT_GIVE_REG) {
+        continue;
+      }
+
       unsigned long free_reg = tzcnt(reg_pool);
       debug_assert(free_reg < num_regs,
                    "reg pool unexpectedly empty!");
@@ -446,16 +488,18 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       
       interval->op->reg = free_reg;
 
+      size_t cur_interval = i;
+
       // insert into `active`, sorted by end point
       for (size_t j = 0; j <= num_active; j++) {
         if (j == num_active) {
-          active[j] = i;
+          active[j] = cur_interval;
           num_active++;
           break;
-        } else if (intervals[active[j + 1]].end > intervals[i].end) {
+        } else if (intervals[active[j]].end > intervals[cur_interval].end) {
           memmove(&active[j + 1], &active[j],
                   sizeof(*active) * (num_active - j));
-          active[j] = i;
+          active[j] = cur_interval;
           num_active++;
           break;
         }
