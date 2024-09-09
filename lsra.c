@@ -1,11 +1,12 @@
 #include "lsra.h"
 
+#include "bit_twiddle.h"
 #include "compiler.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
+#include "log.h"
 #include "util.h"
 #include "vector.h"
-#include "bit_twiddle.h"
 
 #include <limits.h>
 
@@ -41,7 +42,7 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
    inreasing inex
      - indexes can be non-sequential but must be increasing
 */
-struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_lens) {
+struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_maxs) {
   struct interval_data data;
   data.intervals =
       arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
@@ -60,6 +61,7 @@ struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_le
       struct ir_op *op = stmt->first;
       while (op) {
         op->lcl_idx = NO_LCL;
+        struct interval *interval = &data.intervals[op->id];        
 
         if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
           op->reg = arg_regs++;
@@ -73,31 +75,9 @@ struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_le
         debug_assert(op->id < irb->op_count,
                      "out of range! (id %zu with opcount %zu)", op->id,
                      irb->op_count);
-        struct interval *interval = &data.intervals[op->id];
 
         interval->op = op;
         interval->start = op->id;
-
-        if (op->ty == IR_OP_TY_PHI) {
-          size_t start = op->id;
-          size_t end = op->id;
-
-          for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *prev = op->phi.values[i];
-
-            // a phi can be dependent on itself, and in that case we still need it to be assigned a register
-            if (prev->id != op->id) {
-              prev->reg = DONT_GIVE_REG;
-            }
-
-            debug_assert(bb_lens[op->stmt->basicblock->id * irb->basicblock_count + prev->stmt->basicblock->id], "bb_len was 0");
-            start = MIN(start, prev->id);
-            end = MAX(end, bb_lens[op->stmt->basicblock->id * irb->basicblock_count + prev->stmt->basicblock->id]);
-          }
-
-          interval->start = start;
-          interval->end = end;
-        }
 
         // we can get intervals with an end before their start if the value is
         // unused fix them up to be valid
@@ -124,7 +104,7 @@ struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_le
     basicblock = basicblock->succ;
   }
 
-  // now we need to find all ops which are used by phi and expand their range to be at least the range of the phi
+  // now we use each phi to set it (and its dependent intervals) to the min/max of the dependents
   basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -133,16 +113,34 @@ struct interval_data construct_intervals(struct ir_builder *irb, unsigned *bb_le
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
           struct interval *interval = &data.intervals[op->id];
+          size_t start = interval->start;
+          size_t end = interval->end;
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i];
+            struct interval *dependent_interval = &data.intervals[dependent->id];
+
+            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count + dependent->stmt->basicblock->id;
+
+            debug_assert(bb_maxs[path_id], "bb_len was 0");
+            size_t dependent_path_end = bb_maxs[path_id];
+
+            start = MIN(start, dependent_interval->start);
+            end = MAX(end, dependent_path_end);
+          }
+
+          interval->start = start;
+          interval->end = end;
+
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *dependent = op->phi.values[i];
+            struct interval *dependent_interval = &data.intervals[dependent->id];
 
             // a phi can be dependent on itself, and in that case we still need it to be assigned a register
             if (dependent->id != op->id) {
               dependent->reg = DONT_GIVE_REG;
             }
 
-            struct interval *dependent_interval = &data.intervals[dependent->id];
             dependent_interval->start = MIN(dependent_interval->start, interval->start);
             dependent_interval->end = MAX(dependent_interval->end, interval->end);
           }
@@ -196,7 +194,7 @@ void expire_old_intervals(struct interval *intervals,
 
   for (size_t i = 0; i < *num_active; i++) {
     struct interval *interval = &intervals[active[i]];
-    if (interval->end > cur_interval->start) {
+    if (interval->end >= cur_interval->start) {
       break;
     }
 
@@ -315,7 +313,6 @@ void print_live_regs(FILE *file, unsigned long live_regs) {
   fslogsl(file, ")");
 }
 
-
 void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   UNUSED_ARG(metadata);
 
@@ -345,8 +342,10 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     break;
   }
 
-  unsigned long live_regs = interval->op->live_regs;
-  print_live_regs(file, live_regs);
+  if (interval && interval->op) {
+    unsigned long live_regs = interval->op->live_regs;
+    print_live_regs(file, live_regs);
+  }
 }
 
 // walks across the blocks to determine the end range for a phi's dependency
@@ -403,7 +402,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       irb->arena, sizeof(*basicblocks_visited) * irb->basicblock_count);
 
   // this calculates the maximum liveliness between two blocks
-  // the liveliness of a phi-dependent is `basicblock_max_id[phi->bb->id * num_bb + dependent->bb->id]`
+  // the liveliness of a phi-dependent is `basicblock_max_id[phi->bb->id *
+  // num_bb + dependent->bb->id]`
   // FIXME: this can be done MUCH more efficiently
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
@@ -440,6 +440,12 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   }
 
   struct interval_data data = construct_intervals(irb, basicblock_max_id);
+
+  BEGIN_SUB_STAGE("INTERVALS");
+  if (log_enabled()) {
+    debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+  }
+
   struct interval *intervals = data.intervals;
   size_t num_intervals = data.num_intervals;
 
@@ -462,30 +468,30 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     struct interval *interval = &intervals[i];
     expire_old_intervals(intervals, interval, active, &num_active, &reg_pool);
 
-    // update live_regs early in case the op is not value producing/marked DONT_GIVE_REG and we back out
+    // update live_regs early in case the op is not value producing/marked
+    // DONT_GIVE_REG and we back out
     interval->op->live_regs = ~reg_pool & ((1 << num_regs) - 1);
 
     if (interval->op->reg == REG_FLAGS || interval->op->reg == DONT_GIVE_REG) {
       continue;
     }
 
-    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL ||
-        num_active == num_regs) {
+    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL || num_active == num_regs) {
       spill_at_interval(intervals, i, active, &num_active);
     } else {
-      if (interval->op->reg == REG_FLAGS || interval->op->reg == DONT_GIVE_REG) {
+      if (interval->op->reg == REG_FLAGS ||
+          interval->op->reg == DONT_GIVE_REG) {
         continue;
       }
 
       unsigned long free_reg = tzcnt(reg_pool);
-      debug_assert(free_reg < num_regs,
-                   "reg pool unexpectedly empty!");
+      debug_assert(free_reg < num_regs, "reg pool unexpectedly empty!");
 
       MARK_REG_USED(reg_pool, free_reg);
       if (free_reg >= reg_info.num_volatile) {
         irb->nonvolatile_registers_used |= (1 << free_reg);
       }
-      
+
       interval->op->reg = free_reg;
 
       size_t cur_interval = i;
@@ -541,7 +547,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       basicblock = basicblock->succ;
     }
   }
-  
 
   return data;
 }
@@ -570,23 +575,38 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
     debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
   }
 
-  // removes intervals from last pass
-  clear_metadata(irb);
-
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
-  // insert LOAD and STORE ops as needed
-  alloc_fixup(irb, &data);
+  // continually re-spill and re-allocate until no unresolved spills are present
+  // i am concerned this could sometimes not terminate
+  // a cursory think about the issue suggests it *should* terminate but i may simply be missing edge cases
+  while (true) {
+    // removes intervals from last pass
+    clear_metadata(irb);
 
-  if (log_enabled()) {
-    // can't print intervals here, as `alloc_fixup` inserted new ops which don't
-    // have valid intervals yet
-    debug_print_ir(stderr, irb, NULL, NULL);
+    // insert LOAD and STORE ops as needed
+    alloc_fixup(irb, &data);
+
+    if (log_enabled()) {
+      // can't print intervals here, as `alloc_fixup` inserted new ops which don't
+      // have valid intervals yet
+      debug_print_ir(stderr, irb, NULL, NULL);
+    }
+
+    BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
+
+    bool spill_present = false;
+    data = register_alloc_pass(irb, reg_info);
+    for (size_t i = 0; i < data.num_intervals; i++) {
+      if (data.intervals[i].op->reg == REG_SPILLED) {
+        spill_present = true;
+      }
+    }
+
+    if (!spill_present) {
+      break;
+    }
   }
-
-  BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
-
-  data = register_alloc_pass(irb, reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);

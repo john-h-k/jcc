@@ -288,9 +288,6 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
     struct ir_basicblock *target = op->stmt->basicblock->merge.target;
     ssize_t offset = (ssize_t)target->function_offset -
                      (ssize_t)aarch64_emitted_count(state->emitter);
-    printf("merge id %zu\n", target->id);
-    printf("self id %zu\n", op->stmt->basicblock->id);
-    printf("merge offset %zd\n", (ssize_t)offset);
     aarch64_emit_b(state->emitter, offset);
   } else {
     // otherwise, this is the false branch of a SPLIT
@@ -300,7 +297,6 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
     ssize_t false_offset = (ssize_t)false_target->function_offset -
                            (ssize_t)aarch64_emitted_count(state->emitter);
     aarch64_emit_b(state->emitter, false_offset);
-    printf("false offset %zd\n", false_offset);
   }
 }
 
