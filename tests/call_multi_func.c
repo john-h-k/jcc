@@ -1,4 +1,4 @@
-// expected value: 28
+// expected value: 20
 
 int idouble(int a) {
   return a * 2;

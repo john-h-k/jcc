@@ -503,6 +503,7 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     case IR_OP_TY_MOV: {
       if (op->flags & IR_OP_FLAG_PARAM) {
         // don't need to do anything, dummy instr
+        aarch64_emit_nop(state->emitter);
       } else {
         emit_mov_op(state, op);
       }
