@@ -240,13 +240,25 @@ void peek_token(struct lexer *lexer, struct token *token) {
     ty = LEX_TOKEN_TY_COMMA;
     next_col(&end);
     break;
+  case '.':
+    next_col(&end);
+    if (try_consume(lexer, &end, '.')) {
+      if (try_consume(lexer, &end, '.')) {
+        ty = LEX_TOKEN_TY_ELLIPSIS;
+      } else {
+        ty = LEX_TOKEN_TY_UNKNOWN;
+      }
+    } else {
+      ty = LEX_TOKEN_TY_DOT;
+    }
+    break;
+
 
   case '>':
     next_col(&end);
     if (try_consume(lexer, &end, '=')) {
       ty = LEX_TOKEN_TY_OP_GTEQ;
     } else if (try_consume(lexer, &end, '>')) {
-      next_col(&end);
       if (try_consume(lexer, &end, '=')) {
         ty = LEX_TOKEN_TY_OP_RSHIFT_ASSG;
       } else {
@@ -261,7 +273,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
     if (try_consume(lexer, &end, '=')) {
       ty = LEX_TOKEN_TY_OP_LTEQ;
     } else if (try_consume(lexer, &end, '<')) {
-      next_col(&end);
       if (try_consume(lexer, &end, '=')) {
         ty = LEX_TOKEN_TY_OP_LSHIFT_ASSG;
       } else {
@@ -496,6 +507,8 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
     p[len] = '\0';
     return p;
   }
+  case LEX_TOKEN_TY_ELLIPSIS:
+    return "...";
   default:
     bug("associated text did not make sense for token ty '%d'", token->ty);
   }
@@ -547,7 +560,9 @@ const char *token_name(struct lexer *lexer, struct token *token) {
 
     CASE_RET(LEX_TOKEN_TY_SEMICOLON)
     CASE_RET(LEX_TOKEN_TY_COMMA)
+    CASE_RET(LEX_TOKEN_TY_DOT)
 
+    CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
     CASE_RET(LEX_TOKEN_TY_KW_DO)
     CASE_RET(LEX_TOKEN_TY_KW_FOR)
     CASE_RET(LEX_TOKEN_TY_KW_WHILE)

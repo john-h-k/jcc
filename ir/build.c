@@ -29,6 +29,8 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
     break;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     return l->primitive == r->primitive;
+  case IR_OP_VAR_TY_TY_VARIADIC:
+    return r->ty == IR_OP_VAR_TY_TY_VARIADIC;
   case IR_OP_VAR_TY_TY_POINTER:
     return var_ty_eq(l->pointer.underlying, r->pointer.underlying);
   case IR_OP_VAR_TY_TY_FUNC:
@@ -66,6 +68,8 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
     bug("shouldn't reach IR gen with unresolved type");
   case AST_TYREF_TY_VOID:
     return IR_OP_VAR_TY_NONE;
+  case AST_TYREF_TY_VARIADIC:
+    return IR_OP_VAR_TY_VARIADIC;
   case AST_TYREF_TY_WELL_KNOWN: {
     struct ir_op_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
@@ -903,6 +907,8 @@ size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
   switch (ty->ty) {
   case IR_OP_VAR_TY_TY_NONE:
     bug("IR_OP_VAR_TY_TY_NONE has no size");
+  case IR_OP_VAR_TY_TY_VARIADIC:
+    bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_OP_VAR_TY_TY_FUNC:
     return 8;
   case IR_OP_VAR_TY_TY_POINTER:

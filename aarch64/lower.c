@@ -19,7 +19,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
   struct ir_op_var_func_ty *func_ty = &op->call.target->var_ty.func;
 
-  invariant_assert(func_ty->num_params == op->call.num_args,
+  invariant_assert(is_func_variadic(func_ty) || func_ty->num_params == op->call.num_args,
                    "mismatch of function param (%zu) and arg (%zu) count", func_ty->num_params, op->call.num_args);
 
   invariant_assert(func_ty->num_params <= 8,
@@ -91,7 +91,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need to do a swap
   
-  if (func_ty->num_params) {
+  if (op->call.num_args) {
     unsigned long free_regs = ~op->live_regs & ~((1 << func_ty->num_params) - 1);
     size_t free_vol_reg = tzcnt(free_regs);
 
@@ -103,22 +103,27 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
     mov_to_vol->mov.value = op->call.args[0];
     mov_to_vol->reg = free_vol_reg;
 
-    for (size_t head = 0; head < func_ty->num_params; head++) {
-      size_t i = func_ty->num_params - 1 - head;
-      struct ir_op_var_ty *param = &func_ty->params[i];
+    size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1 : func_ty->num_params;
 
-      invariant_assert(param->ty == IR_OP_VAR_TY_TY_PRIMITIVE || param->ty == IR_OP_VAR_TY_TY_POINTER,
+    for (size_t head = 0; head < op->call.num_args; head++) {
+      size_t i = op->call.num_args - 1 - head;
+      struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
+
+      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE || var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
                        "`lower_call` doesn't support non-prims");
 
+      struct ir_op *source = i == 0 ? mov_to_vol : op->call.args[i];
       size_t arg_reg = i;
-      if (i == 0 || op->call.args[i]->reg != arg_reg) {
-        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *param);
+      if (i >= num_normal_args) {
+        // we are in a variadic and everything from here on is passed on the stack
+        struct ir_op *store = insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
+        store->store_lcl.lcl_idx = i - num_normal_args;
+        store->store_lcl.value = source;
+      }
+      else if (i == 0 || op->call.args[i]->reg != arg_reg) {
+        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *var_ty);
 
-        if (i == 0) {
-          mov->mov.value = mov_to_vol;
-        } else {
-          mov->mov.value = op->call.args[i];
-        }
+        mov->mov.value = source;
         mov->reg = arg_reg;
       }
     }
