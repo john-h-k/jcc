@@ -27,7 +27,7 @@ struct var_table var_table_create(struct arena_allocator *arena) {
 struct var_table_entry *create_entry(struct var_table *var_table, const char *name) {
   struct var_table_scope *last = var_table->last;
 
-  struct var_table_entry entry = { .name = name, .scope = last->scope, .value = NULL };
+  struct var_table_entry entry = { .name = name, .scope = last->scope, .flags = VAR_TABLE_ENTRY_FLAG_NONE, .value = NULL };
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
   p->value = NULL;
 

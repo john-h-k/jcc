@@ -155,6 +155,26 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   }
 }
 
+bool is_integral_ty(const struct ast_tyref *ty) {
+  if (ty->ty != AST_TYREF_TY_WELL_KNOWN) {
+    return false;
+  }
+
+  switch (ty->well_known) {
+      case WELL_KNOWN_TY_SIGNED_CHAR:
+      case WELL_KNOWN_TY_UNSIGNED_CHAR:
+      case WELL_KNOWN_TY_SIGNED_SHORT:
+      case WELL_KNOWN_TY_UNSIGNED_SHORT:
+      case WELL_KNOWN_TY_SIGNED_INT:
+      case WELL_KNOWN_TY_UNSIGNED_INT:
+      case WELL_KNOWN_TY_SIGNED_LONG:
+      case WELL_KNOWN_TY_UNSIGNED_LONG:
+      case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+      case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+        return true;
+    }
+}
+
 // FIXME: type pooling so we don't end up with lots of duplicate types
 bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
                       struct ast_tyref *ty_ref) {
@@ -503,22 +523,17 @@ const char *process_raw_string(struct parser *parser, const char *raw) {
   return buff;
 }
 
-bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
+bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
 
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
-  if (is_literal_token(parser, token.ty, &ty_ref)) {
+  if (is_literal_token(parser, token.ty, &ty_ref) && is_integral_ty(&ty_ref)) {
     // TODO: handle unrepresentedly large values
     cnst->cnst_ty = ty_ref;
-
-    if (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
-      cnst->str_value = process_raw_string(parser, associated_text(parser->lexer, &token));
-    } else {
-      cnst->int_value = atoll(associated_text(parser->lexer, &token));
-    }
+    cnst->int_value = atoll(associated_text(parser->lexer, &token));
 
     consume_token(parser->lexer, token);
     return true;
@@ -526,6 +541,30 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   backtrack(parser->lexer, pos);
   return false;
+}
+
+bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  struct ast_tyref ty_ref;
+  if (is_literal_token(parser, token.ty, &ty_ref) && token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
+    cnst->cnst_ty = ty_ref;
+    cnst->str_value = process_raw_string(parser, associated_text(parser->lexer, &token));
+
+    consume_token(parser->lexer, token);
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+
+}
+
+bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
+  return parse_str_cnst(parser, cnst) || parse_int_cnst(parser, cnst);
 }
 
 bool parse_expr(struct parser *parser, struct ast_expr *expr);
@@ -1531,11 +1570,104 @@ const char *identifier_str(struct parser *parser, const struct token *token) {
   return associated_text(parser->lexer, token);
 }
 
+bool parse_enumcnst(struct parser *parser, struct ast_enumcnst *enum_cnst) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  consume_token(parser->lexer, token);
+
+  enum_cnst->ty = AST_ENUMCNST_TY_IMPLICIT_VALUE;
+  enum_cnst->identifier = token;
+
+  struct ast_cnst cnst;
+  if (parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
+    if (!parse_int_cnst(parser, &cnst)) {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+
+    enum_cnst->ty = AST_ENUMCNST_TY_EXPLICIT_VALUE;
+    enum_cnst->value = cnst.int_value;
+  }  
+
+  return true;
+}
+
+bool parse_enumdef(struct parser *parser, struct ast_enumdef *enum_def) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_ENUM)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  enum_def->name = NULL;
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty == LEX_TOKEN_TY_IDENTIFIER) {
+    enum_def->name = arena_alloc(parser->arena, sizeof(*enum_def->name));
+    *enum_def->name = token;
+
+    consume_token(parser->lexer, token);
+  }
+
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
+    backtrack(parser->lexer, pos);
+    return false; 
+  }
+
+  struct vector *cnsts = vector_create(sizeof(struct ast_enumcnst));
+
+  while (true) {
+    struct ast_enumcnst enum_cnst;
+    if (!parse_enumcnst(parser, &enum_cnst)) {
+      break;
+    }
+
+    // need to add the enum cnst into the var table
+    const char *name = identifier_str(parser, &enum_cnst.identifier);
+
+    struct var_table_entry *entry = create_entry(&parser->var_table, name);
+    entry->flags |= VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL;
+    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
+    *(struct ast_tyref *)entry->value = (struct ast_tyref){
+      .ty = AST_TYREF_TY_WELL_KNOWN,
+      .well_known = WELL_KNOWN_TY_SIGNED_INT
+    };
+    
+    vector_push_back(cnsts, &enum_cnst);
+
+    if (!parse_token(parser, LEX_TOKEN_TY_COMMA)) {
+      break;
+    }
+  }
+  
+  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE) && parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    enum_def->num_enum_cnsts = vector_length(cnsts);
+    enum_def->enum_cnsts = arena_alloc(parser->arena, vector_byte_size(cnsts));
+    vector_copy_to(cnsts, enum_def->enum_cnsts);
+
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false; 
+}
+
 struct parse_result parse(struct parser *parser) {
   struct lexer *lexer = parser->lexer;
 
-  struct vector *defs = vector_create(sizeof(struct ast_funcdef));
-  struct vector *decls = vector_create(sizeof(struct ast_funcdecl));
+  struct vector *func_defs = vector_create(sizeof(struct ast_funcdef));
+  struct vector *func_decls = vector_create(sizeof(struct ast_funcdecl));
+
+  struct vector *enum_defs = vector_create(sizeof(struct ast_enumdef));
 
   while (true) {
     if (lexer_at_eof(lexer)) {
@@ -1544,32 +1676,53 @@ struct parse_result parse(struct parser *parser) {
     }
 
     struct ast_funcdecl func_decl;
-    struct ast_funcdef func_def;
     if (parse_funcdecl(parser, &func_decl)) {
       info("found func declaration '%s'",
            associated_text(lexer, &func_decl.sig.name));
-      vector_push_back(decls, &func_decl);
-    } else if (parse_funcdef(parser, &func_def)) {
+      vector_push_back(func_decls, &func_decl);
+      continue;
+    }
+
+    struct ast_funcdef func_def;
+    if (parse_funcdef(parser, &func_def)) {
       info("found func definition '%s'",
            associated_text(lexer, &func_def.sig.name));
-      vector_push_back(defs, &func_def);
-    } else if (!lexer_at_eof(lexer)) {
+      vector_push_back(func_defs, &func_def);
+      continue;
+    }
+    
+    struct ast_enumdef enum_def;
+    if (parse_enumdef(parser, &enum_def)) {
+      info("found enum definition '%s'",
+           enum_def.name ? associated_text(lexer, enum_def.name) : "<unnamed>");
+      vector_push_back(enum_defs, &enum_def);
+      continue;
+    }
+    
+    if (!lexer_at_eof(lexer)) {
       // parser failed
       err("parser finished at position %d", get_position(lexer).idx);
       break;
     }
+
+    bug("parser hit nothing");
   }
 
   struct ast_translationunit translation_unit;
-  translation_unit.func_defs = nonnull_malloc(vector_byte_size(defs));
-  translation_unit.num_func_defs = vector_length(defs);
-  vector_copy_to(defs, translation_unit.func_defs);
-  vector_free(&defs);
+  translation_unit.func_decls = nonnull_malloc(vector_byte_size(func_decls));
+  translation_unit.num_func_decls = vector_length(func_decls);
+  vector_copy_to(func_decls, translation_unit.func_decls);
+  vector_free(&func_decls);
 
-  translation_unit.func_decls = nonnull_malloc(vector_byte_size(decls));
-  translation_unit.num_func_decls = vector_length(decls);
-  vector_copy_to(decls, translation_unit.func_decls);
-  vector_free(&decls);
+  translation_unit.func_defs = nonnull_malloc(vector_byte_size(func_defs));
+  translation_unit.num_func_defs = vector_length(func_defs);
+  vector_copy_to(func_defs, translation_unit.func_defs);
+  vector_free(&func_defs);
+
+  translation_unit.enum_defs = nonnull_malloc(vector_byte_size(enum_defs));
+  translation_unit.num_enum_defs = vector_length(enum_defs);
+  vector_copy_to(enum_defs, translation_unit.enum_defs);
+  vector_free(&enum_defs);
 
   struct parse_result result = {.translation_unit = translation_unit};
 
@@ -2094,6 +2247,35 @@ DEBUG_FUNC(funcdecl, func_decl) {
   DEBUG_CALL(funcsig, &func_decl->sig);
 }
 
+DEBUG_FUNC(enumcnst, enum_cnst) {
+  AST_PRINTZ("ENUM CONSTANT ");
+  INDENT();
+  AST_PRINT_SAMELINE("NAME %s ", associated_text(state->parser->lexer, &enum_cnst->identifier));
+  switch (enum_cnst->ty) {
+  case AST_ENUMCNST_TY_EXPLICIT_VALUE:
+    AST_PRINT_SAMELINE("VALUE %ull ", enum_cnst->value);
+
+      break;
+  case AST_ENUMCNST_TY_IMPLICIT_VALUE:
+    break;
+  }
+  AST_PRINTZ("");
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(enumdef, enum_def) {
+  AST_PRINTZ("ENUM DECLARATION ");
+  AST_PRINT("NAME %s ", enum_def->name ? associated_text(state->parser->lexer, enum_def->name) : NULL);
+
+  INDENT();
+  for (size_t i = 0; i < enum_def->num_enum_cnsts; i++) {
+    DEBUG_CALL(enumcnst, &enum_def->enum_cnsts[i]);
+  }
+  UNINDENT();
+}
+
+
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {
   struct ast_printstate state_ = {.indent = 0, .parser = parser};
@@ -2108,5 +2290,9 @@ void debug_print_ast(struct parser *parser,
 
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     DEBUG_CALL(funcdef, &translation_unit->func_defs[i]);
+  }
+
+  for (size_t i = 0; i < translation_unit->num_enum_defs; i++) {
+    DEBUG_CALL(enumdef, &translation_unit->enum_defs[i]);
   }
 }

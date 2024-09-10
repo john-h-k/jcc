@@ -14,7 +14,8 @@ struct var_key {
 
 enum var_ref_ty {
   VAR_REF_TY_LCL,
-  VAR_REF_TY_GLB
+  VAR_REF_TY_GLB,
+  VAR_REF_TY_ENUM_CNST
 };
 
 struct var_ref {
@@ -28,12 +29,13 @@ struct var_ref {
   union {
     struct ir_op *lcl;
     struct ir_string *glb;
+    unsigned long long enum_cnst;
   };
 };
 
 struct var_refs *var_refs_create(struct var_refs *parent);
 
 struct var_ref *var_refs_get(struct var_refs *var_refs, const struct var_key *key);
-struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key);
+struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key, enum var_ref_ty ty);
 
 #endif
