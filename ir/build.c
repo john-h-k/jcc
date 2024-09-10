@@ -312,12 +312,31 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 
   if (ref) {
-    // global
-    struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
-    struct ir_op *op = alloc_ir_op(irb, stmt);
-    make_sym_ref(irb, key.name, op, &var_ty);
+    // non-local
 
-    return op;
+    switch (ref->ty) {
+      case VAR_REF_TY_LCL:
+        unreachable("local cannot have come from the global var table");
+      case VAR_REF_TY_GLB: {
+        struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
+        struct ir_op *op = alloc_ir_op(irb, stmt);
+        make_sym_ref(irb, key.name, op, &var_ty);
+
+        return op;
+      }
+      case VAR_REF_TY_ENUM_CNST: {
+        struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
+        struct ir_op *op = alloc_ir_op(irb, stmt);
+        op->ty = IR_OP_TY_CNST;
+        op->var_ty = var_ty;
+        op->cnst = (struct ir_op_cnst){
+          .ty = IR_OP_CNST_TY_INT,
+          .int_value = ref->enum_cnst
+        };
+
+        return op;
+      }
+    }
   }
 
   struct ast_tyref var_tyref = var->var_ty;
@@ -346,7 +365,7 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
         identifier_str(irb->parser, &var->identifier));
 
   key = get_var_key(irb->parser, var);
-  struct var_ref *new_ref = var_refs_add(stmt->basicblock->var_refs, &key);
+  struct var_ref *new_ref = var_refs_add(stmt->basicblock->var_refs, &key, VAR_REF_TY_LCL);
   new_ref->ty = VAR_REF_TY_LCL;
   new_ref->lcl = phi;
 
@@ -802,7 +821,7 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
 
   if (!ref) {
-    ref = var_refs_add(stmt->basicblock->var_refs, &key);
+    ref = var_refs_add(stmt->basicblock->var_refs, &key, VAR_REF_TY_LCL);
   }
 
   if (ref->ty == VAR_REF_TY_LCL) {
@@ -915,45 +934,52 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   struct var_key key = get_var_key(irb->parser, var);
   struct var_ref *ref = var_refs_get(basicblock->var_refs, &key);
 
-  if (ref && ref->ty == VAR_REF_TY_LCL) {
-    struct ir_op *entry_op = ref->lcl;
-    // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
-    if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
-      // copy over the entries from that phi, to prevent deeply nested ones
-      // which are confusing and also bad for codegen
-
-      // FIXME: this is O(n^2), we need some sort of lookup instead
-      for (size_t i = 0; i < entry_op->phi.num_values; i++) {
-        struct ir_op *phi = entry_op->phi.values[i];
-
-        bool seen = false;
-        for (size_t j = 0; j < *num_exprs; j++) {
-          if ((*exprs)[j]->id == phi->id) {
-            seen = true;
-            break;
-          }
-        }
-
-        if (!seen) {
-          (*num_exprs)++;
-          *exprs = arena_realloc(irb->arena, *exprs,
-                                 sizeof(struct ir_op *) * *num_exprs);
-          (*exprs)[*num_exprs - 1] = phi;
-        }
-      }
-    } else {
-      (*num_exprs)++;
-      *exprs = arena_realloc(irb->arena, *exprs,
-                             sizeof(struct ir_op *) * *num_exprs);
-      (*exprs)[*num_exprs - 1] = ref->lcl;
+  if (!ref) {
+    debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
+    for (size_t i = 0; i < basicblock->num_preds; i++) {
+      walk_basicblock(irb, basicblocks_visited, source_phi, var,
+                      basicblock->preds[i], exprs, num_exprs);
     }
     return;
   }
 
-  debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
-  for (size_t i = 0; i < basicblock->num_preds; i++) {
-    walk_basicblock(irb, basicblocks_visited, source_phi, var,
-                    basicblock->preds[i], exprs, num_exprs);
+  switch(ref->ty) {
+    case VAR_REF_TY_GLB:
+    case VAR_REF_TY_ENUM_CNST:
+      unreachable("non-lcl var refs should already be handled and not generate phis");
+    case VAR_REF_TY_LCL: {
+      struct ir_op *entry_op = ref->lcl;
+      // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
+      if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
+        // copy over the entries from that phi, to prevent deeply nested ones
+        // which are confusing and also bad for codegen
+
+        // FIXME: this is O(n^2), we need some sort of lookup instead
+        for (size_t i = 0; i < entry_op->phi.num_values; i++) {
+          struct ir_op *phi = entry_op->phi.values[i];
+
+          bool seen = false;
+          for (size_t j = 0; j < *num_exprs; j++) {
+            if ((*exprs)[j]->id == phi->id) {
+              seen = true;
+              break;
+            }
+          }
+
+          if (!seen) {
+            (*num_exprs)++;
+            *exprs = arena_realloc(irb->arena, *exprs,
+                                   sizeof(struct ir_op *) * *num_exprs);
+            (*exprs)[*num_exprs - 1] = phi;
+          }
+        }
+      } else {
+        (*num_exprs)++;
+        *exprs = arena_realloc(irb->arena, *exprs,
+                               sizeof(struct ir_op *) * *num_exprs);
+        (*exprs)[*num_exprs - 1] = ref->lcl;
+      }
+    }
   }
 }
 
@@ -1048,7 +1074,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     const struct ast_param *param = &def->sig.param_list.params[i];
 
     struct var_key key = get_var_key(builder->parser, &param->var);
-    struct var_ref *ref = var_refs_add(basicblock->var_refs, &key);
+    struct var_ref *ref = var_refs_add(basicblock->var_refs, &key, VAR_REF_TY_LCL);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
     mov->ty = IR_OP_TY_MOV;
@@ -1169,7 +1195,7 @@ struct ir_unit *build_ir_for_translationunit(
     struct ast_funcdecl *decl = &translation_unit->func_decls[i];
     struct var_key key = {.name = identifier_str(parser, &decl->sig.name),
                           .scope = SCOPE_GLOBAL};
-    struct var_ref *ref = var_refs_add(global_var_refs, &key);
+    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
     UNUSED_ARG(ref);
   }
 
@@ -1177,9 +1203,31 @@ struct ir_unit *build_ir_for_translationunit(
     struct ast_funcdef *def = &translation_unit->func_defs[i];
     struct var_key key = {.name = identifier_str(parser, &def->sig.name),
                           .scope = SCOPE_GLOBAL};
-    struct var_ref *ref = var_refs_add(global_var_refs, &key);
+    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
     UNUSED_ARG(ref);
   }
+
+  for (size_t i = 0; i < translation_unit->num_enum_defs; i++) {
+    struct ast_enumdef *def = &translation_unit->enum_defs[i];
+
+    unsigned long long enum_value = 0;
+    for (size_t j = 0; j < def->num_enum_cnsts; j++) {
+      struct ast_enumcnst *enum_cnst = &def->enum_cnsts[j];
+
+      if (enum_cnst->ty == AST_ENUMCNST_TY_EXPLICIT_VALUE) {
+        enum_value = enum_cnst->value;
+      }
+
+      struct var_key key = {.name = identifier_str(parser, &enum_cnst->identifier),
+                            .scope = SCOPE_GLOBAL};
+      struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_ENUM_CNST);
+      ref->enum_cnst = enum_value;
+
+      // increment for the next implicit value
+      enum_value++;
+    }
+  }
+  
 
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     struct ast_funcdef *def = &translation_unit->func_defs[i];

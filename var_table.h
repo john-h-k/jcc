@@ -6,9 +6,16 @@
 
 #define SCOPE_GLOBAL (-1)
 
+enum var_table_entry_flags {
+  VAR_TABLE_ENTRY_FLAG_NONE = 0,
+  VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL = 1,
+};
+
 struct var_table_entry {
   const char *name;
   int scope;
+
+  enum var_table_entry_flags flags;
 
   void *value;
 };

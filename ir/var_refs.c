@@ -18,8 +18,8 @@ struct var_refs *var_refs_create(struct var_refs *parent) {
   return var_refs;
 }
 
-struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key) {
-  struct var_ref ref = { .key = *key, .ty = VAR_REF_TY_LCL, .lcl = NULL, .func = NULL };
+struct var_ref *var_refs_add(struct var_refs *var_refs, const struct var_key *key, enum var_ref_ty ty) {
+  struct var_ref ref = { .key = *key, .ty = ty, .lcl = NULL, .func = NULL };
   return (struct var_ref *)vector_push_back(var_refs->refs, &ref);
 }
 

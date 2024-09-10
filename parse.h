@@ -412,6 +412,30 @@ struct ast_stmt {
   };
 };
 
+/* Enum definitions and declarations */
+
+enum ast_enumcnst_ty {
+  AST_ENUMCNST_TY_EXPLICIT_VALUE,
+  AST_ENUMCNST_TY_IMPLICIT_VALUE,
+};
+
+struct ast_enumcnst {
+  struct token identifier;
+
+  enum ast_enumcnst_ty ty;
+
+  union {
+    unsigned long long value;
+  };
+};
+
+struct ast_enumdef {
+  struct token *name;
+
+  size_t num_enum_cnsts;
+  struct ast_enumcnst *enum_cnsts;
+};
+
 /* Function definitions and declarations */
 
 struct ast_funcdef {
@@ -434,6 +458,9 @@ struct ast_translationunit {
 
   struct ast_funcdecl *func_decls;
   size_t num_func_decls;
+
+  struct ast_enumdef *enum_defs;
+  size_t num_enum_defs;
 };
 
 struct parser;
