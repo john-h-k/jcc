@@ -76,6 +76,10 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
     fprintf(file, "<none>");
     return;
   }
+  case IR_OP_VAR_TY_TY_VARIADIC: {
+    fprintf(file, "<VARIADIC>");
+    return;
+  }
   case IR_OP_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
     debug_var_ty_string(file, var_ty->pointer.underlying);

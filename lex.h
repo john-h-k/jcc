@@ -22,6 +22,7 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_SEMICOLON,     // ;
   LEX_TOKEN_TY_COMMA,         // ,
+  LEX_TOKEN_TY_DOT,         // .
 
   /* Operators */
 
@@ -54,8 +55,12 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OP_GT, // >
   LEX_TOKEN_TY_OP_GTEQ, // >=
 
-  /* Keywords */
 
+  /* Variadic */
+
+  LEX_TOKEN_TY_ELLIPSIS,
+
+  /* Keywords */
   LEX_TOKEN_TY_KW_FOR,
   LEX_TOKEN_TY_KW_DO,
   LEX_TOKEN_TY_KW_WHILE,

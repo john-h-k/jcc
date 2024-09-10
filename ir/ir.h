@@ -176,6 +176,8 @@ enum ir_op_var_ty_ty {
 
   IR_OP_VAR_TY_TY_POINTER,
 
+  IR_OP_VAR_TY_TY_VARIADIC,
+
   /* Aggregate */
   // IR_OP_VAR_TY_TY_AGGREGATE,
   // IR_OP_VAR_TY_TY_ARRAY,
@@ -187,6 +189,9 @@ struct ir_op_var_func_ty {
   size_t num_params;
   struct ir_op_var_ty *params;
 };
+
+bool is_func_variadic(const struct ir_op_var_func_ty *ty);
+
 
 struct ir_op_var_pointer_ty {
   struct ir_op_var_ty *underlying;
@@ -202,6 +207,7 @@ struct ir_op_var_ty {
 };
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
+const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
 
 struct ir_op_store_lcl {
   unsigned long lcl_idx;

@@ -254,6 +254,12 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 }
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
+const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {.ty = IR_OP_VAR_TY_TY_VARIADIC};
+
+bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
+  return ty->num_params > 0 && ty->params[ty->num_params - 1].ty == IR_OP_VAR_TY_TY_VARIADIC;
+}
+
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, unsigned long reg,

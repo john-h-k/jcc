@@ -190,6 +190,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_CLOSE_BRACE:
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
+  case LEX_TOKEN_TY_DOT:
   case LEX_TOKEN_TY_OP_ASSG:
   case LEX_TOKEN_TY_OP_INC:
   case LEX_TOKEN_TY_OP_DEC:
@@ -215,6 +216,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_OP_LTEQ:
   case LEX_TOKEN_TY_OP_GT:
   case LEX_TOKEN_TY_OP_GTEQ:
+  case LEX_TOKEN_TY_ELLIPSIS:
   case LEX_TOKEN_TY_KW_DO:
   case LEX_TOKEN_TY_KW_FOR:
   case LEX_TOKEN_TY_KW_WHILE:
@@ -1385,6 +1387,23 @@ bool parse_compoundstmt(struct parser *parser,
 bool parse_param(struct parser *parser, struct ast_param *param) {
   struct text_pos pos = get_position(parser->lexer);
 
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty == LEX_TOKEN_TY_ELLIPSIS) {
+    consume_token(parser->lexer, token);
+
+    // variadic parameter pack
+    param->var_ty = (struct ast_tyref){
+      .ty = AST_TYREF_TY_VARIADIC,
+    };
+    param->var = (struct ast_var){
+      .scope = cur_scope(&parser->var_table),
+      .identifier = token
+    };
+    
+    return true;
+  }
+
   struct ast_tyref var_ty;
   if (!parse_tyref(parser, &var_ty)) {
     backtrack(parser->lexer, pos);
@@ -1783,6 +1802,9 @@ DEBUG_FUNC(tyref, ty_ref) {
     break;
   case AST_TYREF_TY_VOID:
     AST_PRINTZ("VOID");
+    break;
+  case AST_TYREF_TY_VARIADIC:
+    AST_PRINTZ("VARIADIC");
     break;
   case AST_TYREF_TY_POINTER:
     AST_PRINTZ("POINTER TO");
