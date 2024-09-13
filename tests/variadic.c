@@ -1,10 +1,10 @@
 // expected value: 0
-// stdout: "Hello, World!"
+// stdout: Hello, World!. Numbers work too - 2!
 
 int printf(const char *format, ...);
 
 int main() {
-  printf("%s. \nNumbers work too - %d!\n", "Hello, World!", 2);
+  printf("%s. Numbers work too - %d!", "Hello, World!", 2);
 }
 
 
