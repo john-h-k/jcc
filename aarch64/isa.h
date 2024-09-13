@@ -25,6 +25,11 @@
              (U32(0b11) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |          \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
+#define LDR_STR_PAIR_OFFSET(opc, V, L, imm7, Rt2, Rn, Rt)                   \
+  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
+             (U32(0b10) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |          \
+             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+
 #define STP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
   LDR_STR_PAIR_POST_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)
 #define LDP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
@@ -42,6 +47,16 @@
   LDR_STR_PAIR_PRE_INDEX(0b10, 0, 0, imm7, Rt2, Rn, Rt)
 #define LDP_PRE_INDEX_64(imm7, Rt2, Rn, Rt)                                    \
   LDR_STR_PAIR_PRE_INDEX(0b10, 0, 1, imm7, Rt2, Rn, Rt)
+
+#define STP_OFFSET_32(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_OFFSET(0b00, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_OFFSET_32(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_OFFSET(0b00, 0, 1, imm7, Rt2, Rn, Rt)
+#define STP_OFFSET_64(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_OFFSET(0b10, 0, 0, imm7, Rt2, Rn, Rt)
+#define LDP_OFFSET_64(imm7, Rt2, Rn, Rt)                                    \
+  LDR_STR_PAIR_OFFSET(0b10, 0, 1, imm7, Rt2, Rn, Rt)
+  
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \

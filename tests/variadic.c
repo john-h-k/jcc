@@ -4,6 +4,6 @@
 int printf(const char *format, ...);
 
 int main() {
-  printf("%s%d\n", "Hello, World!", 2);
+  printf("%s. Numbers work too - %d!\n", "Hello, World!", 2);
 }
 
