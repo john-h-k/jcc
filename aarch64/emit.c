@@ -435,18 +435,27 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
-static unsigned get_lcl_stack_offset(struct emit_state *state, struct ir_op *op, size_t lcl_idx) {
+static unsigned get_lcl_stack_offset_32(struct emit_state *state, size_t lcl_idx)  {
   UNUSED_ARG(state);
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
-  size_t offset = op->var_ty.ty == IR_OP_VAR_TY_TY_NONE || is_64_bit(op) ? 2 : 4;
-  return lcl_idx + offset;
+  return lcl_idx + 2;
+}
+
+static unsigned get_lcl_stack_offset_64(struct emit_state *state, size_t lcl_idx) {
+  UNUSED_ARG(state);
+  // FIXME: only supports ints
+  // offset by 2/4 because we store FP/LR at the top
+
+  // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
+  return lcl_idx + 4;
 }
 
 static void emit_custom(struct emit_state *state, struct ir_op *op) {
   // FIXME: the pre-indexing here is causing segfaults for some reason? we
+
   // should be using it instead of stack when possible
   switch (op->custom.aarch64->ty) {
   case AARCH64_OP_TY_SAVE_LR:
@@ -474,12 +483,12 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   case AARCH64_OP_TY_SAVE_REG:
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(op->reg),
-                                 get_lcl_stack_offset(state, op, op->lcl_idx));
+                                 get_lcl_stack_offset_64(state, op->lcl_idx));
     break;
   case AARCH64_OP_TY_RSTR_REG:
     aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
                                 get_reg_for_idx(op->reg),
-                                get_lcl_stack_offset(state, op, op->lcl_idx));
+                                get_lcl_stack_offset_64(state, op->lcl_idx));
     break;
   case AARCH64_OP_TY_PAGE:
     emit_page(state, op);
@@ -518,14 +527,14 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
       aarch64_emit_load_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset(state, op, op->load_lcl.lcl_idx));
+          get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
       break;
     }
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
       aarch64_emit_store_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset(state, op, op->store_lcl.lcl_idx));
+          get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
       break;
     }
     case IR_OP_TY_BR_COND: {

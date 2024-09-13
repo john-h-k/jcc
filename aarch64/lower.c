@@ -32,12 +32,12 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC registers
   size_t volatile_reg_count = 18;
 
-  unsigned long live_volatile = live_regs & ((1 << volatile_reg_count) - 1);
+  unsigned long long live_volatile = live_regs & ((1ull << volatile_reg_count) - 1);
 
   // if the return reg is used by the call then remove the call-return reg
   // from live-volatile as we know it will be over written by end of call
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
-    live_volatile &= ~(1 << op->reg);
+    live_volatile &= ~(1ull << op->reg);
 
     struct ir_op *ret_mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
     ret_mov->mov.value = op;
@@ -92,7 +92,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // it is possible there are no spare registers for this, and so we may need to do a swap
   
   if (op->call.num_args) {
-    unsigned long free_regs = ~op->live_regs & ~((1 << func_ty->num_params) - 1);
+    unsigned long free_regs = ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
     size_t free_vol_reg = tzcnt(free_regs);
 
     if (free_vol_reg >= volatile_reg_count) {
