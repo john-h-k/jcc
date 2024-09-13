@@ -159,6 +159,56 @@ bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
   return false;
 }
 
+const char *process_raw_string(struct lexer *lexer, const struct token *token) {
+  // TODO: this i think will wrongly accept multilines
+
+  size_t max_str_len = token->span.end.idx - token->span.start.idx;
+  
+  char *buff = arena_alloc(lexer->arena, max_str_len - 1);
+
+  size_t str_len = 0;
+  bool char_escaped = false;
+  for (size_t i = token->span.start.idx + 1; i <= token->span.end.idx && !(!char_escaped && lexer->text[i] == '"'); i++) {
+    if (char_escaped) {
+      #define ADD_ESCAPED(ch, esc) \
+        case ch: \
+          buff[str_len++] = esc; \
+          break;
+
+      switch (lexer->text[i]) {
+        ADD_ESCAPED('a', '\a')
+        ADD_ESCAPED('b', '\b')
+        // non-standard so not included for now
+        // ADD_ESCAPED('e', '\e')
+        ADD_ESCAPED('f', '\f')
+        ADD_ESCAPED('n', '\n')
+        ADD_ESCAPED('r', '\r')
+        ADD_ESCAPED('t', '\t')
+        ADD_ESCAPED('v', '\v')
+        ADD_ESCAPED('\\', '\\')
+        ADD_ESCAPED('\'', '\'')
+        ADD_ESCAPED('"', '"')
+        ADD_ESCAPED('?', '\?')
+        default:
+          todo("\\x \\u \\U and \\octal escapes");
+          // either octal escape, or invalid
+          break;
+      }
+
+      #undef ADD_ESCAPED
+    } else if (lexer->text[i] != '\\') {
+      buff[str_len++] = lexer->text[i];
+    }
+
+    // next char is escaped if this char is a non-escaped backslash
+    char_escaped = !char_escaped && lexer->text[i] == '\\';
+  }
+
+  buff[str_len] = 0;
+  return buff;
+}
+
+
 /* Attempts to consume and move forward the position if it finds char `c` */
 bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
   debug_assert(
@@ -492,8 +542,10 @@ void next_line(struct text_pos *pos) {
 
 const char *associated_text(struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
-  case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
+    return process_raw_string(lexer, token);
+    break;
+  case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
   case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
   case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:

@@ -514,17 +514,6 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return true;
 }
 
-const char *process_raw_string(struct parser *parser, const char *raw) {
-  // TODO: handle escaped chars
-  size_t raw_len = strlen(raw);
-  size_t processed_len = raw_len - 2 + 1; // remove quotes, add null
-  char *buff = arena_alloc(parser->arena, processed_len);
-
-  memcpy(buff, &raw[1], processed_len);
-  buff[processed_len - 1] = 0;
-  return buff;
-}
-
 bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -554,7 +543,7 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct ast_tyref ty_ref;
   if (is_literal_token(parser, token.ty, &ty_ref) && token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
     cnst->cnst_ty = ty_ref;
-    cnst->str_value = process_raw_string(parser, associated_text(parser->lexer, &token));
+    cnst->str_value = associated_text(parser->lexer, &token);
 
     consume_token(parser->lexer, token);
     return true;
