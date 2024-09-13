@@ -351,7 +351,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       switch (op->cnst.ty) {
 
       case IR_OP_CNST_TY_INT:
-        if (reg == DONT_GIVE_REG) {
+        if (reg == NO_REG) {
           eep_emit_nop(state->emitter);
         } else {
           eep_emit_mov_imm(state->emitter, op->cnst.int_value,

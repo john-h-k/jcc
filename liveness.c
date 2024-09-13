@@ -1,5 +1,6 @@
 #include "liveness.h"
 #include "bit_twiddle.h"
+#include "ir/ir.h"
 
 void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
@@ -128,16 +129,15 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        op->lcl_idx = NO_LCL;
         struct interval *interval = &data.intervals[op->id];        
 
         if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
           op->reg = arg_regs++;
         } else {
-          // reset registers unless flags because flags is never allocated
-          if (op->reg != REG_FLAGS && op->reg != DONT_GIVE_REG) {
-            op->reg = NO_REG;
-          }
+          // // reset registers unless flags because flags is never allocated
+          // if (op->reg != REG_FLAGS && !(op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
+          //   op->reg = NO_REG;
+          // }
         }
 
         debug_assert(op->id < irb->op_count,
@@ -206,7 +206,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
             // a phi can be dependent on itself, and in that case we still need it to be assigned a register
             if (dependent->id != op->id) {
-              dependent->reg = DONT_GIVE_REG;
+              dependent->flags |= IR_OP_FLAG_DONT_GIVE_SLOT;
             }
 
             dependent_interval->start = MIN(dependent_interval->start, interval->start);
@@ -257,16 +257,17 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "    (UNASSIGNED)");
     break;
   case REG_SPILLED:
-    fslogsl(file, "    (SPILLED)");
-    break;
-  case DONT_GIVE_REG:
-    fslogsl(file, "    (DONT)");
+    fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl_idx);
     break;
   case REG_FLAGS:
     fslogsl(file, "    (FLAGS)");
     break;
   default:
-    fslogsl(file, "    register=%zu", op->reg);
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+      fslogsl(file, "    (DONT)");
+    } else {
+      fslogsl(file, "    register=%zu", op->reg);
+    }
     break;
   }
 

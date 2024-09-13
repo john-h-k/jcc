@@ -239,12 +239,13 @@ struct ir_op_custom {
 #define NO_REG (SIZE_T_MAX)
 #define REG_SPILLED (NO_REG - 1)
 #define REG_FLAGS (REG_SPILLED - 1)
-#define DONT_GIVE_REG (REG_FLAGS - 1)
 
 enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
   IR_OP_FLAG_MUST_SPILL = 1,
   IR_OP_FLAG_PARAM = 2,
+  // do not give this a reg/local as it is a phi node that will take the reg/local of that phi
+  IR_OP_FLAG_DONT_GIVE_SLOT = 4
 };
 
 struct ir_op {
