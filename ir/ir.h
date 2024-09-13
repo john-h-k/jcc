@@ -245,7 +245,10 @@ enum ir_op_flags {
   IR_OP_FLAG_MUST_SPILL = 1,
   IR_OP_FLAG_PARAM = 2,
   // do not give this a reg/local as it is a phi node that will take the reg/local of that phi
-  IR_OP_FLAG_DONT_GIVE_SLOT = 4
+  IR_OP_FLAG_DONT_GIVE_SLOT = 4,
+  // TODO: should be arm64 specific
+  // indicates to use an 8 byte slot
+  IR_OP_FLAG_VARIADIC_EXPAND = 8,
 };
 
 struct ir_op {

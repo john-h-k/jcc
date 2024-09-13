@@ -346,6 +346,29 @@ void aarch64_emit_load_pair_pre_index_64(struct aarch64_emitter *emitter,
                                  struct aarch64_reg dest1,
                                  unsigned short offset);
 
+void aarch64_emit_store_pair_offset_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_offset_64(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
+
+void aarch64_emit_store_pair_offset_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg source0,
+                                 struct aarch64_reg source1,
+                                 unsigned short offset);
+
+void aarch64_emit_load_pair_offset_32(struct aarch64_emitter *emitter,
+                                 struct aarch64_reg addr,
+                                 struct aarch64_reg dest0,
+                                 struct aarch64_reg dest1,
+                                 unsigned short offset);
 
 void aarch64_emit_load_offset_64(struct aarch64_emitter *emitter,
                                  struct aarch64_reg addr,

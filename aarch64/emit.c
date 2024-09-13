@@ -435,13 +435,15 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
+// TODO: sep methods no longer needed
+
 static unsigned get_lcl_stack_offset_32(struct emit_state *state, size_t lcl_idx)  {
   UNUSED_ARG(state);
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
-  return lcl_idx + 2;
+  return lcl_idx;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state, size_t lcl_idx) {
@@ -450,27 +452,29 @@ static unsigned get_lcl_stack_offset_64(struct emit_state *state, size_t lcl_idx
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
-  return lcl_idx + 4;
+  return lcl_idx;
 }
 
 static void emit_custom(struct emit_state *state, struct ir_op *op) {
   // FIXME: the pre-indexing here is causing segfaults for some reason? we
 
   // should be using it instead of stack when possible
+  size_t lr_offset = (state->irb->total_locals_size / 2) - 2;
+
   switch (op->custom.aarch64->ty) {
   case AARCH64_OP_TY_SAVE_LR:
-    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG,
-                                         FRAME_PTR_REG, RET_PTR_REG, 0);
+    aarch64_emit_store_pair_offset_64(state->emitter, STACK_PTR_REG,
+                                         FRAME_PTR_REG, RET_PTR_REG, lr_offset);
     break;
   case AARCH64_OP_TY_SAVE_LR_ADD_64:
     // also save stack pointer into frame pointer as required by ABI
     // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
     // so `add x29, sp, #0` is used instead
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, 0, FRAME_PTR_REG);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, lr_offset * 8, FRAME_PTR_REG);
     break;
   case AARCH64_OP_TY_RSTR_LR:
-    aarch64_emit_load_pair_pre_index_64(state->emitter, STACK_PTR_REG,
-                                        FRAME_PTR_REG, RET_PTR_REG, 0);
+    aarch64_emit_load_pair_offset_64(state->emitter, STACK_PTR_REG,
+                                        FRAME_PTR_REG, RET_PTR_REG, lr_offset);
     break;
   case AARCH64_OP_TY_SUB_STACK:
     aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
@@ -525,16 +529,30 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     }
     case IR_OP_TY_LOAD_LCL: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      aarch64_emit_load_offset_32(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
+
+      if (is_64_bit(op)) {
+        aarch64_emit_load_offset_64(
+            state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+            get_lcl_stack_offset_64(state, op->load_lcl.lcl_idx));
+      } else {
+        aarch64_emit_load_offset_32(
+              state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+              get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
+      }
       break;
     }
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
-      aarch64_emit_store_offset_32(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
+
+      if (is_64_bit(op->store_lcl.value) || (op->flags & IR_OP_FLAG_VARIADIC_EXPAND)) {
+        aarch64_emit_store_offset_64(
+            state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+            get_lcl_stack_offset_64(state, op->store_lcl.lcl_idx));
+      } else {
+        aarch64_emit_store_offset_32(
+              state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+              get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
+      }
       break;
     }
     case IR_OP_TY_BR_COND: {
