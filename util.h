@@ -92,19 +92,19 @@ static inline unsigned long popcntl(unsigned long l) {
 #endif
 }
 
-static inline unsigned long tzcnt(unsigned long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_clz)
-  return __builtin_ctzl(l);
+static inline unsigned long tzcnt(unsigned long long l) {
+#if defined(__has_builtin) && __has_builtin(__builtin_clzll)
+  return __builtin_ctzll(l);
 #else
-  todo("lzcnt not implemented outside of `__builtin_clz`");
+  todo("lzcnt not implemented outside of `__builtin_clzll`");
 #endif
 }
 
-static inline unsigned long lzcnt(unsigned long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_clz)
-  return __builtin_clzl(l);
+static inline unsigned long lzcnt(unsigned long long l) {
+#if defined(__has_builtin) && __has_builtin(__builtin_clzll)
+  return __builtin_clzll(l);
 #else
-  todo("lzcnt not implemented outside of `__builtin_clz`");
+  todo("lzcnt not implemented outside of `__builtin_clzll`");
 #endif
 }
 
