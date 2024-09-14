@@ -72,7 +72,7 @@
 
 #include <string.h>
 
-#define ROUND_UP(value, pow2) ((value) + ((pow2)-1)) & ~((pow2)-1)
+#define ROUND_UP(value, pow2) ((value) + ((pow2)-1ull)) & ~((pow2)-1ull)
 #define UNUSED_ARG(arg) (void)(arg);
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -84,11 +84,11 @@ static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
 }
 
-static inline unsigned long popcntl(unsigned long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_popcountl)
-  return __builtin_popcountl(l);
+static inline unsigned long popcntl(unsigned long long l) {
+#if defined(__has_builtin) && __has_builtin(__builtin_popcountll)
+  return __builtin_popcountll(l);
 #else
-  todo("lzcnt not implemented outside of `__builtin_popcountl`");
+  todo("lzcnt not implemented outside of `__builtin_popcountll`");
 #endif
 }
 

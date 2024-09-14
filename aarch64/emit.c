@@ -478,11 +478,11 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
     break;
   case AARCH64_OP_TY_SUB_STACK:
     aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
-                            state->irb->total_locals_size * 4, STACK_PTR_REG);
+                            state->irb->total_locals_size, STACK_PTR_REG);
     break;
   case AARCH64_OP_TY_ADD_STACK:
     aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG,
-                            state->irb->total_locals_size * 4, STACK_PTR_REG);
+                            state->irb->total_locals_size, STACK_PTR_REG);
     break;
   case AARCH64_OP_TY_SAVE_REG:
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,

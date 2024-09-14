@@ -423,10 +423,12 @@ struct ir_builder {
 
   // starts at index of first nonvolatile register, which is a bit odd
   // could change or generally make nice to work with
-  unsigned long nonvolatile_registers_used;
+  unsigned long long nonvolatile_registers_used;
+
+  size_t num_locals;
+  struct ir_lcl *locals;
 
   // number of stack local variables
-  size_t num_locals;
   size_t total_locals_size;
 
   // stack spaces from this can be reused, so we store them here
