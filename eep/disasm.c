@@ -1,16 +1,17 @@
 #include "disasm.h"
 
-#include <stdint.h>
-
-#include "../util.h"
-#include "../log.h"
 #include "../bit_twiddle.h"
+#include "../log.h"
+#include "../util.h"
+
+#include <stdint.h>
 
 static void disasm_instr(const char *instr);
 
-// DISCLAIMER: this was written very speedily for debugging purposes - it seems to work pretty well,
-// but there may be some slight issues with signed-immediates, and also the code is a bit spaghetti
-// I shall refactor it at some point to be easier on the eye
+// DISCLAIMER: this was written very speedily for debugging purposes - it seems
+// to work pretty well, but there may be some slight issues with
+// signed-immediates, and also the code is a bit spaghetti I shall refactor it
+// at some point to be easier on the eye
 
 void eep_debug_disasm(const char *filename) {
   FILE *file = fopen(filename, "r");
@@ -34,11 +35,15 @@ void eep_debug_disasm(const char *filename) {
 #define B(instr) (((instr) >> 5) & 0b111)
 #define C(instr) (((instr) >> 2) & 0b111)
 
-const char *SHIFT_OPC_NAMES[] = { "LSL", "LSR", "ASR", "XSR" };
-const char *ALU_OPC_NAMES[] = { "MOV", "ADD", "SUB", "ADC", "SBC", "AND", "CMP", "Shift" /* shouldn't be hit, keep it for safety though */ };
+const char *SHIFT_OPC_NAMES[] = {"LSL", "LSR", "ASR", "XSR"};
+const char *ALU_OPC_NAMES[] = {
+    "MOV", "ADD", "SUB",  "ADC", "SBC",
+    "AND", "CMP", "Shift" /* shouldn't be hit, keep it for safety though */};
 
-const char *JUMP_OPC_NAMES[] = { "JMP", "JEQ", "JCS", "JMI", "JGE", "JGT", "JHI", "JSR" };
-const char *NEG_JUMP_OPC_NAMES[] = { "NOOP", "JNE", "JCC", "JPL", "JLT", "JLE", "JLS", "RET" };
+const char *JUMP_OPC_NAMES[] = {"JMP", "JEQ", "JCS", "JMI",
+                                "JGE", "JGT", "JHI", "JSR"};
+const char *NEG_JUMP_OPC_NAMES[] = {"NOOP", "JNE", "JCC", "JPL",
+                                    "JLT",  "JLE", "JLS", "RET"};
 
 static void disasm_instr(const char *line) {
   int idx;
@@ -76,7 +81,7 @@ static void disasm_instr(const char *line) {
         signed char imm = SIGN_EXT(instr & 0b11111, 5);
         printf("%s R%d, [R%d, #%d]", name, a, b, imm);
       }
-      
+
     } else if (opc == 0b1100) {
       // jump
       unsigned jump_opc = (instr >> 9) & 0b111;

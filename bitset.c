@@ -1,5 +1,7 @@
 #include "bitset.h"
+
 #include "util.h"
+
 #include <limits.h>
 
 typedef unsigned long long chunk_t;
@@ -16,7 +18,8 @@ struct bitset *bitset_create(size_t num_elements) {
 
   size_t num_chunks = (num_elements + (bits_per_chunk - 1)) / bits_per_chunk;
 
-  struct bitset *bitset = nonnull_malloc(sizeof(*bitset) + sizeof(chunk_t) * num_chunks);
+  struct bitset *bitset =
+      nonnull_malloc(sizeof(*bitset) + sizeof(chunk_t) * num_chunks);
   bitset->num_elements = num_elements;
   bitset->num_chunks = num_chunks;
 
@@ -25,9 +28,7 @@ struct bitset *bitset_create(size_t num_elements) {
   return bitset;
 }
 
-size_t bitset_length(struct bitset *bitset) {
-  return bitset->num_elements;
-}
+size_t bitset_length(struct bitset *bitset) { return bitset->num_elements; }
 
 unsigned long long bitset_as_ull(struct bitset *bitset) {
   debug_assert(bitset->num_chunks <= 1, "too many chunks to get bitset as ull");
@@ -58,7 +59,6 @@ unsigned long long bitset_popcnt(struct bitset *bitset) {
   return count;
 }
 
-
 unsigned long long bitset_tzcnt(struct bitset *bitset) {
   size_t bits_per_chunk = sizeof(chunk_t) * 8;
 
@@ -74,8 +74,6 @@ unsigned long long bitset_tzcnt(struct bitset *bitset) {
 
   return bitset->num_elements;
 }
-
-
 
 bool bitset_get(struct bitset *bitset, size_t idx) {
   debug_assert(idx < bitset->num_elements, "bitset idx out of range");
@@ -101,7 +99,6 @@ void bitset_set(struct bitset *bitset, size_t idx, bool value) {
   }
 }
 
-
 void bitset_clear(struct bitset *bitset, bool value) {
   unsigned char mask = value ? UCHAR_MAX : 0;
   memset(bitset->chunks, mask, sizeof(chunk_t) * bitset->num_chunks);
@@ -112,4 +109,3 @@ void bitset_free(struct bitset **bitset) {
 
   *bitset = NULL;
 }
-

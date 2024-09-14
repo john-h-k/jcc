@@ -16,7 +16,9 @@ struct var_table_scope var_table_scope_create(struct var_table_scope *prev) {
 struct var_table var_table_create(struct arena_allocator *arena) {
   // known memory leak here, no `free` function atm
   struct var_table var_table = {
-      .arena = arena, .first = arena_alloc(arena, sizeof(*var_table.first)), .last = NULL};
+      .arena = arena,
+      .first = arena_alloc(arena, sizeof(*var_table.first)),
+      .last = NULL};
 
   *var_table.first = var_table_scope_create(NULL);
   var_table.last = var_table.first;
@@ -24,10 +26,14 @@ struct var_table var_table_create(struct arena_allocator *arena) {
   return var_table;
 }
 
-struct var_table_entry *create_entry(struct var_table *var_table, const char *name) {
+struct var_table_entry *create_entry(struct var_table *var_table,
+                                     const char *name) {
   struct var_table_scope *last = var_table->last;
 
-  struct var_table_entry entry = { .name = name, .scope = last->scope, .flags = VAR_TABLE_ENTRY_FLAG_NONE, .value = NULL };
+  struct var_table_entry entry = {.name = name,
+                                  .scope = last->scope,
+                                  .flags = VAR_TABLE_ENTRY_FLAG_NONE,
+                                  .value = NULL};
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
   p->value = NULL;
 
@@ -41,9 +47,7 @@ struct var_table_entry *create_entry(struct var_table *var_table, const char *na
 //   err("%s @ %d", entry->name, entry->scope);
 // }
 
-int cur_scope(struct var_table *var_table) {
-  return var_table->last->scope;
-}
+int cur_scope(struct var_table *var_table) { return var_table->last->scope; }
 
 void push_scope(struct var_table *var_table) {
   struct var_table_scope *last = var_table->last;
@@ -55,14 +59,16 @@ void push_scope(struct var_table *var_table) {
 }
 
 void pop_scope(struct var_table *var_table) {
-  struct var_table_scope *last = var_table->last;  
+  struct var_table_scope *last = var_table->last;
 
-  debug_assert(last->scope != SCOPE_GLOBAL, "popping global scope is never correct");
+  debug_assert(last->scope != SCOPE_GLOBAL,
+               "popping global scope is never correct");
 
   vector_free(&last->entries);
 
-  debug_assert(!last->next, "popping var_table_scope but it has a `next` entry? should be impossible");
-  
+  debug_assert(!last->next, "popping var_table_scope but it has a `next` "
+                            "entry? should be impossible");
+
   var_table->last = last->prev;
 
   last->prev->next = NULL;
@@ -83,7 +89,8 @@ struct var_table_entry *get_or_create_entry(struct var_table *var_table,
   return create_entry(var_table, name);
 }
 
-struct var_table_entry *get_entry(struct var_table *var_table, const char *name) {
+struct var_table_entry *get_entry(struct var_table *var_table,
+                                  const char *name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry

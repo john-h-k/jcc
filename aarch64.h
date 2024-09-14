@@ -1,11 +1,11 @@
 #ifndef AARCH64_H
 #define AARCH64_H
 
-#include "target.h"
-#include "disasm.h"
 #include "aarch64/emit.h"
 #include "aarch64/lower.h"
+#include "disasm.h"
 #include "macos/mach-o.h"
+#include "target.h"
 
 // FIXME: this unnecessarily ties arm64 to mach-o
 

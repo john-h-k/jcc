@@ -1,8 +1,9 @@
 #ifndef LEX_H
 #define LEX_H
 
-#include <stdlib.h>
 #include "util.h"
+
+#include <stdlib.h>
 
 enum lex_token_ty {
   LEX_TOKEN_TY_UNKNOWN,
@@ -20,9 +21,9 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OPEN_BRACE,    // {
   LEX_TOKEN_TY_CLOSE_BRACE,   // }
 
-  LEX_TOKEN_TY_SEMICOLON,     // ;
-  LEX_TOKEN_TY_COMMA,         // ,
-  LEX_TOKEN_TY_DOT,         // .
+  LEX_TOKEN_TY_SEMICOLON, // ;
+  LEX_TOKEN_TY_COMMA,     // ,
+  LEX_TOKEN_TY_DOT,       // .
 
   /* Operators */
 
@@ -48,13 +49,12 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_OP_ASSG, // =
 
-  LEX_TOKEN_TY_OP_EQ, // ==
-  LEX_TOKEN_TY_OP_NEQ, // !=
-  LEX_TOKEN_TY_OP_LT, // <
+  LEX_TOKEN_TY_OP_EQ,   // ==
+  LEX_TOKEN_TY_OP_NEQ,  // !=
+  LEX_TOKEN_TY_OP_LT,   // <
   LEX_TOKEN_TY_OP_LTEQ, // <=
-  LEX_TOKEN_TY_OP_GT, // >
+  LEX_TOKEN_TY_OP_GT,   // >
   LEX_TOKEN_TY_OP_GTEQ, // >=
-
 
   /* Variadic */
 
@@ -99,7 +99,7 @@ enum lex_token_ty {
   /* Literals (all suffixes are case-insensitive) */
 
   LEX_TOKEN_TY_ASCII_CHAR_LITERAL, // 'a'
-  LEX_TOKEN_TY_ASCII_STR_LITERAL, // "foobar"
+  LEX_TOKEN_TY_ASCII_STR_LITERAL,  // "foobar"
 
   // Note: `lex.c` relies on `unsigned` being `signed + 1`
 

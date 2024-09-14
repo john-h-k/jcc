@@ -138,12 +138,12 @@ void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
 void debug_call_target_string(FILE *file, struct ir_op *target) {
   if (target->ty == IR_OP_TY_GLB_REF) {
     switch (target->glb_ref.ty) {
-      case IR_OP_GLB_REF_TY_STR:
-        fprintf(file, "%s", target->glb_ref.string->data);
-        break;
-      case IR_OP_GLB_REF_TY_SYM:
-        fprintf(file, "%s", target->glb_ref.sym_name);
-        break;
+    case IR_OP_GLB_REF_TY_STR:
+      fprintf(file, "%s", target->glb_ref.string->data);
+      break;
+    case IR_OP_GLB_REF_TY_SYM:
+      fprintf(file, "%s", target->glb_ref.sym_name);
+      break;
     }
   } else {
     fprintf(file, "%%%zu", target->id);
@@ -178,12 +178,12 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   case IR_OP_TY_GLB_REF:
     debug_lhs(file, ir);
     switch (ir->glb_ref.ty) {
-      case IR_OP_GLB_REF_TY_STR:
-        fprintf(file, "GLOBAL_STR ( %s )", ir->glb_ref.string->data);
-        break;
-      case IR_OP_GLB_REF_TY_SYM:
-        fprintf(file, "GLOBAL_SYM ( %s )", ir->glb_ref.sym_name);
-        break;
+    case IR_OP_GLB_REF_TY_STR:
+      fprintf(file, "GLOBAL_STR ( %s )", ir->glb_ref.string->data);
+      break;
+    case IR_OP_GLB_REF_TY_SYM:
+      fprintf(file, "GLOBAL_SYM ( %s )", ir->glb_ref.sym_name);
+      break;
     }
     // don't print anything for global - let the op consuming it print instead
     break;
@@ -258,8 +258,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
     fprintf(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
-            ir->br_cond.cond->id,
-            ir->stmt->basicblock->split.true_target->id,
+            ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
             ir->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_RET:
@@ -417,8 +416,8 @@ void debug_print_basicblock(FILE *file, struct ir_builder *irb,
   debug_visit_basicblock(irb, basicblock, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_stmt(FILE *file, struct ir_builder* irb, struct ir_stmt *stmt,
-                    debug_print_op_callback *cb, void *cb_metadata) {
+void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
+                      debug_print_op_callback *cb, void *cb_metadata) {
 
   int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;

@@ -78,7 +78,8 @@ int main(int argc, char **argv) {
     strcpy(output, sources[i]);
     strcat(output, ".obj");
 
-    info("compiling source file '%s' into object file '%s'", sources[i], output);
+    info("compiling source file '%s' into object file '%s'", sources[i],
+         output);
 
     objects[i] = output;
 
@@ -100,7 +101,6 @@ int main(int argc, char **argv) {
   struct link_args link_args = {.objects = (const char **)objects,
                                 .num_objects = num_sources,
                                 .output = "a.out"};
-
 
   if (target_needs_linking(&args)) {
     if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {

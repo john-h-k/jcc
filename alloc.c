@@ -81,7 +81,7 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
 
   struct arena *arena;
   size_t next_arena_size;
-  
+
   if (aligned > BLOCK_SIZE) {
     arena = allocator->last;
     next_arena_size = aligned;

@@ -13,8 +13,9 @@ enum link_result link_objects(const struct link_args *args) {
 
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
-  const char *template = "ld -lSystem -lc -dynamic -syslibroot $(xcrun -sdk macosx "
-                         "--show-sdk-path) -ld_classic";
+  const char *template =
+      "ld -lSystem -lc -dynamic -syslibroot $(xcrun -sdk macosx "
+      "--show-sdk-path) -ld_classic";
 
   // super inefficient here
 

@@ -264,7 +264,8 @@ struct compiled_function eep_emit_function(struct ir_builder *func) {
                              .num_extra_stack_slots = 0,
                              .cur_op_state = {0}};
 
-  size_t stack_size = ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
+  size_t stack_size =
+      ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
   if (stack_size) {
     // spills, so we need stack space
     eep_emit_sub_imm(state.emitter, STACK_PTR_REG, stack_size);

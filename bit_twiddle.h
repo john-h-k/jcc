@@ -4,12 +4,11 @@
 #define SIG_FITS_IN_BITS(value, bitc)                                          \
   ((abs((value)) & ~((1 << (bitc)) - 1)) == 0)
 
-#define SIG_FITS_IN_BITSL(value, bitc)                                          \
+#define SIG_FITS_IN_BITSL(value, bitc)                                         \
   ((labs((value)) & ~((1 << (bitc)) - 1)) == 0)
 
 #define UNS_FITS_IN_BITS(value, bitc)                                          \
   (((value) & ~((1u << (bitc + 1)) - 1u)) == 0)
-
 
 #define CLAMP_BITS(value, bitc) ((value) & ((1 << (bitc)) - 1))
 

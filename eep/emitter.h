@@ -11,8 +11,8 @@ struct eep_reg {
 #error "RETURN_REG/STACK_PTR_REG already defined. Check your includes"
 #endif
 
-#define RETURN_REG ((struct eep_reg) {7})
-#define STACK_PTR_REG ((struct eep_reg) {6})
+#define RETURN_REG ((struct eep_reg){7})
+#define STACK_PTR_REG ((struct eep_reg){6})
 
 enum eep_cond {
   EEP_COND_JMP = 0b0000,
@@ -55,39 +55,59 @@ uint16_t *eep_emit_reserved(struct eep_emitter *emitter);
 /* Nop */
 void eep_emit_nop(struct eep_emitter *emitter);
 
-void eep_emit_mov(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest);
-void eep_emit_mov_imm(struct eep_emitter *emitter, int imm, struct eep_reg dest);
+void eep_emit_mov(struct eep_emitter *emitter, struct eep_reg source,
+                  struct eep_reg dest);
+void eep_emit_mov_imm(struct eep_emitter *emitter, int imm,
+                      struct eep_reg dest);
 
-void eep_emit_add(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs, struct eep_reg dest);
-void eep_emit_sub(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs, struct eep_reg dest);
-void eep_emit_adc(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs, struct eep_reg dest);
-void eep_emit_sbc(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs, struct eep_reg dest);
-void eep_emit_and(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs, struct eep_reg dest);
+void eep_emit_add(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs, struct eep_reg dest);
+void eep_emit_sub(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs, struct eep_reg dest);
+void eep_emit_adc(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs, struct eep_reg dest);
+void eep_emit_sbc(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs, struct eep_reg dest);
+void eep_emit_and(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs, struct eep_reg dest);
 
-void eep_emit_cmp(struct eep_emitter *emitter, struct eep_reg lhs, struct eep_reg rhs);
+void eep_emit_cmp(struct eep_emitter *emitter, struct eep_reg lhs,
+                  struct eep_reg rhs);
 
-void eep_emit_add_imm(struct eep_emitter *emitter, struct eep_reg dest, int imm);
-void eep_emit_sub_imm(struct eep_emitter *emitter, struct eep_reg dest, int imm);
-void eep_emit_adc_imm(struct eep_emitter *emitter, struct eep_reg dest, int imm);
-void eep_emit_sbc_imm(struct eep_emitter *emitter, struct eep_reg dest, int imm);
-void eep_emit_and_imm(struct eep_emitter *emitter, struct eep_reg dest, int imm);
+void eep_emit_add_imm(struct eep_emitter *emitter, struct eep_reg dest,
+                      int imm);
+void eep_emit_sub_imm(struct eep_emitter *emitter, struct eep_reg dest,
+                      int imm);
+void eep_emit_adc_imm(struct eep_emitter *emitter, struct eep_reg dest,
+                      int imm);
+void eep_emit_sbc_imm(struct eep_emitter *emitter, struct eep_reg dest,
+                      int imm);
+void eep_emit_and_imm(struct eep_emitter *emitter, struct eep_reg dest,
+                      int imm);
 
 void eep_emit_cmp_imm(struct eep_emitter *emitter, struct eep_reg lhs, int imm);
 
-void eep_emit_lsl(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int scnt);
-void eep_emit_lsr(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int scnt);
-void eep_emit_asr(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int scnt);
-void eep_emit_xsr(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int scnt);
+void eep_emit_lsl(struct eep_emitter *emitter, struct eep_reg source,
+                  struct eep_reg dest, int scnt);
+void eep_emit_lsr(struct eep_emitter *emitter, struct eep_reg source,
+                  struct eep_reg dest, int scnt);
+void eep_emit_asr(struct eep_emitter *emitter, struct eep_reg source,
+                  struct eep_reg dest, int scnt);
+void eep_emit_xsr(struct eep_emitter *emitter, struct eep_reg source,
+                  struct eep_reg dest, int scnt);
 
-void eep_emit_load_direct(struct eep_emitter *emitter, int source, struct eep_reg dest);
-void eep_emit_store_direct(struct eep_emitter *emitter, struct eep_reg source, int dest);
+void eep_emit_load_direct(struct eep_emitter *emitter, int source,
+                          struct eep_reg dest);
+void eep_emit_store_direct(struct eep_emitter *emitter, struct eep_reg source,
+                           int dest);
 
-void eep_emit_load_offset(struct eep_emitter *emitter, struct eep_reg source, int source_offset, struct eep_reg dest);
-void eep_emit_store_offset(struct eep_emitter *emitter, struct eep_reg source, struct eep_reg dest, int dest_offset);
+void eep_emit_load_offset(struct eep_emitter *emitter, struct eep_reg source,
+                          int source_offset, struct eep_reg dest);
+void eep_emit_store_offset(struct eep_emitter *emitter, struct eep_reg source,
+                           struct eep_reg dest, int dest_offset);
 
-void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond, signed char offset);
+void eep_emit_jump(struct eep_emitter *emitter, enum eep_cond cond,
+                   signed char offset);
 void eep_emit_ext(struct eep_emitter *emitter, int imm);
-
-
 
 #endif

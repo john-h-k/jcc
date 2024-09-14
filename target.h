@@ -2,8 +2,8 @@
 #define TARGET_H
 
 #include "alloc.h"
-#include "lsra.h"
 #include "ir/build.h"
+#include "lsra.h"
 
 enum relocation_ty {
   RELOCATION_TY_SINGLE,

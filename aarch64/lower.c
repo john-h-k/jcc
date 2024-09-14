@@ -3,8 +3,9 @@
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
 #include "../ir/build.h"
-#include "../util.h"
 #include "../ir/var_refs.h"
+#include "../util.h"
+
 #include <math.h>
 
 // as we add a bunch of new nodes around, `live_regs` can get lost
@@ -19,27 +20,33 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
   struct ir_op_var_func_ty *func_ty = &op->call.target->var_ty.func;
 
-  invariant_assert(is_func_variadic(func_ty) || func_ty->num_params == op->call.num_args,
-                   "mismatch of function param (%zu) and arg (%zu) count", func_ty->num_params, op->call.num_args);
+  invariant_assert(is_func_variadic(func_ty) ||
+                       func_ty->num_params == op->call.num_args,
+                   "mismatch of function param (%zu) and arg (%zu) count",
+                   func_ty->num_params, op->call.num_args);
 
   invariant_assert(func_ty->num_params <= 8,
                    "`lower_call` doesn't support more than 8 args yet");
 
-  struct ir_lower_call_metadata *metadata = (struct ir_lower_call_metadata *)op->metadata;
+  struct ir_lower_call_metadata *metadata =
+      (struct ir_lower_call_metadata *)op->metadata;
   unsigned long live_regs = metadata->post_call_live_regs;
 
   // FIXME: don't hardcode volatile count
-  // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC registers
+  // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC
+  // registers
   size_t volatile_reg_count = 18;
 
-  unsigned long long live_volatile = live_regs & ((1ull << volatile_reg_count) - 1);
+  unsigned long long live_volatile =
+      live_regs & ((1ull << volatile_reg_count) - 1);
 
   // if the return reg is used by the call then remove the call-return reg
   // from live-volatile as we know it will be over written by end of call
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
     live_volatile &= ~(1ull << op->reg);
 
-    struct ir_op *ret_mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
+    struct ir_op *ret_mov =
+        insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
     ret_mov->mov.value = op;
     ret_mov->reg = op->reg;
 
@@ -51,7 +58,9 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
 
   unsigned caller_saves = popcntl(live_volatile);
-  unsigned new_slots = caller_saves > func->num_call_saves ? caller_saves - func->num_call_saves : 0;
+  unsigned new_slots = caller_saves > func->num_call_saves
+                           ? caller_saves - func->num_call_saves
+                           : 0;
 
   // TODO: we assume all saves are 8 bytes
   func->total_call_saves_size += 8 * new_slots;
@@ -63,7 +72,8 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
   for (size_t i = 0; i < max_volatile; i++) {
     if (!NTH_BIT(live_volatile, i) || i == op->reg) {
-      // if not a live-volatile register or the register used by the actual call, skip
+      // if not a live-volatile register or the register used by the actual
+      // call, skip
       continue;
     }
 
@@ -89,40 +99,47 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // FIXME: generalise this to calling conventions
 
   // now we need to move each argument into its correct register
-  // it is possible there are no spare registers for this, and so we may need to do a swap
-  
+  // it is possible there are no spare registers for this, and so we may need to
+  // do a swap
+
   if (op->call.num_args) {
-    unsigned long long free_regs = ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
+    unsigned long long free_regs =
+        ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
     size_t free_vol_reg = tzcnt(free_regs);
 
     if (free_vol_reg >= volatile_reg_count) {
       todo("argument moving when no free registers");
     }
 
-    struct ir_op *mov_to_vol = insert_before_ir_op(func, op, IR_OP_TY_MOV, func_ty->params[0]);
+    struct ir_op *mov_to_vol =
+        insert_before_ir_op(func, op, IR_OP_TY_MOV, func_ty->params[0]);
     mov_to_vol->mov.value = op->call.args[0];
     mov_to_vol->reg = free_vol_reg;
 
-    size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1 : func_ty->num_params;
+    size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1
+                                                       : func_ty->num_params;
 
     for (size_t head = 0; head < op->call.num_args; head++) {
       size_t i = op->call.num_args - 1 - head;
       struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
 
-      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE || var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
+      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
+                           var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
                        "`lower_call` doesn't support non-prims");
 
       struct ir_op *source = i == 0 ? mov_to_vol : op->call.args[i];
       size_t arg_reg = i;
       if (i >= num_normal_args) {
-        // we are in a variadic and everything from here on is passed on the stack
-        struct ir_op *store = insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
+        // we are in a variadic and everything from here on is passed on the
+        // stack
+        struct ir_op *store =
+            insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
         store->store_lcl.lcl_idx = i - num_normal_args;
         store->store_lcl.value = source;
         store->flags |= IR_OP_FLAG_VARIADIC_EXPAND;
-      }
-      else if (i == 0 || op->call.args[i]->reg != arg_reg) {
-        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, *var_ty);
+      } else if (i == 0 || op->call.args[i]->reg != arg_reg) {
+        struct ir_op *mov =
+            insert_before_ir_op(func, op, IR_OP_TY_MOV, *var_ty);
 
         mov->mov.value = source;
         mov->reg = arg_reg;
@@ -130,14 +147,14 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
     }
   }
 
-
   // FIXME: don't hardcode return reg
   size_t return_reg = 0;
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg != return_reg) {
     size_t target_reg = op->reg;
 
     // we move the call _back_ and replace it with a mov, by swapping them
-    struct ir_op *new_call = insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
+    struct ir_op *new_call =
+        insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
     new_call->call = op->call;
     new_call->reg = return_reg;
 
@@ -299,19 +316,20 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
       while (op) {
         if (op->ty == IR_OP_TY_CALL) {
-            // we need to save registers in-use _after_ call
-            struct ir_op *succ = op->succ;
-            if (!succ && op->stmt->succ) {
-              // call is end of stmt, get live from next stmt
-              // a call can not be the final op of the final stmt of a basicblock
-              // as that must be a br/ret
-              succ = op->stmt->succ->first;
-            }
+          // we need to save registers in-use _after_ call
+          struct ir_op *succ = op->succ;
+          if (!succ && op->stmt->succ) {
+            // call is end of stmt, get live from next stmt
+            // a call can not be the final op of the final stmt of a basicblock
+            // as that must be a br/ret
+            succ = op->stmt->succ->first;
+          }
 
-            op->metadata = arena_alloc(func->arena, sizeof(struct ir_lower_call_metadata));
-            *(struct ir_lower_call_metadata *)op->metadata = (struct ir_lower_call_metadata){
-              .post_call_live_regs = succ->live_regs
-            };
+          op->metadata =
+              arena_alloc(func->arena, sizeof(struct ir_lower_call_metadata));
+          *(struct ir_lower_call_metadata *)op->metadata =
+              (struct ir_lower_call_metadata){.post_call_live_regs =
+                                                  succ->live_regs};
         }
 
         op = op->succ;
@@ -322,7 +340,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     basicblock = basicblock->succ;
   }
-  
 
   bool leaf = !(func->nonvolatile_registers_used || func->num_locals ||
                 func->flags & IR_BUILDER_FLAG_MAKES_CALL);
@@ -335,7 +352,9 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
     // for x29 and x30 as they aren't working yet with pre-indexing
     func->total_locals_size += 16;
 
-    unsigned long max_nonvol_used = sizeof(func->nonvolatile_registers_used) * 8 - lzcnt(func->nonvolatile_registers_used);
+    unsigned long max_nonvol_used =
+        sizeof(func->nonvolatile_registers_used) * 8 -
+        lzcnt(func->nonvolatile_registers_used);
     unsigned long num_saves = popcntl(func->nonvolatile_registers_used);
     // FIXME: assumes 8 bytes
     // unsigned first_slot = func->num_locals;
@@ -343,7 +362,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     func->num_locals += num_saves;
     func->total_locals_size += num_saves * 8;
-    
+
     for (size_t i = 0; i < max_nonvol_used; i++) {
       // FIXME: loop should start at i=first non volatile
       if (!NTH_BIT(func->nonvolatile_registers_used, i)) {
@@ -351,9 +370,9 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
       }
 
       unsigned slot = first_slot++;
-      
-      struct ir_op *save =
-          insert_before_ir_op(func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+
+      struct ir_op *save = insert_before_ir_op(func, first_op, IR_OP_TY_CUSTOM,
+                                               IR_OP_VAR_TY_NONE);
       save->custom.aarch64 =
           arena_alloc(func->arena, sizeof(*save->custom.aarch64));
       save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_REG;
@@ -365,10 +384,8 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
       }
     }
 
-
     func->total_locals_size =
         ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
-
 
     first_op = func->first->first->first;
 
@@ -392,7 +409,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
           arena_alloc(func->arena, sizeof(*sub_stack->custom.aarch64));
       sub_stack->custom.aarch64->ty = AARCH64_OP_TY_SUB_STACK;
     }
-    
 
     // emitter understands the above magic-mov as it does not have the PARAM
     // flag set
@@ -426,28 +442,29 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
           }
 
           const char *data = op->cnst.str_value;
-          
+
           // first insert a GLB_REF to instruct that a reloc must be created
-          struct ir_op *ref = insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
+          struct ir_op *ref =
+              insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
           make_string_ref(func, data, ref, &ref->var_ty);
 
           // now insert the pair needed to generate the actual address
-          struct ir_op *page = insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, op->var_ty);
+          struct ir_op *page =
+              insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, op->var_ty);
           page->reg = op->reg;
-          page->custom.aarch64 = arena_alloc(func->arena, sizeof(*page->custom.aarch64));
+          page->custom.aarch64 =
+              arena_alloc(func->arena, sizeof(*page->custom.aarch64));
           page->custom.aarch64->ty = AARCH64_OP_TY_PAGE;
-          page->custom.aarch64->page = (struct aarch64_op_page){
-            .glb_ref = ref
-          };
+          page->custom.aarch64->page = (struct aarch64_op_page){.glb_ref = ref};
 
           struct ir_op *page_off = op;
           replace_ir_op(func, page_off, IR_OP_TY_CUSTOM, op->var_ty);
           page_off->reg = op->reg;
-          page_off->custom.aarch64 = arena_alloc(func->arena, sizeof(*page_off->custom.aarch64));
+          page_off->custom.aarch64 =
+              arena_alloc(func->arena, sizeof(*page_off->custom.aarch64));
           page_off->custom.aarch64->ty = AARCH64_OP_TY_PAGE_OFF;
-          page_off->custom.aarch64->page_off = (struct aarch64_op_page_off){
-            .glb_ref = ref
-          };
+          page_off->custom.aarch64->page_off =
+              (struct aarch64_op_page_off){.glb_ref = ref};
 
           break;
         }
@@ -468,9 +485,10 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
           if (!leaf) {
             struct ir_op *cur_save = saves;
 
-            while (cur_save && cur_save->ty == IR_OP_TY_CUSTOM && cur_save->custom.aarch64->ty == AARCH64_OP_TY_SAVE_REG) {
-              struct ir_op *restore =
-                  insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+            while (cur_save && cur_save->ty == IR_OP_TY_CUSTOM &&
+                   cur_save->custom.aarch64->ty == AARCH64_OP_TY_SAVE_REG) {
+              struct ir_op *restore = insert_before_ir_op(
+                  func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
               restore->custom.aarch64 =
                   arena_alloc(func->arena, sizeof(*restore->custom.aarch64));
               restore->custom.aarch64->ty = AARCH64_OP_TY_RSTR_REG;

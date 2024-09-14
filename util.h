@@ -1,7 +1,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-// TODO: seperate bool/noreturn and other version-dependent stuff into its own header
+// TODO: seperate bool/noreturn and other version-dependent stuff into its own
+// header
 
 #include <math.h>
 #include <signal.h>
@@ -15,33 +16,37 @@
 #else
 #define HAS_FEATURE(name) 0
 #endif
- 
 
-#if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) || defined(__SANITIZE_MEMORY__)
+#if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
+    defined(__SANITIZE_MEMORY__)
 #define MSAN 1
 #else
 #define MSAN 0
 #endif
 
-#if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) || defined(__SANITIZE_ADDRESS__)
+#if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) ||            \
+    defined(__SANITIZE_ADDRESS__)
 #define ASAN 1
 #else
 #define ASAN 0
 #endif
 
-#if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) || defined(__SANITIZE_HWADDRESS__)
+#if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
+    defined(__SANITIZE_HWADDRESS__)
 #define HWASAN 1
 #else
 #define HWASAN 0
 #endif
 
-#if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) || defined(__SANITIZE_THREAD__)
+#if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) ||              \
+    defined(__SANITIZE_THREAD__)
 #define TSAN 1
 #else
 #define TSAN 0
 #endif
 
-#if HAS_FEATURE(undefined_behavior_sanitizer) || defined(UNDEFINED_BEHAVIOR_SANITIZER)
+#if HAS_FEATURE(undefined_behavior_sanitizer) ||                               \
+    defined(UNDEFINED_BEHAVIOR_SANITIZER)
 #define UBSAN 1
 #else
 #define UBSAN 0
@@ -49,10 +54,10 @@
 
 #if ASAN || MSAN || TSAN || UBSAN
 #define SANITIZER_PRINT_STACK_TRACE
-#include "sanitizer/common_interface_defs.h"  // __sanitizer_print_stack_trace
+#include "sanitizer/common_interface_defs.h" // __sanitizer_print_stack_trace
 #endif
 
-#ifndef __STDC_VERSION__ 
+#ifndef __STDC_VERSION__
 #error "JCC Requires at least C99"
 #endif
 
@@ -72,7 +77,7 @@
 
 #include <string.h>
 
-#define ROUND_UP(value, pow2) ((value) + ((pow2)-1ull)) & ~((pow2)-1ull)
+#define ROUND_UP(value, pow2) ((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull)
 #define UNUSED_ARG(arg) (void)(arg);
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -119,11 +124,16 @@ static inline unsigned long lzcnt(unsigned long long l) {
   } while (0);
 
 #ifdef SANITIZER_PRINT_STACK_TRACE
-#define EXIT_FAIL(code) __sanitizer_print_stack_trace(); raise(SIGINT); exit(code);
+#define EXIT_FAIL(code)                                                        \
+  __sanitizer_print_stack_trace();                                             \
+  raise(SIGINT);                                                               \
+  exit(code);
 #else
-#define EXIT_FAIL(code) raise(SIGINT); exit(code);
+#define EXIT_FAIL(code)                                                        \
+  raise(SIGINT);                                                               \
+  exit(code);
 #endif
-  
+
 NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
   EXIT_FAIL(-2);

@@ -75,10 +75,12 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
 }
 
 static bool is_64_bit(const struct ir_op *op) {
-  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE || op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER,
+  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
+                       op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER,
                    "non-primitive/pointer passed to `is_64_bit`");
 
-  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
+  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
+         op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
 enum aarch64_relocation_ty {
@@ -360,11 +362,12 @@ static void emit_page(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_pageoff(struct emit_state *state, struct ir_op *op) {
-  invariant_assert(op->pred->ty == IR_OP_TY_CUSTOM && op->pred->custom.aarch64->ty == AARCH64_OP_TY_PAGE, "non PAGE instruction proceeded PAGE_OFF");
+  invariant_assert(op->pred->ty == IR_OP_TY_CUSTOM &&
+                       op->pred->custom.aarch64->ty == AARCH64_OP_TY_PAGE,
+                   "non PAGE instruction proceeded PAGE_OFF");
   // the page instruction has already created the reloc
   aarch64_emit_add_64_imm(state->emitter, get_reg_for_idx(op->reg), 0,
                           get_reg_for_idx(op->reg));
-
 }
 
 static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
@@ -437,21 +440,25 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
 
 // TODO: sep methods no longer needed
 
-static unsigned get_lcl_stack_offset_32(struct emit_state *state, size_t lcl_idx)  {
+static unsigned get_lcl_stack_offset_32(struct emit_state *state,
+                                        size_t lcl_idx) {
   UNUSED_ARG(state);
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
+  // HACK: lots of custom instrs have type NONE but assume that means whole reg
+  // (64 bit)
   return lcl_idx;
 }
 
-static unsigned get_lcl_stack_offset_64(struct emit_state *state, size_t lcl_idx) {
+static unsigned get_lcl_stack_offset_64(struct emit_state *state,
+                                        size_t lcl_idx) {
   UNUSED_ARG(state);
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg (64 bit)
+  // HACK: lots of custom instrs have type NONE but assume that means whole reg
+  // (64 bit)
   return lcl_idx;
 }
 
@@ -464,18 +471,19 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
 
   switch (op->custom.aarch64->ty) {
   case AARCH64_OP_TY_SAVE_LR:
-    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG,
-                                         FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
+    aarch64_emit_store_pair_pre_index_64(
+        state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
     break;
   case AARCH64_OP_TY_SAVE_LR_ADD_64:
     // also save stack pointer into frame pointer as required by ABI
     // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
     // so `add x29, sp, #0` is used instead
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, (lr_offset * 8), FRAME_PTR_REG);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, (lr_offset * 8),
+                            FRAME_PTR_REG);
     break;
   case AARCH64_OP_TY_RSTR_LR:
     aarch64_emit_load_pair_post_index_64(state->emitter, STACK_PTR_REG,
-                                        FRAME_PTR_REG, RET_PTR_REG, lr_offset);
+                                         FRAME_PTR_REG, RET_PTR_REG, lr_offset);
     break;
   case AARCH64_OP_TY_SUB_STACK:
     aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
@@ -505,114 +513,115 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_op(struct emit_state *state, struct ir_op *op) {
-    trace("lowering op with id %d, type %d", op->id, op->ty);
-    switch (op->ty) {
-    case IR_OP_TY_CUSTOM: {
-      emit_custom(state, op);
-      break;
-    }
-    case IR_OP_TY_MOV: {
-      if (op->flags & IR_OP_FLAG_PARAM) {
-        // don't need to do anything, dummy instr
-        aarch64_emit_nop(state->emitter);
-      } else {
-        emit_mov_op(state, op);
-      }
-      break;
-    }
-    case IR_OP_TY_PHI: {
-      // TODO: ensure everything is where it should be
-      // currently we emit a `nop` to keep everything aligned
-      // ideally we should remove the phi from IR entirely
-      // earlier
+  trace("lowering op with id %d, type %d", op->id, op->ty);
+  switch (op->ty) {
+  case IR_OP_TY_CUSTOM: {
+    emit_custom(state, op);
+    break;
+  }
+  case IR_OP_TY_MOV: {
+    if (op->flags & IR_OP_FLAG_PARAM) {
+      // don't need to do anything, dummy instr
       aarch64_emit_nop(state->emitter);
-      break;
+    } else {
+      emit_mov_op(state, op);
     }
-    case IR_OP_TY_LOAD_LCL: {
-      size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+    break;
+  }
+  case IR_OP_TY_PHI: {
+    // TODO: ensure everything is where it should be
+    // currently we emit a `nop` to keep everything aligned
+    // ideally we should remove the phi from IR entirely
+    // earlier
+    aarch64_emit_nop(state->emitter);
+    break;
+  }
+  case IR_OP_TY_LOAD_LCL: {
+    size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
-      if (is_64_bit(op)) {
-        aarch64_emit_load_offset_64(
-            state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-            get_lcl_stack_offset_64(state, op->load_lcl.lcl_idx));
-      } else {
-        aarch64_emit_load_offset_32(
-              state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-              get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
-      }
-      break;
+    if (is_64_bit(op)) {
+      aarch64_emit_load_offset_64(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset_64(state, op->load_lcl.lcl_idx));
+    } else {
+      aarch64_emit_load_offset_32(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
     }
-    case IR_OP_TY_STORE_LCL: {
-      size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+    break;
+  }
+  case IR_OP_TY_STORE_LCL: {
+    size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
 
-      if (is_64_bit(op->store_lcl.value) || (op->flags & IR_OP_FLAG_VARIADIC_EXPAND)) {
-        aarch64_emit_store_offset_64(
-            state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-            get_lcl_stack_offset_64(state, op->store_lcl.lcl_idx));
-      } else {
-        aarch64_emit_store_offset_32(
-              state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-              get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
-      }
-      break;
+    if (is_64_bit(op->store_lcl.value) ||
+        (op->flags & IR_OP_FLAG_VARIADIC_EXPAND)) {
+      aarch64_emit_store_offset_64(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset_64(state, op->store_lcl.lcl_idx));
+    } else {
+      aarch64_emit_store_offset_32(
+          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+          get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
     }
-    case IR_OP_TY_BR_COND: {
-      emit_br_cond_op(state, op);
-      break;
-    }
-    case IR_OP_TY_BR: {
-      emit_br_op(state, op);
-      break;
-    }
-    case IR_OP_TY_CNST: {
-      size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+    break;
+  }
+  case IR_OP_TY_BR_COND: {
+    emit_br_cond_op(state, op);
+    break;
+  }
+  case IR_OP_TY_BR: {
+    emit_br_op(state, op);
+    break;
+  }
+  case IR_OP_TY_CNST: {
+    size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
-      switch (op->cnst.ty) {
+    switch (op->cnst.ty) {
 
-      case IR_OP_CNST_TY_INT:
-        aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
-                                  op->cnst.int_value);
-        break;
-      case IR_OP_CNST_TY_STR:
-        vector_push_back(state->strings, &op->cnst.str_value);
+    case IR_OP_CNST_TY_INT:
+      aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
+                                op->cnst.int_value);
+      break;
+    case IR_OP_CNST_TY_STR:
+      vector_push_back(state->strings, &op->cnst.str_value);
 
-        size_t str_pos = state->total_str_len;
+      size_t str_pos = state->total_str_len;
 
-        ssize_t offset =
-            (ssize_t)str_pos - (ssize_t)aarch64_emit_bytesize(state->emitter);
+      ssize_t offset =
+          (ssize_t)str_pos - (ssize_t)aarch64_emit_bytesize(state->emitter);
 
-        aarch64_emit_adr(state->emitter, offset, get_reg_for_idx(reg));
+      aarch64_emit_adr(state->emitter, offset, get_reg_for_idx(reg));
 
-        state->total_str_len += strlen(op->cnst.str_value) + 1;
-        break;
-      }
+      state->total_str_len += strlen(op->cnst.str_value) + 1;
       break;
     }
-    case IR_OP_TY_BINARY_OP: {
-      emit_binary_op(state, op);
-      break;
-    }
-    case IR_OP_TY_CAST_OP: {
-      emit_cast_op(state, op);
-      break;
-    }
-    case IR_OP_TY_GLB_REF: {
-      // TODO:
-      aarch64_emit_nop(state->emitter);
-      break;
-    }
-    case IR_OP_TY_CALL: {
-      emit_call(state, op);
-      break;
-    }
-    case IR_OP_TY_RET: {
-      aarch64_emit_ret(state->emitter);
-      break;
-    }
-    default: {
-      todo("unsupported IR OP '%zu'", op->ty);
-      break;
-    }
+    break;
+  }
+  case IR_OP_TY_BINARY_OP: {
+    emit_binary_op(state, op);
+    break;
+  }
+  case IR_OP_TY_CAST_OP: {
+    emit_cast_op(state, op);
+    break;
+  }
+  case IR_OP_TY_GLB_REF: {
+    // TODO:
+    aarch64_emit_nop(state->emitter);
+    break;
+  }
+  case IR_OP_TY_CALL: {
+    emit_call(state, op);
+    break;
+  }
+  case IR_OP_TY_RET: {
+    aarch64_emit_ret(state->emitter);
+    break;
+  }
+  default: {
+    todo("unsupported IR OP '%zu'", op->ty);
+    break;
+  }
   }
 }
 
@@ -627,7 +636,10 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
     emit_op(state, op);
 
     size_t generated_instrs = aarch64_emitted_count(state->emitter) - emitted;
-    debug_assert(generated_instrs == 1, "expected op to generate exactly 1 instruction but it generated %zu", generated_instrs);
+    debug_assert(
+        generated_instrs == 1,
+        "expected op to generate exactly 1 instruction but it generated %zu",
+        generated_instrs);
 
     op = op->succ;
   }
@@ -694,7 +706,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   size_t num_relocations = 0;
   size_t num_relocation_instrs = 0;
   while (global_refs) {
-    struct aarch64_relocation *reloc = (struct aarch64_relocation *)global_refs->metadata;
+    struct aarch64_relocation *reloc =
+        (struct aarch64_relocation *)global_refs->metadata;
 
     num_relocations++;
 
@@ -716,7 +729,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   global_refs = func->global_refs;
   size_t i = 0;
   while (global_refs) {
-    struct aarch64_relocation *reloc = (struct aarch64_relocation *)global_refs->metadata;
+    struct aarch64_relocation *reloc =
+        (struct aarch64_relocation *)global_refs->metadata;
 
     relocations[i++] = reloc->reloc;
 
@@ -740,7 +754,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   size_t num_strings = vector_length(state.strings);
   for (size_t i = 0; i < num_strings; i++) {
     size_t idx = num_strings - 1 - i;
-    struct ir_string string = *(struct ir_string *)vector_get(state.strings, idx);
+    struct ir_string string =
+        *(struct ir_string *)vector_get(state.strings, idx);
 
     vector_push_back(string_vec, &string.data);
   }

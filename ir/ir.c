@@ -254,12 +254,13 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 }
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
-const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {.ty = IR_OP_VAR_TY_TY_VARIADIC};
+const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {
+    .ty = IR_OP_VAR_TY_TY_VARIADIC};
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
-  return ty->num_params > 0 && ty->params[ty->num_params - 1].ty == IR_OP_VAR_TY_TY_VARIADIC;
+  return ty->num_params > 0 &&
+         ty->params[ty->num_params - 1].ty == IR_OP_VAR_TY_TY_VARIADIC;
 }
-
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, unsigned long reg,
@@ -512,9 +513,8 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
   attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
 
-struct ir_op *replace_ir_op(struct ir_builder *irb,
-                                  struct ir_op *op, enum ir_op_ty ty,
-                                  struct ir_op_var_ty var_ty) {
+struct ir_op *replace_ir_op(struct ir_builder *irb, struct ir_op *op,
+                            enum ir_op_ty ty, struct ir_op_var_ty var_ty) {
   UNUSED_ARG(irb);
   debug_assert(op, "invalid replacement point!");
 
@@ -523,7 +523,6 @@ struct ir_op *replace_ir_op(struct ir_builder *irb,
 
   return op;
 }
-
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
@@ -782,7 +781,8 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
   return end_bb;
 }
 
-void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op, const struct ir_op_var_ty *var_ty) {
+void make_sym_ref(struct ir_builder *irb, const char *sym_name,
+                  struct ir_op *op, const struct ir_op_var_ty *var_ty) {
   struct ir_op_glb_ref *glb_ref = &op->glb_ref;
 
   op->ty = IR_OP_TY_GLB_REF;
@@ -798,10 +798,11 @@ void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op
   irb->global_refs = glb_ref;
 }
 
-void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *op, const struct ir_op_var_ty *var_ty) {
+void make_string_ref(struct ir_builder *irb, const char *string,
+                     struct ir_op *op, const struct ir_op_var_ty *var_ty) {
   struct ir_op_glb_ref *glb_ref = &op->glb_ref;
 
-  size_t index = irb->strings ? irb->strings->index_from_back + 1: 0;
+  size_t index = irb->strings ? irb->strings->index_from_back + 1 : 0;
 
   struct ir_string *str = arena_alloc(irb->arena, sizeof(*str));
   str->data = string;
@@ -812,7 +813,7 @@ void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *o
 
   op->ty = IR_OP_TY_GLB_REF;
   op->var_ty = *var_ty;
-  
+
   glb_ref->ty = IR_OP_GLB_REF_TY_STR;
   glb_ref->string = str;
   glb_ref->metadata = NULL;
@@ -820,4 +821,3 @@ void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *o
   glb_ref->succ = irb->global_refs;
   irb->global_refs = glb_ref;
 }
-

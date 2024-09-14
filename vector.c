@@ -65,12 +65,13 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
   if (!num_elems) {
     return;
   }
-  
+
   if (v->len + num_elems > v->capacity) {
     vector_expand(v, v->len + num_elems);
   }
 
-  debug_assert(v->capacity >= v->len + num_elems, "vector did not expand properly");
+  debug_assert(v->capacity >= v->len + num_elems,
+               "vector did not expand properly");
 
   if (data) {
     void *end = &v->data[v->len * v->element_size];
@@ -78,7 +79,7 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
   }
 
   v->len += num_elems;
-}  
+}
 
 void vector_resize(struct vector *v, size_t size) {
   debug_assert(size <= v->len, "resizing too big");
@@ -89,9 +90,7 @@ size_t vector_length(struct vector *v) { return v->len; }
 
 size_t vector_byte_size(struct vector *v) { return v->len * v->element_size; }
 
-void *vector_head(struct vector *v) {
-  return v->data;
-}
+void *vector_head(struct vector *v) { return v->data; }
 
 void *vector_get(struct vector *v, size_t index) {
   debug_assert(index < v->len, "index out of bounds!");

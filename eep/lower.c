@@ -9,7 +9,7 @@
 // quot:
 //   `x = a % b` -> `c = a / b; x = a - (c * b)`
 static void lower_mul(struct ir_builder *func, struct ir_op *op) {
-  struct ir_basicblock *orig_bb = op->stmt->basicblock;  
+  struct ir_basicblock *orig_bb = op->stmt->basicblock;
 
   struct ir_op *op1 = op->binary_op.lhs;
   struct ir_op *op2 = op->binary_op.rhs;
@@ -46,7 +46,8 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   struct ir_basicblock *shift_bb = alloc_ir_basicblock(func);
   struct ir_stmt *shift_stmt = alloc_ir_stmt(func, shift_bb);
 
-  struct ir_basicblock *end_bb = insert_basicblocks_after(func, op, while_cond_bb);
+  struct ir_basicblock *end_bb =
+      insert_basicblocks_after(func, op, while_cond_bb);
   end_bb->num_preds = 1;
   end_bb->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
   end_bb->preds[0] = while_cond_bb;
@@ -64,7 +65,6 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
 
   shift_bb->ty = IR_BASICBLOCK_TY_MERGE;
   shift_bb->merge.target = while_cond_bb;
-
 
   // struct ir_op *cnst_0 = alloc_ir_op(func, op->stmt);
   struct ir_op *cnst_0 = op;
@@ -85,7 +85,8 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   op1_shifted->ty = IR_OP_TY_PHI;
   op1_shifted->var_ty = var_ty;
   op1_shifted->phi.num_values = 2;
-  op1_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  op1_shifted->phi.values = arena_alloc(
+      func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
   op1_shifted->phi.values[0] = op1;
   op1_shifted->phi.values[1] = op1_shifted_r1;
 
@@ -101,7 +102,8 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   op2_shifted->ty = IR_OP_TY_PHI;
   op2_shifted->var_ty = var_ty;
   op2_shifted->phi.num_values = 2;
-  op2_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op2_shifted->phi.num_values);
+  op2_shifted->phi.values = arena_alloc(
+      func->arena, sizeof(struct ir_op *) * op2_shifted->phi.num_values);
   op2_shifted->phi.values[0] = op2;
   op2_shifted->phi.values[1] = op2_shifted_l1;
 
@@ -115,7 +117,7 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   while_br_cond->ty = IR_OP_TY_BR_COND;
   while_br_cond->var_ty = IR_OP_VAR_TY_NONE;
   while_br_cond->br_cond.cond = op1_shifted;
-  
+
   // op1 & 1
   struct ir_op *if_cond = alloc_ir_op(func, if_cond_stmt);
   if_cond->ty = IR_OP_TY_BINARY_OP;
@@ -129,7 +131,7 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   if_br_cond->ty = IR_OP_TY_BR_COND;
   if_br_cond->var_ty = IR_OP_VAR_TY_NONE;
   if_br_cond->br_cond.cond = if_cond;
-    
+
   struct ir_op *sum = alloc_ir_op(func, if_body_stmt);
   struct ir_op *sum_plus_op2shifted = alloc_ir_op(func, if_body_stmt);
 
@@ -137,7 +139,8 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   sum->ty = IR_OP_TY_PHI;
   sum->var_ty = var_ty;
   sum->phi.num_values = 2;
-  sum->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  sum->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) *
+                                                 op1_shifted->phi.num_values);
   sum->phi.values[0] = cnst_0;
   sum->phi.values[1] = sum_plus_op2shifted;
 
@@ -159,7 +162,7 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
 }
 
 static void lower_div(struct ir_builder *func, struct ir_op *op) {
-  struct ir_basicblock *orig_bb = op->stmt->basicblock;  
+  struct ir_basicblock *orig_bb = op->stmt->basicblock;
 
   struct ir_op *op1 = op->binary_op.lhs;
   struct ir_op *op2 = op->binary_op.rhs;
@@ -170,14 +173,14 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   //     if (divisor == 0) {
   //         return INT_MAX; // handle division by zero
   //     }
-    
+
   //     int sign = ((dividend < 0) ^ (divisor < 0)) ? -1 : 1;
-    
+
   //     T absDividend = abs(dividend);
   //     T absDivisor = abs(divisor);
   //     T temp = 1;
   //     T quotient = 0;
-    
+
   //     while (absDividend >= absDivisor) {
   //         absDivisor <<= 1;
   //         temo <<= 1;
@@ -192,7 +195,7 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   //             quotient += temp;
   //         }
   //     }
-    
+
   //     return sign * quotient;
 
   // 0
@@ -202,8 +205,6 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
 
   // struct ir_basicblock *div_zero_body_bb = alloc_ir_basicblock(func);
   // struct ir_stmt *div_zero_body_stmt = alloc_ir_stmt(func, div_zero_body_bb);
-
-  
 
   struct ir_basicblock *while_cond_bb = alloc_ir_basicblock(func);
   struct ir_stmt *while_cond_stmt = alloc_ir_stmt(func, while_cond_bb);
@@ -217,7 +218,8 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   struct ir_basicblock *shift_bb = alloc_ir_basicblock(func);
   struct ir_stmt *shift_stmt = alloc_ir_stmt(func, shift_bb);
 
-  struct ir_basicblock *end_bb = insert_basicblocks_after(func, op, while_cond_bb);
+  struct ir_basicblock *end_bb =
+      insert_basicblocks_after(func, op, while_cond_bb);
   end_bb->num_preds = 1;
   end_bb->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
   end_bb->preds[0] = while_cond_bb;
@@ -235,7 +237,6 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
 
   shift_bb->ty = IR_BASICBLOCK_TY_MERGE;
   shift_bb->merge.target = while_cond_bb;
-
 
   // struct ir_op *cnst_0 = alloc_ir_op(func, op->stmt);
   struct ir_op *cnst_0 = op;
@@ -256,7 +257,8 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   op1_shifted->ty = IR_OP_TY_PHI;
   op1_shifted->var_ty = var_ty;
   op1_shifted->phi.num_values = 2;
-  op1_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  op1_shifted->phi.values = arena_alloc(
+      func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
   op1_shifted->phi.values[0] = op1;
   op1_shifted->phi.values[1] = op1_shifted_r1;
 
@@ -272,7 +274,8 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   op2_shifted->ty = IR_OP_TY_PHI;
   op2_shifted->var_ty = var_ty;
   op2_shifted->phi.num_values = 2;
-  op2_shifted->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op2_shifted->phi.num_values);
+  op2_shifted->phi.values = arena_alloc(
+      func->arena, sizeof(struct ir_op *) * op2_shifted->phi.num_values);
   op2_shifted->phi.values[0] = op2;
   op2_shifted->phi.values[1] = op2_shifted_l1;
 
@@ -286,7 +289,7 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   while_br_cond->ty = IR_OP_TY_BR_COND;
   while_br_cond->var_ty = IR_OP_VAR_TY_NONE;
   while_br_cond->br_cond.cond = op1_shifted;
-  
+
   // op1 & 1
   struct ir_op *if_cond = alloc_ir_op(func, if_cond_stmt);
   if_cond->ty = IR_OP_TY_BINARY_OP;
@@ -300,7 +303,7 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   if_br_cond->ty = IR_OP_TY_BR_COND;
   if_br_cond->var_ty = IR_OP_VAR_TY_NONE;
   if_br_cond->br_cond.cond = if_cond;
-    
+
   struct ir_op *sum = alloc_ir_op(func, if_body_stmt);
   struct ir_op *sum_plus_op2shifted = alloc_ir_op(func, if_body_stmt);
 
@@ -308,7 +311,8 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   sum->ty = IR_OP_TY_PHI;
   sum->var_ty = var_ty;
   sum->phi.num_values = 2;
-  sum->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) * op1_shifted->phi.num_values);
+  sum->phi.values = arena_alloc(func->arena, sizeof(struct ir_op *) *
+                                                 op1_shifted->phi.num_values);
   sum->phi.values[0] = cnst_0;
   sum->phi.values[1] = sum_plus_op2shifted;
 
@@ -406,10 +410,10 @@ static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   // ldr/str don't write to flags, so insert `mov <reg>, <reg>` to get flags
   // phi does not guarantee ldr, but the optimiser can always remove it later
   // if (op->br_cond.cond->ty == IR_OP_TY_PHI) {
-    struct ir_op *mov =
-        insert_before_ir_op(irb, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
-    mov->mov.value = op->br_cond.cond;
-    op->br_cond.cond = mov;
+  struct ir_op *mov =
+      insert_before_ir_op(irb, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+  mov->mov.value = op->br_cond.cond;
+  op->br_cond.cond = mov;
   // }
 
   insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);

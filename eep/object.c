@@ -1,5 +1,6 @@
-#include "isa.h"
 #include "object.h"
+
+#include "isa.h"
 
 void write_eep(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
@@ -8,7 +9,7 @@ void write_eep(const struct build_object_args *args) {
     exit(EXIT_FAILURE);
   }
 
-  const unsigned short * const instr = (unsigned short *)args->data;
+  const unsigned short *const instr = (unsigned short *)args->data;
   size_t num_instrs = args->len_data / EEP_INSTR_SIZE;
 
   for (size_t i = 0; i < num_instrs; i++) {
@@ -19,4 +20,3 @@ void write_eep(const struct build_object_args *args) {
 
   fclose(file);
 }
-

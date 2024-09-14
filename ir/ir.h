@@ -45,15 +45,15 @@ struct ir_op_glb_ref {
   enum ir_op_glb_ref_ty ty;
 
   union {
-    const char* sym_name;
+    const char *sym_name;
     struct ir_string *string;
   };
 
   struct ir_op_glb_ref *succ;
 
   // ugly HACK: the globals list is just globals, so we have _another_
-  // metadata field on this as iterating globals does not give access to the containing
-  // ops metadata
+  // metadata field on this as iterating globals does not give access to the
+  // containing ops metadata
   void *metadata;
 };
 
@@ -192,7 +192,6 @@ struct ir_op_var_func_ty {
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);
 
-
 struct ir_op_var_pointer_ty {
   struct ir_op_var_ty *underlying;
 };
@@ -244,7 +243,8 @@ enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
   IR_OP_FLAG_MUST_SPILL = 1,
   IR_OP_FLAG_PARAM = 2,
-  // do not give this a reg/local as it is a phi node that will take the reg/local of that phi
+  // do not give this a reg/local as it is a phi node that will take the
+  // reg/local of that phi
   IR_OP_FLAG_DONT_GIVE_SLOT = 4,
   // TODO: should be arm64 specific
   // indicates to use an 8 byte slot
@@ -281,7 +281,8 @@ struct ir_op {
   };
 
   // only meaningful post register-allocation
-  // `live_regs` is bitmask of all registers with values live, needed for spilling
+  // `live_regs` is bitmask of all registers with values live, needed for
+  // spilling
   unsigned long live_regs;
   unsigned long reg;
   unsigned long lcl_idx;
@@ -383,12 +384,13 @@ struct ir_string {
 
   struct ir_string *succ;
 
-  // because the linked list is built from the end (first element), this is an index from the back
+  // because the linked list is built from the end (first element), this is an
+  // index from the back
   size_t index_from_back;
 };
 
 // struct ir_lcl {
-  
+
 // };
 
 struct ir_builder {
@@ -408,7 +410,8 @@ struct ir_builder {
   // used for relocation generation
   // this currenty ends up being a backwards list
   // but this should not be relied on
-  // note that globals may be "true" globals (such as symbols) but also just strings from outside the physical function body
+  // note that globals may be "true" globals (such as symbols) but also just
+  // strings from outside the physical function body
   struct ir_op_glb_ref *global_refs;
 
   // linked lists containing the string literals used by the function
@@ -433,7 +436,8 @@ struct ir_builder {
 
   // stack spaces from this can be reused, so we store them here
   // `num_locals` is still always correct, these fields are used by `lower.c`
-  // to determine whether new locals need to be added or there are enough already
+  // to determine whether new locals need to be added or there are enough
+  // already
   size_t num_call_saves;
   size_t total_call_saves_size;
 
@@ -461,8 +465,10 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
 void clear_metadata(struct ir_builder *irb);
 void rebuild_ids(struct ir_builder *irb);
 
-void make_sym_ref(struct ir_builder *irb, const char *sym_name, struct ir_op *op, const struct ir_op_var_ty *var_ty);
-void make_string_ref(struct ir_builder *irb, const char *string, struct ir_op *op, const struct ir_op_var_ty *var_ty);
+void make_sym_ref(struct ir_builder *irb, const char *sym_name,
+                  struct ir_op *op, const struct ir_op_var_ty *var_ty);
+void make_string_ref(struct ir_builder *irb, const char *string,
+                     struct ir_op *op, const struct ir_op_var_ty *var_ty);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
@@ -475,10 +481,11 @@ void add_pred_to_basicblock(struct ir_builder *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_basicblock *pred);
 
-// NOTE: does NOT connect the blocks to the end (return) block, must be done manually
+// NOTE: does NOT connect the blocks to the end (return) block, must be done
+// manually
 struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
-                              struct ir_op *insert_after,
-                              struct ir_basicblock *first);
+                                               struct ir_op *insert_after,
+                                               struct ir_basicblock *first);
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -495,9 +502,8 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
 void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
                  struct ir_op *right);
 
-struct ir_op *replace_ir_op(struct ir_builder *irb,
-                                  struct ir_op *op, enum ir_op_ty ty,
-                                  struct ir_op_var_ty var_ty);
+struct ir_op *replace_ir_op(struct ir_builder *irb, struct ir_op *op,
+                            enum ir_op_ty ty, struct ir_op_var_ty var_ty);
 
 struct ir_op *insert_before_ir_op(struct ir_builder *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
