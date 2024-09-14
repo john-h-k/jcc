@@ -1,14 +1,14 @@
 #ifndef LSRA_H
 #define LSRA_H
 
-#include <stddef.h>
-
 #include "ir/build.h"
 
-// This follows a very specific ordering. Indices are used to represent registers
-// For register N, if `N < num_volatile`, it represents a volatile reg
-// For register N, if `N >= num_volatile && N < (num_volatile + num_nonvolatile)`, it is an involatile reg
-// Else, it is a reserved reg
+#include <stddef.h>
+
+// This follows a very specific ordering. Indices are used to represent
+// registers For register N, if `N < num_volatile`, it represents a volatile reg
+// For register N, if `N >= num_volatile && N < (num_volatile +
+// num_nonvolatile)`, it is an involatile reg Else, it is a reserved reg
 struct reg_info {
   size_t num_volatile;
   size_t num_nonvolatile;

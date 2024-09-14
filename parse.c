@@ -1,12 +1,12 @@
 #include "parse.h"
 
 #include "alloc.h"
+#include "bit_twiddle.h"
 #include "lex.h"
 #include "log.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
-#include "bit_twiddle.h"
 
 #include <alloca.h>
 #include <string.h>
@@ -161,18 +161,18 @@ bool is_integral_ty(const struct ast_tyref *ty) {
   }
 
   switch (ty->well_known) {
-      case WELL_KNOWN_TY_SIGNED_CHAR:
-      case WELL_KNOWN_TY_UNSIGNED_CHAR:
-      case WELL_KNOWN_TY_SIGNED_SHORT:
-      case WELL_KNOWN_TY_UNSIGNED_SHORT:
-      case WELL_KNOWN_TY_SIGNED_INT:
-      case WELL_KNOWN_TY_UNSIGNED_INT:
-      case WELL_KNOWN_TY_SIGNED_LONG:
-      case WELL_KNOWN_TY_UNSIGNED_LONG:
-      case WELL_KNOWN_TY_SIGNED_LONG_LONG:
-      case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
-        return true;
-    }
+  case WELL_KNOWN_TY_SIGNED_CHAR:
+  case WELL_KNOWN_TY_UNSIGNED_CHAR:
+  case WELL_KNOWN_TY_SIGNED_SHORT:
+  case WELL_KNOWN_TY_UNSIGNED_SHORT:
+  case WELL_KNOWN_TY_SIGNED_INT:
+  case WELL_KNOWN_TY_UNSIGNED_INT:
+  case WELL_KNOWN_TY_SIGNED_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG:
+  case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+    return true;
+  }
 }
 
 // FIXME: type pooling so we don't end up with lots of duplicate types
@@ -541,7 +541,8 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
-  if (is_literal_token(parser, token.ty, &ty_ref) && token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
+  if (is_literal_token(parser, token.ty, &ty_ref) &&
+      token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
     cnst->cnst_ty = ty_ref;
     cnst->str_value = associated_text(parser->lexer, &token);
 
@@ -551,7 +552,6 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   backtrack(parser->lexer, pos);
   return false;
-
 }
 
 bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
@@ -598,10 +598,11 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 
     return true;
   }
-  
+
   backtrack(parser->lexer, pos);
 
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     arg_list->args = NULL;
     arg_list->num_args = 0;
 
@@ -1383,13 +1384,11 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
 
     // variadic parameter pack
     param->var_ty = (struct ast_tyref){
-      .ty = AST_TYREF_TY_VARIADIC,
+        .ty = AST_TYREF_TY_VARIADIC,
     };
-    param->var = (struct ast_var){
-      .scope = cur_scope(&parser->var_table),
-      .identifier = token
-    };
-    
+    param->var = (struct ast_var){.scope = cur_scope(&parser->var_table),
+                                  .identifier = token};
+
     return true;
   }
 
@@ -1602,7 +1601,7 @@ bool parse_enumcnst(struct parser *parser, struct ast_enumcnst *enum_cnst) {
 
     enum_cnst->ty = AST_ENUMCNST_TY_EXPLICIT_VALUE;
     enum_cnst->value = cnst.int_value;
-  }  
+  }
 
   return true;
 }
@@ -1628,7 +1627,7 @@ bool parse_enumdef(struct parser *parser, struct ast_enumdef *enum_def) {
 
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
     backtrack(parser->lexer, pos);
-    return false; 
+    return false;
   }
 
   struct vector *cnsts = vector_create(sizeof(struct ast_enumcnst));
@@ -1646,18 +1645,17 @@ bool parse_enumdef(struct parser *parser, struct ast_enumdef *enum_def) {
     entry->flags |= VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL;
     entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
     *(struct ast_tyref *)entry->value = (struct ast_tyref){
-      .ty = AST_TYREF_TY_WELL_KNOWN,
-      .well_known = WELL_KNOWN_TY_SIGNED_INT
-    };
-    
+        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_INT};
+
     vector_push_back(cnsts, &enum_cnst);
 
     if (!parse_token(parser, LEX_TOKEN_TY_COMMA)) {
       break;
     }
   }
-  
-  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE) && parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+
+  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     enum_def->num_enum_cnsts = vector_length(cnsts);
     enum_def->enum_cnsts = arena_alloc(parser->arena, vector_byte_size(cnsts));
     vector_copy_to(cnsts, enum_def->enum_cnsts);
@@ -1666,7 +1664,7 @@ bool parse_enumdef(struct parser *parser, struct ast_enumdef *enum_def) {
   }
 
   backtrack(parser->lexer, pos);
-  return false; 
+  return false;
 }
 
 struct parse_result parse(struct parser *parser) {
@@ -1698,7 +1696,7 @@ struct parse_result parse(struct parser *parser) {
       vector_push_back(func_defs, &func_def);
       continue;
     }
-    
+
     struct ast_enumdef enum_def;
     if (parse_enumdef(parser, &enum_def)) {
       info("found enum definition '%s'",
@@ -1706,7 +1704,7 @@ struct parse_result parse(struct parser *parser) {
       vector_push_back(enum_defs, &enum_def);
       continue;
     }
-    
+
     if (!lexer_at_eof(lexer)) {
       // parser failed
       err("parser finished at position %d", get_position(lexer).idx);
@@ -1748,12 +1746,12 @@ struct ast_printstate {
   void parse_debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name)
 
 #define DEBUG_FUNC(ty, name)                                                   \
-  void parse_debug_print_##ty(struct ast_printstate *state, struct ast_##ty *name)
+  void parse_debug_print_##ty(struct ast_printstate *state,                    \
+                              struct ast_##ty *name)
 #define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
 
 #define AST_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
-#define AST_PRINT_SAMELINE_NOINDENT(fmt, ...)                                           \
-  slogsl(fmt, __VA_ARGS__)
+#define AST_PRINT_SAMELINE_NOINDENT(fmt, ...) slogsl(fmt, __VA_ARGS__)
 
 #define AST_PRINT_SAMELINE_Z(fmt) slogsl("%*s" fmt, state->indent * 4, "")
 #define AST_PRINT_SAMELINE(fmt, ...)                                           \
@@ -1763,7 +1761,11 @@ struct ast_printstate {
 #define AST_PRINT(fmt, ...) AST_PRINT_SAMELINE(fmt "\n", __VA_ARGS__)
 
 #define INDENT() state->indent++
-#define UNINDENT() do { state->indent--; debug_assert(state->indent >= 0, "indent negative!"); } while(0);
+#define UNINDENT()                                                             \
+  do {                                                                         \
+    state->indent--;                                                           \
+    debug_assert(state->indent >= 0, "indent negative!");                      \
+  } while (0);
 
 #define PUSH_INDENT()                                                          \
   int tmp_indent = state->indent;                                              \
@@ -1772,7 +1774,7 @@ struct ast_printstate {
 
 DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
   UNUSED_ARG(state);
-  
+
   if (*type_qualifier_flags & AST_TYPE_QUALIFIER_FLAG_CONST) {
     AST_PRINTZ("CONST");
   }
@@ -2226,7 +2228,9 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   AST_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(tyref, &param->var_ty);
-  AST_PRINT(" '%s' SCOPE %d", associated_text(state->parser->lexer, &param->var.identifier), param->var.scope);
+  AST_PRINT(" '%s' SCOPE %d",
+            associated_text(state->parser->lexer, &param->var.identifier),
+            param->var.scope);
 }
 
 DEBUG_FUNC(paramlist, param_list) {
@@ -2261,12 +2265,13 @@ DEBUG_FUNC(funcdecl, func_decl) {
 DEBUG_FUNC(enumcnst, enum_cnst) {
   AST_PRINTZ("ENUM CONSTANT ");
   INDENT();
-  AST_PRINT_SAMELINE("NAME %s ", associated_text(state->parser->lexer, &enum_cnst->identifier));
+  AST_PRINT_SAMELINE("NAME %s ", associated_text(state->parser->lexer,
+                                                 &enum_cnst->identifier));
   switch (enum_cnst->ty) {
   case AST_ENUMCNST_TY_EXPLICIT_VALUE:
     AST_PRINT_SAMELINE("VALUE %ull ", enum_cnst->value);
 
-      break;
+    break;
   case AST_ENUMCNST_TY_IMPLICIT_VALUE:
     break;
   }
@@ -2277,7 +2282,9 @@ DEBUG_FUNC(enumcnst, enum_cnst) {
 
 DEBUG_FUNC(enumdef, enum_def) {
   AST_PRINTZ("ENUM DECLARATION ");
-  AST_PRINT("NAME %s ", enum_def->name ? associated_text(state->parser->lexer, enum_def->name) : NULL);
+  AST_PRINT("NAME %s ", enum_def->name ? associated_text(state->parser->lexer,
+                                                         enum_def->name)
+                                       : NULL);
 
   INDENT();
   for (size_t i = 0; i < enum_def->num_enum_cnsts; i++) {
@@ -2285,7 +2292,6 @@ DEBUG_FUNC(enumdef, enum_def) {
   }
   UNINDENT();
 }
-
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {

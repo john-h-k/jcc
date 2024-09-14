@@ -38,8 +38,8 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   header.ncmds = 4;
   header.sizeofcmds =
       sizeof(struct segment_command_64) + sizeof(struct section_64) +
-      sizeof(struct section_64) + sizeof(struct build_version_command) + sizeof(struct symtab_command) +
-      sizeof(struct dysymtab_command);
+      sizeof(struct section_64) + sizeof(struct build_version_command) +
+      sizeof(struct symtab_command) + sizeof(struct dysymtab_command);
   header.flags = 0;
 
   fwrite(&header, sizeof(header), 1, file);
@@ -51,10 +51,11 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
 void write_relocations(FILE *file, const struct build_object_args *args) {
-  // FIXME: currently str relocs are based on hardcoded indices that link the compiler/emitter/object builder
-  // they should probably go to a hashmap against id like how the other relocs work
-  // in current state, it is _required_ that you see all the SINGLE relocs before the PAIR relocs
-  // it goes symbols -> strings -> external symbols
+  // FIXME: currently str relocs are based on hardcoded indices that link the
+  // compiler/emitter/object builder they should probably go to a hashmap
+  // against id like how the other relocs work in current state, it is
+  // _required_ that you see all the SINGLE relocs before the PAIR relocs it
+  // goes symbols -> strings -> external symbols
 
   size_t num_non_str_syms = 0;
   for (size_t i = 0; i < args->num_symbols; i++) {
@@ -188,7 +189,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   version.minos = ENCODE_MINOS(12, 0, 0);
   version.sdk = ENCODE_SDK(0, 0, 0);
   version.ntools = 0;
-  
+
   struct symtab_command symtab;
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;

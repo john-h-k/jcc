@@ -53,8 +53,8 @@ bool valid_first_identifier_char(char c) {
   return !isdigit(c) && valid_identifier_char(c);
 }
 
-/* The lexer parses identifiers, but these could be identifiers, typedef-names, or keywords.
-   This function converts identifiers into their "real" type */
+/* The lexer parses identifiers, but these could be identifiers, typedef-names,
+   or keywords. This function converts identifiers into their "real" type */
 enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
                             struct text_pos end) {
   struct keyword {
@@ -65,8 +65,8 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
 
   size_t len = text_pos_len(start, end);
 
-  #define KEYWORD(kw, ty)                                                        \
-    { kw, sizeof(kw) - 1, ty }
+#define KEYWORD(kw, ty)                                                        \
+  { kw, sizeof(kw) - 1, ty }
 
   // TODO: hashify
   static struct keyword keywords[] = {
@@ -98,12 +98,11 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("union", LEX_TOKEN_TY_KW_UNION),
   };
 
-  #undef KEYWORD
+#undef KEYWORD
 
   for (size_t i = 0; i < ARR_LENGTH(keywords); i++) {
     if (len == keywords[i].len &&
-        memcmp(&lexer->text[start.idx], keywords[i].str, len) ==
-            0) {
+        memcmp(&lexer->text[start.idx], keywords[i].str, len) == 0) {
       return keywords[i].ty;
     }
   }
@@ -163,17 +162,19 @@ const char *process_raw_string(struct lexer *lexer, const struct token *token) {
   // TODO: this i think will wrongly accept multilines
 
   size_t max_str_len = token->span.end.idx - token->span.start.idx;
-  
+
   char *buff = arena_alloc(lexer->arena, max_str_len - 1);
 
   size_t str_len = 0;
   bool char_escaped = false;
-  for (size_t i = token->span.start.idx + 1; i <= token->span.end.idx && !(!char_escaped && lexer->text[i] == '"'); i++) {
+  for (size_t i = token->span.start.idx + 1;
+       i <= token->span.end.idx && !(!char_escaped && lexer->text[i] == '"');
+       i++) {
     if (char_escaped) {
-      #define ADD_ESCAPED(ch, esc) \
-        case ch: \
-          buff[str_len++] = esc; \
-          break;
+#define ADD_ESCAPED(ch, esc)                                                   \
+  case ch:                                                                     \
+    buff[str_len++] = esc;                                                     \
+    break;
 
       switch (lexer->text[i]) {
         ADD_ESCAPED('a', '\a')
@@ -189,13 +190,13 @@ const char *process_raw_string(struct lexer *lexer, const struct token *token) {
         ADD_ESCAPED('\'', '\'')
         ADD_ESCAPED('"', '"')
         ADD_ESCAPED('?', '\?')
-        default:
-          todo("\\x \\u \\U and \\octal escapes");
-          // either octal escape, or invalid
-          break;
+      default:
+        todo("\\x \\u \\U and \\octal escapes");
+        // either octal escape, or invalid
+        break;
       }
 
-      #undef ADD_ESCAPED
+#undef ADD_ESCAPED
     } else if (lexer->text[i] != '\\') {
       buff[str_len++] = lexer->text[i];
     }
@@ -207,7 +208,6 @@ const char *process_raw_string(struct lexer *lexer, const struct token *token) {
   buff[str_len] = 0;
   return buff;
 }
-
 
 /* Attempts to consume and move forward the position if it finds char `c` */
 bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
@@ -302,7 +302,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
       ty = LEX_TOKEN_TY_DOT;
     }
     break;
-
 
   case '>':
     next_col(&end);
@@ -434,7 +433,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // move forward while
       bool char_escaped = false;
-      for (size_t i = end.idx; i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
+      for (size_t i = end.idx;
+           i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
         // next char is escaped if this char is a non-escaped backslash
         char_escaped = !char_escaped && lexer->text[i] == '\\';
         next_col(&end);
@@ -451,7 +451,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // move forward while
       bool char_escaped = false;
-      for (size_t i = end.idx; i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
+      for (size_t i = end.idx;
+           i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
         // next char is escaped if this char is a non-escaped backslash
         char_escaped = !char_escaped && lexer->text[i] == '\\';
         next_col(&end);
@@ -459,7 +460,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // skip final double-quote
       next_col(&end);
-    
+
     } else if (isdigit(c)) {
       ty = LEX_TOKEN_TY_SIGNED_INT_LITERAL;
 

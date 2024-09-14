@@ -5,7 +5,7 @@ int main() {
   int a = 10, b = 7;
 
   int answer;
-  
+
   if (a % b) {
     answer = 5;
   } else {

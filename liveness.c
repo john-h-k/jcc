@@ -1,4 +1,5 @@
 #include "liveness.h"
+
 #include "bit_twiddle.h"
 #include "ir/ir.h"
 
@@ -12,8 +13,8 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
 
 // walks across the blocks to determine the end range for a phi's dependency
 static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
-                       struct ir_op *source_phi,
-                       struct ir_basicblock *basicblock) {
+                              struct ir_op *source_phi,
+                              struct ir_basicblock *basicblock) {
 
   if (!basicblock || basicblocks_visited[basicblock->id]) {
     return 0;
@@ -37,9 +38,9 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
     if (basicblock->merge.target->id == target_bb) {
       return this;
     }
-    
+
     size_t target = walk_basicblock(irb, basicblocks_visited, source_phi,
-                                     basicblock->merge.target);
+                                    basicblock->merge.target);
     return MAX(this, target);
   case IR_BASICBLOCK_TY_RET:
     // this means this path did *not* reach the phi
@@ -47,15 +48,15 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   }
 }
 
-
 unsigned *find_basicblock_ranges(struct ir_builder *irb) {
   // FIXME: *very* memory expensive |BBs|^2 space
-  unsigned *basicblock_max_id = arena_alloc(irb->arena, sizeof(*basicblock_max_id) *
-                                                      irb->basicblock_count *
-                                                      irb->basicblock_count);
+  unsigned *basicblock_max_id = arena_alloc(
+      irb->arena, sizeof(*basicblock_max_id) * irb->basicblock_count *
+                      irb->basicblock_count);
 
   memset(basicblock_max_id, 0,
-         sizeof(*basicblock_max_id) * irb->basicblock_count * irb->basicblock_count);
+         sizeof(*basicblock_max_id) * irb->basicblock_count *
+             irb->basicblock_count);
 
   bool *basicblocks_visited = arena_alloc(
       irb->arena, sizeof(*basicblocks_visited) * irb->basicblock_count);
@@ -74,7 +75,8 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *value = op->phi.values[i];
 
-            size_t len_id = (basicblock->id * irb->basicblock_count) + value->stmt->basicblock->id;
+            size_t len_id = (basicblock->id * irb->basicblock_count) +
+                            value->stmt->basicblock->id;
 
             size_t len;
             if (basicblock_max_id[len_id]) {
@@ -83,7 +85,8 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
               memset(basicblocks_visited, 0,
                      sizeof(*basicblocks_visited) * irb->basicblock_count);
 
-              len = walk_basicblock(irb, basicblocks_visited, op, value->stmt->basicblock);
+              len = walk_basicblock(irb, basicblocks_visited, op,
+                                    value->stmt->basicblock);
               basicblock_max_id[len_id] = len;
             }
           }
@@ -129,13 +132,14 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        struct interval *interval = &data.intervals[op->id];        
+        struct interval *interval = &data.intervals[op->id];
 
         if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
           op->reg = arg_regs++;
         } else {
           // // reset registers unless flags because flags is never allocated
-          // if (op->reg != REG_FLAGS && !(op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
+          // if (op->reg != REG_FLAGS && !(op->flags &
+          // IR_OP_FLAG_DONT_GIVE_SLOT)) {
           //   op->reg = NO_REG;
           // }
         }
@@ -172,7 +176,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
     basicblock = basicblock->succ;
   }
 
-  // now we use each phi to set it (and its dependent intervals) to the min/max of the dependents
+  // now we use each phi to set it (and its dependent intervals) to the min/max
+  // of the dependents
   basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -186,9 +191,11 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i];
-            struct interval *dependent_interval = &data.intervals[dependent->id];
+            struct interval *dependent_interval =
+                &data.intervals[dependent->id];
 
-            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count + dependent->stmt->basicblock->id;
+            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count +
+                             dependent->stmt->basicblock->id;
 
             debug_assert(bb_ranges[path_id], "bb_len was 0");
             size_t dependent_path_end = bb_ranges[path_id];
@@ -202,19 +209,23 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i];
-            struct interval *dependent_interval = &data.intervals[dependent->id];
+            struct interval *dependent_interval =
+                &data.intervals[dependent->id];
 
-            // a phi can be dependent on itself, and in that case we still need it to be assigned a register
+            // a phi can be dependent on itself, and in that case we still need
+            // it to be assigned a register
             if (dependent->id != op->id) {
               dependent->flags |= IR_OP_FLAG_DONT_GIVE_SLOT;
             }
 
-            dependent_interval->start = MIN(dependent_interval->start, interval->start);
-            dependent_interval->end = MAX(dependent_interval->end, interval->end);
+            dependent_interval->start =
+                MIN(dependent_interval->start, interval->start);
+            dependent_interval->end =
+                MAX(dependent_interval->end, interval->end);
           }
         }
 
-        op = op->succ;    
+        op = op->succ;
       }
 
       stmt = stmt->succ;
@@ -276,4 +287,3 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     print_live_regs(file, live_regs);
   }
 }
-

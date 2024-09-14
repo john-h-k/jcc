@@ -1,15 +1,13 @@
 #include "compiler.h"
 
 #include "aarch64.h"
-#include "eep.h"
-
-#include "emit.h"
 #include "alloc.h"
+#include "eep.h"
+#include "emit.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/prettyprint.h"
 #include "lex.h"
-#include "parse.h"
 #include "log.h"
 #include "lsra.h"
 #include "macos/mach-o.h"
@@ -29,7 +27,8 @@ struct compiler {
   char *output;
 };
 
-const char *mangle_str_cnst_name(struct arena_allocator *arena, const char *func_name, size_t id) {
+const char *mangle_str_cnst_name(struct arena_allocator *arena,
+                                 const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
   func_name = "str";
   size_t func_name_len = strlen(func_name);
@@ -37,7 +36,8 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena, const char *func
   size_t len = 0;
   len += func_name_len;
   len += 2; // strlen("l_"), required for local symbols
-  len += 1; // surround function name with `.` so it cannot conflict with real names
+  len += 1; // surround function name with `.` so it cannot conflict with real
+            // names
 
   if (id) {
     len += 1; // extra "." before id
@@ -70,11 +70,11 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena, const char *func
   head += id_len;
   buff[head++] = 0;
 
-  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name", head, len);
- 
+  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name",
+               head, len);
+
   return buff;
 }
-
 
 enum compiler_create_result create_compiler(const char *program,
                                             const char *output,
@@ -106,7 +106,7 @@ void debug_print_stage(struct ir_builder *irb, const char *name) {
   char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
   strcpy(buff, name);
   strcat(buff, ".gv");
-  
+
   FILE *ir_graph = fopen(buff, "w");
   debug_print_ir_graph(ir_graph, irb);
   fclose(ir_graph);
@@ -115,7 +115,8 @@ void debug_print_stage(struct ir_builder *irb, const char *name) {
 const struct target *get_target(const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
-    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen earlier");
+    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
+        "earlier");
     break;
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     todo("macOS x64 target not yet implemented");
@@ -148,7 +149,8 @@ enum compile_result compile(struct compiler *compiler) {
   const struct target *target = get_target(&compiler->args);
 
   struct vector *symbols = vector_create(sizeof(struct symbol));
-  struct vector *external_symbols = vector_create(sizeof(struct external_symbol));
+  struct vector *external_symbols =
+      vector_create(sizeof(struct external_symbol));
 
   // FIXME: super slow quadratic we really need a hashmap
   for (size_t i = 0; i < result.translation_unit.num_func_decls; i++) {
@@ -166,10 +168,11 @@ enum compile_result compile(struct compiler *compiler) {
       }
     }
 
-    // defined symbols are pushed back after creation because only then do we know their position
+    // defined symbols are pushed back after creation because only then do we
+    // know their position
     if (!defined) {
       const char *mangled = target->mangle(compiler->arena, decl_name);
-      struct external_symbol symbol = { .name = mangled };
+      struct external_symbol symbol = {.name = mangled};
       vector_push_back(external_symbols, &symbol);
     }
   }
@@ -185,8 +188,9 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("IR BUILD");
 
-  struct ir_unit *ir = build_ir_for_translationunit(compiler->parser, compiler->arena, &result.translation_unit);
-  
+  struct ir_unit *ir = build_ir_for_translationunit(
+      compiler->parser, compiler->arena, &result.translation_unit);
+
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
 
@@ -241,7 +245,7 @@ enum compile_result compile(struct compiler *compiler) {
       rebuild_ids(irb);
 
       BEGIN_STAGE("POST POST REG LOWER IR");
-      
+
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
         debug_print_stage(irb, "post_lower");
       }
@@ -251,7 +255,8 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   // okay, we've now done everything except actually emit
-  // here we calculate the offsets for all the functions so we can emit calls correctly
+  // here we calculate the offsets for all the functions so we can emit calls
+  // correctly
   size_t offset = 0;
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
@@ -261,7 +266,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     offset = ROUND_UP(offset, target->function_alignment / target->op_size);
   }
-  
+
   size_t num_relocation_instrs = 0;
   size_t total_str_bytes = 0;
   struct vector *relocations = vector_create(sizeof(struct relocation));
@@ -288,8 +293,10 @@ enum compile_result compile(struct compiler *compiler) {
       disable_log();
     }
 
-    struct symbol symbol = {
-        .ty = SYMBOL_TY_FUNC, .visibility = SYMBOL_VISIBILITY_GLOBAL, .name = func.name, .value = total_size};
+    struct symbol symbol = {.ty = SYMBOL_TY_FUNC,
+                            .visibility = SYMBOL_VISIBILITY_GLOBAL,
+                            .name = func.name,
+                            .value = total_size};
 
     total_size += ROUND_UP(func.len_code, target->function_alignment);
     vector_push_back(compiled_functions, &func);
@@ -319,13 +326,16 @@ enum compile_result compile(struct compiler *compiler) {
     for (size_t i = 0; i < func->num_strings; i++) {
       const char *str = func->strings[i];
       const char *name = mangle_str_cnst_name(compiler->arena, func->name, i);
-      struct symbol symbol = { .ty = SYMBOL_TY_STRING, .visibility = SYMBOL_VISIBILITY_PRIVATE, .name = name, .value = total_str_bytes };
+      struct symbol symbol = {.ty = SYMBOL_TY_STRING,
+                              .visibility = SYMBOL_VISIBILITY_PRIVATE,
+                              .name = name,
+                              .value = total_str_bytes};
 
       // FIXME: this is hacky and should be handled elsewhere
       total_str_bytes += strlen(str) + 1; // null char
       vector_push_back(symbols, &symbol);
-    }    
-  
+    }
+
     memcpy(head, func->code, func->len_code);
     head += ROUND_UP(func->len_code, target->function_alignment);
   }
@@ -343,8 +353,7 @@ enum compile_result compile(struct compiler *compiler) {
       .num_extern_symbols = vector_length(external_symbols),
       .relocations = vector_head(relocations),
       .num_relocations = vector_length(relocations),
-      .num_relocation_instrs = num_relocation_instrs
-  };
+      .num_relocation_instrs = num_relocation_instrs};
 
   BEGIN_STAGE("OBJECT FILE");
 

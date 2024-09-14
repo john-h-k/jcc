@@ -1,9 +1,10 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include "util.h"
+
 #include <stdarg.h>
 #include <stdio.h>
-#include "util.h"
 
 #define DECL_LOG_FN(NAME)                                                      \
   void NAME(const char *format, ...);                                          \

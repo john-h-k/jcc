@@ -1,4 +1,5 @@
 #include "hashtbl.h"
+
 #include "util.h"
 #include "vector.h"
 
@@ -20,7 +21,8 @@ struct hashtbl {
   size_t len;
 };
 
-struct hashtbl *hashtbl_create(size_t key_size, size_t element_size, hash_fn hash_fn) {
+struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
+                               hash_fn hash_fn) {
   struct hashtbl *tbl = nonnull_malloc(sizeof(*tbl));
   tbl->hash_fn = hash_fn;
   tbl->key_size = key_size;
@@ -44,7 +46,7 @@ void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
   size_t num_buckets = vector_length(hashtbl->buckets);
 
   if (hashtbl->len + 1 > num_buckets * MAX_FILL) {
-    hashtbl_rebuild(hashtbl); 
+    hashtbl_rebuild(hashtbl);
   }
 
   hash_t bucket_idx = hash % num_buckets;
@@ -53,7 +55,7 @@ void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
 
   void *key_and_elem = vector_push_back(bucket->elems, NULL);
   memcpy(key_and_elem, key, hashtbl->key_size);
-  memcpy((char*)key_and_elem + hashtbl->key_size, data, hashtbl->element_size);
+  memcpy((char *)key_and_elem + hashtbl->key_size, data, hashtbl->element_size);
 
   hashtbl->len++;
 }
@@ -65,7 +67,7 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, void *key) {
   size_t num_buckets = vector_length(hashtbl->buckets);
 
   if (hashtbl->len + 1 > num_buckets * MAX_FILL) {
-    hashtbl_rebuild(hashtbl); 
+    hashtbl_rebuild(hashtbl);
   }
 
   hash_t bucket_idx = hash % num_buckets;
@@ -84,5 +86,3 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, void *key) {
 
   return NULL;
 }
-
-

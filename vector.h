@@ -1,8 +1,9 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
-#include <stdlib.h>
 #include "util.h"
+
+#include <stdlib.h>
 
 struct vector;
 

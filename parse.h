@@ -210,7 +210,8 @@ struct ast_compoundexpr {
   size_t num_exprs;
 };
 
-/* atom - expression which is entirely isolated and not affected by other operators in how it is parsed */
+/* atom - expression which is entirely isolated and not affected by other
+ * operators in how it is parsed */
 
 enum ast_atom_ty {
   AST_ATOM_TY_VAR,
@@ -248,7 +249,7 @@ enum ast_expr_ty {
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_BINARY_OP,
   AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
-                      // they themselves evaluate to an rvalue (unlike in C++)
+                    // they themselves evaluate to an rvalue (unlike in C++)
 };
 
 struct ast_expr {
