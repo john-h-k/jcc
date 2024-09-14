@@ -9,7 +9,10 @@ struct bitset *bitset_create(size_t num_elements);
 bool bitset_get(struct bitset *bitset, size_t idx);
 void bitset_set(struct bitset *bitset, size_t idx, bool value);
 
-size_t bitset_tzcnt(struct bitset *bitset);
+size_t bitset_length(struct bitset *bitset);
+
+unsigned long long bitset_popcnt(struct bitset *bitset);
+unsigned long long bitset_tzcnt(struct bitset *bitset);
 
 unsigned long long bitset_as_ull(struct bitset *bitset);
 

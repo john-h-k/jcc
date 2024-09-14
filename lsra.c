@@ -25,10 +25,6 @@ struct register_alloc_info {
   };
 };
 
-
-#define MARK_REG_USED(reg_pool, i) (reg_pool) &= ~(1ull << i)
-#define MARK_REG_FREE(reg_pool, i) (reg_pool) |= (1ull << i)
-
 void spill_at_interval(struct interval *intervals, size_t cur_interval,
                        size_t *active, size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
@@ -133,7 +129,8 @@ void alloc_fixup_callback(struct ir_op **op, void *metadata) {
 
     (*op)->reg = data->spill_reg;
 
-    data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
+    // FIXME: proper local sizes
+    // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
     struct ir_op *store = insert_after_ir_op(
         data->irb, *op, IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
@@ -181,7 +178,7 @@ int compare_interval_id(const void *a, const void *b) {
 }
 
 struct interval_data register_alloc_pass(struct ir_builder *irb,
-                                         struct register_alloc_info info) {
+                                         struct register_alloc_info info, size_t *max_live) {
 
   struct interval_data data = construct_intervals(irb);
 
@@ -244,10 +241,19 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
         continue;
       }
 
+      if (info.mode == REGISTER_ALLOC_MODE_LCLS && interval->op->reg != REG_SPILLED) {
+        continue;
+      }
+
       size_t free_slot = bitset_tzcnt(reg_pool);
       debug_assert(free_slot < num_regs, "reg pool unexpectedly empty!");
 
       bitset_set(reg_pool, free_slot, false);
+
+      if (max_live) {
+        *max_live = MAX(*max_live, bitset_length(reg_pool) - bitset_popcnt(reg_pool));
+      }
+
       if (info.mode == REGISTER_ALLOC_MODE_REGS &&
           free_slot >= info.reg_info.num_volatile) {
         irb->nonvolatile_registers_used |= (1ull << free_slot);
@@ -343,7 +349,7 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
   struct interval_data data = register_alloc_pass(
       irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_REGS,
-                                        .reg_info = reg_info});
+                                        .reg_info = reg_info}, NULL);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
@@ -359,8 +365,15 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
   BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
 
+  size_t max_locals = 0;
   data = register_alloc_pass(
-      irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS});
+      irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS}, &max_locals);
+
+  debug_assert(!irb->num_locals, "locals %zu already exist but should not", irb->num_locals);
+  irb->num_locals = max_locals;
+  // TODO: dont assume 8 byte locals
+  irb->total_locals_size = irb->num_locals * 8;
+  
 
   clear_metadata(irb);
 

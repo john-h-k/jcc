@@ -20,7 +20,6 @@ void eliminate_phi(struct ir_builder *irb) {
       }
 
       while (op && op->ty == IR_OP_TY_PHI) {
-        // size_t lcl_idx = irb->num_locals++;
         for (size_t i = 0; i < op->phi.num_values; i++) {
           struct ir_op *value = op->phi.values[i];
           struct ir_basicblock *basicblock = value->stmt->basicblock;

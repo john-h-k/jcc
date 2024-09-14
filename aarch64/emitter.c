@@ -286,12 +286,17 @@ void aarch64_emit_add_32_imm(struct aarch64_emitter *emitter,
 void aarch64_emit_sub_64_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg source, size_t imm,
                              struct aarch64_reg dest) {
+  invariant_assert(UNS_FITS_IN_BITS(imm, 12), "imm too big in %s", __func__);
+
   aarch64_emit(emitter, SUB_64_IMM(0, imm, source.idx, dest.idx));
 }
 
 void aarch64_emit_add_64_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg source, size_t imm,
                              struct aarch64_reg dest) {
+    
+  invariant_assert(UNS_FITS_IN_BITS(imm, 12), "imm too big in %s", __func__);
+
   aarch64_emit(emitter, ADD_64_IMM(0, imm, source.idx, dest.idx));
 }
 

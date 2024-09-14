@@ -444,6 +444,8 @@ void debug_print_ir(FILE *file, struct ir_builder *irb,
                                                .cb_metadata = cb_metadata};
 
   fprintf(file, "FUNCTION: %s\n", irb->name);
+  fprintf(file, "    num_locals: %zu\n", irb->num_locals);
+  fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 

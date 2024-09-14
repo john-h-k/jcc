@@ -25,6 +25,10 @@ struct bitset *bitset_create(size_t num_elements) {
   return bitset;
 }
 
+size_t bitset_length(struct bitset *bitset) {
+  return bitset->num_elements;
+}
+
 unsigned long long bitset_as_ull(struct bitset *bitset) {
   debug_assert(bitset->num_chunks <= 1, "too many chunks to get bitset as ull");
 
@@ -35,7 +39,27 @@ unsigned long long bitset_as_ull(struct bitset *bitset) {
   return 0;
 }
 
-size_t bitset_tzcnt(struct bitset *bitset) {
+unsigned long long bitset_popcnt(struct bitset *bitset) {
+  unsigned long long count = 0;
+
+  size_t bits_per_chunk = sizeof(chunk_t) * 8;
+  size_t num_trailing = bitset->num_elements % bits_per_chunk;
+
+  for (size_t i = 0; i < bitset->num_chunks; i++) {
+    chunk_t chunk = bitset->chunks[i];
+
+    if (num_trailing && i + 1 == bitset->num_chunks) {
+      chunk = chunk & (((chunk_t)1 << num_trailing) - (chunk_t)1);
+    }
+
+    count += popcntl(chunk);
+  }
+
+  return count;
+}
+
+
+unsigned long long bitset_tzcnt(struct bitset *bitset) {
   size_t bits_per_chunk = sizeof(chunk_t) * 8;
 
   for (size_t i = 0; i < bitset->num_chunks; i++) {

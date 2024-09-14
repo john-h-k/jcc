@@ -3,7 +3,8 @@
 #include "log.h"
 #include "util.h"
 
-#define BLOCK_SIZE (4096 * 16)
+// TODO: allow larger allocs
+#define BLOCK_SIZE (4096 * 16 * 10)
 
 struct arena;
 

@@ -56,6 +56,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // TODO: we assume all saves are 8 bytes
   func->total_call_saves_size += 8 * new_slots;
   func->total_locals_size += 8 * new_slots;
+    printf("3 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
   func->num_locals += new_slots;
 
   // call slots always at bottom
@@ -334,6 +335,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     // for x29 and x30 as they aren't working yet with pre-indexing
     func->total_locals_size += 16;
+    printf("0 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
 
     unsigned long max_nonvol_used = sizeof(func->nonvolatile_registers_used) * 8 - lzcnt(func->nonvolatile_registers_used);
     unsigned long num_saves = popcntl(func->nonvolatile_registers_used);
@@ -343,6 +345,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     func->num_locals += num_saves;
     func->total_locals_size += num_saves * 8;
+    printf("1 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
     
     for (size_t i = 0; i < max_nonvol_used; i++) {
       // FIXME: loop should start at i=first non volatile
@@ -365,8 +368,11 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
       }
     }
 
+
     func->total_locals_size =
-        ROUND_UP(AARCH64_STACK_ALIGNMENT, func->total_locals_size);
+        ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
+    printf("4 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
+
 
     first_op = func->first->first->first;
     if (func->total_locals_size) {
