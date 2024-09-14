@@ -475,7 +475,7 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
     break;
   case AARCH64_OP_TY_RSTR_LR:
     aarch64_emit_load_pair_post_index_64(state->emitter, STACK_PTR_REG,
-                                        FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
+                                        FRAME_PTR_REG, RET_PTR_REG, lr_offset);
     break;
   case AARCH64_OP_TY_SUB_STACK:
     aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
