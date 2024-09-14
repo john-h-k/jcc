@@ -1,8 +1,10 @@
 #!/bin/zsh
 
 build() {
-
-    cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" -B build -S . && cmake --build .
+    cd build \
+        && cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" .. \
+        && cmake --build . \
+        && cd ..
 }
 
 cfg() {
