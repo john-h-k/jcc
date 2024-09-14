@@ -20,6 +20,8 @@ set(
   link.c
   liveness.c
   disasm.c
+  hashtbl.c
+  bitset.c
   var_table.c
   lsra.c
   graphcol.c

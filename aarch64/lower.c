@@ -92,7 +92,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // it is possible there are no spare registers for this, and so we may need to do a swap
   
   if (op->call.num_args) {
-    unsigned long free_regs = ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
+    unsigned long long free_regs = ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
     size_t free_vol_reg = tzcnt(free_regs);
 
     if (free_vol_reg >= volatile_reg_count) {

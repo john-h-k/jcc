@@ -387,6 +387,10 @@ struct ir_string {
   size_t index_from_back;
 };
 
+// struct ir_lcl {
+  
+// };
+
 struct ir_builder {
   const char *name;
 

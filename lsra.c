@@ -1,6 +1,7 @@
 #include "lsra.h"
 
 #include "bit_twiddle.h"
+#include "bitset.h"
 #include "compiler.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
@@ -10,6 +11,20 @@
 #include "vector.h"
 
 #include <limits.h>
+
+enum register_alloc_mode {
+  REGISTER_ALLOC_MODE_REGS,
+  REGISTER_ALLOC_MODE_LCLS,
+};
+
+struct register_alloc_info {
+  enum register_alloc_mode mode;
+
+  union {
+    struct reg_info reg_info;
+  };
+};
+
 
 #define MARK_REG_USED(reg_pool, i) (reg_pool) &= ~(1ull << i)
 #define MARK_REG_FREE(reg_pool, i) (reg_pool) |= (1ull << i)
@@ -43,23 +58,9 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval,
   }
 }
 
-enum register_alloc_mode {
-  REGISTER_ALLOC_MODE_REGS,
-  REGISTER_ALLOC_MODE_LCLS,
-};
-
-struct register_alloc_info {
-  enum register_alloc_mode mode;
-
-  union {
-    struct reg_info reg_info;
-  };
-};
-
-
 void expire_old_intervals(const struct register_alloc_info *info, struct interval *intervals,
                           struct interval *cur_interval, size_t *active,
-                          size_t *num_active, unsigned long long *reg_pool) {
+                          size_t *num_active, struct bitset *reg_pool) {
   size_t num_expired_intervals = 0;
 
   for (size_t i = 0; i < *num_active; i++) {
@@ -72,10 +73,10 @@ void expire_old_intervals(const struct register_alloc_info *info, struct interva
 
     switch (info->mode) {
       case REGISTER_ALLOC_MODE_REGS:
-        MARK_REG_FREE(*reg_pool, interval->op->reg);
+        bitset_set(reg_pool, interval->op->reg, true);
         break;
       case REGISTER_ALLOC_MODE_LCLS:
-        MARK_REG_FREE(*reg_pool, interval->op->lcl_idx);
+        bitset_set(reg_pool, interval->op->lcl_idx, true);
         break;
       }
   }
@@ -195,32 +196,37 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   qsort(intervals, num_intervals, sizeof(*intervals),
         sort_interval_by_start_point);
 
-  // FIXME: max 63 regs
-  size_t num_regs =
-      info.mode == REGISTER_ALLOC_MODE_REGS
-          ? info.reg_info.num_volatile + info.reg_info.num_nonvolatile
-          : 64;
+  size_t num_regs;
+  switch (info.mode) {
+  case REGISTER_ALLOC_MODE_REGS:
+    num_regs = info.reg_info.num_volatile + info.reg_info.num_nonvolatile;
 
-  // remove one reg, as we may need this for spilling
-  num_regs--;
+    // remove one reg, as we may need this for spilling
+    num_regs--;
+    break;
+  case REGISTER_ALLOC_MODE_LCLS:
+    // there can't be more locals than ops, so upper bound by this
+    num_regs = irb->op_count;
+    break;
+  }
 
   size_t *active = arena_alloc(irb->arena, sizeof(size_t) * num_regs);
   size_t num_active = 0;
 
-  invariant_assert(num_regs <= sizeof(unsigned long) * 8,
-                   "LSRA does not currently support more than `sizeof(unsigned "
-                   "long) * 8` register as it uses a bitmask");
-
-  unsigned long long reg_pool = (1ull << num_regs) - 1;
+  struct bitset *reg_pool = bitset_create(num_regs);
+  bitset_clear(reg_pool, true);
 
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &intervals[i];
-    expire_old_intervals(&info, intervals, interval, active, &num_active, &reg_pool);
+    expire_old_intervals(&info, intervals, interval, active, &num_active, reg_pool);
 
     // update live_regs early in case the op is not value producing/marked
     // DONT_GIVE_REG and we back out
-    interval->op->live_regs = ~reg_pool & ((1ull << num_regs) - 1);
+    if (info.mode == REGISTER_ALLOC_MODE_REGS) {
+      unsigned long long free_regs = bitset_as_ull(reg_pool);
+      interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
+    }
 
     if (interval->op->reg == REG_FLAGS ||
         (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
@@ -228,9 +234,9 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
 
     if (interval->op->flags & IR_OP_FLAG_MUST_SPILL || num_active == num_regs) {
-      // FIXME: currently only support 64 locals because bit flags
       invariant_assert(info.mode != REGISTER_ALLOC_MODE_LCLS,
                        "doesnt make sense to spill in lcl alloc");
+
       spill_at_interval(intervals, i, active, &num_active);
     } else {
       if (interval->op->reg == REG_FLAGS ||
@@ -238,10 +244,10 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
         continue;
       }
 
-      unsigned long free_slot = tzcnt(reg_pool);
+      size_t free_slot = bitset_tzcnt(reg_pool);
       debug_assert(free_slot < num_regs, "reg pool unexpectedly empty!");
 
-      MARK_REG_USED(reg_pool, free_slot);
+      bitset_set(reg_pool, free_slot, false);
       if (info.mode == REGISTER_ALLOC_MODE_REGS &&
           free_slot >= info.reg_info.num_volatile) {
         irb->nonvolatile_registers_used |= (1ull << free_slot);
@@ -275,7 +281,9 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
 
     if (info.mode == REGISTER_ALLOC_MODE_REGS) {
-      interval->op->live_regs = ~reg_pool & ((1ull << num_regs) - 1);
+      // re-set live regs as we may have assigned a new reg
+      unsigned long long free_regs = bitset_as_ull(reg_pool);
+      interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
     }
   }
 
@@ -325,10 +333,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   Works via a two-pass allocation approach:
      - first pass assigns "trivial" registers and marks which variables need
   spill
-     - after the first pass, we insert `storelcl` and `loadlcl` instructions
+     - after the first pass, we run another alloc to allocate local slots, and insert `storelcl` and `loadlcl` instructions
   with appropriate locals as will be needed
-     - we then re-run allocation, which will assign all registers including
-  those needed for spills
 */
 void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   rebuild_ids(irb);
@@ -348,44 +354,18 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
-  // continually re-spill and re-allocate until no unresolved spills are present
-  // i am concerned this could sometimes not terminate
-  // a cursory think about the issue suggests it *should* terminate but i may
-  // simply be missing edge cases
-  while (true) {
-    // removes intervals from last pass
-    clear_metadata(irb);
+  // removes intervals from last pass
+  clear_metadata(irb);
 
-    BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
+  BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
 
-    data = register_alloc_pass(
-        irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS});
+  data = register_alloc_pass(
+      irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS});
 
-    clear_metadata(irb);
+  clear_metadata(irb);
 
-    // insert LOAD and STORE ops as needed
-    alloc_fixup(irb, &data, spill_reg);
-
-    if (log_enabled()) {
-      // can't print intervals here, as `alloc_fixup` inserted new ops which
-      // don't have valid intervals yet
-      debug_print_ir(stderr, irb, NULL, NULL);
-    }
-
-    bool spill_present = false;
-    data = register_alloc_pass(
-        irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS});
-
-    for (size_t i = 0; i < data.num_intervals; i++) {
-      if (data.intervals[i].op->reg == REG_SPILLED) {
-        spill_present = true;
-      }
-    }
-
-    if (!spill_present || true) {
-      break;
-    }
-  }
+  // insert LOAD and STORE ops as needed
+  alloc_fixup(irb, &data, spill_reg);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
