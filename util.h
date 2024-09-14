@@ -178,6 +178,14 @@ static inline void *nonnull_malloc(size_t size) {
   return ptr;
 }
 
+static inline void *nonnull_realloc(void *p, size_t size) {
+  void *ptr = realloc(p, size);
+
+  invariant_assert(ptr, "`realloc` returned NULL (out-of-memory likely)");
+
+  return ptr;
+}
+
 static inline char *malloc_strcpy(const char *s) {
   int len = strlen(s);
 

@@ -45,7 +45,9 @@ void free_aarch64_emitter(struct aarch64_emitter **emitter) {
 
 void aarch64_emit(struct aarch64_emitter *emitter, uint32_t instr) {
   if (emitter->head >= emitter->len) {
-    todo("emitter reached size limit");
+    size_t new_len = emitter->len + BLOCK_SIZE;
+    emitter->block = nonnull_realloc(emitter->block, new_len);
+    emitter->len = new_len;
   }
 
   emitter->block[emitter->head++] = instr;
@@ -191,7 +193,6 @@ void aarch64_emit_ands_64_imm(struct aarch64_emitter *emitter,
 void aarch64_emit_and_32_imm(struct aarch64_emitter *emitter,
                              struct aarch64_reg source, size_t immr,
                              size_t imms, struct aarch64_reg dest) {
-  warn("%zu immr, %zu imms", immr, imms);
   VALIDATE_BITWISE_IMMS();
   aarch64_emit(emitter, AND_32_IMM(immr, imms, source.idx, dest.idx));
 }
