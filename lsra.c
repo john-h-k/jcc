@@ -141,7 +141,7 @@ void alloc_fixup_callback(struct ir_op **op, void *metadata) {
     struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
                                              IR_OP_TY_LOAD_LCL, (*op)->var_ty);
     load->load_lcl.lcl_idx = (*op)->lcl_idx;
-    load->reg = data->spill_reg;
+    load->reg = data->consumer->reg;
 
     *op = load;
   }
