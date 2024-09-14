@@ -56,7 +56,6 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // TODO: we assume all saves are 8 bytes
   func->total_call_saves_size += 8 * new_slots;
   func->total_locals_size += 8 * new_slots;
-    printf("3 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
   func->num_locals += new_slots;
 
   // call slots always at bottom
@@ -335,7 +334,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     // for x29 and x30 as they aren't working yet with pre-indexing
     func->total_locals_size += 16;
-    printf("0 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
 
     unsigned long max_nonvol_used = sizeof(func->nonvolatile_registers_used) * 8 - lzcnt(func->nonvolatile_registers_used);
     unsigned long num_saves = popcntl(func->nonvolatile_registers_used);
@@ -345,7 +343,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     func->num_locals += num_saves;
     func->total_locals_size += num_saves * 8;
-    printf("1 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
     
     for (size_t i = 0; i < max_nonvol_used; i++) {
       // FIXME: loop should start at i=first non volatile
@@ -371,17 +368,9 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     func->total_locals_size =
         ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
-    printf("4 TOTAL LOCAL SIZE: %zu\n", func->total_locals_size);
 
 
     first_op = func->first->first->first;
-    if (func->total_locals_size) {
-      struct ir_op *sub_stack = insert_before_ir_op(
-          func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
-      sub_stack->custom.aarch64 =
-          arena_alloc(func->arena, sizeof(*sub_stack->custom.aarch64));
-      sub_stack->custom.aarch64->ty = AARCH64_OP_TY_SUB_STACK;
-    }
 
     // need to save x29 and x30
     struct ir_op *save =
@@ -395,6 +384,15 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
     save_add_64->custom.aarch64 =
         arena_alloc(func->arena, sizeof(*save_add_64->custom.aarch64));
     save_add_64->custom.aarch64->ty = AARCH64_OP_TY_SAVE_LR_ADD_64;
+
+    if (func->total_locals_size) {
+      struct ir_op *sub_stack = insert_before_ir_op(
+          func, first_op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+      sub_stack->custom.aarch64 =
+          arena_alloc(func->arena, sizeof(*sub_stack->custom.aarch64));
+      sub_stack->custom.aarch64->ty = AARCH64_OP_TY_SUB_STACK;
+    }
+    
 
     // emitter understands the above magic-mov as it does not have the PARAM
     // flag set
@@ -482,12 +480,6 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
               cur_save = cur_save->succ;
             }
 
-            struct ir_op *restore_lr = insert_before_ir_op(
-                func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
-            restore_lr->custom.aarch64 =
-                arena_alloc(func->arena, sizeof(*restore_lr->custom.aarch64));
-            restore_lr->custom.aarch64->ty = AARCH64_OP_TY_RSTR_LR;
-
             if (func->total_locals_size) {
               struct ir_op *add_stack = insert_before_ir_op(
                   func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
@@ -495,6 +487,12 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
                   arena_alloc(func->arena, sizeof(*add_stack->custom.aarch64));
               add_stack->custom.aarch64->ty = AARCH64_OP_TY_ADD_STACK;
             }
+
+            struct ir_op *restore_lr = insert_before_ir_op(
+                func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
+            restore_lr->custom.aarch64 =
+                arena_alloc(func->arena, sizeof(*restore_lr->custom.aarch64));
+            restore_lr->custom.aarch64->ty = AARCH64_OP_TY_RSTR_LR;
           }
 
           break;
@@ -509,4 +507,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
     basicblock = basicblock->succ;
   }
+
+  func->total_locals_size =
+      ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
 }

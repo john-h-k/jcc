@@ -459,22 +459,23 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   // FIXME: the pre-indexing here is causing segfaults for some reason? we
 
   // should be using it instead of stack when possible
-  size_t lr_offset = (state->irb->total_locals_size / 2) - 2;
+  // size_t lr_offset = (state->irb->total_locals_size / 2) - 2;
+  ssize_t lr_offset = 2;
 
   switch (op->custom.aarch64->ty) {
   case AARCH64_OP_TY_SAVE_LR:
-    aarch64_emit_store_pair_offset_64(state->emitter, STACK_PTR_REG,
-                                         FRAME_PTR_REG, RET_PTR_REG, lr_offset);
+    aarch64_emit_store_pair_pre_index_64(state->emitter, STACK_PTR_REG,
+                                         FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
     break;
   case AARCH64_OP_TY_SAVE_LR_ADD_64:
     // also save stack pointer into frame pointer as required by ABI
     // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
     // so `add x29, sp, #0` is used instead
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, lr_offset * 8, FRAME_PTR_REG);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, (lr_offset * 8), FRAME_PTR_REG);
     break;
   case AARCH64_OP_TY_RSTR_LR:
-    aarch64_emit_load_pair_offset_64(state->emitter, STACK_PTR_REG,
-                                        FRAME_PTR_REG, RET_PTR_REG, lr_offset);
+    aarch64_emit_load_pair_post_index_64(state->emitter, STACK_PTR_REG,
+                                        FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
     break;
   case AARCH64_OP_TY_SUB_STACK:
     aarch64_emit_sub_64_imm(state->emitter, STACK_PTR_REG,
