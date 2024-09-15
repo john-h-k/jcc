@@ -268,7 +268,7 @@ bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, unsigned long reg,
-                      unsigned long lcl_idx) {
+                      struct ir_lcl *lcl) {
 
   op->id = id;
   op->ty = ty;
@@ -278,7 +278,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->succ = NULL;
   op->stmt = NULL;
   op->reg = reg;
-  op->lcl_idx = lcl_idx;
+  op->lcl = lcl;
   op->live_regs = 0;
   op->metadata = NULL;
 }
@@ -535,7 +535,7 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NO_LCL);
+  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NULL);
 
   move_before_ir_op(irb, op, insert_before);
 
@@ -549,7 +549,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NO_LCL);
+  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NULL);
 
   move_after_ir_op(irb, op, insert_after);
 
@@ -617,7 +617,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   op->metadata = NULL;
   op->reg = NO_REG;
   op->live_regs = 0;
-  op->lcl_idx = NO_LCL;
+  op->lcl = NULL;
 
   if (stmt->last) {
     stmt->last->succ = op;
@@ -785,6 +785,32 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
   return end_bb;
 }
 
+struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
+  struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
+  lcl->id = irb->num_locals++;
+  lcl->pred = irb->last_local;
+  lcl->succ = NULL;
+  lcl->metadata = NULL;
+
+  // TODO: make not assume all things are 8 bytes
+  irb->total_locals_size += 8;
+  UNUSED_ARG(var_ty);
+  // irb->total_locals_size += var_ty_size(irb, var_ty);
+
+  if (!irb->first_local) {
+    irb->first_local = lcl;
+  }
+
+  if (irb->last_local) {
+    irb->last_local->succ = lcl;
+  }
+
+  irb->last_local = lcl;
+
+  return lcl;
+}
+
+
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty) {
   struct ir_op_glb_ref *glb_ref = &op->glb_ref;
@@ -825,3 +851,31 @@ void make_string_ref(struct ir_builder *irb, const char *string,
   glb_ref->succ = irb->global_refs;
   irb->global_refs = glb_ref;
 }
+
+size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
+  // FIXME: pointer size!
+  UNUSED_ARG(irb);
+
+  switch (ty->ty) {
+  case IR_OP_VAR_TY_TY_NONE:
+    bug("IR_OP_VAR_TY_TY_NONE has no size");
+  case IR_OP_VAR_TY_TY_VARIADIC:
+    bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
+  case IR_OP_VAR_TY_TY_FUNC:
+    return 8;
+  case IR_OP_VAR_TY_TY_POINTER:
+    return 8;
+  case IR_OP_VAR_TY_TY_PRIMITIVE:
+    switch (ty->primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_I8:
+      return 1;
+    case IR_OP_VAR_PRIMITIVE_TY_I16:
+      return 2;
+    case IR_OP_VAR_PRIMITIVE_TY_I32:
+      return 4;
+    case IR_OP_VAR_PRIMITIVE_TY_I64:
+      return 8;
+    }
+  }
+}
+

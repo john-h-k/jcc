@@ -85,25 +85,27 @@ static bool is_64_bit(const struct ir_op *op) {
 
 // TODO: sep methods no longer needed
 static unsigned get_lcl_stack_offset_32(struct emit_state *state,
-                                        size_t lcl_idx) {
+                                        const struct ir_op *op) {
   UNUSED_ARG(state);
+  struct ir_lcl *lcl = op->lcl;
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  return lcl_idx;
+  return lcl->metadata ? (unsigned)(unsigned long long)lcl->metadata - 1 : lcl->id;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state,
-                                        size_t lcl_idx) {
+                                        const struct ir_op *op) {
   UNUSED_ARG(state);
+  struct ir_lcl *lcl = op->lcl;
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  return lcl_idx;
+  return lcl->metadata ? (unsigned)(unsigned long long)lcl->metadata - 1 : lcl->id;
 }
 
 
@@ -239,8 +241,8 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
     }                                                                          \
   } while (0);
 
-  debug_assert(op->ty == IR_OP_TY_BINARY_OP,
-               "wrong ty op to `lower_binary_op`");
+  debug_assert(op->ty == IR_OP_TY_UNARY_OP,
+               "wrong ty op to `%s`", __func__);
   size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
   size_t source = get_reg_for_op(state, op->unary_op.value, REG_USAGE_READ);
   invariant_assert(source != UINT32_MAX && dest != UINT32_MAX,
@@ -261,17 +263,17 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_UNARY_OP_TY_DEREF: {
     struct ir_op *target = op->unary_op.value;
     if (is_64_bit(target)) {
-      size_t offset = get_lcl_stack_offset_64(state, target->lcl_idx);
+      size_t offset = get_lcl_stack_offset_64(state, target);
       aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
     } else {
-      size_t offset = get_lcl_stack_offset_32(state, target->lcl_idx);
+      size_t offset = get_lcl_stack_offset_32(state, target);
       aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
     }
     break;
   }
   case IR_OP_UNARY_OP_TY_ADDRESSOF: {
     struct ir_op *target = op->unary_op.value;
-    size_t offset = get_lcl_stack_offset_64(state, target->lcl_idx);
+    size_t offset = get_lcl_stack_offset_64(state, target);
     aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset, get_reg_for_idx(dest));
     break;
   }
@@ -295,7 +297,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   } while (0);
 
   debug_assert(op->ty == IR_OP_TY_BINARY_OP,
-               "wrong ty op to `lower_binary_op`");
+               "wrong ty op to `%s`", __func__);
   size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
   size_t lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
   size_t rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
@@ -573,12 +575,12 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   case AARCH64_OP_TY_SAVE_REG:
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(op->reg),
-                                 get_lcl_stack_offset_64(state, op->lcl_idx));
+                                 get_lcl_stack_offset_64(state, op->lcl));
     break;
   case AARCH64_OP_TY_RSTR_REG:
     aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
                                 get_reg_for_idx(op->reg),
-                                get_lcl_stack_offset_64(state, op->lcl_idx));
+                                get_lcl_stack_offset_64(state, op->lcl));
     break;
   case AARCH64_OP_TY_PAGE:
     emit_page(state, op);
@@ -619,11 +621,11 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     if (is_64_bit(op)) {
       aarch64_emit_load_offset_64(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_64(state, op->load_lcl.lcl_idx));
+          get_lcl_stack_offset_64(state, op->load_lcl.lcl));
     } else {
       aarch64_emit_load_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->load_lcl.lcl_idx));
+          get_lcl_stack_offset_32(state, op->load_lcl.lcl));
     }
     break;
   }
@@ -631,14 +633,14 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
 
     if (is_64_bit(op->store_lcl.value) ||
-        (op->flags & IR_OP_FLAG_VARIADIC_EXPAND)) {
+        (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
       aarch64_emit_store_offset_64(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_64(state, op->store_lcl.lcl_idx));
+          get_lcl_stack_offset_64(state, op->store_lcl.lcl));
     } else {
       aarch64_emit_store_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->store_lcl.lcl_idx));
+          get_lcl_stack_offset_32(state, op->store_lcl.lcl));
     }
     break;
   }

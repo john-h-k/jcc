@@ -215,12 +215,11 @@ const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
 const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
 
 struct ir_op_store_lcl {
-  unsigned long lcl_idx;
   struct ir_op *value;
 };
 
 struct ir_op_load_lcl {
-  unsigned long lcl_idx;
+  struct ir_op *lcl;
 };
 
 struct ir_op_br_cond {
@@ -249,12 +248,14 @@ enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
   IR_OP_FLAG_MUST_SPILL = 1,
   IR_OP_FLAG_PARAM = 2,
+  // indicates this value is passed as a variadic
+  IR_OP_FLAG_VARIADIC_PARAM = 4,
   // do not give this a reg/local as it is a phi node that will take the
   // reg/local of that phi
-  IR_OP_FLAG_DONT_GIVE_SLOT = 4,
-  // TODO: should be arm64 specific
-  // indicates to use an 8 byte slot
-  IR_OP_FLAG_VARIADIC_EXPAND = 8,
+  IR_OP_FLAG_DONT_GIVE_SLOT = 8,
+
+  // indicates the op is a load_lcl/store_lcl used for a spill
+  IR_OP_FLAG_SPILL = 16,
 };
 
 struct ir_op {
@@ -286,12 +287,14 @@ struct ir_op {
     struct ir_op_custom custom;
   };
 
+
+  struct ir_lcl *lcl;
+
   // only meaningful post register-allocation
   // `live_regs` is bitmask of all registers with values live, needed for
   // spilling
   unsigned long live_regs;
   unsigned long reg;
-  unsigned long lcl_idx;
   void *metadata;
 };
 
@@ -395,6 +398,15 @@ struct ir_string {
   size_t index_from_back;
 };
 
+struct ir_lcl {
+  size_t id;
+
+  struct ir_lcl *pred;
+  struct ir_lcl *succ;
+
+  void *metadata;
+};
+
 struct ir_builder {
   const char *name;
 
@@ -431,7 +443,8 @@ struct ir_builder {
   unsigned long long nonvolatile_registers_used;
 
   size_t num_locals;
-  struct ir_lcl *locals;
+  struct ir_lcl *first_local;
+  struct ir_lcl *last_local;
 
   // number of stack local variables
   size_t total_locals_size;
@@ -467,6 +480,8 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
 void clear_metadata(struct ir_builder *irb);
 void rebuild_ids(struct ir_builder *irb);
 
+struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_ty);
+
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty);
 void make_string_ref(struct ir_builder *irb, const char *string,
@@ -492,7 +507,7 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_op_var_ty var_ty, unsigned long reg,
-                      unsigned long lcl_idx);
+                      struct ir_lcl *lcl);
 
 void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
                       struct ir_op *move_after);
@@ -515,7 +530,6 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_op_var_ty var_ty);
 
-size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty);
-
+size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty);
 
 #endif

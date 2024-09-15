@@ -302,10 +302,10 @@ struct compiled_function eep_emit_function(struct ir_builder *func) {
   return result;
 }
 
-static unsigned get_lcl_stack_offset(struct emit_state *state, size_t lcl_idx) {
+static unsigned get_lcl_stack_offset(struct emit_state *state, const struct ir_lcl *lcl) {
   // FIXME: only supports ints
   UNUSED_ARG(state);
-  return lcl_idx * EEP_REG_SIZE;
+  return lcl->id * EEP_REG_SIZE;
 }
 
 static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
@@ -333,13 +333,13 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
     case IR_OP_TY_LOAD_LCL: {
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
       eep_emit_load_offset(state->emitter, STACK_PTR_REG,
-                           get_lcl_stack_offset(state, op->load_lcl.lcl_idx),
+                           get_lcl_stack_offset(state, op->load_lcl.lcl),
                            get_reg_for_idx(reg));
       break;
     }
     case IR_OP_TY_STORE_LCL: {
       size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
-      size_t offset = get_lcl_stack_offset(state, op->store_lcl.lcl_idx);
+      size_t offset = get_lcl_stack_offset(state, op->store_lcl.lcl);
       invariant_assert(UNS_FITS_IN_BITS(offset, 4), "offset too big!");
       eep_emit_store_offset(state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
                             offset);

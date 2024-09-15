@@ -526,8 +526,14 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
 
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+
+  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys ? call->var_ty.func.num_param_var_tys - 1 : 0;
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
+
+    if (i >= num_non_variadic_args) {
+      args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
+    }
   }
 
   struct ir_op *target = build_ir_for_atom(irb, stmt, call->target, ast_tyref);
@@ -1039,33 +1045,6 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
   case AST_STMT_TY_NULL: {
     return basicblock;
   }
-  }
-}
-
-// FIXME: pointer size!
-size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty) {
-  UNUSED_ARG(irb);
-
-  switch (ty->ty) {
-  case IR_OP_VAR_TY_TY_NONE:
-    bug("IR_OP_VAR_TY_TY_NONE has no size");
-  case IR_OP_VAR_TY_TY_VARIADIC:
-    bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
-  case IR_OP_VAR_TY_TY_FUNC:
-    return 8;
-  case IR_OP_VAR_TY_TY_POINTER:
-    return 8;
-  case IR_OP_VAR_TY_TY_PRIMITIVE:
-    switch (ty->primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-      return 1;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-      return 2;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-      return 4;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-      return 8;
-    }
   }
 }
 
