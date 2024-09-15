@@ -9,6 +9,14 @@ const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
   case IR_OP_UNARY_OP_TY_NEG:
     return "-";
+  case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+    return "!";
+  case IR_OP_UNARY_OP_TY_NOT:
+    return "~";
+  case IR_OP_UNARY_OP_TY_DEREF:
+    return "*";
+  case IR_OP_UNARY_OP_TY_ADDRESSOF:
+    return "&";
   }
 }
 
@@ -245,12 +253,22 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, ir);
-    fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl_idx,
-            ir->store_lcl.value->id);
+    if (ir->load_lcl.lcl_idx == NO_LCL) {
+      fprintf(file, "storelcl LCL(NO_LCL), %%%zu",
+              ir->store_lcl.value->id);
+    } else {
+      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl_idx,
+              ir->store_lcl.value->id);
+    }
     break;
   case IR_OP_TY_LOAD_LCL:
     debug_lhs(file, ir);
-    fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl_idx);
+    if (ir->load_lcl.lcl_idx == NO_LCL) {
+      fprintf(file, "loadlcl LCL(NO_LCL)");
+    } else {
+      fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl_idx);
+      
+    }
     break;
   case IR_OP_TY_BR:
     // this can happen post lowering!

@@ -135,28 +135,34 @@ struct ast_cnst {
 
 struct ast_expr;
 
-enum ast_unary_op_prefix_ty {
-  AST_UNARY_OP_PREFIX_TY_INC,
-  AST_UNARY_OP_PREFIX_TY_DEC,
-  AST_UNARY_OP_PREFIX_TY_PLUS,
-  AST_UNARY_OP_PREFIX_TY_MINUS,
-  // AST_UNARY_OP_TY_NOT,
-  // AST_UNARY_OP_TY_SIZEOF,
+enum ast_unary_op_ty {
+  AST_UNARY_OP_TY_PREFIX_INC,
+  AST_UNARY_OP_TY_PREFIX_DEC,
+  AST_UNARY_OP_TY_POSTFIX_INC,
+  AST_UNARY_OP_TY_POSTFIX_DEC,
+  AST_UNARY_OP_TY_PLUS,
+  AST_UNARY_OP_TY_MINUS,
+  AST_UNARY_OP_TY_LOGICAL_NOT,
+  AST_UNARY_OP_TY_NOT,
+  AST_UNARY_OP_TY_INDIRECTION,
+  AST_UNARY_OP_TY_SIZEOF,
+  AST_UNARY_OP_TY_ADDRESSOF,
+  AST_UNARY_OP_TY_ALIGNOF,
+  AST_UNARY_OP_TY_CAST,
 };
 
-struct ast_unary_op_prefix {
-  enum ast_unary_op_prefix_ty ty;
+struct ast_cast {
+  struct ast_tyref cast_ty;
+};
+
+struct ast_unary_op {
+  enum ast_unary_op_ty ty;
+  struct ast_tyref var_ty;
   struct ast_expr *expr;
-};
 
-enum ast_unary_op_postfix_ty {
-  AST_UNARY_OP_POSTFIX_TY_INC,
-  AST_UNARY_OP_POSTFIX_TY_DEC,
-};
-
-struct ast_unary_op_postfix {
-  enum ast_unary_op_postfix_ty ty;
-  struct ast_expr *expr;
+  union {
+    struct ast_cast cast;
+  };
 };
 
 enum ast_binary_op_ty {
@@ -185,16 +191,6 @@ struct ast_binary_op {
   struct ast_tyref var_ty;
   struct ast_expr *lhs;
   struct ast_expr *rhs;
-};
-
-enum ast_unary_op_ty { AST_UNARY_OP_TY_PREFIX, AST_UNARY_OP_TY_POSTFIX };
-
-struct ast_unary_op {
-  enum ast_unary_op_ty ty;
-  union {
-    struct ast_unary_op_prefix prefix;
-    struct ast_unary_op_postfix postfix;
-  };
 };
 
 struct ast_call {
@@ -269,6 +265,7 @@ struct ast_assg {
 enum ast_expr_ty {
   AST_EXPR_TY_ATOM,
   AST_EXPR_TY_CALL,
+  AST_EXPR_TY_UNARY_OP,
   AST_EXPR_TY_BINARY_OP,
   AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
                     // they themselves evaluate to an rvalue (unlike in C++)
@@ -279,8 +276,8 @@ struct ast_expr {
   struct ast_tyref var_ty;
   union {
     struct ast_atom atom;
-    struct ast_binary_op binary_op;
     struct ast_unary_op unary_op;
+    struct ast_binary_op binary_op;
     struct ast_assg *assg;
     struct ast_call *call;
   };
