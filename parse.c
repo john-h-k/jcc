@@ -860,6 +860,7 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
     return false;
   }
 
+  // TODO: move to parse-call
   struct ast_arglist arg_list;
   if (parse_arglist(parser, &arg_list)) {
     expr->ty = AST_EXPR_TY_CALL;
@@ -880,14 +881,25 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
-// parses precedence level 1:
-// postfix ++, postfix --, (), [], ., ->, (type){list}
-bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+bool parse_array_access(struct parser *parser, struct ast_expr *expr) {
+  todo(__func__);
+}
+
+bool parse_member_access(struct parser *parser, struct ast_expr *expr) {
+  todo(__func__);
+}
+
+bool parse_pointer_access(struct parser *parser, struct ast_expr *expr) {
+  todo(__func__);
+}
+
+bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+
   // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
-  if (!parse_atom_0(parser, sub_expr)) {
+  if (!parse_atom_1(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -915,6 +927,20 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
     expr->unary_op = unary_op;
   } else {
     *expr = *sub_expr;
+  }
+
+  return true;
+}
+
+// parses precedence level 1:
+// postfix ++, postfix --, (), [], ., ->, (type){list}
+bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+  if (!parse_unary_postfix_op(parser, expr) 
+      && !parse_array_access(parser, expr) 
+      && !parse_member_access(parser, expr) 
+      && !parse_pointer_access(parser, expr) 
+      && !parse_atom_0(parser, expr)) {
+    return false;
   }
 
   return true;
