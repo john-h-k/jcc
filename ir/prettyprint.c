@@ -254,7 +254,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, ir);
     if (ir->load_lcl.lcl) {
-      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl->id,
+      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->lcl->id,
               ir->store_lcl.value->id);
     } else {
       fprintf(file, "storelcl LCL(UNASSIGNED), %%%zu",

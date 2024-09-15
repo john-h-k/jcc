@@ -122,6 +122,7 @@ struct fixup_spills_data {
 };
 
 bool op_needs_reg(struct ir_op *op) {
+  // addressof operator does not need a reg, so does not need a load
   return op->ty != IR_OP_TY_UNARY_OP || op->unary_op.ty != IR_OP_UNARY_OP_TY_ADDRESSOF;
 }
 
@@ -132,19 +133,23 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
     return;
   }
 
-  if ((*op)->reg == REG_SPILLED && op_needs_reg(*op)) {
+  if ((*op)->reg == REG_SPILLED) {
     debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id, __func__);
+    if (op_needs_reg(data->consumer)) {
+      // FIXME: proper local sizes
+      // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
-    // FIXME: proper local sizes
-    // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
+      struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
+                                               IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+      load->load_lcl.lcl = *op;
+      load->reg = data->consumer->reg;
+      load->flags |= IR_OP_FLAG_SPILL;
 
-    struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
-                                             IR_OP_TY_LOAD_LCL, (*op)->var_ty);
-    load->load_lcl.lcl = (*op)->lcl;
-    load->reg = data->consumer->reg;
-    load->flags |= IR_OP_FLAG_SPILL;
-
-    *op = load;
+      *op = load;
+    } else {
+      // FIXME: hacky way of getting the store_lcl from a given op...
+      *op = (*op)->succ;
+    }
   }
 }
 
@@ -169,7 +174,7 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
           // insert store for the op
           struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
                                                    IR_OP_VAR_TY_NONE);
-          store->store_lcl.lcl = op;
+          store->lcl = op->lcl;
           store->store_lcl.value = op;
           store->reg = NO_REG;
           store->flags |= IR_OP_FLAG_SPILL;

@@ -3,4 +3,4 @@
 
 int printf(const char *format, ...);
 
-int main() { printf("%d %d Numbers work too - %d!", 3, 5, 2); }
+int main() { printf("%s. Numbers work too - %d!", "Hello, World!", 2); }

@@ -262,19 +262,29 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
     break;
   case IR_OP_UNARY_OP_TY_DEREF: {
     struct ir_op *target = op->unary_op.value;
-    if (is_64_bit(target)) {
-      size_t offset = get_lcl_stack_offset_64(state, target);
-      aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+
+    if (target->lcl) {
+      if (is_64_bit(target)) {
+        size_t offset = get_lcl_stack_offset_64(state, target);
+        aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+      } else {
+        size_t offset = get_lcl_stack_offset_32(state, target);
+        aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+      }
     } else {
-      size_t offset = get_lcl_stack_offset_32(state, target);
-      aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+      if (is_64_bit(target)) {
+        aarch64_emit_load_offset_64(state->emitter, get_reg_for_idx(target->reg), get_reg_for_idx(dest), 0);
+      } else {
+        aarch64_emit_load_offset_32(state->emitter, get_reg_for_idx(target->reg), get_reg_for_idx(dest), 0);
+      }
+      
     }
     break;
   }
   case IR_OP_UNARY_OP_TY_ADDRESSOF: {
     struct ir_op *target = op->unary_op.value;
     size_t offset = get_lcl_stack_offset_64(state, target);
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset, get_reg_for_idx(dest));
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset * 8, get_reg_for_idx(dest));
     break;
   }
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
@@ -575,12 +585,12 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   case AARCH64_OP_TY_SAVE_REG:
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(op->reg),
-                                 get_lcl_stack_offset_64(state, op->lcl));
+                                 get_lcl_stack_offset_64(state, op));
     break;
   case AARCH64_OP_TY_RSTR_REG:
     aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
                                 get_reg_for_idx(op->reg),
-                                get_lcl_stack_offset_64(state, op->lcl));
+                                get_lcl_stack_offset_64(state, op));
     break;
   case AARCH64_OP_TY_PAGE:
     emit_page(state, op);
@@ -636,11 +646,11 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
         (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
       aarch64_emit_store_offset_64(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_64(state, op->store_lcl.lcl));
+          get_lcl_stack_offset_64(state, op));
     } else {
       aarch64_emit_store_offset_32(
           state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->store_lcl.lcl));
+          get_lcl_stack_offset_32(state, op));
     }
     break;
   }

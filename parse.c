@@ -609,12 +609,15 @@ bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
 bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
   parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
 
+  // TODO: handle non integral types
   if (!parse_wkt_integral(parser, ty_ref)) {
     return false;
   }
 
+  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+
   while (parse_pointer(parser, ty_ref)) {
-    // tada
+    *ty_ref = tyref_make_pointer(parser, ty_ref);
   }
 
   return true;
@@ -635,6 +638,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
 
   struct var_table_entry *entry =
       get_entry(&parser->var_table, identifier_str(parser, &var->identifier));
+
   if (entry && entry->value) {
     var->var_ty = *(struct ast_tyref *)entry->value;
     var->scope = entry->scope;
@@ -690,6 +694,7 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 bool parse_expr(struct parser *parser, struct ast_expr *expr);
+bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
 
@@ -847,9 +852,9 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
   return false;
 }
 
-// parses precedence level 1:
+// parses precedence level 0:
 // postfix ++, postfix --, (), [], ., ->, (type){list}
-bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct ast_atom atom;
   if (!parse_atom(parser, &atom)) {
     return false;
@@ -875,9 +880,48 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
-// parses precedence level 2:
-// prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
-bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+// parses precedence level 1:
+// postfix ++, postfix --
+bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  bool has_unary_postfix = false;
+  enum ast_unary_op_ty unary_postfix_ty;
+  if (parse_token(parser, LEX_TOKEN_TY_OP_INC)) {
+    has_unary_postfix = true;
+    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_INC;
+  } else if (parse_token(parser, LEX_TOKEN_TY_OP_DEC)) {
+    has_unary_postfix = true;
+    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_DEC;
+  }
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
+  if (!parse_atom_0(parser, sub_expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+  
+
+  if (has_unary_postfix) {
+    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty, &sub_expr->var_ty, NULL);
+    struct ast_unary_op unary_op = {
+        .ty = unary_postfix_ty,
+        .var_ty = var_ty,
+        .expr = sub_expr,
+    };
+
+    expr->ty = AST_EXPR_TY_UNARY_OP;
+    expr->var_ty = var_ty;
+    expr->unary_op = unary_op;
+  } else {
+    *expr = *sub_expr;
+  }
+
+  return true;
+}
+
+bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -924,65 +968,43 @@ bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
     has_unary_prefix = false;
   }
 
-  if (has_unary_prefix) {
-    consume_token(parser->lexer, token);
+  if (!has_unary_prefix) {
+    return false;
   }
 
+  consume_token(parser->lexer, token);
+
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  if (!parse_atom_1(parser, sub_expr)) {
+  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
+  if (!parse_atom_2(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
 
-  bool has_unary_postfix = false;
-  enum ast_unary_op_ty unary_postfix_ty;
-  if (parse_token(parser, LEX_TOKEN_TY_OP_INC)) {
-    has_unary_postfix = true;
-    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_INC;
-  } else if (parse_token(parser, LEX_TOKEN_TY_OP_DEC)) {
-    has_unary_postfix = true;
-    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_DEC;
-  }
+  struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_prefix_ty, &sub_expr->var_ty, NULL);
+  struct ast_unary_op unary_op = {
+      .ty = unary_prefix_ty,
+      .var_ty = var_ty,
+      .expr = sub_expr,
+  };
 
-  if (has_unary_postfix) {
-    // postfix takes precedence to prefix
+  expr->ty = AST_EXPR_TY_UNARY_OP;
+  expr->var_ty = var_ty;
+  expr->unary_op = unary_op;
 
-    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty, &sub_expr->var_ty, NULL);
-    struct ast_unary_op unary_op = {
-        .ty = unary_postfix_ty,
-        .var_ty = var_ty,
-        .expr = sub_expr,
-    };
-
-    struct ast_expr *postfix_expr =
-        arena_alloc(parser->arena, sizeof(*postfix_expr));
-    postfix_expr->ty = AST_EXPR_TY_UNARY_OP;
-    postfix_expr->var_ty = var_ty;
-    postfix_expr->unary_op = unary_op;
-
-    sub_expr = postfix_expr;
-  }
-
-  if (has_unary_prefix) {
-    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_prefix_ty, &sub_expr->var_ty, NULL);
-    struct ast_unary_op unary_op = {
-        .ty = unary_prefix_ty,
-        .var_ty = var_ty,
-        .expr = sub_expr,
-    };
-
-    struct ast_expr *prefix_expr =
-        arena_alloc(parser->arena, sizeof(*prefix_expr));
-    prefix_expr->ty = AST_EXPR_TY_UNARY_OP;
-    prefix_expr->var_ty = var_ty;
-    prefix_expr->unary_op = unary_op;
-
-    sub_expr = prefix_expr;
-  }
-
-  *expr = *sub_expr;
   return true;
 }
+
+// parses precedence level 2:
+// prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
+bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+  if (!parse_unary_prefix_op(parser, expr) && !parse_atom_1(parser, expr)) {
+    return false;
+  }
+
+  return true;
+}
+
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
