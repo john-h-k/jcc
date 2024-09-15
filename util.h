@@ -171,6 +171,10 @@ static inline void debug_assert(bool b, const char *msg, ...) {
 #endif
 
 static inline void *nonnull_malloc(size_t size) {
+  if (size == 0) {
+    return NULL;
+  }
+
   void *ptr = malloc(size);
 
   invariant_assert(ptr, "`malloc` returned NULL (out-of-memory likely)");

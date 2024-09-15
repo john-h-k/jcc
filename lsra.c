@@ -130,6 +130,8 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
   struct fixup_spills_data *data = metadata;
 
   if (data->consumer->flags & IR_OP_FLAG_SPILL) {
+    // the store that consumes (and stores) this value will be marked with this flag
+    // it of course does not need to have a load (as it uses the op after creation)
     return;
   }
 
@@ -147,8 +149,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
 
       *op = load;
     } else {
-      // FIXME: hacky way of getting the store_lcl from a given op...
-      *op = (*op)->succ;
+      *op = (*op)->lcl->store;
     }
   }
 }
@@ -178,6 +179,8 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
           store->store_lcl.value = op;
           store->reg = NO_REG;
           store->flags |= IR_OP_FLAG_SPILL;
+
+          op->lcl->store = store;
         }
 
         op = op->succ;
