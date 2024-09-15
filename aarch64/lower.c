@@ -157,7 +157,7 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
         
         struct ir_op *store =
             insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
-        store->store_lcl.lcl = lcl;
+        store->lcl = lcl;
         store->store_lcl.value = source;
         store->flags |= IR_OP_FLAG_VARIADIC_PARAM;
       } else if (i == 0 || op->call.args[i]->reg != arg_reg) {
