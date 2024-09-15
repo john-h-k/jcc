@@ -191,6 +191,8 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
   case LEX_TOKEN_TY_DOT:
+  case LEX_TOKEN_TY_OP_LOGICAL_NOT:
+  case LEX_TOKEN_TY_OP_NOT:
   case LEX_TOKEN_TY_OP_ASSG:
   case LEX_TOKEN_TY_OP_INC:
   case LEX_TOKEN_TY_OP_DEC:
@@ -296,41 +298,130 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   unreachable("switch broke");
 }
 
-struct ast_tyref resolve_binary_op_types(const struct ast_tyref *lhs,
+struct ast_tyref tyref_make_pointer(struct parser *parser,
+                                    const struct ast_tyref *var_ty) {
+  UNUSED_ARG(parser);
+
+  // we don't know lifetime of the other one so need to copy it
+  // TODO: cache types
+  struct ast_tyref *copied = arena_alloc(parser->arena, sizeof(*copied));
+  *copied = *var_ty;
+
+  return (struct ast_tyref){.ty = AST_TYREF_TY_POINTER,
+                            .pointer =
+                                (struct ast_ty_pointer){.underlying = copied}};
+}
+
+struct ast_tyref tyref_get_underlying(struct parser *parser,
+                                      const struct ast_tyref *ty_ref) {
+  UNUSED_ARG(parser);
+
+  debug_assert(ty_ref->ty == AST_TYREF_TY_POINTER, "non pointer passed to `%s`",
+               __func__);
+
+  return *ty_ref->pointer.underlying;
+}
+
+struct ast_tyref tyref_promote_integer(struct parser *parser,
+                                       const struct ast_tyref *ty_ref) {
+  UNUSED_ARG(parser);
+
+  debug_assert(ty_ref->ty != AST_TYREF_TY_UNKNOWN, "unknown ty in call to `%s`",
+               __func__);
+
+  if (ty_ref->ty != AST_TYREF_TY_WELL_KNOWN ||
+      ty_ref->well_known >= WELL_KNOWN_TY_SIGNED_INT) {
+    return *ty_ref;
+  }
+
+  // all values smaller than int are promoted to int
+  return (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                            .well_known = WELL_KNOWN_TY_SIGNED_INT};
+}
+
+struct ast_tyref resolve_unary_op_types(struct parser *parser,
+                                        enum ast_unary_op_ty ty,
+                                        const struct ast_tyref *var_ty,
+                                        const struct ast_cast *cast
+                                      ) {
+  switch (ty) {
+  case AST_UNARY_OP_TY_PLUS:
+  case AST_UNARY_OP_TY_MINUS:
+  case AST_UNARY_OP_TY_NOT:
+    // these undergo promotion
+    return tyref_promote_integer(parser, var_ty);
+    break;
+  case AST_UNARY_OP_TY_LOGICAL_NOT:
+    // logical not always results in `int`
+    return (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                              .well_known = WELL_KNOWN_TY_SIGNED_INT};
+    break;
+  case AST_UNARY_OP_TY_INDIRECTION:
+    return tyref_get_underlying(parser, var_ty);
+  case AST_UNARY_OP_TY_SIZEOF:
+  case AST_UNARY_OP_TY_ALIGNOF:
+    todo("type of sizeof/alignof. should be size_t, which is varying per-arch "
+         "(pointer-sized int)");
+    break;
+  case AST_UNARY_OP_TY_ADDRESSOF:
+    return tyref_make_pointer(parser, var_ty);
+  case AST_UNARY_OP_TY_CAST:
+    debug_assert(cast, "no cast provided but unary op ty was cast in `%s`", __func__);
+    return cast->cast_ty;
+  case AST_UNARY_OP_TY_PREFIX_INC:
+  case AST_UNARY_OP_TY_PREFIX_DEC:
+  case AST_UNARY_OP_TY_POSTFIX_INC:
+  case AST_UNARY_OP_TY_POSTFIX_DEC:
+    // these do not change type
+    return *var_ty;
+  }
+}
+
+struct ast_tyref resolve_binary_op_types(struct parser *parser,
+                                         enum ast_binary_op_ty ty,
+                                         const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
   debug_assert(lhs->ty != AST_TYREF_TY_UNKNOWN &&
                    rhs->ty != AST_TYREF_TY_UNKNOWN,
-               "unknown ty in call to `resolve_binary_op_types`");
+               "unknown ty in call to `%s`", __func__);
 
-  if ((lhs->ty == AST_TYREF_TY_WELL_KNOWN &&
-       rhs->ty == AST_TYREF_TY_WELL_KNOWN)) {
-    struct ast_tyref result_ty;
-    result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
-
-    if (lhs->well_known == rhs->well_known) {
-      // they are the same type
-      result_ty.well_known = lhs->well_known;
-    } else {
-      enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs->well_known);
-      enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs->well_known);
-
-      if (signed_lhs != signed_rhs) {
-        // one is bigger than other
-        // type of expression is simply the larger type
-        result_ty.well_known = MAX(signed_lhs, signed_rhs);
-      } else {
-        // they are the same size
-        // the unsigned one is chosen (C spec dictates)
-        result_ty.well_known = WKT_MAKE_UNSIGNED(signed_lhs);
-      }
-    }
-
-    return result_ty;
+  if (lhs->ty != AST_TYREF_TY_WELL_KNOWN ||
+      rhs->ty != AST_TYREF_TY_WELL_KNOWN) {
+    todo("`%s` for types other than well known", __func__);
   }
 
-  todo("`resolve_binary_op_types` for types other than well known");
-}
+  struct ast_tyref result_ty;
+  result_ty.ty = AST_TYREF_TY_WELL_KNOWN;
 
+  struct ast_tyref lhs_ty = tyref_promote_integer(parser, lhs);
+  struct ast_tyref rhs_ty = tyref_promote_integer(parser, rhs);
+
+  if (ty == AST_BINARY_OP_TY_LSHIFT || ty == AST_BINARY_OP_TY_RSHIFT) {
+    // these do not undergo "Usual arithmetic conversions"
+    // and are just typed by the lhs
+    return lhs_ty;
+  }
+
+  if (lhs_ty.well_known == rhs_ty.well_known) {
+    // they are the same type
+    result_ty.well_known = lhs_ty.well_known;
+  } else {
+    enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs_ty.well_known);
+    enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs_ty.well_known);
+
+    if (signed_lhs != signed_rhs) {
+      // one is bigger than other
+      // type of expression is simply the larger type
+      result_ty.well_known = MAX(signed_lhs, signed_rhs);
+    } else {
+      // they are the same size
+      // the unsigned one is chosen (C spec dictates)
+      result_ty.well_known = WKT_MAKE_UNSIGNED(signed_lhs);
+    }
+  }
+
+  return result_ty;
+}
 
 bool parse_token(struct parser *parser, enum lex_token_ty ty) {
   struct token token;
@@ -599,8 +690,8 @@ bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 bool parse_expr(struct parser *parser, struct ast_expr *expr);
-bool parse_above_atom(struct parser *parser, struct ast_expr *expr);
-
+bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
+bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
 
 struct assg_ty_map {
   enum lex_token_ty token_ty;
@@ -609,18 +700,21 @@ struct assg_ty_map {
 };
 
 const struct assg_ty_map ASSG_TOKENS[11] = {
-  {LEX_TOKEN_TY_OP_ASSG, AST_ASSG_TY_SIMPLE_ASSG, 0},
-  {LEX_TOKEN_TY_OP_ADD_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_ADD},
-  {LEX_TOKEN_TY_OP_DIV_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_DIV},
-  {LEX_TOKEN_TY_OP_MUL_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_MUL},
-  {LEX_TOKEN_TY_OP_SUB_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_SUB},
-  {LEX_TOKEN_TY_OP_QUOT_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_QUOT},
+    {LEX_TOKEN_TY_OP_ASSG, AST_ASSG_TY_SIMPLE_ASSG, 0},
+    {LEX_TOKEN_TY_OP_ADD_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_ADD},
+    {LEX_TOKEN_TY_OP_DIV_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_DIV},
+    {LEX_TOKEN_TY_OP_MUL_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_MUL},
+    {LEX_TOKEN_TY_OP_SUB_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_SUB},
+    {LEX_TOKEN_TY_OP_QUOT_ASSG, AST_ASSG_TY_COMPOUND_ASSG,
+     AST_BINARY_OP_TY_QUOT},
 
-  {LEX_TOKEN_TY_OP_LSHIFT_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_LSHIFT},
-  {LEX_TOKEN_TY_OP_RSHIFT_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_RSHIFT},
-  {LEX_TOKEN_TY_OP_AND_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_AND},
-  {LEX_TOKEN_TY_OP_OR_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_OR},
-  {LEX_TOKEN_TY_OP_XOR_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_XOR},
+    {LEX_TOKEN_TY_OP_LSHIFT_ASSG, AST_ASSG_TY_COMPOUND_ASSG,
+     AST_BINARY_OP_TY_LSHIFT},
+    {LEX_TOKEN_TY_OP_RSHIFT_ASSG, AST_ASSG_TY_COMPOUND_ASSG,
+     AST_BINARY_OP_TY_RSHIFT},
+    {LEX_TOKEN_TY_OP_AND_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_AND},
+    {LEX_TOKEN_TY_OP_OR_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_OR},
+    {LEX_TOKEN_TY_OP_XOR_ASSG, AST_ASSG_TY_COMPOUND_ASSG, AST_BINARY_OP_TY_XOR},
 };
 
 bool parse_assg(struct parser *parser, struct ast_assg *assg) {
@@ -628,7 +722,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
   struct ast_expr assignee;
   struct ast_expr expr;
-  if (!parse_above_atom(parser, &assignee)) {
+  if (!parse_atom_2(parser, &assignee)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -647,7 +741,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
     }
   }
 
-  if (token_ty == LEX_TOKEN_TY_UNKNOWN || !parse_expr(parser, &expr)) {   
+  if (token_ty == LEX_TOKEN_TY_UNKNOWN || !parse_expr(parser, &expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -655,9 +749,9 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   assg->ty = assg_ty;
   if (assg->ty == AST_ASSG_TY_COMPOUND_ASSG) {
     assg->compound_assg = (struct ast_assg_compound_assg){
-      .binary_op_ty = binary_op_ty,
-      .intermediate_var_ty = resolve_binary_op_types(&assignee.var_ty, &expr.var_ty)
-    };
+        .binary_op_ty = binary_op_ty,
+        .intermediate_var_ty = resolve_binary_op_types(
+            parser, binary_op_ty, &assignee.var_ty, &expr.var_ty)};
   }
 
   assg->var_ty = assignee.var_ty;
@@ -753,7 +847,9 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
   return false;
 }
 
-bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
+// parses precedence level 1:
+// postfix ++, postfix --, (), [], ., ->, (type){list}
+bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   struct ast_atom atom;
   if (!parse_atom(parser, &atom)) {
     return false;
@@ -779,9 +875,118 @@ bool parse_above_atom(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
+// parses precedence level 2:
+// prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
+bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  bool has_unary_prefix = true;
+  enum ast_unary_op_ty unary_prefix_ty;
+  switch (token.ty) {
+  case LEX_TOKEN_TY_OP_INC:
+    unary_prefix_ty = AST_UNARY_OP_TY_PREFIX_INC;
+    break;
+  case LEX_TOKEN_TY_OP_DEC:
+    unary_prefix_ty = AST_UNARY_OP_TY_PREFIX_DEC;
+    break;
+  case LEX_TOKEN_TY_OP_ADD:
+    unary_prefix_ty = AST_UNARY_OP_TY_PLUS;
+    break;
+  case LEX_TOKEN_TY_OP_SUB:
+    unary_prefix_ty = AST_UNARY_OP_TY_MINUS;
+    break;
+  case LEX_TOKEN_TY_OP_LOGICAL_NOT:
+    unary_prefix_ty = AST_UNARY_OP_TY_LOGICAL_NOT;
+    break;
+  case LEX_TOKEN_TY_OP_NOT:
+    unary_prefix_ty = AST_UNARY_OP_TY_NOT;
+    break;
+  case LEX_TOKEN_TY_OP_MUL:
+    unary_prefix_ty = AST_UNARY_OP_TY_INDIRECTION;
+    break;
+  case LEX_TOKEN_TY_OP_AND:
+    unary_prefix_ty = AST_UNARY_OP_TY_ADDRESSOF;
+    break;
+  // case LEX_TOKEN_TY_OP_SIZEOF:
+  //   ty = AST_UNARY_OP_TY_SIZEOF;
+  //   break;
+  // case LEX_TOKEN_TY_OP_ALIGNOF:
+  //   ty = AST_UNARY_OP_TY_ALIGNOF;
+  //   break;
+  // case LEX_TOKEN_TY_OP_CAST:
+  //   ty = AST_UNARY_OP_TY_CAST;
+  //   break;
+  default:
+    // just pure expr
+    has_unary_prefix = false;
+  }
+
+  if (has_unary_prefix) {
+    consume_token(parser->lexer, token);
+  }
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  if (!parse_atom_1(parser, sub_expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  bool has_unary_postfix = false;
+  enum ast_unary_op_ty unary_postfix_ty;
+  if (parse_token(parser, LEX_TOKEN_TY_OP_INC)) {
+    has_unary_postfix = true;
+    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_INC;
+  } else if (parse_token(parser, LEX_TOKEN_TY_OP_DEC)) {
+    has_unary_postfix = true;
+    unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_DEC;
+  }
+
+  if (has_unary_postfix) {
+    // postfix takes precedence to prefix
+
+    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty, &sub_expr->var_ty, NULL);
+    struct ast_unary_op unary_op = {
+        .ty = unary_postfix_ty,
+        .var_ty = var_ty,
+        .expr = sub_expr,
+    };
+
+    struct ast_expr *postfix_expr =
+        arena_alloc(parser->arena, sizeof(*postfix_expr));
+    postfix_expr->ty = AST_EXPR_TY_UNARY_OP;
+    postfix_expr->var_ty = var_ty;
+    postfix_expr->unary_op = unary_op;
+
+    sub_expr = postfix_expr;
+  }
+
+  if (has_unary_prefix) {
+    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_prefix_ty, &sub_expr->var_ty, NULL);
+    struct ast_unary_op unary_op = {
+        .ty = unary_prefix_ty,
+        .var_ty = var_ty,
+        .expr = sub_expr,
+    };
+
+    struct ast_expr *prefix_expr =
+        arena_alloc(parser->arena, sizeof(*prefix_expr));
+    prefix_expr->ty = AST_EXPR_TY_UNARY_OP;
+    prefix_expr->var_ty = var_ty;
+    prefix_expr->unary_op = unary_op;
+
+    sub_expr = prefix_expr;
+  }
+
+  *expr = *sub_expr;
+  return true;
+}
+
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
-  if (!parse_above_atom(parser, expr)) {
+  if (!parse_atom_2(parser, expr)) {
     return false;
   }
 
@@ -818,7 +1023,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     struct ast_expr lhs = *expr;
 
     struct ast_tyref result_ty =
-        resolve_binary_op_types(&lhs.var_ty, &rhs.var_ty);
+        resolve_binary_op_types(parser, info.ty, &lhs.var_ty, &rhs.var_ty);
 
     expr->ty = AST_EXPR_TY_BINARY_OP;
     expr->var_ty = result_ty;
@@ -1955,6 +2160,56 @@ DEBUG_FUNC(atom, atom) {
   }
 }
 
+DEBUG_FUNC(unary_op, unary_op) {
+  switch (unary_op->ty) {
+  case AST_UNARY_OP_TY_PREFIX_INC:
+    AST_PRINTZ("PREFIX INC");
+    break;
+  case AST_UNARY_OP_TY_PREFIX_DEC:
+    AST_PRINTZ("PREFIX DEC");
+    break;
+  case AST_UNARY_OP_TY_POSTFIX_INC:
+    AST_PRINTZ("POSTFIX INC");
+    break;
+  case AST_UNARY_OP_TY_POSTFIX_DEC:
+    AST_PRINTZ("POSTFIX DEC");
+    break;
+  case AST_UNARY_OP_TY_PLUS:
+    AST_PRINTZ("PLUS");
+    break;
+  case AST_UNARY_OP_TY_MINUS:
+    AST_PRINTZ("MINUS");
+    break;
+  case AST_UNARY_OP_TY_LOGICAL_NOT:
+    AST_PRINTZ("LOGICAL NOT");
+    break;
+  case AST_UNARY_OP_TY_NOT:
+    AST_PRINTZ("NOT");
+    break;
+  case AST_UNARY_OP_TY_INDIRECTION:
+    AST_PRINTZ("INDIRECTION");
+    break;
+  case AST_UNARY_OP_TY_SIZEOF:
+    AST_PRINTZ("SIZEOF");
+    break;
+  case AST_UNARY_OP_TY_ADDRESSOF:
+    AST_PRINTZ("ADDRESSOf");
+    break;
+  case AST_UNARY_OP_TY_ALIGNOF:
+    AST_PRINTZ("ALIGNOF");
+    break;
+  case AST_UNARY_OP_TY_CAST:
+    AST_PRINT_SAMELINE_Z("CAST (-> ");
+    DEBUG_CALL(tyref, &unary_op->cast.cast_ty);
+    AST_PRINTZ(")");
+    break;
+  }
+
+  INDENT();
+  DEBUG_CALL(expr, unary_op->expr);
+  UNINDENT();
+}
+
 DEBUG_FUNC(binary_op, binary_op) {
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_EQ:
@@ -2036,42 +2291,42 @@ DEBUG_FUNC(assg, assg) {
   DEBUG_CALL(expr, assg->assignee);
 
   INDENT();
-  switch (assg->ty) {   
+  switch (assg->ty) {
   case AST_ASSG_TY_SIMPLE_ASSG:
     AST_PRINTZ("=");
     break;
   case AST_ASSG_TY_COMPOUND_ASSG:
     switch (assg->compound_assg.binary_op_ty) {
     case AST_BINARY_OP_TY_ADD:
-    AST_PRINTZ("+=");
-    break;
+      AST_PRINTZ("+=");
+      break;
     case AST_BINARY_OP_TY_SUB:
-    AST_PRINTZ("-=");
-    break;
+      AST_PRINTZ("-=");
+      break;
     case AST_BINARY_OP_TY_MUL:
-    AST_PRINTZ("*=");
-    break;
+      AST_PRINTZ("*=");
+      break;
     case AST_BINARY_OP_TY_DIV:
-    AST_PRINTZ("/=");
-    break;
+      AST_PRINTZ("/=");
+      break;
     case AST_BINARY_OP_TY_QUOT:
-    AST_PRINTZ("%%=");
-    break;
+      AST_PRINTZ("%%=");
+      break;
     case AST_BINARY_OP_TY_LSHIFT:
-    AST_PRINTZ("<<=");
-    break;
+      AST_PRINTZ("<<=");
+      break;
     case AST_BINARY_OP_TY_RSHIFT:
-    AST_PRINTZ(">>=");
-    break;
+      AST_PRINTZ(">>=");
+      break;
     case AST_BINARY_OP_TY_AND:
-    AST_PRINTZ("&=");
-    break;
+      AST_PRINTZ("&=");
+      break;
     case AST_BINARY_OP_TY_OR:
-    AST_PRINTZ("|=");
-    break;
+      AST_PRINTZ("|=");
+      break;
     case AST_BINARY_OP_TY_XOR:
-    AST_PRINTZ("^=");
-    break;
+      AST_PRINTZ("^=");
+      break;
     default:
       bug("unrecognised binary op ty in assg");
     }
@@ -2117,6 +2372,9 @@ DEBUG_FUNC(expr, expr) {
     break;
   case AST_EXPR_TY_CALL:
     DEBUG_CALL(call, expr->call);
+    break;
+  case AST_EXPR_TY_UNARY_OP:
+    DEBUG_CALL(unary_op, &expr->unary_op);
     break;
   case AST_EXPR_TY_BINARY_OP:
     DEBUG_CALL(binary_op, &expr->binary_op);

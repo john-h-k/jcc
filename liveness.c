@@ -159,7 +159,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
         debug_assert(
             op->metadata == NULL,
-            "metadata left over in op during LSRA, will be overwritten");
+            "metadata left over in op during liveness analysis, will be overwritten");
         op->metadata = interval;
 
         struct interval_callback_data cb_data = {.op = op, .data = &data};
@@ -268,7 +268,11 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "    (UNASSIGNED)");
     break;
   case REG_SPILLED:
-    fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl_idx);
+    if (op->lcl) {
+      fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl->id);
+    } else {
+      fslogsl(file, "    (SPILLED), LCL=(UNASSIGNED)");
+    }
     break;
   case REG_FLAGS:
     fslogsl(file, "    (FLAGS)");

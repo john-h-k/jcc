@@ -18,19 +18,22 @@ enum register_alloc_mode {
 };
 
 struct register_alloc_info {
-  enum register_alloc_mode mode;
-
-  union {
-    struct reg_info reg_info;
-  };
+  struct reg_info reg_info;
 };
 
-void spill_at_interval(struct interval *intervals, size_t cur_interval,
+void spill_op(struct ir_builder *irb, struct ir_op *op) {
+  debug_assert(op->reg != REG_SPILLED, "can't spill already spilled op");
+
+  op->reg = REG_SPILLED;
+  op->lcl = add_local(irb, &op->var_ty);
+}
+
+void spill_at_interval(struct ir_builder *irb, struct interval *intervals, size_t cur_interval,
                        size_t *active, size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
-    spill->op->reg = REG_SPILLED;
+    spill_op(irb, spill->op);
 
     // remove `spill`
     (*num_active)--;
@@ -50,12 +53,11 @@ void spill_at_interval(struct interval *intervals, size_t cur_interval,
       }
     }
   } else {
-    intervals[cur_interval].op->reg = REG_SPILLED;
+    spill_op(irb, intervals[cur_interval].op);
   }
 }
 
-void expire_old_intervals(const struct register_alloc_info *info,
-                          struct interval *intervals,
+void expire_old_intervals(struct interval *intervals,
                           struct interval *cur_interval, size_t *active,
                           size_t *num_active, struct bitset *reg_pool) {
   size_t num_expired_intervals = 0;
@@ -68,13 +70,11 @@ void expire_old_intervals(const struct register_alloc_info *info,
 
     num_expired_intervals++;
 
-    switch (info->mode) {
-    case REGISTER_ALLOC_MODE_REGS:
+    if (interval->op->reg != REG_SPILLED) {
+      // intervals can contain ops that were spilled for other reasons
+      // but are still alive
+      // so only free a reg if this interval actually *has* a reg
       bitset_set(reg_pool, interval->op->reg, true);
-      break;
-    case REGISTER_ALLOC_MODE_LCLS:
-      bitset_set(reg_pool, interval->op->lcl_idx, true);
-      break;
     }
   }
 
@@ -116,41 +116,40 @@ int sort_interval_by_start_point(const void *a, const void *b) {
   return 0;
 }
 
-struct alloc_fixup_data {
+struct fixup_spills_data {
   struct ir_builder *irb;
   struct ir_op *consumer;
-  size_t spill_reg;
 };
 
-void alloc_fixup_callback(struct ir_op **op, void *metadata) {
-  struct alloc_fixup_data *data = metadata;
+bool op_needs_reg(struct ir_op *op) {
+  return op->ty != IR_OP_TY_UNARY_OP || op->unary_op.ty != IR_OP_UNARY_OP_TY_ADDRESSOF;
+}
 
-  if ((*op)->reg == REG_SPILLED) {
-    invariant_assert((*op)->lcl_idx != NO_LCL,
-                     "should've had local by this point");
+void fixup_spills_callback(struct ir_op **op, void *metadata) {
+  struct fixup_spills_data *data = metadata;
 
-    (*op)->reg = data->spill_reg;
+  if (data->consumer->flags & IR_OP_FLAG_SPILL) {
+    return;
+  }
+
+  if ((*op)->reg == REG_SPILLED && op_needs_reg(*op)) {
+    debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id, __func__);
 
     // FIXME: proper local sizes
     // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
-    struct ir_op *store = insert_after_ir_op(data->irb, *op, IR_OP_TY_STORE_LCL,
-                                             IR_OP_VAR_TY_NONE);
-    store->store_lcl.lcl_idx = (*op)->lcl_idx;
-    store->store_lcl.value = *op;
-    store->reg = data->spill_reg;
-
     struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
                                              IR_OP_TY_LOAD_LCL, (*op)->var_ty);
-    load->load_lcl.lcl_idx = (*op)->lcl_idx;
+    load->load_lcl.lcl = (*op)->lcl;
     load->reg = data->consumer->reg;
+    load->flags |= IR_OP_FLAG_SPILL;
 
     *op = load;
   }
 }
 
-void alloc_fixup(struct ir_builder *irb, struct interval_data *data,
-                 size_t spill_reg) {
+
+void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
   UNUSED_ARG(data);
 
   struct ir_basicblock *basicblock = irb->first;
@@ -159,10 +158,22 @@ void alloc_fixup(struct ir_builder *irb, struct interval_data *data,
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;
-      while (op) {
-        struct alloc_fixup_data metadata = {
-            .irb = irb, .consumer = op, .spill_reg = spill_reg};
-        walk_op_uses(op, alloc_fixup_callback, &metadata);
+      while (op) {        
+        // walk all things this op uses, and add loads for any that are spilled
+        struct fixup_spills_data metadata = {
+            .irb = irb, .consumer = op};
+
+        walk_op_uses(op, fixup_spills_callback, &metadata);
+
+        if (op->reg == REG_SPILLED) {
+          // insert store for the op
+          struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
+                                                   IR_OP_VAR_TY_NONE);
+          store->store_lcl.lcl = op;
+          store->store_lcl.value = op;
+          store->reg = NO_REG;
+          store->flags |= IR_OP_FLAG_SPILL;
+        }
 
         op = op->succ;
       }
@@ -183,9 +194,11 @@ int compare_interval_id(const void *a, const void *b) {
 
 struct interval_data register_alloc_pass(struct ir_builder *irb,
                                          struct register_alloc_info info,
-                                         size_t *max_live) {
+                                         bool *spilled) {
 
   struct interval_data data = construct_intervals(irb);
+
+  *spilled = false;
 
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
@@ -198,19 +211,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   qsort(intervals, num_intervals, sizeof(*intervals),
         sort_interval_by_start_point);
 
-  size_t num_regs;
-  switch (info.mode) {
-  case REGISTER_ALLOC_MODE_REGS:
-    num_regs = info.reg_info.num_volatile + info.reg_info.num_nonvolatile;
-
-    // remove one reg, as we may need this for spilling
-    num_regs--;
-    break;
-  case REGISTER_ALLOC_MODE_LCLS:
-    // there can't be more locals than ops, so upper bound by this
-    num_regs = irb->op_count;
-    break;
-  }
+  size_t num_regs = info.reg_info.num_volatile + info.reg_info.num_nonvolatile;
 
   size_t *active = arena_alloc(irb->arena, sizeof(size_t) * num_regs);
   size_t num_active = 0;
@@ -221,34 +222,32 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &intervals[i];
-    expire_old_intervals(&info, intervals, interval, active, &num_active,
+    expire_old_intervals(intervals, interval, active, &num_active,
                          reg_pool);
 
     // update live_regs early in case the op is not value producing/marked
     // DONT_GIVE_REG and we back out
-    if (info.mode == REGISTER_ALLOC_MODE_REGS) {
-      unsigned long long free_regs = bitset_as_ull(reg_pool);
-      interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
-    }
+    unsigned long long free_regs = bitset_as_ull(reg_pool);
+    interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
 
     if (interval->op->reg == REG_FLAGS ||
         (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
       continue;
     }
 
-    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL || num_active == num_regs) {
-      invariant_assert(info.mode != REGISTER_ALLOC_MODE_LCLS,
-                       "doesnt make sense to spill in lcl alloc");
+    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL) {
+      // we spill here, and strip the flag for the next regalloc run as then it will need a register
+      interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
 
-      spill_at_interval(intervals, i, active, &num_active);
+      spill_op(irb, interval->op);
+      *spilled = true;
+    }
+    else if (num_active == num_regs) {
+      spill_at_interval(irb, intervals, i, active, &num_active);
+      *spilled = true;
     } else {
       if (interval->op->reg == REG_FLAGS ||
           (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
-        continue;
-      }
-
-      if (info.mode == REGISTER_ALLOC_MODE_LCLS &&
-          interval->op->reg != REG_SPILLED) {
         continue;
       }
 
@@ -257,24 +256,11 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
       bitset_set(reg_pool, free_slot, false);
 
-      if (max_live) {
-        *max_live =
-            MAX(*max_live, bitset_length(reg_pool) - bitset_popcnt(reg_pool));
-      }
-
-      if (info.mode == REGISTER_ALLOC_MODE_REGS &&
-          free_slot >= info.reg_info.num_volatile) {
+      if (free_slot >= info.reg_info.num_volatile) {
         irb->nonvolatile_registers_used |= (1ull << free_slot);
       }
 
-      switch (info.mode) {
-      case REGISTER_ALLOC_MODE_REGS:
-        interval->op->reg = free_slot;
-        break;
-      case REGISTER_ALLOC_MODE_LCLS:
-        interval->op->lcl_idx = free_slot;
-        break;
-      }
+      interval->op->reg = free_slot;
 
       size_t cur_interval = i;
 
@@ -294,11 +280,9 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       }
     }
 
-    if (info.mode == REGISTER_ALLOC_MODE_REGS) {
-      // re-set live regs as we may have assigned a new reg
-      unsigned long long free_regs = bitset_as_ull(reg_pool);
-      interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
-    }
+    // re-set live regs as we may have assigned a new reg
+    free_regs = bitset_as_ull(reg_pool);
+    interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
   }
 
   struct ir_basicblock *basicblock = irb->first;
@@ -352,50 +336,44 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   be needed
 */
 void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
-  rebuild_ids(irb);
+  struct register_alloc_info alloc_info = (struct register_alloc_info){.reg_info = reg_info};
 
-  size_t spill_reg = (reg_info.num_volatile + reg_info.num_nonvolatile) - 1;
+  bool spill_exists = true;
+  int attempts = 0;
 
-  struct interval_data data = register_alloc_pass(
-      irb,
-      (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_REGS,
-                                   .reg_info = reg_info},
-      NULL);
+  while (spill_exists) {
+    // concerned this may not terminate
+    // a cursory logic check suggests it *should* but include this so we can see if it is failing
+    attempts++;
+    if (attempts > 10) {
+      bug("LSRA didn't terminate after %d attempts", attempts);
+    }
 
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
-        compare_interval_id);
+    BEGIN_SUB_STAGE("REGALLOC");
 
-  if (log_enabled()) {
-    debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
-  }
+    clear_metadata(irb);
+    struct interval_data data = register_alloc_pass(
+        irb,
+        alloc_info,
+        &spill_exists);
 
-  BEGIN_SUB_STAGE("SPILL HANDLING");
+    qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+          compare_interval_id);
 
-  // removes intervals from last pass
-  clear_metadata(irb);
+    if (log_enabled()) {
+      debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+    }
 
-  BEGIN_SUB_STAGE("SECOND-PASS REGALLOC");
+    BEGIN_SUB_STAGE("SPILL HANDLING");
+    
+    // insert LOAD and STORE ops as needed
+    fixup_spills(irb, &data);
 
-  size_t max_locals = 0;
-  data = register_alloc_pass(
-      irb, (struct register_alloc_info){.mode = REGISTER_ALLOC_MODE_LCLS},
-      &max_locals);
+    qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+          compare_interval_id);
 
-  debug_assert(!irb->num_locals, "locals %zu already exist but should not",
-               irb->num_locals);
-  irb->num_locals = max_locals;
-  // TODO: dont assume 8 byte locals
-  irb->total_locals_size = irb->num_locals * 8;
-
-  clear_metadata(irb);
-
-  // insert LOAD and STORE ops as needed
-  alloc_fixup(irb, &data, spill_reg);
-
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
-        compare_interval_id);
-
-  if (log_enabled()) {
-    debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+    if (log_enabled()) {
+      debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+    }
   }
 }

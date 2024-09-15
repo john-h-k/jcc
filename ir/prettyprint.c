@@ -253,21 +253,20 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, ir);
-    if (ir->load_lcl.lcl_idx == NO_LCL) {
-      fprintf(file, "storelcl LCL(NO_LCL), %%%zu",
+    if (ir->load_lcl.lcl) {
+      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl->id,
               ir->store_lcl.value->id);
     } else {
-      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->store_lcl.lcl_idx,
+      fprintf(file, "storelcl LCL(UNASSIGNED), %%%zu",
               ir->store_lcl.value->id);
     }
     break;
   case IR_OP_TY_LOAD_LCL:
     debug_lhs(file, ir);
-    if (ir->load_lcl.lcl_idx == NO_LCL) {
-      fprintf(file, "loadlcl LCL(NO_LCL)");
+    if (ir->load_lcl.lcl) {
+      fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl->id);
     } else {
-      fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl_idx);
-      
+      fprintf(file, "loadlcl LCL(UNASSIGNED)");
     }
     break;
   case IR_OP_TY_BR:
