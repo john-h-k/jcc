@@ -121,6 +121,12 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_AND:
     EMIT_WITH_FN(eep_emit_and);
     break;
+  case IR_OP_BINARY_OP_TY_OR:
+    todo("eep OR");
+    break;
+  case IR_OP_BINARY_OP_TY_XOR:
+    todo("eep XOR");
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     EMIT_WITH_FN(eep_emit_add);
     break;

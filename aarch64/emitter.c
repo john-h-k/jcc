@@ -117,6 +117,31 @@ void aarch64_emit_and_64(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, AND_64_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
 }
 
+void aarch64_emit_eor_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6) {
+  aarch64_emit(emitter, EOR_32_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_eor_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6) {
+  aarch64_emit(emitter, EOR_64_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_eon_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6) {
+  aarch64_emit(emitter, EON_32_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
+}
+
+void aarch64_emit_eon_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6) {
+  aarch64_emit(emitter, EON_64_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
+}
+
+
 void aarch64_emit_orr_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6) {

@@ -53,6 +53,10 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "u>>";
   case IR_OP_BINARY_OP_TY_AND:
     return "&";
+  case IR_OP_BINARY_OP_TY_OR:
+    return "|";
+  case IR_OP_BINARY_OP_TY_XOR:
+    return "^";
   case IR_OP_BINARY_OP_TY_ADD:
     return "+";
   case IR_OP_BINARY_OP_TY_SUB:

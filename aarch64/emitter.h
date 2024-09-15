@@ -108,17 +108,34 @@ void aarch64_emit_orr_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6);
 
-void aarch64_emit_orn_32(struct aarch64_emitter *emitter,
+void aarch64_emit_orr_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6);
 
-void aarch64_emit_orr_64(struct aarch64_emitter *emitter,
+void aarch64_emit_orn_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6);
 
 void aarch64_emit_orn_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6);
+
+void aarch64_emit_eor_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6);
+
+void aarch64_emit_eor_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6);
+
+void aarch64_emit_eon_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6);
+
+void aarch64_emit_eon_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg lhs, struct aarch64_reg rhs,
+                         struct aarch64_reg dest, size_t shift, size_t imm6);
+
 
 /* Logical (immediate) */
 

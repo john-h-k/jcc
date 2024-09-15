@@ -158,15 +158,15 @@ struct ir_op *insert_ir_for_cast(struct ir_builder *irb, struct ir_stmt *stmt,
   return cast;
 }
 
-struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
-                                    struct ir_stmt *stmt,
-                                    struct ast_binary_op *binary_op) {
-  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &binary_op->var_ty);
+struct ir_op *alloc_binaryop(
+                             struct ir_builder *irb,
+                             struct ir_stmt *stmt,
+                             const struct ast_tyref *ty_ref,
+                             enum ast_binary_op_ty ty,
+                             struct ir_op *lhs,
+                             struct ir_op *rhs) {
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, ty_ref);
 
-  struct ir_op *lhs =
-      build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
-  struct ir_op *rhs =
-      build_ir_for_expr(irb, stmt, binary_op->rhs, &binary_op->var_ty);
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -177,11 +177,11 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
   b->lhs = lhs;
   b->rhs = rhs;
 
-  invariant_assert(binary_op->var_ty.ty == AST_TYREF_TY_WELL_KNOWN,
+  invariant_assert(ty_ref->ty == AST_TYREF_TY_WELL_KNOWN,
                    "non primitives (/well-knowns) cannot be used in binary "
                    "expression by point IR is reached!");
 
-  switch (binary_op->ty) {
+  switch (ty) {
   case AST_BINARY_OP_TY_EQ:
     b->ty = IR_OP_BINARY_OP_TY_EQ;
     break;
@@ -189,35 +189,35 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
     b->ty = IR_OP_BINARY_OP_TY_NEQ;
     break;
   case AST_BINARY_OP_TY_GT:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SGT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGT;
     }
     break;
   case AST_BINARY_OP_TY_GTEQ:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SGTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGTEQ;
     }
     break;
   case AST_BINARY_OP_TY_LT:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SLT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULT;
     }
     break;
   case AST_BINARY_OP_TY_LTEQ:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SLTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULTEQ;
     }
     break;
   case AST_BINARY_OP_TY_RSHIFT:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SRSHIFT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_URSHIFT;
@@ -238,15 +238,21 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
   case AST_BINARY_OP_TY_MUL:
     b->ty = IR_OP_BINARY_OP_TY_MUL;
     break;
+  case AST_BINARY_OP_TY_OR:
+    b->ty = IR_OP_BINARY_OP_TY_OR;
+    break;
+  case AST_BINARY_OP_TY_XOR:
+    b->ty = IR_OP_BINARY_OP_TY_XOR;
+    break;
   case AST_BINARY_OP_TY_DIV:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SDIV;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UDIV;
     }
     break;
   case AST_BINARY_OP_TY_QUOT:
-    if (WKT_IS_SIGNED(binary_op->var_ty.well_known)) {
+    if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SQUOT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UQUOT;
@@ -255,6 +261,18 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
   }
 
   return op;
+  
+}
+
+struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
+                                    struct ir_stmt *stmt,
+                                    struct ast_binary_op *binary_op) {
+  struct ir_op *lhs =
+      build_ir_for_expr(irb, stmt, binary_op->lhs, &binary_op->var_ty);
+  struct ir_op *rhs =
+      build_ir_for_expr(irb, stmt, binary_op->rhs, &binary_op->var_ty);
+
+  return alloc_binaryop(irb, stmt, &binary_op->var_ty, binary_op->ty, lhs, rhs);
 }
 
 struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
@@ -815,9 +833,8 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
 }
 
 struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
-                       struct ast_tyref *var_ty, struct ast_var *var,
-                       struct ast_expr *expr) {
-  struct ir_op *op = build_ir_for_expr(irb, stmt, expr, var_ty);
+                       struct ir_op *op,
+                       struct ast_var *var) {
   debug_assert(op, "null expr in assignment!");
 
   struct var_key key = get_var_key(irb->parser, var);
@@ -840,8 +857,22 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg) {
   if (assg->assignee->ty == AST_EXPR_TY_ATOM &&
       assg->assignee->atom.ty == AST_ATOM_TY_VAR) {
-    return var_assg(irb, stmt, &assg->assignee->var_ty,
-                    &assg->assignee->atom.var, assg->expr);
+
+
+    switch (assg->ty) {
+    case AST_ASSG_TY_SIMPLE_ASSG: {
+      struct ir_op *op = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+      return var_assg(irb, stmt, op, &assg->assignee->atom.var);
+    }
+    case AST_ASSG_TY_COMPOUND_ASSG: {
+      struct ir_op *op = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+      struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
+
+      struct ir_op *res = alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty, assg->compound_assg.binary_op_ty, assignee, op);
+      return var_assg(irb, stmt, res, &assg->assignee->atom.var);
+    }
+    }
+  
   } else {
     todo("non var assignments");
   }
@@ -858,7 +889,8 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     }
 
     // FIXME: is this right
-    var_assg(irb, stmt, &var_decl_list->var_ty, &decl->var, &decl->assg_expr);
+    struct ir_op *op = build_ir_for_expr(irb, stmt, &decl->assg_expr, &var_decl_list->var_ty);
+    var_assg(irb, stmt, op, &decl->var);
   }
 
   return stmt->last;
