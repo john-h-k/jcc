@@ -302,7 +302,8 @@ struct compiled_function eep_emit_function(struct ir_builder *func) {
   return result;
 }
 
-static unsigned get_lcl_stack_offset(struct emit_state *state, const struct ir_lcl *lcl) {
+static unsigned get_lcl_stack_offset(struct emit_state *state,
+                                     const struct ir_lcl *lcl) {
   // FIXME: only supports ints
   UNUSED_ARG(state);
   return lcl->id * EEP_REG_SIZE;

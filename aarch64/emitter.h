@@ -133,7 +133,6 @@ void aarch64_emit_eon_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
                          struct aarch64_reg dest, size_t shift, size_t imm6);
 
-
 /* Logical (immediate) */
 
 void aarch64_emit_eor_32_imm(struct aarch64_emitter *emitter,
@@ -412,9 +411,9 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg source, struct aarch64_reg dest);
 
 void aarch64_emit_movn_32(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, struct aarch64_reg dest);
+                          struct aarch64_reg source, struct aarch64_reg dest);
 void aarch64_emit_movn_64(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, struct aarch64_reg dest);
+                          struct aarch64_reg source, struct aarch64_reg dest);
 
 /* Conditional selects */
 

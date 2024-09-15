@@ -789,7 +789,8 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
   return end_bb;
 }
 
-struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
+struct ir_lcl *add_local(struct ir_builder *irb,
+                         const struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
   lcl->store = NULL;
@@ -814,7 +815,6 @@ struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_
 
   return lcl;
 }
-
 
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty) {
@@ -883,4 +883,3 @@ size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
     }
   }
 }
-

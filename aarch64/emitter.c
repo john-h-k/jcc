@@ -20,7 +20,8 @@ void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
 
   (*emitter)->len = BLOCK_SIZE;
-  (*emitter)->block = nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
+  (*emitter)->block =
+      nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
   (*emitter)->head = 0;
 }
 
@@ -46,7 +47,8 @@ void free_aarch64_emitter(struct aarch64_emitter **emitter) {
 void aarch64_emit(struct aarch64_emitter *emitter, uint32_t instr) {
   if (emitter->head >= emitter->len) {
     size_t new_len = emitter->len + BLOCK_SIZE;
-    emitter->block = nonnull_realloc(emitter->block, new_len * sizeof(emitter->block));
+    emitter->block =
+        nonnull_realloc(emitter->block, new_len * sizeof(emitter->block));
     emitter->len = new_len;
   }
 
@@ -133,7 +135,6 @@ void aarch64_emit_eon_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg dest, size_t shift, size_t imm6) {
   aarch64_emit(emitter, EON_64_REG(shift, rhs.idx, imm6, lhs.idx, dest.idx));
 }
-
 
 void aarch64_emit_orr_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
@@ -646,15 +647,14 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
 }
 
 void aarch64_emit_movn_32(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, struct aarch64_reg dest) {
+                          struct aarch64_reg source, struct aarch64_reg dest) {
   aarch64_emit(emitter, MOVN_32_REG(source.idx, dest.idx));
 }
 
 void aarch64_emit_movn_64(struct aarch64_emitter *emitter,
-                         struct aarch64_reg source, struct aarch64_reg dest) {
+                          struct aarch64_reg source, struct aarch64_reg dest) {
   aarch64_emit(emitter, MOVN_64_REG(source.idx, dest.idx));
 }
-
 
 /* Conditional selects */
 

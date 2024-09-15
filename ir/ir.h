@@ -287,7 +287,6 @@ struct ir_op {
     struct ir_op_custom custom;
   };
 
-
   struct ir_lcl *lcl;
 
   // only meaningful post register-allocation
@@ -483,7 +482,8 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock);
 void clear_metadata(struct ir_builder *irb);
 void rebuild_ids(struct ir_builder *irb);
 
-struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_ty);
+struct ir_lcl *add_local(struct ir_builder *irb,
+                         const struct ir_op_var_ty *var_ty);
 
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty);
