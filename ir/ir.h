@@ -108,6 +108,10 @@ struct ir_op_cast_op {
 
 enum ir_op_unary_op_ty {
   IR_OP_UNARY_OP_TY_NEG,
+  IR_OP_UNARY_OP_TY_LOGICAL_NOT,
+  IR_OP_UNARY_OP_TY_NOT,
+  IR_OP_UNARY_OP_TY_DEREF,
+  IR_OP_UNARY_OP_TY_ADDRESSOF,
 };
 
 struct ir_op_unary_op {
@@ -391,10 +395,6 @@ struct ir_string {
   size_t index_from_back;
 };
 
-// struct ir_lcl {
-
-// };
-
 struct ir_builder {
   const char *name;
 
@@ -516,5 +516,6 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
                                  struct ir_op_var_ty var_ty);
 
 size_t var_ty_size(struct ir_builder *irb, struct ir_op_var_ty *ty);
+
 
 #endif

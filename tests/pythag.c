@@ -13,7 +13,7 @@ int main() {
   int r = a * a + b * b;
 
   int ans = 0;
-  while ((ans * ans) - r) {
+  while (ans * ans != r) {
     ans = ans + 1;
   }
 

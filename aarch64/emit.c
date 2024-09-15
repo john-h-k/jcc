@@ -83,6 +83,30 @@ static bool is_64_bit(const struct ir_op *op) {
          op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
+// TODO: sep methods no longer needed
+static unsigned get_lcl_stack_offset_32(struct emit_state *state,
+                                        size_t lcl_idx) {
+  UNUSED_ARG(state);
+  // FIXME: only supports ints
+  // offset by 2/4 because we store FP/LR at the top
+
+  // HACK: lots of custom instrs have type NONE but assume that means whole reg
+  // (64 bit)
+  return lcl_idx;
+}
+
+static unsigned get_lcl_stack_offset_64(struct emit_state *state,
+                                        size_t lcl_idx) {
+  UNUSED_ARG(state);
+  // FIXME: only supports ints
+  // offset by 2/4 because we store FP/LR at the top
+
+  // HACK: lots of custom instrs have type NONE but assume that means whole reg
+  // (64 bit)
+  return lcl_idx;
+}
+
+
 enum aarch64_relocation_ty {
   AARCH64_RELOCATION_TY_B,
   AARCH64_RELOCATION_TY_ADRP_ADD
@@ -198,6 +222,61 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       break;
     }
+  }
+
+#undef SEL_32_OR_64_BIT_OP
+}
+
+static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
+#define SEL_32_OR_64_BIT_OP(func)                                              \
+  do {                                                                         \
+    if (is_64_bit(op)) {                                                       \
+      func##_64(state->emitter, get_reg_for_idx(source),                      \
+                get_reg_for_idx(dest));               \
+    } else {                                                                   \
+      func##_32(state->emitter, get_reg_for_idx(source),                      \
+                get_reg_for_idx(dest));               \
+    }                                                                          \
+  } while (0);
+
+  debug_assert(op->ty == IR_OP_TY_BINARY_OP,
+               "wrong ty op to `lower_binary_op`");
+  size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  size_t source = get_reg_for_op(state, op->unary_op.value, REG_USAGE_READ);
+  invariant_assert(source != UINT32_MAX && dest != UINT32_MAX,
+                   "bad IR, no reg");
+
+  
+  switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_NEG:
+    if (is_64_bit(op)) {
+      aarch64_emit_sub_64(state->emitter, ZERO_REG, get_reg_for_idx(source), get_reg_for_idx(dest));
+    } else {
+      aarch64_emit_sub_32(state->emitter, ZERO_REG, get_reg_for_idx(source), get_reg_for_idx(dest));
+    }
+    break;
+  case IR_OP_UNARY_OP_TY_NOT:
+    SEL_32_OR_64_BIT_OP(aarch64_emit_movn);
+    break;
+  case IR_OP_UNARY_OP_TY_DEREF: {
+    struct ir_op *target = op->unary_op.value;
+    if (is_64_bit(target)) {
+      size_t offset = get_lcl_stack_offset_64(state, target->lcl_idx);
+      aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+    } else {
+      size_t offset = get_lcl_stack_offset_32(state, target->lcl_idx);
+      aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG, get_reg_for_idx(dest), offset);
+    }
+    break;
+  }
+  case IR_OP_UNARY_OP_TY_ADDRESSOF: {
+    struct ir_op *target = op->unary_op.value;
+    size_t offset = get_lcl_stack_offset_64(state, target->lcl_idx);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset, get_reg_for_idx(dest));
+    break;
+  }
+  case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+    bug("logical not should never reach emitter, should be converted in lower");
   }
 
 #undef SEL_32_OR_64_BIT_OP
@@ -460,30 +539,6 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
-// TODO: sep methods no longer needed
-
-static unsigned get_lcl_stack_offset_32(struct emit_state *state,
-                                        size_t lcl_idx) {
-  UNUSED_ARG(state);
-  // FIXME: only supports ints
-  // offset by 2/4 because we store FP/LR at the top
-
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg
-  // (64 bit)
-  return lcl_idx;
-}
-
-static unsigned get_lcl_stack_offset_64(struct emit_state *state,
-                                        size_t lcl_idx) {
-  UNUSED_ARG(state);
-  // FIXME: only supports ints
-  // offset by 2/4 because we store FP/LR at the top
-
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg
-  // (64 bit)
-  return lcl_idx;
-}
-
 static void emit_custom(struct emit_state *state, struct ir_op *op) {
   // FIXME: the pre-indexing here is causing segfaults for some reason? we
 
@@ -617,6 +672,10 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
       state->total_str_len += strlen(op->cnst.str_value) + 1;
       break;
     }
+    break;
+  }
+  case IR_OP_TY_UNARY_OP: {
+    emit_unary_op(state, op);
     break;
   }
   case IR_OP_TY_BINARY_OP: {

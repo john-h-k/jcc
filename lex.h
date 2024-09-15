@@ -27,6 +27,9 @@ enum lex_token_ty {
 
   /* Operators */
 
+  LEX_TOKEN_TY_OP_LOGICAL_NOT, // !
+  LEX_TOKEN_TY_OP_NOT, // ~
+
   LEX_TOKEN_TY_OP_INC, // ++
   LEX_TOKEN_TY_OP_DEC, // --
 

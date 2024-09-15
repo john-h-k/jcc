@@ -331,12 +331,16 @@ void peek_token(struct lexer *lexer, struct token *token) {
       ty = LEX_TOKEN_TY_OP_LT;
     }
     break;
+  case '~':
+    next_col(&end);
+    ty = LEX_TOKEN_TY_OP_NOT;
+    break;
   case '!':
     next_col(&end);
     if (try_consume(lexer, &end, '=')) {
       ty = LEX_TOKEN_TY_OP_NEQ;
     } else {
-      todo("boolean not");
+      ty = LEX_TOKEN_TY_OP_LOGICAL_NOT;
     }
     break;
   case '=':
@@ -596,6 +600,9 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_WHITESPACE)
     CASE_RET(LEX_TOKEN_TY_INLINE_COMMENT)
     CASE_RET(LEX_TOKEN_TY_MULTILINE_COMMENT)
+
+    CASE_RET(LEX_TOKEN_TY_OP_NOT)
+    CASE_RET(LEX_TOKEN_TY_OP_LOGICAL_NOT)
 
     CASE_RET(LEX_TOKEN_TY_OP_INC)
     CASE_RET(LEX_TOKEN_TY_OP_DEC)

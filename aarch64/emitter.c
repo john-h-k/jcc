@@ -652,6 +652,17 @@ void aarch64_emit_mov_64(struct aarch64_emitter *emitter,
   aarch64_emit(emitter, MOV_64_REG(source.idx, dest.idx));
 }
 
+void aarch64_emit_movn_32(struct aarch64_emitter *emitter,
+                         struct aarch64_reg source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, MOVN_32_REG(source.idx, dest.idx));
+}
+
+void aarch64_emit_movn_64(struct aarch64_emitter *emitter,
+                         struct aarch64_reg source, struct aarch64_reg dest) {
+  aarch64_emit(emitter, MOVN_64_REG(source.idx, dest.idx));
+}
+
+
 /* Conditional selects */
 
 void aarch64_emit_csel_32(struct aarch64_emitter *emitter,
