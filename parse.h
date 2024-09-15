@@ -167,6 +167,8 @@ enum ast_binary_op_ty {
   AST_BINARY_OP_TY_LT,
   AST_BINARY_OP_TY_LTEQ,
 
+  AST_BINARY_OP_TY_OR,
+  AST_BINARY_OP_TY_XOR,
   AST_BINARY_OP_TY_AND,
   AST_BINARY_OP_TY_LSHIFT,
   AST_BINARY_OP_TY_RSHIFT,
@@ -234,11 +236,31 @@ struct ast_atom {
 // Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue>
 // = <expr>`)
 
+enum ast_assg_ty {
+  AST_ASSG_TY_SIMPLE_ASSG,
+  AST_ASSG_TY_COMPOUND_ASSG // e.g +=
+};
+
+struct ast_assg_compound_assg {
+  // the type of the intermediate
+  // e.g `int a = 0; a += 10l`
+  // is equiv to `int a = 0; a = a + 10l`
+  // so the resulting type is `int` but the intermediate type is `long`
+  struct ast_tyref intermediate_var_ty;
+  enum ast_binary_op_ty binary_op_ty;
+};
+
 struct ast_assg {
+  enum ast_assg_ty ty;
+
   struct ast_tyref var_ty;
 
   struct ast_expr *assignee;
   struct ast_expr *expr;
+
+  union {
+    struct ast_assg_compound_assg compound_assg;
+  };
 };
 
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)

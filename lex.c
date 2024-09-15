@@ -355,6 +355,22 @@ void peek_token(struct lexer *lexer, struct token *token) {
       ty = LEX_TOKEN_TY_OP_AND;
     }
     break;
+  case '^':
+    next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_XOR_ASSG;
+    } else {
+      ty = LEX_TOKEN_TY_OP_XOR;
+    }
+    break;
+  case '|':
+    next_col(&end);
+    if (try_consume(lexer, &end, '=')) {
+      ty = LEX_TOKEN_TY_OP_OR_ASSG;
+    } else {
+      ty = LEX_TOKEN_TY_OP_OR;
+    }
+    break;
   case '+':
     next_col(&end);
     if (try_consume(lexer, &end, '+')) {
@@ -413,7 +429,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
       return;
     }
 
-    ty = LEX_TOKEN_TY_OP_DIV;
     break;
   case '%':
     next_col(&end);
@@ -587,6 +602,10 @@ const char *token_name(struct lexer *lexer, struct token *token) {
 
     CASE_RET(LEX_TOKEN_TY_OP_ASSG)
 
+    CASE_RET(LEX_TOKEN_TY_OP_OR)
+    CASE_RET(LEX_TOKEN_TY_OP_OR_ASSG)
+    CASE_RET(LEX_TOKEN_TY_OP_XOR)
+    CASE_RET(LEX_TOKEN_TY_OP_XOR_ASSG)
     CASE_RET(LEX_TOKEN_TY_OP_AND)
     CASE_RET(LEX_TOKEN_TY_OP_AND_ASSG)
     CASE_RET(LEX_TOKEN_TY_OP_LSHIFT)

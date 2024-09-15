@@ -242,6 +242,28 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
                            get_reg_for_idx(rhs_reg), ZERO_REG);
     }
     break;
+  case IR_OP_BINARY_OP_TY_OR:
+    if (is_64_bit(op)) {
+      aarch64_emit_orr_64(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
+    } else {
+      aarch64_emit_orr_32(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
+    }
+    break;
+  case IR_OP_BINARY_OP_TY_XOR:
+    if (is_64_bit(op)) {
+      aarch64_emit_eor_64(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
+    } else {
+      aarch64_emit_eor_32(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          SHIFT_LSL, 0);
+    }
+    break;
   case IR_OP_BINARY_OP_TY_AND:
     if (is_64_bit(op)) {
       aarch64_emit_and_64(state->emitter, get_reg_for_idx(lhs_reg),

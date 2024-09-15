@@ -32,6 +32,10 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_OP_AND,         // &
   LEX_TOKEN_TY_OP_AND_ASSG,    // &=
+  LEX_TOKEN_TY_OP_OR,          // |
+  LEX_TOKEN_TY_OP_OR_ASSG,     // |=
+  LEX_TOKEN_TY_OP_XOR,         // ^
+  LEX_TOKEN_TY_OP_XOR_ASSG,    // ^=
   LEX_TOKEN_TY_OP_RSHIFT,      // >>
   LEX_TOKEN_TY_OP_RSHIFT_ASSG, // >>=
   LEX_TOKEN_TY_OP_LSHIFT,      // <<

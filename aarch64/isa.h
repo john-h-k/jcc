@@ -274,11 +274,20 @@
   LOGICAL_SHIFTED_REG(0b0, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
 #define ORN_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b0, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
+#define EOR_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b0, 0b10, shift, 0b0, Rm, imm6, Rn, Rd)
+#define EON_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b0, 0b10, shift, 0b1, Rm, imm6, Rn, Rd)
+
 
 #define ORR_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b1, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
 #define ORN_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b1, 0b01, shift, 0b1, Rm, imm6, Rn, Rd)
+#define EOR_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b1, 0b10, shift, 0b0, Rm, imm6, Rn, Rd)
+#define EON_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b1, 0b10, shift, 0b1, Rm, imm6, Rn, Rd)
 
 #define MOV_32_REG(Rm, Rd) ORR_32_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
 #define MOVN_32_REG(Rm, Rd)                                                    \
