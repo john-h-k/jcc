@@ -89,9 +89,9 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
     // FIXME: this saves entire reg but can sometimes save smaller amounts
     // (depending of the type occupying the live reg)
-    struct ir_lcl *lcl = add_local(func, &(struct ir_op_var_ty){
-                                      .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
+    struct ir_lcl *lcl = add_local(
+        func, &(struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                                     .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
 
     struct ir_op *save =
         insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
@@ -146,15 +146,15 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
       if (i >= num_normal_args) {
         // we are in a variadic and everything from here on is passed on the
         // stack
-        struct ir_lcl *lcl = add_local(func, &(struct ir_op_var_ty){
-                                          .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                          .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
-
+        struct ir_lcl *lcl = add_local(
+            func,
+            &(struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                                   .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
 
         // the stack slot this local must live in
         size_t variadic_arg_idx = i - num_normal_args;
-        lcl->metadata = (void*)(variadic_arg_idx + 1);
-        
+        lcl->metadata = (void *)(variadic_arg_idx + 1);
+
         struct ir_op *store =
             insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
         store->lcl = lcl;

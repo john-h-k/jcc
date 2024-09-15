@@ -28,8 +28,9 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   op->lcl = add_local(irb, &op->var_ty);
 }
 
-void spill_at_interval(struct ir_builder *irb, struct interval *intervals, size_t cur_interval,
-                       size_t *active, size_t *num_active) {
+void spill_at_interval(struct ir_builder *irb, struct interval *intervals,
+                       size_t cur_interval, size_t *active,
+                       size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
@@ -123,26 +124,29 @@ struct fixup_spills_data {
 
 bool op_needs_reg(struct ir_op *op) {
   // addressof operator does not need a reg, so does not need a load
-  return op->ty != IR_OP_TY_UNARY_OP || op->unary_op.ty != IR_OP_UNARY_OP_TY_ADDRESSOF;
+  return op->ty != IR_OP_TY_UNARY_OP ||
+         op->unary_op.ty != IR_OP_UNARY_OP_TY_ADDRESSOF;
 }
 
 void fixup_spills_callback(struct ir_op **op, void *metadata) {
   struct fixup_spills_data *data = metadata;
 
   if (data->consumer->flags & IR_OP_FLAG_SPILL) {
-    // the store that consumes (and stores) this value will be marked with this flag
-    // it of course does not need to have a load (as it uses the op after creation)
+    // the store that consumes (and stores) this value will be marked with this
+    // flag it of course does not need to have a load (as it uses the op after
+    // creation)
     return;
   }
 
   if ((*op)->reg == REG_SPILLED) {
-    debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id, __func__);
+    debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
+                 __func__);
     if (op_needs_reg(data->consumer)) {
       // FIXME: proper local sizes
       // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
-      struct ir_op *load = insert_before_ir_op(data->irb, data->consumer,
-                                               IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+      struct ir_op *load = insert_before_ir_op(
+          data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
       load->load_lcl.lcl = *op;
       load->reg = data->consumer->reg;
       load->flags |= IR_OP_FLAG_SPILL;
@@ -154,7 +158,6 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
   }
 }
 
-
 void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
   UNUSED_ARG(data);
 
@@ -164,10 +167,9 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
     struct ir_stmt *stmt = basicblock->first;
     while (stmt) {
       struct ir_op *op = stmt->first;
-      while (op) {        
+      while (op) {
         // walk all things this op uses, and add loads for any that are spilled
-        struct fixup_spills_data metadata = {
-            .irb = irb, .consumer = op};
+        struct fixup_spills_data metadata = {.irb = irb, .consumer = op};
 
         walk_op_uses(op, fixup_spills_callback, &metadata);
 
@@ -230,8 +232,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &intervals[i];
-    expire_old_intervals(intervals, interval, active, &num_active,
-                         reg_pool);
+    expire_old_intervals(intervals, interval, active, &num_active, reg_pool);
 
     // update live_regs early in case the op is not value producing/marked
     // DONT_GIVE_REG and we back out
@@ -244,13 +245,13 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
 
     if (interval->op->flags & IR_OP_FLAG_MUST_SPILL) {
-      // we spill here, and strip the flag for the next regalloc run as then it will need a register
+      // we spill here, and strip the flag for the next regalloc run as then it
+      // will need a register
       interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
 
       spill_op(irb, interval->op);
       *spilled = true;
-    }
-    else if (num_active == num_regs) {
+    } else if (num_active == num_regs) {
       spill_at_interval(irb, intervals, i, active, &num_active);
       *spilled = true;
     } else {
@@ -344,14 +345,16 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   be needed
 */
 void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
-  struct register_alloc_info alloc_info = (struct register_alloc_info){.reg_info = reg_info};
+  struct register_alloc_info alloc_info =
+      (struct register_alloc_info){.reg_info = reg_info};
 
   bool spill_exists = true;
   int attempts = 0;
 
   while (spill_exists) {
     // concerned this may not terminate
-    // a cursory logic check suggests it *should* but include this so we can see if it is failing
+    // a cursory logic check suggests it *should* but include this so we can see
+    // if it is failing
     attempts++;
     if (attempts > 10) {
       bug("LSRA didn't terminate after %d attempts", attempts);
@@ -360,10 +363,8 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
     BEGIN_SUB_STAGE("REGALLOC");
 
     clear_metadata(irb);
-    struct interval_data data = register_alloc_pass(
-        irb,
-        alloc_info,
-        &spill_exists);
+    struct interval_data data =
+        register_alloc_pass(irb, alloc_info, &spill_exists);
 
     qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
           compare_interval_id);
@@ -373,7 +374,7 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
     }
 
     BEGIN_SUB_STAGE("SPILL HANDLING");
-    
+
     // insert LOAD and STORE ops as needed
     fixup_spills(irb, &data);
 

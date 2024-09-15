@@ -342,8 +342,7 @@ struct ast_tyref tyref_promote_integer(struct parser *parser,
 struct ast_tyref resolve_unary_op_types(struct parser *parser,
                                         enum ast_unary_op_ty ty,
                                         const struct ast_tyref *var_ty,
-                                        const struct ast_cast *cast
-                                      ) {
+                                        const struct ast_cast *cast) {
   switch (ty) {
   case AST_UNARY_OP_TY_PLUS:
   case AST_UNARY_OP_TY_MINUS:
@@ -366,7 +365,8 @@ struct ast_tyref resolve_unary_op_types(struct parser *parser,
   case AST_UNARY_OP_TY_ADDRESSOF:
     return tyref_make_pointer(parser, var_ty);
   case AST_UNARY_OP_TY_CAST:
-    debug_assert(cast, "no cast provided but unary op ty was cast in `%s`", __func__);
+    debug_assert(cast, "no cast provided but unary op ty was cast in `%s`",
+                 __func__);
     return cast->cast_ty;
   case AST_UNARY_OP_TY_PREFIX_INC:
   case AST_UNARY_OP_TY_PREFIX_DEC:
@@ -898,7 +898,8 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *expr) {
 
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
 
-  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
+  // first, try and parse *another* unary op, if that fails back out and parse a
+  // higher-precedence expression
   if (!parse_atom_1(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -915,7 +916,8 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *expr) {
   }
 
   if (has_unary_postfix) {
-    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty, &sub_expr->var_ty, NULL);
+    struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty,
+                                                     &sub_expr->var_ty, NULL);
     struct ast_unary_op unary_op = {
         .ty = unary_postfix_ty,
         .var_ty = var_ty,
@@ -935,11 +937,9 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *expr) {
 // parses precedence level 1:
 // postfix ++, postfix --, (), [], ., ->, (type){list}
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
-  if (!parse_unary_postfix_op(parser, expr) 
-      && !parse_array_access(parser, expr) 
-      && !parse_member_access(parser, expr) 
-      && !parse_pointer_access(parser, expr) 
-      && !parse_atom_0(parser, expr)) {
+  if (!parse_unary_postfix_op(parser, expr) &&
+      !parse_array_access(parser, expr) && !parse_member_access(parser, expr) &&
+      !parse_pointer_access(parser, expr) && !parse_atom_0(parser, expr)) {
     return false;
   }
 
@@ -950,7 +950,9 @@ bool parse_cast(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_tyref ty_ref;
-  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) || !parse_tyref(parser, &ty_ref) || !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
+      !parse_tyref(parser, &ty_ref) ||
+      !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -963,15 +965,12 @@ bool parse_cast(struct parser *parser, struct ast_expr *expr) {
 
   expr->ty = AST_EXPR_TY_UNARY_OP;
   expr->var_ty = ty_ref;
-  expr->unary_op = (struct ast_unary_op){
-    .ty = AST_UNARY_OP_TY_CAST,
-    .var_ty = ty_ref,
-    .expr = sub_expr,
-    // TODO: this is redundant
-    .cast = (struct ast_cast){
-      .cast_ty = ty_ref
-    }
-  };
+  expr->unary_op =
+      (struct ast_unary_op){.ty = AST_UNARY_OP_TY_CAST,
+                            .var_ty = ty_ref,
+                            .expr = sub_expr,
+                            // TODO: this is redundant
+                            .cast = (struct ast_cast){.cast_ty = ty_ref}};
 
   return true;
 }
@@ -1035,7 +1034,8 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
     return false;
   }
 
-  struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_prefix_ty, &sub_expr->var_ty, NULL);
+  struct ast_tyref var_ty =
+      resolve_unary_op_types(parser, unary_prefix_ty, &sub_expr->var_ty, NULL);
   struct ast_unary_op unary_op = {
       .ty = unary_prefix_ty,
       .var_ty = var_ty,
@@ -1052,13 +1052,13 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
 // parses precedence level 2:
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
 bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
-  if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) && !parse_atom_1(parser, expr)) {
+  if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
+      !parse_atom_1(parser, expr)) {
     return false;
   }
 
   return true;
 }
-
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {

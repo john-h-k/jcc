@@ -41,7 +41,8 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
   unreachable("var_ty_eq");
 }
 
-bool var_ty_needs_cast_op(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
+bool var_ty_needs_cast_op(const struct ir_op_var_ty *l,
+                          const struct ir_op_var_ty *r) {
   if (var_ty_eq(l, r)) {
     return false;
   }
@@ -53,7 +54,6 @@ bool var_ty_needs_cast_op(const struct ir_op_var_ty *l, const struct ir_op_var_t
 
   return true;
 }
-
 
 enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
   switch (wkt) {
@@ -75,15 +75,17 @@ enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
   }
 }
 
-struct ir_op_var_ty var_ty_get_pointer_underlying(const struct ir_op_var_ty *var_ty) {
-  debug_assert(var_ty->ty == IR_OP_VAR_TY_TY_POINTER, "non pointer passed to `%s`", __func__);
+struct ir_op_var_ty
+var_ty_get_pointer_underlying(const struct ir_op_var_ty *var_ty) {
+  debug_assert(var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
+               "non pointer passed to `%s`", __func__);
 
   return *var_ty->pointer.underlying;
 }
 
-struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb, const struct ir_op_var_ty *underlying) {
-  struct ir_op_var_ty *copied =
-      arena_alloc(irb->arena, sizeof(*copied));
+struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
+                                        const struct ir_op_var_ty *underlying) {
+  struct ir_op_var_ty *copied = arena_alloc(irb->arena, sizeof(*copied));
 
   *copied = *underlying;
 
@@ -93,7 +95,6 @@ struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb, const struct ir_
 
   return ty;
 }
-
 
 struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
                                      const struct ast_tyref *ty_ref) {
@@ -127,7 +128,8 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
     return ty;
   }
   case AST_TYREF_TY_POINTER: {
-    struct ir_op_var_ty underlying = ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
+    struct ir_op_var_ty underlying =
+        ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
     return var_ty_make_pointer(irb, &underlying);
   }
   }
@@ -150,7 +152,6 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
 
   if (from_var_ty.ty == IR_OP_VAR_TY_TY_POINTER &&
       to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-
   }
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
@@ -190,15 +191,11 @@ struct ir_op *insert_ir_for_cast(struct ir_builder *irb, struct ir_stmt *stmt,
   return cast;
 }
 
-struct ir_op *alloc_binaryop(
-                             struct ir_builder *irb,
-                             struct ir_stmt *stmt,
+struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                              const struct ast_tyref *ty_ref,
-                             enum ast_binary_op_ty ty,
-                             struct ir_op *lhs,
+                             enum ast_binary_op_ty ty, struct ir_op *lhs,
                              struct ir_op *rhs) {
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, ty_ref);
-
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -293,26 +290,28 @@ struct ir_op *alloc_binaryop(
   }
 
   return op;
-  
 }
 
-struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
-                                    struct ir_stmt *stmt,
-                                    struct ast_unary_op *unary_op) {
-  struct ir_op *expr = build_ir_for_expr(irb, stmt, unary_op->expr, &unary_op->expr->var_ty);
-  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);  
+struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
+                                   struct ast_unary_op *unary_op) {
+  struct ir_op *expr =
+      build_ir_for_expr(irb, stmt, unary_op->expr, &unary_op->expr->var_ty);
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);
 
   switch (unary_op->ty) {
   case AST_UNARY_OP_TY_PREFIX_DEC:
   case AST_UNARY_OP_TY_PREFIX_INC: {
-    enum ast_binary_op_ty binary_op_ty = unary_op->ty == AST_UNARY_OP_TY_PREFIX_INC ? AST_BINARY_OP_TY_ADD : AST_BINARY_OP_TY_SUB;
+    enum ast_binary_op_ty binary_op_ty =
+        unary_op->ty == AST_UNARY_OP_TY_PREFIX_INC ? AST_BINARY_OP_TY_ADD
+                                                   : AST_BINARY_OP_TY_SUB;
     struct ir_op *one = alloc_ir_op(irb, stmt);
     one->ty = IR_OP_TY_CNST;
     one->var_ty = var_ty;
     one->cnst.ty = IR_OP_CNST_TY_INT;
     one->cnst.int_value = 1;
-  
-    return alloc_binaryop(irb, stmt, &unary_op->var_ty, binary_op_ty, expr, one);
+
+    return alloc_binaryop(irb, stmt, &unary_op->var_ty, binary_op_ty, expr,
+                          one);
   }
   case AST_UNARY_OP_TY_POSTFIX_INC:
   case AST_UNARY_OP_TY_POSTFIX_DEC:
@@ -323,12 +322,15 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
     return expr;
   case AST_UNARY_OP_TY_SIZEOF:
   case AST_UNARY_OP_TY_ALIGNOF:
-    todo("sizeof/alignof build (will need different node as they take types not exprs)");
+    todo("sizeof/alignof build (will need different node as they take types "
+         "not exprs)");
     break;
   case AST_UNARY_OP_TY_CAST:
     if (var_ty_needs_cast_op(&var_ty, &expr->var_ty)) {
       return insert_ir_for_cast(irb, stmt, expr, &var_ty,
-                                cast_ty_for_ast_tyref(irb, &unary_op->expr->var_ty, &unary_op->var_ty));
+                                cast_ty_for_ast_tyref(irb,
+                                                      &unary_op->expr->var_ty,
+                                                      &unary_op->var_ty));
     } else {
       return expr;
     }
@@ -351,7 +353,7 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
     unary_op_ty = IR_OP_UNARY_OP_TY_ADDRESSOF;
 
     // because we take address, this must be spilled
-    expr->flags |= IR_OP_FLAG_MUST_SPILL;   
+    expr->flags |= IR_OP_FLAG_MUST_SPILL;
     break;
   case AST_UNARY_OP_TY_INDIRECTION:
     unary_op_ty = IR_OP_UNARY_OP_TY_DEREF;
@@ -363,10 +365,9 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_UNARY_OP;
-  op->var_ty = var_ty;  
+  op->var_ty = var_ty;
   op->unary_op.ty = unary_op_ty;
   op->unary_op.value = expr;
-  
 
   return op;
 }
@@ -526,7 +527,9 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
-  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys ? call->var_ty.func.num_param_var_tys - 1 : 0;
+  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys
+                                     ? call->var_ty.func.num_param_var_tys - 1
+                                     : 0;
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
 
@@ -949,8 +952,7 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
 }
 
 struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
-                       struct ir_op *op,
-                       struct ast_var *var) {
+                       struct ir_op *op, struct ast_var *var) {
   debug_assert(op, "null expr in assignment!");
 
   struct var_key key = get_var_key(irb->parser, var);
@@ -974,21 +976,25 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   if (assg->assignee->ty == AST_EXPR_TY_ATOM &&
       assg->assignee->atom.ty == AST_ATOM_TY_VAR) {
 
-
     switch (assg->ty) {
     case AST_ASSG_TY_SIMPLE_ASSG: {
-      struct ir_op *op = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+      struct ir_op *op =
+          build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
       return var_assg(irb, stmt, op, &assg->assignee->atom.var);
     }
     case AST_ASSG_TY_COMPOUND_ASSG: {
-      struct ir_op *op = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
-      struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
+      struct ir_op *op =
+          build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+      struct ir_op *assignee =
+          build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
 
-      struct ir_op *res = alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty, assg->compound_assg.binary_op_ty, assignee, op);
+      struct ir_op *res =
+          alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty,
+                         assg->compound_assg.binary_op_ty, assignee, op);
       return var_assg(irb, stmt, res, &assg->assignee->atom.var);
     }
     }
-  
+
   } else {
     todo("non var assignments");
   }
@@ -1005,7 +1011,8 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     }
 
     // FIXME: is this right
-    struct ir_op *op = build_ir_for_expr(irb, stmt, &decl->assg_expr, &var_decl_list->var_ty);
+    struct ir_op *op =
+        build_ir_for_expr(irb, stmt, &decl->assg_expr, &var_decl_list->var_ty);
     var_assg(irb, stmt, op, &decl->var);
   }
 
@@ -1163,24 +1170,23 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
 
   // TODO: validate cast types
   switch (consumer->ty) {
-    case IR_OP_TY_CAST_OP:
-      res_ty = consumer->var_ty;
-      break;
-    case IR_OP_TY_UNARY_OP:
-      if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_DEREF) {
-        res_ty = var_ty_get_pointer_underlying(&(*op)->var_ty);
-      }
-      else if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_ADDRESSOF) {
-        res_ty = var_ty_make_pointer((*op)->stmt->basicblock->irb, &(*op)->var_ty);
-      }
-      break;
-    default:
-      break;
+  case IR_OP_TY_CAST_OP:
+    res_ty = consumer->var_ty;
+    break;
+  case IR_OP_TY_UNARY_OP:
+    if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_DEREF) {
+      res_ty = var_ty_get_pointer_underlying(&(*op)->var_ty);
+    } else if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_ADDRESSOF) {
+      res_ty =
+          var_ty_make_pointer((*op)->stmt->basicblock->irb, &(*op)->var_ty);
+    }
+    break;
+  default:
+    break;
   }
-  
+
   // TODO: validate CALL ops as well
-  if (consumer->ty != IR_OP_TY_CALL &&
-      op_produces_value(consumer->ty)) {
+  if (consumer->ty != IR_OP_TY_CALL && op_produces_value(consumer->ty)) {
 
     invariant_assert(!var_ty_needs_cast_op(&res_ty, &consumer->var_ty),
                      "op %zu uses op %zu with different type!", consumer->id,
@@ -1314,10 +1320,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        struct validate_metadata metadata = {
-          .irb = builder,
-          .consumer = op
-        };
+        struct validate_metadata metadata = {.irb = builder, .consumer = op};
 
         walk_op_uses(op, validate_op_tys_callback, &metadata);
 

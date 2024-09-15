@@ -157,9 +157,9 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
           interval->end = interval->start;
         }
 
-        debug_assert(
-            op->metadata == NULL,
-            "metadata left over in op during liveness analysis, will be overwritten");
+        debug_assert(op->metadata == NULL,
+                     "metadata left over in op during liveness analysis, will "
+                     "be overwritten");
         op->metadata = interval;
 
         struct interval_callback_data cb_data = {.op = op, .data = &data};
