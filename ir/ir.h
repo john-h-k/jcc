@@ -404,6 +404,9 @@ struct ir_lcl {
   struct ir_lcl *pred;
   struct ir_lcl *succ;
 
+  // each local is effectively in SSA, where it is stored to only once
+  struct ir_op *store;
+
   void *metadata;
 };
 

@@ -276,8 +276,7 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
         aarch64_emit_load_offset_64(state->emitter, get_reg_for_idx(target->reg), get_reg_for_idx(dest), 0);
       } else {
         aarch64_emit_load_offset_32(state->emitter, get_reg_for_idx(target->reg), get_reg_for_idx(dest), 0);
-      }
-      
+      } 
     }
     break;
   }

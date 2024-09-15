@@ -62,9 +62,6 @@ size_t aarch64_emitted_count(struct aarch64_emitter *emitter);
 size_t aarch64_emit_bytesize(struct aarch64_emitter *emitter);
 void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void *dest);
 
-/* Emits a `nop` and returns the address such that it can be modified later */
-uint32_t *aarch64_emit_reserved(struct aarch64_emitter *emitter);
-
 /* Nop */
 void aarch64_emit_nop(struct aarch64_emitter *emitter);
 

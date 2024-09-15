@@ -51,12 +51,6 @@ bool var_ty_needs_cast_op(const struct ir_op_var_ty *l, const struct ir_op_var_t
     return false;
   }
 
-  if (l->ty == IR_OP_VAR_TY_TY_PRIMITIVE && r->ty == IR_OP_VAR_TY_TY_PRIMITIVE
-      && WKT_MAKE_SIGNED(l->ty) == WKT_MAKE_SIGNED(r->ty)) {
-    // if same size, they need no cast op
-    return false;
-  }
-
   return true;
 }
 
@@ -306,6 +300,7 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
                                     struct ir_stmt *stmt,
                                     struct ast_unary_op *unary_op) {
   struct ir_op *expr = build_ir_for_expr(irb, stmt, unary_op->expr, &unary_op->expr->var_ty);
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);  
 
   switch (unary_op->ty) {
   case AST_UNARY_OP_TY_PREFIX_DEC:
@@ -313,7 +308,7 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
     enum ast_binary_op_ty binary_op_ty = unary_op->ty == AST_UNARY_OP_TY_PREFIX_INC ? AST_BINARY_OP_TY_ADD : AST_BINARY_OP_TY_SUB;
     struct ir_op *one = alloc_ir_op(irb, stmt);
     one->ty = IR_OP_TY_CNST;
-    one->var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);
+    one->var_ty = var_ty;
     one->cnst.ty = IR_OP_CNST_TY_INT;
     one->cnst.int_value = 1;
   
@@ -331,8 +326,12 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
     todo("sizeof/alignof build (will need different node as they take types not exprs)");
     break;
   case AST_UNARY_OP_TY_CAST:
-    todo("cast build");
-    break;
+    if (var_ty_needs_cast_op(&var_ty, &expr->var_ty)) {
+      return insert_ir_for_cast(irb, stmt, expr, &var_ty,
+                                cast_ty_for_ast_tyref(irb, &unary_op->expr->var_ty, &unary_op->var_ty));
+    } else {
+      return expr;
+    }
   default:
     break;
   }
@@ -364,7 +363,7 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb,
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_UNARY_OP;
-  op->var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);  
+  op->var_ty = var_ty;  
   op->unary_op.ty = unary_op_ty;
   op->unary_op.value = expr;
   
@@ -1243,8 +1242,6 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   for (size_t i = 0; i < def->body.num_stmts; i++) {
     basicblock = build_ir_for_stmt(builder, basicblock, &def->body.stmts[i]);
   }
-
-  debug_print_ir(stderr, builder, NULL, NULL);
 
   // we may generate empty basicblocks or statements, prune them here
   prune_basicblocks(builder);

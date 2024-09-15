@@ -19,8 +19,8 @@ struct aarch64_emitter {
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
 
-  (*emitter)->block = nonnull_malloc(BLOCK_SIZE);
   (*emitter)->len = BLOCK_SIZE;
+  (*emitter)->block = nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
   (*emitter)->head = 0;
 }
 
@@ -46,18 +46,11 @@ void free_aarch64_emitter(struct aarch64_emitter **emitter) {
 void aarch64_emit(struct aarch64_emitter *emitter, uint32_t instr) {
   if (emitter->head >= emitter->len) {
     size_t new_len = emitter->len + BLOCK_SIZE;
-    emitter->block = nonnull_realloc(emitter->block, new_len);
+    emitter->block = nonnull_realloc(emitter->block, new_len * sizeof(emitter->block));
     emitter->len = new_len;
   }
 
   emitter->block[emitter->head++] = instr;
-}
-
-/* Emits a `nop` and returns the address such that it can be modified later */
-uint32_t *aarch64_emit_reserved(struct aarch64_emitter *emitter) {
-  uint32_t *instr = &emitter->block[emitter->head];
-  aarch64_emit_nop(emitter);
-  return instr;
 }
 
 /* Nop */

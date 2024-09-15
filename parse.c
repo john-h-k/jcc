@@ -853,7 +853,7 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 }
 
 // parses precedence level 0:
-// postfix ++, postfix --, (), [], ., ->, (type){list}
+// vars
 bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct ast_atom atom;
   if (!parse_atom(parser, &atom)) {
@@ -881,9 +881,16 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
 }
 
 // parses precedence level 1:
-// postfix ++, postfix --
+// postfix ++, postfix --, (), [], ., ->, (type){list}
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
+  if (!parse_atom_0(parser, sub_expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
 
   bool has_unary_postfix = false;
   enum ast_unary_op_ty unary_postfix_ty;
@@ -894,14 +901,6 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
     has_unary_postfix = true;
     unary_postfix_ty = AST_UNARY_OP_TY_POSTFIX_DEC;
   }
-
-  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
-  if (!parse_atom_0(parser, sub_expr)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-  
 
   if (has_unary_postfix) {
     struct ast_tyref var_ty = resolve_unary_op_types(parser, unary_postfix_ty, &sub_expr->var_ty, NULL);
@@ -917,6 +916,36 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   } else {
     *expr = *sub_expr;
   }
+
+  return true;
+}
+
+bool parse_cast(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_tyref ty_ref;
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) || !parse_tyref(parser, &ty_ref) || !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  if (!parse_atom_2(parser, sub_expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  expr->ty = AST_EXPR_TY_UNARY_OP;
+  expr->var_ty = ty_ref;
+  expr->unary_op = (struct ast_unary_op){
+    .ty = AST_UNARY_OP_TY_CAST,
+    .var_ty = ty_ref,
+    .expr = sub_expr,
+    // TODO: this is redundant
+    .cast = (struct ast_cast){
+      .cast_ty = ty_ref
+    }
+  };
 
   return true;
 }
@@ -975,7 +1004,6 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   consume_token(parser->lexer, token);
 
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  // first, try and parse *another* unary op, if that fails back out and parse a higher-precedence expression
   if (!parse_atom_2(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -998,7 +1026,7 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
 // parses precedence level 2:
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
 bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
-  if (!parse_unary_prefix_op(parser, expr) && !parse_atom_1(parser, expr)) {
+  if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) && !parse_atom_1(parser, expr)) {
     return false;
   }
 
@@ -2221,9 +2249,12 @@ DEBUG_FUNC(unary_op, unary_op) {
     AST_PRINTZ("ALIGNOF");
     break;
   case AST_UNARY_OP_TY_CAST:
-    AST_PRINT_SAMELINE_Z("CAST (-> ");
+    AST_PRINTZ("CAST");
+    INDENT();
+    DEBUG_CALL(tyref, &unary_op->expr->var_ty);
+    AST_PRINTZ("TO");
     DEBUG_CALL(tyref, &unary_op->cast.cast_ty);
-    AST_PRINTZ(")");
+    UNINDENT();
     break;
   }
 

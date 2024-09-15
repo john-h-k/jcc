@@ -640,6 +640,8 @@ struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
   stmt->basicblock = basicblock;
   stmt->pred = basicblock->last;
   stmt->succ = NULL;
+  stmt->first = NULL;
+  stmt->last = NULL;
 
   if (basicblock->last) {
     basicblock->last->succ = stmt;
@@ -724,6 +726,8 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   basicblock->irb = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;
+  basicblock->first = NULL;
+  basicblock->last = NULL;
   basicblock->function_offset = irb->op_count;
   basicblock->metadata = NULL;
 
@@ -788,6 +792,7 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 struct ir_lcl *add_local(struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
+  lcl->store = NULL;
   lcl->pred = irb->last_local;
   lcl->succ = NULL;
   lcl->metadata = NULL;

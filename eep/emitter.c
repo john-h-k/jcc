@@ -24,8 +24,8 @@ struct eep_emitter {
 void create_eep_emitter(struct eep_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
 
-  (*emitter)->block = nonnull_malloc(BLOCK_SIZE);
   (*emitter)->len = BLOCK_SIZE;
+  (*emitter)->block = nonnull_malloc((*emitter)->len * BLOCK_SIZE);
   (*emitter)->head = 0;
 }
 
