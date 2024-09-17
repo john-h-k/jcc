@@ -52,6 +52,12 @@ bool var_ty_needs_cast_op(const struct ir_op_var_ty *l,
     return false;
   }
 
+  // TODO: hardcodes pointer size
+  if (l->ty == IR_OP_VAR_TY_TY_PRIMITIVE && l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64 && r->ty == IR_OP_VAR_TY_TY_POINTER) {
+    // same size int -> pointer needs no cast
+    return false;
+  }
+
   return true;
 }
 
@@ -152,11 +158,26 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
 
   if (from_var_ty.ty == IR_OP_VAR_TY_TY_POINTER &&
       to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+    bug("cast between pointer types is implicit");
+  }
+
+  if (from_var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+    // primitive -> pointer
+    // TODO: hardcodes pointer size
+    if (from_var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64) {
+      bug("cast between primitive & pointer type of same size is implicit");
+    }
+
+    if (WKT_IS_SIGNED(from->well_known)) {
+      return IR_OP_CAST_OP_TY_SEXT;
+    } else {
+      return IR_OP_CAST_OP_TY_ZEXT;
+    }
   }
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
-    todo("casts for non prims/pointers");
+    todo("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty, to_var_ty.ty);
   }
 
   if (to_var_ty.primitive < from_var_ty.primitive) {
@@ -206,8 +227,8 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
   b->lhs = lhs;
   b->rhs = rhs;
 
-  invariant_assert(ty_ref->ty == AST_TYREF_TY_WELL_KNOWN,
-                   "non primitives (/well-knowns) cannot be used in binary "
+  invariant_assert(ty_ref->ty == AST_TYREF_TY_WELL_KNOWN || ty_ref->ty == AST_TYREF_TY_POINTER,
+                   "non primitives/well-knowns/pointers cannot be used in binary "
                    "expression by point IR is reached!");
 
   switch (ty) {
@@ -332,6 +353,7 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                                                       &unary_op->expr->var_ty,
                                                       &unary_op->var_ty));
     } else {
+      expr->var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);
       return expr;
     }
   default:
@@ -538,7 +560,7 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
     }
   }
 
-  struct ir_op *target = build_ir_for_atom(irb, stmt, call->target, ast_tyref);
+  struct ir_op *target = build_ir_for_expr(irb, stmt, call->target, ast_tyref);
 
   irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
@@ -561,7 +583,7 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     op = build_ir_for_atom(irb, stmt, &expr->atom, ast_tyref);
     break;
   case AST_EXPR_TY_CALL:
-    op = build_ir_for_call(irb, stmt, expr->call, ast_tyref);
+    op = build_ir_for_call(irb, stmt, &expr->call, ast_tyref);
     break;
   case AST_EXPR_TY_UNARY_OP:
     op = build_ir_for_unaryop(irb, stmt, &expr->unary_op);
@@ -569,8 +591,30 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_EXPR_TY_BINARY_OP:
     op = build_ir_for_binaryop(irb, stmt, &expr->binary_op);
     break;
+  case AST_EXPR_TY_ARRAYACCESS: {
+    struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, &expr->var_ty);
+    struct ir_op *lhs = build_ir_for_expr(irb, stmt, expr->array_access.lhs, &pointer_ty);
+    struct ir_op *rhs = build_ir_for_expr(irb, stmt, expr->array_access.rhs, &pointer_ty);
+
+    struct ir_op *address = alloc_binaryop(irb, stmt, 
+                                           &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
+
+    op = alloc_ir_op(irb, stmt);
+    op->ty = IR_OP_TY_UNARY_OP;
+    op->var_ty = ty_for_ast_tyref(irb, &expr->var_ty);
+    op->unary_op = (struct ir_op_unary_op){
+      .ty = IR_OP_UNARY_OP_TY_DEREF,
+      .value = address
+    };
+
+    break;
+  }  
+  case AST_EXPR_TY_MEMBERACCESS:
+  case AST_EXPR_TY_POINTERACCESS:
+    todo("access build");
+    break;
   case AST_EXPR_TY_ASSG:
-    op = build_ir_for_assg(irb, stmt, expr->assg);
+    op = build_ir_for_assg(irb, stmt, &expr->assg);
     break;
   }
 
@@ -977,12 +1021,12 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
       assg->assignee->atom.ty == AST_ATOM_TY_VAR) {
 
     switch (assg->ty) {
-    case AST_ASSG_TY_SIMPLE_ASSG: {
+    case AST_ASSG_TY_SIMPLEASSG: {
       struct ir_op *op =
           build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
       return var_assg(irb, stmt, op, &assg->assignee->atom.var);
     }
-    case AST_ASSG_TY_COMPOUND_ASSG: {
+    case AST_ASSG_TY_COMPOUNDASSG: {
       struct ir_op *op =
           build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
       struct ir_op *assignee =

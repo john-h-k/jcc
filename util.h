@@ -89,6 +89,12 @@ static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
 }
 
+static inline void debug_print_stack_trace() {
+  #ifdef SANITIZER_PRINT_STACK_TRACE
+  __sanitizer_print_stack_trace();
+  #endif
+}
+
 static inline unsigned long popcntl(unsigned long long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_popcountll)
   return __builtin_popcountll(l);
@@ -123,16 +129,10 @@ static inline unsigned long lzcnt(unsigned long long l) {
     va_end(v);                                                                 \
   } while (0);
 
-#ifdef SANITIZER_PRINT_STACK_TRACE
 #define EXIT_FAIL(code)                                                        \
-  __sanitizer_print_stack_trace();                                             \
+  debug_print_stack_trace();                                                   \
   raise(SIGINT);                                                               \
   exit(code);
-#else
-#define EXIT_FAIL(code)                                                        \
-  raise(SIGINT);                                                               \
-  exit(code);
-#endif
 
 NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
