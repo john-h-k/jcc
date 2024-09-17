@@ -196,7 +196,7 @@ struct ast_binary_op {
 struct ast_call {
   struct ast_tyref var_ty;
 
-  struct ast_atom *target;
+  struct ast_expr *target;
   struct ast_arglist arg_list;
 };
 
@@ -233,8 +233,8 @@ struct ast_atom {
 // = <expr>`)
 
 enum ast_assg_ty {
-  AST_ASSG_TY_SIMPLE_ASSG,
-  AST_ASSG_TY_COMPOUND_ASSG // e.g +=
+  AST_ASSG_TY_SIMPLEASSG,
+  AST_ASSG_TY_COMPOUNDASSG // e.g +=
 };
 
 struct ast_assg_compound_assg {
@@ -259,6 +259,11 @@ struct ast_assg {
   };
 };
 
+struct ast_arrayaccess {
+  struct ast_expr *lhs;
+  struct ast_expr *rhs;
+};
+
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
@@ -267,6 +272,9 @@ enum ast_expr_ty {
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_UNARY_OP,
   AST_EXPR_TY_BINARY_OP,
+  AST_EXPR_TY_ARRAYACCESS,
+  AST_EXPR_TY_MEMBERACCESS,
+  AST_EXPR_TY_POINTERACCESS,
   AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
                     // they themselves evaluate to an rvalue (unlike in C++)
 };
@@ -278,8 +286,9 @@ struct ast_expr {
     struct ast_atom atom;
     struct ast_unary_op unary_op;
     struct ast_binary_op binary_op;
-    struct ast_assg *assg;
-    struct ast_call *call;
+    struct ast_assg assg;
+    struct ast_call call;
+    struct ast_arrayaccess array_access;
   };
 };
 
@@ -501,6 +510,9 @@ struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
+
+struct ast_tyref tyref_make_pointer(struct parser *parser,
+                                    const struct ast_tyref *var_ty);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

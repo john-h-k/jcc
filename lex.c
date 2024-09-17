@@ -260,7 +260,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
   char c = lexer->text[start.idx];
 
   trace("lexing char '%c'", c);
-  trace("on '%.25s'\n", &lexer->text[start.idx]);
+  size_t context = MIN(lexer->len - start.idx, 25);
+  trace("on '%.*s'\n", context, &lexer->text[start.idx]);
 
   enum lex_token_ty ty;
   switch (c) {
@@ -270,6 +271,15 @@ void peek_token(struct lexer *lexer, struct token *token) {
     break;
   case ')':
     ty = LEX_TOKEN_TY_CLOSE_BRACKET;
+    next_col(&end);
+    break;
+
+  case '[':
+    ty = LEX_TOKEN_TY_OPEN_SQUARE_BRACKET;
+    next_col(&end);
+    break;
+  case ']':
+    ty = LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET;
     next_col(&end);
     break;
 
@@ -670,6 +680,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_SIGNED)
     CASE_RET(LEX_TOKEN_TY_KW_UNSIGNED)
 
+    CASE_RET(LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)
+    CASE_RET(LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)
     CASE_RET(LEX_TOKEN_TY_OPEN_BRACKET)
     CASE_RET(LEX_TOKEN_TY_CLOSE_BRACKET)
     CASE_RET(LEX_TOKEN_TY_OPEN_BRACE)
