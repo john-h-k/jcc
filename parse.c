@@ -969,6 +969,7 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
 
   while (true) {
     if (parse_unary_postfix_op(parser, sub_expr, expr) ||
+        parse_call(parser, sub_expr, expr) ||
         parse_array_access(parser, sub_expr, expr) ||
         parse_member_access(parser, sub_expr, expr) ||
         parse_pointer_access(parser, sub_expr, expr)) {
@@ -2172,16 +2173,13 @@ DEBUG_FUNC(tyref, ty_ref) {
     UNINDENT();
     break;
   case AST_TYREF_TY_FUNC:
-    AST_PRINT_SAMELINE_Z("FUNC ");
-    AST_PRINT_SAMELINE_Z("( ");
-    AST_PRINT_SAMELINE_Z(" )");
+    AST_PRINTZ("FUNC (");
+    INDENT();
     for (size_t i = 0; i < ty_ref->func.num_param_var_tys; i++) {
       DEBUG_CALL(tyref, &ty_ref->func.param_var_tys[i]);
-
-      if (i + 1 != ty_ref->func.num_param_var_tys) {
-        AST_PRINT_SAMELINE_Z(", ");
-      }
     }
+    UNINDENT();
+    AST_PRINTZ(")");
 
     AST_PRINT_SAMELINE_Z(" -> ");
     DEBUG_CALL(tyref, ty_ref->func.ret_var_ty);
