@@ -19,14 +19,17 @@ struct var_key get_var_key(struct parser *parser, const struct ast_var *var) {
 }
 
 bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
+  if (l == r) {
+    return true;
+  }
+
   if (l->ty != r->ty) {
     return false;
   }
 
   switch (l->ty) {
   case IR_OP_VAR_TY_TY_NONE:
-    bug("comparing none makes no sense");
-    break;
+    return r->ty == IR_OP_VAR_TY_TY_NONE;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     return l->primitive == r->primitive;
   case IR_OP_VAR_TY_TY_VARIADIC:
@@ -34,8 +37,19 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
   case IR_OP_VAR_TY_TY_POINTER:
     return var_ty_eq(l->pointer.underlying, r->pointer.underlying);
   case IR_OP_VAR_TY_TY_FUNC:
-    todo("cmp func tys");
-    break;
+    if (!var_ty_eq(l->func.ret_ty, r->func.ret_ty)) {
+      return false;
+    }
+    if (l->func.num_params != r->func.num_params) {
+      return false;
+    }
+    for (size_t i = 0; i < l->func.num_params; i++) {
+      if (!var_ty_eq(&l->func.params[i], &r->func.params[i])) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   unreachable("var_ty_eq");
@@ -542,8 +556,7 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 const struct ast_tyref *ast_tyref);
 
 struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
-                                struct ast_call *call,
-                                const struct ast_tyref *ast_tyref) {
+                                struct ast_call *call) {
   // need to generate args and target IR first to keep IR in order
 
   struct ir_op **args =
@@ -553,14 +566,14 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
                                      ? call->var_ty.func.num_param_var_tys - 1
                                      : 0;
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
-    args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], ast_tyref);
+    args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], &call->arg_list.args[i].var_ty);
 
     if (i >= num_non_variadic_args) {
       args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
     }
   }
 
-  struct ir_op *target = build_ir_for_expr(irb, stmt, call->target, ast_tyref);
+  struct ir_op *target = build_ir_for_expr(irb, stmt, call->target, &call->target->var_ty);
 
   irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
@@ -583,7 +596,7 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     op = build_ir_for_atom(irb, stmt, &expr->atom, ast_tyref);
     break;
   case AST_EXPR_TY_CALL:
-    op = build_ir_for_call(irb, stmt, &expr->call, ast_tyref);
+    op = build_ir_for_call(irb, stmt, &expr->call);
     break;
   case AST_EXPR_TY_UNARY_OP:
     op = build_ir_for_unaryop(irb, stmt, &expr->unary_op);
@@ -1299,11 +1312,13 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->last;
   if (!last_bb) {
+    debug("adding bb to create ret");
     last_bb = alloc_ir_basicblock(builder);
   }
 
   struct ir_stmt *last_stmt = last_bb->last;
   if (!last_stmt) {
+    debug("adding bb to create stmt");
     last_stmt = alloc_ir_stmt(builder, last_bb);
   }
 
@@ -1313,7 +1328,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     struct ir_op *return_value = NULL;
 
     if (strcmp(builder->name, "main") == 0) {
-      debug("adding implicit return 0");
+      debug("adding implicit return 0 to bb %zu", last_bb->id);
 
       struct ir_op *cnst = alloc_ir_op(builder, last_stmt);
       cnst->ty = IR_OP_TY_CNST;
@@ -1321,7 +1336,10 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
           .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
           .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
       };
-      cnst->cnst.int_value = 0;
+      cnst->cnst = (struct ir_op_cnst){
+        .ty = IR_OP_CNST_TY_INT,
+        .int_value = 0
+      };
 
       return_value = cnst;
     }
@@ -1332,7 +1350,8 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     last_stmt->last->ret.value = return_value;
   }
 
-  // do we need to prune again? i do not think so
+  // prune again, as inserting the ret can introduce an extraneous empty bb
+  prune_basicblocks(builder);
 
   if (log_enabled()) {
     debug_print_ir(stderr, builder, NULL, NULL);
