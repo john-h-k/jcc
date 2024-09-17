@@ -262,8 +262,8 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_LOAD_LCL:
     debug_lhs(file, ir);
-    if (ir->load_lcl.lcl) {
-      fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl->id);
+    if (ir->lcl) {
+      fprintf(file, "loadlcl LCL(%zu, %%%zu)", ir->lcl->id, ir->load_lcl.lcl->id);
     } else {
       fprintf(file, "loadlcl LCL(UNASSIGNED)");
     }

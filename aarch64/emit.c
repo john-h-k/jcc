@@ -84,30 +84,34 @@ static bool is_64_bit(const struct ir_op *op) {
 }
 
 // TODO: sep methods no longer needed
-static unsigned get_lcl_stack_offset_32(struct emit_state *state,
+
+static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
                                         const struct ir_op *op) {
   UNUSED_ARG(state);
-  struct ir_lcl *lcl = op->lcl;
+  return op->custom.aarch64->store_variadic.idx;
+}
+
+static unsigned get_lcl_stack_offset_32(struct emit_state *state,
+                                        const struct ir_op *op) {
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  return lcl->metadata ? (unsigned)(unsigned long long)lcl->metadata - 1
-                       : lcl->id;
+  UNUSED_ARG(state);
+  // HACK: eek we need to fix everything being 8 byte
+  return op->lcl->id * 2;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state,
                                         const struct ir_op *op) {
-  UNUSED_ARG(state);
-  struct ir_lcl *lcl = op->lcl;
   // FIXME: only supports ints
   // offset by 2/4 because we store FP/LR at the top
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  return lcl->metadata ? (unsigned)(unsigned long long)lcl->metadata - 1
-                       : lcl->id;
+  UNUSED_ARG(state);
+  return op->lcl->id;
 }
 
 enum aarch64_relocation_ty {
@@ -557,6 +561,15 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
+static void emit_store_variadic(struct emit_state *state, struct ir_op *op) {
+  // all variadic args are 8 byte
+  size_t reg = op->custom.aarch64->store_variadic.value->reg;
+  aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
+                               get_reg_for_idx(reg),
+                               get_lcl_stack_offset_variadic(state, op));
+  
+}
+
 static void emit_custom(struct emit_state *state, struct ir_op *op) {
   // FIXME: the pre-indexing here is causing segfaults for some reason? we
 
@@ -603,6 +616,9 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
     break;
   case AARCH64_OP_TY_PAGE_OFF:
     emit_pageoff(state, op);
+    break;
+  case AARCH64_OP_TY_STORE_VARIADIC:
+    emit_store_variadic(state, op);
     break;
   }
 }

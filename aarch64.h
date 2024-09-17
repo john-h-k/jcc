@@ -30,6 +30,8 @@ enum aarch64_op_ty {
 
   AARCH64_OP_TY_PAGE,
   AARCH64_OP_TY_PAGE_OFF,
+
+  AARCH64_OP_TY_STORE_VARIADIC,
 };
 
 struct aarch64_op_page {
@@ -40,12 +42,18 @@ struct aarch64_op_page_off {
   struct ir_op *glb_ref;
 };
 
+struct aarch64_store_variadic {
+  struct ir_op *value;
+  size_t idx;
+};
+
 struct aarch64_op {
   enum aarch64_op_ty ty;
 
   union {
     struct aarch64_op_page page;
     struct aarch64_op_page_off page_off;
+    struct aarch64_store_variadic store_variadic;
   };
 };
 

@@ -153,12 +153,20 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
         // the stack slot this local must live in
         size_t variadic_arg_idx = i - num_normal_args;
-        lcl->metadata = (void *)(variadic_arg_idx + 1);
 
         struct ir_op *store =
-            insert_before_ir_op(func, op, IR_OP_TY_STORE_LCL, *var_ty);
+            insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, *var_ty);
         store->lcl = lcl;
-        store->store_lcl.value = source;
+        store->custom.aarch64 =
+            arena_alloc(func->arena, sizeof(*store->custom.aarch64));
+        *store->custom.aarch64 = (struct aarch64_op){
+          .ty = AARCH64_OP_TY_STORE_VARIADIC,
+          .store_variadic = (struct aarch64_store_variadic){
+              .value = source,
+              .idx = variadic_arg_idx
+          }
+        };
+
         store->flags |= IR_OP_FLAG_VARIADIC_PARAM;
       } else if (i == 0 || op->call.args[i]->reg != arg_reg) {
         struct ir_op *mov =
