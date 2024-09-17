@@ -3,12 +3,11 @@
 // stdout: sqrt(3^2 + 4^2) = 5
 
 int printf(const char *format, ...);
-int getchar();
+int scanf(const char *format, ...);
 
 int main() {
-  int a = getchar() - 48;
-  getchar();
-  int b = getchar() - 48;
+  int a = 0, b = 0;
+  scanf("%d %d", &a, &b);
 
   int r = a * a + b * b;
 

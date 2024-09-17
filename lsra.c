@@ -22,10 +22,20 @@ struct register_alloc_info {
 };
 
 void spill_op(struct ir_builder *irb, struct ir_op *op) {
+  debug("spilling %zu\n", op->id);
+
   debug_assert(op->reg != REG_SPILLED, "can't spill already spilled op");
 
   op->reg = REG_SPILLED;
   op->lcl = add_local(irb, &op->var_ty);
+
+  if (op->ty == IR_OP_TY_PHI) {
+    for (size_t i = 0; i < op->phi.num_values; i++) {
+      struct ir_op *value = op->phi.values[i];
+
+      value->lcl = op->lcl;
+    }    
+  }
 }
 
 void spill_at_interval(struct ir_builder *irb, struct interval *intervals,
@@ -131,7 +141,7 @@ bool op_needs_reg(struct ir_op *op) {
 void fixup_spills_callback(struct ir_op **op, void *metadata) {
   struct fixup_spills_data *data = metadata;
 
-  if (data->consumer->flags & IR_OP_FLAG_SPILL) {
+  if (data->consumer->ty != IR_OP_TY_PHI && data->consumer->flags & IR_OP_FLAG_SPILL) {
     // the store that consumes (and stores) this value will be marked with this
     // flag it of course does not need to have a load (as it uses the op after
     // creation)
@@ -145,9 +155,16 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
       // FIXME: proper local sizes
       // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
 
-      struct ir_op *load = insert_before_ir_op(
-          data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+      struct ir_op *load;
+      if (data->consumer->ty == IR_OP_TY_PHI) {
+        load = replace_ir_op(
+            data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+      } else {
+        load = insert_before_ir_op(
+            data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+      }
       load->load_lcl.lcl = *op;
+      load->lcl = (*op)->lcl;
       load->reg = data->consumer->reg;
       load->flags |= IR_OP_FLAG_SPILL;
 
@@ -168,6 +185,14 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
+        if (op->ty == IR_OP_TY_PHI) {
+          // phi being spilled means nothing
+          // as the creators will all be spilled and do the store
+          op = op->succ;
+          continue;
+        }
+
+
         // walk all things this op uses, and add loads for any that are spilled
         struct fixup_spills_data metadata = {.irb = irb, .consumer = op};
 
@@ -248,6 +273,14 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       // we spill here, and strip the flag for the next regalloc run as then it
       // will need a register
       interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
+      if (interval->op->ty == IR_OP_TY_PHI) {
+        for (size_t i = 0; i < interval->op->phi.num_values; i++) {
+          struct ir_op *value = interval->op->phi.values[i];
+
+          value->flags &= ~IR_OP_FLAG_MUST_SPILL;
+        }    
+      }
+
 
       spill_op(irb, interval->op);
       *spilled = true;
