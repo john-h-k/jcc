@@ -38,7 +38,8 @@ struct emit_state {
   size_t num_extra_stack_slots;
 
   // the maximum number of variadics used in this function
-  // we offset all stack vars beneath this as it is easier than worrying about lcl lifetimes
+  // we offset all stack vars beneath this as it is easier than worrying about
+  // lcl lifetimes
   size_t max_variadic_arg_idx;
 
   // registers that need to be reloaded
@@ -91,7 +92,7 @@ static bool is_64_bit(const struct ir_op *op) {
 // TODO: sep methods no longer needed
 
 static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
-                                        const struct ir_op *op) {
+                                              const struct ir_op *op) {
   UNUSED_ARG(state);
   return op->custom.aarch64->store_variadic.idx;
 }
@@ -562,7 +563,6 @@ static void emit_store_variadic(struct emit_state *state, struct ir_op *op) {
   aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                get_reg_for_idx(reg),
                                get_lcl_stack_offset_variadic(state, op));
-  
 }
 
 static void emit_custom(struct emit_state *state, struct ir_op *op) {
@@ -772,8 +772,10 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
       while (stmt) {
         struct ir_op *op = stmt->first;
         while (op) {
-          if (op->ty == IR_OP_TY_CUSTOM && op->custom.aarch64->ty == AARCH64_OP_TY_STORE_VARIADIC) {
-            max_variadic_arg_idx = MAX(max_variadic_arg_idx, op->custom.aarch64->store_variadic.idx);
+          if (op->ty == IR_OP_TY_CUSTOM &&
+              op->custom.aarch64->ty == AARCH64_OP_TY_STORE_VARIADIC) {
+            max_variadic_arg_idx = MAX(max_variadic_arg_idx,
+                                       op->custom.aarch64->store_variadic.idx);
           }
 
           opc++;

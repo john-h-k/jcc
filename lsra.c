@@ -29,13 +29,12 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   op->reg = REG_SPILLED;
 
   if (op->ty != IR_OP_TY_PHI) {
-    op->lcl = add_local(irb, &op->var_ty);  
+    op->lcl = add_local(irb, &op->var_ty);
     return;
   }
 
-  
-  // if phi is spilled, first ensure it doesn't already have a local via one of its values
-  // then, once spilled, propogate its local to all of its dependents
+  // if phi is spilled, first ensure it doesn't already have a local via one of
+  // its values then, once spilled, propogate its local to all of its dependents
   struct ir_lcl *lcl = NULL;
   for (size_t i = 0; i < op->phi.num_values; i++) {
     struct ir_op *value = op->phi.values[i];
@@ -46,8 +45,8 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   }
 
   if (!lcl) {
-    lcl = add_local(irb, &op->var_ty);  
-  }    
+    lcl = add_local(irb, &op->var_ty);
+  }
 
   op->lcl = lcl;
   for (size_t i = 0; i < op->phi.num_values; i++) {
@@ -160,7 +159,8 @@ bool op_needs_reg(struct ir_op *op) {
 void fixup_spills_callback(struct ir_op **op, void *metadata) {
   struct fixup_spills_data *data = metadata;
 
-  if (data->consumer->ty != IR_OP_TY_PHI && data->consumer->flags & IR_OP_FLAG_SPILL) {
+  if (data->consumer->ty != IR_OP_TY_PHI &&
+      data->consumer->flags & IR_OP_FLAG_SPILL) {
     // the store that consumes (and stores) this value will be marked with this
     // flag it of course does not need to have a load (as it uses the op after
     // creation)
@@ -176,11 +176,11 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
 
       struct ir_op *load;
       if (data->consumer->ty == IR_OP_TY_PHI) {
-        load = replace_ir_op(
-            data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+        load = replace_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,
+                             (*op)->var_ty);
       } else {
-        load = insert_before_ir_op(
-            data->irb, data->consumer, IR_OP_TY_LOAD_LCL, (*op)->var_ty);
+        load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,
+                                   (*op)->var_ty);
       }
       load->load_lcl.lcl = *op;
       load->lcl = (*op)->lcl;
@@ -210,7 +210,6 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
           op = op->succ;
           continue;
         }
-
 
         // walk all things this op uses, and add loads for any that are spilled
         struct fixup_spills_data metadata = {.irb = irb, .consumer = op};
@@ -297,9 +296,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
           struct ir_op *value = interval->op->phi.values[i];
 
           value->flags &= ~IR_OP_FLAG_MUST_SPILL;
-        }    
+        }
       }
-
 
       spill_op(irb, interval->op);
       *spilled = true;

@@ -7,7 +7,6 @@
 void eep_pre_reg_lower(struct ir_builder *func);
 
 void eep_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
-                                      const struct ir_op *op);
-
+                                  const struct ir_op *op);
 
 #endif

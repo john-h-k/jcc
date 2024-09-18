@@ -75,7 +75,6 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *value = op->phi.values[i];
 
-
             // HACK: this flag needs to enter the phi node so LSRA spills phis
             // maybe ir_lcl should have flag instead?
             if (value->flags & IR_OP_FLAG_MUST_SPILL) {

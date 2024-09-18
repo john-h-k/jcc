@@ -409,7 +409,9 @@ struct ir_lcl {
   void *metadata;
 };
 
-typedef void (*debug_print_custom_ir_op)(FILE *file, const struct ir_builder *func, const struct ir_op *op);
+typedef void (*debug_print_custom_ir_op)(FILE *file,
+                                         const struct ir_builder *func,
+                                         const struct ir_op *op);
 
 struct ir_builder {
   const char *name;
