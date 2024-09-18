@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
 build() {
-    cd "$(dirname "$0")/build"
+    cd build
     cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" .. \
-        && cmake --build . \
-        && cd ..
+        && cmake --build .
     cd -
+}
+
+test() {
+    build
+    ./tests/run.sh
 }
 
 cfg() {
@@ -19,10 +23,8 @@ cfg() {
 }
 
 format() {
-    cd "$(dirname "$0")"
     echo "Formatting..."
     fd '.*\.[hc]' . -x clang-format -style=file -i
-    cd -
 }
 
 _invoke-subcommand() {
@@ -75,5 +77,6 @@ _invoke-subcommand() {
     fi
 }
 
+cd "$(dirname "$0")"
 _invoke-subcommand "$@"
 
