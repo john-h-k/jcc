@@ -119,10 +119,23 @@ void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_
   case IR_OP_VAR_TY_TY_STRUCT: {
     struct ir_var_ty_info info = var_ty_info(irb, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
-    for (size_t i = 0; i < var_ty->structure.num_fields; i++) {
-      debug_var_ty_string(file, irb, &var_ty->structure.fields[i]);
+    for (size_t i = 0; i < var_ty->struct_ty.num_fields; i++) {
+      debug_var_ty_string(file, irb, &var_ty->struct_ty.fields[i]);
 
-      if (i + 1 < var_ty->structure.num_fields) {
+      if (i + 1 < var_ty->struct_ty.num_fields) {
+        fprintf(file, ", ");
+      }
+    }
+    fprintf(file, " ]");
+    break;
+  }
+  case IR_OP_VAR_TY_TY_UNION: {
+    struct ir_var_ty_info info = var_ty_info(irb, var_ty);
+    fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
+    for (size_t i = 0; i < var_ty->union_ty.num_fields; i++) {
+      debug_var_ty_string(file, irb, &var_ty->union_ty.fields[i]);
+
+      if (i + 1 < var_ty->union_ty.num_fields) {
         fprintf(file, ", ");
       }
     }

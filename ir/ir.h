@@ -192,7 +192,7 @@ enum ir_op_var_ty_ty {
   /* Aggregate */
   IR_OP_VAR_TY_TY_ARRAY,
   IR_OP_VAR_TY_TY_STRUCT,
-  // IR_OP_VAR_TY_TY_UNION,
+  IR_OP_VAR_TY_TY_UNION,
 
   /* Variadic */
   IR_OP_VAR_TY_TY_VARIADIC,
@@ -207,6 +207,11 @@ struct ir_op_var_func_ty {
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);
 
 struct ir_op_var_struct_ty {
+  size_t num_fields;
+  struct ir_op_var_ty *fields;
+};
+
+struct ir_op_var_union_ty {
   size_t num_fields;
   struct ir_op_var_ty *fields;
 };
@@ -230,7 +235,8 @@ struct ir_op_var_ty {
     struct ir_op_var_func_ty func;
     struct ir_op_var_pointer_ty pointer;
     struct ir_op_var_array_ty array;
-    struct ir_op_var_struct_ty structure; // `struct` is reserved
+    struct ir_op_var_struct_ty struct_ty;
+    struct ir_op_var_union_ty union_ty;
   };
 };
 
