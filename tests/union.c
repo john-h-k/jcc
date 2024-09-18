@@ -1,3 +1,4 @@
+// expected value: 1
 
 union foo {
   int a;
