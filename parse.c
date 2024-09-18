@@ -198,6 +198,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
   case LEX_TOKEN_TY_DOT:
+  case LEX_TOKEN_TY_ARROW:
   case LEX_TOKEN_TY_OP_LOGICAL_NOT:
   case LEX_TOKEN_TY_OP_NOT:
   case LEX_TOKEN_TY_OP_ASSG:
@@ -1078,10 +1079,9 @@ bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
 }
 
 struct ast_tyref resolve_member_access_ty(struct parser *parser,
-                                          const struct ast_expr *sub_expr,
+                                          const struct ast_tyref *var_ty,
                                           const struct token *member) {
 
-  const struct ast_tyref *var_ty = &sub_expr->var_ty;
   invariant_assert(var_ty->ty == AST_TYREF_TY_STRUCT || var_ty->ty == AST_TYREF_TY_UNION,
                    "non struct/union in member access");
 
@@ -1097,6 +1097,14 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
 
   todo("member does not exist");
 }
+
+struct ast_tyref resolve_pointer_access_ty(struct parser *parser,
+                                          const struct ast_tyref *var_ty,
+                                          const struct token *member) {
+  struct ast_tyref underlying_var_ty = tyref_get_underlying(parser, var_ty);
+  return resolve_member_access_ty(parser, &underlying_var_ty, member);
+}
+
 
 struct ast_tyref resolve_array_access_ty(struct parser *parser,
                                          const struct ast_expr *lhs,
@@ -1162,7 +1170,7 @@ bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
 
   consume_token(parser->lexer, token);
 
-  struct ast_tyref var_ty = resolve_member_access_ty(parser, sub_expr, &token);
+  struct ast_tyref var_ty = resolve_member_access_ty(parser, &sub_expr->var_ty, &token);
 
   expr->ty = AST_EXPR_TY_MEMBERACCESS;
   expr->var_ty = var_ty;
@@ -1174,11 +1182,31 @@ bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
 
 bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
                           struct ast_expr *expr) {
-  UNUSED_ARG(parser);
-  UNUSED_ARG(sub_expr);
-  UNUSED_ARG(expr);
-  return false;
-  todo(__func__);
+
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_ARROW)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  consume_token(parser->lexer, token);
+
+  struct ast_tyref var_ty = resolve_pointer_access_ty(parser, &sub_expr->var_ty, &token);
+
+  expr->ty = AST_EXPR_TY_POINTERACCESS;
+  expr->var_ty = var_ty;
+  expr->pointer_access =
+      (struct ast_pointeraccess){.lhs = sub_expr, .member = token};
+
+  return true;
 }
 
 bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
@@ -2981,6 +3009,21 @@ DEBUG_FUNC(call, call) {
   UNINDENT();
 }
 
+DEBUG_FUNC(pointeraccess, pointer_access) {
+  AST_PRINTZ("POINTER_ACCESS");
+
+  INDENT();
+  DEBUG_CALL(expr, pointer_access->lhs);
+  UNINDENT();
+
+  AST_PRINTZ("MEMBER");
+
+  INDENT();
+  AST_PRINT("%s", identifier_str(state->parser, &pointer_access->member));
+  UNINDENT();
+}
+
+
 DEBUG_FUNC(memberaccess, member_access) {
   AST_PRINTZ("MEMBER_ACCESS");
 
@@ -3044,8 +3087,7 @@ DEBUG_FUNC(expr, expr) {
     DEBUG_CALL(memberaccess, &expr->member_access);
     break;
   case AST_EXPR_TY_POINTERACCESS:
-    todo("pointer access");
-    // DEBUG_CALL(pointer_access, &expr->pointer_access);
+    DEBUG_CALL(pointeraccess, &expr->pointer_access);
     break;
   case AST_EXPR_TY_INIT_LIST:
     DEBUG_CALL(initlist, &expr->init_list);

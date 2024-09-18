@@ -854,6 +854,56 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
   return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
 }
 
+struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
+                                         struct ir_stmt *stmt,
+                                         struct ast_expr *lhs_expr,
+                                         struct token *member) {
+  // TODO: slow need hashtable lookup
+  struct ast_tyref ty_ref = tyref_get_underlying(irb->parser, &lhs_expr->var_ty);
+  invariant_assert(ty_ref.ty == AST_TYREF_TY_STRUCT || ty_ref.ty == AST_TYREF_TY_UNION, "member access for non struct/union");
+
+  const char *member_name = identifier_str(irb->parser, member);
+  
+  size_t member_idx = 0;
+  struct ast_tyref member_ty;
+  for (; member_idx < ty_ref.struct_ty.num_field_var_tys; member_idx++) {
+    struct ast_struct_field *field = &ty_ref.struct_ty.field_var_tys[member_idx];
+    if (strcmp(field->name, member_name) == 0) {
+      member_ty = *field->var_ty;
+      break;
+    }
+  }
+
+  struct ir_op_var_ty struct_ty = ty_for_ast_tyref(irb, &ty_ref);
+  struct ir_var_ty_info info = var_ty_info(irb, &struct_ty);
+
+  // offsets are null for a union
+  size_t offset = info.offsets ? info.offsets[member_idx] : 0;
+
+  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, &member_ty);
+
+  struct ir_op *lhs;
+  if (lhs_expr->ty == AST_EXPR_TY_MEMBERACCESS) {
+    // nested access
+    lhs = build_ir_for_pointer_address(irb, stmt, lhs_expr->member_access.lhs, &lhs_expr->member_access.member);
+  } else {
+    lhs = build_ir_for_expr(irb, stmt, lhs_expr, &lhs_expr->var_ty);
+  }
+
+  struct ir_op *rhs = alloc_ir_op(irb, stmt);
+  rhs->ty = IR_OP_TY_CNST;
+  rhs->var_ty = (struct ir_op_var_ty){
+    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
+  };
+  rhs->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = offset
+  };
+
+  return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
+}
+
 
 struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
                                          struct ir_stmt *stmt,
@@ -926,6 +976,20 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     };
 
     return store;
+  } else if (assg->assignee->ty == AST_EXPR_TY_POINTERACCESS) {
+    struct ast_pointeraccess *access = &assg->assignee->pointer_access;
+    struct ir_op *address = build_ir_for_pointer_address(
+        irb, stmt, access->lhs, &access->member);
+
+    struct ir_op *store = alloc_ir_op(irb, stmt);
+    store->ty = IR_OP_TY_STORE_ADDR;
+    store->var_ty = IR_OP_VAR_TY_NONE;
+    store->store_addr = (struct ir_op_store_addr){
+      .addr = address,
+      .value = value
+    };
+
+    return store;
   } else {
     todo("non var assignments");
   }
@@ -959,6 +1023,19 @@ struct ir_op *build_ir_for_memberaccess(struct ir_builder *irb, struct ir_stmt *
   return op;
 }
 
+struct ir_op *build_ir_for_pointeraccess(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_pointeraccess *pointer_access) {
+  struct ir_op *address =
+      build_ir_for_pointer_address(irb, stmt, pointer_access->lhs,
+                                 &pointer_access->member);
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_LOAD_ADDR;
+  op->var_ty = var_ty_get_underlying(&address->var_ty);
+  op->load_addr = (struct ir_op_load_addr){.addr = address};
+
+  return op;
+}
+
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_expr *expr,
                                 const struct ast_tyref *ast_tyref) {
@@ -983,7 +1060,7 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     op = build_ir_for_memberaccess(irb, stmt, &expr->member_access);
     break;
   case AST_EXPR_TY_POINTERACCESS:
-    todo("access build");
+    op = build_ir_for_pointeraccess(irb, stmt, &expr->pointer_access);
     break;
   case AST_EXPR_TY_INIT_LIST:
     bug("init list only makes sense in decls and compound assignments");

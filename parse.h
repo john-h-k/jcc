@@ -315,6 +315,11 @@ struct ast_memberaccess {
   struct token member;
 };
 
+struct ast_pointeraccess {
+  struct ast_expr *lhs;
+  struct token member;
+};
+
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
@@ -342,6 +347,7 @@ struct ast_expr {
     struct ast_call call;
     struct ast_arrayaccess array_access;
     struct ast_memberaccess member_access;
+    struct ast_pointeraccess pointer_access;
     struct ast_initlist init_list;
   };
 };
