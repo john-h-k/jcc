@@ -1268,8 +1268,6 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
                          .nonvolatile_registers_used = 0,
                          .num_locals = 0,
                          .total_locals_size = 0,
-                         .num_call_saves = 0,
-                         .total_call_saves_size = 0,
                          .offset = 0};
 
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));

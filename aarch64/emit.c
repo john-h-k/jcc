@@ -131,15 +131,7 @@ struct aarch64_relocation {
 static void emit_call(struct emit_state *state, struct ir_op *op) {
   switch (op->call.target->ty) {
   case IR_OP_TY_GLB_REF: {
-    // struct var_key key = {.name = op->call.target->glb.global,
-    //                       .scope = SCOPE_GLOBAL};
-    // struct var_ref *ref = var_refs_get(state->irb->global_var_refs, &key);
-    // int pos = state->irb->offset + aarch64_emitted_count(state->emitter);
-    // offset = (int)ref->func->offset - (int)pos;
-    // offset = 0;
     // this uses relocs instead of actually calculating it
-    // FIXME: may break on 32 bit
-
     struct ir_op_glb_ref *glb_ref = &op->call.target->glb_ref;
     invariant_assert(glb_ref->ty == IR_OP_GLB_REF_TY_SYM,
                      "only symbols make sense for call targets");
