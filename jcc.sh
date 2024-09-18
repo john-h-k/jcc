@@ -1,21 +1,25 @@
 #!/bin/zsh
 
 build() {
-    cd build \
+    cd "$(dirname "$0")/build"
         && cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" .. \
         && cmake --build . \
         && cd ..
+    cd -
 }
 
 cfg() {
+    cd "$(dirname "$0")"
     "./$(dirname $0)/build/jcc" "$@"
     for file in $(find $(dirname $0)/build -name '*.gv' -print); do
         name=$(basename $file)
         dot -Tpng "$(dirname $0)/$file" > "$name.png" && open "$name.png"
     done
+    cd -
 }
 
 format() {
+    cd "$(dirname "$0")"
     if [ $(git status --short | wc -l) != 0 ]; then
         echo "cannot format when changes are present! commit/stash/discard first"
         exit -1
@@ -23,6 +27,7 @@ format() {
 
     echo "Formatting..."
     fd '.*\.[hc]' . -x clang-format -style=file -i
+    cd -
 }
 
 invoke-subcommand() {
