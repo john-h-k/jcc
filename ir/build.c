@@ -75,7 +75,7 @@ bool var_ty_eq(struct ir_builder *irb, const struct ir_op_var_ty *l, const struc
 
     return true;
   case IR_OP_VAR_TY_TY_STRUCT: {
-      if (l->structure.num_fields != r->structure.num_fields) {
+      if (l->struct_ty.num_fields != r->struct_ty.num_fields) {
         return false;
       }
 
@@ -87,14 +87,35 @@ bool var_ty_eq(struct ir_builder *irb, const struct ir_op_var_ty *l, const struc
         return false;
       }
 
-      for (size_t i = 0; i < l->structure.num_fields; i++) {
-        if (!var_ty_eq(irb, &l->structure.fields[i], &r->structure.fields[i])) {
+      for (size_t i = 0; i < l->struct_ty.num_fields; i++) {
+        if (!var_ty_eq(irb, &l->struct_ty.fields[i], &r->struct_ty.fields[i])) {
           return false;
         }
       }
 
       return true;
-  } 
+  }
+  case IR_OP_VAR_TY_TY_UNION: {
+      if (l->union_ty.num_fields != r->union_ty.num_fields) {
+        return false;
+      }
+
+      struct ir_var_ty_info l_info = var_ty_info(irb, l);
+      struct ir_var_ty_info r_info = var_ty_info(irb, r);
+
+      // currently we do not have custom alignment/size but it is possible
+      if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
+        return false;
+      }
+
+      for (size_t i = 0; i < l->union_ty.num_fields; i++) {
+        if (!var_ty_eq(irb, &l->union_ty.fields[i], &r->union_ty.fields[i])) {
+          return false;
+        }
+      }
+
+      return true;
+  }
   }
 
   unreachable("var_ty_eq");
@@ -190,12 +211,25 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
   case AST_TYREF_TY_STRUCT: {
     struct ir_op_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_STRUCT;
-    ty.structure.num_fields = ty_ref->structure.num_field_var_tys;
-    ty.structure.fields =
-        arena_alloc(irb->arena, sizeof(struct ir_op) * ty.structure.num_fields);
+    ty.struct_ty.num_fields = ty_ref->struct_ty.num_field_var_tys;
+    ty.struct_ty.fields =
+        arena_alloc(irb->arena, sizeof(struct ir_op) * ty.struct_ty.num_fields);
 
-    for (size_t i = 0; i < ty.structure.num_fields; i++) {
-      ty.structure.fields[i] = ty_for_ast_tyref(irb, ty_ref->structure.field_var_tys[i].var_ty);
+    for (size_t i = 0; i < ty.struct_ty.num_fields; i++) {
+      ty.struct_ty.fields[i] = ty_for_ast_tyref(irb, ty_ref->struct_ty.field_var_tys[i].var_ty);
+    }
+     
+    return ty;
+  }
+  case AST_TYREF_TY_UNION: {
+    struct ir_op_var_ty ty;
+    ty.ty = IR_OP_VAR_TY_TY_UNION;
+    ty.union_ty.num_fields = ty_ref->union_ty.num_field_var_tys;
+    ty.union_ty.fields =
+        arena_alloc(irb->arena, sizeof(struct ir_op) * ty.union_ty.num_fields);
+
+    for (size_t i = 0; i < ty.union_ty.num_fields; i++) {
+      ty.union_ty.fields[i] = ty_for_ast_tyref(irb, ty_ref->union_ty.field_var_tys[i].var_ty);
     }
      
     return ty;
@@ -776,14 +810,14 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
                                          struct token *member) {
   // TODO: slow need hashtable lookup
   struct ast_tyref *ty_ref = &lhs_expr->var_ty;
-  invariant_assert(ty_ref->ty == AST_TYREF_TY_STRUCT, "member access for non structure");
+  invariant_assert(ty_ref->ty == AST_TYREF_TY_STRUCT || ty_ref->ty == AST_TYREF_TY_UNION, "member access for non struct/union");
 
   const char *member_name = identifier_str(irb->parser, member);
   
   size_t member_idx = 0;
   struct ast_tyref member_ty;
-  for (; member_idx < ty_ref->structure.num_field_var_tys; member_idx++) {
-    struct ast_struct_field *field = &ty_ref->structure.field_var_tys[member_idx];
+  for (; member_idx < ty_ref->struct_ty.num_field_var_tys; member_idx++) {
+    struct ast_struct_field *field = &ty_ref->struct_ty.field_var_tys[member_idx];
     if (strcmp(field->name, member_name) == 0) {
       member_ty = *field->var_ty;
       break;
@@ -792,7 +826,9 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
 
   struct ir_op_var_ty struct_ty = ty_for_ast_tyref(irb, &lhs_expr->var_ty);
   struct ir_var_ty_info info = var_ty_info(irb, &struct_ty);
-  size_t offset = info.offsets[member_idx];
+
+  // offsets are null for a union
+  size_t offset = info.offsets ? info.offsets[member_idx] : 0;
 
   struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, &member_ty);
 

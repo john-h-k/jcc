@@ -921,11 +921,11 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
   case IR_OP_VAR_TY_TY_STRUCT: {
     size_t max_alignment = 0;
     size_t size = 0;
-    size_t num_fields = ty->structure.num_fields;
+    size_t num_fields = ty->struct_ty.num_fields;
     size_t *offsets = arena_alloc(irb->arena, sizeof(*offsets) * num_fields);
 
-    for (size_t i = 0; i < ty->structure.num_fields; i++) {
-      struct ir_op_var_ty *field = &ty->structure.fields[i];
+    for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
+      struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
       struct ir_var_ty_info info = var_ty_info(irb, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
@@ -937,6 +937,21 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
     }
 
     return (struct ir_var_ty_info){.size = size, .alignment = max_alignment, .num_fields = num_fields, .offsets = offsets};
+  }
+  case IR_OP_VAR_TY_TY_UNION: {
+    size_t max_alignment = 0;
+    size_t size = 0;
+    size_t num_fields = ty->struct_ty.num_fields;
+
+    for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
+      struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
+      struct ir_var_ty_info info = var_ty_info(irb, field);
+      max_alignment = MAX(max_alignment, info.alignment);
+
+      size = MAX(size, info.size);
+    }
+
+    return (struct ir_var_ty_info){.size = size, .alignment = max_alignment, .num_fields = num_fields, .offsets = NULL};
   }
   }
 }

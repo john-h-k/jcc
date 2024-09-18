@@ -65,6 +65,11 @@ struct ast_ty_struct {
   size_t num_field_var_tys;
 };
 
+struct ast_ty_union {
+  struct ast_struct_field *field_var_tys;
+  size_t num_field_var_tys;
+};
+
 struct ast_ty_func {
   struct ast_tyref *ret_var_ty;
   struct ast_tyref *param_var_tys;
@@ -82,8 +87,8 @@ enum ast_tyref_ty {
   AST_TYREF_TY_ARRAY,
   AST_TYREF_TY_VARIADIC,
   AST_TYREF_TY_STRUCT,
+  AST_TYREF_TY_UNION,
   // AST_TYREF_TY_TYPEDEF_NAME,
-  // AST_TYREF_TY_UNION,
   // AST_TYREF_TY_ENUM,
 };
 
@@ -118,7 +123,8 @@ struct ast_tyref {
     struct ast_ty_pointer pointer;
     struct ast_ty_array array;
     struct ast_ty_func func;
-    struct ast_ty_struct structure;
+    struct ast_ty_struct struct_ty;
+    struct ast_ty_union union_ty;
   };
 };
 
@@ -501,11 +507,20 @@ struct ast_fieldlist {
   struct ast_field *fields;
 };
 
-struct ast_structdecl {
+enum ast_type_ty {
+  AST_TYPE_TY_UNION,
+  AST_TYPE_TY_STRUCT,
+};
+
+struct ast_typedecl {
+  enum ast_type_ty ty;
+
   struct token name;
 };
 
-struct ast_structdef {
+struct ast_typedef {
+  enum ast_type_ty ty;
+
   struct token name;
 
   size_t num_field_lists;
@@ -550,11 +565,11 @@ struct ast_funcdecl {
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  struct ast_structdef *struct_defs;
-  size_t num_struct_defs;
+  struct ast_typedef *type_defs;
+  size_t num_type_defs;
 
-  struct ast_structdecl *struct_decls;
-  size_t num_struct_decls;
+  struct ast_typedecl *type_decls;
+  size_t num_type_decls;
 
   struct ast_funcdef *func_defs;
   size_t num_func_defs;
