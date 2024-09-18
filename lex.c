@@ -401,6 +401,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
       ty = LEX_TOKEN_TY_OP_DEC;
     } else if (try_consume(lexer, &end, '=')) {
       ty = LEX_TOKEN_TY_OP_SUB_ASSG;
+    } else if (try_consume(lexer, &end, '>')) {
+      ty = LEX_TOKEN_TY_ARROW;
     } else {
       ty = LEX_TOKEN_TY_OP_SUB;
     }
@@ -650,6 +652,7 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_SEMICOLON)
     CASE_RET(LEX_TOKEN_TY_COMMA)
     CASE_RET(LEX_TOKEN_TY_DOT)
+    CASE_RET(LEX_TOKEN_TY_ARROW)
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
     CASE_RET(LEX_TOKEN_TY_KW_DO)

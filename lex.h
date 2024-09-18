@@ -26,6 +26,7 @@ enum lex_token_ty {
   LEX_TOKEN_TY_SEMICOLON, // ;
   LEX_TOKEN_TY_COMMA,     // ,
   LEX_TOKEN_TY_DOT,       // .
+  LEX_TOKEN_TY_ARROW,       // ->
 
   /* Operators */
 
