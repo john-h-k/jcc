@@ -18,7 +18,7 @@ const struct target AARCH64_TARGET;
 enum aarch64_op_ty {
   // Saving LR has two steps - one instr per op so we have two ops for it
   AARCH64_OP_TY_SAVE_LR,
-  AARCH64_OP_TY_SAVE_LR_ADD_64,
+  AARCH64_OP_TY_SAVE_FP,
 
   AARCH64_OP_TY_RSTR_LR,
 

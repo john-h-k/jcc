@@ -539,6 +539,58 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
   }
 }
 
+static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
+  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+
+  if (is_64_bit(op)) {
+    aarch64_emit_load_offset_64(
+        state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+        get_lcl_stack_offset_64(state, op->load_lcl.lcl));
+  } else {
+    aarch64_emit_load_offset_32(
+        state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
+        get_lcl_stack_offset_32(state, op->load_lcl.lcl));
+  }
+}
+
+static void emit_store_lcl_op(struct emit_state *state, struct ir_op *op) {
+  size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+
+  if (is_64_bit(op->store_lcl.value) ||
+      (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
+    aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
+                                 get_reg_for_idx(reg),
+                                 get_lcl_stack_offset_64(state, op));
+  } else {
+    aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
+                                 get_reg_for_idx(reg),
+                                 get_lcl_stack_offset_32(state, op));
+  }
+}
+
+static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
+  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+
+  switch (op->cnst.ty) {
+  case IR_OP_CNST_TY_INT:
+    aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
+                              op->cnst.int_value);
+    break;
+  case IR_OP_CNST_TY_STR:
+    vector_push_back(state->strings, &op->cnst.str_value);
+
+    size_t str_pos = state->total_str_len;
+
+    ssize_t offset =
+        (ssize_t)str_pos - (ssize_t)aarch64_emit_bytesize(state->emitter);
+
+    aarch64_emit_adr(state->emitter, offset, get_reg_for_idx(reg));
+
+    state->total_str_len += strlen(op->cnst.str_value) + 1;
+    break;
+  }
+}
+
 static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   // we jump to the end of the block + skip this
   // instruction
@@ -577,7 +629,7 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
     aarch64_emit_store_pair_pre_index_64(
         state->emitter, STACK_PTR_REG, FRAME_PTR_REG, RET_PTR_REG, -lr_offset);
     break;
-  case AARCH64_OP_TY_SAVE_LR_ADD_64:
+  case AARCH64_OP_TY_SAVE_FP:
     // also save stack pointer into frame pointer as required by ABI
     // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
     // so `add x29, sp, #0` is used instead
@@ -643,32 +695,11 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_LOAD_LCL: {
-    size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-
-    if (is_64_bit(op)) {
-      aarch64_emit_load_offset_64(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_64(state, op->load_lcl.lcl));
-    } else {
-      aarch64_emit_load_offset_32(
-          state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-          get_lcl_stack_offset_32(state, op->load_lcl.lcl));
-    }
+    emit_load_lcl_op(state, op);
     break;
   }
   case IR_OP_TY_STORE_LCL: {
-    size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
-
-    if (is_64_bit(op->store_lcl.value) ||
-        (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
-      aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
-                                   get_reg_for_idx(reg),
-                                   get_lcl_stack_offset_64(state, op));
-    } else {
-      aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
-                                   get_reg_for_idx(reg),
-                                   get_lcl_stack_offset_32(state, op));
-    }
+    emit_store_lcl_op(state, op);
     break;
   }
   case IR_OP_TY_BR_COND: {
@@ -680,27 +711,7 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_CNST: {
-    size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-
-    switch (op->cnst.ty) {
-
-    case IR_OP_CNST_TY_INT:
-      aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
-                                op->cnst.int_value);
-      break;
-    case IR_OP_CNST_TY_STR:
-      vector_push_back(state->strings, &op->cnst.str_value);
-
-      size_t str_pos = state->total_str_len;
-
-      ssize_t offset =
-          (ssize_t)str_pos - (ssize_t)aarch64_emit_bytesize(state->emitter);
-
-      aarch64_emit_adr(state->emitter, offset, get_reg_for_idx(reg));
-
-      state->total_str_len += strlen(op->cnst.str_value) + 1;
-      break;
-    }
+    emit_cnst_op(state, op);
     break;
   }
   case IR_OP_TY_UNARY_OP: {
@@ -873,10 +884,9 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   size_t num_strings = vector_length(state.strings);
   for (size_t i = 0; i < num_strings; i++) {
     size_t idx = num_strings - 1 - i;
-    struct ir_string string =
-        *(struct ir_string *)vector_get(state.strings, idx);
+    const char *string = *(const char **)vector_get(state.strings, idx);
 
-    vector_push_back(string_vec, &string.data);
+    vector_push_back(string_vec, &string);
   }
 
   free_aarch64_emitter(&emitter);
