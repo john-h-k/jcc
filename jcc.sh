@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 
 build() {
     cd "$(dirname "$0")/build"
@@ -20,20 +20,15 @@ cfg() {
 
 format() {
     cd "$(dirname "$0")"
-    if [ $(git status --short | wc -l) != 0 ]; then
-        echo "cannot format when changes are present! commit/stash/discard first"
-        exit -1
-    fi
-
     echo "Formatting..."
     fd '.*\.[hc]' . -x clang-format -style=file -i
     cd -
 }
 
-invoke-subcommand() {
+_invoke-subcommand() {
     local base name func
 
-    base=$1
+    base=$0
 
     unset name
     if [ -z "${1}" ]; then
@@ -52,21 +47,24 @@ invoke-subcommand() {
             return $?
         fi
     elif [[ $name == "help" ]]; then
-        local func_names=(${(Mok)functions:#$base?*}) # don't match private _ lead functions
+        func_names=( $(compgen -A function ) )
+        func_names=("${func_names[@]/_*}")
 
         echo "Usage: ${base} <subcommand> [options]"
         echo "Subcommands:"
-        for func in $func_names; do
-            print "    - $base ${func#${base}-}"
+        for func in "${func_names[@]}"; do
+            if ! [[ -z "$func" ]]; then
+                echo "    - $base ${func#${base}-}"
+            fi
         done
     else
-        local matches=(${(Mok)functions:#$base-$name*})
+        matches=( $(compgen -A function | grep "^$name" ) )
 
-        if [[ ${#matches[@]} == 1 ]]; then
-            "${matches[1]}" "${@}"
-        elif [[ ${#matches[@]} > 1 ]]; then
+        if [ "${#matches[@]}" -eq "1" ]; then
+            "${matches[0]}" "${@}"
+        elif [ "${#matches[@]}" -gt "1" ]; then
             echo "'${name}' is ambiguous; did you mean one of the following?" >&2
-            for match in $matches; do
+            for match in "${matches[@]}"; do
                 echo "    - $base ${match#${base}-}" >&2
             done
             return 1
@@ -77,5 +75,5 @@ invoke-subcommand() {
     fi
 }
 
-invoke-subcommand "$@"
+_invoke-subcommand "$@"
 
