@@ -7,6 +7,7 @@
 #include "emitter.h"
 #include "isa.h"
 
+#include <mach/message.h>
 #include <stdio.h>
 
 #define WORD_SIZE (8)
@@ -35,6 +36,10 @@ struct emit_state {
   size_t total_str_len;
 
   size_t num_extra_stack_slots;
+
+  // the maximum number of variadics used in this function
+  // we offset all stack vars beneath this as it is easier than worrying about lcl lifetimes
+  size_t max_variadic_arg_idx;
 
   // registers that need to be reloaded
   unsigned long need_reload_registers;
@@ -98,9 +103,8 @@ static unsigned get_lcl_stack_offset_32(struct emit_state *state,
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  UNUSED_ARG(state);
   // HACK: eek we need to fix everything being 8 byte
-  return op->lcl->id * 2;
+  return ((state->max_variadic_arg_idx + 1) + op->lcl->id) * 2;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state,
@@ -110,8 +114,7 @@ static unsigned get_lcl_stack_offset_64(struct emit_state *state,
 
   // HACK: lots of custom instrs have type NONE but assume that means whole reg
   // (64 bit)
-  UNUSED_ARG(state);
-  return op->lcl->id;
+  return (state->max_variadic_arg_idx + 1) + op->lcl->id;
 }
 
 enum aarch64_relocation_ty {
@@ -761,6 +764,8 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
 }
 
 struct compiled_function aarch64_emit_function(struct ir_builder *func) {
+  size_t max_variadic_arg_idx = 0;
+
   // the first step of emitting is that we need to ensure the `function_offset`
   // values are correct for all BBs as they may have been broken during various
   // opt/transforming passes
@@ -775,6 +780,10 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
       while (stmt) {
         struct ir_op *op = stmt->first;
         while (op) {
+          if (op->ty == IR_OP_TY_CUSTOM && op->custom.aarch64->ty == AARCH64_OP_TY_STORE_VARIADIC) {
+            max_variadic_arg_idx = MAX(max_variadic_arg_idx, op->custom.aarch64->store_variadic.idx);
+          }
+
           opc++;
           op = op->succ;
         }
@@ -795,6 +804,7 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
                              .strings = vector_create(sizeof(const char *)),
                              .total_str_len = 0,
                              .num_extra_stack_slots = 0,
+                             .max_variadic_arg_idx = max_variadic_arg_idx,
                              .cur_op_state = {0}};
 
   struct ir_basicblock *basicblock = func->first;

@@ -27,14 +27,33 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   debug_assert(op->reg != REG_SPILLED, "can't spill already spilled op");
 
   op->reg = REG_SPILLED;
-  op->lcl = add_local(irb, &op->var_ty);
 
-  if (op->ty == IR_OP_TY_PHI) {
-    for (size_t i = 0; i < op->phi.num_values; i++) {
-      struct ir_op *value = op->phi.values[i];
+  if (op->ty != IR_OP_TY_PHI) {
+    op->lcl = add_local(irb, &op->var_ty);  
+    return;
+  }
 
-      value->lcl = op->lcl;
-    }    
+  
+  // if phi is spilled, first ensure it doesn't already have a local via one of its values
+  // then, once spilled, propogate its local to all of its dependents
+  struct ir_lcl *lcl = NULL;
+  for (size_t i = 0; i < op->phi.num_values; i++) {
+    struct ir_op *value = op->phi.values[i];
+
+    if (value->lcl) {
+      lcl = value->lcl;
+    }
+  }
+
+  if (!lcl) {
+    lcl = add_local(irb, &op->var_ty);  
+  }    
+
+  op->lcl = lcl;
+  for (size_t i = 0; i < op->phi.num_values; i++) {
+    struct ir_op *value = op->phi.values[i];
+
+    value->lcl = lcl;
   }
 }
 
