@@ -135,9 +135,6 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
     debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
                  __func__);
     if (op_needs_reg(data->consumer)) {
-      // FIXME: proper local sizes
-      // data->irb->total_locals_size += var_ty_size(data->irb, &(*op)->var_ty);
-
       struct ir_op *load;
       if (data->consumer->ty == IR_OP_TY_PHI) {
         load = replace_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,

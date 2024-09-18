@@ -55,6 +55,16 @@ struct ast_ty_array {
   };
 };
 
+struct ast_struct_field {
+  const char *name;
+  struct ast_tyref *var_ty;
+};
+
+struct ast_ty_struct {
+  struct ast_struct_field *field_var_tys;
+  size_t num_field_var_tys;
+};
+
 struct ast_ty_func {
   struct ast_tyref *ret_var_ty;
   struct ast_tyref *param_var_tys;
@@ -71,8 +81,8 @@ enum ast_tyref_ty {
   AST_TYREF_TY_POINTER,
   AST_TYREF_TY_ARRAY,
   AST_TYREF_TY_VARIADIC,
+  AST_TYREF_TY_STRUCT,
   // AST_TYREF_TY_TYPEDEF_NAME,
-  // AST_TYREF_TY_STRUCT,
   // AST_TYREF_TY_UNION,
   // AST_TYREF_TY_ENUM,
 };
@@ -108,6 +118,7 @@ struct ast_tyref {
     struct ast_ty_pointer pointer;
     struct ast_ty_array array;
     struct ast_ty_func func;
+    struct ast_ty_struct structure;
   };
 };
 
@@ -293,6 +304,11 @@ struct ast_arrayaccess {
   struct ast_expr *rhs;
 };
 
+struct ast_memberaccess {
+  struct ast_expr *lhs;
+  struct token member;
+};
+
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
@@ -319,6 +335,7 @@ struct ast_expr {
     struct ast_assg assg;
     struct ast_call call;
     struct ast_arrayaccess array_access;
+    struct ast_memberaccess member_access;
     struct ast_initlist init_list;
   };
 };
@@ -473,7 +490,29 @@ struct ast_stmt {
   };
 };
 
-/* Enum definitions and declarations */
+/* Struct definitions and declarations */
+struct ast_field {
+  struct ast_tyref var_ty;
+  struct token identifier;
+};
+
+struct ast_fieldlist {
+  size_t num_fields;
+  struct ast_field *fields;
+};
+
+struct ast_structdecl {
+  struct token name;
+};
+
+struct ast_structdef {
+  struct token name;
+
+  size_t num_field_lists;
+  struct ast_fieldlist *field_lists;
+};
+
+/* Enum definitions */
 
 enum ast_enumcnst_ty {
   AST_ENUMCNST_TY_EXPLICIT_VALUE,
@@ -511,8 +550,11 @@ struct ast_funcdecl {
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  // struct ast_var *globals;
-  // size_t num_globals;
+  struct ast_structdef *struct_defs;
+  size_t num_struct_defs;
+
+  struct ast_structdecl *struct_decls;
+  size_t num_struct_decls;
 
   struct ast_funcdef *func_defs;
   size_t num_func_defs;

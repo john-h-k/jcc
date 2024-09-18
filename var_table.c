@@ -111,6 +111,6 @@ struct var_table_entry *get_entry(struct var_table *var_table,
     scope = scope->prev;
   }
 
-  trace("did not find entry");
+  trace("did not find entry for %s", name);
   return NULL;
 }
