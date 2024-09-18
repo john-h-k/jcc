@@ -1,6 +1,5 @@
 // expected value: 25
 
-struct foo;
 struct foo {
   int a, b;
   char *c;
