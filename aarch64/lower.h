@@ -9,4 +9,7 @@ void aarch64_pre_reg_lower(struct ir_builder *func);
 // does final stack bits
 void aarch64_post_reg_lower(struct ir_builder *func);
 
+void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
+                                      const struct ir_op *op);
+
 #endif

@@ -1,4 +1,5 @@
 #include "aarch64.h"
+#include "aarch64/lower.h"
 
 const struct target AARCH64_TARGET = {
     // x0..x30 excluding x18
@@ -11,4 +12,6 @@ const struct target AARCH64_TARGET = {
     aarch64_post_reg_lower,
     aarch64_emit_function,
     write_macho,
-    objdump_debug_disasm};
+    objdump_debug_disasm,
+    aarch64_debug_print_custom_ir_op
+};

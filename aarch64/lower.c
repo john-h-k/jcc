@@ -8,6 +8,46 @@
 
 #include <math.h>
 
+void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
+                                      const struct ir_op *op) {
+  debug_assert(op->ty == IR_OP_TY_CUSTOM, "non custom-op");
+
+  struct aarch64_op *custom = op->custom.aarch64;
+
+  switch (custom->ty) {
+  case AARCH64_OP_TY_SAVE_LR:
+    fprintf(file, "a64_save_lr");
+    break;
+  case AARCH64_OP_TY_SAVE_LR_ADD_64:
+    fprintf(file, "a64_save_lr_add_64");
+    break;
+  case AARCH64_OP_TY_RSTR_LR:
+    fprintf(file, "a64_rstr_lr");
+    break;
+  case AARCH64_OP_TY_SUB_STACK:
+    fprintf(file, "a64_sub_stack #%zu", func->total_locals_size);
+    break;
+  case AARCH64_OP_TY_ADD_STACK:
+    fprintf(file, "a64_add_stack #%zu", func->total_locals_size);
+    break;
+  case AARCH64_OP_TY_SAVE_REG:
+    fprintf(file, "a64_save_reg R%zu", op->reg);
+    break;
+  case AARCH64_OP_TY_RSTR_REG:
+    fprintf(file, "a64_rstr_reg R%zu", op->reg);
+    break;
+  case AARCH64_OP_TY_PAGE:
+    fprintf(file, "a64_page %%%zu", custom->page.glb_ref->id);
+    break;
+  case AARCH64_OP_TY_PAGE_OFF:
+    fprintf(file, "a64_page_off %%%zu", custom->page_off.glb_ref->id);
+    break;
+  case AARCH64_OP_TY_STORE_VARIADIC:
+    fprintf(file, "a64_store_variadic #%zu, %%%zu", custom->store_variadic.idx, custom->store_variadic.value->id);
+    break;
+  }
+}
+
 // as we add a bunch of new nodes around, `live_regs` can get lost
 // we early preserve it in this metadata for use in `lower_call`
 struct ir_lower_call_metadata {
@@ -152,12 +192,9 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
         store->custom.aarch64 =
             arena_alloc(func->arena, sizeof(*store->custom.aarch64));
         *store->custom.aarch64 = (struct aarch64_op){
-          .ty = AARCH64_OP_TY_STORE_VARIADIC,
-          .store_variadic = (struct aarch64_store_variadic){
-              .value = source,
-              .idx = variadic_arg_idx
-          }
-        };
+            .ty = AARCH64_OP_TY_STORE_VARIADIC,
+            .store_variadic = (struct aarch64_store_variadic){
+                .value = source, .idx = variadic_arg_idx}};
 
         store->flags |= IR_OP_FLAG_VARIADIC_PARAM;
       } else if (i == 0 || op->call.args[i]->reg != arg_reg) {

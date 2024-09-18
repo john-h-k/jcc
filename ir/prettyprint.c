@@ -184,8 +184,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   switch (ir->ty) {
   case IR_OP_TY_CUSTOM:
     debug_lhs(file, ir);
-    fprintf(file, "CUSTOM");
-    // TODO: print customs
+    irb->debug_print_custom_ir_op(file, irb, ir);
     break;
   case IR_OP_TY_GLB_REF:
     debug_lhs(file, ir);
