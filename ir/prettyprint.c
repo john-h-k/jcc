@@ -78,7 +78,7 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
+void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");
@@ -90,13 +90,13 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
   }
   case IR_OP_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
-    debug_var_ty_string(file, var_ty->pointer.underlying);
+    debug_var_ty_string(file, irb, var_ty->pointer.underlying);
     fprintf(file, " ]");
     return;
   }
   case IR_OP_VAR_TY_TY_ARRAY: {
-    fprintf(file, "PTR [ ");
-    debug_var_ty_string(file, var_ty->array.underlying);
+    fprintf(file, "ARRAY [ ");
+    debug_var_ty_string(file, irb, var_ty->array.underlying);
     fprintf(file, ", ");
     fprintf(file, "%zu", var_ty->array.num_elements);
     fprintf(file, " ]");
@@ -106,15 +106,28 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
     // FIXME: buffer vuln
     fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
-      debug_var_ty_string(file, &var_ty->func.params[i]);
+      debug_var_ty_string(file, irb, &var_ty->func.params[i]);
       if (i + 1 < var_ty->func.num_params) {
         fprintf(file, ", ");
       }
     }
     fprintf(file, ")");
     fprintf(file, " -> ");
-    debug_var_ty_string(file, var_ty->func.ret_ty);
+    debug_var_ty_string(file, irb, var_ty->func.ret_ty);
     return;
+  }
+  case IR_OP_VAR_TY_TY_STRUCT: {
+    struct ir_var_ty_info info = var_ty_info(irb, var_ty);
+    fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
+    for (size_t i = 0; i < var_ty->structure.num_fields; i++) {
+      debug_var_ty_string(file, irb, &var_ty->structure.fields[i]);
+
+      if (i + 1 < var_ty->structure.num_fields) {
+        fprintf(file, ", ");
+      }
+    }
+    fprintf(file, " ]");
+    break;
   }
   case IR_OP_VAR_TY_TY_PRIMITIVE: {
     const char *name;
@@ -176,9 +189,9 @@ void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   }
 }
 
-void debug_lhs(FILE *file, struct ir_op *ir) {
+void debug_lhs(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
-  debug_var_ty_string(file, &ir->var_ty);
+  debug_var_ty_string(file, irb, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
@@ -189,15 +202,15 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   case IR_OP_TY_UNKNOWN:
     bug("unknown op!");
   case IR_OP_TY_UNDF:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "UNDF");
     break;
   case IR_OP_TY_CUSTOM:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     irb->debug_print_custom_ir_op(file, irb, ir);
     break;
   case IR_OP_TY_GLB_REF:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     switch (ir->glb_ref.ty) {
     case IR_OP_GLB_REF_TY_STR:
       fprintf(file, "GLOBAL_STR ( %s )", ir->glb_ref.string->data);
@@ -209,7 +222,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     // don't print anything for global - let the op consuming it print instead
     break;
   case IR_OP_TY_CALL: {
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "call ");
 
     debug_call_target_string(file, ir->call.target);
@@ -219,13 +232,13 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   }
   case IR_OP_TY_PHI:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "phi [ ");
     debug_phi_string(file, &ir->phi);
     fprintf(file, " ]");
     break;
   case IR_OP_TY_MOV:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
       fprintf(file, " - (R%zu -> R%zu) ", ir->mov.value->reg, ir->reg);
@@ -234,7 +247,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_CNST:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     switch (ir->cnst.ty) {
     case IR_OP_CNST_TY_INT:
       fprintf(file, "%llu", ir->cnst.int_value);
@@ -245,32 +258,32 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_BINARY_OP:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
 
     fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
             binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
     break;
   case IR_OP_TY_UNARY_OP:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "%s %%%zu", unary_op_string(ir->unary_op.ty),
             ir->unary_op.value->id);
     break;
   case IR_OP_TY_CAST_OP:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "%s %%%zu", cast_op_string(ir->cast_op.ty),
             ir->cast_op.value->id);
     break;
   case IR_OP_TY_STORE_ADDR:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "storeaddr [%%%zu], %%%zu", ir->store_addr.addr->id,
             ir->store_addr.value->id);
     break;
   case IR_OP_TY_LOAD_ADDR:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     fprintf(file, "loadaddr [%%%zu]", ir->load_addr.addr->id);
     break;
   case IR_OP_TY_ADDR:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
       fprintf(file, "addr LCL(%zu)", ir->addr.lcl->id);
@@ -278,7 +291,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_STORE_LCL:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     if (ir->load_lcl.lcl) {
       fprintf(file, "storelcl LCL(%zu), %%%zu", ir->lcl->id,
               ir->store_lcl.value->id);
@@ -287,7 +300,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_LOAD_LCL:
-    debug_lhs(file, ir);
+    debug_lhs(file, irb, ir);
     if (ir->lcl) {
       fprintf(file, "loadlcl LCL(%zu, %%%zu)", ir->lcl->id,
               ir->load_lcl.lcl->id);

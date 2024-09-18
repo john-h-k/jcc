@@ -189,14 +189,13 @@ enum ir_op_var_ty_ty {
 
   IR_OP_VAR_TY_TY_POINTER,
 
-  IR_OP_VAR_TY_TY_ARRAY,
-
-  IR_OP_VAR_TY_TY_VARIADIC,
-
   /* Aggregate */
-  // IR_OP_VAR_TY_TY_AGGREGATE,
-  // IR_OP_VAR_TY_TY_ARRAY,
+  IR_OP_VAR_TY_TY_ARRAY,
+  IR_OP_VAR_TY_TY_STRUCT,
   // IR_OP_VAR_TY_TY_UNION,
+
+  /* Variadic */
+  IR_OP_VAR_TY_TY_VARIADIC,
 };
 
 struct ir_op_var_func_ty {
@@ -206,6 +205,11 @@ struct ir_op_var_func_ty {
 };
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);
+
+struct ir_op_var_struct_ty {
+  size_t num_fields;
+  struct ir_op_var_ty *fields;
+};
 
 struct ir_op_var_array_ty {
   struct ir_op_var_ty *underlying;
@@ -226,6 +230,7 @@ struct ir_op_var_ty {
     struct ir_op_var_func_ty func;
     struct ir_op_var_pointer_ty pointer;
     struct ir_op_var_array_ty array;
+    struct ir_op_var_struct_ty structure; // `struct` is reserved
   };
 };
 
@@ -575,7 +580,15 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_op_var_ty var_ty);
 
-size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty);
+struct ir_var_ty_info {
+  size_t size;
+  size_t alignment;
+
+  size_t num_fields;
+  size_t *offsets;
+};
+
+struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty);
 
 void spill_op(struct ir_builder *irb, struct ir_op *op);
 

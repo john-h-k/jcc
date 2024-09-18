@@ -826,10 +826,10 @@ struct ir_lcl *add_local(struct ir_builder *irb,
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
-  size_t lcl_size = var_ty_size(irb, var_ty);
+  struct ir_var_ty_info ty_info = var_ty_info(irb, var_ty);
   // HACK: offset in general sucks we need to build a proper stack manager
   // round up to 8 so that we don't worry about alignment
-  lcl_size = ROUND_UP(lcl_size, 8);
+  size_t lcl_size = ROUND_UP(ty_info.size, 8);
 
   lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
@@ -893,7 +893,7 @@ void make_string_ref(struct ir_builder *irb, const char *string,
   irb->global_refs = glb_ref;
 }
 
-size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
+struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
   // FIXME: pointer size!
   UNUSED_ARG(irb);
 
@@ -905,18 +905,38 @@ size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
   case IR_OP_VAR_TY_TY_FUNC:
   case IR_OP_VAR_TY_TY_ARRAY:
   case IR_OP_VAR_TY_TY_POINTER:
-    return 8;
+    return (struct ir_var_ty_info){.size = 8, .alignment = 8};
   case IR_OP_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
-      return 1;
+      return (struct ir_var_ty_info){.size = 1, .alignment = 1};
     case IR_OP_VAR_PRIMITIVE_TY_I16:
-      return 2;
+      return (struct ir_var_ty_info){.size = 2, .alignment = 2};
     case IR_OP_VAR_PRIMITIVE_TY_I32:
-      return 4;
+      return (struct ir_var_ty_info){.size = 4, .alignment = 4};
     case IR_OP_VAR_PRIMITIVE_TY_I64:
-      return 8;
+    return (struct ir_var_ty_info){.size = 8, .alignment = 8};
     }
+  case IR_OP_VAR_TY_TY_STRUCT: {
+    size_t max_alignment = 0;
+    size_t size = 0;
+    size_t num_fields = ty->structure.num_fields;
+    size_t *offsets = arena_alloc(irb->arena, sizeof(*offsets) * num_fields);
+
+    for (size_t i = 0; i < ty->structure.num_fields; i++) {
+      struct ir_op_var_ty *field = &ty->structure.fields[i];
+      struct ir_var_ty_info info = var_ty_info(irb, field);
+      max_alignment = MAX(max_alignment, info.alignment);
+
+      size = ROUND_UP(size, info.alignment);
+
+      offsets[i] = size;
+
+      size += info.size;
+    }
+
+    return (struct ir_var_ty_info){.size = size, .alignment = max_alignment, .num_fields = num_fields, .offsets = offsets};
+  }
   }
 }
 
@@ -933,14 +953,17 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   if (op->ty != IR_OP_TY_PHI) {
     op->lcl = add_local(irb, &op->var_ty);   
 
-    struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
-                                             IR_OP_VAR_TY_NONE);
-    store->lcl = op->lcl;
-    store->store_lcl.value = op;
-    store->reg = NO_REG;
-    store->flags |= IR_OP_FLAG_SPILL;
+    if ( op->ty != IR_OP_TY_UNDF) {
+      // storing undf makes no sense
+      struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
+                                               IR_OP_VAR_TY_NONE);
+      store->lcl = op->lcl;
+      store->store_lcl.value = op;
+      store->reg = NO_REG;
+      store->flags |= IR_OP_FLAG_SPILL;
 
-    op->lcl->store = store;
+      op->lcl->store = store;
+    }
 
     return;
   }
