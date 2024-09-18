@@ -89,8 +89,6 @@ static bool is_64_bit(const struct ir_op *op) {
          op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
-// TODO: sep methods no longer needed
-
 static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
                                               const struct ir_op *op) {
   UNUSED_ARG(state);

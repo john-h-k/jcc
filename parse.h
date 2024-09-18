@@ -155,8 +155,6 @@ struct ast_funcsig {
   struct ast_tyref var_ty;
   struct token name;
   struct ast_paramlist param_list;
-
-  // TODO: args
 };
 
 /* Constant values (literals) */
