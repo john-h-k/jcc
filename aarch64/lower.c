@@ -72,14 +72,6 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
 
   size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
 
-  unsigned caller_saves = popcntl(live_volatile);
-  unsigned new_slots = caller_saves > func->num_call_saves
-                           ? caller_saves - func->num_call_saves
-                           : 0;
-
-  // TODO: we assume all saves are 8 bytes
-  func->total_call_saves_size += 8 * new_slots;
-
   for (size_t i = 0; i < max_volatile; i++) {
     if (!NTH_BIT(live_volatile, i) || i == op->reg) {
       // if not a live-volatile register or the register used by the actual

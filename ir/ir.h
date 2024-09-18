@@ -451,13 +451,6 @@ struct ir_builder {
   // number of stack local variables
   size_t total_locals_size;
 
-  // stack spaces from this can be reused, so we store them here
-  // `num_locals` is still always correct, these fields are used by `lower.c`
-  // to determine whether new locals need to be added or there are enough
-  // already
-  size_t num_call_saves;
-  size_t total_call_saves_size;
-
   // used during emitting
   size_t offset;
 };
