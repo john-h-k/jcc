@@ -7,7 +7,11 @@
 #include <stdlib.h>
 
 enum ir_op_ty {
+  IR_OP_TY_UNKNOWN,
+
   IR_OP_TY_PHI,
+
+  IR_OP_TY_UNDF,
 
   // only used late in the pipeline for eliminating phi nodes
   IR_OP_TY_MOV,
@@ -20,6 +24,11 @@ enum ir_op_ty {
 
   IR_OP_TY_STORE_LCL,
   IR_OP_TY_LOAD_LCL,
+
+  IR_OP_TY_STORE_ADDR,
+  IR_OP_TY_LOAD_ADDR,
+
+  IR_OP_TY_ADDR,
 
   // represents a global variable or function
   IR_OP_TY_GLB_REF,
@@ -110,8 +119,6 @@ enum ir_op_unary_op_ty {
   IR_OP_UNARY_OP_TY_NEG,
   IR_OP_UNARY_OP_TY_LOGICAL_NOT,
   IR_OP_UNARY_OP_TY_NOT,
-  IR_OP_UNARY_OP_TY_DEREF,
-  IR_OP_UNARY_OP_TY_ADDRESSOF,
 };
 
 struct ir_op_unary_op {
@@ -182,6 +189,8 @@ enum ir_op_var_ty_ty {
 
   IR_OP_VAR_TY_TY_POINTER,
 
+  IR_OP_VAR_TY_TY_ARRAY,
+
   IR_OP_VAR_TY_TY_VARIADIC,
 
   /* Aggregate */
@@ -198,6 +207,21 @@ struct ir_op_var_func_ty {
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);
 
+enum ir_op_var_array_ty_ty {
+  IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN,
+  IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN,
+};
+
+struct ir_op_var_array_ty {
+  enum ir_op_var_array_ty_ty ty;
+
+  struct ir_op_var_ty *underlying;
+
+  union {
+    size_t num_elements;
+  };
+};
+
 struct ir_op_var_pointer_ty {
   struct ir_op_var_ty *underlying;
 };
@@ -208,6 +232,7 @@ struct ir_op_var_ty {
     enum ir_op_var_primitive_ty primitive;
     struct ir_op_var_func_ty func;
     struct ir_op_var_pointer_ty pointer;
+    struct ir_op_var_array_ty array;
   };
 };
 
@@ -220,6 +245,27 @@ struct ir_op_store_lcl {
 
 struct ir_op_load_lcl {
   struct ir_op *lcl;
+};
+
+struct ir_op_store_addr {
+  struct ir_op *value;
+  struct ir_op *addr;
+};
+
+struct ir_op_load_addr {
+  struct ir_op *addr;
+};
+
+enum ir_op_addr_ty {
+  IR_OP_ADDR_TY_LCL
+};
+
+struct ir_op_addr {
+  enum ir_op_addr_ty ty;
+
+  union {
+    struct ir_lcl *lcl;
+  };
 };
 
 struct ir_op_br_cond {
@@ -279,6 +325,9 @@ struct ir_op {
     struct ir_op_ret ret;
     struct ir_op_store_lcl store_lcl;
     struct ir_op_load_lcl load_lcl;
+    struct ir_op_store_addr store_addr;
+    struct ir_op_load_addr load_addr;
+    struct ir_op_addr addr;
     struct ir_op_br_cond br_cond;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
      * condition */
@@ -352,10 +401,6 @@ struct ir_basicblock_split {
 struct ir_basicblock {
   size_t id;
 
-  // `value` contains a `struct vector *` containing the last op(s) that wrote
-  // to this variable or NULL if it is not yet written to
-  struct var_refs *var_refs;
-
   // a NULL irb means a pruned basicblock
   struct ir_builder *irb;
 
@@ -400,6 +445,9 @@ struct ir_string {
 struct ir_lcl {
   size_t id;
 
+  // HACK: this sucks, stores the current offset of the local but means they cannot be compacted
+  size_t offset;
+
   struct ir_lcl *pred;
   struct ir_lcl *succ;
 
@@ -416,6 +464,7 @@ typedef void (*debug_print_custom_ir_op)(FILE *file,
 struct ir_builder {
   const char *name;
 
+  struct var_refs *var_refs;
   struct var_refs *global_var_refs;
 
   struct ir_op_var_func_ty func_ty;
@@ -534,5 +583,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
                                  struct ir_op_var_ty var_ty);
 
 size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty);
+
+void spill_op(struct ir_builder *irb, struct ir_op *op);
 
 #endif

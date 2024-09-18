@@ -40,7 +40,7 @@ struct emit_state {
   // the maximum number of variadics used in this function
   // we offset all stack vars beneath this as it is easier than worrying about
   // lcl lifetimes
-  size_t max_variadic_arg_idx;
+  size_t max_variadic_args;
 
   // registers that need to be reloaded
   unsigned long need_reload_registers;
@@ -82,10 +82,10 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
 
 static bool is_64_bit(const struct ir_op *op) {
   invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                       op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER,
-                   "non-primitive/pointer passed to `is_64_bit`");
+                       op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY,
+                   "non-primitive/pointer/array passed to `is_64_bit`");
 
-  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
+  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY ||
          op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
 }
 
@@ -98,21 +98,21 @@ static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
 }
 
 static unsigned get_lcl_stack_offset(struct emit_state *state,
-                                        const struct ir_op *op) {
+                                        const struct ir_lcl *lcl) {
   // FIXME: wrongly assumes everything is 8 byte
-  return ((state->max_variadic_arg_idx + 1) + op->lcl->id) * 8;
+  return state->max_variadic_args * 8 + lcl->offset;
 }
 
 static unsigned get_lcl_stack_offset_32(struct emit_state *state,
-                                        const struct ir_op *op) {
-  unsigned abs_offset = get_lcl_stack_offset(state, op);
+                                        const struct ir_lcl *lcl) {
+  unsigned abs_offset = get_lcl_stack_offset(state, lcl);
   debug_assert(abs_offset % 4 == 0, "stack offset not divisible by 4");
   return abs_offset / 4;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state,
-                                        const struct ir_op *op) {
-  unsigned abs_offset = get_lcl_stack_offset(state, op);
+                                        const struct ir_lcl *lcl) {
+  unsigned abs_offset = get_lcl_stack_offset(state, lcl);
   debug_assert(abs_offset % 8 == 0, "stack offset not divisible by 8");
   return abs_offset / 8;
 }
@@ -229,6 +229,75 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
 #undef SEL_32_OR_64_BIT_OP
 }
 
+static void emit_load_addr_op(struct emit_state *state, struct ir_op *op) {
+  size_t dest = op->reg;
+  struct ir_op *target = op->load_addr.addr;
+
+  if (target->lcl) {
+    if (is_64_bit(target)) {
+      size_t offset = get_lcl_stack_offset_64(state, target->lcl);
+      aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
+                                  get_reg_for_idx(dest), offset);
+    } else {
+      size_t offset = get_lcl_stack_offset_32(state, target->lcl);
+      aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
+                                  get_reg_for_idx(dest), offset);
+    }
+  } else {
+    if (is_64_bit(target)) {
+      aarch64_emit_load_offset_64(state->emitter,
+                                  get_reg_for_idx(target->reg),
+                                  get_reg_for_idx(dest), 0);
+    } else {
+      aarch64_emit_load_offset_32(state->emitter,
+                                  get_reg_for_idx(target->reg),
+                                  get_reg_for_idx(dest), 0);
+    }
+  }
+}
+
+static void emit_addr_op(struct emit_state *state, struct ir_op *op) {
+  size_t dest = op->reg;
+
+  switch (op->addr.ty) {
+  case IR_OP_ADDR_TY_LCL: {
+    struct ir_lcl *lcl = op->addr.lcl;
+    size_t offset = get_lcl_stack_offset(state, lcl);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset,
+                            get_reg_for_idx(dest));
+    break;
+  }
+  }
+}
+
+static void emit_store_addr_op(struct emit_state *state, struct ir_op *op) {
+  struct ir_op *value = op->store_addr.value;
+  struct ir_op *target = op->store_addr.addr;
+  size_t source = value->reg;
+
+  if (target->lcl) {
+    if (is_64_bit(target)) {
+      size_t offset = get_lcl_stack_offset_64(state, target->lcl);
+      aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
+                                  get_reg_for_idx(source), offset);
+    } else {
+      size_t offset = get_lcl_stack_offset_32(state, target->lcl);
+      aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
+                                  get_reg_for_idx(source), offset);
+    }
+  } else {
+    if (is_64_bit(target)) {
+      aarch64_emit_store_offset_64(state->emitter,
+                                  get_reg_for_idx(target->reg),
+                                  get_reg_for_idx(source), 0);
+    } else {
+      aarch64_emit_store_offset_32(state->emitter,
+                                  get_reg_for_idx(target->reg),
+                                  get_reg_for_idx(source), 0);
+    }
+  }
+}
+
 static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func)                                              \
   do {                                                                         \
@@ -260,39 +329,6 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_UNARY_OP_TY_NOT:
     SEL_32_OR_64_BIT_OP(aarch64_emit_movn);
     break;
-  case IR_OP_UNARY_OP_TY_DEREF: {
-    struct ir_op *target = op->unary_op.value;
-
-    if (target->lcl) {
-      if (is_64_bit(target)) {
-        size_t offset = get_lcl_stack_offset_64(state, target);
-        aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
-                                    get_reg_for_idx(dest), offset);
-      } else {
-        size_t offset = get_lcl_stack_offset_32(state, target);
-        aarch64_emit_load_offset_32(state->emitter, STACK_PTR_REG,
-                                    get_reg_for_idx(dest), offset);
-      }
-    } else {
-      if (is_64_bit(target)) {
-        aarch64_emit_load_offset_64(state->emitter,
-                                    get_reg_for_idx(target->reg),
-                                    get_reg_for_idx(dest), 0);
-      } else {
-        aarch64_emit_load_offset_32(state->emitter,
-                                    get_reg_for_idx(target->reg),
-                                    get_reg_for_idx(dest), 0);
-      }
-    }
-    break;
-  }
-  case IR_OP_UNARY_OP_TY_ADDRESSOF: {
-    struct ir_op *target = op->unary_op.value;
-    size_t offset = get_lcl_stack_offset(state, target);
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset,
-                            get_reg_for_idx(dest));
-    break;
-  }
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
     bug("logical not should never reach emitter, should be converted in lower");
   }
@@ -544,11 +580,11 @@ static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
   if (is_64_bit(op)) {
     aarch64_emit_load_offset_64(
         state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-        get_lcl_stack_offset_64(state, op->load_lcl.lcl));
+        get_lcl_stack_offset_64(state, op->load_lcl.lcl->lcl));
   } else {
     aarch64_emit_load_offset_32(
         state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-        get_lcl_stack_offset_32(state, op->load_lcl.lcl));
+        get_lcl_stack_offset_32(state, op->load_lcl.lcl->lcl));
   }
 }
 
@@ -559,11 +595,11 @@ static void emit_store_lcl_op(struct emit_state *state, struct ir_op *op) {
       (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(reg),
-                                 get_lcl_stack_offset_64(state, op));
+                                 get_lcl_stack_offset_64(state, op->lcl));
   } else {
     aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(reg),
-                                 get_lcl_stack_offset_32(state, op));
+                                 get_lcl_stack_offset_32(state, op->lcl));
   }
 }
 
@@ -650,12 +686,12 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
   case AARCH64_OP_TY_SAVE_REG:
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(op->reg),
-                                 get_lcl_stack_offset_64(state, op));
+                                 get_lcl_stack_offset_64(state, op->lcl));
     break;
   case AARCH64_OP_TY_RSTR_REG:
     aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
                                 get_reg_for_idx(op->reg),
-                                get_lcl_stack_offset_64(state, op));
+                                get_lcl_stack_offset_64(state, op->lcl));
     break;
   case AARCH64_OP_TY_PAGE:
     emit_page(state, op);
@@ -672,6 +708,10 @@ static void emit_custom(struct emit_state *state, struct ir_op *op) {
 static void emit_op(struct emit_state *state, struct ir_op *op) {
   trace("lowering op with id %d, type %d", op->id, op->ty);
   switch (op->ty) {
+  case IR_OP_TY_UNDF: {
+    aarch64_emit_nop(state->emitter);
+    break;
+  }
   case IR_OP_TY_CUSTOM: {
     emit_custom(state, op);
     break;
@@ -701,6 +741,19 @@ static void emit_op(struct emit_state *state, struct ir_op *op) {
     emit_store_lcl_op(state, op);
     break;
   }
+  case IR_OP_TY_LOAD_ADDR: {
+    emit_load_addr_op(state, op);
+    break;
+  }
+  case IR_OP_TY_STORE_ADDR: {
+    emit_store_addr_op(state, op);
+    break;
+  }
+  case IR_OP_TY_ADDR: {
+    emit_addr_op(state, op);
+    break;
+  }
+
   case IR_OP_TY_BR_COND: {
     emit_br_cond_op(state, op);
     break;
@@ -766,7 +819,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
 }
 
 struct compiled_function aarch64_emit_function(struct ir_builder *func) {
-  size_t max_variadic_arg_idx = 0;
+  size_t max_variadic_args = 0;
 
   // the first step of emitting is that we need to ensure the `function_offset`
   // values are correct for all BBs as they may have been broken during various
@@ -784,8 +837,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
         while (op) {
           if (op->ty == IR_OP_TY_CUSTOM &&
               op->custom.aarch64->ty == AARCH64_OP_TY_STORE_VARIADIC) {
-            max_variadic_arg_idx = MAX(max_variadic_arg_idx,
-                                       op->custom.aarch64->store_variadic.idx);
+            max_variadic_args = MAX(max_variadic_args,
+                                       op->custom.aarch64->store_variadic.idx + 1);
           }
 
           opc++;
@@ -808,7 +861,7 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
                              .strings = vector_create(sizeof(const char *)),
                              .total_str_len = 0,
                              .num_extra_stack_slots = 0,
-                             .max_variadic_arg_idx = max_variadic_arg_idx,
+                             .max_variadic_args = max_variadic_args,
                              .cur_op_state = {0}};
 
   struct ir_basicblock *basicblock = func->first;

@@ -357,12 +357,18 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
+        case IR_OP_TY_UNKNOWN:
+          bug("unknown op!");
+        case IR_OP_TY_UNDF:
         case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
         case IR_OP_TY_CNST:
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
+        case IR_OP_TY_STORE_ADDR:
+        case IR_OP_TY_LOAD_ADDR:
+        case IR_OP_TY_ADDR:
         case IR_OP_TY_BR:
         case IR_OP_TY_MOV:
         case IR_OP_TY_RET:
@@ -569,8 +575,14 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
       while (op) {
         switch (op->ty) {
+        case IR_OP_TY_UNKNOWN:
+          bug("unknown op!");
+        case IR_OP_TY_UNDF:
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
+        case IR_OP_TY_STORE_ADDR:
+        case IR_OP_TY_LOAD_ADDR:
+        case IR_OP_TY_ADDR:
         case IR_OP_TY_BR:
         case IR_OP_TY_MOV:
         case IR_OP_TY_UNARY_OP:

@@ -39,6 +39,22 @@ struct ast_ty_pointer {
   struct ast_tyref *underlying;
 };
 
+
+enum ast_ty_array_ty {
+  AST_TY_ARRAY_TY_UNKNOWN_SIZE,
+  AST_TY_ARRAY_TY_KNOWN_SIZE,
+};
+
+struct ast_ty_array {
+  enum ast_ty_array_ty ty;
+
+  struct ast_tyref *element;
+
+  union {
+    size_t size;
+  };
+};
+
 struct ast_ty_func {
   struct ast_tyref *ret_var_ty;
   struct ast_tyref *param_var_tys;
@@ -53,6 +69,7 @@ enum ast_tyref_ty {
   AST_TYREF_TY_WELL_KNOWN,
   AST_TYREF_TY_FUNC,
   AST_TYREF_TY_POINTER,
+  AST_TYREF_TY_ARRAY,
   AST_TYREF_TY_VARIADIC,
   // AST_TYREF_TY_TYPEDEF_NAME,
   // AST_TYREF_TY_STRUCT,
@@ -60,12 +77,16 @@ enum ast_tyref_ty {
   // AST_TYREF_TY_ENUM,
 };
 
+// enum ast_type_storage_class_flags {
+//   AST_TYPE_STORAGE_CLASS_FLAG_NONE = 0,
+//   AST_TYPE_STORAGE_CLASS_FLAG_CONST = 1,
+//   AST_TYPE_STORAGE_CLASS_FLAG_VOLATILE = 2,
+// };
+
 enum ast_type_qualifier_flags {
   AST_TYPE_QUALIFIER_FLAG_NONE = 0,
   AST_TYPE_QUALIFIER_FLAG_CONST = 1,
   AST_TYPE_QUALIFIER_FLAG_VOLATILE = 2,
-
-  AST_TYPE_QUALIFIER_FLAG_MAX = 4,
 };
 
 // enum ast_type_specifiers_flags {
@@ -85,6 +106,7 @@ struct ast_tyref {
   union {
     enum well_known_ty well_known;
     struct ast_ty_pointer pointer;
+    struct ast_ty_array array;
     struct ast_ty_func func;
   };
 };
@@ -211,6 +233,11 @@ struct ast_compoundexpr {
 /* atom - expression which is entirely isolated and not affected by other
  * operators in how it is parsed */
 
+struct ast_initlist {
+  struct ast_expr *exprs;
+  size_t num_exprs;
+};
+
 enum ast_atom_ty {
   AST_ATOM_TY_VAR,
   AST_ATOM_TY_CNST,
@@ -260,6 +287,8 @@ struct ast_assg {
 };
 
 struct ast_arrayaccess {
+  // The lhs will always be an array/pointer type
+  // rhs may be integral type
   struct ast_expr *lhs;
   struct ast_expr *rhs;
 };
@@ -275,6 +304,7 @@ enum ast_expr_ty {
   AST_EXPR_TY_ARRAYACCESS,
   AST_EXPR_TY_MEMBERACCESS,
   AST_EXPR_TY_POINTERACCESS,
+  AST_EXPR_TY_INIT_LIST, // brace list
   AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
                     // they themselves evaluate to an rvalue (unlike in C++)
 };
@@ -289,6 +319,7 @@ struct ast_expr {
     struct ast_assg assg;
     struct ast_call call;
     struct ast_arrayaccess array_access;
+    struct ast_initlist init_list;
   };
 };
 

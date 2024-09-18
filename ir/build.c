@@ -13,10 +13,31 @@
 
 #include <math.h>
 
-struct var_key get_var_key(struct parser *parser, const struct ast_var *var) {
+struct var_key get_var_key(struct parser *parser, const struct ast_var *var, struct ir_basicblock *basicblock) {
   const char *name = identifier_str(parser, &var->identifier);
-  return (struct var_key){name, var->scope};
+  return (struct var_key){name, var->scope, .basicblock = basicblock};
 }
+
+void get_var_ref(struct ir_builder *irb, struct ir_basicblock *basicblock, struct ast_var *var, struct var_key *key, struct var_ref **ref) {
+  *ref = NULL;
+
+  // this is when we are _reading_ from the var
+  *key = get_var_key(irb->parser, var, basicblock);
+
+  *ref = var_refs_get(irb->var_refs, key);
+
+  if (*ref) {
+    return;
+  }
+
+  *ref = var_refs_get(irb->var_refs, key);
+  if (*ref && (*ref)->op->lcl) {
+    return;
+  }
+
+  *ref = var_refs_get(irb->global_var_refs, key);
+}
+
 
 bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
   if (l == r) {
@@ -36,6 +57,11 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
     return r->ty == IR_OP_VAR_TY_TY_VARIADIC;
   case IR_OP_VAR_TY_TY_POINTER:
     return var_ty_eq(l->pointer.underlying, r->pointer.underlying);
+  case IR_OP_VAR_TY_TY_ARRAY:
+    return l->array.ty == r->array.ty &&
+           (l->array.ty == IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN ||
+            l->array.num_elements == r->array.num_elements) &&
+           var_ty_eq(l->array.underlying, r->array.underlying);
   case IR_OP_VAR_TY_TY_FUNC:
     if (!var_ty_eq(l->func.ret_ty, r->func.ret_ty)) {
       return false;
@@ -61,8 +87,8 @@ bool var_ty_needs_cast_op(const struct ir_op_var_ty *l,
     return false;
   }
 
-  if (l->ty == IR_OP_VAR_TY_TY_POINTER && r->ty == IR_OP_VAR_TY_TY_POINTER) {
-    // pointers need no cast instr
+  if ((l->ty == IR_OP_VAR_TY_TY_POINTER || l->ty == IR_OP_VAR_TY_TY_ARRAY) && (r->ty == IR_OP_VAR_TY_TY_POINTER || r->ty == IR_OP_VAR_TY_TY_ARRAY)) {
+    // pointers/arrays need no cast instr
     return false;
   }
 
@@ -111,11 +137,27 @@ struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
 
   *copied = *underlying;
 
-  struct ir_op_var_ty ty;
-  ty.ty = IR_OP_VAR_TY_TY_POINTER;
-  ty.pointer = (struct ir_op_var_pointer_ty){.underlying = copied};
+  struct ir_op_var_ty var_ty;
+  var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
+  var_ty.pointer = (struct ir_op_var_pointer_ty){.underlying = copied};
 
-  return ty;
+  return var_ty;
+}
+
+struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
+                                      const struct ir_op_var_ty *underlying,
+                                      enum ir_op_var_array_ty_ty ty,
+                                      size_t num_elements) {
+  struct ir_op_var_ty *copied = arena_alloc(irb->arena, sizeof(*copied));
+
+  *copied = *underlying;
+
+  struct ir_op_var_ty var_ty;
+  var_ty.ty = IR_OP_VAR_TY_TY_ARRAY;
+  var_ty.array = (struct ir_op_var_array_ty){
+      .ty = ty, .num_elements = num_elements, .underlying = copied};
+
+  return var_ty;
 }
 
 struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
@@ -153,6 +195,25 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
     struct ir_op_var_ty underlying =
         ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
     return var_ty_make_pointer(irb, &underlying);
+  }
+  case AST_TYREF_TY_ARRAY: {
+    struct ir_op_var_ty underlying =
+        ty_for_ast_tyref(irb, ty_ref->array.element);
+
+    enum ir_op_var_array_ty_ty ty;
+    size_t num_elements;
+    switch (ty_ref->array.ty) {
+    case AST_TY_ARRAY_TY_UNKNOWN_SIZE:
+      ty = IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN;
+      num_elements = 0;
+      break;
+    case AST_TY_ARRAY_TY_KNOWN_SIZE:
+      ty = IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN;
+      num_elements = ty_ref->array.size;
+      break;
+    }
+
+    return var_ty_make_array(irb, &underlying, ty, num_elements);
   }
   }
 }
@@ -333,11 +394,70 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
   return op;
 }
 
+struct ir_op *build_ir_for_addressof(struct ir_builder *irb, struct ir_stmt *stmt,
+                                   struct ast_expr *expr, const struct ast_tyref *underlying_ty) {
+  // address of does not actually "read" its underlying expression
+  // so we do not build the expression
+
+  if (expr->ty != AST_EXPR_TY_ATOM || expr->atom.ty != AST_ATOM_TY_VAR) {
+    todo("address of non-simple vars");
+  }
+
+
+  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, underlying_ty);
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &pointer_ty);
+
+  struct var_key key;
+  struct var_ref *ref;
+  get_var_ref(irb, NULL, &expr->atom.var, &key, &ref);
+
+  struct ir_lcl *lcl;
+  switch (ref->ty) {
+  case VAR_REF_TY_SSA:
+    spill_op(irb, ref->op);
+    lcl = ref->op->lcl;
+
+    ref->ty = VAR_REF_TY_LCL;
+
+    break;
+  case VAR_REF_TY_LCL:
+    lcl = ref->op->lcl;
+    break;
+  case VAR_REF_TY_GLB:
+    todo("address of globals");
+    break;
+  case VAR_REF_TY_ENUM_CNST:
+    bug("address of enum makes no sense");
+    break;
+  }
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_ADDR;
+  op->var_ty = var_ty;
+  op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+  
+  return op;
+}
+
 struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                                    struct ast_unary_op *unary_op) {
+  if (unary_op->ty == AST_UNARY_OP_TY_ADDRESSOF) {
+    return build_ir_for_addressof(irb, stmt, unary_op->expr, &unary_op->expr->var_ty);
+  }
+
   struct ir_op *expr =
       build_ir_for_expr(irb, stmt, unary_op->expr, &unary_op->expr->var_ty);
   struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &unary_op->var_ty);
+
+  if (unary_op->ty == AST_UNARY_OP_TY_INDIRECTION) {
+    // does not generate a unary op instead generates a LOAD_ADDR
+    struct ir_op *op = alloc_ir_op(irb, stmt);
+    op->ty = IR_OP_TY_LOAD_ADDR;
+    op->var_ty = var_ty;
+    op->load_addr = (struct ir_op_load_addr){.addr = expr};
+
+    return op;
+  }
 
   switch (unary_op->ty) {
   case AST_UNARY_OP_TY_PREFIX_DEC:
@@ -390,15 +510,6 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
     break;
   case AST_UNARY_OP_TY_NOT:
     unary_op_ty = IR_OP_UNARY_OP_TY_NOT;
-    break;
-  case AST_UNARY_OP_TY_ADDRESSOF:
-    unary_op_ty = IR_OP_UNARY_OP_TY_ADDRESSOF;
-
-    // because we take address, this must be spilled
-    expr->flags |= IR_OP_FLAG_MUST_SPILL;
-    break;
-  case AST_UNARY_OP_TY_INDIRECTION:
-    unary_op_ty = IR_OP_UNARY_OP_TY_DEREF;
     break;
   default:
     bug("unexpected unary_op_ty in `%s`", __func__);
@@ -466,38 +577,34 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
-  UNUSED_ARG(stmt);
-
   // this is when we are _reading_ from the var
-  struct var_key key = get_var_key(irb->parser, var);
+  struct var_key key;
+  struct var_ref *ref;
+  get_var_ref(irb, stmt->basicblock, var, &key, &ref);
 
-  struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
-  if (!ref) {
-    ref = var_refs_get(irb->global_var_refs, &key);
-  }
-
-  // invariant_assert((ref && ref->op) || !ref, "ref present but empty?");
-  struct ir_op *expr = ref && ref->ty == VAR_REF_TY_LCL ? ref->lcl : NULL;
-
-  if (expr) {
-    return expr;
-  }
-
+  struct ast_tyref var_tyref = var->var_ty;
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
   if (ref) {
-    // non-local
-
     switch (ref->ty) {
-    case VAR_REF_TY_LCL:
-      unreachable("local cannot have come from the global var table");
+    case VAR_REF_TY_SSA:
+      return ref->op;
+    case VAR_REF_TY_LCL: {
+      struct ir_op *op = alloc_ir_op(irb, stmt);
+      op->ty = IR_OP_TY_LOAD_LCL;
+      op->var_ty = var_ty;
+      op->load_lcl = (struct ir_op_load_lcl){
+        .lcl = ref->op
+      };
+
+      return op;
+    }
     case VAR_REF_TY_GLB: {
-      struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
       struct ir_op *op = alloc_ir_op(irb, stmt);
       make_sym_ref(irb, key.name, op, &var_ty);
 
       return op;
     }
     case VAR_REF_TY_ENUM_CNST: {
-      struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var->var_ty);
       struct ir_op *op = alloc_ir_op(irb, stmt);
       op->ty = IR_OP_TY_CNST;
       op->var_ty = var_ty;
@@ -509,8 +616,6 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     }
   }
 
-  struct ast_tyref var_tyref = var->var_ty;
-  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &var_tyref);
   invariant_assert(var_tyref.ty != AST_TYREF_TY_UNKNOWN,
                    "can't have unknown tyref in phi lowering");
 
@@ -534,11 +639,11 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
   debug("creating phi %d for name=%s", phi->id,
         identifier_str(irb->parser, &var->identifier));
 
-  key = get_var_key(irb->parser, var);
+  key = get_var_key(irb->parser, var, stmt->basicblock);
   struct var_ref *new_ref =
-      var_refs_add(stmt->basicblock->var_refs, &key, VAR_REF_TY_LCL);
-  new_ref->ty = VAR_REF_TY_LCL;
-  new_ref->lcl = phi;
+      var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
+  new_ref->ty = VAR_REF_TY_SSA;
+  new_ref->op = phi;
 
   return phi;
 }
@@ -560,6 +665,22 @@ struct ir_op *build_ir_for_atom(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_expr *expr,
                                 const struct ast_tyref *ast_tyref);
+
+struct ir_op *build_ir_for_initlist(struct ir_builder *irb,
+                                    struct ir_stmt *stmt,
+                                    struct ast_initlist *init_list,
+                                    const struct ast_tyref *ast_tyref) {
+  // init list is fundamentally untyped, so it needs to know its target type in
+  // order to be built
+
+  debug_assert(ast_tyref->ty == AST_TYREF_TY_ARRAY,
+               "init list only makes sense for arrays");
+  UNUSED_ARG(irb);
+  UNUSED_ARG(stmt);
+  UNUSED_ARG(init_list);
+  UNUSED_ARG(ast_tyref);
+  todo(__func__);
+}
 
 struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_call *call) {
@@ -595,6 +716,12 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
   return op;
 }
 
+struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
+                                         struct ir_stmt *stmt,
+                                         struct ast_expr *lhs_expr,
+                                         struct ast_expr *rhs_expr,
+                                         const struct ast_tyref *elem_ty);
+
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_expr *expr,
                                 const struct ast_tyref *ast_tyref) {
@@ -613,21 +740,14 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     op = build_ir_for_binaryop(irb, stmt, &expr->binary_op);
     break;
   case AST_EXPR_TY_ARRAYACCESS: {
-    struct ast_tyref pointer_ty =
-        tyref_make_pointer(irb->parser, &expr->var_ty);
-    struct ir_op *lhs =
-        build_ir_for_expr(irb, stmt, expr->array_access.lhs, &pointer_ty);
-    struct ir_op *rhs =
-        build_ir_for_expr(irb, stmt, expr->array_access.rhs, &pointer_ty);
-
     struct ir_op *address =
-        alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
+        build_ir_for_array_address(irb, stmt, expr->array_access.lhs,
+                                   expr->array_access.rhs, &expr->var_ty);
 
     op = alloc_ir_op(irb, stmt);
-    op->ty = IR_OP_TY_UNARY_OP;
+    op->ty = IR_OP_TY_LOAD_ADDR;
     op->var_ty = ty_for_ast_tyref(irb, &expr->var_ty);
-    op->unary_op = (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_DEREF,
-                                           .value = address};
+    op->load_addr = (struct ir_op_load_addr){.addr = address};
 
     break;
   }
@@ -635,6 +755,8 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_EXPR_TY_POINTERACCESS:
     todo("access build");
     break;
+  case AST_EXPR_TY_INIT_LIST:
+    bug("init list only makes sense in decls and compound assignments");
   case AST_EXPR_TY_ASSG:
     op = build_ir_for_assg(irb, stmt, &expr->assg);
     break;
@@ -1021,15 +1143,15 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                        struct ir_op *op, struct ast_var *var) {
   debug_assert(op, "null expr in assignment!");
 
-  struct var_key key = get_var_key(irb->parser, var);
-  struct var_ref *ref = var_refs_get(stmt->basicblock->var_refs, &key);
+  struct var_key key = get_var_key(irb->parser, var, stmt->basicblock);
+  struct var_ref *ref = var_refs_get(irb->var_refs, &key);
 
   if (!ref) {
-    ref = var_refs_add(stmt->basicblock->var_refs, &key, VAR_REF_TY_LCL);
+    ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
   }
 
-  if (ref->ty == VAR_REF_TY_LCL) {
-    ref->lcl = op;
+  if (ref->ty == VAR_REF_TY_SSA) {
+    ref->op = op;
   } else {
     unreachable("assignment to global not yet suppported");
   }
@@ -1037,33 +1159,73 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   return op;
 }
 
+struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
+                                         struct ir_stmt *stmt,
+                                         struct ast_expr *lhs_expr,
+                                         struct ast_expr *rhs_expr,
+                                         const struct ast_tyref *elem_ty) {
+  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, elem_ty);
+
+  struct ir_op *lhs;
+  if (lhs_expr->var_ty.ty == AST_TYREF_TY_ARRAY) {
+    // need to decay the type to pointer
+    struct ast_tyref *underlying = lhs_expr->var_ty.array.element;
+    lhs = build_ir_for_addressof(irb, stmt, lhs_expr, underlying);
+  } else {
+    lhs = build_ir_for_expr(irb, stmt, lhs_expr, &pointer_ty);
+  }
+  
+  struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_ty);
+
+  return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
+}
+
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg) {
+  struct ir_op *expr =
+      build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+  struct ir_op *value;
+
+  switch (assg->ty) {
+  case AST_ASSG_TY_SIMPLEASSG:
+    value = expr;
+    break;
+  case AST_ASSG_TY_COMPOUNDASSG: {
+    struct ir_op *assignee =
+        build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
+
+    value = alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty,
+                           assg->compound_assg.binary_op_ty, assignee, expr);
+  }
+  }
+
   if (assg->assignee->ty == AST_EXPR_TY_ATOM &&
       assg->assignee->atom.ty == AST_ATOM_TY_VAR) {
+    return var_assg(irb, stmt, value, &assg->assignee->atom.var);
+  } else if (assg->assignee->ty == AST_EXPR_TY_ARRAYACCESS) {
+    struct ast_arrayaccess *access = &assg->assignee->array_access;
+    struct ir_op *address = build_ir_for_array_address(
+        irb, stmt, access->lhs, access->rhs, &assg->assignee->var_ty);
 
-    switch (assg->ty) {
-    case AST_ASSG_TY_SIMPLEASSG: {
-      struct ir_op *op =
-          build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
-      return var_assg(irb, stmt, op, &assg->assignee->atom.var);
-    }
-    case AST_ASSG_TY_COMPOUNDASSG: {
-      struct ir_op *op =
-          build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
-      struct ir_op *assignee =
-          build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
+    struct ir_op *store = alloc_ir_op(irb, stmt);
+    store->ty = IR_OP_TY_STORE_ADDR;
+    store->var_ty = IR_OP_VAR_TY_NONE;
+    store->store_addr = (struct ir_op_store_addr){
+      .addr = address,
+      .value = value
+    };
 
-      struct ir_op *res =
-          alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty,
-                         assg->compound_assg.binary_op_ty, assignee, op);
-      return var_assg(irb, stmt, res, &assg->assignee->atom.var);
-    }
-    }
-
+    return store;
   } else {
     todo("non var assignments");
   }
+}
+struct ir_op *build_ir_for_vardecl_with_initlist(struct ir_builder *irb,
+                                       struct ir_stmt *stmt,
+                                       struct ast_vardecl *decl,
+                                       struct ast_initlist *init_list
+                                     ) {
+  for (size_t i = 0; i < init_list->num_exprs; i++)
 }
 
 struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
@@ -1072,14 +1234,21 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
   for (size_t i = 0; i < var_decl_list->num_decls; i++) {
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
-    if (decl->ty == AST_VARDECL_TY_DECL) {
-      continue;
+    struct ir_op *assignment;
+    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG) {
+      if (decl->assg_expr.ty == AST_EXPR_TY_INIT_LIST) {
+        assignment = build_ir_for_vardecl_with_initlist(irb, stmt, decl, &decl->assg_expr.init_list);
+      } else {
+        assignment = build_ir_for_expr(irb, stmt, &decl->assg_expr, &decl->var.var_ty);
+      }
+    } else {
+      assignment = alloc_ir_op(irb, stmt);
+      assignment->ty = IR_OP_TY_UNDF;
+      assignment->var_ty = ty_for_ast_tyref(irb, &decl->var.var_ty);
     }
 
     // FIXME: is this right
-    struct ir_op *op =
-        build_ir_for_expr(irb, stmt, &decl->assg_expr, &var_decl_list->var_ty);
-    var_assg(irb, stmt, op, &decl->var);
+    var_assg(irb, stmt, assignment, &decl->var);
   }
 
   return stmt->last;
@@ -1130,8 +1299,8 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   basicblocks_visited[basicblock->id] = true;
 
-  struct var_key key = get_var_key(irb->parser, var);
-  struct var_ref *ref = var_refs_get(basicblock->var_refs, &key);
+  struct var_key key = get_var_key(irb->parser, var, basicblock);
+  struct var_ref *ref = var_refs_get(irb->var_refs, &key);
 
   if (!ref) {
     debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
@@ -1144,11 +1313,12 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
 
   switch (ref->ty) {
   case VAR_REF_TY_GLB:
+  case VAR_REF_TY_LCL:
   case VAR_REF_TY_ENUM_CNST:
     unreachable(
         "non-lcl var refs should already be handled and not generate phis");
-  case VAR_REF_TY_LCL: {
-    struct ir_op *entry_op = ref->lcl;
+  case VAR_REF_TY_SSA: {
+    struct ir_op *entry_op = ref->op;
     // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
     if (false && entry_op->ty == IR_OP_TY_PHI && entry_op != source_phi) {
       // copy over the entries from that phi, to prevent deeply nested ones
@@ -1173,11 +1343,11 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
           (*exprs)[*num_exprs - 1] = phi;
         }
       }
-    } else {
+    } else if (ref->op) {
       (*num_exprs)++;
       *exprs = arena_realloc(irb->arena, *exprs,
                              sizeof(struct ir_op *) * *num_exprs);
-      (*exprs)[*num_exprs - 1] = ref->lcl;
+      (*exprs)[*num_exprs - 1] = ref->op;
     }
   }
   }
@@ -1239,13 +1409,9 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   case IR_OP_TY_CAST_OP:
     res_ty = consumer->var_ty;
     break;
-  case IR_OP_TY_UNARY_OP:
-    if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_DEREF) {
-      res_ty = var_ty_get_pointer_underlying(&(*op)->var_ty);
-    } else if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_ADDRESSOF) {
-      res_ty =
-          var_ty_make_pointer((*op)->stmt->basicblock->irb, &(*op)->var_ty);
-    }
+  case IR_OP_TY_ADDR:
+    res_ty =
+        var_ty_make_pointer((*op)->stmt->basicblock->irb, &(*op)->var_ty);
     break;
   default:
     break;
@@ -1264,8 +1430,10 @@ struct ir_builder *
 build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
                       struct ast_funcdef *def, struct var_refs *global_var_refs,
                       debug_print_custom_ir_op debug_print_custom_ir_op) {
+  struct var_refs *var_refs = var_refs_create();
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
+                         .var_refs = var_refs,
                          .global_var_refs = global_var_refs,
                          .global_refs = NULL,
                          .strings = NULL,
@@ -1297,9 +1465,9 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
   for (size_t i = 0; i < def->sig.param_list.num_params; i++) {
     const struct ast_param *param = &def->sig.param_list.params[i];
 
-    struct var_key key = get_var_key(builder->parser, &param->var);
+    struct var_key key = get_var_key(builder->parser, &param->var, basicblock);
     struct var_ref *ref =
-        var_refs_add(basicblock->var_refs, &key, VAR_REF_TY_LCL);
+        var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
     mov->ty = IR_OP_TY_MOV;
@@ -1307,7 +1475,7 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
     mov->flags |= IR_OP_FLAG_PARAM;
     mov->mov.value = NULL;
 
-    ref->lcl = mov;
+    ref->op = mov;
   }
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {
@@ -1417,7 +1585,7 @@ struct ir_unit *build_ir_for_translationunit(
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = u;
 
-  struct var_refs *global_var_refs = var_refs_create(NULL);
+  struct var_refs *global_var_refs = var_refs_create();
   // funcs do not necessarily have a seperate decl so we do it for defs too
 
   for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
