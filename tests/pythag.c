@@ -12,10 +12,14 @@ int main() {
   int r = a * a + b * b;
 
   int ans = 0;
-  while (ans * ans != r) {
+  while (ans * ans < r) {
     ans = ans + 1;
   }
 
-  printf("sqrt(%d^2 + %d^2) = %d\n", a, b, ans);
+  if (ans * ans > r) {
+    printf("%d < sqrt(%d^2 + %d^2) < %d\n", ans - 1, a, b, ans);
+  } else {
+    printf("sqrt(%d^2 + %d^2) = %d\n", a, b, ans);
+  }
   return ans;
 }
