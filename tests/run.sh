@@ -1,10 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-ls jcc >/dev/null 2>&1
+ls build/jcc >/dev/null 2>&1
 if [ $? != 0 ]; then
-  echo "Expected file \`jcc\` to be present & executable"
+  echo "Expected file \`build/jcc\` to be present & executable"
   exit -1
 fi
+
 
 for file in $(find $(dirname $0) -name '*.c' -print | sort); do
   echo "Testing $file..."
@@ -16,9 +17,9 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     expected="0"
   fi
 
-  if ! ./jcc $file >/dev/null 2>&1; then
+  if ! ./build/jcc $file >/dev/null 2>&1; then
     echo "compilation failed!"
-    # exit -1
+    exit -1
   fi
 
   output=$(echo "$stdin" | ./a.out)
@@ -34,6 +35,6 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     echo "TEST PASSED"
   fi
 
-  echo "\n"
+  echo -e "\n"
 done
 

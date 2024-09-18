@@ -97,25 +97,24 @@ static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
   return op->custom.aarch64->store_variadic.idx;
 }
 
+static unsigned get_lcl_stack_offset(struct emit_state *state,
+                                        const struct ir_op *op) {
+  // FIXME: wrongly assumes everything is 8 byte
+  return ((state->max_variadic_arg_idx + 1) + op->lcl->id) * 8;
+}
+
 static unsigned get_lcl_stack_offset_32(struct emit_state *state,
                                         const struct ir_op *op) {
-  // FIXME: only supports ints
-  // offset by 2/4 because we store FP/LR at the top
-
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg
-  // (64 bit)
-  // HACK: eek we need to fix everything being 8 byte
-  return ((state->max_variadic_arg_idx + 1) + op->lcl->id) * 2;
+  unsigned abs_offset = get_lcl_stack_offset(state, op);
+  debug_assert(abs_offset % 4 == 0, "stack offset not divisible by 4");
+  return abs_offset / 4;
 }
 
 static unsigned get_lcl_stack_offset_64(struct emit_state *state,
                                         const struct ir_op *op) {
-  // FIXME: only supports ints
-  // offset by 2/4 because we store FP/LR at the top
-
-  // HACK: lots of custom instrs have type NONE but assume that means whole reg
-  // (64 bit)
-  return (state->max_variadic_arg_idx + 1) + op->lcl->id;
+  unsigned abs_offset = get_lcl_stack_offset(state, op);
+  debug_assert(abs_offset % 8 == 0, "stack offset not divisible by 8");
+  return abs_offset / 8;
 }
 
 enum aarch64_relocation_ty {
@@ -289,8 +288,8 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
   }
   case IR_OP_UNARY_OP_TY_ADDRESSOF: {
     struct ir_op *target = op->unary_op.value;
-    size_t offset = get_lcl_stack_offset_64(state, target);
-    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset * 8,
+    size_t offset = get_lcl_stack_offset(state, target);
+    aarch64_emit_add_64_imm(state->emitter, STACK_PTR_REG, offset,
                             get_reg_for_idx(dest));
     break;
   }
@@ -891,6 +890,8 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
 
   free_aarch64_emitter(&emitter);
 
+  // FIXME: some vector leaks here (and probably other places)
+  // should really alloc in arena
   struct compiled_function result = {
       .name = aarch64_mangle(func->arena, func->name),
       .code = data,
