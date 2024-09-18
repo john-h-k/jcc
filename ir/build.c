@@ -867,8 +867,8 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
     lhs = build_ir_for_addressof(irb, stmt, lhs_expr, underlying);
     pointer_ty = tyref_make_pointer(irb->parser, &lhs_expr->var_ty);
   } else {
-    lhs = build_ir_for_expr(irb, stmt, lhs_expr, &pointer_ty);
-    pointer_ty = tyref_get_underlying(irb->parser, &lhs_expr->var_ty);
+    lhs = build_ir_for_expr(irb, stmt, lhs_expr, &lhs_expr->var_ty);
+    pointer_ty = lhs_expr->var_ty;
   }
   
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_ty);
