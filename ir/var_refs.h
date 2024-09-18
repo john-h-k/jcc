@@ -10,9 +10,10 @@ struct var_refs;
 struct var_key {
   const char *name;
   int scope;
+  struct ir_basicblock *basicblock;
 };
 
-enum var_ref_ty { VAR_REF_TY_LCL, VAR_REF_TY_GLB, VAR_REF_TY_ENUM_CNST };
+enum var_ref_ty { VAR_REF_TY_SSA, VAR_REF_TY_LCL, VAR_REF_TY_GLB, VAR_REF_TY_ENUM_CNST };
 
 struct var_ref {
   enum var_ref_ty ty;
@@ -23,13 +24,13 @@ struct var_ref {
   struct ir_builder *func;
 
   union {
-    struct ir_op *lcl;
+    struct ir_op *op;
     struct ir_string *glb;
     unsigned long long enum_cnst;
   };
 };
 
-struct var_refs *var_refs_create(struct var_refs *parent);
+struct var_refs *var_refs_create();
 
 struct var_ref *var_refs_get(struct var_refs *var_refs,
                              const struct var_key *key);

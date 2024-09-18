@@ -34,17 +34,23 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
 
 bool op_produces_value(enum ir_op_ty ty) {
   switch (ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op ty");
   case IR_OP_TY_PHI:
+  case IR_OP_TY_UNDF:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD_LCL:
+  case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_ADDR:
   case IR_OP_TY_CALL:
   case IR_OP_TY_GLB_REF:
     return true;
   case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_STORE_ADDR:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
@@ -56,12 +62,15 @@ bool op_produces_value(enum ir_op_ty ty) {
 
 bool op_is_branch(enum ir_op_ty ty) {
   switch (ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op ty");
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
     return true;
   // calls are NOT branches, because while they do leave, they guarantee return
   case IR_OP_TY_CALL:
+  case IR_OP_TY_UNDF:
   case IR_OP_TY_GLB_REF:
   case IR_OP_TY_PHI:
   case IR_OP_TY_MOV:
@@ -71,6 +80,9 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_LOAD_LCL:
+  case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_ADDR:
     return false;
   case IR_OP_TY_CUSTOM:
     bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
@@ -127,7 +139,10 @@ void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
 
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op!");
   case IR_OP_TY_CUSTOM:
+  case IR_OP_TY_UNDF:
   case IR_OP_TY_GLB_REF: {
     break;
   }
@@ -156,10 +171,18 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_CAST_OP:
     cb(&op->cast_op.value, cb_metadata);
     break;
+  case IR_OP_TY_STORE_ADDR:
+    cb(&op->store_addr.value, cb_metadata);
+    break;
   case IR_OP_TY_STORE_LCL:
     cb(&op->store_lcl.value, cb_metadata);
     break;
   case IR_OP_TY_LOAD_LCL:
+    break;
+  case IR_OP_TY_LOAD_ADDR:
+    break;
+  case IR_OP_TY_ADDR:
+    // this sort-of has uses but not really...
     break;
   case IR_OP_TY_BR:
     break;
@@ -180,6 +203,8 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   cb(&op, cb_metadata);
 
   switch (op->ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op!");
   case IR_OP_TY_CUSTOM:
     todo("walk custom");
   case IR_OP_TY_GLB_REF:
@@ -190,6 +215,14 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     todo("walk phi");
   case IR_OP_TY_MOV:
     todo("walk mov");
+  case IR_OP_TY_LOAD_ADDR:
+    todo("walk load addr");
+  case IR_OP_TY_STORE_ADDR:
+    todo("walk store addr");
+  case IR_OP_TY_ADDR:
+    todo("walk addr");
+  case IR_OP_TY_UNDF:
+    break;
   case IR_OP_TY_CNST:
     walk_cnst(&op->cnst, cb, cb_metadata);
     break;
@@ -722,7 +755,6 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   // disabled and checks are done manually now
   // because this broke stuff by writing to global var refs (bad!)
   // basicblock->var_refs = var_refs_create(irb->global_var_refs);
-  basicblock->var_refs = var_refs_create(NULL);
   basicblock->irb = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;
@@ -793,15 +825,19 @@ struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
+
+  size_t lcl_size = var_ty_size(irb, var_ty);
+  // HACK: offset in general sucks we need to build a proper stack manager
+  // round up to 8 so that we don't worry about alignment
+  lcl_size = ROUND_UP(lcl_size, 8);
+
+  lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
   lcl->pred = irb->last_local;
   lcl->succ = NULL;
   lcl->metadata = NULL;
 
-  // TODO: make not assume all things are 8 bytes
-  irb->total_locals_size += 8;
-  UNUSED_ARG(var_ty);
-  // irb->total_locals_size += var_ty_size(irb, var_ty);
+  irb->total_locals_size += lcl_size;
 
   if (!irb->first_local) {
     irb->first_local = lcl;
@@ -867,7 +903,7 @@ size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
   case IR_OP_VAR_TY_TY_VARIADIC:
     bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_OP_VAR_TY_TY_FUNC:
-    return 8;
+  case IR_OP_VAR_TY_TY_ARRAY:
   case IR_OP_VAR_TY_TY_POINTER:
     return 8;
   case IR_OP_VAR_TY_TY_PRIMITIVE:
@@ -883,3 +919,52 @@ size_t var_ty_size(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
     }
   }
 }
+
+void spill_op(struct ir_builder *irb, struct ir_op *op) {
+  debug("spilling %zu\n", op->id);
+
+  if (op->reg == REG_SPILLED) {
+    debug_assert(op->lcl, "op was spilled but had no local");
+    return;
+  }
+
+  op->reg = REG_SPILLED;
+
+  if (op->ty != IR_OP_TY_PHI) {
+    op->lcl = add_local(irb, &op->var_ty);   
+
+    struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
+                                             IR_OP_VAR_TY_NONE);
+    store->lcl = op->lcl;
+    store->store_lcl.value = op;
+    store->reg = NO_REG;
+    store->flags |= IR_OP_FLAG_SPILL;
+
+    op->lcl->store = store;
+
+    return;
+  }
+
+  // if phi is spilled, first ensure it doesn't already have a local via one of
+  // its values then, once spilled, propogate its local to all of its dependents
+  struct ir_lcl *lcl = NULL;
+  for (size_t i = 0; i < op->phi.num_values; i++) {
+    struct ir_op *value = op->phi.values[i];
+
+    if (value->lcl) {
+      lcl = value->lcl;
+    }
+  }
+
+  if (!lcl) {
+    lcl = add_local(irb, &op->var_ty);
+  }
+
+  op->lcl = lcl;
+  for (size_t i = 0; i < op->phi.num_values; i++) {
+    struct ir_op *value = op->phi.values[i];
+
+    value->lcl = lcl;
+  }
+}
+

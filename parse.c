@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "bit_twiddle.h"
+#include "ir/ir.h"
 #include "lex.h"
 #include "log.h"
 #include "util.h"
@@ -318,10 +319,14 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
                                       const struct ast_tyref *ty_ref) {
   UNUSED_ARG(parser);
 
-  debug_assert(ty_ref->ty == AST_TYREF_TY_POINTER, "non pointer passed to `%s`",
-               __func__);
-
-  return *ty_ref->pointer.underlying;
+  switch (ty_ref->ty) {
+  case AST_TYREF_TY_POINTER:
+    return *ty_ref->pointer.underlying;
+  case AST_TYREF_TY_ARRAY:
+    return *ty_ref->array.element;
+  default:
+    bug("non pointer/array passed (type %d)", ty_ref->ty);
+  }
 }
 
 struct ast_tyref tyref_promote_integer(struct parser *parser,
@@ -590,25 +595,110 @@ bool parse_wkt_integral(struct parser *parser, struct ast_tyref *ty_ref) {
   return true;
 }
 
-bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
-  if (parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
-    struct ast_tyref *underlying =
-        arena_alloc(parser->arena, sizeof(*underlying));
-    *underlying = *ty_ref;
+unsigned long long resolve_constant_expr(struct parser *parser,
+                                         const struct ast_expr *expr) {
+  UNUSED_ARG(parser);
 
-    ty_ref->ty = AST_TYREF_TY_POINTER;
-    ty_ref->pointer.underlying = underlying;
-    ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
-
-    parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
-
-    return true;
+  if (expr->ty == AST_EXPR_TY_ATOM && expr->atom.ty == AST_ATOM_TY_CNST &&
+      is_integral_ty(&expr->atom.cnst.cnst_ty)) {
+    return expr->atom.cnst.int_value;
   }
 
-  return false;
+  todo("non cnst constant expressions");
 }
 
-bool parse_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+bool parse_constant_expr(struct parser *parser, struct ast_expr *expr);
+
+bool parse_array(struct parser *parser, struct ast_tyref *ty_ref) {
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
+    return false;
+  }
+
+  size_t size = 0;
+  enum ast_ty_array_ty ty;
+  struct ast_expr expr;
+  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
+    ty = AST_TY_ARRAY_TY_UNKNOWN_SIZE;
+  } else if (parse_constant_expr(parser, &expr) &&
+             parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
+    ty = AST_TY_ARRAY_TY_KNOWN_SIZE;
+    size = resolve_constant_expr(parser, &expr);
+  } else {
+    return false;
+  }
+
+  struct ast_tyref *underlying =
+      arena_alloc(parser->arena, sizeof(*underlying));
+  *underlying = *ty_ref;
+
+  ty_ref->ty = AST_TYREF_TY_ARRAY;
+  ty_ref->array =
+      (struct ast_ty_array){.ty = ty, .element = underlying, .size = size};
+  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+
+  return true;
+}
+
+bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
+  if (!parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
+    return false;
+  }
+
+  struct ast_tyref *underlying =
+      arena_alloc(parser->arena, sizeof(*underlying));
+  *underlying = *ty_ref;
+
+  ty_ref->ty = AST_TYREF_TY_POINTER;
+  ty_ref->pointer.underlying = underlying;
+  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+
+  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+
+  return true;
+}
+
+// in decls, pointer/array/etc are not declared
+bool parse_decl_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
+  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+
+  // TODO: handle non integral types
+  if (!parse_wkt_integral(parser, ty_ref)) {
+    return false;
+  }
+
+  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+  return true;
+}
+
+// in `int a, *b, *const *c[3]`, this parts the `a`/`*b`/`* const *c[3]` part
+bool parse_partial_declarator(struct parser *parser,
+                              const struct ast_tyref *prev_part,
+                              struct ast_var *var) {
+  var->var_ty = *prev_part;
+
+  while (parse_pointer(parser, &var->var_ty)) {
+  }
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    return false;
+  }
+
+  consume_token(parser->lexer, token);
+
+  var->identifier = token;
+  var->scope = cur_scope(&parser->var_table);
+
+  while (parse_array(parser, &var->var_ty)) {
+  }
+
+  return true;
+}
+
+// does not have id, used in casts/params/return types
+bool parse_abstract_declarator(struct parser *parser,
+                               struct ast_tyref *ty_ref) {
   parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
 
   // TODO: handle non integral types
@@ -636,6 +726,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
     return false;
   }
 
+  var->var_ty.ty = AST_TYREF_TY_UNKNOWN;
   var->identifier = token;
 
   struct var_table_entry *entry =
@@ -808,6 +899,44 @@ struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
   return *ty->func.ret_var_ty;
 }
 
+bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct vector *exprs = vector_create(sizeof(struct ast_expr));
+
+  struct token token;
+  struct ast_expr sub_expr;
+  do {
+    if (!parse_expr(parser, &sub_expr)) {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+
+    vector_push_back(exprs, &sub_expr);
+
+    peek_token(parser->lexer, &token);
+    } while (token.ty == LEX_TOKEN_TY_COMMA &&
+             /* hacky */ (consume_token(parser->lexer, token), true));
+
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  init_list->exprs = arena_alloc(parser->arena, vector_byte_size(exprs));
+  init_list->num_exprs = vector_length(exprs);
+
+  vector_copy_to(exprs, init_list->exprs);
+  vector_free(&exprs);
+
+  return true;
+}
+
 // parses an expression that does _not_ involve binary operators
 bool parse_atom(struct parser *parser, struct ast_atom *atom) {
   struct text_pos pos = get_position(parser->lexer);
@@ -858,14 +987,24 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 // vars
 bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct ast_atom atom;
-  if (!parse_atom(parser, &atom)) {
-    return false;
+  if (parse_atom(parser, &atom)) {
+    expr->ty = AST_EXPR_TY_ATOM;
+    expr->var_ty = atom.var_ty;
+    expr->atom = atom;
+    return true;
   }
 
-  expr->ty = AST_EXPR_TY_ATOM;
-  expr->var_ty = atom.var_ty;
-  expr->atom = atom;
-  return true;
+  struct ast_initlist init_list;
+  if (parse_initlist(parser, &init_list)) {
+    expr->ty = AST_EXPR_TY_INIT_LIST;
+    // init lists are not typed
+    expr->var_ty.ty = AST_TYREF_TY_UNKNOWN;
+    expr->var_ty.type_qualifiers = 0;
+    expr->init_list = init_list;
+    return true;
+  }
+
+  return false;
 }
 
 bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
@@ -886,9 +1025,18 @@ bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
+struct ast_tyref resolve_array_access_ty(struct parser *parser, const struct ast_expr* lhs, const struct ast_expr *rhs, bool *lhs_is_pointer) {
+  if (lhs->var_ty.ty == AST_TYREF_TY_POINTER || lhs->var_ty.ty == AST_TYREF_TY_ARRAY) {
+    *lhs_is_pointer = true;
+    return tyref_get_underlying(parser, &lhs->var_ty);
+  } else {
+    *lhs_is_pointer = false;
+    return tyref_get_underlying(parser, &rhs->var_ty);
+  }
+}
+
 bool parse_array_access(struct parser *parser, struct ast_expr *sub_expr,
                         struct ast_expr *expr) {
-  debug_assert(sub_expr->var_ty.ty != AST_TYREF_TY_UNKNOWN, "bad");
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_expr *access_expr =
@@ -898,20 +1046,18 @@ bool parse_array_access(struct parser *parser, struct ast_expr *sub_expr,
       parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
     expr->ty = AST_EXPR_TY_ARRAYACCESS;
 
-    struct ast_tyref var_ty;
-    if (sub_expr->var_ty.ty == AST_TYREF_TY_POINTER) {
-      var_ty = tyref_get_underlying(parser, &sub_expr->var_ty);
-    } else {
-      var_ty = tyref_get_underlying(parser, &access_expr->var_ty);
-    }
+    bool sub_expr_is_pointer;
+    struct ast_tyref var_ty = resolve_array_access_ty(parser, sub_expr, access_expr, &sub_expr_is_pointer);
 
     expr->var_ty = var_ty;
-    expr->array_access.lhs = sub_expr;
-    expr->array_access.rhs = access_expr;
-    debug_assert(expr->array_access.lhs->var_ty.ty != AST_TYREF_TY_UNKNOWN,
-                 "bad");
-    debug_assert(expr->array_access.rhs->var_ty.ty != AST_TYREF_TY_UNKNOWN,
-                 "bad");
+
+    if (sub_expr_is_pointer) {
+      expr->array_access.lhs = sub_expr;
+      expr->array_access.rhs = access_expr;
+    } else {
+      expr->array_access.lhs = access_expr;
+      expr->array_access.rhs = sub_expr;
+    }
 
     return true;
   }
@@ -998,7 +1144,7 @@ bool parse_cast(struct parser *parser, struct ast_expr *expr) {
 
   struct ast_tyref ty_ref;
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
-      !parse_tyref(parser, &ty_ref) ||
+      !parse_abstract_declarator(parser, &ty_ref) ||
       !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -1162,6 +1308,11 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   }
 }
 
+bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
+  // all non-assignment expressions
+  return parse_expr_precedence_aware(parser, 0, expr);
+}
+
 // parse a non-compound expression
 bool parse_expr(struct parser *parser, struct ast_expr *expr) {
   // assignment is lowest precedence, so we parse it here
@@ -1175,7 +1326,7 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
     return true;
   }
 
-  return parse_expr_precedence_aware(parser, 0, expr);
+  return parse_constant_expr(parser, expr);
 }
 
 // there are only two places you can have compound expressions
@@ -1234,12 +1385,13 @@ bool parse_compoundexpr_with_semicolon(struct parser *parser,
   return false;
 }
 
-bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
+bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
+                   struct ast_vardecl *var_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_var var;
 
-  if (!parse_var(parser, &var)) {
+  if (!parse_partial_declarator(parser, partial_ty, &var)) {
     return false;
   }
 
@@ -1278,18 +1430,16 @@ bool parse_vardecl(struct parser *parser, struct ast_vardecl *var_decl) {
 
 bool parse_vardecllist(struct parser *parser,
                        struct ast_vardecllist *var_decl_list) {
-  struct ast_tyref ty_ref;
-  if (!parse_tyref(parser, &ty_ref)) {
+  struct ast_tyref decl_ty_ref;
+  if (!parse_decl_tyref(parser, &decl_ty_ref)) {
     return false;
   }
 
   struct vector *decls = vector_create(sizeof(struct ast_vardecl));
 
   struct ast_vardecl var_decl;
-  while (parse_vardecl(parser, &var_decl)) {
+  while (parse_vardecl(parser, &decl_ty_ref, &var_decl)) {
     vector_push_back(decls, &var_decl);
-
-    var_decl.var.var_ty = ty_ref;
 
     trace("creating var_table_entry for var name=%s",
           identifier_str(parser, &var_decl.var.identifier));
@@ -1323,7 +1473,7 @@ bool parse_vardecllist(struct parser *parser,
       arena_alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
 
-  var_decl_list->var_ty = ty_ref;
+  var_decl_list->var_ty = decl_ty_ref;
   var_decl_list->num_decls = vector_length(decls);
   var_decl_list->decls = new_decls;
 
@@ -1772,7 +1922,8 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   }
 
   struct ast_tyref var_ty;
-  if (!parse_tyref(parser, &var_ty)) {
+  // FIXME: this is wrong
+  if (!parse_abstract_declarator(parser, &var_ty)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1853,7 +2004,8 @@ bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
   struct token identifier;
   struct ast_paramlist param_list;
 
-  if (parse_tyref(parser, &ty_ref) && parse_identifier(parser, &identifier) &&
+  if (parse_abstract_declarator(parser, &ty_ref) &&
+      parse_identifier(parser, &identifier) &&
       parse_paramlist(parser, &param_list)) {
     struct ast_ty_func func_ty;
     func_ty.ret_var_ty =
@@ -2176,6 +2328,16 @@ DEBUG_FUNC(tyref, ty_ref) {
   case AST_TYREF_TY_VARIADIC:
     AST_PRINTZ("VARIADIC");
     break;
+  case AST_TYREF_TY_ARRAY:
+    if (ty_ref->array.ty == AST_TYREF_TY_UNKNOWN) {
+      AST_PRINTZ("ARRAY UNKNOWN SIZE OF");
+    } else {
+      AST_PRINT("ARRAY SIZE %llu OF", ty_ref->array.size);
+    }
+    INDENT();
+    DEBUG_CALL(tyref, ty_ref->array.element);
+    UNINDENT();
+    break;
   case AST_TYREF_TY_POINTER:
     AST_PRINTZ("POINTER TO");
     INDENT();
@@ -2252,6 +2414,7 @@ DEBUG_FUNC(var, var) {
   AST_PRINT("VARIABLE '%s' SCOPE %d",
             associated_text(state->parser->lexer, &var->identifier),
             var->scope);
+  DEBUG_CALL(tyref, &var->var_ty);
 }
 
 DEBUG_FUNC(cnst, cnst) {
@@ -2491,6 +2654,16 @@ DEBUG_FUNC(arrayaccess, array_access) {
   DEBUG_CALL(expr, array_access->rhs);
 }
 
+DEBUG_FUNC(initlist, init_list) {
+  AST_PRINTZ("INIT LIST");
+
+  INDENT();
+  for (size_t i = 0; i < init_list->num_exprs; i++) {
+    DEBUG_CALL(expr, &init_list->exprs[i]);
+  }
+  UNINDENT();
+}
+
 DEBUG_FUNC(expr, expr) {
   AST_PRINTZ("EXPRESSION");
 
@@ -2519,6 +2692,9 @@ DEBUG_FUNC(expr, expr) {
   case AST_EXPR_TY_POINTERACCESS:
     todo("pointer access");
     // DEBUG_CALL(pointer_access, &expr->pointer_access);
+    break;
+  case AST_EXPR_TY_INIT_LIST:
+    DEBUG_CALL(initlist, &expr->init_list);
     break;
   case AST_EXPR_TY_ASSG:
     DEBUG_CALL(assg, &expr->assg);

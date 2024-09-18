@@ -21,41 +21,6 @@ struct register_alloc_info {
   struct reg_info reg_info;
 };
 
-void spill_op(struct ir_builder *irb, struct ir_op *op) {
-  debug("spilling %zu\n", op->id);
-
-  debug_assert(op->reg != REG_SPILLED, "can't spill already spilled op");
-
-  op->reg = REG_SPILLED;
-
-  if (op->ty != IR_OP_TY_PHI) {
-    op->lcl = add_local(irb, &op->var_ty);
-    return;
-  }
-
-  // if phi is spilled, first ensure it doesn't already have a local via one of
-  // its values then, once spilled, propogate its local to all of its dependents
-  struct ir_lcl *lcl = NULL;
-  for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i];
-
-    if (value->lcl) {
-      lcl = value->lcl;
-    }
-  }
-
-  if (!lcl) {
-    lcl = add_local(irb, &op->var_ty);
-  }
-
-  op->lcl = lcl;
-  for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i];
-
-    value->lcl = lcl;
-  }
-}
-
 void spill_at_interval(struct ir_builder *irb, struct interval *intervals,
                        size_t cur_interval, size_t *active,
                        size_t *num_active) {
@@ -152,8 +117,7 @@ struct fixup_spills_data {
 
 bool op_needs_reg(struct ir_op *op) {
   // addressof operator does not need a reg, so does not need a load
-  return op->ty != IR_OP_TY_UNARY_OP ||
-         op->unary_op.ty != IR_OP_UNARY_OP_TY_ADDRESSOF;
+  return op->ty != IR_OP_TY_ADDR;
 }
 
 void fixup_spills_callback(struct ir_op **op, void *metadata) {
@@ -215,18 +179,6 @@ void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
         struct fixup_spills_data metadata = {.irb = irb, .consumer = op};
 
         walk_op_uses(op, fixup_spills_callback, &metadata);
-
-        if (op->reg == REG_SPILLED) {
-          // insert store for the op
-          struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
-                                                   IR_OP_VAR_TY_NONE);
-          store->lcl = op->lcl;
-          store->store_lcl.value = op;
-          store->reg = NO_REG;
-          store->flags |= IR_OP_FLAG_SPILL;
-
-          op->lcl->store = store;
-        }
 
         op = op->succ;
       }

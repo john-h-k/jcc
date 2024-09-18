@@ -13,10 +13,6 @@ const char *unary_op_string(enum ir_op_unary_op_ty ty) {
     return "!";
   case IR_OP_UNARY_OP_TY_NOT:
     return "~";
-  case IR_OP_UNARY_OP_TY_DEREF:
-    return "*";
-  case IR_OP_UNARY_OP_TY_ADDRESSOF:
-    return "&";
   }
 }
 
@@ -95,6 +91,18 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
   case IR_OP_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
     debug_var_ty_string(file, var_ty->pointer.underlying);
+    fprintf(file, " ]");
+    return;
+  }
+  case IR_OP_VAR_TY_TY_ARRAY: {
+    fprintf(file, "PTR [ ");
+    debug_var_ty_string(file, var_ty->array.underlying);
+    fprintf(file, ", ");
+    if (var_ty->array.ty == IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN) {
+      fprintf(file, "%zu", var_ty->array.num_elements);
+    } else {
+      fprintf(file, "UNKNOWN");
+    }
     fprintf(file, " ]");
     return;
   }
@@ -182,6 +190,12 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   UNUSED_ARG(irb);
 
   switch (ir->ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op!");
+  case IR_OP_TY_UNDF:
+    debug_lhs(file, ir);
+    fprintf(file, "UNDF");
+    break;
   case IR_OP_TY_CUSTOM:
     debug_lhs(file, ir);
     irb->debug_print_custom_ir_op(file, irb, ir);
@@ -249,6 +263,23 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, ir);
     fprintf(file, "%s %%%zu", cast_op_string(ir->cast_op.ty),
             ir->cast_op.value->id);
+    break;
+  case IR_OP_TY_STORE_ADDR:
+    debug_lhs(file, ir);
+    fprintf(file, "storeaddr [%%%zu], %%%zu", ir->store_addr.addr->id,
+            ir->store_addr.value->id);
+    break;
+  case IR_OP_TY_LOAD_ADDR:
+    debug_lhs(file, ir);
+    fprintf(file, "loadaddr [%%%zu]", ir->load_addr.addr->id);
+    break;
+  case IR_OP_TY_ADDR:
+    debug_lhs(file, ir);
+    switch (ir->addr.ty) {
+    case IR_OP_ADDR_TY_LCL:
+      fprintf(file, "addr LCL(%zu)", ir->addr.lcl->id);
+      break;
+    }
     break;
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, ir);
