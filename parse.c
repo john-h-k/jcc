@@ -1204,23 +1204,25 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
 // parses precedence level 1:
 // postfix ++, postfix --, (), [], ., ->, (type){list}
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
-  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  if (!parse_atom_0(parser, sub_expr)) {
+  if (!parse_atom_0(parser, expr)) {
     return false;
   }
 
   while (true) {
-    if (parse_unary_postfix_op(parser, sub_expr, expr) ||
-        parse_call(parser, sub_expr, expr) ||
-        parse_array_access(parser, sub_expr, expr) ||
-        parse_member_access(parser, sub_expr, expr) ||
-        parse_pointer_access(parser, sub_expr, expr)) {
+    struct ast_expr *new_expr = arena_alloc(parser->arena, sizeof(*new_expr));
+    struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*new_expr));
+    *sub_expr = *expr;
 
-      sub_expr = expr;
+    if (parse_unary_postfix_op(parser, sub_expr, new_expr) ||
+        parse_call(parser, sub_expr, new_expr) ||
+        parse_array_access(parser, sub_expr, new_expr) ||
+        parse_member_access(parser, sub_expr, new_expr) ||
+        parse_pointer_access(parser, sub_expr, new_expr)) {
+
+      *expr = *new_expr;
       continue;
     }
 
-    *expr = *sub_expr;
     return true;
   }
 }

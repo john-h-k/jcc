@@ -587,6 +587,10 @@ const char *identifier_str(struct parser *parser, const struct token *token);
 struct ast_tyref tyref_make_pointer(struct parser *parser,
                                     const struct ast_tyref *var_ty);
 
+struct ast_tyref tyref_get_underlying(struct parser *parser,
+                                      const struct ast_tyref *ty_ref);
+
+
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
 

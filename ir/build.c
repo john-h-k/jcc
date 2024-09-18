@@ -143,11 +143,15 @@ enum ir_op_var_primitive_ty ty_for_well_known_ty(enum well_known_ty wkt) {
 }
 
 struct ir_op_var_ty
-var_ty_get_pointer_underlying(const struct ir_op_var_ty *var_ty) {
-  debug_assert(var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
-               "non pointer passed to `%s`", __func__);
-
-  return *var_ty->pointer.underlying;
+var_ty_get_underlying(const struct ir_op_var_ty *var_ty) {
+  switch (var_ty->ty){
+    case IR_OP_VAR_TY_TY_POINTER:
+      return *var_ty->pointer.underlying;
+    case IR_OP_VAR_TY_TY_ARRAY:
+      return *var_ty->array.underlying;
+    default:
+      bug("non pointer/array passed");
+  }
 }
 
 struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
@@ -777,9 +781,11 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
   const char *member_name = identifier_str(irb->parser, member);
   
   size_t member_idx = 0;
+  struct ast_tyref member_ty;
   for (; member_idx < ty_ref->structure.num_field_var_tys; member_idx++) {
     struct ast_struct_field *field = &ty_ref->structure.field_var_tys[member_idx];
     if (strcmp(field->name, member_name) == 0) {
+      member_ty = *field->var_ty;
       break;
     }
   }
@@ -788,9 +794,15 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
   struct ir_var_ty_info info = var_ty_info(irb, &struct_ty);
   size_t offset = info.offsets[member_idx];
 
-  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, ty_ref);
+  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, &member_ty);
 
-  struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr, ty_ref);
+  struct ir_op *lhs;
+  if (lhs_expr->ty == AST_EXPR_TY_MEMBERACCESS) {
+    // nested access
+    lhs = build_ir_for_member_address(irb, stmt, lhs_expr->member_access.lhs, &lhs_expr->member_access.member);
+  } else {
+    lhs = build_ir_for_addressof(irb, stmt, lhs_expr, ty_ref);
+  }
 
   struct ir_op *rhs = alloc_ir_op(irb, stmt);
   rhs->ty = IR_OP_TY_CNST;
@@ -810,17 +822,17 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
 struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
                                          struct ir_stmt *stmt,
                                          struct ast_expr *lhs_expr,
-                                         struct ast_expr *rhs_expr,
-                                         const struct ast_tyref *elem_ty) {
-  struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, elem_ty);
-
+                                         struct ast_expr *rhs_expr) {
+  struct ast_tyref pointer_ty;
   struct ir_op *lhs;
   if (lhs_expr->var_ty.ty == AST_TYREF_TY_ARRAY) {
     // need to decay the type to pointer
     struct ast_tyref *underlying = lhs_expr->var_ty.array.element;
     lhs = build_ir_for_addressof(irb, stmt, lhs_expr, underlying);
+    pointer_ty = tyref_make_pointer(irb->parser, &lhs_expr->var_ty);
   } else {
     lhs = build_ir_for_expr(irb, stmt, lhs_expr, &pointer_ty);
+    pointer_ty = tyref_get_underlying(irb->parser, &lhs_expr->var_ty);
   }
   
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_ty);
@@ -853,7 +865,7 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   } else if (assg->assignee->ty == AST_EXPR_TY_ARRAYACCESS) {
     struct ast_arrayaccess *access = &assg->assignee->array_access;
     struct ir_op *address = build_ir_for_array_address(
-        irb, stmt, access->lhs, access->rhs, &assg->assignee->var_ty);
+        irb, stmt, access->lhs, access->rhs);
 
     struct ir_op *store = alloc_ir_op(irb, stmt);
     store->ty = IR_OP_TY_STORE_ADDR;
@@ -883,6 +895,33 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 }
 
+struct ir_op *build_ir_for_arrayaccess(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_arrayaccess *array_access) {
+  struct ir_op *address =
+      build_ir_for_array_address(irb, stmt, array_access->lhs,
+                                 array_access->rhs);
+
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &array_access->lhs->var_ty);
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_LOAD_ADDR;
+  op->var_ty = var_ty_get_underlying(&var_ty);
+  op->load_addr = (struct ir_op_load_addr){.addr = address};
+
+  return op;  
+}
+
+struct ir_op *build_ir_for_memberaccess(struct ir_builder *irb, struct ir_stmt *stmt, struct ast_memberaccess *member_access) {
+  struct ir_op *address =
+      build_ir_for_member_address(irb, stmt, member_access->lhs,
+                                 &member_access->member);
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_LOAD_ADDR;
+  op->var_ty = var_ty_get_underlying(&address->var_ty);
+  op->load_addr = (struct ir_op_load_addr){.addr = address};
+
+  return op;
+}
 
 struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_expr *expr,
@@ -901,30 +940,12 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_EXPR_TY_BINARY_OP:
     op = build_ir_for_binaryop(irb, stmt, &expr->binary_op);
     break;
-  case AST_EXPR_TY_ARRAYACCESS: {
-    struct ir_op *address =
-        build_ir_for_array_address(irb, stmt, expr->array_access.lhs,
-                                   expr->array_access.rhs, &expr->var_ty);
-
-    op = alloc_ir_op(irb, stmt);
-    op->ty = IR_OP_TY_LOAD_ADDR;
-    op->var_ty = ty_for_ast_tyref(irb, &expr->var_ty);
-    op->load_addr = (struct ir_op_load_addr){.addr = address};
-
+  case AST_EXPR_TY_ARRAYACCESS:
+    op = build_ir_for_arrayaccess(irb, stmt, &expr->array_access);
     break;
-  }
-  case AST_EXPR_TY_MEMBERACCESS: {
-    struct ir_op *address =
-        build_ir_for_member_address(irb, stmt, expr->member_access.lhs,
-                                   &expr->member_access.member);
-
-    op = alloc_ir_op(irb, stmt);
-    op->ty = IR_OP_TY_LOAD_ADDR;
-    op->var_ty = ty_for_ast_tyref(irb, &expr->var_ty);
-    op->load_addr = (struct ir_op_load_addr){.addr = address};
-
+  case AST_EXPR_TY_MEMBERACCESS:
+    op = build_ir_for_memberaccess(irb, stmt, &expr->member_access);
     break;
-  }
   case AST_EXPR_TY_POINTERACCESS:
     todo("access build");
     break;
