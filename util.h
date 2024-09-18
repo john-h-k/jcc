@@ -90,9 +90,9 @@ static inline size_t num_digits(size_t num) {
 }
 
 static inline void debug_print_stack_trace() {
-  #ifdef SANITIZER_PRINT_STACK_TRACE
+#ifdef SANITIZER_PRINT_STACK_TRACE
   __sanitizer_print_stack_trace();
-  #endif
+#endif
 }
 
 static inline unsigned long popcntl(unsigned long long l) {

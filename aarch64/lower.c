@@ -43,7 +43,8 @@ void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
     fprintf(file, "a64_page_off %%%zu", custom->page_off.glb_ref->id);
     break;
   case AARCH64_OP_TY_STORE_VARIADIC:
-    fprintf(file, "a64_store_variadic #%zu, %%%zu", custom->store_variadic.idx, custom->store_variadic.value->id);
+    fprintf(file, "a64_store_variadic #%zu, %%%zu", custom->store_variadic.idx,
+            custom->store_variadic.value->id);
     break;
   }
 }

@@ -67,7 +67,9 @@ bool var_ty_needs_cast_op(const struct ir_op_var_ty *l,
   }
 
   // TODO: hardcodes pointer size
-  if (l->ty == IR_OP_VAR_TY_TY_PRIMITIVE && l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64 && r->ty == IR_OP_VAR_TY_TY_POINTER) {
+  if (l->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+      l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64 &&
+      r->ty == IR_OP_VAR_TY_TY_POINTER) {
     // same size int -> pointer needs no cast
     return false;
   }
@@ -175,7 +177,8 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
     bug("cast between pointer types is implicit");
   }
 
-  if (from_var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+  if (from_var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+      to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
     // primitive -> pointer
     // TODO: hardcodes pointer size
     if (from_var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64) {
@@ -191,7 +194,8 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
-    todo("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty, to_var_ty.ty);
+    todo("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty,
+         to_var_ty.ty);
   }
 
   if (to_var_ty.primitive < from_var_ty.primitive) {
@@ -241,9 +245,11 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
   b->lhs = lhs;
   b->rhs = rhs;
 
-  invariant_assert(ty_ref->ty == AST_TYREF_TY_WELL_KNOWN || ty_ref->ty == AST_TYREF_TY_POINTER,
-                   "non primitives/well-knowns/pointers cannot be used in binary "
-                   "expression by point IR is reached!");
+  invariant_assert(
+      ty_ref->ty == AST_TYREF_TY_WELL_KNOWN ||
+          ty_ref->ty == AST_TYREF_TY_POINTER,
+      "non primitives/well-knowns/pointers cannot be used in binary "
+      "expression by point IR is reached!");
 
   switch (ty) {
   case AST_BINARY_OP_TY_EQ:
@@ -566,14 +572,16 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
                                      ? call->var_ty.func.num_param_var_tys - 1
                                      : 0;
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
-    args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i], &call->arg_list.args[i].var_ty);
+    args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i],
+                                &call->arg_list.args[i].var_ty);
 
     if (i >= num_non_variadic_args) {
       args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
     }
   }
 
-  struct ir_op *target = build_ir_for_expr(irb, stmt, call->target, &call->target->var_ty);
+  struct ir_op *target =
+      build_ir_for_expr(irb, stmt, call->target, &call->target->var_ty);
 
   irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
@@ -605,23 +613,24 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     op = build_ir_for_binaryop(irb, stmt, &expr->binary_op);
     break;
   case AST_EXPR_TY_ARRAYACCESS: {
-    struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, &expr->var_ty);
-    struct ir_op *lhs = build_ir_for_expr(irb, stmt, expr->array_access.lhs, &pointer_ty);
-    struct ir_op *rhs = build_ir_for_expr(irb, stmt, expr->array_access.rhs, &pointer_ty);
+    struct ast_tyref pointer_ty =
+        tyref_make_pointer(irb->parser, &expr->var_ty);
+    struct ir_op *lhs =
+        build_ir_for_expr(irb, stmt, expr->array_access.lhs, &pointer_ty);
+    struct ir_op *rhs =
+        build_ir_for_expr(irb, stmt, expr->array_access.rhs, &pointer_ty);
 
-    struct ir_op *address = alloc_binaryop(irb, stmt, 
-                                           &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
+    struct ir_op *address =
+        alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
 
     op = alloc_ir_op(irb, stmt);
     op->ty = IR_OP_TY_UNARY_OP;
     op->var_ty = ty_for_ast_tyref(irb, &expr->var_ty);
-    op->unary_op = (struct ir_op_unary_op){
-      .ty = IR_OP_UNARY_OP_TY_DEREF,
-      .value = address
-    };
+    op->unary_op = (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_DEREF,
+                                           .value = address};
 
     break;
-  }  
+  }
   case AST_EXPR_TY_MEMBERACCESS:
   case AST_EXPR_TY_POINTERACCESS:
     todo("access build");
@@ -1251,11 +1260,10 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-struct ir_builder *build_ir_for_function(struct parser *parser,
-                                         struct arena_allocator *arena,
-                                         struct ast_funcdef *def,
-                                         struct var_refs *global_var_refs,
-                                         debug_print_custom_ir_op debug_print_custom_ir_op) {
+struct ir_builder *
+build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
+                      struct ast_funcdef *def, struct var_refs *global_var_refs,
+                      debug_print_custom_ir_op debug_print_custom_ir_op) {
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
                          .global_var_refs = global_var_refs,
@@ -1270,8 +1278,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
                          .num_locals = 0,
                          .total_locals_size = 0,
                          .offset = 0,
-                         .debug_print_custom_ir_op = debug_print_custom_ir_op
-                       };
+                         .debug_print_custom_ir_op = debug_print_custom_ir_op};
 
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = b;
@@ -1337,10 +1344,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
           .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
           .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
       };
-      cnst->cnst = (struct ir_op_cnst){
-        .ty = IR_OP_CNST_TY_INT,
-        .int_value = 0
-      };
+      cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = 0};
 
       return_value = cnst;
     }
@@ -1402,10 +1406,8 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
 struct ir_unit *build_ir_for_translationunit(
     /* needed for `associated_text */ struct parser *parser,
-    struct arena_allocator *arena,
-    struct ast_translationunit *translation_unit,
-    debug_print_custom_ir_op debug_print_custom_ir_op
-  ) {
+    struct arena_allocator *arena, struct ast_translationunit *translation_unit,
+    debug_print_custom_ir_op debug_print_custom_ir_op) {
 
   struct ir_unit u = {
       .funcs = arena_alloc(arena, sizeof(struct ir_builder *) *
@@ -1462,8 +1464,8 @@ struct ir_unit *build_ir_for_translationunit(
     struct var_key key = {.name = identifier_str(parser, &def->sig.name),
                           .scope = SCOPE_GLOBAL};
 
-    struct ir_builder *func =
-        build_ir_for_function(parser, arena, def, global_var_refs, debug_print_custom_ir_op);
+    struct ir_builder *func = build_ir_for_function(
+        parser, arena, def, global_var_refs, debug_print_custom_ir_op);
 
     var_refs_get(global_var_refs, &key)->func = func;
 

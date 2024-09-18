@@ -16,12 +16,12 @@ enum lex_token_ty {
 
   /* Bracket types */
 
-  LEX_TOKEN_TY_OPEN_BRACKET,           // (
-  LEX_TOKEN_TY_CLOSE_BRACKET,          // )
-  LEX_TOKEN_TY_OPEN_BRACE,             // {
-  LEX_TOKEN_TY_CLOSE_BRACE,            // }
-  LEX_TOKEN_TY_OPEN_SQUARE_BRACKET,    // [
-  LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET,   // ]
+  LEX_TOKEN_TY_OPEN_BRACKET,         // (
+  LEX_TOKEN_TY_CLOSE_BRACKET,        // )
+  LEX_TOKEN_TY_OPEN_BRACE,           // {
+  LEX_TOKEN_TY_CLOSE_BRACE,          // }
+  LEX_TOKEN_TY_OPEN_SQUARE_BRACKET,  // [
+  LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET, // ]
 
   LEX_TOKEN_TY_SEMICOLON, // ;
   LEX_TOKEN_TY_COMMA,     // ,
