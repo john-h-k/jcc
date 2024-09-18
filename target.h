@@ -114,6 +114,7 @@ struct target {
   emit_function emit_function;
   build_object build_object;
   debug_disasm debug_disasm;
+  debug_print_custom_ir_op debug_print_custom_ir_op;
 };
 
 #endif

@@ -51,9 +51,17 @@ set(
 if(MSVC)
   add_compile_option(/W4 /WX)
 else()
-  add_link_options(-fsanitize=undefined)
-  add_compile_options(-fsanitize=undefined)
-  add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wimplicit-fallthrough -Wstrict-prototypes)
+  add_link_options(-fsanitize=address,undefined)
+  add_compile_options(-fsanitize=address,undefined)
+  add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+    -Wimplicit-fallthrough
+    -Wstrict-prototypes
+    -Wmissing-field-initializers
+  )
   # TODO: remove binary literals in source
   add_compile_options(-Wno-gnu-binary-literal)
 endif()

@@ -6,6 +6,8 @@
 struct ir_unit *build_ir_for_translationunit(
     /* needed for `associated_text */ struct parser *parser,
     struct arena_allocator *arena,
-    struct ast_translationunit *translation_unit);
+    struct ast_translationunit *translation_unit,
+    debug_print_custom_ir_op debug_print_custom_ir_op
+);
 
 #endif

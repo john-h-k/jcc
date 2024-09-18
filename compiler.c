@@ -189,7 +189,7 @@ enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("IR BUILD");
 
   struct ir_unit *ir = build_ir_for_translationunit(
-      compiler->parser, compiler->arena, &result.translation_unit);
+      compiler->parser, compiler->arena, &result.translation_unit, target->debug_print_custom_ir_op);
 
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
