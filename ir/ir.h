@@ -207,14 +207,7 @@ struct ir_op_var_func_ty {
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);
 
-enum ir_op_var_array_ty_ty {
-  IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN,
-  IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN,
-};
-
 struct ir_op_var_array_ty {
-  enum ir_op_var_array_ty_ty ty;
-
   struct ir_op_var_ty *underlying;
 
   union {

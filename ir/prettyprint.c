@@ -98,11 +98,7 @@ void debug_var_ty_string(FILE *file, const struct ir_op_var_ty *var_ty) {
     fprintf(file, "PTR [ ");
     debug_var_ty_string(file, var_ty->array.underlying);
     fprintf(file, ", ");
-    if (var_ty->array.ty == IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN) {
-      fprintf(file, "%zu", var_ty->array.num_elements);
-    } else {
-      fprintf(file, "UNKNOWN");
-    }
+    fprintf(file, "%zu", var_ty->array.num_elements);
     fprintf(file, " ]");
     return;
   }

@@ -58,9 +58,7 @@ bool var_ty_eq(const struct ir_op_var_ty *l, const struct ir_op_var_ty *r) {
   case IR_OP_VAR_TY_TY_POINTER:
     return var_ty_eq(l->pointer.underlying, r->pointer.underlying);
   case IR_OP_VAR_TY_TY_ARRAY:
-    return l->array.ty == r->array.ty &&
-           (l->array.ty == IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN ||
-            l->array.num_elements == r->array.num_elements) &&
+    return l->array.num_elements == r->array.num_elements &&
            var_ty_eq(l->array.underlying, r->array.underlying);
   case IR_OP_VAR_TY_TY_FUNC:
     if (!var_ty_eq(l->func.ret_ty, r->func.ret_ty)) {
@@ -146,7 +144,6 @@ struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
 
 struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
                                       const struct ir_op_var_ty *underlying,
-                                      enum ir_op_var_array_ty_ty ty,
                                       size_t num_elements) {
   struct ir_op_var_ty *copied = arena_alloc(irb->arena, sizeof(*copied));
 
@@ -155,7 +152,7 @@ struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
   struct ir_op_var_ty var_ty;
   var_ty.ty = IR_OP_VAR_TY_TY_ARRAY;
   var_ty.array = (struct ir_op_var_array_ty){
-      .ty = ty, .num_elements = num_elements, .underlying = copied};
+    .num_elements = num_elements, .underlying = copied};
 
   return var_ty;
 }
@@ -200,20 +197,18 @@ struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
     struct ir_op_var_ty underlying =
         ty_for_ast_tyref(irb, ty_ref->array.element);
 
-    enum ir_op_var_array_ty_ty ty;
     size_t num_elements;
     switch (ty_ref->array.ty) {
     case AST_TY_ARRAY_TY_UNKNOWN_SIZE:
-      ty = IR_OP_VAR_ARRAY_TY_TY_SIZE_UNKNOWN;
+      bug("array must have size by build time");
       num_elements = 0;
       break;
     case AST_TY_ARRAY_TY_KNOWN_SIZE:
-      ty = IR_OP_VAR_ARRAY_TY_TY_SIZE_KNOWN;
       num_elements = ty_ref->array.size;
       break;
     }
 
-    return var_ty_make_array(irb, &underlying, ty, num_elements);
+    return var_ty_make_array(irb, &underlying, num_elements);
   }
   }
 }
@@ -1225,7 +1220,68 @@ struct ir_op *build_ir_for_vardecl_with_initlist(struct ir_builder *irb,
                                        struct ast_vardecl *decl,
                                        struct ast_initlist *init_list
                                      ) {
-  for (size_t i = 0; i < init_list->num_exprs; i++)
+
+  struct ast_tyref *var_ty = &decl->var.var_ty;
+  // TODO: non array init lists
+  debug_assert(var_ty->ty == AST_TYREF_TY_ARRAY, "non array init lists");
+
+  struct ast_tyref *el_ty = var_ty->array.element;
+  size_t num_elements = var_ty->array.ty == AST_TY_ARRAY_TY_KNOWN_SIZE ? var_ty->array.size : init_list->num_exprs;
+
+  if (!num_elements) {
+    bug("empty arrays are GNU extension");
+  }
+
+  struct ast_expr decl_expr = {
+    .ty = AST_EXPR_TY_ATOM,
+    .var_ty = *var_ty,
+    .atom = (struct ast_atom){
+      .ty = AST_ATOM_TY_VAR,
+      .var_ty = *var_ty,
+      .var = decl->var
+    }
+  };
+
+  struct ir_op *last;
+
+  struct ir_op *start_address = build_ir_for_addressof(irb, stmt, &decl_expr, el_ty);
+  for (size_t i = 0; i < num_elements; i++) {
+    if (i < init_list->num_exprs) {
+      struct ir_op *expr = build_ir_for_expr(irb, stmt, &init_list->exprs[i], el_ty);
+
+      struct ir_op *offset = alloc_ir_op(irb, stmt);
+      offset->ty = IR_OP_TY_CNST;
+      offset->var_ty = (struct ir_op_var_ty){
+        .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+        .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
+      };
+      offset->cnst = (struct ir_op_cnst){
+        .ty = IR_OP_CNST_TY_INT,
+        .int_value = i
+      };
+
+      struct ir_op *address = alloc_ir_op(irb, stmt);
+      address->ty = IR_OP_TY_BINARY_OP;
+      address->var_ty = start_address->var_ty;
+      address->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_ADD,
+        .lhs = start_address,
+        .rhs = offset
+      };
+
+      struct ir_op *store = alloc_ir_op(irb, stmt);
+      store->ty = IR_OP_TY_STORE_ADDR;
+      store->var_ty = IR_OP_VAR_TY_NONE;
+      store->store_addr = (struct ir_op_store_addr){
+        .addr = address,
+        .value = expr
+      };
+
+      last = store;
+    }
+  }
+
+  return last;
 }
 
 struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
@@ -1235,20 +1291,23 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     struct ast_vardecl *decl = &var_decl_list->decls[i];
 
     struct ir_op *assignment;
-    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG) {
-      if (decl->assg_expr.ty == AST_EXPR_TY_INIT_LIST) {
-        assignment = build_ir_for_vardecl_with_initlist(irb, stmt, decl, &decl->assg_expr.init_list);
-      } else {
-        assignment = build_ir_for_expr(irb, stmt, &decl->assg_expr, &decl->var.var_ty);
-      }
+    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG && decl->assg_expr.ty != AST_EXPR_TY_INIT_LIST) {
+      assignment = build_ir_for_expr(irb, stmt, &decl->assg_expr, &decl->var.var_ty);
     } else {
       assignment = alloc_ir_op(irb, stmt);
       assignment->ty = IR_OP_TY_UNDF;
       assignment->var_ty = ty_for_ast_tyref(irb, &decl->var.var_ty);
     }
 
-    // FIXME: is this right
     var_assg(irb, stmt, assignment, &decl->var);
+
+    // init lists are not true assignments
+    // they are a lot of stores into locals
+    // so must be built after the variable exists
+    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG && decl->assg_expr.ty == AST_EXPR_TY_INIT_LIST) {
+      build_ir_for_vardecl_with_initlist(irb, stmt, decl, &decl->assg_expr.init_list);
+    }
+    
   }
 
   return stmt->last;
