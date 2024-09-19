@@ -973,6 +973,10 @@ void get_member_info(struct ir_builder *irb, const struct ast_tyref *struct_ty,
         &struct_ty->struct_ty.field_var_tys[member_idx];
     if (strcmp(field->name, member_name) == 0) {
       *member_ty = var_ty_for_ast_tyref(irb, field->var_ty);
+      if (member_ty->ty == IR_OP_VAR_TY_TY_ARRAY) {
+        // pointer decay
+        *member_ty = var_ty_make_pointer(irb, member_ty->array.underlying);
+      }
       break;
     }
   }
@@ -1062,7 +1066,10 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
     pointer_ty = lhs_expr->var_ty;
   }
 
-  struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_ty);
+  // need to promote rhs to pointer size int
+  debug_assert(rhs_expr->var_ty.ty == AST_TYREF_TY_WELL_KNOWN, "expected well-known ty rhs");
+  struct ast_tyref pointer_size_int = tyref_pointer_sized_int(irb->parser, false);
+  struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_size_int);
 
   return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
 }

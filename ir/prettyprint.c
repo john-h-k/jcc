@@ -299,7 +299,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
-      fprintf(file, "addr LCL(%zu)", ir->addr.lcl->id);
+      fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id, ir->addr.lcl->offset);
       break;
     }
     break;

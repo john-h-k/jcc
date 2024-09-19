@@ -618,6 +618,8 @@ struct ast_tyref tyref_make_pointer(struct parser *parser,
 struct ast_tyref tyref_get_underlying(struct parser *parser,
                                       const struct ast_tyref *ty_ref);
 
+struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);
+
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
