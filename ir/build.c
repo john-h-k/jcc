@@ -210,12 +210,9 @@ struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb) {
 
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_builder` to know the native integer size
-  // for now just use a void*
   return (struct ir_op_var_ty){
-    .ty = IR_OP_VAR_TY_TY_POINTER,
-    .pointer = (struct ir_op_var_pointer_ty){
-      .underlying = &IR_OP_VAR_TY_NONE
-    }
+    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
   };
 }
 
@@ -380,6 +377,8 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                              const struct ast_tyref *ty_ref,
                              enum ast_binary_op_ty ty, struct ir_op *lhs,
                              struct ir_op *rhs) {
+  invariant_assert(lhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY || rhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY, "array should have decayed to ptr");
+
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, ty_ref);
 
   if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
@@ -546,19 +545,19 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
   get_var_ref(irb, NULL, &expr->var, &key, &ref);
 
   struct ir_lcl *lcl;
-  struct ir_op_var_ty var_ty;
+  struct ir_op_var_ty underlying_var_ty;
   switch (ref->ty) {
   case VAR_REF_TY_SSA:
     spill_op(irb, ref->op);
     lcl = ref->op->lcl;
-    var_ty = var_ty_make_pointer(irb, &ref->op->var_ty);
+    underlying_var_ty = ref->op->var_ty;
 
     ref->ty = VAR_REF_TY_LCL;
 
     break;
   case VAR_REF_TY_LCL:
     lcl = ref->op->lcl;
-    var_ty = var_ty_make_pointer(irb, &ref->op->var_ty);
+    underlying_var_ty = ref->op->var_ty;
     break;
   case VAR_REF_TY_GLB:
     todo("address of globals");
@@ -566,6 +565,14 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
   case VAR_REF_TY_ENUM_CNST:
     bug("address of enum makes no sense");
     break;
+  }
+
+  struct ir_op_var_ty var_ty;
+  if (underlying_var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
+    // decay T[] to T* (rather than to T[]*)
+    var_ty = var_ty_make_pointer(irb, underlying_var_ty.array.underlying);
+  } else {
+    var_ty = var_ty_make_pointer(irb, &underlying_var_ty);    
   }
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
