@@ -347,6 +347,91 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
+// actually more than this but we don't support that yet
+#define MAX_REG_SIZE (8)
+
+static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
+  // look for store after, in case this is a copy
+  // FIXME: not sure if this is perfect logic (could there be ops in between?)
+  struct ir_op *store = op->succ;
+
+  if (!store || store->ty != IR_OP_TY_STORE_LCL) {
+    return;
+  }
+
+  struct ir_var_ty_info info = var_ty_info(func, &op->var_ty);
+  if (info.size <= MAX_REG_SIZE) {
+    return;
+  }
+
+  struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func);
+  struct ir_op_var_ty pointer_copy_ty = var_ty_make_pointer(func, &copy_ty);
+
+  struct ir_lcl *src_lcl = op->load_lcl.lcl;
+  struct ir_lcl *dest_lcl = store->lcl;
+
+  struct ir_op *base_src_addr = op;
+  struct ir_op *base_dest_addr = store;
+
+  base_src_addr->ty = IR_OP_TY_ADDR;
+  base_src_addr->var_ty = pointer_copy_ty;
+  base_src_addr->addr = (struct ir_op_addr){
+    .ty = IR_OP_ADDR_TY_LCL,
+    .lcl = src_lcl
+  };
+
+  base_dest_addr->ty = IR_OP_TY_ADDR;
+  base_dest_addr->var_ty = pointer_copy_ty;
+  base_dest_addr->addr = (struct ir_op_addr){
+    .ty = IR_OP_ADDR_TY_LCL,
+    .lcl = dest_lcl
+  };
+
+  struct ir_op *offset_cnst = insert_after_ir_op(func, store, IR_OP_TY_CNST, copy_ty);
+  make_pointer_constant(func, offset_cnst, MAX_REG_SIZE);
+
+  struct ir_op *last = offset_cnst;
+  struct ir_op *last_src_addr = base_src_addr;
+  struct ir_op *last_dest_addr = base_dest_addr;
+
+  // FIXME: this definitly overwrites stuff
+  // it writes in 8 byte segments so would write 16 byte for a 12 byte type etc
+
+  size_t size_left = info.size;
+  while (size_left) {
+    struct ir_op *src_addr = insert_after_ir_op(func, last, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    src_addr->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_ADD,
+      .lhs = last_src_addr,
+      .rhs = offset_cnst
+    };
+
+    struct ir_op *load = insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+    load->load_addr = (struct ir_op_load_addr){
+      .addr = src_addr
+    };
+
+    struct ir_op *dest_addr = insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    dest_addr->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_ADD,
+      .lhs = last_dest_addr,
+      .rhs = offset_cnst
+    };
+    
+    struct ir_op *store = insert_after_ir_op(func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+    store->store_addr = (struct ir_op_store_addr){
+      .addr = dest_addr,
+      .value = load
+    };
+
+    last = store;
+    last_src_addr = src_addr;
+    last_dest_addr = dest_addr;
+    size_left -= MAX_REG_SIZE;
+  }
+}
+
+
 void aarch64_pre_reg_lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
@@ -366,6 +451,8 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_CNST:
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
+          lower_load_lcl(func, op);
+          break;
         case IR_OP_TY_STORE_ADDR:
         case IR_OP_TY_LOAD_ADDR:
         case IR_OP_TY_ADDR:
