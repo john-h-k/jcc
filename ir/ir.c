@@ -664,6 +664,32 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   return op;
 }
 
+void make_integral_constant(struct ir_builder *irb, struct ir_op *op, enum ir_op_var_primitive_ty ty, unsigned long long value) {
+  UNUSED_ARG(irb);
+
+  op->ty = IR_OP_TY_CNST;
+  op->var_ty = (struct ir_op_var_ty){
+    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    .primitive = ty
+  };
+  op->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = value
+  };
+}
+
+void make_pointer_constant(struct ir_builder *irb, struct ir_op *op, unsigned long long value) {
+  op->ty = IR_OP_TY_CNST;
+  op->var_ty = var_ty_for_pointer_size(irb);
+  op->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = value
+  };
+}
+
+struct ir_op *alloc_integral_constant(struct ir_builder *irb, struct ir_stmt *stmt, enum ir_op_var_primitive_ty primitive, unsigned long long value);
+
+
 struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
                               struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
