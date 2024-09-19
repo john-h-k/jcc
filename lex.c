@@ -96,6 +96,10 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("enum", LEX_TOKEN_TY_KW_ENUM),
       KEYWORD("struct", LEX_TOKEN_TY_KW_STRUCT),
       KEYWORD("union", LEX_TOKEN_TY_KW_UNION),
+
+      KEYWORD("sizeof", LEX_TOKEN_TY_KW_SIZEOF),
+      KEYWORD("alignof", LEX_TOKEN_TY_KW_ALIGNOF),
+      KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF),
   };
 
 #undef KEYWORD
@@ -664,6 +668,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_ENUM)
     CASE_RET(LEX_TOKEN_TY_KW_STRUCT)
     CASE_RET(LEX_TOKEN_TY_KW_UNION)
+    CASE_RET(LEX_TOKEN_TY_KW_SIZEOF)
+    CASE_RET(LEX_TOKEN_TY_KW_ALIGNOF)
 
     CASE_RET(LEX_TOKEN_TY_KW_TYPEDEF)
     CASE_RET(LEX_TOKEN_TY_KW_STATIC)

@@ -578,11 +578,11 @@ static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
   if (is_64_bit(op)) {
     aarch64_emit_load_offset_64(
         state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-        get_lcl_stack_offset_64(state, op->load_lcl.lcl->lcl));
+        get_lcl_stack_offset_64(state, op->load_lcl.lcl));
   } else {
     aarch64_emit_load_offset_32(
         state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
-        get_lcl_stack_offset_32(state, op->load_lcl.lcl->lcl));
+        get_lcl_stack_offset_32(state, op->load_lcl.lcl));
   }
 }
 

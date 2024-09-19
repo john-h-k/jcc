@@ -254,6 +254,8 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_ENUM:
   case LEX_TOKEN_TY_KW_STRUCT:
   case LEX_TOKEN_TY_KW_UNION:
+  case LEX_TOKEN_TY_KW_SIZEOF:
+  case LEX_TOKEN_TY_KW_ALIGNOF:
   case LEX_TOKEN_TY_IDENTIFIER:
     return false;
 
@@ -304,6 +306,16 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   }
 
   unreachable("switch broke");
+}
+
+struct ast_tyref tyref_pointer_sized_int(struct parser *parser) {
+  UNUSED_ARG(parser);
+
+  // returns the type for `size_t` effectively
+  // TODO: generalise - either we should have a special ptr-sized int type, or
+  // parser should have a field for ptr size
+  return (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                            .well_known = WELL_KNOWN_TY_UNSIGNED_LONG_LONG};
 }
 
 struct ast_tyref tyref_make_pointer(struct parser *parser,
@@ -497,6 +509,7 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
 
     if (maybe_other_long.ty == LEX_TOKEN_TY_KW_LONG) {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
+      consume_token(parser->lexer, maybe_other_long);
     } else {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG;
     }
@@ -604,8 +617,7 @@ unsigned long long resolve_constant_expr(struct parser *parser,
                                          const struct ast_expr *expr) {
   UNUSED_ARG(parser);
 
-  if (expr->ty == AST_EXPR_TY_CNST &&
-      is_integral_ty(&expr->cnst.cnst_ty)) {
+  if (expr->ty == AST_EXPR_TY_CNST && is_integral_ty(&expr->cnst.cnst_ty)) {
     return expr->cnst.int_value;
   }
 
@@ -696,10 +708,10 @@ bool parse_simple_type(struct parser *parser, struct ast_tyref *ty_ref) {
   struct var_table_entry *entry = get_entry(&parser->ty_table, ty_name);
 
   if (entry && entry->value) {
-    debug_assert(((struct ast_tyref *)entry->value)->ty ==
-                     AST_TYREF_TY_STRUCT || ((struct ast_tyref *)entry->value)->ty ==
-                     AST_TYREF_TY_UNION,
-                 "expected struct/union ty");
+    debug_assert(
+        ((struct ast_tyref *)entry->value)->ty == AST_TYREF_TY_STRUCT ||
+            ((struct ast_tyref *)entry->value)->ty == AST_TYREF_TY_UNION,
+        "expected struct/union ty");
     *ty_ref = *((struct ast_tyref *)entry->value);
 
     invariant_assert(ty == ty_ref->ty, "union/struct mismatch");
@@ -1078,7 +1090,8 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
                                           const struct ast_tyref *var_ty,
                                           const struct token *member) {
 
-  invariant_assert(var_ty->ty == AST_TYREF_TY_STRUCT || var_ty->ty == AST_TYREF_TY_UNION,
+  invariant_assert(var_ty->ty == AST_TYREF_TY_STRUCT ||
+                       var_ty->ty == AST_TYREF_TY_UNION,
                    "non struct/union in member access");
 
   const char *member_name = identifier_str(parser, member);
@@ -1095,12 +1108,11 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
 }
 
 struct ast_tyref resolve_pointer_access_ty(struct parser *parser,
-                                          const struct ast_tyref *var_ty,
-                                          const struct token *member) {
+                                           const struct ast_tyref *var_ty,
+                                           const struct token *member) {
   struct ast_tyref underlying_var_ty = tyref_get_underlying(parser, var_ty);
   return resolve_member_access_ty(parser, &underlying_var_ty, member);
 }
-
 
 struct ast_tyref resolve_array_access_ty(struct parser *parser,
                                          const struct ast_expr *lhs,
@@ -1166,7 +1178,8 @@ bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
 
   consume_token(parser->lexer, token);
 
-  struct ast_tyref var_ty = resolve_member_access_ty(parser, &sub_expr->var_ty, &token);
+  struct ast_tyref var_ty =
+      resolve_member_access_ty(parser, &sub_expr->var_ty, &token);
 
   expr->ty = AST_EXPR_TY_MEMBERACCESS;
   expr->var_ty = var_ty;
@@ -1195,7 +1208,8 @@ bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
 
   consume_token(parser->lexer, token);
 
-  struct ast_tyref var_ty = resolve_pointer_access_ty(parser, &sub_expr->var_ty, &token);
+  struct ast_tyref var_ty =
+      resolve_pointer_access_ty(parser, &sub_expr->var_ty, &token);
 
   expr->ty = AST_EXPR_TY_POINTERACCESS;
   expr->var_ty = var_ty;
@@ -1365,10 +1379,77 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
+bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_SIZEOF)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  // because of how sizeof works, we need to try and parse `sizeof(<ty_ref>)` first
+  // else, something like `sizeof(char) + sizeof(short)`
+  // will be resolves as `sizeof( (char) + sizeof(short) )`
+  // that is, the size of `+sizeof(short)` cast to `char`
+
+  struct text_pos post_sizeof_pos = get_position(parser->lexer);
+
+  struct ast_tyref ty_ref;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_abstract_declarator(parser, &ty_ref) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    expr->ty = AST_EXPR_TY_SIZEOF;
+    expr->var_ty = tyref_pointer_sized_int(parser);
+    expr->size_of =
+        (struct ast_sizeof){.ty = AST_SIZEOF_TY_TYPE, .ty_ref = ty_ref};
+
+    return true;
+  }
+
+  backtrack(parser->lexer, post_sizeof_pos);
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+  if (parse_atom_3(parser, sub_expr)) {
+    expr->ty = AST_EXPR_TY_SIZEOF;
+    expr->var_ty = tyref_pointer_sized_int(parser);
+    expr->size_of =
+        (struct ast_sizeof){.ty = AST_SIZEOF_TY_EXPR, .expr = sub_expr};
+
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+
+bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_ALIGNOF) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_tyref ty_ref;
+  if (!parse_abstract_declarator(parser, &ty_ref) ||
+      !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  expr->ty = AST_EXPR_TY_ALIGNOF;
+  expr->var_ty = tyref_pointer_sized_int(parser);
+  expr->align_of = (struct ast_alignof){.ty_ref = ty_ref};
+
+  return true;
+}
+
 // parses precedence level 2:
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
 bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
   if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
+      !parse_sizeof(parser, expr) && !parse_alignof(parser, expr) &&
       !parse_atom_2(parser, expr)) {
     return false;
   }
@@ -2408,7 +2489,7 @@ bool parse_typedef(struct parser *parser, struct ast_typedef *type_def) {
     entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
     *(struct ast_tyref *)entry->value =
         (struct ast_tyref){.ty = AST_TYREF_TY_UNION, .union_ty = union_ty};
- 
+
     break;
   }
   }
@@ -3003,7 +3084,6 @@ DEBUG_FUNC(pointeraccess, pointer_access) {
   UNINDENT();
 }
 
-
 DEBUG_FUNC(memberaccess, member_access) {
   AST_PRINTZ("MEMBER_ACCESS");
 
@@ -3039,6 +3119,32 @@ DEBUG_FUNC(initlist, init_list) {
   for (size_t i = 0; i < init_list->num_exprs; i++) {
     DEBUG_CALL(expr, &init_list->exprs[i]);
   }
+  UNINDENT();
+}
+
+DEBUG_FUNC(sizeof, size_of) {
+  AST_PRINTZ("SIZEOF");
+
+  INDENT();
+  switch (size_of->ty) {
+  case AST_SIZEOF_TY_TYPE:
+    AST_PRINTZ("TYPE");
+    DEBUG_CALL(tyref, &size_of->ty_ref);
+    break;
+  case AST_SIZEOF_TY_EXPR:
+    AST_PRINTZ("EXPR");
+    DEBUG_CALL(expr, size_of->expr);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(alignof, align_of) {
+  AST_PRINTZ("ALIGNOF");
+
+  INDENT();
+  AST_PRINTZ("TYPE");
+  DEBUG_CALL(tyref, &align_of->ty_ref);
   UNINDENT();
 }
 
@@ -3080,6 +3186,12 @@ DEBUG_FUNC(expr, expr) {
     break;
   case AST_EXPR_TY_ASSG:
     DEBUG_CALL(assg, &expr->assg);
+    break;
+  case AST_EXPR_TY_SIZEOF:
+    DEBUG_CALL(sizeof, &expr->size_of);
+    break;
+  case AST_EXPR_TY_ALIGNOF:
+    DEBUG_CALL(alignof, &expr->align_of);
     break;
   }
   UNINDENT();

@@ -143,8 +143,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
         load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,
                                    (*op)->var_ty);
       }
-      load->load_lcl.lcl = *op;
-      load->lcl = (*op)->lcl;
+      load->load_lcl.lcl = (*op)->lcl;
       load->reg = data->consumer->reg;
       load->flags |= IR_OP_FLAG_SPILL;
 

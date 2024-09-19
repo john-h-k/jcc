@@ -100,9 +100,8 @@ enum lex_token_ty {
   LEX_TOKEN_TY_KW_STRUCT,
   LEX_TOKEN_TY_KW_UNION,
 
-  // LEX_TOKEN_TY_KW_STRUCT,
-  // LEX_TOKEN_TY_KW_ENUM,
-  // LEX_TOKEN_TY_KW_UNION,
+  LEX_TOKEN_TY_KW_SIZEOF,
+  LEX_TOKEN_TY_KW_ALIGNOF, // both `_Alignof` (C11) and `alignof` (C23 onwards)
 
   LEX_TOKEN_TY_IDENTIFIER,
 
