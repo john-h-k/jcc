@@ -974,20 +974,14 @@ bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
   }
 
   struct vector *exprs = vector_create(sizeof(struct ast_expr));
+  {
+    struct ast_expr expr;
+    while (parse_expr(parser, &expr)) {
+      vector_push_back(exprs, &expr);
 
-  struct token token;
-  struct ast_expr sub_expr;
-  do {
-    if (!parse_expr(parser, &sub_expr)) {
-      backtrack(parser->lexer, pos);
-      return false;
+      parse_token(parser, LEX_TOKEN_TY_COMMA);
     }
-
-    vector_push_back(exprs, &sub_expr);
-
-    peek_token(parser->lexer, &token);
-  } while (token.ty == LEX_TOKEN_TY_COMMA &&
-           /* hacky */ (consume_token(parser->lexer, token), true));
+  }
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
     backtrack(parser->lexer, pos);

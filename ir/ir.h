@@ -546,6 +546,9 @@ void make_string_ref(struct ir_builder *irb, const char *string,
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
+void make_integral_constant(struct ir_builder *irb, struct ir_op *op, enum ir_op_var_primitive_ty ty, unsigned long long value);
+void make_pointer_constant(struct ir_builder *irb, struct ir_op *op, unsigned long long value);
+
 struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
                               struct ir_basicblock *basicblock);
 
@@ -596,6 +599,17 @@ struct ir_var_ty_info {
 };
 
 struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty);
+
+struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty);
+struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb);
+struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
+                                        const struct ir_op_var_ty *underlying);
+struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
+                                      const struct ir_op_var_ty *underlying,
+                                      size_t num_elements);
+
+
+
 
 void spill_op(struct ir_builder *irb, struct ir_op *op);
 
