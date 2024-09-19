@@ -398,7 +398,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   // it writes in 8 byte segments so would write 16 byte for a 12 byte type etc
 
   size_t size_left = info.size;
-  while (size_left) {
+  while (size_left >= MAX_REG_SIZE) {
     struct ir_op *src_addr = insert_after_ir_op(func, last, IR_OP_TY_BINARY_OP, pointer_copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
       .ty = IR_OP_BINARY_OP_TY_ADD,
@@ -428,6 +428,41 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     last_src_addr = src_addr;
     last_dest_addr = dest_addr;
     size_left -= MAX_REG_SIZE;
+  }
+
+  // now we have to do the last trailing load
+  // because size is >= MAX_REG_SIZE,
+  // we can just do a whole-reg copy starting from end-MAX_REG_SIZE
+  if (size_left) {
+    size_t backtrack_size = MAX_REG_SIZE - size_left;
+
+    struct ir_op *backtrack_cnst = insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
+    make_pointer_constant(func, backtrack_cnst, backtrack_size);
+
+    struct ir_op *src_addr = insert_after_ir_op(func, backtrack_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    src_addr->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_SUB,
+      .lhs = last_src_addr,
+      .rhs = backtrack_cnst
+    };
+
+    struct ir_op *load = insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+    load->load_addr = (struct ir_op_load_addr){
+      .addr = src_addr
+    };
+
+    struct ir_op *dest_addr = insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    dest_addr->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_SUB,
+      .lhs = last_dest_addr,
+      .rhs = backtrack_cnst
+    };
+    
+    struct ir_op *store = insert_after_ir_op(func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+    store->store_addr = (struct ir_op_store_addr){
+      .addr = dest_addr,
+      .value = load
+    };
   }
 }
 
