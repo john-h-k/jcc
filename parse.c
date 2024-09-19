@@ -604,9 +604,9 @@ unsigned long long resolve_constant_expr(struct parser *parser,
                                          const struct ast_expr *expr) {
   UNUSED_ARG(parser);
 
-  if (expr->ty == AST_EXPR_TY_ATOM && expr->atom.ty == AST_ATOM_TY_CNST &&
-      is_integral_ty(&expr->atom.cnst.cnst_ty)) {
-    return expr->atom.cnst.int_value;
+  if (expr->ty == AST_EXPR_TY_CNST &&
+      is_integral_ty(&expr->cnst.cnst_ty)) {
+    return expr->cnst.int_value;
   }
 
   todo("non cnst constant expressions");
@@ -843,6 +843,7 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr);
 bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
+bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
 
 struct assg_ty_map {
   enum lex_token_ty token_ty;
@@ -873,7 +874,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
   struct ast_expr assignee;
   struct ast_expr expr;
-  if (!parse_atom_2(parser, &assignee)) {
+  if (!parse_atom_3(parser, &assignee)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -990,8 +991,8 @@ bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
   return true;
 }
 
-// parses an expression that does _not_ involve binary operators
-bool parse_atom(struct parser *parser, struct ast_atom *atom) {
+// parses highest precedence (literals, vars, constants)
+bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -1005,9 +1006,9 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
     // compound expressions return the last expression
     struct ast_tyref var_ty =
         compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
-    atom->ty = AST_ATOM_TY_COMPOUNDEXPR;
-    atom->var_ty = var_ty;
-    atom->compound_expr = compound_expr;
+    expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
+    expr->var_ty = var_ty;
+    expr->compound_expr = compound_expr;
 
     return true;
   }
@@ -1016,19 +1017,18 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 
   struct ast_cnst cnst;
   if (parse_cnst(parser, &cnst)) {
-    atom->ty = AST_ATOM_TY_CNST;
-    atom->var_ty = cnst.cnst_ty;
-    atom->cnst = cnst;
+    expr->ty = AST_EXPR_TY_CNST;
+    expr->var_ty = cnst.cnst_ty;
+    expr->cnst = cnst;
 
     return true;
   }
 
   struct ast_var var;
   if (parse_var(parser, &var)) {
-    atom->ty = AST_ATOM_TY_VAR;
-
-    atom->var_ty = var.var_ty;
-    atom->var = var;
+    expr->ty = AST_EXPR_TY_VAR;
+    expr->var_ty = var.var_ty;
+    expr->var = var;
 
     return true;
   }
@@ -1038,12 +1038,8 @@ bool parse_atom(struct parser *parser, struct ast_atom *atom) {
 
 // parses precedence level 0:
 // vars
-bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
-  struct ast_atom atom;
-  if (parse_atom(parser, &atom)) {
-    expr->ty = AST_EXPR_TY_ATOM;
-    expr->var_ty = atom.var_ty;
-    expr->atom = atom;
+bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+  if (parse_atom_0(parser, expr)) {
     return true;
   }
 
@@ -1242,8 +1238,8 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
 
 // parses precedence level 1:
 // postfix ++, postfix --, (), [], ., ->, (type){list}
-bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
-  if (!parse_atom_0(parser, expr)) {
+bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+  if (!parse_atom_1(parser, expr)) {
     return false;
   }
 
@@ -1278,7 +1274,7 @@ bool parse_cast(struct parser *parser, struct ast_expr *expr) {
   }
 
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  if (!parse_atom_2(parser, sub_expr)) {
+  if (!parse_atom_3(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1349,7 +1345,7 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   consume_token(parser->lexer, token);
 
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  if (!parse_atom_2(parser, sub_expr)) {
+  if (!parse_atom_3(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -1371,9 +1367,9 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
 
 // parses precedence level 2:
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof, _Alignof
-bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
   if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
-      !parse_atom_1(parser, expr)) {
+      !parse_atom_2(parser, expr)) {
     return false;
   }
 
@@ -1382,7 +1378,7 @@ bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
 
 bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
-  if (!parse_atom_2(parser, expr)) {
+  if (!parse_atom_3(parser, expr)) {
     return false;
   }
 
@@ -1971,11 +1967,9 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     struct ast_tyref var_ty =
         compound_expr.exprs[compound_expr.num_exprs - 1].var_ty;
     stmt->ty = AST_STMT_TY_EXPR;
-    stmt->expr.ty = AST_EXPR_TY_ATOM;
+    stmt->expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
     stmt->expr.var_ty = var_ty;
-    stmt->expr.atom.ty = AST_ATOM_TY_COMPOUNDEXPR;
-    stmt->expr.atom.var_ty = var_ty;
-    stmt->expr.atom.compound_expr = compound_expr;
+    stmt->expr.compound_expr = compound_expr;
 
     return true;
   }
@@ -2791,20 +2785,6 @@ DEBUG_FUNC(cnst, cnst) {
 
 DEBUG_FUNC(compoundexpr, compound_expr);
 
-DEBUG_FUNC(atom, atom) {
-  switch (atom->ty) {
-  case AST_ATOM_TY_VAR:
-    DEBUG_CALL(var, &atom->var);
-    break;
-  case AST_ATOM_TY_CNST:
-    DEBUG_CALL(cnst, &atom->cnst);
-    break;
-  case AST_ATOM_TY_COMPOUNDEXPR:
-    DEBUG_CALL(compoundexpr, &atom->compound_expr);
-    break;
-  }
-}
-
 DEBUG_FUNC(unary_op, unary_op) {
   switch (unary_op->ty) {
   case AST_UNARY_OP_TY_PREFIX_INC:
@@ -3068,8 +3048,14 @@ DEBUG_FUNC(expr, expr) {
   INDENT();
   DEBUG_CALL(tyref, &expr->var_ty);
   switch (expr->ty) {
-  case AST_EXPR_TY_ATOM:
-    DEBUG_CALL(atom, &expr->atom);
+  case AST_EXPR_TY_VAR:
+    DEBUG_CALL(var, &expr->var);
+    break;
+  case AST_EXPR_TY_CNST:
+    DEBUG_CALL(cnst, &expr->cnst);
+    break;
+  case AST_EXPR_TY_COMPOUNDEXPR:
+    DEBUG_CALL(compoundexpr, &expr->compound_expr);
     break;
   case AST_EXPR_TY_CALL:
     DEBUG_CALL(call, &expr->call);

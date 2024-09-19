@@ -253,24 +253,6 @@ struct ast_initlist {
   size_t num_exprs;
 };
 
-enum ast_atom_ty {
-  AST_ATOM_TY_VAR,
-  AST_ATOM_TY_CNST,
-  AST_ATOM_TY_COMPOUNDEXPR,
-};
-
-struct ast_atom {
-  enum ast_atom_ty ty;
-  struct ast_tyref var_ty;
-
-  union {
-    struct ast_var var;
-    struct ast_cnst cnst;
-    struct ast_compoundexpr
-        compound_expr; // compound assignments are *never* lvalues in C
-  };
-};
-
 // Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue>
 // = <expr>`)
 
@@ -322,7 +304,6 @@ struct ast_pointeraccess {
  * and `rvalue` (not an lvalue) */
 
 enum ast_expr_ty {
-  AST_EXPR_TY_ATOM,
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_UNARY_OP,
   AST_EXPR_TY_BINARY_OP,
@@ -332,13 +313,20 @@ enum ast_expr_ty {
   AST_EXPR_TY_INIT_LIST, // brace list
   AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
                     // they themselves evaluate to an rvalue (unlike in C++)
+  AST_EXPR_TY_VAR,
+  AST_EXPR_TY_CNST,
+  AST_EXPR_TY_COMPOUNDEXPR,
+
 };
 
 struct ast_expr {
   enum ast_expr_ty ty;
   struct ast_tyref var_ty;
   union {
-    struct ast_atom atom;
+    struct ast_var var;
+    struct ast_cnst cnst;
+    struct ast_compoundexpr
+        compound_expr; // compound assignments are *never* lvalues in C
     struct ast_unary_op unary_op;
     struct ast_binary_op binary_op;
     struct ast_assg assg;
