@@ -78,7 +78,7 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
+void debug_print_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");
@@ -90,13 +90,13 @@ void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_
   }
   case IR_OP_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
-    debug_var_ty_string(file, irb, var_ty->pointer.underlying);
+    debug_print_var_ty_string(file, irb, var_ty->pointer.underlying);
     fprintf(file, " ]");
     return;
   }
   case IR_OP_VAR_TY_TY_ARRAY: {
     fprintf(file, "ARRAY [ ");
-    debug_var_ty_string(file, irb, var_ty->array.underlying);
+    debug_print_var_ty_string(file, irb, var_ty->array.underlying);
     fprintf(file, ", ");
     fprintf(file, "%zu", var_ty->array.num_elements);
     fprintf(file, " ]");
@@ -106,21 +106,21 @@ void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_
     // FIXME: buffer vuln
     fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
-      debug_var_ty_string(file, irb, &var_ty->func.params[i]);
+      debug_print_var_ty_string(file, irb, &var_ty->func.params[i]);
       if (i + 1 < var_ty->func.num_params) {
         fprintf(file, ", ");
       }
     }
     fprintf(file, ")");
     fprintf(file, " -> ");
-    debug_var_ty_string(file, irb, var_ty->func.ret_ty);
+    debug_print_var_ty_string(file, irb, var_ty->func.ret_ty);
     return;
   }
   case IR_OP_VAR_TY_TY_STRUCT: {
     struct ir_var_ty_info info = var_ty_info(irb, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->struct_ty.num_fields; i++) {
-      debug_var_ty_string(file, irb, &var_ty->struct_ty.fields[i]);
+      debug_print_var_ty_string(file, irb, &var_ty->struct_ty.fields[i]);
 
       if (i + 1 < var_ty->struct_ty.num_fields) {
         fprintf(file, ", ");
@@ -133,7 +133,7 @@ void debug_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_
     struct ir_var_ty_info info = var_ty_info(irb, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->union_ty.num_fields; i++) {
-      debug_var_ty_string(file, irb, &var_ty->union_ty.fields[i]);
+      debug_print_var_ty_string(file, irb, &var_ty->union_ty.fields[i]);
 
       if (i + 1 < var_ty->union_ty.num_fields) {
         fprintf(file, ", ");
@@ -204,7 +204,7 @@ void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
 
 void debug_lhs(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
-  debug_var_ty_string(file, irb, &ir->var_ty);
+  debug_print_var_ty_string(file, irb, &ir->var_ty);
   fprintf(file, ") = ");
 }
 

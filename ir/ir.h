@@ -225,7 +225,7 @@ struct ir_op_var_array_ty {
 };
 
 struct ir_op_var_pointer_ty {
-  struct ir_op_var_ty *underlying;
+  const struct ir_op_var_ty *underlying;
 };
 
 struct ir_op_var_ty {
@@ -244,11 +244,12 @@ const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
 const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
 
 struct ir_op_store_lcl {
+  // the local stored into is just the `lcl` assigned to this op
   struct ir_op *value;
 };
 
 struct ir_op_load_lcl {
-  struct ir_op *lcl;
+  struct ir_lcl *lcl;
 };
 
 struct ir_op_store_addr {

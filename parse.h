@@ -300,6 +300,24 @@ struct ast_pointeraccess {
   struct token member;
 };
 
+enum ast_sizeof_ty {
+  AST_SIZEOF_TY_TYPE,
+  AST_SIZEOF_TY_EXPR,
+};
+
+struct ast_sizeof {
+  enum ast_sizeof_ty ty;
+
+  union {
+    struct ast_expr *expr;
+    struct ast_tyref ty_ref;
+  };
+};
+
+struct ast_alignof {
+  struct ast_tyref ty_ref;
+};
+
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
@@ -316,13 +334,16 @@ enum ast_expr_ty {
   AST_EXPR_TY_VAR,
   AST_EXPR_TY_CNST,
   AST_EXPR_TY_COMPOUNDEXPR,
-
+  AST_EXPR_TY_SIZEOF,
+  AST_EXPR_TY_ALIGNOF,
 };
 
 struct ast_expr {
   enum ast_expr_ty ty;
   struct ast_tyref var_ty;
   union {
+    struct ast_sizeof size_of;
+    struct ast_alignof align_of;
     struct ast_var var;
     struct ast_cnst cnst;
     struct ast_compoundexpr

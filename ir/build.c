@@ -137,9 +137,8 @@ bool var_ty_needs_cast_op(struct ir_builder *irb, const struct ir_op_var_ty *l,
   }
 
   // TODO: hardcodes pointer size
-  if (l->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
-      l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64 &&
-      r->ty == IR_OP_VAR_TY_TY_POINTER) {
+  if (((l->ty == IR_OP_VAR_TY_TY_PRIMITIVE && l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) || l->ty == IR_OP_VAR_TY_TY_POINTER) 
+     && ((r->ty == IR_OP_VAR_TY_TY_PRIMITIVE && r->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) || r->ty == IR_OP_VAR_TY_TY_POINTER)) {
     // same size int -> pointer needs no cast
     return false;
   }
@@ -204,6 +203,20 @@ struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
                                              .underlying = copied};
 
   return var_ty;
+}
+
+struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb) {
+  UNUSED_ARG(irb);
+
+  // TODO: again, similar to parser:
+  // either we need a pointer-sized int type or for `ir_builder` to know the native integer size
+  // for now just use a void*
+  return (struct ir_op_var_ty){
+    .ty = IR_OP_VAR_TY_TY_POINTER,
+    .pointer = (struct ir_op_var_pointer_ty){
+      .underlying = &IR_OP_VAR_TY_NONE
+    }
+  };
 }
 
 struct ir_op_var_ty ty_for_ast_tyref(struct ir_builder *irb,
@@ -641,10 +654,54 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
   return alloc_binaryop(irb, stmt, &binary_op->var_ty, binary_op->ty, lhs, rhs);
 }
 
+struct ir_op *build_ir_for_sizeof(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_sizeof *size_of) {
+  struct ir_op_var_ty var_ty;
+  switch (size_of->ty) {
+  case AST_SIZEOF_TY_TYPE:
+    var_ty = ty_for_ast_tyref(irb, &size_of->ty_ref);
+    debug_print_var_ty_string(stderr, irb, &var_ty);
+    break;
+  case AST_SIZEOF_TY_EXPR:
+    var_ty = ty_for_ast_tyref(irb, &size_of->expr->var_ty);
+    break;
+  }
+
+  struct ir_var_ty_info info = var_ty_info(irb, &var_ty);
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_CNST;
+  op->var_ty = var_ty_for_pointer_size(irb);
+  op->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = info.size
+  };
+
+  return op;
+}
+
+struct ir_op *build_ir_for_alignof(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_alignof *align_of) {
+  struct ir_op_var_ty var_ty = ty_for_ast_tyref(irb, &align_of->ty_ref);
+
+  struct ir_var_ty_info info = var_ty_info(irb, &var_ty);
+
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_CNST;
+  op->var_ty = var_ty_for_pointer_size(irb);
+  op->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = info.alignment
+  };
+
+  return op;
+}
+
+
+
 struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_cnst *cnst) {
   struct ir_op *op = alloc_ir_op(irb, stmt);
-
   op->ty = IR_OP_TY_CNST;
   op->var_ty = ty_for_ast_tyref(irb, &cnst->cnst_ty);
 
@@ -694,13 +751,12 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     case VAR_REF_TY_SSA:
       return ref->op;
     case VAR_REF_TY_LCL: {
+      debug_assert(ref->op->lcl, "VAR_REF_TY_LCL but op %zu had no lcl", ref->op->id);
+
       struct ir_op *op = alloc_ir_op(irb, stmt);
       op->ty = IR_OP_TY_LOAD_LCL;
       op->var_ty = var_ty;
-      op->load_lcl = (struct ir_op_load_lcl){.lcl = ref->op};
-      op->lcl = ref->op->lcl;
-
-      debug_assert(ref->op->lcl, "VAR_REF_TY_LCL but op %zu had no lcl", ref->op->id);
+      op->load_lcl = (struct ir_op_load_lcl){.lcl = ref->op->lcl};
 
       return op;
     }
@@ -949,7 +1005,7 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
     // need to decay the type to pointer
     struct ast_tyref *underlying = lhs_expr->var_ty.array.element;
     lhs = build_ir_for_addressof(irb, stmt, lhs_expr, underlying);
-    pointer_ty = tyref_make_pointer(irb->parser, &lhs_expr->var_ty);
+    pointer_ty = tyref_make_pointer(irb->parser, underlying);
   } else {
     lhs = build_ir_for_expr(irb, stmt, lhs_expr, &lhs_expr->var_ty);
     pointer_ty = lhs_expr->var_ty;
@@ -1107,6 +1163,12 @@ struct ir_op *build_ir_for_expr(struct ir_builder *irb, struct ir_stmt *stmt,
     bug("init list only makes sense in decls and compound assignments");
   case AST_EXPR_TY_ASSG:
     op = build_ir_for_assg(irb, stmt, &expr->assg);
+    break;
+  case AST_EXPR_TY_SIZEOF:
+    op = build_ir_for_sizeof(irb, stmt, &expr->size_of);
+    break;
+  case AST_EXPR_TY_ALIGNOF:
+    op = build_ir_for_alignof(irb, stmt, &expr->align_of);
     break;
   }
 
