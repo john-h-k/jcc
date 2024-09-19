@@ -506,7 +506,7 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
   }
 
   if (expr->ty != AST_EXPR_TY_ATOM || expr->atom.ty != AST_ATOM_TY_VAR) {
-    todo("address of non-simple vars");
+    todo("unknown type for addressof");
   }
 
   struct ast_tyref pointer_ty = tyref_make_pointer(irb->parser, underlying_ty);

@@ -904,7 +904,6 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
   case IR_OP_VAR_TY_TY_VARIADIC:
     bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_OP_VAR_TY_TY_FUNC:
-  case IR_OP_VAR_TY_TY_ARRAY:
   case IR_OP_VAR_TY_TY_POINTER:
     return (struct ir_var_ty_info){.size = 8, .alignment = 8};
   case IR_OP_VAR_TY_TY_PRIMITIVE:
@@ -918,6 +917,11 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
     case IR_OP_VAR_PRIMITIVE_TY_I64:
     return (struct ir_var_ty_info){.size = 8, .alignment = 8};
     }
+  case IR_OP_VAR_TY_TY_ARRAY: {
+    struct ir_var_ty_info element_info = var_ty_info(irb, ty->array.underlying);
+    size_t size = ty->array.num_elements * element_info.size;
+    return (struct ir_var_ty_info){.size = size, .alignment = element_info.alignment};   
+  }
   case IR_OP_VAR_TY_TY_STRUCT: {
     size_t max_alignment = 0;
     size_t size = 0;
