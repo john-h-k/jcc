@@ -382,23 +382,61 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, ty_ref);
 
   if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-    invariant_assert(ty == AST_BINARY_OP_TY_ADD, "non add with points");
+    switch (ty) {
+      case AST_BINARY_OP_TY_ADD: {
+        struct ir_op_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty : &rhs->var_ty;
 
-    struct ir_op_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty : &rhs->var_ty;
+        // need to multiply rhs by the element size
+        struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty->pointer.underlying);
 
-    // need to multiply rhs by the element size
-    struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty->pointer.underlying);
+        struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+        make_pointer_constant(irb, el_size_op, el_info.size);
 
-    struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
-    make_pointer_constant(irb, el_size_op, el_info.size);
+        struct ir_op *rhs_mul = alloc_ir_op(irb, stmt);
+        rhs_mul->ty = IR_OP_TY_BINARY_OP;
+        rhs_mul->var_ty = var_ty;
+        rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+        rhs_mul->binary_op.lhs = el_size_op;
+        rhs_mul->binary_op.rhs = rhs;
 
-    struct ir_op *rhs_pre_mul = rhs;
-    rhs = alloc_ir_op(irb, stmt);
-    rhs->ty = IR_OP_TY_BINARY_OP;
-    rhs->var_ty = var_ty;
-    rhs->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
-    rhs->binary_op.lhs = el_size_op;
-    rhs->binary_op.rhs = rhs_pre_mul;
+        struct ir_op *op = alloc_ir_op(irb, stmt);
+        op->ty = IR_OP_TY_BINARY_OP;
+        op->var_ty = var_ty;
+        op->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
+        op->binary_op.lhs = lhs;
+        op->binary_op.rhs = rhs_mul;
+
+        return op;
+      }
+      case AST_BINARY_OP_TY_SUB: {
+        struct ir_op_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty : &rhs->var_ty;
+
+        // need to multiply rhs by the element size
+        struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty->pointer.underlying);
+
+        struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+        make_pointer_constant(irb, el_size_op, el_info.size);
+
+
+        struct ir_op *diff = alloc_ir_op(irb, stmt);
+        diff->ty = IR_OP_TY_BINARY_OP;
+        diff->var_ty = var_ty;
+        diff->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
+        diff->binary_op.lhs = lhs;
+        diff->binary_op.rhs = rhs;
+
+        struct ir_op *op = alloc_ir_op(irb, stmt);
+        op->ty = IR_OP_TY_BINARY_OP;
+        op->var_ty = var_ty;
+        op->binary_op.ty = IR_OP_BINARY_OP_TY_SDIV;
+        op->binary_op.lhs = diff;
+        op->binary_op.rhs = el_size_op;
+
+        return op;
+      }
+      default:
+        break;
+    }
   }
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
