@@ -382,6 +382,26 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                              struct ir_op *rhs) {
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, ty_ref);
 
+  if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+    invariant_assert(ty == AST_BINARY_OP_TY_ADD, "non add with points");
+
+    struct ir_op_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty : &rhs->var_ty;
+
+    // need to multiply rhs by the element size
+    struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty->pointer.underlying);
+
+    struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+    make_pointer_constant(irb, el_size_op, el_info.size);
+
+    struct ir_op *rhs_pre_mul = rhs;
+    rhs = alloc_ir_op(irb, stmt);
+    rhs->ty = IR_OP_TY_BINARY_OP;
+    rhs->var_ty = var_ty;
+    rhs->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+    rhs->binary_op.lhs = el_size_op;
+    rhs->binary_op.rhs = rhs_pre_mul;
+  }
+
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
   op->var_ty = var_ty;
@@ -988,20 +1008,19 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
 
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_assg *assg) {
-  struct ir_op *expr =
-      build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
-  struct ir_op *value;
 
+  struct ir_op *value;
   switch (assg->ty) {
   case AST_ASSG_TY_SIMPLEASSG:
-    value = expr;
+    value = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
     break;
   case AST_ASSG_TY_COMPOUNDASSG: {
     struct ir_op *assignee =
         build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
 
+    struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr, &assg->compound_assg.intermediate_var_ty);
     value = alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty,
-                           assg->compound_assg.binary_op_ty, assignee, expr);
+                           assg->compound_assg.binary_op_ty, assignee, rhs);
   }
   }
 
@@ -1556,7 +1575,10 @@ build_ir_for_array_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *start_address =
       build_ir_for_addressof(irb, stmt, &decl_expr);
 
-  struct ir_op *zero_init;
+  struct ir_op *zero_init = NULL;
+
+  struct ir_op_var_ty ir_el_ty = var_ty_for_ast_tyref(irb, el_ty);
+  size_t el_size = var_ty_info(irb, &ir_el_ty).size;
     
   for (size_t i = 0; i < num_elements; i++) {
     struct ir_op *expr;
@@ -1572,7 +1594,7 @@ build_ir_for_array_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
     }
 
     struct ir_op *offset = alloc_ir_op(irb, stmt);
-    make_pointer_constant(irb, offset, i);
+    make_pointer_constant(irb, offset, i * el_size);
 
     struct ir_op *address = alloc_ir_op(irb, stmt);
     address->ty = IR_OP_TY_BINARY_OP;
