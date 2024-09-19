@@ -409,6 +409,19 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
                    rhs->ty != AST_TYREF_TY_UNKNOWN,
                "unknown ty in call to `%s`", __func__);
 
+  if (lhs->ty == AST_TYREF_TY_POINTER || rhs->ty == AST_TYREF_TY_POINTER) {
+    const struct ast_tyref *pointer_ty = lhs->ty == AST_TYREF_TY_POINTER ? lhs : rhs;
+
+    switch (ty) {
+      case AST_BINARY_OP_TY_ADD:
+        return *pointer_ty;
+      case AST_BINARY_OP_TY_SUB:
+        return tyref_pointer_sized_int(parser);
+      default:
+        bug("bad op for poiner op");
+    }
+  }
+
   if (lhs->ty != AST_TYREF_TY_WELL_KNOWN ||
       rhs->ty != AST_TYREF_TY_WELL_KNOWN) {
     todo("`%s` for types other than well known", __func__);

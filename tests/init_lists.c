@@ -11,6 +11,31 @@ struct three_elem {
 };
 
 int main() {
+  int a[2] = {};
+  int b[2] = {7};
+  int c[2] = { 4, 8 };
+
+  if (a[0] != 0) {
+    return 1;
+  }
+  if (a[1] != 0) {
+    return 1;
+  }
+
+  if (b[0] != 7) {
+    return 1;
+  }
+  if (b[1] != 0) {
+    return 1;
+  }
+
+  if (c[0] != 4) {
+    return 1;
+  }
+  if (c[1] != 8) {
+    return 1;
+  }
+  
   struct one_elem one_init_zero = {};
   struct one_elem one_init_one = { 1 };
 
