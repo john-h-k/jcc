@@ -551,36 +551,12 @@ struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
                                            struct ast_expr *lhs_expr,
                                            const struct token *member);
 
-struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
+struct ir_op *build_ir_for_addressof_var(struct ir_builder *irb,
                                      struct ir_stmt *stmt,
-                                     struct ast_expr *expr) {
-  // address of does not actually "read" its underlying expression
-  // so we do not build the expression
-
-  switch (expr->ty) {
-  case AST_EXPR_TY_ARRAYACCESS: {
-    return build_ir_for_array_address(irb, stmt, expr->array_access.lhs,
-                                      expr->array_access.rhs);
-  }
-  case AST_EXPR_TY_MEMBERACCESS: {
-    return build_ir_for_member_address(irb, stmt, expr->member_access.lhs,
-                                       &expr->member_access.member);
-  }
-  case AST_EXPR_TY_POINTERACCESS: {
-    return build_ir_for_pointer_address(irb, stmt, expr->pointer_access.lhs,
-                                        &expr->pointer_access.member);
-  }
-  default:
-    break;
-  }
-
-  if (expr->ty != AST_EXPR_TY_VAR) {
-    todo("unknown type for addressof");
-  }
-
+                                     struct ast_var *var) {
   struct var_key key;
   struct var_ref *ref;
-  get_var_ref(irb, NULL, &expr->var, &key, &ref);
+  get_var_ref(irb, NULL, var, &key, &ref);
 
   struct ir_lcl *lcl;
   struct ir_op_var_ty underlying_var_ty;
@@ -619,6 +595,36 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
   op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
   return op;
+}
+
+struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
+                                     struct ir_stmt *stmt,
+                                     struct ast_expr *expr) {
+  // address of does not actually "read" its underlying expression
+  // so we do not build the expression
+
+  switch (expr->ty) {
+  case AST_EXPR_TY_ARRAYACCESS: {
+    return build_ir_for_array_address(irb, stmt, expr->array_access.lhs,
+                                      expr->array_access.rhs);
+  }
+  case AST_EXPR_TY_MEMBERACCESS: {
+    return build_ir_for_member_address(irb, stmt, expr->member_access.lhs,
+                                       &expr->member_access.member);
+  }
+  case AST_EXPR_TY_POINTERACCESS: {
+    return build_ir_for_pointer_address(irb, stmt, expr->pointer_access.lhs,
+                                        &expr->pointer_access.member);
+  }
+  default:
+    break;
+  }
+
+  if (expr->ty != AST_EXPR_TY_VAR) {
+    todo("unknown type for addressof");
+  }
+
+  return build_ir_for_addressof_var(irb, stmt, &expr->var);
 }
 
 struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
@@ -804,6 +810,11 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
+  // if `a` is an array, then reading `a` is actually `&a[0]`
+  if (var->var_ty.ty == AST_TYREF_TY_ARRAY) {
+    return build_ir_for_addressof_var(irb, stmt, var);
+  }
+
   // this is when we are _reading_ from the var
   struct var_key key;
   struct var_ref *ref;
@@ -820,7 +831,12 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
 
       struct ir_op *op = alloc_ir_op(irb, stmt);
       op->ty = IR_OP_TY_LOAD_LCL;
-      op->var_ty = var_ty;
+      if (var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
+        // pointer decay
+        op->var_ty = var_ty_make_pointer(irb, var_ty.array.underlying);
+      } else {
+        op->var_ty = var_ty;
+      }
       op->load_lcl = (struct ir_op_load_lcl){.lcl = ref->op->lcl};
 
       return op;

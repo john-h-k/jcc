@@ -308,14 +308,14 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   unreachable("switch broke");
 }
 
-struct ast_tyref tyref_pointer_sized_int(struct parser *parser) {
+struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed) {
   UNUSED_ARG(parser);
 
   // returns the type for `size_t` effectively
   // TODO: generalise - either we should have a special ptr-sized int type, or
   // parser should have a field for ptr size
   return (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
-                            .well_known = WELL_KNOWN_TY_UNSIGNED_LONG_LONG};
+                            .well_known = is_signed ? WELL_KNOWN_TY_SIGNED_LONG_LONG : WELL_KNOWN_TY_UNSIGNED_LONG_LONG};
 }
 
 struct ast_tyref tyref_make_pointer(struct parser *parser,
@@ -416,7 +416,8 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
       case AST_BINARY_OP_TY_ADD:
         return *pointer_ty;
       case AST_BINARY_OP_TY_SUB:
-        return tyref_pointer_sized_int(parser);
+        // ptrdiff is signed
+        return tyref_pointer_sized_int(parser, true);
       default:
         bug("bad op for poiner op");
     }
@@ -1406,7 +1407,7 @@ bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
       parse_abstract_declarator(parser, &ty_ref) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     expr->ty = AST_EXPR_TY_SIZEOF;
-    expr->var_ty = tyref_pointer_sized_int(parser);
+    expr->var_ty = tyref_pointer_sized_int(parser, false);
     expr->size_of =
         (struct ast_sizeof){.ty = AST_SIZEOF_TY_TYPE, .ty_ref = ty_ref};
 
@@ -1418,7 +1419,7 @@ bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
   struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
   if (parse_atom_3(parser, sub_expr)) {
     expr->ty = AST_EXPR_TY_SIZEOF;
-    expr->var_ty = tyref_pointer_sized_int(parser);
+    expr->var_ty = tyref_pointer_sized_int(parser, false);
     expr->size_of =
         (struct ast_sizeof){.ty = AST_SIZEOF_TY_EXPR, .expr = sub_expr};
 
@@ -1446,7 +1447,7 @@ bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
   }
 
   expr->ty = AST_EXPR_TY_ALIGNOF;
-  expr->var_ty = tyref_pointer_sized_int(parser);
+  expr->var_ty = tyref_pointer_sized_int(parser, false);
   expr->align_of = (struct ast_alignof){.ty_ref = ty_ref};
 
   return true;
