@@ -172,6 +172,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->cast_op.value, cb_metadata);
     break;
   case IR_OP_TY_STORE_ADDR:
+    cb(&op->store_addr.addr, cb_metadata);
     cb(&op->store_addr.value, cb_metadata);
     break;
   case IR_OP_TY_STORE_LCL:
@@ -180,6 +181,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_LOAD_LCL:
     break;
   case IR_OP_TY_LOAD_ADDR:
+    cb(&op->load_addr.addr, cb_metadata);
     break;
   case IR_OP_TY_ADDR:
     // this sort-of has uses but not really...
