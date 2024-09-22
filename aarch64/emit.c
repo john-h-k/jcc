@@ -531,8 +531,13 @@ static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
   switch (cnst->cnst.ty) {
   case IR_OP_CNST_TY_INT: {
     size_t src = get_reg_for_op(state, cnst, REG_USAGE_READ);
-    aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
-                        get_reg_for_idx(dest));
+    if (is_64_bit(op)) {
+      aarch64_emit_mov_64(state->emitter, get_reg_for_idx(src),
+                            get_reg_for_idx(dest));
+    } else {
+      aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
+                          get_reg_for_idx(dest));
+    }
     break;
   }
   case IR_OP_CNST_TY_STR:
@@ -606,8 +611,13 @@ static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
 
   switch (op->cnst.ty) {
   case IR_OP_CNST_TY_INT:
-    aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
-                              op->cnst.int_value);
+    if (is_64_bit(op)) {
+      aarch64_emit_load_cnst_64(state->emitter, get_reg_for_idx(reg),
+                                  op->cnst.int_value);
+    } else {
+      aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
+                                op->cnst.int_value);
+    }
     break;
   case IR_OP_CNST_TY_STR:
     vector_push_back(state->strings, &op->cnst.str_value);
