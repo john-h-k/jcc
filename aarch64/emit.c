@@ -85,8 +85,8 @@ static bool is_64_bit(const struct ir_op *op) {
                        op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY,
                    "non-primitive/pointer/array passed to `is_64_bit`");
 
-  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY ||
-         op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64;
+  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY
+         || (op->ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64);
 }
 
 static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,

@@ -12,9 +12,10 @@ int main() {
   a.b[2] = 3;
 
   struct foo b = a;
-  b.b[0] = 3 * b.b[0];
-  b.b[1] = 3 * b.b[1];
-  b.b[2] = 3 * b.b[2];
+  b.b[0] = 2;
+  b.b[1] = 4;
+  b.b[2] = 6;
+  // b.b[2] = 6;
   // printf("%d %d %d\n", b.b[0], b.b[1], b.b[2]);
 
   return a.b[0] + a.b[1] + a.b[2] + b.b[0] + b.b[1] + b.b[2];

@@ -360,7 +360,18 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 
   struct ir_var_ty_info info = var_ty_info(func, &op->var_ty);
-  if (info.size <= MAX_REG_SIZE) {
+  if (info.size < MAX_REG_SIZE) {
+    todo("copies < max_reg_size");
+  } else if (info.size == MAX_REG_SIZE) {
+    op->var_ty = (struct ir_op_var_ty){
+      .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
+    };
+    nxt_store->var_ty = (struct ir_op_var_ty){
+      .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
+    };
+
     return;
   }
 
