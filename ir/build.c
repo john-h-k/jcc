@@ -975,7 +975,7 @@ void get_member_info(struct ir_builder *irb, const struct ast_tyref *struct_ty,
       *member_ty = var_ty_for_ast_tyref(irb, field->var_ty);
       if (member_ty->ty == IR_OP_VAR_TY_TY_ARRAY) {
         // pointer decay
-        *member_ty = var_ty_make_pointer(irb, member_ty->array.underlying);
+        *member_ty = *member_ty->array.underlying;
       }
       break;
     }
