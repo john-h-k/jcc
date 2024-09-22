@@ -46,6 +46,7 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_ADDR_OFF:
   case IR_OP_TY_CALL:
   case IR_OP_TY_GLB_REF:
     return true;
@@ -83,6 +84,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_STORE_ADDR:
   case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_ADDR_OFF:
     return false;
   case IR_OP_TY_CUSTOM:
     bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
@@ -186,6 +188,12 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_ADDR:
     // this sort-of has uses but not really...
     break;
+  case IR_OP_TY_ADDR_OFF:
+    cb(&op->addr_off.addr, cb_metadata);
+    for (size_t i = 0; i < op->addr_off.num_offsets; i++) {
+      cb(&op->addr_off.offsets[i].offset, cb_metadata);
+    }
+    break;
   case IR_OP_TY_BR:
     break;
   case IR_OP_TY_BR_COND:
@@ -223,6 +231,8 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     todo("walk store addr");
   case IR_OP_TY_ADDR:
     todo("walk addr");
+  case IR_OP_TY_ADDR_OFF:
+    todo("walk addroff");
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_CNST:
