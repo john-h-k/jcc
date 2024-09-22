@@ -30,8 +30,6 @@ enum ir_op_ty {
 
   IR_OP_TY_ADDR,
 
-  IR_OP_TY_ADDR_OFF,
-
   // represents a global variable or function
   IR_OP_TY_GLB_REF,
 
@@ -263,18 +261,6 @@ struct ir_op_load_addr {
   struct ir_op *addr;
 };
 
-struct ir_addr_offset {
-  struct ir_op *offset;
-  struct ir_op_var_ty ty;
-};
-
-struct ir_op_addroff {
-  struct ir_op *addr;
-
-  size_t num_offsets;
-  struct ir_addr_offset *offsets;
-};
-
 enum ir_op_addr_ty {
   IR_OP_ADDR_TY_LCL
 };
@@ -347,7 +333,6 @@ struct ir_op {
     struct ir_op_store_addr store_addr;
     struct ir_op_load_addr load_addr;
     struct ir_op_addr addr;
-    struct ir_op_addroff addr_off;
     struct ir_op_br_cond br_cond;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
      * condition */
