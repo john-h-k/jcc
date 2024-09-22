@@ -176,7 +176,7 @@ enum ir_op_var_primitive_ty {
   IR_OP_VAR_PRIMITIVE_TY_I32,
   IR_OP_VAR_PRIMITIVE_TY_I64,
 
-  IR_OP_VAR_PRIMITIVE_TY_IPTR,
+  // IR_OP_VAR_PRIMITIVE_TY_PTR,
 };
 
 enum ir_op_var_ty_ty {
@@ -601,6 +601,7 @@ struct ir_var_ty_info {
 struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty);
 
 struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty);
+struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb);
 struct ir_op_var_ty var_ty_make_pointer(struct ir_builder *irb,
                                         const struct ir_op_var_ty *underlying);
 struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
