@@ -191,7 +191,8 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
       SEL_32_OR_64_BIT_OP(aarch64_emit_sbfm, 0b000000, 0b011111);
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
-      bug("can't sext from I64");
+    case IR_OP_VAR_PRIMITIVE_TY_IPTR:
+      bug("can't sext from I64/IPTR");
     }
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
@@ -220,6 +221,7 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
                           get_reg_for_idx(reg));
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
+    case IR_OP_VAR_PRIMITIVE_TY_IPTR:
       break;
     }
   }

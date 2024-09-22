@@ -679,8 +679,13 @@ void make_integral_constant(struct ir_builder *irb, struct ir_op *op, enum ir_op
 }
 
 void make_pointer_constant(struct ir_builder *irb, struct ir_op *op, unsigned long long value) {
+  UNUSED_ARG(irb);
+
   op->ty = IR_OP_TY_CNST;
-  op->var_ty = var_ty_for_pointer_size(irb);
+  op->var_ty = (struct ir_op_var_ty){
+    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    .primitive = IR_OP_VAR_PRIMITIVE_TY_IPTR
+  };
   op->cnst = (struct ir_op_cnst){
     .ty = IR_OP_CNST_TY_INT,
     .int_value = value
@@ -922,8 +927,8 @@ void make_string_ref(struct ir_builder *irb, const char *string,
   irb->global_refs = glb_ref;
 }
 
+// FIXME: this should be platform specific
 struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
-  // FIXME: pointer size!
   UNUSED_ARG(irb);
 
   switch (ty->ty) {
@@ -944,6 +949,8 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
     case IR_OP_VAR_PRIMITIVE_TY_I64:
     return (struct ir_var_ty_info){.size = 8, .alignment = 8};
+    case IR_OP_VAR_PRIMITIVE_TY_IPTR:
+      return (struct ir_var_ty_info){.size = 1, .alignment = 1};
     }
   case IR_OP_VAR_TY_TY_ARRAY: {
     struct ir_var_ty_info element_info = var_ty_info(irb, ty->array.underlying);

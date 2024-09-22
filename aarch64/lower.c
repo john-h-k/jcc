@@ -364,7 +364,10 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     return;
   }
 
-  struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func);
+  struct ir_op_var_ty copy_ty = {
+    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    .primitive= IR_OP_VAR_PRIMITIVE_TY_IPTR
+  };
   struct ir_op_var_ty pointer_copy_ty = var_ty_make_pointer(func, &copy_ty);
 
   struct ir_lcl *src_lcl = op->load_lcl.lcl;
