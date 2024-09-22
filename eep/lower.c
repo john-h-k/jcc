@@ -499,6 +499,9 @@ void eep_pre_reg_lower(struct ir_builder *func) {
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_CAST_OP:
               break;
+            case IR_OP_TY_ADDR_OFF:
+              todo("lower addroff");
+              break;
             case IR_OP_TY_CALL:
               todo("call");
               break;
