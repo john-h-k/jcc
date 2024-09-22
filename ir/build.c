@@ -1000,7 +1000,7 @@ struct ir_op *build_ir_for_member_address_offset(struct ir_builder *irb,
   struct ir_op *offset = alloc_ir_op(irb, stmt);
   offset->ty = IR_OP_TY_CNST;
   offset->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                      .primitive = IR_OP_VAR_PRIMITIVE_TY_IPTR};
+                                      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
   offset->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
 
@@ -1017,21 +1017,15 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
 
   struct ir_op_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(irb, stmt, &lhs_expr->var_ty, member_name, &member_ty);
-
-  struct ir_addr_offset *offsets = arena_alloc(irb->arena, sizeof(*offsets));
-  offsets->ty = member_ty;
-  offsets->offset = rhs;
-
-  struct ir_op *addr_off = alloc_ir_op(irb, stmt);
-  addr_off->ty = IR_OP_TY_ADDR_OFF;
-  addr_off->var_ty = var_ty_make_pointer(irb, &member_ty);
-  addr_off->addr_off = (struct ir_op_addroff){
-    .addr = lhs,
-    .offsets = offsets,
-    .num_offsets = 1
-  };
+  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(irb, &member_ty);
   
-  return addr_off;
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_BINARY_OP;
+  op->var_ty = pointer_ty;
+  op->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = rhs};
+
+  return op;
 }
 
 struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
@@ -1045,21 +1039,15 @@ struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
 
   struct ir_op_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty);
+  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(irb, &member_ty);
   
-  struct ir_addr_offset *offsets = arena_alloc(irb->arena, sizeof(*offsets));
-  offsets->ty = member_ty;
-  offsets->offset = rhs;
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+  op->ty = IR_OP_TY_BINARY_OP;
+  op->var_ty = pointer_ty;
+  op->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = rhs};
 
-  struct ir_op *addr_off = alloc_ir_op(irb, stmt);
-  addr_off->ty = IR_OP_TY_ADDR_OFF;
-  addr_off->var_ty = var_ty_make_pointer(irb, &member_ty);
-  addr_off->addr_off = (struct ir_op_addroff){
-    .addr = lhs,
-    .offsets = offsets,
-    .num_offsets = 1
-  };
-  
-  return addr_off;
+  return op;
 }
 
 struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
@@ -1083,22 +1071,7 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
   struct ast_tyref pointer_size_int = tyref_pointer_sized_int(irb->parser, false);
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_size_int);
 
-  struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, &pointer_ty);
-
-  struct ir_addr_offset *offsets = arena_alloc(irb->arena, sizeof(*offsets));
-  offsets->ty = var_ty_get_underlying(&var_ty);
-  offsets->offset = rhs;
-
-  struct ir_op *addr_off = alloc_ir_op(irb, stmt);
-  addr_off->ty = IR_OP_TY_ADDR_OFF;
-  addr_off->var_ty = var_ty;
-  addr_off->addr_off = (struct ir_op_addroff){
-    .addr = lhs,
-    .offsets = offsets,
-    .num_offsets = 1
-  };
-  
-  return addr_off;
+  return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
 }
 
 struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,

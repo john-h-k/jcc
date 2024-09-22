@@ -495,9 +495,6 @@ void aarch64_pre_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_CALL:
         case IR_OP_TY_CAST_OP:
           break;
-        case IR_OP_TY_ADDR_OFF:
-          todo("lower addroff");
-          break;
         case IR_OP_TY_UNARY_OP:
           if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
             lower_logical_not(func, op);
@@ -716,9 +713,7 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_CUSTOM:
         case IR_OP_TY_PHI:
           break;
-        case IR_OP_TY_ADDR_OFF:
-          todo("lower addroff");
-          break;
+
         case IR_OP_TY_CNST: {
           if (op->cnst.ty != IR_OP_CNST_TY_STR) {
             break;

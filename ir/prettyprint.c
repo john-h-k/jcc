@@ -306,21 +306,6 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
       break;
     }
     break;
-  case IR_OP_TY_ADDR_OFF:
-    debug_lhs(file, irb, ir);
-    fprintf(file, "addroff %%%zu, [ ", ir->addr_off.addr->id);
-    for (size_t i = 0; i < ir->addr_off.num_offsets; i++) {
-      struct ir_addr_offset *offset = &ir->addr_off.offsets[i];
-      debug_print_var_ty_string(file, irb, &offset->ty);
-      fprintf(file, " * ");
-      fprintf(file, "%%%zu", offset->offset->id);
-
-      if (i + 1 < ir->addr_off.num_offsets) {
-        fprintf(file, ", ");
-      }
-    }
-    fprintf(file, " ]");
-    break;
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, irb, ir);
     if (ir->load_lcl.lcl) {
