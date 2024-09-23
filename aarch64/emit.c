@@ -80,13 +80,13 @@ static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
   return reg;
 }
 
-static bool is_64_bit(const struct ir_op *op) {
-  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                       op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY,
+static bool is_64_bit(const struct ir_op_var_ty *var_ty) {
+  invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
+                       var_ty->ty == IR_OP_VAR_TY_TY_POINTER || var_ty->ty == IR_OP_VAR_TY_TY_ARRAY,
                    "non-primitive/pointer/array passed to `is_64_bit`");
 
-  return op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || op->var_ty.ty == IR_OP_VAR_TY_TY_ARRAY
-         || (op->ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I64);
+  return var_ty->ty == IR_OP_VAR_TY_TY_POINTER || var_ty->ty == IR_OP_VAR_TY_TY_ARRAY
+         || (var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE && var_ty->primitive == IR_OP_VAR_PRIMITIVE_TY_I64);
 }
 
 static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
@@ -163,7 +163,7 @@ static void emit_call(struct emit_state *state, struct ir_op *op) {
 static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func, immr, imms)                                  \
   do {                                                                         \
-    if (is_64_bit(op)) {                                                       \
+    if (is_64_bit(&op->var_ty)) {                                              \
       func##_64_imm(state->emitter, get_reg_for_idx(src_reg), immr, imms,      \
                     get_reg_for_idx(reg));                                     \
     } else {                                                                   \
@@ -232,7 +232,7 @@ static void emit_load_addr_op(struct emit_state *state, struct ir_op *op) {
   struct ir_op *target = op->load_addr.addr;
 
   if (target->lcl) {
-    if (is_64_bit(target)) {
+    if (is_64_bit(&op->var_ty)) {
       size_t offset = get_lcl_stack_offset_64(state, target->lcl);
       aarch64_emit_load_offset_64(state->emitter, STACK_PTR_REG,
                                   get_reg_for_idx(dest), offset);
@@ -242,7 +242,7 @@ static void emit_load_addr_op(struct emit_state *state, struct ir_op *op) {
                                   get_reg_for_idx(dest), offset);
     }
   } else {
-    if (is_64_bit(target)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_load_offset_64(state->emitter,
                                   get_reg_for_idx(target->reg),
                                   get_reg_for_idx(dest), 0);
@@ -274,7 +274,7 @@ static void emit_store_addr_op(struct emit_state *state, struct ir_op *op) {
   size_t source = value->reg;
 
   if (target->lcl) {
-    if (is_64_bit(target)) {
+    if (is_64_bit(&value->var_ty)) {
       size_t offset = get_lcl_stack_offset_64(state, target->lcl);
       aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                   get_reg_for_idx(source), offset);
@@ -284,7 +284,7 @@ static void emit_store_addr_op(struct emit_state *state, struct ir_op *op) {
                                   get_reg_for_idx(source), offset);
     }
   } else {
-    if (is_64_bit(target)) {
+    if (is_64_bit(&value->var_ty)) {
       aarch64_emit_store_offset_64(state->emitter,
                                   get_reg_for_idx(target->reg),
                                   get_reg_for_idx(source), 0);
@@ -299,7 +299,7 @@ static void emit_store_addr_op(struct emit_state *state, struct ir_op *op) {
 static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func)                                              \
   do {                                                                         \
-    if (is_64_bit(op)) {                                                       \
+    if (is_64_bit(&op->var_ty)) {                                              \
       func##_64(state->emitter, get_reg_for_idx(source),                       \
                 get_reg_for_idx(dest));                                        \
     } else {                                                                   \
@@ -316,7 +316,7 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
 
   switch (op->unary_op.ty) {
   case IR_OP_UNARY_OP_TY_NEG:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_sub_64(state->emitter, ZERO_REG, get_reg_for_idx(source),
                           get_reg_for_idx(dest));
     } else {
@@ -337,7 +337,7 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
 static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
 #define SEL_32_OR_64_BIT_OP(func)                                              \
   do {                                                                         \
-    if (is_64_bit(op)) {                                                       \
+    if (is_64_bit(&op->var_ty)) {                                              \
       func##_64(state->emitter, get_reg_for_idx(lhs_reg),                      \
                 get_reg_for_idx(rhs_reg), get_reg_for_idx(reg));               \
     } else {                                                                   \
@@ -364,7 +364,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
                            get_reg_for_idx(rhs_reg), ZERO_REG);
     } else {
@@ -373,7 +373,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     }
     break;
   case IR_OP_BINARY_OP_TY_OR:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_orr_64(state->emitter, get_reg_for_idx(lhs_reg),
                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
                           SHIFT_LSL, 0);
@@ -384,7 +384,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     }
     break;
   case IR_OP_BINARY_OP_TY_XOR:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_eor_64(state->emitter, get_reg_for_idx(lhs_reg),
                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
                           SHIFT_LSL, 0);
@@ -395,7 +395,7 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     }
     break;
   case IR_OP_BINARY_OP_TY_AND:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_and_64(state->emitter, get_reg_for_idx(lhs_reg),
                           get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
                           SHIFT_LSL, 0);
@@ -531,7 +531,7 @@ static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
   switch (cnst->cnst.ty) {
   case IR_OP_CNST_TY_INT: {
     size_t src = get_reg_for_op(state, cnst, REG_USAGE_READ);
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_mov_64(state->emitter, get_reg_for_idx(src),
                             get_reg_for_idx(dest));
     } else {
@@ -567,7 +567,7 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
     emit_mov_cnst(state, op, dest);
     break;
   default:
-    if (is_64_bit(value)) {
+    if (is_64_bit(&value->var_ty)) {
       aarch64_emit_mov_64(state->emitter, get_reg_for_idx(value->reg),
                           get_reg_for_idx(dest));
     } else {
@@ -580,7 +580,7 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
 static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
   size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
-  if (is_64_bit(op)) {
+  if (is_64_bit(&op->var_ty)) {
     aarch64_emit_load_offset_64(
         state->emitter, STACK_PTR_REG, get_reg_for_idx(reg),
         get_lcl_stack_offset_64(state, op->load_lcl.lcl));
@@ -594,7 +594,7 @@ static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
 static void emit_store_lcl_op(struct emit_state *state, struct ir_op *op) {
   size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
 
-  if (is_64_bit(op->store_lcl.value) ||
+  if (is_64_bit(&op->store_lcl.value->var_ty) ||
       (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
     aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                  get_reg_for_idx(reg),
@@ -611,7 +611,7 @@ static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
 
   switch (op->cnst.ty) {
   case IR_OP_CNST_TY_INT:
-    if (is_64_bit(op)) {
+    if (is_64_bit(&op->var_ty)) {
       aarch64_emit_load_cnst_64(state->emitter, get_reg_for_idx(reg),
                                   op->cnst.int_value);
     } else {
