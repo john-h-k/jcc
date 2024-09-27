@@ -160,6 +160,31 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   }
 }
 
+bool is_fp_ty(const struct ast_tyref *ty) {
+  if (ty->ty != AST_TYREF_TY_WELL_KNOWN) {
+    return false;
+  }
+
+  switch (ty->well_known) {
+  case WELL_KNOWN_TY_FLOAT:
+  case WELL_KNOWN_TY_DOUBLE:
+  case WELL_KNOWN_TY_LONG_DOUBLE:
+    return true;
+
+  case WELL_KNOWN_TY_SIGNED_CHAR:
+  case WELL_KNOWN_TY_UNSIGNED_CHAR:
+  case WELL_KNOWN_TY_SIGNED_SHORT:
+  case WELL_KNOWN_TY_UNSIGNED_SHORT:
+  case WELL_KNOWN_TY_SIGNED_INT:
+  case WELL_KNOWN_TY_UNSIGNED_INT:
+  case WELL_KNOWN_TY_SIGNED_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG:
+  case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+  case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+    return false;
+  }
+}
+
 bool is_integral_ty(const struct ast_tyref *ty) {
   if (ty->ty != AST_TYREF_TY_WELL_KNOWN) {
     return false;
@@ -177,6 +202,11 @@ bool is_integral_ty(const struct ast_tyref *ty) {
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
     return true;
+
+  case WELL_KNOWN_TY_FLOAT:
+  case WELL_KNOWN_TY_DOUBLE:
+  case WELL_KNOWN_TY_LONG_DOUBLE:
+    return false;
   }
 }
 
@@ -244,6 +274,8 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_CONST:
   case LEX_TOKEN_TY_KW_VOLATILE:
   case LEX_TOKEN_TY_KW_VOID:
+  case LEX_TOKEN_TY_KW_FLOAT:
+  case LEX_TOKEN_TY_KW_DOUBLE:
   case LEX_TOKEN_TY_KW_CHAR:
   case LEX_TOKEN_TY_KW_SHORT:
   case LEX_TOKEN_TY_KW_INT:
@@ -256,6 +288,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_UNION:
   case LEX_TOKEN_TY_KW_SIZEOF:
   case LEX_TOKEN_TY_KW_ALIGNOF:
+  case LEX_TOKEN_TY_KW_ALIGNAS:
   case LEX_TOKEN_TY_IDENTIFIER:
     return false;
 
@@ -272,6 +305,21 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
     // char is signed!
     ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
     ty_ref->well_known = WELL_KNOWN_TY_SIGNED_CHAR;
+    return true;
+
+  case LEX_TOKEN_TY_FLOAT_LITERAL:
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_FLOAT;
+    return true;
+
+  case LEX_TOKEN_TY_DOUBLE_LITERAL:
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_DOUBLE;
+    return true;
+
+  case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_LONG_DOUBLE;
     return true;
 
   case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
@@ -497,11 +545,19 @@ void skip_int_token_if_present(struct parser *parser) {
   }
 }
 
-bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
+bool parse_wkt_item(struct parser *parser, enum well_known_ty *wkt) {
   struct token token;
   peek_token(parser->lexer, &token);
 
   switch (token.ty) {
+  case LEX_TOKEN_TY_KW_FLOAT:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_FLOAT;
+    return true;
+  case LEX_TOKEN_TY_KW_DOUBLE:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_DOUBLE;
+    return true;
   case LEX_TOKEN_TY_KW_CHAR:
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_SIGNED_CHAR;
@@ -521,7 +577,13 @@ bool parse_integer_size_name(struct parser *parser, enum well_known_ty *wkt) {
     struct token maybe_other_long;
     peek_token(parser->lexer, &maybe_other_long);
 
-    if (maybe_other_long.ty == LEX_TOKEN_TY_KW_LONG) {
+    if (maybe_other_long.ty == LEX_TOKEN_TY_KW_DOUBLE) {
+      consume_token(parser->lexer, token);
+      *wkt = WELL_KNOWN_TY_LONG_DOUBLE;
+
+      // return (ignore `skip_int_token`)
+      return true;
+    } else if (maybe_other_long.ty == LEX_TOKEN_TY_KW_LONG) {
       *wkt = WELL_KNOWN_TY_SIGNED_LONG_LONG;
       consume_token(parser->lexer, maybe_other_long);
     } else {
@@ -575,7 +637,7 @@ void parse_type_qualifiers(struct parser *parser,
 //   return parse_type_specifiers(parser, flags);
 // }
 
-bool parse_wkt_integral(struct parser *parser, struct ast_tyref *ty_ref) {
+bool parse_wkt(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -605,7 +667,7 @@ bool parse_wkt_integral(struct parser *parser, struct ast_tyref *ty_ref) {
       seen_unsigned; // `signed` or `unsigned` is a type in itself
 
   enum well_known_ty wkt;
-  if (!parse_integer_size_name(parser, &wkt)) {
+  if (!parse_wkt_item(parser, &wkt)) {
     if (enough_type_info) {
       wkt = seen_signed ? WELL_KNOWN_TY_SIGNED_INT : WELL_KNOWN_TY_UNSIGNED_INT;
     } else {
@@ -692,7 +754,7 @@ bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
 bool parse_simple_type(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
-  if (parse_wkt_integral(parser, ty_ref)) {
+  if (parse_wkt(parser, ty_ref)) {
     return true;
   }
 
@@ -821,6 +883,38 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return true;
 }
 
+bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+
+  peek_token(parser->lexer, &token);
+  struct ast_tyref ty_ref;
+  if (is_literal_token(parser, token.ty, &ty_ref) && is_fp_ty(&ty_ref)) {
+    const char *literal_text = associated_text(parser->lexer, &token);
+    size_t literal_len = strlen(literal_text);
+
+    debug_assert(literal_len, "literal_len was 0");
+
+    char *end_ptr;
+    long double float_value = strtold(literal_text, &end_ptr);
+
+    if (end_ptr != &literal_text[literal_len]) {
+      todo("handle constant float parse failure");
+    }
+
+    // TODO: handle unrepresentedly large values
+    cnst->cnst_ty = ty_ref;
+    cnst->flt_value = float_value;
+
+    consume_token(parser->lexer, token);
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+
 bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -829,9 +923,29 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
   if (is_literal_token(parser, token.ty, &ty_ref) && is_integral_ty(&ty_ref)) {
+    const char *literal_text = associated_text(parser->lexer, &token);
+    size_t literal_len = strlen(literal_text);
+
+    debug_assert(literal_len, "literal_len was 0");
+
+    int base = 10;
+    if (literal_len >= 2 && literal_text[0] == '0' && literal_text[1] == 'x') {
+      base = 16;
+    } else if (literal_text[0] == '0') {
+      // this classes '0' as octal but that is fine
+      base = 8;
+    }
+
+    char *end_ptr;
+    unsigned long long int_value = strtoull(literal_text, &end_ptr, base);
+
+    if (end_ptr != &literal_text[literal_len]) {
+      todo("handle constant int parse failure");
+    }
+
     // TODO: handle unrepresentedly large values
     cnst->cnst_ty = ty_ref;
-    cnst->int_value = atoll(associated_text(parser->lexer, &token));
+    cnst->int_value = int_value;
 
     consume_token(parser->lexer, token);
     return true;
@@ -862,7 +976,7 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  return parse_str_cnst(parser, cnst) || parse_int_cnst(parser, cnst);
+  return parse_str_cnst(parser, cnst) || parse_int_cnst(parser, cnst) || parse_float_cnst(parser, cnst);
 }
 
 bool parse_expr(struct parser *parser, struct ast_expr *expr);
@@ -2835,6 +2949,15 @@ DEBUG_FUNC(tyref, ty_ref) {
     case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
       AST_PRINTZ("unsigned long long");
       break;
+    case WELL_KNOWN_TY_FLOAT:
+      AST_PRINTZ("float");
+      break;
+    case WELL_KNOWN_TY_DOUBLE:
+      AST_PRINTZ("double");
+      break;
+    case WELL_KNOWN_TY_LONG_DOUBLE:
+      AST_PRINTZ("long double");
+      break;
     }
 
     break;
@@ -2864,8 +2987,10 @@ DEBUG_FUNC(var, var) {
 }
 
 DEBUG_FUNC(cnst, cnst) {
-  if (cnst->cnst_ty.ty == AST_TYREF_TY_WELL_KNOWN) {
+  if (is_integral_ty(&cnst->cnst_ty)) {
     AST_PRINT("CONSTANT '%llu'", cnst->int_value);
+  } else if (is_fp_ty(&cnst->cnst_ty)) {
+    AST_PRINT("CONSTANT '%Lf'", cnst->flt_value);
   } else {
     // must be string literal for now
     AST_PRINT("CONSTANT '%s'", cnst->str_value);

@@ -358,7 +358,8 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
       switch (op->cnst.ty) {
-
+      case IR_OP_CNST_TY_FLT:
+        todo("floats");
       case IR_OP_CNST_TY_INT:
         if (reg == NO_REG) {
           eep_emit_nop(state->emitter);

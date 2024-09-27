@@ -87,6 +87,8 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE),
 
       KEYWORD("void", LEX_TOKEN_TY_KW_VOID),
+      KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT),
+      KEYWORD("double", LEX_TOKEN_TY_KW_DOUBLE),
       KEYWORD("char", LEX_TOKEN_TY_KW_CHAR),
       KEYWORD("short", LEX_TOKEN_TY_KW_SHORT),
       KEYWORD("int", LEX_TOKEN_TY_KW_INT),
@@ -100,6 +102,8 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("sizeof", LEX_TOKEN_TY_KW_SIZEOF),
       KEYWORD("alignof", LEX_TOKEN_TY_KW_ALIGNOF),
       KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF),
+      KEYWORD("alignas", LEX_TOKEN_TY_KW_ALIGNAS),
+      KEYWORD("_Alignas", LEX_TOKEN_TY_KW_ALIGNAS),
   };
 
 #undef KEYWORD
@@ -138,28 +142,6 @@ void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
 
   // we have either hit end of line or end of file
   // we treat both as a valid eol
-}
-
-// attempts to find the `*/` token
-// rather than just lexing the comment itself
-// this may be marginally faster, also may not make much of a difference
-// it returns bool in case we hit EOF without hitting the end token
-bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
-  while (/* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len) {
-    if (lexer->text[cur_pos->idx] == '\n') {
-      next_line(cur_pos);
-    } else if (lexer->text[cur_pos->idx] == '*' &&
-               lexer->text[cur_pos->idx + 1] == '/') {
-      // found it!
-      next_col(cur_pos);
-      next_col(cur_pos);
-      return true;
-    } else {
-      next_col(cur_pos);
-    }
-  }
-
-  return false;
 }
 
 const char *process_raw_string(struct lexer *lexer, const struct token *token) {
@@ -230,6 +212,37 @@ bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
   }
 
   return false;
+}
+
+// attempts to find the `*/` token
+// rather than just lexing the comment itself
+// this may be marginally faster, also may not make much of a difference
+// it returns bool in case we hit EOF without hitting the end token
+// NOTE: this will be removed when preprocessor exists (as that strips comments)
+bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
+  while (/* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len) {
+    if (lexer->text[cur_pos->idx] == '\n') {
+      next_line(cur_pos);
+    } else if (lexer->text[cur_pos->idx] == '*' &&
+               lexer->text[cur_pos->idx + 1] == '/') {
+      // found it!
+      next_col(cur_pos);
+      next_col(cur_pos);
+      return true;
+    } else {
+      next_col(cur_pos);
+    }
+  }
+
+  return false;
+}
+
+// this is really more a parsing exercise than a lexing exercise, but it makes
+// parser cleaner
+bool try_lex_fp_literal(struct lexer *lexer, struct text_pos *cur_pos) {
+  UNUSED_ARG(lexer);
+  UNUSED_ARG(cur_pos);
+  todo("impl");
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
@@ -306,6 +319,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
     break;
   case '.':
     next_col(&end);
+
     if (try_consume(lexer, &end, '.')) {
       if (try_consume(lexer, &end, '.')) {
         ty = LEX_TOKEN_TY_ELLIPSIS;
@@ -313,6 +327,12 @@ void peek_token(struct lexer *lexer, struct token *token) {
         ty = LEX_TOKEN_TY_UNKNOWN;
       }
     } else {
+      // NOTE: `.75` is a valid float
+      // grammar requires a digit after `.` to be valid so we check for that
+      if (end.idx < lexer->len && isdigit(lexer->text[end.idx])) {
+        goto number_literal;
+      }
+
       ty = LEX_TOKEN_TY_DOT;
     }
     break;
@@ -459,6 +479,91 @@ void peek_token(struct lexer *lexer, struct token *token) {
     }
     break;
 
+  case '0':
+  case '1':
+  case '2':
+  case '3':
+  case '4':
+  case '5':
+  case '6':
+  case '7':
+  case '8':
+  case '9':
+  number_literal: {
+    // all integers must begin with a digit
+    // any digit for decimal, `0` for hex/octal
+    // floats can be digit or `.`
+
+    bool is_float = c == '.';
+
+    next_col(&end);
+
+    // remove hex prefix
+    try_consume(lexer, &end, 'x');
+
+    // this is generous and will allow 0BE for example, when only 0xBE is valid
+    // that's okay, let parser handle it
+    for (; end.idx < lexer->len; next_col(&end)) {
+      if (lexer->text[end.idx] == '.') {
+        is_float = true;
+        continue;
+      }
+
+      if (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e') {
+        is_float = true;
+        next_col(&end);
+
+        if (end.idx < lexer->len && (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
+          next_col(&end);
+        }
+
+        // skip the sign after exponent
+        continue;
+      }
+
+      if (!isxdigit(lexer->text[end.idx])) {
+        break;
+      }
+    }
+
+    bool is_unsigned = false;
+
+    ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
+    while (end.idx + 1 < lexer->len) {
+      switch (tolower(lexer->text[end.idx + 1])) {
+      case 'u':
+        is_unsigned = true;
+        next_col(&end);
+        continue;
+      case 'f':
+        ty = LEX_TOKEN_TY_FLOAT_LITERAL;
+        next_col(&end);
+        continue;
+      case 'l':
+        if (!is_float && end.idx + 2 < lexer->len &&
+            tolower(lexer->text[end.idx + 1]) == 'l') {
+          ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
+        } else if (is_float) {
+          ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
+        } else {
+          ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
+        }
+        next_col(&end);
+        continue;
+      default:
+        break;
+      }
+
+      break;
+    }
+
+    if (is_unsigned) {
+      invariant_assert(!is_float, "can't be unsigned and float");
+      ty++;
+    }
+    break;
+  }
+
   default: {
     if (c == '\'') {
       ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
@@ -496,43 +601,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
       // skip final double-quote
       next_col(&end);
 
-    } else if (isdigit(c)) {
-      ty = LEX_TOKEN_TY_SIGNED_INT_LITERAL;
-
-      for (size_t i = end.idx; i < lexer->len && isdigit(lexer->text[i]); i++) {
-        next_col(&end);
-      }
-
-      bool is_unsigned = false;
-
-      while (end.idx + 1 < lexer->len) {
-        debug("current pos %d", end.idx);
-        switch (tolower(lexer->text[end.idx + 1])) {
-        case 'u':
-          debug("found u!");
-          is_unsigned = true;
-          next_col(&end);
-          continue;
-        case 'l':
-          debug("found l!");
-          if (end.idx + 2 < lexer->len &&
-              tolower(lexer->text[end.idx + 1]) == 'l') {
-            ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
-          } else {
-            ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
-          }
-          next_col(&end);
-          continue;
-        default:
-          break;
-        }
-
-        break;
-      }
-
-      if (is_unsigned) {
-        ty++;
-      }
     } else if (valid_first_identifier_char(c)) {
       ty = LEX_TOKEN_TY_IDENTIFIER;
 
@@ -583,6 +651,9 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
     break;
   case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
+  case LEX_TOKEN_TY_FLOAT_LITERAL:
+  case LEX_TOKEN_TY_DOUBLE_LITERAL:
+  case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
   case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
   case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
   case LEX_TOKEN_TY_SIGNED_LONG_LITERAL:
@@ -670,6 +741,7 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_UNION)
     CASE_RET(LEX_TOKEN_TY_KW_SIZEOF)
     CASE_RET(LEX_TOKEN_TY_KW_ALIGNOF)
+    CASE_RET(LEX_TOKEN_TY_KW_ALIGNAS)
 
     CASE_RET(LEX_TOKEN_TY_KW_TYPEDEF)
     CASE_RET(LEX_TOKEN_TY_KW_STATIC)
@@ -682,6 +754,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
 
     CASE_RET(LEX_TOKEN_TY_KW_VOID)
 
+    CASE_RET(LEX_TOKEN_TY_KW_FLOAT)
+    CASE_RET(LEX_TOKEN_TY_KW_DOUBLE)
     CASE_RET(LEX_TOKEN_TY_KW_CHAR)
     CASE_RET(LEX_TOKEN_TY_KW_SHORT)
     CASE_RET(LEX_TOKEN_TY_KW_INT)
@@ -699,6 +773,10 @@ const char *token_name(struct lexer *lexer, struct token *token) {
 
     CASE_RET(LEX_TOKEN_TY_ASCII_STR_LITERAL)
     CASE_RET(LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
+
+    CASE_RET(LEX_TOKEN_TY_FLOAT_LITERAL)
+    CASE_RET(LEX_TOKEN_TY_DOUBLE_LITERAL)
+    CASE_RET(LEX_TOKEN_TY_LONG_DOUBLE_LITERAL)
 
     CASE_RET(LEX_TOKEN_TY_SIGNED_INT_LITERAL)
     CASE_RET(LEX_TOKEN_TY_UNSIGNED_INT_LITERAL)

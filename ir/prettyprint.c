@@ -157,6 +157,12 @@ void debug_print_var_ty_string(FILE *file, struct ir_builder *irb, const struct 
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       name = "i64";
       break;
+    case IR_OP_VAR_PRIMITIVE_TY_F32:
+      name = "f32";
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_F64:
+      name = "f64";
+      break;
     }
 
     fprintf(file, "%s", name);
@@ -262,6 +268,9 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   case IR_OP_TY_CNST:
     debug_lhs(file, irb, ir);
     switch (ir->cnst.ty) {
+    case IR_OP_CNST_TY_FLT:
+      fprintf(file, "%Lf", ir->cnst.flt_value);
+      break;
     case IR_OP_CNST_TY_INT:
       fprintf(file, "%llu", ir->cnst.int_value);
       break;

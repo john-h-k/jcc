@@ -88,6 +88,8 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_KW_VOID,
 
+  LEX_TOKEN_TY_KW_FLOAT,
+  LEX_TOKEN_TY_KW_DOUBLE,
   LEX_TOKEN_TY_KW_CHAR,
   LEX_TOKEN_TY_KW_SHORT,
   LEX_TOKEN_TY_KW_INT,
@@ -102,6 +104,7 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_KW_SIZEOF,
   LEX_TOKEN_TY_KW_ALIGNOF, // both `_Alignof` (C11) and `alignof` (C23 onwards)
+  LEX_TOKEN_TY_KW_ALIGNAS, // both `_Alignas` (C11) and `alignas` (C23 onwards)
 
   LEX_TOKEN_TY_IDENTIFIER,
 
@@ -109,6 +112,10 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_ASCII_CHAR_LITERAL, // 'a'
   LEX_TOKEN_TY_ASCII_STR_LITERAL,  // "foobar"
+
+  LEX_TOKEN_TY_FLOAT_LITERAL,   // 10.0f
+  LEX_TOKEN_TY_DOUBLE_LITERAL,   // 10.0
+  LEX_TOKEN_TY_LONG_DOUBLE_LITERAL,   // 10.0l
 
   // Note: `lex.c` relies on `unsigned` being `signed + 1`
 
@@ -164,6 +171,7 @@ void consume_token(struct lexer *lexer, struct token token);
 // e.g
 // * `token.ty == LEX_TOKEN_TY_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
+// TODO: maybe make this so it doesn't copy, and returns string length as well
 const char *associated_text(struct lexer *lexer, const struct token *token);
 const char *token_name(struct lexer *lexer, struct token *token);
 
