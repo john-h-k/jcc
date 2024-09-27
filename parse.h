@@ -25,6 +25,10 @@ enum well_known_ty {
 
   WELL_KNOWN_TY_SIGNED_LONG_LONG,
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
+
+  WELL_KNOWN_TY_FLOAT,
+  WELL_KNOWN_TY_DOUBLE,
+  WELL_KNOWN_TY_LONG_DOUBLE,
 };
 
 #define WKT_MAKE_SIGNED(wkt) ((wkt) & ~1)
@@ -165,6 +169,7 @@ struct ast_cnst {
   union {
     unsigned long long int_value;
     const char *str_value;
+    long double flt_value;
   };
 };
 
@@ -617,6 +622,9 @@ struct ast_tyref tyref_make_pointer(struct parser *parser,
 
 struct ast_tyref tyref_get_underlying(struct parser *parser,
                                       const struct ast_tyref *ty_ref);
+
+bool is_integral_ty(const struct ast_tyref *ty);
+bool is_fp_ty(const struct ast_tyref *ty);
 
 struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);
 

@@ -163,6 +163,11 @@ enum ir_op_var_primitive_ty var_ty_for_well_known_ty(enum well_known_ty wkt) {
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
     return IR_OP_VAR_PRIMITIVE_TY_I64;
+  case WELL_KNOWN_TY_FLOAT:
+    return IR_OP_VAR_PRIMITIVE_TY_F32;
+  case WELL_KNOWN_TY_DOUBLE:
+  case WELL_KNOWN_TY_LONG_DOUBLE:
+    return IR_OP_VAR_PRIMITIVE_TY_F64;
   }
 }
 
@@ -785,9 +790,14 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
 
     op->cnst.ty = IR_OP_CNST_TY_STR;
     op->cnst.str_value = cnst->str_value;
-  } else {
+  } else if (is_fp_ty(&cnst->cnst_ty)) {
+    op->cnst.ty = IR_OP_CNST_TY_FLT;
+    op->cnst.flt_value = cnst->flt_value;
+  } else if (is_integral_ty(&cnst->cnst_ty)) {
     op->cnst.ty = IR_OP_CNST_TY_INT;
     op->cnst.int_value = cnst->int_value;
+  } else {
+    bug("unrecognised ty for cnst");
   }
 
   return op;

@@ -192,6 +192,8 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       bug("can't sext from I64");
+    default:
+      bug("float cast");
     }
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
@@ -221,6 +223,8 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       break;
+    default:
+      bug("truncate makes no sense for float");
     }
   }
 
@@ -529,6 +533,8 @@ static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
                "received non cnst op in emit_mov_cnst");
 
   switch (cnst->cnst.ty) {
+  case IR_OP_CNST_TY_FLT:
+    todo("float mov");
   case IR_OP_CNST_TY_INT: {
     size_t src = get_reg_for_op(state, cnst, REG_USAGE_READ);
     if (is_64_bit(&op->var_ty)) {
@@ -610,6 +616,8 @@ static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
   size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   switch (op->cnst.ty) {
+  case IR_OP_CNST_TY_FLT:
+    todo("float cnst");
   case IR_OP_CNST_TY_INT:
     if (is_64_bit(&op->var_ty)) {
       aarch64_emit_load_cnst_64(state->emitter, get_reg_for_idx(reg),

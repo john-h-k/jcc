@@ -87,6 +87,7 @@ struct ir_op_phi {
 };
 
 enum ir_op_cnst_ty {
+  IR_OP_CNST_TY_FLT,
   IR_OP_CNST_TY_INT,
   IR_OP_CNST_TY_STR,
 };
@@ -97,6 +98,7 @@ struct ir_op_cnst {
   union {
     unsigned long long int_value;
     const char *str_value;
+    long double flt_value;
   };
 };
 
@@ -175,6 +177,9 @@ enum ir_op_var_primitive_ty {
   IR_OP_VAR_PRIMITIVE_TY_I16,
   IR_OP_VAR_PRIMITIVE_TY_I32,
   IR_OP_VAR_PRIMITIVE_TY_I64,
+
+  IR_OP_VAR_PRIMITIVE_TY_F32,
+  IR_OP_VAR_PRIMITIVE_TY_F64,
 
   // IR_OP_VAR_PRIMITIVE_TY_PTR,
 };
