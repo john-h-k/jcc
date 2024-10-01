@@ -22,32 +22,34 @@ struct emit_state {
   struct current_op_state cur_op_state;
 };
 
-static bool is_return_reg(size_t idx) { return idx == RETURN_REG.idx; }
+static bool is_return_reg(struct ir_reg reg) { return reg.idx == RETURN_REG.idx; }
 
-struct eep_reg get_reg_for_idx(size_t idx) {
-  struct eep_reg reg = {idx};
-  return reg;
+struct eep_reg get_reg_for_idx(struct ir_reg reg) {
+  return (struct eep_reg){.idx = reg.idx};
 }
 
 enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
-static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
+static struct ir_reg get_reg_for_op(struct emit_state *state, struct ir_op *op,
                              enum reg_usage usage) {
-  size_t reg = op->reg;
+  UNUSED_ARG(state);
+  UNUSED_ARG(usage);
 
-  if (reg == REG_FLAGS) {
+  struct ir_reg reg = op->reg;
+
+  if (reg.ty == IR_REG_TY_FLAGS) {
     return reg;
   }
 
-  if (usage & REG_USAGE_READ) {
-    state->cur_op_state.read_registers |= reg;
-  }
-  if (usage & REG_USAGE_WRITE) {
-    state->cur_op_state.write_registers |= reg;
-  }
+  // if (usage & REG_USAGE_READ) {
+  //   state->cur_op_state.read_registers |= reg;
+  // }
+  // if (usage & REG_USAGE_WRITE) {
+  //   state->cur_op_state.write_registers |= reg;
+  // }
 
   invariant_assert(
-      reg != REG_SPILLED,
+      reg.ty != IR_REG_TY_SPILLED,
       "spilled reg reached emitter; should've been handled by lower/regalloc");
 
   return reg;
@@ -68,11 +70,9 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
 
   debug_assert(op->ty == IR_OP_TY_BINARY_OP,
                "wrong ty op to `lower_binary_op`");
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  size_t lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
-  size_t rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
-  invariant_assert(lhs_reg != UINT32_MAX && rhs_reg != UINT32_MAX,
-                   "bad IR, no reg");
+  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
+  struct ir_reg rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
 
   switch (op->binary_op.ty) {
   case IR_OP_BINARY_OP_TY_EQ:
@@ -199,7 +199,7 @@ static enum eep_cond get_cond_for_op(struct ir_op *op) {
 }
 
 static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
-  size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
       binary_op_is_comparison(op->mov.value->binary_op.ty)) {
@@ -209,7 +209,7 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
     UNUSED_ARG(cond);
     todo("don't know how to extract condition codes to reg");
   } else {
-    size_t src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
+    struct ir_reg src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
     eep_emit_mov(state->emitter, get_reg_for_idx(src), get_reg_for_idx(dest));
   }
 }
@@ -221,7 +221,7 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   size_t true_offset =
       true_target->function_offset - eep_emitted_count(state->emitter);
 
-  if (op->br_cond.cond->reg == REG_FLAGS) {
+  if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
     // emit based on flags
     enum eep_cond cond = get_cond_for_op(op->br_cond.cond);
     eep_emit_jump(state->emitter, cond, true_offset);
@@ -332,14 +332,14 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_LOAD_LCL: {
-      size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+      struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
       eep_emit_load_offset(state->emitter, STACK_PTR_REG,
                            get_lcl_stack_offset(state, op->lcl),
                            get_reg_for_idx(reg));
       break;
     }
     case IR_OP_TY_STORE_LCL: {
-      size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+      struct ir_reg reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
       size_t offset = get_lcl_stack_offset(state, op->lcl);
       invariant_assert(UNS_FITS_IN_BITS(offset, 4), "offset too big!");
       eep_emit_store_offset(state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
@@ -355,13 +355,13 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_CNST: {
-      size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+      struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
       switch (op->cnst.ty) {
       case IR_OP_CNST_TY_FLT:
         todo("floats");
       case IR_OP_CNST_TY_INT:
-        if (reg == NO_REG) {
+        if (reg.ty == IR_REG_TY_NONE) {
           eep_emit_nop(state->emitter);
         } else {
           eep_emit_mov_imm(state->emitter, op->cnst.int_value,
@@ -383,8 +383,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
       break;
     }
     case IR_OP_TY_RET: {
-      size_t value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
-      invariant_assert(value_reg != UINT32_MAX, "bad IR, no reg");
+      struct ir_reg value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
 
       if (!is_return_reg(value_reg)) {
         eep_emit_mov(state->emitter, get_reg_for_idx(value_reg), RETURN_REG);

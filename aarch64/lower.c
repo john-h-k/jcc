@@ -6,6 +6,7 @@
 #include "../ir/var_refs.h"
 #include "../util.h"
 
+#include <mach/arm/vm_types.h>
 #include <math.h>
 
 void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
@@ -31,10 +32,10 @@ void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
     fprintf(file, "a64_add_stack #%zu", func->total_locals_size);
     break;
   case AARCH64_OP_TY_SAVE_REG:
-    fprintf(file, "a64_save_reg R%zu", op->reg);
+    fprintf(file, "a64_save_reg R%zu", op->reg.idx);
     break;
   case AARCH64_OP_TY_RSTR_REG:
-    fprintf(file, "a64_rstr_reg R%zu", op->reg);
+    fprintf(file, "a64_rstr_reg R%zu", op->reg.idx);
     break;
   case AARCH64_OP_TY_PAGE:
     fprintf(file, "a64_page %%%zu", custom->page.glb_ref->id);
@@ -98,7 +99,7 @@ static void lower_str_cnst(struct ir_builder *func, struct ir_op *op) {
 }
 
 static void call_save_reg(struct ir_builder *func, struct ir_op *call,
-                          size_t reg) {
+                          struct ir_reg reg) {
   // FIXME: this saves entire reg but can sometimes save smaller amounts
   // (depending of the type occupying the live reg)
   struct ir_lcl *lcl = add_local(
@@ -140,18 +141,30 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
       (struct ir_lower_call_metadata *)op->metadata;
   unsigned long live_regs = metadata->post_call_live_regs;
 
-  // FIXME: don't hardcode volatile count
-  // FIXME: is it safe to consider x15/16 volatile? possibly not as they are IPC
-  // registers
-  size_t volatile_reg_count = AARCH64_TARGET.reg_info.num_volatile;
+  size_t volatile_integral_reg_count =
+      AARCH64_TARGET.reg_info.integral_registers.num_volatile;
+  size_t volatile_fp_reg_count =
+      AARCH64_TARGET.reg_info.fp_registers.num_volatile;
 
-  unsigned long long live_volatile =
-      live_regs & ((1ull << volatile_reg_count) - 1);
+  unsigned long long live_integral_volatile =
+      live_regs & ((1ull << volatile_integral_reg_count) - 1);
+
+  unsigned long long live_fp_volatile =
+      live_regs & ((1ull << volatile_fp_reg_count) - 1);
 
   // if the return reg is used by the call then remove the call-return reg
   // from live-volatile as we know it will be over written by end of call
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
-    live_volatile &= ~(1ull << op->reg);
+    switch (op->reg.ty) {
+    case IR_REG_TY_INTEGRAL:
+      live_integral_volatile &= ~(1ull << op->reg.idx);
+      break;
+    case IR_REG_TY_FP:
+      live_fp_volatile &= ~(1ull << op->reg.idx);
+      break;
+    default:
+      bug("unexpected reg ty");
+    }
 
     struct ir_op *ret_mov =
         insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
@@ -163,17 +176,34 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
     swap_ir_ops(func, op, ret_mov);
   }
 
-  size_t max_volatile = sizeof(live_volatile) * 8 - lzcnt(live_volatile);
+  size_t max_integral_volatile = sizeof(live_integral_volatile) * 8 - lzcnt(live_integral_volatile);
 
-  for (size_t i = 0; i < max_volatile; i++) {
-    if (!NTH_BIT(live_volatile, i) || i == op->reg) {
+  for (size_t i = 0; i < max_integral_volatile; i++) {
+    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_INTEGRAL) {
       // if not a live-volatile register or the register used by the actual
       // call, skip
       continue;
     }
 
-    call_save_reg(func, op, i);
+    if (NTH_BIT(live_integral_volatile, i)) {
+      call_save_reg(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = i  });
+    }
   }
+
+  size_t max_fp_volatile = sizeof(live_fp_volatile) * 8 - lzcnt(live_fp_volatile);
+
+  for (size_t i = 0; i < max_fp_volatile; i++) {
+    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_FP) {
+      // if not a live-volatile register or the register used by the actual
+      // call, skip
+      continue;
+    }
+
+    if (NTH_BIT(live_fp_volatile, i)) {
+      call_save_reg(func, op, (struct ir_reg){ .ty = IR_REG_TY_FP, .idx = i  });
+    }
+  }
+  
 
   // FIXME: generalise this to calling conventions
 
@@ -181,19 +211,20 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
   // it is possible there are no spare registers for this, and so we may need to
   // do a swap
 
+  // TODO: handle fp reg
   if (op->call.num_args) {
     unsigned long long free_regs =
-        ~op->live_regs & ~((1ull << func_ty->num_params) - 1);
+        ~op->live_integral_regs & ~((1ull << func_ty->num_params) - 1);
     size_t free_vol_reg = tzcnt(free_regs);
 
-    if (free_vol_reg >= volatile_reg_count) {
+    if (free_vol_reg >= volatile_integral_reg_count) {
       todo("argument moving when no free registers");
     }
 
     struct ir_op *mov_to_vol =
         insert_before_ir_op(func, op, IR_OP_TY_MOV, func_ty->params[0]);
     mov_to_vol->mov.value = op->call.args[0];
-    mov_to_vol->reg = free_vol_reg;
+    mov_to_vol->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = free_vol_reg };
 
     size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1
                                                        : func_ty->num_params;
@@ -230,26 +261,26 @@ static void lower_call(struct ir_builder *func, struct ir_op *op) {
                 .value = source, .idx = variadic_arg_idx}};
 
         store->flags |= IR_OP_FLAG_VARIADIC_PARAM;
-      } else if (i == 0 || op->call.args[i]->reg != arg_reg) {
+      } else if (i == 0 || op->call.args[i]->reg.idx != arg_reg) {
         struct ir_op *mov =
             insert_before_ir_op(func, op, IR_OP_TY_MOV, *var_ty);
 
         mov->mov.value = source;
-        mov->reg = arg_reg;
+        mov->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = arg_reg };
       }
     }
   }
 
   // FIXME: don't hardcode return reg
-  size_t return_reg = 0;
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg != return_reg) {
-    size_t target_reg = op->reg;
+  size_t return_reg_idx = 0;
+  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg.idx != return_reg_idx) {
+    struct ir_reg target_reg = op->reg;
 
     // we move the call _back_ and replace it with a mov, by swapping them
     struct ir_op *new_call =
         insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
     new_call->call = op->call;
-    new_call->reg = return_reg;
+    new_call->reg = (struct ir_reg){.ty = target_reg.ty, .idx = return_reg_idx};
 
     op->ty = IR_OP_TY_MOV;
     op->mov.value = new_call;
@@ -360,19 +391,38 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 
   struct ir_var_ty_info info = var_ty_info(func, &op->var_ty);
-  if (info.size < MAX_REG_SIZE) {
-    todo("copies < max_reg_size");
-  } else if (info.size == MAX_REG_SIZE) {
-    op->var_ty = (struct ir_op_var_ty){
-      .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
-    };
-    nxt_store->var_ty = (struct ir_op_var_ty){
-      .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
-    };
+
+  bool simple_copy = true;
+  enum ir_op_var_primitive_ty simple_copy_ty;
+  switch (info.size) {
+  case 1:
+    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I8;
+    break;
+  case 2:
+    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I16;
+    break;
+  case 4:
+    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I32;
+    break;
+  case 8:
+    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I64;
+    break;
+
+  default:
+    simple_copy = false;
+  }
+
+  if (simple_copy) {
+    op->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                                       .primitive = simple_copy_ty};
+    nxt_store->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                                              .primitive = simple_copy_ty};
 
     return;
+  }
+
+  if (info.size < MAX_REG_SIZE) {
+    todo("non-pow2 copies < MAX_REG_SIZE");
   }
 
   struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func);
@@ -386,50 +436,43 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
 
   base_src_addr->ty = IR_OP_TY_ADDR;
   base_src_addr->var_ty = pointer_copy_ty;
-  base_src_addr->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_LCL,
-    .lcl = src_lcl
-  };
+  base_src_addr->addr =
+      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = src_lcl};
 
   base_dest_addr->ty = IR_OP_TY_ADDR;
   base_dest_addr->var_ty = pointer_copy_ty;
-  base_dest_addr->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_LCL,
-    .lcl = dest_lcl
-  };
+  base_dest_addr->addr =
+      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = dest_lcl};
 
   struct ir_op *last = base_dest_addr;
 
   size_t size_left = info.size;
   size_t offset = 0;
   while (size_left >= MAX_REG_SIZE) {
-    struct ir_op *offset_cnst = insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
+    struct ir_op *offset_cnst =
+        insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
     make_pointer_constant(func, offset_cnst, offset);
 
-    struct ir_op *src_addr = insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    struct ir_op *src_addr = insert_after_ir_op(
+        func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD,
-      .lhs = base_src_addr,
-      .rhs = offset_cnst
-    };
+        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
-    struct ir_op *load = insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
-    load->load_addr = (struct ir_op_load_addr){
-      .addr = src_addr
-    };
+    struct ir_op *load =
+        insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+    load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
-    struct ir_op *dest_addr = insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
-    dest_addr->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD,
-      .lhs = base_dest_addr,
-      .rhs = offset_cnst
-    };
-    
-    struct ir_op *store = insert_after_ir_op(func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
-    store->store_addr = (struct ir_op_store_addr){
-      .addr = dest_addr,
-      .value = load
-    };
+    struct ir_op *dest_addr =
+        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    dest_addr->binary_op =
+        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
+                                 .lhs = base_dest_addr,
+                                 .rhs = offset_cnst};
+
+    struct ir_op *store = insert_after_ir_op(
+        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+    store->store_addr =
+        (struct ir_op_store_addr){.addr = dest_addr, .value = load};
 
     last = store;
     size_left -= MAX_REG_SIZE;
@@ -442,36 +485,32 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   if (size_left) {
     size_t offset = MAX_REG_SIZE - size_left;
 
-    struct ir_op *offset_cnst = insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
+    struct ir_op *offset_cnst =
+        insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
     make_pointer_constant(func, offset_cnst, offset);
 
-    struct ir_op *src_addr = insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    struct ir_op *src_addr = insert_after_ir_op(
+        func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD,
-      .lhs = base_src_addr,
-      .rhs = offset_cnst
-    };
+        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
-    struct ir_op *load = insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
-    load->load_addr = (struct ir_op_load_addr){
-      .addr = src_addr
-    };
+    struct ir_op *load =
+        insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+    load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
-    struct ir_op *dest_addr = insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
-    dest_addr->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD,
-      .lhs = base_dest_addr,
-      .rhs = offset_cnst
-    };
-    
-    struct ir_op *store = insert_after_ir_op(func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
-    store->store_addr = (struct ir_op_store_addr){
-      .addr = dest_addr,
-      .value = load
-    };
+    struct ir_op *dest_addr =
+        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+    dest_addr->binary_op =
+        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
+                                 .lhs = base_dest_addr,
+                                 .rhs = offset_cnst};
+
+    struct ir_op *store = insert_after_ir_op(
+        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+    store->store_addr =
+        (struct ir_op_store_addr){.addr = dest_addr, .value = load};
   }
 }
-
 
 void aarch64_pre_reg_lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
@@ -570,7 +609,7 @@ struct aarch64_prologue_info insert_prologue(struct ir_builder *func) {
     save->custom.aarch64 =
         arena_alloc(func->arena, sizeof(*save->custom.aarch64));
     save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_REG;
-    save->reg = i;
+    save->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = i };
     // uses type i64 to save entire reg
     save->lcl = add_local(
         func, &(struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
@@ -674,11 +713,12 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
             succ = op->stmt->succ->first;
           }
 
+          // FIXME: floats
           op->metadata =
               arena_alloc(func->arena, sizeof(struct ir_lower_call_metadata));
           *(struct ir_lower_call_metadata *)op->metadata =
               (struct ir_lower_call_metadata){.post_call_live_regs =
-                                                  succ->live_regs};
+                                                  succ->live_integral_regs};
         }
 
         op = op->succ;
@@ -735,11 +775,12 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
           break;
         case IR_OP_TY_RET: {
           // FIXME: don't hardcode return reg
-          if (op->ret.value && op->ret.value->reg != 0) {
+          if (op->ret.value && op->ret.value->reg.idx != 0) {
             struct ir_op *ret =
-                insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+                insert_before_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
             ret->mov.value = op->ret.value;
-            ret->reg = 0;
+            // FIXME: floats
+            ret->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = 0 };
 
             op->ret.value = ret;
           }

@@ -302,7 +302,7 @@ bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
 }
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty, unsigned long reg,
+                      struct ir_op_var_ty var_ty, struct ir_reg reg,
                       struct ir_lcl *lcl) {
 
   op->id = id;
@@ -314,7 +314,8 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
-  op->live_regs = 0;
+  op->live_integral_regs = 0;
+  op->live_fp_regs = 0;
   op->metadata = NULL;
 }
 
@@ -652,7 +653,8 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   op->succ = NULL;
   op->metadata = NULL;
   op->reg = NO_REG;
-  op->live_regs = 0;
+  op->live_integral_regs = 0;
+  op->live_fp_regs = 0;
   op->lcl = NULL;
 
   if (stmt->last) {
@@ -922,6 +924,41 @@ void make_string_ref(struct ir_builder *irb, const char *string,
   irb->global_refs = glb_ref;
 }
 
+bool var_ty_is_integral(const struct ir_op_var_ty *var_ty) {
+  if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
+    return false;
+  }
+
+  switch (var_ty->primitive) {
+  case IR_OP_VAR_PRIMITIVE_TY_I8:
+  case IR_OP_VAR_PRIMITIVE_TY_I16:
+  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  case IR_OP_VAR_PRIMITIVE_TY_I64:
+    return true;
+  case IR_OP_VAR_PRIMITIVE_TY_F32:
+  case IR_OP_VAR_PRIMITIVE_TY_F64:
+    return false;
+  }
+}
+
+bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
+  if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
+    return false;
+  }
+
+  switch (var_ty->primitive) {
+  case IR_OP_VAR_PRIMITIVE_TY_I8:
+  case IR_OP_VAR_PRIMITIVE_TY_I16:
+  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  case IR_OP_VAR_PRIMITIVE_TY_I64:
+    return false;
+  case IR_OP_VAR_PRIMITIVE_TY_F32:
+  case IR_OP_VAR_PRIMITIVE_TY_F64:
+    return true;
+  }
+}
+
+
 struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty) {
   // FIXME: pointer size!
   UNUSED_ARG(irb);
@@ -995,7 +1032,7 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var
 void spill_op(struct ir_builder *irb, struct ir_op *op) {
   debug("spilling %zu\n", op->id);
 
-  if (op->reg == REG_SPILLED) {
+  if (op->reg.ty == IR_REG_TY_SPILLED) {
     debug_assert(op->lcl, "op was spilled but had no local");
     return;
   }
@@ -1005,7 +1042,7 @@ void spill_op(struct ir_builder *irb, struct ir_op *op) {
   if (op->ty != IR_OP_TY_PHI) {
     op->lcl = add_local(irb, &op->var_ty);   
 
-    if ( op->ty != IR_OP_TY_UNDF) {
+    if (op->ty != IR_OP_TY_UNDF) {
       // storing undf makes no sense
       struct ir_op *store = insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL,
                                                IR_OP_VAR_TY_NONE);

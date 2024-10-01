@@ -419,7 +419,7 @@ static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   // phi does not guarantee ldr, but the optimiser can always remove it later
   // if (op->br_cond.cond->ty == IR_OP_TY_PHI) {
   struct ir_op *mov =
-      insert_before_ir_op(irb, op, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+      insert_before_ir_op(irb, op, IR_OP_TY_MOV, op->var_ty);
   mov->mov.value = op->br_cond.cond;
   op->br_cond.cond = mov;
   // }

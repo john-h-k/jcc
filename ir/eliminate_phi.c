@@ -33,7 +33,7 @@ void eliminate_phi(struct ir_builder *irb) {
             last = last->pred;
           }
 
-          debug_assert(op->reg != NO_REG, "expected op %zu to have reg by now",
+          debug_assert(op->reg.ty != IR_REG_TY_NONE, "expected op %zu to have reg by now",
                        op->id);
 
           // insert juuust before the branch
@@ -43,13 +43,14 @@ void eliminate_phi(struct ir_builder *irb) {
           // storelcl->store_lcl.value = value;
           // storelcl->store_lcl.lcl_idx = lcl_idx;
           struct ir_op *mov =
-              insert_before_ir_op(irb, last, IR_OP_TY_MOV, IR_OP_VAR_TY_NONE);
+              insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
           mov->mov.value = value;
           mov->reg = op->reg;
           // FIXME: live regs should be properly propogated when modifying IR,
           // or rebuilt between passes should be pred but easier to use succ,
           // only wastes 1 reg max
-          mov->live_regs = mov->succ->live_regs;
+          mov->live_integral_regs = mov->succ->live_integral_regs;
+          mov->live_fp_regs = mov->succ->live_fp_regs;
 
           // HACK: using spills for phi
           op->phi.values[i] = mov;

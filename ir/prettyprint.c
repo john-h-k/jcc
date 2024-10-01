@@ -78,7 +78,8 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-void debug_print_var_ty_string(FILE *file, struct ir_builder *irb, const struct ir_op_var_ty *var_ty) {
+void debug_print_var_ty_string(FILE *file, struct ir_builder *irb,
+                               const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");
@@ -208,6 +209,19 @@ void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   }
 }
 
+char char_prefix_for_reg(struct ir_reg reg) {
+  switch (reg.ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    bug("prefix doesn't make sense for reg ty");
+  case IR_REG_TY_INTEGRAL:
+    return 'R';
+  case IR_REG_TY_FP:
+    return 'F';
+  }
+}
+
 void debug_lhs(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
   debug_print_var_ty_string(file, irb, &ir->var_ty);
@@ -260,7 +274,9 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
-      fprintf(file, " - (R%zu -> R%zu) ", ir->mov.value->reg, ir->reg);
+      fprintf(file, " - (%c%zu -> %c%zu) ",
+              char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
+              char_prefix_for_reg(ir->reg), ir->reg.idx);
     } else {
       fprintf(file, "<PARAM>");
     }
@@ -308,7 +324,8 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
-      fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id, ir->addr.lcl->offset);
+      fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
+              ir->addr.lcl->offset);
       break;
     }
     break;
