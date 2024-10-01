@@ -39,12 +39,12 @@ set(
   aarch64/emit.c
   aarch64/emitter.c
 
-  eep.c
-  eep/lower.c
-  eep/emit.c
-  eep/emitter.c
-  eep/object.c
-  eep/disasm.c
+  # eep.c
+  # eep/lower.c
+  # eep/emit.c
+  # eep/emitter.c
+  # eep/object.c
+  # eep/disasm.c
 
   macos/mach-o.c
   macos/mach-o.c
