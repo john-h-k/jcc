@@ -1,6 +1,10 @@
 #ifndef AARCH64_ISA_H
 #define AARCH64_ISA_H
 
+enum aarch64_instr_class {
+  AARCH64_INSTR_CLASS_LDR_STR_PAIR,
+};
+
 // Constants must be casted to uint32_t to be well-defined behaviour
 #define U32(v) ((uint32_t)(v))
 
@@ -10,10 +14,10 @@
 
 /* Loads & Stores */
 
-#define LDR_STR(op0, op1, op2, op3, op4)                                       \
-  (uint32_t)((U32(op0) << 28) | U32(0b1 << 27) |                               \
-             (U32(op1) << 26) /* bit 25 is zero */                             \
-             | (U32(op2) << 22) | (U32(op3) << 12) | U32(op4))
+#define LDR_STR_PAIR(opc, V, L, imm7, Rt2, Rn, Rt)                  \
+  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
+             (U32(0b1) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |           \
+             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_POST_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                  \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \

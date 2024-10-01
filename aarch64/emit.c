@@ -55,12 +55,12 @@ static struct aarch64_reg get_reg_for_idx(struct ir_reg reg) {
   case IR_REG_TY_FLAGS:
     bug("reg type invalid");
   case IR_REG_TY_INTEGRAL: {
-    struct aarch64_reg reg = {reg.idx < 18 ? reg.idx : reg.idx + 1};
+    struct aarch64_reg reg = { .idx =reg.idx < 18 ? reg.idx : reg.idx + 1};
     invariant_assert(reg.idx <= 31, "invalid reg!");
     return reg;
   }
   case IR_REG_TY_FP: {
-    struct aarch64_reg reg = {reg.idx < 18 ? reg.idx : reg.idx + 1};
+    struct aarch64_reg reg = {.idx = reg.idx < 18 ? reg.idx : reg.idx + 1};
     invariant_assert(reg.idx <= 31, "invalid reg!");
     return reg;
   }
@@ -335,10 +335,10 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_UNARY_OP_TY_NEG:
     if (is_64_bit(&op->var_ty)) {
       aarch64_emit_sub_64(state->emitter, ZERO_REG, get_reg_for_idx(source),
-                          get_reg_for_idx(dest));
+                          get_reg_for_idx(dest), 0, AARCH64_SHIFT_LSL);
     } else {
       aarch64_emit_sub_32(state->emitter, ZERO_REG, get_reg_for_idx(source),
-                          get_reg_for_idx(dest));
+                          get_reg_for_idx(dest), 0, AARCH64_SHIFT_LSL);
     }
     break;
   case IR_OP_UNARY_OP_TY_NOT:
@@ -381,10 +381,10 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLTEQ:
     if (is_64_bit(&op->var_ty)) {
       aarch64_emit_subs_64(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), ZERO_REG);
+                           get_reg_for_idx(rhs_reg), ZERO_REG, 0, AARCH64_SHIFT_LSL);
     } else {
       aarch64_emit_subs_32(state->emitter, get_reg_for_idx(lhs_reg),
-                           get_reg_for_idx(rhs_reg), ZERO_REG);
+                           get_reg_for_idx(rhs_reg), ZERO_REG, 0, AARCH64_SHIFT_LSL);
     }
     break;
   case IR_OP_BINARY_OP_TY_OR:
@@ -430,10 +430,26 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
     SEL_32_OR_64_BIT_OP(aarch64_emit_asrv);
     break;
   case IR_OP_BINARY_OP_TY_ADD:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_add);
+    if (is_64_bit(&op->var_ty)) {
+      aarch64_emit_add_64(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          0, SHIFT_LSL);
+    } else {
+      aarch64_emit_add_32(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          0, SHIFT_LSL);
+    }
     break;
   case IR_OP_BINARY_OP_TY_SUB:
-    SEL_32_OR_64_BIT_OP(aarch64_emit_sub);
+    if (is_64_bit(&op->var_ty)) {
+      aarch64_emit_sub_64(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          0, SHIFT_LSL);
+    } else {
+      aarch64_emit_sub_32(state->emitter, get_reg_for_idx(lhs_reg),
+                          get_reg_for_idx(rhs_reg), get_reg_for_idx(reg),
+                          0, SHIFT_LSL);
+    }
     break;
   case IR_OP_BINARY_OP_TY_MUL:
     SEL_32_OR_64_BIT_OP(aarch64_emit_mul);

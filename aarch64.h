@@ -15,6 +15,19 @@
 
 const struct target AARCH64_TARGET;
 
+struct aarch64_op_page {
+  struct ir_op *glb_ref;
+};
+
+struct aarch64_op_page_off {
+  struct ir_op *glb_ref;
+};
+
+struct aarch64_store_variadic {
+  struct ir_op *value;
+  size_t idx;
+};
+
 enum aarch64_op_ty {
   // Saving LR has two steps - one instr per op so we have two ops for it
   AARCH64_OP_TY_SAVE_LR,
@@ -32,19 +45,6 @@ enum aarch64_op_ty {
   AARCH64_OP_TY_PAGE_OFF,
 
   AARCH64_OP_TY_STORE_VARIADIC,
-};
-
-struct aarch64_op_page {
-  struct ir_op *glb_ref;
-};
-
-struct aarch64_op_page_off {
-  struct ir_op *glb_ref;
-};
-
-struct aarch64_store_variadic {
-  struct ir_op *value;
-  size_t idx;
 };
 
 struct aarch64_op {

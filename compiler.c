@@ -27,6 +27,10 @@ struct compiler {
   char *output;
 };
 
+// TODO: remove!
+void aarch64_codegen(const struct ir_builder *irb);
+
+
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
                                  const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
@@ -289,6 +293,7 @@ enum compile_result compile(struct compiler *compiler) {
 
       BEGIN_STAGE("EMITTING");
 
+      aarch64_codegen(irb);
       func = target->emit_function(irb);
 
       disable_log();
