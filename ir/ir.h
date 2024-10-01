@@ -448,6 +448,9 @@ struct ir_basicblock {
   // how many ops are before this block in the function
   size_t function_offset;
 
+  struct instr *first_instr;
+  struct instr *last_instr;
+
   void *metadata;
 };
 
@@ -532,7 +535,6 @@ struct ir_builder {
   size_t offset;
 
   struct target *target;
-  debug_print_custom_ir_op debug_print_custom_ir_op;
 };
 
 struct ir_unit {

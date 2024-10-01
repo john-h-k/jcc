@@ -274,6 +274,11 @@ enum aarch64_instr_class {
 #define AND_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b1, 0b00, shift, 0b0, Rm, imm6, Rn, Rd)
 
+#define ANDS_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b0, 0b11, shift, 0b0, Rm, imm6, Rn, Rd)
+#define ANDS_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
+  LOGICAL_SHIFTED_REG(0b1, 0b11, shift, 0b0, Rm, imm6, Rn, Rd)
+
 #define ORR_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b0, 0b01, shift, 0b0, Rm, imm6, Rn, Rd)
 #define ORN_32_REG(shift, Rm, imm6, Rn, Rd)                                    \

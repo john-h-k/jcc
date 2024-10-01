@@ -793,6 +793,8 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   basicblock->last = NULL;
   basicblock->function_offset = irb->op_count;
   basicblock->metadata = NULL;
+  basicblock->first_instr = NULL;
+  basicblock->last_instr = NULL;
 
   basicblock->preds = NULL;
   basicblock->num_preds = 0;

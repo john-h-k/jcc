@@ -195,8 +195,7 @@ enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("IR BUILD");
 
   struct ir_unit *ir = build_ir_for_translationunit(
-      compiler->parser, compiler->arena, &result.translation_unit,
-      target->debug_print_custom_ir_op);
+      compiler->parser, compiler->arena, &result.translation_unit);
 
   for (size_t i = 0; i < ir->num_funcs; i++) {
     struct ir_builder *irb = ir->funcs[i];
@@ -242,21 +241,6 @@ enum compile_result compile(struct compiler *compiler) {
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
         debug_print_stage(irb, "elim_phi");
       }
-
-      BEGIN_STAGE("CODEGEN");
-
-      struct codegen_function *cgf = target->codegen(irb);
-      (void)cgf;
-
-      rebuild_ids(irb);
-
-      BEGIN_STAGE("POST POST REG LOWER IR");
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
-        debug_print_stage(irb, "post_lower");
-      }
-
-      disable_log();
     }
   }
 
@@ -292,10 +276,17 @@ enum compile_result compile(struct compiler *compiler) {
         debug_print_stage(irb, "pre_emit");
       }
 
+      BEGIN_STAGE("CODEGEN");
+
+      struct codegen_function *codegen = target->codegen(irb);
+      
       BEGIN_STAGE("EMITTING");
 
-      aarch64_codegen(irb);
-      func = target->emit_function(irb);
+      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
+        target->debug_print_codegen(stderr, codegen);
+      }
+
+      func = target->emit_function(codegen);
 
       disable_log();
     }

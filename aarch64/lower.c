@@ -341,13 +341,6 @@ static void lower_quot(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.rhs = mul;
 }
 
-// AArch64 requires turning `br.cond <true> <false>` into 2 instructions
-// we represent this as just the `true` part of the `br.cond`, and then a `br`
-// after branching to the false target
-static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
-  insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
-}
-
 static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
   UNUSED_ARG(irb);
 
@@ -537,6 +530,7 @@ void aarch64_lower(struct ir_builder *func) {
         case IR_OP_TY_LOAD_ADDR:
         case IR_OP_TY_ADDR:
         case IR_OP_TY_BR:
+        case IR_OP_TY_BR_COND:
         case IR_OP_TY_MOV:
         case IR_OP_TY_RET:
         case IR_OP_TY_CALL:
@@ -545,11 +539,6 @@ void aarch64_lower(struct ir_builder *func) {
         case IR_OP_TY_UNARY_OP:
           if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
             lower_logical_not(func, op);
-          }
-          break;
-        case IR_OP_TY_BR_COND:
-          if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
-            lower_br_cond(func, op);
           }
           break;
         case IR_OP_TY_BINARY_OP:

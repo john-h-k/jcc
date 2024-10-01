@@ -239,8 +239,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     fprintf(file, "UNDF");
     break;
   case IR_OP_TY_CUSTOM:
-    debug_lhs(file, irb, ir);
-    irb->debug_print_custom_ir_op(file, irb, ir);
+    bug("custom ops no longer supported");
     break;
   case IR_OP_TY_GLB_REF:
     debug_lhs(file, irb, ir);
