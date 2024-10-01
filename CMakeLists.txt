@@ -20,6 +20,7 @@ set(
   link.c
   liveness.c
   disasm.c
+  codegen.c
   hashtbl.c
   bitset.c
   var_table.c
@@ -33,6 +34,7 @@ set(
   ir/prettyprint.c
 
   aarch64.c
+  aarch64/codegen.c
   aarch64/lower.c
   aarch64/emit.c
   aarch64/emitter.c

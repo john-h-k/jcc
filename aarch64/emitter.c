@@ -4,6 +4,7 @@
 #include "../bit_twiddle.h"
 #include "../log.h"
 #include "../util.h"
+#include "codegen.h"
 #include "isa.h"
 
 #include <stdlib.h>
@@ -227,49 +228,49 @@ void aarch64_emit_and_64_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_add_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
-                         struct aarch64_reg dest) {
-  aarch64_emit(emitter, ADD_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, ADD_64_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_adds_64(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
-                          struct aarch64_reg dest) {
-  aarch64_emit(emitter, ADDS_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, ADDS_64_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_sub_64(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
-                         struct aarch64_reg dest) {
-  aarch64_emit(emitter, SUB_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, SUB_64_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_subs_64(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
-                          struct aarch64_reg dest) {
-  aarch64_emit(emitter, SUBS_64_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, SUBS_64_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_add_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
-                         struct aarch64_reg dest) {
-  aarch64_emit(emitter, ADD_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, ADD_32_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_adds_32(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
-                          struct aarch64_reg dest) {
-  aarch64_emit(emitter, ADDS_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, ADDS_32_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_sub_32(struct aarch64_emitter *emitter,
                          struct aarch64_reg lhs, struct aarch64_reg rhs,
-                         struct aarch64_reg dest) {
-  aarch64_emit(emitter, SUB_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
+  aarch64_emit(emitter, SUB_32_REG(shift, imm6, rhs.idx, lhs.idx, dest.idx));
 }
 
 void aarch64_emit_subs_32(struct aarch64_emitter *emitter,
                           struct aarch64_reg lhs, struct aarch64_reg rhs,
-                          struct aarch64_reg dest) {
+                         struct aarch64_reg dest, size_t imm6, enum aarch64_shift shift) {
   aarch64_emit(emitter, SUBS_32_REG(0, 0, rhs.idx, lhs.idx, dest.idx));
 }
 
