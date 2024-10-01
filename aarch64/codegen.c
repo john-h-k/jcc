@@ -182,17 +182,36 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
+#define MAX_LDR_STR_CNST (504)
+
 static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
   struct aarch64_reg dest = codegen_reg(op);
   struct ir_lcl *lcl = op->load_lcl.lcl;
 
+  size_t offset = get_lcl_stack_offset(state, op, lcl);
+
+  struct aarch64_reg addr;
+  if (offset > MAX_LDR_STR_CNST / 4) {
+    struct instr *add = alloc_instr(state->func);
+    add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+    add->aarch64->add_imm =
+        (struct aarch64_addsub_imm){.dest = dest,
+                                  .source = STACK_PTR_REG,
+                                  .imm = offset};
+
+    addr = dest;
+    offset = 0;
+  } else {
+    addr = STACK_PTR_REG;
+  }
+
   instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
   instr->aarch64->ldr_imm =
       (struct aarch64_load_imm){.dest = dest,
-                                .addr = STACK_PTR_REG,
-                                .imm = get_lcl_stack_offset(state, op, lcl),
+                                .addr = addr,
+                                .imm = offset,
                                 .mode = AARCH64_ADDRESSING_MODE_OFFSET};
 }
 
@@ -590,6 +609,8 @@ struct codegen_call_metadata {
 
 static void call_save_reg(struct codegen_state *state, struct ir_op *call,
                           struct ir_reg ir_reg, size_t idx) {
+  UNUSED_ARG(call);
+
   // FIXME: this saves entire reg but can sometimes save smaller amounts
   // (depending of the type occupying the live reg)
 
@@ -609,6 +630,8 @@ static void call_save_reg(struct codegen_state *state, struct ir_op *call,
 
 static void call_restore_reg(struct codegen_state *state, struct ir_op *call,
                              struct ir_reg ir_reg, size_t idx) {
+  UNUSED_ARG(call);
+
   struct aarch64_reg reg = {.ty = AARCH64_REG_TY_X,
                             .idx = translate_reg_idx(ir_reg.idx, ir_reg.ty)};
 
@@ -1581,6 +1604,8 @@ void debug_print_fma(FILE *file, const struct aarch64_fma *fma) {
 
 void debug_print_instr(FILE *file, const struct codegen_function *func,
                        const struct instr *instr) {
+
+  UNUSED_ARG(func);
 
   switch (instr->aarch64->ty) {
   case AARCH64_INSTR_TY_NOP:
