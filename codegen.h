@@ -21,6 +21,8 @@ struct codegen_function {
 
   struct instr* first;
   struct instr* last;
+
+  size_t max_variadic_args;
 };
 
 struct aarch64_instr;

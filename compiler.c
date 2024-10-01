@@ -2,6 +2,7 @@
 
 #include "aarch64.h"
 #include "alloc.h"
+#include "codegen.h"
 #include "eep.h"
 #include "emit.h"
 #include "ir/build.h"
@@ -127,7 +128,8 @@ const struct target *get_target(const struct compile_args *args) {
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
     return &AARCH64_TARGET;
   case COMPILE_TARGET_ARCH_EEP:
-    return &EEP_TARGET;
+    bug("redo eep");
+    // return &EEP_TARGET;
   }
 
   bug("unexpected target in `get_target`");
@@ -206,10 +208,10 @@ enum compile_result compile(struct compiler *compiler) {
         debug_print_stage(irb, "ir");
       }
 
-      BEGIN_STAGE("PRE REG LOWERING");
+      BEGIN_STAGE("LOWERING");
 
-      if (target->pre_reg_lower) {
-        target->pre_reg_lower(irb);
+      if (target->lower) {
+        target->lower(irb);
       }
 
       BEGIN_STAGE("POST PRE REG LOWER IR");
@@ -241,11 +243,10 @@ enum compile_result compile(struct compiler *compiler) {
         debug_print_stage(irb, "elim_phi");
       }
 
-      BEGIN_STAGE("POST REG LOWERING");
+      BEGIN_STAGE("CODEGEN");
 
-      if (target->pre_reg_lower) {
-        target->post_reg_lower(irb);
-      }
+      struct codegen_function *cgf = target->codegen(irb);
+      (void)cgf;
 
       rebuild_ids(irb);
 

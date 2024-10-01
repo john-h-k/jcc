@@ -8,6 +8,7 @@
 const char *aarch64_mangle(struct arena_allocator *arena, const char *name);
 
 // intervals MUST be sorted such that `interval[i].op_id == i` ID
+// struct compiled_function aarch64_emit_function(const struct codegen_function *func);
 struct compiled_function aarch64_emit_function(struct ir_builder *func);
 
 #endif

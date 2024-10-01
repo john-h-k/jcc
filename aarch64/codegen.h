@@ -3,94 +3,70 @@
 
 #include "../codegen.h"
 
-enum aarch64_instr_ty {AARCH64_INSTR_TY_ADDS_32,
-  AARCH64_INSTR_TY_ADDS_64,
-  AARCH64_INSTR_TY_ADD_32,
-  AARCH64_INSTR_TY_ADD_32_IMM,
-  AARCH64_INSTR_TY_ADD_64,
-  AARCH64_INSTR_TY_ADD_64_IMM,
+#if defined(RETURN_REG) || defined(STACK_PTR_REG) || defined(ZERO_REG)
+#error "RETURN_REG/STACK_PTR_REG/ZERO_REG already defined. Check your includes"
+#endif
+
+// `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
+// which is relevant
+#define RETURN_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 0})
+#define ZERO_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 31})
+#define STACK_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 31})
+#define FRAME_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 29})
+#define RET_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 30})
+
+
+enum aarch64_instr_ty {
+  AARCH64_INSTR_TY_ADDS,
+  AARCH64_INSTR_TY_ADD,
+  AARCH64_INSTR_TY_ADD_IMM,
   AARCH64_INSTR_TY_ADR,
   AARCH64_INSTR_TY_ADRP,
-  AARCH64_INSTR_TY_ANDS_32,
-  AARCH64_INSTR_TY_ANDS_32_IMM,
-  AARCH64_INSTR_TY_ANDS_64,
-  AARCH64_INSTR_TY_ANDS_64_IMM,
-  AARCH64_INSTR_TY_AND_32,
-  AARCH64_INSTR_TY_AND_32_IMM,
-  AARCH64_INSTR_TY_AND_64,
-  AARCH64_INSTR_TY_AND_64_IMM,
-  AARCH64_INSTR_TY_ASRV_32,
-  AARCH64_INSTR_TY_ASRV_64,
+  AARCH64_INSTR_TY_ANDS,
+  AARCH64_INSTR_TY_ANDS_IMM,
+  AARCH64_INSTR_TY_AND,
+  AARCH64_INSTR_TY_AND_IMM,
+  AARCH64_INSTR_TY_ASRV,
   AARCH64_INSTR_TY_B,
   AARCH64_INSTR_TY_BC_COND,
-  AARCH64_INSTR_TY_BFM_32_IMM,
-  AARCH64_INSTR_TY_BFM_64_IMM,
+  AARCH64_INSTR_TY_BFM_IMM,
   AARCH64_INSTR_TY_BL,
   AARCH64_INSTR_TY_B_COND,
-  AARCH64_INSTR_TY_CBNZ_32_IMM,
-  AARCH64_INSTR_TY_CBZ_32_IMM,
-  AARCH64_INSTR_TY_CBZ_64_IMM,
-  AARCH64_INSTR_TY_CNBZ_64_IMM,
-  AARCH64_INSTR_TY_CSEL_32,
-  AARCH64_INSTR_TY_CSEL_64,
-  AARCH64_INSTR_TY_CSINC_32,
-  AARCH64_INSTR_TY_CSINC_64,
-  AARCH64_INSTR_TY_CSINV_32,
-  AARCH64_INSTR_TY_CSINV_64,
-  AARCH64_INSTR_TY_CSNEG_32,
-  AARCH64_INSTR_TY_CSNEG_64,
-  AARCH64_INSTR_TY_EON_32,
-  AARCH64_INSTR_TY_EON_64,
-  AARCH64_INSTR_TY_EOR_32,
-  AARCH64_INSTR_TY_EOR_32_IMM,
-  AARCH64_INSTR_TY_EOR_64,
-  AARCH64_INSTR_TY_EOR_64_IMM,
-  AARCH64_INSTR_TY_LOAD_32_IMM,
-  AARCH64_INSTR_TY_LOAD_64_IMM,
-  AARCH64_INSTR_TY_LOAD_PAIR_32_IMM,
-  AARCH64_INSTR_TY_LOAD_PAIR_64_IMM,
-  AARCH64_INSTR_TY_LSLV_32,
-  AARCH64_INSTR_TY_LSLV_64,
-  AARCH64_INSTR_TY_LSRV_32,
-  AARCH64_INSTR_TY_LSRV_64,
-  AARCH64_INSTR_TY_MADD_32,
-  AARCH64_INSTR_TY_MADD_64,
-  AARCH64_INSTR_TY_MOVN_32_IMM,
-  AARCH64_INSTR_TY_MOVN_64_IMM,
-  AARCH64_INSTR_TY_MOV_32_IMM,
-  AARCH64_INSTR_TY_MOV_64_IMM,
-  AARCH64_INSTR_TY_MOV_32,
-  AARCH64_INSTR_TY_MOV_64,
-  AARCH64_INSTR_TY_MSUB_32,
-  AARCH64_INSTR_TY_MSUB_64,
+  AARCH64_INSTR_TY_CBZ,
+  AARCH64_INSTR_TY_CNBZ,
+  AARCH64_INSTR_TY_CSEL,
+  AARCH64_INSTR_TY_CSINC,
+  AARCH64_INSTR_TY_CSINV,
+  AARCH64_INSTR_TY_CSNEG,
+  AARCH64_INSTR_TY_EON,
+  AARCH64_INSTR_TY_EOR,
+  AARCH64_INSTR_TY_EOR_IMM,
+  AARCH64_INSTR_TY_LOAD_IMM,
+  AARCH64_INSTR_TY_LOAD_PAIR_IMM,
+  AARCH64_INSTR_TY_LSLV,
+  AARCH64_INSTR_TY_LSRV,
+  AARCH64_INSTR_TY_MADD,
+  AARCH64_INSTR_TY_MOVN_IMM,
+  AARCH64_INSTR_TY_MOV_IMM,
+  AARCH64_INSTR_TY_MVN,
+  AARCH64_INSTR_TY_MSUB,
   AARCH64_INSTR_TY_NOP,
-  AARCH64_INSTR_TY_ORN_32,
-  AARCH64_INSTR_TY_ORN_64,
-  AARCH64_INSTR_TY_ORR_32,
-  AARCH64_INSTR_TY_ORR_32_IMM,
-  AARCH64_INSTR_TY_ORR_64,
-  AARCH64_INSTR_TY_ORR_64_IMM,
+  AARCH64_INSTR_TY_ORN,
+  AARCH64_INSTR_TY_ORR,
+  AARCH64_INSTR_TY_ORR_IMM,
   AARCH64_INSTR_TY_RET,
-  AARCH64_INSTR_TY_RORV_32,
-  AARCH64_INSTR_TY_RORV_64,
-  AARCH64_INSTR_TY_SBFM_32_IMM,
-  AARCH64_INSTR_TY_SBFM_64_IMM,
-  AARCH64_INSTR_TY_SDIV_32,
-  AARCH64_INSTR_TY_SDIV_64,
-  AARCH64_INSTR_TY_STORE_32_IMM,
-  AARCH64_INSTR_TY_STORE_64_IMM,
-  AARCH64_INSTR_TY_STORE_PAIR_32_IMM,
-  AARCH64_INSTR_TY_STORE_PAIR_64_IMM,
-  AARCH64_INSTR_TY_SUBS_32,
-  AARCH64_INSTR_TY_SUBS_64,
-  AARCH64_INSTR_TY_SUB_32,
-  AARCH64_INSTR_TY_SUB_32_IMM,
-  AARCH64_INSTR_TY_SUB_64,
-  AARCH64_INSTR_TY_SUB_64_IMM,
-  AARCH64_INSTR_TY_UBFM_32_IMM,
-  AARCH64_INSTR_TY_UBFM_64_IMM,
-  AARCH64_INSTR_TY_UDIV_32,
-  AARCH64_INSTR_TY_UDIV_64};
+  AARCH64_INSTR_TY_RORV,
+  AARCH64_INSTR_TY_SBFM_IMM,
+  AARCH64_INSTR_TY_SDIV,
+  AARCH64_INSTR_TY_STORE_IMM,
+  AARCH64_INSTR_TY_STORE_PAIR_IMM,
+  AARCH64_INSTR_TY_SUBS,
+  AARCH64_INSTR_TY_SUB,
+  AARCH64_INSTR_TY_SUB_IMM,
+  AARCH64_INSTR_TY_SUBS_IMM,
+  AARCH64_INSTR_TY_UBFM_IMM,
+  AARCH64_INSTR_TY_UDIV
+};
 
 enum aarch64_cond {
   // always true
@@ -161,8 +137,9 @@ struct aarch64_logical_reg {
   struct aarch64_reg dest;
   struct aarch64_reg lhs;
   struct aarch64_reg rhs;
-  enum aarch64_shift shift;
+
   size_t imm6;
+  enum aarch64_shift shift;
 };
 
 struct aarch64_logical_imm {
@@ -209,6 +186,14 @@ struct aarch64_reg_1_source {
   struct aarch64_reg source;
 };
 
+struct aarch64_reg_1_source_with_shift {
+  struct aarch64_reg dest;
+  struct aarch64_reg source;
+
+  size_t imm6;
+  enum aarch64_shift shift;
+};
+
 struct aarch64_mov_imm {
   struct aarch64_reg dest;
   size_t imm;
@@ -246,19 +231,35 @@ struct aarch64_compare_and_branch {
   struct instr *target;
 };
 
-struct aarch64_loadstore_imm {
+struct aarch64_load_imm {
   enum aarch64_addressing_mode mode;
 
   struct aarch64_reg dest;
-  struct aarch64_reg source;
+  struct aarch64_reg addr;
   size_t imm;
 };
 
-struct aarch64_loadstore_pair_imm {
+struct aarch64_store_imm {
+  enum aarch64_addressing_mode mode;
+
+  struct aarch64_reg source;
+  struct aarch64_reg addr;
+  size_t imm;
+};
+
+struct aarch64_load_pair_imm {
   enum aarch64_addressing_mode mode;
 
   struct aarch64_reg dest[2];
-  struct aarch64_reg source;
+  struct aarch64_reg addr;
+  size_t imm;
+};
+
+struct aarch64_store_pair_imm {
+  enum aarch64_addressing_mode mode;
+
+  struct aarch64_reg source[2];
+  struct aarch64_reg addr;
   size_t imm;
 };
 
@@ -266,25 +267,80 @@ struct aarch64_instr {
   enum aarch64_instr_ty ty;
 
   union {
-    struct aarch64_logical_reg logical_reg;
-    struct aarch64_logical_imm logical_imm;
-    struct aarch64_addr_imm addr_imm;
-    struct aarch64_addsub_reg addsub_reg;
-    struct aarch64_addsub_imm addsub_imm;
-    struct aarch64_reg_1_source reg_1_source;
-    struct aarch64_reg_2_source reg_2_source;
-    struct aarch64_bitfield_imm bitfield_imm;
-    struct aarch64_conditional_select conditional_select;
-    struct aarch64_conditional_branch conditional_branch;
-    struct aarch64_branch branch;
-    struct aarch64_ret ret;
-    struct aarch64_compare_and_branch compare_and_branch;
-    struct aarch64_loadstore_imm loadstore_imm;
-    struct aarch64_loadstore_pair_imm loadstore_pair_imm;
-    struct aarch64_mov_imm mov_imm;
+    union {
+      struct aarch64_logical_reg and, ands, orr, orn, eor, eon;
+    };
+
+    union {
+      struct aarch64_logical_imm and_imm, ands_imm, orr_imm, orn_imm, eor_imm, eon_imm;
+    };
+
+    union {
+      struct aarch64_addr_imm adr, adrp;
+    };
+
+    union {
+      struct aarch64_addsub_reg add, adds, sub, subs;
+    };
+
+    union {
+      struct aarch64_addsub_imm add_imm, adds_imm, sub_imm, subs_imm;
+    };
+
+    union {
+      struct aarch64_reg_1_source_with_shift mvn;
+    };
+
+    union {
+      struct aarch64_reg_2_source asrv, lslv, lsrv, madd, msub, rorv, sdiv, udiv;
+    };
+
+    union {
+      struct aarch64_bitfield_imm sbfm, bfm, ubfm;
+    };
+
+    union {
+      struct aarch64_conditional_select csel, csinc, csinv, csneg;
+    };
+
+    union {
+      struct aarch64_conditional_branch b_cond, bc_cond;
+    };
+
+    union {
+      struct aarch64_branch b, bl;
+    };
+
+    union {
+      struct aarch64_ret ret;
+    };
+
+    union {
+      struct aarch64_compare_and_branch cbz, cbnz;
+    };
+
+    union {
+      struct aarch64_load_imm ldr_imm;
+    };
+
+    union {
+      struct aarch64_store_imm str_imm;
+    };
+
+    union {
+      struct aarch64_load_pair_imm ldp_imm;
+    };
+
+    union {
+      struct aarch64_store_pair_imm stp_imm;
+    };
+
+    union {
+      struct aarch64_mov_imm mov_imm, movn_imm;
+    };
   };
 };
 
-void aarch64_codegen(const struct ir_builder *irb);
+struct codegen_function *aarch64_codegen(const struct ir_builder *irb);
 
 #endif

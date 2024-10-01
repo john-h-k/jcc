@@ -861,6 +861,7 @@ static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt) {
   }
 }
 
+// struct compiled_function aarch64_emit_function(const struct codegen_function *func) {
 struct compiled_function aarch64_emit_function(struct ir_builder *func) {
   size_t max_variadic_args = 0;
 

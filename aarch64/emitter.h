@@ -6,18 +6,6 @@
 
 #include "codegen.h"
 
-#if defined(RETURN_REG) || defined(STACK_PTR_REG) || defined(ZERO_REG)
-#error "RETURN_REG/STACK_PTR_REG/ZERO_REG already defined. Check your includes"
-#endif
-
-// `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
-// which is relevant
-#define RETURN_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 0})
-#define ZERO_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 31})
-#define STACK_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 31})
-#define FRAME_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 29})
-#define RET_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 30})
-
 struct aarch64_emitter;
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter);

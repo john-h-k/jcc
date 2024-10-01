@@ -512,7 +512,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 }
 
-void aarch64_pre_reg_lower(struct ir_builder *func) {
+void aarch64_lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
