@@ -96,7 +96,6 @@ struct build_object_args {
 
   struct relocation *relocations;
   size_t num_relocations;
-  size_t num_relocation_instrs;
 };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);

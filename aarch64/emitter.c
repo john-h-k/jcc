@@ -652,10 +652,14 @@ void aarch64_emit_b(struct aarch64_emitter *emitter,
 
 void aarch64_emit_bl(struct aarch64_emitter *emitter,
                      const struct aarch64_branch br) {
-  signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = br.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  signed offset = 0;
+  if (br.target) {
+    signed long long cur_pos = aarch64_emitted_count(emitter);
+    signed long long target_pos = br.target->first_instr->id;
+
+    offset = target_pos - cur_pos;
+  }
 
   invariant_assert(SIG_FITS_IN_BITS(offset, 26),
                    "offset too big for branch instruction!");
@@ -673,9 +677,9 @@ void aarch64_emit_cbz(struct aarch64_emitter *emitter,
                    "offset too big for branch instruction!");
 
   if (IS64_REG(cmp.cmp)) {
-    aarch64_emit(emitter, CBZ_64_IMM(offset, cmp.cmp.idx));
+    aarch64_emit(emitter, CBZ_64_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
   } else {
-    aarch64_emit(emitter, CBZ_32_IMM(offset, cmp.cmp.idx));
+    aarch64_emit(emitter, CBZ_32_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
   }
 }
 
@@ -690,9 +694,9 @@ void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
                    "offset too big for branch instruction!");
 
   if (IS64_REG(cmp.cmp)) {
-    aarch64_emit(emitter, CBNZ_64_IMM(offset, cmp.cmp.idx));
+    aarch64_emit(emitter, CBNZ_64_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
   } else {
-    aarch64_emit(emitter, CBNZ_32_IMM(offset, cmp.cmp.idx));
+    aarch64_emit(emitter, CBNZ_32_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
   }
 }
 

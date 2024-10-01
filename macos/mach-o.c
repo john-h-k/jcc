@@ -50,6 +50,24 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
+size_t count_relocation_instrs(const struct build_object_args *args) {
+  size_t num_instrs = 0;
+
+  for (size_t i = 0; i < args->num_relocations; i++) {
+    struct relocation *reloc = &args->relocations[i];
+
+    switch (reloc->ty) {
+    case RELOCATION_TY_SINGLE:
+      num_instrs += 1;
+      break;
+    case RELOCATION_TY_PAIR:
+      num_instrs += 2;
+    }
+  }
+
+  return num_instrs;
+}
+
 void write_relocations(FILE *file, const struct build_object_args *args) {
   // FIXME: currently str relocs are based on hardcoded indices that link the
   // compiler/emitter/object builder they should probably go to a hashmap
@@ -161,7 +179,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   text.offset = segment.fileoff;
   text.align = 4;
   text.reloff = segment.fileoff + text.size + total_str_size;
-  text.nreloc = args->num_relocation_instrs;
+  text.nreloc = count_relocation_instrs(args);
   text.flags = S_REGULAR | S_ATTR_PURE_INSTRUCTIONS; /*| S_ATTR_EXT_RELOC;*/
   text.reserved1 = 0;
   text.reserved2 = 0;
@@ -195,7 +213,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
   symtab.symoff = segment.fileoff + text.size + cstrings.size +
-                  sizeof(struct relocation_info) * args->num_relocation_instrs;
+                  sizeof(struct relocation_info) * text.nreloc;
   debug("num symbols %d", args->num_symbols);
   symtab.nsyms = args->num_symbols + args->num_extern_symbols;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;

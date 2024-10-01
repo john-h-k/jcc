@@ -257,7 +257,6 @@ enum compile_result compile(struct compiler *compiler) {
     offset = ROUND_UP(offset, target->function_alignment / target->op_size);
   }
 
-  size_t num_relocation_instrs = 0;
   size_t total_str_bytes = 0;
   struct vector *relocations = vector_create(sizeof(struct relocation));
   struct vector *strings = vector_create(sizeof(const char *));
@@ -306,7 +305,6 @@ enum compile_result compile(struct compiler *compiler) {
       func.relocations[i].address += symbol.value;
     }
 
-    num_relocation_instrs += func.num_relocation_instrs;
     vector_extend(relocations, func.relocations, func.num_relocations);
     vector_extend(strings, func.strings, func.num_strings);
   }
@@ -350,8 +348,7 @@ enum compile_result compile(struct compiler *compiler) {
       .extern_symbols = vector_head(external_symbols),
       .num_extern_symbols = vector_length(external_symbols),
       .relocations = vector_head(relocations),
-      .num_relocations = vector_length(relocations),
-      .num_relocation_instrs = num_relocation_instrs};
+      .num_relocations = vector_length(relocations)};
 
   BEGIN_STAGE("OBJECT FILE");
 

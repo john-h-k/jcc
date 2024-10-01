@@ -9,6 +9,7 @@
 #include "var_table.h"
 #include "vector.h"
 
+#include <ctype.h>
 #include <alloca.h>
 #include <string.h>
 
@@ -939,7 +940,12 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
     char *end_ptr;
     unsigned long long int_value = strtoull(literal_text, &end_ptr, base);
 
-    if (end_ptr != &literal_text[literal_len]) {
+    size_t literal_end = literal_len;
+    do {
+      literal_end--;
+    } while (literal_len && (tolower(literal_text[literal_end]) == 'u' || tolower(literal_text[literal_end]) == 'l'));
+
+    if (end_ptr - 1 != &literal_text[literal_end]) {
       todo("handle constant int parse failure");
     }
 

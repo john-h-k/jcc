@@ -6,7 +6,7 @@
 const struct target AARCH64_TARGET = {
     // x0..x30 excluding x18
     (struct reg_info){
-        .integral_registers = (struct reg_set_info){
+        .gp_registers = (struct reg_set_info){
             .num_volatile = 18, .num_nonvolatile = 10, .num_reserved = 2},
         .fp_registers = (struct reg_set_info){
             // FIXME: technically v8-15 are volatile top half

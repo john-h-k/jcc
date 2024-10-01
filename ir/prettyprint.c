@@ -187,11 +187,11 @@ void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
 void debug_call_target_string(FILE *file, struct ir_op *target) {
   if (target->ty == IR_OP_TY_GLB_REF) {
     switch (target->glb_ref.ty) {
-    case IR_OP_GLB_REF_TY_STR:
-      fprintf(file, "%s", target->glb_ref.string->data);
-      break;
     case IR_OP_GLB_REF_TY_SYM:
       fprintf(file, "%s", target->glb_ref.sym_name);
+      break;
+    case IR_OP_GLB_REF_TY_STR:
+      bug("no longer used");
       break;
     }
   } else {
@@ -245,7 +245,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     switch (ir->glb_ref.ty) {
     case IR_OP_GLB_REF_TY_STR:
-      fprintf(file, "GLOBAL_STR ( %s )", ir->glb_ref.string->data);
+      bug("no longer used");
       break;
     case IR_OP_GLB_REF_TY_SYM:
       fprintf(file, "GLOBAL_SYM ( %s )", ir->glb_ref.sym_name);
@@ -273,9 +273,20 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
-      fprintf(file, " - (%c%zu -> %c%zu) ",
-              char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
-              char_prefix_for_reg(ir->reg), ir->reg.idx);
+      if (ir->mov.value->reg.ty == IR_REG_TY_FLAGS) {
+        // flags moves can appear before register allocation
+
+        if (ir->reg.ty == IR_REG_TY_NONE) {
+          fprintf(file, " - (FLAGS -> UNKNOWN) ");
+        } else {
+          fprintf(file, " - (FLAGS -> %c%zu) ", char_prefix_for_reg(ir->reg),
+                  ir->reg.idx);
+        }
+      } else {
+        fprintf(file, " - (%c%zu -> %c%zu) ",
+                char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
+                char_prefix_for_reg(ir->reg), ir->reg.idx);
+      }
     } else {
       fprintf(file, "<PARAM>");
     }
@@ -339,7 +350,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_LOAD_LCL:
     debug_lhs(file, irb, ir);
-    if (ir->lcl) {
+    if (ir->load_lcl.lcl) {
       fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl->id);
     } else {
       fprintf(file, "loadlcl LCL(UNASSIGNED)");

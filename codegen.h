@@ -21,6 +21,12 @@ struct codegen_function {
   // the size of the element within the union, so it can be allocated
   size_t instr_size;
 
+  size_t num_strings;
+  const char **strings;
+
+  size_t num_datas;
+  const char **datas;
+
   struct instr* first;
   struct instr* last;
 
@@ -35,6 +41,8 @@ struct instr {
 
   struct instr *pred;
   struct instr *succ;
+
+  struct relocation *reloc;
 
   union {
     void *p;

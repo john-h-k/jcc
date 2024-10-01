@@ -16,7 +16,7 @@ struct reg_set_info {
 };
 
 struct reg_info {
-  struct reg_set_info integral_registers;
+  struct reg_set_info gp_registers;
   struct reg_set_info fp_registers;
 };
 

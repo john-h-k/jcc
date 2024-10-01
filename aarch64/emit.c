@@ -213,7 +213,7 @@ static void emit_instr(const struct emit_state *state,
     aarch64_emit_bl(state->emitter, instr->aarch64->bl);
     break;
   case AARCH64_INSTR_TY_B_COND:
-    aarch64_emit_bc_cond(state->emitter, instr->aarch64->b_cond);
+    aarch64_emit_b_cond(state->emitter, instr->aarch64->b_cond);
     break;
   case AARCH64_INSTR_TY_BC_COND:
     aarch64_emit_bc_cond(state->emitter, instr->aarch64->bc_cond);
@@ -328,8 +328,6 @@ static void emit_instr(const struct emit_state *state,
 
 struct compiled_function
 aarch64_emit_function(const struct codegen_function *func) {
-  size_t max_variadic_args = 0;
-
   struct aarch64_emitter *emitter;
   create_aarch64_emitter(&emitter);
 
@@ -339,11 +337,28 @@ aarch64_emit_function(const struct codegen_function *func) {
                              .strings = vector_create(sizeof(const char *)),
                              .total_str_len = 0,
                              .num_extra_stack_slots = 0,
-                             .max_variadic_args = max_variadic_args};
+                             .max_variadic_args = func->max_variadic_args};
+
+  struct vector *relocs = vector_create(sizeof(struct relocation));
 
   struct instr *instr = func->first;
   while (instr) {
+    size_t pos = aarch64_emit_bytesize(state.emitter);
+
+    size_t emitted = aarch64_emitted_count(state.emitter);
     emit_instr(&state, instr);
+    size_t generated_instrs = aarch64_emitted_count(state.emitter) - emitted;
+    debug_assert(
+        generated_instrs == 1,
+        "expected instr %zu to generate exactly 1 instruction but it generated %zu",
+        instr->id,
+        generated_instrs);
+
+    if (instr->reloc) {
+      instr->reloc->address = pos;
+      instr->reloc->size = 2;
+      vector_push_back(relocs, instr->reloc);
+    }
 
     instr = instr->succ;
   }
@@ -352,70 +367,14 @@ aarch64_emit_function(const struct codegen_function *func) {
   void *data = arena_alloc(func->arena, len);
   aarch64_emit_copy_to(emitter, data);
 
-  // now deal with all the relocs which are hidden in the globals
-  // FIXME:
-  struct ir_op_glb_ref *global_refs = NULL;//func->global_refs;
-
-  // first pass to get number
-  size_t num_relocations = 0;
-  size_t num_relocation_instrs = 0;
-  while (global_refs) {
-    struct aarch64_relocation *reloc =
-        (struct aarch64_relocation *)global_refs->metadata;
-
-    num_relocations++;
-
-    switch (reloc->ty) {
-    case AARCH64_RELOCATION_TY_B:
-      num_relocation_instrs += 1;
-      break;
-    case AARCH64_RELOCATION_TY_ADRP_ADD:
-      num_relocation_instrs += 2;
-      break;
-    }
-
-    global_refs = global_refs->succ;
-  }
-
-  struct relocation *relocations =
-      arena_alloc(func->arena, sizeof(*relocations) * num_relocations);
-
-  // FIXME:
-  global_refs = NULL;// func->global_refs;
-  size_t i = 0;
-  while (global_refs) {
-    struct aarch64_relocation *reloc =
-        (struct aarch64_relocation *)global_refs->metadata;
-
-    relocations[i++] = reloc->reloc;
-
-    global_refs = global_refs->succ;
-  }
-
-  // FIXME:
-  struct ir_string *strings = NULL;//func->strings;
-  while (strings) {
-    vector_push_back(state.strings, &strings->data);
-
-    strings = strings->succ;
-  }
-
-  // FIXME: the vector was built backwards due to the structure of the
-  // linked-list of strings really this should be dealt with elsewhere more
-  // generally, but for now just reverse this vector
-
-  // turn the `struct ir_string`s into normal strings
-  struct vector *string_vec = vector_create(sizeof(const char *));
-
-  size_t num_strings = vector_length(state.strings);
-  for (size_t i = 0; i < num_strings; i++) {
-    size_t idx = num_strings - 1 - i;
-    const char *string = *(const char **)vector_get(state.strings, idx);
-
-    vector_push_back(string_vec, &string);
-  }
-
   free_aarch64_emitter(&emitter);
+
+  struct relocation *relocations = arena_alloc(state.arena, vector_byte_size(relocs));
+  vector_copy_to(relocs, relocations);
+
+  if (func->num_datas) {
+    todo("mutable data symbols");
+  }
 
   // FIXME: some vector leaks here (and probably other places)
   // should really alloc in arena
@@ -424,10 +383,11 @@ aarch64_emit_function(const struct codegen_function *func) {
       .code = data,
       .len_code = len,
       .relocations = relocations,
-      .num_relocations = num_relocations,
-      .num_relocation_instrs = num_relocation_instrs,
-      .strings = vector_head(string_vec),
-      .num_strings = vector_length(string_vec)};
+      .num_relocations = vector_length(relocs),
+      .strings = func->strings,
+      .num_strings = func->num_strings};
+
+  vector_free(&relocs);
 
   return result;
 }

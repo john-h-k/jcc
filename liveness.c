@@ -315,6 +315,6 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   }
 
   if (interval && interval->op) {
-    print_live_regs(file, interval->op->live_integral_regs, interval->op->live_fp_regs);
+    print_live_regs(file, interval->op->live_gp_regs, interval->op->live_fp_regs);
   }
 }
