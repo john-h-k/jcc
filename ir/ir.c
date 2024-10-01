@@ -314,7 +314,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
-  op->live_integral_regs = 0;
+  op->live_gp_regs = 0;
   op->live_fp_regs = 0;
   op->metadata = NULL;
 }
@@ -653,7 +653,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   op->succ = NULL;
   op->metadata = NULL;
   op->reg = NO_REG;
-  op->live_integral_regs = 0;
+  op->live_gp_regs = 0;
   op->live_fp_regs = 0;
   op->lcl = NULL;
 
@@ -896,30 +896,6 @@ void make_sym_ref(struct ir_builder *irb, const char *sym_name,
 
   glb_ref->ty = IR_OP_GLB_REF_TY_SYM;
   glb_ref->sym_name = sym_name;
-  glb_ref->metadata = NULL;
-
-  glb_ref->succ = irb->global_refs;
-  irb->global_refs = glb_ref;
-}
-
-void make_string_ref(struct ir_builder *irb, const char *string,
-                     struct ir_op *op, const struct ir_op_var_ty *var_ty) {
-  struct ir_op_glb_ref *glb_ref = &op->glb_ref;
-
-  size_t index = irb->strings ? irb->strings->index_from_back + 1 : 0;
-
-  struct ir_string *str = arena_alloc(irb->arena, sizeof(*str));
-  str->data = string;
-  str->index_from_back = index;
-
-  str->succ = irb->strings;
-  irb->strings = str;
-
-  op->ty = IR_OP_TY_GLB_REF;
-  op->var_ty = *var_ty;
-
-  glb_ref->ty = IR_OP_GLB_REF_TY_STR;
-  glb_ref->string = str;
   glb_ref->metadata = NULL;
 
   glb_ref->succ = irb->global_refs;

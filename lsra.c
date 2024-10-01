@@ -204,8 +204,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
   struct interval_data data = construct_intervals(irb);
 
-  *spilled = false;
-
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
     debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
@@ -236,7 +234,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
     switch (reg_ty) {
       case IR_REG_TY_INTEGRAL:
-        interval->op->live_integral_regs = ~free_regs & ((1ull << num_regs) - 1);
+        interval->op->live_gp_regs = ~free_regs & ((1ull << num_regs) - 1);
         break;
       case IR_REG_TY_FP:
         interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
@@ -304,7 +302,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     free_regs = bitset_as_ull(reg_pool);
     switch (reg_ty) {
       case IR_REG_TY_INTEGRAL:
-        interval->op->live_integral_regs = ~free_regs & ((1ull << num_regs) - 1);
+        interval->op->live_gp_regs = ~free_regs & ((1ull << num_regs) - 1);
         break;
       case IR_REG_TY_FP:
         interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
@@ -366,7 +364,8 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 */
 
 bool op_needs_int_reg(struct ir_op *op) {
-  return var_ty_is_integral(&op->var_ty);
+  // pointers etc live in integer registers
+  return !var_ty_is_fp(&op->var_ty);
 }
 
 bool op_needs_fp_reg(struct ir_op *op) {
@@ -388,9 +387,11 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
     BEGIN_SUB_STAGE("REGALLOC");
 
+    spill_exists = false;
+  
     clear_metadata(irb);
     struct interval_data data =
-        register_alloc_pass(irb, &reg_info.integral_registers, op_needs_int_reg, IR_REG_TY_INTEGRAL, &spill_exists);
+        register_alloc_pass(irb, &reg_info.gp_registers, op_needs_int_reg, IR_REG_TY_INTEGRAL, &spill_exists);
 
     clear_metadata(irb);
     data = register_alloc_pass(irb, &reg_info.fp_registers, op_needs_fp_reg, IR_REG_TY_FP, &spill_exists);

@@ -49,7 +49,7 @@ void eliminate_phi(struct ir_builder *irb) {
           // FIXME: live regs should be properly propogated when modifying IR,
           // or rebuilt between passes should be pred but easier to use succ,
           // only wastes 1 reg max
-          mov->live_integral_regs = mov->succ->live_integral_regs;
+          mov->live_gp_regs = mov->succ->live_gp_regs;
           mov->live_fp_regs = mov->succ->live_fp_regs;
 
           // HACK: using spills for phi

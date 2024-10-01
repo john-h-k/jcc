@@ -16,23 +16,25 @@ enum aarch64_instr_class {
 
 #define LDR_STR_PAIR(opc, V, L, imm7, Rt2, Rn, Rt)                  \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b1) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |           \
+             (U32(0b1) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |           \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_POST_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                  \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b1) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |           \
+             (U32(0b1) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |           \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_PRE_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                   \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b11) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |          \
+             (U32(0b11) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |          \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_OFFSET(opc, V, L, imm7, Rt2, Rn, Rt)                      \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b10) << 23) | (U32(L) << 22) | (U32(imm7) << 15) |          \
+             (U32(0b10) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |          \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+
+// TODO: use CLAMP_BITS(immK, K) for all immediates
 
 #define STP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
   LDR_STR_PAIR_POST_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)

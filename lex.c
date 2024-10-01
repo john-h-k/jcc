@@ -499,7 +499,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
     next_col(&end);
 
     // remove hex prefix
-    try_consume(lexer, &end, 'x');
+    bool is_hex = try_consume(lexer, &end, 'x');
 
     // this is generous and will allow 0BE for example, when only 0xBE is valid
     // that's okay, let parser handle it
@@ -509,7 +509,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
         continue;
       }
 
-      if (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e') {
+      if (!is_hex && (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
         is_float = true;
         next_col(&end);
 
@@ -529,8 +529,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
     bool is_unsigned = false;
 
     ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
-    while (end.idx + 1 < lexer->len) {
-      switch (tolower(lexer->text[end.idx + 1])) {
+    while (end.idx < lexer->len) {
+      switch (tolower(lexer->text[end.idx])) {
       case 'u':
         is_unsigned = true;
         next_col(&end);

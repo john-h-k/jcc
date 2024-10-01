@@ -127,6 +127,9 @@ enum aarch64_reg_ty {
   AARCH64_REG_TY_B, // 8-bit float
 };
 
+bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty);
+bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty);
+
 struct aarch64_reg {
   enum aarch64_reg_ty ty;
 
@@ -243,7 +246,7 @@ struct aarch64_load_imm {
 
   struct aarch64_reg dest;
   struct aarch64_reg addr;
-  size_t imm;
+  ssize_t imm : 7;
 };
 
 struct aarch64_store_imm {
@@ -251,7 +254,7 @@ struct aarch64_store_imm {
 
   struct aarch64_reg source;
   struct aarch64_reg addr;
-  size_t imm;
+  ssize_t imm : 7;
 };
 
 struct aarch64_load_pair_imm {
@@ -259,7 +262,7 @@ struct aarch64_load_pair_imm {
 
   struct aarch64_reg dest[2];
   struct aarch64_reg addr;
-  size_t imm;
+  ssize_t imm : 7;
 };
 
 struct aarch64_store_pair_imm {
@@ -267,7 +270,7 @@ struct aarch64_store_pair_imm {
 
   struct aarch64_reg source[2];
   struct aarch64_reg addr;
-  size_t imm;
+  ssize_t imm : 7;
 };
 
 struct aarch64_instr {

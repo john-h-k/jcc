@@ -5,6 +5,8 @@
 int printf(const char *format, ...);
 int scanf(const char *format, ...);
 
+int raise(int a);
+
 int main() {
   long a = 0, b = 0;
   scanf("%ld %ld", &a, &b);

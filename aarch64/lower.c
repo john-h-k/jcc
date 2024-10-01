@@ -9,53 +9,6 @@
 #include <mach/arm/vm_types.h>
 #include <math.h>
 
-void aarch64_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
-                                      const struct ir_op *op) {
-  debug_assert(op->ty == IR_OP_TY_CUSTOM, "non custom-op");
-
-  struct aarch64_op *custom = op->custom.aarch64;
-
-  switch (custom->ty) {
-  case AARCH64_OP_TY_SAVE_LR:
-    fprintf(file, "a64_save_lr");
-    break;
-  case AARCH64_OP_TY_SAVE_FP:
-    fprintf(file, "a64_save_lr_add_64");
-    break;
-  case AARCH64_OP_TY_RSTR_LR:
-    fprintf(file, "a64_rstr_lr");
-    break;
-  case AARCH64_OP_TY_SUB_STACK:
-    fprintf(file, "a64_sub_stack #%zu", func->total_locals_size);
-    break;
-  case AARCH64_OP_TY_ADD_STACK:
-    fprintf(file, "a64_add_stack #%zu", func->total_locals_size);
-    break;
-  case AARCH64_OP_TY_SAVE_REG:
-    fprintf(file, "a64_save_reg R%zu", op->reg.idx);
-    break;
-  case AARCH64_OP_TY_RSTR_REG:
-    fprintf(file, "a64_rstr_reg R%zu", op->reg.idx);
-    break;
-  case AARCH64_OP_TY_PAGE:
-    fprintf(file, "a64_page %%%zu", custom->page.glb_ref->id);
-    break;
-  case AARCH64_OP_TY_PAGE_OFF:
-    fprintf(file, "a64_page_off %%%zu", custom->page_off.glb_ref->id);
-    break;
-  case AARCH64_OP_TY_STORE_VARIADIC:
-    fprintf(file, "a64_store_variadic #%zu, %%%zu", custom->store_variadic.idx,
-            custom->store_variadic.value->id);
-    break;
-  }
-}
-
-// as we add a bunch of new nodes around, `live_regs` can get lost
-// we early preserve it in this metadata for use in `lower_call`
-struct ir_lower_call_metadata {
-  unsigned long post_call_live_regs;
-};
-
 static void lower_logical_not(struct ir_builder *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_UNARY_OP &&
                    op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
@@ -69,223 +22,6 @@ static void lower_logical_not(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.ty = IR_OP_BINARY_OP_TY_EQ;
   op->binary_op.lhs = op->unary_op.value;
   op->binary_op.rhs = zero;
-}
-
-static void lower_str_cnst(struct ir_builder *func, struct ir_op *op) {
-  const char *data = op->cnst.str_value;
-
-  // first insert a GLB_REF to instruct that a reloc must be created
-  struct ir_op *ref =
-      insert_before_ir_op(func, op, IR_OP_TY_GLB_REF, op->var_ty);
-  make_string_ref(func, data, ref, &ref->var_ty);
-
-  // now insert the pair needed to generate the actual address
-  struct ir_op *page =
-      insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, op->var_ty);
-  page->reg = op->reg;
-  page->custom.aarch64 =
-      arena_alloc(func->arena, sizeof(*page->custom.aarch64));
-  page->custom.aarch64->ty = AARCH64_OP_TY_PAGE;
-  page->custom.aarch64->page = (struct aarch64_op_page){.glb_ref = ref};
-
-  struct ir_op *page_off = op;
-  replace_ir_op(func, page_off, IR_OP_TY_CUSTOM, op->var_ty);
-  page_off->reg = op->reg;
-  page_off->custom.aarch64 =
-      arena_alloc(func->arena, sizeof(*page_off->custom.aarch64));
-  page_off->custom.aarch64->ty = AARCH64_OP_TY_PAGE_OFF;
-  page_off->custom.aarch64->page_off =
-      (struct aarch64_op_page_off){.glb_ref = ref};
-}
-
-static void call_save_reg(struct ir_builder *func, struct ir_op *call,
-                          struct ir_reg reg) {
-  // FIXME: this saves entire reg but can sometimes save smaller amounts
-  // (depending of the type occupying the live reg)
-  struct ir_lcl *lcl = add_local(
-      func, &(struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                   .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
-
-  struct ir_op *save =
-      insert_before_ir_op(func, call, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
-  save->custom.aarch64 =
-      arena_alloc(func->arena, sizeof(*save->custom.aarch64));
-  save->custom.aarch64->ty = AARCH64_OP_TY_SAVE_REG;
-  save->reg = reg;
-  save->lcl = lcl;
-
-  struct ir_op *restore =
-      insert_after_ir_op(func, call, IR_OP_TY_CUSTOM, IR_OP_VAR_TY_NONE);
-  restore->custom.aarch64 =
-      arena_alloc(func->arena, sizeof(*restore->custom.aarch64));
-  restore->custom.aarch64->ty = AARCH64_OP_TY_RSTR_REG;
-  restore->reg = reg;
-  restore->lcl = lcl;
-}
-
-static void lower_call(struct ir_builder *func, struct ir_op *op) {
-  invariant_assert(op->call.target->var_ty.ty == IR_OP_VAR_TY_TY_FUNC,
-                   "non-func");
-
-  struct ir_op_var_func_ty *func_ty = &op->call.target->var_ty.func;
-
-  invariant_assert(is_func_variadic(func_ty) ||
-                       func_ty->num_params == op->call.num_args,
-                   "mismatch of function param (%zu) and arg (%zu) count",
-                   func_ty->num_params, op->call.num_args);
-
-  invariant_assert(func_ty->num_params <= 8,
-                   "`%s` doesn't support more than 8 args yet", __func__);
-
-  struct ir_lower_call_metadata *metadata =
-      (struct ir_lower_call_metadata *)op->metadata;
-  unsigned long live_regs = metadata->post_call_live_regs;
-
-  size_t volatile_integral_reg_count =
-      AARCH64_TARGET.reg_info.integral_registers.num_volatile;
-  size_t volatile_fp_reg_count =
-      AARCH64_TARGET.reg_info.fp_registers.num_volatile;
-
-  unsigned long long live_integral_volatile =
-      live_regs & ((1ull << volatile_integral_reg_count) - 1);
-
-  unsigned long long live_fp_volatile =
-      live_regs & ((1ull << volatile_fp_reg_count) - 1);
-
-  // if the return reg is used by the call then remove the call-return reg
-  // from live-volatile as we know it will be over written by end of call
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
-    switch (op->reg.ty) {
-    case IR_REG_TY_INTEGRAL:
-      live_integral_volatile &= ~(1ull << op->reg.idx);
-      break;
-    case IR_REG_TY_FP:
-      live_fp_volatile &= ~(1ull << op->reg.idx);
-      break;
-    default:
-      bug("unexpected reg ty");
-    }
-
-    struct ir_op *ret_mov =
-        insert_before_ir_op(func, op, IR_OP_TY_MOV, *func_ty->ret_ty);
-    ret_mov->mov.value = op;
-    ret_mov->reg = op->reg;
-
-    // swap so usages point at mov
-    // not needed but makes IR cleaner
-    swap_ir_ops(func, op, ret_mov);
-  }
-
-  size_t max_integral_volatile = sizeof(live_integral_volatile) * 8 - lzcnt(live_integral_volatile);
-
-  for (size_t i = 0; i < max_integral_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_INTEGRAL) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_integral_volatile, i)) {
-      call_save_reg(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = i  });
-    }
-  }
-
-  size_t max_fp_volatile = sizeof(live_fp_volatile) * 8 - lzcnt(live_fp_volatile);
-
-  for (size_t i = 0; i < max_fp_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_FP) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_fp_volatile, i)) {
-      call_save_reg(func, op, (struct ir_reg){ .ty = IR_REG_TY_FP, .idx = i  });
-    }
-  }
-  
-
-  // FIXME: generalise this to calling conventions
-
-  // now we need to move each argument into its correct register
-  // it is possible there are no spare registers for this, and so we may need to
-  // do a swap
-
-  // TODO: handle fp reg
-  if (op->call.num_args) {
-    unsigned long long free_regs =
-        ~op->live_integral_regs & ~((1ull << func_ty->num_params) - 1);
-    size_t free_vol_reg = tzcnt(free_regs);
-
-    if (free_vol_reg >= volatile_integral_reg_count) {
-      todo("argument moving when no free registers");
-    }
-
-    struct ir_op *mov_to_vol =
-        insert_before_ir_op(func, op, IR_OP_TY_MOV, func_ty->params[0]);
-    mov_to_vol->mov.value = op->call.args[0];
-    mov_to_vol->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = free_vol_reg };
-
-    size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1
-                                                       : func_ty->num_params;
-
-    for (size_t head = 0; head < op->call.num_args; head++) {
-      size_t i = op->call.num_args - 1 - head;
-      struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
-
-      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                           var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
-                       "`lower_call` doesn't support non-prims");
-
-      struct ir_op *source = i == 0 ? mov_to_vol : op->call.args[i];
-      size_t arg_reg = i;
-      if (i >= num_normal_args) {
-        // we are in a variadic and everything from here on is passed on the
-        // stack
-        struct ir_lcl *lcl = add_local(
-            func,
-            &(struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                   .primitive = IR_OP_VAR_PRIMITIVE_TY_I64});
-
-        // the stack slot this local must live in
-        size_t variadic_arg_idx = i - num_normal_args;
-
-        struct ir_op *store =
-            insert_before_ir_op(func, op, IR_OP_TY_CUSTOM, *var_ty);
-        store->lcl = lcl;
-        store->custom.aarch64 =
-            arena_alloc(func->arena, sizeof(*store->custom.aarch64));
-        *store->custom.aarch64 = (struct aarch64_op){
-            .ty = AARCH64_OP_TY_STORE_VARIADIC,
-            .store_variadic = (struct aarch64_store_variadic){
-                .value = source, .idx = variadic_arg_idx}};
-
-        store->flags |= IR_OP_FLAG_VARIADIC_PARAM;
-      } else if (i == 0 || op->call.args[i]->reg.idx != arg_reg) {
-        struct ir_op *mov =
-            insert_before_ir_op(func, op, IR_OP_TY_MOV, *var_ty);
-
-        mov->mov.value = source;
-        mov->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = arg_reg };
-      }
-    }
-  }
-
-  // FIXME: don't hardcode return reg
-  size_t return_reg_idx = 0;
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE && op->reg.idx != return_reg_idx) {
-    struct ir_reg target_reg = op->reg;
-
-    // we move the call _back_ and replace it with a mov, by swapping them
-    struct ir_op *new_call =
-        insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
-    new_call->call = op->call;
-    new_call->reg = (struct ir_reg){.ty = target_reg.ty, .idx = return_reg_idx};
-
-    op->ty = IR_OP_TY_MOV;
-    op->mov.value = new_call;
-    op->reg = target_reg;
-  }
 }
 
 // ARM has no quotient function
@@ -521,7 +257,14 @@ void aarch64_lower(struct ir_builder *func) {
         case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
-        case IR_OP_TY_CNST:
+        case IR_OP_TY_CNST: {
+          if (op->cnst.ty != IR_OP_CNST_TY_STR) {
+            break;
+          }
+
+          // lower_str_cnst(func, op);
+          break;
+        }
         case IR_OP_TY_STORE_LCL:
         case IR_OP_TY_LOAD_LCL:
           lower_load_lcl(func, op);
@@ -545,7 +288,51 @@ void aarch64_lower(struct ir_builder *func) {
           if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
               op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
             lower_quot(func, op);
-          } else if (binary_op_is_comparison(op->binary_op.ty)) {
+          }
+          break;
+        }
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  // now we lower comparisons as the above can generate them (via logical_not)
+  basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        switch (op->ty) {
+        case IR_OP_TY_UNKNOWN:
+          bug("unknown op!");
+        case IR_OP_TY_UNDF:
+        case IR_OP_TY_CUSTOM:
+        case IR_OP_TY_GLB_REF:
+        case IR_OP_TY_PHI:
+        case IR_OP_TY_CNST:
+        case IR_OP_TY_STORE_LCL:
+        case IR_OP_TY_LOAD_LCL:
+        case IR_OP_TY_STORE_ADDR:
+        case IR_OP_TY_LOAD_ADDR:
+        case IR_OP_TY_ADDR:
+        case IR_OP_TY_BR:
+        case IR_OP_TY_BR_COND:
+        case IR_OP_TY_MOV:
+        case IR_OP_TY_RET:
+        case IR_OP_TY_CALL:
+        case IR_OP_TY_CAST_OP:
+        case IR_OP_TY_UNARY_OP:
+          break;
+        case IR_OP_TY_BINARY_OP:
+          if(binary_op_is_comparison(op->binary_op.ty)) {
             lower_comparison(func, op);
           }
           break;
@@ -559,6 +346,7 @@ void aarch64_lower(struct ir_builder *func) {
 
     basicblock = basicblock->succ;
   }
+  
 }
 
 
@@ -568,46 +356,12 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
 
   // first we need to insert the metadata we want
   // currently this is just on call nodes
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-
-    while (stmt) {
-      struct ir_op *op = stmt->first;
-
-      while (op) {
-        if (op->ty == IR_OP_TY_CALL) {
-          // we need to save registers in-use _after_ call
-          struct ir_op *succ = op->succ;
-          if (!succ && op->stmt->succ) {
-            // call is end of stmt, get live from next stmt
-            // a call can not be the final op of the final stmt of a basicblock
-            // as that must be a br/ret
-            succ = op->stmt->succ->first;
-          }
-
-          // FIXME: floats
-          op->metadata =
-              arena_alloc(func->arena, sizeof(struct ir_lower_call_metadata));
-          *(struct ir_lower_call_metadata *)op->metadata =
-              (struct ir_lower_call_metadata){.post_call_live_regs =
-                                                  succ->live_integral_regs};
-        }
-
-        op = op->succ;
-      }
-
-      stmt = stmt->succ;
-    }
-
-    basicblock = basicblock->succ;
-  }
 
   // points to first save so we can use it for restore later
   // struct ir_op *saves = NULL;
   // struct aarch64_prologue_info info = insert_prologue(func);
 
-  basicblock = func->first;
+  struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 
@@ -632,19 +386,9 @@ void aarch64_post_reg_lower(struct ir_builder *func) {
         case IR_OP_TY_GLB_REF:
         case IR_OP_TY_BINARY_OP:
         case IR_OP_TY_CUSTOM:
-        case IR_OP_TY_PHI:
-          break;
-
-        case IR_OP_TY_CNST: {
-          if (op->cnst.ty != IR_OP_CNST_TY_STR) {
-            break;
-          }
-
-          lower_str_cnst(func, op);
-          break;
-        }
         case IR_OP_TY_CALL:
-          lower_call(func, op);
+        case IR_OP_TY_CNST:
+        case IR_OP_TY_PHI:
           break;
         case IR_OP_TY_RET: {
           // FIXME: don't hardcode return reg

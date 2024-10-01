@@ -364,7 +364,7 @@ struct ir_op {
   // only meaningful post register-allocation
   // `live_regs` is bitmask of all registers with values live, needed for
   // spilling
-  unsigned long live_integral_regs;
+  unsigned long live_gp_regs;
   unsigned long live_fp_regs;
   struct ir_reg reg;
   void *metadata;
@@ -457,16 +457,6 @@ struct ir_basicblock {
 enum ir_builder_flags {
   IR_BUILDER_FLAG_NONE = 0,
   IR_BUILDER_FLAG_MAKES_CALL = 1
-};
-
-struct ir_string {
-  const char *data;
-
-  struct ir_string *succ;
-
-  // because the linked list is built from the end (first element), this is an
-  // index from the back
-  size_t index_from_back;
 };
 
 struct ir_lcl {
@@ -562,8 +552,6 @@ struct ir_lcl *add_local(struct ir_builder *irb,
 
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty);
-void make_string_ref(struct ir_builder *irb, const char *string,
-                     struct ir_op *op, const struct ir_op_var_ty *var_ty);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
