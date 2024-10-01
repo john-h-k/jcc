@@ -47,46 +47,65 @@ struct emit_state {
   struct current_op_state cur_op_state;
 };
 
-static struct aarch64_reg get_reg_for_idx(size_t idx) {
+static struct aarch64_reg get_reg_for_idx(struct ir_reg reg) {
   // [w|x]18 not available
-  struct aarch64_reg reg = {idx < 18 ? idx : idx + 1};
-  invariant_assert(reg.idx <= 31, "invalid reg!");
-  return reg;
+  switch (reg.ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    bug("reg type invalid");
+  case IR_REG_TY_INTEGRAL: {
+    struct aarch64_reg reg = {reg.idx < 18 ? reg.idx : reg.idx + 1};
+    invariant_assert(reg.idx <= 31, "invalid reg!");
+    return reg;
+  }
+  case IR_REG_TY_FP: {
+    struct aarch64_reg reg = {reg.idx < 18 ? reg.idx : reg.idx + 1};
+    invariant_assert(reg.idx <= 31, "invalid reg!");
+    return reg;
+  }
+  }
 }
 
 enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
 
-static size_t get_reg_for_op(struct emit_state *state, struct ir_op *op,
+static struct ir_reg get_reg_for_op(struct emit_state *state, struct ir_op *op,
                              enum reg_usage usage) {
-  size_t reg = op->reg;
+  UNUSED_ARG(state);
+  UNUSED_ARG(usage);
 
-  if (reg == REG_FLAGS) {
-    return reg;
+  struct ir_reg reg = op->reg;
+
+  if (reg.ty == IR_REG_TY_FLAGS) {
+    bug("flags");
   }
 
-  if (usage & REG_USAGE_READ) {
-    state->cur_op_state.read_registers |= reg;
-  }
-  if (usage & REG_USAGE_WRITE) {
-    state->cur_op_state.write_registers |= reg;
-  }
+  // if (usage & REG_USAGE_READ) {
+  //   state->cur_op_state.read_registers |= reg;
+  // }
+  // if (usage & REG_USAGE_WRITE) {
+  //   state->cur_op_state.write_registers |= reg;
+  // }
 
   invariant_assert(
-      reg != REG_SPILLED,
+      reg.ty != IR_REG_TY_SPILLED,
       "spilled reg reached emitter; should've been handled by lower/regalloc");
 
-  invariant_assert(reg < 31, "invalid reg '%zu' for AArch64", reg);
+  invariant_assert(reg.idx < 31, "invalid reg '%zu' for AArch64", reg);
 
   return reg;
 }
 
 static bool is_64_bit(const struct ir_op_var_ty *var_ty) {
   invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                       var_ty->ty == IR_OP_VAR_TY_TY_POINTER || var_ty->ty == IR_OP_VAR_TY_TY_ARRAY,
+                       var_ty->ty == IR_OP_VAR_TY_TY_POINTER ||
+                       var_ty->ty == IR_OP_VAR_TY_TY_ARRAY,
                    "non-primitive/pointer/array passed to `is_64_bit`");
 
-  return var_ty->ty == IR_OP_VAR_TY_TY_POINTER || var_ty->ty == IR_OP_VAR_TY_TY_ARRAY
-         || (var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE && var_ty->primitive == IR_OP_VAR_PRIMITIVE_TY_I64);
+  return var_ty->ty == IR_OP_VAR_TY_TY_POINTER ||
+         var_ty->ty == IR_OP_VAR_TY_TY_ARRAY ||
+         (var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+          var_ty->primitive == IR_OP_VAR_PRIMITIVE_TY_I64);
 }
 
 static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
@@ -96,7 +115,7 @@ static unsigned get_lcl_stack_offset_variadic(struct emit_state *state,
 }
 
 static unsigned get_lcl_stack_offset(struct emit_state *state,
-                                        const struct ir_lcl *lcl) {
+                                     const struct ir_lcl *lcl) {
   // FIXME: wrongly assumes everything is 8 byte
   return state->max_variadic_args * 8 + lcl->offset;
 }
@@ -172,8 +191,8 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
     }                                                                          \
   } while (0);
 
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  size_t src_reg = get_reg_for_op(state, op->cast_op.value, REG_USAGE_READ);
+  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg src_reg = get_reg_for_op(state, op->cast_op.value, REG_USAGE_READ);
 
   switch (op->cast_op.ty) {
   case IR_OP_CAST_OP_TY_SEXT:
@@ -232,7 +251,7 @@ static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_load_addr_op(struct emit_state *state, struct ir_op *op) {
-  size_t dest = op->reg;
+  struct ir_reg dest = op->reg;
   struct ir_op *target = op->load_addr.addr;
 
   if (target->lcl) {
@@ -247,19 +266,17 @@ static void emit_load_addr_op(struct emit_state *state, struct ir_op *op) {
     }
   } else {
     if (is_64_bit(&op->var_ty)) {
-      aarch64_emit_load_offset_64(state->emitter,
-                                  get_reg_for_idx(target->reg),
+      aarch64_emit_load_offset_64(state->emitter, get_reg_for_idx(target->reg),
                                   get_reg_for_idx(dest), 0);
     } else {
-      aarch64_emit_load_offset_32(state->emitter,
-                                  get_reg_for_idx(target->reg),
+      aarch64_emit_load_offset_32(state->emitter, get_reg_for_idx(target->reg),
                                   get_reg_for_idx(dest), 0);
     }
   }
 }
 
 static void emit_addr_op(struct emit_state *state, struct ir_op *op) {
-  size_t dest = op->reg;
+  struct ir_reg dest = op->reg;
 
   switch (op->addr.ty) {
   case IR_OP_ADDR_TY_LCL: {
@@ -275,27 +292,25 @@ static void emit_addr_op(struct emit_state *state, struct ir_op *op) {
 static void emit_store_addr_op(struct emit_state *state, struct ir_op *op) {
   struct ir_op *value = op->store_addr.value;
   struct ir_op *target = op->store_addr.addr;
-  size_t source = value->reg;
+  struct ir_reg source = value->reg;
 
   if (target->lcl) {
     if (is_64_bit(&value->var_ty)) {
       size_t offset = get_lcl_stack_offset_64(state, target->lcl);
       aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
-                                  get_reg_for_idx(source), offset);
+                                   get_reg_for_idx(source), offset);
     } else {
       size_t offset = get_lcl_stack_offset_32(state, target->lcl);
       aarch64_emit_store_offset_32(state->emitter, STACK_PTR_REG,
-                                  get_reg_for_idx(source), offset);
+                                   get_reg_for_idx(source), offset);
     }
   } else {
     if (is_64_bit(&value->var_ty)) {
-      aarch64_emit_store_offset_64(state->emitter,
-                                  get_reg_for_idx(target->reg),
-                                  get_reg_for_idx(source), 0);
+      aarch64_emit_store_offset_64(state->emitter, get_reg_for_idx(target->reg),
+                                   get_reg_for_idx(source), 0);
     } else {
-      aarch64_emit_store_offset_32(state->emitter,
-                                  get_reg_for_idx(target->reg),
-                                  get_reg_for_idx(source), 0);
+      aarch64_emit_store_offset_32(state->emitter, get_reg_for_idx(target->reg),
+                                   get_reg_for_idx(source), 0);
     }
   }
 }
@@ -313,10 +328,8 @@ static void emit_unary_op(struct emit_state *state, struct ir_op *op) {
   } while (0);
 
   debug_assert(op->ty == IR_OP_TY_UNARY_OP, "wrong ty op to `%s`", __func__);
-  size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  size_t source = get_reg_for_op(state, op->unary_op.value, REG_USAGE_READ);
-  invariant_assert(source != UINT32_MAX && dest != UINT32_MAX,
-                   "bad IR, no reg");
+  struct ir_reg dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg source = get_reg_for_op(state, op->unary_op.value, REG_USAGE_READ);
 
   switch (op->unary_op.ty) {
   case IR_OP_UNARY_OP_TY_NEG:
@@ -351,11 +364,9 @@ static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
   } while (0);
 
   debug_assert(op->ty == IR_OP_TY_BINARY_OP, "wrong ty op to `%s`", __func__);
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  size_t lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
-  size_t rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
-  invariant_assert(lhs_reg != UINT32_MAX && rhs_reg != UINT32_MAX,
-                   "bad IR, no reg");
+  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
+  struct ir_reg rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
 
   switch (op->binary_op.ty) {
   case IR_OP_BINARY_OP_TY_EQ:
@@ -527,7 +538,7 @@ static void emit_pageoff(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
-                          size_t dest) {
+                          struct ir_reg dest) {
   struct ir_op *cnst = op->mov.value;
   debug_assert(cnst->ty == IR_OP_TY_CNST,
                "received non cnst op in emit_mov_cnst");
@@ -536,10 +547,10 @@ static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
   case IR_OP_CNST_TY_FLT:
     todo("float mov");
   case IR_OP_CNST_TY_INT: {
-    size_t src = get_reg_for_op(state, cnst, REG_USAGE_READ);
+    struct ir_reg src = get_reg_for_op(state, cnst, REG_USAGE_READ);
     if (is_64_bit(&op->var_ty)) {
       aarch64_emit_mov_64(state->emitter, get_reg_for_idx(src),
-                            get_reg_for_idx(dest));
+                          get_reg_for_idx(dest));
     } else {
       aarch64_emit_mov_32(state->emitter, get_reg_for_idx(src),
                           get_reg_for_idx(dest));
@@ -553,7 +564,7 @@ static void emit_mov_cnst(struct emit_state *state, struct ir_op *op,
 }
 
 static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
-  size_t dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   struct ir_op *value = op->mov.value;
   if (value->ty == IR_OP_TY_BINARY_OP &&
@@ -584,7 +595,7 @@ static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   if (is_64_bit(&op->var_ty)) {
     aarch64_emit_load_offset_64(
@@ -598,7 +609,7 @@ static void emit_load_lcl_op(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_store_lcl_op(struct emit_state *state, struct ir_op *op) {
-  size_t reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
+  struct ir_reg reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
 
   if (is_64_bit(&op->store_lcl.value->var_ty) ||
       (op->flags & IR_OP_FLAG_VARIADIC_PARAM)) {
@@ -613,7 +624,7 @@ static void emit_store_lcl_op(struct emit_state *state, struct ir_op *op) {
 }
 
 static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
-  size_t reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
+  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
 
   switch (op->cnst.ty) {
   case IR_OP_CNST_TY_FLT:
@@ -621,7 +632,7 @@ static void emit_cnst_op(struct emit_state *state, struct ir_op *op) {
   case IR_OP_CNST_TY_INT:
     if (is_64_bit(&op->var_ty)) {
       aarch64_emit_load_cnst_64(state->emitter, get_reg_for_idx(reg),
-                                  op->cnst.int_value);
+                                op->cnst.int_value);
     } else {
       aarch64_emit_load_cnst_32(state->emitter, get_reg_for_idx(reg),
                                 op->cnst.int_value);
@@ -649,7 +660,7 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
   size_t true_offset =
       true_target->function_offset - aarch64_emitted_count(state->emitter);
 
-  if (op->br_cond.cond->reg == REG_FLAGS) {
+  if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
     // emit based on flags
     enum aarch64_cond cond = get_cond_for_op(op->br_cond.cond);
     aarch64_emit_b_cond(state->emitter, true_offset, cond);
@@ -662,7 +673,7 @@ static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
 
 static void emit_store_variadic(struct emit_state *state, struct ir_op *op) {
   // all variadic args are 8 byte
-  size_t reg = op->custom.aarch64->store_variadic.value->reg;
+  struct ir_reg reg = op->custom.aarch64->store_variadic.value->reg;
   aarch64_emit_store_offset_64(state->emitter, STACK_PTR_REG,
                                get_reg_for_idx(reg),
                                get_lcl_stack_offset_variadic(state, op));
@@ -854,7 +865,7 @@ struct compiled_function aarch64_emit_function(struct ir_builder *func) {
           if (op->ty == IR_OP_TY_CUSTOM &&
               op->custom.aarch64->ty == AARCH64_OP_TY_STORE_VARIADIC) {
             max_variadic_args = MAX(max_variadic_args,
-                                       op->custom.aarch64->store_variadic.idx + 1);
+                                    op->custom.aarch64->store_variadic.idx + 1);
           }
 
           opc++;

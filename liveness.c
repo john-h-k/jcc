@@ -141,7 +141,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         struct interval *interval = &data.intervals[op->id];
 
         if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
-          op->reg = arg_regs++;
+          op->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = arg_regs++ };
         } else {
           // // reset registers unless flags because flags is never allocated
           // if (op->reg != REG_FLAGS && !(op->flags &
@@ -243,14 +243,29 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
-void print_live_regs(FILE *file, unsigned long live_regs) {
-  unsigned long max_live = sizeof(live_regs) * 8 - lzcnt(live_regs);
+void print_live_regs(FILE *file, unsigned long live_integral_regs, unsigned long live_fp_regs) {
+  unsigned long max_integral_live = sizeof(live_integral_regs) * 8 - lzcnt(live_integral_regs);
   fslogsl(file, " - LIVE REGS (");
-  for (size_t i = 0; i < max_live; i++) {
-    if (NTH_BIT(live_regs, i)) {
+  for (size_t i = 0; i < max_integral_live; i++) {
+    if (NTH_BIT(live_integral_regs, i)) {
       fslogsl(file, "R%zu", i);
 
-      if (i + 1 < max_live) {
+      if (i + 1 < max_integral_live) {
+        fslogsl(file, ", ");
+      }
+    }
+  }
+
+  if (live_integral_regs && live_fp_regs) {
+    fslogsl(file, ", ");
+  }
+
+  unsigned long max_fp_live = sizeof(live_fp_regs) * 8 - lzcnt(live_fp_regs);
+  for (size_t i = 0; i < max_fp_live; i++) {
+    if (NTH_BIT(live_fp_regs, i)) {
+      fslogsl(file, "F%zu", i);
+
+      if (i + 1 < max_fp_live) {
         fslogsl(file, ", ");
       }
     }
@@ -269,31 +284,37 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "no associated interval | ");
   }
 
-  switch (op->reg) {
-  case NO_REG:
+  switch (op->reg.ty) {
+  case IR_REG_TY_NONE:
     fslogsl(file, "    (UNASSIGNED)");
     break;
-  case REG_SPILLED:
+  case IR_REG_TY_SPILLED:
     if (op->lcl) {
       fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl->id);
     } else {
       fslogsl(file, "    (SPILLED), LCL=(UNASSIGNED)");
     }
     break;
-  case REG_FLAGS:
+  case IR_REG_TY_FLAGS:
     fslogsl(file, "    (FLAGS)");
     break;
-  default:
+  case IR_REG_TY_INTEGRAL:
     if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
       fslogsl(file, "    (DONT)");
     } else {
-      fslogsl(file, "    register=%zu", op->reg);
+      fslogsl(file, "    register=R%zu", op->reg);
+    }
+    break;
+  case IR_REG_TY_FP:
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+      fslogsl(file, "    (DONT)");
+    } else {
+      fslogsl(file, "    register=F%zu", op->reg);
     }
     break;
   }
 
   if (interval && interval->op) {
-    unsigned long live_regs = interval->op->live_regs;
-    print_live_regs(file, live_regs);
+    print_live_regs(file, interval->op->live_integral_regs, interval->op->live_fp_regs);
   }
 }

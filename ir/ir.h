@@ -180,8 +180,6 @@ enum ir_op_var_primitive_ty {
 
   IR_OP_VAR_PRIMITIVE_TY_F32,
   IR_OP_VAR_PRIMITIVE_TY_F64,
-
-  // IR_OP_VAR_PRIMITIVE_TY_PTR,
 };
 
 enum ir_op_var_ty_ty {
@@ -295,10 +293,25 @@ struct ir_op_custom {
   };
 };
 
-#define NO_LCL (SIZE_T_MAX)
-#define NO_REG (SIZE_T_MAX)
-#define REG_SPILLED (NO_REG - 1)
-#define REG_FLAGS (REG_SPILLED - 1)
+enum ir_reg_ty {
+  IR_REG_TY_NONE,
+  IR_REG_TY_SPILLED,
+  IR_REG_TY_FLAGS,
+  IR_REG_TY_INTEGRAL,
+  IR_REG_TY_FP,
+};
+
+struct ir_reg {
+  enum ir_reg_ty ty;
+
+  union {
+    unsigned long idx;
+  };
+};
+
+#define NO_REG (struct ir_reg){ .ty = IR_REG_TY_NONE }
+#define REG_SPILLED (struct ir_reg){ .ty = IR_REG_TY_SPILLED }
+#define REG_FLAGS (struct ir_reg){ .ty = IR_REG_TY_FLAGS }
 
 enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
@@ -351,8 +364,9 @@ struct ir_op {
   // only meaningful post register-allocation
   // `live_regs` is bitmask of all registers with values live, needed for
   // spilling
-  unsigned long live_regs;
-  unsigned long reg;
+  unsigned long live_integral_regs;
+  unsigned long live_fp_regs;
+  struct ir_reg reg;
   void *metadata;
 };
 
@@ -571,7 +585,7 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty, unsigned long reg,
+                      struct ir_op_var_ty var_ty, struct ir_reg,
                       struct ir_lcl *lcl);
 
 void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
@@ -613,7 +627,8 @@ struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
                                       const struct ir_op_var_ty *underlying,
                                       size_t num_elements);
 
-
+bool var_ty_is_integral(const struct ir_op_var_ty *var_ty);
+bool var_ty_is_fp(const struct ir_op_var_ty *var_ty);
 
 
 void spill_op(struct ir_builder *irb, struct ir_op *op);

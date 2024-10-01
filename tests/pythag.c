@@ -6,20 +6,20 @@ int printf(const char *format, ...);
 int scanf(const char *format, ...);
 
 int main() {
-  int a = 0, b = 0;
-  scanf("%d %d", &a, &b);
+  long a = 0, b = 0;
+  scanf("%ld %ld", &a, &b);
 
-  int r = a * a + b * b;
+  long r = a * a + b * b;
 
-  int ans = 0;
+  long ans = 0;
   while (ans * ans < r) {
     ans = ans + 1;
   }
 
   if (ans * ans > r) {
-    printf("%d < sqrt(%d^2 + %d^2) < %d\n", ans - 1, a, b, ans);
+    printf("%ld < sqrt(%ld^2 + %ld^2) < %ld\n", ans - 1, a, b, ans);
   } else {
-    printf("sqrt(%d^2 + %d^2) = %d\n", a, b, ans);
+    printf("sqrt(%ld^2 + %ld^2) = %ld\n", a, b, ans);
   }
   return ans;
 }

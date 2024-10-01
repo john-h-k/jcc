@@ -18,7 +18,8 @@ enum register_alloc_mode {
 };
 
 struct register_alloc_info {
-  struct reg_info reg_info;
+  struct reg_info integral_reg_info;
+  struct reg_info float_reg_info;
 };
 
 void spill_at_interval(struct ir_builder *irb, struct interval *intervals,
@@ -64,11 +65,11 @@ void expire_old_intervals(struct interval *intervals,
 
     num_expired_intervals++;
 
-    if (interval->op->reg != REG_SPILLED) {
+    if (interval->op->reg.ty != IR_REG_TY_SPILLED) {
       // intervals can contain ops that were spilled for other reasons
       // but are still alive
       // so only free a reg if this interval actually *has* a reg
-      bitset_set(reg_pool, interval->op->reg, true);
+      bitset_set(reg_pool, interval->op->reg.idx, true);
     }
   }
 
@@ -131,7 +132,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
     return;
   }
 
-  if ((*op)->reg == REG_SPILLED) {
+  if ((*op)->reg.ty == IR_REG_TY_SPILLED) {
     debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
                  __func__);
     if (op_needs_reg(data->consumer)) {
@@ -193,8 +194,12 @@ int compare_interval_id(const void *a, const void *b) {
   return (ssize_t)a_id - (ssize_t)b_id;
 }
 
+typedef bool (*op_needs_alloc)(struct ir_op * a);
+
 struct interval_data register_alloc_pass(struct ir_builder *irb,
-                                         struct register_alloc_info info,
+                                         struct reg_set_info *info,
+                                         op_needs_alloc needs_reg,
+                                         enum ir_reg_ty reg_ty,
                                          bool *spilled) {
 
   struct interval_data data = construct_intervals(irb);
@@ -212,7 +217,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   qsort(intervals, num_intervals, sizeof(*intervals),
         sort_interval_by_start_point);
 
-  size_t num_regs = info.reg_info.num_volatile + info.reg_info.num_nonvolatile;
+  size_t num_regs = info->num_volatile + info->num_nonvolatile;
 
   size_t *active = arena_alloc(irb->arena, sizeof(size_t) * num_regs);
   size_t num_active = 0;
@@ -228,10 +233,20 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     // update live_regs early in case the op is not value producing/marked
     // DONT_GIVE_REG and we back out
     unsigned long long free_regs = bitset_as_ull(reg_pool);
-    interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
 
-    if (interval->op->reg == REG_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
+    switch (reg_ty) {
+      case IR_REG_TY_INTEGRAL:
+        interval->op->live_integral_regs = ~free_regs & ((1ull << num_regs) - 1);
+        break;
+      case IR_REG_TY_FP:
+        interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
+        break;
+      default:
+        bug("bad reg type for LSRA");
+    }
+
+    if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
+        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) || !op_produces_value(interval->op->ty) || !needs_reg(interval->op)) {
       continue;
     }
 
@@ -253,21 +268,19 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
       spill_at_interval(irb, intervals, i, active, &num_active);
       *spilled = true;
     } else {
-      if (interval->op->reg == REG_FLAGS ||
-          (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT)) {
-        continue;
-      }
-
       size_t free_slot = bitset_tzcnt(reg_pool);
       debug_assert(free_slot < num_regs, "reg pool unexpectedly empty!");
 
       bitset_set(reg_pool, free_slot, false);
 
-      if (free_slot >= info.reg_info.num_volatile) {
+      if (free_slot >= info->num_volatile) {
         irb->nonvolatile_registers_used |= (1ull << free_slot);
       }
 
-      interval->op->reg = free_slot;
+      interval->op->reg = (struct ir_reg){
+        .ty = reg_ty,
+        .idx = free_slot
+      };
 
       size_t cur_interval = i;
 
@@ -289,7 +302,16 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
     // re-set live regs as we may have assigned a new reg
     free_regs = bitset_as_ull(reg_pool);
-    interval->op->live_regs = ~free_regs & ((1ull << num_regs) - 1);
+    switch (reg_ty) {
+      case IR_REG_TY_INTEGRAL:
+        interval->op->live_integral_regs = ~free_regs & ((1ull << num_regs) - 1);
+        break;
+      case IR_REG_TY_FP:
+        interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
+        break;
+      default:
+        bug("bad reg type for LSRA");
+    }
   }
 
   struct ir_basicblock *basicblock = irb->first;
@@ -342,10 +364,16 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
   insert `storelcl` and `loadlcl` instructions with appropriate locals as will
   be needed
 */
-void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
-  struct register_alloc_info alloc_info =
-      (struct register_alloc_info){.reg_info = reg_info};
 
+bool op_needs_int_reg(struct ir_op *op) {
+  return var_ty_is_integral(&op->var_ty);
+}
+
+bool op_needs_fp_reg(struct ir_op *op) {
+  return var_ty_is_fp(&op->var_ty);
+}
+
+void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
   bool spill_exists = true;
   int attempts = 0;
 
@@ -362,7 +390,10 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
 
     clear_metadata(irb);
     struct interval_data data =
-        register_alloc_pass(irb, alloc_info, &spill_exists);
+        register_alloc_pass(irb, &reg_info.integral_registers, op_needs_int_reg, IR_REG_TY_INTEGRAL, &spill_exists);
+
+    clear_metadata(irb);
+    data = register_alloc_pass(irb, &reg_info.fp_registers, op_needs_fp_reg, IR_REG_TY_FP, &spill_exists);
 
     qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
           compare_interval_id);
