@@ -101,11 +101,12 @@ struct build_object_args {
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*lower)(struct ir_builder *func);
-typedef struct codegen_function *(*codegen)(const struct ir_builder *func);
-// typedef struct compiled_function (*emit_function)(const struct codegen_function *func);
-typedef struct compiled_function (*emit_function)(struct ir_builder *func);
+typedef struct codegen_function *(*codegen)(struct ir_builder *func);
+typedef struct compiled_function (*emit_function)(const struct codegen_function *func);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef void (*debug_disasm)(const char *filename);
+typedef void (*debug_print_codegen)(FILE *file, struct codegen_function *func);
+
 
 struct target {
   struct reg_info reg_info;
@@ -117,7 +118,7 @@ struct target {
   emit_function emit_function;
   build_object build_object;
   debug_disasm debug_disasm;
-  debug_print_custom_ir_op debug_print_custom_ir_op;
+  debug_print_codegen debug_print_codegen;
 };
 
 #endif

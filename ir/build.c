@@ -2011,8 +2011,7 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
 
 struct ir_builder *
 build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
-                      struct ast_funcdef *def, struct var_refs *global_var_refs,
-                      debug_print_custom_ir_op debug_print_custom_ir_op) {
+                      struct ast_funcdef *def, struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
@@ -2028,8 +2027,7 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
                          .nonvolatile_registers_used = 0,
                          .num_locals = 0,
                          .total_locals_size = 0,
-                         .offset = 0,
-                         .debug_print_custom_ir_op = debug_print_custom_ir_op};
+                         .offset = 0};
 
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = b;
@@ -2156,8 +2154,7 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
 
 struct ir_unit *build_ir_for_translationunit(
     /* needed for `associated_text */ struct parser *parser,
-    struct arena_allocator *arena, struct ast_translationunit *translation_unit,
-    debug_print_custom_ir_op debug_print_custom_ir_op) {
+    struct arena_allocator *arena, struct ast_translationunit *translation_unit) {
 
   struct ir_unit u = {
       .funcs = arena_alloc(arena, sizeof(struct ir_builder *) *
@@ -2215,7 +2212,7 @@ struct ir_unit *build_ir_for_translationunit(
                           .scope = SCOPE_GLOBAL};
 
     struct ir_builder *func = build_ir_for_function(
-        parser, arena, def, global_var_refs, debug_print_custom_ir_op);
+        parser, arena, def, global_var_refs);
 
     var_refs_get(global_var_refs, &key)->func = func;
 

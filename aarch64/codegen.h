@@ -33,7 +33,7 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_BL,
   AARCH64_INSTR_TY_B_COND,
   AARCH64_INSTR_TY_CBZ,
-  AARCH64_INSTR_TY_CNBZ,
+  AARCH64_INSTR_TY_CBNZ,
   AARCH64_INSTR_TY_CSEL,
   AARCH64_INSTR_TY_CSINC,
   AARCH64_INSTR_TY_CSINV,
@@ -206,6 +206,13 @@ struct aarch64_reg_2_source {
   struct aarch64_reg rhs;
 };
 
+struct aarch64_fma {
+  struct aarch64_reg dest;
+  struct aarch64_reg lhs;
+  struct aarch64_reg rhs;
+  struct aarch64_reg addsub;
+};
+
 struct aarch64_conditional_select {
   enum aarch64_cond cond;
   struct aarch64_reg true_source;
@@ -215,11 +222,11 @@ struct aarch64_conditional_select {
 
 struct aarch64_conditional_branch {
   enum aarch64_cond cond;
-  struct instr *target;
+  struct ir_basicblock *target;
 };
 
 struct aarch64_branch {
-  struct instr *target;
+  struct ir_basicblock  *target;
 };
 
 struct aarch64_ret {
@@ -228,7 +235,7 @@ struct aarch64_ret {
 
 struct aarch64_compare_and_branch {
   struct aarch64_reg cmp;
-  struct instr *target;
+  struct ir_basicblock  *target;
 };
 
 struct aarch64_load_imm {
@@ -292,7 +299,11 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_2_source asrv, lslv, lsrv, madd, msub, rorv, sdiv, udiv;
+      struct aarch64_reg_2_source asrv, lslv, lsrv, rorv, sdiv, udiv;
+    };
+
+    union {
+      struct aarch64_fma madd, msub;
     };
 
     union {
@@ -341,6 +352,7 @@ struct aarch64_instr {
   };
 };
 
-struct codegen_function *aarch64_codegen(const struct ir_builder *irb);
+struct codegen_function *aarch64_codegen(struct ir_builder *irb);
+void aarch64_debug_print_codegen(FILE *file, struct codegen_function *func);
 
 #endif

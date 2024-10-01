@@ -21,4 +21,4 @@ const struct target AARCH64_TARGET = {
     aarch64_emit_function,
     write_macho,
     objdump_debug_disasm,
-    aarch64_debug_print_custom_ir_op};
+    aarch64_debug_print_codegen};

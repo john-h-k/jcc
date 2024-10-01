@@ -12,6 +12,8 @@ enum codegen_function_ty {
 struct codegen_function {
   enum codegen_function_ty ty;
 
+  const char *name;
+
   struct arena_allocator *arena;
 
   size_t instr_count;
@@ -41,7 +43,6 @@ struct instr {
   };
 };
 
-void debug_print_func(FILE *file, const struct codegen_function *func);
 struct instr *alloc_instr(struct codegen_function *func);
 
 #endif
