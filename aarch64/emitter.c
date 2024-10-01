@@ -119,6 +119,9 @@ void aarch64_emit_ubfm_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_mvn(struct aarch64_emitter *emitter,
                       const struct aarch64_reg_1_source_with_shift mvn) {
+  UNUSED_ARG(emitter);
+  UNUSED_ARG(mvn);
+
   todo("mvn");
   // if (IS64(mvn)) {
   //       aarch64_emit(emitter, MVN(log.shift, log.rhs.idx, log.imm6,

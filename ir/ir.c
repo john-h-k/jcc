@@ -859,10 +859,13 @@ struct ir_lcl *add_local(struct ir_builder *irb,
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
+
   struct ir_var_ty_info ty_info = var_ty_info(irb, var_ty);
-  // HACK: offset in general sucks we need to build a proper stack manager
-  // round up to 8 so that we don't worry about alignment
-  size_t lcl_size = ROUND_UP(ty_info.size, 8);
+
+  size_t lcl_pad = ty_info.alignment - (irb->total_locals_size % ty_info.alignment);
+  size_t lcl_size = ty_info.size;
+
+  irb->total_locals_size += lcl_pad;
 
   lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
