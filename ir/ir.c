@@ -924,6 +924,15 @@ void make_string_ref(struct ir_builder *irb, const char *string,
   irb->global_refs = glb_ref;
 }
 
+bool var_ty_is_simple(const struct ir_op_var_ty *var_ty) {
+  // simple types - pointer, primitive
+  return var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE || var_ty->ty == IR_OP_VAR_TY_TY_POINTER;
+}
+
+bool var_ty_is_primitive(const struct ir_op_var_ty *var_ty, enum ir_op_var_primitive_ty primitive) {
+  return var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE && var_ty->primitive == primitive;
+}
+
 bool var_ty_is_integral(const struct ir_op_var_ty *var_ty) {
   if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
     return false;

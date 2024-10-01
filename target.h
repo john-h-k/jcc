@@ -2,7 +2,8 @@
 #define TARGET_H
 
 #include "alloc.h"
-#include "ir/build.h"
+#include "ir/ir.h"
+#include "codegen.h"
 #include "lsra.h"
 
 enum relocation_ty {
@@ -100,6 +101,8 @@ struct build_object_args {
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*lower)(struct ir_builder *func);
+typedef struct codegen_function *(*codegen)(const struct ir_builder *func);
+// typedef struct compiled_function (*emit_function)(const struct codegen_function *func);
 typedef struct compiled_function (*emit_function)(struct ir_builder *func);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef void (*debug_disasm)(const char *filename);
@@ -109,8 +112,8 @@ struct target {
   size_t function_alignment;
   size_t op_size;
   mangle mangle;
-  lower pre_reg_lower;
-  lower post_reg_lower;
+  lower lower;
+  codegen codegen;
   emit_function emit_function;
   build_object build_object;
   debug_disasm debug_disasm;
