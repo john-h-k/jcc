@@ -1,14 +1,32 @@
 #include "codegen.h"
 
+#include "../bit_twiddle.h"
 #include "../util.h"
 #include "isa.h"
+#include "../aarch64.h"
 
 #include <stdio.h>
 #include <sys/stat.h>
 
+#define MOV_ALIAS(dest_reg, source)                                            \
+  (struct aarch64_instr) {                                                     \
+    .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
+      .lhs = ZERO_REG,                                                         \
+      .rhs = (source),                                                         \
+      .dest = (dest_reg),                                                      \
+      .imm6 = 0                                                                \
+    }                                                                          \
+  }
+
 // static enum aarch64_cond invert_cond(enum aarch64_cond cond) {
 //   return cond ^ 1;
 // }
+
+struct codegen_state {
+  struct codegen_function *func;
+  struct ir_builder *ir;
+  struct prologue_info *prologue_info;
+};
 
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -60,26 +78,41 @@ static unsigned get_lcl_stack_offset(const struct codegen_function *func,
 //   return abs_offset / 8;
 // }
 
+static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
+  switch (ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    bug("does not make sense for none/spilled/flags");
+  case IR_REG_TY_INTEGRAL:
+    return idx < 18 ? idx : idx + 1;
+  case IR_REG_TY_FP:
+    return idx >= 24 ? (idx - 24 + 8) : idx;
+  }
+}
+
 static struct aarch64_reg codegen_reg(struct ir_op *op) {
   if (op->var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
     todo("non primitives");
   }
+
+  size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
   switch (op->var_ty.primitive) {
   case IR_OP_VAR_PRIMITIVE_TY_I8:
   case IR_OP_VAR_PRIMITIVE_TY_I16:
   case IR_OP_VAR_PRIMITIVE_TY_I32:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_W, .idx = op->reg.idx};
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_W, .idx = idx};
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = op->reg.idx};
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = idx};
   case IR_OP_VAR_PRIMITIVE_TY_F32:
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_S, .idx = op->reg.idx};
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_S, .idx = idx};
   case IR_OP_VAR_PRIMITIVE_TY_F64:
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_D, .idx = op->reg.idx};
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_D, .idx = idx};
   }
 }
 
@@ -89,9 +122,7 @@ static void codegen_mov_op(struct codegen_function *func, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
   struct aarch64_reg source = codegen_reg(op->mov.value);
 
-  instr->aarch64->ty = AARCH64_INSTR_TY_ORR;
-  instr->aarch64->orr = (struct aarch64_logical_reg){
-      .dest = dest, .lhs = source, .rhs = ZERO_REG};
+  *instr->aarch64 = MOV_ALIAS(dest, source);
 }
 
 static void codegen_load_lcl_op(struct codegen_function *func,
@@ -419,9 +450,7 @@ static void codegen_cast_op(struct codegen_function *func, struct ir_op *op) {
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
     // `mov`/`orr` with 32 bit operands zeroes top 32 bits
-    instr->aarch64->ty = AARCH64_INSTR_TY_ORR;
-    instr->aarch64->orr = (struct aarch64_logical_reg){
-        .dest = dest, .lhs = source, .rhs = ZERO_REG, .imm6 = 0, .shift = 0};
+    *instr->aarch64 = MOV_ALIAS(dest, source);
     break;
   case IR_OP_CAST_OP_TY_TRUNCATE:
     invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
@@ -449,9 +478,7 @@ static void codegen_cast_op(struct codegen_function *func, struct ir_op *op) {
       };
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I32:
-      instr->aarch64->ty = AARCH64_INSTR_TY_ORR;
-      instr->aarch64->orr = (struct aarch64_logical_reg){
-          .dest = dest, .lhs = source, .rhs = ZERO_REG, .imm6 = 0, .shift = 0};
+      *instr->aarch64 = MOV_ALIAS(dest, source);
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       break;
@@ -463,10 +490,165 @@ static void codegen_cast_op(struct codegen_function *func, struct ir_op *op) {
 }
 
 static void codegen_call_op(struct codegen_function *func, struct ir_op *op) {
+
   todo(__func__);
 }
 
+struct aarch64_prologue_info {
+  // this is not an array! you must traverse the saves as IR ops
+  bool prologue_generated;
+  size_t num_saves;
+  size_t stack_size;
+  size_t lr_offset;
+  struct instr *saves;
+};
+
+struct aarch64_prologue_info insert_prologue(struct codegen_function *func, struct ir_builder *ir
+                                             ) {
+  bool leaf = !(ir->nonvolatile_registers_used || ir->num_locals ||
+                ir->flags & IR_BUILDER_FLAG_MAKES_CALL);
+
+  size_t stack_size = ROUND_UP(ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
+
+  const size_t LR_OFFSET = 2;
+  struct aarch64_prologue_info info = {
+      .prologue_generated = !leaf, .num_saves = 0, .lr_offset = LR_OFFSET, .stack_size = stack_size, .saves = NULL};
+
+  if (!info.prologue_generated) {
+    return info;
+  }
+
+  // for x29 and x30 as they aren't working yet with pre-indexing
+  ir->total_locals_size += 16;
+
+  unsigned long max_nonvol_used = sizeof(ir->nonvolatile_registers_used) * 8 -
+                                  lzcnt(ir->nonvolatile_registers_used);
+
+  for (size_t i = 0; i < max_nonvol_used; i++) {
+    // FIXME: loop should start at i=first non volatile
+    if (!NTH_BIT(ir->nonvolatile_registers_used, i)) {
+      continue;
+    }
+
+    struct instr *save = alloc_instr(func);
+    save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    save->aarch64->str_imm =
+        (struct aarch64_store_imm){
+            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+            .imm = i,
+            .source = (struct aarch64_reg){ .ty = AARCH64_REG_TY_X, .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL) },
+            .addr = STACK_PTR_REG,
+        };
+
+    info.num_saves++;
+    if (!info.saves) {
+      info.saves = save;
+    }
+  }
+
+  // need to save x29 and x30
+  struct instr *save_lr_x30 = alloc_instr(func);
+  save_lr_x30->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
+  save_lr_x30->aarch64->stp_imm =
+      (struct aarch64_store_pair_imm){
+          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+          .imm = -info.lr_offset,
+          .source = {
+            FRAME_PTR_REG,
+            RET_PTR_REG
+          },
+          .addr = STACK_PTR_REG,
+      };
+
+  // also save stack pointer into frame pointer as required by ABI
+  // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
+  // so `add x29, sp, #x` is used instead
+  struct instr *save_x29 = alloc_instr(func);
+  save_x29->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
+  save_x29->aarch64->sub_imm = (struct aarch64_addsub_imm){
+    .dest = (struct aarch64_reg){ .ty = AARCH64_REG_TY_X, .idx = 29 },
+    .source = STACK_PTR_REG,
+    .imm = info.lr_offset * 8,
+    .shift = 0
+  };
+
+  if (info.stack_size) {
+    struct instr *sub_stack = alloc_instr(func);
+    sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
+    sub_stack->aarch64->sub_imm = (struct aarch64_addsub_imm){
+      .dest = STACK_PTR_REG,
+      .source = STACK_PTR_REG,
+      .imm = stack_size,
+      .shift = 0
+    };
+  }
+
+  return info;
+}
+
+void insert_epilogue(struct codegen_function *func, struct ir_builder *ir,
+                     const struct aarch64_prologue_info *prologue_info) {
+  if (!prologue_info->prologue_generated) {
+    return;
+  }
+
+  struct instr *cur_save = prologue_info->saves;
+
+  for (size_t i = 0; i < prologue_info->num_saves; i++) {
+    debug_assert(cur_save && cur_save->aarch64->ty == AARCH64_INSTR_TY_STORE_IMM,
+                 "found a non-save while traversing saves");
+
+    struct instr *restore = alloc_instr(func);
+    restore->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    restore->aarch64->ldr_imm =
+        (struct aarch64_load_imm){
+            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+            .imm = i,
+            .dest = (struct aarch64_reg){ .ty = AARCH64_REG_TY_X, .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL) },
+            .addr = STACK_PTR_REG,
+        };
+
+    cur_save = cur_save->succ;
+  }
+
+  if (prologue_info->stack_size) {
+    struct instr *add_stack = alloc_instr(func);
+    add_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+    add_stack->aarch64->add_imm = (struct aarch64_addsub_imm){
+      .dest = STACK_PTR_REG,
+      .source = STACK_PTR_REG,
+      .imm = prologue_info->stack_size,
+      .shift = 0
+    };
+  }
+
+  struct instr *restore_lr_x30 = alloc_instr(func);
+  restore_lr_x30->aarch64->ty = AARCH64_INSTR_TY_LOAD_PAIR_IMM;
+  restore_lr_x30->aarch64->ldp_imm =
+      (struct aarch64_load_pair_imm){
+          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+          .imm = prologue_info->lr_offset,
+          .dest = {
+            FRAME_PTR_REG,
+            RET_PTR_REG
+          },
+          .addr = STACK_PTR_REG,
+      };
+  
+}
+
 static void codegen_ret_op(struct codegen_function *func, struct ir_op *op) {
+  if (op->ret.value) {
+    struct aarch64_reg source = codegen_reg(op->ret.value);
+
+    if (source.idx != RETURN_REG.idx) {
+      struct instr *mov = alloc_instr(func);
+      *mov->aarch64 = MOV_ALIAS(RETURN_REG, source);
+    }
+  }
+
+  insert_epilogue(func, op->stmt->basicblock->irb, &info);
+
   struct instr *instr = alloc_instr(func);
 
   instr->aarch64->ty = AARCH64_INSTR_TY_RET;
@@ -970,8 +1152,16 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     debug_print_logical_reg(file, &instr->aarch64->ands);
     break;
   case AARCH64_INSTR_TY_ORR:
-    fprintf(file, "orr");
-    debug_print_logical_reg(file, &instr->aarch64->orr);
+    if ((instr->aarch64->orr.lhs.idx == ZERO_REG.idx ||
+         instr->aarch64->orr.rhs.idx == ZERO_REG.idx) &&
+        instr->aarch64->orr.shift == 0) {
+      fprintf(file, "mov");
+      codegen_fprintf(file, "mov %reg, %reg", instr->aarch64->orr.dest,
+                      instr->aarch64->orr.lhs);
+    } else {
+      fprintf(file, "orr");
+      debug_print_logical_reg(file, &instr->aarch64->orr);
+    }
     break;
   case AARCH64_INSTR_TY_ORN:
     fprintf(file, "orn");
