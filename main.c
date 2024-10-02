@@ -4,9 +4,11 @@
 #include "log.h"
 #include "macos/mach-o.h"
 #include "parse.h"
+#include "program.h"
 #include "util.h"
 #include "vector.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -53,6 +55,7 @@ int main(int argc, char **argv) {
   size_t num_sources;
   if (parse_args(argc, argv, &args, &sources, &num_sources) !=
       PARSE_ARGS_RESULT_SUCCESS) {
+    err("failed to parse arguments");
     return -1;
   }
 
@@ -74,18 +77,22 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
-    char *output = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
-    strcpy(output, sources[i]);
-    strcat(output, ".obj");
+    char *object_file = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
+    strcpy(object_file, sources[i]);
+    strcat(object_file, ".obj");
 
     info("compiling source file '%s' into object file '%s'", sources[i],
-         output);
+         object_file);
 
-    objects[i] = output;
+    objects[i] = object_file;
+
+    struct program program = {
+      .text = source
+    };
 
     disable_log();
     struct compiler *compiler;
-    if (create_compiler(source, output, &args, &compiler) !=
+    if (create_compiler(&program, object_file, &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;
@@ -100,7 +107,7 @@ int main(int argc, char **argv) {
 
   struct link_args link_args = {.objects = (const char **)objects,
                                 .num_objects = num_sources,
-                                .output = "a.out"};
+                                .output = args.output ? args.output : "a.out"};
 
   if (target_needs_linking(&args)) {
     if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
@@ -166,6 +173,22 @@ bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
   return false;
 }
 
+bool parse_output(const char *str, char **output) {
+  size_t output_len = strlen(str);
+
+  if (output_len) {
+    char *name = nonnull_malloc(output_len + 1);
+    memcpy(name, str, output_len);
+    name[output_len] = '\0';
+
+    *output = name;
+    return true;
+  }
+
+  return false;
+}
+  
+
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
                                   const char ***sources, size_t *num_sources) {
@@ -174,15 +197,22 @@ enum parse_args_result parse_args(int argc, char **argv,
 
   // default to native arch
   args->target_arch = COMPILE_TARGET_ARCH_NATIVE;
+  args->log_flags = COMPILE_LOG_FLAGS_NONE;
+  args->output = NULL;
 
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
 
   struct vector *sources_vec = vector_create(sizeof(*argv));
-  for (size_t i = 1; i < (size_t)argc; i++) {
+  for (int i = 1; i < argc; i++) {
     const char *arg = argv[i];
 
+    // allows both '-Tfoo' and '-T foo' by using the next argument if the current one is empty (after prefix)
+    // if it uses the next argument it skips it
+    #define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? v : argv[++i])
+
     const char *log = try_get_arg(arg, "-L");
+    GET_ARGUMENT(log);
     if (log) {
       if (!parse_log_flag(log, &args->log_flags)) {
         return PARSE_ARGS_RESULT_ERROR;
@@ -192,6 +222,7 @@ enum parse_args_result parse_args(int argc, char **argv,
     }
 
     const char *target = try_get_arg(arg, "-T");
+    GET_ARGUMENT(target);
     if (target) {
       if (!parse_target_flag(target, &args->target_arch)) {
         return PARSE_ARGS_RESULT_ERROR;
@@ -199,6 +230,18 @@ enum parse_args_result parse_args(int argc, char **argv,
 
       continue;
     }
+
+    const char *output = try_get_arg(arg, "-o");
+    GET_ARGUMENT(output);
+    if (output) {
+      if (!parse_output(output, &args->output)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
+
+      continue;
+    }
+
+    #undef GET_ARGUMENT
 
     // wasn't recognised as a flag, assume source arg
     vector_push_back(sources_vec, &arg);
