@@ -1770,8 +1770,11 @@ bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
 
 bool parse_vardecllist(struct parser *parser,
                        struct ast_vardecllist *var_decl_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
   struct ast_tyref decl_ty_ref;
   if (!parse_decl_tyref(parser, &decl_ty_ref)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
@@ -1806,6 +1809,8 @@ bool parse_vardecllist(struct parser *parser,
 
   if (vector_length(decls) == 0) {
     vector_free(&decls);
+
+    backtrack(parser->lexer, pos);
     return false;
   }
 
@@ -1996,6 +2001,9 @@ bool parse_declorexpr(struct parser *parser,
                       struct ast_declorexpr *decl_or_expr) {
   struct text_pos pos = get_position(parser->lexer);
 
+  decl_or_expr->decl = NULL;
+  decl_or_expr->expr = NULL;
+
   struct ast_vardecllist var_decl_list;
   if (parse_vardecllist(parser, &var_decl_list)) {
     decl_or_expr->decl =
@@ -2007,6 +2015,9 @@ bool parse_declorexpr(struct parser *parser,
   struct ast_expr expr;
   if (parse_expr(parser, &expr) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    decl_or_expr->expr =
+        arena_alloc(parser->arena, sizeof(*decl_or_expr->expr));
+    *decl_or_expr->expr = expr;
     return true;
   }
 
@@ -2029,13 +2040,9 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   if (parse_declorexpr(parser, &decl_or_expr)) {
     for_stmt->init = arena_alloc(parser->arena, sizeof(*for_stmt->init));
     *for_stmt->init = decl_or_expr;
-  } else {
+  } else if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     for_stmt->init = NULL;
-  }
-
-  // if a decl was provided, it includes semicolon.
-  // else we need a semicolon following the expression (or lack of expression)
-  if (!decl_or_expr.decl && !parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+  } else {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2054,13 +2061,13 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     return false;
   }
 
-  // parse the iteration statement if present, else a semicolon
+  // parse the iteration statement if present, else nothing
   struct ast_expr iter;
   if (parse_expr(parser, &iter)) {
     for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
     *for_stmt->iter = iter;
   } else {
-    for_stmt = NULL;
+    for_stmt->iter = NULL;
   }
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
