@@ -203,8 +203,12 @@
   LOGICAL_IMM(0b0, 0b00, 0b0, immr, imms, Rn, Rd)
 #define ORR_32_IMM(immr, imms, Rn, Rd)                                         \
   LOGICAL_IMM(0b0, 0b01, 0b0, immr, imms, Rn, Rd)
+#define ORN_32_IMM(immr, imms, Rn, Rd)                                         \
+  LOGICAL_IMM(0b0, 0b01, 0b1, immr, imms, Rn, Rd)
 #define EOR_32_IMM(immr, imms, Rn, Rd)                                         \
   LOGICAL_IMM(0b0, 0b10, 0b0, immr, imms, Rn, Rd)
+#define EON_32_IMM(immr, imms, Rn, Rd)                                         \
+  LOGICAL_IMM(0b0, 0b10, 0b1, immr, imms, Rn, Rd)
 #define ANDS_32_IMM(immr, imms, Rn, Rd)                                        \
   LOGICAL_IMM(0b0, 0b11, 0b0, immr, imms, Rn, Rd)
 
@@ -212,8 +216,12 @@
   LOGICAL_IMM(0b1, 0b00, 0b0, immr, imms, Rn, Rd)
 #define ORR_64_IMM(immr, imms, Rn, Rd)                                         \
   LOGICAL_IMM(0b1, 0b01, 0b0, immr, imms, Rn, Rd)
+#define ORN_64_IMM(immr, imms, Rn, Rd)                                         \
+  LOGICAL_IMM(0b1, 0b01, 0b1, immr, imms, Rn, Rd)
 #define EOR_64_IMM(immr, imms, Rn, Rd)                                         \
   LOGICAL_IMM(0b1, 0b10, 0b0, immr, imms, Rn, Rd)
+#define EON_64_IMM(immr, imms, Rn, Rd)                                         \
+  LOGICAL_IMM(0b1, 0b10, 0b1, immr, imms, Rn, Rd)
 #define ANDS_64_IMM(immr, imms, Rn, Rd)                                        \
   LOGICAL_IMM(0b1, 0b11, 0b0, immr, imms, Rn, Rd)
 

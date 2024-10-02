@@ -192,7 +192,9 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->br_cond.cond, cb_metadata);
     break;
   case IR_OP_TY_MOV:
-    cb(&op->mov.value, cb_metadata);
+    if (op->mov.value) {
+      cb(&op->mov.value, cb_metadata);
+    }
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {

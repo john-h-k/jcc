@@ -179,6 +179,9 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_ADDS:
     aarch64_emit_adds(state->emitter, instr->aarch64->adds);
     break;
+  case AARCH64_INSTR_TY_ADDS_IMM:
+    aarch64_emit_adds_imm(state->emitter, instr->aarch64->adds_imm);
+    break;
   case AARCH64_INSTR_TY_ADD:
     aarch64_emit_add(state->emitter, instr->aarch64->add);
     break;
@@ -218,8 +221,8 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_BC_COND:
     aarch64_emit_bc_cond(state->emitter, instr->aarch64->bc_cond);
     break;
-  case AARCH64_INSTR_TY_BFM_IMM:
-    aarch64_emit_bfm_imm(state->emitter, instr->aarch64->bfm);
+  case AARCH64_INSTR_TY_BFM:
+    aarch64_emit_bfm(state->emitter, instr->aarch64->bfm);
     break;
   case AARCH64_INSTR_TY_CBZ:
     aarch64_emit_cbz(state->emitter, instr->aarch64->cbz);
@@ -242,6 +245,9 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_EON:
     aarch64_emit_eon(state->emitter, instr->aarch64->eon);
     break;
+  case AARCH64_INSTR_TY_EON_IMM:
+    aarch64_emit_eon_imm(state->emitter, instr->aarch64->eon_imm);
+    break;
   case AARCH64_INSTR_TY_EOR:
     aarch64_emit_eor(state->emitter, instr->aarch64->eor);
     break;
@@ -263,14 +269,14 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_MADD:
     aarch64_emit_madd(state->emitter, instr->aarch64->madd);
     break;
-  case AARCH64_INSTR_TY_MOVN_IMM:
-    todo("movn imm");
+  case AARCH64_INSTR_TY_MOVN:
+    aarch64_emit_movn(state->emitter, instr->aarch64->movn);
     break;
   case AARCH64_INSTR_TY_MOVZ:
-    aarch64_emit_movz_imm(state->emitter, instr->aarch64->movz);
+    aarch64_emit_movz(state->emitter, instr->aarch64->movz);
     break;
   case AARCH64_INSTR_TY_MOVK:
-    aarch64_emit_movk_imm(state->emitter, instr->aarch64->movk);
+    aarch64_emit_movk(state->emitter, instr->aarch64->movk);
     break;
   case AARCH64_INSTR_TY_FMOV:
     aarch64_emit_fmov(state->emitter, instr->aarch64->fmov);
@@ -287,6 +293,9 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_ORN:
     aarch64_emit_orn(state->emitter, instr->aarch64->orn);
     break;
+  case AARCH64_INSTR_TY_ORN_IMM:
+    aarch64_emit_orn_imm(state->emitter, instr->aarch64->orn_imm);
+    break;
   case AARCH64_INSTR_TY_ORR:
     aarch64_emit_orr(state->emitter, instr->aarch64->orr);
     break;
@@ -299,8 +308,8 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_RORV:
     aarch64_emit_rorv(state->emitter, instr->aarch64->rorv);
     break;
-  case AARCH64_INSTR_TY_SBFM_IMM:
-    aarch64_emit_sbfm_imm(state->emitter, instr->aarch64->sbfm);
+  case AARCH64_INSTR_TY_SBFM:
+    aarch64_emit_sbfm(state->emitter, instr->aarch64->sbfm);
     break;
   case AARCH64_INSTR_TY_SDIV:
     aarch64_emit_sdiv(state->emitter, instr->aarch64->sdiv);
@@ -323,8 +332,8 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_SUBS_IMM:
     aarch64_emit_subs_imm(state->emitter, instr->aarch64->subs_imm);
     break;
-  case AARCH64_INSTR_TY_UBFM_IMM:
-    aarch64_emit_ubfm_imm(state->emitter, instr->aarch64->ubfm);
+  case AARCH64_INSTR_TY_UBFM:
+    aarch64_emit_ubfm(state->emitter, instr->aarch64->ubfm);
     break;
   case AARCH64_INSTR_TY_UDIV:
     aarch64_emit_udiv(state->emitter, instr->aarch64->udiv);
