@@ -250,38 +250,40 @@ static void lower_fp_cnst(struct ir_builder *func, struct ir_op *op) {
   debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_F32: {
-      int_ty = IR_OP_VAR_TY_I32;
+  case IR_OP_VAR_PRIMITIVE_TY_F32: {
+    int_ty = IR_OP_VAR_TY_I32;
 
-      union { float f; unsigned u; } v;
-      v.f = (float)op->cnst.flt_value;
-      int_value = v.u;
+    union {
+      float f;
+      unsigned u;
+    } v;
+    v.f = (float)op->cnst.flt_value;
+    int_value = v.u;
 
-      break;
-    }
-    case IR_OP_VAR_PRIMITIVE_TY_F64: {
-      int_ty = IR_OP_VAR_TY_I64;
+    break;
+  }
+  case IR_OP_VAR_PRIMITIVE_TY_F64: {
+    int_ty = IR_OP_VAR_TY_I64;
 
-      union { double d; unsigned long long ull; } v;
-      v.d = (double)op->cnst.flt_value;
-      int_value = v.ull;
+    union {
+      double d;
+      unsigned long long ull;
+    } v;
+    v.d = (double)op->cnst.flt_value;
+    int_value = v.ull;
 
-      break;
-    }
-    default:
-      unreachable("impossible type");
+    break;
+  }
+  default:
+    unreachable("impossible type");
   }
 
   struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
-  int_mov->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_INT,
-    .int_value = int_value
-  };
+  int_mov->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
 
   op->ty = IR_OP_TY_MOV;
-  op->mov = (struct ir_op_mov){
-    .value = int_mov
-  };
+  op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
 void aarch64_lower(struct ir_builder *func) {
@@ -381,7 +383,7 @@ void aarch64_lower(struct ir_builder *func) {
         case IR_OP_TY_UNARY_OP:
           break;
         case IR_OP_TY_BINARY_OP:
-          if(binary_op_is_comparison(op->binary_op.ty)) {
+          if (binary_op_is_comparison(op->binary_op.ty)) {
             lower_comparison(func, op);
           }
           break;
@@ -395,6 +397,26 @@ void aarch64_lower(struct ir_builder *func) {
 
     basicblock = basicblock->succ;
   }
-  
-}
 
+  // Final step: turn all TY_POINTER into TY_I64 as the information is no longer needed
+  basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+          op->var_ty = var_ty_for_pointer_size(func);
+        }
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+}

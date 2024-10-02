@@ -9,15 +9,47 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-#define MOV_ALIAS(dest_reg, source)                                            \
+#define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \
     .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
-      .lhs = ZERO_REG,                                                         \
-      .rhs = (source),                                                         \
+      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
+      .rhs = (source_reg),                                                     \
       .dest = (dest_reg),                                                      \
       .imm6 = 0                                                                \
     }                                                                          \
   }
+
+bool is_return_reg(struct aarch64_reg reg) { return reg.idx == 0; }
+
+bool is_zero_reg(struct aarch64_reg reg) {
+  // this is a bit dodgy as it can also be SP in this context
+  return aarch64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
+}
+
+bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
+  if (l.idx != r.idx) {
+    return false;
+  }
+
+  if (l.ty == r.ty) {
+    return true;
+  }
+
+  if (aarch64_reg_ty_is_gp(l.ty) == aarch64_reg_ty_is_gp(r.ty)) {
+    bug("comparing two registers with same index and type but different size "
+        "(e.g w0 vs x0)");
+  }
+
+  return false;
+}
+
+struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty) {
+  return (struct aarch64_reg){.ty = reg_ty, .idx = 0};
+}
+
+struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
+  return (struct aarch64_reg){.ty = reg_ty, .idx = 31};
+}
 
 bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty) {
   switch (ty) {
@@ -46,6 +78,86 @@ bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty) {
   case AARCH64_REG_TY_H:
   case AARCH64_REG_TY_B:
     return true;
+  }
+}
+
+enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
+  switch (ty) {
+  case AARCH64_INSTR_TY_NOP:
+    return AARCH64_INSTR_CLASS_NOP;
+  case AARCH64_INSTR_TY_AND:
+  case AARCH64_INSTR_TY_ANDS:
+  case AARCH64_INSTR_TY_ORR:
+  case AARCH64_INSTR_TY_ORN:
+  case AARCH64_INSTR_TY_EOR:
+  case AARCH64_INSTR_TY_EON:
+    return AARCH64_INSTR_CLASS_LOGICAL_REG;
+  case AARCH64_INSTR_TY_AND_IMM:
+  case AARCH64_INSTR_TY_ANDS_IMM:
+  case AARCH64_INSTR_TY_ORR_IMM:
+  case AARCH64_INSTR_TY_ORN_IMM:
+  case AARCH64_INSTR_TY_EOR_IMM:
+  case AARCH64_INSTR_TY_EON_IMM:
+    return AARCH64_INSTR_CLASS_LOGICAL_IMM;
+  case AARCH64_INSTR_TY_ADR:
+  case AARCH64_INSTR_TY_ADRP:
+    return AARCH64_INSTR_CLASS_ADDR_IMM;
+  case AARCH64_INSTR_TY_ADD:
+  case AARCH64_INSTR_TY_ADDS:
+  case AARCH64_INSTR_TY_SUB:
+  case AARCH64_INSTR_TY_SUBS:
+    return AARCH64_INSTR_CLASS_ADDSUB_REG;
+  case AARCH64_INSTR_TY_ADD_IMM:
+  case AARCH64_INSTR_TY_ADDS_IMM:
+  case AARCH64_INSTR_TY_SUB_IMM:
+  case AARCH64_INSTR_TY_SUBS_IMM:
+    return AARCH64_INSTR_CLASS_ADDSUB_IMM;
+  case AARCH64_INSTR_TY_MVN:
+    return AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT;
+  case AARCH64_INSTR_TY_FMOV:
+    return AARCH64_INSTR_CLASS_REG_1_SOURCE;
+  case AARCH64_INSTR_TY_ASRV:
+  case AARCH64_INSTR_TY_LSLV:
+  case AARCH64_INSTR_TY_LSRV:
+  case AARCH64_INSTR_TY_RORV:
+  case AARCH64_INSTR_TY_SDIV:
+  case AARCH64_INSTR_TY_UDIV:
+    return AARCH64_INSTR_CLASS_REG_2_SOURCE;
+  case AARCH64_INSTR_TY_MADD:
+  case AARCH64_INSTR_TY_MSUB:
+    return AARCH64_INSTR_CLASS_FMA;
+  case AARCH64_INSTR_TY_BFM:
+  case AARCH64_INSTR_TY_SBFM:
+  case AARCH64_INSTR_TY_UBFM:
+    return AARCH64_INSTR_CLASS_BITFIELD;
+  case AARCH64_INSTR_TY_CSEL:
+  case AARCH64_INSTR_TY_CSINC:
+  case AARCH64_INSTR_TY_CSINV:
+  case AARCH64_INSTR_TY_CSNEG:
+    return AARCH64_INSTR_CLASS_CONDITIONAL_SELECT;
+  case AARCH64_INSTR_TY_B_COND:
+  case AARCH64_INSTR_TY_BC_COND:
+    return AARCH64_INSTR_CLASS_CONDITIONAL_BRANCH;
+  case AARCH64_INSTR_TY_B:
+  case AARCH64_INSTR_TY_BL:
+    return AARCH64_INSTR_CLASS_BRANCH;
+  case AARCH64_INSTR_TY_RET:
+    return AARCH64_INSTR_CLASS_RET;
+  case AARCH64_INSTR_TY_CBZ:
+  case AARCH64_INSTR_TY_CBNZ:
+    return AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH;
+  case AARCH64_INSTR_TY_LOAD_IMM:
+    return AARCH64_INSTR_CLASS_LOAD_IMM;
+  case AARCH64_INSTR_TY_STORE_IMM:
+    return AARCH64_INSTR_CLASS_STORE_IMM;
+  case AARCH64_INSTR_TY_LOAD_PAIR_IMM:
+    return AARCH64_INSTR_CLASS_LOAD_PAIR_IMM;
+  case AARCH64_INSTR_TY_STORE_PAIR_IMM:
+    return AARCH64_INSTR_CLASS_STORE_PAIR_IMM;
+  case AARCH64_INSTR_TY_MOVZ:
+  case AARCH64_INSTR_TY_MOVK:
+  case AARCH64_INSTR_TY_MOVN:
+    return AARCH64_INSTR_CLASS_MOV_IMM;
   }
 }
 
@@ -132,47 +244,59 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   }
 }
 
+enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
+  switch (var_ty->primitive) {
+  case IR_OP_VAR_PRIMITIVE_TY_I8:
+  case IR_OP_VAR_PRIMITIVE_TY_I16:
+  case IR_OP_VAR_PRIMITIVE_TY_I32:
+    return AARCH64_REG_TY_W;
+  case IR_OP_VAR_PRIMITIVE_TY_I64:
+    return AARCH64_REG_TY_X;
+  case IR_OP_VAR_PRIMITIVE_TY_F32:
+    return AARCH64_REG_TY_S;
+  case IR_OP_VAR_PRIMITIVE_TY_F64:
+    return AARCH64_REG_TY_D;
+  }
+}
+
 static struct aarch64_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
-
-  if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-    invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = idx};
-  }
 
   if (op->var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
     todo("non primitives");
   }
 
-  switch (op->var_ty.primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  enum aarch64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
+
+  switch (reg_ty) {
+  case AARCH64_REG_TY_W:
+  case AARCH64_REG_TY_X:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_W, .idx = idx};
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
-    invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = idx};
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
+    break;
+  case AARCH64_REG_TY_S:
+  case AARCH64_REG_TY_D:
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_S, .idx = idx};
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
-    invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
-    return (struct aarch64_reg){.ty = AARCH64_REG_TY_D, .idx = idx};
+    break;
+  default:
+    todo("other reg tys (Q/V)");
   }
+
+  return (struct aarch64_reg){.ty = reg_ty, .idx = idx};
 }
 
 static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
 
   if (op->mov.value->reg.ty == IR_REG_TY_FLAGS) {
+    struct aarch64_reg zero_reg = zero_reg_for_ty(dest.ty);
+
     struct instr *csinc = alloc_instr(state->func);
     csinc->aarch64->ty = AARCH64_INSTR_TY_CSINC;
     csinc->aarch64->csinc = (struct aarch64_conditional_select){
         .dest = dest,
         .cond = invert_cond(get_cond_for_op(op->mov.value)),
-        .true_source = ZERO_REG,
-        .false_source = ZERO_REG,
+        .true_source = zero_reg,
+        .false_source = zero_reg,
     };
 
     return;
@@ -396,7 +520,9 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
 
   struct aarch64_reg dest = codegen_reg(op);
 
-  if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+  switch (op->cnst.ty) {
+
+  case IR_OP_CNST_TY_STR: {
     // FIXME: don't assume string, could be array for example
 
     struct instr *adrp = alloc_instr(state->func);
@@ -423,23 +549,26 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
 
     return;
   }
-
-  switch (op->var_ty.primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
-    codegen_32_bit_int(state, dest, (union b32){.u = op->cnst.int_value});
-    break;
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
-    codegen_64_bit_int(state, dest, (union b64){.ull = op->cnst.int_value});
-    break;
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_OP_CNST_TY_FLT:
     // currently all constants are lowered to an integer load and `fmov`
     // but lots of constants can be loaded directly, so do that here
     todo("simple float constants (not lowered)");
     break;
-  };
+  case IR_OP_CNST_TY_INT:
+    switch (op->var_ty.primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_I8:
+    case IR_OP_VAR_PRIMITIVE_TY_I16:
+    case IR_OP_VAR_PRIMITIVE_TY_I32:
+      codegen_32_bit_int(state, dest, (union b32){.u = op->cnst.int_value});
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_I64:
+      codegen_64_bit_int(state, dest, (union b64){.ull = op->cnst.int_value});
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_F32:
+    case IR_OP_VAR_PRIMITIVE_TY_F64:
+      unreachable("CNST_TY_INT with var_ty of F32/F64 makes no sense");
+    };
+  }
 }
 
 static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
@@ -453,7 +582,7 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     instr->aarch64->ty = AARCH64_INSTR_TY_SUB;
     instr->aarch64->sub = (struct aarch64_addsub_reg){
         .dest = dest,
-        .lhs = ZERO_REG,
+        .lhs = zero_reg_for_ty(source.ty),
         .rhs = source,
         .shift = 0,
         .imm6 = 0,
@@ -498,7 +627,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLTEQ:
     instr->aarch64->ty = AARCH64_INSTR_TY_SUBS;
     instr->aarch64->subs = (struct aarch64_addsub_reg){
-        .dest = ZERO_REG,
+        .dest = zero_reg_for_ty(lhs.ty),
         .lhs = lhs,
         .rhs = rhs,
     };
@@ -569,8 +698,11 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_MUL:
     instr->aarch64->ty = AARCH64_INSTR_TY_MADD;
-    instr->aarch64->madd = (struct aarch64_fma){
-        .dest = dest, .lhs = lhs, .rhs = rhs, .addsub = ZERO_REG};
+    instr->aarch64->madd =
+        (struct aarch64_fma){.dest = dest,
+                             .lhs = lhs,
+                             .rhs = rhs,
+                             .addsub = zero_reg_for_ty(lhs.ty)};
     break;
   case IR_OP_BINARY_OP_TY_SDIV:
     instr->aarch64->ty = AARCH64_INSTR_TY_SDIV;
@@ -600,6 +732,10 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
   struct aarch64_reg source = codegen_reg(op->cast_op.value);
 
+  // NOTE: we promote the reg to the same type as the dest reg (mixed regs make
+  // no sense in the instruction)
+  source.ty = dest.ty;
+
   switch (op->cast_op.ty) {
   case IR_OP_CAST_OP_TY_SEXT:
     invariant_assert(op->cast_op.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
@@ -607,18 +743,18 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
 
     switch (op->cast_op.value->var_ty.primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM_IMM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield_imm){
+      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+      instr->aarch64->sbfm = (struct aarch64_bitfield){
           .dest = dest, .source = source, .immr = 0b000000, .imms = 0b000111};
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I16:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM_IMM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield_imm){
+      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+      instr->aarch64->sbfm = (struct aarch64_bitfield){
           .dest = dest, .source = source, .immr = 0b000000, .imms = 0b001111};
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I32:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM_IMM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield_imm){
+      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+      instr->aarch64->sbfm = (struct aarch64_bitfield){
           .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
@@ -813,7 +949,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     struct aarch64_reg val_reg = codegen_reg(op->call.args[0]);
     struct aarch64_reg vol_reg = (struct aarch64_reg){
-        .ty = AARCH64_REG_TY_X,
+        .ty = val_reg.ty,
         .idx = translate_reg_idx(free_vol_reg, IR_REG_TY_INTEGRAL)};
 
     struct instr *mov_to_vol = alloc_instr(state->func);
@@ -855,7 +991,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         // as well
       } else if (i == 0 || op->call.args[i]->reg.idx != arg_reg_idx) {
         struct aarch64_reg arg_reg = (struct aarch64_reg){
-            .ty = AARCH64_REG_TY_X,
+            .ty = source.ty,
             .idx = translate_reg_idx(arg_reg_idx, IR_REG_TY_INTEGRAL)};
 
         struct instr *mov = alloc_instr(state->func);
@@ -887,8 +1023,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
     struct aarch64_reg ret_dest = codegen_reg(op);
 
+    struct aarch64_reg ret_reg = return_reg_for_ty(ret_dest.ty);
+
     struct instr *ret_mov = alloc_instr(state->func);
-    *ret_mov->aarch64 = MOV_ALIAS(ret_dest, RETURN_REG);
+    *ret_mov->aarch64 = MOV_ALIAS(ret_dest, ret_reg);
   }
 
   // and now we restore
@@ -1082,9 +1220,9 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
   if (op->ret.value) {
     struct aarch64_reg source = codegen_reg(op->ret.value);
 
-    if (source.idx != RETURN_REG.idx) {
+    if (!is_return_reg(source)) {
       struct instr *mov = alloc_instr(state->func);
-      *mov->aarch64 = MOV_ALIAS(RETURN_REG, source);
+      *mov->aarch64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
     }
   }
 
@@ -1193,6 +1331,44 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
+struct check_reg_type_data {
+  // used so we know when the instruction changes
+  struct instr *last;
+
+  enum aarch64_reg_ty reg_ty;
+};
+
+static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
+                                    enum aarch64_reg_usage_ty usage_ty,
+                                    void *metadata) {
+  struct check_reg_type_data *data = metadata;
+
+  if (usage_ty == AARCH64_REG_USAGE_TY_DEREF) {
+    // deref only makes sense on an X register, and is ignored for comparisons
+    // to other registers so back out early
+    invariant_assert(reg.ty == AARCH64_REG_TY_X,
+                     "usage DEREF only makes sense with REG_TY_X in %zu",
+                     instr->id);
+    return;
+  }
+
+  if (instr != data->last) {
+    // new
+    data->reg_ty = reg.ty;
+  } else {
+    // check reg types are the same within instructions
+    // FMOV is an exception as it can move GP<->FP
+
+    if (instr->aarch64->ty != AARCH64_INSTR_TY_FMOV) {
+      invariant_assert(reg.ty == data->reg_ty,
+                       "reg ty mismatch in %zu (expected %d found %d)",
+                       instr->id, data->reg_ty, reg.ty);
+    }
+  }
+
+  data->last = instr;
+}
+
 struct codegen_function *aarch64_codegen(struct ir_builder *ir) {
   struct codegen_function *func = arena_alloc(ir->arena, sizeof(*func));
   *func = (struct codegen_function){.ty = CODEGEN_FUNCTION_TY_AARCH64,
@@ -1290,6 +1466,15 @@ struct codegen_function *aarch64_codegen(struct ir_builder *ir) {
     basicblock = basicblock->succ;
   }
 
+  if (log_enabled()) {
+    aarch64_debug_print_codegen(stderr, state.func);
+  }
+
+  // codegen is now done
+  // do some basic sanity checks
+  struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
+  walk_regs(state.func, check_reg_type_callback, &data);
+
   size_t num_strings = vector_length(state.strings);
   const char **strings =
       arena_alloc(func->arena, vector_byte_size(state.strings));
@@ -1353,116 +1538,142 @@ char reg_prefix(struct aarch64_reg reg, size_t *sz) {
   }
 }
 
-typedef void(walk_regs_callback)(struct instr *instr, void *metadata);
-
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata) {
   struct instr *instr = func->first;
 
   while (instr) {
-    switch (instr->aarch64->ty) {
-    case AARCH64_INSTR_TY_ADDS:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ADD:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ADD_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ADR:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ADRP:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ANDS:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ANDS_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_AND:
-      <#code #> break;
-    case AARCH64_INSTR_TY_AND_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ASRV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_B:
-      <#code #> break;
-    case AARCH64_INSTR_TY_BC_COND:
-      <#code #> break;
-    case AARCH64_INSTR_TY_BFM_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_BL:
-      <#code #> break;
-    case AARCH64_INSTR_TY_B_COND:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CBZ:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CBNZ:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CSEL:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CSINC:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CSINV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_CSNEG:
-      <#code #> break;
-    case AARCH64_INSTR_TY_EON:
-      <#code #> break;
-    case AARCH64_INSTR_TY_EOR:
-      <#code #> break;
-    case AARCH64_INSTR_TY_EOR_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_LOAD_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_LOAD_PAIR_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_LSLV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_LSRV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MADD:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MOVN_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MOVZ:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MOVK:
-      <#code #> break;
-    case AARCH64_INSTR_TY_FMOV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MVN:
-      <#code #> break;
-    case AARCH64_INSTR_TY_MSUB:
-      <#code #> break;
-    case AARCH64_INSTR_TY_NOP:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ORN:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ORR:
-      <#code #> break;
-    case AARCH64_INSTR_TY_ORR_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_RET:
-      <#code #> break;
-    case AARCH64_INSTR_TY_RORV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SBFM_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SDIV:
-      <#code #> break;
-    case AARCH64_INSTR_TY_STORE_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_STORE_PAIR_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SUBS:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SUB:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SUB_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_SUBS_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_UBFM_IMM:
-      <#code #> break;
-    case AARCH64_INSTR_TY_UDIV:
-      <#code #> break;
+    enum aarch64_instr_class class = instr_class(instr->aarch64->ty);
+    switch (class) {
+    case AARCH64_INSTR_CLASS_NOP:
+      break;
+    case AARCH64_INSTR_CLASS_LOGICAL_REG: {
+      struct aarch64_logical_reg logical_reg = instr->aarch64->logical_reg;
+      cb(instr, logical_reg.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, logical_reg.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, logical_reg.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_LOGICAL_IMM: {
+      struct aarch64_logical_imm logical_imm = instr->aarch64->logical_imm;
+      cb(instr, logical_imm.source, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, logical_imm.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_ADDSUB_REG: {
+      struct aarch64_addsub_reg addsub_reg = instr->aarch64->addsub_reg;
+      cb(instr, addsub_reg.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, addsub_reg.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, addsub_reg.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_ADDSUB_IMM: {
+      struct aarch64_addsub_imm addsub_imm = instr->aarch64->addsub_imm;
+      cb(instr, addsub_imm.source, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, addsub_imm.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_ADDR_IMM: {
+      struct aarch64_addr_imm addr_imm = instr->aarch64->addr_imm;
+      cb(instr, addr_imm.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_BITFIELD: {
+      struct aarch64_bitfield bitfield = instr->aarch64->bitfield;
+      cb(instr, bitfield.source, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, bitfield.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_REG_1_SOURCE: {
+      struct aarch64_reg_1_source reg_1_source = instr->aarch64->reg_1_source;
+      cb(instr, reg_1_source.source, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, reg_1_source.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT: {
+      struct aarch64_reg_1_source_with_shift reg_1_source_with_shift =
+          instr->aarch64->reg_1_source_with_shift;
+      cb(instr, reg_1_source_with_shift.source, AARCH64_REG_USAGE_TY_READ,
+         metadata);
+      cb(instr, reg_1_source_with_shift.dest, AARCH64_REG_USAGE_TY_WRITE,
+         metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_REG_2_SOURCE: {
+      struct aarch64_reg_2_source reg_2_source = instr->aarch64->reg_2_source;
+      cb(instr, reg_2_source.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, reg_2_source.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, reg_2_source.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_MOV_IMM: {
+      struct aarch64_mov_imm mov_imm = instr->aarch64->mov_imm;
+      cb(instr, mov_imm.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_FMA: {
+      struct aarch64_fma fma = instr->aarch64->fma;
+      cb(instr, fma.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, fma.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, fma.addsub, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, fma.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_CONDITIONAL_SELECT: {
+      struct aarch64_conditional_select conditional_select =
+          instr->aarch64->conditional_select;
+      cb(instr, conditional_select.false_source, AARCH64_REG_USAGE_TY_READ,
+         metadata);
+      cb(instr, conditional_select.true_source, AARCH64_REG_USAGE_TY_READ,
+         metadata);
+      cb(instr, conditional_select.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_CONDITIONAL_BRANCH: {
+      break;
+    }
+    case AARCH64_INSTR_CLASS_BRANCH: {
+      break;
+    }
+    case AARCH64_INSTR_CLASS_RET: {
+      struct aarch64_ret ret = instr->aarch64->ret;
+      cb(instr, ret.target, AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH: {
+      struct aarch64_compare_and_branch compare_and_branch =
+          instr->aarch64->compare_and_branch;
+      cb(instr, compare_and_branch.cmp, AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_LOAD_IMM: {
+      struct aarch64_load_imm load_imm = instr->aarch64->load_imm;
+      cb(instr, load_imm.addr, AARCH64_REG_USAGE_TY_DEREF, metadata);
+      cb(instr, load_imm.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_STORE_IMM: {
+      struct aarch64_store_imm store_imm = instr->aarch64->store_imm;
+      cb(instr, store_imm.addr, AARCH64_REG_USAGE_TY_DEREF, metadata);
+      cb(instr, store_imm.source, AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_LOAD_PAIR_IMM: {
+      struct aarch64_load_pair_imm load_pair_imm =
+          instr->aarch64->load_pair_imm;
+      cb(instr, load_pair_imm.addr, AARCH64_REG_USAGE_TY_DEREF, metadata);
+      cb(instr, load_pair_imm.dest[0], AARCH64_REG_USAGE_TY_WRITE, metadata);
+      cb(instr, load_pair_imm.dest[1], AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_STORE_PAIR_IMM: {
+      struct aarch64_store_pair_imm store_pair_imm =
+          instr->aarch64->store_pair_imm;
+      cb(instr, store_pair_imm.addr, AARCH64_REG_USAGE_TY_DEREF, metadata);
+      cb(instr, store_pair_imm.source[0], AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, store_pair_imm.source[1], AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
     }
 
     instr = instr->succ;
@@ -1720,7 +1931,7 @@ void debug_print_reg_2_source(FILE *file,
 }
 
 void debug_print_bitfield_imm(FILE *file,
-                              const struct aarch64_bitfield_imm *bitfield_imm) {
+                              const struct aarch64_bitfield *bitfield_imm) {
   codegen_fprintf(file, " %reg, %reg, %imm, %imm", bitfield_imm->dest,
                   bitfield_imm->source, bitfield_imm->immr, bitfield_imm->imms);
 }
@@ -1799,15 +2010,15 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_NOP:
     fprintf(file, "nop");
     break;
-  case AARCH64_INSTR_TY_SBFM_IMM:
+  case AARCH64_INSTR_TY_SBFM:
     fprintf(file, "sbfm");
     debug_print_bitfield_imm(file, &instr->aarch64->sbfm);
     break;
-  case AARCH64_INSTR_TY_BFM_IMM:
+  case AARCH64_INSTR_TY_BFM:
     fprintf(file, "bfm");
     debug_print_bitfield_imm(file, &instr->aarch64->bfm);
     break;
-  case AARCH64_INSTR_TY_UBFM_IMM:
+  case AARCH64_INSTR_TY_UBFM:
     fprintf(file, "ubfm");
     debug_print_bitfield_imm(file, &instr->aarch64->ubfm);
     break;
@@ -1820,11 +2031,11 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     debug_print_logical_reg(file, &instr->aarch64->ands);
     break;
   case AARCH64_INSTR_TY_ORR:
-    if ((instr->aarch64->orr.lhs.idx == ZERO_REG.idx ||
-         instr->aarch64->orr.rhs.idx == ZERO_REG.idx) &&
+    if ((is_zero_reg(instr->aarch64->orr.lhs) ||
+         is_zero_reg(instr->aarch64->orr.rhs)) &&
         instr->aarch64->orr.shift == 0) {
       codegen_fprintf(file, "mov %reg, %reg", instr->aarch64->orr.dest,
-                      instr->aarch64->orr.lhs.idx == ZERO_REG.idx
+                      is_zero_reg(instr->aarch64->orr.lhs)
                           ? instr->aarch64->orr.rhs
                           : instr->aarch64->orr.lhs);
     } else {
@@ -1949,7 +2160,7 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     fprintf(file, "madd");
     debug_print_fma(file, &instr->aarch64->madd);
     break;
-  case AARCH64_INSTR_TY_MOVN_IMM:
+  case AARCH64_INSTR_TY_MOVN:
     fprintf(file, "movn");
     debug_print_mov_imm(file, &instr->aarch64->movn);
     break;
@@ -2013,19 +2224,35 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     fprintf(file, "udiv");
     debug_print_reg_2_source(file, &instr->aarch64->udiv);
     break;
+  case AARCH64_INSTR_TY_ADDS_IMM:
+    fprintf(file, "adds");
+    debug_print_addsub_imm(file, &instr->aarch64->adds_imm);
+    break;
+  case AARCH64_INSTR_TY_EON_IMM:
+    fprintf(file, "eon");
+    debug_print_logical_imm(file, &instr->aarch64->eon_imm);
+    break;
+  case AARCH64_INSTR_TY_ORN_IMM:
+    fprintf(file, "orn");
+    debug_print_logical_imm(file, &instr->aarch64->orn_imm);
+    break;
   }
 }
 
 void aarch64_debug_print_codegen(FILE *file, struct codegen_function *func) {
   debug_assert(func->ty == CODEGEN_FUNCTION_TY_AARCH64, "expected aarch64");
 
-  int offset = 0;
+  fprintf(file, "\nFUNCTION: %s\n", func->name);
+
+  size_t offset = 0;
   struct instr *instr = func->first;
   while (instr) {
-    fprintf(file, "0x%04X: ", offset++);
+    fprintf(file, "%04zu: ", offset++);
     debug_print_instr(file, func, instr);
     fprintf(file, "\n");
 
     instr = instr->succ;
   }
+
+  fprintf(file, "\n");
 }

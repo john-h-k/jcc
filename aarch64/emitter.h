@@ -21,33 +21,37 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
 /* Register moves */
 
-void aarch64_emit_movz_imm(struct aarch64_emitter *emitter, const struct aarch64_mov_imm mov);
-void aarch64_emit_movk_imm(struct aarch64_emitter *emitter, const struct aarch64_mov_imm mov);
+void aarch64_emit_movz(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movz);
+void aarch64_emit_movk(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movk);
+void aarch64_emit_movn(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movn);
+
 void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov);
 
 /* Bitfield operations (Immediate) */
 
-void aarch64_emit_sbfm_imm(struct aarch64_emitter *emitter, const struct aarch64_bitfield_imm bf);
-void aarch64_emit_bfm_imm(struct aarch64_emitter *emitter, const struct aarch64_bitfield_imm bf);
-void aarch64_emit_ubfm_imm(struct aarch64_emitter *emitter, const struct aarch64_bitfield_imm bf);
+void aarch64_emit_sbfm(struct aarch64_emitter *emitter, const struct aarch64_bitfield bf);
+void aarch64_emit_bfm(struct aarch64_emitter *emitter, const struct aarch64_bitfield bf);
+void aarch64_emit_ubfm(struct aarch64_emitter *emitter, const struct aarch64_bitfield bf);
 
 /* Logical (register) */
 
 void aarch64_emit_mvn(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source_with_shift mvn);
 
 void aarch64_emit_and(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
+void aarch64_emit_ands(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_orr(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_orn(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_eor(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_eon(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
-void aarch64_emit_ands(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 
 /* Logical (immediate) */
 
 void aarch64_emit_and_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
-void aarch64_emit_orr_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
-void aarch64_emit_eor_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 void aarch64_emit_ands_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
+void aarch64_emit_orr_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
+void aarch64_emit_orn_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
+void aarch64_emit_eor_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
+void aarch64_emit_eon_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 
 
 /* Add & subtract (register) */
