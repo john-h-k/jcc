@@ -71,6 +71,9 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
 
   // TODO: hashify
   static struct keyword keywords[] = {
+      KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO),
+      KEYWORD("break", LEX_TOKEN_TY_KW_BREAK),
+      KEYWORD("continue", LEX_TOKEN_TY_KW_CONTINUE),
       KEYWORD("do", LEX_TOKEN_TY_KW_DO),
       KEYWORD("for", LEX_TOKEN_TY_KW_FOR),
       KEYWORD("while", LEX_TOKEN_TY_KW_WHILE),
@@ -286,7 +289,10 @@ void peek_token(struct lexer *lexer, struct token *token) {
     ty = LEX_TOKEN_TY_CLOSE_BRACE;
     next_col(&end);
     break;
-
+  case ':':
+    ty = LEX_TOKEN_TY_COLON;
+    next_col(&end);
+    break;
   case ';':
     ty = LEX_TOKEN_TY_SEMICOLON;
     next_col(&end);
@@ -662,12 +668,17 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_OP_GT)
     CASE_RET(LEX_TOKEN_TY_OP_GTEQ)
 
+    CASE_RET(LEX_TOKEN_TY_COLON)
     CASE_RET(LEX_TOKEN_TY_SEMICOLON)
     CASE_RET(LEX_TOKEN_TY_COMMA)
     CASE_RET(LEX_TOKEN_TY_DOT)
     CASE_RET(LEX_TOKEN_TY_ARROW)
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
+
+    CASE_RET(LEX_TOKEN_TY_KW_GOTO)
+    CASE_RET(LEX_TOKEN_TY_KW_BREAK)
+    CASE_RET(LEX_TOKEN_TY_KW_CONTINUE)
     CASE_RET(LEX_TOKEN_TY_KW_DO)
     CASE_RET(LEX_TOKEN_TY_KW_FOR)
     CASE_RET(LEX_TOKEN_TY_KW_WHILE)

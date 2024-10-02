@@ -141,7 +141,8 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
         struct interval *interval = &data.intervals[op->id];
 
         if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
-          op->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = arg_regs++ };
+          op->reg =
+              (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = arg_regs++};
         } else {
           // // reset registers unless flags because flags is never allocated
           // if (op->reg != REG_FLAGS && !(op->flags &
@@ -243,8 +244,10 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
   return data;
 }
 
-void print_live_regs(FILE *file, unsigned long live_integral_regs, unsigned long live_fp_regs) {
-  unsigned long max_integral_live = sizeof(live_integral_regs) * 8 - lzcnt(live_integral_regs);
+void print_live_regs(FILE *file, unsigned long live_integral_regs,
+                     unsigned long live_fp_regs) {
+  unsigned long max_integral_live =
+      sizeof(live_integral_regs) * 8 - lzcnt(live_integral_regs);
   fslogsl(file, " - LIVE REGS (");
   for (size_t i = 0; i < max_integral_live; i++) {
     if (NTH_BIT(live_integral_regs, i)) {
@@ -315,6 +318,7 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
   }
 
   if (interval && interval->op) {
-    print_live_regs(file, interval->op->live_gp_regs, interval->op->live_fp_regs);
+    print_live_regs(file, interval->op->live_gp_regs,
+                    interval->op->live_fp_regs);
   }
 }

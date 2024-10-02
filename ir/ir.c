@@ -443,6 +443,9 @@ void prune_basicblocks(struct ir_builder *irb) {
 
     basicblock = succ;
   }
+
+  // means bb->id < bb_count for all bbs
+  rebuild_ids(irb);
 }
 
 void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
@@ -484,17 +487,23 @@ void clear_metadata(struct ir_builder *irb) {
 }
 
 void rebuild_ids(struct ir_builder *irb) {
-  irb->next_id = 0;
+  irb->next_basicblock_id = 0;
+  irb->next_stmt_id = 0;
+  irb->next_op_id = 0;
 
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
+    basicblock->id = irb->next_basicblock_id++;
+
     struct ir_stmt *stmt = basicblock->first;
 
     while (stmt) {
+      stmt->id = irb->next_stmt_id++;
+
       struct ir_op *op = stmt->first;
 
       while (op) {
-        op->id = irb->next_id++;
+        op->id = irb->next_op_id++;
 
         op = op->succ;
       }
@@ -588,7 +597,7 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NULL);
+  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
   move_before_ir_op(irb, op, insert_before);
 
@@ -602,7 +611,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_id++, ty, var_ty, NO_REG, NULL);
+  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
   move_after_ir_op(irb, op, insert_after);
 
@@ -652,6 +661,66 @@ void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
   attach_ir_op(irb, right, left_stmt, left_pred, left_succ);
 }
 
+struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
+  struct ir_basicblock *basicblock =
+      arena_alloc(irb->arena, sizeof(*basicblock));
+
+  if (!irb->first) {
+    irb->first = basicblock;
+  }
+
+  irb->basicblock_count++;
+
+  basicblock->id = irb->next_basicblock_id++;
+  basicblock->irb = irb;
+  basicblock->pred = irb->last;
+  basicblock->succ = NULL;
+  basicblock->first = NULL;
+  basicblock->last = NULL;
+  basicblock->function_offset = irb->op_count;
+  basicblock->metadata = NULL;
+  basicblock->first_instr = NULL;
+  basicblock->last_instr = NULL;
+
+  basicblock->preds = NULL;
+  basicblock->num_preds = 0;
+
+  if (irb->last) {
+    irb->last->succ = basicblock;
+  }
+
+  irb->last = basicblock;
+
+  return basicblock;
+}
+
+
+struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
+                              struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+
+  if (!basicblock->first) {
+    basicblock->first = stmt;
+  }
+
+  irb->stmt_count++;
+
+  stmt->id = irb->next_stmt_id++;
+  stmt->basicblock = basicblock;
+  stmt->pred = basicblock->last;
+  stmt->succ = NULL;
+  stmt->first = NULL;
+  stmt->last = NULL;
+
+  if (basicblock->last) {
+    basicblock->last->succ = stmt;
+  }
+
+  basicblock->last = stmt;
+
+  return stmt;
+}
+
 // TODO: this should call `initialise_ir_op`
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
@@ -662,7 +731,7 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
 
   irb->op_count++;
 
-  op->id = irb->next_id++;
+  op->id = irb->next_op_id++;
   op->ty = IR_OP_TY_UNKNOWN;
   op->flags = IR_OP_FLAG_NONE;
   op->stmt = stmt;
@@ -707,31 +776,6 @@ void make_pointer_constant(struct ir_builder *irb, struct ir_op *op, unsigned lo
 }
 
 struct ir_op *alloc_integral_constant(struct ir_builder *irb, struct ir_stmt *stmt, enum ir_op_var_primitive_ty primitive, unsigned long long value);
-
-
-struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
-                              struct ir_basicblock *basicblock) {
-  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
-
-  if (!basicblock->first) {
-    basicblock->first = stmt;
-  }
-
-  stmt->id = irb->stmt_count++;
-  stmt->basicblock = basicblock;
-  stmt->pred = basicblock->last;
-  stmt->succ = NULL;
-  stmt->first = NULL;
-  stmt->last = NULL;
-
-  if (basicblock->last) {
-    basicblock->last->succ = stmt;
-  }
-
-  basicblock->last = stmt;
-
-  return stmt;
-}
 
 bool valid_basicblock(struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
@@ -791,40 +835,6 @@ void get_basicblock_successors(struct ir_basicblock *basicblock,
   }
 }
 
-struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
-  struct ir_basicblock *basicblock =
-      arena_alloc(irb->arena, sizeof(*basicblock));
-
-  if (!irb->first) {
-    irb->first = basicblock;
-  }
-
-  basicblock->id = irb->basicblock_count++;
-  // disabled and checks are done manually now
-  // because this broke stuff by writing to global var refs (bad!)
-  // basicblock->var_refs = var_refs_create(irb->global_var_refs);
-  basicblock->irb = irb;
-  basicblock->pred = irb->last;
-  basicblock->succ = NULL;
-  basicblock->first = NULL;
-  basicblock->last = NULL;
-  basicblock->function_offset = irb->op_count;
-  basicblock->metadata = NULL;
-  basicblock->first_instr = NULL;
-  basicblock->last_instr = NULL;
-
-  basicblock->preds = NULL;
-  basicblock->num_preds = 0;
-
-  if (irb->last) {
-    irb->last->succ = basicblock;
-  }
-
-  irb->last = basicblock;
-
-  return basicblock;
-}
-
 struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
                                                struct ir_op *insert_after,
                                                struct ir_basicblock *first) {
@@ -870,6 +880,19 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
 
   return end_bb;
 }
+
+struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_basicblock *basicblock) {
+  struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
+
+  label->name = name;
+  label->basicblock = basicblock;
+  label->succ = irb->labels;
+
+  irb->labels = label;
+
+  return label;
+}
+
 
 struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty) {
