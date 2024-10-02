@@ -21,7 +21,9 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
 /* Register moves */
 
-void aarch64_emit_mov_imm(struct aarch64_emitter *emitter, const struct aarch64_mov_imm mov);
+void aarch64_emit_movz_imm(struct aarch64_emitter *emitter, const struct aarch64_mov_imm mov);
+void aarch64_emit_movk_imm(struct aarch64_emitter *emitter, const struct aarch64_mov_imm mov);
+void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov);
 
 /* Bitfield operations (Immediate) */
 

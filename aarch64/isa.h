@@ -1,10 +1,6 @@
 #ifndef AARCH64_ISA_H
 #define AARCH64_ISA_H
 
-enum aarch64_instr_class {
-  AARCH64_INSTR_CLASS_LDR_STR_PAIR,
-};
-
 // Constants must be casted to uint32_t to be well-defined behaviour
 #define U32(v) ((uint32_t)(v))
 
@@ -14,25 +10,29 @@ enum aarch64_instr_class {
 
 /* Loads & Stores */
 
-#define LDR_STR_PAIR(opc, V, L, imm7, Rt2, Rn, Rt)                  \
+#define LDR_STR_PAIR(opc, V, L, imm7, Rt2, Rn, Rt)                             \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b1) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |           \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+             (U32(0b1) << 23) | (U32(L) << 22) |                               \
+             (U32(CLAMP_BITS(imm7, 7)) << 15) | (U32(Rt2) << 10) |             \
+             (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_POST_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                  \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b1) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |           \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+             (U32(0b1) << 23) | (U32(L) << 22) |                               \
+             (U32(CLAMP_BITS(imm7, 7)) << 15) | (U32(Rt2) << 10) |             \
+             (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_PRE_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                   \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b11) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |          \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+             (U32(0b11) << 23) | (U32(L) << 22) |                              \
+             (U32(CLAMP_BITS(imm7, 7)) << 15) | (U32(Rt2) << 10) |             \
+             (U32(Rn) << 5) | U32(Rt))
 
 #define LDR_STR_PAIR_OFFSET(opc, V, L, imm7, Rt2, Rn, Rt)                      \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b10) << 23) | (U32(L) << 22) | (U32(CLAMP_BITS(imm7, 7)) << 15) |          \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
+             (U32(0b10) << 23) | (U32(L) << 22) |                              \
+             (U32(CLAMP_BITS(imm7, 7)) << 15) | (U32(Rt2) << 10) |             \
+             (U32(Rn) << 5) | U32(Rt))
 
 // TODO: use CLAMP_BITS(immK, K) for all immediates
 
@@ -82,25 +82,50 @@ enum aarch64_instr_class {
              (U32(0b01) << 24) | (U32(opc) << 22) | (U32(imm12) << 10) |       \
              (U32(Rn) << 5) | U32(Rt))
 
+#define LDR_STR_FP_IMM_UNSIGNED(size, VR, opc, imm9, Rn, Rt)                   \
+  (uint32_t)((U32(size) << 30) | (U32(0b111) << 27) | (U32(0b01) << 26) |        \
+             (U32(0b00) << 24) | (U32(opc) << 22) | (U32(imm9) << 12) |        \
+             (U32(0b01) << 10) | (U32(Rn) << 5) | U32(Rt))
+
 #define STR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
   LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
   LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b01, imm12, Rn, Rt)
+
+#define STR_FP_8_IMM_UNSIGNED(imm9, Rn, Rt)                                      \
+  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b0, 0b00, imm9, Rn, Rt)
+#define LDR_FP_8_IMM_UNSIGNED(imm9, Rn, Rt)                                      \
+  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b0, 0b01, imm9, Rn, Rt)
 
 #define STR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b01, imm12, Rn, Rt)
 
+#define STR_FP_16_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b0, 0b00, imm9, Rn, Rt)
+#define LDR_FP_16_FP_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b0, 0b01, imm9, Rn, Rt)
+
 #define STR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b01, imm12, Rn, Rt)
 
+#define STR_FP_32_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b0, 0b00, imm9, Rn, Rt)
+#define LDR_FP_32_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b0, 0b01, imm9, Rn, Rt)
+
 #define STR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b01, imm12, Rn, Rt)
+
+#define STR_FP_64_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b0, 0b00, imm9, Rn, Rt)
+#define LDR_FP_64_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b0, 0b01, imm9, Rn, Rt)
 
 /* Register moves */
 
@@ -115,6 +140,27 @@ enum aarch64_instr_class {
 #define MOVN_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b00, hw, imm16, Rd)
 #define MOVZ_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b10, hw, imm16, Rd)
 #define MOVK_64(hw, imm16, Rd) MOV_WIDE_IMM(0b1, 0b11, hw, imm16, Rd)
+
+#define FMOV(sf, ftype, rmode, opcode, Rn, Rd)                                 \
+  (uint32_t)((U32(sf) << 31) | (U32(0b0011110) << 24) | (U32(ftype) << 22) |   \
+             (U32(0b1) << 21) | (U32(rmode) << 19) | (U32(opcode) << 16) |     \
+             (U32(Rn) << 5) | U32(Rd))
+
+#define FMOV_H_TO_32(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b110, Rn, Rd)
+#define FMOV_H_TO_64(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b110, Rn, Rd)
+
+#define FMOV_32_TO_H(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b111, Rn, Rd)
+#define FMOV_32_TO_S(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b111, Rn, Rd)
+
+#define FMOV_S_TO_32(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b110, Rn, Rd)
+
+#define FMOV_64_TO_H(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b111, Rn, Rd)
+#define FMOV_64_TO_D(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b111, Rn, Rd)
+
+#define FMOV_64_TO_TOP_HALF_Q(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b111, Rn, Rd)
+#define FMOV_TOP_HALF_Q_TO_64(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b110, Rn, Rd)
+
+#define FMOV_D_TO_64(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b110, Rn, Rd)
 
 /* Bitfield operations (Immediate) */
 
@@ -276,9 +322,9 @@ enum aarch64_instr_class {
 #define AND_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(0b1, 0b00, shift, 0b0, Rm, imm6, Rn, Rd)
 
-#define ANDS_32_REG(shift, Rm, imm6, Rn, Rd)                                    \
+#define ANDS_32_REG(shift, Rm, imm6, Rn, Rd)                                   \
   LOGICAL_SHIFTED_REG(0b0, 0b11, shift, 0b0, Rm, imm6, Rn, Rd)
-#define ANDS_64_REG(shift, Rm, imm6, Rn, Rd)                                    \
+#define ANDS_64_REG(shift, Rm, imm6, Rn, Rd)                                   \
   LOGICAL_SHIFTED_REG(0b1, 0b11, shift, 0b0, Rm, imm6, Rn, Rd)
 
 #define ORR_32_REG(shift, Rm, imm6, Rn, Rd)                                    \

@@ -20,6 +20,11 @@ struct aarch64_emitter {
 #define IS64_REG(r) (r).ty == AARCH64_REG_TY_X
 #define IS64(d) (d).dest.ty == AARCH64_REG_TY_X
 
+#define ISDBL(d) (d).dest.ty == AARCH64_REG_TY_D
+#define ISDBL_REG(d) (d).ty == AARCH64_REG_TY_D
+#define ISFLT(d) (d).dest.ty == AARCH64_REG_TY_S
+#define ISFLT_REG(d) (d).ty == AARCH64_REG_TY_S
+
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
 
@@ -67,7 +72,7 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter) {
 
 /* Register moves */
 
-void aarch64_emit_mov_imm(struct aarch64_emitter *emitter,
+void aarch64_emit_movz_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_mov_imm mov) {
   if (!UNS_FITS_IN_BITS(mov.imm, 16)) {
     bug("int too big");
@@ -77,6 +82,32 @@ void aarch64_emit_mov_imm(struct aarch64_emitter *emitter,
     aarch64_emit(emitter, MOVZ_64(mov.shift, (uint16_t)mov.imm, mov.dest.idx));
   } else {
     aarch64_emit(emitter, MOVZ_32(mov.shift, (uint16_t)mov.imm, mov.dest.idx));
+  }
+}
+
+void aarch64_emit_movk_imm(struct aarch64_emitter *emitter,
+                          const struct aarch64_mov_imm mov) {
+  if (!UNS_FITS_IN_BITS(mov.imm, 16)) {
+    bug("int too big");
+  }
+
+  if (IS64(mov)) {
+    aarch64_emit(emitter, MOVK_64(mov.shift, (uint16_t)mov.imm, mov.dest.idx));
+  } else {
+    aarch64_emit(emitter, MOVK_32(mov.shift, (uint16_t)mov.imm, mov.dest.idx));
+  }
+}
+
+void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov) {
+  struct aarch64_reg dest = fmov.dest;
+  struct aarch64_reg source = fmov.source;
+
+  if (dest.ty == AARCH64_REG_TY_S && source.ty == AARCH64_REG_TY_W) {
+    aarch64_emit(emitter, FMOV_32_TO_S(source.idx, dest.idx));
+  } else if (dest.ty == AARCH64_REG_TY_D && source.ty == AARCH64_REG_TY_X) {
+    aarch64_emit(emitter, FMOV_64_TO_D(source.idx, dest.idx));
+  } else {
+    todo("other fmov varieties");
   }
 }
 
@@ -532,6 +563,12 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
     if (IS64(ldr)) {
       aarch64_emit(emitter,
                    LDR_64_IMM_UNSIGNED(ldr.imm, ldr.addr.idx, ldr.dest.idx));
+    } else if (ISDBL(ldr)) {
+      aarch64_emit(emitter,
+                   LDR_FP_64_IMM_UNSIGNED(ldr.imm, ldr.addr.idx, ldr.dest.idx));
+    } else if (ISFLT(ldr)) {
+      aarch64_emit(emitter,
+                   LDR_FP_32_IMM_UNSIGNED(ldr.imm, ldr.addr.idx, ldr.dest.idx));
     } else {
       aarch64_emit(emitter,
                    LDR_32_IMM_UNSIGNED(ldr.imm, ldr.addr.idx, ldr.dest.idx));
@@ -553,6 +590,12 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
     if (IS64_REG(str.source)) {
       aarch64_emit(emitter,
                    STR_64_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
+    } else if (ISDBL_REG(str.source)) {
+      aarch64_emit(emitter,
+                   STR_FP_64_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
+    } else if (ISFLT_REG(str.source)) {
+      aarch64_emit(emitter,
+                   STR_FP_32_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
     } else {
       aarch64_emit(emitter,
                    STR_32_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));

@@ -282,7 +282,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
           fprintf(file, " - (FLAGS -> %c%zu) ", char_prefix_for_reg(ir->reg),
                   ir->reg.idx);
         }
-      } else {
+      } else if (ir->reg.ty != IR_REG_TY_NONE && ir->mov.value->reg.ty != IR_REG_TY_NONE) {
         fprintf(file, " - (%c%zu -> %c%zu) ",
                 char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
                 char_prefix_for_reg(ir->reg), ir->reg.idx);
