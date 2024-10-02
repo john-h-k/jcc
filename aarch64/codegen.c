@@ -1114,9 +1114,18 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       struct aarch64_reg source =
           i == 0 ? vol_reg : codegen_reg(op->call.args[i]);
       size_t arg_reg_idx = i;
+
       if (i >= num_normal_args) {
-        // the stack slot this local must live in
+        // this argument is variadic
+        // the stack slot this local must live in, in terms of 8 byte slots
         size_t variadic_arg_idx = i - num_normal_args;
+
+        if (source.ty == AARCH64_REG_TY_W) {
+          // because offsets are in terms of reg size, we need to double it for the 8 byte slots
+          variadic_arg_idx *= 2;         
+        } else {
+          invariant_assert(var_ty_info(state->ir, var_ty).size >= 8, "variadic arg with size < 8 has not been promoted");
+        }
 
         struct instr *store = alloc_instr(state->func);
 
