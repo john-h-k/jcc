@@ -436,7 +436,8 @@ void prune_basicblocks(struct ir_builder *irb) {
     // save succ before we detach
     struct ir_basicblock *succ = basicblock->succ;
 
-    if (basicblock_is_empty(basicblock)) {
+    // remove if it has no preds (if it has preds, it is needed as a target)
+    if (basicblock_is_empty(basicblock) && !basicblock->num_preds) {
       detach_ir_basicblock(irb, basicblock);
     }
 

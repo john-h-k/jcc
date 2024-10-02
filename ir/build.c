@@ -1622,9 +1622,11 @@ struct ir_basicblock *build_ir_for_forstmt(struct ir_builder *irb,
       build_ir_for_stmt(irb, body_basicblock, for_stmt->body);
 
   if (for_stmt->iter) {
-    invariant_assert(
-        body_basicblock->last,
-        "attempting to add `for` loop iter without stmt present, needs fixing");
+    // if nothing in the body, add an empty stmt
+    if (!body_basicblock->last) {
+      alloc_ir_stmt(irb, body_basicblock);
+    }
+
     build_ir_for_expr(irb, body_basicblock->last, for_stmt->iter,
                       &for_stmt->iter->var_ty);
   }
