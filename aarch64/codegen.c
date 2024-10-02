@@ -564,9 +564,7 @@ static void codegen_32_bit_int(struct codegen_state *state,
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
-  debug_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                   op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER,
-               "expects primitive/pointer type");
+  debug_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE, "expects primitive type");
 
   struct aarch64_reg dest = codegen_reg(op);
 
@@ -1107,9 +1105,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       size_t i = op->call.num_args - 1 - head;
       struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
 
-      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE ||
-                           var_ty->ty == IR_OP_VAR_TY_TY_POINTER,
-                       "`lower_call` doesn't support non-prims");
+      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE, "`lower_call` doesn't support non-prims");
 
       struct aarch64_reg source =
           i == 0 ? vol_reg : codegen_reg(op->call.args[i]);

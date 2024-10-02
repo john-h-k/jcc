@@ -1,6 +1,8 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include "program.h"
+
 struct compiler;
 
 enum compile_target_arch {
@@ -27,6 +29,8 @@ enum compile_log_flags {
 struct compile_args {
   enum compile_target_arch target_arch;
   enum compile_log_flags log_flags;
+
+  char *output;
 };
 
 enum compiler_create_result {
@@ -36,7 +40,7 @@ enum compiler_create_result {
 
 enum compile_result { COMPILE_RESULT_SUCCESS = 0, COMPILE_RESULT_BAD_FILE };
 
-enum compiler_create_result create_compiler(const char *program,
+enum compiler_create_result create_compiler(struct program *program,
                                             const char *output,
                                             const struct compile_args *args,
                                             struct compiler **compiler);

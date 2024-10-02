@@ -2,6 +2,7 @@
 #define LEX_H
 
 #include "util.h"
+#include "program.h"
 
 #include <stdlib.h>
 
@@ -129,36 +130,18 @@ enum lex_token_ty {
   LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL, // 10ull or 10llu
 };
 
-enum lex_status { LEX_STATUS_SUCCESS = 0 };
-
-struct text_pos {
-  size_t idx;
-  size_t line;
-  size_t col;
-};
-
-struct text_span {
-  struct text_pos start;
-  struct text_pos end;
-};
-
-int text_pos_len(struct text_pos start, struct text_pos end);
-int text_span_len(const struct text_span *span);
-
-void next_col(struct text_pos *pos);
-
-void next_line(struct text_pos *pos);
+enum lex_create_result { LEX_CREATE_RESULT_SUCCESS = 0 };
 
 struct token {
-  struct text_span span;
-
   enum lex_token_ty ty;
+
+  struct text_span span;
 };
 
 struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
-enum lex_status lexer_create(const char *program, struct lexer **lexer);
+enum lex_create_result lexer_create(struct preprocessed_program *program, struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
 struct text_pos get_position(struct lexer *lexer);

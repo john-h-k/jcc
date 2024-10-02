@@ -13,6 +13,7 @@
 #include "lsra.h"
 #include "macos/mach-o.h"
 #include "parse.h"
+#include "preproc.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
@@ -81,7 +82,7 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   return buff;
 }
 
-enum compiler_create_result create_compiler(const char *program,
+enum compiler_create_result create_compiler(struct program *program,
                                             const char *output,
                                             const struct compile_args *args,
                                             struct compiler **compiler) {
@@ -89,7 +90,18 @@ enum compiler_create_result create_compiler(const char *program,
 
   (*compiler)->args = *args;
 
-  if (parser_create(program, &(*compiler)->parser) !=
+  // preproc is kept local as it is seperate to other stages
+  struct preproc *preproc;
+
+  if (preproc_create(program, &preproc) !=
+      PREPROC_CREATE_RESULT_SUCCESS) {
+    err("failed to create preproc");
+    return COMPILER_CREATE_RESULT_FAILURE;
+  }
+
+  struct preprocessed_program preprocessed_program = preproc_process(preproc);
+
+  if (parser_create(&preprocessed_program , &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;

@@ -7,6 +7,8 @@
 #include <ctype.h>
 
 struct lexer {
+  struct program *program;
+
   struct arena_allocator *arena;
   const char *text;
   size_t len;
@@ -16,7 +18,7 @@ struct lexer {
   const char **associated_texts;
 };
 
-enum lex_status lexer_create(const char *program, struct lexer **lexer) {
+enum lex_create_result lexer_create(struct preprocessed_program *program, struct lexer **lexer) {
   info("beginning lex stage");
 
   struct arena_allocator *arena;
@@ -24,16 +26,15 @@ enum lex_status lexer_create(const char *program, struct lexer **lexer) {
 
   struct lexer *l = nonnull_malloc(sizeof(*l));
   l->arena = arena;
-  // copy out the program so lifetimes aren't tied
-  l->text = arena_alloc_strcpy(arena, program);
-  l->len = strlen(program);
+  l->text = arena_alloc_strcpy(arena, program->text);
+  l->len = strlen(l->text);
   l->pos.idx = 0;
   l->pos.line = 0;
   l->pos.col = 0;
 
   *lexer = l;
 
-  return LEX_STATUS_SUCCESS;
+  return LEX_CREATE_RESULT_SUCCESS;
 }
 
 void lexer_free(struct lexer **lexer) {
@@ -209,29 +210,6 @@ bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
     }
 
     return true;
-  }
-
-  return false;
-}
-
-// attempts to find the `*/` token
-// rather than just lexing the comment itself
-// this may be marginally faster, also may not make much of a difference
-// it returns bool in case we hit EOF without hitting the end token
-// NOTE: this will be removed when preprocessor exists (as that strips comments)
-bool try_find_comment_end(struct lexer *lexer, struct text_pos *cur_pos) {
-  while (/* token must be at least 2 chars */ cur_pos->idx + 1 < lexer->len) {
-    if (lexer->text[cur_pos->idx] == '\n') {
-      next_line(cur_pos);
-    } else if (lexer->text[cur_pos->idx] == '*' &&
-               lexer->text[cur_pos->idx + 1] == '/') {
-      // found it!
-      next_col(cur_pos);
-      next_col(cur_pos);
-      return true;
-    } else {
-      next_col(cur_pos);
-    }
   }
 
   return false;
@@ -447,28 +425,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
       ty = LEX_TOKEN_TY_OP_DIV;
     }
 
-    // this approach is ugly, TODO: refactor
-    // look for `//` and `/*` comment tokens
-    if (end.idx < lexer->len && lexer->text[end.idx] == '/') {
-      ty = LEX_TOKEN_TY_INLINE_COMMENT;
-      find_eol(lexer, &end);
-      lexer->pos = end;
-
-      // find next token
-      peek_token(lexer, token);
-      return;
-    } else if (end.idx < lexer->len && lexer->text[end.idx] == '*') {
-      ty = LEX_TOKEN_TY_MULTILINE_COMMENT;
-      if (!try_find_comment_end(lexer, &end)) {
-        bug("handle unended /* comments");
-      }
-      lexer->pos = end;
-
-      // find next token
-      peek_token(lexer, token);
-      return;
-    }
-
     break;
   case '%':
     next_col(&end);
@@ -613,7 +569,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
       // is a keyword
       ty = refine_ty(lexer, start, end);
     } else {
-      unreachable("lexer hit an unknown token!");
+      bug("lexer hit an unknown token! line=%zu, col=%zu, value=%u", start.line, start.col, c);
     }
   }
   }
@@ -623,25 +579,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
   token->span.end = end;
 
   debug("parse token %s\n", token_name(lexer, token));
-}
-
-int text_pos_len(struct text_pos start, struct text_pos end) {
-  return end.idx - start.idx;
-}
-
-int text_span_len(const struct text_span *span) {
-  return text_pos_len(span->start, span->end);
-}
-
-void next_col(struct text_pos *pos) {
-  pos->idx++;
-  pos->col++;
-}
-
-void next_line(struct text_pos *pos) {
-  pos->idx++;
-  pos->line++;
-  pos->col = 0;
 }
 
 const char *associated_text(struct lexer *lexer, const struct token *token) {
@@ -673,12 +610,13 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   }
 }
 
-#define CASE_RET(name)                                                         \
-  case name:                                                                   \
-    return #name;
-
 const char *token_name(struct lexer *lexer, struct token *token) {
   UNUSED_ARG(lexer);
+
+  #define CASE_RET(name)                                                         \
+    case name:                                                                   \
+      return #name;
+  
 
   switch (token->ty) {
     CASE_RET(LEX_TOKEN_TY_UNKNOWN)
@@ -787,4 +725,6 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL)
     CASE_RET(LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL)
   }
+
+  #undef CASE_RET
 }

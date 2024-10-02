@@ -5,6 +5,7 @@
 #include "ir/ir.h"
 #include "lex.h"
 #include "log.h"
+#include "program.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
@@ -28,12 +29,12 @@ struct parser {
   struct ast_tyref func_ret_ty;
 };
 
-enum parser_create_result parser_create(const char *program,
+enum parser_create_result parser_create(struct preprocessed_program *program,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   arena_allocator_create(&p->arena);
-  if (lexer_create(program, &p->lexer) != LEX_STATUS_SUCCESS) {
+  if (lexer_create(program, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }

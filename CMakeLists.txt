@@ -17,6 +17,8 @@ set(
   diagnostics.c
   lex.c
   parse.c
+  preproc.c
+  program.c
   link.c
   liveness.c
   disasm.c
