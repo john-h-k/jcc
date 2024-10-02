@@ -1664,6 +1664,26 @@ struct ir_basicblock *build_ir_for_iterstmt(struct ir_builder *irb,
   }
 }
 
+struct ir_basicblock *build_ir_for_goto(struct ir_builder *irb,
+                                        struct ir_stmt *stmt,
+                                       struct ast_gotostmt *goto_stmt) {
+  struct ir_basicblock *before_goto_basicblock = stmt->basicblock;
+
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb, before_goto_basicblock);
+  struct ir_op *br = alloc_ir_op(irb, br_stmt);
+
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_OP_VAR_TY_NONE;
+
+  // put the label we target into metadata
+  br->metadata = (void *)identifier_str(irb->parser, &goto_stmt->label);
+
+  struct ir_basicblock *after_goto_basicblock = alloc_ir_basicblock(irb);
+
+  return after_goto_basicblock;
+}
+
+
 /* Return stmt be null when this is used to add implicit returns not in code
  * (e.g at end of method) */
 struct ir_basicblock *build_ir_for_ret(struct ir_builder *irb,
@@ -1696,6 +1716,8 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN:
     return build_ir_for_ret(irb, stmt, &jump_stmt->return_stmt);
+  case AST_JUMPSTMT_TY_GOTO:
+    return build_ir_for_goto(irb, stmt, &jump_stmt->goto_stmt);
   }
 }
 
@@ -1920,6 +1942,8 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
                                         struct ir_basicblock *basicblock,
                                         struct ast_stmt *stmt) {
 
+  debug_assert(basicblock, "bb cannot be null");
+
   switch (stmt->ty) {
   case AST_STMT_TY_VAR_DECL_LIST: {
     struct ir_stmt *ir_stmt = alloc_ir_stmt(irb, basicblock);
@@ -1944,6 +1968,11 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
   }
   case AST_STMT_TY_ITER: {
     return build_ir_for_iterstmt(irb, basicblock, &stmt->iter);
+  }
+  case AST_STMT_TY_LABELED: {
+    const char *name = identifier_str(irb->parser, &stmt->labeled.label);
+    add_label(irb, name, basicblock);
+    return build_ir_for_stmt(irb, basicblock, stmt->labeled.stmt);
   }
   case AST_STMT_TY_NULL: {
     return basicblock;
@@ -2141,6 +2170,37 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
   for (size_t i = 0; i < def->body.num_stmts; i++) {
     basicblock = build_ir_for_stmt(builder, basicblock, &def->body.stmts[i]);
+    debug_assert(basicblock, "stmt #%zu generated a null basicblock", i);
+  }
+
+  // now we have generated the IR we first need to fix up labels
+  basicblock = builder->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        if (op->ty == IR_OP_TY_BR && op->metadata) {
+          // any BR with metadata is a label
+          const char *name = op->metadata;
+
+          struct ir_label *label = builder->labels;
+          while (label) {
+            if (strcmp(name, label->name) == 0) {
+              make_basicblock_merge(builder, basicblock, label->basicblock);
+            }
+
+            label = label->succ;
+          }
+        }
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
   }
 
   // we may generate empty basicblocks or statements, prune them here

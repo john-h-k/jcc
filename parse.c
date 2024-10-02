@@ -227,6 +227,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET:
   case LEX_TOKEN_TY_OPEN_BRACE:
   case LEX_TOKEN_TY_CLOSE_BRACE:
+  case LEX_TOKEN_TY_COLON:
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
   case LEX_TOKEN_TY_DOT:
@@ -263,6 +264,9 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_OP_GT:
   case LEX_TOKEN_TY_OP_GTEQ:
   case LEX_TOKEN_TY_ELLIPSIS:
+  case LEX_TOKEN_TY_KW_GOTO:
+  case LEX_TOKEN_TY_KW_BREAK:
+  case LEX_TOKEN_TY_KW_CONTINUE:
   case LEX_TOKEN_TY_KW_DO:
   case LEX_TOKEN_TY_KW_FOR:
   case LEX_TOKEN_TY_KW_WHILE:
@@ -1852,11 +1856,53 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
     return true;
   }
 
+  if (parse_token(parser, LEX_TOKEN_TY_KW_GOTO)) {
+    struct token label;
+    peek_token(parser->lexer, &label);
+
+    if (label.ty == LEX_TOKEN_TY_IDENTIFIER) {
+      consume_token(parser->lexer, label);
+
+      if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+        jump_stmt->ty = AST_JUMPSTMT_TY_GOTO;
+        jump_stmt->goto_stmt.label = label;
+        return true;
+      }
+    }
+  }
+  
+
   backtrack(parser->lexer, pos);
   return false;
 }
 
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
+
+bool parse_labeledstmt(struct parser *parser, struct ast_labeledstmt *labeled_stmt) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token label;
+  peek_token(parser->lexer, &label);
+
+  if (label.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  consume_token(parser->lexer, label);
+
+  struct ast_stmt stmt;
+  if (!parse_token(parser, LEX_TOKEN_TY_COLON) || !parse_stmt(parser, &stmt)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  labeled_stmt->label = label;
+  labeled_stmt->stmt = arena_alloc(parser->arena, sizeof(*labeled_stmt->stmt));
+  *labeled_stmt->stmt = stmt;
+  return true;
+}
+
 
 bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct text_pos pos = get_position(parser->lexer);
@@ -2152,6 +2198,13 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     stmt->ty = AST_STMT_TY_NULL;
+    return true;
+  }
+
+  struct ast_labeledstmt labeled_stmt;
+  if (parse_labeledstmt(parser, &labeled_stmt)) {
+    stmt->ty = AST_STMT_TY_LABELED;
+    stmt->labeled = labeled_stmt;
     return true;
   }
 
@@ -3381,6 +3434,9 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     }
     UNINDENT();
     break;
+  case AST_JUMPSTMT_TY_GOTO:
+    AST_PRINT("GOTO %s", identifier_str(state->parser, &jump_stmt->goto_stmt.label));
+    break;
   }
 }
 
@@ -3503,6 +3559,13 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
   }
 }
 
+DEBUG_FUNC(labeledstmt, labeled_stmt) {
+  AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
+  INDENT();
+  DEBUG_CALL(stmt, labeled_stmt->stmt);
+  UNINDENT();
+}
+
 DEBUG_FUNC(stmt, stmt) {
   INDENT();
 
@@ -3526,6 +3589,9 @@ DEBUG_FUNC(stmt, stmt) {
     break;
   case AST_STMT_TY_ITER:
     DEBUG_CALL(iterstmt, &stmt->iter);
+    break;
+  case AST_STMT_TY_LABELED:
+    DEBUG_CALL(labeledstmt, &stmt->labeled);
     break;
   }
 

@@ -506,6 +506,14 @@ typedef void (*debug_print_custom_ir_op)(FILE *file,
                                          const struct ir_builder *func,
                                          const struct ir_op *op);
 
+// linked list of label -> bb mappings
+struct ir_label {
+  const char *name;
+  struct ir_basicblock *basicblock;
+
+  struct ir_label *succ;
+};
+
 struct ir_builder {
   const char *name;
 
@@ -519,6 +527,8 @@ struct ir_builder {
 
   struct ir_basicblock *first;
   struct ir_basicblock *last;
+
+  struct ir_label *labels;
 
   // an arbitrarily ordered list of all globals
   // used for relocation generation
@@ -536,7 +546,9 @@ struct ir_builder {
   size_t basicblock_count;
   size_t stmt_count;
   size_t op_count;
-  size_t next_id;
+  size_t next_basicblock_id;
+  size_t next_stmt_id;
+  size_t next_op_id;
 
   // starts at index of first nonvolatile register, which is a bit odd
   // could change or generally make nice to work with
@@ -577,6 +589,8 @@ void rebuild_ids(struct ir_builder *irb);
 
 struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty);
+
+struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_basicblock *basicblock);
 
 void make_sym_ref(struct ir_builder *irb, const char *sym_name,
                   struct ir_op *op, const struct ir_op_var_ty *var_ty);

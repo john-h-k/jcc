@@ -398,10 +398,14 @@ struct ast_returnstmt {
   struct ast_expr *expr;
 };
 
+struct ast_gotostmt {
+  struct token label;
+};
+
 enum ast_jumpstmt_ty {
-  // AST_JUMPSTMT_TY_GOTO,
   // AST_JUMPSTMT_TY_BREAK,
   // AST_JUMPSTMT_TY_CONTINUE,
+  AST_JUMPSTMT_TY_GOTO,
   AST_JUMPSTMT_TY_RETURN
 };
 
@@ -410,21 +414,17 @@ struct ast_jumpstmt {
 
   union {
     struct ast_returnstmt return_stmt;
+    struct ast_gotostmt goto_stmt;
   };
 };
 
 /* Statements - either declaration, labelled, expression, compound, jump,
  * iteration, or selection */
 
-enum ast_stmt_ty {
-  AST_STMT_TY_NULL,
-  AST_STMT_TY_VAR_DECL_LIST,
-  // AST_STMT_TY_LABELLED,
-  AST_STMT_TY_EXPR,
-  AST_STMT_TY_COMPOUND,
-  AST_STMT_TY_JUMP,
-  AST_STMT_TY_ITER,
-  AST_STMT_TY_SELECT,
+struct ast_labeledstmt {
+  struct token label;
+
+  struct ast_stmt *stmt;
 };
 
 struct ast_ifstmt {
@@ -503,6 +503,17 @@ struct ast_iterstmt {
   };
 };
 
+enum ast_stmt_ty {
+  AST_STMT_TY_NULL,
+  AST_STMT_TY_VAR_DECL_LIST,
+  AST_STMT_TY_LABELED,
+  AST_STMT_TY_EXPR,
+  AST_STMT_TY_COMPOUND,
+  AST_STMT_TY_JUMP,
+  AST_STMT_TY_ITER,
+  AST_STMT_TY_SELECT,
+};
+
 struct ast_stmt {
   enum ast_stmt_ty ty;
   union {
@@ -512,6 +523,7 @@ struct ast_stmt {
     struct ast_jumpstmt jump;
     struct ast_selectstmt select;
     struct ast_iterstmt iter;
+    struct ast_labeledstmt labeled;
   };
 };
 
