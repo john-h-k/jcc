@@ -31,8 +31,8 @@ enum well_known_ty {
   WELL_KNOWN_TY_LONG_DOUBLE,
 };
 
-#define WKT_MAKE_SIGNED(wkt) ((wkt) & ~1)
-#define WKT_MAKE_UNSIGNED(wkt) ((wkt) | 1)
+#define WKT_MAKE_SIGNED(wkt) (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
+#define WKT_MAKE_UNSIGNED(wkt) (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) | 1))
 
 #define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
 

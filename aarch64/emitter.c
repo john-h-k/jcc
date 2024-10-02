@@ -19,11 +19,16 @@ struct aarch64_emitter {
 
 #define IS64_REG(r) (r).ty == AARCH64_REG_TY_X
 #define IS64(d) (d).dest.ty == AARCH64_REG_TY_X
+#define IS32(d) (d).dest.ty == AARCH64_REG_TY_W
 
 #define ISDBL(d) (d).dest.ty == AARCH64_REG_TY_D
 #define ISDBL_REG(d) (d).ty == AARCH64_REG_TY_D
 #define ISFLT(d) (d).dest.ty == AARCH64_REG_TY_S
 #define ISFLT_REG(d) (d).ty == AARCH64_REG_TY_S
+
+void bad_instr() {
+  bug("register types or arguments did not make sense");
+}
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
@@ -70,6 +75,176 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter) {
   aarch64_emit(emitter, NOP);
 }
 
+/* Single reg FP data processing */
+
+void aarch64_emit_scvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source scvtf) {
+  struct aarch64_reg dest = scvtf.dest;
+  struct aarch64_reg source = scvtf.source;
+
+  if (source.ty == AARCH64_REG_TY_S) {
+    if (dest.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FCVTZS_S_TO_32(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FCVTZS_S_TO_64(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_D) {
+    if (dest.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FCVTZS_D_TO_32(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FCVTZS_D_TO_64(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_W) {
+    if (dest.ty == AARCH64_REG_TY_S) {
+      aarch64_emit(emitter, SCVTF_32_TO_S(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_D) {
+      aarch64_emit(emitter, SCVTF_32_TO_D(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_X) {
+    if (dest.ty == AARCH64_REG_TY_S) {
+      aarch64_emit(emitter, SCVTF_64_TO_S(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_D) {
+      aarch64_emit(emitter, SCVTF_64_TO_D(source.idx, dest.idx));
+      return;
+    }
+  }
+
+  bad_instr();
+}
+
+void aarch64_emit_ucvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source ucvtf) {
+  struct aarch64_reg dest = ucvtf.dest;
+  struct aarch64_reg source = ucvtf.source;
+
+  if (source.ty == AARCH64_REG_TY_S) {
+    if (dest.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FCVTZU_S_TO_32(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FCVTZU_S_TO_64(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_D) {
+    if (dest.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FCVTZU_D_TO_32(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FCVTZU_D_TO_64(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_W) {
+    if (dest.ty == AARCH64_REG_TY_S) {
+      aarch64_emit(emitter, UCVTF_32_TO_S(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_D) {
+      aarch64_emit(emitter, UCVTF_32_TO_D(source.idx, dest.idx));
+      return;
+    }
+  } else if (source.ty == AARCH64_REG_TY_X) {
+    if (dest.ty == AARCH64_REG_TY_S) {
+      aarch64_emit(emitter, UCVTF_64_TO_S(source.idx, dest.idx));
+      return;
+    } else if (dest.ty == AARCH64_REG_TY_D) {
+      aarch64_emit(emitter, UCVTF_64_TO_D(source.idx, dest.idx));
+      return;
+    }
+  }
+
+  bad_instr();
+}
+
+void aarch64_emit_fcvt(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fcvt) {
+  struct aarch64_reg dest = fcvt.dest;
+  struct aarch64_reg source = fcvt.source;
+
+  if (source.ty == AARCH64_REG_TY_D && dest.ty == AARCH64_REG_TY_S) {
+    aarch64_emit(emitter, FCVT_D_TO_S(source.idx, dest.idx));
+  } else if (source.ty == AARCH64_REG_TY_S && dest.ty == AARCH64_REG_TY_D) {
+    aarch64_emit(emitter, FCVT_S_TO_D(source.idx, dest.idx));
+  } else {
+    bad_instr();
+  }
+}
+
+void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov) {
+  struct aarch64_reg dest = fmov.dest;
+  struct aarch64_reg source = fmov.source;
+
+  if (dest.ty == AARCH64_REG_TY_S) {
+    if (source.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FMOV_32_TO_S(source.idx, dest.idx));
+      return;
+    } else if (source.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FMOV_64_TO_S(source.idx, dest.idx));
+      return;
+    } else if (source.ty == AARCH64_REG_TY_S) {
+      aarch64_emit(emitter, FMOV_S(source.idx, dest.idx));
+      return;
+    }
+  } else if (dest.ty == AARCH64_REG_TY_D) {
+    if (source.ty == AARCH64_REG_TY_W) {
+      aarch64_emit(emitter, FMOV_32_TO_D(source.idx, dest.idx));
+      return;
+    } else if (source.ty == AARCH64_REG_TY_X) {
+      aarch64_emit(emitter, FMOV_64_TO_D(source.idx, dest.idx));
+      return;
+    } else if (source.ty == AARCH64_REG_TY_D) {
+      aarch64_emit(emitter, FMOV_D(source.idx, dest.idx));
+      return;
+    }
+  }
+
+  bad_instr();
+}
+
+/* Two reg FP data processing */
+
+void aarch64_emit_fadd(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fadd) {
+  if (ISDBL(fadd)) {
+    aarch64_emit(emitter, FADD_D(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
+  } else if (ISFLT(fadd)) {
+    aarch64_emit(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
+  } else {
+    bad_instr();
+  }
+}
+
+void aarch64_emit_fsub(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fsub) {
+  if (ISDBL(fsub)) {
+    aarch64_emit(emitter, FSUB_D(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
+  } else if (ISFLT(fsub)) {
+    aarch64_emit(emitter, FSUB_S(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
+  } else {
+    bad_instr();
+  }
+}
+
+void aarch64_emit_fmul(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fmul) {
+  if (ISDBL(fmul)) {
+    aarch64_emit(emitter, FMUL_D(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
+  } else if (ISFLT(fmul)) {
+    aarch64_emit(emitter, FMUL_S(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
+  } else {
+    bad_instr();
+  }
+}
+
+void aarch64_emit_fdiv(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fdiv) {
+  if (ISDBL(fdiv)) {
+    aarch64_emit(emitter, FDIV_D(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
+  } else if (ISFLT(fdiv)) {
+    aarch64_emit(emitter, FDIV_S(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
+  } else {
+    bad_instr();
+  }
+}
+
 /* Register moves */
 
 void aarch64_emit_movz(struct aarch64_emitter *emitter,
@@ -108,19 +283,6 @@ void aarch64_emit_movn(struct aarch64_emitter *emitter,
     aarch64_emit(emitter, MOVN_64(movn.shift, (uint16_t)movn.imm, movn.dest.idx));
   } else {
     aarch64_emit(emitter, MOVN_32(movn.shift, (uint16_t)movn.imm, movn.dest.idx));
-  }
-}
-
-void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov) {
-  struct aarch64_reg dest = fmov.dest;
-  struct aarch64_reg source = fmov.source;
-
-  if (dest.ty == AARCH64_REG_TY_S && source.ty == AARCH64_REG_TY_W) {
-    aarch64_emit(emitter, FMOV_32_TO_S(source.idx, dest.idx));
-  } else if (dest.ty == AARCH64_REG_TY_D && source.ty == AARCH64_REG_TY_X) {
-    aarch64_emit(emitter, FMOV_64_TO_D(source.idx, dest.idx));
-  } else {
-    todo("other fmov varieties");
   }
 }
 
@@ -347,9 +509,11 @@ void aarch64_emit_subs(struct aarch64_emitter *emitter,
   if (IS64(sub)) {
     aarch64_emit(emitter, SUBS_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                       sub.lhs.idx, sub.dest.idx));
-  } else {
+  } else if (IS32(sub)) {
     aarch64_emit(emitter, SUBS_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                       sub.lhs.idx, sub.dest.idx));
+  } else {
+    bad_instr();
   }
 }
 void aarch64_emit_add(struct aarch64_emitter *emitter,
@@ -357,9 +521,11 @@ void aarch64_emit_add(struct aarch64_emitter *emitter,
   if (IS64(sub)) {
     aarch64_emit(emitter, ADD_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                      sub.lhs.idx, sub.dest.idx));
-  } else {
+  } else if (IS32(sub)) {
     aarch64_emit(emitter, ADD_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                      sub.lhs.idx, sub.dest.idx));
+  } else {
+    bad_instr();
   }
 }
 
@@ -368,10 +534,12 @@ void aarch64_emit_adds(struct aarch64_emitter *emitter,
   if (IS64(sub)) {
     aarch64_emit(emitter, ADDS_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                       sub.lhs.idx, sub.dest.idx));
-  } else {
+  } else if (IS32(sub)) {
     aarch64_emit(emitter, ADDS_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
                                       sub.lhs.idx, sub.dest.idx));
   }
+
+  bad_instr();
 }
 
 /* Addressing (immediate) */

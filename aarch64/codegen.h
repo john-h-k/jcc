@@ -15,6 +15,11 @@
 
 
 enum aarch64_instr_ty {
+  AARCH64_INSTR_TY_FADD,
+  AARCH64_INSTR_TY_FMUL,
+  AARCH64_INSTR_TY_FDIV,
+  AARCH64_INSTR_TY_FSUB,
+
   AARCH64_INSTR_TY_ADDS,
   AARCH64_INSTR_TY_ADDS_IMM,
   AARCH64_INSTR_TY_ADD,
@@ -50,6 +55,9 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_MOVZ,
   AARCH64_INSTR_TY_MOVK,
   AARCH64_INSTR_TY_FMOV,
+  AARCH64_INSTR_TY_FCVT,
+  AARCH64_INSTR_TY_UCVTF,
+  AARCH64_INSTR_TY_SCVTF,
   AARCH64_INSTR_TY_MVN,
   AARCH64_INSTR_TY_MSUB,
   AARCH64_INSTR_TY_NOP,
@@ -329,11 +337,11 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_1_source reg_1_source, fmov;
+      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf;
     };
 
     union {
-      struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv, udiv;
+      struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv, udiv, fmul, fdiv, fadd, fsub;
     };
 
     union {
@@ -394,6 +402,10 @@ enum aarch64_reg_usage_ty {
 
 struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty);
 struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty);
+
+size_t reg_size(enum aarch64_reg_ty reg_ty);
+
+struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 bool is_return_reg(struct aarch64_reg reg);
 bool is_zero_reg(struct aarch64_reg reg);

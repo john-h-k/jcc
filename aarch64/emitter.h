@@ -19,13 +19,25 @@ void aarch64_emit_copy_to(struct aarch64_emitter *emitter, void *dest);
 
 void aarch64_emit_nop(struct aarch64_emitter *emitter);
 
+/* Single reg FP data processing */
+
+void aarch64_emit_scvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source ucvtf);
+void aarch64_emit_ucvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source scvtf);
+void aarch64_emit_fcvt(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fcvt);
+void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov);
+
+/* Two reg FP data processing */
+
+void aarch64_emit_fadd(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fadd);
+void aarch64_emit_fsub(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fsub);
+void aarch64_emit_fmul(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fmul);
+void aarch64_emit_fdiv(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fdiv);
+
 /* Register moves */
 
 void aarch64_emit_movz(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movz);
 void aarch64_emit_movk(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movk);
 void aarch64_emit_movn(struct aarch64_emitter *emitter, const struct aarch64_mov_imm movn);
-
-void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov);
 
 /* Bitfield operations (Immediate) */
 

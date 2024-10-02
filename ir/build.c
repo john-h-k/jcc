@@ -137,8 +137,12 @@ bool var_ty_needs_cast_op(struct ir_builder *irb, const struct ir_op_var_ty *l,
   }
 
   // TODO: hardcodes pointer size
-  if (((l->ty == IR_OP_VAR_TY_TY_PRIMITIVE && l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) || l->ty == IR_OP_VAR_TY_TY_POINTER) 
-     && ((r->ty == IR_OP_VAR_TY_TY_PRIMITIVE && r->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) || r->ty == IR_OP_VAR_TY_TY_POINTER)) {
+  if (((l->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+        l->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) ||
+       l->ty == IR_OP_VAR_TY_TY_POINTER) &&
+      ((r->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+        r->primitive == IR_OP_VAR_PRIMITIVE_TY_I64) ||
+       r->ty == IR_OP_VAR_TY_TY_POINTER)) {
     // same size int -> pointer needs no cast
     return false;
   }
@@ -214,15 +218,14 @@ struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb) {
   UNUSED_ARG(irb);
 
   // TODO: again, similar to parser:
-  // either we need a pointer-sized int type or for `ir_builder` to know the native integer size
-  return (struct ir_op_var_ty){
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-    .primitive = IR_OP_VAR_PRIMITIVE_TY_I64
-  };
+  // either we need a pointer-sized int type or for `ir_builder` to know the
+  // native integer size
+  return (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                               .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
 }
 
 struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
-                                     const struct ast_tyref *ty_ref) {
+                                         const struct ast_tyref *ty_ref) {
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     bug("shouldn't reach IR gen with unresolved type");
@@ -265,17 +268,29 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
     return ty;
   }
   case AST_TYREF_TY_FUNC: {
+    bool variadic =
+        ty_ref->func.num_param_var_tys &&
+        ty_ref->func.param_var_tys[ty_ref->func.num_param_var_tys - 1].ty ==
+            AST_TYREF_TY_VARIADIC;
+
     struct ir_op_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_FUNC;
     ty.func.ret_ty = arena_alloc(irb->arena, sizeof(*ty.func.ret_ty));
     *ty.func.ret_ty = var_ty_for_ast_tyref(irb, ty_ref->func.ret_var_ty);
 
-    ty.func.num_params = ty_ref->func.num_param_var_tys;
+    // from IR onwards, variadic is no longer a param of the function but instead a flag
+    ty.func.num_params = variadic ? ty_ref->func.num_param_var_tys - 1 : ty_ref->func.num_param_var_tys;
     ty.func.params =
         arena_alloc(irb->arena, sizeof(struct ir_op) * ty.func.num_params);
 
+    ty.func.flags = IR_OP_VAR_FUNC_TY_FLAG_NONE;
+    if (variadic) {
+      ty.func.flags |= IR_OP_VAR_FUNC_TY_FLAG_VARIADIC;
+    }
+
     for (size_t i = 0; i < ty.func.num_params; i++) {
-      ty.func.params[i] = var_ty_for_ast_tyref(irb, &ty_ref->func.param_var_tys[i]);
+      ty.func.params[i] =
+          var_ty_for_ast_tyref(irb, &ty_ref->func.param_var_tys[i]);
     }
 
     return ty;
@@ -305,8 +320,9 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
   }
 }
 
-struct ir_op_var_ty var_ty_return_ty_for_ast_tyref(struct ir_builder *irb,
-                                            const struct ast_tyref *ty_ref) {
+struct ir_op_var_ty
+var_ty_return_ty_for_ast_tyref(struct ir_builder *irb,
+                               const struct ast_tyref *ty_ref) {
   invariant_assert(ty_ref->ty == AST_TYREF_TY_FUNC,
                    "passed non-func to `return_ty_for_ast_tyref`");
 
@@ -346,8 +362,27 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
          to_var_ty.ty);
   }
 
+  if (is_fp_ty(from) && is_fp_ty(to)) {
+    return IR_OP_CAST_OP_TY_CONV;
+  }
+
+  if (is_fp_ty(from) || is_fp_ty(to)) {
+    // one (but not both) is fp
+    // we need to generate `uconv`/`iconv` depending on the sign of the integral
+    // type
+
+    invariant_assert(from->ty == AST_TYREF_TY_WELL_KNOWN ||
+                         to->ty == AST_TYREF_TY_WELL_KNOWN,
+                     "other type must be an integer for float conversion");
+
+    bool is_signed = is_fp_ty(from) ? WKT_IS_SIGNED(to->well_known)
+                                    : WKT_IS_SIGNED(from->well_known);
+
+    return is_signed ? IR_OP_CAST_OP_TY_SCONV : IR_OP_CAST_OP_TY_UCONV;
+  }
+
   if (to_var_ty.primitive < from_var_ty.primitive) {
-    return IR_OP_CAST_OP_TY_TRUNCATE;
+    return IR_OP_CAST_OP_TY_TRUNC;
   } else {
     invariant_assert(from_var_ty.primitive != to_var_ty.primitive,
                      "cast not needed for types of same size");
@@ -382,65 +417,71 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                              const struct ast_tyref *ty_ref,
                              enum ast_binary_op_ty ty, struct ir_op *lhs,
                              struct ir_op *rhs) {
-  invariant_assert(lhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY || rhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY, "array should have decayed to ptr");
+  invariant_assert(lhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY ||
+                       rhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY,
+                   "array should have decayed to ptr");
 
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, ty_ref);
 
-  if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER || rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+  if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
+      rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
     switch (ty) {
-      case AST_BINARY_OP_TY_ADD: {
-        struct ir_op_var_ty pointer_ty = var_ty_for_ast_tyref(irb, ty_ref);
+    case AST_BINARY_OP_TY_ADD: {
+      struct ir_op_var_ty pointer_ty = var_ty_for_ast_tyref(irb, ty_ref);
 
-        // need to multiply rhs by the element size
-        struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty.pointer.underlying);
+      // need to multiply rhs by the element size
+      struct ir_var_ty_info el_info =
+          var_ty_info(irb, pointer_ty.pointer.underlying);
 
-        struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
-        make_pointer_constant(irb, el_size_op, el_info.size);
+      struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+      make_pointer_constant(irb, el_size_op, el_info.size);
 
-        struct ir_op *rhs_mul = alloc_ir_op(irb, stmt);
-        rhs_mul->ty = IR_OP_TY_BINARY_OP;
-        rhs_mul->var_ty = var_ty;
-        rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
-        rhs_mul->binary_op.lhs = el_size_op;
-        rhs_mul->binary_op.rhs = rhs;
+      struct ir_op *rhs_mul = alloc_ir_op(irb, stmt);
+      rhs_mul->ty = IR_OP_TY_BINARY_OP;
+      rhs_mul->var_ty = var_ty;
+      rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+      rhs_mul->binary_op.lhs = el_size_op;
+      rhs_mul->binary_op.rhs = rhs;
 
-        struct ir_op *op = alloc_ir_op(irb, stmt);
-        op->ty = IR_OP_TY_BINARY_OP;
-        op->var_ty = var_ty;
-        op->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
-        op->binary_op.lhs = lhs;
-        op->binary_op.rhs = rhs_mul;
+      struct ir_op *op = alloc_ir_op(irb, stmt);
+      op->ty = IR_OP_TY_BINARY_OP;
+      op->var_ty = var_ty;
+      op->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
+      op->binary_op.lhs = lhs;
+      op->binary_op.rhs = rhs_mul;
 
-        return op;
-      }
-      case AST_BINARY_OP_TY_SUB: {
-        struct ir_op_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty : &rhs->var_ty;
+      return op;
+    }
+    case AST_BINARY_OP_TY_SUB: {
+      struct ir_op_var_ty *pointer_ty =
+          lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty
+                                                    : &rhs->var_ty;
 
-        // need to multiply rhs by the element size
-        struct ir_var_ty_info el_info = var_ty_info(irb, pointer_ty->pointer.underlying);
+      // need to multiply rhs by the element size
+      struct ir_var_ty_info el_info =
+          var_ty_info(irb, pointer_ty->pointer.underlying);
 
-        struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
-        make_pointer_constant(irb, el_size_op, el_info.size);
+      struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+      make_pointer_constant(irb, el_size_op, el_info.size);
 
+      struct ir_op *diff = alloc_ir_op(irb, stmt);
+      diff->ty = IR_OP_TY_BINARY_OP;
+      diff->var_ty = var_ty;
+      diff->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
+      diff->binary_op.lhs = lhs;
+      diff->binary_op.rhs = rhs;
 
-        struct ir_op *diff = alloc_ir_op(irb, stmt);
-        diff->ty = IR_OP_TY_BINARY_OP;
-        diff->var_ty = var_ty;
-        diff->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
-        diff->binary_op.lhs = lhs;
-        diff->binary_op.rhs = rhs;
+      struct ir_op *op = alloc_ir_op(irb, stmt);
+      op->ty = IR_OP_TY_BINARY_OP;
+      op->var_ty = var_ty;
+      op->binary_op.ty = IR_OP_BINARY_OP_TY_SDIV;
+      op->binary_op.lhs = diff;
+      op->binary_op.rhs = el_size_op;
 
-        struct ir_op *op = alloc_ir_op(irb, stmt);
-        op->ty = IR_OP_TY_BINARY_OP;
-        op->var_ty = var_ty;
-        op->binary_op.ty = IR_OP_BINARY_OP_TY_SDIV;
-        op->binary_op.lhs = diff;
-        op->binary_op.rhs = el_size_op;
-
-        return op;
-      }
-      default:
-        break;
+      return op;
+    }
+    default:
+      break;
     }
   }
 
@@ -452,6 +493,8 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
 
   b->lhs = lhs;
   b->rhs = rhs;
+
+  bool is_fp = var_ty_is_fp(&op->var_ty);
 
   invariant_assert(
       ty_ref->ty == AST_TYREF_TY_WELL_KNOWN ||
@@ -507,23 +550,26 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
   case AST_BINARY_OP_TY_AND:
     b->ty = IR_OP_BINARY_OP_TY_AND;
     break;
-  case AST_BINARY_OP_TY_ADD:
-    b->ty = IR_OP_BINARY_OP_TY_ADD;
-    break;
-  case AST_BINARY_OP_TY_SUB:
-    b->ty = IR_OP_BINARY_OP_TY_SUB;
-    break;
-  case AST_BINARY_OP_TY_MUL:
-    b->ty = IR_OP_BINARY_OP_TY_MUL;
-    break;
   case AST_BINARY_OP_TY_OR:
     b->ty = IR_OP_BINARY_OP_TY_OR;
     break;
   case AST_BINARY_OP_TY_XOR:
     b->ty = IR_OP_BINARY_OP_TY_XOR;
     break;
+  case AST_BINARY_OP_TY_ADD:
+    b->ty = is_fp ? IR_OP_BINARY_OP_TY_FADD :IR_OP_BINARY_OP_TY_ADD;
+    break;
+  case AST_BINARY_OP_TY_SUB:
+    b->ty = is_fp ? IR_OP_BINARY_OP_TY_FSUB :IR_OP_BINARY_OP_TY_SUB;
+    break;
+  case AST_BINARY_OP_TY_MUL:
+    b->ty = is_fp ? IR_OP_BINARY_OP_TY_FMUL :IR_OP_BINARY_OP_TY_MUL;
+    break;
   case AST_BINARY_OP_TY_DIV:
-    if (WKT_IS_SIGNED(ty_ref->well_known)) {
+    if (is_fp) {
+      b->ty = IR_OP_BINARY_OP_TY_FDIV;
+    }
+    else if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SDIV;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UDIV;
@@ -557,8 +603,8 @@ struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
                                            const struct token *member);
 
 struct ir_op *build_ir_for_addressof_var(struct ir_builder *irb,
-                                     struct ir_stmt *stmt,
-                                     struct ast_var *var) {
+                                         struct ir_stmt *stmt,
+                                         struct ast_var *var) {
   struct var_key key;
   struct var_ref *ref;
   get_var_ref(irb, NULL, var, &key, &ref);
@@ -591,7 +637,7 @@ struct ir_op *build_ir_for_addressof_var(struct ir_builder *irb,
     // decay T[] to T* (rather than to T[]*)
     var_ty = var_ty_make_pointer(irb, underlying_var_ty.array.underlying);
   } else {
-    var_ty = var_ty_make_pointer(irb, &underlying_var_ty);    
+    var_ty = var_ty_make_pointer(irb, &underlying_var_ty);
   }
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
@@ -635,8 +681,7 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
 struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                                    struct ast_unary_op *unary_op) {
   if (unary_op->ty == AST_UNARY_OP_TY_ADDRESSOF) {
-    return build_ir_for_addressof(irb, stmt, unary_op->expr
-                                  );
+    return build_ir_for_addressof(irb, stmt, unary_op->expr);
   }
 
   struct ir_op *expr =
@@ -731,7 +776,7 @@ struct ir_op *build_ir_for_binaryop(struct ir_builder *irb,
 }
 
 struct ir_op *build_ir_for_sizeof(struct ir_builder *irb, struct ir_stmt *stmt,
-                                struct ast_sizeof *size_of) {
+                                  struct ast_sizeof *size_of) {
   struct ir_op_var_ty var_ty;
   switch (size_of->ty) {
   case AST_SIZEOF_TY_TYPE:
@@ -748,16 +793,14 @@ struct ir_op *build_ir_for_sizeof(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty_for_pointer_size(irb);
-  op->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_INT,
-    .int_value = info.size
-  };
+  op->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = info.size};
 
   return op;
 }
 
 struct ir_op *build_ir_for_alignof(struct ir_builder *irb, struct ir_stmt *stmt,
-                                struct ast_alignof *align_of) {
+                                   struct ast_alignof *align_of) {
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, &align_of->ty_ref);
 
   struct ir_var_ty_info info = var_ty_info(irb, &var_ty);
@@ -765,15 +808,11 @@ struct ir_op *build_ir_for_alignof(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty_for_pointer_size(irb);
-  op->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_INT,
-    .int_value = info.alignment
-  };
+  op->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = info.alignment};
 
   return op;
 }
-
-
 
 struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
                                 struct ast_cnst *cnst) {
@@ -837,7 +876,8 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     case VAR_REF_TY_SSA:
       return ref->op;
     case VAR_REF_TY_LCL: {
-      debug_assert(ref->op->lcl, "VAR_REF_TY_LCL but op %zu had no lcl", ref->op->id);
+      debug_assert(ref->op->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
+                   ref->op->id);
 
       struct ir_op *op = alloc_ir_op(irb, stmt);
       op->ty = IR_OP_TY_LOAD_LCL;
@@ -911,13 +951,39 @@ struct ir_op *build_ir_for_initlist(struct ir_builder *irb,
   // init list is fundamentally untyped, so it needs to know its target type in
   // order to be built
 
-  debug_assert(ast_tyref->ty == AST_TYREF_TY_ARRAY || ast_tyref->ty == AST_TYREF_TY_STRUCT || ast_tyref->ty == AST_TYREF_TY_UNION,
+  debug_assert(ast_tyref->ty == AST_TYREF_TY_ARRAY ||
+                   ast_tyref->ty == AST_TYREF_TY_STRUCT ||
+                   ast_tyref->ty == AST_TYREF_TY_UNION,
                "init list only makes sense for arrays/structs/unions");
   UNUSED_ARG(irb);
   UNUSED_ARG(stmt);
   UNUSED_ARG(init_list);
   UNUSED_ARG(ast_tyref);
   todo(__func__);
+}
+
+struct ast_tyref get_target_for_variadic(const struct ast_tyref *ty_ref) {
+  // we could do this in parsing, which would be more "elegant" (letting parser deal with all C typing concerns)
+  // but for now we do it here
+
+  // floats are promoted to doubles and types smaller than int are promoted to int
+  if (ty_ref->ty != AST_TYREF_TY_WELL_KNOWN) {
+    return *ty_ref;
+  }
+
+  if (ty_ref->well_known == WELL_KNOWN_TY_FLOAT) {
+    return (struct ast_tyref){
+      .ty = AST_TYREF_TY_WELL_KNOWN,
+      .well_known = WELL_KNOWN_TY_DOUBLE,
+    };
+  } else if (ty_ref->well_known < WELL_KNOWN_TY_SIGNED_INT) {
+    return (struct ast_tyref){
+      .ty = AST_TYREF_TY_WELL_KNOWN,
+      .well_known = WELL_KNOWN_TY_SIGNED_INT,
+    };
+  }
+
+  return *ty_ref;
 }
 
 struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
@@ -927,12 +993,21 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
-  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys
-                                     ? call->var_ty.func.num_param_var_tys - 1
-                                     : 0;
+  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys;
+
+  struct ir_op_var_ty func_ty = var_ty_for_ast_tyref(irb, &call->target->var_ty);
+  debug_assert(func_ty.ty == IR_OP_VAR_TY_TY_FUNC, "expected target to be func ty");
+
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
+    struct ast_tyref param_target_ty;
+    if (func_ty.func.flags & IR_OP_VAR_FUNC_TY_FLAG_VARIADIC) {
+      param_target_ty = get_target_for_variadic(&call->arg_list.args[i].var_ty);
+    } else {
+      param_target_ty = call->arg_list.args[i].var_ty;
+    }
+
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i],
-                                &call->arg_list.args[i].var_ty);
+                                &param_target_ty);
 
     if (i >= num_non_variadic_args) {
       args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
@@ -1000,25 +1075,24 @@ void get_member_info(struct ir_builder *irb, const struct ast_tyref *struct_ty,
   *member_offset = info.offsets ? info.offsets[member_idx] : 0;
 }
 
-struct ir_op *build_ir_for_member_address_offset(struct ir_builder *irb,
-                                          struct ir_stmt *stmt,
-                                          const struct ast_tyref *struct_ty,
-                                          const char *member_name,
-                                          struct ir_op_var_ty *member_ty
-                                        ) {
+struct ir_op *
+build_ir_for_member_address_offset(struct ir_builder *irb, struct ir_stmt *stmt,
+                                   const struct ast_tyref *struct_ty,
+                                   const char *member_name,
+                                   struct ir_op_var_ty *member_ty) {
   size_t member_offset;
   get_member_info(irb, struct_ty, member_name, member_ty, &member_offset);
 
   struct ir_op *offset = alloc_ir_op(irb, stmt);
   offset->ty = IR_OP_TY_CNST;
-  offset->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
+  offset->var_ty = (struct ir_op_var_ty){
+      .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
   offset->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
 
   return offset;
 }
-  
+
 struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
                                           struct ir_stmt *stmt,
                                           struct ast_expr *lhs_expr,
@@ -1028,9 +1102,10 @@ struct ir_op *build_ir_for_member_address(struct ir_builder *irb,
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
   struct ir_op_var_ty member_ty;
-  struct ir_op *rhs = build_ir_for_member_address_offset(irb, stmt, &lhs_expr->var_ty, member_name, &member_ty);
+  struct ir_op *rhs = build_ir_for_member_address_offset(
+      irb, stmt, &lhs_expr->var_ty, member_name, &member_ty);
   struct ir_op_var_ty pointer_ty = var_ty_make_pointer(irb, &member_ty);
-  
+
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
   op->var_ty = pointer_ty;
@@ -1044,15 +1119,17 @@ struct ir_op *build_ir_for_pointer_address(struct ir_builder *irb,
                                            struct ir_stmt *stmt,
                                            struct ast_expr *lhs_expr,
                                            const struct token *member) {
-  debug_assert(lhs_expr->var_ty.ty == AST_TYREF_TY_POINTER, "makes no sense except on LHS pointer");
+  debug_assert(lhs_expr->var_ty.ty == AST_TYREF_TY_POINTER,
+               "makes no sense except on LHS pointer");
   const char *member_name = identifier_str(irb->parser, member);
 
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, lhs_expr, NULL);
 
   struct ir_op_var_ty member_ty;
-  struct ir_op *rhs = build_ir_for_member_address_offset(irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty);
+  struct ir_op *rhs = build_ir_for_member_address_offset(
+      irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty);
   struct ir_op_var_ty pointer_ty = var_ty_make_pointer(irb, &member_ty);
-  
+
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
   op->var_ty = pointer_ty;
@@ -1079,8 +1156,10 @@ struct ir_op *build_ir_for_array_address(struct ir_builder *irb,
   }
 
   // need to promote rhs to pointer size int
-  debug_assert(rhs_expr->var_ty.ty == AST_TYREF_TY_WELL_KNOWN, "expected well-known ty rhs");
-  struct ast_tyref pointer_size_int = tyref_pointer_sized_int(irb->parser, false);
+  debug_assert(rhs_expr->var_ty.ty == AST_TYREF_TY_WELL_KNOWN,
+               "expected well-known ty rhs");
+  struct ast_tyref pointer_size_int =
+      tyref_pointer_sized_int(irb->parser, false);
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr, &pointer_size_int);
 
   return alloc_binaryop(irb, stmt, &pointer_ty, AST_BINARY_OP_TY_ADD, lhs, rhs);
@@ -1098,7 +1177,8 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     struct ir_op *assignee =
         build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
 
-    struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr, &assg->compound_assg.intermediate_var_ty);
+    struct ir_op *rhs = build_ir_for_expr(
+        irb, stmt, assg->expr, &assg->compound_assg.intermediate_var_ty);
     value = alloc_binaryop(irb, stmt, &assg->compound_assg.intermediate_var_ty,
                            assg->compound_assg.binary_op_ty, assignee, rhs);
   }
@@ -1127,11 +1207,10 @@ struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
     break;
   }
   case AST_EXPR_TY_UNARY_OP: {
-      if (assg->assignee->unary_op.ty == AST_UNARY_OP_TY_INDIRECTION) {
-    address =
-        build_ir_for_expr(irb, stmt, assg->assignee->unary_op.expr, &assg->assignee->unary_op.expr->var_ty);
-        
-      }
+    if (assg->assignee->unary_op.ty == AST_UNARY_OP_TY_INDIRECTION) {
+      address = build_ir_for_expr(irb, stmt, assg->assignee->unary_op.expr,
+                                  &assg->assignee->unary_op.expr->var_ty);
+    }
     break;
   }
   default:
@@ -1618,8 +1697,9 @@ struct ir_basicblock *build_ir_for_jumpstmt(struct ir_builder *irb,
   }
 }
 
-struct ir_op *build_ir_for_zero_init(struct ir_builder *irb, struct ir_stmt *stmt,
-                                    const struct ast_tyref *var_ty) {
+struct ir_op *build_ir_for_zero_init(struct ir_builder *irb,
+                                     struct ir_stmt *stmt,
+                                     const struct ast_tyref *var_ty) {
   if (var_ty->ty != AST_TYREF_TY_WELL_KNOWN) {
     todo("non well-known");
   }
@@ -1631,10 +1711,10 @@ struct ir_op *build_ir_for_zero_init(struct ir_builder *irb, struct ir_stmt *stm
   return value;
 }
 
-struct ir_op *
-build_ir_for_array_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
-                                   struct ast_vardecl *decl,
-                                   struct ast_initlist *init_list) {
+struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
+                                          struct ir_stmt *stmt,
+                                          struct ast_vardecl *decl,
+                                          struct ast_initlist *init_list) {
   struct ast_tyref *var_ty = &decl->var.var_ty;
   debug_assert(var_ty->ty == AST_TYREF_TY_ARRAY, "non array init list");
 
@@ -1652,14 +1732,13 @@ build_ir_for_array_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
 
   struct ir_op *last;
 
-  struct ir_op *start_address =
-      build_ir_for_addressof(irb, stmt, &decl_expr);
+  struct ir_op *start_address = build_ir_for_addressof(irb, stmt, &decl_expr);
 
   struct ir_op *zero_init = NULL;
 
   struct ir_op_var_ty ir_el_ty = var_ty_for_ast_tyref(irb, el_ty);
   size_t el_size = var_ty_info(irb, &ir_el_ty).size;
-    
+
   for (size_t i = 0; i < num_elements; i++) {
     struct ir_op *expr;
 
@@ -1694,11 +1773,10 @@ build_ir_for_array_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   return last;
 }
 
-struct ir_op *
-build_ir_for_struct_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
-                                   struct ast_vardecl *decl,
-                                   struct ast_initlist *init_list) {
-
+struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
+                                           struct ir_stmt *stmt,
+                                           struct ast_vardecl *decl,
+                                           struct ast_initlist *init_list) {
 
   struct ast_tyref *var_ty = &decl->var.var_ty;
   debug_assert(var_ty->ty == AST_TYREF_TY_STRUCT, "non struct init list");
@@ -1714,13 +1792,13 @@ build_ir_for_struct_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
 
   struct ir_op *last;
 
-  struct ir_op *start_address =
-      build_ir_for_addressof(irb, stmt, &decl_expr);
+  struct ir_op *start_address = build_ir_for_addressof(irb, stmt, &decl_expr);
 
   for (size_t i = 0; i < num_elements; i++) {
     struct ir_op *expr;
 
-    debug_assert(i < var_ty->struct_ty.num_field_var_tys, "too many items in struct init-list");
+    debug_assert(i < var_ty->struct_ty.num_field_var_tys,
+                 "too many items in struct init-list");
     struct ast_struct_field *field = &var_ty->struct_ty.field_var_tys[i];
 
     if (i < init_list->num_exprs) {
@@ -1730,7 +1808,8 @@ build_ir_for_struct_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
     }
 
     struct ir_op_var_ty member_ty;
-    struct ir_op *offset = build_ir_for_member_address_offset(irb, stmt, var_ty, field->name, &member_ty);
+    struct ir_op *offset = build_ir_for_member_address_offset(
+        irb, stmt, var_ty, field->name, &member_ty);
 
     struct ir_op *address = alloc_ir_op(irb, stmt);
     address->ty = IR_OP_TY_BINARY_OP;
@@ -1750,21 +1829,22 @@ build_ir_for_struct_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   return last;
 }
 
-struct ir_op *
-build_ir_for_union_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
-                                   struct ast_vardecl *decl,
-                                   struct ast_initlist *init_list) {
+struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
+                                          struct ir_stmt *stmt,
+                                          struct ast_vardecl *decl,
+                                          struct ast_initlist *init_list) {
   struct ast_tyref *var_ty = &decl->var.var_ty;
   debug_assert(var_ty->ty == AST_TYREF_TY_UNION, "non union init list");
 
-  invariant_assert(init_list->num_exprs <= 1, "cannot have more than 1 element in union init-list");
+  invariant_assert(init_list->num_exprs <= 1,
+                   "cannot have more than 1 element in union init-list");
 
   struct ast_expr decl_expr = {
       .ty = AST_EXPR_TY_VAR, .var_ty = *var_ty, .var = decl->var};
-  struct ir_op *address =
-      build_ir_for_addressof(irb, stmt, &decl_expr);
+  struct ir_op *address = build_ir_for_addressof(irb, stmt, &decl_expr);
 
-  debug_assert(var_ty->union_ty.num_field_var_tys, "empty union is GNU extension");
+  debug_assert(var_ty->union_ty.num_field_var_tys,
+               "empty union is GNU extension");
   struct ast_struct_field *field = &var_ty->struct_ty.field_var_tys[0];
 
   struct ir_op *expr;
@@ -1777,9 +1857,7 @@ build_ir_for_union_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op *store = alloc_ir_op(irb, stmt);
   store->ty = IR_OP_TY_STORE_ADDR;
   store->var_ty = IR_OP_VAR_TY_NONE;
-  store->store_addr =
-      (struct ir_op_store_addr){.addr = address, .value = expr};
-
+  store->store_addr = (struct ir_op_store_addr){.addr = address, .value = expr};
 
   return store;
 }
@@ -1793,14 +1871,14 @@ build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   // TODO: non array init lists
 
   switch (var_ty->ty) {
-    case AST_TYREF_TY_ARRAY:
-      return build_ir_for_array_initlist(irb, stmt, decl, init_list);
-    case AST_TYREF_TY_STRUCT:
-      return build_ir_for_struct_initlist(irb, stmt, decl, init_list);
-    case AST_TYREF_TY_UNION:
-      return build_ir_for_union_initlist(irb, stmt, decl, init_list);
-    default:
-      bug("initlist only makes sense for array/struct/union");
+  case AST_TYREF_TY_ARRAY:
+    return build_ir_for_array_initlist(irb, stmt, decl, init_list);
+  case AST_TYREF_TY_STRUCT:
+    return build_ir_for_struct_initlist(irb, stmt, decl, init_list);
+  case AST_TYREF_TY_UNION:
+    return build_ir_for_union_initlist(irb, stmt, decl, init_list);
+  default:
+    bug("initlist only makes sense for array/struct/union");
   }
 }
 
@@ -2009,9 +2087,10 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-struct ir_builder *
-build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
-                      struct ast_funcdef *def, struct var_refs *global_var_refs) {
+struct ir_builder *build_ir_for_function(struct parser *parser,
+                                         struct arena_allocator *arena,
+                                         struct ast_funcdef *def,
+                                         struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
                          .parser = parser,
@@ -2154,7 +2233,8 @@ build_ir_for_function(struct parser *parser, struct arena_allocator *arena,
 
 struct ir_unit *build_ir_for_translationunit(
     /* needed for `associated_text */ struct parser *parser,
-    struct arena_allocator *arena, struct ast_translationunit *translation_unit) {
+    struct arena_allocator *arena,
+    struct ast_translationunit *translation_unit) {
 
   struct ir_unit u = {
       .funcs = arena_alloc(arena, sizeof(struct ir_builder *) *
@@ -2211,8 +2291,8 @@ struct ir_unit *build_ir_for_translationunit(
     struct var_key key = {.name = identifier_str(parser, &def->sig.name),
                           .scope = SCOPE_GLOBAL};
 
-    struct ir_builder *func = build_ir_for_function(
-        parser, arena, def, global_var_refs);
+    struct ir_builder *func =
+        build_ir_for_function(parser, arena, def, global_var_refs);
 
     var_refs_get(global_var_refs, &key)->func = func;
 

@@ -28,8 +28,12 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_UDIV:
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_FADD:
+  case IR_OP_BINARY_OP_TY_FSUB:
+  case IR_OP_BINARY_OP_TY_FMUL:
+  case IR_OP_BINARY_OP_TY_FDIV:
     return false;
-  }
+}
 }
 
 bool op_produces_value(enum ir_op_ty ty) {
@@ -275,6 +279,10 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_MUL:
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_FADD:
+  case IR_OP_BINARY_OP_TY_FSUB:
+  case IR_OP_BINARY_OP_TY_FMUL:
+  case IR_OP_BINARY_OP_TY_FDIV:
     return IR_OP_SIGN_NA;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_SDIV:
@@ -292,7 +300,7 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_UGT:
   case IR_OP_BINARY_OP_TY_UGTEQ:
     return IR_OP_SIGN_UNSIGNED;
-  }
+}
 }
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
@@ -306,8 +314,7 @@ const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {
     .ty = IR_OP_VAR_TY_TY_VARIADIC};
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
-  return ty->num_params > 0 &&
-         ty->params[ty->num_params - 1].ty == IR_OP_VAR_TY_TY_VARIADIC;
+  return ty->flags & IR_OP_VAR_FUNC_TY_FLAG_VARIADIC;
 }
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,

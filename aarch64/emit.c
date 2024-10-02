@@ -61,7 +61,6 @@ struct emit_state {
 //   }
 // }
 
-
 // static unsigned get_lcl_stack_offset(struct emit_state *state,
 //                                      const struct ir_lcl *lcl) {
 //   // FIXME: wrongly assumes everything is 8 byte
@@ -115,7 +114,8 @@ struct aarch64_relocation {
 //         .size = 2,
 //         .sym = (struct sym_relocation){
 //             .symbol_name =
-//                 aarch64_mangle(state->arena, op->call.target->glb_ref.sym_name),
+//                 aarch64_mangle(state->arena,
+//                 op->call.target->glb_ref.sym_name),
 //         }};
 
 //     break;
@@ -125,8 +125,6 @@ struct aarch64_relocation {
 //     break;
 //   }
 // }
-
-
 
 void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
@@ -171,7 +169,6 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
 
 //   // aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(op->reg));
 // }
-
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
@@ -281,6 +278,15 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_FMOV:
     aarch64_emit_fmov(state->emitter, instr->aarch64->fmov);
     break;
+  case AARCH64_INSTR_TY_FCVT:
+    aarch64_emit_fcvt(state->emitter, instr->aarch64->fcvt);
+    break;
+  case AARCH64_INSTR_TY_UCVTF:
+    aarch64_emit_ucvtf(state->emitter, instr->aarch64->ucvtf);
+    break;
+  case AARCH64_INSTR_TY_SCVTF:
+    aarch64_emit_scvtf(state->emitter, instr->aarch64->scvtf);
+    break;
   case AARCH64_INSTR_TY_MVN:
     aarch64_emit_mvn(state->emitter, instr->aarch64->mvn);
     break;
@@ -338,6 +344,18 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_UDIV:
     aarch64_emit_udiv(state->emitter, instr->aarch64->udiv);
     break;
+  case AARCH64_INSTR_TY_FADD:
+    aarch64_emit_fadd(state->emitter, instr->aarch64->fadd);
+    break;
+  case AARCH64_INSTR_TY_FMUL:
+    aarch64_emit_fmul(state->emitter, instr->aarch64->fmul);
+    break;
+  case AARCH64_INSTR_TY_FDIV:
+    aarch64_emit_fdiv(state->emitter, instr->aarch64->fdiv);
+    break;
+  case AARCH64_INSTR_TY_FSUB:
+    aarch64_emit_fsub(state->emitter, instr->aarch64->fsub);
+    break;
   }
 }
 
@@ -363,11 +381,10 @@ aarch64_emit_function(const struct codegen_function *func) {
     size_t emitted = aarch64_emitted_count(state.emitter);
     emit_instr(&state, instr);
     size_t generated_instrs = aarch64_emitted_count(state.emitter) - emitted;
-    debug_assert(
-        generated_instrs == 1,
-        "expected instr %zu to generate exactly 1 instruction but it generated %zu",
-        instr->id,
-        generated_instrs);
+    debug_assert(generated_instrs == 1,
+                 "expected instr %zu to generate exactly 1 instruction but it "
+                 "generated %zu",
+                 instr->id, generated_instrs);
 
     if (instr->reloc) {
       instr->reloc->address = pos;
@@ -384,7 +401,8 @@ aarch64_emit_function(const struct codegen_function *func) {
 
   free_aarch64_emitter(&emitter);
 
-  struct relocation *relocations = arena_alloc(state.arena, vector_byte_size(relocs));
+  struct relocation *relocations =
+      arena_alloc(state.arena, vector_byte_size(relocs));
   vector_copy_to(relocs, relocations);
 
   if (func->num_datas) {
