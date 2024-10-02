@@ -192,6 +192,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->br_cond.cond, cb_metadata);
     break;
   case IR_OP_TY_MOV:
+    cb(&op->mov.value, cb_metadata);
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
@@ -293,6 +294,12 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 }
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
+const struct ir_op_var_ty IR_OP_VAR_TY_I8 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I8 };
+const struct ir_op_var_ty IR_OP_VAR_TY_I16 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I16 };
+const struct ir_op_var_ty IR_OP_VAR_TY_I32 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I32 };
+const struct ir_op_var_ty IR_OP_VAR_TY_I64 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64 };
+const struct ir_op_var_ty IR_OP_VAR_TY_F32 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F32 };
+const struct ir_op_var_ty IR_OP_VAR_TY_F64 = { .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F64 };
 const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {
     .ty = IR_OP_VAR_TY_TY_VARIADIC};
 

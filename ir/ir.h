@@ -244,6 +244,13 @@ struct ir_op_var_ty {
 };
 
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
+const struct ir_op_var_ty IR_OP_VAR_TY_I8;
+const struct ir_op_var_ty IR_OP_VAR_TY_I16;
+const struct ir_op_var_ty IR_OP_VAR_TY_I32;
+const struct ir_op_var_ty IR_OP_VAR_TY_I64;
+const struct ir_op_var_ty IR_OP_VAR_TY_F32;
+const struct ir_op_var_ty IR_OP_VAR_TY_F64;
+
 const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
 
 struct ir_op_store_lcl {

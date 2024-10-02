@@ -241,6 +241,49 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 }
 
+static void lower_fp_cnst(struct ir_builder *func, struct ir_op *op) {
+  // transform into creating an integer, and then mov to float reg
+
+  struct ir_op_var_ty int_ty;
+  unsigned long long int_value;
+
+  debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+
+  switch (op->var_ty.primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_F32: {
+      int_ty = IR_OP_VAR_TY_I32;
+
+      union { float f; unsigned u; } v;
+      v.f = (float)op->cnst.flt_value;
+      int_value = v.u;
+
+      break;
+    }
+    case IR_OP_VAR_PRIMITIVE_TY_F64: {
+      int_ty = IR_OP_VAR_TY_I64;
+
+      union { double d; unsigned long long ull; } v;
+      v.d = (double)op->cnst.flt_value;
+      int_value = v.ull;
+
+      break;
+    }
+    default:
+      unreachable("impossible type");
+  }
+
+  struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+  int_mov->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = int_value
+  };
+
+  op->ty = IR_OP_TY_MOV;
+  op->mov = (struct ir_op_mov){
+    .value = int_mov
+  };
+}
+
 void aarch64_lower(struct ir_builder *func) {
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
@@ -257,7 +300,13 @@ void aarch64_lower(struct ir_builder *func) {
         case IR_OP_TY_CUSTOM:
         case IR_OP_TY_GLB_REF:
         case IR_OP_TY_PHI:
+          break;
         case IR_OP_TY_CNST: {
+          if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
+            lower_fp_cnst(func, op);
+            break;
+          }
+
           if (op->cnst.ty != IR_OP_CNST_TY_STR) {
             break;
           }
@@ -349,62 +398,3 @@ void aarch64_lower(struct ir_builder *func) {
   
 }
 
-
-void aarch64_post_reg_lower(struct ir_builder *func) {
-  // TODO: hacky improve this system so it isn't a bunch of magic values
-  // signalling to the emitter might need new IR layer
-
-  // first we need to insert the metadata we want
-  // currently this is just on call nodes
-
-  // points to first save so we can use it for restore later
-  // struct ir_op *saves = NULL;
-  // struct aarch64_prologue_info info = insert_prologue(func);
-
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-
-    while (stmt) {
-      struct ir_op *op = stmt->first;
-
-      while (op) {
-        switch (op->ty) {
-        case IR_OP_TY_UNKNOWN:
-          bug("unknown op!");
-        case IR_OP_TY_UNDF:
-        case IR_OP_TY_STORE_LCL:
-        case IR_OP_TY_LOAD_LCL:
-        case IR_OP_TY_STORE_ADDR:
-        case IR_OP_TY_LOAD_ADDR:
-        case IR_OP_TY_ADDR:
-        case IR_OP_TY_BR:
-        case IR_OP_TY_MOV:
-        case IR_OP_TY_UNARY_OP:
-        case IR_OP_TY_CAST_OP:
-        case IR_OP_TY_BR_COND:
-        case IR_OP_TY_GLB_REF:
-        case IR_OP_TY_BINARY_OP:
-        case IR_OP_TY_CUSTOM:
-        case IR_OP_TY_CALL:
-        case IR_OP_TY_CNST:
-        case IR_OP_TY_PHI:
-          break;
-        case IR_OP_TY_RET: {
-          // FIXME: don't hardcode return reg
-          break;
-        }
-        }
-
-        op = op->succ;
-      }
-
-      stmt = stmt->succ;
-    }
-
-    basicblock = basicblock->succ;
-  }
-
-  func->total_locals_size =
-      ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
-}

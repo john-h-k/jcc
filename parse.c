@@ -900,7 +900,12 @@ bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
     char *end_ptr;
     long double float_value = strtold(literal_text, &end_ptr);
 
-    if (end_ptr != &literal_text[literal_len]) {
+    size_t literal_end = literal_len;
+    do {
+      literal_end--;
+    } while (literal_len && (tolower(literal_text[literal_end]) == 'f' || tolower(literal_text[literal_end]) == 'l'));
+
+    if (end_ptr - 1 != &literal_text[literal_end]) {
       todo("handle constant float parse failure");
     }
 

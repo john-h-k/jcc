@@ -266,8 +266,14 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_MOVN_IMM:
     todo("movn imm");
     break;
-  case AARCH64_INSTR_TY_MOV_IMM:
-    aarch64_emit_mov_imm(state->emitter, instr->aarch64->mov_imm);
+  case AARCH64_INSTR_TY_MOVZ:
+    aarch64_emit_movz_imm(state->emitter, instr->aarch64->movz);
+    break;
+  case AARCH64_INSTR_TY_MOVK:
+    aarch64_emit_movk_imm(state->emitter, instr->aarch64->movk);
+    break;
+  case AARCH64_INSTR_TY_FMOV:
+    aarch64_emit_fmov(state->emitter, instr->aarch64->fmov);
     break;
   case AARCH64_INSTR_TY_MVN:
     aarch64_emit_mvn(state->emitter, instr->aarch64->mvn);

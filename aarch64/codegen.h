@@ -18,6 +18,7 @@
 
 enum aarch64_instr_ty {
   AARCH64_INSTR_TY_ADDS,
+  AARCH64_INSTR_TY_ADDS_IMM,
   AARCH64_INSTR_TY_ADD,
   AARCH64_INSTR_TY_ADD_IMM,
   AARCH64_INSTR_TY_ADR,
@@ -39,6 +40,7 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_CSINV,
   AARCH64_INSTR_TY_CSNEG,
   AARCH64_INSTR_TY_EON,
+  AARCH64_INSTR_TY_EON_IMM,
   AARCH64_INSTR_TY_EOR,
   AARCH64_INSTR_TY_EOR_IMM,
   AARCH64_INSTR_TY_LOAD_IMM,
@@ -47,11 +49,14 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_LSRV,
   AARCH64_INSTR_TY_MADD,
   AARCH64_INSTR_TY_MOVN_IMM,
-  AARCH64_INSTR_TY_MOV_IMM,
+  AARCH64_INSTR_TY_MOVZ,
+  AARCH64_INSTR_TY_MOVK,
+  AARCH64_INSTR_TY_FMOV,
   AARCH64_INSTR_TY_MVN,
   AARCH64_INSTR_TY_MSUB,
   AARCH64_INSTR_TY_NOP,
   AARCH64_INSTR_TY_ORN,
+  AARCH64_INSTR_TY_ORN_IMM,
   AARCH64_INSTR_TY_ORR,
   AARCH64_INSTR_TY_ORR_IMM,
   AARCH64_INSTR_TY_RET,
@@ -154,11 +159,6 @@ struct aarch64_logical_imm {
   size_t imms;
 };
 
-struct aarch64_addr_imm {
-  struct aarch64_reg dest;
-  size_t imm;
-};
-
 struct aarch64_addsub_imm {
   struct aarch64_reg dest;
   struct aarch64_reg source;
@@ -174,6 +174,11 @@ struct aarch64_addsub_reg {
 
   size_t imm6;
   enum aarch64_shift shift;
+};
+
+struct aarch64_addr_imm {
+  struct aarch64_reg dest;
+  size_t imm;
 };
 
 struct aarch64_bitfield_imm {
@@ -197,16 +202,16 @@ struct aarch64_reg_1_source_with_shift {
   enum aarch64_shift shift;
 };
 
-struct aarch64_mov_imm {
-  struct aarch64_reg dest;
-  size_t imm;
-  size_t shift;
-};
-
 struct aarch64_reg_2_source {
   struct aarch64_reg dest;
   struct aarch64_reg lhs;
   struct aarch64_reg rhs;
+};
+
+struct aarch64_mov_imm {
+  struct aarch64_reg dest;
+  size_t imm;
+  size_t shift;
 };
 
 struct aarch64_fma {
@@ -302,6 +307,10 @@ struct aarch64_instr {
     };
 
     union {
+      struct aarch64_reg_1_source fmov;
+    };
+
+    union {
       struct aarch64_reg_2_source asrv, lslv, lsrv, rorv, sdiv, udiv;
     };
 
@@ -350,7 +359,7 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_mov_imm mov_imm, movn_imm;
+      struct aarch64_mov_imm movz, movk, movn;
     };
   };
 };

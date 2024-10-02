@@ -521,7 +521,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
         continue;
       }
 
-      if (!isxdigit(lexer->text[end.idx])) {
+      if ((is_float && !isdigit(lexer->text[end.idx])) || (!is_float && !isxdigit(lexer->text[end.idx]))) {
         break;
       }
     }
