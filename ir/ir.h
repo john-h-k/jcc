@@ -109,7 +109,16 @@ struct ir_op_ret {
 enum ir_op_cast_op_ty {
   IR_OP_CAST_OP_TY_SEXT,
   IR_OP_CAST_OP_TY_ZEXT,
-  IR_OP_CAST_OP_TY_TRUNCATE,
+  IR_OP_CAST_OP_TY_TRUNC,
+
+  // convert between float types
+  IR_OP_CAST_OP_TY_CONV,
+
+  // convert float <-> signed
+  IR_OP_CAST_OP_TY_UCONV,
+
+  // convert float <-> unsigned
+  IR_OP_CAST_OP_TY_SCONV,
 };
 
 struct ir_op_cast_op {
@@ -147,6 +156,11 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_AND,
   IR_OP_BINARY_OP_TY_OR,
   IR_OP_BINARY_OP_TY_XOR,
+
+  IR_OP_BINARY_OP_TY_FADD,
+  IR_OP_BINARY_OP_TY_FSUB,
+  IR_OP_BINARY_OP_TY_FMUL,
+  IR_OP_BINARY_OP_TY_FDIV,
 
   IR_OP_BINARY_OP_TY_ADD,
   IR_OP_BINARY_OP_TY_SUB,
@@ -201,10 +215,17 @@ enum ir_op_var_ty_ty {
   IR_OP_VAR_TY_TY_VARIADIC,
 };
 
+enum ir_op_var_func_ty_flags {
+  IR_OP_VAR_FUNC_TY_FLAG_NONE = 0,
+  IR_OP_VAR_FUNC_TY_FLAG_VARIADIC = 1
+};
+
 struct ir_op_var_func_ty {
   struct ir_op_var_ty *ret_ty;
   size_t num_params;
   struct ir_op_var_ty *params;
+
+  enum ir_op_var_func_ty_flags flags;
 };
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty);

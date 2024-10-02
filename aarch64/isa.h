@@ -82,50 +82,48 @@
              (U32(0b01) << 24) | (U32(opc) << 22) | (U32(imm12) << 10) |       \
              (U32(Rn) << 5) | U32(Rt))
 
-#define LDR_STR_FP_IMM_UNSIGNED(size, VR, opc, imm9, Rn, Rt)                   \
-  (uint32_t)((U32(size) << 30) | (U32(0b111) << 27) | (U32(0b01) << 26) |        \
-             (U32(0b00) << 24) | (U32(opc) << 22) | (U32(imm9) << 12) |        \
-             (U32(0b01) << 10) | (U32(Rn) << 5) | U32(Rt))
+#define LDR_STR_INT_IMM_UNSIGNED(size, opc, imm12, Rn, Rt) LDR_STR_IMM_UNSIGNED(size, 0b0, opc, imm12, Rn, Rt)
+#define LDR_STR_FP_IMM_UNSIGNED(size, opc, imm12, Rn, Rt) LDR_STR_IMM_UNSIGNED(size, 0b1, opc, imm12, Rn, Rt)
 
 #define STR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
-  LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b00, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b0, 0b00, imm12, Rn, Rt)
 #define LDR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
-  LDR_STR_IMM_UNSIGNED(0b00, 0b0, 0b01, imm12, Rn, Rt)
-
-#define STR_FP_8_IMM_UNSIGNED(imm9, Rn, Rt)                                      \
-  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b0, 0b00, imm9, Rn, Rt)
-#define LDR_FP_8_IMM_UNSIGNED(imm9, Rn, Rt)                                      \
-  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b0, 0b01, imm9, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b0, 0b01, imm12, Rn, Rt)
 
 #define STR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b00, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b01, 0b00, imm12, Rn, Rt)
 #define LDR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b01, 0b0, 0b01, imm12, Rn, Rt)
-
-#define STR_FP_16_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b0, 0b00, imm9, Rn, Rt)
-#define LDR_FP_16_FP_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b0, 0b01, imm9, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b01, 0b01, imm12, Rn, Rt)
 
 #define STR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b00, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b10, 0b00, imm12, Rn, Rt)
 #define LDR_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b10, 0b0, 0b01, imm12, Rn, Rt)
-
-#define STR_FP_32_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b0, 0b00, imm9, Rn, Rt)
-#define LDR_FP_32_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b0, 0b01, imm9, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b10, 0b01, imm12, Rn, Rt)
 
 #define STR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b00, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b11, 0b00, imm12, Rn, Rt)
 #define LDR_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
-  LDR_STR_IMM_UNSIGNED(0b11, 0b0, 0b01, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b11, 0b01, imm12, Rn, Rt)
 
-#define STR_FP_64_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b0, 0b00, imm9, Rn, Rt)
-#define LDR_FP_64_IMM_UNSIGNED(imm9, Rn, Rt)                                     \
-  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b0, 0b01, imm9, Rn, Rt)
+#define STR_FP_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
+  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b00, imm12, Rn, Rt)
+#define LDR_FP_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
+  LDR_STR_FP_IMM_UNSIGNED(0b00, 0b01, imm12, Rn, Rt)
+
+#define STR_FP_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b00, imm12, Rn, Rt)
+#define LDR_FP_16_FP_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b01, 0b01, imm12, Rn, Rt)
+
+#define STR_FP_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b00, imm12, Rn, Rt)
+#define LDR_FP_32_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b10, 0b01, imm12, Rn, Rt)
+
+#define STR_FP_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b00, imm12, Rn, Rt)
+#define LDR_FP_64_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
+  LDR_STR_FP_IMM_UNSIGNED(0b11, 0b01, imm12, Rn, Rt)
 
 /* Register moves */
 
@@ -149,18 +147,176 @@
 #define FMOV_H_TO_32(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b110, Rn, Rd)
 #define FMOV_H_TO_64(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b110, Rn, Rd)
 
-#define FMOV_32_TO_H(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b111, Rn, Rd)
 #define FMOV_32_TO_S(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b111, Rn, Rd)
+#define FMOV_32_TO_D(Rn, Rd) FMOV(0b0, 0b01, 0b00, 0b111, Rn, Rd)
+#define FMOV_32_TO_H(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b111, Rn, Rd)
 
 #define FMOV_S_TO_32(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b110, Rn, Rd)
 
-#define FMOV_64_TO_H(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b111, Rn, Rd)
+#define FMOV_64_TO_S(Rn, Rd) FMOV(0b1, 0b00, 0b00, 0b111, Rn, Rd)
 #define FMOV_64_TO_D(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b111, Rn, Rd)
+#define FMOV_64_TO_H(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b111, Rn, Rd)
 
 #define FMOV_64_TO_TOP_HALF_Q(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b111, Rn, Rd)
 #define FMOV_TOP_HALF_Q_TO_64(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b110, Rn, Rd)
 
 #define FMOV_D_TO_64(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b110, Rn, Rd)
+
+/* Single reg FP data processing */
+
+#define FP_1_REG(M, S, ftype, opcode, Rn, Rd) \
+  (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |   \
+             (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(opcode) << 15) |     \
+             (U32(0b10000) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define FMOV_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000000, Rn, Rd)
+#define FMOV_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)
+#define FMOV_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000000, Rn, Rd)
+
+#define FCVT_S_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000101, Rn, Rd)
+#define FCVT_S_TO_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000111, Rn, Rd)
+
+#define FCVT_D_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000100, Rn, Rd)
+#define FCVT_D_TO_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000111, Rn, Rd)
+
+#define FCVT_H_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000100, Rn, Rd)
+#define FCVT_H_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000101, Rn, Rd)
+
+/* Two reg FP data processing */
+
+
+#define FP_2_REG(M, S, ftype, Rm, opcode, Rn, Rd) \
+  (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |   \
+             (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) | (U32(opcode) << 12) |     \
+             (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define FMUL(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0000, Rn, Rd)
+#define FDIV(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0001, Rn, Rd)
+#define FADD(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0010, Rn, Rd)
+#define FSUB(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0011, Rn, Rd)
+#define FMAX(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0100, Rn, Rd)
+#define FMIN(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0101, Rn, Rd)
+#define FMAXNM(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0110, Rn, Rd)
+#define FMINNM(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0111, Rn, Rd)
+#define FNMUL(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b1000, Rn, Rd)
+#define FMINNM(ftype, Rm, Rn, Rd) FP_2_REG(0b0, 0b0, ftype, Rm, 0b0111, Rn, Rd)
+
+#define FMUL_S(Rm, Rn, Rd) FMUL(0b00, Rm, Rn, Rd)
+#define FDIV_S(Rm, Rn, Rd) FDIV(0b00, Rm, Rn, Rd)
+#define FADD_S(Rm, Rn, Rd) FADD(0b00, Rm, Rn, Rd)
+#define FSUB_S(Rm, Rn, Rd) FSUB(0b00, Rm, Rn, Rd)
+#define FMAX_S(Rm, Rn, Rd) FMAX(0b00, Rm, Rn, Rd)
+#define FMIN_S(Rm, Rn, Rd) FMIN(0b00, Rm, Rn, Rd)
+#define FMAXNM_S(Rm, Rn, Rd) FMAXNM(0b00, Rm, Rn, Rd)
+#define FMINNM_S(Rm, Rn, Rd) FMINNM(0b00, Rm, Rn, Rd)
+#define FNMUL_S(Rm, Rn, Rd) FNMUL(0b00, Rm, Rn, Rd)
+#define FMINNM_S(Rm, Rn, Rd) FMINNM(0b00, Rm, Rn, Rd)
+
+#define FMUL_D(Rm, Rn, Rd) FMUL(0b01, Rm, Rn, Rd)
+#define FDIV_D(Rm, Rn, Rd) FDIV(0b01, Rm, Rn, Rd)
+#define FADD_D(Rm, Rn, Rd) FADD(0b01, Rm, Rn, Rd)
+#define FSUB_D(Rm, Rn, Rd) FSUB(0b01, Rm, Rn, Rd)
+#define FMAX_D(Rm, Rn, Rd) FMAX(0b01, Rm, Rn, Rd)
+#define FMIN_D(Rm, Rn, Rd) FMIN(0b01, Rm, Rn, Rd)
+#define FMAXNM_D(Rm, Rn, Rd) FMAXNM(0b01, Rm, Rn, Rd)
+#define FMINNM_D(Rm, Rn, Rd) FMINNM(0b01, Rm, Rn, Rd)
+#define FNMUL_D(Rm, Rn, Rd) FNMUL(0b01, Rm, Rn, Rd)
+#define FMINNM_D(Rm, Rn, Rd) FMINNM(0b01, Rm, Rn, Rd)
+
+#define FMUL_H(Rm, Rn, Rd) FMUL(0b11, Rm, Rn, Rd)
+#define FDIV_H(Rm, Rn, Rd) FDIV(0b11, Rm, Rn, Rd)
+#define FADD_H(Rm, Rn, Rd) FADD(0b11, Rm, Rn, Rd)
+#define FSUB_H(Rm, Rn, Rd) FSUB(0b11, Rm, Rn, Rd)
+#define FMAX_H(Rm, Rn, Rd) FMAX(0b11, Rm, Rn, Rd)
+#define FMIN_H(Rm, Rn, Rd) FMIN(0b11, Rm, Rn, Rd)
+#define FMAXNM_H(Rm, Rn, Rd) FMAXNM(0b11, Rm, Rn, Rd)
+#define FMINNM_H(Rm, Rn, Rd) FMINNM(0b11, Rm, Rn, Rd)
+#define FNMUL_H(Rm, Rn, Rd) FNMUL(0b11, Rm, Rn, Rd)
+#define FMINNM_H(Rm, Rn, Rd) FMINNM(0b11, Rm, Rn, Rd)
+
+/* Integer <-> FP conversions */
+
+#define INT_FIXP_CONV(sf, S, ftype, rmode, opcode, scale, Rn, Rd) \
+  (uint32_t)((U32(sf) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |   \
+             (U32(ftype) << 22) | (U32(0b0) << 21) | (U32(rmode) << 19) | (U32(opcode) << 16) |     \
+             (U32(scale) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define SCVTF_32FIXP_TO_S(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b00, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_32FIXP_TO_S(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b00, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_S_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b00, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_S_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b00, 0b11, 0b001, scale, Rn, Rd)
+
+#define SCVTF_32FIXP_TO_D(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b01, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_32FIXP_TO_D(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b01, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_D_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b01, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_D_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b01, 0b11, 0b001, scale, Rn, Rd)
+
+#define SCVTF_32FIXP_TO_H(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b11, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_32FIXP_TO_H(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b11, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_H_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b11, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_H_TO_32FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b0, 0b0, 0b11, 0b11, 0b001, scale, Rn, Rd)
+
+#define SCVTF_64FIXP_TO_S(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b00, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_64FIXP_TO_S(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b00, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_S_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b00, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_S_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b00, 0b11, 0b001, scale, Rn, Rd)
+
+#define SCVTF_64FIXP_TO_D(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b01, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_64FIXP_TO_D(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b01, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_D_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b01, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_D_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b01, 0b11, 0b001, scale, Rn, Rd)
+
+#define SCVTF_64FIXP_TO_H(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b11, 0b00, 0b010, scale, Rn, Rd)
+#define UCVTF_64FIXP_TO_H(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b11, 0b00, 0b011, scale, Rn, Rd)
+
+#define FCVTZS_H_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b11, 0b11, 0b000, scale, Rn, Rd)
+#define FCVTZU_H_TO_64FIXP(scale, Rn, Rd) INT_FIXP_CONV(0b1, 0b0, 0b11, 0b11, 0b001, scale, Rn, Rd)
+
+#define INT_FP_CONV(sf, S, ftype, rmode, opcode, Rn, Rd) \
+  (uint32_t)((U32(sf) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |   \
+             (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(rmode) << 19) | (U32(opcode) << 16)     \
+             | (U32(Rn) << 5) | U32(Rd))
+
+#define SCVTF_32_TO_S(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b00, 0b010, Rn, Rd)
+#define UCVTF_32_TO_S(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_S_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_S_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b11, 0b001, Rn, Rd)
+
+#define SCVTF_32_TO_D(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b00, 0b010, Rn, Rd)
+#define UCVTF_32_TO_D(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_D_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_D_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b11, 0b001, Rn, Rd)
+
+#define SCVTF_32_TO_H(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b00, 0b010, Rn, Rd)
+#define UCVTF_32_TO_H(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_H_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_H_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b11, 0b001, Rn, Rd)
+
+#define SCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b010, Rn, Rd)
+#define UCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b001, Rn, Rd)
+
+#define SCVTF_64_TO_D(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b00, 0b010, Rn, Rd)
+#define UCVTF_64_TO_D(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_D_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_D_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b11, 0b001, Rn, Rd)
+
+#define SCVTF_64_TO_H(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b11, 0b00, 0b010, Rn, Rd)
+#define UCVTF_64_TO_H(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b11, 0b00, 0b011, Rn, Rd)
+
+#define FCVTZS_H_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b11, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_H_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b11, 0b11, 0b001, Rn, Rd)
 
 /* Bitfield operations (Immediate) */
 

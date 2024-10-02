@@ -19,6 +19,26 @@
     }                                                                          \
   }
 
+size_t reg_size(enum aarch64_reg_ty reg_ty) {
+  switch (reg_ty) {
+  case AARCH64_REG_TY_W:
+    return 4;
+  case AARCH64_REG_TY_X:
+    return 8;
+  case AARCH64_REG_TY_V:
+  case AARCH64_REG_TY_Q:
+    return 16;
+  case AARCH64_REG_TY_D:
+    return 8;
+  case AARCH64_REG_TY_S:
+    return 4;
+  case AARCH64_REG_TY_H:
+    return 2;
+  case AARCH64_REG_TY_B:
+    return 1;
+  }
+}
+
 bool is_return_reg(struct aarch64_reg reg) { return reg.idx == 0; }
 
 bool is_zero_reg(struct aarch64_reg reg) {
@@ -115,6 +135,9 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_MVN:
     return AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT;
   case AARCH64_INSTR_TY_FMOV:
+  case AARCH64_INSTR_TY_FCVT:
+  case AARCH64_INSTR_TY_UCVTF:
+  case AARCH64_INSTR_TY_SCVTF:
     return AARCH64_INSTR_CLASS_REG_1_SOURCE;
   case AARCH64_INSTR_TY_ASRV:
   case AARCH64_INSTR_TY_LSLV:
@@ -122,6 +145,10 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_RORV:
   case AARCH64_INSTR_TY_SDIV:
   case AARCH64_INSTR_TY_UDIV:
+  case AARCH64_INSTR_TY_FADD:
+  case AARCH64_INSTR_TY_FSUB:
+  case AARCH64_INSTR_TY_FMUL:
+  case AARCH64_INSTR_TY_FDIV:
     return AARCH64_INSTR_CLASS_REG_2_SOURCE;
   case AARCH64_INSTR_TY_MADD:
   case AARCH64_INSTR_TY_MSUB:
@@ -243,6 +270,29 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
     return idx >= 24 ? (idx - 24 + 8) : idx;
   }
 }
+
+// this is useful for save/restores where you don't know what is live in that
+// reg
+struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
+  switch (reg.ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    bug("doesn't make sense for none/spilled/flags");
+  case IR_REG_TY_INTEGRAL:
+    return (struct aarch64_reg){
+      .ty = AARCH64_REG_TY_X,
+      .idx = translate_reg_idx(reg.idx, reg.ty)
+    };
+  case IR_REG_TY_FP:
+    // FIXME: this does not support vectors/quad floats
+    return (struct aarch64_reg){
+      .ty = AARCH64_REG_TY_D,
+      .idx = translate_reg_idx(reg.idx, reg.ty)
+    };
+  }
+}
+
 
 enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
   switch (var_ty->primitive) {
@@ -614,7 +664,15 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg lhs = codegen_reg(op->binary_op.lhs);
   struct aarch64_reg rhs = codegen_reg(op->binary_op.rhs);
 
-  switch (op->binary_op.ty) {
+  bool is_fp = var_ty_is_fp(&op->var_ty);
+
+  enum ir_op_binary_op_ty ty = op->binary_op.ty;
+  debug_assert(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
+                   ty == IR_OP_BINARY_OP_TY_FMUL ||
+                   ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
+               "floating point with invalid binary op");
+
+  switch (ty) {
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
@@ -720,88 +778,181 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
         .rhs = rhs,
     };
     break;
+  case IR_OP_BINARY_OP_TY_FADD:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FADD;
+    instr->aarch64->fadd = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FSUB:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FSUB;
+    instr->aarch64->fsub = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FMUL:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FMUL;
+    instr->aarch64->fmul = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FDIV:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FDIV;
+    instr->aarch64->fdiv = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
     bug("squot/uquot shoud have been lowered");
   }
 }
 
-static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
+                            struct aarch64_reg source,
+                            struct aarch64_reg dest) {
   struct instr *instr = alloc_instr(state->func);
 
+  invariant_assert(op->cast_op.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+                   "can't sext from non-primitive");
+
+  switch (op->cast_op.value->var_ty.primitive) {
+  case IR_OP_VAR_PRIMITIVE_TY_I8:
+    instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+    instr->aarch64->sbfm = (struct aarch64_bitfield){
+        .dest = dest, .source = source, .immr = 0b000000, .imms = 0b000111};
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I16:
+    instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+    instr->aarch64->sbfm = (struct aarch64_bitfield){
+        .dest = dest, .source = source, .immr = 0b000000, .imms = 0b001111};
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I32:
+    instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+    instr->aarch64->sbfm = (struct aarch64_bitfield){
+        .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I64:
+    bug("can't sext from I64");
+  case IR_OP_VAR_PRIMITIVE_TY_F32:
+  case IR_OP_VAR_PRIMITIVE_TY_F64:
+    bug("todo cast floats");
+  }
+}
+
+static void codegen_zext_op(struct codegen_state *state,
+                            struct aarch64_reg source,
+                            struct aarch64_reg dest) {
+  // `mov`/`orr` with 32 bit operands zeroes top 32 bits
+
+  struct instr *instr = alloc_instr(state->func);
+  *instr->aarch64 = MOV_ALIAS(dest, source);
+}
+
+static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
+                             struct aarch64_reg source,
+                             struct aarch64_reg dest) {
+  struct instr *instr = alloc_instr(state->func);
+  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+                   "can't truncate non-primitive");
+
+  // https://kddnewton.com/2022/08/11/aarch64-bitmask-immediates.html
+  // for understanding the immediates
+  switch (op->var_ty.primitive) {
+  case IR_OP_VAR_PRIMITIVE_TY_I8:
+    instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
+    instr->aarch64->and_imm = (struct aarch64_logical_imm){
+        .dest = dest,
+        .source = source,
+        .immr = 0b0,
+        .imms = 0b111,
+    };
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I16:
+    instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
+    instr->aarch64->and_imm = (struct aarch64_logical_imm){
+        .dest = dest,
+        .source = source,
+        .immr = 0b0,
+        .imms = 0b1111,
+    };
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I32:
+    *instr->aarch64 = MOV_ALIAS(dest, source);
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_I64:
+    break;
+  case IR_OP_VAR_PRIMITIVE_TY_F32:
+  case IR_OP_VAR_PRIMITIVE_TY_F64:
+    bug("todo cast floats");
+  }
+}
+
+static void codegen_conv_op(struct codegen_state *state,
+                            struct aarch64_reg source,
+                            struct aarch64_reg dest) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_FCVT;
+  instr->aarch64->fcvt =
+      (struct aarch64_reg_1_source){.dest = dest, .source = source};
+}
+
+static void codegen_uconv_op(struct codegen_state *state,
+                             struct aarch64_reg source,
+                             struct aarch64_reg dest) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_UCVTF;
+  instr->aarch64->fcvt =
+      (struct aarch64_reg_1_source){.dest = dest, .source = source};
+}
+
+static void codegen_sconv_op(struct codegen_state *state,
+                             struct aarch64_reg source,
+                             struct aarch64_reg dest) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_SCVTF;
+  instr->aarch64->fcvt =
+      (struct aarch64_reg_1_source){.dest = dest, .source = source};
+}
+
+static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
   struct aarch64_reg source = codegen_reg(op->cast_op.value);
 
-  // NOTE: we promote the reg to the same type as the dest reg (mixed regs make
-  // no sense in the instruction)
-  source.ty = dest.ty;
+  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg to
+  // the same type as the dest reg (mixed regs make no sense in an integer
+  // instruction)
 
   switch (op->cast_op.ty) {
   case IR_OP_CAST_OP_TY_SEXT:
-    invariant_assert(op->cast_op.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                     "can't sext from non-primitive");
-
-    switch (op->cast_op.value->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield){
-          .dest = dest, .source = source, .immr = 0b000000, .imms = 0b000111};
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield){
-          .dest = dest, .source = source, .immr = 0b000000, .imms = 0b001111};
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
-      instr->aarch64->sbfm = (struct aarch64_bitfield){
-          .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-      bug("can't sext from I64");
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
-      bug("todo cast floats");
-    }
+    source.ty = dest.ty;
+    codegen_sext_op(state, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
-    // `mov`/`orr` with 32 bit operands zeroes top 32 bits
-    *instr->aarch64 = MOV_ALIAS(dest, source);
+    source.ty = dest.ty;
+    codegen_zext_op(state, source, dest);
     break;
-  case IR_OP_CAST_OP_TY_TRUNCATE:
-    invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
-                     "can't truncate non-primitive");
-
-    // https://kddnewton.com/2022/08/11/aarch64-bitmask-immediates.html
-    // for understanding the immediates
-    switch (op->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-      instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
-      instr->aarch64->and_imm = (struct aarch64_logical_imm){
-          .dest = dest,
-          .source = source,
-          .immr = 0b0,
-          .imms = 0b111,
-      };
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-      instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
-      instr->aarch64->and_imm = (struct aarch64_logical_imm){
-          .dest = dest,
-          .source = source,
-          .immr = 0b0,
-          .imms = 0b1111,
-      };
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-      *instr->aarch64 = MOV_ALIAS(dest, source);
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-      break;
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
-      bug("todo cast floats");
-    }
+  case IR_OP_CAST_OP_TY_TRUNC:
+    source.ty = dest.ty;
+    codegen_trunc_op(state, op, source, dest);
+    break;
+  case IR_OP_CAST_OP_TY_CONV:
+    codegen_conv_op(state, source, dest);
+    break;
+  case IR_OP_CAST_OP_TY_UCONV:
+    codegen_uconv_op(state, source, dest);
+    break;
+  case IR_OP_CAST_OP_TY_SCONV:
+    codegen_sconv_op(state, source, dest);
+    break;
   }
 }
 
@@ -812,15 +963,13 @@ struct codegen_call_metadata {
   unsigned long post_call_live_fp_regs;
 };
 
-static void call_save_reg(struct codegen_state *state, struct ir_op *call,
+static void call_save_reg(struct codegen_state *state,
                           struct ir_reg ir_reg, size_t idx) {
-  UNUSED_ARG(call);
-
   // FIXME: this saves entire reg but can sometimes save smaller amounts
   // (depending of the type occupying the live reg)
+  // we would need a way to determine what value is in a reg at a given instruction
 
-  struct aarch64_reg reg = {.ty = AARCH64_REG_TY_X,
-                            .idx = translate_reg_idx(ir_reg.idx, ir_reg.ty)};
+  struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
 
   size_t offset = (state->call_saves_start / 8) + idx;
 
@@ -833,12 +982,9 @@ static void call_save_reg(struct codegen_state *state, struct ir_op *call,
                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
 }
 
-static void call_restore_reg(struct codegen_state *state, struct ir_op *call,
+static void call_restore_reg(struct codegen_state *state,
                              struct ir_reg ir_reg, size_t idx) {
-  UNUSED_ARG(call);
-
-  struct aarch64_reg reg = {.ty = AARCH64_REG_TY_X,
-                            .idx = translate_reg_idx(ir_reg.idx, ir_reg.ty)};
+  struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
 
   size_t offset = (state->call_saves_start / 8) + idx;
 
@@ -909,7 +1055,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
 
     if (NTH_BIT(live_gp_volatile, i)) {
-      call_save_reg(state, op,
+      call_save_reg(state,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
                     save_idx++);
     }
@@ -926,7 +1072,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
 
     if (NTH_BIT(live_fp_volatile, i)) {
-      call_save_reg(state, op, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
+      call_save_reg(state, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
                     save_idx++);
     }
   }
@@ -955,8 +1101,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     struct instr *mov_to_vol = alloc_instr(state->func);
     *mov_to_vol->aarch64 = MOV_ALIAS(vol_reg, val_reg);
 
-    size_t num_normal_args = is_func_variadic(func_ty) ? func_ty->num_params - 1
-                                                       : func_ty->num_params;
+    size_t num_normal_args = func_ty->num_params;
 
     for (size_t head = 0; head < op->call.num_args; head++) {
       size_t i = op->call.num_args - 1 - head;
@@ -974,12 +1119,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         size_t variadic_arg_idx = i - num_normal_args;
 
         struct instr *store = alloc_instr(state->func);
-
-        // TODO: do this in lowering, where it understands the types better
-        // we must force this to be 8 byte as everything is 8 byte to a variadic
-        if (aarch64_reg_ty_is_gp(source.ty)) {
-          source.ty = AARCH64_REG_TY_X;
-        }
 
         store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
         store->aarch64->str_imm =
@@ -1042,7 +1181,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
 
     if (NTH_BIT(live_gp_volatile, i)) {
-      call_restore_reg(state, op,
+      call_restore_reg(state,
                        (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
                        restore_idx++);
     }
@@ -1056,7 +1195,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
 
     if (NTH_BIT(live_fp_volatile, i)) {
-      call_restore_reg(state, op, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
+      call_restore_reg(state, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
                        restore_idx++);
     }
   }
@@ -1359,7 +1498,26 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     // check reg types are the same within instructions
     // FMOV is an exception as it can move GP<->FP
 
-    if (instr->aarch64->ty != AARCH64_INSTR_TY_FMOV) {
+    if (instr->aarch64->ty == AARCH64_INSTR_TY_FMOV) {
+      size_t cur_size = reg_size(reg.ty);
+      size_t last_size = reg_size(data->reg_ty);
+      invariant_assert(cur_size == last_size,
+                       "expected `fmov` %zu to have same size registers "
+                       "(expected %zu found %zu)",
+                       instr->id, cur_size, last_size);
+    } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
+      invariant_assert(
+          aarch64_reg_ty_is_fp(reg.ty) && aarch64_reg_ty_is_fp(data->reg_ty),
+          "expected `fcvt` %zu to have all registers floating-point",
+          instr->id);
+    } else if (instr->aarch64->ty == AARCH64_INSTR_TY_UCVTF ||
+               instr->aarch64->ty == AARCH64_INSTR_TY_SCVTF) {
+      invariant_assert(aarch64_reg_ty_is_fp(reg.ty) !=
+                           aarch64_reg_ty_is_fp(data->reg_ty),
+                       "expected `ucvtf`/`scvtf` %zu to have one fp register "
+                       "and one gp register",
+                       instr->id);
+    } else {
       invariant_assert(reg.ty == data->reg_ty,
                        "reg ty mismatch in %zu (expected %d found %d)",
                        instr->id, data->reg_ty, reg.ty);
@@ -1493,47 +1651,23 @@ struct codegen_function *aarch64_codegen(struct ir_builder *ir) {
   return func;
 }
 
-char reg_prefix(struct aarch64_reg reg, size_t *sz) {
+char reg_prefix(struct aarch64_reg reg) {
   switch (reg.ty) {
   case AARCH64_REG_TY_W:
-    if (sz) {
-      *sz = 4;
-    }
     return 'w';
   case AARCH64_REG_TY_X:
-    if (sz) {
-      *sz = 8;
-    }
     return 'x';
   case AARCH64_REG_TY_V:
-    if (sz) {
-      *sz = 16;
-    }
     return 'b';
   case AARCH64_REG_TY_Q:
-    if (sz) {
-      *sz = 16;
-    }
     return 'q';
   case AARCH64_REG_TY_D:
-    if (sz) {
-      *sz = 8;
-    }
     return 'd';
   case AARCH64_REG_TY_S:
-    if (sz) {
-      *sz = 4;
-    }
     return 's';
   case AARCH64_REG_TY_H:
-    if (sz) {
-      *sz = 2;
-    }
     return 'h';
   case AARCH64_REG_TY_B:
-    if (sz) {
-      *sz = 1;
-    }
     return 'b';
   }
 }
@@ -1699,8 +1833,8 @@ void codegen_fprintf(FILE *file, const char *format, ...) {
       struct aarch64_reg reg = va_arg(list, struct aarch64_reg);
       ssize_t imm = va_arg(list, ssize_t);
 
-      size_t size;
-      char prefix = reg_prefix(reg, &size);
+      size_t size = reg_size(reg.ty);
+      char prefix = reg_prefix(reg);
 
       if (!imm) {
         fprintf(file, "[%c%zu]", prefix, reg.idx);
@@ -1761,7 +1895,7 @@ void codegen_fprintf(FILE *file, const char *format, ...) {
       format += 7;
     } else if (strncmp(format, "reg", 3) == 0) {
       struct aarch64_reg reg = va_arg(list, struct aarch64_reg);
-      char prefix = reg_prefix(reg, NULL);
+      char prefix = reg_prefix(reg);
       fputc(prefix, file);
 
       if (reg.idx == 31) {
@@ -2180,6 +2314,18 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     fprintf(file, "fmov");
     debug_print_reg_1_source(file, &instr->aarch64->fmov);
     break;
+  case AARCH64_INSTR_TY_FCVT:
+    fprintf(file, "fcvt");
+    debug_print_reg_1_source(file, &instr->aarch64->fcvt);
+    break;
+  case AARCH64_INSTR_TY_UCVTF:
+    fprintf(file, "ucvtf");
+    debug_print_reg_1_source(file, &instr->aarch64->ucvtf);
+    break;
+  case AARCH64_INSTR_TY_SCVTF:
+    fprintf(file, "scvtf");
+    debug_print_reg_1_source(file, &instr->aarch64->scvtf);
+    break;
   case AARCH64_INSTR_TY_MSUB:
     fprintf(file, "msub");
     debug_print_fma(file, &instr->aarch64->msub);
@@ -2235,6 +2381,22 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_ORN_IMM:
     fprintf(file, "orn");
     debug_print_logical_imm(file, &instr->aarch64->orn_imm);
+    break;
+  case AARCH64_INSTR_TY_FADD:
+    fprintf(file, "fadd");
+    debug_print_reg_2_source(file, &instr->aarch64->fadd);
+    break;
+  case AARCH64_INSTR_TY_FMUL:
+    fprintf(file, "fmul");
+    debug_print_reg_2_source(file, &instr->aarch64->fmul);
+    break;
+  case AARCH64_INSTR_TY_FDIV:
+    fprintf(file, "fdiv");
+    debug_print_reg_2_source(file, &instr->aarch64->fdiv);
+    break;
+  case AARCH64_INSTR_TY_FSUB:
+    fprintf(file, "fsub");
+    debug_print_reg_2_source(file, &instr->aarch64->fsub);
     break;
   }
 }

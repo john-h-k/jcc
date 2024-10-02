@@ -22,8 +22,14 @@ const char *cast_op_string(enum ir_op_cast_op_ty ty) {
     return "sext";
   case IR_OP_CAST_OP_TY_ZEXT:
     return "zext";
-  case IR_OP_CAST_OP_TY_TRUNCATE:
+  case IR_OP_CAST_OP_TY_TRUNC:
     return "trunc";
+  case IR_OP_CAST_OP_TY_CONV:
+    return "conv";
+  case IR_OP_CAST_OP_TY_UCONV:
+    return "uconv";
+  case IR_OP_CAST_OP_TY_SCONV:
+    return "sconv";
   }
 }
 
@@ -75,6 +81,14 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "s%";
   case IR_OP_BINARY_OP_TY_UQUOT:
     return "u%";
+  case IR_OP_BINARY_OP_TY_FADD:
+    return "f+";
+  case IR_OP_BINARY_OP_TY_FSUB:
+    return "f-";
+  case IR_OP_BINARY_OP_TY_FMUL:
+    return "f*";
+  case IR_OP_BINARY_OP_TY_FDIV:
+    return "f/";
   }
 }
 
@@ -282,7 +296,8 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
           fprintf(file, " - (FLAGS -> %c%zu) ", char_prefix_for_reg(ir->reg),
                   ir->reg.idx);
         }
-      } else if (ir->reg.ty != IR_REG_TY_NONE && ir->mov.value->reg.ty != IR_REG_TY_NONE) {
+      } else if (ir->reg.ty != IR_REG_TY_NONE &&
+                 ir->mov.value->reg.ty != IR_REG_TY_NONE) {
         fprintf(file, " - (%c%zu -> %c%zu) ",
                 char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
                 char_prefix_for_reg(ir->reg), ir->reg.idx);
