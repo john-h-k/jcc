@@ -1,5 +1,9 @@
 // expected value: 25
 
+struct bar;
+struct baz { struct baz* b; };
+struct bat *l;
+
 struct foo {
   int a, b;
   char *c;

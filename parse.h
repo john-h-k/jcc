@@ -65,12 +65,18 @@ struct ast_struct_field {
   struct ast_tyref *var_ty;
 };
 
-struct ast_ty_struct {
-  struct ast_struct_field *field_var_tys;
-  size_t num_field_var_tys;
+enum ast_ty_aggregate_ty {
+  AST_TY_AGGREGATE_TY_STRUCT,
+  AST_TY_AGGREGATE_TY_UNION,
 };
 
-struct ast_ty_union {
+struct ast_ty_aggregate {
+  enum ast_ty_aggregate_ty ty;
+
+  const char *name;
+
+  bool complete;
+
   struct ast_struct_field *field_var_tys;
   size_t num_field_var_tys;
 };
@@ -91,8 +97,8 @@ enum ast_tyref_ty {
   AST_TYREF_TY_POINTER,
   AST_TYREF_TY_ARRAY,
   AST_TYREF_TY_VARIADIC,
-  AST_TYREF_TY_STRUCT,
-  AST_TYREF_TY_UNION,
+  AST_TYREF_TY_AGGREGATE, // e.g `union { int a; }`
+  AST_TYREF_TY_TAGGED, // e.g `struct foo`
   // AST_TYREF_TY_TYPEDEF_NAME,
   // AST_TYREF_TY_ENUM,
 };
@@ -118,6 +124,11 @@ enum ast_type_qualifier_flags {
 //   AST_TYPE_QUALIFIER_FLAG_LONG,
 // };
 
+struct ast_ty_tagged {
+  // union/enum/struct share same namespace so this is fine
+  const char *name;
+};
+
 struct ast_tyref {
   enum ast_tyref_ty ty;
 
@@ -128,8 +139,8 @@ struct ast_tyref {
     struct ast_ty_pointer pointer;
     struct ast_ty_array array;
     struct ast_ty_func func;
-    struct ast_ty_struct struct_ty;
-    struct ast_ty_union union_ty;
+    struct ast_ty_aggregate aggregate;
+    struct ast_ty_tagged tagged;
   };
 };
 
@@ -552,7 +563,7 @@ struct ast_typedecl {
 struct ast_typedef {
   enum ast_type_ty ty;
 
-  struct token name;
+  struct token *name;
 
   size_t num_field_lists;
   struct ast_fieldlist *field_lists;
@@ -596,8 +607,8 @@ struct ast_funcdecl {
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  struct ast_typedef *type_defs;
-  size_t num_type_defs;
+  struct ast_vardecllist *var_decl_lists;
+  size_t num_var_decl_lists;
 
   struct ast_typedecl *type_decls;
   size_t num_type_decls;
@@ -639,8 +650,7 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
 bool is_integral_ty(const struct ast_tyref *ty);
 bool is_fp_ty(const struct ast_tyref *ty);
 
-struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);
-
+struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);                                     
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

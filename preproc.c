@@ -331,6 +331,8 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
     if (end < original_len && is_newline(original_text[end])) {
       // this was a line continuation
       i = end;
+    } else {
+      new_text[head++] = original_text[i];
     }
   }
 
