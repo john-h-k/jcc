@@ -126,6 +126,12 @@ bool var_ty_eq(struct ir_builder *irb, const struct ir_op_var_ty *l,
 
 bool var_ty_needs_cast_op(struct ir_builder *irb, const struct ir_op_var_ty *l,
                           const struct ir_op_var_ty *r) {
+  if (var_ty_is_aggregate(l) && var_ty_is_aggregate(r)) {
+    // casting between these could require conversion,
+    // but never a cast op
+    return false;
+  }
+
   if (var_ty_eq(irb, l, r)) {
     return false;
   }
@@ -229,31 +235,42 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
   switch (ty_ref->ty) {
   case AST_TYREF_TY_UNKNOWN:
     bug("shouldn't reach IR gen with unresolved type");
-  case AST_TYREF_TY_STRUCT: {
-    struct ir_op_var_ty ty;
-    ty.ty = IR_OP_VAR_TY_TY_STRUCT;
-    ty.struct_ty.num_fields = ty_ref->struct_ty.num_field_var_tys;
-    ty.struct_ty.fields =
-        arena_alloc(irb->arena, sizeof(struct ir_op) * ty.struct_ty.num_fields);
-
-    for (size_t i = 0; i < ty.struct_ty.num_fields; i++) {
-      ty.struct_ty.fields[i] =
-          var_ty_for_ast_tyref(irb, ty_ref->struct_ty.field_var_tys[i].var_ty);
-    }
-
-    return ty;
+  case AST_TYREF_TY_TAGGED: {
+    struct ast_tyref base_ty = tyref_get_underlying(irb->parser, ty_ref);
+    return var_ty_for_ast_tyref(irb, &base_ty);
   }
-  case AST_TYREF_TY_UNION: {
-    struct ir_op_var_ty ty;
-    ty.ty = IR_OP_VAR_TY_TY_UNION;
-    ty.union_ty.num_fields = ty_ref->union_ty.num_field_var_tys;
-    ty.union_ty.fields =
-        arena_alloc(irb->arena, sizeof(struct ir_op) * ty.union_ty.num_fields);
+  case AST_TYREF_TY_AGGREGATE: {
+    struct ast_ty_aggregate aggregate = ty_ref->aggregate;
 
-    for (size_t i = 0; i < ty.union_ty.num_fields; i++) {
-      ty.union_ty.fields[i] =
-          var_ty_for_ast_tyref(irb, ty_ref->union_ty.field_var_tys[i].var_ty);
-    }
+    struct ir_op_var_ty ty;
+    switch (aggregate.ty) {
+      case AST_TY_AGGREGATE_TY_STRUCT:
+        ty.ty = IR_OP_VAR_TY_TY_STRUCT;
+        ty.struct_ty.num_fields = aggregate.num_field_var_tys;
+        ty.struct_ty.fields =
+            arena_alloc(irb->arena, sizeof(struct ir_op_var_ty) * ty.struct_ty.num_fields);
+
+        for (size_t i = 0; i < ty.struct_ty.num_fields; i++) {
+          // handle nested types
+
+          ty.struct_ty.fields[i] =
+              var_ty_for_ast_tyref(irb, aggregate.field_var_tys[i].var_ty);
+        }
+        break;
+      case AST_TY_AGGREGATE_TY_UNION:
+        ty.ty = IR_OP_VAR_TY_TY_UNION;
+        ty.union_ty.num_fields = aggregate.num_field_var_tys;
+        ty.union_ty.fields =
+            arena_alloc(irb->arena, sizeof(struct ir_op_var_ty) * ty.union_ty.num_fields);
+
+        for (size_t i = 0; i < ty.union_ty.num_fields; i++) {
+          // handle nested types
+
+          ty.struct_ty.fields[i] =
+              var_ty_for_ast_tyref(irb, aggregate.field_var_tys[i].var_ty);
+        }
+        break;
+      }
 
     return ty;
   }
@@ -296,8 +313,13 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
     return ty;
   }
   case AST_TYREF_TY_POINTER: {
-    struct ir_op_var_ty underlying =
-        var_ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
+    struct ir_op_var_ty underlying ;
+    if (ty_ref->pointer.underlying->ty == AST_TYREF_TY_TAGGED) {
+      underlying = IR_OP_VAR_TY_NONE;
+    } else {
+      underlying = var_ty_for_ast_tyref(irb, ty_ref->pointer.underlying);
+    }
+
     return var_ty_make_pointer(irb, &underlying);
   }
   case AST_TYREF_TY_ARRAY: {
@@ -386,7 +408,6 @@ enum ir_op_cast_op_ty cast_ty_for_ast_tyref(struct ir_builder *irb,
   } else {
     invariant_assert(from_var_ty.primitive != to_var_ty.primitive,
                      "cast not needed for types of same size");
-
     if (WKT_IS_SIGNED(from->well_known)) {
       return IR_OP_CAST_OP_TY_SEXT;
     } else {
@@ -952,8 +973,8 @@ struct ir_op *build_ir_for_initlist(struct ir_builder *irb,
   // order to be built
 
   debug_assert(ast_tyref->ty == AST_TYREF_TY_ARRAY ||
-                   ast_tyref->ty == AST_TYREF_TY_STRUCT ||
-                   ast_tyref->ty == AST_TYREF_TY_UNION,
+                   ast_tyref->ty == AST_TYREF_TY_AGGREGATE ||
+                   ast_tyref->ty == AST_TYREF_TY_TAGGED,
                "init list only makes sense for arrays/structs/unions");
   UNUSED_ARG(irb);
   UNUSED_ARG(stmt);
@@ -1049,15 +1070,24 @@ struct ir_op *var_assg(struct ir_builder *irb, struct ir_stmt *stmt,
   return op;
 }
 
-void get_member_info(struct ir_builder *irb, const struct ast_tyref *struct_ty,
+void get_member_info(struct ir_builder *irb, const struct ast_tyref *ty_ref,
                      const char *member_name, struct ir_op_var_ty *member_ty,
                      size_t *member_offset) {
+  struct ast_tyref aggregate;
+  if (ty_ref->ty == AST_TYREF_TY_TAGGED) {
+    aggregate = tyref_get_underlying(irb->parser, ty_ref);
+  } else {
+    aggregate = *ty_ref;
+  }
+
+  debug_assert(aggregate.ty == AST_TYREF_TY_AGGREGATE, "expected aggregate");
+
   *member_ty = IR_OP_VAR_TY_NONE;
 
   size_t member_idx = 0;
-  for (; member_idx < struct_ty->struct_ty.num_field_var_tys; member_idx++) {
+  for (; member_idx < aggregate.aggregate.num_field_var_tys; member_idx++) {
     struct ast_struct_field *field =
-        &struct_ty->struct_ty.field_var_tys[member_idx];
+        &aggregate.aggregate.field_var_tys[member_idx];
     if (strcmp(field->name, member_name) == 0) {
       *member_ty = var_ty_for_ast_tyref(irb, field->var_ty);
       if (member_ty->ty == IR_OP_VAR_TY_TY_ARRAY) {
@@ -1068,7 +1098,7 @@ void get_member_info(struct ir_builder *irb, const struct ast_tyref *struct_ty,
     }
   }
 
-  struct ir_op_var_ty ir_struct_ty = var_ty_for_ast_tyref(irb, struct_ty);
+  struct ir_op_var_ty ir_struct_ty = var_ty_for_ast_tyref(irb, &aggregate);
   struct ir_var_ty_info info = var_ty_info(irb, &ir_struct_ty);
 
   // offsets are null for a union
@@ -1803,9 +1833,9 @@ struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
                                            struct ast_initlist *init_list) {
 
   struct ast_tyref *var_ty = &decl->var.var_ty;
-  debug_assert(var_ty->ty == AST_TYREF_TY_STRUCT, "non struct init list");
+  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE, "non struct init list");
 
-  size_t num_elements = var_ty->struct_ty.num_field_var_tys;
+  size_t num_elements = var_ty->aggregate.num_field_var_tys;
 
   if (!num_elements) {
     bug("empty structs are GNU extension");
@@ -1821,9 +1851,9 @@ struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
   for (size_t i = 0; i < num_elements; i++) {
     struct ir_op *expr;
 
-    debug_assert(i < var_ty->struct_ty.num_field_var_tys,
+    debug_assert(i < var_ty->aggregate.num_field_var_tys,
                  "too many items in struct init-list");
-    struct ast_struct_field *field = &var_ty->struct_ty.field_var_tys[i];
+    struct ast_struct_field *field = &var_ty->aggregate.field_var_tys[i];
 
     if (i < init_list->num_exprs) {
       expr = build_ir_for_expr(irb, stmt, &init_list->exprs[i], field->var_ty);
@@ -1858,7 +1888,7 @@ struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
                                           struct ast_vardecl *decl,
                                           struct ast_initlist *init_list) {
   struct ast_tyref *var_ty = &decl->var.var_ty;
-  debug_assert(var_ty->ty == AST_TYREF_TY_UNION, "non union init list");
+  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE, "non union init list");
 
   invariant_assert(init_list->num_exprs <= 1,
                    "cannot have more than 1 element in union init-list");
@@ -1867,9 +1897,9 @@ struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
       .ty = AST_EXPR_TY_VAR, .var_ty = *var_ty, .var = decl->var};
   struct ir_op *address = build_ir_for_addressof(irb, stmt, &decl_expr);
 
-  debug_assert(var_ty->union_ty.num_field_var_tys,
+  debug_assert(var_ty->aggregate.num_field_var_tys,
                "empty union is GNU extension");
-  struct ast_struct_field *field = &var_ty->struct_ty.field_var_tys[0];
+  struct ast_struct_field *field = &var_ty->aggregate.field_var_tys[0];
 
   struct ir_op *expr;
   if (init_list->num_exprs) {
@@ -1897,10 +1927,13 @@ build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   switch (var_ty->ty) {
   case AST_TYREF_TY_ARRAY:
     return build_ir_for_array_initlist(irb, stmt, decl, init_list);
-  case AST_TYREF_TY_STRUCT:
-    return build_ir_for_struct_initlist(irb, stmt, decl, init_list);
-  case AST_TYREF_TY_UNION:
-    return build_ir_for_union_initlist(irb, stmt, decl, init_list);
+  case AST_TYREF_TY_AGGREGATE:
+    switch (var_ty->aggregate.ty) {
+      case AST_TY_AGGREGATE_TY_STRUCT:
+        return build_ir_for_struct_initlist(irb, stmt, decl, init_list);
+      case AST_TY_AGGREGATE_TY_UNION:
+        return build_ir_for_union_initlist(irb, stmt, decl, init_list);
+    }
   default:
     bug("initlist only makes sense for array/struct/union");
   }

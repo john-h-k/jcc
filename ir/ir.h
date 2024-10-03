@@ -264,6 +264,7 @@ struct ir_op_var_ty {
   };
 };
 
+const struct ir_op_var_ty IR_OP_VAR_TY_UNKNOWN;
 const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
 const struct ir_op_var_ty IR_OP_VAR_TY_I8;
 const struct ir_op_var_ty IR_OP_VAR_TY_I16;
@@ -659,10 +660,10 @@ struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
                                       const struct ir_op_var_ty *underlying,
                                       size_t num_elements);
 
-bool var_ty_is_simple(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_primitive(const struct ir_op_var_ty *var_ty, enum ir_op_var_primitive_ty primitive);
 bool var_ty_is_integral(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_op_var_ty *var_ty);
+bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty);
 
 
 void spill_op(struct ir_builder *irb, struct ir_op *op);

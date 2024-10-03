@@ -114,3 +114,19 @@ struct var_table_entry *get_entry(struct var_table *var_table,
   trace("did not find entry for %s", name);
   return NULL;
 }
+
+void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_entries_callback cb, void *metadata) {
+  struct var_table_scope *scope = var_table->last;
+  while (scope) {
+    size_t num_vars = vector_length(scope->entries);
+
+    for (size_t i = 0; i < num_vars; i++) {
+      struct var_table_entry *entry = vector_get(scope->entries, i);
+
+      cb(file, entry, metadata);
+    }
+
+    scope = scope->prev;
+  }
+}
+
