@@ -26,9 +26,20 @@ struct aarch64_emitter {
 #define ISFLT(d) (d).dest.ty == AARCH64_REG_TY_S
 #define ISFLT_REG(d) (d).ty == AARCH64_REG_TY_S
 
-void bad_instr() {
-  bug("register types or arguments did not make sense");
-}
+#define SF_FOR_REG(r)                                                          \
+  (r).ty == AARCH64_REG_TY_X                                                   \
+      ? SF_64                                                                  \
+      : (debug_assert((r).ty == AARCH64_REG_TY_W,                              \
+                      "SF_FOR_REG with non {X, W} register"),                  \
+         SF_32)
+
+#define FTYPE_FOR_REG(r)                                                          \
+  (r).ty == AARCH64_REG_TY_D                                                   \
+      ? FTYPE_DOUBLE                                                                  \
+      : ((r).ty == AARCH64_REG_TY_S ? FTYPE_SINGLE : (debug_assert((r).ty == AARCH64_REG_TY_H,                              \
+                      "FTYPE_FOR_REG with non {D, S, H} register"), FTYPE_HALF))
+
+void bad_instr() { bug("register types or arguments did not make sense"); }
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
@@ -77,7 +88,8 @@ void aarch64_emit_nop(struct aarch64_emitter *emitter) {
 
 /* Single reg FP data processing */
 
-void aarch64_emit_scvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source scvtf) {
+void aarch64_emit_scvtf(struct aarch64_emitter *emitter,
+                        const struct aarch64_reg_1_source scvtf) {
   struct aarch64_reg dest = scvtf.dest;
   struct aarch64_reg source = scvtf.source;
 
@@ -118,7 +130,8 @@ void aarch64_emit_scvtf(struct aarch64_emitter *emitter, const struct aarch64_re
   bad_instr();
 }
 
-void aarch64_emit_ucvtf(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source ucvtf) {
+void aarch64_emit_ucvtf(struct aarch64_emitter *emitter,
+                        const struct aarch64_reg_1_source ucvtf) {
   struct aarch64_reg dest = ucvtf.dest;
   struct aarch64_reg source = ucvtf.source;
 
@@ -159,7 +172,8 @@ void aarch64_emit_ucvtf(struct aarch64_emitter *emitter, const struct aarch64_re
   bad_instr();
 }
 
-void aarch64_emit_fcvt(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fcvt) {
+void aarch64_emit_fcvt(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fcvt) {
   struct aarch64_reg dest = fcvt.dest;
   struct aarch64_reg source = fcvt.source;
 
@@ -172,7 +186,8 @@ void aarch64_emit_fcvt(struct aarch64_emitter *emitter, const struct aarch64_reg
   }
 }
 
-void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source fmov) {
+void aarch64_emit_fmov(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fmov) {
   struct aarch64_reg dest = fmov.dest;
   struct aarch64_reg source = fmov.source;
 
@@ -205,120 +220,61 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter, const struct aarch64_reg
 
 /* Two reg FP data processing */
 
-void aarch64_emit_fadd(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fadd) {
-  if (ISDBL(fadd)) {
-    aarch64_emit(emitter, FADD_D(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
-  } else if (ISFLT(fadd)) {
-    aarch64_emit(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
-  } else {
-    bad_instr();
-  }
+void aarch64_emit_fadd(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fadd) {
+  aarch64_emit(emitter, FADD(FTYPE_FOR_REG(fadd.dest), fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
 }
 
-void aarch64_emit_fsub(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fsub) {
-  if (ISDBL(fsub)) {
-    aarch64_emit(emitter, FSUB_D(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
-  } else if (ISFLT(fsub)) {
-    aarch64_emit(emitter, FSUB_S(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
-  } else {
-    bad_instr();
-  }
+void aarch64_emit_fsub(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fsub) {
+  aarch64_emit(emitter, FSUB(FTYPE_FOR_REG(fsub.dest), fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
 }
 
-void aarch64_emit_fmul(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fmul) {
-  if (ISDBL(fmul)) {
-    aarch64_emit(emitter, FMUL_D(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
-  } else if (ISFLT(fmul)) {
-    aarch64_emit(emitter, FMUL_S(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
-  } else {
-    bad_instr();
-  }
+void aarch64_emit_fmul(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fmul) {
+  aarch64_emit(emitter, FMUL(FTYPE_FOR_REG(fmul.dest), fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
 }
 
-void aarch64_emit_fdiv(struct aarch64_emitter *emitter, const struct aarch64_reg_2_source fdiv) {
-  if (ISDBL(fdiv)) {
-    aarch64_emit(emitter, FDIV_D(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
-  } else if (ISFLT(fdiv)) {
-    aarch64_emit(emitter, FDIV_S(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
-  } else {
-    bad_instr();
-  }
+void aarch64_emit_fdiv(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fdiv) {
+  aarch64_emit(emitter, FDIV(FTYPE_FOR_REG(fdiv.dest), fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
 }
 
 /* Register moves */
 
 void aarch64_emit_movz(struct aarch64_emitter *emitter,
-                          const struct aarch64_mov_imm movz) {
-  if (!UNS_FITS_IN_BITS(movz.imm, 16)) {
-    bug("int too big");
-  }
-
-  if (IS64(movz)) {
-    aarch64_emit(emitter, MOVZ_64(movz.shift, (uint16_t)movz.imm, movz.dest.idx));
-  } else {
-    aarch64_emit(emitter, MOVZ_32(movz.shift, (uint16_t)movz.imm, movz.dest.idx));
-  }
+                       const struct aarch64_mov_imm movz) {
+  aarch64_emit(emitter, MOVZ(SF_FOR_REG(movz.dest), movz.shift, movz.imm, movz.dest.idx));
 }
 
 void aarch64_emit_movk(struct aarch64_emitter *emitter,
-                          const struct aarch64_mov_imm movk) {
-  if (!UNS_FITS_IN_BITS(movk.imm, 16)) {
-    bug("int too big");
-  }
-
-  if (IS64(movk)) {
-    aarch64_emit(emitter, MOVK_64(movk.shift, (uint16_t)movk.imm, movk.dest.idx));
-  } else {
-    aarch64_emit(emitter, MOVK_32(movk.shift, (uint16_t)movk.imm, movk.dest.idx));
-  }
+                       const struct aarch64_mov_imm movk) {
+  aarch64_emit(emitter, MOVK(SF_FOR_REG(movk.dest), movk.shift, movk.imm, movk.dest.idx));
 }
 
 void aarch64_emit_movn(struct aarch64_emitter *emitter,
-                          const struct aarch64_mov_imm movn) {
-  if (!UNS_FITS_IN_BITS(movn.imm, 16)) {
-    bug("int too big");
-  }
-
-  if (IS64(movn)) {
-    aarch64_emit(emitter, MOVN_64(movn.shift, (uint16_t)movn.imm, movn.dest.idx));
-  } else {
-    aarch64_emit(emitter, MOVN_32(movn.shift, (uint16_t)movn.imm, movn.dest.idx));
-  }
+                       const struct aarch64_mov_imm movn) {
+  aarch64_emit(emitter, MOVN(SF_FOR_REG(movn.dest), movn.shift, movn.imm, movn.dest.idx));
 }
 
 /* Bitfield operations (Immediate) */
 
 void aarch64_emit_sbfm(struct aarch64_emitter *emitter,
                        const struct aarch64_bitfield bf) {
-  if (IS64(bf)) {
-    aarch64_emit(emitter,
-                 SBFM_64_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 SBFM_32_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  }
+  aarch64_emit(emitter,
+               SBFM_IMM(0b1, bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
 }
 
 void aarch64_emit_bfm(struct aarch64_emitter *emitter,
                       const struct aarch64_bitfield bf) {
-  if (IS64(bf)) {
-    aarch64_emit(emitter,
-                 BFM_64_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 BFM_32_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  }
+  aarch64_emit(emitter,
+               BFM_IMM(SF_FOR_REG(bf.dest), bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
 }
 
 void aarch64_emit_ubfm(struct aarch64_emitter *emitter,
                        const struct aarch64_bitfield bf) {
-  if (IS64(bf)) {
-    aarch64_emit(emitter,
-                 UBFM_64_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 UBFM_32_IMM(bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
-  }
+  aarch64_emit(emitter,
+               UBFM_IMM(SF_FOR_REG(bf.dest), bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
 }
 
 /* Logical (register) */
@@ -340,222 +296,105 @@ void aarch64_emit_mvn(struct aarch64_emitter *emitter,
 
 void aarch64_emit_and(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, AND_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, AND_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+  aarch64_emit(emitter, AND_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                   log.lhs.idx, log.dest.idx));
 }
 
 void aarch64_emit_ands(struct aarch64_emitter *emitter,
-                      const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, ANDS_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, ANDS_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+                       const struct aarch64_logical_reg log) {
+  aarch64_emit(emitter, ANDS_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                    log.lhs.idx, log.dest.idx));
 }
 
 void aarch64_emit_eor(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, EOR_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, EOR_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+  aarch64_emit(emitter, EOR_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                   log.lhs.idx, log.dest.idx));
 }
 
 void aarch64_emit_eon(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, EON_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, EON_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+  aarch64_emit(emitter, EON_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                   log.lhs.idx, log.dest.idx));
 }
 
 void aarch64_emit_orr(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, ORR_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, ORR_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+  aarch64_emit(emitter, ORR_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                   log.lhs.idx, log.dest.idx));
 }
 
 void aarch64_emit_orn(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {
-  if (IS64(log)) {
-    aarch64_emit(emitter, ORN_64_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter, ORN_32_REG(log.shift, log.rhs.idx, log.imm6,
-                                     log.lhs.idx, log.dest.idx));
-  }
+  aarch64_emit(emitter, ORN_REG(SF_FOR_REG(log.dest), log.shift, log.rhs.idx, log.imm6,
+                                   log.lhs.idx, log.dest.idx));
 }
-
 
 /* Logical (immediate) */
 
-#define VALIDATE_BITWISE_IMMS()                                                \
-  invariant_assert(UNS_FITS_IN_BITS(log.immr, 6) &&                            \
-                       UNS_FITS_IN_BITS(log.imms, 6),                          \
-                   "immediate too big for bitwise imm instr");
-
 void aarch64_emit_eor_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 EOR_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 EOR_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
+    aarch64_emit(emitter, EOR_IMM(SF_FOR_REG(log.dest), log.n, log.immr, log.imms, log.source.idx,
+                                     log.dest.idx));
 }
-
-void aarch64_emit_eon_imm(struct aarch64_emitter *emitter,
-                          const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 EON_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 EON_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
-}
-
 
 void aarch64_emit_orr_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 ORR_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ORR_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
-}
-
-void aarch64_emit_orn_imm(struct aarch64_emitter *emitter,
-                          const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 ORN_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ORN_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
+    aarch64_emit(emitter, ORR_IMM(SF_FOR_REG(log.dest), log.n, log.immr, log.imms, log.source.idx,
+                                     log.dest.idx));
 }
 
 void aarch64_emit_ands_imm(struct aarch64_emitter *emitter,
                            const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 ANDS_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ANDS_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
+    aarch64_emit(emitter, ANDS_IMM(SF_FOR_REG(log.dest), log.n, log.immr, log.imms, log.source.idx,
+                                      log.dest.idx));
 }
 
 void aarch64_emit_and_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_logical_imm log) {
-  VALIDATE_BITWISE_IMMS();
-
-  if (IS64(log)) {
-    aarch64_emit(emitter,
-                 AND_64_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 AND_32_IMM(log.immr, log.imms, log.source.idx, log.dest.idx));
-  }
+    aarch64_emit(emitter, AND_IMM(SF_FOR_REG(log.dest), log.n, log.immr, log.imms, log.source.idx,
+                                     log.dest.idx));
 }
 
 /* Add & subtract (register) */
 
 void aarch64_emit_sub(struct aarch64_emitter *emitter,
                       const struct aarch64_addsub_reg sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter, SUB_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                     sub.lhs.idx, sub.dest.idx));
-  } else {
-    aarch64_emit(emitter, SUB_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                     sub.lhs.idx, sub.dest.idx));
-  }
+  aarch64_emit(emitter, SUB_REG(SF_FOR_REG(sub.dest), sub.shift, sub.imm6,
+                                sub.rhs.idx, sub.lhs.idx, sub.dest.idx));
 }
 
 void aarch64_emit_subs(struct aarch64_emitter *emitter,
                        const struct aarch64_addsub_reg sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter, SUBS_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                      sub.lhs.idx, sub.dest.idx));
-  } else if (IS32(sub)) {
-    aarch64_emit(emitter, SUBS_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                      sub.lhs.idx, sub.dest.idx));
-  } else {
-    bad_instr();
-  }
+  aarch64_emit(emitter, SUBS_REG(SF_FOR_REG(sub.dest), sub.shift, sub.imm6,
+                                 sub.rhs.idx, sub.lhs.idx, sub.dest.idx));
 }
 void aarch64_emit_add(struct aarch64_emitter *emitter,
-                      const struct aarch64_addsub_reg sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter, ADD_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                     sub.lhs.idx, sub.dest.idx));
-  } else if (IS32(sub)) {
-    aarch64_emit(emitter, ADD_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                     sub.lhs.idx, sub.dest.idx));
-  } else {
-    bad_instr();
-  }
+                      const struct aarch64_addsub_reg add) {
+  aarch64_emit(emitter, ADD_REG(SF_FOR_REG(add.dest), add.shift, add.imm6,
+                                add.rhs.idx, add.lhs.idx, add.dest.idx));
 }
 
 void aarch64_emit_adds(struct aarch64_emitter *emitter,
-                       const struct aarch64_addsub_reg sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter, ADDS_64_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                      sub.lhs.idx, sub.dest.idx));
-  } else if (IS32(sub)) {
-    aarch64_emit(emitter, ADDS_32_REG(sub.shift, sub.imm6, sub.rhs.idx,
-                                      sub.lhs.idx, sub.dest.idx));
-  }
-
-  bad_instr();
+                       const struct aarch64_addsub_reg add) {
+  aarch64_emit(emitter, ADDS_REG(SF_FOR_REG(add.dest), add.shift, add.imm6,
+                                 add.rhs.idx, add.lhs.idx, add.dest.idx));
 }
 
 /* Addressing (immediate) */
 
 void aarch64_emit_adr(struct aarch64_emitter *emitter,
                       const struct aarch64_addr_imm addr) {
-  unsigned immlo = CLAMP_BITS(addr.imm & 0b11, 2);
-  unsigned immhi = CLAMP_BITS((unsigned int)addr.imm >> 2, 19);
+  imm_t immlo = addr.imm & 0b11;
+  imm_t immhi = addr.imm >> 2;
 
   aarch64_emit(emitter, ADR(immlo, immhi, addr.dest.idx));
 }
 
 void aarch64_emit_adrp(struct aarch64_emitter *emitter,
                        const struct aarch64_addr_imm addr) {
-  int immlo = addr.imm & 0b11;
-  int immhi = addr.imm >> 2;
+  imm_t immlo = addr.imm & 0b11;
+  imm_t immhi = addr.imm >> 2;
 
   aarch64_emit(emitter, ADRP(immlo, immhi, addr.dest.idx));
 }
@@ -564,136 +403,80 @@ void aarch64_emit_adrp(struct aarch64_emitter *emitter,
 
 void aarch64_emit_sub_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_addsub_imm sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter,
-                 SUB_64_IMM(sub.shift, sub.imm, sub.source.idx, sub.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 SUB_32_IMM(sub.shift, sub.imm, sub.source.idx, sub.dest.idx));
-  }
+  aarch64_emit(emitter, SUB_IMM(SF_FOR_REG(sub.dest), sub.shift, sub.imm,
+                                sub.source.idx, sub.dest.idx));
 }
 
 void aarch64_emit_subs_imm(struct aarch64_emitter *emitter,
-                          const struct aarch64_addsub_imm sub) {
-  if (IS64(sub)) {
-    aarch64_emit(emitter,
-                 SUBS_64_IMM(sub.shift, sub.imm, sub.source.idx, sub.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 SUBS_32_IMM(sub.shift, sub.imm, sub.source.idx, sub.dest.idx));
-  }
+                           const struct aarch64_addsub_imm sub) {
+  aarch64_emit(emitter, SUBS_IMM(SF_FOR_REG(sub.dest), sub.shift, sub.imm,
+                                 sub.source.idx, sub.dest.idx));
 }
 
 void aarch64_emit_add_imm(struct aarch64_emitter *emitter,
                           const struct aarch64_addsub_imm add) {
-  if (IS64(add)) {
-    aarch64_emit(emitter,
-                 ADD_64_IMM(add.shift, add.imm, add.source.idx, add.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ADD_32_IMM(add.shift, add.imm, add.source.idx, add.dest.idx));
-  }
+  aarch64_emit(emitter, ADD_IMM(SF_FOR_REG(add.dest), add.shift, add.imm,
+                                add.source.idx, add.dest.idx));
 }
 
 void aarch64_emit_adds_imm(struct aarch64_emitter *emitter,
-                          const struct aarch64_addsub_imm add) {
-  if (IS64(add)) {
-    aarch64_emit(emitter,
-                 ADDS_64_IMM(add.shift, add.imm, add.source.idx, add.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ADDS_32_IMM(add.shift, add.imm, add.source.idx, add.dest.idx));
-  }
+                           const struct aarch64_addsub_imm add) {
+  aarch64_emit(emitter, ADDS_IMM(SF_FOR_REG(add.dest), add.shift, add.imm,
+                                 add.source.idx, add.dest.idx));
 }
 
 /* Multiply & multiply-add */
 
 void aarch64_emit_madd(struct aarch64_emitter *emitter,
                        const struct aarch64_fma fma) {
-  if (IS64(fma)) {
-    aarch64_emit(emitter, MADD_64(fma.rhs.idx, fma.addsub.idx, fma.lhs.idx,
-                                  fma.dest.idx));
-  } else {
-    aarch64_emit(emitter, MADD_32(fma.rhs.idx, fma.addsub.idx, fma.lhs.idx,
-                                  fma.dest.idx));
-  }
+  aarch64_emit(emitter, MADD(SF_FOR_REG(fma.dest), fma.rhs.idx, fma.addsub.idx,
+                             fma.lhs.idx, fma.dest.idx));
 }
 
 void aarch64_emit_msub(struct aarch64_emitter *emitter,
                        const struct aarch64_fma fma) {
-  if (IS64(fma)) {
-    aarch64_emit(emitter, MSUB_64(fma.rhs.idx, fma.addsub.idx, fma.lhs.idx,
-                                  fma.dest.idx));
-  } else {
-    aarch64_emit(emitter, MSUB_32(fma.rhs.idx, fma.addsub.idx, fma.lhs.idx,
-                                  fma.dest.idx));
-  }
+  aarch64_emit(emitter, MSUB(SF_FOR_REG(fma.dest), fma.rhs.idx, fma.addsub.idx,
+                             fma.lhs.idx, fma.dest.idx));
 }
 
 /* Shifts and rotates */
 
 void aarch64_emit_lslv(struct aarch64_emitter *emitter,
-                          const struct aarch64_reg_2_source shift) {
-  if (IS64(shift)) {
-    aarch64_emit(emitter,
-                 LSLV_64(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 LSLV_32(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  }
+                       const struct aarch64_reg_2_source shift) {
+  aarch64_emit(emitter, LSLV(SF_FOR_REG(shift.dest), shift.rhs.idx,
+                             shift.lhs.idx, shift.dest.idx));
 }
 
 void aarch64_emit_lsrv(struct aarch64_emitter *emitter,
-                          const struct aarch64_reg_2_source shift) {
-  if (IS64(shift)) {
-    aarch64_emit(emitter,
-                 LSRV_64(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 LSRV_32(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  }
+                       const struct aarch64_reg_2_source shift) {
+  aarch64_emit(emitter, LSRV(SF_FOR_REG(shift.dest), shift.rhs.idx,
+                             shift.lhs.idx, shift.dest.idx));
 }
 
 void aarch64_emit_asrv(struct aarch64_emitter *emitter,
-                          const struct aarch64_reg_2_source shift) {
-  if (IS64(shift)) {
-    aarch64_emit(emitter,
-                 ASRV_64(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 ASRV_32(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  }
+                       const struct aarch64_reg_2_source shift) {
+  aarch64_emit(emitter, ASRV(SF_FOR_REG(shift.dest), shift.rhs.idx,
+                             shift.lhs.idx, shift.dest.idx));
 }
 
 void aarch64_emit_rorv(struct aarch64_emitter *emitter,
-                          const struct aarch64_reg_2_source shift) {
-  if (IS64(shift)) {
-    aarch64_emit(emitter,
-                 RORV_64(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  } else {
-    aarch64_emit(emitter,
-                 RORV_32(shift.rhs.idx, shift.lhs.idx, shift.dest.idx));
-  }
+                       const struct aarch64_reg_2_source shift) {
+  aarch64_emit(emitter, RORV(SF_FOR_REG(shift.dest), shift.rhs.idx,
+                             shift.lhs.idx, shift.dest.idx));
 }
 
 /* Division */
 
 void aarch64_emit_sdiv(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_2_source div) {
-  if (IS64(div)) {
-    aarch64_emit(emitter, SDIV_64(div.rhs.idx, div.lhs.idx, div.dest.idx));
-  } else {
-    aarch64_emit(emitter, SDIV_32(div.rhs.idx, div.lhs.idx, div.dest.idx));
-  }
+  aarch64_emit(emitter, SDIV(SF_FOR_REG(div.dest), div.rhs.idx, div.lhs.idx,
+                             div.dest.idx));
 }
 
 void aarch64_emit_udiv(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_2_source div) {
-  if (IS64(div)) {
-    aarch64_emit(emitter, UDIV_64(div.rhs.idx, div.lhs.idx, div.dest.idx));
-  } else {
-    aarch64_emit(emitter, UDIV_32(div.rhs.idx, div.lhs.idx, div.dest.idx));
-  }
+  aarch64_emit(emitter, UDIV(SF_FOR_REG(div.dest), div.rhs.idx, div.lhs.idx,
+                             div.dest.idx));
 }
 
 /* Loads and stores */
@@ -799,11 +582,11 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
       aarch64_emit(emitter,
                    STR_64_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
     } else if (ISDBL_REG(str.source)) {
-      aarch64_emit(emitter,
-                   STR_FP_64_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
+      aarch64_emit(emitter, STR_FP_64_IMM_UNSIGNED(str.imm, str.addr.idx,
+                                                   str.source.idx));
     } else if (ISFLT_REG(str.source)) {
-      aarch64_emit(emitter,
-                   STR_FP_32_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
+      aarch64_emit(emitter, STR_FP_32_IMM_UNSIGNED(str.imm, str.addr.idx,
+                                                   str.source.idx));
     } else {
       aarch64_emit(emitter,
                    STR_32_IMM_UNSIGNED(str.imm, str.addr.idx, str.source.idx));
@@ -822,46 +605,30 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_csel(struct aarch64_emitter *emitter,
                        const struct aarch64_conditional_select select) {
-  if (IS64(select)) {
-    aarch64_emit(emitter, CSEL_64(select.false_source.idx, select.cond,
-                                  select.true_source.idx, select.dest.idx));
-  } else {
-    aarch64_emit(emitter, CSEL_32(select.false_source.idx, select.cond,
-                                  select.true_source.idx, select.dest.idx));
-  }
+  aarch64_emit(emitter,
+               CSEL(SF_FOR_REG(select.dest), select.false_source.idx,
+                    select.cond, select.true_source.idx, select.dest.idx));
 }
 
 void aarch64_emit_csinc(struct aarch64_emitter *emitter,
                         const struct aarch64_conditional_select select) {
-  if (IS64(select)) {
-    aarch64_emit(emitter, CSINC_64(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  } else {
-    aarch64_emit(emitter, CSINC_32(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  }
+  aarch64_emit(emitter,
+               CSINC(SF_FOR_REG(select.dest), select.false_source.idx,
+                     select.cond, select.true_source.idx, select.dest.idx));
 }
 
 void aarch64_emit_csinv(struct aarch64_emitter *emitter,
                         const struct aarch64_conditional_select select) {
-  if (IS64(select)) {
-    aarch64_emit(emitter, CSINV_64(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  } else {
-    aarch64_emit(emitter, CSINV_32(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  }
+  aarch64_emit(emitter,
+               CSINV(SF_FOR_REG(select.dest), select.false_source.idx,
+                     select.cond, select.true_source.idx, select.dest.idx));
 }
 
 void aarch64_emit_csneg(struct aarch64_emitter *emitter,
                         const struct aarch64_conditional_select select) {
-  if (IS64(select)) {
-    aarch64_emit(emitter, CSNEG_64(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  } else {
-    aarch64_emit(emitter, CSNEG_32(select.false_source.idx, select.cond,
-                                   select.true_source.idx, select.dest.idx));
-  }
+  aarch64_emit(emitter,
+               CSNEG(SF_FOR_REG(select.dest), select.false_source.idx,
+                     select.cond, select.true_source.idx, select.dest.idx));
 }
 
 /* Branches */
@@ -873,11 +640,9 @@ void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
   signed long long cur_pos = aarch64_emitted_count(emitter);
   signed long long target_pos = br.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  simm_t offset = target_pos - cur_pos;
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
-                   "offset too big for branch instruction!");
-  aarch64_emit(emitter, B_COND(CLAMP_BITS(offset, 19), br.cond));
+  aarch64_emit(emitter, B_COND(offset, br.cond));
 }
 
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
@@ -885,11 +650,9 @@ void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
   signed long long cur_pos = aarch64_emitted_count(emitter);
   signed long long target_pos = br.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  simm_t offset = target_pos - cur_pos;
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
-                   "offset too big for branch instruction!");
-  aarch64_emit(emitter, BC_COND(CLAMP_BITS(offset, 19), br.cond));
+  aarch64_emit(emitter, BC_COND(offset, br.cond));
 }
 
 void aarch64_emit_b(struct aarch64_emitter *emitter,
@@ -897,17 +660,15 @@ void aarch64_emit_b(struct aarch64_emitter *emitter,
   signed long long cur_pos = aarch64_emitted_count(emitter);
   signed long long target_pos = br.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  simm_t offset = target_pos - cur_pos;
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 26),
-                   "offset too big for branch instruction!");
-  aarch64_emit(emitter, B(CLAMP_BITS(offset, 26)));
+  aarch64_emit(emitter, B(offset));
 }
 
 void aarch64_emit_bl(struct aarch64_emitter *emitter,
                      const struct aarch64_branch br) {
 
-  signed offset = 0;
+  simm_t offset = 0;
   if (br.target) {
     signed long long cur_pos = aarch64_emitted_count(emitter);
     signed long long target_pos = br.target->first_instr->id;
@@ -915,9 +676,7 @@ void aarch64_emit_bl(struct aarch64_emitter *emitter,
     offset = target_pos - cur_pos;
   }
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 26),
-                   "offset too big for branch instruction!");
-  aarch64_emit(emitter, BL(CLAMP_BITS(offset, 26)));
+  aarch64_emit(emitter, BL(offset));
 }
 
 void aarch64_emit_cbz(struct aarch64_emitter *emitter,
@@ -925,16 +684,9 @@ void aarch64_emit_cbz(struct aarch64_emitter *emitter,
   signed long long cur_pos = aarch64_emitted_count(emitter);
   signed long long target_pos = cmp.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  simm_t offset = target_pos - cur_pos;
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
-                   "offset too big for branch instruction!");
-
-  if (IS64_REG(cmp.cmp)) {
-    aarch64_emit(emitter, CBZ_64_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
-  } else {
-    aarch64_emit(emitter, CBZ_32_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
-  }
+  aarch64_emit(emitter, CBZ(SF_FOR_REG(cmp.cmp), offset, cmp.cmp.idx));
 }
 
 void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
@@ -942,16 +694,9 @@ void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
   signed long long cur_pos = aarch64_emitted_count(emitter);
   signed long long target_pos = cmp.target->first_instr->id;
 
-  signed offset = target_pos - cur_pos;
+  simm_t offset = target_pos - cur_pos;
 
-  invariant_assert(SIG_FITS_IN_BITS(offset, 19),
-                   "offset too big for branch instruction!");
-
-  if (IS64_REG(cmp.cmp)) {
-    aarch64_emit(emitter, CBNZ_64_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
-  } else {
-    aarch64_emit(emitter, CBNZ_32_IMM(CLAMP_BITS(offset, 19), cmp.cmp.idx));
-  }
+  aarch64_emit(emitter, CBNZ(SF_FOR_REG(cmp.cmp), offset, cmp.cmp.idx));
 }
 
 void aarch64_emit_ret(struct aarch64_emitter *emitter,

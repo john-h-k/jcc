@@ -402,6 +402,10 @@ struct ast_vardecllist {
   size_t num_decls;
 };
 
+struct ast_typedef {
+  struct ast_vardecllist var_decl_list;
+};
+
 /* Jump statements - `return`, `break`, `continue`, `goto` */
 
 struct ast_returnstmt {
@@ -554,13 +558,13 @@ enum ast_type_ty {
   AST_TYPE_TY_STRUCT,
 };
 
-struct ast_typedecl {
+struct ast_aggregatedecl {
   enum ast_type_ty ty;
 
   struct token name;
 };
 
-struct ast_typedef {
+struct ast_aggregatedef {
   enum ast_type_ty ty;
 
   struct token *name;
@@ -610,7 +614,7 @@ struct ast_translationunit {
   struct ast_vardecllist *var_decl_lists;
   size_t num_var_decl_lists;
 
-  struct ast_typedecl *type_decls;
+  struct ast_aggregatedecl *type_decls;
   size_t num_type_decls;
 
   struct ast_funcdef *func_defs;

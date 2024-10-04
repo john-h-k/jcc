@@ -1768,8 +1768,9 @@ struct ir_op *build_ir_for_zero_init(struct ir_builder *irb,
 struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
                                           struct ir_stmt *stmt,
                                           struct ast_vardecl *decl,
-                                          struct ast_initlist *init_list) {
-  struct ast_tyref *var_ty = &decl->var.var_ty;
+                                          struct ast_initlist *init_list,
+                                           const struct ast_tyref *var_ty
+                                        ) {
   debug_assert(var_ty->ty == AST_TYREF_TY_ARRAY, "non array init list");
 
   struct ast_tyref *el_ty = var_ty->array.element;
@@ -1830,10 +1831,11 @@ struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
 struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
                                            struct ir_stmt *stmt,
                                            struct ast_vardecl *decl,
-                                           struct ast_initlist *init_list) {
+                                           struct ast_initlist *init_list,
+                                           const struct ast_tyref *var_ty
+                                         ) {
 
-  struct ast_tyref *var_ty = &decl->var.var_ty;
-  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE, "non struct init list");
+  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE && var_ty->aggregate.ty == AST_TY_AGGREGATE_TY_STRUCT, "non stuct init list");
 
   size_t num_elements = var_ty->aggregate.num_field_var_tys;
 
@@ -1886,9 +1888,10 @@ struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
 struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
                                           struct ir_stmt *stmt,
                                           struct ast_vardecl *decl,
-                                          struct ast_initlist *init_list) {
-  struct ast_tyref *var_ty = &decl->var.var_ty;
-  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE, "non union init list");
+                                          struct ast_initlist *init_list,
+                                           const struct ast_tyref *var_ty
+                                        ) {
+  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE && var_ty->aggregate.ty == AST_TY_AGGREGATE_TY_UNION, "non union init list");
 
   invariant_assert(init_list->num_exprs <= 1,
                    "cannot have more than 1 element in union init-list");
@@ -1899,13 +1902,13 @@ struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
 
   debug_assert(var_ty->aggregate.num_field_var_tys,
                "empty union is GNU extension");
-  struct ast_struct_field *field = &var_ty->aggregate.field_var_tys[0];
 
   struct ir_op *expr;
   if (init_list->num_exprs) {
+    struct ast_struct_field *field = &var_ty->aggregate.field_var_tys[0];
     expr = build_ir_for_expr(irb, stmt, &init_list->exprs[0], field->var_ty);
   } else {
-    expr = build_ir_for_zero_init(irb, stmt, field->var_ty);
+    expr = build_ir_for_zero_init(irb, stmt, var_ty);
   }
 
   struct ir_op *store = alloc_ir_op(irb, stmt);
@@ -1921,18 +1924,21 @@ build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
                                    struct ast_vardecl *decl,
                                    struct ast_initlist *init_list) {
 
-  struct ast_tyref *var_ty = &decl->var.var_ty;
+  struct ast_tyref var_ty = decl->var.var_ty;
+  if (var_ty.ty == AST_TYREF_TY_TAGGED) {
+    var_ty = tyref_get_underlying(irb->parser, &var_ty);
+  }
   // TODO: non array init lists
 
-  switch (var_ty->ty) {
+  switch (var_ty.ty) {
   case AST_TYREF_TY_ARRAY:
-    return build_ir_for_array_initlist(irb, stmt, decl, init_list);
+    return build_ir_for_array_initlist(irb, stmt, decl, init_list, &var_ty);
   case AST_TYREF_TY_AGGREGATE:
-    switch (var_ty->aggregate.ty) {
+    switch (var_ty.aggregate.ty) {
       case AST_TY_AGGREGATE_TY_STRUCT:
-        return build_ir_for_struct_initlist(irb, stmt, decl, init_list);
+        return build_ir_for_struct_initlist(irb, stmt, decl, init_list, &var_ty);
       case AST_TY_AGGREGATE_TY_UNION:
-        return build_ir_for_union_initlist(irb, stmt, decl, init_list);
+        return build_ir_for_union_initlist(irb, stmt, decl, init_list, &var_ty);
     }
   default:
     bug("initlist only makes sense for array/struct/union");

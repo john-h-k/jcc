@@ -717,8 +717,25 @@ unsigned long long resolve_constant_expr(struct parser *parser,
 
 bool parse_constant_expr(struct parser *parser, struct ast_expr *expr);
 
+bool parse_typedef(struct parser *parser, struct ast_typedef *type_def) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_TYPEDEF)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  UNUSED_ARG(type_def);
+  todo(__func__);
+
+  return true;
+}
+
 bool parse_array(struct parser *parser, struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
@@ -732,6 +749,7 @@ bool parse_array(struct parser *parser, struct ast_tyref *ty_ref) {
     ty = AST_TY_ARRAY_TY_KNOWN_SIZE;
     size = resolve_constant_expr(parser, &expr);
   } else {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
@@ -765,7 +783,7 @@ bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
   return true;
 }
 
-bool parse_typedef(struct parser *parser, struct ast_typedef *type_def,
+bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def,
                    struct ast_tyref *ty_ref);
 
 // enum/union/struct/keyword
@@ -776,8 +794,8 @@ bool parse_simple_type(struct parser *parser, struct ast_tyref *ty_ref) {
     return true;
   }
 
-  struct ast_typedef def;
-  if (parse_typedef(parser, &def, ty_ref)) {
+  struct ast_aggregatedef def;
+  if (parse_aggregatedef(parser, &def, ty_ref)) {
     return true;
   }
 
@@ -1801,6 +1819,15 @@ bool parse_vardecllist(struct parser *parser,
                        struct ast_vardecllist *var_decl_list) {
   struct text_pos pos = get_position(parser->lexer);
 
+  // FIXME: typedef can occur after type too
+  struct var_table *table;
+  if (parse_token(parser, LEX_TOKEN_TY_KW_TYPEDEF)) {
+    table = &parser->ty_table;
+  } else {
+    table = NULL;
+  }
+  (void)table;
+
   struct ast_tyref decl_ty_ref;
   if (!parse_decl_tyref(parser, &decl_ty_ref)) {
     backtrack(parser->lexer, pos);
@@ -2609,7 +2636,7 @@ bool parse_fieldlist(struct parser *parser, struct ast_fieldlist *field_list) {
   return true;
 }
 
-bool parse_typedef(struct parser *parser, struct ast_typedef *type_def,
+bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def,
                    struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2724,7 +2751,7 @@ case AST_TYPE_TY_STRUCT:
   return true;
 }
 
-bool parse_typedecl(struct parser *parser, struct ast_typedecl *type_decl) {
+bool parse_aggregatedecl(struct parser *parser, struct ast_aggregatedecl *type_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_STRUCT)) {
@@ -2818,7 +2845,7 @@ struct parse_result parse(struct parser *parser) {
   struct vector *func_defs = vector_create(sizeof(struct ast_funcdef));
   struct vector *func_decls = vector_create(sizeof(struct ast_funcdecl));
 
-  struct vector *type_decls = vector_create(sizeof(struct ast_typedecl));
+  struct vector *type_decls = vector_create(sizeof(struct ast_aggregatedecl));
   struct vector *var_decl_lists = vector_create(sizeof(struct ast_vardecllist));
 
   struct vector *enum_defs = vector_create(sizeof(struct ast_enumdef));
@@ -2845,8 +2872,8 @@ struct parse_result parse(struct parser *parser) {
       continue;
     }
 
-    struct ast_typedecl type_decl;
-    if (parse_typedecl(parser, &type_decl)) {
+    struct ast_aggregatedecl type_decl;
+    if (parse_aggregatedecl(parser, &type_decl)) {
       info("found type declaration '%s'",
            associated_text(lexer, &type_decl.name));
       vector_push_back(type_decls, &type_decl);
@@ -3732,8 +3759,8 @@ DEBUG_FUNC(fieldlist, field_list) {
   UNINDENT();
 }
 
-DEBUG_FUNC(typedef, type_def) {
-  switch (type_def->ty) {
+DEBUG_FUNC(aggregatedef, aggregate_def) {
+  switch (aggregate_def->ty) {
   case AST_TYPE_TY_UNION:
     AST_PRINTZ("UNION DEFINITION ");
     break;
@@ -3742,19 +3769,19 @@ DEBUG_FUNC(typedef, type_def) {
     break;
   }
 
-  AST_PRINT("NAME %s ", type_def->name ? associated_text(state->parser->lexer,
-                                                         type_def->name)
+  AST_PRINT("NAME %s ", aggregate_def->name ? associated_text(state->parser->lexer,
+                                                         aggregate_def->name)
                                        : "<unnamed>");
 
   INDENT();
-  for (size_t i = 0; i < type_def->num_field_lists; i++) {
-    DEBUG_CALL(fieldlist, &type_def->field_lists[i]);
+  for (size_t i = 0; i < aggregate_def->num_field_lists; i++) {
+    DEBUG_CALL(fieldlist, &aggregate_def->field_lists[i]);
   }
   UNINDENT();
 }
 
-DEBUG_FUNC(typedecl, type_decl) {
-  switch (type_decl->ty) {
+DEBUG_FUNC(aggregatedecl, aggregate_decl) {
+  switch (aggregate_decl->ty) {
   case AST_TYPE_TY_UNION:
     AST_PRINTZ("UNION DECLARATION ");
     break;
@@ -3763,7 +3790,7 @@ DEBUG_FUNC(typedecl, type_decl) {
     break;
   }
   AST_PRINT("NAME %s ",
-            associated_text(state->parser->lexer, &type_decl->name));
+            associated_text(state->parser->lexer, &aggregate_decl->name));
 }
 
 void debug_print_ast(struct parser *parser,
@@ -3783,7 +3810,7 @@ void debug_print_ast(struct parser *parser,
   }
 
   for (size_t i = 0; i < translation_unit->num_type_decls; i++) {
-    DEBUG_CALL(typedecl, &translation_unit->type_decls[i]);
+    DEBUG_CALL(aggregatedecl, &translation_unit->type_decls[i]);
   }
 
   for (size_t i = 0; i < translation_unit->num_var_decl_lists; i++) {

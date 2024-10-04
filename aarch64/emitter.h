@@ -61,9 +61,7 @@ void aarch64_emit_eon(struct aarch64_emitter *emitter, const struct aarch64_logi
 void aarch64_emit_and_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 void aarch64_emit_ands_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 void aarch64_emit_orr_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
-void aarch64_emit_orn_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 void aarch64_emit_eor_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
-void aarch64_emit_eon_imm(struct aarch64_emitter *emitter, const struct aarch64_logical_imm log);
 
 
 /* Add & subtract (register) */
