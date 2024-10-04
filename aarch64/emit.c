@@ -242,9 +242,6 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_EON:
     aarch64_emit_eon(state->emitter, instr->aarch64->eon);
     break;
-  case AARCH64_INSTR_TY_EON_IMM:
-    aarch64_emit_eon_imm(state->emitter, instr->aarch64->eon_imm);
-    break;
   case AARCH64_INSTR_TY_EOR:
     aarch64_emit_eor(state->emitter, instr->aarch64->eor);
     break;
@@ -298,9 +295,6 @@ static void emit_instr(const struct emit_state *state,
     break;
   case AARCH64_INSTR_TY_ORN:
     aarch64_emit_orn(state->emitter, instr->aarch64->orn);
-    break;
-  case AARCH64_INSTR_TY_ORN_IMM:
-    aarch64_emit_orn_imm(state->emitter, instr->aarch64->orn_imm);
     break;
   case AARCH64_INSTR_TY_ORR:
     aarch64_emit_orr(state->emitter, instr->aarch64->orr);

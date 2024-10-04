@@ -13,6 +13,8 @@
 #define FRAME_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 29})
 #define RET_PTR_REG ((struct aarch64_reg){AARCH64_REG_TY_X, 30})
 
+typedef unsigned long long imm_t;
+typedef long long simm_t;
 
 enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FADD,
@@ -43,7 +45,6 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_CSINV,
   AARCH64_INSTR_TY_CSNEG,
   AARCH64_INSTR_TY_EON,
-  AARCH64_INSTR_TY_EON_IMM,
   AARCH64_INSTR_TY_EOR,
   AARCH64_INSTR_TY_EOR_IMM,
   AARCH64_INSTR_TY_LOAD_IMM,
@@ -62,7 +63,6 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_MSUB,
   AARCH64_INSTR_TY_NOP,
   AARCH64_INSTR_TY_ORN,
-  AARCH64_INSTR_TY_ORN_IMM,
   AARCH64_INSTR_TY_ORR,
   AARCH64_INSTR_TY_ORR_IMM,
   AARCH64_INSTR_TY_RET,
@@ -176,7 +176,7 @@ struct aarch64_logical_reg {
   struct aarch64_reg lhs;
   struct aarch64_reg rhs;
 
-  size_t imm6;
+  imm_t imm6;
   enum aarch64_shift shift;
 };
 
@@ -184,16 +184,16 @@ struct aarch64_logical_imm {
   struct aarch64_reg dest;
   struct aarch64_reg source;
 
-  size_t n;
-  size_t immr;
-  size_t imms;
+  imm_t n;
+  imm_t immr;
+  imm_t imms;
 };
 
 struct aarch64_addsub_imm {
   struct aarch64_reg dest;
   struct aarch64_reg source;
 
-  size_t imm;
+  imm_t imm;
   size_t shift;
 };
 
@@ -202,7 +202,7 @@ struct aarch64_addsub_reg {
   struct aarch64_reg lhs;
   struct aarch64_reg rhs;
 
-  size_t imm6;
+  imm_t imm6;
   enum aarch64_shift shift;
 };
 
@@ -215,8 +215,8 @@ struct aarch64_bitfield {
   struct aarch64_reg dest;
   struct aarch64_reg source;
 
-  size_t immr;
-  size_t imms;
+  imm_t immr;
+  imm_t imms;
 };
 
 struct aarch64_reg_1_source {
@@ -228,7 +228,7 @@ struct aarch64_reg_1_source_with_shift {
   struct aarch64_reg dest;
   struct aarch64_reg source;
 
-  size_t imm6;
+  imm_t imm6;
   enum aarch64_shift shift;
 };
 
@@ -240,7 +240,7 @@ struct aarch64_reg_2_source {
 
 struct aarch64_mov_imm {
   struct aarch64_reg dest;
-  size_t imm;
+  imm_t imm;
   size_t shift;
 };
 
@@ -281,7 +281,7 @@ struct aarch64_load_imm {
 
   struct aarch64_reg dest;
   struct aarch64_reg addr;
-  ssize_t imm : 7;
+  simm_t imm;
 };
 
 struct aarch64_store_imm {
@@ -289,7 +289,7 @@ struct aarch64_store_imm {
 
   struct aarch64_reg source;
   struct aarch64_reg addr;
-  ssize_t imm : 7;
+  simm_t imm;
 };
 
 struct aarch64_load_pair_imm {
@@ -297,7 +297,7 @@ struct aarch64_load_pair_imm {
 
   struct aarch64_reg dest[2];
   struct aarch64_reg addr;
-  ssize_t imm : 7;
+  simm_t imm;
 };
 
 struct aarch64_store_pair_imm {
@@ -305,7 +305,7 @@ struct aarch64_store_pair_imm {
 
   struct aarch64_reg source[2];
   struct aarch64_reg addr;
-  ssize_t imm : 7;
+  simm_t imm;
 };
 
 struct aarch64_instr {

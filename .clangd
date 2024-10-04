@@ -1,3 +1,20 @@
 CompileFlags:
-  Add: [ -xc,  -Wall,  -Wpedantic, -Werror, -Wno-gnu-binary-literal, -Wimplicit-fallthrough, -Wstrict-prototypes, -Wmissing-field-initializers, -std=c2x]
+  Add: [ -Wall, -Wextra, -Wpedantic, -Werror, -Wimplicit-fallthrough, -Wstrict-prototypes, -Wmissing-field-initializers, -Wno-gnu-binary-literal, -std=c2x]
 
+---
+
+# Flags for .h files
+If:
+  PathMatch: .*\.h
+
+CompileFlags:
+  Add: [-xc-header]
+
+---
+
+# Flags for .c files
+If:
+  PathMatch: .*\.c
+
+CompileFlags:
+  Add: [-xc]

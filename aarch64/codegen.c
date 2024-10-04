@@ -115,9 +115,7 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_AND_IMM:
   case AARCH64_INSTR_TY_ANDS_IMM:
   case AARCH64_INSTR_TY_ORR_IMM:
-  case AARCH64_INSTR_TY_ORN_IMM:
   case AARCH64_INSTR_TY_EOR_IMM:
-  case AARCH64_INSTR_TY_EON_IMM:
     return AARCH64_INSTR_CLASS_LOGICAL_IMM;
   case AARCH64_INSTR_TY_ADR:
   case AARCH64_INSTR_TY_ADRP:
@@ -375,23 +373,10 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   size_t offset = get_lcl_stack_offset(state, op, lcl);
 
-  struct aarch64_reg addr;
-  if (offset > MAX_LDR_STR_CNST / 4) {
-    struct instr *add = alloc_instr(state->func);
-    add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    add->aarch64->add_imm = (struct aarch64_addsub_imm){
-        .dest = dest, .source = STACK_PTR_REG, .imm = offset};
-
-    addr = dest;
-    offset = 0;
-  } else {
-    addr = STACK_PTR_REG;
-  }
-
   instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
   instr->aarch64->ldr_imm =
       (struct aarch64_load_imm){.dest = dest,
-                                .addr = addr,
+                                .addr = STACK_PTR_REG,
                                 .imm = offset,
                                 .mode = AARCH64_ADDRESSING_MODE_OFFSET};
 }
@@ -1217,19 +1202,20 @@ void insert_prologue(struct codegen_state *state) {
   stack_size =
       ROUND_UP(stack_size + ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
 
+  // this field is needed so caller saves know where on the stack is free
+  state->call_saves_start = stack_size;
+
+  // add caller saves
+  stack_size = ROUND_UP(stack_size + state->total_call_saves_size,
+                             AARCH64_STACK_ALIGNMENT);
+    
+
   const size_t LR_OFFSET = 2;
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
                                        .saved_registers = 0,
                                        .save_start = stack_size,
                                        .lr_offset = LR_OFFSET,
                                        .stack_size = stack_size};
-
-  // this field is needed so caller saves know where on the stack is free
-  state->call_saves_start = info.stack_size;
-
-  // add caller saves
-  info.stack_size = ROUND_UP(info.stack_size + state->total_call_saves_size,
-                             AARCH64_STACK_ALIGNMENT);
 
   if (!info.prologue_generated) {
     state->prologue_info = info;
@@ -2378,14 +2364,6 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_ADDS_IMM:
     fprintf(file, "adds");
     debug_print_addsub_imm(file, &instr->aarch64->adds_imm);
-    break;
-  case AARCH64_INSTR_TY_EON_IMM:
-    fprintf(file, "eon");
-    debug_print_logical_imm(file, &instr->aarch64->eon_imm);
-    break;
-  case AARCH64_INSTR_TY_ORN_IMM:
-    fprintf(file, "orn");
-    debug_print_logical_imm(file, &instr->aarch64->orn_imm);
     break;
   case AARCH64_INSTR_TY_FADD:
     fprintf(file, "fadd");

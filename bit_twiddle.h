@@ -1,20 +1,22 @@
 #ifndef BIT_TWIDDLE_H
 #define BIT_TWIDDLE_H
 
-#define SIG_FITS_IN_BITS(value, bitc)                                          \
-  ((abs((value)) & ~((1 << (bitc)) - 1)) == 0)
-
-#define SIG_FITS_IN_BITSL(value, bitc)                                         \
-  ((labs((value)) & ~((1 << (bitc)) - 1)) == 0)
-
-#define UNS_FITS_IN_BITS(value, bitc)                                          \
-  (((value) & ~((1u << (bitc + 1)) - 1u)) == 0)
+  // _Generic((value), int                                                        \
+  //          : ((abs((value)) & ~((1 << (bitc)) - 1u)) == 0), long               \
+  //          : ((labs((value)) & ~((1l << (bitc)) - 1l)) == 0), long long        \
+  //          : ((llabs((value)) & ~((1ll << (bitc)) - 1l)) == 0),                \
+  //                                                                              \
+  //            unsigned int                                                      \
+  //          : (((value) & ~((1u << (bitc + 1)) - 1u)) == 0), unsigned long      \
+  //          : (((value) & ~((1ul << (bitc + 1)) - 1ul)) == 0),                  \
+  //            unsigned long long                                                \
+  //          : (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0))
 
 #define CLAMP_BITS(value, bitc) ((value) & ((1 << (bitc)) - 1))
 
 #define NTH_BIT(value, bitn) (((value) & (1ull << (bitn))) >> (bitn))
 
-#define MASK(bitc) (1 << ((bitc) - 1))
+#define MASK(bitc) (1 << ((bitc)-1))
 #define SIGN_EXT(value, bitc) (((value) ^ MASK(bitc)) - MASK(bitc))
 
 #endif
