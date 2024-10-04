@@ -59,7 +59,6 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FCVT,
   AARCH64_INSTR_TY_UCVTF,
   AARCH64_INSTR_TY_SCVTF,
-  AARCH64_INSTR_TY_MVN,
   AARCH64_INSTR_TY_MSUB,
   AARCH64_INSTR_TY_NOP,
   AARCH64_INSTR_TY_ORN,
@@ -156,7 +155,6 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_ADDR_IMM,
   AARCH64_INSTR_CLASS_BITFIELD,
   AARCH64_INSTR_CLASS_REG_1_SOURCE,
-  AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT,
   AARCH64_INSTR_CLASS_REG_2_SOURCE,
   AARCH64_INSTR_CLASS_MOV_IMM,
   AARCH64_INSTR_CLASS_FMA,
@@ -222,14 +220,6 @@ struct aarch64_bitfield {
 struct aarch64_reg_1_source {
   struct aarch64_reg dest;
   struct aarch64_reg source;
-};
-
-struct aarch64_reg_1_source_with_shift {
-  struct aarch64_reg dest;
-  struct aarch64_reg source;
-
-  imm_t imm6;
-  enum aarch64_shift shift;
 };
 
 struct aarch64_reg_2_source {
@@ -330,10 +320,6 @@ struct aarch64_instr {
 
     union {
       struct aarch64_addsub_imm addsub_imm, add_imm, adds_imm, sub_imm, subs_imm;
-    };
-
-    union {
-      struct aarch64_reg_1_source_with_shift reg_1_source_with_shift, mvn;
     };
 
     union {

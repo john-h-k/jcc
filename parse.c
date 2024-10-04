@@ -73,36 +73,53 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
   struct ast_op_info info = {.ty = ty};
 
   switch (ty) {
-  case AST_BINARY_OP_TY_AND:
+    // ternary
+  case AST_BINARY_OP_TY_LOGICAL_OR:
     info.precedence = 1;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_LOGICAL_AND:
+    info.precedence = 2;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_OR:
+    info.precedence = 3;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_XOR:
+    info.precedence = 4;
+    info.associativity = AST_ASSOCIATIVITY_LEFT;
+    break;
+  case AST_BINARY_OP_TY_AND:
+    info.precedence = 5;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_EQ:
   case AST_BINARY_OP_TY_NEQ:
-    info.precedence = 2;
+    info.precedence = 6;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_GT:
   case AST_BINARY_OP_TY_GTEQ:
   case AST_BINARY_OP_TY_LT:
   case AST_BINARY_OP_TY_LTEQ:
-    info.precedence = 3;
+    info.precedence = 7;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_LSHIFT:
   case AST_BINARY_OP_TY_RSHIFT:
-    info.precedence = 4;
+    info.precedence = 8;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_ADD:
   case AST_BINARY_OP_TY_SUB:
-    info.precedence = 5;
+    info.precedence = 9;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   case AST_BINARY_OP_TY_MUL:
   case AST_BINARY_OP_TY_DIV:
   case AST_BINARY_OP_TY_QUOT:
-    info.precedence = 6;
+    info.precedence = 10;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
   default:
@@ -138,8 +155,20 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   case LEX_TOKEN_TY_OP_RSHIFT:
     *info = op_info(AST_BINARY_OP_TY_RSHIFT);
     return true;
+  case LEX_TOKEN_TY_OP_LOGICAL_AND:
+    *info = op_info(AST_BINARY_OP_TY_LOGICAL_AND);
+    return true;
+  case LEX_TOKEN_TY_OP_LOGICAL_OR:
+    *info = op_info(AST_BINARY_OP_TY_LOGICAL_OR);
+    return true;
   case LEX_TOKEN_TY_OP_AND:
     *info = op_info(AST_BINARY_OP_TY_AND);
+    return true;
+  case LEX_TOKEN_TY_OP_OR:
+    *info = op_info(AST_BINARY_OP_TY_OR);
+    return true;
+  case LEX_TOKEN_TY_OP_XOR:
+    *info = op_info(AST_BINARY_OP_TY_XOR);
     return true;
   case LEX_TOKEN_TY_OP_ADD:
     *info = op_info(AST_BINARY_OP_TY_ADD);
@@ -241,8 +270,10 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_OP_RSHIFT_ASSG:
   case LEX_TOKEN_TY_OP_LSHIFT:
   case LEX_TOKEN_TY_OP_LSHIFT_ASSG:
+  case LEX_TOKEN_TY_OP_LOGICAL_AND:
   case LEX_TOKEN_TY_OP_AND:
   case LEX_TOKEN_TY_OP_AND_ASSG:
+  case LEX_TOKEN_TY_OP_LOGICAL_OR:
   case LEX_TOKEN_TY_OP_OR:
   case LEX_TOKEN_TY_OP_OR_ASSG:
   case LEX_TOKEN_TY_OP_XOR:
@@ -399,7 +430,8 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
   case AST_TYREF_TY_ARRAY:
     return *ty_ref->array.element;
   case AST_TYREF_TY_TAGGED: {
-    struct var_table_entry *entry = get_entry(&parser->ty_table, ty_ref->tagged.name);
+    struct var_table_entry *entry =
+        get_entry(&parser->ty_table, ty_ref->tagged.name);
     invariant_assert(entry, "expected aggregate to be defined");
     return *(struct ast_tyref *)entry->value;
   }
@@ -783,8 +815,9 @@ bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
   return true;
 }
 
-bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def,
-                   struct ast_tyref *ty_ref);
+bool parse_aggregatedef(struct parser *parser,
+                        struct ast_aggregatedef *type_def,
+                        struct ast_tyref *ty_ref);
 
 // enum/union/struct/keyword
 bool parse_simple_type(struct parser *parser, struct ast_tyref *ty_ref) {
@@ -1264,7 +1297,6 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
   invariant_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE ||
                        var_ty->ty == AST_TYREF_TY_TAGGED,
                    "non struct/union in member access");
-
 
   struct ast_tyref base_ty;
 
@@ -2636,8 +2668,9 @@ bool parse_fieldlist(struct parser *parser, struct ast_fieldlist *field_list) {
   return true;
 }
 
-bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def,
-                   struct ast_tyref *ty_ref) {
+bool parse_aggregatedef(struct parser *parser,
+                        struct ast_aggregatedef *type_def,
+                        struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
   enum ast_type_ty ty;
@@ -2673,9 +2706,7 @@ bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def
   if (token.ty != LEX_TOKEN_TY_OPEN_BRACE) {
     ty_ref->ty = AST_TYREF_TY_TAGGED;
     ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
-    ty_ref->tagged = (struct ast_ty_tagged){
-      .name = name
-    };
+    ty_ref->tagged = (struct ast_ty_tagged){.name = name};
 
     debug_assert(name, "struct with neither { nor name makes no sense");
     return true;
@@ -2726,7 +2757,7 @@ bool parse_aggregatedef(struct parser *parser, struct ast_aggregatedef *type_def
   case AST_TYPE_TY_UNION:
     aggregate_ty = AST_TY_AGGREGATE_TY_UNION;
     break;
-case AST_TYPE_TY_STRUCT:
+  case AST_TYPE_TY_STRUCT:
     aggregate_ty = AST_TY_AGGREGATE_TY_STRUCT;
     break;
   }
@@ -2751,7 +2782,8 @@ case AST_TYPE_TY_STRUCT:
   return true;
 }
 
-bool parse_aggregatedecl(struct parser *parser, struct ast_aggregatedecl *type_decl) {
+bool parse_aggregatedecl(struct parser *parser,
+                         struct ast_aggregatedecl *type_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_STRUCT)) {
@@ -3005,107 +3037,107 @@ DEBUG_FUNC(tyref, ty_ref) {
       AST_PRINTZ("UNION ");
       break;
     }
-  INDENT();
-  for (size_t i = 0; i < ty_ref->aggregate.num_field_var_tys; i++) {
-    AST_PRINT("FIELD %s", ty_ref->aggregate.field_var_tys[i].name);
     INDENT();
-    DEBUG_CALL(tyref, ty_ref->aggregate.field_var_tys[i].var_ty);
+    for (size_t i = 0; i < ty_ref->aggregate.num_field_var_tys; i++) {
+      AST_PRINT("FIELD %s", ty_ref->aggregate.field_var_tys[i].name);
+      INDENT();
+      DEBUG_CALL(tyref, ty_ref->aggregate.field_var_tys[i].var_ty);
+      UNINDENT();
+    }
     UNINDENT();
-  }
-  UNINDENT();
-  break;
-case AST_TYREF_TY_VOID:
-  AST_PRINTZ("VOID");
-  break;
-case AST_TYREF_TY_VARIADIC:
-  AST_PRINTZ("VARIADIC");
-  break;
-case AST_TYREF_TY_ARRAY:
-  if (ty_ref->array.ty == AST_TYREF_TY_UNKNOWN) {
-    AST_PRINTZ("ARRAY UNKNOWN SIZE OF");
-  } else {
-    AST_PRINT("ARRAY SIZE %llu OF", ty_ref->array.size);
-  }
-  INDENT();
-  DEBUG_CALL(tyref, ty_ref->array.element);
-  UNINDENT();
-  break;
-case AST_TYREF_TY_POINTER:
-  AST_PRINTZ("POINTER TO");
-  INDENT();
-  DEBUG_CALL(tyref, ty_ref->pointer.underlying);
-  UNINDENT();
-  break;
-case AST_TYREF_TY_FUNC:
-  AST_PRINTZ("FUNC (");
-  INDENT();
-  for (size_t i = 0; i < ty_ref->func.num_param_var_tys; i++) {
-    DEBUG_CALL(tyref, &ty_ref->func.param_var_tys[i]);
-  }
-  UNINDENT();
-  AST_PRINTZ(")");
+    break;
+  case AST_TYREF_TY_VOID:
+    AST_PRINTZ("VOID");
+    break;
+  case AST_TYREF_TY_VARIADIC:
+    AST_PRINTZ("VARIADIC");
+    break;
+  case AST_TYREF_TY_ARRAY:
+    if (ty_ref->array.ty == AST_TYREF_TY_UNKNOWN) {
+      AST_PRINTZ("ARRAY UNKNOWN SIZE OF");
+    } else {
+      AST_PRINT("ARRAY SIZE %llu OF", ty_ref->array.size);
+    }
+    INDENT();
+    DEBUG_CALL(tyref, ty_ref->array.element);
+    UNINDENT();
+    break;
+  case AST_TYREF_TY_POINTER:
+    AST_PRINTZ("POINTER TO");
+    INDENT();
+    DEBUG_CALL(tyref, ty_ref->pointer.underlying);
+    UNINDENT();
+    break;
+  case AST_TYREF_TY_FUNC:
+    AST_PRINTZ("FUNC (");
+    INDENT();
+    for (size_t i = 0; i < ty_ref->func.num_param_var_tys; i++) {
+      DEBUG_CALL(tyref, &ty_ref->func.param_var_tys[i]);
+    }
+    UNINDENT();
+    AST_PRINTZ(")");
 
-  AST_PRINT_SAMELINE_Z(" -> ");
-  DEBUG_CALL(tyref, ty_ref->func.ret_var_ty);
+    AST_PRINT_SAMELINE_Z(" -> ");
+    DEBUG_CALL(tyref, ty_ref->func.ret_var_ty);
 
-  break;
-case AST_TYREF_TY_WELL_KNOWN:
-  switch (ty_ref->well_known) {
-  case WELL_KNOWN_TY_SIGNED_CHAR:
-    AST_PRINTZ("signed char");
     break;
-  case WELL_KNOWN_TY_UNSIGNED_CHAR:
-    AST_PRINTZ("unsigned char");
+  case AST_TYREF_TY_WELL_KNOWN:
+    switch (ty_ref->well_known) {
+    case WELL_KNOWN_TY_SIGNED_CHAR:
+      AST_PRINTZ("signed char");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_CHAR:
+      AST_PRINTZ("unsigned char");
+      break;
+    case WELL_KNOWN_TY_SIGNED_SHORT:
+      AST_PRINTZ("short");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_SHORT:
+      AST_PRINTZ("unsigned short");
+      break;
+    case WELL_KNOWN_TY_SIGNED_INT:
+      AST_PRINTZ("int");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_INT:
+      AST_PRINTZ("unsigned int");
+      break;
+    case WELL_KNOWN_TY_SIGNED_LONG:
+      AST_PRINTZ("long");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_LONG:
+      AST_PRINTZ("unsigned long");
+      break;
+    case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+      AST_PRINTZ("long long");
+      break;
+    case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+      AST_PRINTZ("unsigned long long");
+      break;
+    case WELL_KNOWN_TY_FLOAT:
+      AST_PRINTZ("float");
+      break;
+    case WELL_KNOWN_TY_DOUBLE:
+      AST_PRINTZ("double");
+      break;
+    case WELL_KNOWN_TY_LONG_DOUBLE:
+      AST_PRINTZ("long double");
+      break;
+    }
+
     break;
-  case WELL_KNOWN_TY_SIGNED_SHORT:
-    AST_PRINTZ("short");
-    break;
-  case WELL_KNOWN_TY_UNSIGNED_SHORT:
-    AST_PRINTZ("unsigned short");
-    break;
-  case WELL_KNOWN_TY_SIGNED_INT:
-    AST_PRINTZ("int");
-    break;
-  case WELL_KNOWN_TY_UNSIGNED_INT:
-    AST_PRINTZ("unsigned int");
-    break;
-  case WELL_KNOWN_TY_SIGNED_LONG:
-    AST_PRINTZ("long");
-    break;
-  case WELL_KNOWN_TY_UNSIGNED_LONG:
-    AST_PRINTZ("unsigned long");
-    break;
-  case WELL_KNOWN_TY_SIGNED_LONG_LONG:
-    AST_PRINTZ("long long");
-    break;
-  case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
-    AST_PRINTZ("unsigned long long");
-    break;
-  case WELL_KNOWN_TY_FLOAT:
-    AST_PRINTZ("float");
-    break;
-  case WELL_KNOWN_TY_DOUBLE:
-    AST_PRINTZ("double");
-    break;
-  case WELL_KNOWN_TY_LONG_DOUBLE:
-    AST_PRINTZ("long double");
-    break;
+    // case AST_TYREF_TY_TYPEDEF_NAME:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_STRUCT:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_UNION:
+    //   <#code#>
+    //   break;
+    // case AST_TYREF_TY_ENUM:
+    //   <#code#>
+    //   break;
   }
-
-  break;
-  // case AST_TYREF_TY_TYPEDEF_NAME:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_STRUCT:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_UNION:
-  //   <#code#>
-  //   break;
-  // case AST_TYREF_TY_ENUM:
-  //   <#code#>
-  //   break;
-}
 }
 
 DEBUG_FUNC(compoundstmt, compound_stmt);
@@ -3233,6 +3265,12 @@ DEBUG_FUNC(binary_op, binary_op) {
     break;
   case AST_BINARY_OP_TY_QUOT:
     AST_PRINTZ("QUOT");
+    break;
+  case AST_BINARY_OP_TY_LOGICAL_OR:
+    AST_PRINTZ("LOGICAL OR");
+    break;
+  case AST_BINARY_OP_TY_LOGICAL_AND:
+    AST_PRINTZ("LOGICAL AND");
     break;
   }
 
@@ -3769,9 +3807,10 @@ DEBUG_FUNC(aggregatedef, aggregate_def) {
     break;
   }
 
-  AST_PRINT("NAME %s ", aggregate_def->name ? associated_text(state->parser->lexer,
-                                                         aggregate_def->name)
-                                       : "<unnamed>");
+  AST_PRINT("NAME %s ",
+            aggregate_def->name
+                ? associated_text(state->parser->lexer, aggregate_def->name)
+                : "<unnamed>");
 
   INDENT();
   for (size_t i = 0; i < aggregate_def->num_field_lists; i++) {

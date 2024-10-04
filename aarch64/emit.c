@@ -284,9 +284,6 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_SCVTF:
     aarch64_emit_scvtf(state->emitter, instr->aarch64->scvtf);
     break;
-  case AARCH64_INSTR_TY_MVN:
-    aarch64_emit_mvn(state->emitter, instr->aarch64->mvn);
-    break;
   case AARCH64_INSTR_TY_MSUB:
     aarch64_emit_msub(state->emitter, instr->aarch64->msub);
     break;

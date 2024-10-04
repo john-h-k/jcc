@@ -11,12 +11,12 @@
 // Constants must be casted to uint32_t to be well-defined behaviour
 #define U32(v) ((uint32_t)(v))
 
-#define SF_32 (0b0)
-#define SF_64 (0b1)
+#define SF_32 (0b0u)
+#define SF_64 (0b1u)
 
-#define FTYPE_SINGLE (0b01)
-#define FTYPE_DOUBLE (0b10)
-#define FTYPE_HALF (0b11)
+#define FTYPE_SINGLE (0b00u)
+#define FTYPE_DOUBLE (0b01u)
+#define FTYPE_HALF (0b11u)
 
 #define IMM_ASSERT(imm, expected) imm 
  // (debug_assert(imm == expected, "imm did not match expected"), imm)
@@ -187,19 +187,9 @@
 #define FMOV_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)
 #define FMOV_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000000, Rn, Rd)
 
-#define FCVT(ftype_from, ftype_to, Rn, Rd) FP_1_REG(0b0, 0b0, ftype_from, (0b000100) | (ftype_to), Rn, Rd)
-
-#define FCVT_S_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000101, Rn, Rd)
-#define FCVT_S_TO_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000111, Rn, Rd)
-
-#define FCVT_D_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000100, Rn, Rd)
-#define FCVT_D_TO_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000111, Rn, Rd)
-
-#define FCVT_H_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000100, Rn, Rd)
-#define FCVT_H_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000101, Rn, Rd)
+#define FCVT(ftype_to, ftype_from, Rn, Rd) FP_1_REG(0b0, 0b0, ftype_from, (0b000100 | (ftype_to)), Rn, Rd)
 
 /* Two reg FP data processing */
-
 
 #define FP_2_REG(M, S, ftype, Rm, opcode, Rn, Rd) \
   (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |   \
@@ -268,8 +258,14 @@
 #define SCVTF_32_TO_S(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b00, 0b010, Rn, Rd)
 #define UCVTF_32_TO_S(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b00, 0b011, Rn, Rd)
 
+#define SCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b010, Rn, Rd)
+#define UCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b011, Rn, Rd)
+
 #define FCVTZS_S_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b11, 0b000, Rn, Rd)
 #define FCVTZU_S_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b00, 0b11, 0b001, Rn, Rd)
+
+#define FCVTZS_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b000, Rn, Rd)
+#define FCVTZU_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b001, Rn, Rd)
 
 #define SCVTF_32_TO_D(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b00, 0b010, Rn, Rd)
 #define UCVTF_32_TO_D(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b01, 0b00, 0b011, Rn, Rd)
@@ -282,12 +278,6 @@
 
 #define FCVTZS_H_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b11, 0b000, Rn, Rd)
 #define FCVTZU_H_TO_32(Rn, Rd) INT_FP_CONV(0b0, 0b0, 0b11, 0b11, 0b001, Rn, Rd)
-
-#define SCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b010, Rn, Rd)
-#define UCVTF_64_TO_S(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b00, 0b011, Rn, Rd)
-
-#define FCVTZS_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b000, Rn, Rd)
-#define FCVTZU_S_TO_64(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b00, 0b11, 0b001, Rn, Rd)
 
 #define SCVTF_64_TO_D(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b00, 0b010, Rn, Rd)
 #define UCVTF_64_TO_D(Rn, Rd) INT_FP_CONV(0b1, 0b0, 0b01, 0b00, 0b011, Rn, Rd)
@@ -420,14 +410,6 @@
   LOGICAL_SHIFTED_REG(sf, 0b10, shift, 0b0, Rm, imm6, Rn, Rd)
 #define EON_REG(sf, shift, Rm, imm6, Rn, Rd)                                    \
   LOGICAL_SHIFTED_REG(sf, 0b10, shift, 0b1, Rm, imm6, Rn, Rd)
-
-#define MOV_32_REG(Rm, Rd) ORR_32_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
-#define MOVN_32_REG(Rm, Rd)                                                    \
-  ORN_32_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
-
-#define MOV_64_REG(Rm, Rd) ORR_64_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
-#define MOVN_64_REG(Rm, Rd)                                                    \
-  ORN_64_REG(SHIFT_LSL, Rm, 0b000000, ZERO_REG.idx, Rd)
 
 /* Conditional selects */
 
