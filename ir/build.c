@@ -524,6 +524,10 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
       "expression by point IR is reached!");
 
   switch (ty) {
+  case AST_BINARY_OP_TY_LOGICAL_AND:
+  case AST_BINARY_OP_TY_LOGICAL_OR:
+    todo("logical and/or");
+    break;
   case AST_BINARY_OP_TY_EQ:
     b->ty = IR_OP_BINARY_OP_TY_EQ;
     break;

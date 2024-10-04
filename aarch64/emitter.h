@@ -47,8 +47,6 @@ void aarch64_emit_ubfm(struct aarch64_emitter *emitter, const struct aarch64_bit
 
 /* Logical (register) */
 
-void aarch64_emit_mvn(struct aarch64_emitter *emitter, const struct aarch64_reg_1_source_with_shift mvn);
-
 void aarch64_emit_and(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_ands(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);
 void aarch64_emit_orr(struct aarch64_emitter *emitter, const struct aarch64_logical_reg log);

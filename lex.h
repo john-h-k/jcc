@@ -38,6 +38,8 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OP_INC, // ++
   LEX_TOKEN_TY_OP_DEC, // --
 
+  LEX_TOKEN_TY_OP_LOGICAL_AND, // &&
+  LEX_TOKEN_TY_OP_LOGICAL_OR,  // ||
   LEX_TOKEN_TY_OP_AND,         // &
   LEX_TOKEN_TY_OP_AND_ASSG,    // &=
   LEX_TOKEN_TY_OP_OR,          // |

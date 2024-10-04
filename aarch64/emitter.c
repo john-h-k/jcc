@@ -177,13 +177,7 @@ void aarch64_emit_fcvt(struct aarch64_emitter *emitter,
   struct aarch64_reg dest = fcvt.dest;
   struct aarch64_reg source = fcvt.source;
 
-  if (source.ty == AARCH64_REG_TY_D && dest.ty == AARCH64_REG_TY_S) {
-    aarch64_emit(emitter, FCVT_D_TO_S(source.idx, dest.idx));
-  } else if (source.ty == AARCH64_REG_TY_S && dest.ty == AARCH64_REG_TY_D) {
-    aarch64_emit(emitter, FCVT_S_TO_D(source.idx, dest.idx));
-  } else {
-    bad_instr();
-  }
+  aarch64_emit(emitter, FCVT(FTYPE_FOR_REG(dest), FTYPE_FOR_REG(source), source.idx, dest.idx));
 }
 
 void aarch64_emit_fmov(struct aarch64_emitter *emitter,
@@ -278,21 +272,6 @@ void aarch64_emit_ubfm(struct aarch64_emitter *emitter,
 }
 
 /* Logical (register) */
-
-void aarch64_emit_mvn(struct aarch64_emitter *emitter,
-                      const struct aarch64_reg_1_source_with_shift mvn) {
-  UNUSED_ARG(emitter);
-  UNUSED_ARG(mvn);
-
-  todo("mvn");
-  // if (IS64(mvn)) {
-  //       aarch64_emit(emitter, MVN(log.shift, log.rhs.idx, log.imm6,
-  //                                    log.lhs.idx, log.dest.idx));
-  // } else {
-  //   aarch64_emit(emitter, AND_32_REG(log.shift, log.rhs.idx, log.imm6,
-  //                                    log.lhs.idx, log.dest.idx));
-  // }
-}
 
 void aarch64_emit_and(struct aarch64_emitter *emitter,
                       const struct aarch64_logical_reg log) {

@@ -130,8 +130,6 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_SUB_IMM:
   case AARCH64_INSTR_TY_SUBS_IMM:
     return AARCH64_INSTR_CLASS_ADDSUB_IMM;
-  case AARCH64_INSTR_TY_MVN:
-    return AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT;
   case AARCH64_INSTR_TY_FMOV:
   case AARCH64_INSTR_TY_FCVT:
   case AARCH64_INSTR_TY_UCVTF:
@@ -622,10 +620,11 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     };
     return;
   case IR_OP_UNARY_OP_TY_NOT:
-    instr->aarch64->ty = AARCH64_INSTR_TY_MVN;
-    instr->aarch64->mvn = (struct aarch64_reg_1_source_with_shift){
+    instr->aarch64->ty = AARCH64_INSTR_TY_ORN;
+    instr->aarch64->orn = (struct aarch64_logical_reg){
         .dest = dest,
-        .source = source,
+        .lhs = zero_reg_for_ty(source.ty),
+        .rhs = source,
         .shift = 0,
         .imm6 = 0,
     };
@@ -1715,15 +1714,6 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
       cb(instr, reg_1_source.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
       break;
     }
-    case AARCH64_INSTR_CLASS_REG_1_SOURCE_WITH_SHIFT: {
-      struct aarch64_reg_1_source_with_shift reg_1_source_with_shift =
-          instr->aarch64->reg_1_source_with_shift;
-      cb(instr, reg_1_source_with_shift.source, AARCH64_REG_USAGE_TY_READ,
-         metadata);
-      cb(instr, reg_1_source_with_shift.dest, AARCH64_REG_USAGE_TY_WRITE,
-         metadata);
-      break;
-    }
     case AARCH64_INSTR_CLASS_REG_2_SOURCE: {
       struct aarch64_reg_2_source reg_2_source = instr->aarch64->reg_2_source;
       cb(instr, reg_2_source.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
@@ -2040,15 +2030,6 @@ void debug_print_reg_1_source(FILE *file,
                   reg_1_source->source);
 }
 
-void debug_print_reg_1_source_with_shift(
-    FILE *file,
-    const struct aarch64_reg_1_source_with_shift *reg_1_source_with_shift) {
-  codegen_fprintf(file, " %reg, %reg%shift_imm", reg_1_source_with_shift->dest,
-                  reg_1_source_with_shift->source,
-                  reg_1_source_with_shift->shift,
-                  reg_1_source_with_shift->imm6);
-}
-
 void debug_print_reg_2_source(FILE *file,
                               const struct aarch64_reg_2_source *reg_2_source) {
   codegen_fprintf(file, " %reg, %reg, %reg", reg_2_source->dest,
@@ -2288,10 +2269,6 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_MOVN:
     fprintf(file, "movn");
     debug_print_mov_imm(file, &instr->aarch64->movn);
-    break;
-  case AARCH64_INSTR_TY_MVN:
-    fprintf(file, "mvn");
-    debug_print_reg_1_source_with_shift(file, &instr->aarch64->mvn);
     break;
   case AARCH64_INSTR_TY_MOVZ:
     fprintf(file, "movz");
