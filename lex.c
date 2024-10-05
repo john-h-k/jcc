@@ -87,6 +87,8 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN),
       KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER),
 
+      KEYWORD("inline", LEX_TOKEN_TY_KW_INLINE),
+
       KEYWORD("const", LEX_TOKEN_TY_KW_CONST),
       KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE),
 
@@ -703,6 +705,8 @@ const char *token_name(struct lexer *lexer, struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_EXTERN)
     CASE_RET(LEX_TOKEN_TY_KW_AUTO)
     CASE_RET(LEX_TOKEN_TY_KW_REGISTER)
+
+    CASE_RET(LEX_TOKEN_TY_KW_INLINE)
 
     CASE_RET(LEX_TOKEN_TY_KW_CONST)
     CASE_RET(LEX_TOKEN_TY_KW_VOLATILE)

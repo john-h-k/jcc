@@ -308,6 +308,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_EXTERN:
   case LEX_TOKEN_TY_KW_AUTO:
   case LEX_TOKEN_TY_KW_REGISTER:
+  case LEX_TOKEN_TY_KW_INLINE:
   case LEX_TOKEN_TY_KW_CONST:
   case LEX_TOKEN_TY_KW_VOLATILE:
   case LEX_TOKEN_TY_KW_VOID:
@@ -433,7 +434,7 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
     struct var_table_entry *entry =
         get_entry(&parser->ty_table, ty_ref->tagged.name);
     invariant_assert(entry, "expected aggregate to be defined");
-    return *(struct ast_tyref *)entry->value;
+    return *entry->value;
   }
   default:
     bug("non pointer/array/tagged passed (type %d)", ty_ref->ty);
@@ -645,7 +646,7 @@ bool parse_wkt_item(struct parser *parser, enum well_known_ty *wkt) {
   }
 }
 
-void parse_type_qualifiers(struct parser *parser,
+bool parse_type_qualifiers(struct parser *parser,
                            enum ast_type_qualifier_flags *flags) {
   struct token token;
   peek_token(parser->lexer, &token);
@@ -655,35 +656,52 @@ void parse_type_qualifiers(struct parser *parser,
   } else if (token.ty == LEX_TOKEN_TY_KW_VOLATILE) {
     *flags |= AST_TYPE_QUALIFIER_FLAG_VOLATILE;
   } else {
-    return;
+    return false;
   }
 
   consume_token(parser->lexer, token);
-  parse_type_qualifiers(parser, flags);
+  return true;
 }
 
-// // VOID, INT, SHORT, etc
-// // but also `struct X`, `enum X`, `union X`, and (painfully!) typedefs
-// bool parse_type_specifiers(struct parser *parser,
-//                             enum ast_type_qualifier_flags *flags) {
-//   struct token token;
-//   peek_token(parser->lexer, &token);
+bool parse_storage_class_specifiers(
+    struct parser *parser, enum ast_storage_class_specifier_flags *flags) {
+  struct token token;
+  peek_token(parser->lexer, &token);
 
-//   switch (token.ty) {
-//     c
-//   }
+  if (token.ty == LEX_TOKEN_TY_KW_TYPEDEF) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF;
+  } else if (token.ty == LEX_TOKEN_TY_KW_AUTO) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN;
+  } else if (token.ty == LEX_TOKEN_TY_KW_EXTERN) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC;
+  } else if (token.ty == LEX_TOKEN_TY_KW_STATIC) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO;
+  } else if (token.ty == LEX_TOKEN_TY_KW_AUTO) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO;
+  } else if (token.ty == LEX_TOKEN_TY_KW_REGISTER) {
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER;
+  } else {
+    return false;
+  }
 
-//   if (token.ty == LEX_TOKEN_TY_KW_CONST) {
-//     *flags |= AST_TYPE_QUALIFIER_FLAG_CONST;
-//   } else if (token.ty == LEX_TOKEN_TY_KW_VOLATILE) {
-//     *flags |= AST_TYPE_QUALIFIER_FLAG_VOLATILE;
-//   } else {
-//     return false;
-//   }
+  consume_token(parser->lexer, token);
+  return true;
+}
 
-//   return parse_type_specifiers(parser, flags);
-// }
+bool parse_function_specifiers(struct parser *parser,
+                               enum ast_function_specifier_flags *flags) {
+  struct token token;
+  peek_token(parser->lexer, &token);
 
+  if (token.ty == LEX_TOKEN_TY_KW_INLINE) {
+    *flags |= AST_FUNCTION_SPECIFIER_FLAG_INLINE;
+  } else {
+    return false;
+  }
+
+  consume_token(parser->lexer, token);
+  return true;
+}
 bool parse_wkt(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -790,9 +808,11 @@ bool parse_array(struct parser *parser, struct ast_tyref *ty_ref) {
   *underlying = *ty_ref;
 
   ty_ref->ty = AST_TYREF_TY_ARRAY;
+  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+  ty_ref->storage_class_specifiers = AST_STORAGE_CLASS_SPECIFIER_FLAG_NONE;
+  ty_ref->function_specifiers = AST_FUNCTION_SPECIFIER_FLAG_NONE;
   ty_ref->array =
       (struct ast_ty_array){.ty = ty, .element = underlying, .size = size};
-  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
 
   return true;
 }
@@ -809,78 +829,23 @@ bool parse_pointer(struct parser *parser, struct ast_tyref *ty_ref) {
   ty_ref->ty = AST_TYREF_TY_POINTER;
   ty_ref->pointer.underlying = underlying;
   ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+  ty_ref->storage_class_specifiers = AST_STORAGE_CLASS_SPECIFIER_FLAG_NONE;
+  ty_ref->function_specifiers = AST_FUNCTION_SPECIFIER_FLAG_NONE;
 
-  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+  while (parse_type_qualifiers(parser, &ty_ref->type_qualifiers)) {
+    ;
+  }
 
   return true;
 }
 
-bool parse_aggregatedef(struct parser *parser,
-                        struct ast_aggregatedef *type_def,
-                        struct ast_tyref *ty_ref);
+bool parse_structdecllist(struct parser *parser,
+                          struct ast_structdecllist *type_def);
 
-// enum/union/struct/keyword
-bool parse_simple_type(struct parser *parser, struct ast_tyref *ty_ref) {
-  struct text_pos pos = get_position(parser->lexer);
+bool parse_enumdecllist(struct parser *parser,
+                        struct ast_enumdecllist *type_def);
 
-  if (parse_wkt(parser, ty_ref)) {
-    return true;
-  }
-
-  struct ast_aggregatedef def;
-  if (parse_aggregatedef(parser, &def, ty_ref)) {
-    return true;
-  }
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-  enum ast_tyref_ty ty = AST_TYREF_TY_UNKNOWN;
-  if (token.ty == LEX_TOKEN_TY_KW_STRUCT || token.ty == LEX_TOKEN_TY_KW_UNION) {
-  } else {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  consume_token(parser->lexer, token);
-
-  peek_token(parser->lexer, &token);
-  if (token.ty != LEX_TOKEN_TY_IDENTIFIER) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  consume_token(parser->lexer, token);
-
-  const char *ty_name = associated_text(parser->lexer, &token);
-  struct var_table_entry *entry = get_entry(&parser->ty_table, ty_name);
-
-  if (entry && entry->value) {
-    debug_assert(((struct ast_tyref *)entry->value)->ty ==
-                     AST_TYREF_TY_AGGREGATE,
-                 "expected struct/union ty");
-    *ty_ref = *((struct ast_tyref *)entry->value);
-
-    invariant_assert(ty == ty_ref->ty, "union/struct mismatch");
-  } else {
-    ty_ref->ty = AST_TYREF_TY_UNKNOWN;
-  }
-  return true;
-}
-
-// in decls, pointer/array/etc are not declared
-bool parse_decl_tyref(struct parser *parser, struct ast_tyref *ty_ref) {
-  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
-
-  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
-
-  // TODO: handle non integral types
-  if (!parse_simple_type(parser, ty_ref)) {
-    return false;
-  }
-
-  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
-  return true;
-}
+bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list);
 
 // in `int a, *b, *const *c[3]`, this parts the `a`/`*b`/`* const *c[3]` part
 bool parse_partial_declarator(struct parser *parser,
@@ -899,29 +864,50 @@ bool parse_partial_declarator(struct parser *parser,
 
   consume_token(parser->lexer, *identifier);
 
+  struct ast_paramlist param_list;
+  if (parse_paramlist(parser, &param_list)) {
+    struct ast_ty_func func_ty;
+    func_ty.ret_var_ty =
+        arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
+    *func_ty.ret_var_ty = *ty_ref;
+    func_ty.num_params = param_list.num_params;
+    func_ty.param_var_tys = arena_alloc(
+        parser->arena, sizeof(*func_ty.param_var_tys) * param_list.num_params);
+    for (size_t i = 0; i < param_list.num_params; i++) {
+      func_ty.param_var_tys[i] = param_list.params[i].var_ty;
+    }
+
+    ty_ref->ty = AST_TYREF_TY_FUNC;
+    ty_ref->func = func_ty;
+
+    return true;
+  }
+
   while (parse_array(parser, ty_ref)) {
   }
 
   return true;
 }
+bool parse_type_specifier(struct parser *parser, struct ast_tyref *ty_ref);
+bool parse_declarator(struct parser *parser, struct token *identifier,
+                      struct ast_tyref *specifier, struct ast_tyref *ty_ref);
 
 // does not have id, used in casts/params/return types
 bool parse_abstract_declarator(struct parser *parser,
                                struct ast_tyref *ty_ref) {
-  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+  struct text_pos pos = get_position(parser->lexer);
 
-  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
+  struct ast_tyref ret_ty;
+  if (!parse_type_specifier(parser, &ret_ty)) {
+    backtrack(parser->lexer, pos);
+    return true;
+  }
 
-  // TODO: handle non integral types
-  if (!parse_simple_type(parser, ty_ref)) {
+  struct token identifier;
+  if (!parse_declarator(parser, &identifier, &ret_ty, ty_ref)) {
+      backtrack(parser->lexer, pos);
     return false;
-  }
-
-  parse_type_qualifiers(parser, &ty_ref->type_qualifiers);
-
-  while (parse_pointer(parser, ty_ref)) {
-    // continually parse pointer
-  }
+  }  
 
   return true;
 }
@@ -944,7 +930,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
       get_entry(&parser->var_table, identifier_str(parser, &var->identifier));
 
   if (entry && entry->value) {
-    var->var_ty = *(struct ast_tyref *)entry->value;
+    var->var_ty = *entry->value;
     var->scope = entry->scope;
   }
 
@@ -1802,14 +1788,18 @@ bool parse_compoundexpr_with_semicolon(struct parser *parser,
   return false;
 }
 
-bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
-                   struct ast_vardecl *var_decl) {
+bool parse_declarator(struct parser *parser, struct token *identifier,
+                      struct ast_tyref *specifier, struct ast_tyref *ty_ref);
+
+
+bool parse_decl(struct parser *parser, struct ast_tyref *specifier,
+                struct ast_decl *var_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_var var;
 
   struct token identifier;
-  if (!parse_partial_declarator(parser, partial_ty, &identifier, &var.var_ty)) {
+  if (!parse_declarator(parser, &identifier, specifier, &var.var_ty)) {
     return false;
   }
 
@@ -1818,6 +1808,11 @@ bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
   var.scope = cur_scope(&parser->var_table);
   var_decl->var = var;
 
+  // HACK: should be done higher up so it knows ty table v var table
+  struct var_table_entry *entry = create_entry(&parser->var_table, identifier_str(parser, &identifier));
+  entry->value = arena_alloc(parser->arena, sizeof(*entry->value));
+  *entry->value = var.var_ty;
+
   struct text_pos post_var_pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
@@ -1825,7 +1820,7 @@ bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
     // return to where we were when we passed the var
     backtrack(parser->lexer, post_var_pos);
 
-    var_decl->ty = AST_VARDECL_TY_DECL;
+    var_decl->ty = AST_DECL_TY_DECL;
 
     return true;
   }
@@ -1841,46 +1836,23 @@ bool parse_vardecl(struct parser *parser, struct ast_tyref *partial_ty,
     return false;
   }
 
-  var_decl->ty = AST_VARDECL_TY_DECL_WITH_ASSG;
+  var_decl->ty = AST_DECL_TY_DECL_WITH_ASSG;
   var_decl->assg_expr = expr;
 
   return true;
 }
 
-bool parse_vardecllist(struct parser *parser,
-                       struct ast_vardecllist *var_decl_list) {
+bool parse_decl_list(struct parser *parser, struct ast_tyref *specifier, struct ast_decllist *decl_list) {
   struct text_pos pos = get_position(parser->lexer);
 
-  // FIXME: typedef can occur after type too
-  struct var_table *table;
-  if (parse_token(parser, LEX_TOKEN_TY_KW_TYPEDEF)) {
-    table = &parser->ty_table;
-  } else {
-    table = NULL;
-  }
-  (void)table;
+  struct vector *decls = vector_create(sizeof(struct ast_decl));
 
-  struct ast_tyref decl_ty_ref;
-  if (!parse_decl_tyref(parser, &decl_ty_ref)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  struct vector *decls = vector_create(sizeof(struct ast_vardecl));
-
-  struct ast_vardecl var_decl;
-  while (parse_vardecl(parser, &decl_ty_ref, &var_decl)) {
+  struct ast_decl var_decl;
+  while (parse_decl(parser, specifier, &var_decl)) {
     vector_push_back(decls, &var_decl);
 
     trace("creating var_table_entry for var name=%s",
           identifier_str(parser, &var_decl.var.identifier));
-
-    // copy the type ref into arena memory for lifetime simplicity
-
-    const char *name = identifier_str(parser, &var_decl.var.identifier);
-    struct var_table_entry *entry = create_entry(&parser->var_table, name);
-    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
-    *(struct ast_tyref *)entry->value = var_decl.var.var_ty;
 
     struct token token;
     peek_token(parser->lexer, &token);
@@ -1896,13 +1868,12 @@ bool parse_vardecllist(struct parser *parser,
     return false;
   }
 
-  struct ast_vardecl *new_decls =
+  struct ast_decl *new_decls =
       arena_alloc(parser->arena, vector_byte_size(decls));
   vector_copy_to(decls, new_decls);
 
-  var_decl_list->var_ty = decl_ty_ref;
-  var_decl_list->num_decls = vector_length(decls);
-  var_decl_list->decls = new_decls;
+  decl_list->num_decls = vector_length(decls);
+  decl_list->decls = new_decls;
 
   vector_free(&decls);
 
@@ -2127,13 +2098,16 @@ bool parse_declorexpr(struct parser *parser,
   decl_or_expr->decl = NULL;
   decl_or_expr->expr = NULL;
 
-  struct ast_vardecllist var_decl_list;
-  if (parse_vardecllist(parser, &var_decl_list)) {
+  struct ast_tyref specifier;
+  struct ast_decllist decl_list;
+  if (parse_type_specifier(parser, &specifier) && parse_decl_list(parser, &specifier, &decl_list)) {
     decl_or_expr->decl =
         arena_alloc(parser->arena, sizeof(*decl_or_expr->decl));
-    *decl_or_expr->decl = var_decl_list;
+    *decl_or_expr->decl = decl_list;
     return true;
   }
+  
+  backtrack(parser->lexer, pos);
 
   struct ast_expr expr;
   if (parse_expr(parser, &expr) &&
@@ -2264,6 +2238,10 @@ bool parse_selectstmt(struct parser *parser,
 bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
+bool parse_type_specifier(struct parser *parser, struct ast_tyref *ty_ref);
+bool parse_declarator(struct parser *parser, struct token *identifier,
+                      struct ast_tyref *specifier, struct ast_tyref *ty_ref);
+
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2335,11 +2313,21 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   // }
   // backtrack(parser->lexer, pos);
 
-  struct ast_vardecllist var_decl_list;
-  if (parse_vardecllist(parser, &var_decl_list)) {
-    stmt->ty = AST_STMT_TY_VAR_DECL_LIST;
-    stmt->var_decl_list = var_decl_list;
-    return true;
+  {
+    struct text_pos pos = get_position(parser->lexer);
+
+    struct ast_tyref specifier;
+    if (!parse_type_specifier(parser, &specifier)) {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+
+    struct ast_decllist decl_list;
+    if (parse_decl_list(parser, &specifier, &decl_list)) {
+      stmt->ty = AST_STMT_TY_DECL_LIST;
+      stmt->decl_list = decl_list;
+      return true;
+    }
   }
 
   backtrack(parser->lexer, pos);
@@ -2399,16 +2387,16 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   }
 
   struct ast_tyref var_ty;
+  struct token identifier;
   // FIXME: this is wrong
-  if (!parse_abstract_declarator(parser, &var_ty)) {
+
+  struct ast_tyref specifier;
+  if (!parse_type_specifier(parser, &specifier)) {
     backtrack(parser->lexer, pos);
     return false;
   }
 
-  struct token identifier;
-  peek_token(parser->lexer, &identifier);
-
-  if (identifier.ty != LEX_TOKEN_TY_IDENTIFIER) {
+  if (!parse_declarator(parser, &identifier, &specifier, &var_ty)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2474,103 +2462,269 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   return false;
 }
 
-bool parse_funcsig(struct parser *parser, struct ast_funcsig *func_sig) {
+bool parse_declaration_specifiers(struct parser *parser,
+                                  struct ast_tyref *ty_ref) {
+  if (parse_function_specifiers(parser, &ty_ref->function_specifiers) ||
+      parse_storage_class_specifiers(parser,
+                                     &ty_ref->storage_class_specifiers) ||
+      parse_type_qualifiers(parser, &ty_ref->type_qualifiers)) {
+    return parse_declaration_specifiers(parser, ty_ref);
+  }
+
+  return false;
+}
+
+bool parse_type_specifier(struct parser *parser, struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct ast_tyref ty_ref;
-  struct token identifier;
-  struct ast_paramlist param_list;
+  ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
+  ty_ref->storage_class_specifiers = AST_STORAGE_CLASS_SPECIFIER_FLAG_NONE;
+  ty_ref->function_specifiers = AST_FUNCTION_SPECIFIER_FLAG_NONE;
 
-  if (parse_abstract_declarator(parser, &ty_ref) &&
-      parse_identifier(parser, &identifier) &&
-      parse_paramlist(parser, &param_list)) {
-    struct ast_ty_func func_ty;
-    func_ty.ret_var_ty =
-        arena_alloc(parser->arena, sizeof(*func_ty.ret_var_ty));
-    *func_ty.ret_var_ty = ty_ref;
-    func_ty.num_param_var_tys = param_list.num_params;
-    func_ty.param_var_tys = arena_alloc(
-        parser->arena, sizeof(*func_ty.param_var_tys) * param_list.num_params);
-    for (size_t i = 0; i < param_list.num_params; i++) {
-      func_ty.param_var_tys[i] = param_list.params[i].var_ty;
+  parse_declaration_specifiers(parser, ty_ref);
+
+  if (parse_wkt(parser, ty_ref)) {
+    return true;
+  }
+
+  struct token type;
+  peek_token(parser->lexer, &type);
+
+  struct token token;
+  const char *name = NULL;
+  if (type.ty == LEX_TOKEN_TY_KW_STRUCT || type.ty == LEX_TOKEN_TY_KW_UNION) {
+    peek_token(parser->lexer, &token);
+    if (token.ty == LEX_TOKEN_TY_IDENTIFIER) {
+      name = identifier_str(parser, &token);
+      consume_token(parser->lexer, token);
     }
 
-    struct ast_tyref func_ty_ref;
-    func_ty_ref.ty = AST_TYREF_TY_FUNC;
-    func_ty_ref.func = func_ty;
+    struct ast_structdecllist decl_list;
+    if (parse_structdecllist(parser, &decl_list)) {
+      return true;
+    }
 
-    struct ast_var var;
-    var.identifier = identifier;
-    var.scope = cur_scope(&parser->var_table);
-    var.var_ty = func_ty_ref;
+    size_t total_fields = 0;
+    for (size_t i = 0; i < decl_list.num_struct_decls; i++) {
+      total_fields += decl_list.struct_decls[i].num_fields;
+    }
 
-    const char *name = identifier_str(parser, &var.identifier);
+    struct ast_struct_field *fields = arena_alloc(
+        parser->arena, sizeof(struct ast_struct_field) * total_fields);
+
+    size_t idx = 0;
+    for (size_t i = 0; i < decl_list.num_struct_decls; i++) {
+      struct ast_structdecl *field_list = &decl_list.struct_decls[i];
+      for (size_t j = 0; j < field_list->num_fields; j++) {
+        struct ast_struct_field *field = &fields[idx++];
+        field->name = identifier_str(parser, &field_list->fields[j].var.identifier);
+        field->var_ty = arena_alloc(parser->arena, sizeof(*field->var_ty));
+        *field->var_ty = field_list->fields[j].var.var_ty;
+      }
+    }
+
+    enum ast_ty_aggregate_ty aggregate_ty;
+    switch (type.ty) {
+    case LEX_TOKEN_TY_KW_UNION:
+      aggregate_ty = AST_TY_AGGREGATE_TY_UNION;
+      break;
+    case LEX_TOKEN_TY_KW_STRUCT:
+      aggregate_ty = AST_TY_AGGREGATE_TY_STRUCT;
+      break;
+    default:
+      unreachable("impossible");
+    }
+
+    struct ast_ty_aggregate aggregate;
+    aggregate.ty = aggregate_ty;
+    aggregate.name = name;
+    aggregate.num_field_var_tys = total_fields;
+    aggregate.field_var_tys = fields;
+
+    *ty_ref = (struct ast_tyref){.ty = AST_TYREF_TY_AGGREGATE,
+                                 .aggregate = aggregate};
+
     struct var_table_entry *entry =
-        get_or_create_entry(&parser->var_table, name);
-    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
-    *(struct ast_tyref *)entry->value = var.var_ty;
+        get_or_create_entry(&parser->ty_table, name);
 
-    func_sig->name = identifier;
-    func_sig->var_ty = func_ty_ref;
-    func_sig->param_list = param_list;
+    if (name && entry) {
+      if (!entry->value) {
+        entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
+      }
 
-    return true;
+      *entry->value = *ty_ref;
+    }
+  } else if (type.ty == LEX_TOKEN_TY_KW_ENUM) {
+    peek_token(parser->lexer, &token);
+    if (token.ty == LEX_TOKEN_TY_IDENTIFIER) {
+      name = identifier_str(parser, &token);
+      consume_token(parser->lexer, token);
+    }
+
+    struct ast_enumdecllist decl_list;
+    if (parse_enumdecllist(parser, &decl_list)) {
+      return true;
+    }
+
+    *ty_ref = (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                                 .well_known = WELL_KNOWN_TY_SIGNED_INT};
+
+    struct var_table_entry *entry =
+        get_or_create_entry(&parser->ty_table, name);
+
+    if (name && entry) {
+      if (!entry->value) {
+        entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
+      }
+
+      *entry->value = *ty_ref;
+    }
+  } else {
+    // must be a typedef name
+    todo("typedef names");
   }
 
   backtrack(parser->lexer, pos);
   return false;
 }
 
-bool parse_funcdecl(struct parser *parser, struct ast_funcdecl *func_decl) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  struct ast_funcsig func_sig;
-  if (parse_funcsig(parser, &func_sig) &&
-      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
-    func_decl->sig = func_sig;
-    return true;
+bool parse_direct_declarator(struct parser *parser, struct token *identifier,
+                             struct ast_tyref *specifier,
+                             struct ast_tyref *ty_ref);
+bool parse_declarator(struct parser *parser, struct token *identifier,
+                      struct ast_tyref *specifier, struct ast_tyref *ty_ref) {
+  while (parse_pointer(parser, ty_ref)) {
+    ;
   }
 
-  backtrack(parser->lexer, pos);
-  return false;
+  return parse_direct_declarator(parser, identifier, specifier, ty_ref);
+}
+
+bool parse_direct_declarator_modifier(struct parser *parser,
+                                      struct ast_tyref *specifier,
+                                      struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_paramlist param_list;
+  if (parse_paramlist(parser, &param_list)) {
+    // param type list or identifier list
+
+    ty_ref->ty = AST_TYREF_TY_FUNC;
+    ty_ref->func.ret_var_ty = arena_alloc(parser->arena, sizeof(*ty_ref->func.ret_var_ty));
+    *ty_ref->func.ret_var_ty = *specifier;
+    ty_ref->func.num_params = param_list.num_params;
+    ty_ref->func.param_identifiers =
+        arena_alloc(parser->arena, sizeof(*ty_ref->func.param_identifiers) *
+                                       ty_ref->func.num_params);
+    ty_ref->func.param_var_tys =
+        arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
+                                       ty_ref->func.num_params);
+
+    for (size_t i = 0; i < ty_ref->func.num_params; i++) {
+      ty_ref->func.param_identifiers[i] = param_list.params[i].var.identifier;
+      ty_ref->func.param_var_tys[i] = param_list.params[i].var_ty;
+    }
+
+    return true;
+  } else if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
+    // array
+    bool is_static = parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
+    // parse_type_qualifiers(parser, &flags);
+    is_static = is_static || parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
+    struct ast_expr expr;
+    parse_expr(parser, &expr);
+    todo("array");
+    invariant_assert(parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET), "expected");
+    return true;
+  } else {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+}
+
+bool parse_direct_declarator(struct parser *parser, struct token *identifier,
+                             struct ast_tyref *specifier,
+                             struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (parse_identifier(parser, identifier)) {
+    *ty_ref = *specifier;
+  } else {
+    if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+               parse_declarator(parser, identifier, specifier, ty_ref) &&
+               parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+      ;
+    } else {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+  }
+
+  while (parse_direct_declarator_modifier(parser, specifier, ty_ref)) {
+    specifier = arena_alloc(parser->arena, sizeof(*specifier));
+    *specifier = *ty_ref;
+  }
+
+  return true;
 }
 
 bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct ast_funcsig func_sig;
+  struct ast_tyref ret_ty;
+  if (!parse_type_specifier(parser, &ret_ty)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_tyref func_ty;
+  struct token identifier;
+  if (!parse_declarator(parser, &identifier, &ret_ty, &func_ty)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  if (func_ty.ty != AST_TYREF_TY_FUNC) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  func_def->var_ty = func_ty;
+
+  // struct ast_decllist decl_list;
+  // if (parse_decl_list(parser, &decl_list)) {
+  //   todo("func with decl list");
+  // }
+
+  push_scope(&parser->var_table);
+
+  // need to add the params to the locals table
+  for (size_t i = 0; i < func_ty.func.num_params; i++) {
+    const struct ast_tyref *param = &func_ty.func.param_var_tys[i];
+    struct token *identifier = &func_ty.func.param_identifiers[i];
+
+    struct ast_var var;
+    var.identifier = *identifier;
+    var.scope = cur_scope(&parser->var_table);
+    var.var_ty = *param;
+
+    const char *name = identifier_str(parser, &var.identifier);
+    struct var_table_entry *entry = create_entry(&parser->var_table, name);
+    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
+    *entry->value = var.var_ty;
+  }
+
+  pop_scope(&parser->var_table);
+
+  // return statements need to know the type they coerce to
+  parser->func_ret_ty = ret_ty;
+
   struct ast_compoundstmt func_body;
+  if (parse_compoundstmt(parser, &func_body)) {
+    func_def->identifier = identifier;
+    func_def->body = func_body;
 
-  if (parse_funcsig(parser, &func_sig)) {
-    push_scope(&parser->var_table);
-
-    // return statements need to know the type they coerce to
-    parser->func_ret_ty = *func_sig.var_ty.func.ret_var_ty;
-
-    // need to add the params to the locals table
-    for (size_t i = 0; i < func_sig.param_list.num_params; i++) {
-      const struct ast_param *param = &func_sig.param_list.params[i];
-
-      struct ast_var var;
-      var.identifier = param->var.identifier;
-      var.scope = cur_scope(&parser->var_table);
-      var.var_ty = param->var_ty;
-
-      const char *name = identifier_str(parser, &var.identifier);
-      struct var_table_entry *entry = create_entry(&parser->var_table, name);
-      entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
-      *(struct ast_tyref *)entry->value = var.var_ty;
-    }
-
-    if (parse_compoundstmt(parser, &func_body)) {
-      func_def->sig = func_sig;
-      func_def->body = func_body;
-
-      pop_scope(&parser->var_table);
-      return true;
-    }
-
-    pop_scope(&parser->var_table);
+    return true;
   }
 
   backtrack(parser->lexer, pos);
@@ -2614,169 +2768,91 @@ bool parse_enumcnst(struct parser *parser, struct ast_enumcnst *enum_cnst) {
   return true;
 }
 
-bool parse_field(struct parser *parser, const struct ast_tyref *partial_ty,
-                 struct ast_field *field) {
-  if (!parse_partial_declarator(parser, partial_ty, &field->identifier,
-                                &field->var_ty)) {
-    return false;
+bool parse_fieldlist(struct parser *parser, struct ast_structdecl *field_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_tyref specifier;
+  struct ast_decllist decl_list;
+  if (parse_type_specifier(parser, &specifier) && parse_decl_list(parser, &specifier, &decl_list)) {
+    field_list->num_fields = decl_list.num_decls;
+    field_list->fields = decl_list.decls;
+    return true;
   }
 
-  return true;
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
-bool parse_fieldlist(struct parser *parser, struct ast_fieldlist *field_list) {
-  struct ast_tyref decl_ty_ref;
-  if (!parse_decl_tyref(parser, &decl_ty_ref)) {
+bool parse_enumdecllist(struct parser *parser,
+                        struct ast_enumdecllist *enum_decl_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
 
-  struct vector *fields = vector_create(sizeof(struct ast_field));
+  struct vector *cnsts = vector_create(sizeof(struct ast_enumcnst));
 
-  struct ast_field field;
-  while (parse_field(parser, &decl_ty_ref, &field)) {
-    vector_push_back(fields, &field);
+  while (true) {
+    struct ast_enumcnst enum_cnst;
+    if (!parse_enumcnst(parser, &enum_cnst)) {
+      break;
+    }
 
-    // copy the type ref into arena memory for lifetime simplicity
+    // need to add the enum cnst into the var table
+    const char *name = identifier_str(parser, &enum_cnst.identifier);
 
-    struct token token;
-    peek_token(parser->lexer, &token);
+    struct var_table_entry *entry = create_entry(&parser->var_table, name);
+    entry->flags |= VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL;
+    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
+    *entry->value = (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                                       .well_known = WELL_KNOWN_TY_SIGNED_INT};
 
-    if (token.ty == LEX_TOKEN_TY_COMMA) {
-      // another decl
-      consume_token(parser->lexer, token);
-      continue;
-    } else if (token.ty == LEX_TOKEN_TY_SEMICOLON) {
-      consume_token(parser->lexer, token);
+    vector_push_back(cnsts, &enum_cnst);
+
+    if (!parse_token(parser, LEX_TOKEN_TY_COMMA)) {
       break;
     }
   }
 
-  if (vector_length(fields) == 0) {
-    vector_free(&fields);
-    return false;
-  }
+  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
+    enum_decl_list->num_enum_cnsts = vector_length(cnsts);
+    enum_decl_list->enum_cnsts =
+        arena_alloc(parser->arena, vector_byte_size(cnsts));
+    vector_copy_to(cnsts, enum_decl_list->enum_cnsts);
 
-  struct ast_field *new_fields =
-      arena_alloc(parser->arena, vector_byte_size(fields));
-  vector_copy_to(fields, new_fields);
-
-  field_list->num_fields = vector_length(fields);
-  field_list->fields = new_fields;
-
-  vector_free(&fields);
-
-  return true;
-}
-
-bool parse_aggregatedef(struct parser *parser,
-                        struct ast_aggregatedef *type_def,
-                        struct ast_tyref *ty_ref) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  enum ast_type_ty ty;
-  if (parse_token(parser, LEX_TOKEN_TY_KW_STRUCT)) {
-    ty = AST_TYPE_TY_STRUCT;
-  } else if (parse_token(parser, LEX_TOKEN_TY_KW_UNION)) {
-    ty = AST_TYPE_TY_UNION;
-  } else {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  type_def->ty = ty;
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TY_IDENTIFIER) {
-    type_def->name = arena_alloc(parser->arena, sizeof(*type_def->name));
-    *type_def->name = token;
-
-    consume_token(parser->lexer, token);
-    peek_token(parser->lexer, &token);
-  } else {
-    type_def->name = NULL;
-  };
-
-  const char *name =
-      type_def->name ? identifier_str(parser, type_def->name) : NULL;
-
-  type_def->num_field_lists = 0;
-  type_def->field_lists = NULL;
-
-  if (token.ty != LEX_TOKEN_TY_OPEN_BRACE) {
-    ty_ref->ty = AST_TYREF_TY_TAGGED;
-    ty_ref->type_qualifiers = AST_TYPE_QUALIFIER_FLAG_NONE;
-    ty_ref->tagged = (struct ast_ty_tagged){.name = name};
-
-    debug_assert(name, "struct with neither { nor name makes no sense");
     return true;
   }
 
-  consume_token(parser->lexer, token);
+  backtrack(parser->lexer, pos);
+  return false;
+}
 
-  struct vector *field_lists = vector_create(sizeof(struct ast_fieldlist));
+bool parse_structdecllist(struct parser *parser,
+                          struct ast_structdecllist *type_def) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  type_def->num_struct_decls = 0;
+  type_def->struct_decls = NULL;
+
+  struct vector *struct_decls = vector_create(sizeof(struct ast_structdecl));
   {
-    struct ast_fieldlist field_list;
-    while (parse_fieldlist(parser, &field_list)) {
-      vector_push_back(field_lists, &field_list);
+    struct ast_structdecl struct_decl;
+    while (parse_fieldlist(parser, &struct_decl)) {
+      vector_push_back(struct_decls, &struct_decl);
     }
   }
 
-  type_def->field_lists =
-      arena_alloc(parser->arena, vector_byte_size(field_lists));
-  type_def->num_field_lists = vector_length(field_lists);
-  vector_copy_to(field_lists, type_def->field_lists);
-  vector_free(&field_lists);
+  type_def->struct_decls =
+      arena_alloc(parser->arena, vector_byte_size(struct_decls));
+  type_def->num_struct_decls = vector_length(struct_decls);
+  vector_copy_to(struct_decls, type_def->struct_decls);
+  vector_free(&struct_decls);
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
     backtrack(parser->lexer, pos);
     return false;
-  }
-
-  size_t total_fields = 0;
-  for (size_t i = 0; i < type_def->num_field_lists; i++) {
-    total_fields += type_def->field_lists[i].num_fields;
-  }
-
-  struct ast_struct_field *fields = arena_alloc(
-      parser->arena, sizeof(struct ast_struct_field) * total_fields);
-
-  size_t idx = 0;
-  for (size_t i = 0; i < type_def->num_field_lists; i++) {
-    struct ast_fieldlist *field_list = &type_def->field_lists[i];
-    for (size_t j = 0; j < field_list->num_fields; j++) {
-      struct ast_struct_field *field = &fields[idx++];
-      field->name = identifier_str(parser, &field_list->fields[j].identifier);
-      field->var_ty = arena_alloc(parser->arena, sizeof(*field->var_ty));
-      *field->var_ty = field_list->fields[j].var_ty;
-    }
-  }
-
-  enum ast_ty_aggregate_ty aggregate_ty;
-  switch (type_def->ty) {
-  case AST_TYPE_TY_UNION:
-    aggregate_ty = AST_TY_AGGREGATE_TY_UNION;
-    break;
-  case AST_TYPE_TY_STRUCT:
-    aggregate_ty = AST_TY_AGGREGATE_TY_STRUCT;
-    break;
-  }
-  struct ast_ty_aggregate aggregate;
-  aggregate.ty = aggregate_ty;
-  aggregate.name = name;
-  aggregate.complete = true;
-  aggregate.num_field_var_tys = total_fields;
-  aggregate.field_var_tys = fields;
-
-  *ty_ref =
-      (struct ast_tyref){.ty = AST_TYREF_TY_AGGREGATE, .aggregate = aggregate};
-
-  struct var_table_entry *entry = get_or_create_entry(&parser->ty_table, name);
-  if (entry) {
-    if (!entry->value) {
-      entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
-    }
-    *(struct ast_tyref *)entry->value = *ty_ref;
   }
 
   return true;
@@ -2810,77 +2886,11 @@ bool parse_aggregatedecl(struct parser *parser,
   return true;
 }
 
-bool parse_enumdef(struct parser *parser, struct ast_enumdef *enum_def) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  if (!parse_token(parser, LEX_TOKEN_TY_KW_ENUM)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  enum_def->name = NULL;
-
-  struct token token;
-  peek_token(parser->lexer, &token);
-  if (token.ty == LEX_TOKEN_TY_IDENTIFIER) {
-    enum_def->name = arena_alloc(parser->arena, sizeof(*enum_def->name));
-    *enum_def->name = token;
-
-    consume_token(parser->lexer, token);
-  }
-
-  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
-  struct vector *cnsts = vector_create(sizeof(struct ast_enumcnst));
-
-  while (true) {
-    struct ast_enumcnst enum_cnst;
-    if (!parse_enumcnst(parser, &enum_cnst)) {
-      break;
-    }
-
-    // need to add the enum cnst into the var table
-    const char *name = identifier_str(parser, &enum_cnst.identifier);
-
-    struct var_table_entry *entry = create_entry(&parser->var_table, name);
-    entry->flags |= VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL;
-    entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
-    *(struct ast_tyref *)entry->value = (struct ast_tyref){
-        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_INT};
-
-    vector_push_back(cnsts, &enum_cnst);
-
-    if (!parse_token(parser, LEX_TOKEN_TY_COMMA)) {
-      break;
-    }
-  }
-
-  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE) &&
-      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
-    enum_def->num_enum_cnsts = vector_length(cnsts);
-    enum_def->enum_cnsts = arena_alloc(parser->arena, vector_byte_size(cnsts));
-    vector_copy_to(cnsts, enum_def->enum_cnsts);
-
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
-  return false;
-}
-
 struct parse_result parse(struct parser *parser) {
   struct lexer *lexer = parser->lexer;
 
   struct vector *func_defs = vector_create(sizeof(struct ast_funcdef));
-  struct vector *func_decls = vector_create(sizeof(struct ast_funcdecl));
-
-  struct vector *type_decls = vector_create(sizeof(struct ast_aggregatedecl));
-  struct vector *var_decl_lists = vector_create(sizeof(struct ast_vardecllist));
-
-  struct vector *enum_defs = vector_create(sizeof(struct ast_enumdef));
+  struct vector *declarations = vector_create(sizeof(struct ast_decllist));
 
   while (true) {
     if (lexer_at_eof(lexer)) {
@@ -2888,43 +2898,21 @@ struct parse_result parse(struct parser *parser) {
       break;
     }
 
-    struct ast_funcdecl func_decl;
-    if (parse_funcdecl(parser, &func_decl)) {
-      info("found func declaration '%s'",
-           associated_text(lexer, &func_decl.sig.name));
-      vector_push_back(func_decls, &func_decl);
-      continue;
-    }
-
     struct ast_funcdef func_def;
     if (parse_funcdef(parser, &func_def)) {
-      info("found func definition '%s'",
-           associated_text(lexer, &func_def.sig.name));
       vector_push_back(func_defs, &func_def);
       continue;
     }
 
-    struct ast_aggregatedecl type_decl;
-    if (parse_aggregatedecl(parser, &type_decl)) {
-      info("found type declaration '%s'",
-           associated_text(lexer, &type_decl.name));
-      vector_push_back(type_decls, &type_decl);
-      continue;
-    }
+    struct text_pos pos = get_position(parser->lexer);
 
-    struct ast_vardecllist var_decl_list;
-    if (parse_vardecllist(parser, &var_decl_list)) {
-      vector_push_back(var_decl_lists, &var_decl_list);
+    struct ast_decllist var_decl_list;
+    struct ast_tyref specifier;
+    if (parse_type_specifier(parser, &specifier) && parse_decl_list(parser, &specifier, &var_decl_list)) {
+      vector_push_back(declarations, &var_decl_list);
       continue;
     }
-
-    struct ast_enumdef enum_def;
-    if (parse_enumdef(parser, &enum_def)) {
-      info("found enum definition '%s'",
-           enum_def.name ? associated_text(lexer, enum_def.name) : "<unnamed>");
-      vector_push_back(enum_defs, &enum_def);
-      continue;
-    }
+    backtrack(parser->lexer, pos);
 
     if (!lexer_at_eof(lexer)) {
       // parser failed
@@ -2938,31 +2926,16 @@ struct parse_result parse(struct parser *parser) {
   }
 
   struct ast_translationunit translation_unit;
-  translation_unit.func_decls = nonnull_malloc(vector_byte_size(func_decls));
-  translation_unit.num_func_decls = vector_length(func_decls);
-  vector_copy_to(func_decls, translation_unit.func_decls);
-  vector_free(&func_decls);
 
   translation_unit.func_defs = nonnull_malloc(vector_byte_size(func_defs));
   translation_unit.num_func_defs = vector_length(func_defs);
   vector_copy_to(func_defs, translation_unit.func_defs);
   vector_free(&func_defs);
 
-  translation_unit.type_decls = nonnull_malloc(vector_byte_size(type_decls));
-  translation_unit.num_type_decls = vector_length(type_decls);
-  vector_copy_to(type_decls, translation_unit.type_decls);
-  vector_free(&type_decls);
-
-  translation_unit.var_decl_lists =
-      nonnull_malloc(vector_byte_size(var_decl_lists));
-  translation_unit.num_var_decl_lists = vector_length(var_decl_lists);
-  vector_copy_to(var_decl_lists, translation_unit.var_decl_lists);
-  vector_free(&var_decl_lists);
-
-  translation_unit.enum_defs = nonnull_malloc(vector_byte_size(enum_defs));
-  translation_unit.num_enum_defs = vector_length(enum_defs);
-  vector_copy_to(enum_defs, translation_unit.enum_defs);
-  vector_free(&enum_defs);
+  translation_unit.decl_lists = nonnull_malloc(vector_byte_size(declarations));
+  translation_unit.num_decl_lists = vector_length(declarations);
+  vector_copy_to(declarations, translation_unit.decl_lists);
+  vector_free(&declarations);
 
   struct parse_result result = {.translation_unit = translation_unit};
 
@@ -3071,7 +3044,7 @@ DEBUG_FUNC(tyref, ty_ref) {
   case AST_TYREF_TY_FUNC:
     AST_PRINTZ("FUNC (");
     INDENT();
-    for (size_t i = 0; i < ty_ref->func.num_param_var_tys; i++) {
+    for (size_t i = 0; i < ty_ref->func.num_params; i++) {
       DEBUG_CALL(tyref, &ty_ref->func.param_var_tys[i]);
     }
     UNINDENT();
@@ -3500,26 +3473,24 @@ DEBUG_FUNC(expr, expr) {
   UNINDENT();
 }
 
-DEBUG_FUNC(vardecl, var_decl) {
-  DEBUG_CALL(var, &var_decl->var);
+DEBUG_FUNC(decl, decl) {
+  DEBUG_CALL(var, &decl->var);
 
-  if (var_decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG) {
+  if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG) {
     AST_PRINTZ("WITH ASSIGNMENT");
 
     INDENT();
-    DEBUG_CALL(expr, &var_decl->assg_expr);
+    DEBUG_CALL(expr, &decl->assg_expr);
     UNINDENT();
   }
 }
 
-DEBUG_FUNC(vardecllist, var_decl_list) {
-  AST_PRINTZ("VAR DECL LIST");
+DEBUG_FUNC(decllist, decl_list) {
+  AST_PRINTZ("DECLARATION");
   INDENT();
 
-  DEBUG_CALL(tyref, &var_decl_list->var_ty);
-
-  for (size_t i = 0; i < var_decl_list->num_decls; i++) {
-    DEBUG_CALL(vardecl, &var_decl_list->decls[i]);
+  for (size_t i = 0; i < decl_list->num_decls; i++) {
+    DEBUG_CALL(decl, &decl_list->decls[i]);
   }
 
   UNINDENT();
@@ -3612,11 +3583,11 @@ DEBUG_FUNC(dowhilestmt, do_while_stmt) {
   UNINDENT();
 }
 
-DEBUG_FUNC(vardecllist, var_decl_list);
+DEBUG_FUNC(decllist, decl_list);
 
 DEBUG_FUNC(declorexpr, decl_or_expr) {
   if (decl_or_expr->decl) {
-    DEBUG_CALL(vardecllist, decl_or_expr->decl);
+    DEBUG_CALL(decllist, decl_or_expr->decl);
   } else if (decl_or_expr->expr) {
     DEBUG_CALL(expr, decl_or_expr->expr);
   }
@@ -3674,8 +3645,8 @@ DEBUG_FUNC(stmt, stmt) {
   switch (stmt->ty) {
   case AST_STMT_TY_NULL:
     break;
-  case AST_STMT_TY_VAR_DECL_LIST:
-    DEBUG_CALL(vardecllist, &stmt->var_decl_list);
+  case AST_STMT_TY_DECL_LIST:
+    DEBUG_CALL(decllist, &stmt->decl_list);
     break;
   case AST_STMT_TY_EXPR:
     DEBUG_CALL(expr, &stmt->expr);
@@ -3738,83 +3709,33 @@ DEBUG_FUNC(funcsig, func_sig) {
 
 DEBUG_FUNC(funcdef, func_def) {
   AST_PRINT_SAMELINE_Z("FUNCTION DEFINITION ");
-  DEBUG_CALL(funcsig, &func_def->sig);
+  // DEBUG_CALL(funcsig, &func_def->sig);
 
   DEBUG_CALL(compoundstmt, &func_def->body);
 }
 
-DEBUG_FUNC(funcdecl, func_decl) {
-  AST_PRINT_SAMELINE_Z("FUNCTION DECLARATION ");
-  DEBUG_CALL(funcsig, &func_decl->sig);
-}
-
-DEBUG_FUNC(enumcnst, enum_cnst) {
-  AST_PRINTZ("ENUM CONSTANT ");
-  INDENT();
-  AST_PRINT_SAMELINE("NAME %s ", associated_text(state->parser->lexer,
-                                                 &enum_cnst->identifier));
-  switch (enum_cnst->ty) {
-  case AST_ENUMCNST_TY_EXPLICIT_VALUE:
-    AST_PRINT_SAMELINE("VALUE %ull ", enum_cnst->value);
-
-    break;
-  case AST_ENUMCNST_TY_IMPLICIT_VALUE:
-    break;
-  }
-  AST_PRINTZ("");
-
-  UNINDENT();
-}
-
-DEBUG_FUNC(enumdef, enum_def) {
-  AST_PRINTZ("ENUM DEFINITION ");
-  AST_PRINT("NAME %s ", enum_def->name ? associated_text(state->parser->lexer,
-                                                         enum_def->name)
-                                       : NULL);
-
-  INDENT();
-  for (size_t i = 0; i < enum_def->num_enum_cnsts; i++) {
-    DEBUG_CALL(enumcnst, &enum_def->enum_cnsts[i]);
-  }
-  UNINDENT();
-}
-
 DEBUG_FUNC(field, field) {
   AST_PRINTZ("FIELD ");
-  INDENT();
   AST_PRINT("NAME %s ",
             associated_text(state->parser->lexer, &field->identifier));
   DEBUG_CALL(tyref, &field->var_ty);
   UNINDENT();
 }
 
-DEBUG_FUNC(fieldlist, field_list) {
-  AST_PRINTZ("FIELD LIST");
+DEBUG_FUNC(structdecl, struct_decl) {
+  AST_PRINTZ("STRUCT DECL");
   INDENT();
-  for (size_t i = 0; i < field_list->num_fields; i++) {
-    DEBUG_CALL(field, &field_list->fields[i]);
+  for (size_t i = 0; i < struct_decl->num_fields; i++) {
+    DEBUG_CALL(decl, &struct_decl->fields[i]);
   }
   UNINDENT();
 }
 
-DEBUG_FUNC(aggregatedef, aggregate_def) {
-  switch (aggregate_def->ty) {
-  case AST_TYPE_TY_UNION:
-    AST_PRINTZ("UNION DEFINITION ");
-    break;
-  case AST_TYPE_TY_STRUCT:
-    AST_PRINTZ("STRUCT DEFINITION ");
-    break;
-  }
-
-  AST_PRINT("NAME %s ",
-            aggregate_def->name
-                ? associated_text(state->parser->lexer, aggregate_def->name)
-                : "<unnamed>");
-
+DEBUG_FUNC(structdecllist, struct_decl_list) {
+  AST_PRINTZ("STRUCT DECL LIST");
   INDENT();
-  for (size_t i = 0; i < aggregate_def->num_field_lists; i++) {
-    DEBUG_CALL(fieldlist, &aggregate_def->field_lists[i]);
+  for (size_t i = 0; i < struct_decl_list->num_struct_decls; i++) {
+    DEBUG_CALL(structdecl, &struct_decl_list->struct_decls[i]);
   }
   UNINDENT();
 }
@@ -3840,23 +3761,11 @@ void debug_print_ast(struct parser *parser,
 
   AST_PRINTZ("PRINTING AST");
 
-  for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
-    DEBUG_CALL(funcdecl, &translation_unit->func_decls[i]);
-  }
-
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     DEBUG_CALL(funcdef, &translation_unit->func_defs[i]);
   }
 
-  for (size_t i = 0; i < translation_unit->num_type_decls; i++) {
-    DEBUG_CALL(aggregatedecl, &translation_unit->type_decls[i]);
-  }
-
-  for (size_t i = 0; i < translation_unit->num_var_decl_lists; i++) {
-    DEBUG_CALL(vardecllist, &translation_unit->var_decl_lists[i]);
-  }
-
-  for (size_t i = 0; i < translation_unit->num_enum_defs; i++) {
-    DEBUG_CALL(enumdef, &translation_unit->enum_defs[i]);
+  for (size_t i = 0; i < translation_unit->num_decl_lists; i++) {
+    DEBUG_CALL(decllist, &translation_unit->decl_lists[i]);
   }
 }
