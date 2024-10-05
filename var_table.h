@@ -17,7 +17,7 @@ struct var_table_entry {
 
   enum var_table_entry_flags flags;
 
-  void *value;
+  struct ast_tyref *value;
 };
 
 struct var_table {

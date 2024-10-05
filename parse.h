@@ -75,8 +75,6 @@ struct ast_ty_aggregate {
 
   const char *name;
 
-  bool complete;
-
   struct ast_struct_field *field_var_tys;
   size_t num_field_var_tys;
 };
@@ -84,7 +82,8 @@ struct ast_ty_aggregate {
 struct ast_ty_func {
   struct ast_tyref *ret_var_ty;
   struct ast_tyref *param_var_tys;
-  size_t num_param_var_tys;
+  struct token *param_identifiers;
+  size_t num_params;
 };
 
 enum ast_tyref_ty {
@@ -103,26 +102,25 @@ enum ast_tyref_ty {
   // AST_TYREF_TY_ENUM,
 };
 
-// enum ast_type_storage_class_flags {
-//   AST_TYPE_STORAGE_CLASS_FLAG_NONE = 0,
-//   AST_TYPE_STORAGE_CLASS_FLAG_CONST = 1,
-//   AST_TYPE_STORAGE_CLASS_FLAG_VOLATILE = 2,
-// };
+enum ast_storage_class_specifier_flags {
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_NONE = 0,
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF = 1,
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN = 4,
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC = 8,
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO = 16,
+  AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER = 32,
+};
+
+enum ast_function_specifier_flags {
+  AST_FUNCTION_SPECIFIER_FLAG_NONE = 0,
+  AST_FUNCTION_SPECIFIER_FLAG_INLINE = 1,
+};
 
 enum ast_type_qualifier_flags {
   AST_TYPE_QUALIFIER_FLAG_NONE = 0,
   AST_TYPE_QUALIFIER_FLAG_CONST = 1,
   AST_TYPE_QUALIFIER_FLAG_VOLATILE = 2,
 };
-
-// enum ast_type_specifiers_flags {
-//   AST_TYPE_QUALIFIER_FLAG_NONE,
-//   AST_TYPE_QUALIFIER_FLAG_VOID,
-//   AST_TYPE_QUALIFIER_FLAG_CHAR,
-//   AST_TYPE_QUALIFIER_FLAG_SHORT,
-//   AST_TYPE_QUALIFIER_FLAG_INT,
-//   AST_TYPE_QUALIFIER_FLAG_LONG,
-// };
 
 struct ast_ty_tagged {
   // union/enum/struct share same namespace so this is fine
@@ -133,6 +131,8 @@ struct ast_tyref {
   enum ast_tyref_ty ty;
 
   enum ast_type_qualifier_flags type_qualifiers;
+  enum ast_storage_class_specifier_flags storage_class_specifiers;
+  enum ast_function_specifier_flags function_specifiers;
 
   union {
     enum well_known_ty well_known;
@@ -381,13 +381,13 @@ struct ast_expr {
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
  * where each declaration is `<name>` or `<name> = <expr>` */
 
-enum ast_vardecl_ty {
-  AST_VARDECL_TY_DECL,
-  AST_VARDECL_TY_DECL_WITH_ASSG,
+enum ast_decl_ty {
+  AST_DECL_TY_DECL,
+  AST_DECL_TY_DECL_WITH_ASSG,
 };
 
-struct ast_vardecl {
-  enum ast_vardecl_ty ty;
+struct ast_decl {
+  enum ast_decl_ty ty;
   struct ast_var var;
 
   // int scope;
@@ -397,15 +397,20 @@ struct ast_vardecl {
   };
 };
 
-struct ast_vardecllist {
-  struct ast_tyref var_ty;
+enum ast_decllist_ty {
+  AST_DECL_LIST_TY_VARS,
+  AST_DECL_LIST_TY_TYPES,
+};
 
-  struct ast_vardecl *decls;
+struct ast_decllist {
+  enum ast_decllist_ty ty;
+
+  struct ast_decl *decls;
   size_t num_decls;
 };
 
 struct ast_typedef {
-  struct ast_vardecllist var_decl_list;
+  struct ast_decllist var_decl_list;
 };
 
 /* Jump statements - `return`, `break`, `continue`, `goto` */
@@ -493,7 +498,7 @@ struct ast_dowhilestmt {
 };
 
 struct ast_declorexpr {
-  struct ast_vardecllist *decl;
+  struct ast_decllist *decl;
   struct ast_expr *expr;
 };
 
@@ -522,7 +527,7 @@ struct ast_iterstmt {
 
 enum ast_stmt_ty {
   AST_STMT_TY_NULL,
-  AST_STMT_TY_VAR_DECL_LIST,
+  AST_STMT_TY_DECL_LIST,
   AST_STMT_TY_LABELED,
   AST_STMT_TY_EXPR,
   AST_STMT_TY_COMPOUND,
@@ -534,7 +539,7 @@ enum ast_stmt_ty {
 struct ast_stmt {
   enum ast_stmt_ty ty;
   union {
-    struct ast_vardecllist var_decl_list;
+    struct ast_decllist decl_list;
     struct ast_expr expr;
     struct ast_compoundstmt compound;
     struct ast_jumpstmt jump;
@@ -550,9 +555,10 @@ struct ast_field {
   struct token identifier;
 };
 
-struct ast_fieldlist {
+struct ast_structdecl {
   size_t num_fields;
-  struct ast_field *fields;
+  // struct ast_field *fields;
+  struct ast_decl *fields;
 };
 
 enum ast_type_ty {
@@ -566,13 +572,9 @@ struct ast_aggregatedecl {
   struct token name;
 };
 
-struct ast_aggregatedef {
-  enum ast_type_ty ty;
-
-  struct token *name;
-
-  size_t num_field_lists;
-  struct ast_fieldlist *field_lists;
+struct ast_structdecllist {
+  size_t num_struct_decls;
+  struct ast_structdecl *struct_decls;
 };
 
 /* Enum definitions */
@@ -592,9 +594,7 @@ struct ast_enumcnst {
   };
 };
 
-struct ast_enumdef {
-  struct token *name;
-
+struct ast_enumdecllist {
   size_t num_enum_cnsts;
   struct ast_enumcnst *enum_cnsts;
 };
@@ -602,31 +602,20 @@ struct ast_enumdef {
 /* Function definitions and declarations */
 
 struct ast_funcdef {
-  struct ast_funcsig sig;
+  // struct ast_decllist decl;
+  struct token identifier;
+  struct ast_tyref var_ty;
   struct ast_compoundstmt body;
-};
-
-struct ast_funcdecl {
-  struct ast_funcsig sig;
 };
 
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  struct ast_vardecllist *var_decl_lists;
-  size_t num_var_decl_lists;
-
-  struct ast_aggregatedecl *type_decls;
-  size_t num_type_decls;
+  struct ast_decllist *decl_lists;
+  size_t num_decl_lists;
 
   struct ast_funcdef *func_defs;
   size_t num_func_defs;
-
-  struct ast_funcdecl *func_decls;
-  size_t num_func_decls;
-
-  struct ast_enumdef *enum_defs;
-  size_t num_enum_defs;
 };
 
 struct parser;

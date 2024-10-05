@@ -32,7 +32,6 @@ struct compiler {
 // TODO: remove!
 void aarch64_codegen(const struct ir_builder *irb);
 
-
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
                                  const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
@@ -93,15 +92,14 @@ enum compiler_create_result create_compiler(struct program *program,
   // preproc is kept local as it is seperate to other stages
   struct preproc *preproc;
 
-  if (preproc_create(program, &preproc) !=
-      PREPROC_CREATE_RESULT_SUCCESS) {
+  if (preproc_create(program, &preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
   struct preprocessed_program preprocessed_program = preproc_process(preproc);
 
-  if (parser_create(&preprocessed_program , &(*compiler)->parser) !=
+  if (parser_create(&preprocessed_program, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -171,27 +169,32 @@ enum compile_result compile(struct compiler *compiler) {
       vector_create(sizeof(struct external_symbol));
 
   // FIXME: super slow quadratic we really need a hashmap
-  for (size_t i = 0; i < result.translation_unit.num_func_decls; i++) {
-    struct ast_funcdecl *decl = &result.translation_unit.func_decls[i];
-    const char *decl_name = identifier_str(compiler->parser, &decl->sig.name);
+  for (size_t i = 0; i < result.translation_unit.num_decl_lists; i++) {
+    struct ast_decllist *decl_list = &result.translation_unit.decl_lists[i];
 
-    bool defined = false;
-    for (size_t j = 0; j < result.translation_unit.num_func_defs; j++) {
-      struct ast_funcdef *def = &result.translation_unit.func_defs[j];
-      const char *def_name = identifier_str(compiler->parser, &def->sig.name);
+    for (size_t j = 0; j < decl_list->num_decls; j++) {
+      struct ast_decl *decl = &decl_list->decls[j];
+      const char *decl_name = identifier_str(compiler->parser, &decl->var.identifier);
 
-      if (strcmp(decl_name, def_name) == 0) {
-        defined = true;
-        break;
+      bool defined = false;
+      // FIXME: hashtbl
+      for (size_t k = 0; k < result.translation_unit.num_func_defs; k++) {
+        struct ast_funcdef *def = &result.translation_unit.func_defs[k];
+        const char *def_name = identifier_str(compiler->parser, &def->identifier);
+
+        if (strcmp(decl_name, def_name) == 0) {
+          defined = true;
+          break;
+        }
       }
-    }
 
-    // defined symbols are pushed back after creation because only then do we
-    // know their position
-    if (!defined) {
-      const char *mangled = target->mangle(compiler->arena, decl_name);
-      struct external_symbol symbol = {.name = mangled};
-      vector_push_back(external_symbols, &symbol);
+      // defined symbols are pushed back after creation because only then do we
+      // know their position
+      if (!defined) {
+        const char *mangled = target->mangle(compiler->arena, decl_name);
+        struct external_symbol symbol = {.name = mangled};
+        vector_push_back(external_symbols, &symbol);
+      }
     }
   }
 
@@ -290,7 +293,7 @@ enum compile_result compile(struct compiler *compiler) {
       BEGIN_STAGE("CODEGEN");
 
       struct codegen_function *codegen = target->codegen(irb);
-      
+
       BEGIN_STAGE("EMITTING");
 
       if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {

@@ -5,7 +5,6 @@
 #include "../lex.h"
 #include "../parse.h"
 #include "../util.h"
-#include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
@@ -286,8 +285,8 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
   }
   case AST_TYREF_TY_FUNC: {
     bool variadic =
-        ty_ref->func.num_param_var_tys &&
-        ty_ref->func.param_var_tys[ty_ref->func.num_param_var_tys - 1].ty ==
+        ty_ref->func.num_params &&
+        ty_ref->func.param_var_tys[ty_ref->func.num_params - 1].ty ==
             AST_TYREF_TY_VARIADIC;
 
     struct ir_op_var_ty ty;
@@ -296,7 +295,7 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_builder *irb,
     *ty.func.ret_ty = var_ty_for_ast_tyref(irb, ty_ref->func.ret_var_ty);
 
     // from IR onwards, variadic is no longer a param of the function but instead a flag
-    ty.func.num_params = variadic ? ty_ref->func.num_param_var_tys - 1 : ty_ref->func.num_param_var_tys;
+    ty.func.num_params = variadic ? ty_ref->func.num_params - 1 : ty_ref->func.num_params;
     ty.func.params =
         arena_alloc(irb->arena, sizeof(struct ir_op) * ty.func.num_params);
 
@@ -1018,7 +1017,7 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
-  size_t num_non_variadic_args = call->var_ty.func.num_param_var_tys;
+  size_t num_non_variadic_args = call->var_ty.func.num_params;
 
   struct ir_op_var_ty func_ty = var_ty_for_ast_tyref(irb, &call->target->var_ty);
   debug_assert(func_ty.ty == IR_OP_VAR_TY_TY_FUNC, "expected target to be func ty");
@@ -1608,15 +1607,15 @@ build_ir_for_dowhilestmt(struct ir_builder *irb,
   return after_cond_basicblock;
 }
 
-struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
+struct ir_op *build_ir_for_decllist(struct ir_builder *irb,
                                        struct ir_stmt *stmt,
-                                       struct ast_vardecllist *var_decl_list);
+                                       struct ast_decllist *decl_list);
 
 struct ir_op *build_ir_for_declorexpr(struct ir_builder *irb,
                                       struct ir_stmt *stmt,
                                       struct ast_declorexpr *decl_or_expr) {
   if (decl_or_expr->decl) {
-    return build_ir_for_vardecllist(irb, stmt, decl_or_expr->decl);
+    return build_ir_for_decllist(irb, stmt, decl_or_expr->decl);
   } else if (decl_or_expr->expr) {
     return build_ir_for_expr(irb, stmt, decl_or_expr->expr,
                              &decl_or_expr->expr->var_ty);
@@ -1771,7 +1770,7 @@ struct ir_op *build_ir_for_zero_init(struct ir_builder *irb,
 
 struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
                                           struct ir_stmt *stmt,
-                                          struct ast_vardecl *decl,
+                                          struct ast_decl *decl,
                                           struct ast_initlist *init_list,
                                            const struct ast_tyref *var_ty
                                         ) {
@@ -1834,7 +1833,7 @@ struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
 
 struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
                                            struct ir_stmt *stmt,
-                                           struct ast_vardecl *decl,
+                                           struct ast_decl *decl,
                                            struct ast_initlist *init_list,
                                            const struct ast_tyref *var_ty
                                          ) {
@@ -1891,7 +1890,7 @@ struct ir_op *build_ir_for_struct_initlist(struct ir_builder *irb,
 
 struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
                                           struct ir_stmt *stmt,
-                                          struct ast_vardecl *decl,
+                                          struct ast_decl *decl,
                                           struct ast_initlist *init_list,
                                            const struct ast_tyref *var_ty
                                         ) {
@@ -1925,7 +1924,7 @@ struct ir_op *build_ir_for_union_initlist(struct ir_builder *irb,
 
 struct ir_op *
 build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
-                                   struct ast_vardecl *decl,
+                                   struct ast_decl *decl,
                                    struct ast_initlist *init_list) {
 
   struct ast_tyref var_ty = decl->var.var_ty;
@@ -1949,14 +1948,18 @@ build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 }
 
-struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
+struct ir_op *build_ir_for_decllist(struct ir_builder *irb,
                                        struct ir_stmt *stmt,
-                                       struct ast_vardecllist *var_decl_list) {
-  for (size_t i = 0; i < var_decl_list->num_decls; i++) {
-    struct ast_vardecl *decl = &var_decl_list->decls[i];
+                                       struct ast_decllist *decl_list) {
+  if (decl_list->ty == AST_DECL_LIST_TY_TYPES) {
+    return NULL;
+  }
+
+  for (size_t i = 0; i < decl_list->num_decls; i++) {
+    struct ast_decl *decl = &decl_list->decls[i];
 
     struct ir_op *assignment;
-    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG &&
+    if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG &&
         decl->assg_expr.ty != AST_EXPR_TY_INIT_LIST) {
       assignment =
           build_ir_for_expr(irb, stmt, &decl->assg_expr, &decl->var.var_ty);
@@ -1971,7 +1974,7 @@ struct ir_op *build_ir_for_vardecllist(struct ir_builder *irb,
     // init lists are not true assignments
     // they are a lot of stores into locals
     // so must be built after the variable exists
-    if (decl->ty == AST_VARDECL_TY_DECL_WITH_ASSG &&
+    if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG &&
         decl->assg_expr.ty == AST_EXPR_TY_INIT_LIST) {
       build_ir_for_vardecl_with_initlist(irb, stmt, decl,
                                          &decl->assg_expr.init_list);
@@ -1988,9 +1991,9 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_builder *irb,
   debug_assert(basicblock, "bb cannot be null");
 
   switch (stmt->ty) {
-  case AST_STMT_TY_VAR_DECL_LIST: {
+  case AST_STMT_TY_DECL_LIST: {
     struct ir_stmt *ir_stmt = alloc_ir_stmt(irb, basicblock);
-    build_ir_for_vardecllist(irb, ir_stmt, &stmt->var_decl_list);
+    build_ir_for_decllist(irb, ir_stmt, &stmt->decl_list);
     return basicblock;
   }
   case AST_STMT_TY_EXPR: {
@@ -2166,7 +2169,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
                                          struct ast_funcdef *def,
                                          struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
-  struct ir_builder b = {.name = identifier_str(parser, &def->sig.name),
+  struct ir_builder b = {.name = identifier_str(parser, &def->identifier),
                          .parser = parser,
                          .var_refs = var_refs,
                          .global_var_refs = global_var_refs,
@@ -2185,7 +2188,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   struct ir_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = b;
 
-  struct ir_op_var_ty ty = var_ty_for_ast_tyref(builder, &def->sig.var_ty);
+  struct ir_op_var_ty ty = var_ty_for_ast_tyref(builder, &def->var_ty);
   builder->func_ty = ty.func;
 
   // needs at least one initial basic block
@@ -2196,15 +2199,22 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   // first statement is a bunch of magic MOV commands that explain to the rest
   // of the IR that these are params this is encoded as MOV NULL with the
   // IR_OP_FLAG_PARAM flag
-  for (size_t i = 0; i < def->sig.param_list.num_params; i++) {
-    const struct ast_param *param = &def->sig.param_list.params[i];
+  for (size_t i = 0; i < def->var_ty.func.num_params; i++) {
+    const struct token *param_identifier = &def->var_ty.func.param_identifiers[i];
+    const struct ast_tyref *param_var_ty = &def->var_ty.func.param_var_tys[i];
 
-    struct var_key key = get_var_key(builder->parser, &param->var, basicblock);
+    // TODO: the whole decl code needs reworking
+    struct ast_var var = {
+      .scope = 1,
+      .identifier = *param_identifier
+    };
+
+    struct var_key key = get_var_key(builder->parser, &var, basicblock);
     struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
     mov->ty = IR_OP_TY_MOV;
-    mov->var_ty = var_ty_for_ast_tyref(builder, &param->var_ty);
+    mov->var_ty = var_ty_for_ast_tyref(builder, param_var_ty);
     mov->flags |= IR_OP_FLAG_PARAM;
     mov->mov.value = NULL;
 
@@ -2352,48 +2362,58 @@ struct ir_unit *build_ir_for_translationunit(
   struct var_refs *global_var_refs = var_refs_create();
   // funcs do not necessarily have a seperate decl so we do it for defs too
 
-  for (size_t i = 0; i < translation_unit->num_func_decls; i++) {
-    struct ast_funcdecl *decl = &translation_unit->func_decls[i];
-    struct var_key key = {.name = identifier_str(parser, &decl->sig.name),
-                          .scope = SCOPE_GLOBAL};
-    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
-    UNUSED_ARG(ref);
-  }
+  for (size_t i = 0; i < translation_unit->num_decl_lists; i++) {
+    struct ast_decllist *decl_list = &translation_unit->decl_lists[i];
 
-  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
-    struct ast_funcdef *def = &translation_unit->func_defs[i];
-    struct var_key key = {.name = identifier_str(parser, &def->sig.name),
-                          .scope = SCOPE_GLOBAL};
-    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
-    UNUSED_ARG(ref);
-  }
+    if (decl_list->ty == AST_DECL_LIST_TY_TYPES) {
+      continue;
+    }
 
-  for (size_t i = 0; i < translation_unit->num_enum_defs; i++) {
-    struct ast_enumdef *def = &translation_unit->enum_defs[i];
+    for (size_t j = 0; j < decl_list->num_decls; j++) {
+      struct ast_decl *decl = &decl_list->decls[j];
 
-    unsigned long long enum_value = 0;
-    for (size_t j = 0; j < def->num_enum_cnsts; j++) {
-      struct ast_enumcnst *enum_cnst = &def->enum_cnsts[j];
-
-      if (enum_cnst->ty == AST_ENUMCNST_TY_EXPLICIT_VALUE) {
-        enum_value = enum_cnst->value;
-      }
-
-      struct var_key key = {.name =
-                                identifier_str(parser, &enum_cnst->identifier),
+      struct var_key key = {.name = identifier_str(parser, &decl->var.identifier),
                             .scope = SCOPE_GLOBAL};
-      struct var_ref *ref =
-          var_refs_add(global_var_refs, &key, VAR_REF_TY_ENUM_CNST);
-      ref->enum_cnst = enum_value;
-
-      // increment for the next implicit value
-      enum_value++;
+      struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
+      UNUSED_ARG(ref);
     }
   }
 
   for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
     struct ast_funcdef *def = &translation_unit->func_defs[i];
-    struct var_key key = {.name = identifier_str(parser, &def->sig.name),
+    struct var_key key = {.name = identifier_str(parser, &def->identifier),
+                          .scope = SCOPE_GLOBAL};
+    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
+    UNUSED_ARG(ref);
+  }
+
+  // TODO: enums
+  // for (size_t i = 0; i < translation_unit->num_enum_defs; i++) {
+  //   struct ast_enumdef *def = &translation_unit->enum_defs[i];
+
+  //   unsigned long long enum_value = 0;
+  //   for (size_t j = 0; j < def->num_enum_cnsts; j++) {
+  //     struct ast_enumcnst *enum_cnst = &def->enum_cnsts[j];
+
+  //     if (enum_cnst->ty == AST_ENUMCNST_TY_EXPLICIT_VALUE) {
+  //       enum_value = enum_cnst->value;
+  //     }
+
+  //     struct var_key key = {.name =
+  //                               identifier_str(parser, &enum_cnst->identifier),
+  //                           .scope = SCOPE_GLOBAL};
+  //     struct var_ref *ref =
+  //         var_refs_add(global_var_refs, &key, VAR_REF_TY_ENUM_CNST);
+  //     ref->enum_cnst = enum_value;
+
+  //     // increment for the next implicit value
+  //     enum_value++;
+  //   }
+  // }
+
+  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
+    struct ast_funcdef *def = &translation_unit->func_defs[i];
+    struct var_key key = {.name = identifier_str(parser, &def->identifier),
                           .scope = SCOPE_GLOBAL};
 
     struct ir_builder *func =
