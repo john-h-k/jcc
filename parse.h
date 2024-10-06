@@ -131,7 +131,6 @@ struct ast_tyref {
   enum ast_tyref_ty ty;
 
   enum ast_type_qualifier_flags type_qualifiers;
-  enum ast_storage_class_specifier_flags storage_class_specifiers;
   enum ast_function_specifier_flags function_specifiers;
 
   union {
@@ -151,10 +150,21 @@ struct ast_arglist {
 
 /* Variable references */
 
+enum ast_var_ty {
+  AST_VAR_TY_VAR,
+  AST_VAR_TY_ENUM_CNST
+};
+
 struct ast_var {
+  enum ast_var_ty ty;
+
   struct token identifier;
   int scope;
   struct ast_tyref var_ty;
+
+  union {
+    int enum_cnst;
+  };
 };
 
 struct ast_param {
@@ -404,6 +414,8 @@ enum ast_decllist_ty {
 
 struct ast_decllist {
   enum ast_decllist_ty ty;
+
+  enum ast_storage_class_specifier_flags storage_class_specifiers;
 
   struct ast_decl *decls;
   size_t num_decls;

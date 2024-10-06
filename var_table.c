@@ -32,7 +32,7 @@ struct var_table_entry *create_entry(struct var_table *var_table,
 
   struct var_table_entry entry = {.name = name,
                                   .scope = last->scope,
-                                  .flags = VAR_TABLE_ENTRY_FLAG_NONE,
+                                  .ty = VAR_TABLE_ENTRY_TY_NONE,
                                   .value = NULL};
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
   p->value = NULL;
@@ -77,6 +77,8 @@ void pop_scope(struct var_table *var_table) {
 
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
                                             const char *name) {
+  debug_assert(name, "name must be non-null");
+
   struct var_table_entry *entry = get_entry(var_table, name);
 
   if (entry) {
@@ -116,6 +118,8 @@ struct var_table_entry *get_entry(struct var_table *var_table,
 }
 
 void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_entries_callback cb, void *metadata) {
+  fprintf(file, "var_table entries:\n");
+
   struct var_table_scope *scope = var_table->last;
   while (scope) {
     size_t num_vars = vector_length(scope->entries);
@@ -123,7 +127,11 @@ void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_en
     for (size_t i = 0; i < num_vars; i++) {
       struct var_table_entry *entry = vector_get(scope->entries, i);
 
-      cb(file, entry, metadata);
+      if (cb) {
+        cb(file, entry, metadata);
+      } else {
+        fprintf(file, "entry %s\n @ %d\n", entry->name, entry->scope);
+      }
     }
 
     scope = scope->prev;

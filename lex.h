@@ -163,7 +163,7 @@ void consume_token(struct lexer *lexer, struct token token);
 // * `token.ty == LEX_TOKEN_TY_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
-const char *associated_text(struct lexer *lexer, const struct token *token);
-const char *token_name(struct lexer *lexer, struct token *token);
+const char *associated_text(const struct lexer *lexer, const struct token *token);
+const char *token_name(const struct lexer *lexer, const struct token *token);
 
 #endif
