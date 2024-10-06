@@ -21,6 +21,8 @@ struct var_key get_var_key(struct parser *parser, const struct ast_var *var,
 void get_var_ref(struct ir_builder *irb, struct ir_basicblock *basicblock,
                  struct ast_var *var, struct var_key *key,
                  struct var_ref **ref) {
+  debug_assert(var->ty != AST_VAR_TY_ENUM_CNST, "can't get var ref for enum cnst");
+
   *ref = NULL;
 
   // this is when we are _reading_ from the var
@@ -651,9 +653,6 @@ struct ir_op *build_ir_for_addressof_var(struct ir_builder *irb,
   case VAR_REF_TY_GLB:
     todo("address of globals");
     break;
-  case VAR_REF_TY_ENUM_CNST:
-    bug("address of enum makes no sense");
-    break;
   }
 
   struct ir_op_var_ty var_ty;
@@ -888,6 +887,16 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     return build_ir_for_addressof_var(irb, stmt, var);
   }
 
+  if (var->ty == AST_VAR_TY_ENUM_CNST) {
+    struct ir_op *op = alloc_ir_op(irb, stmt);
+    op->ty = IR_OP_TY_CNST;
+    op->var_ty = var_ty_for_ast_tyref(irb, &var->var_ty);
+    op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                   .int_value = var->enum_cnst};
+
+    return op;
+  }
+
   // this is when we are _reading_ from the var
   struct var_key key;
   struct var_ref *ref;
@@ -918,15 +927,6 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
     case VAR_REF_TY_GLB: {
       struct ir_op *op = alloc_ir_op(irb, stmt);
       make_sym_ref(irb, key.name, op, &var_ty);
-
-      return op;
-    }
-    case VAR_REF_TY_ENUM_CNST: {
-      struct ir_op *op = alloc_ir_op(irb, stmt);
-      op->ty = IR_OP_TY_CNST;
-      op->var_ty = var_ty;
-      op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                     .int_value = ref->enum_cnst};
 
       return op;
     }
@@ -2051,9 +2051,6 @@ void walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   switch (ref->ty) {
   case VAR_REF_TY_GLB:
   case VAR_REF_TY_LCL:
-  case VAR_REF_TY_ENUM_CNST:
-    unreachable(
-        "non-lcl var refs should already be handled and not generate phis");
   case VAR_REF_TY_SSA: {
     struct ir_op *entry_op = ref->op;
     // FIXME: this phi simplification is buggy and breaks `tests/do_while.c`
@@ -2205,7 +2202,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
 
     // TODO: the whole decl code needs reworking
     struct ast_var var = {
-      .scope = 1,
+      .scope = SCOPE_PARAMS,
       .identifier = *param_identifier
     };
 

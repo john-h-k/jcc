@@ -5,19 +5,26 @@
 #include "parse.h"
 
 #define SCOPE_GLOBAL (-1)
+#define SCOPE_PARAMS (0)
 
-enum var_table_entry_flags {
-  VAR_TABLE_ENTRY_FLAG_NONE = 0,
-  VAR_TABLE_ENTRY_FLAG_READ_ONLY_SYMBOL = 1,
+enum var_table_entry_ty {
+  VAR_TABLE_ENTRY_TY_NONE,
+  VAR_TABLE_ENTRY_TY_VAR,
+  VAR_TABLE_ENTRY_TY_ENUM_CNST,
+  VAR_TABLE_ENTRY_TY_ENUM,
+  VAR_TABLE_ENTRY_TY_STRUCT,
+  VAR_TABLE_ENTRY_TY_UNION,
+  VAR_TABLE_ENTRY_TY_TYPEDEF,
 };
 
 struct var_table_entry {
   const char *name;
   int scope;
 
-  enum var_table_entry_flags flags;
+  enum var_table_entry_ty ty;
 
   struct ast_tyref *value;
+  int enum_cnst;
 };
 
 struct var_table {

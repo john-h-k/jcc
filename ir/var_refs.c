@@ -16,7 +16,7 @@ struct var_refs *var_refs_create() {
 
 struct var_ref *var_refs_add(struct var_refs *var_refs,
                              const struct var_key *key, enum var_ref_ty ty) {
-  debug_assert(ty == VAR_REF_TY_GLB || ty == VAR_REF_TY_ENUM_CNST || key->basicblock, "must provide basicblock for non globals!");
+  debug_assert(ty == VAR_REF_TY_GLB || key->basicblock, "must provide basicblock for non globals!");
 
   struct var_ref ref = {.key = *key, .ty = ty, .op = NULL, .func = NULL};
   return (struct var_ref *)vector_push_back(var_refs->refs, &ref);

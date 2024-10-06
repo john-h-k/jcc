@@ -124,8 +124,6 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
-const char *token_name(struct lexer *lexer, struct token *token);
-
 struct text_pos get_position(struct lexer *lexer) { return lexer->pos; }
 
 void backtrack(struct lexer *lexer, struct text_pos position) {
@@ -150,7 +148,7 @@ void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
   // we treat both as a valid eol
 }
 
-const char *process_raw_string(struct lexer *lexer, const struct token *token) {
+const char *process_raw_string(const struct lexer *lexer, const struct token *token) {
   // TODO: this i think will wrongly accept multilines
 
   size_t max_str_len = token->span.end.idx - token->span.start.idx;
@@ -593,7 +591,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
   debug("parse token %s\n", token_name(lexer, token));
 }
 
-const char *associated_text(struct lexer *lexer, const struct token *token) {
+const char *associated_text(const struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
     return process_raw_string(lexer, token);
@@ -618,11 +616,11 @@ const char *associated_text(struct lexer *lexer, const struct token *token) {
   case LEX_TOKEN_TY_ELLIPSIS:
     return "...";
   default:
-    bug("associated text did not make sense for token ty '%d'", token->ty);
+    bug("associated text did not make sense for token '%s'", token_name(lexer, token));
   }
 }
 
-const char *token_name(struct lexer *lexer, struct token *token) {
+const char *token_name(const struct lexer *lexer, const struct token *token) {
   UNUSED_ARG(lexer);
 
   #define CASE_RET(name)                                                         \
