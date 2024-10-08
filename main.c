@@ -121,6 +121,8 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     free(objects[i]);
   }
+
+  free(objects);
 }
 
 const char *try_get_arg(const char *arg, const char *prefix) {

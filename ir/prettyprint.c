@@ -199,18 +199,7 @@ void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
 }
 
 void debug_call_target_string(FILE *file, struct ir_op *target) {
-  if (target->ty == IR_OP_TY_GLB_REF) {
-    switch (target->glb_ref.ty) {
-    case IR_OP_GLB_REF_TY_SYM:
-      fprintf(file, "%s", target->glb_ref.sym_name);
-      break;
-    case IR_OP_GLB_REF_TY_STR:
-      bug("no longer used");
-      break;
-    }
-  } else {
-    fprintf(file, "%%%zu", target->id);
-  }
+  fprintf(file, "%%%zu", target->id);
 }
 
 void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
@@ -254,18 +243,6 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_CUSTOM:
     bug("custom ops no longer supported");
-    break;
-  case IR_OP_TY_GLB_REF:
-    debug_lhs(file, irb, ir);
-    switch (ir->glb_ref.ty) {
-    case IR_OP_GLB_REF_TY_STR:
-      bug("no longer used");
-      break;
-    case IR_OP_GLB_REF_TY_SYM:
-      fprintf(file, "GLOBAL_SYM ( %s )", ir->glb_ref.sym_name);
-      break;
-    }
-    // don't print anything for global - let the op consuming it print instead
     break;
   case IR_OP_TY_CALL: {
     debug_lhs(file, irb, ir);
@@ -315,9 +292,6 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     case IR_OP_CNST_TY_INT:
       fprintf(file, "%llu", ir->cnst.int_value);
       break;
-    case IR_OP_CNST_TY_STR:
-      fprintf(file, "\"%s\"", ir->cnst.str_value);
-      break;
     }
     break;
   case IR_OP_TY_BINARY_OP:
@@ -352,6 +326,9 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
       fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
               ir->addr.lcl->offset);
       break;
+    case IR_OP_ADDR_TY_GLB:
+      fprintf(file, "addr GLB(%zu)", ir->addr.glb->id);
+      break;
     }
     break;
   case IR_OP_TY_STORE_LCL:
@@ -371,6 +348,23 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
       fprintf(file, "loadlcl LCL(UNASSIGNED)");
     }
     break;
+  case IR_OP_TY_STORE_GLB:
+    debug_lhs(file, irb, ir);
+    if (ir->load_glb.glb) {
+      fprintf(file, "storeglb GLB(%zu), %%%zu", ir->store_glb.glb->id, ir->store_glb.value->id);
+    } else {
+      fprintf(file, "storeglb GLB(UNASSIGNED), %%%zu", ir->store_glb.value->id);
+    }
+    break;
+  case IR_OP_TY_LOAD_GLB:
+    debug_lhs(file, irb, ir);
+    if (ir->load_glb.glb) {
+      fprintf(file, "loadglb GLB(%zu)", ir->load_glb.glb->id);
+    } else {
+      fprintf(file, "loadglb GLB(UNASSIGNED)");
+    }
+    break;
+
   case IR_OP_TY_BR:
     // this can happen post lowering!
     // invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
@@ -394,7 +388,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   }
 }
 
-const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
+extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
 struct prettyprint_file_metadata {
   FILE *file;

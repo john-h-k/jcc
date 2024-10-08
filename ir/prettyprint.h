@@ -30,8 +30,8 @@ struct prettyprint_callbacks {
   prettyprint_visit_op *visit_op;
 };
 
-const struct prettyprint_callbacks FILE_WRITER_CALLBACKS;
-const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
+extern const struct prettyprint_callbacks FILE_WRITER_CALLBACKS;
+extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
 /* Generic visitor methods that can be used to walk the graph */
 

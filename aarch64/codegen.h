@@ -34,9 +34,11 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_AND_IMM,
   AARCH64_INSTR_TY_ASRV,
   AARCH64_INSTR_TY_B,
+  AARCH64_INSTR_TY_BR,
   AARCH64_INSTR_TY_BC_COND,
   AARCH64_INSTR_TY_BFM,
   AARCH64_INSTR_TY_BL,
+  AARCH64_INSTR_TY_BLR,
   AARCH64_INSTR_TY_B_COND,
   AARCH64_INSTR_TY_CBZ,
   AARCH64_INSTR_TY_CBNZ,
@@ -161,7 +163,7 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_CONDITIONAL_SELECT,
   AARCH64_INSTR_CLASS_CONDITIONAL_BRANCH,
   AARCH64_INSTR_CLASS_BRANCH,
-  AARCH64_INSTR_CLASS_RET,
+  AARCH64_INSTR_CLASS_BRANCH_REG,
   AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH,
   AARCH64_INSTR_CLASS_LOAD_IMM,
   AARCH64_INSTR_CLASS_STORE_IMM,
@@ -257,7 +259,7 @@ struct aarch64_branch {
   struct ir_basicblock  *target;
 };
 
-struct aarch64_ret {
+struct aarch64_branch_reg {
   struct aarch64_reg target;
 };
 
@@ -351,7 +353,7 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_ret ret;
+      struct aarch64_branch_reg branch_reg, br, blr, ret;
     };
 
     union {
@@ -403,7 +405,7 @@ typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg, en
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 
-struct codegen_function *aarch64_codegen(struct ir_builder *irb);
-void aarch64_debug_print_codegen(FILE *file, struct codegen_function *func);
+struct codegen_unit *aarch64_codegen(struct ir_unit *ir);
+void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit);
 
 #endif

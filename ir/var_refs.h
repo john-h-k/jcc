@@ -25,14 +25,14 @@ struct var_ref {
 
   union {
     struct ir_op *op;
-    struct ir_string *glb;
+    struct ir_glb *glb;
     unsigned long long enum_cnst;
   };
 };
 
 struct var_refs *var_refs_create();
 
-struct var_ref *var_refs_get(struct var_refs *var_refs,
+struct var_ref *var_refs_get(const struct var_refs *var_refs,
                              const struct var_key *key);
 struct var_ref *var_refs_add(struct var_refs *var_refs,
                              const struct var_key *key, enum var_ref_ty ty);

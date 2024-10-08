@@ -165,7 +165,9 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_BL:
     return AARCH64_INSTR_CLASS_BRANCH;
   case AARCH64_INSTR_TY_RET:
-    return AARCH64_INSTR_CLASS_RET;
+  case AARCH64_INSTR_TY_BR:
+  case AARCH64_INSTR_TY_BLR:
+    return AARCH64_INSTR_CLASS_BRANCH_REG;
   case AARCH64_INSTR_TY_CBZ:
   case AARCH64_INSTR_TY_CBNZ:
     return AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH;
@@ -203,6 +205,8 @@ struct codegen_state {
 
   size_t call_saves_start;
   size_t total_call_saves_size;
+
+  size_t max_variadic_args;
 
   struct vector *strings;
   struct vector *datas;
@@ -242,7 +246,7 @@ static unsigned get_lcl_stack_offset(const struct codegen_state *state,
                                      const struct ir_op *op,
                                      const struct ir_lcl *lcl) {
   // FIXME: wrongly assumes everything is 8 byte
-  size_t offset = state->func->max_variadic_args * 8 + lcl->offset;
+  size_t offset = state->max_variadic_args * 8 + lcl->offset;
 
   if (!op) {
     return offset;
@@ -276,19 +280,14 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
   case IR_REG_TY_FLAGS:
     bug("doesn't make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
-    return (struct aarch64_reg){
-      .ty = AARCH64_REG_TY_X,
-      .idx = translate_reg_idx(reg.idx, reg.ty)
-    };
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
+                                .idx = translate_reg_idx(reg.idx, reg.ty)};
   case IR_REG_TY_FP:
     // FIXME: this does not support vectors/quad floats
-    return (struct aarch64_reg){
-      .ty = AARCH64_REG_TY_D,
-      .idx = translate_reg_idx(reg.idx, reg.ty)
-    };
+    return (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
+                                .idx = translate_reg_idx(reg.idx, reg.ty)};
   }
 }
-
 
 enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
   switch (var_ty->primitive) {
@@ -361,7 +360,8 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-#define MAX_LDR_STR_CNST (504)
+// TODO: we should remove load/store lcl/glb ops and lower all addressing
+// requirements earlier
 
 static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
@@ -425,8 +425,6 @@ static void codegen_store_addr_op(struct codegen_state *state,
 }
 
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
-
   struct aarch64_reg dest = codegen_reg(op);
 
   switch (op->addr.ty) {
@@ -436,6 +434,7 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     // op is NULL as we want the absolute offset
     size_t offset = get_lcl_stack_offset(state, NULL, lcl);
 
+    struct instr *instr = alloc_instr(state->func);
     instr->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
     instr->aarch64->add_imm = (struct aarch64_addsub_imm){
         .dest = dest,
@@ -444,6 +443,27 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
         .shift = 0,
     };
     break;
+  }
+  case IR_OP_ADDR_TY_GLB: {
+    struct ir_glb *glb = op->addr.glb;
+
+    struct instr *adrp = alloc_instr(state->func);
+    adrp->aarch64->ty = AARCH64_INSTR_TY_ADRP;
+    adrp->aarch64->adrp = (struct aarch64_addr_imm){.dest = dest, .imm = 0};
+
+    adrp->reloc = arena_alloc(state->func->unit->arena, sizeof(*adrp->reloc));
+    *adrp->reloc = (struct relocation){.ty = RELOCATION_TY_PAIR,
+                                       .symbol_index = glb->id,
+                                       .address = 0,
+                                       .size = 0};
+
+    struct instr *add = alloc_instr(state->func);
+    add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+    add->aarch64->add_imm = (struct aarch64_addsub_imm){
+        .dest = dest,
+        .source = dest,
+        .imm = 0,
+    };
   }
   }
 }
@@ -547,39 +567,12 @@ static void codegen_32_bit_int(struct codegen_state *state,
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
-  debug_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE, "expects primitive type");
+  debug_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+               "expects primitive type");
 
   struct aarch64_reg dest = codegen_reg(op);
 
   switch (op->cnst.ty) {
-
-  case IR_OP_CNST_TY_STR: {
-    // FIXME: don't assume string, could be array for example
-
-    struct instr *adrp = alloc_instr(state->func);
-    adrp->aarch64->ty = AARCH64_INSTR_TY_ADRP;
-    adrp->aarch64->adrp = (struct aarch64_addr_imm){.dest = dest, .imm = 0};
-
-    adrp->reloc = arena_alloc(state->func->arena, sizeof(*adrp->reloc));
-    *adrp->reloc = (struct relocation){
-        .ty = RELOCATION_TY_PAIR,
-        .str =
-            (struct str_relocation){.str_index = vector_length(state->strings)},
-        .address = 0,
-        .size = 0};
-
-    struct instr *add = alloc_instr(state->func);
-    add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    add->aarch64->add_imm = (struct aarch64_addsub_imm){
-        .dest = dest,
-        .source = dest,
-        .imm = 0,
-    };
-
-    vector_push_back(state->strings, &op->cnst.str_value);
-
-    return;
-  }
   case IR_OP_CNST_TY_FLT:
     // currently all constants are lowered to an integer load and `fmov`
     // but lots of constants can be loaded directly, so do that here
@@ -945,11 +938,12 @@ struct codegen_call_metadata {
   unsigned long post_call_live_fp_regs;
 };
 
-static void call_save_reg(struct codegen_state *state,
-                          struct ir_reg ir_reg, size_t idx) {
+static void call_save_reg(struct codegen_state *state, struct ir_reg ir_reg,
+                          size_t idx) {
   // FIXME: this saves entire reg but can sometimes save smaller amounts
   // (depending of the type occupying the live reg)
-  // we would need a way to determine what value is in a reg at a given instruction
+  // we would need a way to determine what value is in a reg at a given
+  // instruction
 
   struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
 
@@ -964,8 +958,8 @@ static void call_save_reg(struct codegen_state *state,
                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
 }
 
-static void call_restore_reg(struct codegen_state *state,
-                             struct ir_reg ir_reg, size_t idx) {
+static void call_restore_reg(struct codegen_state *state, struct ir_reg ir_reg,
+                             size_t idx) {
   struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
 
   size_t offset = (state->call_saves_start / 8) + idx;
@@ -980,10 +974,9 @@ static void call_restore_reg(struct codegen_state *state,
 }
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
-  invariant_assert(op->call.target->var_ty.ty == IR_OP_VAR_TY_TY_FUNC,
-                   "non-func");
+  invariant_assert(op->call.func_ty.ty == IR_OP_VAR_TY_TY_FUNC, "non-func");
 
-  struct ir_op_var_func_ty *func_ty = &op->call.target->var_ty.func;
+  const struct ir_op_var_func_ty *func_ty = &op->call.func_ty.func;
 
   invariant_assert(is_func_variadic(func_ty) ||
                        func_ty->num_params == op->call.num_args,
@@ -1037,8 +1030,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
 
     if (NTH_BIT(live_gp_volatile, i)) {
-      call_save_reg(state,
-                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
+      call_save_reg(state, (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
                     save_idx++);
     }
   }
@@ -1089,7 +1081,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       size_t i = op->call.num_args - 1 - head;
       struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
 
-      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE, "`lower_call` doesn't support non-prims");
+      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+                       "`lower_call` doesn't support non-prims");
 
       struct aarch64_reg source =
           i == 0 ? vol_reg : codegen_reg(op->call.args[i]);
@@ -1101,10 +1094,12 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         size_t variadic_arg_idx = i - num_normal_args;
 
         if (source.ty == AARCH64_REG_TY_W) {
-          // because offsets are in terms of reg size, we need to double it for the 8 byte slots
-          variadic_arg_idx *= 2;         
+          // because offsets are in terms of reg size, we need to double it for
+          // the 8 byte slots
+          variadic_arg_idx *= 2;
         } else {
-          invariant_assert(var_ty_info(state->ir, var_ty).size >= 8, "variadic arg with size < 8 has not been promoted");
+          invariant_assert(var_ty_info(state->ir, var_ty).size >= 8,
+                           "variadic arg with size < 8 has not been promoted");
         }
 
         struct instr *store = alloc_instr(state->func);
@@ -1131,22 +1126,11 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we generate the actual call
 
   struct instr *instr = alloc_instr(state->func);
-  instr->aarch64->ty = AARCH64_INSTR_TY_BL;
-  instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
-
-  if (op->call.target->ty != IR_OP_TY_GLB_REF) {
-    todo("calls to non-symbols");
-  }
-
-  instr->reloc = arena_alloc(state->func->arena, sizeof(*instr->reloc));
-  *instr->reloc = (struct relocation){
-      .ty = RELOCATION_TY_SINGLE,
-      .sym = (struct sym_relocation){.symbol_name = aarch64_mangle(
-                                         state->func->arena,
-                                         op->call.target->glb_ref.sym_name)},
-      // set by emitter
-      .address = 0,
-      .size = 0};
+  // instr->aarch64->ty = AARCH64_INSTR_TY_BL;
+  // instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
+  instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
+  instr->aarch64->blr =
+      (struct aarch64_branch_reg){.target = codegen_reg(op->call.target)};
 
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
     struct aarch64_reg ret_dest = codegen_reg(op);
@@ -1197,7 +1181,7 @@ void insert_prologue(struct codegen_state *state) {
                 ir->flags & IR_BUILDER_FLAG_MAKES_CALL);
 
   // FIXME: don't assume 8 bytes (they can be bigger)
-  size_t stack_size = 8 * state->func->max_variadic_args;
+  size_t stack_size = 8 * state->max_variadic_args;
   stack_size =
       ROUND_UP(stack_size + ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
 
@@ -1206,8 +1190,7 @@ void insert_prologue(struct codegen_state *state) {
 
   // add caller saves
   stack_size = ROUND_UP(stack_size + state->total_call_saves_size,
-                             AARCH64_STACK_ALIGNMENT);
-    
+                        AARCH64_STACK_ALIGNMENT);
 
   const size_t LR_OFFSET = 2;
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
@@ -1360,7 +1343,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
   instr->aarch64->ty = AARCH64_INSTR_TY_RET;
-  instr->aarch64->ret = (struct aarch64_ret){.target = RET_PTR_REG};
+  instr->aarch64->ret = (struct aarch64_branch_reg){.target = RET_PTR_REG};
 }
 
 static void codegen_op(struct codegen_state *state, struct ir_op *op) {
@@ -1380,6 +1363,10 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
       codegen_mov_op(state, op);
     }
     break;
+  }
+  case IR_OP_TY_LOAD_GLB:
+  case IR_OP_TY_STORE_GLB: {
+    unreachable("loadglb/storeglb should have been lowered");
   }
   case IR_OP_TY_LOAD_LCL: {
     codegen_load_lcl_op(state, op);
@@ -1401,7 +1388,6 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     codegen_addr_op(state, op);
     break;
   }
-
   case IR_OP_TY_BR_COND: {
     codegen_br_cond_op(state, op);
     break;
@@ -1424,9 +1410,6 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   }
   case IR_OP_TY_CAST_OP: {
     codegen_cast_op(state, op);
-    break;
-  }
-  case IR_OP_TY_GLB_REF: {
     break;
   }
   case IR_OP_TY_CALL: {
@@ -1517,128 +1500,127 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   data->last = instr;
 }
 
-struct codegen_function *aarch64_codegen(struct ir_builder *ir) {
-  struct codegen_function *func = arena_alloc(ir->arena, sizeof(*func));
-  *func = (struct codegen_function){.ty = CODEGEN_FUNCTION_TY_AARCH64,
-                                    .name = ir->name,
-                                    .first = NULL,
-                                    .last = NULL,
-                                    .instr_count = 0,
-                                    .instr_size = sizeof(struct aarch64_instr),
-                                    .num_strings = 0,
-                                    .strings = NULL,
-                                    .num_datas = 0,
-                                    .datas = NULL,
-                                    .max_variadic_args = 0};
+struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
+  struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
+  *unit = (struct codegen_unit){.ty = CODEGEN_UNIT_TY_AARCH64,
+                                .instr_size = sizeof(struct aarch64_instr),
+                                .num_funcs = ir->num_funcs,
+                                .funcs = arena_alloc(ir->arena, ir->num_funcs * sizeof(struct codegen_function *))
+                              };
 
-  arena_allocator_create(&func->arena);
 
-  clear_metadata(ir);
+  arena_allocator_create(&unit->arena);
 
-  size_t total_call_saves_size = 0;
+  for (size_t i = 0; i < ir->num_funcs; i++) {
+    struct ir_builder *ir_func = ir->funcs[i];
 
-  struct ir_basicblock *basicblock = ir->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
+    clear_metadata(ir_func);
 
-    while (stmt) {
-      struct ir_op *op = stmt->first;
+    size_t total_call_saves_size = 0;
+    size_t max_variadic_args = 0;
 
-      while (op) {
-        if (op->ty == IR_OP_TY_CALL) {
-          if (is_func_variadic(&op->call.target->var_ty.func)) {
-            size_t num_variadic_args =
-                op->call.num_args - op->call.target->var_ty.func.num_params + 1;
-            func->max_variadic_args =
-                MAX(func->max_variadic_args, num_variadic_args);
+    struct ir_basicblock *basicblock = ir_func->first;
+    while (basicblock) {
+      struct ir_stmt *stmt = basicblock->first;
+
+      while (stmt) {
+        struct ir_op *op = stmt->first;
+
+        while (op) {
+          if (op->ty == IR_OP_TY_CALL) {
+            if (is_func_variadic(&op->call.target->var_ty.func)) {
+              size_t num_variadic_args =
+                  op->call.num_args - op->call.target->var_ty.func.num_params +
+                  1;
+
+              max_variadic_args =
+                  MAX(max_variadic_args, num_variadic_args);
+            }
+
+            // we need to save registers in-use _after_ call
+            struct ir_op *succ = op->succ;
+            if (!succ && op->stmt->succ) {
+              // call is end of stmt, get live from next stmt
+              // a call can not be the final op of the final stmt of a
+              // basicblock as that must be a br/ret
+              succ = op->stmt->succ->first;
+            }
+
+            size_t num_live =
+                popcntl(succ->live_fp_regs) + popcntl(succ->live_gp_regs);
+            // FIXME: we naively assume we save 8 bytes
+            // this over saves for smaller data types and breaks with 128 bit
+            // vectors/floats
+            total_call_saves_size = MAX(total_call_saves_size, num_live * 8);
+
+            // FIXME: floats
+            op->metadata =
+                arena_alloc(unit->arena, sizeof(struct codegen_call_metadata));
+            *(struct codegen_call_metadata *)op->metadata =
+                (struct codegen_call_metadata){
+                    .post_call_live_gp_regs = succ->live_gp_regs,
+                    .post_call_live_fp_regs = succ->live_fp_regs,
+                };
           }
 
-          // we need to save registers in-use _after_ call
-          struct ir_op *succ = op->succ;
-          if (!succ && op->stmt->succ) {
-            // call is end of stmt, get live from next stmt
-            // a call can not be the final op of the final stmt of a basicblock
-            // as that must be a br/ret
-            succ = op->stmt->succ->first;
-          }
-
-          size_t num_live =
-              popcntl(succ->live_fp_regs) + popcntl(succ->live_gp_regs);
-          // FIXME: we naively assume we save 8 bytes
-          // this over saves for smaller data types and breaks with 128 bit
-          // vectors/floats
-          total_call_saves_size = MAX(total_call_saves_size, num_live * 8);
-
-          // FIXME: floats
-          op->metadata =
-              arena_alloc(func->arena, sizeof(struct codegen_call_metadata));
-          *(struct codegen_call_metadata *)op->metadata =
-              (struct codegen_call_metadata){
-                  .post_call_live_gp_regs = succ->live_gp_regs,
-                  .post_call_live_fp_regs = succ->live_fp_regs,
-              };
+          op = op->succ;
         }
 
-        op = op->succ;
+        stmt = stmt->succ;
       }
 
-      stmt = stmt->succ;
+      basicblock = basicblock->succ;
     }
 
-    basicblock = basicblock->succ;
-  }
+    struct codegen_function *func = arena_alloc(unit->arena, sizeof(*func));
+    *func = (struct codegen_function){
+                                      .unit = unit,
+                                      .name = ir_func->name,
+                                      .first = NULL,
+                                      .last = NULL,
+                                      .instr_count = 0};
+    unit->funcs[i] = func;
 
-  struct codegen_state state = {.func = func,
-                                .ir = ir,
-                                .total_call_saves_size = total_call_saves_size,
-                                .strings = vector_create(sizeof(char *)),
-                                .datas = vector_create(sizeof(char *))};
+    struct codegen_state state = {.func = func,
+                                      .ir = ir_func,
+                                      .max_variadic_args = max_variadic_args,
+                                      .total_call_saves_size = total_call_saves_size,
+                                      .strings = vector_create(sizeof(char *)),
+                                      .datas = vector_create(sizeof(char *))};
+    
 
-  insert_prologue(&state);
+    insert_prologue(&state);
 
-  basicblock = ir->first;
-  while (basicblock) {
-    struct instr *first_pred = func->last;
+    basicblock = ir_func->first;
+    while (basicblock) {
+      struct instr *first_pred = func->last;
 
-    struct ir_stmt *stmt = basicblock->first;
+      struct ir_stmt *stmt = basicblock->first;
 
-    while (stmt) {
-      codegen_stmt(&state, stmt);
+      while (stmt) {
+        codegen_stmt(&state, stmt);
 
-      stmt = stmt->succ;
+        stmt = stmt->succ;
+      }
+
+      basicblock->first_instr = first_pred ? first_pred->succ : func->first;
+      basicblock->last_instr = func->last;
+
+      basicblock = basicblock->succ;
     }
 
-    basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-    basicblock->last_instr = func->last;
+    // codegen is now done
+    // do some basic sanity checks
+    struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
+    walk_regs(state.func, check_reg_type_callback, &data);
 
-    basicblock = basicblock->succ;
   }
 
   if (log_enabled()) {
-    aarch64_debug_print_codegen(stderr, state.func);
+    aarch64_debug_print_codegen(stderr, unit);
   }
 
-  // codegen is now done
-  // do some basic sanity checks
-  struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
-  walk_regs(state.func, check_reg_type_callback, &data);
-
-  size_t num_strings = vector_length(state.strings);
-  const char **strings =
-      arena_alloc(func->arena, vector_byte_size(state.strings));
-  vector_copy_to(state.strings, strings);
-
-  size_t num_datas = vector_length(state.datas);
-  const char **datas = arena_alloc(func->arena, vector_byte_size(state.datas));
-  vector_copy_to(state.datas, datas);
-
-  func->num_strings = num_strings;
-  func->strings = strings;
-
-  func->num_datas = num_datas;
-  func->datas = datas;
-
-  return func;
+  return unit;
 }
 
 char reg_prefix(struct aarch64_reg reg) {
@@ -1750,9 +1732,9 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
     case AARCH64_INSTR_CLASS_BRANCH: {
       break;
     }
-    case AARCH64_INSTR_CLASS_RET: {
-      struct aarch64_ret ret = instr->aarch64->ret;
-      cb(instr, ret.target, AARCH64_REG_USAGE_TY_READ, metadata);
+    case AARCH64_INSTR_CLASS_BRANCH_REG: {
+      struct aarch64_branch_reg branch_reg = instr->aarch64->branch_reg;
+      cb(instr, branch_reg.target, AARCH64_REG_USAGE_TY_READ, metadata);
       break;
     }
     case AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH: {
@@ -2059,8 +2041,9 @@ void debug_print_branch(FILE *file, const struct aarch64_branch *branch) {
   codegen_fprintf(file, " %instr", branch->target->first_instr);
 }
 
-void debug_print_ret(FILE *file, const struct aarch64_ret *ret) {
-  codegen_fprintf(file, " %reg", ret->target);
+void debug_print_branch_reg(FILE *file,
+                            const struct aarch64_branch_reg *branch_reg) {
+  codegen_fprintf(file, " %reg", branch_reg->target);
 }
 
 void debug_print_compare_and_branch(
@@ -2211,7 +2194,7 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     if (instr->aarch64->bl.target) {
       debug_print_branch(file, &instr->aarch64->bl);
     } else {
-      fprintf(file, " %s", instr->reloc->sym.symbol_name);
+      fprintf(file, " <unknown>");
     }
     break;
   case AARCH64_INSTR_TY_BC_COND:
@@ -2298,9 +2281,17 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     fprintf(file, "msub");
     debug_print_fma(file, &instr->aarch64->msub);
     break;
+  case AARCH64_INSTR_TY_BR:
+    fprintf(file, "br");
+    debug_print_branch_reg(file, &instr->aarch64->br);
+    break;
+  case AARCH64_INSTR_TY_BLR:
+    fprintf(file, "blr");
+    debug_print_branch_reg(file, &instr->aarch64->blr);
+    break;
   case AARCH64_INSTR_TY_RET:
     fprintf(file, "ret");
-    debug_print_ret(file, &instr->aarch64->ret);
+    debug_print_branch_reg(file, &instr->aarch64->ret);
     break;
   case AARCH64_INSTR_TY_RORV:
     fprintf(file, "rorv");
@@ -2361,20 +2352,24 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   }
 }
 
-void aarch64_debug_print_codegen(FILE *file, struct codegen_function *func) {
-  debug_assert(func->ty == CODEGEN_FUNCTION_TY_AARCH64, "expected aarch64");
+void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
+  debug_assert(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
 
-  fprintf(file, "\nFUNCTION: %s\n", func->name);
+  for (size_t i = 0; i < unit->num_funcs; i++) {
+    struct codegen_function *func = unit->funcs[i];
 
-  size_t offset = 0;
-  struct instr *instr = func->first;
-  while (instr) {
-    fprintf(file, "%04zu: ", offset++);
-    debug_print_instr(file, func, instr);
+    fprintf(file, "\nFUNCTION: %s\n", func->name);
+
+    size_t offset = 0;
+    struct instr *instr = func->first;
+    while (instr) {
+      fprintf(file, "%04zu: ", offset++);
+      debug_print_instr(file, func, instr);
+      fprintf(file, "\n");
+
+      instr = instr->succ;
+    }
+
     fprintf(file, "\n");
-
-    instr = instr->succ;
   }
-
-  fprintf(file, "\n");
 }

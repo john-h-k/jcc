@@ -47,12 +47,13 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
+  case IR_OP_TY_LOAD_GLB:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_CALL:
-  case IR_OP_TY_GLB_REF:
     return true;
+  case IR_OP_TY_STORE_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_STORE_ADDR:
   case IR_OP_TY_BR_COND:
@@ -75,13 +76,14 @@ bool op_is_branch(enum ir_op_ty ty) {
   // calls are NOT branches, because while they do leave, they guarantee return
   case IR_OP_TY_CALL:
   case IR_OP_TY_UNDF:
-  case IR_OP_TY_GLB_REF:
   case IR_OP_TY_PHI:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
+  case IR_OP_TY_STORE_GLB:
+  case IR_OP_TY_LOAD_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_STORE_ADDR:
@@ -147,9 +149,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     bug("unknown op!");
   case IR_OP_TY_CUSTOM:
   case IR_OP_TY_UNDF:
-  case IR_OP_TY_GLB_REF: {
     break;
-  }
   case IR_OP_TY_CALL: {
     cb(&op->call.target, cb_metadata);
     for (size_t i = 0; i < op->call.num_args; i++) {
@@ -178,6 +178,11 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_STORE_ADDR:
     cb(&op->store_addr.addr, cb_metadata);
     cb(&op->store_addr.value, cb_metadata);
+    break;
+  case IR_OP_TY_STORE_GLB:
+    cb(&op->store_glb.value, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_GLB:
     break;
   case IR_OP_TY_STORE_LCL:
     cb(&op->store_lcl.value, cb_metadata);
@@ -216,14 +221,16 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     bug("unknown op!");
   case IR_OP_TY_CUSTOM:
     todo("walk custom");
-  case IR_OP_TY_GLB_REF:
-    todo("walk global");
   case IR_OP_TY_CALL:
     todo("walk call");
   case IR_OP_TY_PHI:
     todo("walk phi");
   case IR_OP_TY_MOV:
     todo("walk mov");
+  case IR_OP_TY_LOAD_GLB:
+    todo("walk load glb");
+  case IR_OP_TY_STORE_GLB:
+    todo("walk store glb");
   case IR_OP_TY_LOAD_ADDR:
     todo("walk load addr");
   case IR_OP_TY_STORE_ADDR:
@@ -894,6 +901,29 @@ struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_b
 }
 
 
+struct ir_glb *add_global(struct ir_unit *iru,
+                         const struct ir_op_var_ty *var_ty) {
+  struct ir_glb *glb = arena_alloc(iru->arena, sizeof(*glb));
+
+  struct ir_glb *pred = iru->first_global;
+
+  glb->id = pred ? pred->id + 1 : 0;
+  glb->succ = NULL;
+  glb->pred = pred;
+  glb->var_ty = *var_ty;
+
+  if (!iru->first_global) {
+    iru->first_global = glb;
+  }
+
+  if (iru->last_global) {
+    iru->last_global->succ = glb;
+  }
+
+  iru->last_global = glb;
+
+  return glb;
+}
 struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
@@ -926,23 +956,6 @@ struct ir_lcl *add_local(struct ir_builder *irb,
   irb->last_local = lcl;
 
   return lcl;
-}
-
-void make_sym_ref(struct ir_builder *irb, const char *sym_name,
-                  struct ir_op *op, const struct ir_op_var_ty *var_ty) {
-  struct ir_op_glb_ref *glb_ref = &op->glb_ref;
-
-  op->ty = IR_OP_TY_GLB_REF;
-  op->var_ty = *var_ty;
-  op->reg = NO_REG;
-  op->flags |= IR_OP_FLAG_DONT_GIVE_SLOT;
-
-  glb_ref->ty = IR_OP_GLB_REF_TY_SYM;
-  glb_ref->sym_name = sym_name;
-  glb_ref->metadata = NULL;
-
-  glb_ref->succ = irb->global_refs;
-  irb->global_refs = glb_ref;
 }
 
 bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty) {

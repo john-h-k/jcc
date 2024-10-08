@@ -26,105 +26,7 @@ struct emit_state {
   const struct codegen_function *func;
   struct arena_allocator *arena;
   struct aarch64_emitter *emitter;
-
-  struct vector *strings;
-  size_t total_str_len;
-
-  size_t num_extra_stack_slots;
-
-  // the maximum number of variadics used in this function
-  // we offset all stack vars beneath this as it is easier than worrying about
-  // lcl lifetimes
-  size_t max_variadic_args;
-
-  // registers that need to be reloaded
-  unsigned long need_reload_registers;
 };
-
-// static struct aarch64_reg get_reg_for_idx(struct ir_reg reg) {
-//   // [w|x]18 not available
-//   switch (reg.ty) {
-//   case IR_REG_TY_NONE:
-//   case IR_REG_TY_SPILLED:
-//   case IR_REG_TY_FLAGS:
-//     bug("reg type invalid");
-//   case IR_REG_TY_INTEGRAL: {
-//     struct aarch64_reg reg = {.idx = reg.idx < 18 ? reg.idx : reg.idx + 1};
-//     invariant_assert(reg.idx <= 31, "invalid reg!");
-//     return reg;
-//   }
-//   case IR_REG_TY_FP: {
-//     struct aarch64_reg reg = {.idx = reg.idx < 18 ? reg.idx : reg.idx + 1};
-//     invariant_assert(reg.idx <= 31, "invalid reg!");
-//     return reg;
-//   }
-//   }
-// }
-
-// static unsigned get_lcl_stack_offset(struct emit_state *state,
-//                                      const struct ir_lcl *lcl) {
-//   // FIXME: wrongly assumes everything is 8 byte
-//   return state->max_variadic_args * 8 + lcl->offset;
-// }
-
-// static unsigned get_lcl_stack_offset_32(struct emit_state *state,
-//                                         const struct ir_lcl *lcl) {
-//   unsigned abs_offset = get_lcl_stack_offset(state, lcl);
-//   debug_assert(abs_offset % 4 == 0, "stack offset not divisible by 4");
-//   return abs_offset / 4;
-// }
-
-// static unsigned get_lcl_stack_offset_64(struct emit_state *state,
-//                                         const struct ir_lcl *lcl) {
-//   unsigned abs_offset = get_lcl_stack_offset(state, lcl);
-//   debug_assert(abs_offset % 8 == 0, "stack offset not divisible by 8");
-//   return abs_offset / 8;
-// }
-
-enum aarch64_relocation_ty {
-  AARCH64_RELOCATION_TY_B,
-  AARCH64_RELOCATION_TY_ADRP_ADD
-};
-
-struct aarch64_relocation {
-  enum aarch64_relocation_ty ty;
-
-  struct relocation reloc;
-};
-
-// static void emit_call(struct emit_state *state, struct ir_op *op) {
-//   switch (op->call.target->ty) {
-//   case IR_OP_TY_GLB_REF: {
-//     // this uses relocs instead of actually calculating it
-//     struct ir_op_glb_ref *glb_ref = &op->call.target->glb_ref;
-//     invariant_assert(glb_ref->ty == IR_OP_GLB_REF_TY_SYM,
-//                      "only symbols make sense for call targets");
-
-//     glb_ref->metadata =
-//         arena_alloc(state->arena, sizeof(struct aarch64_relocation));
-//     struct aarch64_relocation *reloc =
-//         (struct aarch64_relocation *)glb_ref->metadata;
-//     reloc->ty = AARCH64_RELOCATION_TY_B;
-//     reloc->reloc = (struct relocation){
-//         // this is not actually the address!!
-//         // this is the offset WITHIN the function
-//         // we let `compiler.c` fix up the address
-//         .ty = RELOCATION_TY_SINGLE,
-//         .address = aarch64_emit_bytesize(state->emitter),
-//         .size = 2,
-//         .sym = (struct sym_relocation){
-//             .symbol_name =
-//                 aarch64_mangle(state->arena,
-//                 op->call.target->glb_ref.sym_name),
-//         }};
-
-//     break;
-//   }
-//   default:
-//     todo("non GLB calls");
-//     break;
-//   }
-// }
 
 void emit_br_op(struct emit_state *state, struct ir_op *op) {
   if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
@@ -144,31 +46,6 @@ void emit_br_op(struct emit_state *state, struct ir_op *op) {
     // aarch64_emit_b(state->emitter, false_offset);
   }
 }
-
-// static void emit_page(struct emit_state *state, struct ir_op *op) {
-
-//   struct ir_op *value = op->custom.aarch64->page.glb_ref;
-//   debug_assert(value->ty == IR_OP_TY_GLB_REF,
-//                "received non glb_ref op in emit_mov_glb");
-
-//   value->glb_ref.metadata =
-//       arena_alloc(state->arena, sizeof(struct aarch64_relocation));
-//   struct aarch64_relocation *reloc =
-//       (struct aarch64_relocation *)value->glb_ref.metadata;
-
-//   reloc->ty = AARCH64_RELOCATION_TY_ADRP_ADD;
-//   reloc->reloc = (struct relocation){
-//       // this is not actually the address!!
-//       // this is the offset WITHIN the function
-//       // we let `compiler.c` fix up the address
-//       .ty = RELOCATION_TY_PAIR,
-//       .address = aarch64_emit_bytesize(state->emitter),
-//       .size = 2,
-//       .str = (struct str_relocation){
-//           .str_index = value->glb_ref.string->index_from_back}};
-
-//   // aarch64_emit_adrp(state->emitter, 0, get_reg_for_idx(op->reg));
-// }
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
@@ -299,6 +176,12 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_ORR_IMM:
     aarch64_emit_orr_imm(state->emitter, instr->aarch64->orr_imm);
     break;
+  case AARCH64_INSTR_TY_BR:
+    aarch64_emit_br(state->emitter, instr->aarch64->br);
+    break;
+  case AARCH64_INSTR_TY_BLR:
+    aarch64_emit_blr(state->emitter, instr->aarch64->blr);
+    break;
   case AARCH64_INSTR_TY_RET:
     aarch64_emit_ret(state->emitter, instr->aarch64->ret);
     break;
@@ -350,68 +233,78 @@ static void emit_instr(const struct emit_state *state,
   }
 }
 
-struct compiled_function
-aarch64_emit_function(const struct codegen_function *func) {
-  struct aarch64_emitter *emitter;
-  create_aarch64_emitter(&emitter);
+struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
+  // TODO: vars
+  if (unit->num_vars) {
+    todo("vars");
+  }
 
-  struct emit_state state = {.func = func,
-                             .arena = func->arena,
-                             .emitter = emitter,
-                             .strings = vector_create(sizeof(const char *)),
-                             .total_str_len = 0,
-                             .num_extra_stack_slots = 0,
-                             .max_variadic_args = func->max_variadic_args};
+  size_t num_entries = unit->num_funcs;
+  struct object_entry *entries =
+      arena_alloc(unit->arena, num_entries * sizeof(*entries));
 
-  struct vector *relocs = vector_create(sizeof(struct relocation));
+  for (size_t i = 0; i < unit->num_funcs; i++) {
+    struct codegen_function *func = unit->funcs[i];
 
-  struct instr *instr = func->first;
-  while (instr) {
-    size_t pos = aarch64_emit_bytesize(state.emitter);
+    struct aarch64_emitter *emitter;
+    create_aarch64_emitter(&emitter);
 
-    size_t emitted = aarch64_emitted_count(state.emitter);
-    emit_instr(&state, instr);
-    size_t generated_instrs = aarch64_emitted_count(state.emitter) - emitted;
-    debug_assert(generated_instrs == 1,
-                 "expected instr %zu to generate exactly 1 instruction but it "
-                 "generated %zu",
-                 instr->id, generated_instrs);
+    struct emit_state state = {
+        .func = func, .arena = unit->arena, .emitter = emitter};
 
-    if (instr->reloc) {
-      instr->reloc->address = pos;
-      instr->reloc->size = 2;
-      vector_push_back(relocs, instr->reloc);
+    struct vector *relocs = vector_create(sizeof(struct relocation));
+
+    struct instr *instr = func->first;
+    while (instr) {
+      size_t pos = aarch64_emit_bytesize(state.emitter);
+
+      size_t emitted = aarch64_emitted_count(state.emitter);
+      emit_instr(&state, instr);
+      size_t generated_instrs = aarch64_emitted_count(state.emitter) - emitted;
+      debug_assert(
+          generated_instrs == 1,
+          "expected instr %zu to generate exactly 1 instruction but it "
+          "generated %zu",
+          instr->id, generated_instrs);
+
+      if (instr->reloc) {
+        instr->reloc->address = pos;
+        instr->reloc->size = 2;
+        vector_push_back(relocs, instr->reloc);
+      }
+
+      instr = instr->succ;
     }
 
-    instr = instr->succ;
-  }
+    struct symbol symbol = {
+      .ty = SYMBOL_TY_FUNC,
+      .name = aarch64_mangle(unit->arena, func->name),
+      .visibility = SYMBOL_VISIBILITY_GLOBAL // FIXME: symbol vis
+    };
 
-  size_t len = aarch64_emit_bytesize(emitter);
-  void *data = arena_alloc(func->arena, len);
-  aarch64_emit_copy_to(emitter, data);
+    size_t len = aarch64_emit_bytesize(emitter);
+    void *data = arena_alloc(unit->arena, len);
+    aarch64_emit_copy_to(emitter, data);
 
-  free_aarch64_emitter(&emitter);
+    free_aarch64_emitter(&emitter);
 
-  struct relocation *relocations =
-      arena_alloc(state.arena, vector_byte_size(relocs));
-  vector_copy_to(relocs, relocations);
-
-  if (func->num_datas) {
-    todo("mutable data symbols");
-  }
-
-  // FIXME: some vector leaks here (and probably other places)
-  // should really alloc in arena
-  struct compiled_function result = {
-      .name = aarch64_mangle(func->arena, func->name),
-      .code = data,
-      .len_code = len,
-      .relocations = relocations,
+    // FIXME: some vector leaks here (and probably other places)
+    // should really alloc in arena
+    entries[i] = (struct object_entry){
+      .ty = OBJECT_ENTRY_TY_FUNC,
+      .data = data,
+      .len_data = len,
+      .symbol = symbol,
+      .relocations = vector_head(relocs),
       .num_relocations = vector_length(relocs),
-      .strings = func->strings,
-      .num_strings = func->num_strings};
+      .alignment = AARCH64_FUNCTION_ALIGNMENT,
+    };
+  }
 
-  vector_free(&relocs);
+  struct emitted_unit result = {
+    .entries = entries,
+    .num_entries = num_entries
+  };
 
   return result;
 }

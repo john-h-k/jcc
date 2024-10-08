@@ -18,7 +18,7 @@ const struct target AARCH64_TARGET = {
     aarch64_mangle,
     aarch64_lower,
     aarch64_codegen,
-    aarch64_emit_function,
+    aarch64_emit,
     write_macho,
     objdump_debug_disasm,
     aarch64_debug_print_codegen};
