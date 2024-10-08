@@ -115,8 +115,10 @@ void aarch64_emit_csneg(struct aarch64_emitter *emitter, const struct aarch64_co
 
 /* Branches */
 
-void aarch64_emit_b(struct aarch64_emitter *emitter, const struct aarch64_branch br);
-void aarch64_emit_bl(struct aarch64_emitter *emitter, const struct aarch64_branch br);
+void aarch64_emit_b(struct aarch64_emitter *emitter, const struct aarch64_branch b);
+void aarch64_emit_br(struct aarch64_emitter *emitter, const struct aarch64_branch_reg br);
+void aarch64_emit_bl(struct aarch64_emitter *emitter, const struct aarch64_branch bl);
+void aarch64_emit_blr(struct aarch64_emitter *emitter, const struct aarch64_branch_reg blr);
 
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter, const struct aarch64_conditional_branch br);
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, const struct aarch64_conditional_branch br);
@@ -124,6 +126,6 @@ void aarch64_emit_bc_cond(struct aarch64_emitter *emitter, const struct aarch64_
 void aarch64_emit_cbz(struct aarch64_emitter *emitter, const struct aarch64_compare_and_branch cmp);
 void aarch64_emit_cbnz(struct aarch64_emitter *emitter, const struct aarch64_compare_and_branch cmp);
 
-void aarch64_emit_ret(struct aarch64_emitter *emitter, const struct aarch64_ret ret);
+void aarch64_emit_ret(struct aarch64_emitter *emitter, const struct aarch64_branch_reg ret);
 
 #endif

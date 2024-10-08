@@ -458,6 +458,8 @@
              (U32(op3) << 5) | U32(Rn),                                        \
          op4)
 
+#define BR(Rn) UNCOND_BRANCH_REG(0b0000, 0b11111, 0b000000, Rn, 00000)
+#define BLR(Rn) UNCOND_BRANCH_REG(0b0001, 0b11111, 0b000000, Rn, 00000)
 #define RET(Rn) UNCOND_BRANCH_REG(0b0010, 0b11111, 0b000000, Rn, 00000)
 
 #endif

@@ -13,7 +13,7 @@
 #define AARCH64_STACK_ALIGNMENT (16)
 #define AARCH64_OP_SIZE (4)
 
-const struct target AARCH64_TARGET;
+extern const struct target AARCH64_TARGET;
 
 struct aarch64_op_page {
   struct ir_op *glb_ref;

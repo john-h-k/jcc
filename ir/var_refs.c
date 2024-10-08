@@ -22,7 +22,7 @@ struct var_ref *var_refs_add(struct var_refs *var_refs,
   return (struct var_ref *)vector_push_back(var_refs->refs, &ref);
 }
 
-struct var_ref *var_refs_get(struct var_refs *var_refs,
+struct var_ref *var_refs_get(const struct var_refs *var_refs,
                              const struct var_key *key) {
   size_t num_refs = vector_length(var_refs->refs);
   for (size_t i = 0; i < num_refs; i++) {

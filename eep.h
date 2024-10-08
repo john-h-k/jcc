@@ -10,6 +10,6 @@
 // #define EEP_FUNCTION_ALIGNMENT (2)
 // #define EEP_OP_SIZE (2)
 
-// const struct target EEP_TARGET;
+// extern const struct target EEP_TARGET;
 
 #endif

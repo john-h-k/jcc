@@ -29,9 +29,6 @@ struct compiler {
   char *output;
 };
 
-// TODO: remove!
-void aarch64_codegen(const struct ir_builder *irb);
-
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
                                  const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
@@ -115,16 +112,21 @@ enum compiler_create_result create_compiler(struct program *program,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-void debug_print_stage(struct ir_builder *irb, const char *name) {
-  debug_print_ir(stderr, irb, NULL, NULL);
+void debug_print_stage(const struct ir_unit *ir, const char *name) {
+  for (size_t i = 0; i < ir->num_funcs; i++) {
+    struct ir_builder *irb = ir->funcs[i];
 
-  char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
-  strcpy(buff, name);
-  strcat(buff, ".gv");
+    debug_print_ir(stderr, irb, NULL, NULL);
 
-  FILE *ir_graph = fopen(buff, "w");
-  debug_print_ir_graph(ir_graph, irb);
-  fclose(ir_graph);
+    // TODO: fix logic
+    char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
+    strcpy(buff, name);
+    strcat(buff, ".gv");
+
+    FILE *ir_graph = fopen(buff, "w");
+    debug_print_ir_graph(ir_graph, irb);
+    fclose(ir_graph);
+  }
 }
 
 const struct target *get_target(const struct compile_args *args) {
@@ -164,7 +166,6 @@ enum compile_result compile(struct compiler *compiler) {
 
   const struct target *target = get_target(&compiler->args);
 
-  struct vector *symbols = vector_create(sizeof(struct symbol));
   struct vector *external_symbols =
       vector_create(sizeof(struct external_symbol));
 
@@ -174,17 +175,23 @@ enum compile_result compile(struct compiler *compiler) {
 
     for (size_t j = 0; j < decl_list->num_decls; j++) {
       struct ast_decl *decl = &decl_list->decls[j];
-      const char *decl_name = identifier_str(compiler->parser, &decl->var.identifier);
+      const char *decl_name =
+          identifier_str(compiler->parser, &decl->var.identifier);
 
-      bool defined = false;
-      // FIXME: hashtbl
-      for (size_t k = 0; k < result.translation_unit.num_func_defs; k++) {
-        struct ast_funcdef *def = &result.translation_unit.func_defs[k];
-        const char *def_name = identifier_str(compiler->parser, &def->identifier);
 
-        if (strcmp(decl_name, def_name) == 0) {
-          defined = true;
-          break;
+      bool defined = decl->var.var_ty.ty != AST_TYREF_TY_FUNC && !(decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN);
+
+      if (!defined) {
+        // FIXME: hashtbl
+        for (size_t k = 0; k < result.translation_unit.num_func_defs; k++) {
+          struct ast_funcdef *def = &result.translation_unit.func_defs[k];
+          const char *def_name =
+              identifier_str(compiler->parser, &def->identifier);
+
+          if (strcmp(decl_name, def_name) == 0) {
+            defined = true;
+            break;
+          }
         }
       }
 
@@ -199,9 +206,7 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   struct vector *compiled_functions =
-      vector_create(sizeof(struct compiled_function));
-
-  size_t total_size = 0;
+      vector_create(sizeof(struct emitted_unit));
 
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
     enable_log();
@@ -212,165 +217,96 @@ enum compile_result compile(struct compiler *compiler) {
   struct ir_unit *ir = build_ir_for_translationunit(
       compiler->parser, compiler->arena, &result.translation_unit);
 
-  for (size_t i = 0; i < ir->num_funcs; i++) {
-    struct ir_builder *irb = ir->funcs[i];
+  {
+    BEGIN_STAGE("IR");
 
-    {
-      BEGIN_STAGE("IR");
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
-        debug_print_stage(irb, "ir");
-      }
-
-      BEGIN_STAGE("LOWERING");
-
-      if (target->lower) {
-        target->lower(irb);
-      }
-
-      BEGIN_STAGE("POST PRE REG LOWER IR");
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
-        debug_print_stage(irb, "lower");
-      }
-
-      disable_log();
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+      debug_print_stage(ir, "ir");
     }
 
-    {
-      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
-        enable_log();
-      }
+    BEGIN_STAGE("LOWERING");
 
-      BEGIN_STAGE("REGALLOC");
+    if (target->lower) {
+      target->lower(ir);
+    }
+
+    BEGIN_STAGE("POST PRE REG LOWER IR");
+
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+      debug_print_stage(ir, "lower");
+    }
+
+    disable_log();
+  }
+
+  {
+    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
+      enable_log();
+    }
+
+
+    BEGIN_STAGE("REGALLOC");
+    for (size_t i = 0; i < ir->num_funcs; i++) {
+      struct ir_builder *irb = ir->funcs[i];
 
       lsra_register_alloc(irb, target->reg_info);
 
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
-        debug_print_stage(irb, "reg_alloc");
-      }
+    }
+
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+      debug_print_stage(ir, "regalloc");
+    }
+
+    for (size_t i = 0; i < ir->num_funcs; i++) {
+      struct ir_builder *irb = ir->funcs[i];
 
       BEGIN_STAGE("ELIM PHI");
+
       eliminate_phi(irb);
+    }
 
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
-        debug_print_stage(irb, "elim_phi");
-      }
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+      debug_print_stage(ir, "elim_phi");
     }
   }
 
-  // okay, we've now done everything except actually emit
-  // here we calculate the offsets for all the functions so we can emit calls
-  // correctly
-  size_t offset = 0;
-  for (size_t i = 0; i < ir->num_funcs; i++) {
-    struct ir_builder *irb = ir->funcs[i];
-
-    irb->offset = offset;
-    offset += irb->op_count;
-
-    offset = ROUND_UP(offset, target->function_alignment / target->op_size);
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_EMIT)) {
+    enable_log();
   }
 
-  size_t total_str_bytes = 0;
-  struct vector *relocations = vector_create(sizeof(struct relocation));
-  struct vector *strings = vector_create(sizeof(const char *));
-  for (size_t i = 0; i < ir->num_funcs; i++) {
-    struct ir_builder *irb = ir->funcs[i];
+  BEGIN_STAGE("PRE-EMIT");
 
-    struct compiled_function func;
-    {
-      if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_EMIT)) {
-        enable_log();
-      }
-
-      BEGIN_STAGE("PRE-EMIT");
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
-        debug_print_stage(irb, "pre_emit");
-      }
-
-      BEGIN_STAGE("CODEGEN");
-
-      struct codegen_function *codegen = target->codegen(irb);
-
-      BEGIN_STAGE("EMITTING");
-
-      if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
-        target->debug_print_codegen(stderr, codegen);
-      }
-
-      func = target->emit_function(codegen);
-
-      disable_log();
-    }
-
-    struct symbol symbol = {.ty = SYMBOL_TY_FUNC,
-                            .visibility = SYMBOL_VISIBILITY_GLOBAL,
-                            .name = func.name,
-                            .value = total_size};
-
-    total_size += ROUND_UP(func.len_code, target->function_alignment);
-    vector_push_back(compiled_functions, &func);
-
-    vector_push_back(symbols, &symbol);
-
-    for (size_t i = 0; i < func.num_relocations; i++) {
-      // add function position to relocs
-      func.relocations[i].address += symbol.value;
-    }
-
-    vector_extend(relocations, func.relocations, func.num_relocations);
-    vector_extend(strings, func.strings, func.num_strings);
+  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
+    debug_print_stage(ir, "pre_emit");
   }
 
-  char *code = arena_alloc(compiler->arena, total_size);
-  char *head = code;
+  BEGIN_STAGE("CODEGEN");
 
-  size_t num_results = vector_length(compiled_functions);
+  struct codegen_unit *codegen = target->codegen(ir);
 
-  for (size_t i = 0; i < num_results; i++) {
-    struct compiled_function *func = vector_get(compiled_functions, i);
+  BEGIN_STAGE("EMITTING");
 
-    // must be done here so all string symbols are after func symbols
-    // this will be fixed
-    for (size_t i = 0; i < func->num_strings; i++) {
-      const char *str = func->strings[i];
-      const char *name = mangle_str_cnst_name(compiler->arena, func->name, i);
-      struct symbol symbol = {.ty = SYMBOL_TY_STRING,
-                              .visibility = SYMBOL_VISIBILITY_PRIVATE,
-                              .name = name,
-                              .value = total_str_bytes};
-
-      // FIXME: this is hacky and should be handled elsewhere
-      total_str_bytes += strlen(str) + 1; // null char
-      vector_push_back(symbols, &symbol);
-    }
-
-    memcpy(head, func->code, func->len_code);
-    head += ROUND_UP(func->len_code, target->function_alignment);
+  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
+    target->debug_print_codegen(stderr, codegen);
   }
+
+  struct emitted_unit unit = target->emit_function(codegen);
+
+  disable_log();
 
   struct build_object_args args = {
       .compile_args = &compiler->args,
       .output = compiler->output,
-      .data = code,
-      .len_data = total_size,
-      .strings = vector_head(strings),
-      .num_strings = vector_length(strings),
-      .symbols = vector_head(symbols),
-      .num_symbols = vector_length(symbols),
+      .entries = unit.entries,
+      .num_entries = unit.num_entries,
       .extern_symbols = vector_head(external_symbols),
-      .num_extern_symbols = vector_length(external_symbols),
-      .relocations = vector_head(relocations),
-      .num_relocations = vector_length(relocations)};
+      .num_extern_symbols = vector_length(external_symbols)};
 
   BEGIN_STAGE("OBJECT FILE");
 
   target->build_object(&args);
 
   vector_free(&compiled_functions);
-  vector_free(&symbols);
 
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_ASM)) {
     enable_log();

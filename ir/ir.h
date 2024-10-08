@@ -22,16 +22,15 @@ enum ir_op_ty {
   IR_OP_TY_UNARY_OP,
   IR_OP_TY_CAST_OP,
 
+  // we could merge this all into LOAD/STORE ops
+  IR_OP_TY_STORE_GLB,
+  IR_OP_TY_LOAD_GLB,
   IR_OP_TY_STORE_LCL,
   IR_OP_TY_LOAD_LCL,
-
   IR_OP_TY_STORE_ADDR,
   IR_OP_TY_LOAD_ADDR,
 
   IR_OP_TY_ADDR,
-
-  // represents a global variable or function
-  IR_OP_TY_GLB_REF,
 
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
@@ -45,35 +44,8 @@ enum ir_op_ty {
 bool op_produces_value(enum ir_op_ty ty);
 bool op_is_branch(enum ir_op_ty ty);
 
-enum ir_op_glb_ref_ty {
-  IR_OP_GLB_REF_TY_SYM,
-  IR_OP_GLB_REF_TY_STR,
-};
-
-struct ir_op_glb_ref {
-  enum ir_op_glb_ref_ty ty;
-
-  union {
-    const char *sym_name;
-    struct ir_string *string;
-  };
-
-  struct ir_op_glb_ref *succ;
-
-  // ugly HACK: the globals list is just globals, so we have _another_
-  // metadata field on this as iterating globals does not give access to the
-  // containing ops metadata
-  void *metadata;
-};
-
 struct ir_op_mov {
   struct ir_op *value;
-};
-
-struct ir_op_call {
-  struct ir_op *target;
-  size_t num_args;
-  struct ir_op **args;
 };
 
 struct ir_op_phi {
@@ -89,7 +61,6 @@ struct ir_op_phi {
 enum ir_op_cnst_ty {
   IR_OP_CNST_TY_FLT,
   IR_OP_CNST_TY_INT,
-  IR_OP_CNST_TY_STR,
 };
 
 struct ir_op_cnst {
@@ -97,7 +68,6 @@ struct ir_op_cnst {
 
   union {
     unsigned long long int_value;
-    const char *str_value;
     long double flt_value;
   };
 };
@@ -264,16 +234,23 @@ struct ir_op_var_ty {
   };
 };
 
-const struct ir_op_var_ty IR_OP_VAR_TY_UNKNOWN;
-const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
-const struct ir_op_var_ty IR_OP_VAR_TY_I8;
-const struct ir_op_var_ty IR_OP_VAR_TY_I16;
-const struct ir_op_var_ty IR_OP_VAR_TY_I32;
-const struct ir_op_var_ty IR_OP_VAR_TY_I64;
-const struct ir_op_var_ty IR_OP_VAR_TY_F32;
-const struct ir_op_var_ty IR_OP_VAR_TY_F64;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_UNKNOWN;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_NONE;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_I8;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_I16;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_I32;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_I64;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_F32;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_F64;
+extern const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
 
-const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC;
+struct ir_op_call {
+  struct ir_op_var_ty func_ty;
+
+  struct ir_op *target;
+  size_t num_args;
+  struct ir_op **args;
+};
 
 struct ir_op_store_lcl {
   // the local stored into is just the `lcl` assigned to this op
@@ -293,8 +270,18 @@ struct ir_op_load_addr {
   struct ir_op *addr;
 };
 
+struct ir_op_store_glb {
+  struct ir_op *value;
+  struct ir_glb *glb;
+};
+
+struct ir_op_load_glb {
+  struct ir_glb *glb;
+};
+
 enum ir_op_addr_ty {
-  IR_OP_ADDR_TY_LCL
+  IR_OP_ADDR_TY_LCL,
+  IR_OP_ADDR_TY_GLB,
 };
 
 struct ir_op_addr {
@@ -302,6 +289,7 @@ struct ir_op_addr {
 
   union {
     struct ir_lcl *lcl;
+    struct ir_glb *glb;
   };
 };
 
@@ -368,13 +356,14 @@ struct ir_op {
   struct ir_op *succ;
   struct ir_stmt *stmt;
   union {
-    struct ir_op_glb_ref glb_ref;
     struct ir_op_cnst cnst;
     struct ir_op_call call;
     struct ir_op_binary_op binary_op;
     struct ir_op_unary_op unary_op;
     struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
+    struct ir_op_store_glb store_glb;
+    struct ir_op_load_glb load_glb;
     struct ir_op_store_lcl store_lcl;
     struct ir_op_load_lcl load_lcl;
     struct ir_op_store_addr store_addr;
@@ -488,11 +477,19 @@ enum ir_builder_flags {
   IR_BUILDER_FLAG_MAKES_CALL = 1
 };
 
+struct ir_glb {
+  size_t id;
+
+  struct ir_op_var_ty var_ty;
+
+  struct ir_glb *pred;
+  struct ir_glb *succ;
+};
+
 struct ir_lcl {
   size_t id;
 
-  // HACK: this sucks, stores the current offset of the local but means they cannot be compacted
-  size_t offset;
+  struct ir_op_var_ty var_ty;
 
   struct ir_lcl *pred;
   struct ir_lcl *succ;
@@ -501,6 +498,9 @@ struct ir_lcl {
   struct ir_op *store;
 
   void *metadata;
+
+  // HACK: this sucks, stores the current offset of the local but means they cannot be compacted
+  size_t offset;
 };
 
 typedef void (*debug_print_custom_ir_op)(FILE *file,
@@ -516,6 +516,8 @@ struct ir_label {
 };
 
 struct ir_builder {
+  struct ir_unit *unit;
+
   const char *name;
 
   struct var_refs *var_refs;
@@ -530,14 +532,6 @@ struct ir_builder {
   struct ir_basicblock *last;
 
   struct ir_label *labels;
-
-  // an arbitrarily ordered list of all globals
-  // used for relocation generation
-  // this currenty ends up being a backwards list
-  // but this should not be relied on
-  // note that globals may be "true" globals (such as symbols) but also just
-  // strings from outside the physical function body
-  struct ir_op_glb_ref *global_refs;
 
   // linked lists containing the string literals used by the function
   struct ir_string *strings;
@@ -562,13 +556,15 @@ struct ir_builder {
   // number of stack local variables
   size_t total_locals_size;
 
-  // used during emitting
-  size_t offset;
-
   struct target *target;
 };
 
 struct ir_unit {
+  struct arena_allocator *arena;
+
+  struct ir_glb *first_global;
+  struct ir_glb *last_global;
+
   struct ir_builder **funcs;
   size_t num_funcs;
 };
@@ -591,10 +587,10 @@ void rebuild_ids(struct ir_builder *irb);
 struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty);
 
-struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_basicblock *basicblock);
+struct ir_glb *add_global(struct ir_unit *iru,
+                         const struct ir_op_var_ty *var_ty);
 
-void make_sym_ref(struct ir_builder *irb, const char *sym_name,
-                  struct ir_op *op, const struct ir_op_var_ty *var_ty);
+struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_basicblock *basicblock);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
