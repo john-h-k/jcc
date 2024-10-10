@@ -9,34 +9,47 @@ enum codegen_unit_ty {
   CODEGEN_UNIT_TY_EEP,
 };
 
-struct codegen_unit {
-  enum codegen_unit_ty ty;
-
-  struct arena_allocator *arena;
-
-  struct codegen_var **vars;
-  size_t num_vars;
-
-  struct codegen_function **funcs;
-  size_t num_funcs;
-
-  // the size of the element within the union, so it can be allocated
-  size_t instr_size;
-};
-
 struct codegen_var {
-  const char *name;
+  int tmp;
 };
 
 struct codegen_function {
   struct codegen_unit *unit;
 
-  const char *name;
-
   size_t instr_count;
 
   struct instr* first;
   struct instr* last;
+};
+
+enum codegen_entry_ty {
+  CODEGEN_ENTRY_TY_FUNC,
+  CODEGEN_ENTRY_TY_STRING,
+  CODEGEN_ENTRY_TY_CONST_DATA,
+  CODEGEN_ENTRY_TY_DATA,
+  CODEGEN_ENTRY_TY_DECL,
+};
+
+struct codegen_entry {
+  enum codegen_entry_ty ty;
+
+  const char *name;
+
+  union {
+    struct codegen_function func;
+  };
+};
+
+struct codegen_unit {
+  enum codegen_unit_ty ty;
+
+  struct arena_allocator *arena;
+
+  struct codegen_entry *entries;
+  size_t num_entries;
+
+  // the size of the element within the union, so it can be allocated
+  size_t instr_size;
 };
 
 struct aarch64_instr;

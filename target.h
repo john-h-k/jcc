@@ -8,7 +8,8 @@
 
 enum relocation_ty {
   RELOCATION_TY_SINGLE,
-  RELOCATION_TY_PAIR,
+  RELOCATION_TY_LOCAL_PAIR,
+  RELOCATION_TY_UNDEF_PAIR,
 };
 
 struct relocation {
@@ -21,15 +22,17 @@ struct relocation {
 };
 
 enum symbol_ty {
+  SYMBOL_TY_DECL,
   SYMBOL_TY_FUNC,
   SYMBOL_TY_STRING,
   SYMBOL_TY_CONST_DATA,
-  SYMBOL_TY_DATA
+  SYMBOL_TY_DATA,
 };
 
 enum symbol_visibility {
   SYMBOL_VISIBILITY_PRIVATE,
   SYMBOL_VISIBILITY_GLOBAL,
+  SYMBOL_VISIBILITY_UNDEF,
 };
 
 struct symbol {
@@ -52,7 +55,8 @@ enum object_entry_ty {
   OBJECT_ENTRY_TY_FUNC,
   OBJECT_ENTRY_TY_C_STRING,
   OBJECT_ENTRY_TY_CONST_DATA,
-  OBJECT_ENTRY_TY_MUT_DATA
+  OBJECT_ENTRY_TY_MUT_DATA,
+  OBJECT_ENTRY_TY_DECL // undefined symbols
 };
 
 struct object_entry {
@@ -77,9 +81,6 @@ struct build_object_args {
   const struct object_entry *entries;
   size_t num_entries;
 
-  // symbols not defined in this object
-  const struct external_symbol *extern_symbols;
-  size_t num_extern_symbols;
 };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);

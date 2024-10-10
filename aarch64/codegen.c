@@ -452,18 +452,30 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     adrp->aarch64->adrp = (struct aarch64_addr_imm){.dest = dest, .imm = 0};
 
     adrp->reloc = arena_alloc(state->func->unit->arena, sizeof(*adrp->reloc));
-    *adrp->reloc = (struct relocation){.ty = RELOCATION_TY_PAIR,
-                                       .symbol_index = glb->id,
-                                       .address = 0,
-                                       .size = 0};
+    *adrp->reloc = (struct relocation){
+        .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
+                                                   : RELOCATION_TY_UNDEF_PAIR,
+        .symbol_index = glb->id,
+        .address = 0,
+        .size = 0};
 
-    struct instr *add = alloc_instr(state->func);
-    add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    add->aarch64->add_imm = (struct aarch64_addsub_imm){
-        .dest = dest,
-        .source = dest,
-        .imm = 0,
-    };
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+      struct instr *add = alloc_instr(state->func);
+      add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+      add->aarch64->add_imm = (struct aarch64_addsub_imm){
+          .dest = dest,
+          .source = dest,
+          .imm = 0,
+      };
+    } else {
+      struct instr *ldr = alloc_instr(state->func);
+      ldr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+      ldr->aarch64->load_imm = (struct aarch64_load_imm){
+          .dest = dest,
+          .addr = dest,
+          .imm = 0,
+      };
+    }
   }
   }
 }
@@ -1500,120 +1512,189 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   data->last = instr;
 }
 
+const char *mangle_str_cnst_name(struct arena_allocator *arena,
+                                 const char *func_name, size_t id) {
+  // TODO: this should all really be handled by the mach-o file
+  func_name = "str";
+  size_t func_name_len = strlen(func_name);
+
+  size_t len = 0;
+  len += func_name_len;
+  len += 2; // strlen("l_"), required for local symbols
+  len += 1; // surround function name with `.` so it cannot conflict with real
+            // names
+
+  if (id) {
+    len += 1; // extra "." before id
+  }
+
+  size_t id_len = id ? num_digits(id) : 0;
+  len += id_len;
+
+  len += 1; // null char
+  char *buff = arena_alloc(arena, len);
+  size_t head = 0;
+
+  strcpy(&buff[head], "l_");
+  head += strlen("l_");
+
+  buff[head++] = '.';
+  strcpy(&buff[head], func_name);
+  head += func_name_len;
+
+  if (id) {
+    buff[head++] = '.';
+
+    size_t tail = head + id_len - 1;
+    while (tail >= head) {
+      buff[tail--] = (id % 10) + '0';
+      id /= 10;
+    }
+  }
+
+  head += id_len;
+  buff[head++] = 0;
+
+  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name",
+               head, len);
+
+  return buff;
+}
+
 struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
-  *unit = (struct codegen_unit){.ty = CODEGEN_UNIT_TY_AARCH64,
-                                .instr_size = sizeof(struct aarch64_instr),
-                                .num_funcs = ir->num_funcs,
-                                .funcs = arena_alloc(ir->arena, ir->num_funcs * sizeof(struct codegen_function *))
-                              };
-
+  *unit = (struct codegen_unit){
+      .ty = CODEGEN_UNIT_TY_AARCH64,
+      .instr_size = sizeof(struct aarch64_instr),
+      .num_entries = ir->num_globals,
+      .entries = arena_alloc(ir->arena,
+                             ir->num_globals * sizeof(struct codeen_entry *))};
 
   arena_allocator_create(&unit->arena);
 
-  for (size_t i = 0; i < ir->num_funcs; i++) {
-    struct ir_builder *ir_func = ir->funcs[i];
+  struct ir_glb *glb = ir->first_global;
+  size_t i = 0;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      unit->entries[i] = (struct codegen_entry){
+          .ty = CODEGEN_ENTRY_TY_DECL,
+          .name = glb->name ? aarch64_mangle(ir->arena, glb->name)
+                            : mangle_str_cnst_name(ir->arena, "todo", glb->id)};
 
-    clear_metadata(ir_func);
+      i++;
+      glb = glb->succ;
+    }
 
-    size_t total_call_saves_size = 0;
-    size_t max_variadic_args = 0;
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      todo("codegen data");
+      break;
+    case IR_GLB_TY_FUNC: {
+      struct ir_builder *ir_func = glb->func;
 
-    struct ir_basicblock *basicblock = ir_func->first;
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
+      clear_metadata(ir_func);
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
+      size_t total_call_saves_size = 0;
+      size_t max_variadic_args = 0;
 
-        while (op) {
-          if (op->ty == IR_OP_TY_CALL) {
-            if (is_func_variadic(&op->call.target->var_ty.func)) {
-              size_t num_variadic_args =
-                  op->call.num_args - op->call.target->var_ty.func.num_params +
-                  1;
+      struct ir_basicblock *basicblock = ir_func->first;
+      while (basicblock) {
+        struct ir_stmt *stmt = basicblock->first;
 
-              max_variadic_args =
-                  MAX(max_variadic_args, num_variadic_args);
+        while (stmt) {
+          struct ir_op *op = stmt->first;
+
+          while (op) {
+            if (op->ty == IR_OP_TY_CALL) {
+              if (is_func_variadic(&op->call.target->var_ty.func)) {
+                size_t num_variadic_args =
+                    op->call.num_args -
+                    op->call.target->var_ty.func.num_params + 1;
+
+                max_variadic_args = MAX(max_variadic_args, num_variadic_args);
+              }
+
+              // we need to save registers in-use _after_ call
+              struct ir_op *succ = op->succ;
+              if (!succ && op->stmt->succ) {
+                // call is end of stmt, get live from next stmt
+                // a call can not be the final op of the final stmt of a
+                // basicblock as that must be a br/ret
+                succ = op->stmt->succ->first;
+              }
+
+              size_t num_live =
+                  popcntl(succ->live_fp_regs) + popcntl(succ->live_gp_regs);
+              // FIXME: we naively assume we save 8 bytes
+              // this over saves for smaller data types and breaks with 128 bit
+              // vectors/floats
+              total_call_saves_size = MAX(total_call_saves_size, num_live * 8);
+
+              // FIXME: floats
+              op->metadata = arena_alloc(unit->arena,
+                                         sizeof(struct codegen_call_metadata));
+              *(struct codegen_call_metadata *)op->metadata =
+                  (struct codegen_call_metadata){
+                      .post_call_live_gp_regs = succ->live_gp_regs,
+                      .post_call_live_fp_regs = succ->live_fp_regs,
+                  };
             }
 
-            // we need to save registers in-use _after_ call
-            struct ir_op *succ = op->succ;
-            if (!succ && op->stmt->succ) {
-              // call is end of stmt, get live from next stmt
-              // a call can not be the final op of the final stmt of a
-              // basicblock as that must be a br/ret
-              succ = op->stmt->succ->first;
-            }
-
-            size_t num_live =
-                popcntl(succ->live_fp_regs) + popcntl(succ->live_gp_regs);
-            // FIXME: we naively assume we save 8 bytes
-            // this over saves for smaller data types and breaks with 128 bit
-            // vectors/floats
-            total_call_saves_size = MAX(total_call_saves_size, num_live * 8);
-
-            // FIXME: floats
-            op->metadata =
-                arena_alloc(unit->arena, sizeof(struct codegen_call_metadata));
-            *(struct codegen_call_metadata *)op->metadata =
-                (struct codegen_call_metadata){
-                    .post_call_live_gp_regs = succ->live_gp_regs,
-                    .post_call_live_fp_regs = succ->live_fp_regs,
-                };
+            op = op->succ;
           }
 
-          op = op->succ;
+          stmt = stmt->succ;
         }
 
-        stmt = stmt->succ;
+        basicblock = basicblock->succ;
       }
 
-      basicblock = basicblock->succ;
-    }
+      unit->entries[i] = (struct codegen_entry){
+          .ty = CODEGEN_ENTRY_TY_FUNC,
+          .name = aarch64_mangle(ir->arena, ir_func->name),
+          .func = {
+              .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
-    struct codegen_function *func = arena_alloc(unit->arena, sizeof(*func));
-    *func = (struct codegen_function){
-                                      .unit = unit,
-                                      .name = ir_func->name,
-                                      .first = NULL,
-                                      .last = NULL,
-                                      .instr_count = 0};
-    unit->funcs[i] = func;
+      struct codegen_function *func = &unit->entries[i].func;
+      struct codegen_state state = {.func = func,
+                                    .ir = ir_func,
+                                    .max_variadic_args = max_variadic_args,
+                                    .total_call_saves_size =
+                                        total_call_saves_size,
+                                    .strings = vector_create(sizeof(char *)),
+                                    .datas = vector_create(sizeof(char *))};
 
-    struct codegen_state state = {.func = func,
-                                      .ir = ir_func,
-                                      .max_variadic_args = max_variadic_args,
-                                      .total_call_saves_size = total_call_saves_size,
-                                      .strings = vector_create(sizeof(char *)),
-                                      .datas = vector_create(sizeof(char *))};
-    
+      insert_prologue(&state);
 
-    insert_prologue(&state);
+      basicblock = ir_func->first;
+      while (basicblock) {
+        struct instr *first_pred = func->last;
 
-    basicblock = ir_func->first;
-    while (basicblock) {
-      struct instr *first_pred = func->last;
+        struct ir_stmt *stmt = basicblock->first;
 
-      struct ir_stmt *stmt = basicblock->first;
+        while (stmt) {
+          codegen_stmt(&state, stmt);
 
-      while (stmt) {
-        codegen_stmt(&state, stmt);
+          stmt = stmt->succ;
+        }
 
-        stmt = stmt->succ;
+        basicblock->first_instr = first_pred ? first_pred->succ : func->first;
+        basicblock->last_instr = func->last;
+
+        basicblock = basicblock->succ;
       }
 
-      basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-      basicblock->last_instr = func->last;
+      // codegen is now done
+      // do some basic sanity checks
+      struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
+      walk_regs(state.func, check_reg_type_callback, &data);
 
-      basicblock = basicblock->succ;
+      break;
+    }
     }
 
-    // codegen is now done
-    // do some basic sanity checks
-    struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
-    walk_regs(state.func, check_reg_type_callback, &data);
-
+    i++;
+    glb = glb->succ;
   }
 
   if (log_enabled()) {
@@ -1849,10 +1930,10 @@ void codegen_fprintf(FILE *file, const char *format, ...) {
       if (!n && !immr && !imms) {
         fprintf(file, "#0");
       } else {
-        fprintf(
-            file,
-            "(N=%zu, immr=%zu, imms=%zu) - TODO: logical immediate formatting",
-            n, immr, imms);
+        fprintf(file,
+                "(N=%zu, immr=%zu, imms=%zu) - TODO: logical immediate "
+                "formatting",
+                n, immr, imms);
       }
 
       format += 7;
@@ -2355,10 +2436,16 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
 void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
   debug_assert(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
 
-  for (size_t i = 0; i < unit->num_funcs; i++) {
-    struct codegen_function *func = unit->funcs[i];
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    struct codegen_entry *entry = &unit->entries[i];
 
-    fprintf(file, "\nFUNCTION: %s\n", func->name);
+    if (entry->ty != CODEGEN_ENTRY_TY_FUNC) {
+      continue;
+    }
+
+    struct codegen_function *func = &entry->func;
+
+    fprintf(file, "\nFUNCTION: %s\n", entry->name);
 
     size_t offset = 0;
     struct instr *instr = func->first;
