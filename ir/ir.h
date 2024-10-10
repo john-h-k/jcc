@@ -84,10 +84,10 @@ enum ir_op_cast_op_ty {
   // convert between float types
   IR_OP_CAST_OP_TY_CONV,
 
-  // convert float <-> signed
+  // convert float <-> unsigned
   IR_OP_CAST_OP_TY_UCONV,
 
-  // convert float <-> unsigned
+  // convert float <-> signed
   IR_OP_CAST_OP_TY_SCONV,
 };
 
@@ -326,9 +326,12 @@ struct ir_reg {
   };
 };
 
-#define NO_REG (struct ir_reg){ .ty = IR_REG_TY_NONE }
-#define REG_SPILLED (struct ir_reg){ .ty = IR_REG_TY_SPILLED }
-#define REG_FLAGS (struct ir_reg){ .ty = IR_REG_TY_FLAGS }
+#define NO_REG                                                                 \
+  (struct ir_reg) { .ty = IR_REG_TY_NONE }
+#define REG_SPILLED                                                            \
+  (struct ir_reg) { .ty = IR_REG_TY_SPILLED }
+#define REG_FLAGS                                                              \
+  (struct ir_reg) { .ty = IR_REG_TY_FLAGS }
 
 enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
@@ -477,13 +480,30 @@ enum ir_builder_flags {
   IR_BUILDER_FLAG_MAKES_CALL = 1
 };
 
-struct ir_glb {
-  size_t id;
+enum ir_glb_ty {
+  IR_GLB_TY_DATA,
+  IR_GLB_TY_FUNC,
+};
 
-  struct ir_op_var_ty var_ty;
+enum ir_glb_def_ty { IR_GLB_DEF_TY_DEFINED, IR_GLB_DEF_TY_UNDEFINED };
+
+struct ir_glb {
+  enum ir_glb_ty ty;
+
+  enum ir_glb_def_ty def_ty;
+
+  size_t id;
 
   struct ir_glb *pred;
   struct ir_glb *succ;
+
+  const char *name;
+
+  struct ir_op_var_ty var_ty;
+
+  union {
+    struct ir_builder *func;
+  };
 };
 
 struct ir_lcl {
@@ -499,7 +519,8 @@ struct ir_lcl {
 
   void *metadata;
 
-  // HACK: this sucks, stores the current offset of the local but means they cannot be compacted
+  // HACK: this sucks, stores the current offset of the local but means they
+  // cannot be compacted
   size_t offset;
 };
 
@@ -565,8 +586,7 @@ struct ir_unit {
   struct ir_glb *first_global;
   struct ir_glb *last_global;
 
-  struct ir_builder **funcs;
-  size_t num_funcs;
+  size_t num_globals;
 };
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
@@ -587,15 +607,20 @@ void rebuild_ids(struct ir_builder *irb);
 struct ir_lcl *add_local(struct ir_builder *irb,
                          const struct ir_op_var_ty *var_ty);
 
-struct ir_glb *add_global(struct ir_unit *iru,
-                         const struct ir_op_var_ty *var_ty);
+struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
+                          const struct ir_op_var_ty *var_ty,
+                          enum ir_glb_def_ty def_ty, const char *name);
 
-struct ir_label *add_label(struct ir_builder *irb, const char *name, struct ir_basicblock *basicblock);
+struct ir_label *add_label(struct ir_builder *irb, const char *name,
+                           struct ir_basicblock *basicblock);
 
 struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt);
 
-void make_integral_constant(struct ir_builder *irb, struct ir_op *op, enum ir_op_var_primitive_ty ty, unsigned long long value);
-void make_pointer_constant(struct ir_builder *irb, struct ir_op *op, unsigned long long value);
+void make_integral_constant(struct ir_builder *irb, struct ir_op *op,
+                            enum ir_op_var_primitive_ty ty,
+                            unsigned long long value);
+void make_pointer_constant(struct ir_builder *irb, struct ir_op *op,
+                           unsigned long long value);
 
 struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
                               struct ir_basicblock *basicblock);
@@ -646,7 +671,8 @@ struct ir_var_ty_info {
   size_t *offsets;
 };
 
-struct ir_var_ty_info var_ty_info(struct ir_builder *irb, const struct ir_op_var_ty *ty);
+struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
+                                  const struct ir_op_var_ty *ty);
 
 struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty);
 struct ir_op_var_ty var_ty_for_pointer_size(struct ir_builder *irb);
@@ -656,11 +682,11 @@ struct ir_op_var_ty var_ty_make_array(struct ir_builder *irb,
                                       const struct ir_op_var_ty *underlying,
                                       size_t num_elements);
 
-bool var_ty_is_primitive(const struct ir_op_var_ty *var_ty, enum ir_op_var_primitive_ty primitive);
+bool var_ty_is_primitive(const struct ir_op_var_ty *var_ty,
+                         enum ir_op_var_primitive_ty primitive);
 bool var_ty_is_integral(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty);
-
 
 void spill_op(struct ir_builder *irb, struct ir_op *op);
 

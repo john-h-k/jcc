@@ -861,7 +861,7 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
     // these are promoted to globals
 
     struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, &cnst->cnst_ty);
-    struct ir_glb *glb = add_global(irb->unit, &var_ty);
+    struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty, IR_GLB_DEF_TY_DEFINED, NULL);
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -2390,15 +2390,13 @@ struct ir_unit *build_ir_for_translationunit(
     struct arena_allocator *arena,
     struct ast_translationunit *translation_unit) {
 
-  struct ir_unit u = {
-      .arena = arena,
-      .funcs = arena_alloc(arena, sizeof(struct ir_builder *) *
-                                      translation_unit->num_func_defs),
-      .num_funcs = translation_unit->num_func_defs,
-  };
-
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
-  *iru = u;
+  *iru = (struct ir_unit){
+      .arena = arena,
+      .first_global = NULL,
+      .last_global = NULL,
+      .num_globals = 0
+  };
 
   struct var_refs *global_var_refs = var_refs_create();
   // funcs do not necessarily have a seperate decl so we do it for defs too
@@ -2427,7 +2425,22 @@ struct ir_unit *build_ir_for_translationunit(
       struct var_ref *ref =
           var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
-      ref->glb = add_global(iru, &var_ty);
+      enum ir_glb_ty ty;
+      if (decl->var.var_ty.ty == AST_TYREF_TY_FUNC) {
+        ty = IR_GLB_TY_FUNC;
+      } else {
+        ty = IR_GLB_TY_DATA;
+      }
+      
+      enum ir_glb_def_ty def_ty;
+      if ((decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) || (decl->var.var_ty.ty == AST_TYREF_TY_FUNC && !(decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC))) {
+        def_ty = IR_GLB_DEF_TY_UNDEFINED;
+      } else {
+        def_ty = IR_GLB_DEF_TY_DEFINED;
+      }
+      
+      ref->glb = add_global(iru, ty, &var_ty, def_ty, key.name);
+      ref->func = NULL;
     }
   }
 
@@ -2442,20 +2455,11 @@ struct ir_unit *build_ir_for_translationunit(
     struct var_ref *ref =
         var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
-    ref->glb = add_global(iru, &var_ty);
-  }
+    ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED, key.name);
+    struct ir_builder *func = build_ir_for_function(parser, arena, def, global_var_refs);
 
-  for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
-    struct ast_funcdef *def = &translation_unit->func_defs[i];
-    struct var_key key = {.name = identifier_str(parser, &def->identifier),
-                          .scope = SCOPE_GLOBAL};
-
-    struct ir_builder *func =
-        build_ir_for_function(parser, arena, def, global_var_refs);
-
-    var_refs_get(global_var_refs, &key)->func = func;
-
-    iru->funcs[i] = func;
+    ref->func = func;
+    ref->glb->func = func;
   }
 
   return iru;

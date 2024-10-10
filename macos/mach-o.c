@@ -38,8 +38,8 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   header.ncmds = 4;
   header.sizeofcmds =
       sizeof(struct segment_command_64) + sizeof(struct section_64) * 4 +
-      sizeof(struct build_version_command) +
-      sizeof(struct symtab_command) + sizeof(struct dysymtab_command);
+      sizeof(struct build_version_command) + sizeof(struct symtab_command) +
+      sizeof(struct dysymtab_command);
   header.flags = 0;
 
   fwrite(&header, sizeof(header), 1, file);
@@ -55,14 +55,16 @@ size_t count_relocation_instrs(const struct build_object_args *args) {
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
+
     for (size_t j = 0; j < entry->num_relocations; j++) {
-      const struct relocation *reloc = &entry->relocations[i];
+      const struct relocation *reloc = &entry->relocations[j];
 
       switch (reloc->ty) {
       case RELOCATION_TY_SINGLE:
         num_instrs += 1;
         break;
-      case RELOCATION_TY_PAIR:
+      case RELOCATION_TY_LOCAL_PAIR:
+      case RELOCATION_TY_UNDEF_PAIR:
         num_instrs += 2;
       }
     }
@@ -71,13 +73,14 @@ size_t count_relocation_instrs(const struct build_object_args *args) {
   return num_instrs;
 }
 
-void write_relocations(FILE *file, const struct build_object_args *args, const size_t *entry_offsets) {
+void write_relocations(FILE *file, const struct build_object_args *args,
+                       const size_t *entry_offsets) {
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
     size_t offset = entry_offsets[i];
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
-      const struct relocation *reloc = &entry->relocations[i];
+      const struct relocation *reloc = &entry->relocations[j];
 
       size_t index = reloc->symbol_index;
       size_t addr = offset + reloc->address;
@@ -96,7 +99,7 @@ void write_relocations(FILE *file, const struct build_object_args *args, const s
 
         break;
       }
-      case RELOCATION_TY_PAIR: {
+      case RELOCATION_TY_LOCAL_PAIR: {
         struct relocation_info infos[2] = {
             {.r_address = addr,
              .r_length = reloc->size,
@@ -110,6 +113,26 @@ void write_relocations(FILE *file, const struct build_object_args *args, const s
              .r_symbolnum = index,
              .r_extern = 1,
              .r_type = ARM64_RELOC_PAGEOFF12},
+        };
+
+        fwrite(infos, sizeof(infos), 1, file);
+
+        break;
+      }
+      case RELOCATION_TY_UNDEF_PAIR: {
+        struct relocation_info infos[2] = {
+            {.r_address = addr,
+             .r_length = reloc->size,
+             .r_pcrel = 1,
+             .r_symbolnum = index,
+             .r_extern = 1,
+             .r_type = ARM64_RELOC_GOT_LOAD_PAGE21},
+            {.r_address = addr + 4,
+             .r_length = reloc->size,
+             .r_pcrel = 0,
+             .r_symbolnum = index,
+             .r_extern = 1,
+             .r_type = ARM64_RELOC_GOT_LOAD_PAGEOFF12},
         };
 
         fwrite(infos, sizeof(infos), 1, file);
@@ -145,6 +168,8 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     case OBJECT_ENTRY_TY_MUT_DATA:
       data_align = MAX(data_align, entry->alignment);
       break;
+    case OBJECT_ENTRY_TY_DECL:
+      break;
     }
   }
 
@@ -153,7 +178,8 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   size_t total_data_size = 0;
   size_t total_func_size = 0;
 
-  size_t *entry_offsets = nonnull_malloc(args->num_entries * sizeof(*entry_offsets));
+  size_t *entry_offsets =
+      nonnull_malloc(args->num_entries * sizeof(*entry_offsets));
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
@@ -175,6 +201,8 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
       entry_offsets[i] = total_data_size;
       total_data_size += ROUND_UP(entry->len_data, data_align);
       break;
+    case OBJECT_ENTRY_TY_DECL:
+      break;
     }
   }
 
@@ -194,16 +222,17 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     case OBJECT_ENTRY_TY_MUT_DATA:
       entry_offsets[i] += total_func_size + total_str_size + total_const_size;
       break;
+    case OBJECT_ENTRY_TY_DECL:
+      break;
     }
   }
-  
 
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;
 
   // FIXME: alignments need to be log2(align) not align
 
-  #define LOG2(x) ((sizeof((x)) * 8 - lzcnt(x)) - 1)
+#define LOG2(x) ((sizeof((x)) * 8 - lzcnt(x)) - 1)
 
   struct segment_command_64 segment;
   memset(&segment, 0, sizeof(segment));
@@ -294,9 +323,10 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
-  symtab.symoff = segment.fileoff + text.size + cstrings.size + const_data.size + data.size + 
+  symtab.symoff = segment.fileoff + text.size + cstrings.size +
+                  const_data.size + data.size +
                   sizeof(struct relocation_info) * text.nreloc;
-  symtab.nsyms = args->num_entries + args->num_extern_symbols;
+  symtab.nsyms = args->num_entries;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
 
   size_t total_sym_str_len = 0;
@@ -305,12 +335,17 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     total_sym_str_len++; // null terminator
   }
 
-  for (size_t i = 0; i < args->num_extern_symbols; i++) {
-    total_sym_str_len += strlen(args->extern_symbols[i].name);
-    total_sym_str_len++; // null terminator
-  }
-
   symtab.strsize = total_sym_str_len;
+
+  size_t num_defined_symbols = 0;
+  // finally add offsets to the sections
+  for (size_t i = 0; i < args->num_entries; i++) {
+    const struct object_entry *entry = &args->entries[i];
+
+    if (entry->symbol.visibility != SYMBOL_VISIBILITY_UNDEF) {
+      num_defined_symbols++;
+    }
+  }
 
   // "local" symbols are debugging
   // "external" symbols are what we call symbols
@@ -320,9 +355,9 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   dysymtab.cmd = LC_DYSYMTAB;
   dysymtab.cmdsize = sizeof(dysymtab);
   dysymtab.iextdefsym = 0;
-  dysymtab.nextdefsym = args->num_entries;
-  dysymtab.iundefsym = args->num_entries;
-  dysymtab.nundefsym = args->num_extern_symbols;
+  dysymtab.nextdefsym = num_defined_symbols;
+  dysymtab.iundefsym = num_defined_symbols;
+  dysymtab.nundefsym = args->num_entries - num_defined_symbols;
 
   fwrite(&segment, sizeof(segment), 1, file);
   fwrite(&text, sizeof(text), 1, file);
@@ -417,30 +452,36 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     const struct object_entry *entry = &args->entries[i];
     const struct symbol *symbol = &entry->symbol;
 
-    uint8_t n_sect;
-    uint64_t n_value;
-    uint8_t n_type;
-    switch (symbol->ty) {
-    case SYMBOL_TY_FUNC:
-      n_sect = 1;
-      n_value = func_offset;
-      func_offset += ROUND_UP(entry->len_data, func_align);
-      break;
-    case SYMBOL_TY_STRING:
-      n_sect = 2;
-      n_value = str_offset;
-      str_offset += ROUND_UP(entry->len_data, str_align);
-      break;
-    case SYMBOL_TY_CONST_DATA:
-      n_sect = 3;
-      n_value = const_offset;
-      const_offset += ROUND_UP(entry->len_data, const_align);
-      break;
-    case SYMBOL_TY_DATA:
-      n_sect = 4;
-      n_value = data_offset;
-      data_offset += ROUND_UP(entry->len_data, data_align);
-      break;
+    uint8_t n_sect = NO_SECT;
+    uint64_t n_value = 0;
+    uint8_t n_type = 0;
+
+    if (symbol->visibility != SYMBOL_VISIBILITY_UNDEF) {
+      switch (symbol->ty) {
+      case SYMBOL_TY_FUNC:
+        n_sect = 1;
+        n_value = func_offset;
+        func_offset += ROUND_UP(entry->len_data, func_align);
+        break;
+      case SYMBOL_TY_STRING:
+        n_sect = 2;
+        n_value = str_offset;
+        str_offset += ROUND_UP(entry->len_data, str_align);
+        break;
+      case SYMBOL_TY_CONST_DATA:
+        n_sect = 3;
+        n_value = const_offset;
+        const_offset += ROUND_UP(entry->len_data, const_align);
+        break;
+      case SYMBOL_TY_DATA:
+        n_sect = 4;
+        n_value = data_offset;
+        data_offset += ROUND_UP(entry->len_data, data_align);
+        break;
+      case SYMBOL_TY_DECL:
+        bug("DECL symbol must be VISIBILITY_UNDEF");
+        break;
+      }
     }
 
     switch (symbol->visibility) {
@@ -449,6 +490,9 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
       break;
     case SYMBOL_VISIBILITY_PRIVATE:
       n_type = N_SECT;
+      break;
+    case SYMBOL_VISIBILITY_UNDEF:
+      n_type = N_EXT | N_UNDF;
       break;
     }
 
@@ -463,20 +507,6 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
     fwrite(&nlist, sizeof(nlist), 1, file);
   }
 
-  for (size_t i = 0; i < args->num_extern_symbols; i++) {
-    const struct external_symbol *symbol = &args->extern_symbols[i];
-
-    struct nlist_64 nlist;
-    nlist.n_un.n_strx = str_off;
-    nlist.n_type = N_UNDF | N_EXT;
-    nlist.n_sect = NO_SECT;
-    nlist.n_desc = 0;
-    nlist.n_value = 0;
-
-    str_off += strlen(symbol->name) + 1;
-    fwrite(&nlist, sizeof(nlist), 1, file);
-  }
-
   char null = 0;
   fwrite(&null, sizeof(null), 1, file);
 
@@ -484,10 +514,6 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct symbol *symbol = &args->entries[i].symbol;
-    fwrite(symbol->name, strlen(symbol->name) + 1, 1, file);
-  }
-  for (size_t i = 0; i < args->num_extern_symbols; i++) {
-    const struct external_symbol *symbol = &args->extern_symbols[i];
     fwrite(symbol->name, strlen(symbol->name) + 1, 1, file);
   }
 }

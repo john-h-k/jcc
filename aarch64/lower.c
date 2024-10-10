@@ -311,143 +311,158 @@ static void lower_fp_cnst(struct ir_builder *func, struct ir_op *op) {
 }
 
 void aarch64_lower(struct ir_unit *unit) {
-  for (size_t i = 0; i < unit->num_funcs; i++) {
-    struct ir_builder *func = unit->funcs[i];
+  struct ir_glb *glb = unit->first_global;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
 
-    struct ir_basicblock *basicblock = func->first;
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      todo("lower data");
+    case IR_GLB_TY_FUNC: {
+      struct ir_builder *func = glb->func;
+      struct ir_basicblock *basicblock = func->first;
+      while (basicblock) {
+        struct ir_stmt *stmt = basicblock->first;
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
+        while (stmt) {
+          struct ir_op *op = stmt->first;
 
-        while (op) {
-          switch (op->ty) {
-          case IR_OP_TY_UNKNOWN:
-            bug("unknown op!");
-          case IR_OP_TY_UNDF:
-          case IR_OP_TY_CUSTOM:
-          case IR_OP_TY_PHI:
-            break;
-          case IR_OP_TY_CNST: {
-            if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
-              lower_fp_cnst(func, op);
+          while (op) {
+            switch (op->ty) {
+            case IR_OP_TY_UNKNOWN:
+              bug("unknown op!");
+            case IR_OP_TY_UNDF:
+            case IR_OP_TY_CUSTOM:
+            case IR_OP_TY_PHI:
+              break;
+            case IR_OP_TY_CNST: {
+              if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
+                lower_fp_cnst(func, op);
+                break;
+              }
+
+              break;
+            }
+            case IR_OP_TY_STORE_GLB:
+              lower_store_glb(func, op);
+              break;
+            case IR_OP_TY_LOAD_GLB:
+              lower_load_glb(func, op);
+              break;
+            case IR_OP_TY_STORE_LCL:
+              break;
+            case IR_OP_TY_LOAD_LCL:
+              lower_load_lcl(func, op);
+              break;
+            case IR_OP_TY_STORE_ADDR:
+            case IR_OP_TY_LOAD_ADDR:
+            case IR_OP_TY_ADDR:
+            case IR_OP_TY_BR:
+            case IR_OP_TY_BR_COND:
+            case IR_OP_TY_MOV:
+            case IR_OP_TY_RET:
+            case IR_OP_TY_CALL:
+            case IR_OP_TY_CAST_OP:
+              break;
+            case IR_OP_TY_UNARY_OP:
+              if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
+                lower_logical_not(func, op);
+              }
+              break;
+            case IR_OP_TY_BINARY_OP:
+              if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
+                  op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
+                lower_quot(func, op);
+              }
               break;
             }
 
-            break;
-          }
-          case IR_OP_TY_STORE_GLB:
-            lower_store_glb(func, op);
-            break;
-          case IR_OP_TY_LOAD_GLB:
-            lower_load_glb(func, op);
-            break;
-          case IR_OP_TY_STORE_LCL:
-            break;
-          case IR_OP_TY_LOAD_LCL:
-            lower_load_lcl(func, op);
-            break;
-          case IR_OP_TY_STORE_ADDR:
-          case IR_OP_TY_LOAD_ADDR:
-          case IR_OP_TY_ADDR:
-          case IR_OP_TY_BR:
-          case IR_OP_TY_BR_COND:
-          case IR_OP_TY_MOV:
-          case IR_OP_TY_RET:
-          case IR_OP_TY_CALL:
-          case IR_OP_TY_CAST_OP:
-            break;
-          case IR_OP_TY_UNARY_OP:
-            if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
-              lower_logical_not(func, op);
-            }
-            break;
-          case IR_OP_TY_BINARY_OP:
-            if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
-                op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
-              lower_quot(func, op);
-            }
-            break;
+            op = op->succ;
           }
 
-          op = op->succ;
+          stmt = stmt->succ;
         }
 
-        stmt = stmt->succ;
+        basicblock = basicblock->succ;
       }
 
-      basicblock = basicblock->succ;
-    }
+      // now we lower comparisons as the above can generate them (via
+      // logical_not)
+      basicblock = func->first;
+      while (basicblock) {
+        struct ir_stmt *stmt = basicblock->first;
 
-    // now we lower comparisons as the above can generate them (via logical_not)
-    basicblock = func->first;
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
+        while (stmt) {
+          struct ir_op *op = stmt->first;
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
-
-        while (op) {
-          switch (op->ty) {
-          case IR_OP_TY_UNKNOWN:
-            bug("unknown op!");
-          case IR_OP_TY_UNDF:
-          case IR_OP_TY_CUSTOM:
-          case IR_OP_TY_PHI:
-          case IR_OP_TY_CNST:
-          case IR_OP_TY_STORE_GLB:
-          case IR_OP_TY_LOAD_GLB:
-          case IR_OP_TY_STORE_LCL:
-          case IR_OP_TY_LOAD_LCL:
-          case IR_OP_TY_STORE_ADDR:
-          case IR_OP_TY_LOAD_ADDR:
-          case IR_OP_TY_ADDR:
-          case IR_OP_TY_BR:
-          case IR_OP_TY_BR_COND:
-          case IR_OP_TY_MOV:
-          case IR_OP_TY_RET:
-          case IR_OP_TY_CALL:
-          case IR_OP_TY_CAST_OP:
-          case IR_OP_TY_UNARY_OP:
-            break;
-          case IR_OP_TY_BINARY_OP:
-            if (binary_op_is_comparison(op->binary_op.ty)) {
-              lower_comparison(func, op);
+          while (op) {
+            switch (op->ty) {
+            case IR_OP_TY_UNKNOWN:
+              bug("unknown op!");
+            case IR_OP_TY_UNDF:
+            case IR_OP_TY_CUSTOM:
+            case IR_OP_TY_PHI:
+            case IR_OP_TY_CNST:
+            case IR_OP_TY_STORE_GLB:
+            case IR_OP_TY_LOAD_GLB:
+            case IR_OP_TY_STORE_LCL:
+            case IR_OP_TY_LOAD_LCL:
+            case IR_OP_TY_STORE_ADDR:
+            case IR_OP_TY_LOAD_ADDR:
+            case IR_OP_TY_ADDR:
+            case IR_OP_TY_BR:
+            case IR_OP_TY_BR_COND:
+            case IR_OP_TY_MOV:
+            case IR_OP_TY_RET:
+            case IR_OP_TY_CALL:
+            case IR_OP_TY_CAST_OP:
+            case IR_OP_TY_UNARY_OP:
+              break;
+            case IR_OP_TY_BINARY_OP:
+              if (binary_op_is_comparison(op->binary_op.ty)) {
+                lower_comparison(func, op);
+              }
+              break;
             }
-            break;
+
+            op = op->succ;
           }
 
-          op = op->succ;
+          stmt = stmt->succ;
         }
 
-        stmt = stmt->succ;
+        basicblock = basicblock->succ;
       }
 
-      basicblock = basicblock->succ;
-    }
+      // Final step: turn all TY_POINTER into TY_I64 as the information is no
+      // longer needed
+      basicblock = func->first;
+      while (basicblock) {
+        struct ir_stmt *stmt = basicblock->first;
 
-    // Final step: turn all TY_POINTER into TY_I64 as the information is no
-    // longer needed
-    basicblock = func->first;
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
+        while (stmt) {
+          struct ir_op *op = stmt->first;
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
+          while (op) {
+            if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+              op->var_ty = var_ty_for_pointer_size(func);
+            }
 
-        while (op) {
-          if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-            op->var_ty = var_ty_for_pointer_size(func);
+            op = op->succ;
           }
 
-          op = op->succ;
+          stmt = stmt->succ;
         }
 
-        stmt = stmt->succ;
+        basicblock = basicblock->succ;
       }
-
-      basicblock = basicblock->succ;
+      break;
     }
+    }
+
+    glb = glb->succ;
   }
 }

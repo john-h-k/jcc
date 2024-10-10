@@ -234,77 +234,100 @@ static void emit_instr(const struct emit_state *state,
 }
 
 struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
-  // TODO: vars
-  if (unit->num_vars) {
-    todo("vars");
-  }
-
-  size_t num_entries = unit->num_funcs;
+  size_t num_entries = unit->num_entries;
   struct object_entry *entries =
       arena_alloc(unit->arena, num_entries * sizeof(*entries));
 
-  for (size_t i = 0; i < unit->num_funcs; i++) {
-    struct codegen_function *func = unit->funcs[i];
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    struct codegen_entry *entry = &unit->entries[i];
 
-    struct aarch64_emitter *emitter;
-    create_aarch64_emitter(&emitter);
+    switch (entry->ty) {
+    case CODEGEN_ENTRY_TY_STRING:
+    case CODEGEN_ENTRY_TY_CONST_DATA:
+    case CODEGEN_ENTRY_TY_DATA:
+      todo("emit other tys");
+      break;
+    case CODEGEN_ENTRY_TY_DECL:
+      entries[i] = (struct object_entry){
+        .ty = OBJECT_ENTRY_TY_DECL,
+        .alignment = 0,
+        .data = NULL,
+        .len_data = 0,
+        .num_relocations = 0,
+        .relocations = NULL,
+        .symbol = (struct symbol){
+          .ty = SYMBOL_TY_DECL,
+          .visibility = SYMBOL_VISIBILITY_UNDEF,
+          .name = entry->name
+        }
+      };
+      break;
+    case CODEGEN_ENTRY_TY_FUNC: {
+      struct codegen_function *func = &entry->func;
 
-    struct emit_state state = {
-        .func = func, .arena = unit->arena, .emitter = emitter};
+      struct aarch64_emitter *emitter;
+      create_aarch64_emitter(&emitter);
 
-    struct vector *relocs = vector_create(sizeof(struct relocation));
+      struct emit_state state = {
+          .func = func, .arena = unit->arena, .emitter = emitter};
 
-    struct instr *instr = func->first;
-    while (instr) {
-      size_t pos = aarch64_emit_bytesize(state.emitter);
+      struct vector *relocs = vector_create(sizeof(struct relocation));
 
-      size_t emitted = aarch64_emitted_count(state.emitter);
-      emit_instr(&state, instr);
-      size_t generated_instrs = aarch64_emitted_count(state.emitter) - emitted;
-      debug_assert(
-          generated_instrs == 1,
-          "expected instr %zu to generate exactly 1 instruction but it "
-          "generated %zu",
-          instr->id, generated_instrs);
+      struct instr *instr = func->first;
+      while (instr) {
+        size_t pos = aarch64_emit_bytesize(state.emitter);
 
-      if (instr->reloc) {
-        instr->reloc->address = pos;
-        instr->reloc->size = 2;
-        vector_push_back(relocs, instr->reloc);
+        size_t emitted = aarch64_emitted_count(state.emitter);
+        emit_instr(&state, instr);
+
+        size_t generated_instrs =
+            aarch64_emitted_count(state.emitter) - emitted;
+
+        debug_assert(
+            generated_instrs == 1,
+            "expected instr %zu to generate exactly 1 instruction but it "
+            "generated %zu",
+            instr->id, generated_instrs);
+
+        if (instr->reloc) {
+          printf("reloc offset %zu id %zu\n", pos, instr->id);
+          instr->reloc->address = pos;
+          instr->reloc->size = 2;
+          vector_push_back(relocs, instr->reloc);
+        }
+
+        instr = instr->succ;
       }
 
-      instr = instr->succ;
+      struct symbol symbol = {
+          .ty = SYMBOL_TY_FUNC,
+          .name = entry->name,
+          .visibility = SYMBOL_VISIBILITY_GLOBAL // FIXME: symbol vis
+      };
+
+      size_t len = aarch64_emit_bytesize(emitter);
+      void *data = arena_alloc(unit->arena, len);
+      aarch64_emit_copy_to(emitter, data);
+
+      free_aarch64_emitter(&emitter);
+
+      // FIXME: some vector leaks here (and probably other places)
+      // should really alloc in arena
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_FUNC,
+          .data = data,
+          .len_data = len,
+          .symbol = symbol,
+          .relocations = vector_head(relocs),
+          .num_relocations = vector_length(relocs),
+          .alignment = AARCH64_FUNCTION_ALIGNMENT,
+      };
+      break;
     }
-
-    struct symbol symbol = {
-      .ty = SYMBOL_TY_FUNC,
-      .name = aarch64_mangle(unit->arena, func->name),
-      .visibility = SYMBOL_VISIBILITY_GLOBAL // FIXME: symbol vis
-    };
-
-    size_t len = aarch64_emit_bytesize(emitter);
-    void *data = arena_alloc(unit->arena, len);
-    aarch64_emit_copy_to(emitter, data);
-
-    free_aarch64_emitter(&emitter);
-
-    // FIXME: some vector leaks here (and probably other places)
-    // should really alloc in arena
-    entries[i] = (struct object_entry){
-      .ty = OBJECT_ENTRY_TY_FUNC,
-      .data = data,
-      .len_data = len,
-      .symbol = symbol,
-      .relocations = vector_head(relocs),
-      .num_relocations = vector_length(relocs),
-      .alignment = AARCH64_FUNCTION_ALIGNMENT,
-    };
+    }
   }
 
-  struct emitted_unit result = {
-    .entries = entries,
-    .num_entries = num_entries
-  };
+  struct emitted_unit result = {.entries = entries, .num_entries = num_entries};
 
   return result;
 }
