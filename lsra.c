@@ -206,7 +206,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
 
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
-    debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+    debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
   }
 
   struct interval *intervals = data.intervals;
@@ -400,7 +400,7 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
           compare_interval_id);
 
     if (log_enabled()) {
-      debug_print_ir(stderr, irb, print_ir_intervals, data.intervals);
+      debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
     }
 
     BEGIN_SUB_STAGE("SPILL HANDLING");
@@ -412,7 +412,7 @@ void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
           compare_interval_id);
 
     if (log_enabled()) {
-      debug_print_ir(stderr, irb, print_ir_intervals, NULL);
+      debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
     }
   }
 }

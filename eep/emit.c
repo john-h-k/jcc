@@ -5,21 +5,11 @@
 #include "emitter.h"
 #include "isa.h"
 
-struct current_op_state {
-  // registers being used by the current instruction, so not possible to use
-  unsigned long write_registers;
-  unsigned long read_registers;
-};
-
 struct emit_state {
   struct arena_allocator *arena;
   struct eep_emitter *emitter;
 
   size_t num_extra_stack_slots;
-
-  // registers that need to be reloaded
-  unsigned long need_reload_registers;
-  struct current_op_state cur_op_state;
 };
 
 static bool is_return_reg(struct ir_reg reg) { return reg.idx == RETURN_REG.idx; }

@@ -77,7 +77,7 @@
 
 #include <string.h>
 
-#define ROUND_UP(value, pow2) ((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull)
+#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 #define UNUSED_ARG(arg) (void)(arg);
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
