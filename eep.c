@@ -1,9 +1,10 @@
 #include "eep.h"
 
 #include "eep/lower.h"
+#include "eep/codegen.h"
 
 const struct target EEP_TARGET =  {  (struct reg_info){
-                                    .integral_registers = (struct reg_set_info){
+                                    .gp_registers = (struct reg_set_info){
                                         .num_volatile = 3, .num_nonvolatile = 3, .num_reserved = 2},
                                       .fp_registers = (struct reg_set_info){
                                           // FIXME: technically v8-15 are non-volatile bottom half
@@ -13,9 +14,9 @@ const struct target EEP_TARGET =  {  (struct reg_info){
                                   EEP_FUNCTION_ALIGNMENT,
                                   EEP_OP_SIZE,
                                   NULL,
-                                  eep_pre_reg_lower,
-                                  NULL,
-                                  eep_emit_function,
+                                  eep_lower,
+                                  eep_codegen,
+                                  eep_emit,
                                   write_eep,
                                   eep_debug_disasm,
-                                  eep_debug_print_custom_ir_op};
+                                  NULL};

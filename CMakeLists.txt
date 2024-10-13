@@ -43,6 +43,7 @@ set(
   aarch64/emitter.c
 
   # eep.c
+  # eep/codegen.c
   # eep/lower.c
   # eep/emit.c
   # eep/emitter.c

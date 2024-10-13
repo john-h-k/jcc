@@ -418,8 +418,7 @@ static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   // ldr/str don't write to flags, so insert `mov <reg>, <reg>` to get flags
   // phi does not guarantee ldr, but the optimiser can always remove it later
   // if (op->br_cond.cond->ty == IR_OP_TY_PHI) {
-  struct ir_op *mov =
-      insert_before_ir_op(irb, op, IR_OP_TY_MOV, op->var_ty);
+  struct ir_op *mov = insert_before_ir_op(irb, op, IR_OP_TY_MOV, op->var_ty);
   mov->mov.value = op->br_cond.cond;
   op->br_cond.cond = mov;
   // }
@@ -460,76 +459,98 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
 
 enum eep_lower_stage { EEP_LOWER_STAGE_QUOT, EEP_LOWER_STAGE_ALL };
 
-void eep_pre_reg_lower(struct ir_builder *func) {
-  for (enum eep_lower_stage stage = EEP_LOWER_STAGE_QUOT;
-       stage <= EEP_LOWER_STAGE_ALL; stage++) {
+void eep_lower(struct ir_unit *unit) {
+  struct ir_glb *glb = unit->first_global;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
 
-    struct ir_basicblock *basicblock = func->first;
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      break;
+    case IR_GLB_TY_FUNC: {
+      struct ir_builder *func = glb->func;
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
 
-        while (op) {
-          if (stage == EEP_LOWER_STAGE_QUOT) {
-            if (op->ty == IR_OP_TY_BINARY_OP &&
-                (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
-                 op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT)) {
-              lower_quot(func, op);
-            }
-          } else {
+      for (enum eep_lower_stage stage = EEP_LOWER_STAGE_QUOT;
+           stage <= EEP_LOWER_STAGE_ALL; stage++) {
 
-            switch (op->ty) {
-            case IR_OP_TY_UNKNOWN:
-              bug("unknown op!");
-            case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_GLB_REF:
-            case IR_OP_TY_PHI:
-            case IR_OP_TY_CNST:
-            case IR_OP_TY_RET:
-            case IR_OP_TY_STORE_LCL:
-            case IR_OP_TY_LOAD_LCL:
-            case IR_OP_TY_STORE_ADDR:
-            case IR_OP_TY_LOAD_ADDR:
-            case IR_OP_TY_ADDR:
-            case IR_OP_TY_BR:
-            case IR_OP_TY_MOV:
-            case IR_OP_TY_UNARY_OP:
-            case IR_OP_TY_CAST_OP:
-              break;
-            case IR_OP_TY_CALL:
-              todo("call");
-              break;
-            case IR_OP_TY_BR_COND:
-              if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
-                lower_br_cond(func, op);
+        struct ir_basicblock *basicblock = func->first;
+        while (basicblock) {
+          struct ir_stmt *stmt = basicblock->first;
+
+          while (stmt) {
+            struct ir_op *op = stmt->first;
+
+            while (op) {
+              if (stage == EEP_LOWER_STAGE_QUOT) {
+                if (op->ty == IR_OP_TY_BINARY_OP &&
+                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
+                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT)) {
+                  lower_quot(func, op);
+                }
+              } else {
+
+                switch (op->ty) {
+                case IR_OP_TY_UNKNOWN:
+                  bug("unknown op!");
+                case IR_OP_TY_UNDF:
+                case IR_OP_TY_CUSTOM:
+                case IR_OP_TY_PHI:
+                case IR_OP_TY_CNST:
+                case IR_OP_TY_RET:
+                case IR_OP_TY_STORE_LCL:
+                case IR_OP_TY_LOAD_LCL:
+                case IR_OP_TY_STORE_ADDR:
+                case IR_OP_TY_LOAD_ADDR:
+                case IR_OP_TY_ADDR:
+                case IR_OP_TY_BR:
+                case IR_OP_TY_MOV:
+                case IR_OP_TY_UNARY_OP:
+                case IR_OP_TY_CAST_OP:
+                  break;
+                case IR_OP_TY_CALL:
+                  todo("call");
+                  break;
+                case IR_OP_TY_BR_COND:
+                  if (!(op->succ && op->succ->ty == IR_OP_TY_BR)) {
+                    lower_br_cond(func, op);
+                  }
+                  break;
+                case IR_OP_TY_BINARY_OP:
+                  if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UDIV ||
+                      op->binary_op.ty == IR_OP_BINARY_OP_TY_SDIV) {
+                    lower_div(func, op);
+                  } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
+                             op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT ||
+                             op->binary_op.ty == IR_OP_BINARY_OP_TY_URSHIFT) {
+                    lower_shift(func, op);
+                  } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_MUL) {
+                    lower_mul(func, op);
+                  } else if (binary_op_is_comparison(op->binary_op.ty)) {
+                    lower_comparison(func, op);
+                  }
+                  break;
+                case IR_OP_TY_STORE_GLB:
+                case IR_OP_TY_LOAD_GLB:
+                  bug("should have been lowered");
+                }
               }
-              break;
-            case IR_OP_TY_BINARY_OP:
-              if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UDIV ||
-                  op->binary_op.ty == IR_OP_BINARY_OP_TY_SDIV) {
-                lower_div(func, op);
-              } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
-                         op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT ||
-                         op->binary_op.ty == IR_OP_BINARY_OP_TY_URSHIFT) {
-                lower_shift(func, op);
-              } else if (op->binary_op.ty == IR_OP_BINARY_OP_TY_MUL) {
-                lower_mul(func, op);
-              } else if (binary_op_is_comparison(op->binary_op.ty)) {
-                lower_comparison(func, op);
-              }
+
+              op = op->succ;
             }
+
+            stmt = stmt->succ;
           }
 
-          op = op->succ;
+          basicblock = basicblock->succ;
         }
-
-        stmt = stmt->succ;
       }
-
-      basicblock = basicblock->succ;
     }
+    }
+
+    glb = glb->succ;
   }
 }
