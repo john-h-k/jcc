@@ -2,161 +2,15 @@
 
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
+#include "../vector.h"
 #include "emitter.h"
 #include "isa.h"
 
 struct emit_state {
+  const struct codegen_function *func;
   struct arena_allocator *arena;
   struct eep_emitter *emitter;
-
-  size_t num_extra_stack_slots;
 };
-
-static bool is_return_reg(struct ir_reg reg) { return reg.idx == RETURN_REG.idx; }
-
-struct eep_reg get_reg_for_idx(struct ir_reg reg) {
-  return (struct eep_reg){.idx = reg.idx};
-}
-
-enum reg_usage { REG_USAGE_WRITE = 1, REG_USAGE_READ = 2 };
-
-static struct ir_reg get_reg_for_op(struct emit_state *state, struct ir_op *op,
-                             enum reg_usage usage) {
-  UNUSED_ARG(state);
-  UNUSED_ARG(usage);
-
-  struct ir_reg reg = op->reg;
-
-  if (reg.ty == IR_REG_TY_FLAGS) {
-    return reg;
-  }
-
-  // if (usage & REG_USAGE_READ) {
-  //   state->cur_op_state.read_registers |= reg;
-  // }
-  // if (usage & REG_USAGE_WRITE) {
-  //   state->cur_op_state.write_registers |= reg;
-  // }
-
-  invariant_assert(
-      reg.ty != IR_REG_TY_SPILLED,
-      "spilled reg reached emitter; should've been handled by lower/regalloc");
-
-  return reg;
-}
-
-static void emit_cast_op(struct emit_state *state, struct ir_op *op) {
-  UNUSED_ARG(state);
-  UNUSED_ARG(op);
-  todo("cast on EEP");
-}
-
-static void emit_binary_op(struct emit_state *state, struct ir_op *op) {
-#define EMIT_WITH_FN(func)                                                     \
-  do {                                                                         \
-    func(state->emitter, get_reg_for_idx(lhs_reg), get_reg_for_idx(rhs_reg),   \
-         get_reg_for_idx(reg));                                                \
-  } while (0);
-
-  debug_assert(op->ty == IR_OP_TY_BINARY_OP,
-               "wrong ty op to `lower_binary_op`");
-  struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-  struct ir_reg lhs_reg = get_reg_for_op(state, op->binary_op.lhs, REG_USAGE_READ);
-  struct ir_reg rhs_reg = get_reg_for_op(state, op->binary_op.rhs, REG_USAGE_READ);
-
-  switch (op->binary_op.ty) {
-  case IR_OP_BINARY_OP_TY_EQ:
-  case IR_OP_BINARY_OP_TY_NEQ:
-  case IR_OP_BINARY_OP_TY_UGT:
-  case IR_OP_BINARY_OP_TY_SGT:
-  case IR_OP_BINARY_OP_TY_UGTEQ:
-  case IR_OP_BINARY_OP_TY_SGTEQ:
-  case IR_OP_BINARY_OP_TY_ULT:
-  case IR_OP_BINARY_OP_TY_SLT:
-  case IR_OP_BINARY_OP_TY_ULTEQ:
-  case IR_OP_BINARY_OP_TY_SLTEQ:
-    eep_emit_cmp(state->emitter, get_reg_for_idx(lhs_reg),
-                 get_reg_for_idx(rhs_reg));
-    break;
-  case IR_OP_BINARY_OP_TY_LSHIFT:
-  case IR_OP_BINARY_OP_TY_SRSHIFT:
-  case IR_OP_BINARY_OP_TY_URSHIFT: {
-    // FIXME: see lower.c, this is disabled bc sometimes one is needed
-    // invariant_assert(rhs_reg == DONT_GIVE_REG, "shift RHS has been mistakenly
-    // given a register by allocator even though it must be a constant");
-    unsigned shift_imm = op->binary_op.rhs->cnst.int_value;
-    if (!UNS_FITS_IN_BITS(shift_imm, 4)) {
-      err("shift constant too large for eep! will be truncated");
-    }
-
-    switch (op->binary_op.ty) {
-    case IR_OP_BINARY_OP_TY_LSHIFT:
-      eep_emit_lsl(state->emitter, get_reg_for_idx(lhs_reg),
-                   get_reg_for_idx(reg), shift_imm);
-      break;
-    case IR_OP_BINARY_OP_TY_SRSHIFT:
-      eep_emit_asr(state->emitter, get_reg_for_idx(lhs_reg),
-                   get_reg_for_idx(reg), shift_imm);
-      break;
-    case IR_OP_BINARY_OP_TY_URSHIFT:
-      eep_emit_lsr(state->emitter, get_reg_for_idx(lhs_reg),
-                   get_reg_for_idx(reg), shift_imm);
-      break;
-    default:
-      unreachable("broken switch");
-    }
-
-    break;
-  }
-  case IR_OP_BINARY_OP_TY_AND:
-    EMIT_WITH_FN(eep_emit_and);
-    break;
-  case IR_OP_BINARY_OP_TY_OR:
-    todo("eep OR");
-    break;
-  case IR_OP_BINARY_OP_TY_XOR:
-    todo("eep XOR");
-    break;
-  case IR_OP_BINARY_OP_TY_ADD:
-    EMIT_WITH_FN(eep_emit_add);
-    break;
-  case IR_OP_BINARY_OP_TY_SUB:
-    EMIT_WITH_FN(eep_emit_sub);
-    break;
-  case IR_OP_BINARY_OP_TY_MUL:
-  case IR_OP_BINARY_OP_TY_SDIV:
-  case IR_OP_BINARY_OP_TY_UDIV:
-  case IR_OP_BINARY_OP_TY_SQUOT:
-  case IR_OP_BINARY_OP_TY_UQUOT:
-    bug("SQUOT, UQUOT, SDIV, UDIV, and MUL should've been lowered to already");
-  }
-
-#undef SEL_32_OR_64_BIT_OP
-}
-
-static void emit_br_op(struct emit_state *state, struct ir_op *op) {
-  if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
-    struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-    ssize_t offset = (ssize_t)target->function_offset -
-                     (ssize_t)eep_emitted_count(state->emitter);
-
-    eep_emit_jump(state->emitter, EEP_COND_JMP, offset);
-  } else {
-    // otherwise, this is the false branch of a SPLIT
-    struct ir_basicblock *false_target =
-        op->stmt->basicblock->split.false_target;
-
-    ssize_t false_offset = (ssize_t)false_target->function_offset -
-                           (ssize_t)eep_emitted_count(state->emitter);
-    eep_emit_jump(state->emitter, EEP_COND_JMP, false_offset);
-  }
-}
-
-// not currently used
-// static enum eep_cond invert_cond(enum eep_cond cond) {
-//   invariant_assert(cond != EEP_COND_RET && cond != EEP_COND_JSR, "can't
-//   invert JSR/RET"); return cond ^ 1;
-// }
 
 static enum eep_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -188,213 +42,210 @@ static enum eep_cond get_cond_for_op(struct ir_op *op) {
   }
 }
 
-static void emit_mov_op(struct emit_state *state, struct ir_op *op) {
-  struct ir_reg dest = get_reg_for_op(state, op, REG_USAGE_WRITE);
+static void emit_instr(const struct emit_state *state,
+                       const struct instr *instr) {
 
-  if (op->mov.value->ty == IR_OP_TY_BINARY_OP &&
-      binary_op_is_comparison(op->mov.value->binary_op.ty)) {
-
-    // need to move from flags
-    enum eep_cond cond = get_cond_for_op(op->mov.value);
-    UNUSED_ARG(cond);
-    todo("don't know how to extract condition codes to reg");
-  } else {
-    struct ir_reg src = get_reg_for_op(state, op->mov.value, REG_USAGE_READ);
-    eep_emit_mov(state->emitter, get_reg_for_idx(src), get_reg_for_idx(dest));
+  switch (instr->eep->ty) {
+  case EEP_INSTR_TY_MOV:
+    eep_emit_mov(state->emitter, instr->eep->mov);
+    break;
+  case EEP_INSTR_TY_MOV_IMM:
+    eep_emit_mov_imm(state->emitter, instr->eep->mov_imm);
+    break;
+  case EEP_INSTR_TY_ADD:
+    eep_emit_add(state->emitter, instr->eep->add);
+    break;
+  case EEP_INSTR_TY_SUB:
+    eep_emit_sub(state->emitter, instr->eep->sub);
+    break;
+  case EEP_INSTR_TY_ADC:
+    eep_emit_adc(state->emitter, instr->eep->adc);
+    break;
+  case EEP_INSTR_TY_SBC:
+    eep_emit_sbc(state->emitter, instr->eep->sbc);
+    break;
+  case EEP_INSTR_TY_AND:
+    eep_emit_and(state->emitter, instr->eep->and);
+    break;
+  case EEP_INSTR_TY_CMP:
+    eep_emit_cmp(state->emitter, instr->eep->cmp);
+    break;
+  case EEP_INSTR_TY_ADD_IMM:
+    eep_emit_add_imm(state->emitter, instr->eep->add_imm);
+    break;
+  case EEP_INSTR_TY_SUB_IMM:
+    eep_emit_sub_imm(state->emitter, instr->eep->sub_imm);
+    break;
+  case EEP_INSTR_TY_ADC_IMM:
+    eep_emit_adc_imm(state->emitter, instr->eep->adc_imm);
+    break;
+  case EEP_INSTR_TY_SBC_IMM:
+    eep_emit_sbc_imm(state->emitter, instr->eep->sbc_imm);
+    break;
+  case EEP_INSTR_TY_AND_IMM:
+    eep_emit_and_imm(state->emitter, instr->eep->and_imm);
+    break;
+  case EEP_INSTR_TY_CMP_IMM:
+    eep_emit_cmp_imm(state->emitter, instr->eep->cmp_imm);
+    break;
+  case EEP_INSTR_TY_LSL:
+    eep_emit_lsl(state->emitter, instr->eep->lsl);
+    break;
+  case EEP_INSTR_TY_LSR:
+    eep_emit_lsr(state->emitter, instr->eep->lsr);
+    break;
+  case EEP_INSTR_TY_ASR:
+    eep_emit_asr(state->emitter, instr->eep->asr);
+    break;
+  case EEP_INSTR_TY_XSR:
+    eep_emit_xsr(state->emitter, instr->eep->xsr);
+    break;
+  case EEP_INSTR_TY_LDR_DIRECT:
+    eep_emit_load_direct(state->emitter, instr->eep->ldr_direct);
+    break;
+  case EEP_INSTR_TY_STR_DIRECT:
+    eep_emit_store_direct(state->emitter, instr->eep->str_direct);
+    break;
+  case EEP_INSTR_TY_LDR_OFFSET:
+    eep_emit_load_offset(state->emitter, instr->eep->ldr_offset);
+    break;
+  case EEP_INSTR_TY_STR_OFFSET:
+    eep_emit_store_offset(state->emitter, instr->eep->str_offset);
+    break;
+  case EEP_INSTR_TY_JMP:
+    eep_emit_jump(state->emitter, instr->eep->jmp);
+    break;
+  case EEP_INSTR_TY_EXT:
+    eep_emit_ext(state->emitter, instr->eep->ext);
+    break;
   }
 }
 
-static void emit_br_cond_op(struct emit_state *state, struct ir_op *op) {
-  // we jump to the end of the block + skip this
-  // instruction
-  struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
-  size_t true_offset =
-      true_target->function_offset - eep_emitted_count(state->emitter);
+struct emitted_unit eep_emit(const struct codegen_unit *unit) {
+  size_t num_entries = unit->num_entries;
+  struct object_entry *entries =
+      arena_alloc(unit->arena, num_entries * sizeof(*entries));
 
-  if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
-    // emit based on flags
-    enum eep_cond cond = get_cond_for_op(op->br_cond.cond);
-    eep_emit_jump(state->emitter, cond, true_offset);
-  } else {
-    invariant_assert(op->br_cond.cond->succ = op,
-                     "can't use zeroness of reg unless it was last instr");
-    // emit based on zero
-    eep_emit_jump(state->emitter, EEP_COND_JNE, true_offset);
-  }
-}
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    struct codegen_entry *entry = &unit->entries[i];
 
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
-                      size_t stack_size);
+    switch (entry->ty) {
+    case CODEGEN_ENTRY_TY_STRING:
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_C_STRING,
+          .alignment = 0,
+          .data = entry->str,
+          .len_data = strlen(entry->str) + 1,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_STRING,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
+      break;
+    case CODEGEN_ENTRY_TY_CONST_DATA:
+      // TODO: relocations
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_CONST_DATA,
+          .alignment = 0,
+          .data = entry->data.data,
+          .len_data = entry->data.len_data,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_CONST_DATA,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
+      break;
+    case CODEGEN_ENTRY_TY_DATA:
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_MUT_DATA,
+          .alignment = 0,
+          .data = entry->data.data,
+          .len_data = entry->data.len_data,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_DATA,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
+      break;
+    case CODEGEN_ENTRY_TY_DECL:
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_DECL,
+          .alignment = 0,
+          .data = NULL,
+          .len_data = 0,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol = (struct symbol){.ty = SYMBOL_TY_DECL,
+                                    .visibility = SYMBOL_VISIBILITY_UNDEF,
+                                    .name = entry->name}};
+      break;
+    case CODEGEN_ENTRY_TY_FUNC: {
+      struct codegen_function *func = &entry->func;
 
-struct compiled_function eep_emit_function(struct ir_builder *func) {
-  // the first step of emitting is that we need to ensure the `function_offset`
-  // values are correct for all BBs as they may have been broken during various
-  // opt/transforming passes
-  {
-    size_t opc = 0;
+      struct eep_emitter *emitter;
+      create_eep_emitter(&emitter);
 
-    struct ir_basicblock *basicblock = func->first;
-    while (basicblock) {
-      basicblock->function_offset = opc;
-      struct ir_stmt *stmt = basicblock->first;
+      struct emit_state state = {
+          .func = func, .arena = unit->arena, .emitter = emitter};
 
-      while (stmt) {
-        struct ir_op *op = stmt->first;
-        while (op) {
-          opc++;
-          op = op->succ;
+      struct vector *relocs = vector_create(sizeof(struct relocation));
+
+      struct instr *instr = func->first;
+      while (instr) {
+        size_t pos = eep_emit_bytesize(state.emitter);
+
+        size_t emitted = eep_emitted_count(state.emitter);
+        emit_instr(&state, instr);
+
+        size_t generated_instrs = eep_emitted_count(state.emitter) - emitted;
+
+        debug_assert(
+            generated_instrs == 1,
+            "expected instr %zu to generate exactly 1 instruction but it "
+            "generated %zu",
+            instr->id, generated_instrs);
+
+        if (instr->reloc) {
+          instr->reloc->address = pos;
+          instr->reloc->size = 2;
+          vector_push_back(relocs, instr->reloc);
         }
 
-        stmt = stmt->succ;
+        instr = instr->succ;
       }
 
-      basicblock = basicblock->succ;
+      struct symbol symbol = {
+          .ty = SYMBOL_TY_FUNC,
+          .name = entry->name,
+          .visibility = SYMBOL_VISIBILITY_GLOBAL // FIXME: symbol vis
+      };
+
+      size_t len = eep_emit_bytesize(emitter);
+      void *data = arena_alloc(unit->arena, len);
+      eep_emit_copy_to(emitter, data);
+
+      free_eep_emitter(&emitter);
+
+      // FIXME: some vector leaks here (and probably other places)
+      // should really alloc in arena
+      entries[i] = (struct object_entry){
+          .ty = OBJECT_ENTRY_TY_FUNC,
+          .data = data,
+          .len_data = len,
+          .symbol = symbol,
+          .relocations = vector_head(relocs),
+          .num_relocations = vector_length(relocs),
+          .alignment = AARCH64_FUNCTION_ALIGNMENT,
+      };
+      break;
+    }
     }
   }
 
-  struct eep_emitter *emitter;
-  create_eep_emitter(&emitter);
-
-  struct emit_state state = {.arena = func->arena,
-                             .emitter = emitter,
-                             .num_extra_stack_slots = 0,
-                             .cur_op_state = {0}};
-
-  size_t stack_size =
-      ROUND_UP(func->total_locals_size, AARCH64_STACK_ALIGNMENT);
-  if (stack_size) {
-    // spills, so we need stack space
-    eep_emit_sub_imm(state.emitter, STACK_PTR_REG, stack_size);
-  }
-
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-
-    while (stmt) {
-      emit_stmt(&state, stmt, stack_size);
-
-      stmt = stmt->succ;
-    }
-
-    basicblock = basicblock->succ;
-  }
-
-  size_t len = eep_emit_bytesize(emitter);
-  void *data = arena_alloc(func->arena, len);
-  eep_emit_copy_to(emitter, data);
-
-  free_eep_emitter(&emitter);
-
-  struct compiled_function result = {
-      .name = func->name, .code = data, .len_code = len};
+  struct emitted_unit result = {.entries = entries, .num_entries = num_entries};
 
   return result;
-}
-
-static unsigned get_lcl_stack_offset(struct emit_state *state,
-                                     const struct ir_lcl *lcl) {
-  // FIXME: only supports ints
-  UNUSED_ARG(state);
-  return lcl->id * EEP_REG_SIZE;
-}
-
-static void emit_stmt(struct emit_state *state, struct ir_stmt *stmt,
-                      size_t stack_size) {
-  // NOTE: it is important, for branch offset calculations, that each IR
-  // operation emits exactly one instruction any expansion needed other than
-  // this should have occured in lowering
-
-  struct ir_op *op = stmt->first;
-  while (op) {
-    trace("lowering op with id %d, type %d", op->id, op->ty);
-    switch (op->ty) {
-    case IR_OP_TY_MOV: {
-      emit_mov_op(state, op);
-      break;
-    }
-    case IR_OP_TY_PHI: {
-      // TODO: ensure everything is where it should be
-      // currently we emit a `nop` to keep everything aligned
-      // ideally we should remove the phi from IR entirely
-      // earlier
-      eep_emit_nop(state->emitter);
-      break;
-    }
-    case IR_OP_TY_LOAD_LCL: {
-      struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-      eep_emit_load_offset(state->emitter, STACK_PTR_REG,
-                           get_lcl_stack_offset(state, op->lcl),
-                           get_reg_for_idx(reg));
-      break;
-    }
-    case IR_OP_TY_STORE_LCL: {
-      struct ir_reg reg = get_reg_for_op(state, op->store_lcl.value, REG_USAGE_READ);
-      size_t offset = get_lcl_stack_offset(state, op->lcl);
-      invariant_assert(UNS_FITS_IN_BITS(offset, 4), "offset too big!");
-      eep_emit_store_offset(state->emitter, get_reg_for_idx(reg), STACK_PTR_REG,
-                            offset);
-      break;
-    }
-    case IR_OP_TY_BR_COND: {
-      emit_br_cond_op(state, op);
-      break;
-    }
-    case IR_OP_TY_BR: {
-      emit_br_op(state, op);
-      break;
-    }
-    case IR_OP_TY_CNST: {
-      struct ir_reg reg = get_reg_for_op(state, op, REG_USAGE_WRITE);
-
-      switch (op->cnst.ty) {
-      case IR_OP_CNST_TY_FLT:
-        todo("floats");
-      case IR_OP_CNST_TY_INT:
-        if (reg.ty == IR_REG_TY_NONE) {
-          eep_emit_nop(state->emitter);
-        } else {
-          eep_emit_mov_imm(state->emitter, op->cnst.int_value,
-                           get_reg_for_idx(reg));
-        }
-        break;
-      case IR_OP_CNST_TY_STR:
-        todo("eep emit str cnst");
-        break;
-      }
-      break;
-    }
-    case IR_OP_TY_BINARY_OP: {
-      emit_binary_op(state, op);
-      break;
-    }
-    case IR_OP_TY_CAST_OP: {
-      emit_cast_op(state, op);
-      break;
-    }
-    case IR_OP_TY_RET: {
-      struct ir_reg value_reg = get_reg_for_op(state, op->ret.value, REG_USAGE_READ);
-
-      if (!is_return_reg(value_reg)) {
-        eep_emit_mov(state->emitter, get_reg_for_idx(value_reg), RETURN_REG);
-      }
-
-      // this should really be handled somewhere else for
-      // elegance but this readjusts SP as needed (epilogue)
-      if (stack_size) {
-        eep_emit_add_imm(state->emitter, STACK_PTR_REG, stack_size);
-      }
-
-      // offset ignored by RET
-      eep_emit_jump(state->emitter, EEP_COND_RET, 0);
-      break;
-    }
-    default: {
-      todo("unsupported IR OP");
-      break;
-    }
-    }
-
-    op = op->succ;
-  }
 }
