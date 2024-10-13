@@ -691,7 +691,6 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   basicblock->succ = NULL;
   basicblock->first = NULL;
   basicblock->last = NULL;
-  basicblock->function_offset = irb->op_count;
   basicblock->metadata = NULL;
   basicblock->first_instr = NULL;
   basicblock->last_instr = NULL;
@@ -910,7 +909,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           enum ir_glb_def_ty def_ty, const char *name) {
   struct ir_glb *glb = arena_alloc(iru->arena, sizeof(*glb));
 
-  struct ir_glb *pred = iru->first_global;
+  struct ir_glb *pred = iru->last_global;
 
   iru->num_globals++;
 
@@ -921,6 +920,10 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   glb->name = name;
   glb->def_ty = def_ty;
   glb->var_ty = *var_ty;
+
+  // TODO: for debugging
+  glb->func = NULL;
+  glb->var = NULL;
 
   if (!iru->first_global) {
     iru->first_global = glb;
@@ -939,7 +942,7 @@ struct ir_lcl *add_local(struct ir_builder *irb,
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
-  struct ir_var_ty_info ty_info = var_ty_info(irb, var_ty);
+  struct ir_var_ty_info ty_info = var_ty_info(irb->unit, var_ty);
 
   size_t lcl_pad =
       ty_info.alignment - (irb->total_locals_size % ty_info.alignment);
@@ -1013,10 +1016,10 @@ bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
   }
 }
 
-struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
+struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_op_var_ty *ty) {
   // FIXME: pointer size!
-  UNUSED_ARG(irb);
+  UNUSED_ARG(iru);
 
   switch (ty->ty) {
   case IR_OP_VAR_TY_TY_NONE:
@@ -1042,7 +1045,7 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
     }
   case IR_OP_VAR_TY_TY_ARRAY: {
-    struct ir_var_ty_info element_info = var_ty_info(irb, ty->array.underlying);
+    struct ir_var_ty_info element_info = var_ty_info(iru, ty->array.underlying);
     size_t size = ty->array.num_elements * element_info.size;
     return (struct ir_var_ty_info){.size = size,
                                    .alignment = element_info.alignment};
@@ -1051,11 +1054,11 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
     size_t max_alignment = 0;
     size_t size = 0;
     size_t num_fields = ty->struct_ty.num_fields;
-    size_t *offsets = arena_alloc(irb->arena, sizeof(*offsets) * num_fields);
+    size_t *offsets = arena_alloc(iru->arena, sizeof(*offsets) * num_fields);
 
     for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
       struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
-      struct ir_var_ty_info info = var_ty_info(irb, field);
+      struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
       size = ROUND_UP(size, info.alignment);
@@ -1077,7 +1080,7 @@ struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
 
     for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
       struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
-      struct ir_var_ty_info info = var_ty_info(irb, field);
+      struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
       size = MAX(size, info.size);

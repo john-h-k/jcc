@@ -145,10 +145,10 @@ void write_relocations(FILE *file, const struct build_object_args *args,
 }
 
 void write_segment_command(FILE *file, const struct build_object_args *args) {
-  size_t str_align = 0;
-  size_t func_align = 0;
-  size_t const_align = 0;
-  size_t data_align = 0;
+  size_t str_align = 1;
+  size_t func_align = 1;
+  size_t const_align = 1;
+  size_t data_align = 1;
 
   // TODO: sort by alignment instead of aligning each entry by max align
 
@@ -410,6 +410,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
     if (entry->ty == OBJECT_ENTRY_TY_CONST_DATA) {
       fwrite(entry->data, 1, entry->len_data, file);
+
       size_t align = ROUND_UP(entry->len_data, const_align) - entry->len_data;
       for (size_t j = 0; j < align; j++) {
         fputc(0, file);
@@ -424,7 +425,7 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
 
-    if (entry->ty == OBJECT_ENTRY_TY_MUT_DATA) {
+    if (entry->ty == OBJECT_ENTRY_TY_MUT_DATA && entry->data) {
       fwrite(entry->data, 1, entry->len_data, file);
       size_t align = ROUND_UP(entry->len_data, data_align) - entry->len_data;
       for (size_t j = 0; j < align; j++) {

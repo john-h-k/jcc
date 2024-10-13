@@ -84,8 +84,8 @@ bool var_ty_eq(struct ir_builder *irb, const struct ir_op_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(irb, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb, r);
+    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
+    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -105,8 +105,8 @@ bool var_ty_eq(struct ir_builder *irb, const struct ir_op_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(irb, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb, r);
+    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
+    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -456,7 +456,7 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
 
       // need to multiply rhs by the element size
       struct ir_var_ty_info el_info =
-          var_ty_info(irb, pointer_ty.pointer.underlying);
+          var_ty_info(irb->unit, pointer_ty.pointer.underlying);
 
       struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
       make_pointer_constant(irb, el_size_op, el_info.size);
@@ -484,7 +484,7 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
 
       // need to multiply rhs by the element size
       struct ir_var_ty_info el_info =
-          var_ty_info(irb, pointer_ty->pointer.underlying);
+          var_ty_info(irb->unit, pointer_ty->pointer.underlying);
 
       struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
       make_pointer_constant(irb, el_size_op, el_info.size);
@@ -649,7 +649,6 @@ struct ir_op *build_ir_for_addressof_var(struct ir_builder *irb,
     underlying_var_ty = ref->glb->var_ty;
     break;
   }
-
 
   struct ir_op_var_ty var_ty;
   if (underlying_var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
@@ -818,14 +817,14 @@ struct ir_op *build_ir_for_sizeof(struct ir_builder *irb, struct ir_stmt *stmt,
   switch (size_of->ty) {
   case AST_SIZEOF_TY_TYPE:
     var_ty = var_ty_for_ast_tyref(irb, &size_of->ty_ref);
-    debug_print_var_ty_string(stderr, irb, &var_ty);
+    debug_print_var_ty_string(stderr, irb->unit, &var_ty);
     break;
   case AST_SIZEOF_TY_EXPR:
     var_ty = var_ty_for_ast_tyref(irb, &size_of->expr->var_ty);
     break;
   }
 
-  struct ir_var_ty_info info = var_ty_info(irb, &var_ty);
+  struct ir_var_ty_info info = var_ty_info(irb->unit, &var_ty);
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_CNST;
@@ -840,7 +839,7 @@ struct ir_op *build_ir_for_alignof(struct ir_builder *irb, struct ir_stmt *stmt,
                                    struct ast_alignof *align_of) {
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, &align_of->ty_ref);
 
-  struct ir_var_ty_info info = var_ty_info(irb, &var_ty);
+  struct ir_var_ty_info info = var_ty_info(irb->unit, &var_ty);
 
   struct ir_op *op = alloc_ir_op(irb, stmt);
   op->ty = IR_OP_TY_CNST;
@@ -861,14 +860,17 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
     // these are promoted to globals
 
     struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb, &cnst->cnst_ty);
-    struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty, IR_GLB_DEF_TY_DEFINED, NULL);
+    struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty,
+                                    IR_GLB_DEF_TY_DEFINED, NULL);
+    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    *glb->var = (struct ir_var){
+        .ty = IR_VAR_TY_STRING_LITERAL,
+        .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                             .str_value = cnst->str_value}};
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
-    op->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = glb
-    };
+    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
   } else if (is_fp_ty(&cnst->cnst_ty)) {
     op->ty = IR_OP_TY_CNST;
     op->var_ty = var_ty_for_ast_tyref(irb, &cnst->cnst_ty);
@@ -987,8 +989,7 @@ struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
         identifier_str(irb->parser, &var->identifier));
 
   key = get_var_key(irb->parser, var, stmt->basicblock);
-  struct var_ref *new_ref =
-      var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
+  struct var_ref *new_ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
   new_ref->ty = VAR_REF_TY_SSA;
   new_ref->op = phi;
 
@@ -1079,7 +1080,7 @@ struct ir_op *build_ir_for_call(struct ir_builder *irb, struct ir_stmt *stmt,
     target = build_ir_for_expr(irb, stmt, call->target, &call->target->var_ty);
   } else {
     target = build_ir_for_addressof(irb, stmt, call->target);
-  }  
+  }
 
   irb->flags |= IR_BUILDER_FLAG_MAKES_CALL;
   struct ir_op *op = alloc_ir_op(irb, stmt);
@@ -1144,7 +1145,7 @@ void get_member_info(struct ir_builder *irb, const struct ast_tyref *ty_ref,
   }
 
   struct ir_op_var_ty ir_struct_ty = var_ty_for_ast_tyref(irb, &aggregate);
-  struct ir_var_ty_info info = var_ty_info(irb, &ir_struct_ty);
+  struct ir_var_ty_info info = var_ty_info(irb->unit, &ir_struct_ty);
 
   // offsets are null for a union
   *member_offset = info.offsets ? info.offsets[member_idx] : 0;
@@ -1835,7 +1836,7 @@ struct ir_op *build_ir_for_array_initlist(struct ir_builder *irb,
   struct ir_op *zero_init = NULL;
 
   struct ir_op_var_ty ir_el_ty = var_ty_for_ast_tyref(irb, el_ty);
-  size_t el_size = var_ty_info(irb, &ir_el_ty).size;
+  size_t el_size = var_ty_info(irb->unit, &ir_el_ty).size;
 
   for (size_t i = 0; i < num_elements; i++) {
     struct ir_op *expr;
@@ -1993,7 +1994,8 @@ build_ir_for_vardecl_with_initlist(struct ir_builder *irb, struct ir_stmt *stmt,
 struct ir_op *build_ir_for_decllist(struct ir_builder *irb,
                                     struct ir_stmt *stmt,
                                     struct ast_decllist *decl_list) {
-  if (decl_list->ty == AST_DECL_LIST_TY_TYPES) {
+  if (decl_list->storage_class_specifiers &
+      AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
     return NULL;
   }
 
@@ -2203,12 +2205,14 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-struct ir_builder *build_ir_for_function(struct parser *parser,
+struct ir_builder *build_ir_for_function(struct ir_unit *unit,
+                                         struct parser *parser,
                                          struct arena_allocator *arena,
                                          struct ast_funcdef *def,
                                          struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
-  struct ir_builder b = {.name = identifier_str(parser, &def->identifier),
+  struct ir_builder b = {.unit = unit,
+                         .name = identifier_str(parser, &def->identifier),
                          .parser = parser,
                          .var_refs = var_refs,
                          .global_var_refs = global_var_refs,
@@ -2248,8 +2252,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
     };
 
     struct var_key key = get_var_key(builder->parser, &var, basicblock);
-    struct var_ref *ref =
-        var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
+    struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
     struct ir_op *mov = alloc_ir_op(builder, param_stmt);
     mov->ty = IR_OP_TY_MOV;
@@ -2340,7 +2343,7 @@ struct ir_builder *build_ir_for_function(struct parser *parser,
   prune_basicblocks(builder);
 
   if (log_enabled()) {
-    debug_print_ir(stderr, builder, NULL, NULL);
+    debug_print_ir_func(stderr, builder, NULL, NULL);
   }
 
   // now we fix up phis
@@ -2391,12 +2394,10 @@ struct ir_unit *build_ir_for_translationunit(
     struct ast_translationunit *translation_unit) {
 
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
-  *iru = (struct ir_unit){
-      .arena = arena,
-      .first_global = NULL,
-      .last_global = NULL,
-      .num_globals = 0
-  };
+  *iru = (struct ir_unit){.arena = arena,
+                          .first_global = NULL,
+                          .last_global = NULL,
+                          .num_globals = 0};
 
   struct var_refs *global_var_refs = var_refs_create();
   // funcs do not necessarily have a seperate decl so we do it for defs too
@@ -2409,7 +2410,8 @@ struct ir_unit *build_ir_for_translationunit(
   for (size_t i = 0; i < translation_unit->num_decl_lists; i++) {
     struct ast_decllist *decl_list = &translation_unit->decl_lists[i];
 
-    if (decl_list->ty == AST_DECL_LIST_TY_TYPES) {
+    if (decl_list->storage_class_specifiers &
+        AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
       continue;
     }
 
@@ -2422,8 +2424,7 @@ struct ir_unit *build_ir_for_translationunit(
       struct var_key key = {.name =
                                 identifier_str(parser, &decl->var.identifier),
                             .scope = SCOPE_GLOBAL};
-      struct var_ref *ref =
-          var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
+      struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
       enum ir_glb_ty ty;
       if (decl->var.var_ty.ty == AST_TYREF_TY_FUNC) {
@@ -2431,16 +2432,23 @@ struct ir_unit *build_ir_for_translationunit(
       } else {
         ty = IR_GLB_TY_DATA;
       }
-      
+
       enum ir_glb_def_ty def_ty;
-      if ((decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) || (decl->var.var_ty.ty == AST_TYREF_TY_FUNC && !(decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC))) {
+      if ((decl_list->storage_class_specifiers &
+           AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) ||
+          (decl->var.var_ty.ty == AST_TYREF_TY_FUNC &&
+           !(decl_list->storage_class_specifiers &
+             AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC))) {
         def_ty = IR_GLB_DEF_TY_UNDEFINED;
       } else {
         def_ty = IR_GLB_DEF_TY_DEFINED;
       }
-      
+
       ref->glb = add_global(iru, ty, &var_ty, def_ty, key.name);
-      ref->func = NULL;
+      ref->glb->var = arena_alloc(arena, sizeof(*ref->glb->var));
+      *ref->glb->var = (struct ir_var){.ty = IR_VAR_TY_DATA,
+                                       .var_ty = var_ty,
+                                       .value = {.ty = IR_VAR_VALUE_TY_UNDF}};
     }
   }
 
@@ -2452,13 +2460,13 @@ struct ir_unit *build_ir_for_translationunit(
     struct ir_op_var_ty var_ty =
         var_ty_for_ast_tyref(&tmp_builder, &def->var_ty);
 
-    struct var_ref *ref =
-        var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
+    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
-    ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED, key.name);
-    struct ir_builder *func = build_ir_for_function(parser, arena, def, global_var_refs);
+    ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED,
+                          key.name);
+    struct ir_builder *func =
+        build_ir_for_function(iru, parser, arena, def, global_var_refs);
 
-    ref->func = func;
     ref->glb->func = func;
   }
 

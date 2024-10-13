@@ -143,7 +143,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     return;
   }
 
-  struct ir_var_ty_info info = var_ty_info(func, &op->var_ty);
+  struct ir_var_ty_info info = var_ty_info(func->unit, &op->var_ty);
 
   bool simple_copy = true;
   enum ir_op_var_primitive_ty simple_copy_ty;
@@ -320,7 +320,7 @@ void aarch64_lower(struct ir_unit *unit) {
 
     switch (glb->ty) {
     case IR_GLB_TY_DATA:
-      todo("lower data");
+      break;
     case IR_GLB_TY_FUNC: {
       struct ir_builder *func = glb->func;
       struct ir_basicblock *basicblock = func->first;
@@ -364,8 +364,12 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
-            case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
+              break;
+            case IR_OP_TY_CALL:
+              if (op->call.target->ty == IR_OP_TY_ADDR) {
+                op->call.target->flags |= IR_OP_FLAG_CONTAINED;
+              }
               break;
             case IR_OP_TY_UNARY_OP:
               if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {

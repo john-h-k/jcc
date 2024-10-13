@@ -64,33 +64,10 @@ enum compiler_create_result create_compiler(struct program *program,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-void debug_print_stage(const struct ir_unit *ir, const char *name) {
-  struct ir_glb *glb = ir->first_global;
+void debug_print_stage(struct ir_unit *ir, const char *name) {
+  UNUSED_ARG(name);
 
-  while (glb) {
-    switch (glb->ty) {
-    case IR_GLB_TY_DATA:
-      todo("data");
-      break;
-    case IR_GLB_TY_FUNC:
-      if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-        debug_print_ir(stderr, glb->func, NULL, NULL);
-
-        // TODO: fix logic
-        char *buff = nonnull_malloc(strlen(name) + sizeof(".gv"));
-        strcpy(buff, name);
-        strcat(buff, ".gv");
-
-        FILE *ir_graph = fopen(buff, "w");
-        debug_print_ir_graph(ir_graph, glb->func);
-        fclose(ir_graph);
-
-      }
-      break;
-    }
-
-    glb = glb->succ;
-  }
+  debug_print_ir(stderr, ir, NULL, NULL);
 }
 
 const struct target *get_target(const struct compile_args *args) {

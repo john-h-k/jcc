@@ -30,13 +30,21 @@ enum codegen_entry_ty {
   CODEGEN_ENTRY_TY_DECL,
 };
 
+struct codegen_data {
+  void *data;
+  size_t len_data;
+};
+
 struct codegen_entry {
   enum codegen_entry_ty ty;
 
+  size_t glb_id;
   const char *name;
 
   union {
     struct codegen_function func;
+    struct codegen_data data;
+    const char *str;
   };
 };
 

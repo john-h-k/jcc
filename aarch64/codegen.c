@@ -252,7 +252,7 @@ static unsigned get_lcl_stack_offset(const struct codegen_state *state,
     return offset;
   }
 
-  struct ir_var_ty_info info = var_ty_info(state->ir, &op->var_ty);
+  struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
   debug_assert(offset % info.size == 0,
                "stack offset not divisible by type size");
   return offset / info.size;
@@ -1110,7 +1110,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           // the 8 byte slots
           variadic_arg_idx *= 2;
         } else {
-          invariant_assert(var_ty_info(state->ir, var_ty).size >= 8,
+          invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
                            "variadic arg with size < 8 has not been promoted");
         }
 
@@ -1138,11 +1138,23 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we generate the actual call
 
   struct instr *instr = alloc_instr(state->func);
-  // instr->aarch64->ty = AARCH64_INSTR_TY_BL;
-  // instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
-  instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
-  instr->aarch64->blr =
-      (struct aarch64_branch_reg){.target = codegen_reg(op->call.target)};
+  if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
+    instr->aarch64->ty = AARCH64_INSTR_TY_BL;
+    instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
+
+    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+    *instr->reloc = (struct relocation){
+        .ty = RELOCATION_TY_SINGLE,
+        .symbol_index = op->call.target->addr.glb->id,
+        .size = 2,
+        .address = 0,
+    };
+  } else {
+    todo("reg alloc for call targets needs fixing");
+    instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
+    instr->aarch64->blr =
+        (struct aarch64_branch_reg){.target = codegen_reg(op->call.target)};
+  }
 
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
     struct aarch64_reg ret_dest = codegen_reg(op);
@@ -1449,7 +1461,9 @@ static void codegen_stmt(struct codegen_state *state,
                          const struct ir_stmt *stmt) {
   struct ir_op *op = stmt->first;
   while (op) {
-    codegen_op(state, op);
+    if (!(op->flags & IR_OP_FLAG_CONTAINED)) {
+      codegen_op(state, op);
+    }
 
     op = op->succ;
   }
@@ -1561,6 +1575,44 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   return buff;
 }
 
+int sort_entries_by_id(const void *a, const void *b) {
+  const struct codegen_entry *l = a;
+  const struct codegen_entry *r = b;
+
+  if (l->glb_id > r->glb_id) {
+    return 1;
+  } else if (l->glb_id == r->glb_id) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
+  switch (var->ty) {
+  case IR_VAR_TY_STRING_LITERAL: {
+    bug("str literal should have been lowered seperately");
+    break;
+  }
+  case IR_VAR_TY_CONST_DATA:
+  case IR_VAR_TY_DATA: {
+    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
+
+    size_t len = info.size;
+
+    char *data = arena_alloc(ir->arena, len);
+    if (var->value.ty != IR_VAR_VALUE_TY_UNDF) {
+      bug("todo defined values");
+    }
+    
+    return (struct codegen_data){
+      .data = data,
+      .len_data = len
+    };
+  }
+  }
+}
+
 struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
   *unit = (struct codegen_unit){
@@ -1576,19 +1628,48 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
   size_t i = 0;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-      unit->entries[i] = (struct codegen_entry){
-          .ty = CODEGEN_ENTRY_TY_DECL,
-          .name = glb->name ? aarch64_mangle(ir->arena, glb->name)
-                            : mangle_str_cnst_name(ir->arena, "todo", glb->id)};
+      unit->entries[i] =
+          (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DECL,
+                                 .glb_id = glb->id,
+                                 .name = aarch64_mangle(ir->arena, glb->name)};
 
       i++;
       glb = glb->succ;
+      continue;
     }
 
     switch (glb->ty) {
-    case IR_GLB_TY_DATA:
-      todo("codegen data");
+    case IR_GLB_TY_DATA: {
+      // TODO: non string literals
+
+      const char *name = glb->name
+                             ? aarch64_mangle(ir->arena, glb->name)
+                             : mangle_str_cnst_name(ir->arena, "todo", glb->id);
+      switch (glb->var->ty) {
+      case IR_VAR_TY_STRING_LITERAL:
+        unit->entries[i] =
+            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
+                                   .glb_id = glb->id,
+                                   .name = name,
+                                   .str = glb->var->value.str_value};
+        break;
+      case IR_VAR_TY_CONST_DATA:
+        unit->entries[i] =
+            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
+                                   .glb_id = glb->id,
+                                   .name = name,
+                                   .data = codegen_var_data(ir, glb->var)};
+        break;
+      case IR_VAR_TY_DATA:
+        unit->entries[i] =
+            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
+                                   .glb_id = glb->id,
+                                   .name = name,
+                                   .data = codegen_var_data(ir, glb->var)};
+        break;
+      }
       break;
+    }
     case IR_GLB_TY_FUNC: {
       struct ir_builder *ir_func = glb->func;
 
@@ -1606,7 +1687,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
           while (op) {
             if (op->ty == IR_OP_TY_CALL) {
-              if (is_func_variadic(&op->call.target->var_ty.func)) {
+              if (is_func_variadic(&op->call.func_ty.func)) {
                 size_t num_variadic_args =
                     op->call.num_args -
                     op->call.target->var_ty.func.num_params + 1;
@@ -1651,6 +1732,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
       unit->entries[i] = (struct codegen_entry){
           .ty = CODEGEN_ENTRY_TY_FUNC,
+          .glb_id = glb->id,
           .name = aarch64_mangle(ir->arena, ir_func->name),
           .func = {
               .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
@@ -1696,6 +1778,9 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
     i++;
     glb = glb->succ;
   }
+
+  qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
+        sort_entries_by_id);
 
   if (log_enabled()) {
     aarch64_debug_print_codegen(stderr, unit);

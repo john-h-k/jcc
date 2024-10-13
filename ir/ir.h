@@ -5,6 +5,7 @@
 #include "../var_table.h"
 
 #include <stdlib.h>
+#include <limits.h>
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
@@ -224,6 +225,7 @@ struct ir_op_var_pointer_ty {
 
 struct ir_op_var_ty {
   enum ir_op_var_ty_ty ty;
+
   union {
     enum ir_op_var_primitive_ty primitive;
     struct ir_op_var_func_ty func;
@@ -298,8 +300,6 @@ struct ir_op_br_cond {
   // targets on `ir_basicblock`
 };
 
-#include <limits.h>
-
 struct aarch64_op;
 struct eep_op;
 
@@ -345,6 +345,9 @@ enum ir_op_flags {
 
   // indicates the op is a load_lcl/store_lcl used for a spill
   IR_OP_FLAG_SPILL = 16,
+
+  // indicates this op does not generate any instructions and it is encoded in its uses
+  IR_OP_FLAG_CONTAINED = 32
 };
 
 struct ir_op {
@@ -466,9 +469,6 @@ struct ir_basicblock {
     struct ir_basicblock_split split;
   };
 
-  // how many ops are before this block in the function
-  size_t function_offset;
-
   struct instr *first_instr;
   struct instr *last_instr;
 
@@ -483,6 +483,44 @@ enum ir_builder_flags {
 enum ir_glb_ty {
   IR_GLB_TY_DATA,
   IR_GLB_TY_FUNC,
+};
+
+enum ir_var_ty {
+  IR_VAR_TY_STRING_LITERAL,
+  IR_VAR_TY_CONST_DATA,
+  IR_VAR_TY_DATA
+};
+
+struct ir_var_value_list {
+  struct ir_var_value *values;
+  size_t num_values;
+};
+
+enum ir_var_value_ty {
+  IR_VAR_VALUE_TY_UNDF,
+  IR_VAR_VALUE_TY_STR,
+  IR_VAR_VALUE_TY_INT,
+  IR_VAR_VALUE_TY_FLT,
+  IR_VAR_VALUE_TY_VALUE_LIST
+};
+
+struct ir_var_value {
+  enum ir_var_value_ty ty;
+
+  union {
+    const char *str_value;
+    unsigned long long int_value;
+    long double flt_value;
+
+    struct ir_var_value_list value_list;
+  };
+};
+
+struct ir_var {
+  enum ir_var_ty ty;
+
+  struct ir_op_var_ty var_ty;
+  struct ir_var_value value;
 };
 
 enum ir_glb_def_ty { IR_GLB_DEF_TY_DEFINED, IR_GLB_DEF_TY_UNDEFINED };
@@ -502,6 +540,7 @@ struct ir_glb {
   struct ir_op_var_ty var_ty;
 
   union {
+    struct ir_var *var;
     struct ir_builder *func;
   };
 };
@@ -671,7 +710,7 @@ struct ir_var_ty_info {
   size_t *offsets;
 };
 
-struct ir_var_ty_info var_ty_info(struct ir_builder *irb,
+struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_op_var_ty *ty);
 
 struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty);

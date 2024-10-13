@@ -3078,6 +3078,30 @@ struct ast_printstate {
   state->indent = 0;
 #define POP_INDENT() state->indent = tmp_indent;
 
+DEBUG_FUNC_ENUM(storage_class_specifier_flags, storage_class_specifier_flags) {
+  UNUSED_ARG(state);
+
+  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
+    AST_PRINTZ("TYPEDEF");
+  }
+
+  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO) {
+    AST_PRINTZ("AUTO");
+  }
+
+  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) {
+    AST_PRINTZ("EXTERN");
+  }
+
+  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER) {
+    AST_PRINTZ("REGISTER");
+  }
+
+  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC) {
+    AST_PRINTZ("STATIC");
+  }
+}
+
 DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
   UNUSED_ARG(state);
 
@@ -3595,6 +3619,8 @@ DEBUG_FUNC(decl, decl) {
 DEBUG_FUNC(decllist, decl_list) {
   AST_PRINTZ("DECLARATION");
   INDENT();
+
+  DEBUG_CALL(storage_class_specifier_flags, &decl_list->storage_class_specifiers);
 
   for (size_t i = 0; i < decl_list->num_decls; i++) {
     DEBUG_CALL(decl, &decl_list->decls[i]);

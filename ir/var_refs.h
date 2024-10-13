@@ -20,9 +20,6 @@ struct var_ref {
 
   struct var_key key;
 
-  // potentially null - the func associated with this var ref
-  struct ir_builder *func;
-
   union {
     struct ir_op *op;
     struct ir_glb *glb;

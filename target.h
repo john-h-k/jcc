@@ -64,7 +64,7 @@ struct object_entry {
 
   struct symbol symbol;
 
-  void *data;
+  const void *data;
   size_t len_data;
 
   size_t alignment;

@@ -28,24 +28,6 @@ struct emit_state {
   struct aarch64_emitter *emitter;
 };
 
-void emit_br_op(struct emit_state *state, struct ir_op *op) {
-  if (op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE) {
-    struct ir_basicblock *target = op->stmt->basicblock->merge.target;
-    ssize_t offset = (ssize_t)target->function_offset -
-                     (ssize_t)aarch64_emitted_count(state->emitter);
-    (void)offset;
-    // aarch64_emit_b(state->emitter, offset);
-  } else {
-    // otherwise, this is the false branch of a SPLIT
-    struct ir_basicblock *false_target =
-        op->stmt->basicblock->split.false_target;
-
-    ssize_t false_offset = (ssize_t)false_target->function_offset -
-                           (ssize_t)aarch64_emitted_count(state->emitter);
-    (void)false_offset;
-    // aarch64_emit_b(state->emitter, false_offset);
-  }
-}
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
@@ -243,9 +225,50 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
 
     switch (entry->ty) {
     case CODEGEN_ENTRY_TY_STRING:
+      entries[i] = (struct object_entry){
+        .ty = OBJECT_ENTRY_TY_C_STRING,
+        .alignment = 0,
+        .data = entry->str,
+        .len_data = strlen(entry->str) + 1,
+        .num_relocations = 0,
+        .relocations = NULL,
+        .symbol = (struct symbol){
+          .ty = SYMBOL_TY_STRING,
+          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+          .name = entry->name
+        }
+      };
+      break;
     case CODEGEN_ENTRY_TY_CONST_DATA:
+      // TODO: relocations
+      entries[i] = (struct object_entry){
+        .ty = OBJECT_ENTRY_TY_CONST_DATA,
+        .alignment = 0,
+        .data = entry->data.data,
+        .len_data = entry->data.len_data,
+        .num_relocations = 0,
+        .relocations = NULL,
+        .symbol = (struct symbol){
+          .ty = SYMBOL_TY_CONST_DATA,
+          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+          .name = entry->name
+        }
+      };
+      break;
     case CODEGEN_ENTRY_TY_DATA:
-      todo("emit other tys");
+      entries[i] = (struct object_entry){
+        .ty = OBJECT_ENTRY_TY_MUT_DATA,
+        .alignment = 0,
+        .data = entry->data.data,
+        .len_data = entry->data.len_data,
+        .num_relocations = 0,
+        .relocations = NULL,
+        .symbol = (struct symbol){
+          .ty = SYMBOL_TY_DATA,
+          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+          .name = entry->name
+        }
+      };
       break;
     case CODEGEN_ENTRY_TY_DECL:
       entries[i] = (struct object_entry){
@@ -290,7 +313,6 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
             instr->id, generated_instrs);
 
         if (instr->reloc) {
-          printf("reloc offset %zu id %zu\n", pos, instr->id);
           instr->reloc->address = pos;
           instr->reloc->size = 2;
           vector_push_back(relocs, instr->reloc);

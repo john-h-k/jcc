@@ -92,7 +92,7 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
-void debug_print_var_ty_string(FILE *file, struct ir_builder *irb,
+void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_op_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
@@ -105,13 +105,13 @@ void debug_print_var_ty_string(FILE *file, struct ir_builder *irb,
   }
   case IR_OP_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
-    debug_print_var_ty_string(file, irb, var_ty->pointer.underlying);
+    debug_print_var_ty_string(file, iru, var_ty->pointer.underlying);
     fprintf(file, " ]");
     return;
   }
   case IR_OP_VAR_TY_TY_ARRAY: {
     fprintf(file, "ARRAY [ ");
-    debug_print_var_ty_string(file, irb, var_ty->array.underlying);
+    debug_print_var_ty_string(file, iru, var_ty->array.underlying);
     fprintf(file, ", ");
     fprintf(file, "%zu", var_ty->array.num_elements);
     fprintf(file, " ]");
@@ -121,21 +121,21 @@ void debug_print_var_ty_string(FILE *file, struct ir_builder *irb,
     // FIXME: buffer vuln
     fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
-      debug_print_var_ty_string(file, irb, &var_ty->func.params[i]);
+      debug_print_var_ty_string(file, iru, &var_ty->func.params[i]);
       if (i + 1 < var_ty->func.num_params) {
         fprintf(file, ", ");
       }
     }
     fprintf(file, ")");
     fprintf(file, " -> ");
-    debug_print_var_ty_string(file, irb, var_ty->func.ret_ty);
+    debug_print_var_ty_string(file, iru, var_ty->func.ret_ty);
     return;
   }
   case IR_OP_VAR_TY_TY_STRUCT: {
-    struct ir_var_ty_info info = var_ty_info(irb, var_ty);
+    struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->struct_ty.num_fields; i++) {
-      debug_print_var_ty_string(file, irb, &var_ty->struct_ty.fields[i]);
+      debug_print_var_ty_string(file, iru, &var_ty->struct_ty.fields[i]);
 
       if (i + 1 < var_ty->struct_ty.num_fields) {
         fprintf(file, ", ");
@@ -145,10 +145,10 @@ void debug_print_var_ty_string(FILE *file, struct ir_builder *irb,
     break;
   }
   case IR_OP_VAR_TY_TY_UNION: {
-    struct ir_var_ty_info info = var_ty_info(irb, var_ty);
+    struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->union_ty.num_fields; i++) {
-      debug_print_var_ty_string(file, irb, &var_ty->union_ty.fields[i]);
+      debug_print_var_ty_string(file, iru, &var_ty->union_ty.fields[i]);
 
       if (i + 1 < var_ty->union_ty.num_fields) {
         fprintf(file, ", ");
@@ -227,7 +227,7 @@ char char_prefix_for_reg(struct ir_reg reg) {
 
 void debug_lhs(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
-  debug_print_var_ty_string(file, irb, &ir->var_ty);
+  debug_print_var_ty_string(file, irb->unit, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
@@ -351,7 +351,8 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
   case IR_OP_TY_STORE_GLB:
     debug_lhs(file, irb, ir);
     if (ir->load_glb.glb) {
-      fprintf(file, "storeglb GLB(%zu), %%%zu", ir->store_glb.glb->id, ir->store_glb.value->id);
+      fprintf(file, "storeglb GLB(%zu), %%%zu", ir->store_glb.glb->id,
+              ir->store_glb.value->id);
     } else {
       fprintf(file, "storeglb GLB(UNASSIGNED), %%%zu", ir->store_glb.value->id);
     }
@@ -548,8 +549,8 @@ void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
   debug_visit_ir(stmt->basicblock->irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_ir(FILE *file, struct ir_builder *irb,
-                    debug_print_op_callback *cb, void *cb_metadata) {
+void debug_print_ir_func(FILE *file, struct ir_builder *irb,
+                         debug_print_op_callback *cb, void *cb_metadata) {
   int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
 
@@ -563,6 +564,39 @@ void debug_print_ir(FILE *file, struct ir_builder *irb,
   fprintf(file, "    num_locals: %zu\n", irb->num_locals);
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
+}
+
+void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value) {
+  switch (var_value->ty) {
+  case IR_VAR_VALUE_TY_UNDF:
+    fprintf(file, "UNDF");
+    break;
+  case IR_VAR_VALUE_TY_STR:
+    fprintf(file, "%s", var_value->str_value);
+    break;
+  case IR_VAR_VALUE_TY_INT:
+    fprintf(file, "%llu", var_value->int_value);
+    break;
+  case IR_VAR_VALUE_TY_FLT:
+    fprintf(file, "%Lf", var_value->flt_value);
+    break;
+  case IR_VAR_VALUE_TY_VALUE_LIST:
+    fprintf(file, "{");
+    for (size_t i = 0; i < var_value->value_list.num_values; i++) {
+      struct ir_var_value *sub_value = &var_value->value_list.values[i];
+      debug_print_ir_var_value(file, sub_value);
+      fprintf(file, ",\n");
+    }
+    fprintf(file, "}");
+    break;
+  }
+}
+
+void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {
+  debug_print_var_ty_string(file, iru, &var->var_ty);
+  fprintf(file, " ");
+  debug_print_ir_var_value(file, &var->value);
+  fprintf(file, "\n\n");
 }
 
 struct print_ir_graph_metadata {
@@ -640,4 +674,29 @@ void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
   }
 
   graphwriter_free(&gwr);
+}
+
+void debug_print_ir(FILE *file, struct ir_unit *iru,
+                    debug_print_op_callback *cb, void *cb_metadata) {
+  struct ir_glb *glb = iru->first_global;
+  while (glb) {
+    fprintf(file, "GLB(%zu) = ", glb->id);
+
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      debug_print_ir_var(file, iru, glb->var);
+      break;
+    case IR_GLB_TY_FUNC:
+      switch (glb->def_ty) {
+      case IR_GLB_DEF_TY_DEFINED:
+        debug_print_ir_func(file, glb->func, cb, cb_metadata);
+        break;
+      case IR_GLB_DEF_TY_UNDEFINED:
+        fprintf(file, "UNDF\n");
+        break;
+      }
+    }
+
+    glb = glb->succ;
+  }
 }

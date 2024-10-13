@@ -407,14 +407,7 @@ struct ast_decl {
   };
 };
 
-enum ast_decllist_ty {
-  AST_DECL_LIST_TY_VARS,
-  AST_DECL_LIST_TY_TYPES,
-};
-
 struct ast_decllist {
-  enum ast_decllist_ty ty;
-
   enum ast_storage_class_specifier_flags storage_class_specifiers;
 
   struct ast_decl *decls;
