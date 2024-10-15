@@ -138,11 +138,11 @@ enum compile_result compile(struct compiler *compiler) {
     disable_log();
   }
 
-  {
-    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
-      enable_log();
-    }
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
+    enable_log();
+  }
 
+  {
     BEGIN_STAGE("REGALLOC");
 
     struct ir_glb *glb = ir->first_global;
@@ -167,9 +167,11 @@ enum compile_result compile(struct compiler *compiler) {
     if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
       debug_print_stage(ir, "regalloc");
     }
+  }
 
+  {
     BEGIN_STAGE("ELIM PHI");
-    glb = ir->first_global;
+    struct ir_glb *glb = ir->first_global;
 
     while (glb) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {

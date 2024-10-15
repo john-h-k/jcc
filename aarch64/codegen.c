@@ -1071,22 +1071,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
   // TODO: handle fp reg
   if (op->call.num_args) {
-    unsigned long long free_regs =
-        ~op->live_gp_regs & ~((1ull << func_ty->num_params) - 1);
-    size_t free_vol_reg = tzcnt(free_regs);
-
-    if (free_vol_reg >= volatile_gp_reg_count) {
-      todo("argument moving when no free registers");
-    }
-
-    struct aarch64_reg val_reg = codegen_reg(op->call.args[0]);
-    struct aarch64_reg vol_reg = (struct aarch64_reg){
-        .ty = val_reg.ty,
-        .idx = translate_reg_idx(free_vol_reg, IR_REG_TY_INTEGRAL)};
-
-    struct instr *mov_to_vol = alloc_instr(state->func);
-    *mov_to_vol->aarch64 = MOV_ALIAS(vol_reg, val_reg);
-
     size_t num_normal_args = func_ty->num_params;
 
     for (size_t head = 0; head < op->call.num_args; head++) {
@@ -1096,9 +1080,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
                        "`lower_call` doesn't support non-prims");
 
-      struct aarch64_reg source =
-          i == 0 ? vol_reg : codegen_reg(op->call.args[i]);
-      size_t arg_reg_idx = i;
+      struct aarch64_reg source = codegen_reg(op->call.args[i]);
 
       if (i >= num_normal_args) {
         // this argument is variadic
@@ -1124,13 +1106,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET};
         // TODO: replace all REG.idx == REG.idx with a method that checks type
         // as well
-      } else if (i == 0 || op->call.args[i]->reg.idx != arg_reg_idx) {
-        struct aarch64_reg arg_reg = (struct aarch64_reg){
-            .ty = source.ty,
-            .idx = translate_reg_idx(arg_reg_idx, IR_REG_TY_INTEGRAL)};
-
-        struct instr *mov = alloc_instr(state->func);
-        *mov->aarch64 = MOV_ALIAS(arg_reg, source);
       }
     }
   }
