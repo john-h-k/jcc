@@ -318,8 +318,6 @@ void aarch64_lower(struct ir_unit *unit) {
       continue;
     }
 
-    size_t param_idx = 0;
-
     switch (glb->ty) {
     case IR_GLB_TY_DATA:
       break;
@@ -364,35 +362,11 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
+            case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
             case IR_OP_TY_CAST_OP:
               break;
-            case IR_OP_TY_MOV:
-              if (op->flags & IR_OP_FLAG_PARAM) {
-                op->reg = (struct ir_reg){
-                  .ty = var_ty_is_fp(&op->var_ty) ? IR_REG_TY_FP : IR_REG_TY_INTEGRAL,
-                  .idx = param_idx++
-                };
-              }
-              break;
             case IR_OP_TY_CALL:
-              for (size_t i = 0; i < op->call.num_args; i++) {
-                struct ir_op *arg = op->call.args[i];
-
-                struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
-                mov->mov = (struct ir_op_mov){
-                  .value = arg
-                };
-                mov->reg = (struct ir_reg){
-                  .ty = var_ty_is_fp(&arg->var_ty) ? IR_REG_TY_FP : IR_REG_TY_INTEGRAL,
-                  .idx = i
-                };
-
-                mov->flags |= IR_OP_FLAG_FIXED_REG;
-
-                op->call.args[i] = mov;
-              }
-
               if (op->call.target->ty == IR_OP_TY_ADDR) {
                 op->call.target->flags |= IR_OP_FLAG_CONTAINED;
               }
