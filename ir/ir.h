@@ -341,13 +341,16 @@ enum ir_op_flags {
   IR_OP_FLAG_VARIADIC_PARAM = 4,
   // do not give this a reg/local as it is a phi node that will take the
   // reg/local of that phi
-  IR_OP_FLAG_DONT_GIVE_SLOT = 8,
+  IR_OP_FLAG_DONT_GIVE_REG = 8,
 
   // indicates the op is a load_lcl/store_lcl used for a spill
   IR_OP_FLAG_SPILL = 16,
 
   // indicates this op does not generate any instructions and it is encoded in its uses
-  IR_OP_FLAG_CONTAINED = 32
+  IR_OP_FLAG_CONTAINED = 32,
+
+  // reg is assigned and cannot change
+  IR_OP_FLAG_FIXED_REG = 64,
 };
 
 struct ir_op {
@@ -675,6 +678,16 @@ void add_pred_to_basicblock(struct ir_builder *irb,
 struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
                                                struct ir_op *insert_after,
                                                struct ir_basicblock *first);
+
+
+void make_basicblock_split(struct ir_builder *irb,
+                           struct ir_basicblock *basicblock,
+                           struct ir_basicblock *true_target,
+                           struct ir_basicblock *false_target);
+
+void make_basicblock_merge(struct ir_builder *irb,
+                           struct ir_basicblock *basicblock,
+                           struct ir_basicblock *target);
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
