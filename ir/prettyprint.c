@@ -212,16 +212,23 @@ void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   }
 }
 
-char char_prefix_for_reg(struct ir_reg reg) {
+void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   switch (reg.ty) {
   case IR_REG_TY_NONE:
+    fprintf(file, "UNASSIGNED");
+    break;
   case IR_REG_TY_SPILLED:
+    fprintf(file, "SPILLED");
+    break;
   case IR_REG_TY_FLAGS:
-    bug("prefix doesn't make sense for reg ty");
+    fprintf(file, "FLAGS");
+    break;
   case IR_REG_TY_INTEGRAL:
-    return 'R';
+    fprintf(file, "R%zu", reg.idx);
+    break;
   case IR_REG_TY_FP:
-    return 'F';
+    fprintf(file, "F%zu", reg.idx);
+    break;
   }
 }
 
@@ -264,21 +271,11 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     debug_lhs(file, irb, ir);
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
-      if (ir->mov.value->reg.ty == IR_REG_TY_FLAGS) {
-        // flags moves can appear before register allocation
-
-        if (ir->reg.ty == IR_REG_TY_NONE) {
-          fprintf(file, " - (FLAGS -> UNKNOWN) ");
-        } else {
-          fprintf(file, " - (FLAGS -> %c%zu) ", char_prefix_for_reg(ir->reg),
-                  ir->reg.idx);
-        }
-      } else if (ir->reg.ty != IR_REG_TY_NONE &&
-                 ir->mov.value->reg.ty != IR_REG_TY_NONE) {
-        fprintf(file, " - (%c%zu -> %c%zu) ",
-                char_prefix_for_reg(ir->mov.value->reg), ir->mov.value->reg.idx,
-                char_prefix_for_reg(ir->reg), ir->reg.idx);
-      }
+      fprintf(file, " - (");
+      debug_print_ir_reg(file, ir->mov.value->reg);
+      fprintf(file, " -> ");
+      debug_print_ir_reg(file, ir->reg);
+      fprintf(file, ")");
     } else {
       fprintf(file, "<PARAM>");
     }
@@ -386,7 +383,7 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
       fprintf(file, "return");
     }
     break;
-  }
+  }  
 }
 
 extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
@@ -453,6 +450,38 @@ void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
     fm->cb(fm->file, op, fm->cb_metadata);
   }
 
+  fprintf(fm->file, " | ");
+
+  switch (op->reg.ty) {
+  case IR_REG_TY_NONE:
+    fprintf(fm->file, "    (UNASSIGNED)");
+    break;
+  case IR_REG_TY_SPILLED:
+    if (op->lcl) {
+      fprintf(fm->file, "    (SPILLED), LCL=%zu", op->lcl->id);
+    } else {
+      fprintf(fm->file, "    (SPILLED), LCL=(UNASSIGNED)");
+    }
+    break;
+  case IR_REG_TY_FLAGS:
+    fprintf(fm->file, "    (FLAGS)");
+    break;
+  case IR_REG_TY_INTEGRAL:
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
+      fprintf(fm->file, "    (DONT)");
+    } else {
+      fprintf(fm->file, "    register=R%zu", op->reg.idx);
+    }
+    break;
+  case IR_REG_TY_FP:
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
+      fprintf(fm->file, "    (DONT)");
+    } else {
+      fprintf(fm->file, "    register=F%zu", op->reg.idx);
+    }
+    break;
+  }
+  
   fprintf(fm->file, "\n");
 }
 

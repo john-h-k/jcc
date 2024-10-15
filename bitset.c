@@ -82,7 +82,7 @@ bool bitset_get(struct bitset *bitset, size_t idx) {
   size_t mod_idx = idx % (sizeof(chunk_t) * 8);
   chunk_t chunk = bitset->chunks[chunk_idx];
 
-  return chunk & ((chunk_t)1 < mod_idx);
+  return (chunk & ((chunk_t)1 << mod_idx)) > 0;
 }
 
 void bitset_set(struct bitset *bitset, size_t idx, bool value) {

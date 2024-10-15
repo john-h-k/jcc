@@ -194,7 +194,6 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->load_addr.addr, cb_metadata);
     break;
   case IR_OP_TY_ADDR:
-    // this sort-of has uses but not really...
     break;
   case IR_OP_TY_BR:
     break;
@@ -845,6 +844,29 @@ void get_basicblock_successors(struct ir_basicblock *basicblock,
   }
 }
 
+
+
+void make_basicblock_split(struct ir_builder *irb,
+                           struct ir_basicblock *basicblock,
+                           struct ir_basicblock *true_target,
+                           struct ir_basicblock *false_target) {
+  basicblock->ty = IR_BASICBLOCK_TY_SPLIT;
+  basicblock->split.true_target = true_target;
+  basicblock->split.false_target = false_target;
+
+  add_pred_to_basicblock(irb, true_target, basicblock);
+  add_pred_to_basicblock(irb, false_target, basicblock);
+}
+
+void make_basicblock_merge(struct ir_builder *irb,
+                           struct ir_basicblock *basicblock,
+                           struct ir_basicblock *target) {
+  basicblock->ty = IR_BASICBLOCK_TY_MERGE;
+  basicblock->merge.target = target;
+
+  add_pred_to_basicblock(irb, target, basicblock);
+}
+
 struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
                                                struct ir_op *insert_after,
                                                struct ir_basicblock *first) {
@@ -1095,6 +1117,8 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 }
 
 void spill_op(struct ir_builder *irb, struct ir_op *op) {
+  debug_assert(!(op->flags & IR_OP_FLAG_FIXED_REG), "spilling fixed reg illegal");
+
   debug("spilling %zu\n", op->id);
 
   if (op->reg.ty == IR_REG_TY_SPILLED) {
