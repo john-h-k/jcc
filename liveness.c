@@ -75,6 +75,12 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *value = op->phi.values[i];
 
+            // HACK: this flag needs to enter the phi node so LSRA spills phis
+            // maybe ir_lcl should have flag instead?
+            if (value->flags & IR_OP_FLAG_MUST_SPILL) {
+              op->flags |= IR_OP_FLAG_MUST_SPILL;
+            }
+
             size_t len_id = (basicblock->id * irb->basicblock_count) +
                             value->stmt->basicblock->id;
 
@@ -87,7 +93,6 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
 
               len = walk_basicblock(irb, basicblocks_visited, op,
                                     value->stmt->basicblock);
-
               basicblock_max_id[len_id] = len;
             }
           }
@@ -103,44 +108,6 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
   }
 
   return basicblock_max_id;
-}
-
-void propogate_phi_liveness(struct ir_builder *irb, struct interval_data *data,
-                            unsigned *bb_ranges, struct ir_op *op) {
-  struct interval *interval = &data->intervals[op->id];
-
-  size_t start = interval->start;
-  size_t end = interval->end;
-
-  if (op->ty == IR_OP_TY_PHI) {
-    for (size_t i = 0; i < op->phi.num_values; i++) {
-      struct ir_op *dependent = op->phi.values[i];
-      struct interval *dependent_interval = &data->intervals[dependent->id];
-
-      size_t path_id = op->stmt->basicblock->id * irb->basicblock_count +
-                       dependent->stmt->basicblock->id;
-
-      debug_assert(bb_ranges[path_id], "bb_len was 0");
-      size_t dependent_path_end = bb_ranges[path_id];
-
-      start = MIN(start, dependent_interval->start);
-      end = MAX(end, dependent_path_end);
-    }
-
-    for (size_t i = 0; i < op->phi.num_values; i++) {
-      struct ir_op *dependent = op->phi.values[i];
-      struct interval *dependent_interval = &data->intervals[dependent->id];
-
-      dependent_interval->start =
-          MIN(dependent_interval->start, start);
-      dependent_interval->end = MAX(dependent_interval->end, end);
-
-      propogate_phi_liveness(irb, data, bb_ranges, dependent);
-    }
-  }
-
-  interval->start = start;
-  interval->end = end;
 }
 
 /* Builds the intervals for each value in the SSA representation
@@ -161,6 +128,10 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
+  // NOTE: this logic relies on MOV <PARAM> instructions existing for all params
+  // AND being in order of params
+  size_t arg_regs = 0;
+
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -168,6 +139,17 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         struct interval *interval = &data.intervals[op->id];
+
+        if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
+          op->reg =
+              (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = arg_regs++};
+        } else {
+          // // reset registers unless flags because flags is never allocated
+          // if (op->reg != REG_FLAGS && !(op->flags &
+          // IR_OP_FLAG_DONT_GIVE_SLOT)) {
+          //   op->reg = NO_REG;
+          // }
+        }
 
         debug_assert(op->id < irb->op_count,
                      "out of range! (id %zu with opcount %zu)", op->id,
@@ -210,8 +192,44 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
-          UNUSED_ARG(bb_ranges);
-          // propogate_phi_liveness(irb, &data, bb_ranges, op);
+          struct interval *interval = &data.intervals[op->id];
+          size_t start = interval->start;
+          size_t end = interval->end;
+
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *dependent = op->phi.values[i];
+            struct interval *dependent_interval =
+                &data.intervals[dependent->id];
+
+            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count +
+                             dependent->stmt->basicblock->id;
+
+            debug_assert(bb_ranges[path_id], "bb_len was 0");
+            size_t dependent_path_end = bb_ranges[path_id];
+
+            start = MIN(start, dependent_interval->start);
+            end = MAX(end, dependent_path_end);
+          }
+
+          interval->start = start;
+          interval->end = end;
+
+          for (size_t i = 0; i < op->phi.num_values; i++) {
+            struct ir_op *dependent = op->phi.values[i];
+            struct interval *dependent_interval =
+                &data.intervals[dependent->id];
+
+            // a phi can be dependent on itself, and in that case we still need
+            // it to be assigned a register
+            if (dependent->id != op->id) {
+              dependent->flags |= IR_OP_FLAG_DONT_GIVE_SLOT;
+            }
+
+            dependent_interval->start =
+                MIN(dependent_interval->start, interval->start);
+            dependent_interval->end =
+                MAX(dependent_interval->end, interval->end);
+          }
         }
 
         op = op->succ;
@@ -267,6 +285,36 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
   } else {
     fslogsl(file, "no associated interval | ");
+  }
+
+  switch (op->reg.ty) {
+  case IR_REG_TY_NONE:
+    fslogsl(file, "    (UNASSIGNED)");
+    break;
+  case IR_REG_TY_SPILLED:
+    if (op->lcl) {
+      fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl->id);
+    } else {
+      fslogsl(file, "    (SPILLED), LCL=(UNASSIGNED)");
+    }
+    break;
+  case IR_REG_TY_FLAGS:
+    fslogsl(file, "    (FLAGS)");
+    break;
+  case IR_REG_TY_INTEGRAL:
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+      fslogsl(file, "    (DONT)");
+    } else {
+      fslogsl(file, "    register=R%zu", op->reg.idx);
+    }
+    break;
+  case IR_REG_TY_FP:
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+      fslogsl(file, "    (DONT)");
+    } else {
+      fslogsl(file, "    register=F%zu", op->reg.idx);
+    }
+    break;
   }
 
   if (interval && interval->op) {
