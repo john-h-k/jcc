@@ -12,6 +12,7 @@
 #include "lex.h"
 #include "log.h"
 #include "lsra.h"
+#include "lower.h"
 #include "macos/mach-o.h"
 #include "parse.h"
 #include "preproc.h"
@@ -124,6 +125,8 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     BEGIN_STAGE("LOWERING");
+
+    lower(ir);
 
     if (target->lower) {
       target->lower(ir);

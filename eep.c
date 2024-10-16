@@ -12,7 +12,6 @@ const struct target EEP_TARGET =  {  (struct reg_info){
                                           .num_volatile = 0, .num_nonvolatile = 0, .num_reserved = 0},
                                   },
                                   EEP_FUNCTION_ALIGNMENT,
-                                  EEP_OP_SIZE,
                                   NULL,
                                   eep_lower,
                                   eep_codegen,

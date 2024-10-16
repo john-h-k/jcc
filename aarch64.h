@@ -11,7 +11,6 @@
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 #define AARCH64_STACK_ALIGNMENT (16)
-#define AARCH64_OP_SIZE (4)
 
 extern const struct target AARCH64_TARGET;
 

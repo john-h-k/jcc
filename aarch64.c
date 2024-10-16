@@ -14,7 +14,6 @@ const struct target AARCH64_TARGET = {
             .num_volatile = 24, .num_nonvolatile = 8, .num_reserved = 0},
     },
     AARCH64_FUNCTION_ALIGNMENT,
-    AARCH64_OP_SIZE,
     aarch64_mangle,
     aarch64_lower,
     aarch64_codegen,

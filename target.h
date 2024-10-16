@@ -84,7 +84,7 @@ struct build_object_args {
 };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
-typedef void (*lower)(struct ir_unit *unit);
+typedef void (*target_lower)(struct ir_unit *unit);
 typedef struct codegen_unit *(*codegen)(struct ir_unit *unit);
 typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
@@ -95,9 +95,8 @@ typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
 struct target {
   struct reg_info reg_info;
   size_t function_alignment;
-  size_t op_size;
   mangle mangle;
-  lower lower;
+  target_lower lower;
   codegen codegen;
   emit_function emit_function;
   build_object build_object;

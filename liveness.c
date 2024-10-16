@@ -222,7 +222,7 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
             // a phi can be dependent on itself, and in that case we still need
             // it to be assigned a register
             if (dependent->id != op->id) {
-              dependent->flags |= IR_OP_FLAG_DONT_GIVE_SLOT;
+              dependent->flags |= IR_OP_FLAG_DONT_GIVE_REG;
             }
 
             dependent_interval->start =
@@ -302,14 +302,14 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     fslogsl(file, "    (FLAGS)");
     break;
   case IR_REG_TY_INTEGRAL:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
       fslogsl(file, "    (DONT)");
     } else {
       fslogsl(file, "    register=R%zu", op->reg.idx);
     }
     break;
   case IR_REG_TY_FP:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
       fslogsl(file, "    (DONT)");
     } else {
       fslogsl(file, "    register=F%zu", op->reg.idx);

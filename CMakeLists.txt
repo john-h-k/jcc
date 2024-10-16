@@ -20,6 +20,7 @@ set(
   preproc.c
   program.c
   link.c
+  lower.c
   liveness.c
   disasm.c
   codegen.c
@@ -41,6 +42,12 @@ set(
   aarch64/lower.c
   aarch64/emit.c
   aarch64/emitter.c
+
+  # riscv.c
+  # riscv/codegen.c
+  # riscv/lower.c
+  # riscv/emit.c
+  # riscv/emitter.c
 
   # eep.c
   # eep/codegen.c

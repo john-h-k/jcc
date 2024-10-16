@@ -208,8 +208,6 @@ struct codegen_state {
 
   size_t max_variadic_args;
 
-  struct vector *strings;
-  struct vector *datas;
 };
 
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
@@ -1742,9 +1740,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
                                     .ir = ir_func,
                                     .max_variadic_args = max_variadic_args,
                                     .total_call_saves_size =
-                                        total_call_saves_size,
-                                    .strings = vector_create(sizeof(char *)),
-                                    .datas = vector_create(sizeof(char *))};
+                                        total_call_saves_size};
 
       insert_prologue(&state);
 

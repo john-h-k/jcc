@@ -107,30 +107,6 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
-static void lower_store_glb(struct ir_builder *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func, &op->var_ty);
-
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
-  addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
-
-  struct ir_op *value = op->store_glb.value;
-
-  op->ty = IR_OP_TY_STORE_ADDR;
-  op->store_addr = (struct ir_op_store_addr){.addr = addr, .value = value};
-}
-
-static void lower_load_glb(struct ir_builder *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func, &op->var_ty);
-
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
-  addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
-
-  op->ty = IR_OP_TY_LOAD_ADDR;
-  op->load_addr = (struct ir_op_load_addr){.addr = addr};
-}
-
 // actually more than this but we don't support that yet
 #define MAX_REG_SIZE (8)
 
@@ -179,7 +155,6 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 
   struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func);
-  struct ir_op_var_ty pointer_copy_ty = var_ty_make_pointer(func, &copy_ty);
 
   struct ir_lcl *src_lcl = op->load_lcl.lcl;
   struct ir_lcl *dest_lcl = nxt_store->lcl;
@@ -188,12 +163,12 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   struct ir_op *base_dest_addr = nxt_store;
 
   base_src_addr->ty = IR_OP_TY_ADDR;
-  base_src_addr->var_ty = pointer_copy_ty;
+  base_src_addr->var_ty = copy_ty;
   base_src_addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = src_lcl};
 
   base_dest_addr->ty = IR_OP_TY_ADDR;
-  base_dest_addr->var_ty = pointer_copy_ty;
+  base_dest_addr->var_ty = copy_ty;
   base_dest_addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = dest_lcl};
 
@@ -207,7 +182,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     make_pointer_constant(func, offset_cnst, offset);
 
     struct ir_op *src_addr = insert_after_ir_op(
-        func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+        func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
@@ -216,7 +191,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
     struct ir_op *dest_addr =
-        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
     dest_addr->binary_op =
         (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
                                  .lhs = base_dest_addr,
@@ -243,7 +218,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     make_pointer_constant(func, offset_cnst, offset);
 
     struct ir_op *src_addr = insert_after_ir_op(
-        func, offset_cnst, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+        func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
@@ -252,7 +227,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
     struct ir_op *dest_addr =
-        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, pointer_copy_ty);
+        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
     dest_addr->binary_op =
         (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
                                  .lhs = base_dest_addr,
@@ -336,6 +311,8 @@ void aarch64_lower(struct ir_unit *unit) {
               bug("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
+            case IR_OP_TY_STORE_GLB:
+            case IR_OP_TY_LOAD_GLB:
             case IR_OP_TY_PHI:
               break;
             case IR_OP_TY_CNST: {
@@ -346,12 +323,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
               break;
             }
-            case IR_OP_TY_STORE_GLB:
-              lower_store_glb(func, op);
-              break;
-            case IR_OP_TY_LOAD_GLB:
-              lower_load_glb(func, op);
-              break;
             case IR_OP_TY_STORE_LCL:
               break;
             case IR_OP_TY_LOAD_LCL:
@@ -430,29 +401,6 @@ void aarch64_lower(struct ir_unit *unit) {
                 lower_comparison(func, op);
               }
               break;
-            }
-
-            op = op->succ;
-          }
-
-          stmt = stmt->succ;
-        }
-
-        basicblock = basicblock->succ;
-      }
-
-      // Final step: turn all TY_POINTER into TY_I64 as the information is no
-      // longer needed
-      basicblock = func->first;
-      while (basicblock) {
-        struct ir_stmt *stmt = basicblock->first;
-
-        while (stmt) {
-          struct ir_op *op = stmt->first;
-
-          while (op) {
-            if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-              op->var_ty = var_ty_for_pointer_size(func);
             }
 
             op = op->succ;
