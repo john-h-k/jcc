@@ -1424,27 +1424,6 @@ build_ir_for_compoundstmt(struct ir_builder *irb,
   return basicblock;
 }
 
-void make_basicblock_split(struct ir_builder *irb,
-                           struct ir_basicblock *basicblock,
-                           struct ir_basicblock *true_target,
-                           struct ir_basicblock *false_target) {
-  basicblock->ty = IR_BASICBLOCK_TY_SPLIT;
-  basicblock->split.true_target = true_target;
-  basicblock->split.false_target = false_target;
-
-  add_pred_to_basicblock(irb, true_target, basicblock);
-  add_pred_to_basicblock(irb, false_target, basicblock);
-}
-
-void make_basicblock_merge(struct ir_builder *irb,
-                           struct ir_basicblock *basicblock,
-                           struct ir_basicblock *target) {
-  basicblock->ty = IR_BASICBLOCK_TY_MERGE;
-  basicblock->merge.target = target;
-
-  add_pred_to_basicblock(irb, target, basicblock);
-}
-
 struct ir_basicblock *build_ir_for_if(struct ir_builder *irb,
                                       struct ir_basicblock *basicblock,
                                       struct ast_ifstmt *if_stmt) {

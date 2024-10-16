@@ -12,11 +12,6 @@
 
 #include <limits.h>
 
-enum register_alloc_mode {
-  REGISTER_ALLOC_MODE_REGS,
-  REGISTER_ALLOC_MODE_LCLS,
-};
-
 struct register_alloc_info {
   struct reg_info integral_reg_info;
   struct reg_info float_reg_info;
@@ -65,7 +60,7 @@ void expire_old_intervals(struct interval *intervals,
 
     num_expired_intervals++;
 
-    if (interval->op->reg.ty != IR_REG_TY_SPILLED) {
+    if (interval->op->reg.ty == IR_REG_TY_INTEGRAL || interval->op->reg.ty == IR_REG_TY_FP) {
       // intervals can contain ops that were spilled for other reasons
       // but are still alive
       // so only free a reg if this interval actually *has* a reg
@@ -244,7 +239,7 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) || !op_produces_value(interval->op->ty) || !needs_reg(interval->op)) {
+        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) || !op_produces_value(interval->op->ty) || !needs_reg(interval->op)) {
       continue;
     }
 
@@ -327,13 +322,13 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
         struct ir_op *op = stmt->first;
         while (op) {
           if (op->ty == IR_OP_TY_PHI) {
-            if (op->flags & IR_OP_FLAG_DONT_GIVE_SLOT) {
+            if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
               unreg_left = true;
             } else {
               for (size_t i = 0; i < op->phi.num_values; i++) {
                 struct ir_op *value = op->phi.values[i];
                 value->reg = op->reg;
-                value->flags &= ~IR_OP_FLAG_DONT_GIVE_SLOT;
+                value->flags &= ~IR_OP_FLAG_DONT_GIVE_REG;
               }
             }
           }

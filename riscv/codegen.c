@@ -24,6 +24,9 @@ struct codegen_state {
   size_t total_call_saves_size;
 
   size_t max_variadic_args;
+
+  struct vector *strings;
+  struct vector *datas;
 };
 
 
