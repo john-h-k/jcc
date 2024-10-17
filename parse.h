@@ -82,7 +82,7 @@ struct ast_ty_aggregate {
 struct ast_ty_func {
   struct ast_tyref *ret_var_ty;
   struct ast_tyref *param_var_tys;
-  struct token *param_identifiers;
+  struct token **param_identifiers;
   size_t num_params;
 };
 
@@ -169,7 +169,7 @@ struct ast_var {
 
 struct ast_param {
   struct ast_tyref var_ty;
-  struct ast_var var;
+  struct ast_var *var;
 };
 
 struct ast_paramlist {
