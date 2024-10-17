@@ -450,34 +450,7 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
 
   if (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
       rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-    switch (ty) {
-    case AST_BINARY_OP_TY_ADD: {
-      struct ir_op_var_ty pointer_ty = var_ty_for_ast_tyref(irb, ty_ref);
-
-      // need to multiply rhs by the element size
-      struct ir_var_ty_info el_info =
-          var_ty_info(irb->unit, pointer_ty.pointer.underlying);
-
-      struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
-      make_pointer_constant(irb, el_size_op, el_info.size);
-
-      struct ir_op *rhs_mul = alloc_ir_op(irb, stmt);
-      rhs_mul->ty = IR_OP_TY_BINARY_OP;
-      rhs_mul->var_ty = var_ty;
-      rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
-      rhs_mul->binary_op.lhs = el_size_op;
-      rhs_mul->binary_op.rhs = rhs;
-
-      struct ir_op *op = alloc_ir_op(irb, stmt);
-      op->ty = IR_OP_TY_BINARY_OP;
-      op->var_ty = var_ty;
-      op->binary_op.ty = IR_OP_BINARY_OP_TY_ADD;
-      op->binary_op.lhs = lhs;
-      op->binary_op.rhs = rhs_mul;
-
-      return op;
-    }
-    case AST_BINARY_OP_TY_SUB: {
+    if (ty_ref->ty == AST_TYREF_TY_WELL_KNOWN) {
       struct ir_op_var_ty *pointer_ty =
           lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty
                                                     : &rhs->var_ty;
@@ -504,9 +477,33 @@ struct ir_op *alloc_binaryop(struct ir_builder *irb, struct ir_stmt *stmt,
       op->binary_op.rhs = el_size_op;
 
       return op;
-    }
-    default:
-      break;
+    } else {
+
+      struct ir_op_var_ty pointer_ty = var_ty_for_ast_tyref(irb, ty_ref);
+
+      // need to multiply rhs by the element size
+      struct ir_var_ty_info el_info =
+          var_ty_info(irb->unit, pointer_ty.pointer.underlying);
+
+      struct ir_op *el_size_op = alloc_ir_op(irb, stmt);
+      make_pointer_constant(irb, el_size_op, el_info.size);
+
+      struct ir_op *rhs_mul = alloc_ir_op(irb, stmt);
+      rhs_mul->ty = IR_OP_TY_BINARY_OP;
+      rhs_mul->var_ty = var_ty;
+      rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+      rhs_mul->binary_op.lhs = el_size_op;
+      rhs_mul->binary_op.rhs = rhs;
+
+      struct ir_op *op = alloc_ir_op(irb, stmt);
+      op->ty = IR_OP_TY_BINARY_OP;
+      op->var_ty = var_ty;
+      op->binary_op.ty = ty == AST_BINARY_OP_TY_ADD ? IR_OP_BINARY_OP_TY_ADD
+                                                    : IR_OP_BINARY_OP_TY_SUB;
+      op->binary_op.lhs = lhs;
+      op->binary_op.rhs = rhs_mul;
+
+      return op;
     }
   }
 
@@ -714,6 +711,9 @@ struct ir_op *build_ir_for_addressof(struct ir_builder *irb,
   return build_ir_for_addressof_var(irb, stmt, &expr->var);
 }
 
+struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
+                                struct ast_assg *assg);
+
 struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
                                    struct ast_unary_op *unary_op) {
   if (unary_op->ty == AST_UNARY_OP_TY_ADDRESSOF) {
@@ -740,19 +740,51 @@ struct ir_op *build_ir_for_unaryop(struct ir_builder *irb, struct ir_stmt *stmt,
     enum ast_binary_op_ty binary_op_ty =
         unary_op->ty == AST_UNARY_OP_TY_PREFIX_INC ? AST_BINARY_OP_TY_ADD
                                                    : AST_BINARY_OP_TY_SUB;
-    struct ir_op *one = alloc_ir_op(irb, stmt);
-    one->ty = IR_OP_TY_CNST;
-    one->var_ty = var_ty;
-    one->cnst.ty = IR_OP_CNST_TY_INT;
-    one->cnst.int_value = 1;
+    struct ast_tyref cnst_ty = (struct ast_tyref){
+        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_INT};
 
-    return alloc_binaryop(irb, stmt, &unary_op->var_ty, binary_op_ty, expr,
-                          one);
+    struct ast_expr one = {
+        .ty = AST_EXPR_TY_CNST,
+        .var_ty = cnst_ty,
+        .cnst = (struct ast_cnst){.cnst_ty = cnst_ty, .int_value = 1}};
+
+    struct ast_assg ast_assg = {
+        .ty = AST_ASSG_TY_COMPOUNDASSG,
+        .var_ty = unary_op->var_ty,
+        .expr = &one,
+        .assignee = unary_op->expr,
+        .compound_assg = (struct ast_assg_compound_assg){
+            .binary_op_ty = binary_op_ty,
+            .intermediate_var_ty = unary_op->var_ty}};
+
+    return build_ir_for_assg(irb, stmt, &ast_assg);
   }
   case AST_UNARY_OP_TY_POSTFIX_INC:
-  case AST_UNARY_OP_TY_POSTFIX_DEC:
-    todo("postfix inc/dec");
-    break;
+  case AST_UNARY_OP_TY_POSTFIX_DEC: {
+    enum ast_binary_op_ty binary_op_ty =
+        unary_op->ty == AST_UNARY_OP_TY_POSTFIX_INC ? AST_BINARY_OP_TY_ADD
+                                                    : AST_BINARY_OP_TY_SUB;
+    struct ast_tyref cnst_ty = (struct ast_tyref){
+        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_INT};
+
+    struct ast_expr one = {
+        .ty = AST_EXPR_TY_CNST,
+        .var_ty = cnst_ty,
+        .cnst = (struct ast_cnst){.cnst_ty = cnst_ty, .int_value = 1}};
+
+    struct ast_assg ast_assg = {
+        .ty = AST_ASSG_TY_COMPOUNDASSG,
+        .var_ty = unary_op->var_ty,
+        .expr = &one,
+        .assignee = unary_op->expr,
+        .compound_assg = (struct ast_assg_compound_assg){
+            .binary_op_ty = binary_op_ty,
+            .intermediate_var_ty = unary_op->var_ty}};
+
+    build_ir_for_assg(irb, stmt, &ast_assg);
+
+    return expr;
+  }
   case AST_UNARY_OP_TY_PLUS:
     // no work needed, build_expr will handle type conversion
     return expr;
@@ -865,8 +897,7 @@ struct ir_op *build_ir_for_cnst(struct ir_builder *irb, struct ir_stmt *stmt,
     glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
     *glb->var = (struct ir_var){
         .ty = IR_VAR_TY_STRING_LITERAL,
-        .value = {.ty = IR_VAR_VALUE_TY_STR,
-                                             .str_value = cnst->str_value}};
+        .value = {.ty = IR_VAR_VALUE_TY_STR, .str_value = cnst->str_value}};
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -899,9 +930,6 @@ struct ir_op *build_ir_for_compoundexpr(struct ir_builder *irb,
 
   return op;
 }
-
-struct ir_op *build_ir_for_assg(struct ir_builder *irb, struct ir_stmt *stmt,
-                                struct ast_assg *assg);
 
 struct ir_op *build_ir_for_var(struct ir_builder *irb, struct ir_stmt *stmt,
                                struct ast_var *var) {
