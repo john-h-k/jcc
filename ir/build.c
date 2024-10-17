@@ -2221,7 +2221,7 @@ struct ir_builder *build_ir_for_function(struct ir_unit *unit,
   // IR_OP_FLAG_PARAM flag
   for (size_t i = 0; i < def->var_ty.func.num_params; i++) {
     const struct token *param_identifier =
-        &def->var_ty.func.param_identifiers[i];
+        def->var_ty.func.param_identifiers[i];
     const struct ast_tyref *param_var_ty = &def->var_ty.func.param_var_tys[i];
 
     // TODO: the whole decl code needs reworking

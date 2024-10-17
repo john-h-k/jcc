@@ -824,11 +824,6 @@ bool parse_abstract_declaration(struct parser *parser,
                                 struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
-  if (!parse_type_specifier(parser, ty_ref, NULL)) {
-    backtrack(parser->lexer, pos);
-    return true;
-  }
-
   if (!parse_abstract_declarator(parser, ty_ref)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -2323,8 +2318,9 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
     param->var_ty = (struct ast_tyref){
         .ty = AST_TYREF_TY_VARIADIC,
     };
-    param->var = (struct ast_var){.scope = cur_scope(&parser->var_table),
-                                  .identifier = token};
+    param->var = arena_alloc(parser->arena, sizeof(*param->var));
+    *param->var = (struct ast_var){.scope = cur_scope(&parser->var_table),
+                                   .identifier = token};
 
     return true;
   }
@@ -2338,18 +2334,24 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
     return false;
   }
 
-  if (!parse_declarator(parser, &identifier, &var_ty)) {
-    backtrack(parser->lexer, pos);
-    return false;
+  if (parse_declarator(parser, &identifier, &var_ty)) {
+    consume_token(parser->lexer, identifier);
+
+    param->var_ty = var_ty;
+    param->var = arena_alloc(parser->arena, sizeof(*param->var));
+    param->var->scope = cur_scope(&parser->var_table);
+    param->var->identifier = identifier;
+
+    return true;
+  } else if (parse_abstract_declaration(parser, &var_ty)) {
+    param->var_ty = var_ty;
+    param->var = NULL;
+
+    return true;
   }
 
-  consume_token(parser->lexer, identifier);
-
-  param->var_ty = var_ty;
-  param->var.scope = cur_scope(&parser->var_table);
-  param->var.identifier = identifier;
-
-  return true;
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
 bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
@@ -2589,14 +2591,18 @@ bool parse_abstract_direct_declarator_modifier(struct parser *parser,
     *ty_ref->func.ret_var_ty = *specifier;
     ty_ref->func.num_params = param_list.num_params;
     ty_ref->func.param_identifiers =
-        arena_alloc(parser->arena, sizeof(*ty_ref->func.param_identifiers) *
+        arena_alloc(parser->arena, sizeof(struct token *) *
                                        ty_ref->func.num_params);
     ty_ref->func.param_var_tys =
         arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
                                        ty_ref->func.num_params);
 
     for (size_t i = 0; i < ty_ref->func.num_params; i++) {
-      ty_ref->func.param_identifiers[i] = param_list.params[i].var.identifier;
+      if (param_list.params[i].var) {
+        ty_ref->func.param_identifiers[i] = &param_list.params[i].var->identifier;
+      } else {
+        ty_ref->func.param_identifiers[i] = NULL;
+      }
       ty_ref->func.param_var_tys[i] = param_list.params[i].var_ty;
     }
 
@@ -2666,14 +2672,18 @@ bool parse_direct_declarator_modifier(struct parser *parser,
     ty_ref->func.ret_var_ty = underlying;
     ty_ref->func.num_params = param_list.num_params;
     ty_ref->func.param_identifiers =
-        arena_alloc(parser->arena, sizeof(*ty_ref->func.param_identifiers) *
+        arena_alloc(parser->arena, sizeof(struct token *) *
                                        ty_ref->func.num_params);
     ty_ref->func.param_var_tys =
         arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
                                        ty_ref->func.num_params);
 
     for (size_t i = 0; i < ty_ref->func.num_params; i++) {
-      ty_ref->func.param_identifiers[i] = param_list.params[i].var.identifier;
+      if (param_list.params[i].var) {
+        ty_ref->func.param_identifiers[i] = &param_list.params[i].var->identifier;
+      } else {
+        ty_ref->func.param_identifiers[i] = NULL;
+      }
       ty_ref->func.param_var_tys[i] = param_list.params[i].var_ty;
     }
 
@@ -2784,7 +2794,11 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   // need to add the params to the locals table
   for (size_t i = 0; i < func_ty.func.num_params; i++) {
     const struct ast_tyref *param = &func_ty.func.param_var_tys[i];
-    struct token *identifier = &func_ty.func.param_identifiers[i];
+    struct token *identifier = func_ty.func.param_identifiers[i];
+
+    if (!identifier) {
+      continue;
+    }
 
     struct ast_var var;
     var.identifier = *identifier;
@@ -3081,7 +3095,8 @@ struct ast_printstate {
 DEBUG_FUNC_ENUM(storage_class_specifier_flags, storage_class_specifier_flags) {
   UNUSED_ARG(state);
 
-  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
+  if (*storage_class_specifier_flags &
+      AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
     AST_PRINTZ("TYPEDEF");
   }
 
@@ -3089,15 +3104,18 @@ DEBUG_FUNC_ENUM(storage_class_specifier_flags, storage_class_specifier_flags) {
     AST_PRINTZ("AUTO");
   }
 
-  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) {
+  if (*storage_class_specifier_flags &
+      AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) {
     AST_PRINTZ("EXTERN");
   }
 
-  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER) {
+  if (*storage_class_specifier_flags &
+      AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER) {
     AST_PRINTZ("REGISTER");
   }
 
-  if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC) {
+  if (*storage_class_specifier_flags &
+      AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC) {
     AST_PRINTZ("STATIC");
   }
 }
@@ -3620,7 +3638,8 @@ DEBUG_FUNC(decllist, decl_list) {
   AST_PRINTZ("DECLARATION");
   INDENT();
 
-  DEBUG_CALL(storage_class_specifier_flags, &decl_list->storage_class_specifiers);
+  DEBUG_CALL(storage_class_specifier_flags,
+             &decl_list->storage_class_specifiers);
 
   for (size_t i = 0; i < decl_list->num_decls; i++) {
     DEBUG_CALL(decl, &decl_list->decls[i]);
@@ -3819,8 +3838,8 @@ DEBUG_FUNC(param, param) {
   AST_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(tyref, &param->var_ty);
   AST_PRINT(" '%s' SCOPE %d",
-            associated_text(state->parser->lexer, &param->var.identifier),
-            param->var.scope);
+            associated_text(state->parser->lexer, &param->var->identifier),
+            param->var->scope);
 }
 
 DEBUG_FUNC(paramlist, param_list) {
