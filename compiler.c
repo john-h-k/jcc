@@ -42,7 +42,7 @@ enum compiler_create_result create_compiler(struct program *program,
   // preproc is kept local as it is seperate to other stages
   struct preproc *preproc;
 
-  if (preproc_create(program, &preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
+  if (preproc_create(program, args->num_include_paths, args->include_paths, &preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }

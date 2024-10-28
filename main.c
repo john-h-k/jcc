@@ -199,12 +199,11 @@ enum parse_args_result parse_args(int argc, char **argv,
 
   // default to native arch
   args->target_arch = COMPILE_TARGET_ARCH_NATIVE;
-  args->log_flags = COMPILE_LOG_FLAGS_NONE;
-  args->output = NULL;
 
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
 
+  struct vector *include_path_vec = vector_create(sizeof(*argv));
   struct vector *sources_vec = vector_create(sizeof(*argv));
   for (int i = 1; i < argc; i++) {
     const char *arg = argv[i];
@@ -219,6 +218,14 @@ enum parse_args_result parse_args(int argc, char **argv,
       if (!parse_log_flag(log, &args->log_flags)) {
         return PARSE_ARGS_RESULT_ERROR;
       }
+
+      continue;
+    }
+
+    const char *include_path = try_get_arg(arg, "-I");
+    GET_ARGUMENT(include_path);
+    if (include_path) {
+      vector_push_back(include_path_vec, include_path);
 
       continue;
     }
@@ -249,6 +256,10 @@ enum parse_args_result parse_args(int argc, char **argv,
     vector_push_back(sources_vec, &arg);
   }
 
+  args->num_include_paths = vector_length(include_path_vec);
+  args->include_paths = nonnull_malloc(vector_byte_size(include_path_vec));
+  vector_copy_to(include_path_vec, args->include_paths);
+
   *num_sources = vector_length(sources_vec);
 
   if (*num_sources == 0) {
@@ -257,7 +268,6 @@ enum parse_args_result parse_args(int argc, char **argv,
   }
 
   *sources = nonnull_malloc(vector_byte_size(sources_vec));
-
   vector_copy_to(sources_vec, *sources);
 
   return PARSE_ARGS_RESULT_SUCCESS;

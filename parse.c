@@ -422,6 +422,22 @@ struct ast_tyref tyref_make_pointer(struct parser *parser,
                                 (struct ast_ty_pointer){.underlying = copied}};
 }
 
+struct ast_tyref tyref_get_defined(struct parser *parser,
+                                   const struct ast_tyref *ty_ref) {
+  UNUSED_ARG(parser);
+
+  debug_assert(ty_ref->ty == AST_TYREF_TY_TAGGED, "non tagged");
+
+  if (ty_ref->tagged.underlying) {
+    return *ty_ref->tagged.underlying;
+  }
+
+  struct var_table_entry *entry =
+      get_entry(&parser->ty_table, ty_ref->tagged.name);
+  invariant_assert(entry, "expected aggregate to be defined");
+  return *entry->value;
+}
+
 struct ast_tyref tyref_get_underlying(struct parser *parser,
                                       const struct ast_tyref *ty_ref) {
   UNUSED_ARG(parser);
@@ -431,12 +447,6 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
     return *ty_ref->pointer.underlying;
   case AST_TYREF_TY_ARRAY:
     return *ty_ref->array.element;
-  case AST_TYREF_TY_TAGGED: {
-    struct var_table_entry *entry =
-        get_entry(&parser->ty_table, ty_ref->tagged.name);
-    invariant_assert(entry, "expected aggregate to be defined");
-    return *entry->value;
-  }
   default:
     bug("non pointer/array/tagged passed (type %d)", ty_ref->ty);
   }
@@ -556,6 +566,16 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
   }
 
   return result_ty;
+}
+
+void parser_push_scope(struct parser *parser) {
+  push_scope(&parser->var_table);
+  push_scope(&parser->ty_table);
+}
+
+void parser_pop_scope(struct parser *parser) {
+  pop_scope(&parser->var_table);
+  pop_scope(&parser->ty_table);
 }
 
 bool parse_token(struct parser *parser, enum lex_token_ty ty) {
@@ -1171,6 +1191,30 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
+
+void ensure_ty_defined(struct parser *parser, struct ast_tyref *ty_ref) {
+  struct ast_tyref underlying_ty = tyref_get_underlying(parser, ty_ref);
+
+  if (underlying_ty.ty == AST_TYREF_TY_TAGGED && underlying_ty.tagged.underlying == NULL) {
+    underlying_ty = tyref_get_defined(parser, &underlying_ty);
+
+    struct ast_tyref *tagged;
+    switch (ty_ref->ty) {
+      case AST_TYREF_TY_POINTER:
+        tagged = ty_ref->pointer.underlying;
+        break;
+      case AST_TYREF_TY_ARRAY:
+        tagged = ty_ref->array.element;
+        break;
+      default:
+        unreachable("doesn't make sense");
+    }
+
+    debug_assert(tagged->ty == AST_TYREF_TY_TAGGED, "should be TAGGED");
+    tagged->tagged.underlying = arena_alloc(parser->arena, sizeof(*tagged->tagged.underlying));
+    *tagged->tagged.underlying = underlying_ty;
+  }
+}
 // parses precedence level 0:
 // vars
 bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
@@ -1220,10 +1264,12 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
 
   // incomplete type, look it up now it is defined
   if (var_ty->ty == AST_TYREF_TY_TAGGED) {
-    base_ty = tyref_get_underlying(parser, var_ty);
+    base_ty = tyref_get_defined(parser, var_ty);
   } else {
     base_ty = *var_ty;
   }
+
+  *var_ty = base_ty;
 
   const char *member_name = identifier_str(parser, member);
 
@@ -1235,14 +1281,16 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
     }
   }
 
-  todo("member does not exist");
+  todo("member '%s' does not exist", member_name);
 }
 
 struct ast_tyref resolve_pointer_access_ty(struct parser *parser,
                                            const struct ast_tyref *var_ty,
                                            const struct token *member) {
+
   struct ast_tyref underlying_var_ty = tyref_get_underlying(parser, var_ty);
-  return resolve_member_access_ty(parser, &underlying_var_ty, member);
+  struct ast_tyref base_ty = underlying_var_ty.ty == AST_TYREF_TY_TAGGED ? tyref_get_defined(parser, &underlying_var_ty) : underlying_var_ty;
+  return resolve_member_access_ty(parser, &base_ty, member);
 }
 
 struct ast_tyref resolve_array_access_ty(struct parser *parser,
@@ -1338,6 +1386,8 @@ bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
   }
 
   consume_token(parser->lexer, token);
+
+  ensure_ty_defined(parser, &sub_expr->var_ty);
 
   struct ast_tyref var_ty =
       resolve_pointer_access_ty(parser, &sub_expr->var_ty, &token);
@@ -1493,6 +1543,10 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   if (!parse_atom_3(parser, sub_expr)) {
     backtrack(parser->lexer, pos);
     return false;
+  }
+
+  if (unary_prefix_ty == AST_UNARY_OP_TY_INDIRECTION) {
+    ensure_ty_defined(parser, &sub_expr->var_ty);
   }
 
   struct ast_tyref var_ty =
@@ -1857,14 +1911,12 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
     return true;
   }
 
-  
   if (parse_token(parser, LEX_TOKEN_TY_KW_BREAK) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_BREAK;
     return true;
   }
 
-  
   if (parse_token(parser, LEX_TOKEN_TY_KW_CONTINUE) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_CONTINUE;
@@ -2300,7 +2352,7 @@ bool parse_compoundstmt(struct parser *parser,
     return false;
   }
 
-  push_scope(&parser->var_table);
+  parser_push_scope(parser);
 
   struct vector *stmts = vector_create(sizeof(struct ast_stmt));
   {
@@ -2315,7 +2367,7 @@ bool parse_compoundstmt(struct parser *parser,
   vector_copy_to(stmts, compound_stmt->stmts);
   vector_free(&stmts);
 
-  pop_scope(&parser->var_table);
+  parser_pop_scope(parser);
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
     backtrack(parser->lexer, pos);
@@ -2376,7 +2428,7 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
 bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   struct text_pos pos = get_position(parser->lexer);
 
-  push_scope(&parser->var_table);
+  parser_push_scope(parser);
 
   // TODO: merge with parse_compoundexpr?
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
@@ -2394,7 +2446,7 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
       do {
         if (!parse_param(parser, &param)) {
           backtrack(parser->lexer, pos);
-          pop_scope(&parser->var_table);
+          parser_pop_scope(parser);
           return false;
         }
 
@@ -2415,13 +2467,13 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
     }
 
     if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
-      pop_scope(&parser->var_table);
+      parser_pop_scope(parser);
       return true;
     }
   }
 
   backtrack(parser->lexer, pos);
-  pop_scope(&parser->var_table);
+  parser_pop_scope(parser);
   return false;
 }
 
@@ -2520,8 +2572,7 @@ bool parse_type_specifier(
                              .aggregate = aggregate};
 
       if (name) {
-        struct var_table_entry *entry =
-            get_or_create_entry(&parser->ty_table, name);
+        struct var_table_entry *entry = create_entry(&parser->ty_table, name);
         if (!entry->value) {
           entry->value = arena_alloc(parser->arena, sizeof(struct ast_tyref));
         }
@@ -2532,6 +2583,9 @@ bool parse_type_specifier(
     } else {
       struct ast_ty_tagged tagged;
       tagged.name = name;
+
+      struct var_table_entry *entry = get_entry(&parser->ty_table, name);
+      tagged.underlying = entry ? entry->value : NULL;
 
       *ty_ref =
           (struct ast_tyref){.ty = AST_TYREF_TY_TAGGED,
@@ -2609,16 +2663,16 @@ bool parse_abstract_direct_declarator_modifier(struct parser *parser,
         arena_alloc(parser->arena, sizeof(*ty_ref->func.ret_var_ty));
     *ty_ref->func.ret_var_ty = *specifier;
     ty_ref->func.num_params = param_list.num_params;
-    ty_ref->func.param_identifiers =
-        arena_alloc(parser->arena, sizeof(struct token *) *
-                                       ty_ref->func.num_params);
+    ty_ref->func.param_identifiers = arena_alloc(
+        parser->arena, sizeof(struct token *) * ty_ref->func.num_params);
     ty_ref->func.param_var_tys =
         arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
                                        ty_ref->func.num_params);
 
     for (size_t i = 0; i < ty_ref->func.num_params; i++) {
       if (param_list.params[i].var) {
-        ty_ref->func.param_identifiers[i] = &param_list.params[i].var->identifier;
+        ty_ref->func.param_identifiers[i] =
+            &param_list.params[i].var->identifier;
       } else {
         ty_ref->func.param_identifiers[i] = NULL;
       }
@@ -2690,16 +2744,16 @@ bool parse_direct_declarator_modifier(struct parser *parser,
         arena_alloc(parser->arena, sizeof(*ty_ref->func.ret_var_ty));
     ty_ref->func.ret_var_ty = underlying;
     ty_ref->func.num_params = param_list.num_params;
-    ty_ref->func.param_identifiers =
-        arena_alloc(parser->arena, sizeof(struct token *) *
-                                       ty_ref->func.num_params);
+    ty_ref->func.param_identifiers = arena_alloc(
+        parser->arena, sizeof(struct token *) * ty_ref->func.num_params);
     ty_ref->func.param_var_tys =
         arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
                                        ty_ref->func.num_params);
 
     for (size_t i = 0; i < ty_ref->func.num_params; i++) {
       if (param_list.params[i].var) {
-        ty_ref->func.param_identifiers[i] = &param_list.params[i].var->identifier;
+        ty_ref->func.param_identifiers[i] =
+            &param_list.params[i].var->identifier;
       } else {
         ty_ref->func.param_identifiers[i] = NULL;
       }
@@ -2808,7 +2862,7 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   //   todo("func with decl list");
   // }
 
-  push_scope(&parser->var_table);
+  parser_push_scope(parser);
 
   // need to add the params to the locals table
   for (size_t i = 0; i < func_ty.func.num_params; i++) {
@@ -2838,11 +2892,11 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
     func_def->identifier = identifier;
     func_def->body = func_body;
 
-    pop_scope(&parser->var_table);
+    parser_pop_scope(parser);
     return true;
   }
 
-  pop_scope(&parser->var_table);
+  parser_pop_scope(parser);
   backtrack(parser->lexer, pos);
   return false;
 }
@@ -3159,7 +3213,11 @@ DEBUG_FUNC(tyref, ty_ref) {
     AST_PRINTZ("<unresolved type>");
     break;
   case AST_TYREF_TY_TAGGED:
-    AST_PRINT("TAGGED %s", ty_ref->tagged.name);
+    if (ty_ref->tagged.underlying) {
+      AST_PRINT("TAGGED %s", ty_ref->tagged.name);
+    } else {
+      AST_PRINT("TAGGED %s (undf)", ty_ref->tagged.name);
+    }
     break;
   case AST_TYREF_TY_AGGREGATE:
     switch (ty_ref->aggregate.ty) {

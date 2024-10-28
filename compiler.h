@@ -30,6 +30,9 @@ struct compile_args {
   enum compile_target_arch target_arch;
   enum compile_log_flags log_flags;
 
+  size_t num_include_paths;
+  const char **include_paths;
+
   char *output;
 };
 
