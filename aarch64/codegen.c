@@ -207,7 +207,6 @@ struct codegen_state {
   size_t total_call_saves_size;
 
   size_t max_variadic_args;
-
 };
 
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
@@ -1586,6 +1585,28 @@ int sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
+static void codegen_write_var_value(struct ir_unit *iru, struct ir_var_value *value, char *data) {
+  switch (value->ty) {
+  case IR_VAR_VALUE_TY_UNDF:
+    break;
+  case IR_VAR_VALUE_TY_STR:
+    strcpy(data, value->str_value);
+    break;
+  case IR_VAR_VALUE_TY_INT:
+    memcpy(data, &value->int_value, sizeof(unsigned long));
+    break;
+  case IR_VAR_VALUE_TY_FLT:
+    // FIXME: this needs to understand the actual data type
+    *(double*)data = value->int_value;
+    break;
+  case IR_VAR_VALUE_TY_VALUE_LIST:
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      codegen_write_var_value(iru, &value->value_list.values[i], &data[value->value_list.offsets[i]]);
+    }
+    break;
+  }
+}
+
 struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
@@ -1599,16 +1620,10 @@ struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
     size_t len = info.size;
 
     char *data = arena_alloc(ir->arena, len);
-    if (var->value.ty != IR_VAR_VALUE_TY_UNDF) {
-      bug("todo defined values");
-    } else {
-      memset(data, 0, len);
-    }
-    
-    return (struct codegen_data){
-      .data = data,
-      .len_data = len
-    };
+    memset(data, 0, len);
+    codegen_write_var_value(ir, &var->value, data);
+
+    return (struct codegen_data){.data = data, .len_data = len};
   }
   }
 }

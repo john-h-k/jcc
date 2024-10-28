@@ -1214,12 +1214,12 @@ struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   }
 }
 
-void get_member_info(struct ir_func_builder *irb,
-                     const struct ast_tyref *ty_ref, const char *member_name,
-                     struct ir_op_var_ty *member_ty, size_t *member_offset) {
+void get_member_info(struct ir_unit *iru, const struct ast_tyref *ty_ref,
+                     const char *member_name, struct ir_op_var_ty *member_ty,
+                     size_t *member_offset) {
   struct ast_tyref aggregate;
   if (ty_ref->ty == AST_TYREF_TY_TAGGED) {
-    aggregate = tyref_get_defined(irb->parser, ty_ref);
+    aggregate = tyref_get_defined(iru->parser, ty_ref);
   } else {
     aggregate = *ty_ref;
   }
@@ -1233,7 +1233,7 @@ void get_member_info(struct ir_func_builder *irb,
     struct ast_struct_field *field =
         &aggregate.aggregate.field_var_tys[member_idx];
     if (strcmp(field->name, member_name) == 0) {
-      *member_ty = var_ty_for_ast_tyref(irb->func->unit, field->var_ty);
+      *member_ty = var_ty_for_ast_tyref(iru, field->var_ty);
       if (member_ty->ty == IR_OP_VAR_TY_TY_ARRAY) {
         // pointer decay
         *member_ty = *member_ty->array.underlying;
@@ -1242,9 +1242,8 @@ void get_member_info(struct ir_func_builder *irb,
     }
   }
 
-  struct ir_op_var_ty ir_struct_ty =
-      var_ty_for_ast_tyref(irb->func->unit, &aggregate);
-  struct ir_var_ty_info info = var_ty_info(irb->func->unit, &ir_struct_ty);
+  struct ir_op_var_ty ir_struct_ty = var_ty_for_ast_tyref(iru, &aggregate);
+  struct ir_var_ty_info info = var_ty_info(iru, &ir_struct_ty);
 
   // offsets are null for a union
   *member_offset = info.offsets ? info.offsets[member_idx] : 0;
@@ -1255,7 +1254,8 @@ struct ir_op *build_ir_for_member_address_offset(
     const struct ast_tyref *struct_ty, const char *member_name,
     struct ir_op_var_ty *member_ty) {
   size_t member_offset;
-  get_member_info(irb, struct_ty, member_name, member_ty, &member_offset);
+  get_member_info(irb->func->unit, struct_ty, member_name, member_ty,
+                  &member_offset);
 
   struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
   offset->ty = IR_OP_TY_CNST;
@@ -1352,12 +1352,22 @@ struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     break;
   case AST_ASSG_TY_COMPOUNDASSG: {
     struct ir_op *assignee =
-        build_ir_for_expr(irb, stmt, assg->assignee, &assg->assignee->var_ty);
+        build_ir_for_expr(irb, stmt, assg->assignee, &assg->compound_assg.intermediate_var_ty);
 
     struct ir_op *rhs = build_ir_for_expr(
         irb, stmt, assg->expr, &assg->compound_assg.intermediate_var_ty);
-    value = alloc_binaryop(irb, *stmt, &assg->compound_assg.intermediate_var_ty,
+  
+    struct ir_op *result = alloc_binaryop(irb, *stmt, &assg->compound_assg.intermediate_var_ty,
                            assg->compound_assg.binary_op_ty, assignee, rhs);
+
+    struct ir_op_var_ty assg_var_ty = var_ty_for_ast_tyref(irb->func->unit, &assg->var_ty);
+    if (var_ty_needs_cast_op(irb, &result->var_ty, &assg_var_ty)) {
+      value = insert_ir_for_cast(
+          irb, *stmt, result, &assg_var_ty,
+          cast_ty_for_ast_tyref(irb, &assg->compound_assg.intermediate_var_ty, &assg->var_ty));
+    } else {
+      value = result;
+    }
   }
   }
 
@@ -1678,9 +1688,9 @@ struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
   make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
                         after_body_basicblock);
 
-  struct ir_stmt *pre_cond_stmt = alloc_ir_stmt(irb->func, before_cond_basicblock);
-  struct ir_op *pre_cond_br =
-      alloc_ir_op(irb->func, pre_cond_stmt);
+  struct ir_stmt *pre_cond_stmt =
+      alloc_ir_stmt(irb->func, before_cond_basicblock);
+  struct ir_op *pre_cond_br = alloc_ir_op(irb->func, pre_cond_stmt);
   pre_cond_br->ty = IR_OP_TY_BR;
   pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
 
@@ -1725,9 +1735,9 @@ struct ir_loop build_ir_for_dowhilestmt(struct ir_func_builder *irb,
   make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
                         after_cond_basicblock);
 
-  struct ir_stmt *pre_cond_stmt = alloc_ir_stmt(irb->func, before_body_basicblock);
-  struct ir_op *pre_body_br =
-      alloc_ir_op(irb->func, pre_cond_stmt);
+  struct ir_stmt *pre_cond_stmt =
+      alloc_ir_stmt(irb->func, before_body_basicblock);
+  struct ir_op *pre_body_br = alloc_ir_op(irb->func, pre_cond_stmt);
   pre_body_br->ty = IR_OP_TY_BR;
   pre_body_br->var_ty = IR_OP_VAR_TY_NONE;
 
@@ -1766,7 +1776,7 @@ struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_OP_VAR_TY_NONE;
-    cond_br->br_cond.cond = cond;    
+    cond_br->br_cond.cond = cond;
   } else {
     struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
     cond_br->ty = IR_OP_TY_BR;
@@ -1795,9 +1805,9 @@ struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     make_basicblock_merge(irb->func, cond_basicblock, body_basicblock);
   }
 
-  struct ir_stmt *pre_cond_stmt = alloc_ir_stmt(irb->func, before_cond_basicblock);
-  struct ir_op *pre_cond_br =
-      alloc_ir_op(irb->func, pre_cond_stmt);
+  struct ir_stmt *pre_cond_stmt =
+      alloc_ir_stmt(irb->func, before_cond_basicblock);
+  struct ir_op *pre_cond_br = alloc_ir_op(irb->func, pre_cond_stmt);
   pre_cond_br->ty = IR_OP_TY_BR;
   pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
 
@@ -2509,11 +2519,90 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   return builder;
 }
 
-struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
-                                           struct ast_decl *decl) {
+struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
+                                           struct ast_tyref *var_ty) {
   UNUSED_ARG(iru);
-  UNUSED_ARG(decl);
+  UNUSED_ARG(var_ty);
   todo("");
+}
+
+struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
+                                           struct ast_expr *expr,
+                                           struct ast_tyref *var_ty);
+struct ir_var_value
+build_ir_value_for_struct_initlist(struct ir_unit *iru,
+                                   struct ast_initlist *init_list,
+                                   const struct ast_tyref *var_ty) {
+
+  debug_assert(var_ty->ty == AST_TYREF_TY_AGGREGATE &&
+                   var_ty->aggregate.ty == AST_TY_AGGREGATE_TY_STRUCT,
+               "non stuct init list");
+
+  size_t num_elements = var_ty->aggregate.num_field_var_tys;
+
+  if (!num_elements) {
+    bug("empty structs are GNU extension");
+  }
+
+  struct ir_var_value_list value_list = {
+      .num_values = init_list->num_exprs,
+      .values = arena_alloc(iru->arena,
+                            sizeof(*value_list.values) * init_list->num_exprs),
+      .offsets = arena_alloc(iru->arena,
+                            sizeof(*value_list.offsets) * init_list->num_exprs)
+    };
+
+  for (size_t i = 0; i < num_elements; i++) {
+
+    debug_assert(i < var_ty->aggregate.num_field_var_tys,
+                 "too many items in struct init-list");
+    struct ast_struct_field *field = &var_ty->aggregate.field_var_tys[i];
+
+    struct ir_var_value value;
+    if (i < init_list->num_exprs) {
+      value = build_ir_for_var_value(iru, &init_list->exprs[i], field->var_ty);
+    } else {
+      value = build_ir_for_zero_var(iru, field->var_ty);
+    }
+
+    struct ir_op_var_ty member_ty;
+
+    size_t member_offset;
+    get_member_info(iru, var_ty, field->name, &member_ty, &member_offset);
+
+    value_list.values[i] = value;
+    value_list.offsets[i] = member_offset;
+  }
+
+  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
+                               .value_list = value_list};
+}
+
+struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
+                                           struct ast_expr *expr,
+                                           struct ast_tyref *var_ty) {
+  switch (expr->ty) {
+  case AST_EXPR_TY_CNST: {
+    struct ast_cnst *cnst = &expr->cnst;
+    if (is_integral_ty(&cnst->cnst_ty)) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
+                                   .int_value = expr->cnst.int_value};
+    } else if (is_fp_ty(&cnst->cnst_ty)) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
+                                   .flt_value = expr->cnst.flt_value};
+    } else if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
+                                   .str_value = expr->cnst.str_value};
+    } else {
+      bug("bad var ty");
+    }
+  }
+  case AST_EXPR_TY_INIT_LIST: {
+      return build_ir_value_for_struct_initlist(iru, &expr->init_list, var_ty);
+  }
+  default:
+    todo("other expr tys");
+  }
 }
 
 struct ir_unit *build_ir_for_translationunit(
@@ -2573,7 +2662,7 @@ struct ir_unit *build_ir_for_translationunit(
       if (def_ty == IR_GLB_DEF_TY_DEFINED) {
         struct ir_var_value value;
         if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG) {
-          value = build_ir_for_var_value(iru, decl);
+          value = build_ir_for_var_value(iru, &decl->assg_expr, &decl->var.var_ty);
         } else {
           value = (struct ir_var_value){.ty = IR_VAR_VALUE_TY_UNDF};
         }

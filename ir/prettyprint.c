@@ -613,8 +613,9 @@ void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value) {
     fprintf(file, "%Lf", var_value->flt_value);
     break;
   case IR_VAR_VALUE_TY_VALUE_LIST:
-    fprintf(file, "{");
+    fprintf(file, "{\n");
     for (size_t i = 0; i < var_value->value_list.num_values; i++) {
+      fprintf(file, "  ");
       struct ir_var_value *sub_value = &var_value->value_list.values[i];
       debug_print_ir_var_value(file, sub_value);
       fprintf(file, ",\n");
