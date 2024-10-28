@@ -85,6 +85,8 @@ void write_relocations(FILE *file, const struct build_object_args *args,
       size_t index = reloc->symbol_index;
       size_t addr = offset + reloc->address;
 
+      debug_assert(index < args->num_entries, "symbol index %zu > num entries %zu", index, args->num_entries);
+
       switch (reloc->ty) {
       case RELOCATION_TY_SINGLE: {
 

@@ -934,7 +934,6 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   struct ir_glb *pred = iru->last_global;
 
   iru->num_globals++;
-
   glb->id = pred ? pred->id + 1 : 0;
   glb->succ = NULL;
   glb->pred = pred;
