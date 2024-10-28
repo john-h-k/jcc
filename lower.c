@@ -5,7 +5,7 @@ static void lower_store_glb(struct ir_builder *func, struct ir_op *op) {
 
   struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
   addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
+      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store_glb.glb};
 
   struct ir_op *value = op->store_glb.value;
 
