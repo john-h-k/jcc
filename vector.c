@@ -55,6 +55,18 @@ void *vector_push_front(struct vector *v, const void *data) {
   return head;
 }
 
+
+void vector_truncate(struct vector *v, size_t new_len) {
+  debug_assert(new_len <= v->len, "truncating out of range");
+  v->len = new_len;
+}
+
+void *vector_pop(struct vector *v) {
+  void *data = vector_get(v, v->len - 1);
+  vector_truncate(v, v->len - 1);
+  return data;
+}
+
 void *vector_push_back(struct vector *v, const void *data) {
   vector_extend(v, data, 1);
 
