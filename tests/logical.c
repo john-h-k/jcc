@@ -1,4 +1,4 @@
-// expected value: 14
+// expected value: 7
 
 int main() {
   int a = 1;
