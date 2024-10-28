@@ -17,7 +17,7 @@ struct eep_prologue_info {
 
 struct codegen_state {
   struct codegen_function *func;
-  struct ir_builder *ir;
+  struct ir_func *ir;
   struct eep_prologue_info prologue_info;
 
   size_t call_saves_start;
@@ -85,7 +85,7 @@ struct codegen_unit *eep_codegen(struct ir_unit *ir) {
       break;
     }
     case IR_GLB_TY_FUNC: {
-      struct ir_builder *ir_func = glb->func;
+      struct ir_func *ir_func = glb->func;
 
       clear_metadata(ir_func);
 

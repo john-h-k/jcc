@@ -200,7 +200,7 @@ struct aarch64_prologue_info {
 
 struct codegen_state {
   struct codegen_function *func;
-  struct ir_builder *ir;
+  struct ir_func *ir;
   struct aarch64_prologue_info prologue_info;
 
   size_t call_saves_start;
@@ -1197,10 +1197,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 void insert_prologue(struct codegen_state *state) {
-  struct ir_builder *ir = state->ir;
+  struct ir_func *ir = state->ir;
 
   bool leaf = !(ir->nonvolatile_registers_used || ir->num_locals ||
-                ir->flags & IR_BUILDER_FLAG_MAKES_CALL);
+                ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   // FIXME: don't assume 8 bytes (they can be bigger)
   size_t stack_size = 8 * state->max_variadic_args;
@@ -1669,7 +1669,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
       break;
     }
     case IR_GLB_TY_FUNC: {
-      struct ir_builder *ir_func = glb->func;
+      struct ir_func *ir_func = glb->func;
 
       clear_metadata(ir_func);
 

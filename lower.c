@@ -1,7 +1,7 @@
 #include "lower.h"
 
-static void lower_store_glb(struct ir_builder *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func, &op->var_ty);
+static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
 
   struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
   addr->addr =
@@ -13,8 +13,8 @@ static void lower_store_glb(struct ir_builder *func, struct ir_op *op) {
   op->store_addr = (struct ir_op_store_addr){.addr = addr, .value = value};
 }
 
-static void lower_load_glb(struct ir_builder *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func, &op->var_ty);
+static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
 
   struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
   addr->addr =
@@ -27,7 +27,7 @@ static void lower_load_glb(struct ir_builder *func, struct ir_op *op) {
 // Most architectures require turning `br.cond <true> <false>` into 2 instructions
 // we represent this as just the `true` part of the `br.cond`, and then a `br`
 // after branching to the false target
-static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
+static void lower_br_cond(struct ir_func *irb, struct ir_op *op) {
   if (1 == 2)
   insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
 }
@@ -45,7 +45,7 @@ void lower(struct ir_unit *unit) {
     case IR_GLB_TY_DATA:
       break;
     case IR_GLB_TY_FUNC: {
-      struct ir_builder *func = glb->func;
+      struct ir_func *func = glb->func;
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -108,7 +108,7 @@ void lower(struct ir_unit *unit) {
 
           while (op) {
             if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
-              op->var_ty = var_ty_for_pointer_size(func);
+              op->var_ty = var_ty_for_pointer_size(func->unit);
             }
 
             op = op->succ;

@@ -3,7 +3,7 @@
 #include "ir.h"
 #include "prettyprint.h"
 
-void eliminate_phi(struct ir_builder *irb) {
+void eliminate_phi(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {

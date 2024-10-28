@@ -3,6 +3,6 @@
 
 #include "build.h"
 
-void eliminate_phi(struct ir_builder *irb);
+void eliminate_phi(struct ir_func *irb);
 
 #endif

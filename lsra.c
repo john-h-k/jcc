@@ -17,7 +17,7 @@ struct register_alloc_info {
   struct reg_info float_reg_info;
 };
 
-void spill_at_interval(struct ir_builder *irb, struct interval *intervals,
+void spill_at_interval(struct ir_func *irb, struct interval *intervals,
                        size_t cur_interval, size_t *active,
                        size_t *num_active) {
   struct interval *spill = &intervals[active[*num_active - 1]];
@@ -107,7 +107,7 @@ int sort_interval_by_start_point(const void *a, const void *b) {
 }
 
 struct fixup_spills_data {
-  struct ir_builder *irb;
+  struct ir_func *irb;
   struct ir_op *consumer;
 };
 
@@ -150,7 +150,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
   }
 }
 
-void fixup_spills(struct ir_builder *irb, struct interval_data *data) {
+void fixup_spills(struct ir_func *irb, struct interval_data *data) {
   UNUSED_ARG(data);
 
   struct ir_basicblock *basicblock = irb->first;
@@ -191,7 +191,7 @@ int compare_interval_id(const void *a, const void *b) {
 
 typedef bool (*op_needs_alloc)(struct ir_op * a);
 
-struct interval_data register_alloc_pass(struct ir_builder *irb,
+struct interval_data register_alloc_pass(struct ir_func *irb,
                                          struct reg_set_info *info,
                                          op_needs_alloc needs_reg,
                                          enum ir_reg_ty reg_ty,
@@ -331,7 +331,7 @@ bool op_needs_fp_reg(struct ir_op *op) {
   return var_ty_is_fp(&op->var_ty);
 }
 
-void lsra_register_alloc(struct ir_builder *irb, struct reg_info reg_info) {
+void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   bool spill_exists = true;
   int attempts = 0;
 

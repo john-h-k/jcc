@@ -232,13 +232,13 @@ void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   }
 }
 
-void debug_lhs(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
+void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
   debug_print_var_ty_string(file, irb->unit, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
-void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
+void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   UNUSED_ARG(irb);
 
   switch (ir->ty) {
@@ -399,7 +399,7 @@ struct prettyprint_file_metadata {
   void *cb_metadata;
 };
 
-void prettyprint_begin_visit_basicblock_file(struct ir_builder *irb,
+void prettyprint_begin_visit_basicblock_file(struct ir_func *irb,
                                              struct ir_basicblock *basicblock,
                                              void *metadata) {
   UNUSED_ARG(irb);
@@ -409,7 +409,7 @@ void prettyprint_begin_visit_basicblock_file(struct ir_builder *irb,
   fslog(fm->file, "\nBB @ %03zu", basicblock->id);
 }
 
-void prettyprint_end_visit_basicblock_file(struct ir_builder *irb,
+void prettyprint_end_visit_basicblock_file(struct ir_func *irb,
                                            struct ir_basicblock *basicblock,
                                            void *metadata) {
   UNUSED_ARG(irb);
@@ -420,7 +420,7 @@ void prettyprint_end_visit_basicblock_file(struct ir_builder *irb,
   fslog(fm->file, "");
 }
 
-void prettyprint_visit_op_file(struct ir_builder *irb, struct ir_op *op,
+void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
                                void *metadata) {
   // if (op->ty == IR_OP_TY_GLB) {
   //   // TODO: stop this function needing to deal with GLB its a messy opcode
@@ -498,7 +498,7 @@ const struct prettyprint_callbacks FILE_WRITER_CALLBACKS = {
     .visit_op = prettyprint_visit_op_file,
 };
 
-void debug_visit_stmt(struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_visit_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                       const struct prettyprint_callbacks *callbacks,
                       void *metadata) {
   if (callbacks->begin_visit_stmt) {
@@ -519,7 +519,7 @@ void debug_visit_stmt(struct ir_builder *irb, struct ir_stmt *stmt,
   }
 }
 
-void debug_visit_basicblock(struct ir_builder *irb,
+void debug_visit_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             const struct prettyprint_callbacks *callbacks,
                             void *metadata) {
@@ -539,7 +539,7 @@ void debug_visit_basicblock(struct ir_builder *irb,
   }
 }
 
-void debug_visit_ir(struct ir_builder *irb,
+void debug_visit_ir(struct ir_func *irb,
                     const struct prettyprint_callbacks *callbacks,
                     void *metadata) {
   struct ir_basicblock *basicblock = irb->first;
@@ -551,7 +551,7 @@ void debug_visit_ir(struct ir_builder *irb,
   }
 }
 
-void debug_print_basicblock(FILE *file, struct ir_builder *irb,
+void debug_print_basicblock(FILE *file, struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             debug_print_op_callback *cb, void *cb_metadata) {
   int ctr_pad = (int)num_digits(irb->op_count);
@@ -566,7 +566,7 @@ void debug_print_basicblock(FILE *file, struct ir_builder *irb,
   debug_visit_basicblock(irb, basicblock, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                       debug_print_op_callback *cb, void *cb_metadata) {
 
   int ctr_pad = (int)num_digits(irb->op_count);
@@ -581,7 +581,7 @@ void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
   debug_visit_ir(stmt->basicblock->irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_ir_func(FILE *file, struct ir_builder *irb,
+void debug_print_ir_func(FILE *file, struct ir_func *irb,
                          debug_print_op_callback *cb, void *cb_metadata) {
   int ctr_pad = (int)num_digits(irb->op_count);
   size_t ctr = 0;
@@ -635,7 +635,7 @@ struct print_ir_graph_metadata {
   FILE *file;
 };
 
-void visit_op_for_graph(struct ir_builder *irb, struct ir_op *op,
+void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
                         void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
@@ -645,7 +645,7 @@ void visit_op_for_graph(struct ir_builder *irb, struct ir_op *op,
   fprintf(gm->file, "\\l");
 }
 
-struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,
+struct graph_vertex *get_basicblock_vertex(struct ir_func *irb,
                                            struct ir_basicblock *basicblock,
                                            struct graphwriter *gwr) {
   if (!basicblock->metadata) {
@@ -684,7 +684,7 @@ struct graph_vertex *get_basicblock_vertex(struct ir_builder *irb,
   return basicblock->metadata;
 }
 
-void debug_print_ir_graph(FILE *file, struct ir_builder *irb) {
+void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
   clear_metadata(irb);
 
   struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,

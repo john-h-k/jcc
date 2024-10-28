@@ -3,7 +3,7 @@
 #include "../ir/build.h"
 #include "../util.h"
 
-void eep_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
+void eep_debug_print_custom_ir_op(FILE *file, const struct ir_func *func,
                                   const struct ir_op *op) {
   UNUSED_ARG(file);
   UNUSED_ARG(func);
@@ -16,7 +16,7 @@ void eep_debug_print_custom_ir_op(FILE *file, const struct ir_builder *func,
 //   `
 // quot:
 //   `x = a % b` -> `c = a / b; x = a - (c * b)`
-static void lower_mul(struct ir_builder *func, struct ir_op *op) {
+static void lower_mul(struct ir_func *func, struct ir_op *op) {
   struct ir_basicblock *orig_bb = op->stmt->basicblock;
 
   struct ir_op *op1 = op->binary_op.lhs;
@@ -169,7 +169,7 @@ static void lower_mul(struct ir_builder *func, struct ir_op *op) {
   orig_bb_br->ty = IR_OP_TY_BR;
 }
 
-static void lower_div(struct ir_builder *func, struct ir_op *op) {
+static void lower_div(struct ir_func *func, struct ir_op *op) {
   struct ir_basicblock *orig_bb = op->stmt->basicblock;
 
   struct ir_op *op1 = op->binary_op.lhs;
@@ -341,7 +341,7 @@ static void lower_div(struct ir_builder *func, struct ir_op *op) {
   orig_bb_br->ty = IR_OP_TY_BR;
 }
 
-static void lower_shift(struct ir_builder *func, struct ir_op *op) {
+static void lower_shift(struct ir_func *func, struct ir_op *op) {
   UNUSED_ARG(func);
 
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
@@ -361,7 +361,7 @@ static void lower_shift(struct ir_builder *func, struct ir_op *op) {
   // op->binary_op.rhs->reg = DONT_GIVE_REG;
 }
 
-static void lower_quot(struct ir_builder *func, struct ir_op *op) {
+static void lower_quot(struct ir_func *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
@@ -414,7 +414,7 @@ static void lower_quot(struct ir_builder *func, struct ir_op *op) {
 // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
 // we represent this as just the `true` part of the `br.cond`, and then a `br`
 // after branching to the false target
-static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
+static void lower_br_cond(struct ir_func *irb, struct ir_op *op) {
   // ldr/str don't write to flags, so insert `mov <reg>, <reg>` to get flags
   // phi does not guarantee ldr, but the optimiser can always remove it later
   // if (op->br_cond.cond->ty == IR_OP_TY_PHI) {
@@ -426,7 +426,7 @@ static void lower_br_cond(struct ir_builder *irb, struct ir_op *op) {
   insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
 }
 
-static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
+static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   UNUSED_ARG(irb);
 
   return;
@@ -471,7 +471,7 @@ void eep_lower(struct ir_unit *unit) {
     case IR_GLB_TY_DATA:
       break;
     case IR_GLB_TY_FUNC: {
-      struct ir_builder *func = glb->func;
+      struct ir_func *func = glb->func;
 
 
       for (enum eep_lower_stage stage = EEP_LOWER_STAGE_QUOT;

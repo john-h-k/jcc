@@ -3,13 +3,12 @@
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
 #include "../ir/build.h"
-#include "../ir/var_refs.h"
 #include "../util.h"
 
 #include <mach/arm/vm_types.h>
 #include <math.h>
 
-static void lower_logical_not(struct ir_builder *func, struct ir_op *op) {
+static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_UNARY_OP &&
                    op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
@@ -27,7 +26,7 @@ static void lower_logical_not(struct ir_builder *func, struct ir_op *op) {
 // ARM has no quotient function
 // so instead of `x = a % b` we do
 // `c = a / b; x = a - (c * b)`
-static void lower_quot(struct ir_builder *func, struct ir_op *op) {
+static void lower_quot(struct ir_func *func, struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
@@ -77,7 +76,7 @@ static void lower_quot(struct ir_builder *func, struct ir_op *op) {
   op->binary_op.rhs = mul;
 }
 
-static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
+static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   UNUSED_ARG(irb);
 
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
@@ -110,7 +109,7 @@ static void lower_comparison(struct ir_builder *irb, struct ir_op *op) {
 // actually more than this but we don't support that yet
 #define MAX_REG_SIZE (8)
 
-static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
+static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
   // look for store after, in case this is a copy
   // FIXME: not sure if this is perfect logic (could there be ops in between?)
   struct ir_op *nxt_store = op->succ;
@@ -154,7 +153,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
     todo("non-pow2 copies < MAX_REG_SIZE");
   }
 
-  struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func);
+  struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func->unit);
 
   struct ir_lcl *src_lcl = op->load_lcl.lcl;
   struct ir_lcl *dest_lcl = nxt_store->lcl;
@@ -179,7 +178,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   while (size_left >= MAX_REG_SIZE) {
     struct ir_op *offset_cnst =
         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
-    make_pointer_constant(func, offset_cnst, offset);
+    make_pointer_constant(func->unit, offset_cnst, offset);
 
     struct ir_op *src_addr = insert_after_ir_op(
         func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
@@ -215,7 +214,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
 
     struct ir_op *offset_cnst =
         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
-    make_pointer_constant(func, offset_cnst, offset);
+    make_pointer_constant(func->unit, offset_cnst, offset);
 
     struct ir_op *src_addr = insert_after_ir_op(
         func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
@@ -240,7 +239,7 @@ static void lower_load_lcl(struct ir_builder *func, struct ir_op *op) {
   }
 }
 
-static void lower_fp_cnst(struct ir_builder *func, struct ir_op *op) {
+static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
   struct ir_op_var_ty int_ty;
@@ -297,7 +296,7 @@ void aarch64_lower(struct ir_unit *unit) {
     case IR_GLB_TY_DATA:
       break;
     case IR_GLB_TY_FUNC: {
-      struct ir_builder *func = glb->func;
+      struct ir_func *func = glb->func;
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
