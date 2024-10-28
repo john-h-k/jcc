@@ -1276,6 +1276,10 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
   // TODO: super slow hashtable needed
   for (size_t i = 0; i < base_ty.aggregate.num_field_var_tys; i++) {
     const struct ast_struct_field *field = &base_ty.aggregate.field_var_tys[i];
+    if (field->name == NULL) {
+      bug("anon");
+    }
+
     if (strcmp(field->name, member_name) == 0) {
       return *field->var_ty;
     }
@@ -2258,6 +2262,7 @@ bool parse_compoundstmt(struct parser *parser,
 bool parse_type_specifier(
     struct parser *parser, struct ast_tyref *ty_ref,
     enum ast_storage_class_specifier_flags *storage_class_specifiers);
+
 bool parse_declarator(struct parser *parser, struct token *identifier,
                       struct ast_tyref *ty_ref);
 
@@ -2439,8 +2444,13 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
     struct vector *params = vector_create(sizeof(struct ast_param));
 
     struct token token;
-
     peek_token(parser->lexer, &token);
+
+    if (token.ty == LEX_TOKEN_TY_KW_VOID) {
+      consume_token(parser->lexer, token);
+      peek_token(parser->lexer, &token);
+    }
+    
     if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
       struct ast_param param;
       do {

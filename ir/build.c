@@ -2361,6 +2361,10 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
         def->var_ty.func.param_identifiers[i];
     const struct ast_tyref *param_var_ty = &def->var_ty.func.param_var_tys[i];
 
+    if (param_var_ty->ty == AST_TYREF_TY_VARIADIC) {
+      continue;
+    }
+
     // TODO: the whole decl code needs reworking
     struct ast_var var = {
         .scope = SCOPE_PARAMS,

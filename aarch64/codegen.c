@@ -1601,6 +1601,8 @@ struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
     char *data = arena_alloc(ir->arena, len);
     if (var->value.ty != IR_VAR_VALUE_TY_UNDF) {
       bug("todo defined values");
+    } else {
+      memset(data, 0, len);
     }
     
     return (struct codegen_data){
