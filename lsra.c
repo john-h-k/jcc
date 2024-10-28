@@ -307,42 +307,6 @@ struct interval_data register_alloc_pass(struct ir_builder *irb,
     }
   }
 
-  struct ir_basicblock *basicblock = irb->first;
-
-  // continously fix up phi until everything has a register
-  // by just looping we don't need to worry about order
-  bool unreg_left = true;
-  while (unreg_left) {
-    unreg_left = false;
-    basicblock = irb->first;
-
-    while (basicblock) {
-      struct ir_stmt *stmt = basicblock->first;
-      while (stmt) {
-        struct ir_op *op = stmt->first;
-        while (op) {
-          if (op->ty == IR_OP_TY_PHI) {
-            if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-              unreg_left = true;
-            } else {
-              for (size_t i = 0; i < op->phi.num_values; i++) {
-                struct ir_op *value = op->phi.values[i];
-                value->reg = op->reg;
-                value->flags &= ~IR_OP_FLAG_DONT_GIVE_REG;
-              }
-            }
-          }
-
-          op = op->succ;
-        }
-
-        stmt = stmt->succ;
-      }
-
-      basicblock = basicblock->succ;
-    }
-  }
-
   return data;
 }
 

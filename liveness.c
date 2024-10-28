@@ -219,12 +219,6 @@ struct interval_data construct_intervals(struct ir_builder *irb) {
             struct interval *dependent_interval =
                 &data.intervals[dependent->id];
 
-            // a phi can be dependent on itself, and in that case we still need
-            // it to be assigned a register
-            if (dependent->id != op->id) {
-              dependent->flags |= IR_OP_FLAG_DONT_GIVE_REG;
-            }
-
             dependent_interval->start =
                 MIN(dependent_interval->start, interval->start);
             dependent_interval->end =
