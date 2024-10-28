@@ -6,18 +6,18 @@
 #include <stdio.h>
 
 typedef void(prettyprint_begin_visit_basicblock)(
-    struct ir_builder *irb, struct ir_basicblock *basicblock, void *metadata);
-typedef void(prettyprint_end_visit_basicblock)(struct ir_builder *irb,
+    struct ir_func *irb, struct ir_basicblock *basicblock, void *metadata);
+typedef void(prettyprint_end_visit_basicblock)(struct ir_func *irb,
                                                struct ir_basicblock *basicblock,
                                                void *metadata);
 
-typedef void(prettyprint_begin_visit_stmt)(struct ir_builder *irb,
+typedef void(prettyprint_begin_visit_stmt)(struct ir_func *irb,
                                            struct ir_stmt *stmt,
                                            void *metadata);
-typedef void(prettyprint_end_visit_stmt)(struct ir_builder *irb,
+typedef void(prettyprint_end_visit_stmt)(struct ir_func *irb,
                                          struct ir_stmt *stmt, void *metadata);
 
-typedef void(prettyprint_visit_op)(struct ir_builder *irb, struct ir_op *op,
+typedef void(prettyprint_visit_op)(struct ir_func *irb, struct ir_op *op,
                                    void *metadata);
 
 struct prettyprint_callbacks {
@@ -35,16 +35,16 @@ extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
 /* Generic visitor methods that can be used to walk the graph */
 
-void debug_visit_stmt(struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_visit_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                       const struct prettyprint_callbacks *callbacks,
                       void *metadata);
 
-void debug_visit_basicblock(struct ir_builder *irb,
+void debug_visit_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             const struct prettyprint_callbacks *callbacks,
                             void *metadata);
 
-void debug_visit_ir(struct ir_builder *irb,
+void debug_visit_ir(struct ir_func *irb,
                     const struct prettyprint_callbacks *callbacks,
                     void *metadata);
 
@@ -55,17 +55,17 @@ typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
 
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru, const struct ir_op_var_ty *var_ty);
 
-void debug_print_stmt(FILE *file, struct ir_builder *irb, struct ir_stmt *stmt,
+void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                       debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_basicblock(FILE *file, struct ir_builder *irb,
+void debug_print_basicblock(FILE *file, struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_ir_func(FILE *file, struct ir_builder *irb,
+void debug_print_ir_func(FILE *file, struct ir_func *irb,
                     debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_ir_graph(FILE *file, struct ir_builder *irb);
+void debug_print_ir_graph(FILE *file, struct ir_func *irb);
 
 void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata);

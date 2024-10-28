@@ -1857,6 +1857,20 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
     return true;
   }
 
+  
+  if (parse_token(parser, LEX_TOKEN_TY_KW_BREAK) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    jump_stmt->ty = AST_JUMPSTMT_TY_BREAK;
+    return true;
+  }
+
+  
+  if (parse_token(parser, LEX_TOKEN_TY_KW_CONTINUE) &&
+      parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    jump_stmt->ty = AST_JUMPSTMT_TY_CONTINUE;
+    return true;
+  }
+
   if (parse_token(parser, LEX_TOKEN_TY_KW_GOTO)) {
     struct token label;
     peek_token(parser->lexer, &label);
@@ -3666,6 +3680,12 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
   case AST_JUMPSTMT_TY_GOTO:
     AST_PRINT("GOTO %s",
               identifier_str(state->parser, &jump_stmt->goto_stmt.label));
+    break;
+  case AST_JUMPSTMT_TY_BREAK:
+    AST_PRINTZ("BREAK");
+    break;
+  case AST_JUMPSTMT_TY_CONTINUE:
+    AST_PRINTZ("CONTINUE");
     break;
   }
 }

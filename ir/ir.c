@@ -348,7 +348,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->metadata = NULL;
 }
 
-void detach_ir_basicblock(struct ir_builder *irb,
+void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock) {
   invariant_assert(irb->basicblock_count,
                    "`detach_ir_basicblock` would underflow basicblock count "
@@ -374,7 +374,7 @@ void detach_ir_basicblock(struct ir_builder *irb,
   basicblock->irb = NULL;
 }
 
-void detach_ir_stmt(struct ir_builder *irb, struct ir_stmt *stmt) {
+void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
   invariant_assert(
       irb->stmt_count,
       "`detach_ir_stmt` would underflow stmt count for `ir_builder`");
@@ -397,7 +397,7 @@ void detach_ir_stmt(struct ir_builder *irb, struct ir_stmt *stmt) {
   stmt->basicblock = NULL;
 }
 
-void detach_ir_op(struct ir_builder *irb, struct ir_op *op) {
+void detach_ir_op(struct ir_func *irb, struct ir_op *op) {
   invariant_assert(irb->op_count,
                    "`detach_ir_op` would underflow op count for `ir_builder`");
   invariant_assert(op->stmt, "can't detach `op` not attached to stmt");
@@ -440,7 +440,7 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock) {
   return !basicblock->first;
 }
 
-void prune_basicblocks(struct ir_builder *irb) {
+void prune_basicblocks(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {
@@ -461,7 +461,7 @@ void prune_basicblocks(struct ir_builder *irb) {
   rebuild_ids(irb);
 }
 
-void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
+void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
   while (stmt) {
@@ -476,7 +476,7 @@ void prune_stmts(struct ir_builder *irb, struct ir_basicblock *basicblock) {
   }
 }
 
-void clear_metadata(struct ir_builder *irb) {
+void clear_metadata(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     basicblock->metadata = NULL;
@@ -499,7 +499,7 @@ void clear_metadata(struct ir_builder *irb) {
   }
 }
 
-void rebuild_ids(struct ir_builder *irb) {
+void rebuild_ids(struct ir_func *irb) {
   irb->next_basicblock_id = 0;
   irb->next_stmt_id = 0;
   irb->next_op_id = 0;
@@ -528,7 +528,7 @@ void rebuild_ids(struct ir_builder *irb) {
   }
 }
 
-void attach_ir_op(struct ir_builder *irb, struct ir_op *op,
+void attach_ir_op(struct ir_func *irb, struct ir_op *op,
                   struct ir_stmt *stmt, struct ir_op *pred,
                   struct ir_op *succ) {
   invariant_assert(!op->stmt && !op->pred && !op->succ,
@@ -563,7 +563,7 @@ void attach_ir_op(struct ir_builder *irb, struct ir_op *op,
   }
 }
 
-void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
+void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
                       struct ir_op *move_after) {
   UNUSED_ARG(irb);
   invariant_assert(op->id != move_after->id, "trying to move op after itself!");
@@ -577,7 +577,7 @@ void move_after_ir_op(struct ir_builder *irb, struct ir_op *op,
   attach_ir_op(irb, op, move_after->stmt, move_after, move_after->succ);
 }
 
-void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
+void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
                        struct ir_op *move_before) {
   UNUSED_ARG(irb);
   invariant_assert(op->id != move_before->id,
@@ -592,7 +592,7 @@ void move_before_ir_op(struct ir_builder *irb, struct ir_op *op,
   attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
 
-struct ir_op *replace_ir_op(struct ir_builder *irb, struct ir_op *op,
+struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_op_var_ty var_ty) {
   UNUSED_ARG(irb);
   debug_assert(op, "invalid replacement point!");
@@ -603,7 +603,7 @@ struct ir_op *replace_ir_op(struct ir_builder *irb, struct ir_op *op,
   return op;
 }
 
-struct ir_op *insert_before_ir_op(struct ir_builder *irb,
+struct ir_op *insert_before_ir_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_op_var_ty var_ty) {
   debug_assert(insert_before, "invalid insertion point!");
@@ -617,7 +617,7 @@ struct ir_op *insert_before_ir_op(struct ir_builder *irb,
   return op;
 }
 
-struct ir_op *insert_after_ir_op(struct ir_builder *irb,
+struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_op_var_ty var_ty) {
   debug_assert(insert_after, "invalid insertion point!");
@@ -631,7 +631,7 @@ struct ir_op *insert_after_ir_op(struct ir_builder *irb,
   return op;
 }
 
-void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
+void swap_ir_ops(struct ir_func *irb, struct ir_op *left,
                  struct ir_op *right) {
   if (left == right) {
     return;
@@ -674,7 +674,7 @@ void swap_ir_ops(struct ir_builder *irb, struct ir_op *left,
   attach_ir_op(irb, right, left_stmt, left_pred, left_succ);
 }
 
-struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
+struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
 
@@ -706,7 +706,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_builder *irb) {
   return basicblock;
 }
 
-struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
+struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
 
@@ -733,7 +733,7 @@ struct ir_stmt *alloc_ir_stmt(struct ir_builder *irb,
 }
 
 // TODO: this should call `initialise_ir_op`
-struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
+struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
   if (!stmt->first) {
@@ -763,10 +763,10 @@ struct ir_op *alloc_ir_op(struct ir_builder *irb, struct ir_stmt *stmt) {
   return op;
 }
 
-void make_integral_constant(struct ir_builder *irb, struct ir_op *op,
+void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_op_var_primitive_ty ty,
                             unsigned long long value) {
-  UNUSED_ARG(irb);
+  UNUSED_ARG(iru);
 
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
@@ -774,14 +774,65 @@ void make_integral_constant(struct ir_builder *irb, struct ir_op *op,
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-void make_pointer_constant(struct ir_builder *irb, struct ir_op *op,
+void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                            unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
-  op->var_ty = var_ty_for_pointer_size(irb);
+  op->var_ty = var_ty_for_pointer_size(iru);
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-struct ir_op *alloc_integral_constant(struct ir_builder *irb,
+
+
+struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty) {
+  switch (var_ty->ty) {
+  case IR_OP_VAR_TY_TY_POINTER:
+    return *var_ty->pointer.underlying;
+  case IR_OP_VAR_TY_TY_ARRAY:
+    return *var_ty->array.underlying;
+  default:
+    bug("non pointer/array passed");
+  }
+}
+
+struct ir_op_var_ty var_ty_make_pointer(struct ir_unit *iru,
+                                        const struct ir_op_var_ty *underlying) {
+  struct ir_op_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
+
+  *copied = *underlying;
+
+  struct ir_op_var_ty var_ty;
+  var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
+  var_ty.pointer = (struct ir_op_var_pointer_ty){.underlying = copied};
+
+  return var_ty;
+}
+
+struct ir_op_var_ty var_ty_make_array(struct ir_unit *iru,
+                                      const struct ir_op_var_ty *underlying,
+                                      size_t num_elements) {
+  struct ir_op_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
+
+  *copied = *underlying;
+
+  struct ir_op_var_ty var_ty;
+  var_ty.ty = IR_OP_VAR_TY_TY_ARRAY;
+  var_ty.array = (struct ir_op_var_array_ty){.num_elements = num_elements,
+                                             .underlying = copied};
+
+  return var_ty;
+}
+
+struct ir_op_var_ty var_ty_for_pointer_size(struct ir_unit *iru) {
+  UNUSED_ARG(iru);
+
+  // TODO: again, similar to parser:
+  // either we need a pointer-sized int type or for `ir_func` to know the
+  // native integer size
+  return (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                               .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
+}
+
+struct ir_op *alloc_integral_constant(struct ir_func *irb,
                                       struct ir_stmt *stmt,
                                       enum ir_op_var_primitive_ty primitive,
                                       unsigned long long value);
@@ -806,7 +857,7 @@ bool valid_basicblock(struct ir_basicblock *basicblock) {
   return false;
 }
 
-void add_pred_to_basicblock(struct ir_builder *irb,
+void add_pred_to_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_basicblock *pred) {
   for (size_t i = 0; i < basicblock->num_preds; i++) {
@@ -846,7 +897,7 @@ void get_basicblock_successors(struct ir_basicblock *basicblock,
 
 
 
-void make_basicblock_split(struct ir_builder *irb,
+void make_basicblock_split(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *true_target,
                            struct ir_basicblock *false_target) {
@@ -858,7 +909,7 @@ void make_basicblock_split(struct ir_builder *irb,
   add_pred_to_basicblock(irb, false_target, basicblock);
 }
 
-void make_basicblock_merge(struct ir_builder *irb,
+void make_basicblock_merge(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *target) {
   basicblock->ty = IR_BASICBLOCK_TY_MERGE;
@@ -867,7 +918,7 @@ void make_basicblock_merge(struct ir_builder *irb,
   add_pred_to_basicblock(irb, target, basicblock);
 }
 
-struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
+struct ir_basicblock *insert_basicblocks_after(struct ir_func *irb,
                                                struct ir_op *insert_after,
                                                struct ir_basicblock *first) {
   struct ir_basicblock *orig_bb = insert_after->stmt->basicblock;
@@ -913,19 +964,6 @@ struct ir_basicblock *insert_basicblocks_after(struct ir_builder *irb,
   return end_bb;
 }
 
-struct ir_label *add_label(struct ir_builder *irb, const char *name,
-                           struct ir_basicblock *basicblock) {
-  struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
-
-  label->name = name;
-  label->basicblock = basicblock;
-  label->succ = irb->labels;
-
-  irb->labels = label;
-
-  return label;
-}
-
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_op_var_ty *var_ty,
                           enum ir_glb_def_ty def_ty, const char *name) {
@@ -958,7 +996,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
   return glb;
 }
-struct ir_lcl *add_local(struct ir_builder *irb,
+struct ir_lcl *add_local(struct ir_func *irb,
                          const struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
@@ -1115,7 +1153,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   }
 }
 
-void spill_op(struct ir_builder *irb, struct ir_op *op) {
+void spill_op(struct ir_func *irb, struct ir_op *op) {
   debug_assert(!(op->flags & IR_OP_FLAG_FIXED_REG), "spilling fixed reg illegal");
 
   debug("spilling %zu\n", op->id);

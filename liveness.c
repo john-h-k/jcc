@@ -12,7 +12,7 @@ void op_used_callback(struct ir_op **op, void *cb_metadata) {
 }
 
 // walks across the blocks to determine the end range for a phi's dependency
-static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
+static size_t walk_basicblock(struct ir_func *irb, bool *basicblocks_visited,
                               struct ir_op *source_phi,
                               struct ir_basicblock *basicblock) {
 
@@ -48,7 +48,7 @@ static size_t walk_basicblock(struct ir_builder *irb, bool *basicblocks_visited,
   }
 }
 
-unsigned *find_basicblock_ranges(struct ir_builder *irb) {
+unsigned *find_basicblock_ranges(struct ir_func *irb) {
   // FIXME: *very* memory expensive |BBs|^2 space
   unsigned *basicblock_max_id = arena_alloc(
       irb->arena, sizeof(*basicblock_max_id) * irb->basicblock_count *
@@ -115,7 +115,7 @@ unsigned *find_basicblock_ranges(struct ir_builder *irb) {
    inreasing inex
      - indexes can be non-sequential but must be increasing
 */
-struct interval_data construct_intervals(struct ir_builder *irb) {
+struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   rebuild_ids(irb);
 
