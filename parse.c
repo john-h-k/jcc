@@ -824,6 +824,11 @@ bool parse_abstract_declaration(struct parser *parser,
                                 struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
+  if (!parse_type_specifier(parser, ty_ref, NULL)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
   if (!parse_abstract_declarator(parser, ty_ref)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -2343,7 +2348,7 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
     param->var->identifier = identifier;
 
     return true;
-  } else if (parse_abstract_declaration(parser, &var_ty)) {
+  } else if (parse_abstract_declarator(parser, &var_ty)) {
     param->var_ty = var_ty;
     param->var = NULL;
 
