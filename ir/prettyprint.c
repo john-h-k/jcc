@@ -363,12 +363,15 @@ void debug_print_op(FILE *file, struct ir_builder *irb, struct ir_op *ir) {
     }
     break;
 
-  case IR_OP_TY_BR:
+  case IR_OP_TY_BR: {
     // this can happen post lowering!
     // invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
     //                  "found `br` but bb wasn't MERGE");
-    fprintf(file, "br @%zu", ir->stmt->basicblock->merge.target->id);
+    struct ir_basicblock *bb = ir->stmt->basicblock;
+    struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE ? bb->merge.target : bb->split.false_target;
+    fprintf(file, "br @%zu", target->id);
     break;
+  }
   case IR_OP_TY_BR_COND:
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");

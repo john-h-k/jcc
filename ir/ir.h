@@ -53,7 +53,7 @@ struct ir_op_phi {
   // not elegant, but phi needs ref to var so it can build itself in
   // `find_phi_exprs`
   // FIXME: ?
-  struct ast_var var;
+  struct ast_var *var;
 
   struct ir_op **values;
   size_t num_values;
