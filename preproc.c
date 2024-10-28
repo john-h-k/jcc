@@ -9,11 +9,15 @@
 
 #include <ctype.h>
 #include <stddef.h>
+#include <string.h>
 
 struct preproc {
   struct arena_allocator *arena;
   const char *text;
   size_t len;
+
+  size_t num_include_paths;
+  const char **include_paths;
 
   char *processed;
   size_t processed_head;
@@ -70,7 +74,7 @@ struct preproc_token {
   struct text_span span;
 };
 
-enum preproc_create_result preproc_create(struct program *program,
+enum preproc_create_result preproc_create(struct program *program, size_t num_include_paths, const char **include_paths,
                                           struct preproc **preproc) {
   info("beginning lex stage");
 
@@ -79,6 +83,8 @@ enum preproc_create_result preproc_create(struct program *program,
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
+  p->num_include_paths = num_include_paths;
+  p->include_paths = include_paths;
   // copy out the program so lifetimes aren't tied
   p->text = arena_alloc_strcpy(arena, program->text);
   p->len = strlen(program->text);
@@ -212,16 +218,19 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   }
 
   switch (c) {
+  case '<':
   case '"':
   case '\'':
     // string/char literal
     // skip first single-quote
     next_col(&end);
 
+    char end_char = c == '<' ? '>' : c;
+
     // move forward while
     bool char_escaped = false;
     for (size_t i = end.idx;
-         i < preproc->len && !(!char_escaped && preproc->text[i] == c); i++) {
+         i < preproc->len && !(!char_escaped && preproc->text[i] == end_char); i++) {
       // next char is escaped if this char is a non-escaped backslash
       char_escaped = !char_escaped && preproc->text[i] == '\\';
       next_col(&end);
@@ -237,10 +246,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
     return;
   case '#':
     if (!line_has_nontrivial_token) {
-      while (end.idx < preproc->len && !is_newline(preproc->text[end.idx])) {
-        next_col(&end);
-      }
-
+      next_col(&end);
       token->ty = PREPROC_TOKEN_TY_DIRECTIVE;
       token->span = (struct text_span){.start = start, .end = end};
 
@@ -307,6 +313,19 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   preproc->pos = end;
 }
 
+void preproc_next_non_whitespace_token(struct preproc *preproc, struct preproc_token *token) {
+  do {
+    preproc_next_token(preproc, token);
+  } while (token->ty == PREPROC_TOKEN_TY_WHITESPACE);
+}
+
+bool token_streq(struct preproc *preproc, struct preproc_token token, const char *str) {
+  size_t token_len = token.span.end.idx - token.span.start.idx;
+  size_t len = MIN(token_len, strlen(str));
+
+  return strncmp(&preproc->text[token.span.start.idx], str, len) == 0;
+}
+
 struct preprocessed_program preproc_process(struct preproc *preproc) {
   const char *original_text = preproc->text;
   size_t original_len = preproc->len;
@@ -358,9 +377,28 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       unreachable("unknown token (should never happen)");
     case PREPROC_TOKEN_TY_EOF:
       break;
-    case PREPROC_TOKEN_TY_DIRECTIVE:
-      todo("preproc directives");
+    case PREPROC_TOKEN_TY_DIRECTIVE: {
+      struct preproc_token directive;
+      preproc_next_token(preproc, &directive);
+
+      if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER && token_streq(preproc, directive, "include")) {
+        struct preproc_token filename_token;
+        preproc_next_non_whitespace_token(preproc, &filename_token);
+
+        // remove quotes
+        debug_assert(filename_token.span.end.idx - filename_token.span.start.idx >= 2, "filename token can't be <2 chars");
+        size_t filename_len = filename_token.span.end.idx - filename_token.span.start.idx - 2;
+        char *filename = arena_alloc(preproc->arena, filename_len + 1);
+        filename[filename_len] = 0;
+        strncpy(filename, &preproc->text[filename_token.span.start.idx + 1], filename_len);
+
+        todo("actually include file");
+      } else {
+        todo("other directives");
+      }
+
       break;
+    }
     case PREPROC_TOKEN_TY_WHITESPACE:
       // keep leading whitespace
       if (new_line) {

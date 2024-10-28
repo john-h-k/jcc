@@ -232,7 +232,7 @@ struct ir_op_var_ty var_ty_for_ast_tyref(struct ir_unit *iru,
   case AST_TYREF_TY_UNKNOWN:
     bug("shouldn't reach IR gen with unresolved type");
   case AST_TYREF_TY_TAGGED: {
-    struct ast_tyref base_ty = tyref_get_underlying(iru->parser, ty_ref);
+    struct ast_tyref base_ty = tyref_get_defined(iru->parser, ty_ref);
     return var_ty_for_ast_tyref(iru, &base_ty);
   }
   case AST_TYREF_TY_AGGREGATE: {
@@ -1219,7 +1219,7 @@ void get_member_info(struct ir_func_builder *irb,
                      struct ir_op_var_ty *member_ty, size_t *member_offset) {
   struct ast_tyref aggregate;
   if (ty_ref->ty == AST_TYREF_TY_TAGGED) {
-    aggregate = tyref_get_underlying(irb->parser, ty_ref);
+    aggregate = tyref_get_defined(irb->parser, ty_ref);
   } else {
     aggregate = *ty_ref;
   }
@@ -2111,7 +2111,7 @@ build_ir_for_vardecl_with_initlist(struct ir_func_builder *irb,
 
   struct ast_tyref var_ty = decl->var.var_ty;
   if (var_ty.ty == AST_TYREF_TY_TAGGED) {
-    var_ty = tyref_get_underlying(irb->parser, &var_ty);
+    var_ty = tyref_get_defined(irb->parser, &var_ty);
   }
   // TODO: non array init lists
 
