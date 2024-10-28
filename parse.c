@@ -1821,8 +1821,25 @@ bool parse_decl(struct parser *parser, struct ast_tyref *specifier,
     return false;
   }
 
+  // fixup unsized arrays
+  if (var.var_ty.ty == AST_TYREF_TY_ARRAY && var.var_ty.array.ty == AST_TY_ARRAY_TY_UNKNOWN_SIZE) {
+    size_t size;
+    if (expr.ty == AST_EXPR_TY_CNST) {
+      // must be string
+      size = strlen(expr.cnst.str_value) + 1;
+    } else if (expr.ty == AST_EXPR_TY_INIT_LIST) {
+      size = expr.init_list.num_exprs;
+    } else {
+      bug("couldn't determine array size");
+    }
+
+    var.var_ty.array.ty = AST_TY_ARRAY_TY_KNOWN_SIZE;
+    var.var_ty.array.size = size;
+  }  
+  
   var_decl->ty = AST_DECL_TY_DECL_WITH_ASSG;
   var_decl->assg_expr = expr;
+  var_decl->var = var;
 
   return true;
 }

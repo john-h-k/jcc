@@ -496,6 +496,7 @@ enum ir_var_ty {
 
 struct ir_var_value_list {
   struct ir_var_value *values;
+  size_t *offsets;
   size_t num_values;
 };
 
