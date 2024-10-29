@@ -880,9 +880,6 @@ struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
 
     phi->phi.values[0] = lhs;
     phi->phi.values[1] = rhs;
-    // phi->phi.values = (struct ir_op *[2]){
-    //   lhs, rhs
-    // };
 
     *stmt = phi->stmt;
     return phi;
@@ -902,7 +899,6 @@ struct ir_op *build_ir_for_sizeof(struct ir_func_builder *irb,
   switch (size_of->ty) {
   case AST_SIZEOF_TY_TYPE:
     var_ty = var_ty_for_ast_tyref(irb->func->unit, &size_of->ty_ref);
-    debug_print_var_ty_string(stderr, irb->func->unit, &var_ty);
     break;
   case AST_SIZEOF_TY_EXPR:
     var_ty = var_ty_for_ast_tyref(irb->func->unit, &size_of->expr->var_ty);
@@ -985,6 +981,54 @@ struct ir_op *build_ir_for_compoundexpr(struct ir_func_builder *irb,
   }
 
   return op;
+}
+
+struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
+                               struct ir_stmt **stmt, struct ast_ternary *ternary) {
+  struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond, &ternary->cond->var_ty);
+  struct ir_op *br_cond = alloc_ir_op(irb->func, *stmt);
+  br_cond->ty = IR_OP_TY_BR_COND;
+  br_cond->var_ty = IR_OP_VAR_TY_NONE;
+  br_cond->br_cond = (struct ir_op_br_cond){
+    .cond = cond
+  };
+
+  struct ir_basicblock *pre_cond_bb = (*stmt)->basicblock;
+  struct ir_basicblock *true_bb = alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *false_bb = alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *end_bb = alloc_ir_basicblock(irb->func);
+
+  make_basicblock_split(irb->func, pre_cond_bb, true_bb, false_bb);
+  make_basicblock_merge(irb->func, true_bb, end_bb);
+  make_basicblock_merge(irb->func, false_bb, end_bb);
+
+  
+  struct ir_stmt *true_stmt = alloc_ir_stmt(irb->func, true_bb);
+  struct ir_op *true_op = build_ir_for_expr(irb, &true_stmt, ternary->true_expr, &ternary->var_ty);
+  struct ir_op *true_br = alloc_ir_op(irb->func, true_stmt);
+  true_br->ty = IR_OP_TY_BR;
+  true_br->var_ty = IR_OP_VAR_TY_NONE;
+
+  struct ir_stmt *false_stmt = alloc_ir_stmt(irb->func, false_bb);
+  struct ir_op *false_op = build_ir_for_expr(irb, &false_stmt, ternary->false_expr, &ternary->var_ty);
+  struct ir_op *false_br = alloc_ir_op(irb->func, false_stmt);
+  false_br->ty = IR_OP_TY_BR;
+  false_br->var_ty = IR_OP_VAR_TY_NONE;
+
+  struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
+  struct ir_op *phi = alloc_ir_op(irb->func, end_stmt);
+  phi->ty = IR_OP_TY_PHI;
+  phi->var_ty = var_ty_for_ast_tyref(irb->func->unit, &ternary->var_ty);
+  phi->phi = (struct ir_op_phi){
+      .num_values = 2,
+      .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2),
+      .var = NULL};
+
+  phi->phi.values[0] = true_op;
+  phi->phi.values[1] = false_op;
+
+  *stmt = end_stmt;
+  return phi;
 }
 
 struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
@@ -1481,6 +1525,9 @@ struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
                                 const struct ast_tyref *ast_tyref) {
   struct ir_op *op;
   switch (expr->ty) {
+  case AST_EXPR_TY_TERNARY:
+    op = build_ir_for_ternary(irb, stmt, &expr->ternary);
+    break;
   case AST_EXPR_TY_VAR:
     op = build_ir_for_var(irb, stmt, &expr->var);
     break;

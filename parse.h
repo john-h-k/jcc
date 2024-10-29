@@ -369,10 +369,19 @@ struct ast_alignof {
   struct ast_tyref ty_ref;
 };
 
+struct ast_ternary {
+  struct ast_tyref var_ty;
+
+  struct ast_expr *cond;
+  struct ast_expr *true_expr;
+  struct ast_expr *false_expr;
+};
+
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
 enum ast_expr_ty {
+  AST_EXPR_TY_TERNARY,
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_UNARY_OP,
   AST_EXPR_TY_BINARY_OP,
@@ -393,6 +402,7 @@ struct ast_expr {
   enum ast_expr_ty ty;
   struct ast_tyref var_ty;
   union {
+    struct ast_ternary ternary;
     struct ast_sizeof size_of;
     struct ast_alignof align_of;
     struct ast_var var;

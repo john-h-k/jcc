@@ -258,6 +258,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_OPEN_BRACE:
   case LEX_TOKEN_TY_CLOSE_BRACE:
   case LEX_TOKEN_TY_COLON:
+  case LEX_TOKEN_TY_QMARK:
   case LEX_TOKEN_TY_SEMICOLON:
   case LEX_TOKEN_TY_COMMA:
   case LEX_TOKEN_TY_DOT:
@@ -524,7 +525,10 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
       return *pointer_ty;
     case AST_BINARY_OP_TY_SUB:
       // ptrdiff is signed
-      return (lhs->ty == AST_TYREF_TY_POINTER && rhs->ty == AST_TYREF_TY_POINTER) ? tyref_pointer_sized_int(parser, true) : *pointer_ty;
+      return (lhs->ty == AST_TYREF_TY_POINTER &&
+              rhs->ty == AST_TYREF_TY_POINTER)
+                 ? tyref_pointer_sized_int(parser, true)
+                 : *pointer_ty;
     default:
       bug("bad op for poiner op");
     }
@@ -1769,9 +1773,56 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   }
 }
 
+struct ast_tyref resolve_ternary_ty(struct parser *parser, struct ast_tyref *lhs, struct ast_tyref *rhs) {
+  UNUSED_ARG(parser);
+  UNUSED_ARG(rhs);
+
+  // FIXME: do logic
+  return *lhs;
+}
+
+bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_expr cond, true_expr, false_expr;
+  if (parse_expr_precedence_aware(parser, 0, &cond) &&
+      parse_token(parser, LEX_TOKEN_TY_QMARK) &&
+      parse_expr_precedence_aware(parser, 0, &true_expr) &&
+      parse_token(parser, LEX_TOKEN_TY_COLON) &&
+      parse_expr_precedence_aware(parser, 0, &false_expr)) {
+    expr->ty = AST_EXPR_TY_TERNARY;
+    expr->var_ty = resolve_ternary_ty(parser, &true_expr.var_ty, &false_expr.var_ty);
+    expr->ternary = (struct ast_ternary){
+      .var_ty = expr->var_ty,
+      .cond = arena_alloc(parser->arena, sizeof(*expr->ternary.cond)),
+      .true_expr = arena_alloc(parser->arena, sizeof(*expr->ternary.true_expr)),
+      .false_expr = arena_alloc(parser->arena, sizeof(*expr->ternary.false_expr)),
+    };
+
+    *expr->ternary.cond = cond;
+    *expr->ternary.true_expr = true_expr;
+    *expr->ternary.false_expr = false_expr;
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
+}
+
 bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (parse_ternary(parser, expr)) {
+    return true;
+  }
+
   // all non-assignment expressions
-  return parse_expr_precedence_aware(parser, 0, expr);
+  if (!parse_expr_precedence_aware(parser, 0, expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  return true;
 }
 
 // parse a non-compound expression
@@ -1897,7 +1948,19 @@ bool parse_decl(struct parser *parser, struct ast_tyref *specifier,
       // must be string
       size = strlen(expr.cnst.str_value) + 1;
     } else if (expr.ty == AST_EXPR_TY_INIT_LIST) {
-      size = expr.init_list.num_inits;
+      size_t idx = 0;
+      size_t max_idx = 0;
+      for (size_t i = 0; i < expr.init_list.num_inits; i++) {
+        struct ast_init *init = &expr.init_list.inits[i];
+        if (init->designator && init->designator->ty == AST_DESIGNATOR_TY_INDEX) {
+          idx = init->designator->index;
+        }
+        max_idx = MAX(max_idx, idx);
+
+        idx++;
+      }
+
+      size = max_idx + 1;
     } else {
       bug("couldn't determine array size");
     }
@@ -3801,12 +3864,34 @@ DEBUG_FUNC(alignof, align_of) {
   UNINDENT();
 }
 
+DEBUG_FUNC(ternary, ternary) {
+  AST_PRINTZ("TERNARY");
+
+  INDENT();
+  AST_PRINTZ("COND");
+  DEBUG_CALL(expr, ternary->cond);
+  UNINDENT();
+
+  INDENT();
+  AST_PRINTZ("TRUE");
+  DEBUG_CALL(expr, ternary->true_expr);
+  UNINDENT();
+
+  INDENT();
+  AST_PRINTZ("FALSE");
+  DEBUG_CALL(expr, ternary->false_expr);
+  UNINDENT();
+}
+
 DEBUG_FUNC(expr, expr) {
   AST_PRINTZ("EXPRESSION");
 
   INDENT();
   DEBUG_CALL(tyref, &expr->var_ty);
   switch (expr->ty) {
+  case AST_EXPR_TY_TERNARY:
+    DEBUG_CALL(ternary, &expr->ternary);
+    break;
   case AST_EXPR_TY_VAR:
     DEBUG_CALL(var, &expr->var);
     break;
