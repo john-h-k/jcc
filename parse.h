@@ -639,7 +639,8 @@ struct ast_enumdecllist {
 /* Function definitions and declarations */
 
 struct ast_funcdef {
-  // struct ast_decllist decl;
+  enum ast_storage_class_specifier_flags storage_class_specifiers;
+
   struct token identifier;
   struct ast_tyref var_ty;
   struct ast_compoundstmt body;
