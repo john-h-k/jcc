@@ -337,7 +337,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_CALL:
-              if (op->call.target->ty == IR_OP_TY_ADDR) {
+              if (op->call.target->ty == IR_OP_TY_ADDR && op->call.target->addr.ty == IR_OP_ADDR_TY_GLB) {
                 op->call.target = alloc_contained_ir_op(func, op->call.target, op);
               }
               break;
