@@ -372,10 +372,11 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   size_t offset = get_lcl_stack_offset(state, op, lcl);
 
-  if (op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+  if (op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
     instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
   } else {
-    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;    
+    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
   }
   instr->aarch64->load_imm =
       (struct aarch64_load_imm){.dest = dest,
@@ -391,10 +392,11 @@ static void codegen_store_lcl_op(struct codegen_state *state,
   struct aarch64_reg source = codegen_reg(op->store_lcl.value);
   struct ir_lcl *lcl = op->lcl;
 
-  if (op->store_lcl.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->store_lcl.value->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+  if (op->store_lcl.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+      op->store_lcl.value->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
     instr->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
   } else {
-    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;    
+    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
   }
   instr->aarch64->str_imm = (struct aarch64_store_imm){
       .source = source,
@@ -1597,25 +1599,46 @@ int sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
-static void codegen_write_var_value(struct ir_unit *iru, struct ir_var_value *value, char *data) {
-  switch (value->ty) {
-  case IR_VAR_VALUE_TY_UNDF:
+static void codegen_write_var_value(struct ir_unit *iru,
+                                    struct ir_var_value *value, char *data) {
+  if (!value) {
+    return;
+  }
+
+  switch (value->var_ty.ty) {
+  case IR_OP_VAR_TY_TY_NONE:
+  case IR_OP_VAR_TY_TY_VARIADIC:
     break;
-  case IR_VAR_VALUE_TY_STR:
-    strcpy(data, value->str_value);
-    break;
-  case IR_VAR_VALUE_TY_INT:
-    memcpy(data, &value->int_value, sizeof(unsigned long));
-    break;
-  case IR_VAR_VALUE_TY_FLT:
-    // FIXME: this needs to understand the actual data type
-    *(double*)data = value->int_value;
-    break;
-  case IR_VAR_VALUE_TY_VALUE_LIST:
-    for (size_t i = 0; i < value->value_list.num_values; i++) {
-      codegen_write_var_value(iru, &value->value_list.values[i], &data[value->value_list.offsets[i]]);
+  case IR_OP_VAR_TY_TY_PRIMITIVE: {
+    switch (value->var_ty.primitive) {
+    case IR_OP_VAR_PRIMITIVE_TY_I8:
+      memcpy(data, &value->int_value, 1);
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_I16:
+      memcpy(data, &value->int_value, 2);
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_I32:
+    case IR_OP_VAR_PRIMITIVE_TY_F32:
+      memcpy(data, &value->int_value, 4);
+      break;
+    case IR_OP_VAR_PRIMITIVE_TY_I64:
+    case IR_OP_VAR_PRIMITIVE_TY_F64:
+      memcpy(data, &value->int_value, sizeof(unsigned long));
+      break;
     }
     break;
+  }
+  case IR_OP_VAR_TY_TY_FUNC:
+  case IR_OP_VAR_TY_TY_POINTER:
+    todo("todo");
+
+  case IR_OP_VAR_TY_TY_ARRAY:
+  case IR_OP_VAR_TY_TY_STRUCT:
+  case IR_OP_VAR_TY_TY_UNION:
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      codegen_write_var_value(iru, &value->value_list.values[i],
+                              &data[value->value_list.offsets[i]]);
+    }
   }
 }
 

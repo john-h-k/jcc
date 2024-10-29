@@ -599,30 +599,29 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 }
 
 void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value) {
-  switch (var_value->ty) {
-  case IR_VAR_VALUE_TY_UNDF:
+  if (!var_value) {
     fprintf(file, "UNDF");
-    break;
-  case IR_VAR_VALUE_TY_STR:
-    fprintf(file, "%s", var_value->str_value);
-    break;
-  case IR_VAR_VALUE_TY_INT:
-    fprintf(file, "%llu", var_value->int_value);
-    break;
-  case IR_VAR_VALUE_TY_FLT:
-    fprintf(file, "%Lf", var_value->flt_value);
-    break;
-  case IR_VAR_VALUE_TY_VALUE_LIST:
-    fprintf(file, "{\n");
-    for (size_t i = 0; i < var_value->value_list.num_values; i++) {
-      fprintf(file, "  ");
-      struct ir_var_value *sub_value = &var_value->value_list.values[i];
-      debug_print_ir_var_value(file, sub_value);
-      fprintf(file, ",  OFFSET=%zu\n", var_value->value_list.offsets[i]);
-    }
-    fprintf(file, "}");
-    break;
   }
+  // case IR_VAR_VALUE_TY_STR:
+  //   fprintf(file, "%s", var_value->str_value);
+  //   break;
+  // case IR_VAR_VALUE_TY_INT:
+  //   fprintf(file, "%llu", var_value->int_value);
+  //   break;
+  // case IR_VAR_VALUE_TY_FLT:
+  //   fprintf(file, "%Lf", var_value->flt_value);
+  //   break;
+  // case IR_VAR_VALUE_TY_VALUE_LIST:
+  //   fprintf(file, "{\n");
+  //   for (size_t i = 0; i < var_value->value_list.num_values; i++) {
+  //     fprintf(file, "  ");
+  //     struct ir_var_value *sub_value = &var_value->value_list.values[i];
+  //     debug_print_ir_var_value(file, sub_value);
+  //     fprintf(file, ",  OFFSET=%zu\n", var_value->value_list.offsets[i]);
+  //   }
+  //   fprintf(file, "}");
+  //   break;
+  // }
 }
 
 void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {

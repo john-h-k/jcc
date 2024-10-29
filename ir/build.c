@@ -954,7 +954,7 @@ struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
     glb->var = arena_alloc(irb->func->arena, sizeof(*glb->var));
     *glb->var = (struct ir_var){
         .ty = IR_VAR_TY_STRING_LITERAL,
-        .value = {.ty = IR_VAR_VALUE_TY_STR, .str_value = cnst->str_value}};
+        .value = {.var_ty = var_ty, .str_value = cnst->str_value}};
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -1429,7 +1429,7 @@ struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   store->store_addr =
       (struct ir_op_store_addr){.addr = address, .value = value};
 
-  return store;
+  return value;
 }
 
 struct ir_op *build_ir_for_arrayaccess(struct ir_func_builder *irb,
@@ -2561,7 +2561,6 @@ struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
   case AST_TYREF_TY_TAGGED:
   case AST_TYREF_TY_AGGREGATE:
     return (struct ir_var_value){
-      .ty = IR_VAR_VALUE_TY_INT,
       .var_ty = var_ty_for_ast_tyref(iru, var_ty)
     };
   }
@@ -2690,7 +2689,7 @@ build_ir_value_for_struct_initlist(struct ir_unit *iru,
     value_list.offsets[i] = offset;
   }
 
-  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
+  return (struct ir_var_value){.var_ty = var_ty_for_ast_tyref(iru, var_ty),
                                .value_list = value_list};
 }
 
@@ -2706,13 +2705,13 @@ struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
   case AST_EXPR_TY_CNST: {
     struct ast_cnst *cnst = &expr->cnst;
     if (is_integral_ty(&cnst->cnst_ty)) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
+      return (struct ir_var_value){.var_ty = var_ty_for_ast_tyref(iru, &cnst->cnst_ty),
                                    .int_value = expr->cnst.int_value};
     } else if (is_fp_ty(&cnst->cnst_ty)) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
+      return (struct ir_var_value){.var_ty = var_ty_for_ast_tyref(iru, &cnst->cnst_ty),
                                    .flt_value = expr->cnst.flt_value};
     } else if (cnst->cnst_ty.ty == AST_TYREF_TY_POINTER) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
+      return (struct ir_var_value){.var_ty = var_ty_for_ast_tyref(iru, &cnst->cnst_ty),
                                    .str_value = expr->cnst.str_value};
     } else {
       bug("bad var ty");
@@ -2787,7 +2786,7 @@ struct ir_unit *build_ir_for_translationunit(
           value =
               build_ir_for_var_value(iru, &decl->assg_expr, &decl->var.var_ty);
         } else {
-          value = (struct ir_var_value){.ty = IR_VAR_VALUE_TY_UNDF};
+          value = (struct ir_var_value){.var_ty = var_ty };
         }
 
         *ref->glb->var = (struct ir_var){
