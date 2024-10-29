@@ -995,19 +995,31 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   struct token token;
 
+  struct vector *strings = vector_create(sizeof(char));
+
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
-  if (is_literal_token(parser, token.ty, &ty_ref) &&
+  while (is_literal_token(parser, token.ty, &ty_ref) &&
       token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
     cnst->cnst_ty = ty_ref;
-    cnst->str_value = associated_text(parser->lexer, &token);
+
+    const char *str = associated_text(parser->lexer, &token);
+    vector_extend(strings, str, strlen(str));
 
     consume_token(parser->lexer, token);
-    return true;
+    peek_token(parser->lexer, &token);
   }
 
-  backtrack(parser->lexer, pos);
-  return false;
+  if (vector_empty(strings)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  char null = 0;
+  vector_push_back(strings, &null);
+  cnst->str_value = arena_alloc(parser->arena, vector_byte_size(strings));
+  vector_copy_to(strings, cnst->str_value);
+  return true;
 }
 
 bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
