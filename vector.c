@@ -47,7 +47,7 @@ void *vector_push_front(struct vector *v, const void *data) {
   for (size_t i = length; i > 0; i--) {
     void *curr = vector_get(v, i);
     void *prev = vector_get(v, i - 1);
-    memcpy(curr, prev, v->element_size);
+    memmove(curr, prev, v->element_size);
   }
 
   void *head = vector_head(v);
@@ -55,6 +55,15 @@ void *vector_push_front(struct vector *v, const void *data) {
   return head;
 }
 
+void vector_remove_at(struct vector *v, size_t index) {
+  debug_assert(index < v->len, "index out of range");
+
+  v->len--;
+
+  size_t tail = v->len - index;
+  char *pos = &v->data[index * v->element_size];
+  memmove(pos, &pos[v->element_size], tail * v->element_size);
+}
 
 void vector_truncate(struct vector *v, size_t new_len) {
   debug_assert(new_len <= v->len, "truncating out of range");

@@ -14,6 +14,7 @@ enum compile_target_arch {
 
 enum compile_log_flags {
   COMPILE_LOG_FLAGS_NONE = 0,
+  COMPILE_LOG_FLAGS_PREPROC = 1,
   COMPILE_LOG_FLAGS_PARSE = 2,
   COMPILE_LOG_FLAGS_IR = 4,
   COMPILE_LOG_FLAGS_REGALLOC = 8,

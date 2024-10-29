@@ -242,7 +242,7 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   UNUSED_ARG(irb);
 
   if (ir->comment) {
-    fprintf(file, "// %s", ir->comment);
+    fprintf(file, "// %s\n", ir->comment);
   }
 
   switch (ir->ty) {
@@ -410,7 +410,11 @@ void prettyprint_begin_visit_basicblock_file(struct ir_func *irb,
 
   struct prettyprint_file_metadata *fm = metadata;
 
-  fslog(fm->file, "\nBB @ %03zu", basicblock->id);
+  fslog(fm->file, "\n");
+  if (basicblock->comment) {
+    fslog(fm->file, "// %s\n", basicblock->comment);
+  }
+  fslog(fm->file, "BB @ %03zu", basicblock->id);
 }
 
 void prettyprint_end_visit_basicblock_file(struct ir_func *irb,
@@ -599,6 +603,24 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   fprintf(file, "FUNCTION: %s\n", irb->name);
   fprintf(file, "    num_locals: %zu\n", irb->num_locals);
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
+  fprintf(file, "\n");
+
+  if (irb->num_locals) {
+    fprintf(file, "LOCALS: {\n");
+    struct ir_lcl *lcl = irb->first_local;
+    while (lcl) {
+      fprintf(file, "  ");
+
+      fprintf(file, "[%zu] : ", lcl->id);
+      debug_print_var_ty_string(file, irb->unit, &lcl->var_ty);
+
+      fprintf(file, ",\n");
+      lcl = lcl->succ;
+    }
+    fprintf(file, "}");
+  }
+
+  fprintf(file, "\n");
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 

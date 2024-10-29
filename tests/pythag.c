@@ -17,6 +17,7 @@ int main() {
   while (ans * ans < r) {
     ans = ans + 1;
   }
+  printf("ans: %ld\n", ans);
 
   if (ans * ans > r) {
     printf("%ld < sqrt(%ld^2 + %ld^2) < %ld\n", ans - 1, a, b, ans);
