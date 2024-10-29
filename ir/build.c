@@ -472,7 +472,6 @@ struct ir_op *alloc_binaryop(struct ir_func_builder *irb, struct ir_stmt *stmt,
 
       return op;
     } else {
-
       struct ir_op_var_ty pointer_ty =
           var_ty_for_ast_tyref(irb->func->unit, ty_ref);
 
