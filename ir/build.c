@@ -2597,24 +2597,25 @@ size_t get_member_index_offset(struct ir_unit *iru,
 size_t get_designator_offset(struct ir_unit *iru,
                              const struct ast_tyref *var_ty,
                              struct ast_designator *designator,
-                             size_t *member_index) {
+                             size_t *member_index,
+                             struct ast_tyref *member_ty
+                           ) {
   size_t offset;
-  struct ast_tyref member_ty_ref;
 
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD: {
     const char *member_name = identifier_str(iru->parser, &designator->field);
-    struct ir_op_var_ty member_ty;
+    struct ir_op_var_ty ir_member_ty;
     size_t member_offset;
-    get_member_info(iru, var_ty, member_name, &member_ty, member_index,
-                    &member_offset, &member_ty_ref);
+    get_member_info(iru, var_ty, member_name, &ir_member_ty, member_index,
+                    &member_offset, member_ty);
 
     offset = member_offset;
     break;
   }
   case AST_DESIGNATOR_TY_INDEX: {
-    member_ty_ref = tyref_get_underlying(iru->parser, var_ty);
-    struct ir_op_var_ty el_var_ty = var_ty_for_ast_tyref(iru, &member_ty_ref);
+    *member_ty = tyref_get_underlying(iru->parser, var_ty);
+    struct ir_op_var_ty el_var_ty = var_ty_for_ast_tyref(iru, member_ty);
     struct ir_var_ty_info info = var_ty_info(iru, &el_var_ty);
 
     offset = info.size * designator->index;
@@ -2626,8 +2627,9 @@ size_t get_designator_offset(struct ir_unit *iru,
 
   if (designator->next) {
     size_t idx;
+    struct ast_tyref sub_member_ty;
     offset +=
-        get_designator_offset(iru, &member_ty_ref, designator->next, &idx);
+        get_designator_offset(iru, member_ty, designator->next, &idx, &sub_member_ty);
   }
 
   return offset;
@@ -2671,7 +2673,7 @@ build_ir_value_for_struct_initlist(struct ir_unit *iru,
     struct ast_tyref member_ty;
     if (i < init_list->num_inits && init->designator) {
       offset = get_designator_offset(
-          iru, var_ty, init_list->inits[i].designator, &member_idx);
+          iru, var_ty, init_list->inits[i].designator, &member_idx, &member_ty);
     } else {
       offset = get_member_index_offset(iru, var_ty, member_idx, &member_ty);
     }
