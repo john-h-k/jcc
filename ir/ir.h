@@ -500,17 +500,7 @@ struct ir_var_value_list {
   size_t num_values;
 };
 
-enum ir_var_value_ty {
-  IR_VAR_VALUE_TY_UNDF,
-  IR_VAR_VALUE_TY_STR,
-  IR_VAR_VALUE_TY_INT,
-  IR_VAR_VALUE_TY_FLT,
-  IR_VAR_VALUE_TY_VALUE_LIST
-};
-
 struct ir_var_value {
-  enum ir_var_value_ty ty;
-
   struct ir_op_var_ty var_ty;
 
   union {
@@ -524,7 +514,6 @@ struct ir_var_value {
 
 struct ir_var {
   enum ir_var_ty ty;
-
   struct ir_op_var_ty var_ty;
   struct ir_var_value value;
 };
