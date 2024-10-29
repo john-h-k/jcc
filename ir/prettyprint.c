@@ -391,6 +391,10 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   }  
+
+  if (ir->flags & IR_OP_FLAG_CONTAINED) {
+    fprintf(file, " [CONTAINED] ");
+  }
 }
 
 extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;

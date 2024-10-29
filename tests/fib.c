@@ -1,6 +1,5 @@
 // Expected value: 89
 
-int printf(const char *, ...);
 int fib(int n) {
   if (n == 0) {
     return n;

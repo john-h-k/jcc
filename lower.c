@@ -1,4 +1,5 @@
 #include "lower.h"
+#include "ir/ir.h"
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
   struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
@@ -24,16 +25,15 @@ static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
   op->load_addr = (struct ir_op_load_addr){.addr = addr};
 }
 
-// Most architectures require turning `br.cond <true> <false>` into 2 instructions
-// we represent this as just the `true` part of the `br.cond`, and then a `br`
-// after branching to the false target
+// Most architectures require turning `br.cond <true> <false>` into 2
+// instructions we represent this as just the `true` part of the `br.cond`, and
+// then a `br` after branching to the false target
 static void lower_br_cond(struct ir_func *irb, struct ir_op *op) {
   if (1 == 2)
-  insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
+    insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
 }
 
-
-void lower(struct ir_unit *unit) {
+void lower(struct ir_unit *unit, const struct target *target) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
@@ -123,6 +123,39 @@ void lower(struct ir_unit *unit) {
     }
     }
 
+    glb = glb->succ;
+  }
+
+  // now target-specific lowering
+  if (target->lower) {
+    target->lower(unit);
+  }
+
+  // now we do pruning before regalloc
+  glb = unit->first_global;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
+
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      break;
+    case IR_GLB_TY_FUNC: {
+      struct ir_func *func = glb->func;
+      struct ir_op_uses uses = build_op_uses_map(func);
+
+      for (size_t i = 0; i < uses.num_use_datas; i++) {
+        struct ir_op_use *use = &uses.use_datas[i];
+
+        if (!use->num_uses && !op_has_side_effects(use->op)) {
+          debug("detaching op %zu", use->op->id);
+          detach_ir_op(func, use->op);
+        }
+      }
+    }
+    }
     glb = glb->succ;
   }
 }

@@ -38,6 +38,43 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   }
 }
 
+bool op_has_side_effects(const struct ir_op *op) {
+  if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+    return true;
+  }
+
+  switch (op->ty) {
+  case IR_OP_TY_UNKNOWN:
+    bug("unknown op ty");
+  case IR_OP_TY_PHI:
+  case IR_OP_TY_UNDF:
+  case IR_OP_TY_CNST:
+  case IR_OP_TY_CAST_OP:
+  case IR_OP_TY_LOAD_GLB:
+  case IR_OP_TY_LOAD_LCL:
+  case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_ADDR:
+  case IR_OP_TY_BINARY_OP:
+    return false;
+  case IR_OP_TY_UNARY_OP:
+    return op->unary_op.ty == AST_UNARY_OP_TY_POSTFIX_DEC
+    ||op->unary_op.ty == AST_UNARY_OP_TY_POSTFIX_INC
+    ||op->unary_op.ty == AST_UNARY_OP_TY_PREFIX_DEC
+    ||op->unary_op.ty == AST_UNARY_OP_TY_PREFIX_INC;
+  case IR_OP_TY_MOV:
+  case IR_OP_TY_CALL:
+  case IR_OP_TY_STORE_GLB:
+  case IR_OP_TY_STORE_LCL:
+  case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_BR_COND:
+  case IR_OP_TY_RET:
+  case IR_OP_TY_BR:
+    return true;
+  case IR_OP_TY_CUSTOM:
+    bug("not well defined for IR_OP_TY_CUSTOM");
+  }
+}
+
 bool op_produces_value(const struct ir_op *op) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
@@ -764,6 +801,34 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   return op;
 }
 
+struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_op *consumer) {
+  struct ir_op *contained = insert_before_ir_op(irb, consumer, op->ty, op->var_ty);
+
+  contained->flags |= IR_OP_FLAG_CONTAINED;
+  
+  switch (op->ty) {
+    case IR_OP_TY_CNST:
+      contained->cnst = op->cnst;
+      break;
+    case IR_OP_TY_ADDR:
+      contained->addr = op->addr;
+      break;
+    case IR_OP_TY_CAST_OP:
+      contained->cast_op = op->cast_op;
+      break;
+    case IR_OP_TY_BINARY_OP:
+      contained->binary_op = op->binary_op;
+      break;
+    case IR_OP_TY_UNARY_OP:
+      contained->unary_op = op->unary_op;
+      break;
+    default:
+      todo("unsupported type for contained op");
+  }
+
+  return contained;
+}
+
 void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_op_var_primitive_ty ty,
                             unsigned long long value) {
@@ -1155,21 +1220,18 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   }
 }
 
-void spill_op(struct ir_func *irb, struct ir_op *op) {
+struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
   debug_assert(!(op->flags & IR_OP_FLAG_FIXED_REG), "spilling fixed reg illegal");
 
   debug("spilling %zu\n", op->id);
 
-  if (op->reg.ty == IR_REG_TY_SPILLED) {
-    debug_assert(op->lcl, "op was spilled but had no local");
-    return;
+  if (!op->lcl) {
+    op->lcl = add_local(irb, &op->var_ty);    
   }
 
   if (op->ty != IR_OP_TY_PHI) {
-    op->lcl = add_local(irb, &op->var_ty);
-
+    // storing undf makes no sense
     if (op->ty != IR_OP_TY_UNDF) {
-      // storing undf makes no sense
       struct ir_op *store =
           insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
       store->lcl = op->lcl;
@@ -1178,9 +1240,10 @@ void spill_op(struct ir_func *irb, struct ir_op *op) {
       store->flags |= IR_OP_FLAG_SPILL;
 
       op->lcl->store = store;
+      return store;
     }
 
-    return;
+    return NULL;
   }
 
   // if phi is spilled, first ensure it doesn't already have a local via one of
@@ -1204,9 +1267,16 @@ void spill_op(struct ir_func *irb, struct ir_op *op) {
 
     value->lcl = lcl;
   }
+
+  return NULL;
 }
 
 struct build_op_uses_callback_data {
+  struct ir_op *op;
+  struct use_data *use_data;
+};
+
+struct use_data {
   struct ir_op *op;
   struct vector *uses;
 };
@@ -1214,13 +1284,21 @@ struct build_op_uses_callback_data {
 static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
   struct build_op_uses_callback_data *data = cb_metadata;
 
-  vector_push_back(data->uses, op);
+  vector_push_back(data->use_data[(*op)->id].uses, data->op);
 }
 
 struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   rebuild_ids(func);
 
-  struct build_op_uses_callback_data *datas = arena_alloc(func->arena, sizeof(*datas) * func->op_count);
+  struct build_op_uses_callback_data data = {
+    .op = NULL,
+    .use_data = arena_alloc(func->arena, sizeof(*data.use_data) * func->op_count)
+  };
+
+  for (size_t i = 0; i < func->op_count; i++) {
+    // because walk_op_uses can be out of order we need to create the vectors in advance
+    data.use_data[i].uses = vector_create(sizeof(struct ir_op *));
+  }
 
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
@@ -1230,13 +1308,10 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
       struct ir_op *op = stmt->first;
 
       while (op) {
-        struct build_op_uses_callback_data *data = &datas[op->id];
-        *data = (struct build_op_uses_callback_data){
-          .op = op,
-          .uses = vector_create(sizeof(struct ir_op *))
-        };
+        data.op = op;
+        data.use_data[op->id].op = op;
 
-        walk_op_uses(op, build_op_uses_callback, data);
+        walk_op_uses(op, build_op_uses_callback, &data);
 
         op = op->succ;
       }
@@ -1253,15 +1328,17 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   };
 
   for (size_t i = 0; i < func->op_count; i++) {
-    struct build_op_uses_callback_data *data = &datas[i];
+    struct use_data *use_data = &data.use_data[i];
+
+    debug_assert(i == use_data->op->id, "ops were not keyed");
 
     uses.use_datas[i] = (struct ir_op_use){
-      .op = data->op,
-      .num_uses = vector_length(data->uses),
-      .uses = arena_alloc(func->arena, vector_byte_size(data->uses))
+      .op = use_data->op,
+      .num_uses = vector_length(use_data->uses),
+      .uses = arena_alloc(func->arena, vector_byte_size(use_data->uses))
     };
 
-    vector_copy_to(data->uses, uses.use_datas[i].uses);
+    vector_copy_to(use_data->uses, uses.use_datas[i].uses);
   }
 
   return uses;
