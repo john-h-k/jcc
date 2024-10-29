@@ -263,6 +263,11 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
   enum lex_token_ty ty;
   switch (c) {
+  case '?':
+    ty = LEX_TOKEN_TY_QMARK;
+    next_col(&end);
+    break;
+
   case '(':
     ty = LEX_TOKEN_TY_OPEN_BRACKET;
     next_col(&end);
@@ -679,6 +684,7 @@ const char *token_name(const struct lexer *lexer, const struct token *token) {
     CASE_RET(LEX_TOKEN_TY_COMMA)
     CASE_RET(LEX_TOKEN_TY_DOT)
     CASE_RET(LEX_TOKEN_TY_ARROW)
+    CASE_RET(LEX_TOKEN_TY_QMARK)
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 

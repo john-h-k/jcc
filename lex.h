@@ -1,8 +1,8 @@
 #ifndef LEX_H
 #define LEX_H
 
-#include "util.h"
 #include "program.h"
+#include "util.h"
 
 #include <stdlib.h>
 
@@ -24,11 +24,12 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OPEN_SQUARE_BRACKET,  // [
   LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET, // ]
 
-  LEX_TOKEN_TY_COLON, // :
+  LEX_TOKEN_TY_COLON,     // :
   LEX_TOKEN_TY_SEMICOLON, // ;
   LEX_TOKEN_TY_COMMA,     // ,
   LEX_TOKEN_TY_DOT,       // .
-  LEX_TOKEN_TY_ARROW,       // ->
+  LEX_TOKEN_TY_ARROW,     // ->
+  LEX_TOKEN_TY_QMARK,     // ?
 
   /* Operators */
 
@@ -122,9 +123,9 @@ enum lex_token_ty {
   LEX_TOKEN_TY_ASCII_CHAR_LITERAL, // 'a'
   LEX_TOKEN_TY_ASCII_STR_LITERAL,  // "foobar"
 
-  LEX_TOKEN_TY_FLOAT_LITERAL,   // 10.0f
-  LEX_TOKEN_TY_DOUBLE_LITERAL,   // 10.0
-  LEX_TOKEN_TY_LONG_DOUBLE_LITERAL,   // 10.0l
+  LEX_TOKEN_TY_FLOAT_LITERAL,       // 10.0f
+  LEX_TOKEN_TY_DOUBLE_LITERAL,      // 10.0
+  LEX_TOKEN_TY_LONG_DOUBLE_LITERAL, // 10.0l
 
   // Note: `lex.c` relies on `unsigned` being `signed + 1`
 
@@ -149,7 +150,8 @@ struct token {
 struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
-enum lex_create_result lexer_create(struct preprocessed_program *program, struct lexer **lexer);
+enum lex_create_result lexer_create(struct preprocessed_program *program,
+                                    struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
 struct text_pos get_position(struct lexer *lexer);
@@ -163,7 +165,8 @@ void consume_token(struct lexer *lexer, struct token token);
 // * `token.ty == LEX_TOKEN_TY_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
-const char *associated_text(const struct lexer *lexer, const struct token *token);
+const char *associated_text(const struct lexer *lexer,
+                            const struct token *token);
 const char *token_name(const struct lexer *lexer, const struct token *token);
 
 #endif
