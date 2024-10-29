@@ -1360,7 +1360,7 @@ struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   struct ir_op *value;
   switch (assg->ty) {
   case AST_ASSG_TY_SIMPLEASSG:
-    value = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
+    value = build_ir_for_expr(irb, stmt, assg->expr, &assg->var_ty);
     break;
   case AST_ASSG_TY_COMPOUNDASSG: {
     struct ir_op *assignee = build_ir_for_expr(
