@@ -78,6 +78,10 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
 }
 
 void *arena_alloc(struct arena_allocator *allocator, size_t size) {
+  if (!size) {
+    return 0;
+  }
+
   size_t aligned = ROUND_UP(size, sizeof(void *));
 
   struct arena *arena;
@@ -115,7 +119,7 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
 
   void *allocation;
   invariant_assert(try_alloc_in_arena(allocator->last, aligned, &allocation),
-                   "allocating into new arena should be infallible");
+                   "allocating into new arena should be infallible (%zu bytes requested)", aligned);
   return allocation;
 }
 

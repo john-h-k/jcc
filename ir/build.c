@@ -181,7 +181,7 @@ bool var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  if (l->ty == IR_OP_VAR_TY_TY_POINTER && r->ty == IR_OP_VAR_TY_TY_FUNC) {
+  if (l->ty == IR_OP_VAR_TY_TY_FUNC && r->ty == IR_OP_VAR_TY_TY_POINTER) {
     return false;
   }
 
@@ -651,6 +651,9 @@ struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
     // decay T[] to T* (rather than to T[]*)
     var_ty = var_ty_make_pointer(irb->func->unit,
                                  underlying_var_ty.array.underlying);
+  } else if (underlying_var_ty.ty == IR_OP_VAR_TY_TY_FUNC) {
+    // `func_ptr = func` is legal without address
+    var_ty = var_ty_make_pointer(irb->func->unit, &underlying_var_ty);
   } else {
     var_ty = var_ty_make_pointer(irb->func->unit, &underlying_var_ty);
   }
@@ -1038,7 +1041,8 @@ struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
 struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                struct ir_stmt **stmt, struct ast_var *var) {
   // if `a` is an array, then reading `a` is actually `&a[0]`
-  if (var->var_ty.ty == AST_TYREF_TY_ARRAY) {
+  // same with functions
+  if (var->var_ty.ty == AST_TYREF_TY_ARRAY || var->var_ty.ty == AST_TYREF_TY_FUNC) {
     return build_ir_for_addressof_var(irb, stmt, var);
   }
 
@@ -1191,6 +1195,12 @@ struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   struct ir_op_var_ty func_ty =
       var_ty_for_ast_tyref(irb->func->unit, &call->target->var_ty);
+
+  // one level deref can occur
+  if (func_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+    func_ty = *func_ty.pointer.underlying;
+  }
+
   debug_assert(func_ty.ty == IR_OP_VAR_TY_TY_FUNC,
                "expected target to be func ty");
 
@@ -1224,9 +1234,8 @@ struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   op->ty = IR_OP_TY_CALL;
   op->var_ty = var_ty_for_ast_tyref(irb->func->unit, &call->var_ty);
-  // TODO: if this is ptr it will need unwrapping one layer
-  op->call.func_ty =
-      var_ty_for_ast_tyref(irb->func->unit, &call->target->var_ty);
+
+  op->call.func_ty = func_ty;
   op->call.target = target;
   op->call.num_args = call->arg_list.num_args;
   op->call.args = args;
