@@ -216,7 +216,7 @@ int compare_interval_id(const void *a, const void *b) {
 }
 
 struct interval_data register_alloc_pass(struct ir_func *irb,
-                                         struct reg_info *info, bool *spilled) {
+                                         struct reg_info *info) {
 
   struct interval_data data = construct_intervals(irb);
 
@@ -317,7 +317,6 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
       }
 
       spill_op(irb, interval->op);
-      *spilled = true;
       continue;
     }
 
@@ -357,7 +356,6 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
       // need to spill, no free registers
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = spill_reg};
       spill_at_interval(irb, &state, i);
-      *spilled = true;
     }
   }
 
@@ -389,25 +387,11 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
                         false),
   };
 
-  bool spill_exists = true;
-  int attempts = 0;
-
-  while (spill_exists) {
-    // concerned this may not terminate
-    // a cursory logic check suggests it *should* but include this so we can see
-    // if it is failing
-    attempts++;
-    if (attempts > 10) {
-      bug("LSRA didn't terminate after %d attempts", attempts);
-    }
-
     BEGIN_SUB_STAGE("REGALLOC");
-
-    spill_exists = false;
 
     clear_metadata(irb);
     struct interval_data data =
-        register_alloc_pass(irb, &reg_info, &spill_exists);
+        register_alloc_pass(irb, &reg_info);
 
     qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
           compare_interval_id);
@@ -416,7 +400,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
       debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
     }
 
-    spill_exists = false;
     BEGIN_SUB_STAGE("SPILL HANDLING");
 
     // insert LOAD and STORE ops as needed
@@ -428,5 +411,4 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
     if (log_enabled()) {
       debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
     }
-  }
 }
