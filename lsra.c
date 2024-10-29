@@ -60,6 +60,7 @@ void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
 
     intervals[cur_interval].op->reg = spill->op->reg;
     spill_op(irb, spill->op);
+    spill->op->flags |= IR_OP_FLAG_SPILLED;
 
     state->num_active--;
 
@@ -67,6 +68,7 @@ void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
   } else {
     // spill current interval
     spill_op(irb, intervals[cur_interval].op);
+    intervals[cur_interval].op->flags |= IR_OP_FLAG_SPILLED;
   }
 }
 
@@ -151,7 +153,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
     return;
   }
 
-  if ((*op)->reg.ty == IR_REG_TY_SPILLED) {
+  if ((*op)->flags & IR_OP_FLAG_SPILLED) {
     debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
                  __func__);
     if (op_needs_reg(data->consumer)) {
@@ -218,10 +220,15 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
 
   struct interval_data data = construct_intervals(irb);
 
+  // we reserve one reg in each bank for spills
+
   size_t num_gp_regs =
-      info->gp_registers.num_volatile + info->gp_registers.num_nonvolatile;
+      info->gp_registers.num_volatile + info->gp_registers.num_nonvolatile - 1;
   size_t num_fp_regs =
-      info->fp_registers.num_volatile + info->fp_registers.num_nonvolatile;
+      info->fp_registers.num_volatile + info->fp_registers.num_nonvolatile - 1;
+
+  size_t gp_spill_reg = num_gp_regs;
+  size_t fp_spill_reg = num_fp_regs;
 
   struct register_alloc_state state = {
       .interval_data = data,
@@ -262,8 +269,6 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
           continue;
         }
 
-        printf("spilling %zu ending %zu (%zu)\n", live->op->id, live->end, interval->op->id);
-
         if ((reg.ty == IR_REG_TY_INTEGRAL &&
              reg.idx < info->gp_registers.num_volatile) ||
             (reg.ty == IR_REG_TY_FP &&
@@ -294,7 +299,7 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
+        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) || (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
         !op_produces_value(interval->op) || interval->op->ty == IR_OP_TY_UNDF) {
       continue;
     }
@@ -319,14 +324,17 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
     struct bitset *reg_pool;
     struct bitset *all_used_reg_pool;
     enum ir_reg_ty reg_ty;
+    size_t spill_reg;
     if (var_ty_is_integral(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
       all_used_reg_pool = irb->reg_usage.gp_registers_used;
+      spill_reg = gp_spill_reg;
     } else if (var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
       all_used_reg_pool = irb->reg_usage.fp_registers_used;
+      spill_reg = fp_spill_reg;
     } else {
       bug("don't know what register type to allocate for op %zu",
           interval->op->id);
@@ -347,6 +355,7 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
       insert_active(&state, cur_interval);
     } else {
       // need to spill, no free registers
+      interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = spill_reg};
       spill_at_interval(irb, &state, i);
       *spilled = true;
     }
@@ -359,12 +368,6 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
      - phi elimination must have occured earlier
      - registers may be spilt to new local variables
 
-  Works via a two-pass allocation approach:
-     - first pass assigns "trivial" registers and marks which variables need
-  spill
-     - after the first pass, we run another alloc to allocate local slots, and
-  insert `storelcl` and `loadlcl` instructions with appropriate locals as will
-  be needed
 */
 
 bool op_needs_int_reg(struct ir_op *op) {
@@ -413,6 +416,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
       debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
     }
 
+    spill_exists = false;
     BEGIN_SUB_STAGE("SPILL HANDLING");
 
     // insert LOAD and STORE ops as needed

@@ -1099,6 +1099,10 @@ static struct move_set gen_move_order(struct arena_allocator *arena,
 
   vector_copy_to(moves, move_set.moves);
 
+  vector_free(&non_dependent);
+  vector_free(&remainder);
+  vector_free(&moves);
+
   return move_set;
 
 #undef NO_LOCATION

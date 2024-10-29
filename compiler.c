@@ -136,11 +136,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("LOWERING");
 
-    lower(ir);
-
-    if (target->lower) {
-      target->lower(ir);
-    }
+    lower(ir, target);
 
     BEGIN_STAGE("POST PRE REG LOWER IR");
 
@@ -205,7 +201,6 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "elim_phi");
     }
 
-    BEGIN_STAGE("EXPOSE ABI");
     glb = ir->first_global;
 
     while (glb) {

@@ -348,6 +348,12 @@ enum ir_op_flags {
 
   // reg is assigned and cannot change
   IR_OP_FLAG_FIXED_REG = 64,
+
+  // op has side effects (e.g is an assignment)
+  IR_OP_FLAG_SIDE_EFFECTS = 128,
+
+  // op has been spilled and all consumers must reload it
+  IR_OP_FLAG_SPILLED = 256,
 };
 
 typedef unsigned long long regpool_t;
@@ -621,6 +627,7 @@ struct ir_unit {
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
 
 
+bool op_has_side_effects(const struct ir_op *ty);
 bool op_produces_value(const struct ir_op *ty);
 bool op_is_branch(enum ir_op_ty ty);
 
@@ -648,7 +655,7 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
 
 // clones an op so it can be marked contained
 // else we would need to ensure all consumers can contain it
-struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op);
+struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_op *consumer);
 
 void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_op_var_primitive_ty ty,
@@ -680,6 +687,11 @@ void make_basicblock_split(struct ir_func *irb,
 void make_basicblock_merge(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *target);
+
+void detach_ir_basicblock(struct ir_func *irb,
+                          struct ir_basicblock *basicblock);
+void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt);
+void detach_ir_op(struct ir_func *irb, struct ir_op *op);
 
 // Helper method that ensures the essential fields in IR op are initialised
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -732,7 +744,7 @@ bool var_ty_is_integral(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty);
 
-void spill_op(struct ir_func *irb, struct ir_op *op);
+struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
 
 struct ir_op_use {
   struct ir_op *op;
