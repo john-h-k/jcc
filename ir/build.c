@@ -1351,20 +1351,23 @@ struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     value = build_ir_for_expr(irb, stmt, assg->expr, &assg->expr->var_ty);
     break;
   case AST_ASSG_TY_COMPOUNDASSG: {
-    struct ir_op *assignee =
-        build_ir_for_expr(irb, stmt, assg->assignee, &assg->compound_assg.intermediate_var_ty);
+    struct ir_op *assignee = build_ir_for_expr(
+        irb, stmt, assg->assignee, &assg->compound_assg.intermediate_var_ty);
 
     struct ir_op *rhs = build_ir_for_expr(
         irb, stmt, assg->expr, &assg->compound_assg.intermediate_var_ty);
-  
-    struct ir_op *result = alloc_binaryop(irb, *stmt, &assg->compound_assg.intermediate_var_ty,
-                           assg->compound_assg.binary_op_ty, assignee, rhs);
 
-    struct ir_op_var_ty assg_var_ty = var_ty_for_ast_tyref(irb->func->unit, &assg->var_ty);
+    struct ir_op *result =
+        alloc_binaryop(irb, *stmt, &assg->compound_assg.intermediate_var_ty,
+                       assg->compound_assg.binary_op_ty, assignee, rhs);
+
+    struct ir_op_var_ty assg_var_ty =
+        var_ty_for_ast_tyref(irb->func->unit, &assg->var_ty);
     if (var_ty_needs_cast_op(irb, &result->var_ty, &assg_var_ty)) {
       value = insert_ir_for_cast(
           irb, *stmt, result, &assg_var_ty,
-          cast_ty_for_ast_tyref(irb, &assg->compound_assg.intermediate_var_ty, &assg->var_ty));
+          cast_ty_for_ast_tyref(irb, &assg->compound_assg.intermediate_var_ty,
+                                &assg->var_ty));
     } else {
       value = result;
     }
@@ -1420,11 +1423,11 @@ struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
 struct ir_op *build_ir_for_arrayaccess(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct ast_arrayaccess *array_access) {
-  struct ir_op *address = build_ir_for_array_address(
-      irb, stmt, array_access->lhs, array_access->rhs);
-
   struct ir_op_var_ty var_ty =
       var_ty_for_ast_tyref(irb->func->unit, &array_access->lhs->var_ty);
+
+  struct ir_op *address = build_ir_for_array_address(
+      irb, stmt, array_access->lhs, array_access->rhs);
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_LOAD_ADDR;
@@ -2384,9 +2387,20 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     struct var_key key = get_var_key(builder->parser, &var, basicblock);
     struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
+    struct ir_op_var_ty var_ty =
+        var_ty_for_ast_tyref(builder->func->unit, param_var_ty);
+    if (var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
+      // arrays are actually pointers
+      struct ir_op_var_ty array_ty = var_ty;
+      var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
+      var_ty.pointer.underlying =
+          arena_alloc(builder->func->arena, sizeof(*var_ty.pointer.underlying));
+      *var_ty.pointer.underlying = array_ty;
+    }
+
     struct ir_op *mov = alloc_ir_op(builder->func, param_stmt);
     mov->ty = IR_OP_TY_MOV;
-    mov->var_ty = var_ty_for_ast_tyref(builder->func->unit, param_var_ty);
+    mov->var_ty = var_ty;
     mov->flags |= IR_OP_FLAG_PARAM;
     mov->mov.value = NULL;
 
@@ -2520,7 +2534,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 }
 
 struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
-                                           struct ast_tyref *var_ty) {
+                                          struct ast_tyref *var_ty) {
   UNUSED_ARG(iru);
   UNUSED_ARG(var_ty);
   todo("");
@@ -2548,9 +2562,8 @@ build_ir_value_for_struct_initlist(struct ir_unit *iru,
       .num_values = init_list->num_exprs,
       .values = arena_alloc(iru->arena,
                             sizeof(*value_list.values) * init_list->num_exprs),
-      .offsets = arena_alloc(iru->arena,
-                            sizeof(*value_list.offsets) * init_list->num_exprs)
-    };
+      .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
+                                             init_list->num_exprs)};
 
   for (size_t i = 0; i < num_elements; i++) {
 
@@ -2598,7 +2611,7 @@ struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
     }
   }
   case AST_EXPR_TY_INIT_LIST: {
-      return build_ir_value_for_struct_initlist(iru, &expr->init_list, var_ty);
+    return build_ir_value_for_struct_initlist(iru, &expr->init_list, var_ty);
   }
   default:
     todo("other expr tys");
@@ -2662,7 +2675,8 @@ struct ir_unit *build_ir_for_translationunit(
       if (def_ty == IR_GLB_DEF_TY_DEFINED) {
         struct ir_var_value value;
         if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG) {
-          value = build_ir_for_var_value(iru, &decl->assg_expr, &decl->var.var_ty);
+          value =
+              build_ir_for_var_value(iru, &decl->assg_expr, &decl->var.var_ty);
         } else {
           value = (struct ir_var_value){.ty = IR_VAR_VALUE_TY_UNDF};
         }

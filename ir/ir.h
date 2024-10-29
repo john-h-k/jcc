@@ -220,7 +220,7 @@ struct ir_op_var_array_ty {
 };
 
 struct ir_op_var_pointer_ty {
-  const struct ir_op_var_ty *underlying;
+  struct ir_op_var_ty *underlying;
 };
 
 struct ir_op_var_ty {

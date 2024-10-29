@@ -2399,6 +2399,13 @@ bool parse_compoundstmt(struct parser *parser,
   return true;
 }
 
+void decay_array_params(struct ast_param *param) {
+  if (param->var_ty.ty == AST_TYREF_TY_ARRAY) {
+    param->var_ty.ty = AST_TYREF_TY_POINTER;
+    param->var_ty.pointer.underlying = param->var_ty.array.element;
+  }
+}
+
 bool parse_param(struct parser *parser, struct ast_param *param) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2428,17 +2435,19 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   }
 
   if (parse_declarator(parser, &identifier, &var_ty)) {
-    consume_token(parser->lexer, identifier);
-
     param->var_ty = var_ty;
     param->var = arena_alloc(parser->arena, sizeof(*param->var));
     param->var->scope = cur_scope(&parser->var_table);
     param->var->identifier = identifier;
 
+    decay_array_params(param);
+
     return true;
   } else if (parse_abstract_declarator(parser, &var_ty)) {
     param->var_ty = var_ty;
     param->var = NULL;
+
+    decay_array_params(param);
 
     return true;
   }
@@ -2460,14 +2469,18 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
 
     struct vector *params = vector_create(sizeof(struct ast_param));
 
-    struct token token;
-    peek_token(parser->lexer, &token);
+    struct text_pos param_pos = get_position(parser->lexer);
 
-    if (token.ty == LEX_TOKEN_TY_KW_VOID) {
-      consume_token(parser->lexer, token);
+
+    struct token token;
+    if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
       peek_token(parser->lexer, &token);
+      if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
+        backtrack(parser->lexer, param_pos);
+      }
     }
     
+    peek_token(parser->lexer, &token);
     if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
       struct ast_param param;
       do {
@@ -2816,6 +2829,7 @@ bool parse_direct_declarator_modifier(struct parser *parser,
     ty_ref->ty = AST_TYREF_TY_ARRAY;
     ty_ref->array =
         (struct ast_ty_array){.ty = ty, .element = underlying, .size = size};
+
     return true;
   } else {
     backtrack(parser->lexer, pos);
