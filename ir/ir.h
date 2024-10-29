@@ -511,6 +511,8 @@ enum ir_var_value_ty {
 struct ir_var_value {
   enum ir_var_value_ty ty;
 
+  struct ir_op_var_ty var_ty;
+
   union {
     const char *str_value;
     unsigned long long int_value;

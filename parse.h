@@ -278,9 +278,30 @@ struct ast_compoundexpr {
 /* atom - expression which is entirely isolated and not affected by other
  * operators in how it is parsed */
 
+enum ast_designator_ty {
+  AST_DESIGNATOR_TY_FIELD,
+  AST_DESIGNATOR_TY_INDEX,
+};
+
+struct ast_designator {
+  enum ast_designator_ty ty;
+
+  struct ast_designator *next;
+
+  union {
+    struct token field;
+    size_t index;
+  };
+};
+
+struct ast_init {
+  struct ast_designator *designator;
+  struct ast_expr *expr;
+};
+
 struct ast_initlist {
-  struct ast_expr *exprs;
-  size_t num_exprs;
+  struct ast_init *inits;
+  size_t num_inits;
 };
 
 // Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue>
