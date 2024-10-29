@@ -46,11 +46,6 @@ void eliminate_phi(struct ir_func *irb) {
               insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
           mov->mov.value = value;
           mov->reg = op->reg;
-          // FIXME: live regs should be properly propogated when modifying IR,
-          // or rebuilt between passes should be pred but easier to use succ,
-          // only wastes 1 reg max
-          mov->live_gp_regs = mov->succ->live_gp_regs;
-          mov->live_fp_regs = mov->succ->live_fp_regs;
 
           // HACK: using spills for phi
           op->phi.values[i] = mov;

@@ -343,8 +343,6 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
-  op->live_gp_regs = 0;
-  op->live_fp_regs = 0;
   op->metadata = NULL;
 }
 
@@ -750,8 +748,6 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->succ = NULL;
   op->metadata = NULL;
   op->reg = NO_REG;
-  op->live_gp_regs = 0;
-  op->live_fp_regs = 0;
   op->lcl = NULL;
 
   if (stmt->last) {

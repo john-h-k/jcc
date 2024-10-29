@@ -2419,7 +2419,6 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
                       .first = NULL,
                       .last = NULL,
                       .op_count = 0,
-                      .nonvolatile_registers_used = 0,
                       .num_locals = 0,
                       .total_locals_size = 0};
 

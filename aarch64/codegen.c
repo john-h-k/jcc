@@ -1009,23 +1009,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
 
-  struct codegen_call_metadata *metadata =
-      (struct codegen_call_metadata *)op->metadata;
-
-  unsigned long live_gp_regs = metadata->post_call_live_gp_regs;
-  unsigned long live_fp_regs = metadata->post_call_live_fp_regs;
-
-  size_t volatile_gp_reg_count =
-      AARCH64_TARGET.reg_info.gp_registers.num_volatile;
-  size_t volatile_fp_reg_count =
-      AARCH64_TARGET.reg_info.fp_registers.num_volatile;
-
-  unsigned long long live_gp_volatile =
-      live_gp_regs & ((1ull << volatile_gp_reg_count) - 1);
-
-  unsigned long long live_fp_volatile =
-      live_fp_regs & ((1ull << volatile_fp_reg_count) - 1);
-
   // if the return reg is used by the call then remove the call-return reg
   // from live-volatile as we know it will be over written by end of call
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {

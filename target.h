@@ -91,7 +91,6 @@ typedef void (*build_object)(const struct build_object_args *args);
 typedef void (*debug_disasm)(const char *filename);
 typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
 
-
 struct target {
   struct reg_info reg_info;
   size_t function_alignment;
