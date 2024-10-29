@@ -999,7 +999,8 @@ struct move_set {
 };
 
 static struct move_set gen_move_order(struct arena_allocator *arena,
-                                      size_t *from, size_t *to, size_t num, size_t tmp_index) {
+                                      size_t *from, size_t *to, size_t num,
+                                      size_t tmp_index) {
   size_t max = 0;
 
   for (size_t i = 0; i < num; i++) {
@@ -1125,11 +1126,27 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // it is possible there are no spare registers for this, and so we may need
   // to do a swap
 
+  struct vector *move_from = vector_create(sizeof(size_t));
+  struct vector *move_to = vector_create(sizeof(size_t));
+
+  // reg 9 is not part of calling convention
+  // and all registers have already been saved
+  // so this is always safe
+  // same with reg 10, which we use if a register branch target is needed for
+  // `blr`
+  size_t tmp_reg_idx = 9;
+  size_t blr_reg_idx = 10;
+
+  if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+    struct aarch64_reg source = codegen_reg(op->call.target);
+
+    // need to move it into reg 10
+    vector_push_back(move_from, &source.idx);
+    vector_push_back(move_to, &blr_reg_idx);
+  }
+
   // TODO: handle fp reg
   if (op->call.num_args) {
-    struct vector *move_from = vector_create(sizeof(size_t));
-    struct vector *move_to = vector_create(sizeof(size_t));
-
     size_t num_normal_args = func_ty->num_params;
 
     for (size_t head = 0; head < op->call.num_args; head++) {
@@ -1169,24 +1186,20 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET};
       }
     }
+  }
 
-      // reg 9 is not part of calling convention
-      // and all registers have already been saved
-      // so this is always safe
-    size_t tmp_reg_idx = 9;
-    struct move_set arg_moves =
-        gen_move_order(state->ir->arena, vector_head(move_from),
-                       vector_head(move_to), vector_length(move_from), tmp_reg_idx);
+  struct move_set arg_moves = gen_move_order(
+      state->ir->arena, vector_head(move_from), vector_head(move_to),
+      vector_length(move_from), tmp_reg_idx);
 
-    for (size_t i = 0; i < arg_moves.num_moves; i++) {
-      struct move move = arg_moves.moves[i];
+  for (size_t i = 0; i < arg_moves.num_moves; i++) {
+    struct move move = arg_moves.moves[i];
 
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from};
-      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to};
+    struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from};
+    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to};
 
-      struct instr *mov = alloc_instr(state->func);
-      *mov->aarch64 = MOV_ALIAS(dest, source);
-    }
+    struct instr *mov = alloc_instr(state->func);
+    *mov->aarch64 = MOV_ALIAS(dest, source);
   }
 
   // now we generate the actual call
@@ -1204,10 +1217,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         .address = 0,
     };
   } else {
-    todo("reg alloc for call targets needs fixing");
     instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
-    instr->aarch64->blr =
-        (struct aarch64_branch_reg){.target = codegen_reg(op->call.target)};
+    instr->aarch64->blr = (struct aarch64_branch_reg){
+        .target = {.ty = AARCH64_REG_TY_X, .idx = blr_reg_idx}};
   }
 
   if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {

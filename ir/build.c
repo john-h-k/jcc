@@ -2781,6 +2781,9 @@ struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
     return build_ir_value_for_struct_initlist(iru, &expr->init_list,
                                               &def_var_ty);
   }
+  case AST_EXPR_TY_UNARY_OP: {
+    
+  }
   default:
     todo("other expr tys");
   }
