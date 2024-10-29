@@ -305,7 +305,7 @@ static struct aarch64_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
   if (op->var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
-    todo("non primitives");
+    todo("non primitives (op %zu)", op->id);
   }
 
   enum aarch64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
