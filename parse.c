@@ -1977,6 +1977,8 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
     return true;
   }
 
+  backtrack(parser->lexer, pos);
+
   if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
@@ -1986,17 +1988,23 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
     return true;
   }
 
+  backtrack(parser->lexer, pos);
+
   if (parse_token(parser, LEX_TOKEN_TY_KW_BREAK) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_BREAK;
     return true;
   }
 
+  backtrack(parser->lexer, pos);
+
   if (parse_token(parser, LEX_TOKEN_TY_KW_CONTINUE) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     jump_stmt->ty = AST_JUMPSTMT_TY_CONTINUE;
     return true;
   }
+
+  backtrack(parser->lexer, pos);
 
   if (parse_token(parser, LEX_TOKEN_TY_KW_GOTO)) {
     struct token label;
