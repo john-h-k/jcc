@@ -26,6 +26,9 @@ struct preproc {
   // if the current line has seen a token that is not whitespace
   bool line_has_nontrivial_token;
 
+  // whether we are in an include/embed that accepts <foo> style strings
+  bool in_angle_string_context;
+
   struct text_pos pos;
 
   const char **associated_texts;
@@ -99,6 +102,7 @@ enum preproc_create_result preproc_create(struct program *program, size_t num_in
   p->processed_len = initial_processed_size;
   p->processed_head = 0;
   p->line_has_nontrivial_token = false;
+  p->in_angle_string_context = false;
 
   *preproc = p;
 
@@ -167,6 +171,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       is_newline(preproc->text[preproc->pos.idx])) {
     next_line(&end);
     preproc->line_has_nontrivial_token = false;
+    preproc->in_angle_string_context = false;
 
     token->ty = PREPROC_TOKEN_TY_NEWLINE;
     token->span = (struct text_span){.start = start, .end = end};
@@ -221,6 +226,10 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   case '<':
   case '"':
   case '\'':
+    if (c == '<' && !preproc->in_angle_string_context) {
+      break;
+    }
+
     // string/char literal
     // skip first single-quote
     next_col(&end);
@@ -366,6 +375,9 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
   struct preproc_token token = {.ty = PREPROC_TOKEN_TY_UNKNOWN};
   while (token.ty != PREPROC_TOKEN_TY_EOF) {
     preproc_next_token(preproc, &token);
+    trace("found preproc token %s from %zu:%zu (%zu) to %zu:%zu (%zu)\n", preproc_token_name(token.ty),
+           token.span.start.line, token.span.start.col, token.span.start.idx,
+           token.span.end.line, token.span.end.col, token.span.end.idx);
 
     // this is sort of redundant, as we do this "is it first token on line"
     // check in the tokenize for directives
@@ -382,6 +394,8 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       preproc_next_token(preproc, &directive);
 
       if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER && token_streq(preproc, directive, "include")) {
+        preproc->in_angle_string_context = true;
+
         struct preproc_token filename_token;
         preproc_next_non_whitespace_token(preproc, &filename_token);
 

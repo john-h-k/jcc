@@ -47,7 +47,17 @@ enum compiler_create_result create_compiler(struct program *program,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
+  BEGIN_STAGE("PREPROC");
+
+  if (args->log_flags & COMPILE_LOG_FLAGS_PREPROC) {
+    enable_log();
+  }
+
   struct preprocessed_program preprocessed_program = preproc_process(preproc);
+
+  slog("%s\n", preprocessed_program.text);
+
+  disable_log();
 
   if (parser_create(&preprocessed_program, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
@@ -185,6 +195,30 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         eliminate_phi(glb->func);
+        break;
+      }
+
+      glb = glb->succ;
+    }
+
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+      debug_print_stage(ir, "elim_phi");
+    }
+
+    BEGIN_STAGE("EXPOSE ABI");
+    glb = ir->first_global;
+
+    while (glb) {
+      if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+        glb = glb->succ;
+        continue;
+      }
+
+      switch (glb->ty) {
+      case IR_GLB_TY_DATA:
+        break;
+      case IR_GLB_TY_FUNC:
+        // eliminate_phi(glb->func);
         break;
       }
 

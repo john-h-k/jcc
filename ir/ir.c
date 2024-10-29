@@ -1,6 +1,7 @@
 #include "ir.h"
 
 #include "var_refs.h"
+#include "../vector.h"
 #include <sys/stat.h>
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
@@ -37,8 +38,8 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   }
 }
 
-bool op_produces_value(enum ir_op_ty ty) {
-  switch (ty) {
+bool op_produces_value(const struct ir_op *op) {
+  switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     bug("unknown op ty");
   case IR_OP_TY_PHI:
@@ -52,8 +53,9 @@ bool op_produces_value(enum ir_op_ty ty) {
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_ADDR:
-  case IR_OP_TY_CALL:
     return true;
+  case IR_OP_TY_CALL:
+    return op->call.func_ty.func.ret_ty->ty != IR_OP_VAR_TY_TY_NONE;
   case IR_OP_TY_STORE_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_STORE_ADDR:
@@ -344,6 +346,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->reg = reg;
   op->lcl = lcl;
   op->metadata = NULL;
+  op->comment = NULL;
 }
 
 void detach_ir_basicblock(struct ir_func *irb,
@@ -689,6 +692,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
   basicblock->first = NULL;
   basicblock->last = NULL;
   basicblock->metadata = NULL;
+  basicblock->comment = NULL;
   basicblock->first_instr = NULL;
   basicblock->last_instr = NULL;
 
@@ -747,6 +751,7 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->pred = stmt->last;
   op->succ = NULL;
   op->metadata = NULL;
+  op->comment = NULL;
   op->reg = NO_REG;
   op->lcl = NULL;
 
@@ -993,7 +998,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   return glb;
 }
 struct ir_lcl *add_local(struct ir_func *irb,
-                         const struct ir_op_var_ty *var_ty) {
+                         struct ir_op_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
@@ -1005,6 +1010,7 @@ struct ir_lcl *add_local(struct ir_func *irb,
 
   irb->total_locals_size += lcl_pad;
 
+  lcl->var_ty = *var_ty;
   lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
   lcl->pred = irb->last_local;
@@ -1159,8 +1165,6 @@ void spill_op(struct ir_func *irb, struct ir_op *op) {
     return;
   }
 
-  op->reg = REG_SPILLED;
-
   if (op->ty != IR_OP_TY_PHI) {
     op->lcl = add_local(irb, &op->var_ty);
 
@@ -1201,3 +1205,65 @@ void spill_op(struct ir_func *irb, struct ir_op *op) {
     value->lcl = lcl;
   }
 }
+
+struct build_op_uses_callback_data {
+  struct ir_op *op;
+  struct vector *uses;
+};
+
+static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
+  struct build_op_uses_callback_data *data = cb_metadata;
+
+  vector_push_back(data->uses, op);
+}
+
+struct ir_op_uses build_op_uses_map(struct ir_func *func) {
+  rebuild_ids(func);
+
+  struct build_op_uses_callback_data *datas = arena_alloc(func->arena, sizeof(*datas) * func->op_count);
+
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      while (op) {
+        struct build_op_uses_callback_data *data = &datas[op->id];
+        *data = (struct build_op_uses_callback_data){
+          .op = op,
+          .uses = vector_create(sizeof(struct ir_op *))
+        };
+
+        walk_op_uses(op, build_op_uses_callback, data);
+
+        op = op->succ;
+      }
+
+      stmt = stmt->succ;
+    }
+    
+    basicblock = basicblock->succ;
+  }
+
+  struct ir_op_uses uses = {
+    .num_use_datas = func->op_count,
+    .use_datas = arena_alloc(func->arena, sizeof(*uses.use_datas) * func->op_count)
+  };
+
+  for (size_t i = 0; i < func->op_count; i++) {
+    struct build_op_uses_callback_data *data = &datas[i];
+
+    uses.use_datas[i] = (struct ir_op_use){
+      .op = data->op,
+      .num_uses = vector_length(data->uses),
+      .uses = arena_alloc(func->arena, vector_byte_size(data->uses))
+    };
+
+    vector_copy_to(data->uses, uses.use_datas[i].uses);
+  }
+
+  return uses;
+}
+

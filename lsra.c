@@ -28,34 +28,44 @@ struct register_alloc_state {
   struct bitset *fp_reg_pool;
 };
 
+void insert_active(struct register_alloc_state *state, size_t cur_interval) {
+  struct interval *intervals = state->interval_data.intervals;
+  size_t *active = state->active;
+
+  // insert sorted by endpoint
+  // TODO: use a heap
+  for (size_t j = 0; j <= state->num_active; j++) {
+    if (j == state->num_active) {
+      state->active[j] = cur_interval;
+      state->num_active++;
+      break;
+    } else if (intervals[active[j]].end > intervals[cur_interval].end) {
+      memmove(&active[j + 1], &active[j],
+              sizeof(*active) * (state->num_active - j));
+      active[j] = cur_interval;
+      state->num_active++;
+      break;
+    }
+  }
+}
+
 void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
                        size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
 
+  // spill the longest living variable
   struct interval *spill = &intervals[state->active[state->num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
+    // spill active
+
     intervals[cur_interval].op->reg = spill->op->reg;
     spill_op(irb, spill->op);
 
-    // remove `spill`
     state->num_active--;
 
-    // insert into `active`, sorted by end point
-    for (size_t j = 0; j <= state->num_active; j++) {
-      if (j == state->num_active) {
-        state->active[j] = cur_interval;
-        state->num_active++;
-        break;
-      } else if (intervals[state->active[j]].end >
-                 intervals[cur_interval].end) {
-        memmove(&state->active[j + 1], &state->active[j],
-                sizeof(*state->active) * (state->num_active - j));
-        state->active[j] = cur_interval;
-        state->num_active++;
-        break;
-      }
-    }
+    insert_active(state, cur_interval);
   } else {
+    // spill current interval
     spill_op(irb, intervals[cur_interval].op);
   }
 }
@@ -84,7 +94,6 @@ void expire_old_intervals(struct register_alloc_state *state,
   }
 
   // shift the active array down
-
   state->num_active -= num_expired_intervals;
   memmove(state->active, &state->active[num_expired_intervals],
           sizeof(*state->active) * (state->num_active));
@@ -204,35 +213,10 @@ int compare_interval_id(const void *a, const void *b) {
   return (ssize_t)a_id - (ssize_t)b_id;
 }
 
-typedef bool (*op_needs_alloc)(struct ir_op *);
-
-void insert_active(struct register_alloc_state *state, size_t cur_interval) {
-  struct interval *intervals = state->interval_data.intervals;
-  size_t *active = state->active;
-
-  // insert sorted by endpoint
-  // TODO: use a heap
-  for (size_t j = 0; j <= state->num_active; j++) {
-    if (j == state->num_active) {
-      state->active[j] = cur_interval;
-      state->num_active++;
-      break;
-    } else if (intervals[active[j]].end > intervals[cur_interval].end) {
-      memmove(&active[j + 1], &active[j],
-              sizeof(*active) * (state->num_active - j));
-      active[j] = cur_interval;
-      state->num_active++;
-      break;
-    }
-  }
-}
-
 struct interval_data register_alloc_pass(struct ir_func *irb,
                                          struct reg_info *info, bool *spilled) {
 
   struct interval_data data = construct_intervals(irb);
-  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
-        sort_interval_by_start_point);
 
   size_t num_gp_regs =
       info->gp_registers.num_volatile + info->gp_registers.num_nonvolatile;
@@ -255,6 +239,9 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
     debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
   }
 
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        sort_interval_by_start_point);
+
   struct interval *const intervals = state.interval_data.intervals;
   const size_t num_intervals = state.interval_data.num_intervals;
   // intervals must be sorted by start point
@@ -262,9 +249,70 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
     struct interval *interval = &intervals[i];
     expire_old_intervals(&state, interval);
 
+    if (interval->op->ty == IR_OP_TY_CALL) {
+      // need to spill everything that is nonvolatile & active
+      // this is a "quiet" spill and does not actually spill the local,
+      // as after the call it is immediately reloaded
+      for (size_t j = 0; j < state.num_active; j++) {
+        struct interval *live = &intervals[state.active[j]];
+        struct ir_reg reg = live->op->reg;
+
+        if (live->end <= interval->op->id) {
+          // don't need save
+          continue;
+        }
+
+        printf("spilling %zu ending %zu (%zu)\n", live->op->id, live->end, interval->op->id);
+
+        if ((reg.ty == IR_REG_TY_INTEGRAL &&
+             reg.idx < info->gp_registers.num_volatile) ||
+            (reg.ty == IR_REG_TY_FP &&
+             reg.idx < info->fp_registers.num_volatile)) {
+
+          struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
+          struct ir_op *lcl_addr = insert_before_ir_op(
+              irb, interval->op, IR_OP_TY_ADDR,
+              var_ty_make_pointer(irb->unit, &live->op->var_ty));
+          lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
+          lcl_addr->addr =
+              (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+          struct ir_op *save = insert_after_ir_op(
+              irb, lcl_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+          save->reg = reg;
+          save->store_addr =
+              (struct ir_op_store_addr){.addr = lcl_addr, .value = live->op};
+
+          struct ir_op *reload = insert_after_ir_op(
+              irb, interval->op, IR_OP_TY_LOAD_ADDR, live->op->var_ty);
+          reload->reg = reg;
+          reload->load_addr = (struct ir_op_load_addr){
+              .addr = lcl_addr,
+          };
+        }
+      }
+    }
+
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
         (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
-        !op_produces_value(interval->op->ty)) {
+        !op_produces_value(interval->op) || interval->op->ty == IR_OP_TY_UNDF) {
+      continue;
+    }
+
+    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL) {
+      // we spill here, and strip the flag for the next regalloc run as then it
+      // will need a register
+      interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
+      if (interval->op->ty == IR_OP_TY_PHI) {
+        for (size_t i = 0; i < interval->op->phi.num_values; i++) {
+          struct ir_op *value = interval->op->phi.values[i];
+
+          value->flags &= ~IR_OP_FLAG_MUST_SPILL;
+        }
+      }
+
+      spill_op(irb, interval->op);
+      *spilled = true;
       continue;
     }
 
@@ -284,21 +332,7 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
           interval->op->id);
     }
 
-    if (interval->op->flags & IR_OP_FLAG_MUST_SPILL) {
-      // we spill here, and strip the flag for the next regalloc run as then it
-      // will need a register
-      interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
-      if (interval->op->ty == IR_OP_TY_PHI) {
-        for (size_t i = 0; i < interval->op->phi.num_values; i++) {
-          struct ir_op *value = interval->op->phi.values[i];
-
-          value->flags &= ~IR_OP_FLAG_MUST_SPILL;
-        }
-      }
-
-      spill_op(irb, interval->op);
-      *spilled = true;
-    } else if (bitset_any(reg_pool, true)) {
+    if (bitset_any(reg_pool, true)) {
       // we can allocate a register from the pool
       size_t free_slot = bitset_tzcnt(reg_pool);
       debug_assert(free_slot < bitset_length(reg_pool),

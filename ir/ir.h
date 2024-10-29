@@ -42,9 +42,6 @@ enum ir_op_ty {
   IR_OP_TY_CUSTOM,
 };
 
-bool op_produces_value(enum ir_op_ty ty);
-bool op_is_branch(enum ir_op_ty ty);
-
 struct ir_op_mov {
   struct ir_op *value;
 };
@@ -480,6 +477,7 @@ struct ir_basicblock {
   struct instr *last_instr;
 
   void *metadata;
+  const char *comment;
 };
 
 enum ir_func_flags {
@@ -622,6 +620,10 @@ struct ir_unit {
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
 
+
+bool op_produces_value(const struct ir_op *ty);
+bool op_is_branch(enum ir_op_ty ty);
+
 void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
@@ -636,7 +638,7 @@ void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);
 
 struct ir_lcl *add_local(struct ir_func *irb,
-                         const struct ir_op_var_ty *var_ty);
+                         struct ir_op_var_ty *var_ty);
 
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_op_var_ty *var_ty,
@@ -731,5 +733,19 @@ bool var_ty_is_fp(const struct ir_op_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty);
 
 void spill_op(struct ir_func *irb, struct ir_op *op);
+
+struct ir_op_use {
+  struct ir_op *op;
+
+  struct ir_op *uses;
+  size_t num_uses;
+};
+
+struct ir_op_uses {
+  struct ir_op_use *use_datas;
+  size_t num_use_datas;
+};
+
+struct ir_op_uses build_op_uses_map(struct ir_func *func);
 
 #endif

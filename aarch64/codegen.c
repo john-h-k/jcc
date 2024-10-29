@@ -2,6 +2,7 @@
 
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
+#include "../bitset.h"
 #include "../util.h"
 #include "../vector.h"
 #include "isa.h"
@@ -207,9 +208,6 @@ struct codegen_state {
   struct ir_func *ir;
   struct aarch64_prologue_info prologue_info;
 
-  size_t call_saves_start;
-  size_t total_call_saves_size;
-
   size_t max_variadic_args;
 };
 
@@ -410,14 +408,32 @@ static void codegen_load_addr_op(struct codegen_state *state,
   struct instr *instr = alloc_instr(state->func);
 
   struct aarch64_reg dest = codegen_reg(op);
-  struct aarch64_reg addr = codegen_reg(op->load_addr.addr);
 
-  instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-  instr->aarch64->ldr_imm =
-      (struct aarch64_load_imm){.dest = dest,
-                                .addr = addr,
-                                .imm = 0,
-                                .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  if (op->load_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->load_addr.addr;
+
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
+    } else {
+      bug("can't CONTAIN operand in load_addr node");
+    }
+
+    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    instr->aarch64->ldr_imm =
+        (struct aarch64_load_imm){.dest = dest,
+                                  .addr = STACK_PTR_REG,
+                                  .imm = imm,
+                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  } else {
+    struct aarch64_reg addr = codegen_reg(op->load_addr.addr);
+    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    instr->aarch64->ldr_imm =
+        (struct aarch64_load_imm){.dest = dest,
+                                  .addr = addr,
+                                  .imm = 0,
+                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  }
 }
 
 static void codegen_store_addr_op(struct codegen_state *state,
@@ -425,14 +441,32 @@ static void codegen_store_addr_op(struct codegen_state *state,
   struct instr *instr = alloc_instr(state->func);
 
   struct aarch64_reg source = codegen_reg(op->store_addr.value);
-  struct aarch64_reg addr = codegen_reg(op->store_addr.addr);
 
-  instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-  instr->aarch64->str_imm =
-      (struct aarch64_store_imm){.source = source,
-                                 .addr = addr,
-                                 .imm = 0,
-                                 .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  if (op->store_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->store_addr.addr;
+
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op->store_addr.value, addr->addr.lcl);
+    } else {
+      bug("can't CONTAIN operand in store_addr node");
+    }
+
+    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    instr->aarch64->str_imm =
+        (struct aarch64_store_imm){.source = source,
+                                   .addr = STACK_PTR_REG,
+                                   .imm = imm,
+                                   .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  } else {
+    struct aarch64_reg addr = codegen_reg(op->store_addr.addr);
+    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    instr->aarch64->str_imm =
+        (struct aarch64_store_imm){.source = source,
+                                   .addr = addr,
+                                   .imm = 0,
+                                   .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+  }
 }
 
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
@@ -954,46 +988,120 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// as we add a bunch of new nodes around, `live_regs` can get lost
-// we early preserve it in this metadata for use in `lower_call`
-struct codegen_call_metadata {
-  unsigned long post_call_live_gp_regs;
-  unsigned long post_call_live_fp_regs;
+struct move {
+  size_t from;
+  size_t to;
 };
 
-static void call_save_reg(struct codegen_state *state, struct ir_reg ir_reg,
-                          size_t idx) {
-  // FIXME: this saves entire reg but can sometimes save smaller amounts
-  // (depending of the type occupying the live reg)
-  // we would need a way to determine what value is in a reg at a given
-  // instruction
+struct move_set {
+  struct move *moves;
+  size_t num_moves;
+};
 
-  struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
+static struct move_set gen_move_order(struct arena_allocator *arena,
+                                      size_t *from, size_t *to, size_t num, size_t tmp_index) {
+  size_t max = 0;
 
-  size_t offset = (state->call_saves_start / 8) + idx;
+  for (size_t i = 0; i < num; i++) {
+    max = MAX(max, from[i]);
+    max = MAX(max, to[i]);
+  }
 
-  struct instr *save = alloc_instr(state->func);
-  save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-  save->aarch64->str_imm =
-      (struct aarch64_store_imm){.source = reg,
-                                 .addr = STACK_PTR_REG,
-                                 .imm = offset,
-                                 .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-}
+  max++;
 
-static void call_restore_reg(struct codegen_state *state, struct ir_reg ir_reg,
-                             size_t idx) {
-  struct aarch64_reg reg = get_full_reg_for_ir_reg(ir_reg);
+  struct info {
+    size_t pred;
+    size_t cur;
+  } *infos = arena_alloc(arena, sizeof(*infos) * (max));
+  memset(infos, 0, sizeof(*infos) * (max));
 
-  size_t offset = (state->call_saves_start / 8) + idx;
+  struct vector *non_dependent = vector_create(sizeof(size_t));
+  struct vector *remainder = vector_create(sizeof(size_t));
+  struct vector *moves = vector_create(sizeof(struct move));
 
-  struct instr *restore = alloc_instr(state->func);
-  restore->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-  restore->aarch64->ldr_imm =
-      (struct aarch64_load_imm){.dest = reg,
-                                .addr = STACK_PTR_REG,
-                                .imm = offset,
-                                .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+#define NO_LOCATION (SIZE_T_MAX)
+
+  for (size_t i = 0; i < num; i++) {
+    size_t source = from[i];
+    size_t dest = to[i];
+    infos[dest].cur = NO_LOCATION;
+    infos[dest].pred = NO_LOCATION;
+    infos[source].pred = NO_LOCATION;
+  }
+
+  for (size_t i = 0; i < num; i++) {
+    size_t source = from[i];
+    size_t dest = to[i];
+
+    infos[source].cur = source;
+    infos[dest].pred = source;
+
+    vector_push_back(remainder, &dest);
+  }
+
+  for (size_t i = 0; i < num; i++) {
+    size_t dest = to[i];
+
+    if (infos[dest].cur == NO_LOCATION) {
+      vector_push_back(non_dependent, &dest);
+    }
+  }
+
+  while (!vector_empty(remainder)) {
+    while (!vector_empty(non_dependent)) {
+      size_t dest = *(size_t *)vector_pop(non_dependent);
+
+      size_t source = infos[dest].pred;
+      size_t source_loc = infos[source].cur;
+
+      struct move move = {
+          .from = source_loc,
+          .to = dest,
+      };
+      vector_push_back(moves, &move);
+
+      // FIXME: inefficient
+      for (size_t i = 0; i < vector_length(remainder); i++) {
+        size_t el = *(size_t *)vector_get(remainder, i);
+        if (el == source_loc) {
+          vector_remove_at(remainder, i);
+          break;
+        }
+      }
+
+      infos[source].cur = dest;
+
+      if (source == source_loc && infos[source].pred != NO_LOCATION) {
+        vector_push_back(non_dependent, &source);
+      }
+    }
+
+    if (vector_empty(remainder)) {
+      break;
+    }
+
+    size_t dest = *(size_t *)vector_pop(remainder);
+    if (dest != infos[infos[dest].pred].cur) {
+      struct move move = {
+          .from = dest,
+          .to = tmp_index,
+      };
+      vector_push_back(moves, &move);
+
+      infos[dest].cur = tmp_index;
+      vector_push_back(non_dependent, &dest);
+    }
+  }
+
+  struct move_set move_set = {.num_moves = vector_length(moves),
+                              .moves =
+                                  arena_alloc(arena, vector_byte_size(moves))};
+
+  vector_copy_to(moves, move_set.moves);
+
+  return move_set;
+
+#undef NO_LOCATION
 }
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
@@ -1009,77 +1117,14 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
 
-  // if the return reg is used by the call then remove the call-return reg
-  // from live-volatile as we know it will be over written by end of call
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
-    switch (op->reg.ty) {
-    case IR_REG_TY_INTEGRAL:
-      live_gp_volatile &= ~(1ull << op->reg.idx);
-      break;
-    case IR_REG_TY_FP:
-      live_fp_volatile &= ~(1ull << op->reg.idx);
-      break;
-    default:
-      bug("unexpected reg ty");
-    }
-  }
-
-  size_t max_gp_volatile =
-      sizeof(live_gp_volatile) * 8 - lzcnt(live_gp_volatile);
-
-  size_t save_idx = 0;
-  for (size_t i = 0; i < max_gp_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_INTEGRAL) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_gp_volatile, i)) {
-      call_save_reg(state, (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
-                    save_idx++);
-    }
-  }
-
-  size_t max_fp_volatile =
-      sizeof(live_fp_volatile) * 8 - lzcnt(live_fp_volatile);
-
-  for (size_t i = 0; i < max_fp_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_FP) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_fp_volatile, i)) {
-      call_save_reg(state, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
-                    save_idx++);
-    }
-  }
-
-  // FIXME: generalise this to calling conventions
-
   // now we need to move each argument into its correct register
-  // it is possible there are no spare registers for this, and so we may need to
-  // do a swap
+  // it is possible there are no spare registers for this, and so we may need
+  // to do a swap
 
   // TODO: handle fp reg
   if (op->call.num_args) {
-    unsigned long long free_regs =
-        ~op->live_gp_regs & ~((1ull << func_ty->num_params) - 1);
-    size_t free_vol_reg = tzcnt(free_regs);
-
-    if (free_vol_reg >= volatile_gp_reg_count) {
-      todo("argument moving when no free registers");
-    }
-
-    struct aarch64_reg val_reg = codegen_reg(op->call.args[0]);
-    struct aarch64_reg vol_reg = (struct aarch64_reg){
-        .ty = val_reg.ty,
-        .idx = translate_reg_idx(free_vol_reg, IR_REG_TY_INTEGRAL)};
-
-    struct instr *mov_to_vol = alloc_instr(state->func);
-    *mov_to_vol->aarch64 = MOV_ALIAS(vol_reg, val_reg);
+    struct vector *move_from = vector_create(sizeof(size_t));
+    struct vector *move_to = vector_create(sizeof(size_t));
 
     size_t num_normal_args = func_ty->num_params;
 
@@ -1090,18 +1135,20 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
                        "`lower_call` doesn't support non-prims");
 
-      struct aarch64_reg source =
-          i == 0 ? vol_reg : codegen_reg(op->call.args[i]);
+      struct aarch64_reg source = codegen_reg(op->call.args[i]);
       size_t arg_reg_idx = i;
 
-      if (i >= num_normal_args) {
+      if (i < num_normal_args) {
+        vector_push_back(move_from, &source.idx);
+        vector_push_back(move_to, &arg_reg_idx);
+      } else {
         // this argument is variadic
         // the stack slot this local must live in, in terms of 8 byte slots
         size_t variadic_arg_idx = i - num_normal_args;
 
         if (source.ty == AARCH64_REG_TY_W) {
-          // because offsets are in terms of reg size, we need to double it for
-          // the 8 byte slots
+          // because offsets are in terms of reg size, we need to double it
+          // for the 8 byte slots
           variadic_arg_idx *= 2;
         } else {
           invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
@@ -1116,16 +1163,25 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                        .addr = STACK_PTR_REG,
                                        .imm = variadic_arg_idx,
                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-        // TODO: replace all REG.idx == REG.idx with a method that checks type
-        // as well
-      } else if (i == 0 || op->call.args[i]->reg.idx != arg_reg_idx) {
-        struct aarch64_reg arg_reg = (struct aarch64_reg){
-            .ty = source.ty,
-            .idx = translate_reg_idx(arg_reg_idx, IR_REG_TY_INTEGRAL)};
-
-        struct instr *mov = alloc_instr(state->func);
-        *mov->aarch64 = MOV_ALIAS(arg_reg, source);
       }
+    }
+
+      // reg 9 is not part of calling convention
+      // and all registers have already been saved
+      // so this is always safe
+    size_t tmp_reg_idx = 9;
+    struct move_set arg_moves =
+        gen_move_order(state->ir->arena, vector_head(move_from),
+                       vector_head(move_to), vector_length(move_from), tmp_reg_idx);
+
+    for (size_t i = 0; i < arg_moves.num_moves; i++) {
+      struct move move = arg_moves.moves[i];
+
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from};
+      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to};
+
+      struct instr *mov = alloc_instr(state->func);
+      *mov->aarch64 = MOV_ALIAS(dest, source);
     }
   }
 
@@ -1158,57 +1214,25 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     struct instr *ret_mov = alloc_instr(state->func);
     *ret_mov->aarch64 = MOV_ALIAS(ret_dest, ret_reg);
   }
-
-  // and now we restore
-
-  // we must restore in the same order we saved in because they rely on index
-  // for address
-  size_t restore_idx = 0;
-  for (size_t i = 0; i < max_gp_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_INTEGRAL) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_gp_volatile, i)) {
-      call_restore_reg(state,
-                       (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i},
-                       restore_idx++);
-    }
-  }
-
-  for (size_t i = 0; i < max_fp_volatile; i++) {
-    if (i == op->reg.idx && op->reg.ty == IR_REG_TY_FP) {
-      // if not a live-volatile register or the register used by the actual
-      // call, skip
-      continue;
-    }
-
-    if (NTH_BIT(live_fp_volatile, i)) {
-      call_restore_reg(state, (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i},
-                       restore_idx++);
-    }
-  }
 }
 
 void insert_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
 
-  bool leaf = !(ir->nonvolatile_registers_used || ir->num_locals ||
+  // TODO: super inefficient
+  bool nonvolatile_registers_used =
+      (bitset_lzcnt(ir->reg_usage.gp_registers_used) <
+       AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile) ||
+      (bitset_lzcnt(ir->reg_usage.fp_registers_used) <
+       AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile);
+
+  bool leaf = !(nonvolatile_registers_used || ir->num_locals ||
                 ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   // FIXME: don't assume 8 bytes (they can be bigger)
   size_t stack_size = 8 * state->max_variadic_args;
   stack_size =
       ROUND_UP(stack_size + ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
-
-  // this field is needed so caller saves know where on the stack is free
-  state->call_saves_start = stack_size;
-
-  // add caller saves
-  stack_size = ROUND_UP(stack_size + state->total_call_saves_size,
-                        AARCH64_STACK_ALIGNMENT);
 
   const size_t LR_OFFSET = 2;
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
@@ -1222,15 +1246,12 @@ void insert_prologue(struct codegen_state *state) {
     return;
   }
 
-  unsigned long max_nonvol_used = sizeof(ir->nonvolatile_registers_used) * 8 -
-                                  lzcnt(ir->nonvolatile_registers_used);
+  struct bitset_iter iter =
+      bitset_iter(ir->reg_usage.gp_registers_used,
+                  AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
 
-  for (size_t i = 0; i < max_nonvol_used; i++) {
-    // FIXME: loop should start at i=first non volatile
-    if (!NTH_BIT(ir->nonvolatile_registers_used, i)) {
-      continue;
-    }
-
+  size_t i;
+  while (bitset_iter_next(&iter, &i)) {
     info.saved_registers |= (1 << i);
     info.stack_size += 8;
   }
@@ -1270,12 +1291,12 @@ void insert_prologue(struct codegen_state *state) {
                                     .shift = 0};
 
     size_t save_idx = 0;
-    for (size_t i = 0; i < max_nonvol_used; i++) {
-      // FIXME: loop should start at i=first non volatile
-      if (!NTH_BIT(ir->nonvolatile_registers_used, i)) {
-        continue;
-      }
+    struct bitset_iter iter =
+        bitset_iter(ir->reg_usage.gp_registers_used,
+                    AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
 
+    size_t i;
+    while (bitset_iter_next(&iter, &i)) {
       // guaranteed to be mod 8
       size_t offset = (info.save_start / 8) + save_idx++;
 
@@ -1708,7 +1729,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
       clear_metadata(ir_func);
 
-      size_t total_call_saves_size = 0;
       size_t max_variadic_args = 0;
 
       struct ir_basicblock *basicblock = ir_func->first;
@@ -1727,31 +1747,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
                 max_variadic_args = MAX(max_variadic_args, num_variadic_args);
               }
-
-              // we need to save registers in-use _after_ call
-              struct ir_op *succ = op->succ;
-              if (!succ && op->stmt->succ) {
-                // call is end of stmt, get live from next stmt
-                // a call can not be the final op of the final stmt of a
-                // basicblock as that must be a br/ret
-                succ = op->stmt->succ->first;
-              }
-
-              size_t num_live =
-                  popcntl(succ->live_fp_regs) + popcntl(succ->live_gp_regs);
-              // FIXME: we naively assume we save 8 bytes
-              // this over saves for smaller data types and breaks with 128 bit
-              // vectors/floats
-              total_call_saves_size = MAX(total_call_saves_size, num_live * 8);
-
-              // FIXME: floats
-              op->metadata = arena_alloc(unit->arena,
-                                         sizeof(struct codegen_call_metadata));
-              *(struct codegen_call_metadata *)op->metadata =
-                  (struct codegen_call_metadata){
-                      .post_call_live_gp_regs = succ->live_gp_regs,
-                      .post_call_live_fp_regs = succ->live_fp_regs,
-                  };
             }
 
             op = op->succ;
@@ -1771,13 +1766,13 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
               .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
       struct codegen_function *func = &unit->entries[i].func;
-      struct codegen_state state = {.func = func,
-                                    .ir = ir_func,
-                                    .max_variadic_args = max_variadic_args,
-                                    .total_call_saves_size =
-                                        total_call_saves_size};
+      struct codegen_state state = {
+          .func = func, .ir = ir_func, .max_variadic_args = max_variadic_args};
 
       insert_prologue(&state);
+
+      func->prologue = state.prologue_info.prologue_generated;
+      func->stack_size = state.prologue_info.stack_size;
 
       basicblock = ir_func->first;
       while (basicblock) {
@@ -2578,6 +2573,9 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
     struct codegen_function *func = &entry->func;
 
     fprintf(file, "\nFUNCTION: %s\n", entry->name);
+    fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
+    fprintf(file, "  stack_size: %zu\n", entry->func.stack_size);
+    fprintf(file, "\n");
 
     size_t offset = 0;
     struct instr *instr = func->first;

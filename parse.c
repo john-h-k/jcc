@@ -3033,16 +3033,11 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
 
 bool parse_abstract_direct_declarator(struct parser *parser,
                                       struct ast_tyref *ty_ref) {
-  struct text_pos pos = get_position(parser->lexer);
-
   struct ast_tyref *inner = arena_alloc(parser->arena, sizeof(*inner));
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
       parse_abstract_declarator(parser, inner) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     ;
-  } else {
-    backtrack(parser->lexer, pos);
-    return false;
   }
 
   while (parse_direct_declarator_modifier(parser, inner, ty_ref)) {

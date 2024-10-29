@@ -26,6 +26,7 @@ unsigned long long bitset_all(struct bitset *bitset, bool value);
 unsigned long long bitset_any(struct bitset *bitset, bool value);
 
 unsigned long long bitset_popcnt(struct bitset *bitset);
+unsigned long long bitset_lzcnt(struct bitset *bitset);
 unsigned long long bitset_tzcnt(struct bitset *bitset);
 
 unsigned long long bitset_as_ull(struct bitset *bitset);

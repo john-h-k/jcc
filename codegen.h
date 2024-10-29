@@ -16,6 +16,9 @@ struct codegen_var {
 struct codegen_function {
   struct codegen_unit *unit;
 
+  bool prologue;
+  size_t stack_size;
+
   size_t instr_count;
 
   struct instr* first;

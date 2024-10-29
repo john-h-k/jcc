@@ -47,6 +47,22 @@ unsigned long long bitset_popcnt(struct bitset *bitset) {
   return bitset->num_set;
 }
 
+unsigned long long bitset_lzcnt(struct bitset *bitset) {
+  size_t bits_per_chunk = sizeof(chunk_t) * 8;
+
+  for (size_t i = bitset->num_chunks; i > 0; i--) {
+    chunk_t chunk = bitset->chunks[i - 1];
+
+    size_t lz = lzcnt(chunk);
+
+    if (lz < bits_per_chunk) {
+      return MIN(i * bits_per_chunk + lz, bitset->num_elements);
+    }
+  }
+
+  return bitset->num_elements;
+}
+
 unsigned long long bitset_tzcnt(struct bitset *bitset) {
   size_t bits_per_chunk = sizeof(chunk_t) * 8;
 

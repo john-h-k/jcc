@@ -2386,6 +2386,9 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
 
   // TODO: validate cast types (make sure they are valid)
   switch (consumer->ty) {
+  case IR_OP_TY_CALL:
+    res_ty = *consumer->call.func_ty.func.ret_ty;
+    break;
   case IR_OP_TY_CAST_OP:
     res_ty = consumer->var_ty;
     break;
@@ -2399,8 +2402,7 @@ void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
     break;
   }
 
-  // TODO: validate CALL ops as well
-  if (consumer->ty != IR_OP_TY_CALL && op_produces_value(consumer->ty)) {
+  if (op_produces_value(consumer)) {
     invariant_assert(
         !var_ty_needs_cast_op(metadata->irb, &res_ty, &consumer->var_ty),
         "op %zu uses op %zu with different type!", consumer->id, (*op)->id);
