@@ -1123,6 +1123,11 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 }
 
 struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
+  // one level of implicit deref occurs
+  if (ty->ty == AST_TYREF_TY_POINTER) {
+    ty = ty->pointer.underlying;
+  }
+
   invariant_assert(ty->ty == AST_TYREF_TY_FUNC,
                    "only makes sense with func ty");
 
@@ -2913,6 +2918,7 @@ bool parse_declarator(struct parser *parser, struct token *identifier,
 }
 
 bool parse_direct_declarator_modifier(struct parser *parser,
+                                      struct ast_tyref *inner,
                                       struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2924,25 +2930,42 @@ bool parse_direct_declarator_modifier(struct parser *parser,
         arena_alloc(parser->arena, sizeof(*underlying));
     *underlying = *ty_ref;
 
-    ty_ref->ty = AST_TYREF_TY_FUNC;
-    ty_ref->func.ret_var_ty =
-        arena_alloc(parser->arena, sizeof(*ty_ref->func.ret_var_ty));
-    ty_ref->func.ret_var_ty = underlying;
-    ty_ref->func.num_params = param_list.num_params;
-    ty_ref->func.param_identifiers = arena_alloc(
-        parser->arena, sizeof(struct token *) * ty_ref->func.num_params);
-    ty_ref->func.param_var_tys =
-        arena_alloc(parser->arena, sizeof(*ty_ref->func.param_var_tys) *
-                                       ty_ref->func.num_params);
+    struct ast_tyref *func_ty =
+        arena_alloc(parser->arena, sizeof(*func_ty));
+    func_ty->ty = AST_TYREF_TY_FUNC;
+    func_ty->func.ret_var_ty =
+        arena_alloc(parser->arena, sizeof(*func_ty->func.ret_var_ty));
+    func_ty->func.ret_var_ty = underlying;
+    func_ty->func.num_params = param_list.num_params;
+    func_ty->func.param_identifiers = arena_alloc(
+        parser->arena, sizeof(struct token *) * func_ty->func.num_params);
+    func_ty->func.param_var_tys =
+        arena_alloc(parser->arena, sizeof(*func_ty->func.param_var_tys) *
+                                       func_ty->func.num_params);
 
-    for (size_t i = 0; i < ty_ref->func.num_params; i++) {
+    for (size_t i = 0; i < func_ty->func.num_params; i++) {
       if (param_list.params[i].var) {
-        ty_ref->func.param_identifiers[i] =
+        func_ty->func.param_identifiers[i] =
             &param_list.params[i].var->identifier;
       } else {
-        ty_ref->func.param_identifiers[i] = NULL;
+        func_ty->func.param_identifiers[i] = NULL;
       }
-      ty_ref->func.param_var_tys[i] = param_list.params[i].var_ty;
+      func_ty->func.param_var_tys[i] = param_list.params[i].var_ty;
+    }
+
+    if (!inner) {
+      *ty_ref = *func_ty;
+    } else {
+      if (inner->ty == AST_TYREF_TY_POINTER) {
+        inner->pointer.underlying = func_ty;
+        *ty_ref = *inner;
+      } else if (inner->ty == AST_TYREF_TY_ARRAY) {
+        inner->array.element = func_ty;
+        *ty_ref = *inner;
+      } else if (inner->ty == AST_TYREF_TY_FUNC) {
+        inner->func.ret_var_ty = func_ty;
+        *ty_ref = *inner;
+      }
     }
 
     return true;
@@ -2986,11 +3009,13 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
                              struct ast_tyref *ty_ref) {
   struct text_pos pos = get_position(parser->lexer);
 
+  struct ast_tyref *inner;
   if (parse_identifier(parser, identifier)) {
-    ;
+    inner = NULL;
   } else {
+    inner = arena_alloc(parser->arena, sizeof(*inner));
     if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
-        parse_declarator(parser, identifier, ty_ref) &&
+        parse_declarator(parser, identifier, inner) &&
         parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
       ;
     } else {
@@ -2999,7 +3024,7 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
     }
   }
 
-  while (parse_direct_declarator_modifier(parser, ty_ref)) {
+  while (parse_direct_declarator_modifier(parser, inner, ty_ref)) {
     ;
   }
 
@@ -3008,7 +3033,19 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
 
 bool parse_abstract_direct_declarator(struct parser *parser,
                                       struct ast_tyref *ty_ref) {
-  while (parse_direct_declarator_modifier(parser, ty_ref)) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_tyref *inner = arena_alloc(parser->arena, sizeof(*inner));
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_abstract_declarator(parser, inner) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    ;
+  } else {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  while (parse_direct_declarator_modifier(parser, inner, ty_ref)) {
     ;
   }
 
