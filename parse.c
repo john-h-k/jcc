@@ -524,7 +524,7 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
       return *pointer_ty;
     case AST_BINARY_OP_TY_SUB:
       // ptrdiff is signed
-      return tyref_pointer_sized_int(parser, true);
+      return (lhs->ty == AST_TYREF_TY_POINTER && rhs->ty == AST_TYREF_TY_POINTER) ? tyref_pointer_sized_int(parser, true) : *pointer_ty;
     default:
       bug("bad op for poiner op");
     }
