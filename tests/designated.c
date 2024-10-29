@@ -1,4 +1,4 @@
-// expected value: 18
+// expected value: 103
 
 struct bar { int a; const char *b; };
 
@@ -8,6 +8,11 @@ struct foo f = {
   .a = 10,
   .bar.a = 7,
   .bar.b = "boo"
+};
+
+struct foo z = {
+  .a = 10,
+  .bar = { .a = 9, .b = "" }
 };
 
 int arr[10][10] = {
@@ -20,5 +25,5 @@ struct bar b = {
 };
 
 int main() {
-  return b.a + f.a + f.bar.a + arr[7][5];
+  return b.a + f.a + f.bar.a + arr[7][5] + z.a + z.bar.a;
 }
