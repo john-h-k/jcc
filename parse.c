@@ -1114,6 +1114,56 @@ struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
   return *ty->func.ret_var_ty;
 }
 
+bool parse_designator(struct parser *parser, struct ast_designator *designator) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token identifier;
+  struct ast_expr expr;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET) && parse_constant_expr(parser, &expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
+    designator->ty = AST_DESIGNATOR_TY_INDEX;
+    designator->index = resolve_constant_expr(parser, &expr);
+  }
+  else if (parse_token(parser, LEX_TOKEN_TY_DOT) && parse_identifier(parser, &identifier)) {
+    designator->ty = AST_DESIGNATOR_TY_FIELD;
+    designator->field = identifier;
+  } else {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_designator next;
+  if (parse_designator(parser, &next)) {
+    designator->next = arena_alloc(parser->arena, sizeof(*designator->next));
+    *designator->next = next;
+  } else {
+    designator->next = NULL;
+  }
+
+  return true;
+}
+
+bool parse_init(struct parser *parser, struct ast_init *init) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  init->designator = NULL;
+
+  struct ast_designator designator;
+  if (parse_designator(parser, &designator) && parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
+    init->designator = arena_alloc(parser->arena, sizeof(*init->designator));
+    *init->designator = designator;
+  }
+
+  struct ast_expr expr;
+  if (!parse_expr(parser, &expr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  init->expr = arena_alloc(parser->arena, sizeof(*init->expr));
+  *init->expr = expr;
+  return true;
+}
+
 bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1122,11 +1172,11 @@ bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
     return false;
   }
 
-  struct vector *exprs = vector_create(sizeof(struct ast_expr));
+  struct vector *inits = vector_create(sizeof(struct ast_init));
   {
-    struct ast_expr expr;
-    while (parse_expr(parser, &expr)) {
-      vector_push_back(exprs, &expr);
+    struct ast_init init;
+    while (parse_init(parser, &init)) {
+      vector_push_back(inits, &init);
 
       parse_token(parser, LEX_TOKEN_TY_COMMA);
     }
@@ -1137,11 +1187,11 @@ bool parse_initlist(struct parser *parser, struct ast_initlist *init_list) {
     return false;
   }
 
-  init_list->exprs = arena_alloc(parser->arena, vector_byte_size(exprs));
-  init_list->num_exprs = vector_length(exprs);
+  init_list->inits = arena_alloc(parser->arena, vector_byte_size(inits));
+  init_list->num_inits = vector_length(inits);
 
-  vector_copy_to(exprs, init_list->exprs);
-  vector_free(&exprs);
+  vector_copy_to(inits, init_list->inits);
+  vector_free(&inits);
 
   return true;
 }
@@ -1191,27 +1241,28 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-
 void ensure_ty_defined(struct parser *parser, struct ast_tyref *ty_ref) {
   struct ast_tyref underlying_ty = tyref_get_underlying(parser, ty_ref);
 
-  if (underlying_ty.ty == AST_TYREF_TY_TAGGED && underlying_ty.tagged.underlying == NULL) {
+  if (underlying_ty.ty == AST_TYREF_TY_TAGGED &&
+      underlying_ty.tagged.underlying == NULL) {
     underlying_ty = tyref_get_defined(parser, &underlying_ty);
 
     struct ast_tyref *tagged;
     switch (ty_ref->ty) {
-      case AST_TYREF_TY_POINTER:
-        tagged = ty_ref->pointer.underlying;
-        break;
-      case AST_TYREF_TY_ARRAY:
-        tagged = ty_ref->array.element;
-        break;
-      default:
-        unreachable("doesn't make sense");
+    case AST_TYREF_TY_POINTER:
+      tagged = ty_ref->pointer.underlying;
+      break;
+    case AST_TYREF_TY_ARRAY:
+      tagged = ty_ref->array.element;
+      break;
+    default:
+      unreachable("doesn't make sense");
     }
 
     debug_assert(tagged->ty == AST_TYREF_TY_TAGGED, "should be TAGGED");
-    tagged->tagged.underlying = arena_alloc(parser->arena, sizeof(*tagged->tagged.underlying));
+    tagged->tagged.underlying =
+        arena_alloc(parser->arena, sizeof(*tagged->tagged.underlying));
     *tagged->tagged.underlying = underlying_ty;
   }
 }
@@ -1293,7 +1344,9 @@ struct ast_tyref resolve_pointer_access_ty(struct parser *parser,
                                            const struct token *member) {
 
   struct ast_tyref underlying_var_ty = tyref_get_underlying(parser, var_ty);
-  struct ast_tyref base_ty = underlying_var_ty.ty == AST_TYREF_TY_TAGGED ? tyref_get_defined(parser, &underlying_var_ty) : underlying_var_ty;
+  struct ast_tyref base_ty = underlying_var_ty.ty == AST_TYREF_TY_TAGGED
+                                 ? tyref_get_defined(parser, &underlying_var_ty)
+                                 : underlying_var_ty;
   return resolve_member_access_ty(parser, &base_ty, member);
 }
 
@@ -1822,21 +1875,22 @@ bool parse_decl(struct parser *parser, struct ast_tyref *specifier,
   }
 
   // fixup unsized arrays
-  if (var.var_ty.ty == AST_TYREF_TY_ARRAY && var.var_ty.array.ty == AST_TY_ARRAY_TY_UNKNOWN_SIZE) {
+  if (var.var_ty.ty == AST_TYREF_TY_ARRAY &&
+      var.var_ty.array.ty == AST_TY_ARRAY_TY_UNKNOWN_SIZE) {
     size_t size;
     if (expr.ty == AST_EXPR_TY_CNST) {
       // must be string
       size = strlen(expr.cnst.str_value) + 1;
     } else if (expr.ty == AST_EXPR_TY_INIT_LIST) {
-      size = expr.init_list.num_exprs;
+      size = expr.init_list.num_inits;
     } else {
       bug("couldn't determine array size");
     }
 
     var.var_ty.array.ty = AST_TY_ARRAY_TY_KNOWN_SIZE;
     var.var_ty.array.size = size;
-  }  
-  
+  }
+
   var_decl->ty = AST_DECL_TY_DECL_WITH_ASSG;
   var_decl->assg_expr = expr;
   var_decl->var = var;
@@ -2471,7 +2525,6 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
 
     struct text_pos param_pos = get_position(parser->lexer);
 
-
     struct token token;
     if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
       peek_token(parser->lexer, &token);
@@ -2479,7 +2532,7 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
         backtrack(parser->lexer, param_pos);
       }
     }
-    
+
     peek_token(parser->lexer, &token);
     if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
       struct ast_param param;
@@ -3064,6 +3117,8 @@ bool parse_structdecllist(struct parser *parser,
     return false;
   }
 
+  parser_push_scope(parser);
+
   struct vector *struct_decls = vector_create(sizeof(struct ast_structdecl));
   {
     struct ast_structdecl struct_decl;
@@ -3078,6 +3133,7 @@ bool parse_structdecllist(struct parser *parser,
   vector_copy_to(struct_decls, type_def->struct_decls);
   vector_free(&struct_decls);
 
+  parser_pop_scope(parser);
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
     backtrack(parser->lexer, pos);
     return false;
@@ -3655,12 +3711,43 @@ DEBUG_FUNC(arrayaccess, array_access) {
   UNINDENT();
 }
 
+DEBUG_FUNC(designator, designator) {
+  switch (designator->ty) {
+  case AST_DESIGNATOR_TY_FIELD:
+    AST_PRINT("FIELD '%s'", identifier_str(state->parser, &designator->field));
+    break;
+  case AST_DESIGNATOR_TY_INDEX:
+    AST_PRINT("INDEX '%zu'", designator->index);
+    break;
+  }
+
+  if (designator->next) {
+    DEBUG_CALL(designator, designator->next);
+  }
+}
+
+DEBUG_FUNC(init, init) {
+  AST_PRINTZ("INIT");
+
+  if (init->designator) {
+    INDENT();
+    DEBUG_CALL(designator, init->designator);
+    UNINDENT();
+  }
+
+  AST_PRINTZ("EXPR");
+
+  INDENT();
+  DEBUG_CALL(expr, init->expr);
+  UNINDENT();
+}
+
 DEBUG_FUNC(initlist, init_list) {
   AST_PRINTZ("INIT LIST");
 
   INDENT();
-  for (size_t i = 0; i < init_list->num_exprs; i++) {
-    DEBUG_CALL(expr, &init_list->exprs[i]);
+  for (size_t i = 0; i < init_list->num_inits; i++) {
+    DEBUG_CALL(init, &init_list->inits[i]);
   }
   UNINDENT();
 }
