@@ -103,6 +103,10 @@ void aarch64_emit_udiv(struct aarch64_emitter *emitter, const struct aarch64_reg
 void aarch64_emit_load_pair_imm(struct aarch64_emitter *emitter, const struct aarch64_load_pair_imm ldp);
 void aarch64_emit_store_pair_imm(struct aarch64_emitter *emitter, const struct aarch64_store_pair_imm stp);
 
+void aarch64_emit_load_byte_imm(struct aarch64_emitter *emitter, const struct aarch64_load_imm ldrb);
+void aarch64_emit_store_byte_imm(struct aarch64_emitter *emitter, const struct aarch64_store_imm strb);
+void aarch64_emit_load_half_imm(struct aarch64_emitter *emitter, const struct aarch64_load_imm ldrh);
+void aarch64_emit_store_half_imm(struct aarch64_emitter *emitter, const struct aarch64_store_imm strh);
 void aarch64_emit_load_imm(struct aarch64_emitter *emitter, const struct aarch64_load_imm ldr);
 void aarch64_emit_store_imm(struct aarch64_emitter *emitter, const struct aarch64_store_imm str);
 

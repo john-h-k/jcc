@@ -172,8 +172,12 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_CBNZ:
     return AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH;
   case AARCH64_INSTR_TY_LOAD_IMM:
+  case AARCH64_INSTR_TY_LOAD_BYTE_IMM:
+  case AARCH64_INSTR_TY_LOAD_HALF_IMM:
     return AARCH64_INSTR_CLASS_LOAD_IMM;
   case AARCH64_INSTR_TY_STORE_IMM:
+  case AARCH64_INSTR_TY_STORE_BYTE_IMM:
+  case AARCH64_INSTR_TY_STORE_HALF_IMM:
     return AARCH64_INSTR_CLASS_STORE_IMM;
   case AARCH64_INSTR_TY_LOAD_PAIR_IMM:
     return AARCH64_INSTR_CLASS_LOAD_PAIR_IMM;
@@ -368,8 +372,12 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   size_t offset = get_lcl_stack_offset(state, op, lcl);
 
-  instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-  instr->aarch64->ldr_imm =
+  if (op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
+  } else {
+    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;    
+  }
+  instr->aarch64->load_imm =
       (struct aarch64_load_imm){.dest = dest,
                                 .addr = STACK_PTR_REG,
                                 .imm = offset,
@@ -383,7 +391,11 @@ static void codegen_store_lcl_op(struct codegen_state *state,
   struct aarch64_reg source = codegen_reg(op->store_lcl.value);
   struct ir_lcl *lcl = op->lcl;
 
-  instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+  if (op->store_lcl.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE && op->store_lcl.value->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
+  } else {
+    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;    
+  }
   instr->aarch64->str_imm = (struct aarch64_store_imm){
       .source = source,
       .addr = STACK_PTR_REG,
@@ -2412,6 +2424,14 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     fprintf(file, "ldr");
     debug_print_load_imm(file, &instr->aarch64->ldr_imm);
     break;
+  case AARCH64_INSTR_TY_LOAD_BYTE_IMM:
+    fprintf(file, "ldrb");
+    debug_print_load_imm(file, &instr->aarch64->ldrb_imm);
+    break;
+  case AARCH64_INSTR_TY_LOAD_HALF_IMM:
+    fprintf(file, "ldrh");
+    debug_print_load_imm(file, &instr->aarch64->ldrh_imm);
+    break;
   case AARCH64_INSTR_TY_LOAD_PAIR_IMM:
     fprintf(file, "ldp");
     debug_print_load_pair_imm(file, &instr->aarch64->ldp_imm);
@@ -2483,6 +2503,14 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_STORE_IMM:
     fprintf(file, "str");
     debug_print_store_imm(file, &instr->aarch64->str_imm);
+    break;
+  case AARCH64_INSTR_TY_STORE_BYTE_IMM:
+    fprintf(file, "strb");
+    debug_print_store_imm(file, &instr->aarch64->strb_imm);
+    break;
+  case AARCH64_INSTR_TY_STORE_HALF_IMM:
+    fprintf(file, "strh");
+    debug_print_store_imm(file, &instr->aarch64->strh_imm);
     break;
   case AARCH64_INSTR_TY_STORE_PAIR_IMM:
     fprintf(file, "stp");

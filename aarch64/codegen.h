@@ -50,6 +50,8 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_EOR,
   AARCH64_INSTR_TY_EOR_IMM,
   AARCH64_INSTR_TY_LOAD_IMM,
+  AARCH64_INSTR_TY_LOAD_BYTE_IMM,
+  AARCH64_INSTR_TY_LOAD_HALF_IMM,
   AARCH64_INSTR_TY_LOAD_PAIR_IMM,
   AARCH64_INSTR_TY_LSLV,
   AARCH64_INSTR_TY_LSRV,
@@ -71,6 +73,8 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_SBFM,
   AARCH64_INSTR_TY_SDIV,
   AARCH64_INSTR_TY_STORE_IMM,
+  AARCH64_INSTR_TY_STORE_BYTE_IMM,
+  AARCH64_INSTR_TY_STORE_HALF_IMM,
   AARCH64_INSTR_TY_STORE_PAIR_IMM,
   AARCH64_INSTR_TY_SUBS,
   AARCH64_INSTR_TY_SUB,
@@ -361,11 +365,11 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_load_imm load_imm, ldr_imm;
+      struct aarch64_load_imm load_imm, ldr_imm, ldrh_imm, ldrb_imm;
     };
 
     union {
-      struct aarch64_store_imm store_imm, str_imm;
+      struct aarch64_store_imm store_imm, str_imm, strh_imm, strb_imm;
     };
 
     union {
