@@ -1773,7 +1773,9 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   }
 }
 
-struct ast_tyref resolve_ternary_ty(struct parser *parser, struct ast_tyref *lhs, struct ast_tyref *rhs) {
+struct ast_tyref resolve_ternary_ty(struct parser *parser,
+                                    struct ast_tyref *lhs,
+                                    struct ast_tyref *rhs) {
   UNUSED_ARG(parser);
   UNUSED_ARG(rhs);
 
@@ -1791,12 +1793,15 @@ bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
       parse_token(parser, LEX_TOKEN_TY_COLON) &&
       parse_expr_precedence_aware(parser, 0, &false_expr)) {
     expr->ty = AST_EXPR_TY_TERNARY;
-    expr->var_ty = resolve_ternary_ty(parser, &true_expr.var_ty, &false_expr.var_ty);
+    expr->var_ty =
+        resolve_ternary_ty(parser, &true_expr.var_ty, &false_expr.var_ty);
     expr->ternary = (struct ast_ternary){
-      .var_ty = expr->var_ty,
-      .cond = arena_alloc(parser->arena, sizeof(*expr->ternary.cond)),
-      .true_expr = arena_alloc(parser->arena, sizeof(*expr->ternary.true_expr)),
-      .false_expr = arena_alloc(parser->arena, sizeof(*expr->ternary.false_expr)),
+        .var_ty = expr->var_ty,
+        .cond = arena_alloc(parser->arena, sizeof(*expr->ternary.cond)),
+        .true_expr =
+            arena_alloc(parser->arena, sizeof(*expr->ternary.true_expr)),
+        .false_expr =
+            arena_alloc(parser->arena, sizeof(*expr->ternary.false_expr)),
     };
 
     *expr->ternary.cond = cond;
@@ -1952,7 +1957,8 @@ bool parse_decl(struct parser *parser, struct ast_tyref *specifier,
       size_t max_idx = 0;
       for (size_t i = 0; i < expr.init_list.num_inits; i++) {
         struct ast_init *init = &expr.init_list.inits[i];
-        if (init->designator && init->designator->ty == AST_DESIGNATOR_TY_INDEX) {
+        if (init->designator &&
+            init->designator->ty == AST_DESIGNATOR_TY_INDEX) {
           idx = init->designator->index;
         }
         max_idx = MAX(max_idx, idx);

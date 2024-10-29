@@ -181,6 +181,10 @@ bool var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
+  if (l->ty == IR_OP_VAR_TY_TY_POINTER && r->ty == IR_OP_VAR_TY_TY_FUNC) {
+    return false;
+  }
+
   if ((l->ty == IR_OP_VAR_TY_TY_POINTER || l->ty == IR_OP_VAR_TY_TY_ARRAY) &&
       (r->ty == IR_OP_VAR_TY_TY_POINTER || r->ty == IR_OP_VAR_TY_TY_ARRAY)) {
     // pointers/arrays need no cast instr
