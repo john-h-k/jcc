@@ -942,25 +942,36 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
     debug_assert(literal_len, "literal_len was 0");
 
-    int base = 10;
-    if (literal_len >= 2 && literal_text[0] == '0' && literal_text[1] == 'x') {
-      base = 16;
-    } else if (literal_text[0] == '0') {
-      // this classes '0' as octal but that is fine
-      base = 8;
-    }
+    unsigned long long int_value;
+    if (token.ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL) {
+      if (literal_len == 3) {
+        // simple
+        int_value = literal_text[1];
+      } else {
+        todo("other char literals");
+      }
+    } else {
+      int base = 10;
+      if (literal_len >= 2 && literal_text[0] == '0' &&
+          literal_text[1] == 'x') {
+        base = 16;
+      } else if (literal_text[0] == '0') {
+        // this classes '0' as octal but that is fine
+        base = 8;
+      }
 
-    char *end_ptr;
-    unsigned long long int_value = strtoull(literal_text, &end_ptr, base);
+      char *end_ptr;
+      int_value = strtoull(literal_text, &end_ptr, base);
 
-    size_t literal_end = literal_len;
-    do {
-      literal_end--;
-    } while (literal_len && (tolower(literal_text[literal_end]) == 'u' ||
-                             tolower(literal_text[literal_end]) == 'l'));
+      size_t literal_end = literal_len;
+      do {
+        literal_end--;
+      } while (literal_len && (tolower(literal_text[literal_end]) == 'u' ||
+                               tolower(literal_text[literal_end]) == 'l'));
 
-    if (end_ptr - 1 != &literal_text[literal_end]) {
-      todo("handle constant int parse failure");
+      if (end_ptr - 1 != &literal_text[literal_end]) {
+        todo("handle constant int parse failure");
+      }
     }
 
     // TODO: handle unrepresentedly large values
@@ -1114,16 +1125,19 @@ struct ast_tyref var_ty_return_type_of(const struct ast_tyref *ty) {
   return *ty->func.ret_var_ty;
 }
 
-bool parse_designator(struct parser *parser, struct ast_designator *designator) {
+bool parse_designator(struct parser *parser,
+                      struct ast_designator *designator) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token identifier;
   struct ast_expr expr;
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET) && parse_constant_expr(parser, &expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET) &&
+      parse_constant_expr(parser, &expr) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET)) {
     designator->ty = AST_DESIGNATOR_TY_INDEX;
     designator->index = resolve_constant_expr(parser, &expr);
-  }
-  else if (parse_token(parser, LEX_TOKEN_TY_DOT) && parse_identifier(parser, &identifier)) {
+  } else if (parse_token(parser, LEX_TOKEN_TY_DOT) &&
+             parse_identifier(parser, &identifier)) {
     designator->ty = AST_DESIGNATOR_TY_FIELD;
     designator->field = identifier;
   } else {
@@ -1148,7 +1162,8 @@ bool parse_init(struct parser *parser, struct ast_init *init) {
   init->designator = NULL;
 
   struct ast_designator designator;
-  if (parse_designator(parser, &designator) && parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
+  if (parse_designator(parser, &designator) &&
+      parse_token(parser, LEX_TOKEN_TY_OP_ASSG)) {
     init->designator = arena_alloc(parser->arena, sizeof(*init->designator));
     *init->designator = designator;
   }
