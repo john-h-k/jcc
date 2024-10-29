@@ -104,9 +104,9 @@
 #define LDR_STR_FP_IMM_UNSIGNED(size, opc, imm12, Rn, Rt) LDR_STR_IMM_UNSIGNED(size, 0b1, opc, imm12, Rn, Rt)
 
 #define STR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
-  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b0, 0b00, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b00, imm12, Rn, Rt)
 #define LDR_8_IMM_UNSIGNED(imm12, Rn, Rt)                                      \
-  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b0, 0b01, imm12, Rn, Rt)
+  LDR_STR_INT_IMM_UNSIGNED(0b00, 0b01, imm12, Rn, Rt)
 
 #define STR_16_IMM_UNSIGNED(imm12, Rn, Rt)                                     \
   LDR_STR_INT_IMM_UNSIGNED(0b01, 0b00, imm12, Rn, Rt)

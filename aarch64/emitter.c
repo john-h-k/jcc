@@ -526,6 +526,67 @@ void aarch64_emit_store_pair_imm(struct aarch64_emitter *emitter,
   }
 }
 
+
+void aarch64_emit_load_half_imm(struct aarch64_emitter *emitter, const struct aarch64_load_imm ldrh) {
+  switch (ldrh.mode) {
+  case AARCH64_ADDRESSING_MODE_OFFSET:
+    aarch64_emit_instr(emitter,
+                 LDR_16_IMM_UNSIGNED(ldrh.imm, ldrh.addr.idx, ldrh.dest.idx));
+    break;
+  case AARCH64_ADDRESSING_MODE_PREINDEX:
+    todo("preindex single loads");
+    break;
+  case AARCH64_ADDRESSING_MODE_POSTINDEX:
+    todo("postindex single loads");
+    break;
+  }
+}
+
+void aarch64_emit_store_half_imm(struct aarch64_emitter *emitter, const struct aarch64_store_imm strh) {
+  switch (strh.mode) {
+  case AARCH64_ADDRESSING_MODE_OFFSET:
+    aarch64_emit_instr(emitter,
+                 STR_16_IMM_UNSIGNED(strh.imm, strh.addr.idx, strh.source.idx));
+    break;
+  case AARCH64_ADDRESSING_MODE_PREINDEX:
+    todo("preindex single loads");
+    break;
+  case AARCH64_ADDRESSING_MODE_POSTINDEX:
+    todo("postindex single loads");
+    break;
+  }
+}
+
+void aarch64_emit_load_byte_imm(struct aarch64_emitter *emitter, const struct aarch64_load_imm ldrb) {
+  switch (ldrb.mode) {
+  case AARCH64_ADDRESSING_MODE_OFFSET:
+    aarch64_emit_instr(emitter,
+                 LDR_8_IMM_UNSIGNED(ldrb.imm, ldrb.addr.idx, ldrb.dest.idx));
+    break;
+  case AARCH64_ADDRESSING_MODE_PREINDEX:
+    todo("preindex single loads");
+    break;
+  case AARCH64_ADDRESSING_MODE_POSTINDEX:
+    todo("postindex single loads");
+    break;
+  }
+}
+
+void aarch64_emit_store_byte_imm(struct aarch64_emitter *emitter, const struct aarch64_store_imm strb) {
+  switch (strb.mode) {
+  case AARCH64_ADDRESSING_MODE_OFFSET:
+    aarch64_emit_instr(emitter,
+                 STR_8_IMM_UNSIGNED(strb.imm, strb.addr.idx, strb.source.idx));
+    break;
+  case AARCH64_ADDRESSING_MODE_PREINDEX:
+    todo("preindex single loads");
+    break;
+  case AARCH64_ADDRESSING_MODE_POSTINDEX:
+    todo("postindex single loads");
+    break;
+  }
+}
+
 void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
                            const struct aarch64_load_imm ldr) {
   switch (ldr.mode) {
