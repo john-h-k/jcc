@@ -191,7 +191,7 @@ struct ast_cnst {
 
   union {
     unsigned long long int_value;
-    const char *str_value;
+    char *str_value;
     long double flt_value;
   };
 };
