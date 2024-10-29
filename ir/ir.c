@@ -1070,7 +1070,7 @@ struct ir_lcl *add_local(struct ir_func *irb,
   struct ir_var_ty_info ty_info = var_ty_info(irb->unit, var_ty);
 
   size_t lcl_pad =
-      ty_info.alignment - (irb->total_locals_size % ty_info.alignment);
+      (ty_info.alignment - (irb->total_locals_size % ty_info.alignment)) % ty_info.alignment;
   size_t lcl_size = ty_info.size;
 
   irb->total_locals_size += lcl_pad;
