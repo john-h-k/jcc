@@ -241,6 +241,10 @@ void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
 void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   UNUSED_ARG(irb);
 
+  if (ir->comment) {
+    fprintf(file, "// %s", ir->comment);
+  }
+
   switch (ir->ty) {
   case IR_OP_TY_UNKNOWN:
     bug("unknown op!");

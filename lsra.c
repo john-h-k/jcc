@@ -17,28 +17,41 @@ struct register_alloc_info {
   struct reg_info float_reg_info;
 };
 
-void spill_at_interval(struct ir_func *irb, struct interval *intervals,
-                       size_t cur_interval, size_t *active,
-                       size_t *num_active) {
-  struct interval *spill = &intervals[active[*num_active - 1]];
+struct register_alloc_state {
+  struct interval_data interval_data;
+
+  // contains indices into the intervals above
+  size_t *active;
+  size_t num_active;
+
+  struct bitset *gp_reg_pool;
+  struct bitset *fp_reg_pool;
+};
+
+void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
+                       size_t cur_interval) {
+  struct interval *intervals = state->interval_data.intervals;
+
+  struct interval *spill = &intervals[state->active[state->num_active - 1]];
   if (spill->end > intervals[cur_interval].end) {
     intervals[cur_interval].op->reg = spill->op->reg;
     spill_op(irb, spill->op);
 
     // remove `spill`
-    (*num_active)--;
+    state->num_active--;
 
     // insert into `active`, sorted by end point
-    for (size_t j = 0; j <= *num_active; j++) {
-      if (j == *num_active) {
-        active[j] = cur_interval;
-        (*num_active)++;
+    for (size_t j = 0; j <= state->num_active; j++) {
+      if (j == state->num_active) {
+        state->active[j] = cur_interval;
+        state->num_active++;
         break;
-      } else if (intervals[active[j]].end > intervals[cur_interval].end) {
-        memmove(&active[j + 1], &active[j],
-                sizeof(*active) * (*num_active - j));
-        active[j] = cur_interval;
-        (*num_active)++;
+      } else if (intervals[state->active[j]].end >
+                 intervals[cur_interval].end) {
+        memmove(&state->active[j + 1], &state->active[j],
+                sizeof(*state->active) * (state->num_active - j));
+        state->active[j] = cur_interval;
+        state->num_active++;
         break;
       }
     }
@@ -47,32 +60,34 @@ void spill_at_interval(struct ir_func *irb, struct interval *intervals,
   }
 }
 
-void expire_old_intervals(struct interval *intervals,
-                          struct interval *cur_interval, size_t *active,
-                          size_t *num_active, struct bitset *reg_pool) {
+void expire_old_intervals(struct register_alloc_state *state,
+                          struct interval *cur_interval) {
   size_t num_expired_intervals = 0;
 
-  for (size_t i = 0; i < *num_active; i++) {
-    struct interval *interval = &intervals[active[i]];
+  for (size_t i = 0; i < state->num_active; i++) {
+    struct interval *interval =
+        &state->interval_data.intervals[state->active[i]];
     if (interval->end >= cur_interval->start) {
       break;
     }
 
     num_expired_intervals++;
 
-    if (interval->op->reg.ty == IR_REG_TY_INTEGRAL || interval->op->reg.ty == IR_REG_TY_FP) {
-      // intervals can contain ops that were spilled for other reasons
-      // but are still alive
-      // so only free a reg if this interval actually *has* a reg
-      bitset_set(reg_pool, interval->op->reg.idx, true);
+    // intervals can contain ops that were spilled for other reasons
+    // but are still alive
+    // so only free a reg if this interval actually *has* a reg
+    if (interval->op->reg.ty == IR_REG_TY_INTEGRAL) {
+      bitset_set(state->gp_reg_pool, interval->op->reg.idx, true);
+    } else if (interval->op->reg.ty == IR_REG_TY_FP) {
+      bitset_set(state->fp_reg_pool, interval->op->reg.idx, true);
     }
   }
 
   // shift the active array down
 
-  *num_active -= num_expired_intervals;
-  memmove(active, &active[num_expired_intervals],
-          sizeof(*active) * (*num_active));
+  state->num_active -= num_expired_intervals;
+  memmove(state->active, &state->active[num_expired_intervals],
+          sizeof(*state->active) * (state->num_active));
 }
 
 int sort_interval_by_start_point(const void *a, const void *b) {
@@ -189,58 +204,84 @@ int compare_interval_id(const void *a, const void *b) {
   return (ssize_t)a_id - (ssize_t)b_id;
 }
 
-typedef bool (*op_needs_alloc)(struct ir_op * a);
+typedef bool (*op_needs_alloc)(struct ir_op *);
+
+void insert_active(struct register_alloc_state *state, size_t cur_interval) {
+  struct interval *intervals = state->interval_data.intervals;
+  size_t *active = state->active;
+
+  // insert sorted by endpoint
+  // TODO: use a heap
+  for (size_t j = 0; j <= state->num_active; j++) {
+    if (j == state->num_active) {
+      state->active[j] = cur_interval;
+      state->num_active++;
+      break;
+    } else if (intervals[active[j]].end > intervals[cur_interval].end) {
+      memmove(&active[j + 1], &active[j],
+              sizeof(*active) * (state->num_active - j));
+      active[j] = cur_interval;
+      state->num_active++;
+      break;
+    }
+  }
+}
 
 struct interval_data register_alloc_pass(struct ir_func *irb,
-                                         struct reg_set_info *info,
-                                         op_needs_alloc needs_reg,
-                                         enum ir_reg_ty reg_ty,
-                                         bool *spilled) {
+                                         struct reg_info *info, bool *spilled) {
 
   struct interval_data data = construct_intervals(irb);
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        sort_interval_by_start_point);
+
+  size_t num_gp_regs =
+      info->gp_registers.num_volatile + info->gp_registers.num_nonvolatile;
+  size_t num_fp_regs =
+      info->fp_registers.num_volatile + info->fp_registers.num_nonvolatile;
+
+  struct register_alloc_state state = {
+      .interval_data = data,
+      .active =
+          arena_alloc(irb->arena, sizeof(size_t) * (num_fp_regs + num_gp_regs)),
+      .num_active = 0,
+      .gp_reg_pool = bitset_create(num_gp_regs, true),
+      .fp_reg_pool = bitset_create(num_fp_regs, true)};
+
+  bitset_clear(state.gp_reg_pool, true);
+  bitset_clear(state.fp_reg_pool, true);
 
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
     debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
   }
 
-  struct interval *intervals = data.intervals;
-  size_t num_intervals = data.num_intervals;
-
-  qsort(intervals, num_intervals, sizeof(*intervals),
-        sort_interval_by_start_point);
-
-  size_t num_regs = info->num_volatile + info->num_nonvolatile;
-
-  size_t *active = arena_alloc(irb->arena, sizeof(size_t) * num_regs);
-  size_t num_active = 0;
-
-  struct bitset *reg_pool = bitset_create(num_regs);
-  bitset_clear(reg_pool, true);
-
+  struct interval *const intervals = state.interval_data.intervals;
+  const size_t num_intervals = state.interval_data.num_intervals;
   // intervals must be sorted by start point
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &intervals[i];
-    expire_old_intervals(intervals, interval, active, &num_active, reg_pool);
-
-    // update live_regs early in case the op is not value producing/marked
-    // DONT_GIVE_REG and we back out
-    unsigned long long free_regs = bitset_as_ull(reg_pool);
-
-    switch (reg_ty) {
-      case IR_REG_TY_INTEGRAL:
-        interval->op->live_gp_regs = ~free_regs & ((1ull << num_regs) - 1);
-        break;
-      case IR_REG_TY_FP:
-        interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
-        break;
-      default:
-        bug("bad reg type for LSRA");
-    }
+    expire_old_intervals(&state, interval);
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) || !op_produces_value(interval->op->ty) || !needs_reg(interval->op)) {
+        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
+        !op_produces_value(interval->op->ty)) {
       continue;
+    }
+
+    struct bitset *reg_pool;
+    struct bitset *all_used_reg_pool;
+    enum ir_reg_ty reg_ty;
+    if (var_ty_is_integral(&interval->op->var_ty)) {
+      reg_ty = IR_REG_TY_INTEGRAL;
+      reg_pool = state.gp_reg_pool;
+      all_used_reg_pool = irb->reg_usage.gp_registers_used;
+    } else if (var_ty_is_fp(&interval->op->var_ty)) {
+      reg_ty = IR_REG_TY_FP;
+      reg_pool = state.fp_reg_pool;
+      all_used_reg_pool = irb->reg_usage.fp_registers_used;
+    } else {
+      bug("don't know what register type to allocate for op %zu",
+          interval->op->id);
     }
 
     if (interval->op->flags & IR_OP_FLAG_MUST_SPILL) {
@@ -257,53 +298,23 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
 
       spill_op(irb, interval->op);
       *spilled = true;
-    } else if (num_active == num_regs) {
-      spill_at_interval(irb, intervals, i, active, &num_active);
-      *spilled = true;
-    } else {
+    } else if (bitset_any(reg_pool, true)) {
+      // we can allocate a register from the pool
       size_t free_slot = bitset_tzcnt(reg_pool);
-      debug_assert(free_slot < num_regs, "reg pool unexpectedly empty!");
+      debug_assert(free_slot < bitset_length(reg_pool),
+                   "reg pool unexpectedly empty!");
 
       bitset_set(reg_pool, free_slot, false);
+      bitset_set(all_used_reg_pool, free_slot, true);
 
-      if (free_slot >= info->num_volatile) {
-        irb->nonvolatile_registers_used |= (1ull << free_slot);
-      }
-
-      interval->op->reg = (struct ir_reg){
-        .ty = reg_ty,
-        .idx = free_slot
-      };
+      interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = free_slot};
 
       size_t cur_interval = i;
-
-      // insert into `active`, sorted by end point
-      for (size_t j = 0; j <= num_active; j++) {
-        if (j == num_active) {
-          active[j] = cur_interval;
-          num_active++;
-          break;
-        } else if (intervals[active[j]].end > intervals[cur_interval].end) {
-          memmove(&active[j + 1], &active[j],
-                  sizeof(*active) * (num_active - j));
-          active[j] = cur_interval;
-          num_active++;
-          break;
-        }
-      }
-    }
-
-    // re-set live regs as we may have assigned a new reg
-    free_regs = bitset_as_ull(reg_pool);
-    switch (reg_ty) {
-      case IR_REG_TY_INTEGRAL:
-        interval->op->live_gp_regs = ~free_regs & ((1ull << num_regs) - 1);
-        break;
-      case IR_REG_TY_FP:
-        interval->op->live_fp_regs = ~free_regs & ((1ull << num_regs) - 1);
-        break;
-      default:
-        bug("bad reg type for LSRA");
+      insert_active(&state, cur_interval);
+    } else {
+      // need to spill, no free registers
+      spill_at_interval(irb, &state, i);
+      *spilled = true;
     }
   }
 
@@ -327,11 +338,20 @@ bool op_needs_int_reg(struct ir_op *op) {
   return !var_ty_is_fp(&op->var_ty);
 }
 
-bool op_needs_fp_reg(struct ir_op *op) {
-  return var_ty_is_fp(&op->var_ty);
-}
+bool op_needs_fp_reg(struct ir_op *op) { return var_ty_is_fp(&op->var_ty); }
 
 void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
+  irb->reg_usage = (struct ir_reg_usage){
+      .fp_registers_used =
+          bitset_create(reg_info.fp_registers.num_volatile +
+                            reg_info.fp_registers.num_nonvolatile,
+                        false),
+      .gp_registers_used =
+          bitset_create(reg_info.gp_registers.num_volatile +
+                            reg_info.gp_registers.num_nonvolatile,
+                        false),
+  };
+
   bool spill_exists = true;
   int attempts = 0;
 
@@ -347,13 +367,10 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
     BEGIN_SUB_STAGE("REGALLOC");
 
     spill_exists = false;
-  
-    clear_metadata(irb);
-    struct interval_data data =
-        register_alloc_pass(irb, &reg_info.gp_registers, op_needs_int_reg, IR_REG_TY_INTEGRAL, &spill_exists);
 
     clear_metadata(irb);
-    data = register_alloc_pass(irb, &reg_info.fp_registers, op_needs_fp_reg, IR_REG_TY_FP, &spill_exists);
+    struct interval_data data =
+        register_alloc_pass(irb, &reg_info, &spill_exists);
 
     qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
           compare_interval_id);

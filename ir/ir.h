@@ -353,6 +353,12 @@ enum ir_op_flags {
   IR_OP_FLAG_FIXED_REG = 64,
 };
 
+typedef unsigned long long regpool_t;
+struct ir_reg_state {
+  regpool_t live_gp;
+  regpool_t live_fp;
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -389,12 +395,10 @@ struct ir_op {
   struct ir_lcl *lcl;
 
   // only meaningful post register-allocation
-  // `live_regs` is bitmask of all registers with values live, needed for
-  // spilling
-  unsigned long live_gp_regs;
-  unsigned long live_fp_regs;
   struct ir_reg reg;
   void *metadata;
+
+  const char *comment;
 };
 
 // set of ops with no SEQ_POINTs
@@ -570,6 +574,11 @@ struct ir_label {
   struct ir_label *succ;
 };
 
+struct ir_reg_usage {
+  struct bitset *gp_registers_used;
+  struct bitset *fp_registers_used;
+};
+
 struct ir_func {
   struct ir_unit *unit;
 
@@ -591,13 +600,11 @@ struct ir_func {
   size_t next_stmt_id;
   size_t next_op_id;
 
-  // starts at index of first nonvolatile register, which is a bit odd
-  // could change or generally make nice to work with
-  unsigned long long nonvolatile_registers_used;
-
   size_t num_locals;
   struct ir_lcl *first_local;
   struct ir_lcl *last_local;
+
+  struct ir_reg_usage reg_usage;
 
   // number of stack local variables
   size_t total_locals_size;
@@ -636,6 +643,10 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           enum ir_glb_def_ty def_ty, const char *name);
 
 struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
+
+// clones an op so it can be marked contained
+// else we would need to ensure all consumers can contain it
+struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op);
 
 void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_op_var_primitive_ty ty,

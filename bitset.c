@@ -7,13 +7,15 @@
 typedef unsigned long long chunk_t;
 
 struct bitset {
+  size_t num_set;
+
   size_t num_elements;
   size_t num_chunks;
 
   chunk_t chunks[];
 };
 
-struct bitset *bitset_create(size_t num_elements) {
+struct bitset *bitset_create(size_t num_elements, bool init_value) {
   size_t bits_per_chunk = sizeof(chunk_t) * 8;
 
   size_t num_chunks = (num_elements + (bits_per_chunk - 1)) / bits_per_chunk;
@@ -22,8 +24,9 @@ struct bitset *bitset_create(size_t num_elements) {
       nonnull_malloc(sizeof(*bitset) + sizeof(chunk_t) * num_chunks);
   bitset->num_elements = num_elements;
   bitset->num_chunks = num_chunks;
+  bitset->num_set = 0;
 
-  bitset_clear(bitset, false);
+  bitset_clear(bitset, init_value);
 
   return bitset;
 }
@@ -41,22 +44,7 @@ unsigned long long bitset_as_ull(struct bitset *bitset) {
 }
 
 unsigned long long bitset_popcnt(struct bitset *bitset) {
-  unsigned long long count = 0;
-
-  size_t bits_per_chunk = sizeof(chunk_t) * 8;
-  size_t num_trailing = bitset->num_elements % bits_per_chunk;
-
-  for (size_t i = 0; i < bitset->num_chunks; i++) {
-    chunk_t chunk = bitset->chunks[i];
-
-    if (num_trailing && i + 1 == bitset->num_chunks) {
-      chunk = chunk & (((chunk_t)1 << num_trailing) - (chunk_t)1);
-    }
-
-    count += popcntl(chunk);
-  }
-
-  return count;
+  return bitset->num_set;
 }
 
 unsigned long long bitset_tzcnt(struct bitset *bitset) {
@@ -85,6 +73,14 @@ bool bitset_get(struct bitset *bitset, size_t idx) {
   return (chunk & ((chunk_t)1 << mod_idx)) > 0;
 }
 
+unsigned long long bitset_all(struct bitset *bitset, bool value) {
+  return value ? bitset->num_set == bitset->num_elements : !bitset->num_set;
+}
+
+unsigned long long bitset_any(struct bitset *bitset, bool value) {
+  return value ? bitset->num_set : bitset->num_set != bitset->num_elements;
+}
+
 void bitset_set(struct bitset *bitset, size_t idx, bool value) {
   debug_assert(idx < bitset->num_elements, "bitset idx out of range");
 
@@ -92,9 +88,17 @@ void bitset_set(struct bitset *bitset, size_t idx, bool value) {
   size_t mod_idx = idx % (sizeof(chunk_t) * 8);
   chunk_t *chunk = &bitset->chunks[chunk_idx];
 
+  bool prev = (*chunk & ((chunk_t)1 << mod_idx)) > 0;
+
   if (value) {
+    if (!prev) {
+      bitset->num_set++;
+    }
     *chunk |= ((chunk_t)1 << mod_idx);
   } else {
+    if (prev) {
+      bitset->num_set--;
+    }
     *chunk &= ~((chunk_t)1 << mod_idx);
   }
 }
@@ -102,10 +106,31 @@ void bitset_set(struct bitset *bitset, size_t idx, bool value) {
 void bitset_clear(struct bitset *bitset, bool value) {
   unsigned char mask = value ? UCHAR_MAX : 0;
   memset(bitset->chunks, mask, sizeof(chunk_t) * bitset->num_chunks);
+
+  bitset->num_set = value ? bitset->num_elements : 0;
 }
 
 void bitset_free(struct bitset **bitset) {
   free(*bitset);
 
   *bitset = NULL;
+}
+
+
+struct bitset_iter bitset_iter(struct bitset *bitset, size_t start, bool value) {
+  return (struct bitset_iter){ .bitset = bitset, .value = value, .idx = start };
+}
+
+bool bitset_iter_next(struct bitset_iter *iter, size_t *idx) {
+  // TODO: this can be optimised
+  while (iter->idx < iter->bitset->num_elements) {
+    if (bitset_get(iter->bitset, iter->idx) == iter->value) {
+      *idx = iter->idx++;
+      return true;
+    }
+
+    iter->idx++;
+  }
+
+  return false;
 }

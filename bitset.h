@@ -5,11 +5,25 @@
 
 struct bitset;
 
-struct bitset *bitset_create(size_t num_elements);
+struct bitset *bitset_create(size_t num_elements, bool init_value);
 bool bitset_get(struct bitset *bitset, size_t idx);
 void bitset_set(struct bitset *bitset, size_t idx, bool value);
 
 size_t bitset_length(struct bitset *bitset);
+
+struct bitset_iter {
+  struct bitset *bitset;
+  bool value;
+  size_t idx;
+};
+
+struct bitset_iter bitset_iter(struct bitset *bitset, size_t start, bool value);
+
+// returns `false` when finished (idx is undefined as soon as this occurs)
+bool bitset_iter_next(struct bitset_iter *iter, size_t *idx);
+
+unsigned long long bitset_all(struct bitset *bitset, bool value);
+unsigned long long bitset_any(struct bitset *bitset, bool value);
 
 unsigned long long bitset_popcnt(struct bitset *bitset);
 unsigned long long bitset_tzcnt(struct bitset *bitset);

@@ -1,6 +1,7 @@
 #include "liveness.h"
 
 #include "bit_twiddle.h"
+#include "bitset.h"
 #include "ir/ir.h"
 
 void op_used_callback(struct ir_op **op, void *cb_metadata) {
@@ -238,34 +239,35 @@ struct interval_data construct_intervals(struct ir_func *irb) {
   return data;
 }
 
-void print_live_regs(FILE *file, unsigned long live_integral_regs,
-                     unsigned long live_fp_regs) {
-  unsigned long max_integral_live =
-      sizeof(live_integral_regs) * 8 - lzcnt(live_integral_regs);
+void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
   fslogsl(file, " - LIVE REGS (");
-  for (size_t i = 0; i < max_integral_live; i++) {
-    if (NTH_BIT(live_integral_regs, i)) {
-      fslogsl(file, "R%zu", i);
 
-      if (i + 1 < max_integral_live) {
-        fslogsl(file, ", ");
-      }
+  struct bitset_iter gp_iter = bitset_iter(reg_usage->gp_registers_used, 0, true);
+  struct bitset_iter fp_iter = bitset_iter(reg_usage->fp_registers_used, 0, true);
+
+  size_t i;
+  bool first = true;
+  while (bitset_iter_next(&gp_iter, &i)) {
+    if (first) {
+      first = false;
+      fslogsl(file, ", ");
     }
+
+    fslogsl(file, "R%zu", i);
   }
 
-  if (live_integral_regs && live_fp_regs) {
+  if (bitset_any(reg_usage->gp_registers_used, true) && bitset_any(reg_usage->fp_registers_used, true)) {
     fslogsl(file, ", ");
   }
 
-  unsigned long max_fp_live = sizeof(live_fp_regs) * 8 - lzcnt(live_fp_regs);
-  for (size_t i = 0; i < max_fp_live; i++) {
-    if (NTH_BIT(live_fp_regs, i)) {
-      fslogsl(file, "F%zu", i);
-
-      if (i + 1 < max_fp_live) {
-        fslogsl(file, ", ");
-      }
+  first = true;
+  while (bitset_iter_next(&fp_iter, &i)) {
+    if (first) {
+      first = false;
+      fslogsl(file, ", ");
     }
+
+    fslogsl(file, "F%zu", i);
   }
   fslogsl(file, ")");
 }
@@ -311,8 +313,7 @@ void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
     break;
   }
 
-  if (interval && interval->op) {
-    print_live_regs(file, interval->op->live_gp_regs,
-                    interval->op->live_fp_regs);
-  }
+  // if (interval && interval->op) {
+  //   print_live_regs(file, &interval->op->reg_usage);
+  // }
 }
