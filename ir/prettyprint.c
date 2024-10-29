@@ -752,6 +752,9 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
       case IR_GLB_DEF_TY_DEFINED:
         debug_print_ir_func(file, glb->func, cb, cb_metadata);
         break;
+      case IR_GLB_DEF_TY_TENTATIVE:
+        fprintf(file, "TENTATIVE\n");
+        break;
       case IR_GLB_DEF_TY_UNDEFINED:
         fprintf(file, "UNDF\n");
         break;
