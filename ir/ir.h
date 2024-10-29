@@ -526,7 +526,7 @@ struct ir_var {
   struct ir_var_value value;
 };
 
-enum ir_glb_def_ty { IR_GLB_DEF_TY_DEFINED, IR_GLB_DEF_TY_UNDEFINED };
+enum ir_glb_def_ty { IR_GLB_DEF_TY_DEFINED, IR_GLB_DEF_TY_UNDEFINED, IR_GLB_DEF_TY_TENTATIVE };
 
 struct ir_glb {
   enum ir_glb_ty ty;
