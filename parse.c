@@ -3063,7 +3063,7 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_tyref func_ty;
-  if (!parse_type_specifier(parser, &func_ty, NULL)) {
+  if (!parse_type_specifier(parser, &func_ty, &func_def->storage_class_specifiers)) {
     backtrack(parser->lexer, pos);
     return false;
   }
