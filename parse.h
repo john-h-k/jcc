@@ -425,14 +425,13 @@ struct ast_expr {
 
 enum ast_decl_ty {
   AST_DECL_TY_DECL,
+  AST_DECL_TY_ANON_DECL,
   AST_DECL_TY_DECL_WITH_ASSG,
 };
 
 struct ast_decl {
   enum ast_decl_ty ty;
   struct ast_var var;
-
-  // int scope;
 
   union {
     struct ast_expr assg_expr;
@@ -592,9 +591,21 @@ struct ast_field {
   struct token identifier;
 };
 
+enum ast_structdecl_ty {
+  // normal fields
+  AST_STRUCTDECL_TY_NONE,
+
+  // anonymous struct
+  AST_STRUCTDECL_TY_STRUCT,
+
+  // anonymous union
+  AST_STRUCTDECL_TY_UNION,
+};
+
 struct ast_structdecl {
+  enum ast_structdecl_ty ty;
+
   size_t num_fields;
-  // struct ast_field *fields;
   struct ast_decl *fields;
 };
 
