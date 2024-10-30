@@ -1000,7 +1000,7 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
   while (is_literal_token(parser, token.ty, &ty_ref) &&
-      token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
+         token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
     cnst->cnst_ty = ty_ref;
 
     const char *str = associated_text(parser->lexer, &token);
@@ -1340,6 +1340,27 @@ bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
+bool try_resolve_member_access_ty(
+                                  struct ast_tyref base_ty,
+                                  const char *member_name,
+                                  struct ast_tyref *ty_ref) {
+  // TODO: super slow hashtable needed
+  for (size_t i = 0; i < base_ty.aggregate.num_field_var_tys; i++) {
+    const struct ast_struct_field *field = &base_ty.aggregate.field_var_tys[i];
+    if (field->name == NULL) {
+      if (try_resolve_member_access_ty(*field->var_ty, member_name, ty_ref)) {
+        return true;
+      }
+    }
+
+    if (strcmp(field->name, member_name) == 0) {
+      *ty_ref = *field->var_ty;
+      return true;
+    }
+  }
+
+  return false;
+}
 struct ast_tyref resolve_member_access_ty(struct parser *parser,
                                           struct ast_tyref *var_ty,
                                           const struct token *member) {
@@ -1360,16 +1381,9 @@ struct ast_tyref resolve_member_access_ty(struct parser *parser,
 
   const char *member_name = identifier_str(parser, member);
 
-  // TODO: super slow hashtable needed
-  for (size_t i = 0; i < base_ty.aggregate.num_field_var_tys; i++) {
-    const struct ast_struct_field *field = &base_ty.aggregate.field_var_tys[i];
-    if (field->name == NULL) {
-      bug("anon");
-    }
-
-    if (strcmp(field->name, member_name) == 0) {
-      return *field->var_ty;
-    }
+  struct ast_tyref access_ty;
+  if (try_resolve_member_access_ty(base_ty, member_name, &access_ty)) {
+    return access_ty;
   }
 
   todo("member '%s' does not exist", member_name);
@@ -2693,6 +2707,60 @@ bool parse_declaration_specifiers(
   return false;
 }
 
+struct ast_tyref
+make_aggregate_ty(struct parser *parser, struct token type, const char *name,
+                  struct ast_structdecllist *decl_list,
+                  enum ast_function_specifier_flags function_specifiers,
+                  enum ast_type_qualifier_flags type_qualifiers) {
+  size_t total_fields = 0;
+  for (size_t i = 0; i < decl_list->num_struct_decls; i++) {
+    total_fields += decl_list->struct_decls[i].num_fields;
+  }
+
+  struct ast_struct_field *fields = arena_alloc(
+      parser->arena, sizeof(struct ast_struct_field) * total_fields);
+
+  size_t idx = 0;
+  for (size_t i = 0; i < decl_list->num_struct_decls; i++) {
+    struct ast_structdecl *field_list = &decl_list->struct_decls[i];
+    for (size_t j = 0; j < field_list->num_fields; j++) {
+      struct ast_struct_field *field = &fields[idx++];
+
+      if (field_list->fields[j].ty == AST_DECL_TY_ANON_DECL) {
+        field->name = NULL;
+      } else {
+        field->name =
+            identifier_str(parser, &field_list->fields[j].var.identifier);
+      }
+      field->var_ty = arena_alloc(parser->arena, sizeof(*field->var_ty));
+      *field->var_ty = field_list->fields[j].var.var_ty;
+    }
+  }
+
+  enum ast_ty_aggregate_ty aggregate_ty;
+  switch (type.ty) {
+  case LEX_TOKEN_TY_KW_UNION:
+    aggregate_ty = AST_TY_AGGREGATE_TY_UNION;
+    break;
+  case LEX_TOKEN_TY_KW_STRUCT:
+    aggregate_ty = AST_TY_AGGREGATE_TY_STRUCT;
+    break;
+  default:
+    unreachable("impossible");
+  }
+
+  struct ast_ty_aggregate aggregate;
+  aggregate.ty = aggregate_ty;
+  aggregate.name = name;
+  aggregate.num_field_var_tys = total_fields;
+  aggregate.field_var_tys = fields;
+
+  return (struct ast_tyref){.ty = AST_TYREF_TY_AGGREGATE,
+                            .function_specifiers = function_specifiers,
+                            .type_qualifiers = type_qualifiers,
+                            .aggregate = aggregate};
+}
+
 bool parse_type_specifier(
     struct parser *parser, struct ast_tyref *ty_ref,
     enum ast_storage_class_specifier_flags *storage_class_specifiers) {
@@ -2726,52 +2794,21 @@ bool parse_type_specifier(
 
     struct ast_structdecllist decl_list;
     if (parse_structdecllist(parser, &decl_list)) {
-      size_t total_fields = 0;
-      for (size_t i = 0; i < decl_list.num_struct_decls; i++) {
-        total_fields += decl_list.struct_decls[i].num_fields;
-      }
+      *ty_ref = make_aggregate_ty(parser, type, name, &decl_list,
+                                  ty_ref->function_specifiers,
+                                  ty_ref->type_qualifiers);
 
-      struct ast_struct_field *fields = arena_alloc(
-          parser->arena, sizeof(struct ast_struct_field) * total_fields);
-
-      size_t idx = 0;
-      for (size_t i = 0; i < decl_list.num_struct_decls; i++) {
-        struct ast_structdecl *field_list = &decl_list.struct_decls[i];
-        for (size_t j = 0; j < field_list->num_fields; j++) {
-          struct ast_struct_field *field = &fields[idx++];
-          field->name =
-              identifier_str(parser, &field_list->fields[j].var.identifier);
-          field->var_ty = arena_alloc(parser->arena, sizeof(*field->var_ty));
-          *field->var_ty = field_list->fields[j].var.var_ty;
-        }
-      }
-
-      enum ast_ty_aggregate_ty aggregate_ty;
       enum var_table_entry_ty entry_ty;
       switch (type.ty) {
       case LEX_TOKEN_TY_KW_UNION:
-        aggregate_ty = AST_TY_AGGREGATE_TY_UNION;
         entry_ty = VAR_TABLE_ENTRY_TY_UNION;
         break;
       case LEX_TOKEN_TY_KW_STRUCT:
-        aggregate_ty = AST_TY_AGGREGATE_TY_STRUCT;
         entry_ty = VAR_TABLE_ENTRY_TY_STRUCT;
         break;
       default:
         unreachable("impossible");
       }
-
-      struct ast_ty_aggregate aggregate;
-      aggregate.ty = aggregate_ty;
-      aggregate.name = name;
-      aggregate.num_field_var_tys = total_fields;
-      aggregate.field_var_tys = fields;
-
-      *ty_ref =
-          (struct ast_tyref){.ty = AST_TYREF_TY_AGGREGATE,
-                             .function_specifiers = ty_ref->function_specifiers,
-                             .type_qualifiers = ty_ref->type_qualifiers,
-                             .aggregate = aggregate};
 
       if (name) {
         struct var_table_entry *entry = create_entry(&parser->ty_table, name);
@@ -2942,8 +2979,7 @@ bool parse_direct_declarator_modifier(struct parser *parser,
         arena_alloc(parser->arena, sizeof(*underlying));
     *underlying = *ty_ref;
 
-    struct ast_tyref *func_ty =
-        arena_alloc(parser->arena, sizeof(*func_ty));
+    struct ast_tyref *func_ty = arena_alloc(parser->arena, sizeof(*func_ty));
     func_ty->ty = AST_TYREF_TY_FUNC;
     func_ty->func.ret_var_ty =
         arena_alloc(parser->arena, sizeof(*func_ty->func.ret_var_ty));
@@ -3063,7 +3099,8 @@ bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_tyref func_ty;
-  if (!parse_type_specifier(parser, &func_ty, &func_def->storage_class_specifiers)) {
+  if (!parse_type_specifier(parser, &func_ty,
+                            &func_def->storage_class_specifiers)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -3168,6 +3205,47 @@ bool parse_enumcnst(struct parser *parser, struct ast_enumcnst *enum_cnst) {
   return true;
 }
 
+bool parse_anonymousdecl(struct parser *parser,
+                         struct ast_structdecl *field_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct token token;
+  peek_token(parser->lexer, &token);
+
+  if (token.ty == LEX_TOKEN_TY_KW_STRUCT) {
+    field_list->ty = AST_STRUCTDECL_TY_STRUCT;
+  } else if (token.ty == LEX_TOKEN_TY_KW_UNION) {
+    field_list->ty = AST_STRUCTDECL_TY_STRUCT;
+  } else {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  consume_token(parser->lexer, token);
+
+  struct ast_structdecllist decl_list;
+  if (!parse_structdecllist(parser, &decl_list)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_tyref var_ty = make_aggregate_ty(parser, token, NULL, &decl_list,
+                                              AST_FUNCTION_SPECIFIER_FLAG_NONE,
+                                              AST_TYPE_QUALIFIER_FLAG_NONE);
+
+  field_list->num_fields = 1;
+  field_list->fields = arena_alloc(parser->arena, sizeof(struct ast_decl));
+  field_list->fields[0] =
+      (struct ast_decl){.ty = AST_DECL_TY_ANON_DECL, .var = {.var_ty = var_ty}};
+
+  if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  return true;
+}
+
 bool parse_fieldlist(struct parser *parser, struct ast_structdecl *field_list) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -3258,7 +3336,8 @@ bool parse_structdecllist(struct parser *parser,
   struct vector *struct_decls = vector_create(sizeof(struct ast_structdecl));
   {
     struct ast_structdecl struct_decl;
-    while (parse_fieldlist(parser, &struct_decl)) {
+    while (parse_anonymousdecl(parser, &struct_decl) ||
+           parse_fieldlist(parser, &struct_decl)) {
       vector_push_back(struct_decls, &struct_decl);
     }
   }
