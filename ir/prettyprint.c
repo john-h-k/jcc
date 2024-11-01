@@ -418,7 +418,21 @@ void prettyprint_begin_visit_basicblock_file(struct ir_func *irb,
   if (basicblock->comment) {
     fslog(fm->file, "// %s\n", basicblock->comment);
   }
-  fslog(fm->file, "BB @ %03zu", basicblock->id);
+  fslogsl(fm->file, "BB @ %03zu", basicblock->id);
+
+  if (basicblock->num_preds) {
+    fslogsl(fm->file, " PREDS = [ ");
+    for (size_t i = 0; i < basicblock->num_preds; i++) {
+      fslogsl(fm->file, "@%zu", basicblock->preds[i]->id);
+
+      if (i + 1 != basicblock->num_preds) {
+        fslogsl(fm->file, ", ");
+      }
+    }
+    fslogsl(fm->file, " ]");
+  }
+
+  fslog(fm->file, "");
 }
 
 void prettyprint_end_visit_basicblock_file(struct ir_func *irb,

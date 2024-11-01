@@ -1928,7 +1928,7 @@ struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
   }
 
-  return (struct ir_loop){.entry = before_body_basicblock,
+  return (struct ir_loop){.entry = end_body_basicblock,
                           .exit = after_body_basicblock};
 }
 
