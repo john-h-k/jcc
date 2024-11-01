@@ -508,7 +508,32 @@ struct ast_tyref resolve_unary_op_types(struct parser *parser,
   }
 }
 
-struct ast_tyref resolve_binary_op_types(struct parser *parser,
+bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty) {
+  switch (ty) {
+  case AST_BINARY_OP_TY_EQ:
+  case AST_BINARY_OP_TY_NEQ:
+  case AST_BINARY_OP_TY_GT:
+  case AST_BINARY_OP_TY_GTEQ:
+  case AST_BINARY_OP_TY_LT:
+  case AST_BINARY_OP_TY_LTEQ:
+  case AST_BINARY_OP_TY_LOGICAL_OR:
+  case AST_BINARY_OP_TY_LOGICAL_AND:
+    return true;
+  case AST_BINARY_OP_TY_OR:
+  case AST_BINARY_OP_TY_AND:
+  case AST_BINARY_OP_TY_XOR:
+  case AST_BINARY_OP_TY_LSHIFT:
+  case AST_BINARY_OP_TY_RSHIFT:
+  case AST_BINARY_OP_TY_ADD:
+  case AST_BINARY_OP_TY_SUB:
+  case AST_BINARY_OP_TY_MUL:
+  case AST_BINARY_OP_TY_DIV:
+  case AST_BINARY_OP_TY_QUOT:
+    return false;
+  }
+}
+
+struct ast_tyref resolve_binary_op_intermediate_types(struct parser *parser,
                                          enum ast_binary_op_ty ty,
                                          const struct ast_tyref *lhs,
                                          const struct ast_tyref *rhs) {
@@ -519,6 +544,10 @@ struct ast_tyref resolve_binary_op_types(struct parser *parser,
   if (lhs->ty == AST_TYREF_TY_POINTER || rhs->ty == AST_TYREF_TY_POINTER) {
     const struct ast_tyref *pointer_ty =
         lhs->ty == AST_TYREF_TY_POINTER ? lhs : rhs;
+
+    if (ast_binary_op_is_comparison(ty)) {
+      return tyref_pointer_sized_int(parser, false);
+    }
 
     switch (ty) {
     case AST_BINARY_OP_TY_ADD:
@@ -1090,7 +1119,7 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   if (assg->ty == AST_ASSG_TY_COMPOUNDASSG) {
     assg->compound_assg = (struct ast_assg_compound_assg){
         .binary_op_ty = binary_op_ty,
-        .intermediate_var_ty = resolve_binary_op_types(
+        .intermediate_var_ty = resolve_binary_op_intermediate_types(
             parser, binary_op_ty, &assignee.var_ty, &expr.var_ty)};
   }
 
@@ -1340,8 +1369,7 @@ bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
-bool try_resolve_member_access_ty(
-                                  struct ast_tyref base_ty,
+bool try_resolve_member_access_ty(struct ast_tyref base_ty,
                                   const char *member_name,
                                   struct ast_tyref *ty_ref) {
   // TODO: super slow hashtable needed
@@ -1787,14 +1815,22 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     // `rhs` so we need to in-place modify `expr`
     struct ast_expr lhs = *expr;
 
-    struct ast_tyref result_ty =
-        resolve_binary_op_types(parser, info.ty, &lhs.var_ty, &rhs.var_ty);
+    struct ast_tyref intermediate_ty =
+        resolve_binary_op_intermediate_types(parser, info.ty, &lhs.var_ty, &rhs.var_ty);
+
+    struct ast_tyref result_ty;
+    if (ast_binary_op_is_comparison(info.ty)) {
+      result_ty = (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
+                                .well_known = WELL_KNOWN_TY_SIGNED_INT};
+    } else {
+      result_ty = intermediate_ty;
+    }
 
     expr->ty = AST_EXPR_TY_BINARY_OP;
     expr->var_ty = result_ty;
     struct ast_binary_op *binary_op = &expr->binary_op;
     binary_op->ty = info.ty;
-    binary_op->var_ty = result_ty;
+    binary_op->intermediate_var_ty = intermediate_ty;
 
     binary_op->lhs = arena_alloc(parser->arena, sizeof(*binary_op->lhs));
     *binary_op->lhs = lhs;
@@ -3728,6 +3764,8 @@ DEBUG_FUNC(unary_op, unary_op) {
 }
 
 DEBUG_FUNC(binary_op, binary_op) {
+  INDENT();
+  DEBUG_CALL(tyref, &binary_op->intermediate_var_ty);
   switch (binary_op->ty) {
   case AST_BINARY_OP_TY_EQ:
     AST_PRINTZ("EQ");
@@ -3793,6 +3831,8 @@ DEBUG_FUNC(binary_op, binary_op) {
   AST_PRINTZ("RHS: ");
   INDENT();
   DEBUG_CALL(expr, binary_op->rhs);
+  UNINDENT();
+
   UNINDENT();
 }
 
@@ -4094,6 +4134,7 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN:
     AST_PRINTZ("RETURN");
+    DEBUG_CALL(tyref, &jump_stmt->return_stmt.var_ty);
     INDENT();
     if (jump_stmt->return_stmt.expr) {
       DEBUG_CALL(expr, jump_stmt->return_stmt.expr);

@@ -255,7 +255,7 @@ enum ast_binary_op_ty {
 
 struct ast_binary_op {
   enum ast_binary_op_ty ty;
-  struct ast_tyref var_ty;
+  struct ast_tyref intermediate_var_ty;
   struct ast_expr *lhs;
   struct ast_expr *rhs;
 };
@@ -698,6 +698,8 @@ bool is_integral_ty(const struct ast_tyref *ty);
 bool is_fp_ty(const struct ast_tyref *ty);
 
 struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);                                     
+bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty);
+
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

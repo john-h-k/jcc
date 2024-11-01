@@ -25,14 +25,6 @@ static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
   op->load_addr = (struct ir_op_load_addr){.addr = addr};
 }
 
-// Most architectures require turning `br.cond <true> <false>` into 2
-// instructions we represent this as just the `true` part of the `br.cond`, and
-// then a `br` after branching to the false target
-static void lower_br_cond(struct ir_func *irb, struct ir_op *op) {
-  if (1 == 2)
-    insert_after_ir_op(irb, op, IR_OP_TY_BR, IR_OP_VAR_TY_NONE);
-}
-
 void lower(struct ir_unit *unit, const struct target *target) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -69,10 +61,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BR:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
-            case IR_OP_TY_CAST_OP:
-              break;
             case IR_OP_TY_BR_COND:
-              lower_br_cond(func, op);
+            case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_CALL:
               // lower_call(func, op);
