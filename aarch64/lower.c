@@ -5,7 +5,6 @@
 #include "../ir/build.h"
 #include "../util.h"
 
-#include <mach/arm/vm_types.h>
 #include <math.h>
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
