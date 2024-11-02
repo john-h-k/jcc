@@ -570,14 +570,6 @@ typedef void (*debug_print_custom_ir_op)(FILE *file,
                                          const struct ir_func *func,
                                          const struct ir_op *op);
 
-// linked list of label -> bb mappings
-struct ir_label {
-  const char *name;
-  struct ir_basicblock *basicblock;
-
-  struct ir_label *succ;
-};
-
 struct ir_reg_usage {
   struct bitset *gp_registers_used;
   struct bitset *fp_registers_used;

@@ -479,10 +479,21 @@ struct ast_jumpstmt {
 /* Statements - either declaration, labelled, expression, compound, jump,
  * iteration, or selection */
 
+enum ast_labeledstmt_ty {
+  AST_LABELEDSTMT_TY_LABEL,
+  AST_LABELEDSTMT_TY_CASE,
+  AST_LABELEDSTMT_TY_DEFAULT,
+};
+
 struct ast_labeledstmt {
-  struct token label;
+  enum ast_labeledstmt_ty ty;
 
   struct ast_stmt *stmt;
+
+  union {
+    unsigned long long cnst;
+    struct token label;
+  };
 };
 
 struct ast_ifstmt {
@@ -497,8 +508,8 @@ struct ast_ifelsestmt {
 };
 
 struct ast_switchstmt {
-  struct ast_expr ctrl_var;
-  // TODO:
+  struct ast_expr ctrl_expr;
+  struct ast_stmt *body;
 };
 
 enum ast_selectstmt_ty {

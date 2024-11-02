@@ -29,6 +29,29 @@ struct ir_jump {
   struct ir_basicblock *basicblock;
 };
 
+// linked list of label -> bb mappings
+struct ir_label {
+  const char *name;
+  struct ir_basicblock *basicblock;
+
+  struct ir_label *succ;
+};
+
+enum ir_case_label_ty {
+  IR_CASE_LABEL_TY_CASE,
+  IR_CASE_LABEL_TY_DEFAULT,
+};
+
+struct ir_case_label {
+  enum ir_case_label_ty ty;
+
+  struct ir_basicblock *basicblock;
+
+  union {
+    unsigned long long value;
+  };
+};
+
 struct ir_func_builder {
   struct parser *parser;
 
@@ -39,6 +62,7 @@ struct ir_func_builder {
   struct ir_func *func;
 
   struct vector *jumps;
+  struct vector *switch_cases;
 };
 
 struct ir_label *add_label(struct ir_func_builder *irb, const char *name,
@@ -446,8 +470,9 @@ struct ir_op *alloc_binaryop(struct ir_func_builder *irb, struct ir_stmt *stmt,
 
   struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(irb->func->unit, ty_ref);
 
-  if (!ast_binary_op_is_comparison(ty) && (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
-      rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER)) {
+  if (!ast_binary_op_is_comparison(ty) &&
+      (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
+       rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER)) {
     if (ty_ref->ty == AST_TYREF_TY_WELL_KNOWN) {
       struct ir_op_var_ty *pointer_ty =
           lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty
@@ -1715,6 +1740,99 @@ struct ir_basicblock *build_ir_for_ifelse(struct ir_func_builder *irb,
   return after_if_else_basicblock;
 }
 
+struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
+                                          struct ir_basicblock *basicblock,
+                                          struct ast_switchstmt *switch_stmt) {
+  struct ir_jump new_loop = {.ty = IR_JUMP_TY_NEW_LOOP};
+  vector_push_back(irb->jumps, &new_loop);
+
+  struct ir_stmt *ctrl_stmt = alloc_ir_stmt(irb->func, basicblock);
+  // TODO: this should be coerced to integer type
+  struct ir_op *ctrl_op =
+      build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr, NULL);
+
+  struct ir_basicblock *post_ctrl_bb = alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *end =
+      build_ir_for_stmt(irb, post_ctrl_bb, switch_stmt->body);
+
+  struct ir_basicblock *default_block = NULL;
+
+  while (!vector_empty(irb->switch_cases)) {
+    struct ir_case_label *case_label = vector_pop(irb->switch_cases);
+
+    switch (case_label->ty) {
+    case IR_CASE_LABEL_TY_CASE: {
+      struct ir_stmt *cmp_stmt = alloc_ir_stmt(irb->func, post_ctrl_bb);
+      struct ir_op *cnst = alloc_ir_op(irb->func, cmp_stmt);
+      cnst->ty = IR_OP_TY_CNST;
+      cnst->var_ty = ctrl_op->var_ty;
+      cnst->cnst = (struct ir_op_cnst){
+        .ty = IR_OP_CNST_TY_INT,
+        .int_value = case_label->value
+      };
+
+      struct ir_op *cmp_op = alloc_ir_op(irb->func, cmp_stmt);
+      cmp_op->ty = IR_OP_TY_BINARY_OP;
+      cmp_op->var_ty = IR_OP_VAR_TY_I32;
+      cmp_op->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_EQ,
+        .lhs = ctrl_op,
+        .rhs = cnst
+      };
+
+      struct ir_op *br_op = alloc_ir_op(irb->func, cmp_stmt);
+      br_op->ty = IR_OP_TY_BR_COND;
+      br_op->var_ty = IR_OP_VAR_TY_NONE;
+      br_op->br_cond = (struct ir_op_br_cond){
+        .cond = cmp_op
+      };
+
+      struct ir_basicblock *next_case_bb = alloc_ir_basicblock(irb->func);
+      make_basicblock_split(irb->func, post_ctrl_bb, case_label->basicblock, next_case_bb);
+
+      post_ctrl_bb = next_case_bb;
+
+      break;
+    }
+    case IR_CASE_LABEL_TY_DEFAULT:
+      default_block = case_label->basicblock;
+      break;
+    }
+  }
+
+  make_basicblock_merge(irb->func, post_ctrl_bb, default_block);
+
+  struct ir_basicblock *after_switch = alloc_ir_basicblock(irb->func);
+
+  struct vector *continues = vector_create(sizeof(struct ir_jump));
+
+  while (!vector_empty(irb->jumps)) {
+    struct ir_jump *jump = vector_pop(irb->jumps);
+
+    switch (jump->ty) {
+    case IR_JUMP_TY_NEW_LOOP:
+      // end
+      return after_switch;
+    case IR_JUMP_TY_BREAK:
+      make_basicblock_merge(irb->func, jump->basicblock, after_switch);
+      break;
+    case IR_JUMP_TY_CONTINUE:
+      vector_push_back(continues, jump);
+      break;
+    }
+
+    struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, jump->basicblock);
+    struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
+    br->ty = IR_OP_TY_BR;
+    br->var_ty = IR_OP_VAR_TY_NONE;
+  }
+
+  // propogate the `continue`s to the next level up
+  vector_extend(irb->jumps, vector_head(continues), vector_length(continues));
+
+  return end;
+}
+
 struct ir_basicblock *
 build_ir_for_selectstmt(struct ir_func_builder *irb,
                         struct ir_basicblock *basicblock,
@@ -1726,7 +1844,7 @@ build_ir_for_selectstmt(struct ir_func_builder *irb,
   case AST_SELECTSTMT_TY_IF_ELSE:
     return build_ir_for_ifelse(irb, basicblock, &select_stmt->if_else_stmt);
   case AST_SELECTSTMT_TY_SWITCH:
-    todo("switch IR");
+    return build_ir_for_switch(irb, basicblock, &select_stmt->switch_stmt);
   }
 }
 
@@ -2307,6 +2425,42 @@ struct ir_op *build_ir_for_decllist(struct ir_func_builder *irb,
   return (*stmt)->last;
 }
 
+struct ir_basicblock *
+build_ir_for_labeledstmt(struct ir_func_builder *irb,
+                         struct ir_basicblock *basicblock,
+                         struct ast_labeledstmt *labeled_stmt) {
+  struct ir_basicblock *next_bb = alloc_ir_basicblock(irb->func);
+
+  make_basicblock_merge(irb->func, basicblock, next_bb);
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, basicblock);
+  struct ir_op *br_op = alloc_ir_op(irb->func, br_stmt);
+  br_op->ty = IR_OP_TY_BR;
+  br_op->var_ty = IR_OP_VAR_TY_NONE;
+
+  switch (labeled_stmt->ty) {
+  case AST_LABELEDSTMT_TY_LABEL: {
+    const char *name = identifier_str(irb->parser, &labeled_stmt->label);
+    add_label(irb, name, next_bb);
+    break;
+  }
+  case AST_LABELEDSTMT_TY_CASE: {
+    struct ir_case_label label = {.ty = IR_CASE_LABEL_TY_CASE,
+                                  .basicblock = next_bb,
+                                  .value = labeled_stmt->cnst};
+    vector_push_back(irb->switch_cases, &label);
+    break;
+  }
+  case AST_LABELEDSTMT_TY_DEFAULT: {
+    struct ir_case_label label = {.ty = IR_CASE_LABEL_TY_DEFAULT,
+                                  .basicblock = next_bb};
+    vector_push_back(irb->switch_cases, &label);
+    break;
+  }
+  }
+
+  return build_ir_for_stmt(irb, next_bb, labeled_stmt->stmt);
+}
+
 struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
                                         struct ir_basicblock *basicblock,
                                         struct ast_stmt *stmt) {
@@ -2339,9 +2493,7 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
     return build_ir_for_iterstmt(irb, basicblock, &stmt->iter);
   }
   case AST_STMT_TY_LABELED: {
-    const char *name = identifier_str(irb->parser, &stmt->labeled.label);
-    add_label(irb, name, basicblock);
-    return build_ir_for_stmt(irb, basicblock, stmt->labeled.stmt);
+    return build_ir_for_labeledstmt(irb, basicblock, &stmt->labeled);
   }
   case AST_STMT_TY_NULL: {
     return basicblock;
@@ -2484,12 +2636,13 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   *f = b;
 
   struct ir_func_builder *builder = arena_alloc(arena, sizeof(b));
-  *builder =
-      (struct ir_func_builder){.func = f,
-                               .jumps = vector_create(sizeof(struct ir_jump)),
-                               .parser = unit->parser,
-                               .var_refs = var_refs,
-                               .global_var_refs = global_var_refs};
+  *builder = (struct ir_func_builder){
+      .func = f,
+      .jumps = vector_create(sizeof(struct ir_jump)),
+      .switch_cases = vector_create(sizeof(struct ir_case_label)),
+      .parser = unit->parser,
+      .var_refs = var_refs,
+      .global_var_refs = global_var_refs};
 
   // needs at least one initial basic block
   alloc_ir_basicblock(builder->func);

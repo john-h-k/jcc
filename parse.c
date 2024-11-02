@@ -302,7 +302,10 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_CONTINUE:
   case LEX_TOKEN_TY_KW_DO:
   case LEX_TOKEN_TY_KW_FOR:
+  case LEX_TOKEN_TY_KW_SWITCH:
   case LEX_TOKEN_TY_KW_WHILE:
+  case LEX_TOKEN_TY_KW_DEFAULT:
+  case LEX_TOKEN_TY_KW_CASE:
   case LEX_TOKEN_TY_KW_IF:
   case LEX_TOKEN_TY_KW_ELSE:
   case LEX_TOKEN_TY_KW_TYPEDEF:
@@ -533,10 +536,9 @@ bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty) {
   }
 }
 
-struct ast_tyref resolve_binary_op_intermediate_types(struct parser *parser,
-                                         enum ast_binary_op_ty ty,
-                                         const struct ast_tyref *lhs,
-                                         const struct ast_tyref *rhs) {
+struct ast_tyref resolve_binary_op_intermediate_types(
+    struct parser *parser, enum ast_binary_op_ty ty,
+    const struct ast_tyref *lhs, const struct ast_tyref *rhs) {
   debug_assert(lhs->ty != AST_TYREF_TY_UNKNOWN &&
                    rhs->ty != AST_TYREF_TY_UNKNOWN,
                "unknown ty in call to `%s`", __func__);
@@ -1815,13 +1817,13 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
     // `rhs` so we need to in-place modify `expr`
     struct ast_expr lhs = *expr;
 
-    struct ast_tyref intermediate_ty =
-        resolve_binary_op_intermediate_types(parser, info.ty, &lhs.var_ty, &rhs.var_ty);
+    struct ast_tyref intermediate_ty = resolve_binary_op_intermediate_types(
+        parser, info.ty, &lhs.var_ty, &rhs.var_ty);
 
     struct ast_tyref result_ty;
     if (ast_binary_op_is_comparison(info.ty)) {
       result_ty = (struct ast_tyref){.ty = AST_TYREF_TY_WELL_KNOWN,
-                                .well_known = WELL_KNOWN_TY_SIGNED_INT};
+                                     .well_known = WELL_KNOWN_TY_SIGNED_INT};
     } else {
       result_ty = intermediate_ty;
     }
@@ -2184,13 +2186,22 @@ bool parse_labeledstmt(struct parser *parser,
 
   struct token label;
   peek_token(parser->lexer, &label);
+  consume_token(parser->lexer, label);
 
-  if (label.ty != LEX_TOKEN_TY_IDENTIFIER) {
+  struct ast_expr expr;
+
+  if (label.ty == LEX_TOKEN_TY_KW_DEFAULT) {
+    labeled_stmt->ty = AST_LABELEDSTMT_TY_DEFAULT;
+  } else if (label.ty == LEX_TOKEN_TY_KW_CASE && parse_expr(parser, &expr)) {
+    labeled_stmt->ty = AST_LABELEDSTMT_TY_CASE;
+    labeled_stmt->cnst = resolve_constant_expr(parser, &expr);
+  } else if (label.ty == LEX_TOKEN_TY_IDENTIFIER) {
+    labeled_stmt->ty = AST_LABELEDSTMT_TY_LABEL;
+    labeled_stmt->label = label;
+  } else {
     backtrack(parser->lexer, pos);
     return false;
   }
-
-  consume_token(parser->lexer, label);
 
   struct ast_stmt stmt;
   if (!parse_token(parser, LEX_TOKEN_TY_COLON) || !parse_stmt(parser, &stmt)) {
@@ -2198,7 +2209,6 @@ bool parse_labeledstmt(struct parser *parser,
     return false;
   }
 
-  labeled_stmt->label = label;
   labeled_stmt->stmt = arena_alloc(parser->arena, sizeof(*labeled_stmt->stmt));
   *labeled_stmt->stmt = stmt;
   return true;
@@ -2265,9 +2275,28 @@ bool parse_ifelsestmt(struct parser *parser,
 
 bool parse_switchstmt(struct parser *parser,
                       struct ast_switchstmt *switch_stmt) {
-  UNUSED_ARG(parser);
-  UNUSED_ARG(switch_stmt);
-  return false;
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct ast_expr ctrl_expr;
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_SWITCH) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
+      !parse_expr(parser, &ctrl_expr) ||
+      !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  struct ast_stmt stmt;
+  if (!parse_stmt(parser, &stmt)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  switch_stmt->ctrl_expr = ctrl_expr;
+  switch_stmt->body = arena_alloc(parser->arena, sizeof(*switch_stmt->body));
+  *switch_stmt->body = stmt;
+
+  return true;
 }
 
 bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
@@ -4154,10 +4183,17 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
   }
 }
 
+DEBUG_FUNC(stmt, stmt);
+
 DEBUG_FUNC(switchstmt, switch_stmt) {
-  UNUSED_ARG(state);
-  UNUSED_ARG(switch_stmt);
-  todo("debug func for switch");
+  AST_PRINTZ("SWITCH");
+  AST_PRINTZ("CONTROL EXPRESSION");
+  INDENT();
+  DEBUG_CALL(expr, &switch_stmt->ctrl_expr);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, switch_stmt->body);
 }
 
 DEBUG_FUNC(stmt, if_stmt);
@@ -4274,7 +4310,18 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
 }
 
 DEBUG_FUNC(labeledstmt, labeled_stmt) {
-  AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
+  switch (labeled_stmt->ty) {
+  case AST_LABELEDSTMT_TY_LABEL:
+    AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
+    break;
+  case AST_LABELEDSTMT_TY_CASE:
+    AST_PRINT("CASE %llu", labeled_stmt->cnst);
+    break;
+  case AST_LABELEDSTMT_TY_DEFAULT:
+    AST_PRINTZ("DEFAULT");
+    break;
+  }
+  AST_PRINTZ("STATEMENT");
   INDENT();
   DEBUG_CALL(stmt, labeled_stmt->stmt);
   UNINDENT();

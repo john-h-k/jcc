@@ -77,6 +77,9 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("do", LEX_TOKEN_TY_KW_DO),
       KEYWORD("for", LEX_TOKEN_TY_KW_FOR),
       KEYWORD("while", LEX_TOKEN_TY_KW_WHILE),
+      KEYWORD("switch", LEX_TOKEN_TY_KW_SWITCH),
+      KEYWORD("default", LEX_TOKEN_TY_KW_DEFAULT),
+      KEYWORD("case", LEX_TOKEN_TY_KW_CASE),
       KEYWORD("if", LEX_TOKEN_TY_KW_IF),
       KEYWORD("else", LEX_TOKEN_TY_KW_ELSE),
       KEYWORD("return", LEX_TOKEN_TY_KW_RETURN),
@@ -694,6 +697,9 @@ const char *token_name(const struct lexer *lexer, const struct token *token) {
     CASE_RET(LEX_TOKEN_TY_KW_DO)
     CASE_RET(LEX_TOKEN_TY_KW_FOR)
     CASE_RET(LEX_TOKEN_TY_KW_WHILE)
+    CASE_RET(LEX_TOKEN_TY_KW_SWITCH)
+    CASE_RET(LEX_TOKEN_TY_KW_DEFAULT)
+    CASE_RET(LEX_TOKEN_TY_KW_CASE)
     CASE_RET(LEX_TOKEN_TY_KW_IF)
     CASE_RET(LEX_TOKEN_TY_KW_ELSE)
     CASE_RET(LEX_TOKEN_TY_KW_RETURN)
