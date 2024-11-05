@@ -22,5 +22,3 @@ int main() {
   foo.c.value = 57005;
   return foo.c.bytes.b;
 }
-
-

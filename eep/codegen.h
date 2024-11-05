@@ -147,7 +147,7 @@ struct eep_ext {
 
 struct eep_instr {
   enum eep_instr_ty ty;
-  
+
   union {
     union {
       struct eep_mov mov;
@@ -162,7 +162,8 @@ struct eep_instr {
     };
 
     union {
-      struct eep_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm, cmp_imm;
+      struct eep_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm,
+          cmp_imm;
     };
 
     union {

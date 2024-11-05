@@ -53,7 +53,8 @@ void debug_visit_ir(struct ir_func *irb,
 typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
                                       void *metadata);
 
-void debug_print_var_ty_string(FILE *file, struct ir_unit *iru, const struct ir_op_var_ty *var_ty);
+void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
+                               const struct ir_op_var_ty *var_ty);
 
 void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                       debug_print_op_callback *cb, void *cb_metadata);
@@ -63,7 +64,7 @@ void debug_print_basicblock(FILE *file, struct ir_func *irb,
                             debug_print_op_callback *cb, void *cb_metadata);
 
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
-                    debug_print_op_callback *cb, void *cb_metadata);
+                         debug_print_op_callback *cb, void *cb_metadata);
 
 void debug_print_ir_graph(FILE *file, struct ir_func *irb);
 

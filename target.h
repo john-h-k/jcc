@@ -2,8 +2,8 @@
 #define TARGET_H
 
 #include "alloc.h"
-#include "ir/ir.h"
 #include "codegen.h"
+#include "ir/ir.h"
 #include "lsra.h"
 
 enum relocation_ty {
@@ -80,7 +80,6 @@ struct build_object_args {
 
   const struct object_entry *entries;
   size_t num_entries;
-
 };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);

@@ -1,8 +1,6 @@
 // expected value: 3
 
-void bar() {
-  
-}
+void bar() {}
 
 int main() {
   int a = 1;

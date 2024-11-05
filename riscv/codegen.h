@@ -147,7 +147,7 @@ struct riscv_ext {
 
 struct riscv_instr {
   enum riscv_instr_ty ty;
-  
+
   union {
     union {
       struct riscv_mov mov;
@@ -162,7 +162,8 @@ struct riscv_instr {
     };
 
     union {
-      struct riscv_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm, cmp_imm;
+      struct riscv_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm,
+          cmp_imm;
     };
 
     union {

@@ -12,12 +12,10 @@
 
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \
-    .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
-      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
-      .rhs = (source_reg),                                                     \
-      .dest = (dest_reg),                                                      \
-      .imm6 = 0                                                                \
-    }                                                                          \
+    .ty = AARCH64_INSTR_TY_ORR, .orr = {.lhs = zero_reg_for_ty(dest_reg.ty),   \
+                                        .rhs = (source_reg),                   \
+                                        .dest = (dest_reg),                    \
+                                        .imm6 = 0}                             \
   }
 
 size_t reg_size(enum aarch64_reg_ty reg_ty) {

@@ -1747,14 +1747,12 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
   struct ir_op *switch_op = alloc_ir_op(irb->func, ctrl_stmt);
   switch_op->ty = IR_OP_TY_BR_SWITCH;
   switch_op->var_ty = IR_OP_VAR_TY_NONE;
-  switch_op->br_switch = (struct ir_op_br_switch){
-    .value = ctrl_op
-  };
+  switch_op->br_switch = (struct ir_op_br_switch){.value = ctrl_op};
 
   struct ir_basicblock *body_bb = alloc_ir_basicblock(irb->func);
   struct ir_basicblock *end_bb =
       build_ir_for_stmt(irb, body_bb, switch_stmt->body);
-    
+
   struct ir_basicblock *after_body_bb = alloc_ir_basicblock(irb->func);
   make_basicblock_merge(irb->func, end_bb, after_body_bb);
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, end_bb);
@@ -1769,7 +1767,7 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
   while (!vector_empty(irb->switch_cases)) {
     struct ir_case *switch_case = vector_pop(irb->switch_cases);
 
-    switch (switch_case ->ty) {
+    switch (switch_case->ty) {
     case IR_CASE_TY_CASE: {
       vector_push_back(cases, &switch_case->split_case);
       break;
@@ -1784,7 +1782,8 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
     default_block = after_body_bb;
   }
 
-  make_basicblock_switch(irb->func, basicblock, vector_length(cases), vector_head(cases), default_block);
+  make_basicblock_switch(irb->func, basicblock, vector_length(cases),
+                         vector_head(cases), default_block);
 
   struct vector *continues = vector_create(sizeof(struct ir_jump));
 

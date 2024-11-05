@@ -2,6 +2,4 @@
 
 void exit(int code);
 
-int main() {
-  exit(17);
-}
+int main() { exit(17); }

@@ -60,7 +60,10 @@ struct var_table_entry *get_entry(struct var_table *var_table,
 struct var_table_entry *get_or_create_entry(struct var_table *var_table,
                                             const char *name);
 
-typedef void(*debug_print_entries_callback)(FILE *file, struct var_table_entry *entry, void *metadata);
-void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_entries_callback cb, void *metadata);
+typedef void (*debug_print_entries_callback)(FILE *file,
+                                             struct var_table_entry *entry,
+                                             void *metadata);
+void debug_print_entries(FILE *file, struct var_table *var_table,
+                         debug_print_entries_callback cb, void *metadata);
 
 #endif

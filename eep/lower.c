@@ -473,7 +473,6 @@ void eep_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-
       for (enum eep_lower_stage stage = EEP_LOWER_STAGE_QUOT;
            stage <= EEP_LOWER_STAGE_ALL; stage++) {
 

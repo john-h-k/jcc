@@ -33,8 +33,8 @@ void eliminate_phi(struct ir_func *irb) {
             last = last->pred;
           }
 
-          debug_assert(op->reg.ty != IR_REG_TY_NONE, "expected op %zu to have reg by now",
-                       op->id);
+          debug_assert(op->reg.ty != IR_REG_TY_NONE,
+                       "expected op %zu to have reg by now", op->id);
 
           // insert juuust before the branch
           // struct ir_op *storelcl =

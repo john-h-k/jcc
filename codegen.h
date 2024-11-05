@@ -2,6 +2,7 @@
 #define CODEGEN_H
 
 #include "ir/ir.h"
+
 #include <stddef.h>
 
 enum codegen_unit_ty {
@@ -21,8 +22,8 @@ struct codegen_function {
 
   size_t instr_count;
 
-  struct instr* first;
-  struct instr* last;
+  struct instr *first;
+  struct instr *last;
 };
 
 enum codegen_entry_ty {

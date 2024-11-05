@@ -32,8 +32,10 @@ enum well_known_ty {
   WELL_KNOWN_TY_LONG_DOUBLE,
 };
 
-#define WKT_MAKE_SIGNED(wkt) (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
-#define WKT_MAKE_UNSIGNED(wkt) (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) | 1))
+#define WKT_MAKE_SIGNED(wkt)                                                   \
+  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
+#define WKT_MAKE_UNSIGNED(wkt)                                                 \
+  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) | 1))
 
 #define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
 
@@ -43,7 +45,6 @@ enum well_known_ty {
 struct ast_ty_pointer {
   struct ast_tyref *underlying;
 };
-
 
 enum ast_ty_array_ty {
   AST_TY_ARRAY_TY_UNKNOWN_SIZE,
@@ -97,7 +98,7 @@ enum ast_tyref_ty {
   AST_TYREF_TY_ARRAY,
   AST_TYREF_TY_VARIADIC,
   AST_TYREF_TY_AGGREGATE, // e.g `union { int a; }`
-  AST_TYREF_TY_TAGGED, // e.g `struct foo`
+  AST_TYREF_TY_TAGGED,    // e.g `struct foo`
   // AST_TYREF_TY_TYPEDEF_NAME,
   // AST_TYREF_TY_ENUM,
 };
@@ -151,10 +152,7 @@ struct ast_arglist {
 
 /* Variable references */
 
-enum ast_var_ty {
-  AST_VAR_TY_VAR,
-  AST_VAR_TY_ENUM_CNST
-};
+enum ast_var_ty { AST_VAR_TY_VAR, AST_VAR_TY_ENUM_CNST };
 
 struct ast_var {
   enum ast_var_ty ty;
@@ -389,7 +387,7 @@ enum ast_expr_ty {
   AST_EXPR_TY_MEMBERACCESS,
   AST_EXPR_TY_POINTERACCESS,
   AST_EXPR_TY_INIT_LIST, // brace list
-  AST_EXPR_TY_ASSG, // while assignments are of the form `lvalue = rvalue`,
+  AST_EXPR_TY_ASSG,      // while assignments are of the form `lvalue = rvalue`,
                     // they themselves evaluate to an rvalue (unlike in C++)
   AST_EXPR_TY_VAR,
   AST_EXPR_TY_CNST,
@@ -708,9 +706,8 @@ struct ast_tyref tyref_get_underlying(struct parser *parser,
 bool is_integral_ty(const struct ast_tyref *ty);
 bool is_fp_ty(const struct ast_tyref *ty);
 
-struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);                                     
+struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);
 bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty);
-
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
