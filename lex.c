@@ -539,10 +539,14 @@ void peek_token(struct lexer *lexer, struct token *token) {
   }
 
   default: {
-    if (c == '\'') {
+    if (c == '\'' || (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '\'')) {
       ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
 
       // skip first single-quote
+      if (c == 'L') {
+        next_col(&end);
+        ty = LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
+      }
       next_col(&end);
 
       // move forward while
@@ -556,11 +560,15 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // skip final single-quote
       next_col(&end);
-    } else if (c == '"') {
+    } else if (c == '"' || (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '"')) {
       // TODO: logic is same as for char, could dedupe
       ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
 
       // skip first double-quote
+      if (c == 'L') {
+        next_col(&end);
+        ty = LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
+      }
       next_col(&end);
 
       // move forward while
@@ -574,7 +582,6 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // skip final double-quote
       next_col(&end);
-
     } else if (valid_first_identifier_char(c)) {
       ty = LEX_TOKEN_TY_IDENTIFIER;
 
@@ -602,10 +609,12 @@ void peek_token(struct lexer *lexer, struct token *token) {
 const char *associated_text(const struct lexer *lexer, const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
+  case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
     return process_raw_string(lexer, token);
     break;
   case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
+  case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
   case LEX_TOKEN_TY_FLOAT_LITERAL:
   case LEX_TOKEN_TY_DOUBLE_LITERAL:
   case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
@@ -741,7 +750,9 @@ const char *token_name(const struct lexer *lexer, const struct token *token) {
     CASE_RET(LEX_TOKEN_TY_IDENTIFIER)
 
     CASE_RET(LEX_TOKEN_TY_ASCII_STR_LITERAL)
+    CASE_RET(LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)
     CASE_RET(LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
+    CASE_RET(LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL)
 
     CASE_RET(LEX_TOKEN_TY_FLOAT_LITERAL)
     CASE_RET(LEX_TOKEN_TY_DOUBLE_LITERAL)
