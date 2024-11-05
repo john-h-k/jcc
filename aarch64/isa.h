@@ -128,7 +128,7 @@
 
 #define STR_FP_16_IMM_UNSIGNED(imm12, Rn, Rt)                                  \
   LDR_STR_FP_IMM_UNSIGNED(0b01, 0b00, imm12, Rn, Rt)
-#define LDR_FP_16_FP_IMM_UNSIGNED(imm12, Rn, Rt)                               \
+#define LDR_FP_16_IMM_UNSIGNED(imm12, Rn, Rt)                               \
   LDR_STR_FP_IMM_UNSIGNED(0b01, 0b01, imm12, Rn, Rt)
 
 #define STR_FP_32_IMM_UNSIGNED(imm12, Rn, Rt)                                  \

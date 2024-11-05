@@ -99,6 +99,8 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
       KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE),
 
       KEYWORD("void", LEX_TOKEN_TY_KW_VOID),
+      KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF),
+      KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF),
       KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT),
       KEYWORD("double", LEX_TOKEN_TY_KW_DOUBLE),
       KEYWORD("char", LEX_TOKEN_TY_KW_CHAR),
@@ -752,6 +754,7 @@ const char *token_name(const struct lexer *lexer, const struct token *token) {
 
     CASE_RET(LEX_TOKEN_TY_KW_VOID)
 
+    CASE_RET(LEX_TOKEN_TY_KW_HALF)
     CASE_RET(LEX_TOKEN_TY_KW_FLOAT)
     CASE_RET(LEX_TOKEN_TY_KW_DOUBLE)
     CASE_RET(LEX_TOKEN_TY_KW_CHAR)

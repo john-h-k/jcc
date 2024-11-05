@@ -308,6 +308,8 @@ enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
     return AARCH64_REG_TY_W;
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     return AARCH64_REG_TY_X;
+  case IR_OP_VAR_PRIMITIVE_TY_F16:
+    return AARCH64_REG_TY_H;
   case IR_OP_VAR_PRIMITIVE_TY_F32:
     return AARCH64_REG_TY_S;
   case IR_OP_VAR_PRIMITIVE_TY_F64:
@@ -329,6 +331,7 @@ static struct aarch64_reg codegen_reg(struct ir_op *op) {
   case AARCH64_REG_TY_X:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
     break;
+  case AARCH64_REG_TY_H:
   case AARCH64_REG_TY_S:
   case AARCH64_REG_TY_D:
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
@@ -657,6 +660,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       codegen_64_bit_int(state, dest, (union b64){.ull = op->cnst.int_value});
       break;
+    case IR_OP_VAR_PRIMITIVE_TY_F16:
     case IR_OP_VAR_PRIMITIVE_TY_F32:
     case IR_OP_VAR_PRIMITIVE_TY_F64:
       unreachable("CNST_TY_INT with var_ty of F32/F64 makes no sense");
@@ -898,6 +902,7 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
     break;
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     bug("can't sext from I64");
+  case IR_OP_VAR_PRIMITIVE_TY_F16:
   case IR_OP_VAR_PRIMITIVE_TY_F32:
   case IR_OP_VAR_PRIMITIVE_TY_F64:
     bug("todo cast floats");
@@ -946,6 +951,7 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
     break;
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     break;
+  case IR_OP_VAR_PRIMITIVE_TY_F16:
   case IR_OP_VAR_PRIMITIVE_TY_F32:
   case IR_OP_VAR_PRIMITIVE_TY_F64:
     bug("todo cast floats");
@@ -1537,6 +1543,7 @@ static void codegen_write_var_value(struct ir_unit *iru,
     case IR_OP_VAR_PRIMITIVE_TY_I8:
       memcpy(data, &value->int_value, 1);
       break;
+    case IR_OP_VAR_PRIMITIVE_TY_F16:
     case IR_OP_VAR_PRIMITIVE_TY_I16:
       memcpy(data, &value->int_value, 2);
       break;
