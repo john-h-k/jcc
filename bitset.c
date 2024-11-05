@@ -136,9 +136,9 @@ void bitset_free(struct bitset **bitset) {
   *bitset = NULL;
 }
 
-
-struct bitset_iter bitset_iter(struct bitset *bitset, size_t start, bool value) {
-  return (struct bitset_iter){ .bitset = bitset, .value = value, .idx = start };
+struct bitset_iter bitset_iter(struct bitset *bitset, size_t start,
+                               bool value) {
+  return (struct bitset_iter){.bitset = bitset, .value = value, .idx = start};
 }
 
 bool bitset_iter_next(struct bitset_iter *iter, size_t *idx) {

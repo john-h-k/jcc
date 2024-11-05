@@ -29,13 +29,14 @@ static size_t walk_basicblock(struct ir_func *irb, bool *basicblocks_visited,
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_SWITCH: {
-      size_t m = 0;
-      for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
-        size_t m_case = walk_basicblock(irb, basicblocks_visited, source_phi, basicblock->switch_case.cases[i].target);
-        m = MAX(m, m_case);
-      }
+    size_t m = 0;
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      size_t m_case = walk_basicblock(irb, basicblocks_visited, source_phi,
+                                      basicblock->switch_case.cases[i].target);
+      m = MAX(m, m_case);
+    }
 
-      return MAX(this, m);
+    return MAX(this, m);
   }
   case IR_BASICBLOCK_TY_SPLIT: {
     size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
@@ -251,8 +252,10 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
   fslogsl(file, " - LIVE REGS (");
 
-  struct bitset_iter gp_iter = bitset_iter(reg_usage->gp_registers_used, 0, true);
-  struct bitset_iter fp_iter = bitset_iter(reg_usage->fp_registers_used, 0, true);
+  struct bitset_iter gp_iter =
+      bitset_iter(reg_usage->gp_registers_used, 0, true);
+  struct bitset_iter fp_iter =
+      bitset_iter(reg_usage->fp_registers_used, 0, true);
 
   size_t i;
   bool first = true;
@@ -265,7 +268,8 @@ void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
     fslogsl(file, "R%zu", i);
   }
 
-  if (bitset_any(reg_usage->gp_registers_used, true) && bitset_any(reg_usage->fp_registers_used, true)) {
+  if (bitset_any(reg_usage->gp_registers_used, true) &&
+      bitset_any(reg_usage->fp_registers_used, true)) {
     fslogsl(file, ", ");
   }
 

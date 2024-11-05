@@ -695,10 +695,9 @@ void make_basicblock_merge(struct ir_func *irb,
                            struct ir_basicblock *target);
 
 void make_basicblock_switch(struct ir_func *irb,
-                           struct ir_basicblock *basicblock,
-                           size_t num_cases,
-                           struct ir_split_case *cases,
-                           struct ir_basicblock *default_target);
+                            struct ir_basicblock *basicblock, size_t num_cases,
+                            struct ir_split_case *cases,
+                            struct ir_basicblock *default_target);
 
 void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock);
@@ -746,12 +745,13 @@ struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_op_var_ty var_ty);
 
+struct ir_basicblock *
+insert_before_ir_basicblock(struct ir_func *irb,
+                            struct ir_basicblock *insert_before);
 
-struct ir_basicblock *insert_before_ir_basicblock(struct ir_func *irb,
-                                  struct ir_basicblock *insert_before);
-
-struct ir_basicblock *insert_after_ir_basicblock(struct ir_func *irb,
-                                 struct ir_basicblock *insert_after);
+struct ir_basicblock *
+insert_after_ir_basicblock(struct ir_func *irb,
+                           struct ir_basicblock *insert_after);
 
 struct ir_var_ty_info {
   size_t size;

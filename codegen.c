@@ -21,4 +21,3 @@ struct instr *alloc_instr(struct codegen_function *func) {
 
   return instr;
 }
-

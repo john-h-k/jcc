@@ -1,11 +1,11 @@
 #include "codegen.h"
+
 #include "../vector.h"
 
 const char *eep_mangle(struct arena_allocator *arena, const char *name) {
   UNUSED_ARG(arena);
   return name;
 }
-
 
 struct eep_prologue_info {
   bool prologue_generated;
@@ -28,7 +28,6 @@ struct codegen_state {
   struct vector *strings;
   struct vector *datas;
 };
-
 
 struct codegen_unit *eep_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));

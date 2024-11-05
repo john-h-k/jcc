@@ -1057,7 +1057,8 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   // must be at least one string component (but it could be empty)
   bool is_string = false;
   while (is_literal_token(parser, token.ty, &ty_ref) &&
-         (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL || token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)) {
+         (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL ||
+          token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)) {
     if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
       todo("wide str literals (must be stored as cnst data)");
     }

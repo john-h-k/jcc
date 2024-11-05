@@ -299,7 +299,8 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) || (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
+        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
+        (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
         !op_produces_value(interval->op) || interval->op->ty == IR_OP_TY_UNDF) {
       continue;
     }
@@ -387,28 +388,27 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
                         false),
   };
 
-    BEGIN_SUB_STAGE("REGALLOC");
+  BEGIN_SUB_STAGE("REGALLOC");
 
-    clear_metadata(irb);
-    struct interval_data data =
-        register_alloc_pass(irb, &reg_info);
+  clear_metadata(irb);
+  struct interval_data data = register_alloc_pass(irb, &reg_info);
 
-    qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
-          compare_interval_id);
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        compare_interval_id);
 
-    if (log_enabled()) {
-      debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
-    }
+  if (log_enabled()) {
+    debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
+  }
 
-    BEGIN_SUB_STAGE("SPILL HANDLING");
+  BEGIN_SUB_STAGE("SPILL HANDLING");
 
-    // insert LOAD and STORE ops as needed
-    fixup_spills(irb, &data);
+  // insert LOAD and STORE ops as needed
+  fixup_spills(irb, &data);
 
-    qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
-          compare_interval_id);
+  qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
+        compare_interval_id);
 
-    if (log_enabled()) {
-      debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
-    }
+  if (log_enabled()) {
+    debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
+  }
 }

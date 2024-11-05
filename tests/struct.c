@@ -1,7 +1,9 @@
 // expected value: 26
 
 struct bar;
-struct baz { struct baz* b; };
+struct baz {
+  struct baz *b;
+};
 struct bat l;
 
 struct foo {
@@ -10,7 +12,9 @@ struct foo {
   unsigned long d[3];
 };
 
-struct bat { int a; };
+struct bat {
+  int a;
+};
 
 int main() {
   l.a = 1;

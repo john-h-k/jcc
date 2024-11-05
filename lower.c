@@ -1,4 +1,5 @@
 #include "lower.h"
+
 #include "ir/ir.h"
 
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
@@ -14,38 +15,33 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   struct ir_split_case *split_cases = bb_switch->cases;
   for (size_t i = 0; i < num_cases; i++) {
     struct ir_split_case *split_case = &split_cases[i];
-    
+
     struct ir_stmt *cmp_stmt = alloc_ir_stmt(func, prev_bb);
     struct ir_op *cnst = alloc_ir_op(func, cmp_stmt);
     cnst->ty = IR_OP_TY_CNST;
     cnst->var_ty = var_ty;
-    cnst->cnst = (struct ir_op_cnst){
-      .ty = IR_OP_CNST_TY_INT,
-      .int_value = split_case->value
-    };
+    cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                     .int_value = split_case->value};
 
     struct ir_op *cmp_op = alloc_ir_op(func, cmp_stmt);
     cmp_op->ty = IR_OP_TY_BINARY_OP;
     cmp_op->var_ty = IR_OP_VAR_TY_I32;
     cmp_op->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_EQ,
-      .lhs = op->br_switch.value,
-      .rhs = cnst
-    };
+        .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = op->br_switch.value, .rhs = cnst};
 
     struct ir_op *br_op = alloc_ir_op(func, cmp_stmt);
     br_op->ty = IR_OP_TY_BR_COND;
     br_op->var_ty = IR_OP_VAR_TY_NONE;
-    br_op->br_cond = (struct ir_op_br_cond){
-      .cond = cmp_op
-    };
+    br_op->br_cond = (struct ir_op_br_cond){.cond = cmp_op};
 
     if (i + 1 < num_cases) {
-      struct ir_basicblock *next_cond = insert_after_ir_basicblock(func, prev_bb);
+      struct ir_basicblock *next_cond =
+          insert_after_ir_basicblock(func, prev_bb);
       make_basicblock_split(func, prev_bb, split_case->target, next_cond);
       prev_bb = next_cond;
     } else {
-      make_basicblock_split(func, prev_bb, split_case->target, bb_switch->default_target);
+      make_basicblock_split(func, prev_bb, split_case->target,
+                            bb_switch->default_target);
     }
   }
 }

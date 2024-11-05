@@ -28,7 +28,6 @@ struct emit_state {
   struct aarch64_emitter *emitter;
 };
 
-
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
   switch (instr->aarch64->ty) {
@@ -238,64 +237,55 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
     switch (entry->ty) {
     case CODEGEN_ENTRY_TY_STRING:
       entries[i] = (struct object_entry){
-        .ty = OBJECT_ENTRY_TY_C_STRING,
-        .alignment = 0,
-        .data = entry->str,
-        .len_data = strlen(entry->str) + 1,
-        .num_relocations = 0,
-        .relocations = NULL,
-        .symbol = (struct symbol){
-          .ty = SYMBOL_TY_STRING,
-          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-          .name = entry->name
-        }
-      };
+          .ty = OBJECT_ENTRY_TY_C_STRING,
+          .alignment = 0,
+          .data = entry->str,
+          .len_data = strlen(entry->str) + 1,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_STRING,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
       break;
     case CODEGEN_ENTRY_TY_CONST_DATA:
       // TODO: relocations
       entries[i] = (struct object_entry){
-        .ty = OBJECT_ENTRY_TY_CONST_DATA,
-        .alignment = 0,
-        .data = entry->data.data,
-        .len_data = entry->data.len_data,
-        .num_relocations = 0,
-        .relocations = NULL,
-        .symbol = (struct symbol){
-          .ty = SYMBOL_TY_CONST_DATA,
-          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-          .name = entry->name
-        }
-      };
+          .ty = OBJECT_ENTRY_TY_CONST_DATA,
+          .alignment = 0,
+          .data = entry->data.data,
+          .len_data = entry->data.len_data,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_CONST_DATA,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
       break;
     case CODEGEN_ENTRY_TY_DATA:
       entries[i] = (struct object_entry){
-        .ty = OBJECT_ENTRY_TY_MUT_DATA,
-        .alignment = 0,
-        .data = entry->data.data,
-        .len_data = entry->data.len_data,
-        .num_relocations = 0,
-        .relocations = NULL,
-        .symbol = (struct symbol){
-          .ty = SYMBOL_TY_DATA,
-          .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-          .name = entry->name
-        }
-      };
+          .ty = OBJECT_ENTRY_TY_MUT_DATA,
+          .alignment = 0,
+          .data = entry->data.data,
+          .len_data = entry->data.len_data,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol =
+              (struct symbol){.ty = SYMBOL_TY_DATA,
+                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
+                              .name = entry->name}};
       break;
     case CODEGEN_ENTRY_TY_DECL:
       entries[i] = (struct object_entry){
-        .ty = OBJECT_ENTRY_TY_DECL,
-        .alignment = 0,
-        .data = NULL,
-        .len_data = 0,
-        .num_relocations = 0,
-        .relocations = NULL,
-        .symbol = (struct symbol){
-          .ty = SYMBOL_TY_DECL,
-          .visibility = SYMBOL_VISIBILITY_UNDEF,
-          .name = entry->name
-        }
-      };
+          .ty = OBJECT_ENTRY_TY_DECL,
+          .alignment = 0,
+          .data = NULL,
+          .len_data = 0,
+          .num_relocations = 0,
+          .relocations = NULL,
+          .symbol = (struct symbol){.ty = SYMBOL_TY_DECL,
+                                    .visibility = SYMBOL_VISIBILITY_UNDEF,
+                                    .name = entry->name}};
       break;
     case CODEGEN_ENTRY_TY_FUNC: {
       struct codegen_function *func = &entry->func;

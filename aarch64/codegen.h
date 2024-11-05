@@ -4,7 +4,8 @@
 #include "../codegen.h"
 
 #if defined(STACK_PTR_REG) || defined(FRAME_PTR_REG) || defined(RET_PTR_REG)
-#error "STACK_PTR_REG/FRAME_PTR_REG/RET_PTR_REG already defined. Check your includes"
+#error                                                                         \
+    "STACK_PTR_REG/FRAME_PTR_REG/RET_PTR_REG already defined. Check your includes"
 #endif
 
 // `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
@@ -260,7 +261,7 @@ struct aarch64_conditional_branch {
 };
 
 struct aarch64_branch {
-  struct ir_basicblock  *target;
+  struct ir_basicblock *target;
 };
 
 struct aarch64_branch_reg {
@@ -269,7 +270,7 @@ struct aarch64_branch_reg {
 
 struct aarch64_compare_and_branch {
   struct aarch64_reg cmp;
-  struct ir_basicblock  *target;
+  struct ir_basicblock *target;
 };
 
 struct aarch64_load_imm {
@@ -313,7 +314,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_logical_imm logical_imm, and_imm, ands_imm, orr_imm, orn_imm, eor_imm, eon_imm;
+      struct aarch64_logical_imm logical_imm, and_imm, ands_imm, orr_imm,
+          orn_imm, eor_imm, eon_imm;
     };
 
     union {
@@ -325,7 +327,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_addsub_imm addsub_imm, add_imm, adds_imm, sub_imm, subs_imm;
+      struct aarch64_addsub_imm addsub_imm, add_imm, adds_imm, sub_imm,
+          subs_imm;
     };
 
     union {
@@ -333,7 +336,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv, udiv, fmul, fdiv, fadd, fsub;
+      struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv,
+          udiv, fmul, fdiv, fadd, fsub;
     };
 
     union {
@@ -345,7 +349,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_conditional_select conditional_select, csel, csinc, csinv, csneg;
+      struct aarch64_conditional_select conditional_select, csel, csinc, csinv,
+          csneg;
     };
 
     union {
@@ -405,7 +410,9 @@ bool reg_eq(struct aarch64_reg l, struct aarch64_reg r);
 
 enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty);
 
-typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg, enum aarch64_reg_usage_ty usage_ty, void *metadata);
+typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg,
+                                 enum aarch64_reg_usage_ty usage_ty,
+                                 void *metadata);
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 

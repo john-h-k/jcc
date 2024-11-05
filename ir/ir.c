@@ -1100,12 +1100,13 @@ void make_basicblock_switch(struct ir_func *irb,
                             struct ir_basicblock *default_target) {
   basicblock->ty = IR_BASICBLOCK_TY_SWITCH;
   basicblock->switch_case = (struct ir_basicblock_switch){
-    .cases = arena_alloc(irb->arena, sizeof(*basicblock->switch_case.cases) * num_cases),
-    .num_cases = num_cases,
-    .default_target = default_target
-  };
+      .cases = arena_alloc(irb->arena,
+                           sizeof(*basicblock->switch_case.cases) * num_cases),
+      .num_cases = num_cases,
+      .default_target = default_target};
 
-  memcpy(basicblock->switch_case.cases, cases, sizeof(*basicblock->switch_case.cases) * num_cases);
+  memcpy(basicblock->switch_case.cases, cases,
+         sizeof(*basicblock->switch_case.cases) * num_cases);
 
   for (size_t i = 0; i < num_cases; i++) {
     add_pred_to_basicblock(irb, cases[i].target, basicblock);

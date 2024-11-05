@@ -117,7 +117,8 @@ struct var_table_entry *get_entry(struct var_table *var_table,
   return NULL;
 }
 
-void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_entries_callback cb, void *metadata) {
+void debug_print_entries(FILE *file, struct var_table *var_table,
+                         debug_print_entries_callback cb, void *metadata) {
   fprintf(file, "var_table entries:\n");
 
   struct var_table_scope *scope = var_table->last;
@@ -137,4 +138,3 @@ void debug_print_entries(FILE *file, struct var_table *var_table, debug_print_en
     scope = scope->prev;
   }
 }
-

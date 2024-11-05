@@ -11,5 +11,6 @@ int main() {
   c += 1;
   d += 1;
 
-  return a + (unsigned long long)b + (unsigned long long)c + (unsigned long long)d;
+  return a + (unsigned long long)b + (unsigned long long)c +
+         (unsigned long long)d;
 }

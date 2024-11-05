@@ -18,7 +18,8 @@ struct lexer {
   const char **associated_texts;
 };
 
-enum lex_create_result lexer_create(struct preprocessed_program *program, struct lexer **lexer) {
+enum lex_create_result lexer_create(struct preprocessed_program *program,
+                                    struct lexer **lexer) {
   info("beginning lex stage");
 
   struct arena_allocator *arena;
@@ -67,7 +68,9 @@ enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
   size_t len = text_pos_len(start, end);
 
 #define KEYWORD(kw, ty)                                                        \
-  { kw, sizeof(kw) - 1, ty }
+  {                                                                            \
+    kw, sizeof(kw) - 1, ty                                                     \
+  }
 
   // TODO: hashify
   static struct keyword keywords[] = {
@@ -151,7 +154,8 @@ void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
   // we treat both as a valid eol
 }
 
-const char *process_raw_string(const struct lexer *lexer, const struct token *token) {
+const char *process_raw_string(const struct lexer *lexer,
+                               const struct token *token) {
   // TODO: this i think will wrongly accept multilines
 
   size_t max_str_len = token->span.end.idx - token->span.start.idx;
@@ -483,11 +487,13 @@ void peek_token(struct lexer *lexer, struct token *token) {
         continue;
       }
 
-      if (!is_hex && (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
+      if (!is_hex &&
+          (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
         is_float = true;
         next_col(&end);
 
-        if (end.idx < lexer->len && (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
+        if (end.idx < lexer->len &&
+            (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
           next_col(&end);
         }
 
@@ -495,14 +501,16 @@ void peek_token(struct lexer *lexer, struct token *token) {
         continue;
       }
 
-      if ((is_float && !isdigit(lexer->text[end.idx])) || (!is_float && !isxdigit(lexer->text[end.idx]))) {
+      if ((is_float && !isdigit(lexer->text[end.idx])) ||
+          (!is_float && !isxdigit(lexer->text[end.idx]))) {
         break;
       }
     }
 
     bool is_unsigned = false;
 
-    ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
+    ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL
+                  : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
     while (end.idx < lexer->len) {
       switch (tolower(lexer->text[end.idx])) {
       case 'u':
@@ -539,7 +547,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
   }
 
   default: {
-    if (c == '\'' || (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '\'')) {
+    if (c == '\'' || (c == 'L' && end.idx < lexer->len &&
+                      lexer->text[end.idx + 1] == '\'')) {
       ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
 
       // skip first single-quote
@@ -560,7 +569,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
       // skip final single-quote
       next_col(&end);
-    } else if (c == '"' || (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '"')) {
+    } else if (c == '"' || (c == 'L' && end.idx < lexer->len &&
+                            lexer->text[end.idx + 1] == '"')) {
       // TODO: logic is same as for char, could dedupe
       ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
 
@@ -594,7 +604,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
       // is a keyword
       ty = refine_ty(lexer, start, end);
     } else {
-      bug("lexer hit an unknown token! line=%zu, col=%zu, value=%u", start.line, start.col, c);
+      bug("lexer hit an unknown token! line=%zu, col=%zu, value=%u", start.line,
+          start.col, c);
     }
   }
   }
@@ -606,7 +617,8 @@ void peek_token(struct lexer *lexer, struct token *token) {
   debug("parse token %s\n", token_name(lexer, token));
 }
 
-const char *associated_text(const struct lexer *lexer, const struct token *token) {
+const char *associated_text(const struct lexer *lexer,
+                            const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
@@ -633,17 +645,17 @@ const char *associated_text(const struct lexer *lexer, const struct token *token
   case LEX_TOKEN_TY_ELLIPSIS:
     return "...";
   default:
-    bug("associated text did not make sense for token '%s'", token_name(lexer, token));
+    bug("associated text did not make sense for token '%s'",
+        token_name(lexer, token));
   }
 }
 
 const char *token_name(const struct lexer *lexer, const struct token *token) {
   UNUSED_ARG(lexer);
 
-  #define CASE_RET(name)                                                         \
-    case name:                                                                   \
-      return #name;
-  
+#define CASE_RET(name)                                                         \
+  case name:                                                                   \
+    return #name;
 
   switch (token->ty) {
     CASE_RET(LEX_TOKEN_TY_UNKNOWN)
@@ -768,5 +780,5 @@ const char *token_name(const struct lexer *lexer, const struct token *token) {
     CASE_RET(LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL)
   }
 
-  #undef CASE_RET
+#undef CASE_RET
 }

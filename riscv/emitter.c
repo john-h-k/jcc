@@ -60,7 +60,8 @@ void eep_emit_nop(struct eep_emitter *emitter) { eep_emit_instr(emitter, NOP); }
 void eep_emit_mov(struct eep_emitter *emitter, const struct eep_mov mov) {
   eep_emit_instr(emitter, MOV(mov.dest.idx, mov.source.idx));
 }
-void eep_emit_mov_imm(struct eep_emitter *emitter, const struct eep_mov_imm mov_imm) {
+void eep_emit_mov_imm(struct eep_emitter *emitter,
+                      const struct eep_mov_imm mov_imm) {
   eep_emit_instr(emitter, MOV_IMM(mov_imm.dest.idx, mov_imm.imm));
 }
 
@@ -83,49 +84,63 @@ void eep_emit_cmp(struct eep_emitter *emitter, const struct eep_alu alu) {
   eep_emit_instr(emitter, CMP(alu.lhs.idx, alu.rhs.idx));
 }
 
-void eep_emit_add_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_add_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, ADD_IMM(imm.dest.idx, imm.imm));
 }
-void eep_emit_sub_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_sub_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, SUB_IMM(imm.dest.idx, imm.imm));
 }
-void eep_emit_adc_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_adc_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, ADC_IMM(imm.dest.idx, imm.imm));
 }
-void eep_emit_sbc_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_sbc_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, SBC_IMM(imm.dest.idx, imm.imm));
 }
-void eep_emit_and_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_and_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, AND_IMM(imm.dest.idx, imm.imm));
 }
-void eep_emit_cmp_imm(struct eep_emitter *emitter, const struct eep_alu_imm imm) {
+void eep_emit_cmp_imm(struct eep_emitter *emitter,
+                      const struct eep_alu_imm imm) {
   eep_emit_instr(emitter, CMP_IMM(imm.dest.idx, imm.imm));
 }
 
-void eep_emit_lsl(struct eep_emitter *emitter, const struct eep_alu_shift shift) {
+void eep_emit_lsl(struct eep_emitter *emitter,
+                  const struct eep_alu_shift shift) {
   eep_emit_instr(emitter, LSL(shift.dest.idx, shift.source.idx, shift.imm));
 }
-void eep_emit_lsr(struct eep_emitter *emitter, const struct eep_alu_shift shift) {
+void eep_emit_lsr(struct eep_emitter *emitter,
+                  const struct eep_alu_shift shift) {
   eep_emit_instr(emitter, LSR(shift.dest.idx, shift.source.idx, shift.imm));
 }
-void eep_emit_asr(struct eep_emitter *emitter, const struct eep_alu_shift shift) {
+void eep_emit_asr(struct eep_emitter *emitter,
+                  const struct eep_alu_shift shift) {
   eep_emit_instr(emitter, ASR(shift.dest.idx, shift.source.idx, shift.imm));
 }
-void eep_emit_xsr(struct eep_emitter *emitter, const struct eep_alu_shift shift) {
+void eep_emit_xsr(struct eep_emitter *emitter,
+                  const struct eep_alu_shift shift) {
   eep_emit_instr(emitter, XSR(shift.dest.idx, shift.source.idx, shift.imm));
 }
 
-void eep_emit_load_direct(struct eep_emitter *emitter, const struct eep_ldr_direct ldr) {
+void eep_emit_load_direct(struct eep_emitter *emitter,
+                          const struct eep_ldr_direct ldr) {
   eep_emit_instr(emitter, LDR_DIRECT(ldr.dest.idx, ldr.imm));
 }
-void eep_emit_store_direct(struct eep_emitter *emitter, const struct eep_str_direct str) {
+void eep_emit_store_direct(struct eep_emitter *emitter,
+                           const struct eep_str_direct str) {
   eep_emit_instr(emitter, STR_DIRECT(str.source.idx, str.imm));
 }
 
-void eep_emit_load_offset(struct eep_emitter *emitter, const struct eep_ldr_offset ldr) {
+void eep_emit_load_offset(struct eep_emitter *emitter,
+                          const struct eep_ldr_offset ldr) {
   eep_emit_instr(emitter, LDR_OFFSET(ldr.dest.idx, ldr.addr.idx, ldr.imm));
 }
-void eep_emit_store_offset(struct eep_emitter *emitter, const struct eep_str_offset str) {
+void eep_emit_store_offset(struct eep_emitter *emitter,
+                           const struct eep_str_offset str) {
   eep_emit_instr(emitter, STR_OFFSET(str.source.idx, str.addr.idx, str.imm));
 }
 
@@ -135,5 +150,3 @@ void eep_emit_jump(struct eep_emitter *emitter, const struct eep_jmp jmp) {
 void eep_emit_ext(struct eep_emitter *emitter, const struct eep_ext ext) {
   eep_emit_instr(emitter, EXT(ext.imm));
 }
-
-

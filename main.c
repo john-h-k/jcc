@@ -86,9 +86,7 @@ int main(int argc, char **argv) {
 
     objects[i] = object_file;
 
-    struct program program = {
-      .text = source
-    };
+    struct program program = {.text = source};
 
     disable_log();
     struct compiler *compiler;
@@ -190,7 +188,6 @@ bool parse_output(const char *str, char **output) {
 
   return false;
 }
-  
 
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
@@ -209,9 +206,9 @@ enum parse_args_result parse_args(int argc, char **argv,
   for (int i = 1; i < argc; i++) {
     const char *arg = argv[i];
 
-    // allows both '-Tfoo' and '-T foo' by using the next argument if the current one is empty (after prefix)
-    // if it uses the next argument it skips it
-    #define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? v : argv[++i])
+// allows both '-Tfoo' and '-T foo' by using the next argument if the current
+// one is empty (after prefix) if it uses the next argument it skips it
+#define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? v : argv[++i])
 
     const char *log = try_get_arg(arg, "-L");
     GET_ARGUMENT(log);
@@ -251,7 +248,7 @@ enum parse_args_result parse_args(int argc, char **argv,
       continue;
     }
 
-    #undef GET_ARGUMENT
+#undef GET_ARGUMENT
 
     // wasn't recognised as a flag, assume source arg
     vector_push_back(sources_vec, &arg);

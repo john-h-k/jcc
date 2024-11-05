@@ -118,8 +118,10 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
   allocator->last = *next;
 
   void *allocation;
-  invariant_assert(try_alloc_in_arena(allocator->last, aligned, &allocation),
-                   "allocating into new arena should be infallible (%zu bytes requested)", aligned);
+  invariant_assert(
+      try_alloc_in_arena(allocator->last, aligned, &allocation),
+      "allocating into new arena should be infallible (%zu bytes requested)",
+      aligned);
   return allocation;
 }
 

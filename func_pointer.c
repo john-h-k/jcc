@@ -1,9 +1,7 @@
 // expected value: 3
 
 int val;
-int inc() {
-  return val++;
-}
+int inc() { return val++; }
 
 int main() {
   int (*a)() = inc;

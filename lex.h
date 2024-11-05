@@ -123,9 +123,9 @@ enum lex_token_ty {
 
   /* Literals (all suffixes are case-insensitive) */
 
-  LEX_TOKEN_TY_ASCII_CHAR_LITERAL, // 'a'
+  LEX_TOKEN_TY_ASCII_CHAR_LITERAL,      // 'a'
   LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL, // L'a'
-  LEX_TOKEN_TY_ASCII_STR_LITERAL,  // "foobar"
+  LEX_TOKEN_TY_ASCII_STR_LITERAL,       // "foobar"
   LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL,  // "foobar"
 
   LEX_TOKEN_TY_FLOAT_LITERAL,       // 10.0f

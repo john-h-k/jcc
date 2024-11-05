@@ -18,4 +18,3 @@ void next_line(struct text_pos *pos) {
   pos->line++;
   pos->col = 0;
 }
-

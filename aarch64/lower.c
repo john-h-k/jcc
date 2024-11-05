@@ -179,8 +179,8 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
     make_pointer_constant(func->unit, offset_cnst, offset);
 
-    struct ir_op *src_addr = insert_after_ir_op(
-        func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
+    struct ir_op *src_addr =
+        insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
@@ -215,8 +215,8 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
     make_pointer_constant(func->unit, offset_cnst, offset);
 
-    struct ir_op *src_addr = insert_after_ir_op(
-        func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
+    struct ir_op *src_addr =
+        insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
     src_addr->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
@@ -337,8 +337,10 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_CALL:
-              if (op->call.target->ty == IR_OP_TY_ADDR && op->call.target->addr.ty == IR_OP_ADDR_TY_GLB) {
-                op->call.target = alloc_contained_ir_op(func, op->call.target, op);
+              if (op->call.target->ty == IR_OP_TY_ADDR &&
+                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB) {
+                op->call.target =
+                    alloc_contained_ir_op(func, op->call.target, op);
               }
               break;
             case IR_OP_TY_UNARY_OP:
