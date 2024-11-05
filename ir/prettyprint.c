@@ -368,11 +368,12 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     break;
 
   case IR_OP_TY_BR: {
-    // this can happen post lowering!
-    // invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
-    //                  "found `br` but bb wasn't MERGE");
+    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+                     "found `br` but bb wasn't MERGE");
     struct ir_basicblock *bb = ir->stmt->basicblock;
-    struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE ? bb->merge.target : bb->split.false_target;
+    struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE
+                                       ? bb->merge.target
+                                       : bb->split.false_target;
     fprintf(file, "br @%zu", target->id);
     break;
   }
@@ -383,6 +384,24 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
             ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
             ir->stmt->basicblock->split.false_target->id);
     break;
+  case IR_OP_TY_BR_SWITCH:
+    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SWITCH,
+                     "found `br.switch` but bb wasn't SWITCH");
+    fprintf(file, "br.switch %%%zu, [\n", ir->br_switch.value->id);
+
+    size_t num_cases = ir->stmt->basicblock->switch_case.num_cases;
+    struct ir_split_case *cases = ir->stmt->basicblock->switch_case.cases;
+    for (size_t i = 0; i < num_cases; i++) {
+      struct ir_split_case *split_case = &cases[i];
+
+      fprintf(file, "    # %llu -> @%zu\n", split_case->value,
+              split_case->target->id);
+    }
+
+    fprintf(file, "    DEFAULT -> @%zu\n",
+            ir->stmt->basicblock->switch_case.default_target->id);
+    fprintf(file, "  ]");
+    break;
   case IR_OP_TY_RET:
     if (ir->ret.value) {
       fprintf(file, "return %%%zu", ir->ret.value->id);
@@ -390,7 +409,7 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
       fprintf(file, "return");
     }
     break;
-  }  
+  }
 
   if (ir->flags & IR_OP_FLAG_CONTAINED) {
     fprintf(file, " [CONTAINED] ");
@@ -479,38 +498,40 @@ void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     fm->cb(fm->file, op, fm->cb_metadata);
   }
 
-  fprintf(fm->file, " | ");
+  if (op_produces_value(op)) {
+    fprintf(fm->file, " | ");
 
-  switch (op->reg.ty) {
-  case IR_REG_TY_NONE:
-    fprintf(fm->file, "    (UNASSIGNED)");
-    break;
-  case IR_REG_TY_SPILLED:
-    if (op->lcl) {
-      fprintf(fm->file, "    (SPILLED), LCL=%zu", op->lcl->id);
-    } else {
-      fprintf(fm->file, "    (SPILLED), LCL=(UNASSIGNED)");
+    switch (op->reg.ty) {
+    case IR_REG_TY_NONE:
+      fprintf(fm->file, "    (UNASSIGNED)");
+      break;
+    case IR_REG_TY_SPILLED:
+      if (op->lcl) {
+        fprintf(fm->file, "    (SPILLED), LCL=%zu", op->lcl->id);
+      } else {
+        fprintf(fm->file, "    (SPILLED), LCL=(UNASSIGNED)");
+      }
+      break;
+    case IR_REG_TY_FLAGS:
+      fprintf(fm->file, "    (FLAGS)");
+      break;
+    case IR_REG_TY_INTEGRAL:
+      if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
+        fprintf(fm->file, "    (DONT)");
+      } else {
+        fprintf(fm->file, "    register=R%zu", op->reg.idx);
+      }
+      break;
+    case IR_REG_TY_FP:
+      if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
+        fprintf(fm->file, "    (DONT)");
+      } else {
+        fprintf(fm->file, "    register=F%zu", op->reg.idx);
+      }
+      break;
     }
-    break;
-  case IR_REG_TY_FLAGS:
-    fprintf(fm->file, "    (FLAGS)");
-    break;
-  case IR_REG_TY_INTEGRAL:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-      fprintf(fm->file, "    (DONT)");
-    } else {
-      fprintf(fm->file, "    register=R%zu", op->reg.idx);
-    }
-    break;
-  case IR_REG_TY_FP:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-      fprintf(fm->file, "    (DONT)");
-    } else {
-      fprintf(fm->file, "    register=F%zu", op->reg.idx);
-    }
-    break;
   }
-  
+
   fprintf(fm->file, "\n");
 }
 
@@ -678,8 +699,7 @@ struct print_ir_graph_metadata {
   FILE *file;
 };
 
-void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
-                        void *metadata) {
+void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
   debug_print_op(gm->file, irb, op);

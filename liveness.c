@@ -28,6 +28,15 @@ static size_t walk_basicblock(struct ir_func *irb, bool *basicblocks_visited,
   size_t target_bb = source_phi->stmt->basicblock->id;
 
   switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_SWITCH: {
+      size_t m = 0;
+      for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+        size_t m_case = walk_basicblock(irb, basicblocks_visited, source_phi, basicblock->switch_case.cases[i].target);
+        m = MAX(m, m_case);
+      }
+
+      return MAX(this, m);
+  }
   case IR_BASICBLOCK_TY_SPLIT: {
     size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
                                      basicblock->split.false_target);

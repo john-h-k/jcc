@@ -29,27 +29,20 @@ struct ir_jump {
   struct ir_basicblock *basicblock;
 };
 
+enum ir_case_ty { IR_CASE_TY_CASE, IR_CASE_TY_DEFAULT };
+
+struct ir_case {
+  enum ir_case_ty ty;
+
+  struct ir_split_case split_case;
+};
+
 // linked list of label -> bb mappings
 struct ir_label {
   const char *name;
   struct ir_basicblock *basicblock;
 
   struct ir_label *succ;
-};
-
-enum ir_case_label_ty {
-  IR_CASE_LABEL_TY_CASE,
-  IR_CASE_LABEL_TY_DEFAULT,
-};
-
-struct ir_case_label {
-  enum ir_case_label_ty ty;
-
-  struct ir_basicblock *basicblock;
-
-  union {
-    unsigned long long value;
-  };
 };
 
 struct ir_func_builder {
@@ -1751,58 +1744,43 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
   struct ir_op *ctrl_op =
       build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr, NULL);
 
-  struct ir_basicblock *post_ctrl_bb = alloc_ir_basicblock(irb->func);
-  struct ir_basicblock *end =
-      build_ir_for_stmt(irb, post_ctrl_bb, switch_stmt->body);
+  struct ir_op *switch_op = alloc_ir_op(irb->func, ctrl_stmt);
+  switch_op->ty = IR_OP_TY_BR_SWITCH;
+  switch_op->var_ty = IR_OP_VAR_TY_NONE;
+  switch_op->br_switch = (struct ir_op_br_switch){
+    .value = ctrl_op
+  };
+
+  struct ir_basicblock *body_bb = alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *end_bb =
+      build_ir_for_stmt(irb, body_bb, switch_stmt->body);
+    
+  struct ir_basicblock *after_body_bb = alloc_ir_basicblock(irb->func);
+  make_basicblock_merge(irb->func, end_bb, after_body_bb);
 
   struct ir_basicblock *default_block = NULL;
 
+  struct vector *cases = vector_create(sizeof(struct ir_split_case));
+
   while (!vector_empty(irb->switch_cases)) {
-    struct ir_case_label *case_label = vector_pop(irb->switch_cases);
+    struct ir_case *switch_case = vector_pop(irb->switch_cases);
 
-    switch (case_label->ty) {
-    case IR_CASE_LABEL_TY_CASE: {
-      struct ir_stmt *cmp_stmt = alloc_ir_stmt(irb->func, post_ctrl_bb);
-      struct ir_op *cnst = alloc_ir_op(irb->func, cmp_stmt);
-      cnst->ty = IR_OP_TY_CNST;
-      cnst->var_ty = ctrl_op->var_ty;
-      cnst->cnst = (struct ir_op_cnst){
-        .ty = IR_OP_CNST_TY_INT,
-        .int_value = case_label->value
-      };
-
-      struct ir_op *cmp_op = alloc_ir_op(irb->func, cmp_stmt);
-      cmp_op->ty = IR_OP_TY_BINARY_OP;
-      cmp_op->var_ty = IR_OP_VAR_TY_I32;
-      cmp_op->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_EQ,
-        .lhs = ctrl_op,
-        .rhs = cnst
-      };
-
-      struct ir_op *br_op = alloc_ir_op(irb->func, cmp_stmt);
-      br_op->ty = IR_OP_TY_BR_COND;
-      br_op->var_ty = IR_OP_VAR_TY_NONE;
-      br_op->br_cond = (struct ir_op_br_cond){
-        .cond = cmp_op
-      };
-
-      struct ir_basicblock *next_case_bb = alloc_ir_basicblock(irb->func);
-      make_basicblock_split(irb->func, post_ctrl_bb, case_label->basicblock, next_case_bb);
-
-      post_ctrl_bb = next_case_bb;
-
+    switch (switch_case ->ty) {
+    case IR_CASE_TY_CASE: {
+      vector_push_back(cases, &switch_case->split_case);
       break;
     }
-    case IR_CASE_LABEL_TY_DEFAULT:
-      default_block = case_label->basicblock;
+    case IR_CASE_TY_DEFAULT:
+      default_block = switch_case->split_case.target;
       break;
     }
   }
 
-  make_basicblock_merge(irb->func, post_ctrl_bb, default_block);
+  if (!default_block) {
+    default_block = after_body_bb;
+  }
 
-  struct ir_basicblock *after_switch = alloc_ir_basicblock(irb->func);
+  make_basicblock_switch(irb->func, basicblock, vector_length(cases), vector_head(cases), default_block);
 
   struct vector *continues = vector_create(sizeof(struct ir_jump));
 
@@ -1812,25 +1790,25 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
     switch (jump->ty) {
     case IR_JUMP_TY_NEW_LOOP:
       // end
-      return after_switch;
-    case IR_JUMP_TY_BREAK:
-      make_basicblock_merge(irb->func, jump->basicblock, after_switch);
+      return after_body_bb;
+    case IR_JUMP_TY_BREAK: {
+      make_basicblock_merge(irb->func, jump->basicblock, after_body_bb);
+      struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, jump->basicblock);
+      struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
+      br->ty = IR_OP_TY_BR;
+      br->var_ty = IR_OP_VAR_TY_NONE;
       break;
+    }
     case IR_JUMP_TY_CONTINUE:
       vector_push_back(continues, jump);
       break;
     }
-
-    struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, jump->basicblock);
-    struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
-    br->ty = IR_OP_TY_BR;
-    br->var_ty = IR_OP_VAR_TY_NONE;
   }
 
   // propogate the `continue`s to the next level up
   vector_extend(irb->jumps, vector_head(continues), vector_length(continues));
 
-  return end;
+  return after_body_bb;
 }
 
 struct ir_basicblock *
@@ -2159,17 +2137,19 @@ struct ir_basicblock *build_ir_for_continue(struct ir_func_builder *irb,
 }
 
 struct ir_basicblock *build_ir_for_jumpstmt(struct ir_func_builder *irb,
-                                            struct ir_stmt **stmt,
+                                            struct ir_basicblock *basicblock,
                                             struct ast_jumpstmt *jump_stmt) {
+  struct ir_stmt *stmt = alloc_ir_stmt(irb->func, basicblock);
+
   switch (jump_stmt->ty) {
   case AST_JUMPSTMT_TY_RETURN:
-    return build_ir_for_ret(irb, stmt, &jump_stmt->return_stmt);
+    return build_ir_for_ret(irb, &stmt, &jump_stmt->return_stmt);
   case AST_JUMPSTMT_TY_GOTO:
-    return build_ir_for_goto(irb, stmt, &jump_stmt->goto_stmt);
+    return build_ir_for_goto(irb, &stmt, &jump_stmt->goto_stmt);
   case AST_JUMPSTMT_TY_BREAK:
-    return build_ir_for_break(irb, stmt);
+    return build_ir_for_break(irb, &stmt);
   case AST_JUMPSTMT_TY_CONTINUE:
-    return build_ir_for_continue(irb, stmt);
+    return build_ir_for_continue(irb, &stmt);
   }
 }
 
@@ -2430,8 +2410,8 @@ build_ir_for_labeledstmt(struct ir_func_builder *irb,
                          struct ir_basicblock *basicblock,
                          struct ast_labeledstmt *labeled_stmt) {
   struct ir_basicblock *next_bb = alloc_ir_basicblock(irb->func);
-
   make_basicblock_merge(irb->func, basicblock, next_bb);
+
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, basicblock);
   struct ir_op *br_op = alloc_ir_op(irb->func, br_stmt);
   br_op->ty = IR_OP_TY_BR;
@@ -2444,16 +2424,16 @@ build_ir_for_labeledstmt(struct ir_func_builder *irb,
     break;
   }
   case AST_LABELEDSTMT_TY_CASE: {
-    struct ir_case_label label = {.ty = IR_CASE_LABEL_TY_CASE,
-                                  .basicblock = next_bb,
-                                  .value = labeled_stmt->cnst};
-    vector_push_back(irb->switch_cases, &label);
+    struct ir_case switch_case = {
+        .ty = IR_CASE_TY_CASE,
+        .split_case = {.target = next_bb, .value = labeled_stmt->cnst}};
+    vector_push_back(irb->switch_cases, &switch_case);
     break;
   }
   case AST_LABELEDSTMT_TY_DEFAULT: {
-    struct ir_case_label label = {.ty = IR_CASE_LABEL_TY_DEFAULT,
-                                  .basicblock = next_bb};
-    vector_push_back(irb->switch_cases, &label);
+    struct ir_case switch_case = {.ty = IR_CASE_TY_DEFAULT,
+                                  .split_case = {.target = next_bb}};
+    vector_push_back(irb->switch_cases, &switch_case);
     break;
   }
   }
@@ -2480,8 +2460,7 @@ struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
     return ir_stmt->basicblock;
   }
   case AST_STMT_TY_JUMP: {
-    struct ir_stmt *ir_stmt = alloc_ir_stmt(irb->func, basicblock);
-    return build_ir_for_jumpstmt(irb, &ir_stmt, &stmt->jump);
+    return build_ir_for_jumpstmt(irb, basicblock, &stmt->jump);
   }
   case AST_STMT_TY_COMPOUND: {
     return build_ir_for_compoundstmt(irb, basicblock, &stmt->compound);
@@ -2639,7 +2618,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   *builder = (struct ir_func_builder){
       .func = f,
       .jumps = vector_create(sizeof(struct ir_jump)),
-      .switch_cases = vector_create(sizeof(struct ir_case_label)),
+      .switch_cases = vector_create(sizeof(struct ir_case)),
       .parser = unit->parser,
       .var_refs = var_refs,
       .global_var_refs = global_var_refs};
