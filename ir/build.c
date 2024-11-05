@@ -533,7 +533,8 @@ struct ir_op *alloc_binaryop(struct ir_func_builder *irb, struct ir_stmt *stmt,
   b->rhs = rhs;
 
   bool is_fp = var_ty_is_fp(&op->binary_op.lhs->var_ty);
-  debug_assert(is_fp == var_ty_is_fp(&op->binary_op.rhs->var_ty), "type mismatch between lhs/rhs");
+  debug_assert(is_fp == var_ty_is_fp(&op->binary_op.rhs->var_ty),
+               "type mismatch between lhs/rhs");
 
   invariant_assert(
       ty_ref->ty == AST_TYREF_TY_WELL_KNOWN ||

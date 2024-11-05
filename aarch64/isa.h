@@ -189,7 +189,7 @@
 
 /* Two reg FP data processing */
 
-#define FP_CMP(M, S, ftype, Rm, op, Rn, opcode2) \
+#define FP_CMP(M, S, ftype, Rm, op, Rn, opcode2)                               \
   (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |          \
              (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |         \
              (U32(op) << 14 | (U32(0b1000) << 10) | (U32(Rn) << 5) |        \
