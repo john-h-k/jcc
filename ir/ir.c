@@ -1258,6 +1258,7 @@ bool var_ty_is_integral(const struct ir_op_var_ty *var_ty) {
   case IR_OP_VAR_PRIMITIVE_TY_I32:
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     return true;
+  case IR_OP_VAR_PRIMITIVE_TY_F16:
   case IR_OP_VAR_PRIMITIVE_TY_F32:
   case IR_OP_VAR_PRIMITIVE_TY_F64:
     return false;
@@ -1275,6 +1276,7 @@ bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
   case IR_OP_VAR_PRIMITIVE_TY_I32:
   case IR_OP_VAR_PRIMITIVE_TY_I64:
     return false;
+  case IR_OP_VAR_PRIMITIVE_TY_F16:
   case IR_OP_VAR_PRIMITIVE_TY_F32:
   case IR_OP_VAR_PRIMITIVE_TY_F64:
     return true;
@@ -1304,6 +1306,8 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
+    case IR_OP_VAR_PRIMITIVE_TY_F16:
+      return (struct ir_var_ty_info){.size = 2, .alignment = 2};
     case IR_OP_VAR_PRIMITIVE_TY_F32:
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
     case IR_OP_VAR_PRIMITIVE_TY_F64:

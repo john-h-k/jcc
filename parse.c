@@ -198,6 +198,7 @@ bool is_fp_ty(const struct ast_tyref *ty) {
   }
 
   switch (ty->well_known) {
+  case WELL_KNOWN_TY_HALF:
   case WELL_KNOWN_TY_FLOAT:
   case WELL_KNOWN_TY_DOUBLE:
   case WELL_KNOWN_TY_LONG_DOUBLE:
@@ -235,6 +236,7 @@ bool is_integral_ty(const struct ast_tyref *ty) {
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
     return true;
 
+  case WELL_KNOWN_TY_HALF:
   case WELL_KNOWN_TY_FLOAT:
   case WELL_KNOWN_TY_DOUBLE:
   case WELL_KNOWN_TY_LONG_DOUBLE:
@@ -317,6 +319,7 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
   case LEX_TOKEN_TY_KW_CONST:
   case LEX_TOKEN_TY_KW_VOLATILE:
   case LEX_TOKEN_TY_KW_VOID:
+  case LEX_TOKEN_TY_KW_HALF:
   case LEX_TOKEN_TY_KW_FLOAT:
   case LEX_TOKEN_TY_KW_DOUBLE:
   case LEX_TOKEN_TY_KW_CHAR:
@@ -669,6 +672,10 @@ bool parse_wkt_item(struct parser *parser, enum well_known_ty *wkt) {
   peek_token(parser->lexer, &token);
 
   switch (token.ty) {
+  case LEX_TOKEN_TY_KW_HALF:
+    consume_token(parser->lexer, token);
+    *wkt = WELL_KNOWN_TY_HALF;
+    return true;
   case LEX_TOKEN_TY_KW_FLOAT:
     consume_token(parser->lexer, token);
     *wkt = WELL_KNOWN_TY_FLOAT;
@@ -3731,6 +3738,9 @@ DEBUG_FUNC(tyref, ty_ref) {
       break;
     case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
       AST_PRINTZ("unsigned long long");
+      break;
+    case WELL_KNOWN_TY_HALF:
+      AST_PRINTZ("half");
       break;
     case WELL_KNOWN_TY_FLOAT:
       AST_PRINTZ("float");

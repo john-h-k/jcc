@@ -247,6 +247,8 @@ enum ir_op_var_primitive_ty var_ty_for_well_known_ty(enum well_known_ty wkt) {
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
     return IR_OP_VAR_PRIMITIVE_TY_I64;
+  case WELL_KNOWN_TY_HALF:
+    return IR_OP_VAR_PRIMITIVE_TY_F16;
   case WELL_KNOWN_TY_FLOAT:
     return IR_OP_VAR_PRIMITIVE_TY_F32;
   case WELL_KNOWN_TY_DOUBLE:
