@@ -2733,60 +2733,61 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
 bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   struct text_pos pos = get_position(parser->lexer);
 
-  parser_push_scope(parser);
-
   // TODO: merge with parse_compoundexpr?
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
-    struct text_pos pos = get_position(parser->lexer);
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
 
-    // this could be made recursive instead
+  parser_push_scope(parser);
+  
+  // this could be made recursive instead
 
-    struct vector *params = vector_create(sizeof(struct ast_param));
+  struct vector *params = vector_create(sizeof(struct ast_param));
 
-    struct text_pos param_pos = get_position(parser->lexer);
+  struct text_pos param_pos = get_position(parser->lexer);
 
-    struct token token;
-    if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
-      peek_token(parser->lexer, &token);
-      if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
-        backtrack(parser->lexer, param_pos);
-      }
-    }
-
+  struct token token;
+  if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
     peek_token(parser->lexer, &token);
     if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
-      struct ast_param param;
-      do {
-        if (!parse_param(parser, &param)) {
-          backtrack(parser->lexer, pos);
-          parser_pop_scope(parser);
-          return false;
-        }
-
-        vector_push_back(params, &param);
-
-        peek_token(parser->lexer, &token);
-      } while (token.ty == LEX_TOKEN_TY_COMMA &&
-               /* hacky */ (consume_token(parser->lexer, token), true));
-
-      param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
-      param_list->num_params = vector_length(params);
-
-      vector_copy_to(params, param_list->params);
-      vector_free(&params);
-    } else {
-      param_list->params = NULL;
-      param_list->num_params = 0;
-    }
-
-    if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
-      parser_pop_scope(parser);
-      return true;
+      backtrack(parser->lexer, param_pos);
     }
   }
 
-  backtrack(parser->lexer, pos);
+  peek_token(parser->lexer, &token);
+  if (token.ty != LEX_TOKEN_TY_CLOSE_BRACKET) {
+    struct ast_param param;
+    do {
+      if (!parse_param(parser, &param)) {
+        backtrack(parser->lexer, pos);
+        parser_pop_scope(parser);
+        return false;
+      }
+
+      vector_push_back(params, &param);
+
+      peek_token(parser->lexer, &token);
+    } while (token.ty == LEX_TOKEN_TY_COMMA &&
+             /* hacky */ (consume_token(parser->lexer, token), true));
+
+    param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
+    param_list->num_params = vector_length(params);
+
+    vector_copy_to(params, param_list->params);
+    vector_free(&params);
+  } else {
+    param_list->params = NULL;
+    param_list->num_params = 0;
+  }
+
+  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    parser_pop_scope(parser);
+    return true;
+  }
+
   parser_pop_scope(parser);
+  backtrack(parser->lexer, pos);
   return false;
 }
 
@@ -2873,6 +2874,7 @@ bool parse_type_specifier(
   parse_declaration_specifiers(parser, ty_ref, storage_class_specifiers);
 
   if (parse_wkt(parser, ty_ref)) {
+    parse_declaration_specifiers(parser, ty_ref, NULL);
     return true;
   }
 
@@ -2931,6 +2933,7 @@ bool parse_type_specifier(
                              .tagged = tagged};
     }
 
+    parse_declaration_specifiers(parser, ty_ref, NULL);
     return true;
   } else if (type.ty == LEX_TOKEN_TY_KW_ENUM) {
     peek_token(parser->lexer, &token);
@@ -2956,6 +2959,7 @@ bool parse_type_specifier(
       }
     }
 
+    parse_declaration_specifiers(parser, ty_ref, NULL);
     return true;
   } else if (type.ty == LEX_TOKEN_TY_IDENTIFIER) {
     struct var_table_entry *entry =
@@ -2963,6 +2967,7 @@ bool parse_type_specifier(
 
     if (entry && entry->ty == VAR_TABLE_ENTRY_TY_TYPEDEF) {
       *ty_ref = *entry->value;
+      parse_declaration_specifiers(parser, ty_ref, NULL);
       return true;
     }
   }
@@ -3056,11 +3061,18 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
 
 bool parse_declarator(struct parser *parser, struct token *identifier,
                       struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
   while (parse_pointer(parser, ty_ref)) {
     ;
   }
 
-  return parse_direct_declarator(parser, identifier, ty_ref);
+  if (parse_direct_declarator(parser, identifier, ty_ref)) {
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+  return false;
 }
 
 bool parse_direct_declarator_modifier(struct parser *parser,
@@ -3178,11 +3190,15 @@ bool parse_direct_declarator(struct parser *parser, struct token *identifier,
 
 bool parse_abstract_direct_declarator(struct parser *parser,
                                       struct ast_tyref *ty_ref) {
+  struct text_pos pos = get_position(parser->lexer);
+
   struct ast_tyref *inner = arena_alloc(parser->arena, sizeof(*inner));
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
       parse_abstract_declarator(parser, inner) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
     ;
+  } else {
+    backtrack(parser->lexer, pos);
   }
 
   while (parse_direct_declarator_modifier(parser, inner, ty_ref)) {
@@ -3494,12 +3510,6 @@ struct parse_result parse(struct parser *parser) {
       break;
     }
 
-    struct ast_funcdef func_def;
-    if (parse_funcdef(parser, &func_def)) {
-      vector_push_back(func_defs, &func_def);
-      continue;
-    }
-
     struct text_pos pos = get_position(parser->lexer);
 
     struct ast_decllist var_decl_list;
@@ -3507,6 +3517,15 @@ struct parse_result parse(struct parser *parser) {
       vector_push_back(declarations, &var_decl_list);
       continue;
     }
+
+    backtrack(parser->lexer, pos);
+
+    struct ast_funcdef func_def;
+    if (parse_funcdef(parser, &func_def)) {
+      vector_push_back(func_defs, &func_def);
+      continue;
+    }
+    
     backtrack(parser->lexer, pos);
 
     if (!lexer_at_eof(lexer)) {

@@ -3,7 +3,6 @@
 
 int printf(const char *format, ...);
 
-// FIXME: temporarily disabled until we handle large stack offsets properly
 int main() {
   int a00 = 0, a01 = 1, a02 = 2, a03 = 3, a04 = 4, a05 = 5, a06 = 6, a07 = 7,
       a08 = 8, a09 = 9, a10 = 10, a11 = 11, a12 = 12, a13 = 13, a14 = 14,

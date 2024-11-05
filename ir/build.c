@@ -206,7 +206,7 @@ bool var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  if (l->ty == IR_OP_VAR_TY_TY_FUNC && r->ty == IR_OP_VAR_TY_TY_POINTER) {
+  if ((l->ty == IR_OP_VAR_TY_TY_FUNC && r->ty == IR_OP_VAR_TY_TY_POINTER) || (r->ty == IR_OP_VAR_TY_TY_FUNC && l->ty == IR_OP_VAR_TY_TY_POINTER)) {
     return false;
   }
 
@@ -739,8 +739,16 @@ struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     return build_ir_for_pointer_address(irb, stmt, expr->pointer_access.lhs,
                                         &expr->pointer_access.member);
   }
+  case AST_EXPR_TY_COMPOUNDEXPR: {
+      return build_ir_for_addressof(irb, stmt, &expr->compound_expr.exprs[expr->compound_expr.num_exprs - 1]);
+    }
   default:
     break;
+  }
+
+  if (expr->ty == AST_EXPR_TY_UNARY_OP && expr->unary_op.ty == AST_UNARY_OP_TY_INDIRECTION) {
+    // &*, so cancel
+    return build_ir_for_expr(irb, stmt, expr->unary_op.expr, &expr->var_ty);
   }
 
   if (expr->ty != AST_EXPR_TY_VAR) {
@@ -891,11 +899,6 @@ struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     } else {
       make_basicblock_split(irb->func, entry_bb, end_bb, rhs_bb);
     }
-
-    // struct ir_op *entry_br = alloc_ir_op(irb->func, entry_stmt);
-    // entry_br->ty = IR_OP_TY_BR;
-    // entry_br->var_ty = IR_OP_VAR_TY_NONE;
-    // make_basicblock_merge(irb->func, entry_bb, end_bb);
 
     struct ir_stmt *entry_stmt = alloc_ir_stmt(irb->func, entry_bb);
     struct ir_op *lhs_br = alloc_ir_op(irb->func, entry_stmt);
@@ -1891,8 +1894,6 @@ struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
   UNUSED_ARG(body_stmt_basicblock);
-  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb
-  // (while)");
 
   struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb->func);
   make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
@@ -1905,15 +1906,10 @@ struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
   pre_cond_br->var_ty = IR_OP_VAR_TY_NONE;
 
   make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
-  // struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_basicblock);
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_OP_VAR_TY_NONE;
-
-  // make_basicblock_merge(irb->func, body_basicblock, cond_basicblock);
-  debug("body %zu, body_stmt %zu, after %zu\n", body_basicblock->id,
-        body_stmt_basicblock->id, after_body_basicblock->id);
 
   return (struct ir_loop){.entry = cond_basicblock,
                           .exit = after_body_basicblock};
@@ -1938,8 +1934,6 @@ struct ir_loop build_ir_for_dowhilestmt(struct ir_func_builder *irb,
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
-  // debug_assert(body_stmt_basicblock == body_basicblock, "stmt in wrong bb
-  // (do-while)");
 
   struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb->func);
   make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
@@ -1952,7 +1946,6 @@ struct ir_loop build_ir_for_dowhilestmt(struct ir_func_builder *irb,
   pre_body_br->var_ty = IR_OP_VAR_TY_NONE;
 
   make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
-  // struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_basicblock);
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
@@ -2768,7 +2761,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
         def->var_ty.func.param_identifiers[i];
     const struct ast_tyref *param_var_ty = &def->var_ty.func.param_var_tys[i];
 
-    if (param_var_ty->ty == AST_TYREF_TY_VARIADIC) {
+    if (param_var_ty->ty == AST_TYREF_TY_VARIADIC || !param_identifier) {
       continue;
     }
 
@@ -3141,10 +3134,20 @@ struct ir_unit *build_ir_for_translationunit(
                           .scope = SCOPE_GLOBAL};
 
     struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(iru, &def->var_ty);
-    struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
-    ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED,
-                          key.name);
+    
+    struct var_ref *ref = var_refs_get(global_var_refs, &key);
+    if (!ref) {
+      ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
+    }
+
+    if (!ref->glb) {
+      ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED,
+                            key.name);
+    } else {
+      ref->glb->ty = IR_GLB_TY_FUNC;
+      ref->glb->def_ty = IR_GLB_DEF_TY_DEFINED;
+    }
 
     struct ir_func_builder *builder =
         build_ir_for_function(iru, arena, def, global_var_refs);
