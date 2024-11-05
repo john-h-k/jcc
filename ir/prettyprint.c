@@ -55,6 +55,18 @@ const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "u<";
   case IR_OP_BINARY_OP_TY_ULTEQ:
     return "u<=";
+  case IR_OP_BINARY_OP_TY_FEQ:
+    return "f==";
+  case IR_OP_BINARY_OP_TY_FNEQ:
+    return "!=";
+  case IR_OP_BINARY_OP_TY_FGT:
+    return "f>";
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    return "f>=";
+  case IR_OP_BINARY_OP_TY_FLT:
+    return "f<";
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    return "f<=";
   case IR_OP_BINARY_OP_TY_LSHIFT:
     return "<<";
   case IR_OP_BINARY_OP_TY_SRSHIFT:

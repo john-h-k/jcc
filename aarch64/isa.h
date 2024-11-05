@@ -189,6 +189,17 @@
 
 /* Two reg FP data processing */
 
+#define FP_CMP(M, S, ftype, Rm, op, Rn, opcode2) \
+  (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |          \
+             (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |         \
+             (U32(op) << 14 | (U32(0b1000) << 10) | (U32(Rn) << 5) |        \
+             U32(opcode2))
+
+#define FCMP(ftype, Rm, Rn) FP_CMP(0b0, 0b0, ftype, Rm, 0b00, Rn, 0b00000)
+#define FCMP_ZERO(ftype, Rn) FP_CMP(0b0, 0b0, ftype, 0b0000, 0b00, Rn, 0b01000)
+#define FCMPE(ftype, Rm, Rn) FP_CMP(0b0, 0b0, ftype, Rm, 0b00, Rn, 0b10000)
+#define FCMPE_ZERO(ftype, Rn) FP_CMP(0b0, 0b0, ftype, 0b0000, 0b00, Rn, 0b11000)
+
 #define FP_2_REG(M, S, ftype, Rm, opcode, Rn, Rd)                              \
   (uint32_t)((U32(M) << 31) | (U32(S) << 29) | (U32(0b11110) << 24) |          \
              (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |         \

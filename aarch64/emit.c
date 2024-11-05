@@ -211,6 +211,12 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_UDIV:
     aarch64_emit_udiv(state->emitter, instr->aarch64->udiv);
     break;
+  case AARCH64_INSTR_TY_FCMP:
+    aarch64_emit_fcmp(state->emitter, instr->aarch64->fcmp);
+    break;
+  case AARCH64_INSTR_TY_FCMP_ZERO:
+    aarch64_emit_fcmp_zero(state->emitter, instr->aarch64->fcmp_zero);
+    break;
   case AARCH64_INSTR_TY_FADD:
     aarch64_emit_fadd(state->emitter, instr->aarch64->fadd);
     break;

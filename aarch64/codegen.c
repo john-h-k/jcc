@@ -129,6 +129,10 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_SUB_IMM:
   case AARCH64_INSTR_TY_SUBS_IMM:
     return AARCH64_INSTR_CLASS_ADDSUB_IMM;
+  case AARCH64_INSTR_TY_FCMP:
+    return AARCH64_INSTR_CLASS_FCMP;
+  case AARCH64_INSTR_TY_FCMP_ZERO:
+    return AARCH64_INSTR_CLASS_FCMP_ZERO;
   case AARCH64_INSTR_TY_FMOV:
   case AARCH64_INSTR_TY_FCVT:
   case AARCH64_INSTR_TY_UCVTF:
@@ -214,8 +218,10 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
                    "`get_cond_for_op` expects a binary op");
 
   switch (op->binary_op.ty) {
+  case IR_OP_BINARY_OP_TY_FEQ:
   case IR_OP_BINARY_OP_TY_EQ:
     return AARCH64_COND_EQ;
+  case IR_OP_BINARY_OP_TY_FNEQ:
   case IR_OP_BINARY_OP_TY_NEQ:
     return AARCH64_COND_NE;
   case IR_OP_BINARY_OP_TY_UGT:
@@ -234,6 +240,14 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
     return AARCH64_COND_LS;
   case IR_OP_BINARY_OP_TY_SLTEQ:
     return AARCH64_COND_LE;
+  case IR_OP_BINARY_OP_TY_FLT:
+    return AARCH64_COND_MI;
+  case IR_OP_BINARY_OP_TY_FGT:
+    return AARCH64_COND_GT;
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    return AARCH64_COND_LS;
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    return AARCH64_COND_GE;
   default:
     bug("op was not a comparison");
   }
@@ -703,6 +717,18 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                "floating point with invalid binary op");
 
   switch (ty) {
+  case IR_OP_BINARY_OP_TY_FEQ:
+  case IR_OP_BINARY_OP_TY_FNEQ:
+  case IR_OP_BINARY_OP_TY_FGT:
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+  case IR_OP_BINARY_OP_TY_FLT:
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FCMP;
+    instr->aarch64->fcmp = (struct aarch64_fcmp){
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
@@ -1896,6 +1922,17 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
       cb(instr, bitfield.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
       break;
     }
+    case AARCH64_INSTR_CLASS_FCMP: {
+      struct aarch64_fcmp fcmp = instr->aarch64->fcmp;
+      cb(instr, fcmp.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, fcmp.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_FCMP_ZERO: {
+      struct aarch64_fcmp_zero fcmp_zero = instr->aarch64->fcmp_zero;
+      cb(instr, fcmp_zero.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      break;
+    }
     case AARCH64_INSTR_CLASS_REG_1_SOURCE: {
       struct aarch64_reg_1_source reg_1_source = instr->aarch64->reg_1_source;
       cb(instr, reg_1_source.source, AARCH64_REG_USAGE_TY_READ, metadata);
@@ -2216,6 +2253,16 @@ void debug_print_reg_1_source(FILE *file,
                               const struct aarch64_reg_1_source *reg_1_source) {
   codegen_fprintf(file, " %reg, %reg", reg_1_source->dest,
                   reg_1_source->source);
+}
+
+void debug_print_fcmp(FILE *file,
+                              const struct aarch64_fcmp *fcmp) {
+  codegen_fprintf(file, " %reg, %reg", fcmp->lhs, fcmp->rhs);
+}
+
+void debug_print_fcmp_zero(FILE *file,
+                              const struct aarch64_fcmp_zero *fcmp_zero) {
+  codegen_fprintf(file, " %reg, #0.0", fcmp_zero->lhs);
 }
 
 void debug_print_reg_2_source(FILE *file,
@@ -2554,6 +2601,14 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
   case AARCH64_INSTR_TY_ADDS_IMM:
     fprintf(file, "adds");
     debug_print_addsub_imm(file, &instr->aarch64->adds_imm);
+    break;
+  case AARCH64_INSTR_TY_FCMP:
+    fprintf(file, "fcmp");
+    debug_print_fcmp(file, &instr->aarch64->fcmp);
+    break;
+  case AARCH64_INSTR_TY_FCMP_ZERO:
+    fprintf(file, "fcmp");
+    debug_print_fcmp_zero(file, &instr->aarch64->fcmp_zero);
     break;
   case AARCH64_INSTR_TY_FADD:
     fprintf(file, "fadd");

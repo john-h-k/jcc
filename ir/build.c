@@ -532,7 +532,8 @@ struct ir_op *alloc_binaryop(struct ir_func_builder *irb, struct ir_stmt *stmt,
   b->lhs = lhs;
   b->rhs = rhs;
 
-  bool is_fp = var_ty_is_fp(&op->var_ty);
+  bool is_fp = var_ty_is_fp(&op->binary_op.lhs->var_ty);
+  debug_assert(is_fp == var_ty_is_fp(&op->binary_op.rhs->var_ty), "type mismatch between lhs/rhs");
 
   invariant_assert(
       ty_ref->ty == AST_TYREF_TY_WELL_KNOWN ||
@@ -547,34 +548,42 @@ struct ir_op *alloc_binaryop(struct ir_func_builder *irb, struct ir_stmt *stmt,
         "adjustment)");
     break;
   case AST_BINARY_OP_TY_EQ:
-    b->ty = IR_OP_BINARY_OP_TY_EQ;
+    b->ty = is_fp ? IR_OP_BINARY_OP_TY_FEQ : IR_OP_BINARY_OP_TY_EQ;
     break;
   case AST_BINARY_OP_TY_NEQ:
-    b->ty = IR_OP_BINARY_OP_TY_NEQ;
+    b->ty = is_fp ? IR_OP_BINARY_OP_TY_FNEQ : IR_OP_BINARY_OP_TY_NEQ;
     break;
   case AST_BINARY_OP_TY_GT:
-    if (WKT_IS_SIGNED(ty_ref->well_known)) {
+    if (is_fp) {
+      b->ty = IR_OP_BINARY_OP_TY_FGT;
+    } else if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SGT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGT;
     }
     break;
   case AST_BINARY_OP_TY_GTEQ:
-    if (WKT_IS_SIGNED(ty_ref->well_known)) {
+    if (is_fp) {
+      b->ty = IR_OP_BINARY_OP_TY_FGTEQ;
+    } else if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SGTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGTEQ;
     }
     break;
   case AST_BINARY_OP_TY_LT:
-    if (WKT_IS_SIGNED(ty_ref->well_known)) {
+    if (is_fp) {
+      b->ty = IR_OP_BINARY_OP_TY_FLT;
+    } else if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SLT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULT;
     }
     break;
   case AST_BINARY_OP_TY_LTEQ:
-    if (WKT_IS_SIGNED(ty_ref->well_known)) {
+    if (is_fp) {
+      b->ty = IR_OP_BINARY_OP_TY_FLTEQ;
+    } else if (WKT_IS_SIGNED(ty_ref->well_known)) {
       b->ty = IR_OP_BINARY_OP_TY_SLTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULTEQ;
