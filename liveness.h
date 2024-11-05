@@ -4,6 +4,7 @@
 #include "ir/ir.h"
 
 #include <stddef.h>
+#include <stdio.h>
 
 struct interval {
   struct ir_op *op;

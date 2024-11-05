@@ -1,6 +1,8 @@
 #include "ir.h"
 
 #include "../vector.h"
+#include "../alloc.h"
+#include "../log.h"
 #include "var_refs.h"
 
 #include <sys/stat.h>
@@ -62,12 +64,8 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_BINARY_OP:
-    return false;
   case IR_OP_TY_UNARY_OP:
-    return op->unary_op.ty == AST_UNARY_OP_TY_POSTFIX_DEC ||
-           op->unary_op.ty == AST_UNARY_OP_TY_POSTFIX_INC ||
-           op->unary_op.ty == AST_UNARY_OP_TY_PREFIX_DEC ||
-           op->unary_op.ty == AST_UNARY_OP_TY_PREFIX_INC;
+    return false;
   case IR_OP_TY_MOV:
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE_GLB:

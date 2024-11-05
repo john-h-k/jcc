@@ -6,6 +6,7 @@
 #include "../parse.h"
 #include "../util.h"
 #include "../vector.h"
+#include "../var_table.h"
 #include "ir.h"
 #include "prettyprint.h"
 #include "var_refs.h"

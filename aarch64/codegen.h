@@ -2,6 +2,7 @@
 #define AARCH64_CODEGEN_H
 
 #include "../codegen.h"
+#include <stdio.h>
 
 #if defined(STACK_PTR_REG) || defined(FRAME_PTR_REG) || defined(RET_PTR_REG)
 #error                                                                         \

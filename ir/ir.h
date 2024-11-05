@@ -1,9 +1,6 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
-#include "../parse.h"
-#include "../var_table.h"
-
 #include <limits.h>
 #include <stdlib.h>
 
@@ -303,6 +300,7 @@ struct ir_op_addr {
 
 struct ir_op_br_switch {
   struct ir_op *value;
+  // targets on `ir_basicblock`
 };
 
 struct ir_op_br_cond {
