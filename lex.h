@@ -172,6 +172,10 @@ void consume_token(struct lexer *lexer, struct token token);
 // TODO: maybe make this so it doesn't copy, and returns string length as well
 const char *associated_text(const struct lexer *lexer,
                             const struct token *token);
+
+const char *strlike_associated_text(const struct lexer *lexer,
+                                    const struct token *token, size_t *str_len);
+
 const char *token_name(const struct lexer *lexer, const struct token *token);
 
 #endif
