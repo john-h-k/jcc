@@ -132,7 +132,6 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     return;
   }
   case IR_OP_VAR_TY_TY_FUNC: {
-    // FIXME: buffer vuln
     fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       debug_print_var_ty_string(file, iru, &var_ty->func.params[i]);
@@ -201,8 +200,6 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
 }
 
 void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
-  // just assume we don't have more than 100,000 phi inputs
-  // FIXME: buffer vuln
   for (size_t i = 0; i < phi->num_values; i++) {
     fprintf(file, "%%%zu", phi->values[i]->id);
 

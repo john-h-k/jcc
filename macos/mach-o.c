@@ -5,6 +5,7 @@
 #include "../util.h"
 
 #include <mach-o/arm64/reloc.h>
+#include <mach-o/x86_64/reloc.h>
 #include <mach-o/loader.h>
 #include <mach-o/reloc.h>
 #include <mach/machine.h>
@@ -28,7 +29,7 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     header.cputype = CPU_TYPE_X86_64;
     header.cpusubtype = CPU_SUBTYPE_X86_64_ALL;
-    todo("unsupported arch x86_64");
+    break;
   case COMPILE_TARGET_ARCH_EEP:
     todo("mach-o does not support EEP");
     break;
@@ -233,8 +234,6 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
 
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;
-
-  // FIXME: alignments need to be log2(align) not align
 
 #define LOG2(x) ((sizeof((x)) * 8 - lzcnt(x)) - 1)
 
