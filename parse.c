@@ -741,12 +741,10 @@ bool parse_storage_class_specifiers(
 
   if (token.ty == LEX_TOKEN_TY_KW_TYPEDEF) {
     *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF;
-  } else if (token.ty == LEX_TOKEN_TY_KW_AUTO) {
-    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN;
   } else if (token.ty == LEX_TOKEN_TY_KW_EXTERN) {
-    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC;
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN;
   } else if (token.ty == LEX_TOKEN_TY_KW_STATIC) {
-    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO;
+    *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC;
   } else if (token.ty == LEX_TOKEN_TY_KW_AUTO) {
     *flags |= AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO;
   } else if (token.ty == LEX_TOKEN_TY_KW_REGISTER) {

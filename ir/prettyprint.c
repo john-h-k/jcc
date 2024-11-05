@@ -789,7 +789,11 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    fprintf(file, "GLB(%zu) = ", glb->id);
+    if (glb->name) {
+      fprintf(file, "GLB(%zu) %s = ", glb->id, glb->name);
+    } else {
+      fprintf(file, "GLB(%zu) = ", glb->id);
+    }
 
     switch (glb->ty) {
     case IR_GLB_TY_DATA:
