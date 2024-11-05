@@ -155,25 +155,36 @@ void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
 }
 
 const char *process_raw_string(const struct lexer *lexer,
-                               const struct token *token) {
+                               const struct token *token, size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
+  // FIXME: definitely wrong for wide strings
 
   size_t max_str_len = token->span.end.idx - token->span.start.idx;
 
   char *buff = arena_alloc(lexer->arena, max_str_len - 1);
 
-  size_t str_len = 0;
+  char end_char = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
+                   token->ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
+                      ? '\''
+                      : '"';
+  size_t str_start = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
+                      token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)
+                         ? token->span.start.idx + 2
+                         : token->span.start.idx + 1;
+
+  *str_len = 0;
   bool char_escaped = false;
-  for (size_t i = token->span.start.idx + 1;
-       i <= token->span.end.idx && !(!char_escaped && lexer->text[i] == '"');
+  for (size_t i = str_start; i <= token->span.end.idx &&
+                             !(!char_escaped && lexer->text[i] == end_char);
        i++) {
     if (char_escaped) {
 #define ADD_ESCAPED(ch, esc)                                                   \
   case ch:                                                                     \
-    buff[str_len++] = esc;                                                     \
+    buff[(*str_len)++] = esc;                                                  \
     break;
 
       switch (lexer->text[i]) {
+        ADD_ESCAPED('0', '\0')
         ADD_ESCAPED('a', '\a')
         ADD_ESCAPED('b', '\b')
         // non-standard so not included for now
@@ -195,14 +206,14 @@ const char *process_raw_string(const struct lexer *lexer,
 
 #undef ADD_ESCAPED
     } else if (lexer->text[i] != '\\') {
-      buff[str_len++] = lexer->text[i];
+      buff[(*str_len)++] = lexer->text[i];
     }
 
     // next char is escaped if this char is a non-escaped backslash
     char_escaped = !char_escaped && lexer->text[i] == '\\';
   }
 
-  buff[str_len] = 0;
+  buff[*str_len] = 0;
   return buff;
 }
 
@@ -223,14 +234,6 @@ bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
   }
 
   return false;
-}
-
-// this is really more a parsing exercise than a lexing exercise, but it makes
-// parser cleaner
-bool try_lex_fp_literal(struct lexer *lexer, struct text_pos *cur_pos) {
-  UNUSED_ARG(lexer);
-  UNUSED_ARG(cur_pos);
-  todo("impl");
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
@@ -617,16 +620,21 @@ void peek_token(struct lexer *lexer, struct token *token) {
   debug("parse token %s\n", token_name(lexer, token));
 }
 
+const char *strlike_associated_text(const struct lexer *lexer,
+                                    const struct token *token,
+                                    size_t *str_len) {
+  return process_raw_string(lexer, token, str_len);
+}
+
 const char *associated_text(const struct lexer *lexer,
                             const struct token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
-    return process_raw_string(lexer, token);
-    break;
-  case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
+    bug("use `strlike_associated_text` instead");
+  case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_FLOAT_LITERAL:
   case LEX_TOKEN_TY_DOUBLE_LITERAL:
   case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:

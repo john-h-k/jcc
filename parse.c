@@ -987,28 +987,28 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
   if (is_literal_token(parser, token.ty, &ty_ref) && is_integral_ty(&ty_ref)) {
-    const char *literal_text = associated_text(parser->lexer, &token);
-    size_t literal_len = strlen(literal_text);
-
-    debug_assert(literal_len, "literal_len was 0");
-
     unsigned long long int_value;
     if (token.ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL) {
-      if (literal_len == 3) {
-        // simple
-        int_value = literal_text[1];
-      } else {
-        todo("other char literal types");
-      }
+      size_t literal_len;
+      const char *literal_text =
+          strlike_associated_text(parser->lexer, &token, &literal_len);
+      debug_assert(literal_len, "literal_len was 0");
+
+      int_value = literal_text[0];
     } else if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL) {
-      if (literal_len == 4) {
-        wchar_t wchar;
-        mbtowc(&wchar, &literal_text[2], literal_len - 3);
-        int_value = wchar;
-      } else {
-        todo("other wide char literal types");
-      }
+      size_t literal_len;
+      const char *literal_text =
+          strlike_associated_text(parser->lexer, &token, &literal_len);
+      debug_assert(literal_len, "literal_len was 0");
+
+      wchar_t wchar;
+      mbtowc(&wchar, literal_text, literal_len);
+      int_value = wchar;
     } else {
+      const char *literal_text = associated_text(parser->lexer, &token);
+      size_t literal_len = strlen(literal_text);
+      debug_assert(literal_len, "literal_len was 0");
+
       int base = 10;
       if (literal_len >= 2 && literal_text[0] == '0' &&
           literal_text[1] == 'x') {
@@ -1067,8 +1067,9 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
     cnst->cnst_ty = ty_ref;
 
-    const char *str = associated_text(parser->lexer, &token);
-    vector_extend(strings, str, strlen(str));
+    size_t str_len;
+    const char *str = strlike_associated_text(parser->lexer, &token, &str_len);
+    vector_extend(strings, str, str_len);
 
     consume_token(parser->lexer, token);
     peek_token(parser->lexer, &token);
