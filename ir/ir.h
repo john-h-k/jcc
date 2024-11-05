@@ -513,11 +513,6 @@ struct ir_basicblock {
 
 enum ir_func_flags { IR_FUNC_FLAG_NONE = 0, IR_FUNC_FLAG_MAKES_CALL = 1 };
 
-enum ir_glb_ty {
-  IR_GLB_TY_DATA,
-  IR_GLB_TY_FUNC,
-};
-
 enum ir_var_ty {
   IR_VAR_TY_STRING_LITERAL,
   IR_VAR_TY_CONST_DATA,
@@ -546,6 +541,11 @@ struct ir_var {
   enum ir_var_ty ty;
   struct ir_op_var_ty var_ty;
   struct ir_var_value value;
+};
+
+enum ir_glb_ty {
+  IR_GLB_TY_DATA,
+  IR_GLB_TY_FUNC,
 };
 
 enum ir_glb_def_ty {
