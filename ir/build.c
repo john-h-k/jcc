@@ -189,6 +189,13 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_op_var_ty *l,
 bool var_ty_needs_cast_op(struct ir_func_builder *irb,
                           const struct ir_op_var_ty *l,
                           const struct ir_op_var_ty *r) {
+  // note: `l` is TO, `r` is FROM, (as this is in the context of `l <- r`)
+
+  if (l->ty == IR_OP_VAR_TY_TY_NONE) {
+    // void casts are nop
+    return false;
+  }
+
   if (var_ty_is_aggregate(l) && var_ty_is_aggregate(r)) {
     // casting between these could require conversion,
     // but never a cast op
@@ -2380,11 +2387,11 @@ void build_ir_for_non_auto_var(struct ir_unit *iru,
   struct ir_op_var_ty var_ty =
       var_ty_for_ast_tyref(iru, &decl->var.var_ty);
 
-  const char *name;
+  const char *name = identifier_str(iru->parser, &decl->var.identifier);
+  const char *symbol_name;
   if (decl_list->storage_class_specifiers & AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC) {
     // need to mangle the name as statics cannot interfere with others
-    const char *base = identifier_str(iru->parser, &decl->var.identifier);
-    size_t base_len = strlen(base);
+    size_t base_len = strlen(name);
 
     size_t len = base_len + 2; // null char and leading "."
 
@@ -2406,15 +2413,15 @@ void build_ir_for_non_auto_var(struct ir_unit *iru,
       buff[head++] = '.';
     }
     
-    memcpy(&buff[head], base, base_len);
+    memcpy(&buff[head], name, base_len);
     head += base_len;
     buff[head++] = '\0';
 
     debug_assert(head == len, "string/buff length mismatch");
     
-    name = buff;
+    symbol_name = buff;
   } else {
-    name = identifier_str(iru->parser, &decl->var.identifier);
+    symbol_name = name;
   }
 
   struct var_key key = {.name =
@@ -2452,7 +2459,7 @@ void build_ir_for_non_auto_var(struct ir_unit *iru,
   }
 
   if (!ref->glb) {
-    ref->glb = add_global(iru, ty, &var_ty, def_ty, key.name);
+    ref->glb = add_global(iru, ty, &var_ty, def_ty, symbol_name);
     ref->glb->var = arena_alloc(iru->arena, sizeof(*ref->glb->var));
   }
 
@@ -3134,14 +3141,16 @@ struct ir_unit *build_ir_for_translationunit(
                           .scope = SCOPE_GLOBAL};
 
     struct ir_op_var_ty var_ty = var_ty_for_ast_tyref(iru, &def->var_ty);
-
-    struct ir_func_builder *builder =
-        build_ir_for_function(iru, arena, def, global_var_refs);
-
     struct var_ref *ref = var_refs_add(global_var_refs, &key, VAR_REF_TY_GLB);
 
     ref->glb = add_global(iru, IR_GLB_TY_FUNC, &var_ty, IR_GLB_DEF_TY_DEFINED,
                           key.name);
+
+    struct ir_func_builder *builder =
+        build_ir_for_function(iru, arena, def, global_var_refs);
+
+    // ref may not be valid due to writes in the call to build ir
+    ref = var_refs_get(global_var_refs, &key);
     ref->glb->func = builder->func;
   }
 
