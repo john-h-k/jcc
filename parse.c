@@ -344,6 +344,21 @@ bool is_literal_token(struct parser *parser, enum lex_token_ty tok_ty,
         .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_CHAR};
     return true;
 
+  case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
+    // char is signed!
+    ty_ref->ty = AST_TYREF_TY_POINTER;
+    ty_ref->pointer.underlying =
+        arena_alloc(parser->arena, sizeof(*ty_ref->pointer.underlying));
+    *ty_ref->pointer.underlying = (struct ast_tyref){
+        .ty = AST_TYREF_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_SIGNED_INT};
+    return true;
+
+  case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
+    // char is signed!
+    ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
+    ty_ref->well_known = WELL_KNOWN_TY_SIGNED_INT;
+    return true;
+
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
     // char is signed!
     ty_ref->ty = AST_TYREF_TY_WELL_KNOWN;
@@ -983,7 +998,15 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
         // simple
         int_value = literal_text[1];
       } else {
-        todo("other char literals");
+        todo("other char literal types");
+      }
+    } else if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL) {
+      if (literal_len == 4) {
+        wchar_t wchar;
+        mbtowc(&wchar, &literal_text[2], literal_len - 3);
+        int_value = wchar;
+      } else {
+        todo("other wide char literal types");
       }
     } else {
       int base = 10;
@@ -1030,8 +1053,17 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   peek_token(parser->lexer, &token);
   struct ast_tyref ty_ref;
+
+  // must be at least one string component (but it could be empty)
+  bool is_string = false;
   while (is_literal_token(parser, token.ty, &ty_ref) &&
-         token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL) {
+         (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL || token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)) {
+    if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
+      todo("wide str literals (must be stored as cnst data)");
+    }
+
+    is_string = true;
+
     cnst->cnst_ty = ty_ref;
 
     const char *str = associated_text(parser->lexer, &token);
@@ -1041,7 +1073,7 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
     peek_token(parser->lexer, &token);
   }
 
-  if (vector_empty(strings)) {
+  if (!is_string) {
     backtrack(parser->lexer, pos);
     return false;
   }
