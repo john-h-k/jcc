@@ -1757,6 +1757,10 @@ struct ir_basicblock *build_ir_for_switch(struct ir_func_builder *irb,
     
   struct ir_basicblock *after_body_bb = alloc_ir_basicblock(irb->func);
   make_basicblock_merge(irb->func, end_bb, after_body_bb);
+  struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, end_bb);
+  struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_OP_VAR_TY_NONE;
 
   struct ir_basicblock *default_block = NULL;
 
