@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include "alloc.h"
 
 struct instr *alloc_instr(struct codegen_function *func) {
   struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));

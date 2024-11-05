@@ -1,6 +1,8 @@
 #include "prettyprint.h"
 
 #include "../graphwriter.h"
+#include "../util.h"
+#include "../log.h"
 #include "ir.h"
 
 #include <math.h>

@@ -2,6 +2,7 @@
 #define IR_BUILD_H
 
 #include "ir.h"
+#include "../parse.h"
 
 struct ir_unit *build_ir_for_translationunit(
     /* needed for `associated_text */ struct parser *parser,

@@ -1,6 +1,9 @@
 #include "liveness.h"
 
 #include "bit_twiddle.h"
+#include "util.h"
+#include "log.h"
+#include "alloc.h"
 #include "bitset.h"
 #include "ir/ir.h"
 
