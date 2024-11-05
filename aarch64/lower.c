@@ -329,6 +329,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_STORE_ADDR:
             case IR_OP_TY_LOAD_ADDR:
             case IR_OP_TY_ADDR:
+            case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
@@ -388,6 +389,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
+            case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
             case IR_OP_TY_CALL:

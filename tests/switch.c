@@ -1,14 +1,34 @@
-// expected value: 1
+// expected value: 5
 
 int main() {
-  int x = 1;
+  int x = 2;
+
+  int a;
 
   switch (x) {
     case 2:
-      return 8;
+      a = 0;
+      break;
     case 1:
-      return 1;
+      a = 1;
+      break;
     default:
-      return 0;
+      a = 2;
+      break;
   }
+
+  int b;
+
+  switch (x) {
+    case 2:
+      b = 0;
+      break;
+    case 1:
+      b = 1;
+      break;
+  }
+
+  int c = 5;
+
+  return a + b + c;
 }
