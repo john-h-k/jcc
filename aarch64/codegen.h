@@ -23,6 +23,9 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FDIV,
   AARCH64_INSTR_TY_FSUB,
 
+  AARCH64_INSTR_TY_FCMP,
+  AARCH64_INSTR_TY_FCMP_ZERO,
+
   AARCH64_INSTR_TY_ADDS,
   AARCH64_INSTR_TY_ADDS_IMM,
   AARCH64_INSTR_TY_ADD,
@@ -161,6 +164,8 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_ADDSUB_IMM,
   AARCH64_INSTR_CLASS_ADDR_IMM,
   AARCH64_INSTR_CLASS_BITFIELD,
+  AARCH64_INSTR_CLASS_FCMP,
+  AARCH64_INSTR_CLASS_FCMP_ZERO,
   AARCH64_INSTR_CLASS_REG_1_SOURCE,
   AARCH64_INSTR_CLASS_REG_2_SOURCE,
   AARCH64_INSTR_CLASS_MOV_IMM,
@@ -222,6 +227,15 @@ struct aarch64_bitfield {
 
   imm_t immr;
   imm_t imms;
+};
+
+struct aarch64_fcmp {
+  struct aarch64_reg lhs;
+  struct aarch64_reg rhs;
+};
+
+struct aarch64_fcmp_zero {
+  struct aarch64_reg lhs;
 };
 
 struct aarch64_reg_1_source {
@@ -338,6 +352,14 @@ struct aarch64_instr {
     union {
       struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv,
           udiv, fmul, fdiv, fadd, fsub;
+    };
+
+    union {
+      struct aarch64_fcmp fcmp;
+    };
+
+    union {
+      struct aarch64_fcmp_zero fcmp_zero;
     };
 
     union {
