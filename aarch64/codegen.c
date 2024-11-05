@@ -2255,13 +2255,12 @@ void debug_print_reg_1_source(FILE *file,
                   reg_1_source->source);
 }
 
-void debug_print_fcmp(FILE *file,
-                              const struct aarch64_fcmp *fcmp) {
+void debug_print_fcmp(FILE *file, const struct aarch64_fcmp *fcmp) {
   codegen_fprintf(file, " %reg, %reg", fcmp->lhs, fcmp->rhs);
 }
 
 void debug_print_fcmp_zero(FILE *file,
-                              const struct aarch64_fcmp_zero *fcmp_zero) {
+                           const struct aarch64_fcmp_zero *fcmp_zero) {
   codegen_fprintf(file, " %reg, #0.0", fcmp_zero->lhs);
 }
 

@@ -36,7 +36,7 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,
                        const struct aarch64_fcmp fcmp);
 void aarch64_emit_fcmp_zero(struct aarch64_emitter *emitter,
-                       const struct aarch64_fcmp_zero fcmp_zero);
+                            const struct aarch64_fcmp_zero fcmp_zero);
 
 void aarch64_emit_fadd(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_2_source fadd);
