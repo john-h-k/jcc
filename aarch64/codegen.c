@@ -2438,7 +2438,9 @@ void debug_print_instr(FILE *file, const struct codegen_function *func,
     break;
   case AARCH64_INSTR_TY_RET:
     fprintf(file, "ret");
-    debug_print_branch_reg(file, &instr->aarch64->ret);
+    if (!reg_eq(instr->aarch64->ret.target, RET_PTR_REG)) {
+      debug_print_branch_reg(file, &instr->aarch64->ret);
+    }
     break;
   case AARCH64_INSTR_TY_RORV:
     fprintf(file, "rorv");
