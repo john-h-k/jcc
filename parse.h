@@ -7,143 +7,229 @@
 #include "program.h"
 #include "util.h"
 
-/* Well known types - keywords (`int`, `unsigned`, etc) */
 
-enum well_known_ty {
-  // parser.c relies on the unsigned variant being the signed variant +1
-  // ir.c relies on the sizes being ascending
-  WELL_KNOWN_TY_SIGNED_CHAR,
-  WELL_KNOWN_TY_UNSIGNED_CHAR,
-
-  WELL_KNOWN_TY_SIGNED_SHORT,
-  WELL_KNOWN_TY_UNSIGNED_SHORT,
-
-  WELL_KNOWN_TY_SIGNED_INT,
-  WELL_KNOWN_TY_UNSIGNED_INT,
-
-  WELL_KNOWN_TY_SIGNED_LONG,
-  WELL_KNOWN_TY_UNSIGNED_LONG,
-
-  WELL_KNOWN_TY_SIGNED_LONG_LONG,
-  WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
-
-  WELL_KNOWN_TY_HALF,
-  WELL_KNOWN_TY_FLOAT,
-  WELL_KNOWN_TY_DOUBLE,
-  WELL_KNOWN_TY_LONG_DOUBLE,
-};
-
-#define WKT_MAKE_SIGNED(wkt)                                                   \
-  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
-#define WKT_MAKE_UNSIGNED(wkt)                                                 \
-  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) | 1))
-
-#define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
 
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
  * `<keyword>` */
 
-struct ast_ty_pointer {
-  struct ast_tyref *underlying;
+enum ast_storage_class_specifier {
+  AST_STORAGE_CLASS_SPECIFIER_TYPEDEF,
+  AST_STORAGE_CLASS_SPECIFIER_EXTERN,
+  AST_STORAGE_CLASS_SPECIFIER_STATIC,
+  AST_STORAGE_CLASS_SPECIFIER_AUTO,
+  AST_STORAGE_CLASS_SPECIFIER_REGISTER,
 };
 
-enum ast_ty_array_ty {
-  AST_TY_ARRAY_TY_UNKNOWN_SIZE,
-  AST_TY_ARRAY_TY_KNOWN_SIZE,
+enum ast_function_specifier {
+  AST_FUNCTION_SPECIFIER_INLINE,
 };
 
-struct ast_ty_array {
-  enum ast_ty_array_ty ty;
+enum ast_type_qualifier {
+  AST_TYPE_QUALIFIER_NONE,
+  AST_TYPE_QUALIFIER_CONST,
+  AST_TYPE_QUALIFIER_VOLATILE,
+};
 
-  struct ast_tyref *element;
+struct ast_declaration_specifier_list {
+  size_t num_decl_specifiers;
+  struct ast_decl_specifier *decl_specifiers;
+};
+
+struct ast_pointer {
+  struct ast_declaration_specifier_list specifier_list;
+};
+
+struct ast_pointer_list {
+  size_t num_pointers;
+  struct ast_pointer *pointers;
+};
+
+enum ast_direct_declarator_ty {
+  AST_DIRECT_DECLARATOR_TY_IDENTIFIER,
+  AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR,
+  AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR,
+  AST_DIRECT_DECLARATOR_TY_FUNC_DECLARATOR,
+};
+
+struct ast_direct_declarator {
+  enum ast_direct_declarator_ty ty;
 
   union {
-    size_t size;
+    struct token identifier;
+    struct ast_declarator *paren_declarator;
+    struct ast_array_declarator *array_declarator;
+    struct ast_func_declarator *func_declarator;
   };
 };
 
-struct ast_struct_field {
-  const char *name;
-  struct ast_tyref *var_ty;
+struct ast_direct_declarator_list {
+  size_t num_direct_declarators;
+  struct ast_direct_declarator *direct_declarators;
 };
 
-enum ast_ty_aggregate_ty {
-  AST_TY_AGGREGATE_TY_STRUCT,
-  AST_TY_AGGREGATE_TY_UNION,
+enum ast_declarator_ty {
+  AST_DECLARATOR_TY_VALUE,
+  AST_DECLARATOR_TY_POINTER,
 };
 
-struct ast_ty_aggregate {
-  enum ast_ty_aggregate_ty ty;
-
-  const char *name;
-
-  struct ast_struct_field *field_var_tys;
-  size_t num_field_var_tys;
+struct ast_declarator {
+  struct ast_pointer_list pointer_list;
+  struct ast_direct_declarator_list direct_declarator_list;
 };
 
-struct ast_ty_func {
-  struct ast_tyref *ret_var_ty;
-  struct ast_tyref *param_var_tys;
-  struct token **param_identifiers;
-  size_t num_params;
+struct ast_struct_declarator {
+  struct ast_declarator declarator;
+  struct ast_expr *bitfield_size;
 };
 
-enum ast_tyref_ty {
-  /* Used for variables that were used without declaration and similar. Usually
-     an error */
-  AST_TYREF_TY_UNKNOWN,
-  AST_TYREF_TY_VOID,
-  AST_TYREF_TY_WELL_KNOWN,
-  AST_TYREF_TY_FUNC,
-  AST_TYREF_TY_POINTER,
-  AST_TYREF_TY_ARRAY,
-  AST_TYREF_TY_VARIADIC,
-  AST_TYREF_TY_AGGREGATE, // e.g `union { int a; }`
-  AST_TYREF_TY_TAGGED,    // e.g `struct foo`
-  // AST_TYREF_TY_TYPEDEF_NAME,
-  // AST_TYREF_TY_ENUM,
+struct ast_struct_declarator_list {
+  size_t num_declarators;
+  struct ast_struct_declarator *declarators;
 };
 
-enum ast_storage_class_specifier_flags {
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_NONE = 0,
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF = 1,
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN = 4,
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC = 8,
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO = 16,
-  AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER = 32,
+struct ast_struct_declaration {
+  struct ast_declaration_specifier_list decl_specifiers;
+  struct ast_struct_declarator_list struct_declarator_list;
 };
 
-enum ast_function_specifier_flags {
-  AST_FUNCTION_SPECIFIER_FLAG_NONE = 0,
-  AST_FUNCTION_SPECIFIER_FLAG_INLINE = 1,
+struct ast_struct_declaration_list {
+  size_t num_struct_declarations;
+  struct ast_struct_declaration *declarations;
 };
 
-enum ast_type_qualifier_flags {
-  AST_TYPE_QUALIFIER_FLAG_NONE = 0,
-  AST_TYPE_QUALIFIER_FLAG_CONST = 1,
-  AST_TYPE_QUALIFIER_FLAG_VOLATILE = 2,
+enum ast_struct_or_union_specifier_ty {
+  AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT,
+  AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION,
 };
 
-struct ast_ty_tagged {
-  // union/enum/struct share same namespace so this is fine
-  const char *name;
-  struct ast_tyref *underlying;
+struct ast_struct_or_union_specifier {
+  enum ast_struct_or_union_specifier_ty ty;
+  
+  struct token *identifier;
+  struct ast_struct_declaration_list struct_decl_list;
 };
 
-struct ast_tyref {
-  enum ast_tyref_ty ty;
+struct ast_enumerator {
+  struct token identifier;
+  struct ast_expr *value;
+};
 
-  enum ast_type_qualifier_flags type_qualifiers;
-  enum ast_function_specifier_flags function_specifiers;
+struct ast_enumerator_list {
+  size_t num_enumerators;
+  struct ast_enumerator *enumerators;
+};
+
+struct ast_enum_specifier {
+  struct token *identifier;
+  struct ast_enumerator_list *enumerator_list;
+};
+
+enum ast_type_specifier_ty {
+  AST_TYPE_SPECIFIER_TY_KW,
+  AST_TYPE_SPECIFIER_STRUCT_OR_UNION,
+  AST_TYPE_SPECIFIER_ENUM,
+  AST_TYPE_SPECIFIER_TYPEDEF_NAME
+};
+
+enum ast_type_specifier_kw {
+  AST_TYPE_SPECIFIER_KW_VOID,
+  AST_TYPE_SPECIFIER_KW_CHAR,
+  AST_TYPE_SPECIFIER_KW_SHORT,
+  AST_TYPE_SPECIFIER_KW_INT,
+  AST_TYPE_SPECIFIER_KW_LONG,
+  AST_TYPE_SPECIFIER_KW_FLOAT,
+  AST_TYPE_SPECIFIER_KW_DOUBLE,
+  AST_TYPE_SPECIFIER_KW_SIGNED,
+  AST_TYPE_SPECIFIER_KW_UNSIGNED,
+
+  AST_TYPE_SPECIFIER_KW_BOOL,
+  AST_TYPE_SPECIFIER_KW_COMPLEX,
+
+  AST_TYPE_SPECIFIER_KW_HALF,
+};
+
+struct ast_type_specifier {
+  enum ast_type_specifier_ty ty;
 
   union {
-    enum well_known_ty well_known;
-    struct ast_ty_pointer pointer;
-    struct ast_ty_array array;
-    struct ast_ty_func func;
-    struct ast_ty_aggregate aggregate;
-    struct ast_ty_tagged tagged;
+    enum ast_type_specifier_kw type_specifier_kw;
+    struct ast_struct_or_union_specifier struct_or_union_specifier;
+    struct ast_enum_specifier enum_specifier;
+    struct token typedef_name;
   };
+};
+
+
+enum ast_decl_specifier_ty {
+  AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER,
+  AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER,
+  AST_DECL_SPECIFIER_TY_TYPE_QUALIFIER,
+  AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER,
+};
+
+struct ast_decl_specifier {
+  enum ast_decl_specifier_ty ty;
+
+  union {
+    enum ast_storage_class_specifier storage_class_specifier;
+    enum ast_type_qualifier type_qualifier;
+    enum ast_function_specifier function_specifier;
+    struct ast_type_specifier type_specifier;
+  };
+};
+
+enum ast_array_declarator_ty {
+  AST_ARRAY_DECLARATOR_TY_STAR,
+  AST_ARRAY_DECLARATOR_TY_STATIC_SIZED,
+  AST_ARRAY_DECLARATOR_TY_SIZED,
+  AST_ARRAY_DECLARATOR_TY_UNSIZED,
+};
+
+struct ast_array_declarator {
+  enum ast_array_declarator_ty ty;
+  struct ast_declaration_specifier_list specifier_list;
+  struct ast_expr *size;
+};
+
+struct ast_func_declarator {
+  struct ast_paramlist *param_list;
+};
+
+enum ast_direct_abstract_declarator_ty {
+  AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR,
+  AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR,
+  AST_DIRECT_ABSTRACT_DECLARATOR_TY_FUNC_DECLARATOR,
+};
+
+struct ast_direct_abstract_declarator {
+  enum ast_direct_abstract_declarator_ty ty;
+
+  union {
+    struct ast_abstract_declarator *paren_declarator;
+    struct ast_array_declarator *array_declarator;
+    struct ast_func_declarator *func_declarator;
+  };
+};
+
+struct ast_direct_abstract_declarator_list {
+  size_t num_direct_abstract_declarators;
+  struct ast_direct_abstract_declarator *direct_abstract_declarators;
+};
+
+struct ast_abstract_declarator {
+  struct ast_pointer_list pointer_list;
+  struct ast_direct_abstract_declarator_list direct_abstract_declarator_list;
+};
+
+struct ast_type_name {
+  struct ast_declaration_specifier_list specifier_list;
+  struct ast_abstract_declarator abstract_declarator;
+};
+
+// TODO: try and parse init lists as expressions to give better error messages
+enum ast_init_ty {
+  AST_INIT_TY_EXPR,
+  AST_INIT_TY_INIT_LIST,
 };
 
 struct ast_arglist {
@@ -153,23 +239,24 @@ struct ast_arglist {
 
 /* Variable references */
 
-enum ast_var_ty { AST_VAR_TY_VAR, AST_VAR_TY_ENUM_CNST };
-
 struct ast_var {
-  enum ast_var_ty ty;
-
   struct token identifier;
-  int scope;
-  struct ast_tyref var_ty;
+};
 
-  union {
-    int enum_cnst;
-  };
+enum ast_param_ty {
+  AST_PARAM_TY_DECL,
+  AST_PARAM_TY_ABSTRACT_DECL,
 };
 
 struct ast_param {
-  struct ast_tyref var_ty;
-  struct ast_var *var;
+  enum ast_param_ty ty;
+
+  struct ast_declaration_specifier_list specifier_list;
+
+  union {
+    struct ast_declarator declarator;
+    struct ast_abstract_declarator abstract_declarator;
+  };
 };
 
 struct ast_paramlist {
@@ -177,16 +264,29 @@ struct ast_paramlist {
   size_t num_params;
 };
 
-struct ast_funcsig {
-  struct ast_tyref var_ty;
-  struct token name;
-  struct ast_paramlist param_list;
-};
-
 /* Constant values (literals) */
 
+enum ast_cnst_ty {
+  AST_CNST_TY_SIGNED_INT,
+  AST_CNST_TY_UNSIGNED_INT,
+  AST_CNST_TY_SIGNED_LONG,
+  AST_CNST_TY_UNSIGNED_LONG,
+  AST_CNST_TY_SIGNED_LONG_LONG,
+  AST_CNST_TY_UNSIGNED_LONG_LONG,
+
+  AST_CNST_TY_FLOAT,
+  AST_CNST_TY_DOUBLE,
+  AST_CNST_TY_LONG_DOUBLE,
+
+  AST_CNST_TY_CHAR,
+  AST_CNST_TY_WIDE_CHAR,
+
+  AST_CNST_TY_STR_LITERAL,
+  AST_CNST_TY_WIDE_STR_LITERAL,
+};
+
 struct ast_cnst {
-  struct ast_tyref cnst_ty;
+  enum ast_cnst_ty ty;
 
   union {
     unsigned long long int_value;
@@ -216,12 +316,11 @@ enum ast_unary_op_ty {
 };
 
 struct ast_cast {
-  struct ast_tyref cast_ty;
+  struct ast_type_name type_name;
 };
 
 struct ast_unary_op {
   enum ast_unary_op_ty ty;
-  struct ast_tyref var_ty;
   struct ast_expr *expr;
 
   union {
@@ -254,14 +353,11 @@ enum ast_binary_op_ty {
 
 struct ast_binary_op {
   enum ast_binary_op_ty ty;
-  struct ast_tyref intermediate_var_ty;
   struct ast_expr *lhs;
   struct ast_expr *rhs;
 };
 
 struct ast_call {
-  struct ast_tyref var_ty;
-
   struct ast_expr *target;
   struct ast_arglist arg_list;
 };
@@ -289,17 +385,23 @@ struct ast_designator {
 
   union {
     struct token field;
-    size_t index;
+    struct ast_expr *index;
   };
 };
 
-struct ast_init {
-  struct ast_designator *designator;
-  struct ast_expr *expr;
+
+struct ast_designator_list {
+  size_t num_designators;
+  struct ast_designator *designators;
 };
 
-struct ast_initlist {
-  struct ast_init *inits;
+struct ast_init_list_init {
+  struct ast_designator_list *designator_list;
+  struct ast_init *init;
+};
+
+struct ast_init_list {
+  struct ast_init_list_init *inits;
   size_t num_inits;
 };
 
@@ -307,30 +409,24 @@ struct ast_initlist {
 // = <expr>`)
 
 enum ast_assg_ty {
-  AST_ASSG_TY_SIMPLEASSG,
-  AST_ASSG_TY_COMPOUNDASSG // e.g +=
-};
-
-struct ast_assg_compound_assg {
-  // the type of the intermediate
-  // e.g `int a = 0; a += 10l`
-  // is equiv to `int a = 0; a = a + 10l`
-  // so the resulting type is `int` but the intermediate type is `long`
-  struct ast_tyref intermediate_var_ty;
-  enum ast_binary_op_ty binary_op_ty;
+  AST_ASSG_TY_BASIC,
+  AST_ASSG_TY_ADD,
+  AST_ASSG_TY_SUB,
+  AST_ASSG_TY_MUL,
+  AST_ASSG_TY_DIV,
+  AST_ASSG_TY_QUOT,
+  AST_ASSG_TY_AND,
+  AST_ASSG_TY_OR,
+  AST_ASSG_TY_XOR,
+  AST_ASSG_TY_LSHIFT,
+  AST_ASSG_TY_RSHIFT,
 };
 
 struct ast_assg {
   enum ast_assg_ty ty;
 
-  struct ast_tyref var_ty;
-
   struct ast_expr *assignee;
   struct ast_expr *expr;
-
-  union {
-    struct ast_assg_compound_assg compound_assg;
-  };
 };
 
 struct ast_arrayaccess {
@@ -360,17 +456,15 @@ struct ast_sizeof {
 
   union {
     struct ast_expr *expr;
-    struct ast_tyref ty_ref;
+    struct ast_type_name type_name;
   };
 };
 
 struct ast_alignof {
-  struct ast_tyref ty_ref;
+  struct ast_type_name type_name;
 };
 
 struct ast_ternary {
-  struct ast_tyref var_ty;
-
   struct ast_expr *cond;
   struct ast_expr *true_expr;
   struct ast_expr *false_expr;
@@ -378,6 +472,11 @@ struct ast_ternary {
 
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
+
+ struct ast_compound_literal {
+   struct ast_type_name type_name;
+   struct ast_init_list init_list;
+ };
 
 enum ast_expr_ty {
   AST_EXPR_TY_TERNARY,
@@ -387,27 +486,25 @@ enum ast_expr_ty {
   AST_EXPR_TY_ARRAYACCESS,
   AST_EXPR_TY_MEMBERACCESS,
   AST_EXPR_TY_POINTERACCESS,
-  AST_EXPR_TY_INIT_LIST, // brace list
-  AST_EXPR_TY_ASSG,      // while assignments are of the form `lvalue = rvalue`,
-                    // they themselves evaluate to an rvalue (unlike in C++)
+  AST_EXPR_TY_ASSG,
   AST_EXPR_TY_VAR,
   AST_EXPR_TY_CNST,
   AST_EXPR_TY_COMPOUNDEXPR,
   AST_EXPR_TY_SIZEOF,
   AST_EXPR_TY_ALIGNOF,
+  AST_EXPR_TY_COMPOUND_LITERAL,
 };
 
 struct ast_expr {
   enum ast_expr_ty ty;
-  struct ast_tyref var_ty;
+
   union {
     struct ast_ternary ternary;
     struct ast_sizeof size_of;
     struct ast_alignof align_of;
     struct ast_var var;
     struct ast_cnst cnst;
-    struct ast_compoundexpr
-        compound_expr; // compound assignments are *never* lvalues in C
+    struct ast_compoundexpr compound_expr;
     struct ast_unary_op unary_op;
     struct ast_binary_op binary_op;
     struct ast_assg assg;
@@ -415,43 +512,40 @@ struct ast_expr {
     struct ast_arrayaccess array_access;
     struct ast_memberaccess member_access;
     struct ast_pointeraccess pointer_access;
-    struct ast_initlist init_list;
+    struct ast_compound_literal compound_literal;
   };
 };
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
  * where each declaration is `<name>` or `<name> = <expr>` */
 
-enum ast_decl_ty {
-  AST_DECL_TY_DECL,
-  AST_DECL_TY_ANON_DECL,
-  AST_DECL_TY_DECL_WITH_ASSG,
-};
-
-struct ast_decl {
-  enum ast_decl_ty ty;
-  struct ast_var var;
+struct ast_init {
+  enum ast_init_ty ty;
 
   union {
-    struct ast_expr assg_expr;
+    struct ast_expr expr;
+    struct ast_init_list init_list;
   };
 };
 
-struct ast_decllist {
-  enum ast_storage_class_specifier_flags storage_class_specifiers;
-
-  struct ast_decl *decls;
-  size_t num_decls;
+struct ast_init_declarator {
+  struct ast_declarator declarator;
+  struct ast_init *init;
 };
 
-struct ast_typedef {
-  struct ast_decllist var_decl_list;
+struct ast_init_declarator_list {
+  size_t num_init_declarators;
+  struct ast_init_declarator *init_declarators;
+};
+
+struct ast_declaration {
+  struct ast_declaration_specifier_list specifier_list;
+  struct ast_init_declarator_list declarator_list;
 };
 
 /* Jump statements - `return`, `break`, `continue`, `goto` */
 
 struct ast_returnstmt {
-  struct ast_tyref var_ty;
   struct ast_expr *expr;
 };
 
@@ -490,7 +584,7 @@ struct ast_labeledstmt {
   struct ast_stmt *stmt;
 
   union {
-    unsigned long long cnst;
+    struct ast_expr cnst;
     struct token label;
   };
 };
@@ -543,13 +637,22 @@ struct ast_dowhilestmt {
   struct ast_stmt *body;
 };
 
-struct ast_declorexpr {
-  struct ast_decllist *decl;
-  struct ast_expr *expr;
+enum ast_declaration_or_expr_ty {
+  AST_DECLARATION_OR_EXPR_TY_DECL,
+  AST_DECLARATION_OR_EXPR_TY_EXPR,
+};
+
+struct ast_declaration_or_expr {
+  enum ast_declaration_or_expr_ty ty;
+
+  union {
+    struct ast_declaration decl;
+    struct ast_expr expr;
+  };
 };
 
 struct ast_forstmt {
-  struct ast_declorexpr *init;
+  struct ast_declaration_or_expr *init;
   struct ast_expr *cond;
   struct ast_expr *iter;
   struct ast_stmt *body;
@@ -585,7 +688,7 @@ enum ast_stmt_ty {
 struct ast_stmt {
   enum ast_stmt_ty ty;
   union {
-    struct ast_decllist decl_list;
+    struct ast_declaration declaration;
     struct ast_expr expr;
     struct ast_compoundstmt compound;
     struct ast_jumpstmt jump;
@@ -595,86 +698,39 @@ struct ast_stmt {
   };
 };
 
-/* Struct definitions and declarations */
-struct ast_field {
-  struct ast_tyref var_ty;
-  struct token identifier;
-};
-
-enum ast_structdecl_ty {
-  // normal fields
-  AST_STRUCTDECL_TY_NONE,
-
-  // anonymous struct
-  AST_STRUCTDECL_TY_STRUCT,
-
-  // anonymous union
-  AST_STRUCTDECL_TY_UNION,
-};
-
-struct ast_structdecl {
-  enum ast_structdecl_ty ty;
-
-  size_t num_fields;
-  struct ast_decl *fields;
-};
-
-enum ast_type_ty {
-  AST_TYPE_TY_UNION,
-  AST_TYPE_TY_STRUCT,
-};
-
-struct ast_aggregatedecl {
-  enum ast_type_ty ty;
-
-  struct token name;
-};
-
-struct ast_structdecllist {
-  size_t num_struct_decls;
-  struct ast_structdecl *struct_decls;
-};
-
-/* Enum definitions */
-
-enum ast_enumcnst_ty {
-  AST_ENUMCNST_TY_EXPLICIT_VALUE,
-  AST_ENUMCNST_TY_IMPLICIT_VALUE,
-};
-
-struct ast_enumcnst {
-  struct token identifier;
-
-  enum ast_enumcnst_ty ty;
-
-  union {
-    unsigned long long value;
-  };
-};
-
-struct ast_enumdecllist {
-  size_t num_enum_cnsts;
-  struct ast_enumcnst *enum_cnsts;
-};
-
 /* Function definitions and declarations */
 
-struct ast_funcdef {
-  enum ast_storage_class_specifier_flags storage_class_specifiers;
+struct ast_declaration_list {
+  size_t num_declarations;
+  struct ast_declaration *declarations;
+};
 
-  struct token identifier;
-  struct ast_tyref var_ty;
+struct ast_funcdef {
+  struct ast_declaration_specifier_list decl_specifiers;
+  struct ast_declarator declarator;
+  struct ast_declaration_list declaration_list;
   struct ast_compoundstmt body;
+};
+
+enum ast_external_declaration_ty {
+  AST_EXTERNAL_DECLARATION_TY_DECLARATION,
+  AST_EXTERNAL_DECLARATION_TY_FUNC_DEF
+};
+
+struct ast_external_declaration {
+  enum ast_external_declaration_ty ty;
+
+  union {
+    struct ast_funcdef func_def;
+    struct ast_declaration declaration;
+  };
 };
 
 /* Translation unit (top level) */
 
 struct ast_translationunit {
-  struct ast_decllist *decl_lists;
-  size_t num_decl_lists;
-
-  struct ast_funcdef *func_defs;
-  size_t num_func_defs;
+  struct ast_external_declaration *external_declarations;
+  size_t num_external_declarations;
 };
 
 struct parser;
@@ -695,22 +751,10 @@ void parser_free(struct parser **parser);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 
-struct ast_tyref tyref_make_pointer(struct parser *parser,
-                                    const struct ast_tyref *var_ty);
-
-struct ast_tyref tyref_get_defined(struct parser *parser,
-                                   const struct ast_tyref *ty_ref);
-
-struct ast_tyref tyref_get_underlying(struct parser *parser,
-                                      const struct ast_tyref *ty_ref);
-
-bool is_integral_ty(const struct ast_tyref *ty);
-bool is_fp_ty(const struct ast_tyref *ty);
-
-struct ast_tyref tyref_pointer_sized_int(struct parser *parser, bool is_signed);
 bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
 
 #endif
+
