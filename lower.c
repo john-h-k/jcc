@@ -3,6 +3,8 @@
 #include "ir/ir.h"
 
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
+  // lowers a `br.switch` into a series of if-else statements
+
   struct ir_basicblock_switch *bb_switch = &op->stmt->basicblock->switch_case;
 
   struct ir_basicblock *prev_bb = op->stmt->basicblock;

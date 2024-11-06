@@ -526,7 +526,15 @@ struct ir_var_value_list {
   size_t num_values;
 };
 
+enum ir_var_value_ty {
+  IR_VAR_VALUE_TY_ZERO,
+  IR_VAR_VALUE_TY_INT,
+  IR_VAR_VALUE_TY_FLT,
+  IR_VAR_VALUE_TY_VALUE_LIST,
+};
+
 struct ir_var_value {
+  enum ir_var_value_ty ty;
   struct ir_op_var_ty var_ty;
 
   union {
@@ -540,6 +548,7 @@ struct ir_var_value {
 
 struct ir_var {
   enum ir_var_ty ty;
+
   struct ir_op_var_ty var_ty;
   struct ir_var_value value;
 };
@@ -555,12 +564,18 @@ enum ir_glb_def_ty {
   IR_GLB_DEF_TY_TENTATIVE
 };
 
+enum ir_linkage {
+  IR_LINKAGE_NONE,
+  IR_LINKAGE_INTERNAL,
+  IR_LINKAGE_EXTERNAL
+};
+
 struct ir_glb {
-  enum ir_glb_ty ty;
-
-  enum ir_glb_def_ty def_ty;
-
   size_t id;
+
+  enum ir_glb_ty ty;
+  enum ir_glb_def_ty def_ty;
+  enum ir_linkage linkage;
 
   struct ir_glb *pred;
   struct ir_glb *succ;

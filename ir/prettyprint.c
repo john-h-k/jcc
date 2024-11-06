@@ -1,8 +1,8 @@
 #include "prettyprint.h"
 
 #include "../graphwriter.h"
-#include "../util.h"
 #include "../log.h"
+#include "../util.h"
 #include "ir.h"
 
 #include <math.h>
@@ -676,36 +676,47 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value) {
-  if (!var_value) {
-    fprintf(file, "UNDF");
-  }
+void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value, bool top) {
+  switch (var_value->ty) {
   // case IR_VAR_VALUE_TY_STR:
   //   fprintf(file, "%s", var_value->str_value);
   //   break;
-  // case IR_VAR_VALUE_TY_INT:
-  //   fprintf(file, "%llu", var_value->int_value);
-  //   break;
-  // case IR_VAR_VALUE_TY_FLT:
-  //   fprintf(file, "%Lf", var_value->flt_value);
-  //   break;
-  // case IR_VAR_VALUE_TY_VALUE_LIST:
-  //   fprintf(file, "{\n");
-  //   for (size_t i = 0; i < var_value->value_list.num_values; i++) {
-  //     fprintf(file, "  ");
-  //     struct ir_var_value *sub_value = &var_value->value_list.values[i];
-  //     debug_print_ir_var_value(file, sub_value);
-  //     fprintf(file, ",  OFFSET=%zu\n", var_value->value_list.offsets[i]);
-  //   }
-  //   fprintf(file, "}");
-  //   break;
-  // }
+  case IR_VAR_VALUE_TY_ZERO:
+    fprintf(file, "{ ZERO }");
+    break;
+  case IR_VAR_VALUE_TY_INT:
+    fprintf(file, "%llu", var_value->int_value);
+    break;
+  case IR_VAR_VALUE_TY_FLT:
+    fprintf(file, "%Lf", var_value->flt_value);
+    break;
+  case IR_VAR_VALUE_TY_VALUE_LIST:
+    if (top) {
+      fprintf(file, "{\n");
+    }
+    for (size_t i = 0; i < var_value->value_list.num_values; i++) {
+      if (top || i) {
+        fprintf(file, "  ");
+      }
+      struct ir_var_value *sub_value = &var_value->value_list.values[i];
+
+      debug_print_ir_var_value(file, sub_value, false);
+
+      if (sub_value->ty != IR_VAR_VALUE_TY_VALUE_LIST) {
+        fprintf(file, ",  OFFSET=%zu\n", var_value->value_list.offsets[i]);
+      }
+    }
+    if (top) {
+      fprintf(file, "}");
+    }
+    break;
+  }
 }
 
 void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {
   debug_print_var_ty_string(file, iru, &var->var_ty);
-  fprintf(file, " ");
-  debug_print_ir_var_value(file, &var->value);
+  fprintf(file, " = ");
+  debug_print_ir_var_value(file, &var->value, true);
   fprintf(file, "\n\n");
 }
 
@@ -789,27 +800,36 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    if (glb->name) {
-      fprintf(file, "GLB(%zu) %s = ", glb->id, glb->name);
-    } else {
-      fprintf(file, "GLB(%zu) = ", glb->id);
+    fprintf(file, "GLB(%zu) [", glb->id);
+
+    switch (glb->linkage) {
+    case IR_LINKAGE_NONE:
+      fprintf(file, "NO LINKAGE");
+      break;
+    case IR_LINKAGE_INTERNAL:
+      fprintf(file, "INTERNAL LINKAGE");
+      break;
+    case IR_LINKAGE_EXTERNAL:
+      fprintf(file, "EXTERNAL LINKAGE");
+      break;
     }
 
-    switch (glb->ty) {
-    case IR_GLB_TY_DATA:
-      debug_print_ir_var(file, iru, glb->var);
-      break;
-    case IR_GLB_TY_FUNC:
-      switch (glb->def_ty) {
-      case IR_GLB_DEF_TY_DEFINED:
+    fprintf(file, "]\n");
+
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+      switch (glb->ty) {
+      case IR_GLB_TY_DATA:
+        // TODO: should either have name in `var` or remove it from `func` for consistency
+        fprintf(file, "%s ", glb->name);
+        debug_print_ir_var(file, iru, glb->var);
+        break;
+      case IR_GLB_TY_FUNC:
         debug_print_ir_func(file, glb->func, cb, cb_metadata);
         break;
-      case IR_GLB_DEF_TY_TENTATIVE:
-        fprintf(file, "TENTATIVE\n");
-        break;
-      case IR_GLB_DEF_TY_UNDEFINED:
-        fprintf(file, "UNDF\n");
-        break;
+      }
+    } else {
+      if (glb->name) {
+        fprintf(file, "%s\n", glb->name);
       }
     }
 

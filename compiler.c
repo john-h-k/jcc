@@ -141,7 +141,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     BEGIN_STAGE("POST PRE REG LOWER IR");
 
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
       debug_print_stage(ir, "lower");
     }
 
@@ -232,7 +232,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("PRE-EMIT");
 
-  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
+  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
     debug_print_stage(ir, "pre_emit");
   }
 
