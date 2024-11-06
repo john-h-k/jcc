@@ -17,7 +17,7 @@
 
 #define EXP_PARSE(e, diag)                                                     \
   do {                                                                         \
-    if (!e) {                                                                  \
+    if (!(e)) {                                                                \
       bug("failure during parsing: %s", diag);                                 \
     }                                                                          \
   } while (0)
@@ -531,8 +531,10 @@ void parse_declaration_specifier_list(
 
 bool parse_declarator(struct parser *parser, struct ast_declarator *declarator);
 
-bool parse_struct_declarator(struct parser *parser, struct ast_struct_declarator *struct_declarator) {
-  bool has_declarator = parse_declarator(parser, &struct_declarator->declarator);
+bool parse_struct_declarator(struct parser *parser,
+                             struct ast_struct_declarator *struct_declarator) {
+  bool has_declarator =
+      parse_declarator(parser, &struct_declarator->declarator);
 
   struct text_pos end_of_declarator = get_position(parser->lexer);
 
@@ -540,7 +542,8 @@ bool parse_struct_declarator(struct parser *parser, struct ast_struct_declarator
   bool has_bitfield;
   if (parse_token(parser, LEX_TOKEN_TY_COLON) && parse_expr(parser, &expr)) {
     has_bitfield = true;
-    struct_declarator->bitfield_size = arena_alloc(parser->arena, sizeof(*struct_declarator->bitfield_size));
+    struct_declarator->bitfield_size =
+        arena_alloc(parser->arena, sizeof(*struct_declarator->bitfield_size));
     *struct_declarator->bitfield_size = expr;
   } else {
     has_bitfield = false;
@@ -556,8 +559,11 @@ bool parse_struct_declarator(struct parser *parser, struct ast_struct_declarator
   return true;
 }
 
-void parse_struct_declarator_list(struct parser *parser, struct ast_struct_declarator_list *struct_declarator_list) {
-  struct vector *list = vector_create(sizeof(*struct_declarator_list->declarators));
+void parse_struct_declarator_list(
+    struct parser *parser,
+    struct ast_struct_declarator_list *struct_declarator_list) {
+  struct vector *list =
+      vector_create(sizeof(*struct_declarator_list->declarators));
 
   struct ast_struct_declarator struct_declarator;
   while (parse_struct_declarator(parser, &struct_declarator)) {
@@ -577,7 +583,7 @@ void parse_struct_declarator_list(struct parser *parser, struct ast_struct_decla
 }
 
 bool parse_struct_declaration(struct parser *parser,
-                           struct ast_struct_declaration *struct_decl) {
+                              struct ast_struct_declaration *struct_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &struct_decl->decl_specifiers);
@@ -591,20 +597,21 @@ bool parse_struct_declaration(struct parser *parser,
   return false;
 }
 
-void parse_struct_declaration_list(struct parser *parser,
-                           struct ast_struct_declaration_list *struct_decl_list) {
-  struct vector *list = vector_create(sizeof(*struct_decl_list->declarations));
+void parse_struct_declaration_list(
+    struct parser *parser,
+    struct ast_struct_declaration_list *struct_decl_list) {
+  struct vector *list = vector_create(sizeof(*struct_decl_list->struct_declarations));
 
   struct ast_struct_declaration struct_decl;
   while (parse_struct_declaration(parser, &struct_decl)) {
     vector_push_back(list, &struct_decl);
   }
 
-  struct_decl_list->declarations =
+  struct_decl_list->struct_declarations =
       arena_alloc(parser->arena, vector_byte_size(list));
   struct_decl_list->num_struct_declarations = vector_length(list);
 
-  vector_copy_to(list, struct_decl_list->declarations);
+  vector_copy_to(list, struct_decl_list->struct_declarations);
   vector_free(&list);
 }
 
@@ -633,15 +640,17 @@ bool parse_struct_or_union_specifier(
 
   struct_or_union_specifier->ty = ty;
   struct_or_union_specifier->struct_decl_list.num_struct_declarations = 0;
-  struct_or_union_specifier->struct_decl_list.declarations = NULL;
+  struct_or_union_specifier->struct_decl_list.struct_declarations = NULL;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
-    parse_struct_declaration_list(parser, &struct_or_union_specifier->struct_decl_list);
+    parse_struct_declaration_list(parser,
+                                  &struct_or_union_specifier->struct_decl_list);
     EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
               "expected } after struct_or_union_declaration body");
   }
 
-  if (!struct_or_union_specifier->identifier && !struct_or_union_specifier->struct_decl_list.num_struct_declarations) {
+  if (!struct_or_union_specifier->identifier &&
+      !struct_or_union_specifier->struct_decl_list.num_struct_declarations) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -668,16 +677,16 @@ bool parse_type_specifier(struct parser *parser,
     return true;
   }
 
-  if (parse_identifier(parser, &type_specifier->typedef_name)) {
-    type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
-    return true;
-  }
+  // if (parse_identifier(parser, &type_specifier->typedef_name)) {
+  //   type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
+  //   return true;
+  // }
 
   return false;
 }
 
 bool parse_decl_specifier(struct parser *parser,
-                          struct ast_decl_specifier *specifier) {
+                          struct ast_declaration_specifier *specifier) {
   if (parse_storage_class_specifier(parser,
                                     &specifier->storage_class_specifier)) {
     specifier->ty = AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER;
@@ -707,7 +716,7 @@ void parse_declaration_specifier_list(
     struct ast_declaration_specifier_list *specifier_list) {
   struct vector *list = vector_create(sizeof(*specifier_list->decl_specifiers));
 
-  struct ast_decl_specifier specifier;
+  struct ast_declaration_specifier specifier;
   while (parse_decl_specifier(parser, &specifier)) {
     vector_push_back(list, &specifier);
   }
@@ -948,6 +957,7 @@ bool parse_direct_abstract_declarator(
     direct_abstract_declarator->array_declarator = arena_alloc(
         parser->arena, sizeof(*direct_abstract_declarator->array_declarator));
     *direct_abstract_declarator->array_declarator = array_declarator;
+    return true;
   }
 
   struct ast_func_declarator func_declarator;
@@ -957,6 +967,7 @@ bool parse_direct_abstract_declarator(
     direct_abstract_declarator->func_declarator = arena_alloc(
         parser->arena, sizeof(*direct_abstract_declarator->func_declarator));
     *direct_abstract_declarator->func_declarator = func_declarator;
+    return true;
   }
 
   return false;
@@ -1033,6 +1044,7 @@ bool parse_direct_declarator(struct parser *parser,
     direct_declarator->array_declarator = arena_alloc(
         parser->arena, sizeof(*direct_declarator->array_declarator));
     *direct_declarator->array_declarator = array_declarator;
+    return true;
   }
 
   struct ast_func_declarator func_declarator;
@@ -1041,6 +1053,7 @@ bool parse_direct_declarator(struct parser *parser,
     direct_declarator->func_declarator =
         arena_alloc(parser->arena, sizeof(*direct_declarator->func_declarator));
     *direct_declarator->func_declarator = func_declarator;
+    return true;
   }
 
   return false;
@@ -1053,6 +1066,7 @@ void parse_direct_declarator_list(
       vector_create(sizeof(*direct_declarator_list->direct_declarators));
 
   struct ast_direct_declarator direct_declarator;
+
   while (parse_direct_declarator(parser, &direct_declarator)) {
     vector_push_back(list, &direct_declarator);
   }
@@ -1087,12 +1101,15 @@ bool parse_init_declarator(struct parser *parser,
     return false;
   }
 
+  struct text_pos pre_init_pos = get_position(parser->lexer);
+
   struct ast_init init;
-  if (parse_init(parser, &init)) {
+  if (parse_token(parser, LEX_TOKEN_TY_OP_ASSG) && parse_init(parser, &init)) {
     init_declarator->init =
         arena_alloc(parser->arena, sizeof(*init_declarator->init));
     *init_declarator->init = init;
   } else {
+    backtrack(parser->lexer, pre_init_pos);
     init_declarator->init = NULL;
   }
 
@@ -1961,7 +1978,8 @@ bool parse_declaration(struct parser *parser,
   parse_declaration_specifier_list(parser, &declaration->specifier_list);
   parse_init_declarator_list(parser, &declaration->declarator_list);
 
-  if (!declaration->specifier_list.num_decl_specifiers) {
+  if (!declaration->specifier_list.num_decl_specifiers ||
+      !parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2381,12 +2399,6 @@ bool parse_compoundstmt(struct parser *parser,
 bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  // FIXME: this shouldn't be needed
-  if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
-
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     stmt->ty = AST_STMT_TY_NULL;
     return true;
@@ -2438,7 +2450,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
   struct ast_declaration declaration;
   if (parse_declaration(parser, &declaration)) {
-    stmt->ty = AST_STMT_TY_DECL_LIST;
+    stmt->ty = AST_STMT_TY_DECLARATION;
     stmt->declaration = declaration;
     return true;
   }
@@ -2501,13 +2513,15 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   while (parse_param(parser, &param)) {
     vector_push_back(params, &param);
 
-    if (parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    if (!parse_token(parser, LEX_TOKEN_TY_COMMA)) {
       break;
     }
-
-    EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_COMMA),
-              "expected , or ) after param");
   }
+
+  // allow trailing comma
+  parse_token(parser, LEX_TOKEN_TY_COMMA);
+  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
+            "expected ) after params");
 
   param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
   param_list->num_params = vector_length(params);
@@ -2641,909 +2655,1097 @@ struct ast_printstate {
   state->indent = 0;
 #define POP_INDENT() state->indent = tmp_indent;
 
-// DEBUG_FUNC_ENUM(storage_class_specifier_flags, storage_class_specifier_flags)
-// {
-//   UNUSED_ARG(state);
-
-//   if (*storage_class_specifier_flags &
-//       AST_STORAGE_CLASS_SPECIFIER_FLAG_TYPEDEF) {
-//     AST_PRINTZ("TYPEDEF");
-//   }
-
-//   if (*storage_class_specifier_flags & AST_STORAGE_CLASS_SPECIFIER_FLAG_AUTO)
-//   {
-//     AST_PRINTZ("AUTO");
-//   }
-
-//   if (*storage_class_specifier_flags &
-//       AST_STORAGE_CLASS_SPECIFIER_FLAG_EXTERN) {
-//     AST_PRINTZ("EXTERN");
-//   }
-
-//   if (*storage_class_specifier_flags &
-//       AST_STORAGE_CLASS_SPECIFIER_FLAG_REGISTER) {
-//     AST_PRINTZ("REGISTER");
-//   }
-
-//   if (*storage_class_specifier_flags &
-//       AST_STORAGE_CLASS_SPECIFIER_FLAG_STATIC) {
-//     AST_PRINTZ("STATIC");
-//   }
-// }
-
-// DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
-//   UNUSED_ARG(state);
-
-//   if (*type_qualifier_flags & AST_TYPE_QUALIFIER_FLAG_CONST) {
-//     AST_PRINTZ("CONST");
-//   }
-
-//   if (*type_qualifier_flags & AST_TYPE_QUALIFIER_FLAG_VOLATILE) {
-//     AST_PRINTZ("VOLATILE");
-//   }
-// }
-
-// DEBUG_FUNC(tyref, ty_ref) {
-//   DEBUG_CALL(type_qualifier_flags, &ty_ref->type_qualifiers);
-
-//   switch (ty_ref->ty) {
-//   case AST_TYREF_TY_UNKNOWN:
-//     AST_PRINTZ("<unresolved type>");
-//     break;
-//   case AST_TYREF_TY_TAGGED:
-//     if (ty_ref->tagged.underlying) {
-//       AST_PRINT("TAGGED %s", ty_ref->tagged.name);
-//     } else {
-//       AST_PRINT("TAGGED %s (undf)", ty_ref->tagged.name);
-//     }
-//     break;
-//   case AST_TYREF_TY_AGGREGATE:
-//     switch (ty_ref->aggregate.ty) {
-//     case AST_TY_AGGREGATE_TY_STRUCT:
-//       AST_PRINTZ("STRUCT ");
-//       break;
-//     case AST_TY_AGGREGATE_TY_UNION:
-//       AST_PRINTZ("UNION ");
-//       break;
-//     }
-//     INDENT();
-//     for (size_t i = 0; i < ty_ref->aggregate.num_field_var_tys; i++) {
-//       AST_PRINT("FIELD %s", ty_ref->aggregate.field_var_tys[i].name);
-//       INDENT();
-//       DEBUG_CALL(tyref, ty_ref->aggregate.field_var_tys[i].var_ty);
-//       UNINDENT();
-//     }
-//     UNINDENT();
-//     break;
-//   case AST_TYREF_TY_VOID:
-//     AST_PRINTZ("VOID");
-//     break;
-//   case AST_TYREF_TY_VARIADIC:
-//     AST_PRINTZ("VARIADIC");
-//     break;
-//   case AST_TYREF_TY_ARRAY:
-//     if (ty_ref->array.ty == AST_TYREF_TY_UNKNOWN) {
-//       AST_PRINTZ("ARRAY UNKNOWN SIZE OF");
-//     } else {
-//       AST_PRINT("ARRAY SIZE %llu OF", ty_ref->array.size);
-//     }
-//     INDENT();
-//     DEBUG_CALL(tyref, ty_ref->array.element);
-//     UNINDENT();
-//     break;
-//   case AST_TYREF_TY_POINTER:
-//     AST_PRINTZ("POINTER TO");
-//     INDENT();
-//     DEBUG_CALL(tyref, ty_ref->pointer.underlying);
-//     UNINDENT();
-//     break;
-//   case AST_TYREF_TY_FUNC:
-//     AST_PRINTZ("FUNC (");
-//     INDENT();
-//     for (size_t i = 0; i < ty_ref->func.num_params; i++) {
-//       DEBUG_CALL(tyref, &ty_ref->func.param_var_tys[i]);
-//     }
-//     UNINDENT();
-//     AST_PRINTZ(")");
-
-//     AST_PRINT_SAMELINE_Z(" -> ");
-//     DEBUG_CALL(tyref, ty_ref->func.ret_var_ty);
-
-//     break;
-//   case AST_TYREF_TY_WELL_KNOWN:
-//     switch (ty_ref->well_known) {
-//     case WELL_KNOWN_TY_SIGNED_CHAR:
-//       AST_PRINTZ("signed char");
-//       break;
-//     case WELL_KNOWN_TY_UNSIGNED_CHAR:
-//       AST_PRINTZ("unsigned char");
-//       break;
-//     case WELL_KNOWN_TY_SIGNED_SHORT:
-//       AST_PRINTZ("short");
-//       break;
-//     case WELL_KNOWN_TY_UNSIGNED_SHORT:
-//       AST_PRINTZ("unsigned short");
-//       break;
-//     case WELL_KNOWN_TY_SIGNED_INT:
-//       AST_PRINTZ("int");
-//       break;
-//     case WELL_KNOWN_TY_UNSIGNED_INT:
-//       AST_PRINTZ("unsigned int");
-//       break;
-//     case WELL_KNOWN_TY_SIGNED_LONG:
-//       AST_PRINTZ("long");
-//       break;
-//     case WELL_KNOWN_TY_UNSIGNED_LONG:
-//       AST_PRINTZ("unsigned long");
-//       break;
-//     case WELL_KNOWN_TY_SIGNED_LONG_LONG:
-//       AST_PRINTZ("long long");
-//       break;
-//     case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
-//       AST_PRINTZ("unsigned long long");
-//       break;
-//     case WELL_KNOWN_TY_HALF:
-//       AST_PRINTZ("half");
-//       break;
-//     case WELL_KNOWN_TY_FLOAT:
-//       AST_PRINTZ("float");
-//       break;
-//     case WELL_KNOWN_TY_DOUBLE:
-//       AST_PRINTZ("double");
-//       break;
-//     case WELL_KNOWN_TY_LONG_DOUBLE:
-//       AST_PRINTZ("long double");
-//       break;
-//     }
-
-//     break;
-//     // case AST_TYREF_TY_TYPEDEF_NAME:
-//     //   <#code#>
-//     //   break;
-//     // case AST_TYREF_TY_STRUCT:
-//     //   <#code#>
-//     //   break;
-//     // case AST_TYREF_TY_UNION:
-//     //   <#code#>
-//     //   break;
-//     // case AST_TYREF_TY_ENUM:
-//     //   <#code#>
-//     //   break;
-//   }
-// }
-
-// DEBUG_FUNC(compoundstmt, compound_stmt);
-// DEBUG_FUNC(expr, expr);
-
-// DEBUG_FUNC(var, var) {
-//   AST_PRINT("VARIABLE '%s' SCOPE %d",
-//             associated_text(state->parser->lexer, &var->identifier),
-//             var->scope);
-
-//   switch (var->ty) {
-//   case AST_VAR_TY_VAR:
-//     break;
-//   case AST_VAR_TY_ENUM_CNST:
-//     AST_PRINT("VALUE '%d'", var->enum_cnst);
-//   }
-
-//   DEBUG_CALL(tyref, &var->var_ty);
-// }
-
-// DEBUG_FUNC(cnst, cnst) {
-//   if (is_integral_ty(&cnst->cnst_ty)) {
-//     AST_PRINT("CONSTANT '%llu'", cnst->int_value);
-//   } else if (is_fp_ty(&cnst->cnst_ty)) {
-//     AST_PRINT("CONSTANT '%Lf'", cnst->flt_value);
-//   } else {
-//     // must be string literal for now
-//     AST_PRINT("CONSTANT '%s'", cnst->str_value);
-//   }
-// }
-
-// DEBUG_FUNC(compoundexpr, compound_expr);
-
-// DEBUG_FUNC(unary_op, unary_op) {
-//   switch (unary_op->ty) {
-//   case AST_UNARY_OP_TY_PREFIX_INC:
-//     AST_PRINTZ("PREFIX INC");
-//     break;
-//   case AST_UNARY_OP_TY_PREFIX_DEC:
-//     AST_PRINTZ("PREFIX DEC");
-//     break;
-//   case AST_UNARY_OP_TY_POSTFIX_INC:
-//     AST_PRINTZ("POSTFIX INC");
-//     break;
-//   case AST_UNARY_OP_TY_POSTFIX_DEC:
-//     AST_PRINTZ("POSTFIX DEC");
-//     break;
-//   case AST_UNARY_OP_TY_PLUS:
-//     AST_PRINTZ("PLUS");
-//     break;
-//   case AST_UNARY_OP_TY_MINUS:
-//     AST_PRINTZ("MINUS");
-//     break;
-//   case AST_UNARY_OP_TY_LOGICAL_NOT:
-//     AST_PRINTZ("LOGICAL NOT");
-//     break;
-//   case AST_UNARY_OP_TY_NOT:
-//     AST_PRINTZ("NOT");
-//     break;
-//   case AST_UNARY_OP_TY_INDIRECTION:
-//     AST_PRINTZ("INDIRECTION");
-//     break;
-//   case AST_UNARY_OP_TY_SIZEOF:
-//     AST_PRINTZ("SIZEOF");
-//     break;
-//   case AST_UNARY_OP_TY_ADDRESSOF:
-//     AST_PRINTZ("ADDRESSOF");
-//     break;
-//   case AST_UNARY_OP_TY_ALIGNOF:
-//     AST_PRINTZ("ALIGNOF");
-//     break;
-//   case AST_UNARY_OP_TY_CAST:
-//     AST_PRINTZ("CAST");
-//     INDENT();
-//     DEBUG_CALL(tyref, &unary_op->expr->var_ty);
-//     AST_PRINTZ("TO");
-//     DEBUG_CALL(tyref, &unary_op->cast.cast_ty);
-//     UNINDENT();
-//     break;
-//   }
-
-//   INDENT();
-//   DEBUG_CALL(expr, unary_op->expr);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(binary_op, binary_op) {
-//   INDENT();
-//   DEBUG_CALL(tyref, &binary_op->intermediate_var_ty);
-//   switch (binary_op->ty) {
-//   case AST_BINARY_OP_TY_EQ:
-//     AST_PRINTZ("EQ");
-//     break;
-//   case AST_BINARY_OP_TY_NEQ:
-//     AST_PRINTZ("NEQ");
-//     break;
-//   case AST_BINARY_OP_TY_LT:
-//     AST_PRINTZ("LT");
-//     break;
-//   case AST_BINARY_OP_TY_LTEQ:
-//     AST_PRINTZ("LTEQ");
-//     break;
-//   case AST_BINARY_OP_TY_GT:
-//     AST_PRINTZ("GT");
-//     break;
-//   case AST_BINARY_OP_TY_GTEQ:
-//     AST_PRINTZ("GTEQ");
-//     break;
-//   case AST_BINARY_OP_TY_LSHIFT:
-//     AST_PRINTZ("LSHIFT");
-//     break;
-//   case AST_BINARY_OP_TY_RSHIFT:
-//     AST_PRINTZ("RSHIFT");
-//     break;
-//   case AST_BINARY_OP_TY_OR:
-//     AST_PRINTZ("OR");
-//     break;
-//   case AST_BINARY_OP_TY_XOR:
-//     AST_PRINTZ("XOR");
-//     break;
-//   case AST_BINARY_OP_TY_AND:
-//     AST_PRINTZ("AND");
-//     break;
-//   case AST_BINARY_OP_TY_ADD:
-//     AST_PRINTZ("ADD");
-//     break;
-//   case AST_BINARY_OP_TY_SUB:
-//     AST_PRINTZ("SUB");
-//     break;
-//   case AST_BINARY_OP_TY_MUL:
-//     AST_PRINTZ("MUL");
-//     break;
-//   case AST_BINARY_OP_TY_DIV:
-//     AST_PRINTZ("DIV");
-//     break;
-//   case AST_BINARY_OP_TY_QUOT:
-//     AST_PRINTZ("QUOT");
-//     break;
-//   case AST_BINARY_OP_TY_LOGICAL_OR:
-//     AST_PRINTZ("LOGICAL OR");
-//     break;
-//   case AST_BINARY_OP_TY_LOGICAL_AND:
-//     AST_PRINTZ("LOGICAL AND");
-//     break;
-//   }
-
-//   AST_PRINTZ("LHS: ");
-//   INDENT();
-//   DEBUG_CALL(expr, binary_op->lhs);
-//   UNINDENT();
-
-//   AST_PRINTZ("RHS: ");
-//   INDENT();
-//   DEBUG_CALL(expr, binary_op->rhs);
-//   UNINDENT();
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(compoundexpr, compound_expr) {
-//   AST_PRINTZ("COMPOUND EXPRESSION: ");
-
-//   INDENT();
-
-//   for (size_t i = 0; i < compound_expr->num_exprs; i++) {
-//     DEBUG_CALL(expr, &compound_expr->exprs[i]);
-//   }
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(assg, assg) {
-//   AST_PRINTZ("ASSIGNMENT");
-//   INDENT();
-//   DEBUG_CALL(expr, assg->assignee);
-
-//   INDENT();
-//   switch (assg->ty) {
-//   case AST_ASSG_TY_SIMPLEASSG:
-//     AST_PRINTZ("=");
-//     break;
-//   case AST_ASSG_TY_COMPOUNDASSG:
-//     switch (assg->compound_assg.binary_op_ty) {
-//     case AST_BINARY_OP_TY_ADD:
-//       AST_PRINTZ("+=");
-//       break;
-//     case AST_BINARY_OP_TY_SUB:
-//       AST_PRINTZ("-=");
-//       break;
-//     case AST_BINARY_OP_TY_MUL:
-//       AST_PRINTZ("*=");
-//       break;
-//     case AST_BINARY_OP_TY_DIV:
-//       AST_PRINTZ("/=");
-//       break;
-//     case AST_BINARY_OP_TY_QUOT:
-//       AST_PRINTZ("%%=");
-//       break;
-//     case AST_BINARY_OP_TY_LSHIFT:
-//       AST_PRINTZ("<<=");
-//       break;
-//     case AST_BINARY_OP_TY_RSHIFT:
-//       AST_PRINTZ(">>=");
-//       break;
-//     case AST_BINARY_OP_TY_AND:
-//       AST_PRINTZ("&=");
-//       break;
-//     case AST_BINARY_OP_TY_OR:
-//       AST_PRINTZ("|=");
-//       break;
-//     case AST_BINARY_OP_TY_XOR:
-//       AST_PRINTZ("^=");
-//       break;
-//     default:
-//       bug("unrecognised binary op ty in assg");
-//     }
-
-//     DEBUG_CALL(tyref, &assg->compound_assg.intermediate_var_ty);
-//   }
-//   DEBUG_CALL(expr, assg->expr);
-//   UNINDENT();
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(arglist, arg_list) {
-//   AST_PRINTZ("ARGLIST:");
-//   INDENT();
-
-//   for (size_t i = 0; i < arg_list->num_args; i++) {
-//     DEBUG_CALL(expr, &arg_list->args[i]);
-//   }
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(call, call) {
-//   AST_PRINTZ("CALL");
-//   INDENT();
-//   DEBUG_CALL(tyref, &call->var_ty);
-//   DEBUG_CALL(expr, call->target);
-
-//   DEBUG_CALL(arglist, &call->arg_list);
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(pointeraccess, pointer_access) {
-//   AST_PRINTZ("POINTER_ACCESS");
-
-//   INDENT();
-//   DEBUG_CALL(expr, pointer_access->lhs);
-//   UNINDENT();
-
-//   AST_PRINTZ("MEMBER");
-
-//   INDENT();
-//   AST_PRINT("%s", identifier_str(state->parser, &pointer_access->member));
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(memberaccess, member_access) {
-//   AST_PRINTZ("MEMBER_ACCESS");
-
-//   INDENT();
-//   DEBUG_CALL(expr, member_access->lhs);
-//   UNINDENT();
-
-//   AST_PRINTZ("MEMBER");
-
-//   INDENT();
-//   AST_PRINT("%s", identifier_str(state->parser, &member_access->member));
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(arrayaccess, array_access) {
-//   AST_PRINTZ("ARRAY_ACCESS");
-
-//   INDENT();
-//   DEBUG_CALL(expr, array_access->lhs);
-//   UNINDENT();
-
-//   AST_PRINTZ("OFFSET");
-
-//   INDENT();
-//   DEBUG_CALL(expr, array_access->rhs);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(designator, designator) {
-//   switch (designator->ty) {
-//   case AST_DESIGNATOR_TY_FIELD:
-//     AST_PRINT("FIELD '%s'", identifier_str(state->parser,
-//     &designator->field)); break;
-//   case AST_DESIGNATOR_TY_INDEX:
-//     AST_PRINT("INDEX '%zu'", designator->index);
-//     break;
-//   }
-
-//   if (designator->next) {
-//     DEBUG_CALL(designator, designator->next);
-//   }
-// }
-
-// DEBUG_FUNC(init, init) {
-//   AST_PRINTZ("INIT");
-
-//   if (init->designator) {
-//     INDENT();
-//     DEBUG_CALL(designator, init->designator);
-//     UNINDENT();
-//   }
-
-//   AST_PRINTZ("EXPR");
-
-//   INDENT();
-//   DEBUG_CALL(expr, init->expr);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(initlist, init_list) {
-//   AST_PRINTZ("INIT LIST");
-
-//   INDENT();
-//   for (size_t i = 0; i < init_list->num_inits; i++) {
-//     DEBUG_CALL(init, &init_list->inits[i]);
-//   }
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(sizeof, size_of) {
-//   AST_PRINTZ("SIZEOF");
-
-//   INDENT();
-//   switch (size_of->ty) {
-//   case AST_SIZEOF_TY_TYPE:
-//     AST_PRINTZ("TYPE");
-//     DEBUG_CALL(tyref, &size_of->ty_ref);
-//     break;
-//   case AST_SIZEOF_TY_EXPR:
-//     AST_PRINTZ("EXPR");
-//     DEBUG_CALL(expr, size_of->expr);
-//     break;
-//   }
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(alignof, align_of) {
-//   AST_PRINTZ("ALIGNOF");
-
-//   INDENT();
-//   AST_PRINTZ("TYPE");
-//   DEBUG_CALL(tyref, &align_of->ty_ref);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(ternary, ternary) {
-//   AST_PRINTZ("TERNARY");
-
-//   INDENT();
-//   AST_PRINTZ("COND");
-//   DEBUG_CALL(expr, ternary->cond);
-//   UNINDENT();
-
-//   INDENT();
-//   AST_PRINTZ("TRUE");
-//   DEBUG_CALL(expr, ternary->true_expr);
-//   UNINDENT();
-
-//   INDENT();
-//   AST_PRINTZ("FALSE");
-//   DEBUG_CALL(expr, ternary->false_expr);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(expr, expr) {
-//   AST_PRINTZ("EXPRESSION");
-
-//   INDENT();
-//   DEBUG_CALL(tyref, &expr->var_ty);
-//   switch (expr->ty) {
-//   case AST_EXPR_TY_TERNARY:
-//     DEBUG_CALL(ternary, &expr->ternary);
-//     break;
-//   case AST_EXPR_TY_VAR:
-//     DEBUG_CALL(var, &expr->var);
-//     break;
-//   case AST_EXPR_TY_CNST:
-//     DEBUG_CALL(cnst, &expr->cnst);
-//     break;
-//   case AST_EXPR_TY_COMPOUNDEXPR:
-//     DEBUG_CALL(compoundexpr, &expr->compound_expr);
-//     break;
-//   case AST_EXPR_TY_CALL:
-//     DEBUG_CALL(call, &expr->call);
-//     break;
-//   case AST_EXPR_TY_UNARY_OP:
-//     DEBUG_CALL(unary_op, &expr->unary_op);
-//     break;
-//   case AST_EXPR_TY_BINARY_OP:
-//     DEBUG_CALL(binary_op, &expr->binary_op);
-//     break;
-//   case AST_EXPR_TY_ARRAYACCESS:
-//     DEBUG_CALL(arrayaccess, &expr->array_access);
-//     break;
-//   case AST_EXPR_TY_MEMBERACCESS:
-//     DEBUG_CALL(memberaccess, &expr->member_access);
-//     break;
-//   case AST_EXPR_TY_POINTERACCESS:
-//     DEBUG_CALL(pointeraccess, &expr->pointer_access);
-//     break;
-//   case AST_EXPR_TY_INIT_LIST:
-//     DEBUG_CALL(initlist, &expr->init_list);
-//     break;
-//   case AST_EXPR_TY_ASSG:
-//     DEBUG_CALL(assg, &expr->assg);
-//     break;
-//   case AST_EXPR_TY_SIZEOF:
-//     DEBUG_CALL(sizeof, &expr->size_of);
-//     break;
-//   case AST_EXPR_TY_ALIGNOF:
-//     DEBUG_CALL(alignof, &expr->align_of);
-//     break;
-//   }
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(decl, decl) {
-//   DEBUG_CALL(var, &decl->var);
-
-//   if (decl->ty == AST_DECL_TY_DECL_WITH_ASSG) {
-//     AST_PRINTZ("WITH ASSIGNMENT");
-
-//     INDENT();
-//     DEBUG_CALL(expr, &decl->assg_expr);
-//     UNINDENT();
-//   }
-// }
-
-// DEBUG_FUNC(decllist, decl_list) {
-//   AST_PRINTZ("DECLARATION");
-//   INDENT();
-
-//   DEBUG_CALL(storage_class_specifier_flags,
-//              &decl_list->storage_class_specifiers);
-
-//   for (size_t i = 0; i < decl_list->num_decls; i++) {
-//     DEBUG_CALL(decl, &decl_list->decls[i]);
-//   }
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(jumpstmt, jump_stmt) {
-//   switch (jump_stmt->ty) {
-//   case AST_JUMPSTMT_TY_RETURN:
-//     AST_PRINTZ("RETURN");
-//     DEBUG_CALL(tyref, &jump_stmt->return_stmt.var_ty);
-//     INDENT();
-//     if (jump_stmt->return_stmt.expr) {
-//       DEBUG_CALL(expr, jump_stmt->return_stmt.expr);
-//     }
-//     UNINDENT();
-//     break;
-//   case AST_JUMPSTMT_TY_GOTO:
-//     AST_PRINT("GOTO %s",
-//               identifier_str(state->parser, &jump_stmt->goto_stmt.label));
-//     break;
-//   case AST_JUMPSTMT_TY_BREAK:
-//     AST_PRINTZ("BREAK");
-//     break;
-//   case AST_JUMPSTMT_TY_CONTINUE:
-//     AST_PRINTZ("CONTINUE");
-//     break;
-//   }
-// }
-
-// DEBUG_FUNC(stmt, stmt);
-
-// DEBUG_FUNC(switchstmt, switch_stmt) {
-//   AST_PRINTZ("SWITCH");
-//   AST_PRINTZ("CONTROL EXPRESSION");
-//   INDENT();
-//   DEBUG_CALL(expr, &switch_stmt->ctrl_expr);
-//   UNINDENT();
-
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, switch_stmt->body);
-// }
-
-// DEBUG_FUNC(stmt, if_stmt);
-
-// DEBUG_FUNC(ifstmt, if_stmt) {
-//   AST_PRINTZ("IF");
-//   AST_PRINTZ("CONDITION");
-//   INDENT();
-//   DEBUG_CALL(expr, &if_stmt->condition);
-//   UNINDENT();
-
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, if_stmt->body);
-// }
-
-// DEBUG_FUNC(ifelsestmt, if_else_stmt) {
-//   AST_PRINTZ("IF");
-//   AST_PRINTZ("CONDITION");
-//   INDENT();
-//   DEBUG_CALL(expr, &if_else_stmt->condition);
-//   UNINDENT();
-
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, if_else_stmt->body);
-
-//   AST_PRINTZ("ELSE");
-//   DEBUG_CALL(stmt, if_else_stmt->else_body);
-// }
-
-// DEBUG_FUNC(selectstmt, select_stmt) {
-//   switch (select_stmt->ty) {
-//   case AST_SELECTSTMT_TY_IF:
-//     DEBUG_CALL(ifstmt, &select_stmt->if_stmt);
-//     break;
-//   case AST_SELECTSTMT_TY_IF_ELSE:
-//     DEBUG_CALL(ifelsestmt, &select_stmt->if_else_stmt);
-//     break;
-//   case AST_SELECTSTMT_TY_SWITCH:
-//     DEBUG_CALL(switchstmt, &select_stmt->switch_stmt);
-//     break;
-//   }
-// }
-
-// DEBUG_FUNC(whilestmt, while_stmt) {
-//   AST_PRINTZ("WHILE");
-//   AST_PRINTZ("CONDITION");
-//   INDENT();
-//   DEBUG_CALL(expr, &while_stmt->cond);
-//   UNINDENT();
-
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, while_stmt->body);
-// }
-
-// DEBUG_FUNC(dowhilestmt, do_while_stmt) {
-//   AST_PRINTZ("DO");
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, do_while_stmt->body);
-
-//   AST_PRINTZ("WHILE");
-//   AST_PRINTZ("CONDITION");
-//   INDENT();
-//   DEBUG_CALL(expr, &do_while_stmt->cond);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(decllist, decl_list);
-
-// DEBUG_FUNC(declorexpr, decl_or_expr) {
-//   if (decl_or_expr->decl) {
-//     DEBUG_CALL(decllist, decl_or_expr->decl);
-//   } else if (decl_or_expr->expr) {
-//     DEBUG_CALL(expr, decl_or_expr->expr);
-//   }
-// }
-
-// DEBUG_FUNC(forstmt, for_stmt) {
-//   AST_PRINTZ("FOR");
-//   AST_PRINTZ("INIT");
-//   INDENT();
-//   if (for_stmt->init) {
-//     DEBUG_CALL(declorexpr, for_stmt->init);
-//   }
-//   UNINDENT();
-//   AST_PRINTZ("COND");
-//   INDENT();
-//   if (for_stmt->cond) {
-//     DEBUG_CALL(expr, for_stmt->cond);
-//   }
-//   UNINDENT();
-//   AST_PRINTZ("ITER");
-//   INDENT();
-//   if (for_stmt->iter) {
-//     DEBUG_CALL(expr, for_stmt->iter);
-//   }
-//   UNINDENT();
-
-//   AST_PRINTZ("BODY");
-//   DEBUG_CALL(stmt, for_stmt->body);
-// }
-
-// DEBUG_FUNC(iterstmt, iter_stmt) {
-//   switch (iter_stmt->ty) {
-//   case AST_ITERSTMT_TY_WHILE:
-//     DEBUG_CALL(whilestmt, &iter_stmt->while_stmt);
-//     break;
-//   case AST_ITERSTMT_TY_DO_WHILE:
-//     DEBUG_CALL(dowhilestmt, &iter_stmt->do_while_stmt);
-//     break;
-//   case AST_ITERSTMT_TY_FOR:
-//     DEBUG_CALL(forstmt, &iter_stmt->for_stmt);
-//     break;
-//   }
-// }
-
-// DEBUG_FUNC(labeledstmt, labeled_stmt) {
-//   switch (labeled_stmt->ty) {
-//   case AST_LABELEDSTMT_TY_LABEL:
-//     AST_PRINT("LABEL %s", identifier_str(state->parser,
-//     &labeled_stmt->label)); break;
-//   case AST_LABELEDSTMT_TY_CASE:
-//     AST_PRINT("CASE %llu", labeled_stmt->cnst);
-//     break;
-//   case AST_LABELEDSTMT_TY_DEFAULT:
-//     AST_PRINTZ("DEFAULT");
-//     break;
-//   }
-//   AST_PRINTZ("STATEMENT");
-//   INDENT();
-//   DEBUG_CALL(stmt, labeled_stmt->stmt);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(stmt, stmt) {
-//   INDENT();
-
-//   switch (stmt->ty) {
-//   case AST_STMT_TY_NULL:
-//     break;
-//   case AST_STMT_TY_DECL_LIST:
-//     DEBUG_CALL(decllist, &stmt->decl_list);
-//     break;
-//   case AST_STMT_TY_EXPR:
-//     DEBUG_CALL(expr, &stmt->expr);
-//     break;
-//   case AST_STMT_TY_COMPOUND:
-//     DEBUG_CALL(compoundstmt, &stmt->compound);
-//     break;
-//   case AST_STMT_TY_JUMP:
-//     DEBUG_CALL(jumpstmt, &stmt->jump);
-//     break;
-//   case AST_STMT_TY_SELECT:
-//     DEBUG_CALL(selectstmt, &stmt->select);
-//     break;
-//   case AST_STMT_TY_ITER:
-//     DEBUG_CALL(iterstmt, &stmt->iter);
-//     break;
-//   case AST_STMT_TY_LABELED:
-//     DEBUG_CALL(labeledstmt, &stmt->labeled);
-//     break;
-//   }
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(compoundstmt, compound_stmt) {
-//   AST_PRINTZ("COMPOUND STATEMENT: ");
-//   INDENT();
-
-//   for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
-//     DEBUG_CALL(stmt, &compound_stmt->stmts[i]);
-//   }
-
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(param, param) {
-//   AST_PRINT_SAMELINE_Z("PARAM ");
-//   DEBUG_CALL(tyref, &param->var_ty);
-//   AST_PRINT(" '%s' SCOPE %d",
-//             associated_text(state->parser->lexer, &param->var->identifier),
-//             param->var->scope);
-// }
-
-// DEBUG_FUNC(paramlist, param_list) {
-//   for (size_t i = 0; i < param_list->num_params; i++) {
-//     DEBUG_CALL(param, &param_list->params[i]);
-//   }
-// }
-
-// DEBUG_FUNC(funcsig, func_sig) {
-//   AST_PRINT("'%s'", associated_text(state->parser->lexer, &func_sig->name));
-//   AST_PRINTZ("RETURNS: ");
-
-//   INDENT();
-//   DEBUG_CALL(tyref, func_sig->var_ty.func.ret_var_ty);
-//   UNINDENT();
-
-//   DEBUG_CALL(paramlist, &func_sig->param_list);
-// }
-
-// DEBUG_FUNC(funcdef, func_def) {
-//   AST_PRINT_SAMELINE_Z("FUNCTION DEFINITION ");
-//   // DEBUG_CALL(funcsig, &func_def->sig);
-
-//   DEBUG_CALL(compoundstmt, &func_def->body);
-// }
-
-// DEBUG_FUNC(field, field) {
-//   AST_PRINTZ("FIELD ");
-//   AST_PRINT("NAME %s ",
-//             associated_text(state->parser->lexer, &field->identifier));
-//   DEBUG_CALL(tyref, &field->var_ty);
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(structdecl, struct_decl) {
-//   AST_PRINTZ("STRUCT DECL");
-//   INDENT();
-//   for (size_t i = 0; i < struct_decl->num_fields; i++) {
-//     DEBUG_CALL(decl, &struct_decl->fields[i]);
-//   }
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(structdecllist, struct_decl_list) {
-//   AST_PRINTZ("STRUCT DECL LIST");
-//   INDENT();
-//   for (size_t i = 0; i < struct_decl_list->num_struct_decls; i++) {
-//     DEBUG_CALL(structdecl, &struct_decl_list->struct_decls[i]);
-//   }
-//   UNINDENT();
-// }
-
-// DEBUG_FUNC(aggregatedecl, aggregate_decl) {
-//   switch (aggregate_decl->ty) {
-//   case AST_TYPE_TY_UNION:
-//     AST_PRINTZ("UNION DECLARATION ");
-//     break;
-//   case AST_TYPE_TY_STRUCT:
-//     AST_PRINTZ("STRUCT DECLARATION ");
-//     break;
-//   }
-//   AST_PRINT("NAME %s ",
-//             associated_text(state->parser->lexer, &aggregate_decl->name));
-// }
+DEBUG_FUNC_ENUM(function_specifier, function_specifier) {
+  UNUSED_ARG(state);
+
+  switch (*function_specifier) {
+  case AST_FUNCTION_SPECIFIER_INLINE:
+    AST_PRINTZ("INLINE");
+    break;
+  }
+}
+
+DEBUG_FUNC_ENUM(storage_class_specifier, storage_class_specifier) {
+  UNUSED_ARG(state);
+
+  switch (*storage_class_specifier) {
+  case AST_STORAGE_CLASS_SPECIFIER_AUTO:
+    AST_PRINTZ("AUTO");
+    break;
+  case AST_STORAGE_CLASS_SPECIFIER_STATIC:
+    AST_PRINTZ("STATIC");
+    break;
+  case AST_STORAGE_CLASS_SPECIFIER_REGISTER:
+    AST_PRINTZ("REGISTER");
+    break;
+  case AST_STORAGE_CLASS_SPECIFIER_EXTERN:
+    AST_PRINTZ("EXTERN");
+    break;
+  case AST_STORAGE_CLASS_SPECIFIER_TYPEDEF:
+    AST_PRINTZ("TYPEDEF");
+    break;
+  }
+}
+
+DEBUG_FUNC_ENUM(type_qualifier, type_qualifier) {
+  UNUSED_ARG(state);
+
+  switch (*type_qualifier) {
+  case AST_TYPE_QUALIFIER_CONST:
+    AST_PRINTZ("CONST");
+    break;
+  case AST_TYPE_QUALIFIER_VOLATILE:
+    AST_PRINTZ("VOLATILE");
+    break;
+  }
+}
+
+DEBUG_FUNC_ENUM(type_specifier_kw, type_specifier_kw) {
+  switch (*type_specifier_kw) {
+  case AST_TYPE_SPECIFIER_KW_VOID:
+    AST_PRINTZ("VOID");
+    break;
+  case AST_TYPE_SPECIFIER_KW_CHAR:
+    AST_PRINTZ("CHAR");
+    break;
+  case AST_TYPE_SPECIFIER_KW_SHORT:
+    AST_PRINTZ("SHORT");
+    break;
+  case AST_TYPE_SPECIFIER_KW_INT:
+    AST_PRINTZ("INT");
+    break;
+  case AST_TYPE_SPECIFIER_KW_LONG:
+    AST_PRINTZ("LONG");
+    break;
+  case AST_TYPE_SPECIFIER_KW_FLOAT:
+    AST_PRINTZ("FLOAT");
+    break;
+  case AST_TYPE_SPECIFIER_KW_DOUBLE:
+    AST_PRINTZ("DOUBLE");
+    break;
+  case AST_TYPE_SPECIFIER_KW_SIGNED:
+    AST_PRINTZ("SIGNED");
+    break;
+  case AST_TYPE_SPECIFIER_KW_UNSIGNED:
+    AST_PRINTZ("UNSIGNED");
+    break;
+  case AST_TYPE_SPECIFIER_KW_BOOL:
+    AST_PRINTZ("BOOL");
+    break;
+  case AST_TYPE_SPECIFIER_KW_COMPLEX:
+    AST_PRINTZ("COMPLEX");
+    break;
+  case AST_TYPE_SPECIFIER_KW_HALF:
+    AST_PRINTZ("HALF");
+    break;
+  }
+}
+
+DEBUG_FUNC(declarator, declarator);
+DEBUG_FUNC(declaration_specifier_list, specifier_list);
+DEBUG_FUNC(expr, expr);
+
+DEBUG_FUNC(struct_declarator, struct_declarator) {
+  DEBUG_CALL(declarator, &struct_declarator->declarator);
+
+  if (struct_declarator->bitfield_size) {
+    AST_PRINTZ("BITFIELD");
+    INDENT();
+    DEBUG_CALL(expr, struct_declarator->bitfield_size);
+    UNINDENT();
+  }
+}
+
+DEBUG_FUNC(struct_declarator_list, struct_declarator_list) {
+  for (size_t i = 0; i < struct_declarator_list->num_declarators; i++) {
+    DEBUG_CALL(struct_declarator, &struct_declarator_list->declarators[i]);
+  }
+}
+
+DEBUG_FUNC(struct_declaration, struct_decl) {
+  AST_PRINTZ("STRUCT DECL");
+  INDENT();
+  DEBUG_CALL(declaration_specifier_list, &struct_decl->decl_specifiers);
+
+  DEBUG_CALL(struct_declarator_list, &struct_decl->struct_declarator_list);
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(struct_declaration_list, struct_decl_list) {
+  for (size_t i = 0; i < struct_decl_list->num_struct_declarations; i++) {
+    DEBUG_CALL(struct_declaration, &struct_decl_list->struct_declarations[i]);
+  }
+}
+
+DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
+  switch (struct_or_union_specifier->ty) {
+  case AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT:
+    if (struct_or_union_specifier->identifier) {
+      AST_PRINT(
+          "STRUCT '%s'",
+          identifier_str(state->parser, struct_or_union_specifier->identifier));
+
+    } else {
+      AST_PRINTZ("STRUCT");
+    }
+    break;
+  case AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION:
+    if (struct_or_union_specifier->identifier) {
+      AST_PRINT(
+          "UNION '%s'",
+          identifier_str(state->parser, struct_or_union_specifier->identifier));
+
+    } else {
+      AST_PRINTZ("UNION");
+    }
+    break;
+  }
+
+  DEBUG_CALL(struct_declaration_list, &struct_or_union_specifier->struct_decl_list);
+}
+
+DEBUG_FUNC(enumerator, enumerator) {
+  AST_PRINT("ENUMERATOR '%s'", identifier_str(state->parser, &enumerator->identifier));
+
+  if (enumerator->value) {
+    AST_PRINTZ("VALUE");
+    INDENT();
+    DEBUG_CALL(expr, enumerator->value);
+    UNINDENT();
+  }
+}
+
+DEBUG_FUNC(enumerator_list, enumerator_list) {
+  for (size_t i = 0; i < enumerator_list->num_enumerators; i++) {
+    DEBUG_CALL(enumerator, &enumerator_list->enumerators[i]);
+  }
+}
+  
+DEBUG_FUNC(enum_specifier, enum_specifier) {
+  if (enum_specifier->identifier) {
+    AST_PRINT("ENUM '%s'",
+              identifier_str(state->parser, enum_specifier->identifier));
+
+  } else {
+    AST_PRINTZ("ENUM");
+  }
+
+  DEBUG_CALL(enumerator_list, enum_specifier->enumerator_list);
+}
+
+DEBUG_FUNC(type_specifier, type_specifier) {
+  AST_PRINTZ("TYPE SPECIFIER");
+  INDENT();
+  switch (type_specifier->ty) {
+  case AST_TYPE_SPECIFIER_TY_KW:
+    DEBUG_CALL(type_specifier_kw, &type_specifier->type_specifier_kw);
+    break;
+  case AST_TYPE_SPECIFIER_STRUCT_OR_UNION:
+    DEBUG_CALL(struct_or_union_specifier,
+               &type_specifier->struct_or_union_specifier);
+    break;
+  case AST_TYPE_SPECIFIER_ENUM:
+    DEBUG_CALL(enum_specifier, &type_specifier->enum_specifier);
+    break;
+  case AST_TYPE_SPECIFIER_TYPEDEF_NAME:
+    AST_PRINT("TYPEDEF '%s'",
+              identifier_str(state->parser, &type_specifier->typedef_name));
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(compoundstmt, compound_stmt);
+
+DEBUG_FUNC(var, var) {
+  AST_PRINT("VARIABLE '%s'", identifier_str(state->parser, &var->identifier));
+}
+
+DEBUG_FUNC(cnst, cnst) {
+  switch (cnst->ty) {
+  case AST_CNST_TY_SIGNED_INT:
+  case AST_CNST_TY_UNSIGNED_INT:
+  case AST_CNST_TY_SIGNED_LONG:
+  case AST_CNST_TY_UNSIGNED_LONG:
+  case AST_CNST_TY_SIGNED_LONG_LONG:
+  case AST_CNST_TY_UNSIGNED_LONG_LONG:
+    AST_PRINT("CONSTANT '%llu'", cnst->int_value);
+    break;
+  case AST_CNST_TY_FLOAT:
+  case AST_CNST_TY_DOUBLE:
+  case AST_CNST_TY_LONG_DOUBLE:
+    AST_PRINT("CONSTANT '%Lf'", cnst->flt_value);
+    break;
+  case AST_CNST_TY_CHAR:
+    AST_PRINT("CONSTANT '%c'", cnst->int_value);
+    break;
+  case AST_CNST_TY_WIDE_CHAR:
+    AST_PRINT("CONSTANT '%wc'", cnst->int_value);
+    break;
+  case AST_CNST_TY_STR_LITERAL:
+    AST_PRINT("CONSTANT '%s'", cnst->str_value);
+    break;
+  case AST_CNST_TY_WIDE_STR_LITERAL:
+    todo("wide strs");
+    break;
+  }
+}
+
+DEBUG_FUNC(compoundexpr, compound_expr);
+
+DEBUG_FUNC(pointer, pointer) {
+  AST_PRINTZ("POINTER");
+  DEBUG_CALL(declaration_specifier_list, &pointer->specifier_list);
+}
+
+DEBUG_FUNC(pointer_list, pointer_list) {
+  AST_PRINTZ("POINTER LIST");
+  INDENT();
+  for (size_t i = 0; i < pointer_list->num_pointers; i++) {
+    DEBUG_CALL(pointer, &pointer_list->pointers[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(abstract_declarator, abstract_declarator);
+
+DEBUG_FUNC(array_declarator, array_declarator) {
+  AST_PRINTZ("ARRAY DECLARATOR");
+
+  INDENT();
+  switch (array_declarator->ty) {
+  case AST_ARRAY_DECLARATOR_TY_STAR:
+    AST_PRINTZ("STAR");
+    break;
+  case AST_ARRAY_DECLARATOR_TY_STATIC_SIZED:
+    AST_PRINTZ("STATIC");
+    goto sized;
+  sized:
+  case AST_ARRAY_DECLARATOR_TY_SIZED:
+    AST_PRINTZ("SIZED");
+    DEBUG_CALL(expr, array_declarator->size);
+    break;
+  case AST_ARRAY_DECLARATOR_TY_UNSIZED:
+    AST_PRINTZ("UNSIZED");
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(paramlist, param_list);
+
+DEBUG_FUNC(func_declarator, func_declarator) {
+  AST_PRINTZ("FUNC DECLARATOR");
+
+  INDENT();
+  DEBUG_CALL(paramlist, func_declarator->param_list);
+  UNINDENT();
+}
+
+DEBUG_FUNC(direct_abstract_declarator, direct_abstract_declarator) {
+  AST_PRINTZ("DIRECT ABSTRACT DECLARATOR");
+
+  INDENT();
+  switch (direct_abstract_declarator->ty) {
+  case AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR:
+    DEBUG_CALL(abstract_declarator,
+               direct_abstract_declarator->paren_declarator);
+    break;
+  case AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR:
+    DEBUG_CALL(array_declarator, direct_abstract_declarator->array_declarator);
+    break;
+  case AST_DIRECT_ABSTRACT_DECLARATOR_TY_FUNC_DECLARATOR:
+    DEBUG_CALL(func_declarator, direct_abstract_declarator->func_declarator);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(direct_abstract_declarator_list, direct_abstract_declarator_list) {
+  AST_PRINTZ("DIRECT ABSTRACT DECLARATOR LIST");
+  INDENT();
+  for (size_t i = 0;
+       i < direct_abstract_declarator_list->num_direct_abstract_declarators;
+       i++) {
+    DEBUG_CALL(
+        direct_abstract_declarator,
+        &direct_abstract_declarator_list->direct_abstract_declarators[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(abstract_declarator, abstract_declarator) {
+  AST_PRINTZ("ABSTRACT DECLARATOR");
+  INDENT();
+  DEBUG_CALL(pointer_list, &abstract_declarator->pointer_list);
+  DEBUG_CALL(direct_abstract_declarator_list,
+             &abstract_declarator->direct_abstract_declarator_list);
+  UNINDENT();
+}
+
+DEBUG_FUNC(direct_declarator, direct_declarator) {
+  AST_PRINTZ("DIRECT DECLARATOR");
+
+  INDENT();
+  switch (direct_declarator->ty) {
+  case AST_DIRECT_DECLARATOR_TY_IDENTIFIER:
+    AST_PRINT("IDENTIFIER '%s'",
+              identifier_str(state->parser, &direct_declarator->identifier));
+    break;
+  case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
+    DEBUG_CALL(declarator, direct_declarator->paren_declarator);
+    break;
+  case AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR:
+    DEBUG_CALL(array_declarator, direct_declarator->array_declarator);
+    break;
+  case AST_DIRECT_DECLARATOR_TY_FUNC_DECLARATOR:
+    DEBUG_CALL(func_declarator, direct_declarator->func_declarator);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(direct_declarator_list, direct_declarator_list) {
+  AST_PRINTZ("DIRECT DECLARATOR LIST");
+  INDENT();
+  for (size_t i = 0; i < direct_declarator_list->num_direct_declarators; i++) {
+    DEBUG_CALL(direct_declarator,
+               &direct_declarator_list->direct_declarators[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(declarator, declarator) {
+  AST_PRINTZ("DECLARATOR");
+  INDENT();
+  DEBUG_CALL(pointer_list, &declarator->pointer_list);
+  DEBUG_CALL(direct_declarator_list, &declarator->direct_declarator_list);
+  UNINDENT();
+}
+
+DEBUG_FUNC(declaration_specifier, specifier) {
+  AST_PRINTZ("DECLARATION SPECIFIER");
+  INDENT();
+
+  switch (specifier->ty) {
+  case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
+    DEBUG_CALL(storage_class_specifier, &specifier->storage_class_specifier);
+    break;
+  case AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER:
+    DEBUG_CALL(type_specifier, &specifier->type_specifier);
+    break;
+  case AST_DECL_SPECIFIER_TY_TYPE_QUALIFIER:
+    DEBUG_CALL(type_qualifier, &specifier->type_qualifier);
+    break;
+  case AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER:
+    DEBUG_CALL(function_specifier, &specifier->function_specifier);
+    break;
+  }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(declaration_specifier_list, specifier_list) {
+  AST_PRINTZ("DECLARATION SPECIFIER LIST");
+  INDENT();
+  for (size_t i = 0; i < specifier_list->num_decl_specifiers; i++) {
+    DEBUG_CALL(declaration_specifier, &specifier_list->decl_specifiers[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(type_name, type_name) {
+  AST_PRINTZ("TYPE NAME");
+  INDENT();
+  DEBUG_CALL(declaration_specifier_list, &type_name->specifier_list);
+  DEBUG_CALL(abstract_declarator, &type_name->abstract_declarator);
+  UNINDENT();
+}
+
+DEBUG_FUNC(unary_op, unary_op) {
+  switch (unary_op->ty) {
+  case AST_UNARY_OP_TY_PREFIX_INC:
+    AST_PRINTZ("PREFIX INC");
+    break;
+  case AST_UNARY_OP_TY_PREFIX_DEC:
+    AST_PRINTZ("PREFIX DEC");
+    break;
+  case AST_UNARY_OP_TY_POSTFIX_INC:
+    AST_PRINTZ("POSTFIX INC");
+    break;
+  case AST_UNARY_OP_TY_POSTFIX_DEC:
+    AST_PRINTZ("POSTFIX DEC");
+    break;
+  case AST_UNARY_OP_TY_PLUS:
+    AST_PRINTZ("PLUS");
+    break;
+  case AST_UNARY_OP_TY_MINUS:
+    AST_PRINTZ("MINUS");
+    break;
+  case AST_UNARY_OP_TY_LOGICAL_NOT:
+    AST_PRINTZ("LOGICAL NOT");
+    break;
+  case AST_UNARY_OP_TY_NOT:
+    AST_PRINTZ("NOT");
+    break;
+  case AST_UNARY_OP_TY_INDIRECTION:
+    AST_PRINTZ("INDIRECTION");
+    break;
+  case AST_UNARY_OP_TY_SIZEOF:
+    AST_PRINTZ("SIZEOF");
+    break;
+  case AST_UNARY_OP_TY_ADDRESSOF:
+    AST_PRINTZ("ADDRESSOF");
+    break;
+  case AST_UNARY_OP_TY_ALIGNOF:
+    AST_PRINTZ("ALIGNOF");
+    break;
+  case AST_UNARY_OP_TY_CAST:
+    AST_PRINTZ("CAST");
+    INDENT();
+    AST_PRINTZ("TO");
+    DEBUG_CALL(type_name, &unary_op->cast.type_name);
+    UNINDENT();
+    break;
+  }
+
+  INDENT();
+  DEBUG_CALL(expr, unary_op->expr);
+  UNINDENT();
+}
+
+DEBUG_FUNC(binary_op, binary_op) {
+  INDENT();
+  switch (binary_op->ty) {
+  case AST_BINARY_OP_TY_EQ:
+    AST_PRINTZ("EQ");
+    break;
+  case AST_BINARY_OP_TY_NEQ:
+    AST_PRINTZ("NEQ");
+    break;
+  case AST_BINARY_OP_TY_LT:
+    AST_PRINTZ("LT");
+    break;
+  case AST_BINARY_OP_TY_LTEQ:
+    AST_PRINTZ("LTEQ");
+    break;
+  case AST_BINARY_OP_TY_GT:
+    AST_PRINTZ("GT");
+    break;
+  case AST_BINARY_OP_TY_GTEQ:
+    AST_PRINTZ("GTEQ");
+    break;
+  case AST_BINARY_OP_TY_LSHIFT:
+    AST_PRINTZ("LSHIFT");
+    break;
+  case AST_BINARY_OP_TY_RSHIFT:
+    AST_PRINTZ("RSHIFT");
+    break;
+  case AST_BINARY_OP_TY_OR:
+    AST_PRINTZ("OR");
+    break;
+  case AST_BINARY_OP_TY_XOR:
+    AST_PRINTZ("XOR");
+    break;
+  case AST_BINARY_OP_TY_AND:
+    AST_PRINTZ("AND");
+    break;
+  case AST_BINARY_OP_TY_ADD:
+    AST_PRINTZ("ADD");
+    break;
+  case AST_BINARY_OP_TY_SUB:
+    AST_PRINTZ("SUB");
+    break;
+  case AST_BINARY_OP_TY_MUL:
+    AST_PRINTZ("MUL");
+    break;
+  case AST_BINARY_OP_TY_DIV:
+    AST_PRINTZ("DIV");
+    break;
+  case AST_BINARY_OP_TY_QUOT:
+    AST_PRINTZ("QUOT");
+    break;
+  case AST_BINARY_OP_TY_LOGICAL_OR:
+    AST_PRINTZ("LOGICAL OR");
+    break;
+  case AST_BINARY_OP_TY_LOGICAL_AND:
+    AST_PRINTZ("LOGICAL AND");
+    break;
+  }
+
+  AST_PRINTZ("LHS: ");
+  INDENT();
+  DEBUG_CALL(expr, binary_op->lhs);
+  UNINDENT();
+
+  AST_PRINTZ("RHS: ");
+  INDENT();
+  DEBUG_CALL(expr, binary_op->rhs);
+  UNINDENT();
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(compoundexpr, compound_expr) {
+  AST_PRINTZ("COMPOUND EXPRESSION: ");
+
+  INDENT();
+
+  for (size_t i = 0; i < compound_expr->num_exprs; i++) {
+    DEBUG_CALL(expr, &compound_expr->exprs[i]);
+  }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(assg, assg) {
+  AST_PRINTZ("ASSIGNMENT");
+  INDENT();
+  DEBUG_CALL(expr, assg->assignee);
+
+  INDENT();
+  switch (assg->ty) {
+  case AST_ASSG_TY_BASIC:
+    AST_PRINTZ("=");
+    break;
+  case AST_ASSG_TY_ADD:
+    AST_PRINTZ("+=");
+    break;
+  case AST_ASSG_TY_SUB:
+    AST_PRINTZ("-=");
+    break;
+  case AST_ASSG_TY_MUL:
+    AST_PRINTZ("*=");
+    break;
+  case AST_ASSG_TY_DIV:
+    AST_PRINTZ("/=");
+    break;
+  case AST_ASSG_TY_QUOT:
+    AST_PRINTZ("%%=");
+    break;
+  case AST_ASSG_TY_LSHIFT:
+    AST_PRINTZ("<<=");
+    break;
+  case AST_ASSG_TY_RSHIFT:
+    AST_PRINTZ(">>=");
+    break;
+  case AST_ASSG_TY_AND:
+    AST_PRINTZ("&=");
+    break;
+  case AST_ASSG_TY_OR:
+    AST_PRINTZ("|=");
+    break;
+  case AST_ASSG_TY_XOR:
+    AST_PRINTZ("^=");
+    break;
+  }
+
+  DEBUG_CALL(expr, assg->expr);
+  UNINDENT();
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(arglist, arg_list) {
+  AST_PRINTZ("ARGLIST:");
+  INDENT();
+
+  for (size_t i = 0; i < arg_list->num_args; i++) {
+    DEBUG_CALL(expr, &arg_list->args[i]);
+  }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(call, call) {
+  AST_PRINTZ("CALL");
+  INDENT();
+  DEBUG_CALL(expr, call->target);
+
+  DEBUG_CALL(arglist, &call->arg_list);
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(pointeraccess, pointer_access) {
+  AST_PRINTZ("POINTER_ACCESS");
+
+  INDENT();
+  DEBUG_CALL(expr, pointer_access->lhs);
+  UNINDENT();
+
+  AST_PRINTZ("MEMBER");
+
+  INDENT();
+  AST_PRINT("%s", identifier_str(state->parser, &pointer_access->member));
+  UNINDENT();
+}
+
+DEBUG_FUNC(memberaccess, member_access) {
+  AST_PRINTZ("MEMBER_ACCESS");
+
+  INDENT();
+  DEBUG_CALL(expr, member_access->lhs);
+  UNINDENT();
+
+  AST_PRINTZ("MEMBER");
+
+  INDENT();
+  AST_PRINT("%s", identifier_str(state->parser, &member_access->member));
+  UNINDENT();
+}
+
+DEBUG_FUNC(arrayaccess, array_access) {
+  AST_PRINTZ("ARRAY_ACCESS");
+
+  INDENT();
+  DEBUG_CALL(expr, array_access->lhs);
+  UNINDENT();
+
+  AST_PRINTZ("OFFSET");
+
+  INDENT();
+  DEBUG_CALL(expr, array_access->rhs);
+  UNINDENT();
+}
+
+DEBUG_FUNC(designator, designator) {
+  AST_PRINTZ("DESIGNATOR");
+
+  INDENT();
+  switch (designator->ty) {
+  case AST_DESIGNATOR_TY_FIELD:
+    AST_PRINT("FIELD '%s'", identifier_str(state->parser, &designator->field));
+    break;
+  case AST_DESIGNATOR_TY_INDEX:
+    AST_PRINT("INDEX '%zu'", designator->index);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(designator_list, designator_list) {
+  AST_PRINTZ("DESIGNATOR LIST");
+  INDENT();
+  for (size_t i = 0; i < designator_list->num_designators; i++) {
+    DEBUG_CALL(designator, &designator_list->designators[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(init_list, init_list);
+
+DEBUG_FUNC(init, init) {
+  AST_PRINTZ("INIT");
+  INDENT();
+  switch (init->ty) {
+  case AST_INIT_TY_EXPR:
+    DEBUG_CALL(expr, &init->expr);
+    break;
+  case AST_INIT_TY_INIT_LIST:
+    DEBUG_CALL(init_list, &init->init_list);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(init_list_init, init) {
+  AST_PRINTZ("INIT LIST INIT");
+
+  DEBUG_CALL(designator_list, init->designator_list);
+
+  AST_PRINTZ("init");
+
+  INDENT();
+  DEBUG_CALL(init, init->init);
+  UNINDENT();
+}
+
+DEBUG_FUNC(init_list, init_list) {
+  AST_PRINTZ("INIT LIST");
+
+  INDENT();
+  for (size_t i = 0; i < init_list->num_inits; i++) {
+    DEBUG_CALL(init_list_init, &init_list->inits[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(sizeof, size_of) {
+  AST_PRINTZ("SIZEOF");
+
+  INDENT();
+  switch (size_of->ty) {
+  case AST_SIZEOF_TY_TYPE:
+    DEBUG_CALL(type_name, &size_of->type_name);
+    break;
+  case AST_SIZEOF_TY_EXPR:
+    DEBUG_CALL(expr, size_of->expr);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(alignof, align_of) {
+  AST_PRINTZ("ALIGNOF");
+
+  INDENT();
+  AST_PRINTZ("TYPE");
+  DEBUG_CALL(type_name, &align_of->type_name);
+  UNINDENT();
+}
+
+DEBUG_FUNC(ternary, ternary) {
+  AST_PRINTZ("TERNARY");
+
+  INDENT();
+  AST_PRINTZ("COND");
+  DEBUG_CALL(expr, ternary->cond);
+  UNINDENT();
+
+  INDENT();
+  AST_PRINTZ("TRUE");
+  DEBUG_CALL(expr, ternary->true_expr);
+  UNINDENT();
+
+  INDENT();
+  AST_PRINTZ("FALSE");
+  DEBUG_CALL(expr, ternary->false_expr);
+  UNINDENT();
+}
+
+DEBUG_FUNC(compound_literal, compound_literal) {
+  UNUSED_ARG(state);
+  UNUSED_ARG(compound_literal);
+  todo("compound literal");
+}
+
+DEBUG_FUNC(expr, expr) {
+  AST_PRINTZ("EXPRESSION");
+
+  INDENT();
+  switch (expr->ty) {
+  case AST_EXPR_TY_TERNARY:
+    DEBUG_CALL(ternary, &expr->ternary);
+    break;
+  case AST_EXPR_TY_VAR:
+    DEBUG_CALL(var, &expr->var);
+    break;
+  case AST_EXPR_TY_CNST:
+    DEBUG_CALL(cnst, &expr->cnst);
+    break;
+  case AST_EXPR_TY_COMPOUNDEXPR:
+    DEBUG_CALL(compoundexpr, &expr->compound_expr);
+    break;
+  case AST_EXPR_TY_CALL:
+    DEBUG_CALL(call, &expr->call);
+    break;
+  case AST_EXPR_TY_UNARY_OP:
+    DEBUG_CALL(unary_op, &expr->unary_op);
+    break;
+  case AST_EXPR_TY_BINARY_OP:
+    DEBUG_CALL(binary_op, &expr->binary_op);
+    break;
+  case AST_EXPR_TY_ARRAYACCESS:
+    DEBUG_CALL(arrayaccess, &expr->array_access);
+    break;
+  case AST_EXPR_TY_MEMBERACCESS:
+    DEBUG_CALL(memberaccess, &expr->member_access);
+    break;
+  case AST_EXPR_TY_POINTERACCESS:
+    DEBUG_CALL(pointeraccess, &expr->pointer_access);
+    break;
+  case AST_EXPR_TY_COMPOUND_LITERAL:
+    DEBUG_CALL(compound_literal, &expr->compound_literal);
+    break;
+  case AST_EXPR_TY_ASSG:
+    DEBUG_CALL(assg, &expr->assg);
+    break;
+  case AST_EXPR_TY_SIZEOF:
+    DEBUG_CALL(sizeof, &expr->size_of);
+    break;
+  case AST_EXPR_TY_ALIGNOF:
+    DEBUG_CALL(alignof, &expr->align_of);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(jumpstmt, jump_stmt) {
+  switch (jump_stmt->ty) {
+  case AST_JUMPSTMT_TY_RETURN:
+    AST_PRINTZ("RETURN");
+    INDENT();
+    if (jump_stmt->return_stmt.expr) {
+      DEBUG_CALL(expr, jump_stmt->return_stmt.expr);
+    }
+    UNINDENT();
+    break;
+  case AST_JUMPSTMT_TY_GOTO:
+    AST_PRINT("GOTO %s",
+              identifier_str(state->parser, &jump_stmt->goto_stmt.label));
+    break;
+  case AST_JUMPSTMT_TY_BREAK:
+    AST_PRINTZ("BREAK");
+    break;
+  case AST_JUMPSTMT_TY_CONTINUE:
+    AST_PRINTZ("CONTINUE");
+    break;
+  }
+}
+
+DEBUG_FUNC(stmt, stmt);
+
+DEBUG_FUNC(switchstmt, switch_stmt) {
+  AST_PRINTZ("SWITCH");
+  AST_PRINTZ("CONTROL EXPRESSION");
+  INDENT();
+  DEBUG_CALL(expr, &switch_stmt->ctrl_expr);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, switch_stmt->body);
+}
+
+DEBUG_FUNC(stmt, if_stmt);
+
+DEBUG_FUNC(ifstmt, if_stmt) {
+  AST_PRINTZ("IF");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &if_stmt->condition);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, if_stmt->body);
+}
+
+DEBUG_FUNC(ifelsestmt, if_else_stmt) {
+  AST_PRINTZ("IF");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &if_else_stmt->condition);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, if_else_stmt->body);
+
+  AST_PRINTZ("ELSE");
+  DEBUG_CALL(stmt, if_else_stmt->else_body);
+}
+
+DEBUG_FUNC(selectstmt, select_stmt) {
+  switch (select_stmt->ty) {
+  case AST_SELECTSTMT_TY_IF:
+    DEBUG_CALL(ifstmt, &select_stmt->if_stmt);
+    break;
+  case AST_SELECTSTMT_TY_IF_ELSE:
+    DEBUG_CALL(ifelsestmt, &select_stmt->if_else_stmt);
+    break;
+  case AST_SELECTSTMT_TY_SWITCH:
+    DEBUG_CALL(switchstmt, &select_stmt->switch_stmt);
+    break;
+  }
+}
+
+DEBUG_FUNC(whilestmt, while_stmt) {
+  AST_PRINTZ("WHILE");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &while_stmt->cond);
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, while_stmt->body);
+}
+
+DEBUG_FUNC(dowhilestmt, do_while_stmt) {
+  AST_PRINTZ("DO");
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, do_while_stmt->body);
+
+  AST_PRINTZ("WHILE");
+  AST_PRINTZ("CONDITION");
+  INDENT();
+  DEBUG_CALL(expr, &do_while_stmt->cond);
+  UNINDENT();
+}
+
+DEBUG_FUNC(init_declarator, init_declarator) {
+  DEBUG_CALL(declarator, &init_declarator->declarator);
+
+  if (init_declarator->init) {
+    DEBUG_CALL(init, init_declarator->init);
+  }
+}
+
+DEBUG_FUNC(init_declarator_list, init_declarator_list) {
+  AST_PRINTZ("INIT DECLARATOR LIST");
+  INDENT();
+  for (size_t i = 0; i < init_declarator_list->num_init_declarators; i++) {
+    DEBUG_CALL(init_declarator, &init_declarator_list->init_declarators[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(declaration, declaration) {
+  AST_PRINTZ("DECLARATION");
+  INDENT();
+  DEBUG_CALL(declaration_specifier_list, &declaration->specifier_list);
+  DEBUG_CALL(init_declarator_list, &declaration->declarator_list);
+  UNINDENT();
+}
+
+DEBUG_FUNC(declaration_or_expr, decl_or_expr) {
+  switch (decl_or_expr->ty) {
+
+  case AST_DECLARATION_OR_EXPR_TY_DECL:
+    DEBUG_CALL(declaration, &decl_or_expr->decl);
+    break;
+  case AST_DECLARATION_OR_EXPR_TY_EXPR:
+    DEBUG_CALL(expr, &decl_or_expr->expr);
+    break;
+  }
+}
+
+DEBUG_FUNC(forstmt, for_stmt) {
+  AST_PRINTZ("FOR");
+  AST_PRINTZ("INIT");
+  INDENT();
+  if (for_stmt->init) {
+    DEBUG_CALL(declaration_or_expr, for_stmt->init);
+  }
+  UNINDENT();
+  AST_PRINTZ("COND");
+  INDENT();
+  if (for_stmt->cond) {
+    DEBUG_CALL(expr, for_stmt->cond);
+  }
+  UNINDENT();
+  AST_PRINTZ("ITER");
+  INDENT();
+  if (for_stmt->iter) {
+    DEBUG_CALL(expr, for_stmt->iter);
+  }
+  UNINDENT();
+
+  AST_PRINTZ("BODY");
+  DEBUG_CALL(stmt, for_stmt->body);
+}
+
+DEBUG_FUNC(iterstmt, iter_stmt) {
+  switch (iter_stmt->ty) {
+  case AST_ITERSTMT_TY_WHILE:
+    DEBUG_CALL(whilestmt, &iter_stmt->while_stmt);
+    break;
+  case AST_ITERSTMT_TY_DO_WHILE:
+    DEBUG_CALL(dowhilestmt, &iter_stmt->do_while_stmt);
+    break;
+  case AST_ITERSTMT_TY_FOR:
+    DEBUG_CALL(forstmt, &iter_stmt->for_stmt);
+    break;
+  }
+}
+
+DEBUG_FUNC(labeledstmt, labeled_stmt) {
+  switch (labeled_stmt->ty) {
+  case AST_LABELEDSTMT_TY_LABEL:
+    AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
+    break;
+  case AST_LABELEDSTMT_TY_CASE:
+    AST_PRINT("CASE %llu", labeled_stmt->cnst);
+    break;
+  case AST_LABELEDSTMT_TY_DEFAULT:
+    AST_PRINTZ("DEFAULT");
+    break;
+  }
+  AST_PRINTZ("STATEMENT");
+  INDENT();
+  DEBUG_CALL(stmt, labeled_stmt->stmt);
+  UNINDENT();
+}
+
+DEBUG_FUNC(stmt, stmt) {
+  INDENT();
+
+  switch (stmt->ty) {
+  case AST_STMT_TY_NULL:
+    break;
+  case AST_STMT_TY_DECLARATION:
+    DEBUG_CALL(declaration, &stmt->declaration);
+    break;
+  case AST_STMT_TY_EXPR:
+    DEBUG_CALL(expr, &stmt->expr);
+    break;
+  case AST_STMT_TY_COMPOUND:
+    DEBUG_CALL(compoundstmt, &stmt->compound);
+    break;
+  case AST_STMT_TY_JUMP:
+    DEBUG_CALL(jumpstmt, &stmt->jump);
+    break;
+  case AST_STMT_TY_SELECT:
+    DEBUG_CALL(selectstmt, &stmt->select);
+    break;
+  case AST_STMT_TY_ITER:
+    DEBUG_CALL(iterstmt, &stmt->iter);
+    break;
+  case AST_STMT_TY_LABELED:
+    DEBUG_CALL(labeledstmt, &stmt->labeled);
+    break;
+  }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(compoundstmt, compound_stmt) {
+  AST_PRINTZ("COMPOUND STATEMENT: ");
+  INDENT();
+
+  for (size_t i = 0; i < compound_stmt->num_stmts; i++) {
+    DEBUG_CALL(stmt, &compound_stmt->stmts[i]);
+  }
+
+  UNINDENT();
+}
+
+DEBUG_FUNC(param, param) {
+  AST_PRINTZ("PARAM");
+  INDENT();
+  DEBUG_CALL(declaration_specifier_list, &param->specifier_list);
+  switch (param->ty) {
+  case AST_PARAM_TY_DECL:
+    DEBUG_CALL(declarator, &param->declarator);
+    break;
+  case AST_PARAM_TY_ABSTRACT_DECL:
+    DEBUG_CALL(abstract_declarator, &param->abstract_declarator);
+    break;
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(paramlist, param_list) {
+  for (size_t i = 0; i < param_list->num_params; i++) {
+    DEBUG_CALL(param, &param_list->params[i]);
+  }
+}
+
+DEBUG_FUNC(funcdef, func_def) {
+  AST_PRINT_SAMELINE_Z("FUNCTION DEFINITION ");
+
+  DEBUG_CALL(compoundstmt, &func_def->body);
+}
+
+DEBUG_FUNC(external_declaration, external_declaration) {
+  switch (external_declaration->ty) {
+  case AST_EXTERNAL_DECLARATION_TY_DECLARATION:
+    DEBUG_CALL(declaration, &external_declaration->declaration);
+    break;
+  case AST_EXTERNAL_DECLARATION_TY_FUNC_DEF:
+    DEBUG_CALL(funcdef, &external_declaration->func_def);
+    break;
+  }
+}
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {
@@ -3555,11 +3757,8 @@ void debug_print_ast(struct parser *parser,
 
   AST_PRINTZ("PRINTING AST");
 
-  // for (size_t i = 0; i < translation_unit->num_func_defs; i++) {
-  //   DEBUG_CALL(funcdef, &translation_unit->func_defs[i]);
-  // }
-
-  // for (size_t i = 0; i < translation_unit->num_decl_lists; i++) {
-  //   DEBUG_CALL(decllist, &translation_unit->decl_lists[i]);
-  // }
+  for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
+    DEBUG_CALL(external_declaration,
+               &translation_unit->external_declarations[i]);
+  }
 }

@@ -269,9 +269,9 @@ void peek_token(struct lexer *lexer, struct token *token) {
 
   char c = lexer->text[start.idx];
 
-  trace("lexing char '%c'", c);
-  size_t context = MIN(lexer->len - start.idx, 25);
-  trace("on '%.*s'\n", context, &lexer->text[start.idx]);
+  // trace("lexing char '%c'", c);
+  // size_t context = MIN(lexer->len - start.idx, 25);
+  // trace("on '%.*s'\n", context, &lexer->text[start.idx]);
 
   enum lex_token_ty ty;
   switch (c) {
@@ -619,7 +619,7 @@ void peek_token(struct lexer *lexer, struct token *token) {
   token->span.start = start;
   token->span.end = end;
 
-  debug("parse token %s\n", token_name(lexer, token));
+  // debug("parse token %s\n", token_name(lexecr, token));
 }
 
 const char *strlike_associated_text(const struct lexer *lexer,
