@@ -25,14 +25,13 @@ enum ast_function_specifier {
 };
 
 enum ast_type_qualifier {
-  AST_TYPE_QUALIFIER_NONE,
   AST_TYPE_QUALIFIER_CONST,
   AST_TYPE_QUALIFIER_VOLATILE,
 };
 
 struct ast_declaration_specifier_list {
   size_t num_decl_specifiers;
-  struct ast_decl_specifier *decl_specifiers;
+  struct ast_declaration_specifier *decl_specifiers;
 };
 
 struct ast_pointer {
@@ -94,7 +93,7 @@ struct ast_struct_declaration {
 
 struct ast_struct_declaration_list {
   size_t num_struct_declarations;
-  struct ast_struct_declaration *declarations;
+  struct ast_struct_declaration *struct_declarations;
 };
 
 enum ast_struct_or_union_specifier_ty {
@@ -167,7 +166,7 @@ enum ast_decl_specifier_ty {
   AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER,
 };
 
-struct ast_decl_specifier {
+struct ast_declaration_specifier {
   enum ast_decl_specifier_ty ty;
 
   union {
@@ -380,8 +379,6 @@ enum ast_designator_ty {
 
 struct ast_designator {
   enum ast_designator_ty ty;
-
-  struct ast_designator *next;
 
   union {
     struct token field;
@@ -676,7 +673,7 @@ struct ast_iterstmt {
 
 enum ast_stmt_ty {
   AST_STMT_TY_NULL,
-  AST_STMT_TY_DECL_LIST,
+  AST_STMT_TY_DECLARATION,
   AST_STMT_TY_LABELED,
   AST_STMT_TY_EXPR,
   AST_STMT_TY_COMPOUND,
