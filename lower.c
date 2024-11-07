@@ -2,6 +2,8 @@
 
 #include "ir/ir.h"
 
+typedef int a;
+
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   // lowers a `br.switch` into a series of if-else statements
 

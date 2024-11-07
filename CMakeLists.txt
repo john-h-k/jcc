@@ -27,7 +27,7 @@ set(
   hashtbl.c
   bitset.c
   var_table.c
-  # typechk.c
+  typechk.c
   lsra.c
   graphcol.c
   

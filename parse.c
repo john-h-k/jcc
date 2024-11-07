@@ -1,17 +1,12 @@
 #include "parse.h"
 
 #include "alloc.h"
-#include "bit_twiddle.h"
-#include "ir/ir.h"
-#include "ir/var_refs.h"
 #include "lex.h"
 #include "log.h"
 #include "program.h"
 #include "util.h"
-#include "var_table.h"
 #include "vector.h"
 
-#include <alloca.h>
 #include <ctype.h>
 #include <string.h>
 
@@ -295,31 +290,6 @@ bool is_literal_token(enum lex_token_ty tok_ty) {
   case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
   case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL:
     return true;
-  }
-}
-
-bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty) {
-  switch (ty) {
-  case AST_BINARY_OP_TY_EQ:
-  case AST_BINARY_OP_TY_NEQ:
-  case AST_BINARY_OP_TY_GT:
-  case AST_BINARY_OP_TY_GTEQ:
-  case AST_BINARY_OP_TY_LT:
-  case AST_BINARY_OP_TY_LTEQ:
-  case AST_BINARY_OP_TY_LOGICAL_OR:
-  case AST_BINARY_OP_TY_LOGICAL_AND:
-    return true;
-  case AST_BINARY_OP_TY_OR:
-  case AST_BINARY_OP_TY_AND:
-  case AST_BINARY_OP_TY_XOR:
-  case AST_BINARY_OP_TY_LSHIFT:
-  case AST_BINARY_OP_TY_RSHIFT:
-  case AST_BINARY_OP_TY_ADD:
-  case AST_BINARY_OP_TY_SUB:
-  case AST_BINARY_OP_TY_MUL:
-  case AST_BINARY_OP_TY_DIV:
-  case AST_BINARY_OP_TY_QUOT:
-    return false;
   }
 }
 
