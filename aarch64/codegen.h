@@ -136,6 +136,8 @@ enum aarch64_addressing_mode {
 };
 
 enum aarch64_reg_ty {
+  AARCH64_REG_TY_NONE,
+
   AARCH64_REG_TY_W, // 32-bit int
   AARCH64_REG_TY_X, // 64-bit int
 

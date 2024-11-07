@@ -6,7 +6,7 @@ struct var_refs {
   struct vector *refs;
 };
 
-struct var_refs *var_refs_create() {
+struct var_refs *var_refs_create(void) {
   struct var_refs refs = {.refs = vector_create(sizeof(struct var_ref))};
 
   struct var_refs *var_refs = nonnull_malloc(sizeof(*var_refs));

@@ -41,6 +41,7 @@ bool td_binary_op_is_comparison(enum td_binary_op_ty ty) {
     return false;
   }
 }
+
 bool is_fp_ty(const struct td_var_ty *ty) {
   if (ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
     return false;
@@ -93,10 +94,8 @@ bool is_integral_ty(const struct td_var_ty *ty) {
   }
 }
 
-struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
+struct td_var_ty td_var_ty_pointer_sized_int(UNUSED_ARG(struct typechk *tchk),
                                              bool is_signed) {
-  UNUSED_ARG(tchk);
-
   // returns the type for `size_t` effectively
   // TODO: generalise - either we should have a special ptr-sized int type, or
   // tchk should have a field for ptr size
@@ -107,23 +106,20 @@ struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
 }
 
 struct td_var_ty td_var_ty_make_pointer(struct typechk *tchk,
-                                        const struct td_var_ty *var_ty) {
-  UNUSED_ARG(tchk);
-
+                                        const struct td_var_ty *var_ty, enum td_type_qualifier_flags qualifiers) {
   // we don't know lifetime of the other one so need to copy it
   // TODO: cache types
   struct td_var_ty *copied = arena_alloc(tchk->arena, sizeof(*copied));
   *copied = *var_ty;
 
   return (struct td_var_ty){.ty = TD_VAR_TY_TY_POINTER,
+                            .type_qualifiers = qualifiers,
                             .pointer =
                                 (struct td_ty_pointer){.underlying = copied}};
 }
 
-struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
+struct td_var_ty td_var_ty_get_underlying(UNUSED_ARG(struct typechk *tchk),
                                           const struct td_var_ty *ty_ref) {
-  UNUSED_ARG(tchk);
-
   switch (ty_ref->ty) {
   case TD_VAR_TY_TY_POINTER:
     return *ty_ref->pointer.underlying;
@@ -134,10 +130,14 @@ struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
   }
 }
 
-struct td_var_ty td_var_ty_promote_integer(struct typechk *tchk,
-                                           const struct td_var_ty *ty_ref) {
-  UNUSED_ARG(tchk);
+struct td_var_ty td_var_ty_make_func(struct typechk *tchk,
+                                     enum td_ty_func_ty ty,
+                                     struct td_var_ty ret_ty, size_t num_params, const struct td_var_ty *params) {
+}
 
+
+static struct td_var_ty td_var_ty_promote_integer(UNUSED_ARG(struct typechk *tchk),
+                                           const struct td_var_ty *ty_ref) {
   debug_assert(ty_ref->ty != TD_VAR_TY_TY_UNKNOWN, "unknown ty in call to `%s`",
                __func__);
 
@@ -151,7 +151,7 @@ struct td_var_ty td_var_ty_promote_integer(struct typechk *tchk,
                             .well_known = WELL_KNOWN_TY_SIGNED_INT};
 }
 
-struct td_var_ty resolve_unary_op_types(struct typechk *tchk,
+static struct td_var_ty resolve_unary_op_types(struct typechk *tchk,
                                         enum td_unary_op_ty ty,
                                         const struct td_var_ty *var_ty,
                                         const struct td_cast *cast) {
@@ -189,7 +189,7 @@ struct td_var_ty resolve_unary_op_types(struct typechk *tchk,
   }
 }
 
-struct td_var_ty resolve_binary_op_intermediate_types(
+static struct td_var_ty resolve_binary_op_intermediate_types(
     struct typechk *tchk, enum td_binary_op_ty ty, const struct td_var_ty *lhs,
     const struct td_var_ty *rhs) {
   debug_assert(lhs->ty != TD_VAR_TY_TY_UNKNOWN &&
@@ -472,12 +472,8 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   }
 }
 
-static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
-                                              const struct token *identifier) {
-  UNUSED_ARG(tchk);
-  UNUSED_ARG(identifier);
-  todo("typedefs");
-}
+TODO_FUNC(static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
+                                              const struct token *identifier))
 
 // represents an in-process build of a var_ty
 // e.g in `int (**foo)`, the processing of `(**foo)` leads to a partial ptr ty
@@ -769,31 +765,28 @@ condense_specifiers(struct typechk *tchk,
   return specifiers;
 }
 
-struct td_var_ty resolve_ternary_ty(struct parser *parser,
+static struct td_var_ty resolve_ternary_ty(UNUSED_ARG(struct parser *parser),
                                     struct td_var_ty *lhs,
-                                    struct td_var_ty *rhs) {
-  UNUSED_ARG(parser);
-  UNUSED_ARG(rhs);
-
+                                    UNUSED_ARG(struct td_var_ty *rhs)) {
   // FIXME: do logic
   return *lhs;
 }
 
-void tchk_push_scope(struct typechk *tchk) {
+static void tchk_push_scope(struct typechk *tchk) {
   push_scope(&tchk->var_table);
   push_scope(&tchk->ty_table);
 }
 
-void tchk_pop_scope(struct typechk *tchk) {
+static void tchk_pop_scope(struct typechk *tchk) {
   pop_scope(&tchk->var_table);
   pop_scope(&tchk->ty_table);
 }
 
-struct td_stmt type_stmt(struct typechk *tchk, const struct ast_stmt *stmt) {
+static struct td_stmt type_stmt(struct typechk *tchk, const struct ast_stmt *stmt) {
   switch (stmt->ty) {}
 }
 
-struct td_compoundstmt
+static struct td_compoundstmt
 type_compoundstmt(struct typechk *tchk,
                   const struct ast_compoundstmt *compound_stmt) {
   struct td_compoundstmt td_cmpd = {
@@ -808,7 +801,7 @@ type_compoundstmt(struct typechk *tchk,
   return td_cmpd;
 }
 
-struct td_funcdef type_funcdef(struct typechk *tchk,
+static struct td_funcdef type_funcdef(struct typechk *tchk,
                                const struct ast_funcdef *func_def) {
   if (func_def->declaration_list.num_declarations) {
     bug("old-style function arguments not currently supported");
@@ -819,7 +812,7 @@ struct td_funcdef type_funcdef(struct typechk *tchk,
   type_compoundstmt(tchk, &func_def->body);
 }
 
-struct td_declaration
+static struct td_declaration
 type_declaration(struct typechk *tchk,
                  const struct ast_declaration *declaration) {}
 

@@ -36,7 +36,6 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
   switch (sign) {
   case IR_OP_SIGN_NA:
     bug("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
-    break;
   case IR_OP_SIGN_SIGNED:
     div_ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
@@ -76,8 +75,6 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
-  UNUSED_ARG(irb);
-
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
                        binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");
@@ -209,11 +206,11 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
   // because size is >= MAX_REG_SIZE,
   // we can just do a whole-reg copy starting from end-MAX_REG_SIZE
   if (size_left) {
-    size_t offset = MAX_REG_SIZE - size_left;
+    size_t trailing_offset = MAX_REG_SIZE - size_left;
 
     struct ir_op *offset_cnst =
         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
-    make_pointer_constant(func->unit, offset_cnst, offset);
+    make_pointer_constant(func->unit, offset_cnst, trailing_offset);
 
     struct ir_op *src_addr =
         insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);

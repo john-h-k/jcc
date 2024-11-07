@@ -143,49 +143,44 @@ bool op_is_branch(enum ir_op_ty ty) {
   }
 }
 
-void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
+static void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
                   void *cb_metadata) {
   cb(&br_cond->cond, cb_metadata);
 }
 
-void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
+static void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
                     void *cb_metadata) {
   cb(&store_lcl->value, cb_metadata);
 }
 
-void walk_load_lcl(struct ir_op_load_lcl *load_lcl, walk_op_callback *cb,
-                   void *cb_metadata) {
-  UNUSED_ARG(load_lcl);
-  UNUSED_ARG(cb);
-  UNUSED_ARG(cb_metadata);
+static void walk_load_lcl(
+                          UNUSED_ARG(struct ir_op_load_lcl *load_lcl), UNUSED_ARG(walk_op_callback *cb),
+                   UNUSED_ARG(void *cb_metadata)) {
   // nada
 }
 
-void walk_cnst(struct ir_op_cnst *cnst, walk_op_callback *cb,
-               void *cb_metadata) {
-  UNUSED_ARG(cnst);
-  UNUSED_ARG(cb);
-  UNUSED_ARG(cb_metadata);
+static void walk_cnst(UNUSED_ARG(struct ir_op_cnst *cnst), UNUSED_ARG(walk_op_callback *cb),
+               UNUSED_ARG(void *cb_metadata)) {
   // nada
 }
 
-void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
+static void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
                     void *cb_metadata) {
   walk_op(binary_op->lhs, cb, cb_metadata);
   walk_op(binary_op->rhs, cb, cb_metadata);
 }
 
-void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
+static void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
                    void *cb_metadata) {
   walk_op(unary_op->value, cb, cb_metadata);
 }
 
-void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
+static void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
                   void *cb_metadata) {
   walk_op(cast_op->value, cb, cb_metadata);
 }
 
-void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
+static void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
   if (ret->value) {
     walk_op(ret->value, cb, cb_metadata);
   }
@@ -673,7 +668,6 @@ void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
 
 void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
                       struct ir_op *move_after) {
-  UNUSED_ARG(irb);
   invariant_assert(op->id != move_after->id, "trying to move op after itself!");
   invariant_assert(op->stmt == NULL || op->stmt == move_after->stmt,
                    "moving between ir_stmts not supported");
@@ -687,7 +681,6 @@ void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
 
 void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
                        struct ir_op *move_before) {
-  UNUSED_ARG(irb);
   invariant_assert(op->id != move_before->id,
                    "trying to move op before itself!");
   invariant_assert(op->stmt == NULL || op->stmt == move_before->stmt,
@@ -703,7 +696,6 @@ void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
 void move_after_ir_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *move_after) {
-  UNUSED_ARG(irb);
   invariant_assert(basicblock->id != move_after->id,
                    "trying to move basicblock after itself!");
 
@@ -717,7 +709,6 @@ void move_after_ir_basicblock(struct ir_func *irb,
 void move_before_ir_basicblock(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                struct ir_basicblock *move_before) {
-  UNUSED_ARG(irb);
   invariant_assert(basicblock->id != move_before->id,
                    "trying to move basicblock before itself!");
 
@@ -730,7 +721,6 @@ void move_before_ir_basicblock(struct ir_func *irb,
 
 struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_op_var_ty var_ty) {
-  UNUSED_ARG(irb);
   debug_assert(op, "invalid replacement point!");
 
   op->ty = ty;
@@ -974,11 +964,9 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   return contained;
 }
 
-void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
+void make_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                             enum ir_op_var_primitive_ty ty,
                             unsigned long long value) {
-  UNUSED_ARG(iru);
-
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
       (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = ty};
@@ -1031,9 +1019,7 @@ struct ir_op_var_ty var_ty_make_array(struct ir_unit *iru,
   return var_ty;
 }
 
-struct ir_op_var_ty var_ty_for_pointer_size(struct ir_unit *iru) {
-  UNUSED_ARG(iru);
-
+struct ir_op_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
@@ -1286,7 +1272,6 @@ bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_op_var_ty *ty) {
   // FIXME: pointer size!
-  UNUSED_ARG(iru);
 
   switch (ty->ty) {
   case IR_OP_VAR_TY_TY_NONE:

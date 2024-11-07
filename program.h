@@ -22,8 +22,8 @@ struct text_span {
   struct text_pos end;
 };
 
-int text_pos_len(struct text_pos start, struct text_pos end);
-int text_span_len(const struct text_span *span);
+size_t text_pos_len(struct text_pos start, struct text_pos end);
+size_t text_span_len(const struct text_span *span);
 
 void next_col(struct text_pos *pos);
 

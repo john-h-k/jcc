@@ -1,10 +1,10 @@
 #include "program.h"
 
-int text_pos_len(struct text_pos start, struct text_pos end) {
+size_t text_pos_len(struct text_pos start, struct text_pos end) {
   return end.idx - start.idx;
 }
 
-int text_span_len(const struct text_span *span) {
+size_t text_span_len(const struct text_span *span) {
   return text_pos_len(span->start, span->end);
 }
 

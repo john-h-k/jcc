@@ -28,7 +28,7 @@ struct register_alloc_state {
   struct bitset *fp_reg_pool;
 };
 
-void insert_active(struct register_alloc_state *state, size_t cur_interval) {
+static void insert_active(struct register_alloc_state *state, size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
   size_t *active = state->active;
 
@@ -49,7 +49,7 @@ void insert_active(struct register_alloc_state *state, size_t cur_interval) {
   }
 }
 
-void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
+static void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
                        size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
 
@@ -72,7 +72,7 @@ void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
   }
 }
 
-void expire_old_intervals(struct register_alloc_state *state,
+static void expire_old_intervals(struct register_alloc_state *state,
                           struct interval *cur_interval) {
   size_t num_expired_intervals = 0;
 
@@ -101,9 +101,9 @@ void expire_old_intervals(struct register_alloc_state *state,
           sizeof(*state->active) * (state->num_active));
 }
 
-int sort_interval_by_start_point(const void *a, const void *b) {
-  struct interval *a_int = (struct interval *)a;
-  struct interval *b_int = (struct interval *)b;
+static int sort_interval_by_start_point(const void *a, const void *b) {
+  const struct interval *a_int = (const struct interval *)a;
+  const struct interval *b_int = (const struct interval *)b;
   size_t a_start = a_int->start;
   size_t b_start = b_int->start;
 
@@ -137,12 +137,12 @@ struct fixup_spills_data {
   struct ir_op *consumer;
 };
 
-bool op_needs_reg(struct ir_op *op) {
+static bool op_needs_reg(struct ir_op *op) {
   // addressof operator does not need a reg, so does not need a load
   return op->ty != IR_OP_TY_ADDR;
 }
 
-void fixup_spills_callback(struct ir_op **op, void *metadata) {
+static void fixup_spills_callback(struct ir_op **op, void *metadata) {
   struct fixup_spills_data *data = metadata;
 
   if (data->consumer->ty != IR_OP_TY_PHI &&
@@ -176,9 +176,7 @@ void fixup_spills_callback(struct ir_op **op, void *metadata) {
   }
 }
 
-void fixup_spills(struct ir_func *irb, struct interval_data *data) {
-  UNUSED_ARG(data);
-
+static void fixup_spills(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
 
@@ -208,14 +206,14 @@ void fixup_spills(struct ir_func *irb, struct interval_data *data) {
   }
 }
 
-int compare_interval_id(const void *a, const void *b) {
-  size_t a_id = ((struct interval *)a)->op->id;
-  size_t b_id = ((struct interval *)b)->op->id;
+static int compare_interval_id(const void *a, const void *b) {
+  size_t a_id = ((const struct interval *)a)->op->id;
+  size_t b_id = ((const struct interval *)b)->op->id;
 
-  return (ssize_t)a_id - (ssize_t)b_id;
+  return (int)((ssize_t)a_id - (ssize_t)b_id);
 }
 
-struct interval_data register_alloc_pass(struct ir_func *irb,
+static struct interval_data register_alloc_pass(struct ir_func *irb,
                                          struct reg_info *info) {
 
   struct interval_data data = construct_intervals(irb);
@@ -310,8 +308,8 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
       // will need a register
       interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
       if (interval->op->ty == IR_OP_TY_PHI) {
-        for (size_t i = 0; i < interval->op->phi.num_values; i++) {
-          struct ir_op *value = interval->op->phi.values[i];
+        for (size_t j = 0; j < interval->op->phi.num_values; j++) {
+          struct ir_op *value = interval->op->phi.values[j];
 
           value->flags &= ~IR_OP_FLAG_MUST_SPILL;
         }
@@ -368,14 +366,6 @@ struct interval_data register_alloc_pass(struct ir_func *irb,
      - registers may be spilt to new local variables
 
 */
-
-bool op_needs_int_reg(struct ir_op *op) {
-  // pointers etc live in integer registers
-  return !var_ty_is_fp(&op->var_ty);
-}
-
-bool op_needs_fp_reg(struct ir_op *op) { return var_ty_is_fp(&op->var_ty); }
-
 void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   irb->reg_usage = (struct ir_reg_usage){
       .fp_registers_used =
@@ -403,7 +393,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
   // insert LOAD and STORE ops as needed
-  fixup_spills(irb, &data);
+  fixup_spills(irb);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);

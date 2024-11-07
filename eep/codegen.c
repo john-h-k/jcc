@@ -1,11 +1,7 @@
 #include "codegen.h"
 
+#include "../alloc.h"
 #include "../vector.h"
-
-const char *eep_mangle(struct arena_allocator *arena, const char *name) {
-  UNUSED_ARG(arena);
-  return name;
-}
 
 struct eep_prologue_info {
   bool prologue_generated;

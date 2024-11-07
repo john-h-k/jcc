@@ -22,9 +22,9 @@ void eliminate_phi(struct ir_func *irb) {
       while (op && op->ty == IR_OP_TY_PHI) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
           struct ir_op *value = op->phi.values[i];
-          struct ir_basicblock *basicblock = value->stmt->basicblock;
+          struct ir_basicblock *phi_basicblock = value->stmt->basicblock;
 
-          struct ir_op *last = basicblock->last->last;
+          struct ir_op *last = phi_basicblock->last->last;
 
           invariant_assert(op_is_branch(last->ty),
                            "bb ended in non-branch instruction!");

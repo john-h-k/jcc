@@ -27,7 +27,7 @@ struct var_ref {
   };
 };
 
-struct var_refs *var_refs_create();
+struct var_refs *var_refs_create(void);
 
 struct var_ref *var_refs_get(const struct var_refs *var_refs,
                              const struct var_key *key);

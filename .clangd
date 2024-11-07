@@ -1,4 +1,15 @@
-CompilationDatabase: ./build
+# TEMP: disable eep/riscv folders
+If:
+  PathMatch: eep.*
+Index:
+  Background: Skip
+
+---
+
+If:
+  PathMatch: riscv.*
+Index:
+  Background: Skip
 
 ---
 

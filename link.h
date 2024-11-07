@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 struct link_args {
-  const char **objects;
+  const char *const *objects;
   size_t num_objects;
 
   const char *output;

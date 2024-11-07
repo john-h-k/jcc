@@ -46,18 +46,18 @@ void lexer_free(struct lexer **lexer) {
   *lexer = NULL;
 }
 
-bool valid_identifier_char(char c) {
+static bool valid_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
 }
 
 /* Identifiers cannot start with digits */
-bool valid_first_identifier_char(char c) {
+static bool valid_first_identifier_char(char c) {
   return !isdigit(c) && valid_identifier_char(c);
 }
 
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
-enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
+static enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
                             struct text_pos end) {
   struct keyword {
     const char *str;
@@ -142,21 +142,7 @@ void consume_token(struct lexer *lexer, struct token token) {
   lexer->pos = token.span.end;
 }
 
-void find_eol(struct lexer *lexer, struct text_pos *cur_pos) {
-  for (; cur_pos->idx < lexer->len && lexer->text[cur_pos->idx] != '\n';
-       next_col(cur_pos)) {
-    // nothing
-  }
-
-  if (cur_pos->idx < lexer->len) {
-    next_line(cur_pos);
-  }
-
-  // we have either hit end of line or end of file
-  // we treat both as a valid eol
-}
-
-const char *process_raw_string(const struct lexer *lexer,
+static const char *process_raw_string(const struct lexer *lexer,
                                const struct token *token, size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
@@ -203,7 +189,6 @@ const char *process_raw_string(const struct lexer *lexer,
       default:
         todo("\\x \\u \\U and \\octal escapes");
         // either octal escape, or invalid
-        break;
       }
 
 #undef ADD_ESCAPED
@@ -220,7 +205,7 @@ const char *process_raw_string(const struct lexer *lexer,
 }
 
 /* Attempts to consume and move forward the position if it finds char `c` */
-bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
+static bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
   debug_assert(
       lexer->pos.idx != pos->idx,
       "calling `try_consume` with `pos` the same as lexer makes no sense");
@@ -660,9 +645,7 @@ const char *associated_text(const struct lexer *lexer,
   }
 }
 
-const char *token_name(const struct lexer *lexer, const struct token *token) {
-  UNUSED_ARG(lexer);
-
+const char *token_name(UNUSED_ARG(const struct lexer *lexer), const struct token *token) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;

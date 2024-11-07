@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-void write_mach_header(FILE *file, const struct compile_args *args) {
+static void write_mach_header(FILE *file, const struct compile_args *args) {
   struct mach_header_64 header;
   memset(&header, 0, sizeof(header));
 
@@ -21,7 +21,6 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
     bug("NATIVE arch reached linker, should have been selected earlier");
-    break;
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
     header.cputype = CPU_TYPE_ARM64;
     header.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
@@ -32,7 +31,6 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
     break;
   case COMPILE_TARGET_ARCH_EEP:
     todo("mach-o does not support EEP");
-    break;
   }
 
   header.filetype = MH_OBJECT;
@@ -51,7 +49,7 @@ void write_mach_header(FILE *file, const struct compile_args *args) {
   ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
-size_t count_relocation_instrs(const struct build_object_args *args) {
+static size_t count_relocation_instrs(const struct build_object_args *args) {
   size_t num_instrs = 0;
 
   for (size_t i = 0; i < args->num_entries; i++) {
@@ -74,7 +72,7 @@ size_t count_relocation_instrs(const struct build_object_args *args) {
   return num_instrs;
 }
 
-void write_relocations(FILE *file, const struct build_object_args *args,
+static void write_relocations(FILE *file, const struct build_object_args *args,
                        const size_t *entry_offsets) {
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
@@ -149,7 +147,7 @@ void write_relocations(FILE *file, const struct build_object_args *args,
   }
 }
 
-void write_segment_command(FILE *file, const struct build_object_args *args) {
+static void write_segment_command(FILE *file, const struct build_object_args *args) {
   size_t str_align = 1;
   size_t func_align = 1;
   size_t const_align = 1;
@@ -484,7 +482,6 @@ void write_segment_command(FILE *file, const struct build_object_args *args) {
         break;
       case SYMBOL_TY_DECL:
         bug("DECL symbol must be VISIBILITY_UNDEF");
-        break;
       }
     }
 

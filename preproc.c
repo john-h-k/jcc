@@ -49,7 +49,7 @@ enum preproc_token_ty {
   PREPROC_TOKEN_TY_OTHER,
 };
 
-const char *preproc_token_name(enum preproc_token_ty ty) {
+static const char *preproc_token_name(enum preproc_token_ty ty) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;
@@ -119,7 +119,7 @@ void preproc_free(struct preproc **preproc) {
   *preproc = NULL;
 }
 
-void find_multiline_comment_end(struct preproc *preproc,
+static void find_multiline_comment_end(struct preproc *preproc,
                                 struct text_pos *cur_pos) {
   while (/* token must be at least 2 chars */ cur_pos->idx + 1 < preproc->len) {
     if (preproc->text[cur_pos->idx] == '\n') {
@@ -138,27 +138,27 @@ void find_multiline_comment_end(struct preproc *preproc,
   // if not found, it will just push to end of file and next token will be EOF
 }
 
-bool is_newline(char c) { return c == '\n'; }
+static bool is_newline(char c) { return c == '\n'; }
 
-bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
+static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
 
-bool is_punctuator(char c) {
+static bool is_punctuator(char c) {
   return ispunct(c) && c != '$' && c != '@' && c != '`';
 }
 
-bool is_identifier_char(char c) { return isalpha(c) || isdigit(c) || c == '_'; }
+static bool is_identifier_char(char c) { return isalpha(c) || isdigit(c) || c == '_'; }
 
-bool is_first_identifier_char(char c) {
+static bool is_first_identifier_char(char c) {
   return is_identifier_char(c) && !isdigit(c);
 }
 
-bool is_preproc_number_char(char c) {
+static bool is_preproc_number_char(char c) {
   // legal chars are letters, digits, underscores, periods, and exponents (not
   // handled here)
   return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
 
-void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
+static void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   struct text_pos start = preproc->pos;
   struct text_pos end = start;
 
@@ -274,12 +274,12 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
     next_col(&end);
 
     while (end.idx < preproc->len) {
-      char c = preproc->text[end.idx];
+      char nc = preproc->text[end.idx];
 
-      if (is_preproc_number_char(c)) {
+      if (is_preproc_number_char(nc)) {
         next_col(&end);
       } else if (end.idx + 1 < preproc->len &&
-                 (tolower(c) == 'e' || tolower(c) == 'p') &&
+                 (tolower(nc) == 'e' || tolower(nc) == 'p') &&
                  (preproc->text[end.idx + 1] == '+' ||
                   preproc->text[end.idx + 1] == '-')) {
         // need to check if it is an exponent
@@ -325,14 +325,14 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   preproc->pos = end;
 }
 
-void preproc_next_non_whitespace_token(struct preproc *preproc,
+static void preproc_next_non_whitespace_token(struct preproc *preproc,
                                        struct preproc_token *token) {
   do {
     preproc_next_token(preproc, token);
   } while (token->ty == PREPROC_TOKEN_TY_WHITESPACE);
 }
 
-bool token_streq(struct preproc *preproc, struct preproc_token token,
+static bool token_streq(struct preproc *preproc, struct preproc_token token,
                  const char *str) {
   size_t token_len = token.span.end.idx - token.span.start.idx;
   size_t len = MIN(token_len, strlen(str));
@@ -418,11 +418,10 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
                 filename_len);
 
         todo("actually include file");
-      } else {
-        todo("other directives");
+        // break;
       }
 
-      break;
+      todo("other directives");
     }
     case PREPROC_TOKEN_TY_WHITESPACE:
       // keep leading whitespace

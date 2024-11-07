@@ -61,7 +61,7 @@ struct ast_op_info {
   unsigned precedence;
 };
 
-struct ast_op_info op_info(enum ast_binary_op_ty ty) {
+static struct ast_op_info op_info(enum ast_binary_op_ty ty) {
   struct ast_op_info info = {.ty = ty};
 
   switch (ty) {
@@ -114,14 +114,12 @@ struct ast_op_info op_info(enum ast_binary_op_ty ty) {
     info.precedence = 10;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
-  default:
-    unreachable("invalid `ast_binary_op_ty`");
   }
 
   return info;
 }
 
-bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
+static bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   switch (token->ty) {
   case LEX_TOKEN_TY_OP_EQ:
     *info = op_info(AST_BINARY_OP_TY_EQ);
@@ -183,117 +181,7 @@ bool op_info_for_token(const struct token *token, struct ast_op_info *info) {
   }
 }
 
-// FIXME: type pooling so we don't end up with lots of duplicate types
-bool is_literal_token(enum lex_token_ty tok_ty) {
-  switch (tok_ty) {
-  case LEX_TOKEN_TY_UNKNOWN:
-  case LEX_TOKEN_TY_EOF:
-  case LEX_TOKEN_TY_WHITESPACE:
-  case LEX_TOKEN_TY_INLINE_COMMENT:
-  case LEX_TOKEN_TY_MULTILINE_COMMENT:
-  case LEX_TOKEN_TY_OPEN_BRACKET:
-  case LEX_TOKEN_TY_CLOSE_BRACKET:
-  case LEX_TOKEN_TY_OPEN_SQUARE_BRACKET:
-  case LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET:
-  case LEX_TOKEN_TY_OPEN_BRACE:
-  case LEX_TOKEN_TY_CLOSE_BRACE:
-  case LEX_TOKEN_TY_COLON:
-  case LEX_TOKEN_TY_QMARK:
-  case LEX_TOKEN_TY_SEMICOLON:
-  case LEX_TOKEN_TY_COMMA:
-  case LEX_TOKEN_TY_DOT:
-  case LEX_TOKEN_TY_ARROW:
-  case LEX_TOKEN_TY_OP_LOGICAL_NOT:
-  case LEX_TOKEN_TY_OP_NOT:
-  case LEX_TOKEN_TY_OP_ASSG:
-  case LEX_TOKEN_TY_OP_INC:
-  case LEX_TOKEN_TY_OP_DEC:
-  case LEX_TOKEN_TY_OP_RSHIFT:
-  case LEX_TOKEN_TY_OP_RSHIFT_ASSG:
-  case LEX_TOKEN_TY_OP_LSHIFT:
-  case LEX_TOKEN_TY_OP_LSHIFT_ASSG:
-  case LEX_TOKEN_TY_OP_LOGICAL_AND:
-  case LEX_TOKEN_TY_OP_AND:
-  case LEX_TOKEN_TY_OP_AND_ASSG:
-  case LEX_TOKEN_TY_OP_LOGICAL_OR:
-  case LEX_TOKEN_TY_OP_OR:
-  case LEX_TOKEN_TY_OP_OR_ASSG:
-  case LEX_TOKEN_TY_OP_XOR:
-  case LEX_TOKEN_TY_OP_XOR_ASSG:
-  case LEX_TOKEN_TY_OP_ADD:
-  case LEX_TOKEN_TY_OP_ADD_ASSG:
-  case LEX_TOKEN_TY_OP_SUB:
-  case LEX_TOKEN_TY_OP_SUB_ASSG:
-  case LEX_TOKEN_TY_OP_MUL:
-  case LEX_TOKEN_TY_OP_MUL_ASSG:
-  case LEX_TOKEN_TY_OP_DIV:
-  case LEX_TOKEN_TY_OP_DIV_ASSG:
-  case LEX_TOKEN_TY_OP_QUOT:
-  case LEX_TOKEN_TY_OP_QUOT_ASSG:
-  case LEX_TOKEN_TY_OP_EQ:
-  case LEX_TOKEN_TY_OP_NEQ:
-  case LEX_TOKEN_TY_OP_LT:
-  case LEX_TOKEN_TY_OP_LTEQ:
-  case LEX_TOKEN_TY_OP_GT:
-  case LEX_TOKEN_TY_OP_GTEQ:
-  case LEX_TOKEN_TY_ELLIPSIS:
-  case LEX_TOKEN_TY_KW_GOTO:
-  case LEX_TOKEN_TY_KW_BREAK:
-  case LEX_TOKEN_TY_KW_CONTINUE:
-  case LEX_TOKEN_TY_KW_DO:
-  case LEX_TOKEN_TY_KW_FOR:
-  case LEX_TOKEN_TY_KW_SWITCH:
-  case LEX_TOKEN_TY_KW_WHILE:
-  case LEX_TOKEN_TY_KW_DEFAULT:
-  case LEX_TOKEN_TY_KW_CASE:
-  case LEX_TOKEN_TY_KW_IF:
-  case LEX_TOKEN_TY_KW_ELSE:
-  case LEX_TOKEN_TY_KW_TYPEDEF:
-  case LEX_TOKEN_TY_KW_STATIC:
-  case LEX_TOKEN_TY_KW_EXTERN:
-  case LEX_TOKEN_TY_KW_AUTO:
-  case LEX_TOKEN_TY_KW_REGISTER:
-  case LEX_TOKEN_TY_KW_INLINE:
-  case LEX_TOKEN_TY_KW_CONST:
-  case LEX_TOKEN_TY_KW_VOLATILE:
-  case LEX_TOKEN_TY_KW_VOID:
-  case LEX_TOKEN_TY_KW_HALF:
-  case LEX_TOKEN_TY_KW_FLOAT:
-  case LEX_TOKEN_TY_KW_DOUBLE:
-  case LEX_TOKEN_TY_KW_CHAR:
-  case LEX_TOKEN_TY_KW_SHORT:
-  case LEX_TOKEN_TY_KW_INT:
-  case LEX_TOKEN_TY_KW_LONG:
-  case LEX_TOKEN_TY_KW_UNSIGNED:
-  case LEX_TOKEN_TY_KW_SIGNED:
-  case LEX_TOKEN_TY_KW_RETURN:
-  case LEX_TOKEN_TY_KW_ENUM:
-  case LEX_TOKEN_TY_KW_STRUCT:
-  case LEX_TOKEN_TY_KW_UNION:
-  case LEX_TOKEN_TY_KW_SIZEOF:
-  case LEX_TOKEN_TY_KW_ALIGNOF:
-  case LEX_TOKEN_TY_KW_ALIGNAS:
-  case LEX_TOKEN_TY_IDENTIFIER:
-    return false;
-
-  case LEX_TOKEN_TY_ASCII_STR_LITERAL:
-  case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
-  case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
-  case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
-  case LEX_TOKEN_TY_FLOAT_LITERAL:
-  case LEX_TOKEN_TY_DOUBLE_LITERAL:
-  case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
-  case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
-  case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
-  case LEX_TOKEN_TY_SIGNED_LONG_LITERAL:
-  case LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL:
-  case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
-  case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL:
-    return true;
-  }
-}
-
-bool parse_token(struct parser *parser, enum lex_token_ty ty) {
+static bool parse_token(struct parser *parser, enum lex_token_ty ty) {
   struct token token;
 
   peek_token(parser->lexer, &token);
@@ -305,7 +193,7 @@ bool parse_token(struct parser *parser, enum lex_token_ty ty) {
   return false;
 }
 
-bool parse_identifier(struct parser *parser, struct token *token) {
+static bool parse_identifier(struct parser *parser, struct token *token) {
   struct text_pos pos = get_position(parser->lexer);
 
   peek_token(parser->lexer, token);
@@ -320,7 +208,7 @@ bool parse_identifier(struct parser *parser, struct token *token) {
   return false;
 }
 
-bool parse_type_qualifier(struct parser *parser,
+static bool parse_type_qualifier(struct parser *parser,
                           enum ast_type_qualifier *qualifier) {
   struct token token;
   peek_token(parser->lexer, &token);
@@ -337,7 +225,7 @@ bool parse_type_qualifier(struct parser *parser,
   return true;
 }
 
-bool parse_function_specifier(struct parser *parser,
+static bool parse_function_specifier(struct parser *parser,
                               enum ast_function_specifier *specifier) {
   struct token token;
   peek_token(parser->lexer, &token);
@@ -352,7 +240,7 @@ bool parse_function_specifier(struct parser *parser,
   return true;
 }
 
-bool parse_storage_class_specifier(
+static bool parse_storage_class_specifier(
     struct parser *parser, enum ast_storage_class_specifier *specifier) {
   struct token token;
   peek_token(parser->lexer, &token);
@@ -375,7 +263,7 @@ bool parse_storage_class_specifier(
   return true;
 }
 
-bool parse_type_specifier_kw(struct parser *parser,
+static bool parse_type_specifier_kw(struct parser *parser,
                              enum ast_type_specifier_kw *wkt) {
   struct token token;
   peek_token(parser->lexer, &token);
@@ -414,9 +302,9 @@ bool parse_type_specifier_kw(struct parser *parser,
   }
 }
 
-bool parse_expr(struct parser *parser, struct ast_expr *expr);
+static bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
-bool parse_enumerator(struct parser *parser,
+static bool parse_enumerator(struct parser *parser,
                       struct ast_enumerator *enumerator) {
   if (!parse_identifier(parser, &enumerator->identifier)) {
     return false;
@@ -435,7 +323,7 @@ bool parse_enumerator(struct parser *parser,
   return true;
 }
 
-void parse_enumerator_list(struct parser *parser,
+static void parse_enumerator_list(struct parser *parser,
                            struct ast_enumerator_list *enumerator_list) {
 
   struct vector *list = vector_create(sizeof(*enumerator_list->enumerators));
@@ -457,7 +345,7 @@ void parse_enumerator_list(struct parser *parser,
   vector_free(&list);
 }
 
-bool parse_enum_specifier(struct parser *parser,
+static bool parse_enum_specifier(struct parser *parser,
                           struct ast_enum_specifier *enum_specifier) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -495,13 +383,13 @@ bool parse_enum_specifier(struct parser *parser,
   return true;
 }
 
-void parse_declaration_specifier_list(
+static void parse_declaration_specifier_list(
     struct parser *parser,
     struct ast_declaration_specifier_list *specifier_list);
 
-bool parse_declarator(struct parser *parser, struct ast_declarator *declarator);
+static bool parse_declarator(struct parser *parser, struct ast_declarator *declarator);
 
-bool parse_struct_declarator(struct parser *parser,
+static bool parse_struct_declarator(struct parser *parser,
                              struct ast_struct_declarator *struct_declarator) {
   bool has_declarator =
       parse_declarator(parser, &struct_declarator->declarator);
@@ -529,7 +417,7 @@ bool parse_struct_declarator(struct parser *parser,
   return true;
 }
 
-void parse_struct_declarator_list(
+static void parse_struct_declarator_list(
     struct parser *parser,
     struct ast_struct_declarator_list *struct_declarator_list) {
   struct vector *list =
@@ -552,7 +440,7 @@ void parse_struct_declarator_list(
   vector_free(&list);
 }
 
-bool parse_struct_declaration(struct parser *parser,
+static bool parse_struct_declaration(struct parser *parser,
                               struct ast_struct_declaration *struct_decl) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -567,7 +455,7 @@ bool parse_struct_declaration(struct parser *parser,
   return false;
 }
 
-void parse_struct_declaration_list(
+static void parse_struct_declaration_list(
     struct parser *parser,
     struct ast_struct_declaration_list *struct_decl_list) {
   struct vector *list = vector_create(sizeof(*struct_decl_list->struct_declarations));
@@ -585,7 +473,7 @@ void parse_struct_declaration_list(
   vector_free(&list);
 }
 
-bool parse_struct_or_union_specifier(
+static bool parse_struct_or_union_specifier(
     struct parser *parser,
     struct ast_struct_or_union_specifier *struct_or_union_specifier) {
   struct text_pos pos = get_position(parser->lexer);
@@ -628,7 +516,7 @@ bool parse_struct_or_union_specifier(
   return true;
 }
 
-bool parse_type_specifier(struct parser *parser,
+static bool parse_type_specifier(struct parser *parser,
                           struct ast_type_specifier *type_specifier) {
 
   if (parse_type_specifier_kw(parser, &type_specifier->type_specifier_kw)) {
@@ -655,7 +543,7 @@ bool parse_type_specifier(struct parser *parser,
   return false;
 }
 
-bool parse_decl_specifier(struct parser *parser,
+static bool parse_decl_specifier(struct parser *parser,
                           struct ast_declaration_specifier *specifier) {
   if (parse_storage_class_specifier(parser,
                                     &specifier->storage_class_specifier)) {
@@ -681,7 +569,7 @@ bool parse_decl_specifier(struct parser *parser,
   return false;
 }
 
-void parse_declaration_specifier_list(
+static void parse_declaration_specifier_list(
     struct parser *parser,
     struct ast_declaration_specifier_list *specifier_list) {
   struct vector *list = vector_create(sizeof(*specifier_list->decl_specifiers));
@@ -699,7 +587,7 @@ void parse_declaration_specifier_list(
   vector_free(&list);
 }
 
-bool parse_designator(struct parser *parser,
+static bool parse_designator(struct parser *parser,
                       struct ast_designator *designator) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -729,7 +617,7 @@ bool parse_designator(struct parser *parser,
   return false;
 }
 
-bool parse_designator_list(struct parser *parser,
+static bool parse_designator_list(struct parser *parser,
                            struct ast_designator_list *designator_list) {
 
   struct vector *list = vector_create(sizeof(*designator_list->designators));
@@ -754,9 +642,9 @@ bool parse_designator_list(struct parser *parser,
   return true;
 }
 
-bool parse_init_list(struct parser *parser, struct ast_init_list *init_list);
+static bool parse_init_list(struct parser *parser, struct ast_init_list *init_list);
 
-bool parse_init(struct parser *parser, struct ast_init *init) {
+static bool parse_init(struct parser *parser, struct ast_init *init) {
   if (parse_init_list(parser, &init->init_list)) {
     init->ty = AST_INIT_TY_INIT_LIST;
     return true;
@@ -768,7 +656,7 @@ bool parse_init(struct parser *parser, struct ast_init *init) {
   return false;
 }
 
-bool parse_init_list_init(struct parser *parser,
+static bool parse_init_list_init(struct parser *parser,
                           struct ast_init_list_init *init_list) {
   *init_list =
       (struct ast_init_list_init){.designator_list = NULL, .init = NULL};
@@ -791,7 +679,7 @@ bool parse_init_list_init(struct parser *parser,
   return true;
 }
 
-bool parse_init_list(struct parser *parser, struct ast_init_list *init_list) {
+static bool parse_init_list(struct parser *parser, struct ast_init_list *init_list) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
@@ -799,10 +687,10 @@ bool parse_init_list(struct parser *parser, struct ast_init_list *init_list) {
     return false;
   }
 
-  struct vector *inits = vector_create(sizeof(struct ast_init));
+  struct vector *inits = vector_create(sizeof(struct ast_init_list_init));
 
-  struct ast_init init;
-  while (parse_init(parser, &init)) {
+  struct ast_init_list_init init;
+  while (parse_init_list_init(parser, &init)) {
     vector_push_back(inits, &init);
 
     parse_token(parser, LEX_TOKEN_TY_COMMA);
@@ -820,7 +708,7 @@ bool parse_init_list(struct parser *parser, struct ast_init_list *init_list) {
   return true;
 }
 
-bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
+static bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
   if (!parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
     return false;
   }
@@ -829,7 +717,7 @@ bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
   return true;
 }
 
-void parse_pointer_list(struct parser *parser,
+static void parse_pointer_list(struct parser *parser,
                         struct ast_pointer_list *pointer_list) {
   struct vector *list = vector_create(sizeof(*pointer_list->pointers));
 
@@ -845,7 +733,7 @@ void parse_pointer_list(struct parser *parser,
   vector_free(&list);
 }
 
-bool parse_ast_array_declarator(struct parser *parser,
+static bool parse_ast_array_declarator(struct parser *parser,
                                 struct ast_array_declarator *array_declarator) {
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
     return false;
@@ -880,9 +768,9 @@ bool parse_ast_array_declarator(struct parser *parser,
   return true;
 }
 
-bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list);
+static bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list);
 
-bool parse_ast_func_declarator(struct parser *parser,
+static bool parse_ast_func_declarator(struct parser *parser,
                                struct ast_func_declarator *func_declarator) {
 
   struct ast_paramlist param_list;
@@ -896,10 +784,10 @@ bool parse_ast_func_declarator(struct parser *parser,
   return true;
 }
 
-bool parse_abstract_declarator(
+static bool parse_abstract_declarator(
     struct parser *parser, struct ast_abstract_declarator *abstract_declarator);
 
-bool parse_direct_abstract_declarator(
+static bool parse_direct_abstract_declarator(
     struct parser *parser,
     struct ast_direct_abstract_declarator *direct_abstract_declarator) {
   struct text_pos pos = get_position(parser->lexer);
@@ -943,7 +831,7 @@ bool parse_direct_abstract_declarator(
   return false;
 }
 
-void parse_direct_abstract_declarator_list(
+static void parse_direct_abstract_declarator_list(
     struct parser *parser, struct ast_direct_abstract_declarator_list
                                *direct_abstract_declarator_list) {
   struct vector *list = vector_create(
@@ -965,7 +853,7 @@ void parse_direct_abstract_declarator_list(
   vector_free(&list);
 }
 
-bool parse_abstract_declarator(
+static bool parse_abstract_declarator(
     struct parser *parser,
     struct ast_abstract_declarator *abstract_declarator) {
   struct text_pos pos = get_position(parser->lexer);
@@ -984,7 +872,7 @@ bool parse_abstract_declarator(
   return true;
 }
 
-bool parse_direct_declarator(struct parser *parser,
+static bool parse_direct_declarator(struct parser *parser,
                              struct ast_direct_declarator *direct_declarator) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1029,7 +917,7 @@ bool parse_direct_declarator(struct parser *parser,
   return false;
 }
 
-void parse_direct_declarator_list(
+static void parse_direct_declarator_list(
     struct parser *parser,
     struct ast_direct_declarator_list *direct_declarator_list) {
   struct vector *list =
@@ -1049,7 +937,7 @@ void parse_direct_declarator_list(
   vector_free(&list);
 }
 
-bool parse_declarator(struct parser *parser,
+static bool parse_declarator(struct parser *parser,
                       struct ast_declarator *declarator) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1065,7 +953,7 @@ bool parse_declarator(struct parser *parser,
   return true;
 }
 
-bool parse_init_declarator(struct parser *parser,
+static bool parse_init_declarator(struct parser *parser,
                            struct ast_init_declarator *init_declarator) {
   if (!parse_declarator(parser, &init_declarator->declarator)) {
     return false;
@@ -1086,7 +974,7 @@ bool parse_init_declarator(struct parser *parser,
   return true;
 }
 
-void parse_init_declarator_list(
+static void parse_init_declarator_list(
     struct parser *parser,
     struct ast_init_declarator_list *init_declarator_list) {
   struct vector *list =
@@ -1105,7 +993,7 @@ void parse_init_declarator_list(
   vector_free(&list);
 }
 
-bool parse_type_name(struct parser *parser, struct ast_type_name *type_name) {
+static bool parse_type_name(struct parser *parser, struct ast_type_name *type_name) {
   struct text_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &type_name->specifier_list);
@@ -1117,7 +1005,7 @@ bool parse_type_name(struct parser *parser, struct ast_type_name *type_name) {
   return false;
 }
 
-bool parse_var(struct parser *parser, struct ast_var *var) {
+static bool parse_var(struct parser *parser, struct ast_var *var) {
   if (parse_identifier(parser, &var->identifier)) {
     return true;
   }
@@ -1125,7 +1013,7 @@ bool parse_var(struct parser *parser, struct ast_var *var) {
   return false;
 }
 
-bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
+static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct token token;
 
   peek_token(parser->lexer, &token);
@@ -1171,7 +1059,7 @@ bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
-bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
+static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct token token;
 
   peek_token(parser->lexer, &token);
@@ -1187,7 +1075,7 @@ bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     const char *literal_text =
         strlike_associated_text(parser->lexer, &token, &literal_len);
     debug_assert(literal_len, "literal_len was 0");
-    int_value = literal_text[0];
+    int_value = (unsigned long long)literal_text[0];
     break;
   }
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL: {
@@ -1200,7 +1088,7 @@ bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
     wchar_t wchar;
     mbtowc(&wchar, literal_text, literal_len);
-    int_value = wchar;
+    int_value = (unsigned long long)wchar;
     break;
   }
   default:
@@ -1213,7 +1101,7 @@ bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
-bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
+static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct token token;
 
   peek_token(parser->lexer, &token);
@@ -1275,7 +1163,7 @@ bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
-bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
+static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -1320,18 +1208,18 @@ bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
-bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
+static bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return parse_str_cnst(parser, cnst) || parse_int_cnst(parser, cnst) ||
          parse_char_cnst(parser, cnst) || parse_float_cnst(parser, cnst);
 }
 
-bool parse_expr(struct parser *parser, struct ast_expr *expr);
-bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
-bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
-bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
-bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
+static bool parse_expr(struct parser *parser, struct ast_expr *expr);
+static bool parse_atom_0(struct parser *parser, struct ast_expr *expr);
+static bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
+static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
+static bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
 
-bool parse_assg(struct parser *parser, struct ast_assg *assg) {
+static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_expr assignee;
@@ -1395,10 +1283,10 @@ bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   return true;
 }
 
-bool parse_compoundexpr(struct parser *parser,
+static bool parse_compoundexpr(struct parser *parser,
                         struct ast_compoundexpr *compound_expr);
 
-bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
+static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_compoundexpr compound_expr;
@@ -1427,7 +1315,7 @@ bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 }
 
 // parses highest precedence (literals, vars, constants)
-bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
+static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -1456,18 +1344,12 @@ bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-bool parse_compound_literal(struct parser *parser,
-                            struct ast_compound_literal *compound_literal) {
-  // TODO:
-  UNUSED_ARG(parser);
-  UNUSED_ARG(compound_literal);
-
-  return false;
-}
+TODO_FUNC(static bool parse_compound_literal(struct parser *parser,
+                            struct ast_compound_literal *compound_literal))
 
 // parses precedence level 0:
 // vars
-bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
+static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   if (parse_atom_0(parser, expr)) {
     return true;
   }
@@ -1480,7 +1362,7 @@ bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
+static bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
                 struct ast_expr *expr) {
   struct ast_arglist arg_list;
   if (!parse_arglist(parser, &arg_list)) {
@@ -1495,7 +1377,7 @@ bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
-bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
+static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
                         struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1518,7 +1400,7 @@ bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
   return false;
 }
 
-bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
+static bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
                          struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1538,7 +1420,7 @@ bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
-bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
+static bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
                           struct ast_expr *expr) {
 
   struct text_pos pos = get_position(parser->lexer);
@@ -1559,7 +1441,7 @@ bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
   return true;
 }
 
-bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
+static bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
                             struct ast_expr *expr) {
   bool has_unary_postfix = false;
   enum ast_unary_op_ty unary_postfix_ty;
@@ -1586,7 +1468,7 @@ bool parse_unary_postfix_op(struct parser *parser, struct ast_expr *sub_expr,
 
 // parses precedence level 1:
 // postfix ++, postfix --, (), [], ., ->, (type){list}
-bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
+static bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
   if (!parse_atom_1(parser, expr)) {
     return false;
   }
@@ -1610,7 +1492,7 @@ bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
   }
 }
 
-bool parse_cast(struct parser *parser, struct ast_expr *expr) {
+static bool parse_cast(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_type_name type_name;
@@ -1640,7 +1522,7 @@ bool parse_cast(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
+static bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct token token;
@@ -1708,7 +1590,7 @@ bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
-bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
+static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SIZEOF)) {
@@ -1746,7 +1628,7 @@ bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
+static bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
   if (!parse_token(parser, LEX_TOKEN_TY_KW_ALIGNOF)) {
     return false;
   }
@@ -1765,7 +1647,7 @@ bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
 // parses precedence level 2:
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof,
 // _Alignof
-bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
+static bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
   if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
       !parse_sizeof(parser, expr) && !parse_alignof(parser, expr) &&
       !parse_atom_2(parser, expr)) {
@@ -1775,7 +1657,7 @@ bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
   return true;
 }
 
-bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
+static bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
                                  struct ast_expr *expr) {
   if (!parse_atom_3(parser, expr)) {
     return false;
@@ -1826,7 +1708,7 @@ bool parse_expr_precedence_aware(struct parser *parser, unsigned min_precedence,
   }
 }
 
-bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
+static bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_expr cond, true_expr, false_expr;
@@ -1854,7 +1736,7 @@ bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
+static bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (parse_ternary(parser, expr)) {
@@ -1871,7 +1753,7 @@ bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
 }
 
 // parse a non-compound expression
-bool parse_expr(struct parser *parser, struct ast_expr *expr) {
+static bool parse_expr(struct parser *parser, struct ast_expr *expr) {
   // assignment is lowest precedence, so we parse it here
 
   struct ast_assg assg;
@@ -1891,7 +1773,7 @@ bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 // so only those places call this method for that purpose.
 // `parse_call` calls this method as a helper but doesn't actually parse it as
 // a compound expr
-bool parse_compoundexpr(struct parser *parser,
+static bool parse_compoundexpr(struct parser *parser,
                         struct ast_compoundexpr *compound_expr) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1928,7 +1810,7 @@ bool parse_compoundexpr(struct parser *parser,
 }
 
 // parse a non-compound expression, ending with a semicolon
-bool parse_compoundexpr_with_semicolon(struct parser *parser,
+static bool parse_compoundexpr_with_semicolon(struct parser *parser,
                                        struct ast_compoundexpr *compoundexpr) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1941,7 +1823,7 @@ bool parse_compoundexpr_with_semicolon(struct parser *parser,
   return false;
 }
 
-bool parse_declaration(struct parser *parser,
+static bool parse_declaration(struct parser *parser,
                        struct ast_declaration *declaration) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -1957,7 +1839,7 @@ bool parse_declaration(struct parser *parser,
   return true;
 }
 
-void parse_declaration_list(struct parser *parser,
+static void parse_declaration_list(struct parser *parser,
                             struct ast_declaration_list *declaration_list) {
   struct vector *list = vector_create(sizeof(*declaration_list->declarations));
 
@@ -1974,7 +1856,7 @@ void parse_declaration_list(struct parser *parser,
   vector_free(&list);
 }
 
-bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
+static bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   struct ast_expr expr;
@@ -2036,9 +1918,9 @@ bool parse_jumpstmt(struct parser *parser, struct ast_jumpstmt *jump_stmt) {
   return false;
 }
 
-bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
+static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
 
-bool parse_labeledstmt(struct parser *parser,
+static bool parse_labeledstmt(struct parser *parser,
                        struct ast_labeledstmt *labeled_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2072,7 +1954,7 @@ bool parse_labeledstmt(struct parser *parser,
   return true;
 }
 
-bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
+static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_IF) ||
@@ -2105,7 +1987,7 @@ bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   return true;
 }
 
-bool parse_ifelsestmt(struct parser *parser,
+static bool parse_ifelsestmt(struct parser *parser,
                       struct ast_ifelsestmt *if_else_stmt) {
   // parse `if {}`, then try parse `else`
   // not perfectly efficient but more elegant
@@ -2131,7 +2013,7 @@ bool parse_ifelsestmt(struct parser *parser,
   return true;
 }
 
-bool parse_switchstmt(struct parser *parser,
+static bool parse_switchstmt(struct parser *parser,
                       struct ast_switchstmt *switch_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2157,7 +2039,7 @@ bool parse_switchstmt(struct parser *parser,
   return true;
 }
 
-bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
+static bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_WHILE) ||
@@ -2190,7 +2072,7 @@ bool parse_whilestmt(struct parser *parser, struct ast_whilestmt *while_stmt) {
   return true;
 }
 
-bool parse_dowhilestmt(struct parser *parser,
+static bool parse_dowhilestmt(struct parser *parser,
                        struct ast_dowhilestmt *do_while_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2230,7 +2112,7 @@ bool parse_dowhilestmt(struct parser *parser,
   return true;
 }
 
-bool parse_declaration_or_expr(struct parser *parser,
+static bool parse_declaration_or_expr(struct parser *parser,
                                struct ast_declaration_or_expr *decl_or_expr) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2250,7 +2132,7 @@ bool parse_declaration_or_expr(struct parser *parser,
   return false;
 }
 
-bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
+static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   // first parse the `for (`
@@ -2312,7 +2194,7 @@ bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   return true;
 }
 
-bool parse_iterstmt(struct parser *parser, struct ast_iterstmt *iter_stmt) {
+static bool parse_iterstmt(struct parser *parser, struct ast_iterstmt *iter_stmt) {
   struct ast_whilestmt while_stmt;
   if (parse_whilestmt(parser, &while_stmt)) {
     iter_stmt->ty = AST_ITERSTMT_TY_WHILE;
@@ -2337,7 +2219,7 @@ bool parse_iterstmt(struct parser *parser, struct ast_iterstmt *iter_stmt) {
   return false;
 }
 
-bool parse_selectstmt(struct parser *parser,
+static bool parse_selectstmt(struct parser *parser,
                       struct ast_selectstmt *select_stmt) {
   struct ast_ifelsestmt if_else_stmt;
   if (parse_ifelsestmt(parser, &if_else_stmt)) {
@@ -2363,10 +2245,10 @@ bool parse_selectstmt(struct parser *parser,
   return false;
 }
 
-bool parse_compoundstmt(struct parser *parser,
+static bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt);
 
-bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
+static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
@@ -2429,7 +2311,7 @@ bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
   return false;
 }
 
-bool parse_compoundstmt(struct parser *parser,
+static bool parse_compoundstmt(struct parser *parser,
                         struct ast_compoundstmt *compound_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
@@ -2456,7 +2338,7 @@ bool parse_compoundstmt(struct parser *parser,
   return true;
 }
 
-bool parse_param(struct parser *parser, struct ast_param *param) {
+static bool parse_param(struct parser *parser, struct ast_param *param) {
   if (parse_declarator(parser, &param->declarator)) {
     param->ty = AST_PARAM_TY_DECL;
     return true;
@@ -2468,7 +2350,7 @@ bool parse_param(struct parser *parser, struct ast_param *param) {
   return false;
 }
 
-bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
+static bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   // TODO: merge with parse_compoundexpr?
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
     return false;
@@ -2502,7 +2384,7 @@ bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_list) {
   return true;
 }
 
-bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
+static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &func_def->decl_specifiers);
@@ -2530,7 +2412,7 @@ const char *identifier_str(struct parser *parser, const struct token *token) {
   return associated_text(parser->lexer, token);
 }
 
-bool parse_external_declaration(
+static bool parse_external_declaration(
     struct parser *parser,
     struct ast_external_declaration *external_declaration) {
   if (parse_funcdef(parser, &external_declaration->func_def)) {
@@ -2596,11 +2478,16 @@ struct ast_printstate {
 };
 
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
-  void parse_debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name)
+  START_NO_UNUSED_ARGS \
+  static void parse_debug_print_##ty(struct ast_printstate *state, enum ast_##ty *name) \
+  END_NO_UNUSED_ARGS
 
 #define DEBUG_FUNC(ty, name)                                                   \
-  void parse_debug_print_##ty(struct ast_printstate *state,                    \
-                              struct ast_##ty *name)
+  START_NO_UNUSED_ARGS \
+  static void parse_debug_print_##ty(struct ast_printstate *state,                    \
+                              struct ast_##ty *name) \
+  END_NO_UNUSED_ARGS
+
 #define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
 
 #define AST_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
@@ -2626,8 +2513,6 @@ struct ast_printstate {
 #define POP_INDENT() state->indent = tmp_indent;
 
 DEBUG_FUNC_ENUM(function_specifier, function_specifier) {
-  UNUSED_ARG(state);
-
   switch (*function_specifier) {
   case AST_FUNCTION_SPECIFIER_INLINE:
     AST_PRINTZ("INLINE");
@@ -2636,8 +2521,6 @@ DEBUG_FUNC_ENUM(function_specifier, function_specifier) {
 }
 
 DEBUG_FUNC_ENUM(storage_class_specifier, storage_class_specifier) {
-  UNUSED_ARG(state);
-
   switch (*storage_class_specifier) {
   case AST_STORAGE_CLASS_SPECIFIER_AUTO:
     AST_PRINTZ("AUTO");
@@ -2658,8 +2541,6 @@ DEBUG_FUNC_ENUM(storage_class_specifier, storage_class_specifier) {
 }
 
 DEBUG_FUNC_ENUM(type_qualifier, type_qualifier) {
-  UNUSED_ARG(state);
-
   switch (*type_qualifier) {
   case AST_TYPE_QUALIFIER_CONST:
     AST_PRINTZ("CONST");
@@ -2848,17 +2729,16 @@ DEBUG_FUNC(cnst, cnst) {
     AST_PRINT("CONSTANT '%Lf'", cnst->flt_value);
     break;
   case AST_CNST_TY_CHAR:
-    AST_PRINT("CONSTANT '%c'", cnst->int_value);
+    AST_PRINT("CONSTANT '%c'", (char)cnst->int_value);
     break;
   case AST_CNST_TY_WIDE_CHAR:
-    AST_PRINT("CONSTANT '%wc'", cnst->int_value);
+    AST_PRINT("CONSTANT (wide char) '%'llu", cnst->int_value);
     break;
   case AST_CNST_TY_STR_LITERAL:
     AST_PRINT("CONSTANT '%s'", cnst->str_value);
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
     todo("wide strs");
-    break;
   }
 }
 
@@ -3289,7 +3169,8 @@ DEBUG_FUNC(designator, designator) {
     AST_PRINT("FIELD '%s'", identifier_str(state->parser, &designator->field));
     break;
   case AST_DESIGNATOR_TY_INDEX:
-    AST_PRINT("INDEX '%zu'", designator->index);
+    AST_PRINTZ("INDEX");
+    DEBUG_CALL(expr, designator->index);
     break;
   }
   UNINDENT();
@@ -3386,9 +3267,9 @@ DEBUG_FUNC(ternary, ternary) {
 }
 
 DEBUG_FUNC(compound_literal, compound_literal) {
-  UNUSED_ARG(state);
-  UNUSED_ARG(compound_literal);
-  todo("compound literal");
+  if (state->parser) {
+    todo("compound literal");
+  }
 }
 
 DEBUG_FUNC(expr, expr) {
@@ -3624,7 +3505,8 @@ DEBUG_FUNC(labeledstmt, labeled_stmt) {
     AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
     break;
   case AST_LABELEDSTMT_TY_CASE:
-    AST_PRINT("CASE %llu", labeled_stmt->cnst);
+    AST_PRINTZ("CASE");
+    DEBUG_CALL(expr, &labeled_stmt->cnst);
     break;
   case AST_LABELEDSTMT_TY_DEFAULT:
     AST_PRINTZ("DEFAULT");
@@ -3719,8 +3601,6 @@ DEBUG_FUNC(external_declaration, external_declaration) {
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {
-  UNUSED_ARG(parser);
-  UNUSED_ARG(translation_unit);
   struct ast_printstate state_ = {.indent = 0, .parser = parser};
 
   struct ast_printstate *state = &state_;
