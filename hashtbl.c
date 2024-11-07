@@ -33,12 +33,9 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
 }
 
 // when len >= buckets * max_fill, double bucket size and rebuild
-const float MAX_FILL = 0.8;
+static const float MAX_FILL = 0.8f;
 
-void hashtbl_rebuild(struct hashtbl *hashtbl) {
-  UNUSED_ARG(hashtbl);
-  todo(__func__);
-}
+TODO_FUNC(static void hashtbl_rebuild(struct hashtbl *hashtbl))
 
 void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
   hash_t hash = hashtbl->hash_fn(key);

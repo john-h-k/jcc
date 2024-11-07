@@ -76,18 +76,15 @@ enum compiler_create_result create_compiler(struct program *program,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-void debug_print_stage(struct ir_unit *ir, const char *name) {
-  UNUSED_ARG(name);
-
+static void debug_print_stage(struct ir_unit *ir, UNUSED_ARG(const char *name)) {
   debug_print_ir(stderr, ir, NULL, NULL);
 }
 
-const struct target *get_target(const struct compile_args *args) {
+static const struct target *get_target(const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
     bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
         "earlier");
-    break;
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     todo("macOS x64 target not yet implemented");
   case COMPILE_TARGET_ARCH_MACOS_ARM64:

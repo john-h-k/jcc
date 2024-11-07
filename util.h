@@ -4,12 +4,34 @@
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own
 // header
 
+#include <string.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
+
+#if __STDC_VERSION__ >= 202311L
+#define STDC_C23 1
+#elif __STDC_VERSION__ >= 201710L
+#define STDC_C18 1
+#elif __STDC_VERSION__ >= 201112L
+#define STDC_C11 1
+#else
+#error "jcc only supports C11 or later"
+#endif
+
+
+#if STDC_C23 && __GNUC__
+#define PRINTF_ARGS(idx) [gcc::format(printf, idx + 1, idx + 2)]
+#elif __GNUC__
+#define PRINTF_ARGS(idx) __attribute__ ((format (printf, idx + 1, idx + 2)))
+#else
+#define PRINTF_ARGS(idx)
+#endif
+
 
 #ifdef __has_feature
 #define HAS_FEATURE(name) __has_feature(name)
@@ -57,28 +79,22 @@
 #include "sanitizer/common_interface_defs.h" // __sanitizer_print_stack_trace
 #endif
 
-#ifndef __STDC_VERSION__
-#error "JCC Requires at least C99"
-#endif
-
-#define NORETURN
-
-#if __STDC_VERSION__ >= 201112L
-#undef NORETURN
-#include <stdnoreturn.h>
-
-#if __STDC_VERSION__ >= 202311L
+#if STDC_C23
 #define NORETURN [[noreturn]]
 #else
+#include <stdnoreturn.h>
 #define NORETURN noreturn
 #endif
 
-#endif
-
-#include <string.h>
-
 #define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
-#define UNUSED_ARG(arg) (void)(arg);
+
+#if STDC_C23 && __GNUC__
+#define UNUSED_ARG(arg) [gcc::unused] arg
+#elif __GNUC__
+#define UNUSED_ARG(arg) __attribute__((__unused__)) arg
+#else
+#define UNUSED_ARG(arg)
+#endif
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -89,13 +105,13 @@ static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
 }
 
-static inline void debug_print_stack_trace() {
+static inline void debug_print_stack_trace(void) {
 #ifdef SANITIZER_PRINT_STACK_TRACE
   __sanitizer_print_stack_trace();
 #endif
 }
 
-static inline unsigned long popcntl(unsigned long long l) {
+static inline int popcntl(unsigned long long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_popcountll)
   return __builtin_popcountll(l);
 #else
@@ -103,7 +119,7 @@ static inline unsigned long popcntl(unsigned long long l) {
 #endif
 }
 
-static inline unsigned long tzcnt(unsigned long long l) {
+static inline int tzcnt(unsigned long long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_clzll)
   return __builtin_ctzll(l);
 #else
@@ -111,7 +127,7 @@ static inline unsigned long tzcnt(unsigned long long l) {
 #endif
 }
 
-static inline unsigned long lzcnt(unsigned long long l) {
+static inline int lzcnt(unsigned long long l) {
 #if defined(__has_builtin) && __has_builtin(__builtin_clzll)
   return __builtin_clzll(l);
 #else
@@ -134,23 +150,47 @@ static inline unsigned long lzcnt(unsigned long long l) {
   raise(SIGINT);                                                               \
   exit(code);
 
-NORETURN static inline void todo(const char *msg, ...) {
+#if __clang__
+#define START_NO_UNUSED_ARGS \
+  _Pragma("clang diagnostic push") \
+  _Pragma("clang diagnostic ignored \"-Wunused-parameter\"")
+#elif __GNUC__
+#define START_NO_UNUSED_ARGS \
+  _Pragma("GCC diagnostic push") \
+  _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")
+#endif
+
+#if __clang__
+#define END_NO_UNUSED_ARGS \
+  _Pragma("clang diagnostic pop")
+#elif __GNUC__
+#define END_NO_UNUSED_ARGS \
+  _Pragma("GCC diagnostic pop")
+#endif
+
+#define TODO_FUNC(sig) \
+  START_NO_UNUSED_ARGS \
+  sig { todo(__func__); } \
+  END_NO_UNUSED_ARGS
+
+
+PRINTF_ARGS(0) NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
   EXIT_FAIL(-2);
 }
 
-NORETURN static inline void unreachable(const char *msg, ...) {
+PRINTF_ARGS(0) NORETURN static inline void unreachable(const char *msg, ...) {
   FMTPRINT(stderr, "`unreachable` hit, program exiting: ", msg);
   EXIT_FAIL(-2);
 }
 
-NORETURN static inline void bug(const char *msg, ...) {
+PRINTF_ARGS(0) NORETURN static inline void bug(const char *msg, ...) {
   FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
   EXIT_FAIL(-2);
 }
 
 // present in all mode, always causes program exit if fails
-static inline void invariant_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1) static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
     EXIT_FAIL(-1);
@@ -160,9 +200,9 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 static inline void breakpoint(void) { raise(SIGINT); }
 
 #if NDEBUG
-static inline void debug_assert(bool, const char *, ...) {}
+PRINTF_ARGS(1) static inline void debug_assert(bool, const char *, ...) {}
 #else
-static inline void debug_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1) static inline void debug_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
     EXIT_FAIL(-1);
@@ -191,7 +231,7 @@ static inline void *nonnull_realloc(void *p, size_t size) {
 }
 
 static inline char *malloc_strcpy(const char *s) {
-  int len = strlen(s);
+  size_t len = strlen(s);
 
   char *cp = nonnull_malloc(len * sizeof(*s));
 

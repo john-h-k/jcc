@@ -3,7 +3,7 @@
 #include "util.h"
 #include "vector.h"
 
-struct var_table_scope var_table_scope_create(struct var_table_scope *prev) {
+static struct var_table_scope var_table_scope_create(struct var_table_scope *prev) {
   struct var_table_scope var_table_scope = {
       .next = NULL,
       .prev = prev,

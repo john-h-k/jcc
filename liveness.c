@@ -7,7 +7,7 @@
 #include "bitset.h"
 #include "ir/ir.h"
 
-void op_used_callback(struct ir_op **op, void *cb_metadata) {
+static void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
@@ -62,7 +62,7 @@ static size_t walk_basicblock(struct ir_func *irb, bool *basicblocks_visited,
   }
 }
 
-unsigned *find_basicblock_ranges(struct ir_func *irb) {
+static unsigned *find_basicblock_ranges(struct ir_func *irb) {
   // FIXME: *very* memory expensive |BBs|^2 space
   unsigned *basicblock_max_id = arena_alloc(
       irb->arena, sizeof(*basicblock_max_id) * irb->basicblock_count *
@@ -107,7 +107,7 @@ unsigned *find_basicblock_ranges(struct ir_func *irb) {
 
               len = walk_basicblock(irb, basicblocks_visited, op,
                                     value->stmt->basicblock);
-              basicblock_max_id[len_id] = len;
+              basicblock_max_id[len_id] = (unsigned)len;
             }
           }
         }
@@ -288,9 +288,7 @@ void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
   fslogsl(file, ")");
 }
 
-void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata) {
-  UNUSED_ARG(metadata);
-
+void print_ir_intervals(FILE *file, struct ir_op *op, UNUSED_ARG(void *metadata)) {
   struct interval *interval = op->metadata;
   if (interval) {
     invariant_assert(interval->op->id == op->id, "intervals are not ID keyed");

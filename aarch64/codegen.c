@@ -20,6 +20,8 @@
 
 size_t reg_size(enum aarch64_reg_ty reg_ty) {
   switch (reg_ty) {
+  case AARCH64_REG_TY_NONE:
+    bug("NONE reg ty has no size");
   case AARCH64_REG_TY_W:
     return 4;
   case AARCH64_REG_TY_X:
@@ -72,6 +74,9 @@ struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
 
 bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty) {
   switch (ty) {
+  case AARCH64_REG_TY_NONE:
+    bug("makes no sense");
+
   case AARCH64_REG_TY_W:
   case AARCH64_REG_TY_X:
     return true;
@@ -87,6 +92,9 @@ bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty) {
 
 bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty) {
   switch (ty) {
+  case AARCH64_REG_TY_NONE:
+    bug("makes no sense");
+
   case AARCH64_REG_TY_W:
   case AARCH64_REG_TY_X:
     return false;
@@ -253,11 +261,11 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   }
 }
 
-static unsigned get_lcl_stack_offset(const struct codegen_state *state,
+static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                      const struct ir_op *op,
                                      const struct ir_lcl *lcl) {
   // FIXME: wrongly assumes everything is 8 byte
-  size_t offset = state->max_variadic_args * 8 + lcl->offset;
+  ssize_t offset = state->max_variadic_args * 8 + lcl->offset;
 
   if (!op) {
     return offset;
@@ -266,6 +274,7 @@ static unsigned get_lcl_stack_offset(const struct codegen_state *state,
   struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
   debug_assert(offset % info.size == 0,
                "stack offset not divisible by type size");
+
   return offset / info.size;
 }
 
@@ -300,7 +309,7 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
   }
 }
 
-enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
+static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
   switch (var_ty->primitive) {
   case IR_OP_VAR_PRIMITIVE_TY_I8:
   case IR_OP_VAR_PRIMITIVE_TY_I16:
@@ -383,7 +392,7 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
   struct ir_lcl *lcl = op->load_lcl.lcl;
 
-  size_t offset = get_lcl_stack_offset(state, op, lcl);
+  simm_t offset = get_lcl_stack_offset(state, op, lcl);
 
   if (op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
       op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
@@ -579,7 +588,7 @@ static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static_assert((sizeof(unsigned long long) == 8) &
-              (sizeof(unsigned short) == 2));
+              (sizeof(unsigned short) == 2), "type sizes not expected");
 
 union b64 {
   unsigned long long ull;
@@ -615,7 +624,7 @@ static void codegen_64_bit_int(struct codegen_state *state,
   }
 }
 
-static_assert((sizeof(unsigned) == 4) & (sizeof(unsigned short) == 2));
+static_assert((sizeof(unsigned) == 4) & (sizeof(unsigned short) == 2), "type sizes not expected");
 
 union b32 {
   unsigned u;
@@ -649,13 +658,12 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     // currently all constants are lowered to an integer load and `fmov`
     // but lots of constants can be loaded directly, so do that here
     todo("simple float constants (not lowered)");
-    break;
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
     case IR_OP_VAR_PRIMITIVE_TY_I8:
     case IR_OP_VAR_PRIMITIVE_TY_I16:
     case IR_OP_VAR_PRIMITIVE_TY_I32:
-      codegen_32_bit_int(state, dest, (union b32){.u = op->cnst.int_value});
+      codegen_32_bit_int(state, dest, (union b32){.u = (unsigned)op->cnst.int_value});
       break;
     case IR_OP_VAR_PRIMITIVE_TY_I64:
       codegen_64_bit_int(state, dest, (union b64){.ull = op->cnst.int_value});
@@ -703,7 +711,7 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
-  struct aarch64_reg dest;
+  struct aarch64_reg dest = { 0 };
 
   if (!binary_op_is_comparison(op->binary_op.ty)) {
     dest = codegen_reg(op);
@@ -1141,7 +1149,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-void insert_prologue(struct codegen_state *state) {
+static void insert_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
 
   // TODO: super inefficient
@@ -1216,12 +1224,13 @@ void insert_prologue(struct codegen_state *state) {
                                     .shift = 0};
 
     size_t save_idx = 0;
-    struct bitset_iter iter =
+
+    struct bitset_iter gp_reg_iter =
         bitset_iter(ir->reg_usage.gp_registers_used,
                     AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
 
-    size_t i;
-    while (bitset_iter_next(&iter, &i)) {
+    size_t idx;
+    while (bitset_iter_next(&gp_reg_iter, &idx)) {
       // guaranteed to be mod 8
       size_t offset = (info.save_start / 8) + save_idx++;
 
@@ -1232,7 +1241,7 @@ void insert_prologue(struct codegen_state *state) {
           .imm = offset,
           .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
                                          .idx = translate_reg_idx(
-                                             i, IR_REG_TY_INTEGRAL)},
+                                             idx, IR_REG_TY_INTEGRAL)},
           .addr = STACK_PTR_REG,
       };
     }
@@ -1241,7 +1250,7 @@ void insert_prologue(struct codegen_state *state) {
   state->prologue_info = info;
 }
 
-void insert_epilogue(struct codegen_state *state) {
+static void insert_epilogue(struct codegen_state *state) {
   const struct aarch64_prologue_info *prologue_info = &state->prologue_info;
 
   if (!prologue_info->prologue_generated) {
@@ -1311,14 +1320,13 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_op(struct codegen_state *state, struct ir_op *op) {
-  trace("lowering op with id %d, type %d", op->id, op->ty);
+  trace("lowering op with id %zu, type %d", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
     break;
   case IR_OP_TY_CUSTOM: {
     bug("custom");
-    break;
   }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
@@ -1385,8 +1393,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   default: {
-    todo("unsupported IR OP '%zu'", op->ty);
-    break;
+    todo("unsupported IR OP '%d'", op->ty);
   }
   }
 }
@@ -1466,7 +1473,7 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   data->last = instr;
 }
 
-const char *mangle_str_cnst_name(struct arena_allocator *arena,
+static const char *mangle_str_cnst_name(struct arena_allocator *arena,
                                  const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
   func_name = "str";
@@ -1515,7 +1522,7 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   return buff;
 }
 
-int sort_entries_by_id(const void *a, const void *b) {
+static int sort_entries_by_id(const void *a, const void *b) {
   const struct codegen_entry *l = a;
   const struct codegen_entry *r = b;
 
@@ -1573,11 +1580,10 @@ static void codegen_write_var_value(struct ir_unit *iru,
   }
 }
 
-struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
+static struct codegen_data codegen_var_data(struct ir_unit *ir, struct ir_var *var) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
     bug("str literal should have been lowered seperately");
-    break;
   }
   case IR_VAR_TY_CONST_DATA:
   case IR_VAR_TY_DATA: {
@@ -1742,8 +1748,10 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
   return unit;
 }
 
-char reg_prefix(struct aarch64_reg reg) {
+static char reg_prefix(struct aarch64_reg reg) {
   switch (reg.ty) {
+  case AARCH64_REG_TY_NONE:
+    return '!';
   case AARCH64_REG_TY_W:
     return 'w';
   case AARCH64_REG_TY_X:
@@ -1907,7 +1915,7 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
   }
 }
 
-void codegen_fprintf(FILE *file, const char *format, ...) {
+static void codegen_fprintf(FILE *file, const char *format, ...) {
   va_list list;
   va_start(list, format);
   while (format[0] != '\0') {
@@ -2100,32 +2108,32 @@ void codegen_fprintf(FILE *file, const char *format, ...) {
   }
 }
 
-void debug_print_logical_reg(FILE *file,
+static void debug_print_logical_reg(FILE *file,
                              const struct aarch64_logical_reg *logical_reg) {
   codegen_fprintf(file, " %reg, %reg, %reg%shift_imm", logical_reg->dest,
                   logical_reg->lhs, logical_reg->rhs, logical_reg->shift,
                   logical_reg->imm6);
 }
 
-void debug_print_logical_imm(FILE *file,
+static void debug_print_logical_imm(FILE *file,
                              const struct aarch64_logical_imm *logical_imm) {
   codegen_fprintf(file, " %reg, %reg, %log_imm", logical_imm->dest,
                   logical_imm->source, logical_imm->n, logical_imm->immr,
                   logical_imm->imms);
 }
 
-void debug_print_addr_imm(FILE *file, const struct aarch64_addr_imm *addr_imm) {
+static void debug_print_addr_imm(FILE *file, const struct aarch64_addr_imm *addr_imm) {
   codegen_fprintf(file, " %reg, %imm", addr_imm->dest, addr_imm->imm);
 }
 
-void debug_print_addsub_reg(FILE *file,
+static void debug_print_addsub_reg(FILE *file,
                             const struct aarch64_addsub_reg *addsub_reg) {
   codegen_fprintf(file, " %reg, %reg, %reg%shift_imm", addsub_reg->dest,
                   addsub_reg->lhs, addsub_reg->rhs, addsub_reg->shift,
                   addsub_reg->imm6);
 }
 
-void debug_print_addsub_imm(FILE *file,
+static void debug_print_addsub_imm(FILE *file,
                             const struct aarch64_addsub_imm *addsub_imm) {
   if (addsub_imm->shift) {
     codegen_fprintf(file, " %reg, %reg, %imm, lsl %imm", addsub_imm->dest,
@@ -2136,87 +2144,87 @@ void debug_print_addsub_imm(FILE *file,
   }
 }
 
-void debug_print_reg_1_source(FILE *file,
+static void debug_print_reg_1_source(FILE *file,
                               const struct aarch64_reg_1_source *reg_1_source) {
   codegen_fprintf(file, " %reg, %reg", reg_1_source->dest,
                   reg_1_source->source);
 }
 
-void debug_print_fcmp(FILE *file, const struct aarch64_fcmp *fcmp) {
+static void debug_print_fcmp(FILE *file, const struct aarch64_fcmp *fcmp) {
   codegen_fprintf(file, " %reg, %reg", fcmp->lhs, fcmp->rhs);
 }
 
-void debug_print_fcmp_zero(FILE *file,
+static void debug_print_fcmp_zero(FILE *file,
                            const struct aarch64_fcmp_zero *fcmp_zero) {
   codegen_fprintf(file, " %reg, #0.0", fcmp_zero->lhs);
 }
 
-void debug_print_reg_2_source(FILE *file,
+static void debug_print_reg_2_source(FILE *file,
                               const struct aarch64_reg_2_source *reg_2_source) {
   codegen_fprintf(file, " %reg, %reg, %reg", reg_2_source->dest,
                   reg_2_source->lhs, reg_2_source->rhs);
 }
 
-void debug_print_bitfield_imm(FILE *file,
+static void debug_print_bitfield_imm(FILE *file,
                               const struct aarch64_bitfield *bitfield_imm) {
   codegen_fprintf(file, " %reg, %reg, %imm, %imm", bitfield_imm->dest,
                   bitfield_imm->source, bitfield_imm->immr, bitfield_imm->imms);
 }
 
-void debug_print_conditional_select(
+static void debug_print_conditional_select(
     FILE *file, const struct aarch64_conditional_select *conditional_select) {
   codegen_fprintf(file, " %reg, %reg, %reg, %cond", conditional_select->dest,
                   conditional_select->false_source,
                   conditional_select->true_source, conditional_select->cond);
 }
 
-void debug_print_conditional_branch(
+static void debug_print_conditional_branch(
     FILE *file, const struct aarch64_conditional_branch *conditional_branch) {
   codegen_fprintf(file, ".%cond %instr", conditional_branch->cond,
                   conditional_branch->target->first_instr);
 }
 
-void debug_print_branch(FILE *file, const struct aarch64_branch *branch) {
+static void debug_print_branch(FILE *file, const struct aarch64_branch *branch) {
   codegen_fprintf(file, " %instr", branch->target->first_instr);
 }
 
-void debug_print_branch_reg(FILE *file,
+static void debug_print_branch_reg(FILE *file,
                             const struct aarch64_branch_reg *branch_reg) {
   codegen_fprintf(file, " %reg", branch_reg->target);
 }
 
-void debug_print_compare_and_branch(
+static void debug_print_compare_and_branch(
     FILE *file, const struct aarch64_compare_and_branch *compare_and_branch) {
   codegen_fprintf(file, " %reg, %instr", compare_and_branch->cmp,
                   compare_and_branch->target->first_instr);
 }
 
-void debug_print_load_imm(FILE *file, const struct aarch64_load_imm *load_imm) {
+static void debug_print_load_imm(FILE *file, const struct aarch64_load_imm *load_imm) {
   codegen_fprintf(file, " %reg, %addr_imm", load_imm->dest, load_imm->mode,
                   load_imm->addr, load_imm->imm);
 }
 
-void debug_print_store_imm(FILE *file,
+static void debug_print_store_imm(FILE *file,
                            const struct aarch64_store_imm *store_imm) {
   codegen_fprintf(file, " %reg, %addr_imm", store_imm->source, store_imm->mode,
                   store_imm->addr, store_imm->imm);
 }
 
-void debug_print_load_pair_imm(
+static void debug_print_load_pair_imm(
     FILE *file, const struct aarch64_load_pair_imm *load_pair_imm) {
   codegen_fprintf(file, " %reg, %reg, %addr_imm", load_pair_imm->dest[0],
                   load_pair_imm->dest[1], load_pair_imm->mode,
                   load_pair_imm->addr, load_pair_imm->imm);
 }
 
-void debug_print_store_pair_imm(
+static void debug_print_store_pair_imm(
     FILE *file, const struct aarch64_store_pair_imm *store_pair_imm) {
   codegen_fprintf(file, " %reg, %reg, %addr_imm", store_pair_imm->source[0],
                   store_pair_imm->source[1], store_pair_imm->mode,
                   store_pair_imm->addr, store_pair_imm->imm);
 }
 
-void debug_print_mov_imm(FILE *file, const struct aarch64_mov_imm *mov_imm) {
+static void debug_print_mov_imm(FILE *file, const struct aarch64_mov_imm *mov_imm) {
   if (mov_imm->shift) {
     codegen_fprintf(file, " %reg, %imm, lsl %imm", mov_imm->dest, mov_imm->imm,
                     mov_imm->shift);
@@ -2225,14 +2233,12 @@ void debug_print_mov_imm(FILE *file, const struct aarch64_mov_imm *mov_imm) {
   }
 }
 
-void debug_print_fma(FILE *file, const struct aarch64_fma *fma) {
+static void debug_print_fma(FILE *file, const struct aarch64_fma *fma) {
   codegen_fprintf(file, " %reg, %reg, %reg", fma->lhs, fma->rhs, fma->addsub);
 }
 
-void debug_print_instr(FILE *file, const struct codegen_function *func,
+static void debug_print_instr(FILE *file, UNUSED_ARG(const struct codegen_function *func),
                        const struct instr *instr) {
-
-  UNUSED_ARG(func);
 
   switch (instr->aarch64->ty) {
   case AARCH64_INSTR_TY_NOP:

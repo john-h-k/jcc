@@ -44,7 +44,7 @@ struct aarch64_emitter {
                              "FTYPE_FOR_REG with non {D, S, H} register"),     \
                 FTYPE_HALF))
 
-void bad_instr() { bug("register types or arguments did not make sense"); }
+static void bad_instr(void) { bug("register types or arguments did not make sense"); }
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = nonnull_malloc(sizeof(**emitter));
@@ -74,7 +74,7 @@ void free_aarch64_emitter(struct aarch64_emitter **emitter) {
   *emitter = NULL;
 }
 
-void aarch64_emit_instr(struct aarch64_emitter *emitter, uint32_t instr) {
+static void aarch64_emit_instr(struct aarch64_emitter *emitter, uint32_t instr) {
   if (emitter->head >= emitter->len) {
     size_t new_len = emitter->len + BLOCK_SIZE;
     emitter->block =
@@ -615,10 +615,8 @@ void aarch64_emit_load_half_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single loads");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single loads");
-    break;
   }
 }
 
@@ -631,10 +629,8 @@ void aarch64_emit_store_half_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single loads");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single loads");
-    break;
   }
 }
 
@@ -647,10 +643,8 @@ void aarch64_emit_load_byte_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single loads");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single loads");
-    break;
   }
 }
 
@@ -663,10 +657,8 @@ void aarch64_emit_store_byte_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single loads");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single loads");
-    break;
   }
 }
 
@@ -693,10 +685,8 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single loads");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single loads");
-    break;
   }
 }
 
@@ -723,10 +713,8 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
     todo("preindex single stores");
-    break;
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
     todo("postindex single stores");
-    break;
   }
 }
 

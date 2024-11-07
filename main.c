@@ -18,11 +18,11 @@ enum parse_args_result {
   PARSE_ARGS_RESULT_ERROR = 2,
 };
 
-enum parse_args_result parse_args(int argc, char **argv,
+static enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
                                   const char ***sources, size_t *num_sources);
 
-char *readfile(const char *path) {
+static char *readfile(const char *path) {
   FILE *f = fopen(path, "r");
 
   if (!f) {
@@ -31,17 +31,20 @@ char *readfile(const char *path) {
 
   fseek(f, 0, SEEK_END);
   long fsize = ftell(f);
+
+  invariant_assert(fsize != -1L, "ftell failed");
+
   rewind(f);
 
-  char *content = nonnull_malloc(fsize + 1);
-  fread(content, fsize, 1, f);
+  char *content = nonnull_malloc((unsigned long)fsize + 1);
+  fread(content, (unsigned long)fsize, 1, f);
   fclose(f);
 
   content[fsize] = '\0';
   return content;
 }
 
-bool target_needs_linking(const struct compile_args *args) {
+static bool target_needs_linking(const struct compile_args *args) {
   return args->target_arch != COMPILE_TARGET_ARCH_EEP;
 }
 
@@ -103,7 +106,7 @@ int main(int argc, char **argv) {
     enable_log();
   }
 
-  struct link_args link_args = {.objects = (const char **)objects,
+  struct link_args link_args = {.objects = (const char * const *)objects,
                                 .num_objects = num_sources,
                                 .output = args.output ? args.output : "a.out"};
 
@@ -123,7 +126,7 @@ int main(int argc, char **argv) {
   free(objects);
 }
 
-const char *try_get_arg(const char *arg, const char *prefix) {
+static const char *try_get_arg(const char *arg, const char *prefix) {
   if (strncmp(arg, prefix, strlen(prefix)) == 0) {
     return &arg[strlen(prefix)];
   }
@@ -131,7 +134,7 @@ const char *try_get_arg(const char *arg, const char *prefix) {
   return NULL;
 }
 
-void parse_arg_error(const char *fmt, ...) {
+PRINTF_ARGS(0) static void parse_arg_error(const char *fmt, ...) {
   va_list v;
   va_start(v, fmt);
   vfprintf(stderr, fmt, v);
@@ -139,7 +142,7 @@ void parse_arg_error(const char *fmt, ...) {
   va_end(v);
 }
 
-bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
+static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
 #define LOG_FLAG(name, str)                                                    \
   if (strcmp(flag, str) == 0) {                                                \
     *flags |= name;                                                            \
@@ -159,7 +162,7 @@ bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
   return false;
 }
 
-bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
+static bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
   if (strcmp(flag, "x64") == 0) {
     *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
     return true;
@@ -174,7 +177,7 @@ bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
   return false;
 }
 
-bool parse_output(const char *str, char **output) {
+static bool parse_output(const char *str, char **output) {
   size_t output_len = strlen(str);
 
   if (output_len) {
@@ -189,7 +192,7 @@ bool parse_output(const char *str, char **output) {
   return false;
 }
 
-enum parse_args_result parse_args(int argc, char **argv,
+static enum parse_args_result parse_args(int argc, char **argv,
                                   struct compile_args *args,
                                   const char ***sources, size_t *num_sources) {
 

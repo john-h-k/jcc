@@ -5,9 +5,6 @@
 
 void eep_debug_print_custom_ir_op(FILE *file, const struct ir_func *func,
                                   const struct ir_op *op) {
-  UNUSED_ARG(file);
-  UNUSED_ARG(func);
-  UNUSED_ARG(op);
   bug("no custom EEP ops currently");
 }
 
@@ -341,9 +338,7 @@ static void lower_div(struct ir_func *func, struct ir_op *op) {
   orig_bb_br->ty = IR_OP_TY_BR;
 }
 
-static void lower_shift(struct ir_func *func, struct ir_op *op) {
-  UNUSED_ARG(func);
-
+static void lower_shift(UNUSED_ARG(struct ir_func *func), struct ir_op *op) {
   debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT ||
@@ -427,9 +422,6 @@ static void lower_br_cond(struct ir_func *irb, struct ir_op *op) {
 }
 
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
-  UNUSED_ARG(irb);
-
-  return;
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
                        binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");

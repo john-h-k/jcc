@@ -7,7 +7,7 @@
 
 #include <math.h>
 
-const char *unary_op_string(enum ir_op_unary_op_ty ty) {
+static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
   case IR_OP_UNARY_OP_TY_NEG:
     return "-";
@@ -18,7 +18,7 @@ const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   }
 }
 
-const char *cast_op_string(enum ir_op_cast_op_ty ty) {
+static const char *cast_op_string(enum ir_op_cast_op_ty ty) {
   switch (ty) {
   case IR_OP_CAST_OP_TY_SEXT:
     return "sext";
@@ -35,7 +35,7 @@ const char *cast_op_string(enum ir_op_cast_op_ty ty) {
   }
 }
 
-const char *binary_op_string(enum ir_op_binary_op_ty ty) {
+static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_EQ:
     return "==";
@@ -202,7 +202,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
+static void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
   for (size_t i = 0; i < phi->num_values; i++) {
     fprintf(file, "%%%zu", phi->values[i]->id);
 
@@ -212,11 +212,11 @@ void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
   }
 }
 
-void debug_call_target_string(FILE *file, struct ir_op *target) {
+static void debug_call_target_string(FILE *file, struct ir_op *target) {
   fprintf(file, "%%%zu", target->id);
 }
 
-void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
+static void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   for (size_t i = 0; i < call->num_args; i++) {
     fprintf(file, "%%%zu", call->args[i]->id);
 
@@ -226,7 +226,7 @@ void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   }
 }
 
-void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
+static void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   switch (reg.ty) {
   case IR_REG_TY_NONE:
     fprintf(file, "UNASSIGNED");
@@ -246,15 +246,13 @@ void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   }
 }
 
-void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
+static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
   debug_print_var_ty_string(file, irb->unit, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
-void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
-  UNUSED_ARG(irb);
-
+static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   if (ir->comment) {
     fprintf(file, "// %s\n", ir->comment);
   }
@@ -268,7 +266,6 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_CUSTOM:
     bug("custom ops no longer supported");
-    break;
   case IR_OP_TY_CALL: {
     debug_lhs(file, irb, ir);
     fprintf(file, "call ");
@@ -440,11 +437,9 @@ struct prettyprint_file_metadata {
   void *cb_metadata;
 };
 
-void prettyprint_begin_visit_basicblock_file(struct ir_func *irb,
+static void prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
                                              struct ir_basicblock *basicblock,
                                              void *metadata) {
-  UNUSED_ARG(irb);
-
   struct prettyprint_file_metadata *fm = metadata;
 
   fslog(fm->file, "\n");
@@ -468,18 +463,16 @@ void prettyprint_begin_visit_basicblock_file(struct ir_func *irb,
   fslog(fm->file, "");
 }
 
-void prettyprint_end_visit_basicblock_file(struct ir_func *irb,
-                                           struct ir_basicblock *basicblock,
+static void prettyprint_end_visit_basicblock_file(
+                                          UNUSED_ARG(struct ir_func *irb),
+                                          UNUSED_ARG(struct ir_basicblock *basicblock),
                                            void *metadata) {
-  UNUSED_ARG(irb);
-  UNUSED_ARG(basicblock);
-
   struct prettyprint_file_metadata *fm = metadata;
 
   fslog(fm->file, "");
 }
 
-void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
+static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
                                void *metadata) {
   // if (op->ty == IR_OP_TY_GLB) {
   //   // TODO: stop this function needing to deal with GLB its a messy opcode
@@ -676,7 +669,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value, bool top) {
+static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value, bool top) {
   switch (var_value->ty) {
   // case IR_VAR_VALUE_TY_STR:
   //   fprintf(file, "%s", var_value->str_value);
@@ -713,7 +706,7 @@ void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value, bool t
   }
 }
 
-void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {
+static void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {
   debug_print_var_ty_string(file, iru, &var->var_ty);
   fprintf(file, " = ");
   debug_print_ir_var_value(file, &var->value, true);
@@ -724,7 +717,7 @@ struct print_ir_graph_metadata {
   FILE *file;
 };
 
-void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *metadata) {
+static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
   debug_print_op(gm->file, irb, op);
@@ -733,7 +726,7 @@ void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *metadata) {
   fprintf(gm->file, "\\l");
 }
 
-struct graph_vertex *get_basicblock_vertex(struct ir_func *irb,
+static struct graph_vertex *get_basicblock_vertex(struct ir_func *irb,
                                            struct ir_basicblock *basicblock,
                                            struct graphwriter *gwr) {
   if (!basicblock->metadata) {

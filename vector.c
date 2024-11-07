@@ -24,8 +24,8 @@ struct vector *vector_create(size_t element_size) {
   return v;
 }
 
-void vector_expand(struct vector *v, size_t min_size) {
-  size_t new_capacity = MAX(min_size, v->capacity ? v->capacity * 2 : 1);
+void vector_ensure_capacity(struct vector *v, size_t capacity) {
+  size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : 1);
   char *new_data = nonnull_malloc(new_capacity * v->element_size);
 
   memcpy(new_data, v->data, v->len * v->element_size);
@@ -88,7 +88,7 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
   }
 
   if (v->len + num_elems > v->capacity) {
-    vector_expand(v, v->len + num_elems);
+    vector_ensure_capacity(v, v->len + num_elems);
   }
 
   debug_assert(v->capacity >= v->len + num_elems,

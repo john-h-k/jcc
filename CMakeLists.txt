@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.13)
 project(jcc C)
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(
   SOURCE_FILES
@@ -70,10 +71,29 @@ else()
     -Wall
     -Wextra
     -Wpedantic
+    -Weverything
     -Werror
+
+    -Wno-error=unused-parameter
+
+    -Wmissing-prototypes
+    -Wsign-conversion
     -Wimplicit-fallthrough
     -Wstrict-prototypes
     -Wmissing-field-initializers
+
+    -Wno-missing-noreturn
+    -Wno-unused-macros
+    -Wno-switch-enum
+    -Wno-bad-function-cast
+    -Wno-undef
+    -Wno-padded
+    -Wno-declaration-after-statement
+    -Wno-class-varargs
+    -Wno-sign-conversion
+    -Wno-conditional-uninitialized
+    -Wno-shorten-64-to-32
+    -Wno-assign-enum
   )
   # TODO: remove binary literals in source
   add_compile_options(-Wno-gnu-binary-literal)

@@ -70,7 +70,7 @@ void graphwriter_free(struct graphwriter **gwr) {
   // does not close the file!
 }
 
-const char *edge_connector(enum graph_ty ty) {
+static const char *edge_connector(enum graph_ty ty) {
   switch (ty) {
   case GRAPH_TY_UNDIRECTED:
     return "--";
@@ -78,20 +78,22 @@ const char *edge_connector(enum graph_ty ty) {
     return "->";
   }
 }
-void write_end(struct graphwriter *gwr) { fprintf(gwr->file, "\n"); }
+
+
+static void write_end(struct graphwriter *gwr) { fprintf(gwr->file, "\n"); }
 
 // FIXME: these break with double quotes
 
-void write_vertex(struct graph_vertex *vertex) {
+static void write_vertex(struct graph_vertex *vertex) {
   fprintf(vertex->gwr->file, "    \"%s\"", vertex->id);
 }
 
-void write_edge(struct graph_edge *edge) {
+static void write_edge(struct graph_edge *edge) {
   fprintf(edge->gwr->file, "    \"%s\" %s \"%s\"", edge->from->id,
           edge_connector(edge->gwr->ty), edge->to->id);
 }
 
-struct graph_vertex *create_vertex(struct graphwriter *gwr, const char *id) {
+static struct graph_vertex *create_vertex(struct graphwriter *gwr, const char *id) {
   struct graph_vertex *gvx = arena_alloc(gwr->arena, sizeof(*gvx));
 
   gvx->gwr = gwr;

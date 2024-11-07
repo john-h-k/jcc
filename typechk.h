@@ -89,17 +89,18 @@ struct td_ty_aggregate {
   size_t num_fields;
 };
 
-enum td_ty_func_flags {
-  TD_TY_FUNC_FLAGS_UNSPECIFIED_ARGS, // e.g `int foo()`
-  TD_TY_FUNC_FLAGS_VARIADIC
+enum td_ty_func_ty {
+  TD_TY_FUNC_TY_UNKNOWN_ARGS, // e.g `int foo()`
+  TD_TY_FUNC_FLAGS_KNOWN_ARGS, // e.g `int foo(void), int foo(int, float)`
+  TD_TY_FUNC_FLAGS_VARIADIC // e.g `int foo(...)`
 };
 
 struct td_ty_func {
+  enum td_ty_func_ty ty;
+
   struct td_var_ty *ret_var_ty;
   struct td_var_ty *param_var_tys;
   size_t num_params;
-
-  enum td_ty_func_flags flags;
 };
 
 
@@ -646,6 +647,7 @@ struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
                                       const struct td_var_ty *ty_ref);
 
 struct td_var_ty td_var_ty_make_func(struct typechk *tchk,
+                                     enum td_ty_func_ty ty,
                                      struct td_var_ty ret_ty, size_t num_params, const struct td_var_ty *params);
 
 struct td_translationunit td_typchk(struct ast_translationunit *translation_unit);

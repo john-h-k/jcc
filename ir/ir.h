@@ -1,6 +1,7 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
+#include <stdbool.h>
 #include <limits.h>
 #include <stdlib.h>
 
