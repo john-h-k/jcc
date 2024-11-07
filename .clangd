@@ -1,5 +1,4 @@
-CompileFlags:
-  Add: [ -Wall, -Wextra, -Wpedantic, -Werror, -Wimplicit-fallthrough, -Wstrict-prototypes, -Wmissing-field-initializers, -Wno-gnu-binary-literal, -std=c2x]
+CompilationDatabase: ./build
 
 ---
 
