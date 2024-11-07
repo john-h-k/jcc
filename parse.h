@@ -748,8 +748,6 @@ void parser_free(struct parser **parser);
 
 const char *identifier_str(struct parser *parser, const struct token *token);
 
-bool ast_binary_op_is_comparison(enum ast_binary_op_ty ty);
-
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
 
