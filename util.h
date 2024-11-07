@@ -13,14 +13,47 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#ifdef __cplusplus
+#error "do not compile jcc as C++"
+#endif
+
+
 #if __STDC_VERSION__ >= 202311L
 #define STDC_C23 1
 #elif __STDC_VERSION__ >= 201710L
 #define STDC_C18 1
-#elif __STDC_VERSION__ >= 201112L
+#elif __STDC_VERSION__ == 201112L
 #define STDC_C11 1
 #else
 #error "jcc only supports C11 or later"
+#endif
+
+#ifdef UTIL_MACRO_DEBUG
+
+#ifdef __clang__
+#pragma message "Compiler is clang"
+#elif __GNUC__
+#warn "Compiler is GCC"
+#else
+#pragma message "unrecognised compiler"
+#endif
+
+#define FOO 99
+
+#if STDC_C23
+#pragma message "C version is C23"
+#elif STDC_C18
+#pragma message "C version is C28"
+#elif STDC_C11
+#pragma message "C version is C11"
+#else
+#define EXPAND_INNER(x) "unrecognised C version '" #x "'"
+#define EXPAND(x) EXPAND_INNER(x)
+#pragma message (EXPAND(__STDC_VERSION__))
+#undef EXPAND
+#undef EXPAND_INNER
+#endif
+
 #endif
 
 
