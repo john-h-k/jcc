@@ -88,10 +88,16 @@ struct td_ty_aggregate {
   size_t num_fields;
 };
 
+struct td_ty_incomplete_aggregate {
+  enum td_ty_aggregate_ty ty;
+
+  const char *name;
+};
+
 enum td_ty_func_ty {
   TD_TY_FUNC_TY_UNKNOWN_ARGS, // e.g `int foo()`
-  TD_TY_FUNC_FLAGS_KNOWN_ARGS, // e.g `int foo(void), int foo(int, float)`
-  TD_TY_FUNC_FLAGS_VARIADIC // e.g `int foo(...)`
+  TD_TY_FUNC_TY_KNOWN_ARGS, // e.g `int foo(void), int foo(int, float)`
+  TD_TY_FUNC_TY_VARIADIC // e.g `int foo(...)`
 };
 
 struct td_ty_func {
@@ -114,9 +120,8 @@ enum td_var_ty_ty {
   TD_VAR_TY_TY_ARRAY,
   TD_VAR_TY_TY_VARIADIC,
   TD_VAR_TY_TY_AGGREGATE, // e.g `union { int a; }`
-  TD_VAR_TY_TY_TAGGED,    // e.g `struct foo`
-  // td_var_ty_TY_TYPEDEF_NAME,
-  // td_var_ty_TY_ENUM,
+  TD_VAR_TY_TY_INCOMPLETE_AGGREGATE
+  // TD_VAR_TY_TY_TYPEDEF_NAME,
 };
 
 struct td_var_ty {
@@ -131,6 +136,7 @@ struct td_var_ty {
     struct td_ty_array array;
     struct td_ty_func func;
     struct td_ty_aggregate aggregate;
+    struct td_ty_incomplete_aggregate incomplete_aggregate;
   };
 };
 

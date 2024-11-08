@@ -264,10 +264,8 @@ static struct ir_op_var_ty
 var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
     bug("shouldn't reach IR gen with unresolved type");
-  case TD_VAR_TY_TY_TAGGED: {
-    return var_ty_for_td_var_ty(iru, var_ty);
-  }
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
@@ -314,7 +312,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
     return ty;
   }
   case TD_VAR_TY_TY_FUNC: {
-    bool variadic = var_ty->func.ty == TD_VAR_TY_TY_VARIADIC;
+    bool variadic = var_ty->func.ty == TD_TY_FUNC_TY_VARIADIC;
 
     struct ir_op_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_FUNC;
@@ -341,7 +339,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   }
   case TD_VAR_TY_TY_POINTER: {
     struct ir_op_var_ty underlying;
-    if (var_ty->pointer.underlying->ty == TD_VAR_TY_TY_TAGGED) {
+    if (var_ty->pointer.underlying->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
       underlying = IR_OP_VAR_TY_NONE;
     } else {
       underlying = var_ty_for_td_var_ty(iru, var_ty->pointer.underlying);
@@ -782,6 +780,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     // does not generate a unary op instead generates a LOAD_ADDR
     struct ir_op *op = alloc_ir_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD_ADDR;
+    op->var_ty = var_ty;
     op->load_addr = (struct ir_op_load_addr){.addr = ir_expr};
 
     return op;
@@ -790,57 +789,59 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   switch (unary_op->ty) {
   case TD_UNARY_OP_TY_PREFIX_DEC:
   case TD_UNARY_OP_TY_PREFIX_INC: {
-    todo("");
-    // enum td_binary_op_ty binary_op_ty =
-    //     unary_op->ty == TD_UNARY_OP_TY_PREFIX_INC ? TD_BINARY_OP_TY_ADD
-    //                                                : TD_BINARY_OP_TY_SUB;
-    // struct td_var_ty cnst_ty = (struct td_var_ty){
-    //     .ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known =
-    //     WELL_KNOWN_TY_SIGNED_INT};
+    enum td_assg_ty assg_ty =
+        unary_op->ty == TD_UNARY_OP_TY_PREFIX_INC ? TD_ASSG_TY_ADD
+                                                   : TD_ASSG_TY_SUB;
 
-    // struct td_expr one = {
-    //     .ty = TD_EXPR_TY_CNST,
-    //     .var_ty = cnst_ty,
-    //     .cnst = (struct td_cnst){.cnst_ty = cnst_ty, .int_value = 1}};
+    struct td_var_ty cnst_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
 
-    // struct td_assg td_assg = {
-    //     .ty = td_ASSG_TY_COMPOUNDASSG,
-    //     .var_ty = unary_op->var_ty,
-    //     .expr = &one,
-    //     .assignee = unary_op->expr,
-    //     .compound_assg = (struct td_assg_compound_assg){
-    //         .binary_op_ty = binary_op_ty,
-    //         .intermediate_var_ty = unary_op->var_ty}};
+    struct td_expr one = {
+        .ty = TD_EXPR_TY_CNST,
+        .var_ty = cnst_ty,
+        .cnst = (struct td_cnst){.ty = TD_CNST_TY_SIGNED_INT, .int_value = 1}};
 
-    // return build_ir_for_assg(irb, stmt, &td_assg);
+    struct td_assg td_assg = {
+        .ty = assg_ty,
+        .expr = &one,
+        .assignee = unary_op->expr,
+    };
+
+    struct td_expr td_expr = {
+      .ty = TD_EXPR_TY_ASSG,
+      .var_ty = expr->var_ty,
+      .assg = td_assg
+    };
+
+    return build_ir_for_assg(irb, stmt, &td_expr);
   }
   case TD_UNARY_OP_TY_POSTFIX_INC:
   case TD_UNARY_OP_TY_POSTFIX_DEC: {
-    todo("");
-    // enum td_binary_op_ty binary_op_ty =
-    //     unary_op->ty == TD_UNARY_OP_TY_POSTFIX_INC ? TD_BINARY_OP_TY_ADD
-    //                                                 : TD_BINARY_OP_TY_SUB;
-    // struct td_var_ty cnst_ty = (struct td_var_ty){
-    //     .ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known =
-    //     WELL_KNOWN_TY_SIGNED_INT};
+    enum td_assg_ty assg_ty =
+        unary_op->ty == TD_UNARY_OP_TY_POSTFIX_INC ? TD_ASSG_TY_ADD
+                                                   : TD_ASSG_TY_SUB;
 
-    // struct td_expr one = {
-    //     .ty = TD_EXPR_TY_CNST,
-    //     .var_ty = cnst_ty,
-    //     .cnst = (struct td_cnst){.cnst_ty = cnst_ty, .int_value = 1}};
+    struct td_var_ty cnst_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
 
-    // struct td_assg td_assg = {
-    //     .ty = td_ASSG_TY_COMPOUNDASSG,
-    //     .var_ty = unary_op->var_ty,
-    //     .expr = &one,
-    //     .assignee = unary_op->expr,
-    //     .compound_assg = (struct td_assg_compound_assg){
-    //         .binary_op_ty = binary_op_ty,
-    //         .intermediate_var_ty = unary_op->var_ty}};
+    struct td_expr one = {
+        .ty = TD_EXPR_TY_CNST,
+        .var_ty = cnst_ty,
+        .cnst = (struct td_cnst){.ty = TD_CNST_TY_SIGNED_INT, .int_value = 1}};
 
-    // build_ir_for_assg(irb, stmt, &td_assg);
+    struct td_assg td_assg = {
+        .ty = assg_ty,
+        .expr = &one,
+        .assignee = unary_op->expr,
+    };
 
-    // return ir_expr;
+    struct td_expr td_expr = {
+      .ty = TD_EXPR_TY_ASSG,
+      .var_ty = expr->var_ty,
+      .assg = td_assg
+    };
+
+    build_ir_for_assg(irb, stmt, &td_expr);
+  
+    return ir_expr;
   }
   case TD_UNARY_OP_TY_PLUS:
     // no work needed, build_expr will handle type conversion
@@ -1137,7 +1138,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
       case VAR_REF_TY_SSA:
         return ref->op;
       case VAR_REF_TY_LCL: {
-        debug_assert(ref->op->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
+        debug_assert(ref->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
                      ref->op->id);
 
         struct ir_op *op = alloc_ir_op(irb->func, *stmt);
@@ -1150,7 +1151,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
         } else {
           op->var_ty = var_ty;
         }
-        op->load_lcl = (struct ir_op_load_lcl){.lcl = ref->op->lcl};
+        op->load_lcl = (struct ir_op_load_lcl){.lcl = ref->lcl};
 
         return op;
       }
@@ -1287,6 +1288,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
     ref->op = op;
     return op;
   } else {
+    // FIXME: is this right
     struct ir_op *ld = alloc_ir_op(irb->func, stmt);
     ld->ty = IR_OP_TY_STORE_GLB;
     ld->var_ty = op->var_ty;
@@ -1825,18 +1827,20 @@ build_ir_for_selectstmt(struct ir_func_builder *irb,
   }
 }
 
-static struct ir_op *
+static void
 build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
                          struct td_declaration *declaration);
 
-static struct ir_op *
+static void
 build_ir_for_declorexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
                         struct td_declaration_or_expr *decl_or_expr) {
   switch (decl_or_expr->ty) {
   case TD_DECLARATION_OR_EXPR_TY_DECL:
-    return build_ir_for_declaration(irb, stmt, &decl_or_expr->decl);
+    build_ir_for_declaration(irb, stmt, &decl_or_expr->decl);
+    break;
   case TD_DECLARATION_OR_EXPR_TY_EXPR:
-    return build_ir_for_expr(irb, stmt, &decl_or_expr->expr);
+    build_ir_for_expr(irb, stmt, &decl_or_expr->expr);
+    break;
   }
 }
 
@@ -2531,12 +2535,12 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
 
 // this is called for decl lists WITHIN a function (i.e default is local
 // storage)
-static struct ir_op *
+static void
 build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
                          struct td_declaration *declaration) {
   if (declaration->storage_class_specifier ==
       TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
-    return NULL;
+    return;
   }
 
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
@@ -2563,12 +2567,10 @@ build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
             TD_STORAGE_CLASS_SPECIFIER_AUTO) {
       build_ir_for_auto_var(irb, stmt, decl);
     } else {
-      build_ir_for_global_var(irb->func->unit, irb->func, irb->global_var_refs,
+        build_ir_for_global_var(irb->func->unit, irb->func, irb->global_var_refs,
                               declaration->storage_class_specifier, decl);
     }
   }
-
-  return (*stmt)->last;
 }
 
 static struct ir_basicblock *
@@ -2970,7 +2972,7 @@ static struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
   case TD_VAR_TY_TY_WELL_KNOWN:
   case TD_VAR_TY_TY_POINTER:
   case TD_VAR_TY_TY_ARRAY:
-  case TD_VAR_TY_TY_TAGGED:
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
   case TD_VAR_TY_TY_AGGREGATE:
     return (struct ir_var_value){.var_ty = var_ty_for_td_var_ty(iru, var_ty)};
   }
@@ -2988,7 +2990,7 @@ static size_t get_member_index_offset(struct ir_unit *iru,
     return info.size * member_index;
   } else {
     debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
-                     var_ty->ty == TD_VAR_TY_TY_TAGGED,
+                     var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
     const char *member_name = var_ty->aggregate.fields[member_index].identifier;

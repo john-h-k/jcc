@@ -48,7 +48,7 @@ struct typechk {
   struct var_table ty_table;
 };
 
-UNUSED static struct td_var_ty
+static struct td_var_ty
 get_target_for_variadic(const struct td_var_ty *ty_ref) {
   // floats are promoted to doubles and types smaller than int are promoted to
   // int
@@ -190,9 +190,8 @@ static bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
     // same declaration we give anonymous types a name per-declaration
     return !strcmp(l_agg.name, r_agg.name);
   }
-
-  case TD_VAR_TY_TY_TAGGED:
-    todo("hmm");
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    bug("can't check incomplete");
   }
 }
 
@@ -410,7 +409,7 @@ resolve_binary_op_types(struct typechk *tchk,
   enum td_binary_op_ty ty = binary_op->ty;
 
   const struct td_expr *lhs_expr = binary_op->lhs;
-  const struct td_expr *rhs_expr = binary_op->lhs;
+  const struct td_expr *rhs_expr = binary_op->rhs;
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
   const struct td_var_ty *rhs = &rhs_expr->var_ty;
@@ -418,7 +417,7 @@ resolve_binary_op_types(struct typechk *tchk,
   struct td_var_ty lhs_op_ty, rhs_op_ty, result_ty;
 
   if (lhs->ty == TD_VAR_TY_TY_POINTER && rhs->ty == TD_VAR_TY_TY_POINTER) {
-    if (ty != TD_BINARY_OP_TY_SUB) {
+    if (ty == TD_BINARY_OP_TY_SUB) {
       if (!td_var_ty_eq(tchk, lhs, rhs)) {
         WARN("subtraction on pointers of different kinds is forbidden");
       }
@@ -429,6 +428,14 @@ resolve_binary_op_types(struct typechk *tchk,
       WARN("binary operations where both types are pointer only makes sense "
            "for subtraction or comparisons");
     }
+  } else if (lhs->ty == TD_VAR_TY_TY_POINTER) {
+    lhs_op_ty = *lhs;
+    rhs_op_ty = *lhs;
+    result_ty = *lhs;
+  } else if (rhs->ty == TD_VAR_TY_TY_POINTER) {
+    lhs_op_ty = *rhs;
+    rhs_op_ty = *rhs;
+    result_ty = *rhs;
   } else if (ty == TD_BINARY_OP_TY_LSHIFT || ty == TD_BINARY_OP_TY_RSHIFT) {
     lhs_op_ty = *lhs;
     rhs_op_ty = *rhs;
@@ -634,12 +641,70 @@ static struct td_declaration
 type_declaration(struct typechk *tchk,
                  const struct ast_declaration *declaration);
 
+static struct td_declaration
+type_struct_declaration(struct typechk *tchk,
+                        const struct ast_declaration *declaration);
+
 static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
                 enum td_specifier_allow allow);
 
 enum sign_state { SIGN_STATE_NONE, SIGN_STATE_SIGNED, SIGN_STATE_UNSIGNED };
+
+static char *anonymous_name(struct typechk *tchk) {
+  size_t id = tchk->next_anonymous_type_name_id++;
+  size_t char_size = num_digits(id);
+  size_t len_prefix = strlen("<anonymous>");
+  size_t len = len_prefix + char_size + 1;
+
+  char *buff = arena_alloc(tchk->arena, sizeof(*buff) * len);
+  snprintf(buff, len, "<anonymous>%zu", id);
+  buff[len] = '\0';
+
+  return buff;
+}
+
+static struct td_var_ty
+td_var_ty_for_enum(struct typechk *tchk,
+                   const struct ast_enum_specifier *specifier) {
+  if (!specifier->enumerator_list) {
+    if (!specifier->identifier) {
+      WARN("enum without identifier or decl list");
+    }
+  } else {
+    unsigned long last_value;
+    for (size_t i = 0; i < specifier->enumerator_list->num_enumerators; i++) {
+      struct ast_enumerator *enumerator =
+          &specifier->enumerator_list->enumerators[i];
+
+      unsigned long long value;
+      if (enumerator->value) {
+        value = type_constant_integral_expr(tchk, enumerator->value);
+      } else {
+        value = i ? last_value + 1 : 0;
+      }
+
+      const char *enum_name =
+          identifier_str(tchk->parser, &enumerator->identifier);
+      struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
+                           .identifier = enum_name,
+                           .scope = cur_scope(&tchk->var_table),
+                           .enumerator = value};
+
+      struct var_table_entry *entry =
+          var_table_create_entry(&tchk->var_table, enum_name);
+      entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+      *entry->var = var;
+      entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+      *entry->var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+
+      last_value = value;
+    }
+  }
+
+  return TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+}
 
 static struct td_var_ty td_var_ty_for_struct_or_union(
     struct typechk *tchk,
@@ -662,26 +727,34 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   if (specifier->identifier) {
     name = identifier_str(tchk->parser, specifier->identifier);
   } else {
-    size_t id = tchk->next_anonymous_type_name_id++;
-    size_t char_size = num_digits(id);
-    size_t len_prefix = strlen("<anonymous>");
-    size_t len = len_prefix + char_size + 1;
+    name = anonymous_name(tchk);
+  }
 
-    char *buff = arena_alloc(tchk->arena, sizeof(*buff) * len);
-    snprintf(buff, len, "<anonymous>%zu", id);
-    buff[len] = '\0';
+  if (!specifier->decl_list) {
+    if (!specifier->identifier) {
+      WARN("struct/union without identifier or decl list");
+    }
 
-    name = buff;
+    struct var_table_entry *entry = var_table_get_entry(&tchk->ty_table, name);
+    // FIXME: check scope too
+    // if (entry && entry->scope == scope of this decl)
+    if (entry) {
+      return *entry->var_ty;
+    } else {
+      return (struct td_var_ty){
+          .ty = TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
+          .incomplete_aggregate = {.ty = var_ty.aggregate.ty, .name = name}};
+    }
   }
 
   var_ty.aggregate.name = name;
 
   struct vector *var_decls = vector_create(sizeof(struct td_var_declaration));
-  for (size_t i = 0; i < specifier->decl_list.num_declarations; i++) {
+  for (size_t i = 0; i < specifier->decl_list->num_declarations; i++) {
     const struct ast_declaration *declaration =
-        &specifier->decl_list.declarations[i];
+        &specifier->decl_list->declarations[i];
 
-    struct td_declaration td_decl = type_declaration(tchk, declaration);
+    struct td_declaration td_decl = type_struct_declaration(tchk, declaration);
     vector_extend(var_decls, td_decl.var_declarations,
                   td_decl.num_var_declarations);
   }
@@ -703,9 +776,18 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
         .identifier = var_decl->var.identifier, .var_ty = var_decl->var_ty};
   }
 
+  struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
+                       .identifier = name,
+                       .scope = cur_scope(&tchk->ty_table)};
+
+  struct var_table_entry *entry = var_table_create_entry(&tchk->ty_table, name);
+  entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+  *entry->var = var;
+  entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+  *entry->var_ty = var_ty;
+
   return var_ty;
 }
-
 
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -722,8 +804,8 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       .ty = TD_VAR_TY_TY_ARRAY,
   };
 
-  array_ty.array.size = type_constant_integral_expr(
-      tchk, array_declarator->size);
+  array_ty.array.size =
+      type_constant_integral_expr(tchk, array_declarator->size);
   array_ty.array.underlying =
       arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
   *array_ty.array.underlying = var_ty;
@@ -738,17 +820,32 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       .ty = TD_VAR_TY_TY_FUNC,
   };
 
-  func_ty.func.ty = TD_TY_FUNC_TY_UNKNOWN_ARGS;
   func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
   *func_ty.func.ret = var_ty;
 
   struct ast_paramlist *param_list = func_declarator->param_list;
 
-  func_ty.func.num_params = param_list->num_params;
-  func_ty.func.params = arena_alloc(tchk->arena, sizeof(*func_ty.func.params) *
-                                                     param_list->num_params);
+  size_t num_params;
+  if (param_list->num_params &&
+      param_list->params[param_list->num_params - 1].ty ==
+          AST_PARAM_TY_VARIADIC) {
+    num_params = param_list->num_params - 1;
+    func_ty.func.ty = TD_TY_FUNC_TY_VARIADIC;
+  } else if (param_list->num_params &&
+             param_list->params[0].ty == AST_PARAM_TY_VOID) {
+    num_params = 0;
+    func_ty.func.ty = TD_TY_FUNC_TY_KNOWN_ARGS;
+  } else {
+    num_params = param_list->num_params;
+    func_ty.func.ty = param_list->num_params ? TD_TY_FUNC_TY_KNOWN_ARGS
+                                             : TD_TY_FUNC_TY_UNKNOWN_ARGS;
+  }
 
-  for (size_t j = 0; j < param_list->num_params; j++) {
+  func_ty.func.num_params = num_params;
+  func_ty.func.params =
+      arena_alloc(tchk->arena, sizeof(*func_ty.func.params) * num_params);
+
+  for (size_t j = 0; j < num_params; j++) {
     struct ast_param *param = &param_list->params[j];
     struct td_ty_param *td_param = &func_ty.func.params[j];
 
@@ -758,6 +855,9 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
                             TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
     switch (param->ty) {
+    case AST_PARAM_TY_VOID:
+    case AST_PARAM_TY_VARIADIC:
+      continue;
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
           type_declarator(tchk, &param_specifiers, &param->declarator);
@@ -768,6 +868,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     case AST_PARAM_TY_ABSTRACT_DECL: {
       struct td_var_ty param_var_ty = type_abstract_declarator(
           tchk, &param_specifiers, &param->abstract_declarator);
+
       *td_param =
           (struct td_ty_param){.identifier = NULL, .var_ty = param_var_ty};
       break;
@@ -808,7 +909,7 @@ static struct td_var_ty type_abstract_declarator(
       todo("");
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
-                                    direct_declarator->array_declarator);
+                                     direct_declarator->array_declarator);
 
       break;
     }
@@ -871,10 +972,10 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
       found_ident = true;
       break;
     case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
-      todo("");
+      todo("paren declarators");
     case AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
-                                    direct_declarator->array_declarator);
+                                     direct_declarator->array_declarator);
 
       break;
     }
@@ -1110,8 +1211,7 @@ type_specifiers(struct typechk *tchk,
         break;
       case AST_TYPE_SPECIFIER_ENUM:
         specifiers.type_specifier =
-            (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN,
-                               .well_known = WELL_KNOWN_TY_SIGNED_INT};
+            td_var_ty_for_enum(tchk, &last_specifier.enum_specifier);
         break;
       case AST_TYPE_SPECIFIER_TYPEDEF_NAME:
         specifiers.type_specifier =
@@ -1210,6 +1310,27 @@ static struct td_expr type_call(struct typechk *tchk,
 
   if (target_var_ty.ty != TD_VAR_TY_TY_FUNC) {
     WARN("can't call non_func");
+  }
+
+  size_t num_params = target_var_ty.func.num_params;
+  if (target_var_ty.func.ty != TD_TY_FUNC_TY_UNKNOWN_ARGS && call->arg_list.num_args < num_params) {
+    WARN("too few params");
+  } else if (target_var_ty.func.ty == TD_TY_FUNC_TY_KNOWN_ARGS && call->arg_list.num_args > num_params) {
+    WARN("too many params");
+  }
+
+  for (size_t i = 0; i < td_call.arg_list.num_args; i++) {
+    struct td_var_ty param_ty;
+
+    if (i < num_params) {
+      param_ty = target_var_ty.func.params[i].var_ty;
+    } else {
+      param_ty = get_target_for_variadic(&td_call.arg_list.args[i].var_ty);
+    }
+
+    if (!td_var_ty_eq(tchk, &param_ty, &td_call.arg_list.args[i].var_ty)) {
+      td_call.arg_list.args[i] = add_cast_expr(tchk, td_call.arg_list.args[i], param_ty);
+    }
   }
 
   struct td_var_ty var_ty = *target_var_ty.func.ret;
@@ -1427,9 +1548,26 @@ type_arrayaccess(struct typechk *tchk,
 }
 
 static bool try_resolve_member_access_ty(struct typechk *tchk,
-                                         const struct td_var_ty *var_ty,
+                                         const struct td_var_ty *td_var_ty,
                                          const char *member_name,
                                          struct td_var_ty *member_var_ty) {
+
+  const struct td_var_ty *var_ty;
+  if (td_var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct var_table_entry *entry = var_table_get_entry(
+        &tchk->ty_table, td_var_ty->incomplete_aggregate.name);
+
+    // FIXME: ALSO needs to check scope
+    // if (!entry || entry->var->scope != td_var_ty)
+    if (!entry) {
+      WARN("incomplete type in member access");
+    }
+
+    var_ty = entry->var_ty;
+  } else {
+    var_ty = td_var_ty;
+  }
+
   debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
 
   // FIXME: super slow hashtable needed
@@ -2026,8 +2164,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   struct td_var_declaration declaration =
       type_declarator(tchk, &specifiers, &func_def->declarator);
 
-    
-  struct var_table_entry *func_entry = var_table_create_entry(&tchk->var_table, declaration.var.identifier);
+  struct var_table_entry *func_entry =
+      var_table_create_entry(&tchk->var_table, declaration.var.identifier);
   func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
   *func_entry->var = declaration.var;
   func_entry->var_ty = arena_alloc(tchk->arena, sizeof(*func_entry->var_ty));
@@ -2046,12 +2184,13 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
     }
 
     struct td_var var = {
-      .ty = TD_VAR_VAR_TY_VAR,
-      .identifier = identifier,
-      .scope = SCOPE_PARAMS,
+        .ty = TD_VAR_VAR_TY_VAR,
+        .identifier = identifier,
+        .scope = SCOPE_PARAMS,
     };
 
-    struct var_table_entry *entry = var_table_create_entry(&tchk->var_table, identifier);
+    struct var_table_entry *entry =
+        var_table_create_entry(&tchk->var_table, identifier);
     entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
     *entry->var = var;
     entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -2180,11 +2319,10 @@ type_init_declarator(struct typechk *tchk,
 
     if (init.ty == TD_INIT_TY_EXPR &&
         !td_var_ty_eq(tchk, &init.expr.var_ty, &td_var_decl.var_ty)) {
-      td_var_decl.init->expr =
-          add_cast_expr(tchk, init.expr, td_var_decl.var_ty);
-    } else {
-      *td_var_decl.init = init;
+      init.expr = add_cast_expr(tchk, init.expr, td_var_decl.var_ty);
     }
+
+    *td_var_decl.init = init;
   }
 
   return td_var_decl;
@@ -2210,6 +2348,19 @@ static struct td_declaration type_init_declarator_list(
 static struct td_declaration
 type_declaration(struct typechk *tchk,
                  const struct ast_declaration *declaration) {
+  struct td_specifiers specifiers = type_specifiers(
+      tchk, &declaration->specifier_list,
+      TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS |
+          TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS |
+          TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS);
+
+  return type_init_declarator_list(tchk, &specifiers,
+                                   &declaration->declarator_list);
+}
+
+static struct td_declaration
+type_struct_declaration(struct typechk *tchk,
+                        const struct ast_declaration *declaration) {
   struct td_specifiers specifiers = type_specifiers(
       tchk, &declaration->specifier_list,
       TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
@@ -2354,17 +2505,26 @@ DEBUG_FUNC(var_ty, var_ty) {
   case TD_VAR_TY_TY_UNKNOWN:
     TD_PRINTZ("<unresolved type>");
     break;
-  case TD_VAR_TY_TY_TAGGED:
-    todo("taggged");
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    switch (var_ty->aggregate.ty) {
+    case TD_TY_AGGREGATE_TY_STRUCT:
+      TD_PRINT("INCOMPLETE STRUCT '%s'", var_ty->aggregate.name);
+      break;
+    case TD_TY_AGGREGATE_TY_UNION:
+      TD_PRINT("INCOMPLETE UNION '%s'", var_ty->aggregate.name);
+      break;
+    }
+    break;
   case TD_VAR_TY_TY_AGGREGATE:
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
-      TD_PRINTZ("STRUCT ");
+      TD_PRINT("STRUCT '%s'", var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
-      TD_PRINTZ("UNION ");
+      TD_PRINT("UNION '%s'", var_ty->aggregate.name);
       break;
     }
+
     INDENT();
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
       TD_PRINT("FIELD %s", var_ty->aggregate.fields[i].identifier);
@@ -2393,7 +2553,17 @@ DEBUG_FUNC(var_ty, var_ty) {
     UNINDENT();
     break;
   case TD_VAR_TY_TY_FUNC:
-    TD_PRINTZ("FUNC (");
+    switch (var_ty->func.ty) {
+    case TD_TY_FUNC_TY_UNKNOWN_ARGS:
+      TD_PRINTZ("UNSPECIFIED FUNC (");
+      break;
+    case TD_TY_FUNC_TY_KNOWN_ARGS:
+      TD_PRINTZ("FUNC (");
+      break;
+    case TD_TY_FUNC_TY_VARIADIC:
+      TD_PRINTZ("VARIADIC FUNC (");
+      break;
+    }
     INDENT();
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       DEBUG_CALL(var_ty, &var_ty->func.params[i].var_ty);
