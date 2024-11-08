@@ -591,7 +591,6 @@ static bool parse_init_list_init(struct parser *parser,
     init_list->designator_list =
         arena_alloc(parser->arena, sizeof(*init_list->designator_list));
     *init_list->designator_list = designator_list;
-
     
     EXP_PARSE(parse_init(parser, &init), "expected init in init list");
   } else if (!parse_init(parser, &init)) {
@@ -3114,7 +3113,9 @@ DEBUG_FUNC(init, init) {
 DEBUG_FUNC(init_list_init, init) {
   AST_PRINTZ("INIT LIST INIT");
 
-  DEBUG_CALL(designator_list, init->designator_list);
+  if (init->designator_list) {
+    DEBUG_CALL(designator_list, init->designator_list);
+  }
 
   AST_PRINTZ("init");
 
