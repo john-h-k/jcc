@@ -74,26 +74,27 @@ enum ast_declarator_ty {
 struct ast_declarator {
   struct ast_pointer_list pointer_list;
   struct ast_direct_declarator_list direct_declarator_list;
-};
-
-struct ast_struct_declarator {
-  struct ast_declarator declarator;
   struct ast_expr *bitfield_size;
 };
 
-struct ast_struct_declarator_list {
-  size_t num_declarators;
-  struct ast_struct_declarator *declarators;
-};
+// struct ast_struct_declarator {
+//   struct ast_declarator declarator;
+//   struct ast_expr *bitfield_size;
+// };
 
-struct ast_struct_declaration {
-  struct ast_declaration_specifier_list decl_specifiers;
-  struct ast_struct_declarator_list struct_declarator_list;
-};
+// struct ast_struct_declarator_list {
+//   size_t num_declarators;
+//   struct ast_struct_declarator *declarators;
+// };
+
+// struct ast_struct_declaration {
+//   struct ast_declaration_specifier_list decl_specifiers;
+//   struct ast_struct_declarator_list struct_declarator_list;
+// };
 
 struct ast_struct_declaration_list {
-  size_t num_struct_declarations;
-  struct ast_struct_declaration *struct_declarations;
+  size_t num_declarations;
+  struct ast_declaration *declarations;
 };
 
 enum ast_struct_or_union_specifier_ty {
@@ -308,9 +309,7 @@ enum ast_unary_op_ty {
   AST_UNARY_OP_TY_LOGICAL_NOT,
   AST_UNARY_OP_TY_NOT,
   AST_UNARY_OP_TY_INDIRECTION,
-  AST_UNARY_OP_TY_SIZEOF,
   AST_UNARY_OP_TY_ADDRESSOF,
-  AST_UNARY_OP_TY_ALIGNOF,
   AST_UNARY_OP_TY_CAST,
 };
 
@@ -587,12 +586,12 @@ struct ast_labeledstmt {
 };
 
 struct ast_ifstmt {
-  struct ast_expr condition;
+  struct ast_expr cond;
   struct ast_stmt *body;
 };
 
 struct ast_ifelsestmt {
-  struct ast_expr condition;
+  struct ast_expr cond;
   struct ast_stmt *body;
   struct ast_stmt *else_body;
 };

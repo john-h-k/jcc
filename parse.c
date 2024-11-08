@@ -389,90 +389,6 @@ static void parse_declaration_specifier_list(
 
 static bool parse_declarator(struct parser *parser, struct ast_declarator *declarator);
 
-static bool parse_struct_declarator(struct parser *parser,
-                             struct ast_struct_declarator *struct_declarator) {
-  bool has_declarator =
-      parse_declarator(parser, &struct_declarator->declarator);
-
-  struct text_pos end_of_declarator = get_position(parser->lexer);
-
-  struct ast_expr expr;
-  bool has_bitfield;
-  if (parse_token(parser, LEX_TOKEN_TY_COLON) && parse_expr(parser, &expr)) {
-    has_bitfield = true;
-    struct_declarator->bitfield_size =
-        arena_alloc(parser->arena, sizeof(*struct_declarator->bitfield_size));
-    *struct_declarator->bitfield_size = expr;
-  } else {
-    has_bitfield = false;
-    backtrack(parser->lexer, end_of_declarator);
-  }
-
-  if (!has_declarator && !has_bitfield) {
-    return false;
-  }
-
-  parse_token(parser, LEX_TOKEN_TY_COMMA);
-
-  return true;
-}
-
-static void parse_struct_declarator_list(
-    struct parser *parser,
-    struct ast_struct_declarator_list *struct_declarator_list) {
-  struct vector *list =
-      vector_create(sizeof(*struct_declarator_list->declarators));
-
-  struct ast_struct_declarator struct_declarator;
-  while (parse_struct_declarator(parser, &struct_declarator)) {
-    parse_token(parser, LEX_TOKEN_TY_COMMA);
-
-    vector_push_back(list, &struct_declarator);
-  }
-
-  parse_token(parser, LEX_TOKEN_TY_COMMA);
-
-  struct_declarator_list->declarators =
-      arena_alloc(parser->arena, vector_byte_size(list));
-  struct_declarator_list->num_declarators = vector_length(list);
-
-  vector_copy_to(list, struct_declarator_list->declarators);
-  vector_free(&list);
-}
-
-static bool parse_struct_declaration(struct parser *parser,
-                              struct ast_struct_declaration *struct_decl) {
-  struct text_pos pos = get_position(parser->lexer);
-
-  parse_declaration_specifier_list(parser, &struct_decl->decl_specifiers);
-  parse_struct_declarator_list(parser, &struct_decl->struct_declarator_list);
-
-  if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
-  return false;
-}
-
-static void parse_struct_declaration_list(
-    struct parser *parser,
-    struct ast_struct_declaration_list *struct_decl_list) {
-  struct vector *list = vector_create(sizeof(*struct_decl_list->struct_declarations));
-
-  struct ast_struct_declaration struct_decl;
-  while (parse_struct_declaration(parser, &struct_decl)) {
-    vector_push_back(list, &struct_decl);
-  }
-
-  struct_decl_list->struct_declarations =
-      arena_alloc(parser->arena, vector_byte_size(list));
-  struct_decl_list->num_struct_declarations = vector_length(list);
-
-  vector_copy_to(list, struct_decl_list->struct_declarations);
-  vector_free(&list);
-}
-
 static bool parse_struct_or_union_specifier(
     struct parser *parser,
     struct ast_struct_or_union_specifier *struct_or_union_specifier) {
@@ -497,11 +413,11 @@ static bool parse_struct_or_union_specifier(
   }
 
   struct_or_union_specifier->ty = ty;
-  struct_or_union_specifier->struct_decl_list.num_struct_declarations = 0;
-  struct_or_union_specifier->struct_decl_list.struct_declarations = NULL;
+  struct_or_union_specifier->struct_decl_list.num_declarations = 0;
+  struct_or_union_specifier->struct_decl_list.declarations = NULL;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
-    parse_struct_declaration_list(parser,
+    parse_declaration_list(parser,
                                   &struct_or_union_specifier->struct_decl_list);
     EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
               "expected } after struct_or_union_declaration body");
@@ -944,8 +860,22 @@ static bool parse_declarator(struct parser *parser,
   parse_pointer_list(parser, &declarator->pointer_list);
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
 
-  if (!declarator->pointer_list.num_pointers &&
-      !declarator->direct_declarator_list.num_direct_declarators) {
+  bool has_declarator = declarator->pointer_list.num_pointers ||
+      declarator->direct_declarator_list.num_direct_declarators;
+
+  struct text_pos end_of_declarator = get_position(parser->lexer);
+
+  struct ast_expr expr;
+  if (parse_token(parser, LEX_TOKEN_TY_COLON) && parse_expr(parser, &expr)) {
+    declarator->bitfield_size =
+        arena_alloc(parser->arena, sizeof(*struct_declarator->bitfield_size));
+    *declarator->bitfield_size = expr;
+  } else {
+    declarator->bitfield_size = NULL;
+    backtrack(parser->lexer, end_of_declarator);
+  }
+
+  if (!has_declarator && !declarator->bitfield_size) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -983,6 +913,8 @@ static void parse_init_declarator_list(
   struct ast_init_declarator init_declarator;
   while (parse_init_declarator(parser, &init_declarator)) {
     vector_push_back(list, &init_declarator);
+
+    parse_token(parser, LEX_TOKEN_TY_COMMA);
   }
 
   init_declarator_list->init_declarators =
@@ -1555,15 +1487,6 @@ static bool parse_unary_prefix_op(struct parser *parser, struct ast_expr *expr) 
   case LEX_TOKEN_TY_OP_AND:
     unary_prefix_ty = AST_UNARY_OP_TY_ADDRESSOF;
     break;
-  // case LEX_TOKEN_TY_OP_SIZEOF:
-  //   ty = AST_UNARY_OP_TY_SIZEOF;
-  //   break;
-  // case LEX_TOKEN_TY_OP_ALIGNOF:
-  //   ty = AST_UNARY_OP_TY_ALIGNOF;
-  //   break;
-  // case LEX_TOKEN_TY_OP_CAST:
-  //   ty = AST_UNARY_OP_TY_CAST;
-  //   break;
   default:
     // just pure expr
     has_unary_prefix = false;
@@ -1980,7 +1903,7 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
     return false;
   }
 
-  if_stmt->condition = expr;
+  if_stmt->cond = expr;
   if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
   *if_stmt->body = stmt;
 
@@ -2003,7 +1926,7 @@ static bool parse_ifelsestmt(struct parser *parser,
     return false;
   }
 
-  if_else_stmt->condition = if_stmt.condition;
+  if_else_stmt->cond = if_stmt.cond;
   if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
   if_else_stmt->body = if_stmt.body;
   if_else_stmt->else_body =
@@ -2942,14 +2865,8 @@ DEBUG_FUNC(unary_op, unary_op) {
   case AST_UNARY_OP_TY_INDIRECTION:
     AST_PRINTZ("INDIRECTION");
     break;
-  case AST_UNARY_OP_TY_SIZEOF:
-    AST_PRINTZ("SIZEOF");
-    break;
   case AST_UNARY_OP_TY_ADDRESSOF:
     AST_PRINTZ("ADDRESSOF");
-    break;
-  case AST_UNARY_OP_TY_ALIGNOF:
-    AST_PRINTZ("ALIGNOF");
     break;
   case AST_UNARY_OP_TY_CAST:
     AST_PRINTZ("CAST");
@@ -3365,7 +3282,7 @@ DEBUG_FUNC(ifstmt, if_stmt) {
   AST_PRINTZ("IF");
   AST_PRINTZ("CONDITION");
   INDENT();
-  DEBUG_CALL(expr, &if_stmt->condition);
+  DEBUG_CALL(expr, &if_stmt->cond);
   UNINDENT();
 
   AST_PRINTZ("BODY");
@@ -3376,7 +3293,7 @@ DEBUG_FUNC(ifelsestmt, if_else_stmt) {
   AST_PRINTZ("IF");
   AST_PRINTZ("CONDITION");
   INDENT();
-  DEBUG_CALL(expr, &if_else_stmt->condition);
+  DEBUG_CALL(expr, &if_else_stmt->cond);
   UNINDENT();
 
   AST_PRINTZ("BODY");

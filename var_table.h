@@ -7,24 +7,15 @@
 #define SCOPE_GLOBAL (-1)
 #define SCOPE_PARAMS (0)
 
-enum var_table_entry_ty {
-  VAR_TABLE_ENTRY_TY_NONE,
-  VAR_TABLE_ENTRY_TY_VAR,
-  VAR_TABLE_ENTRY_TY_ENUM_CNST,
-  VAR_TABLE_ENTRY_TY_ENUM,
-  VAR_TABLE_ENTRY_TY_STRUCT,
-  VAR_TABLE_ENTRY_TY_UNION,
-  VAR_TABLE_ENTRY_TY_TYPEDEF,
-};
-
 struct var_table_entry {
   const char *name;
   int scope;
 
-  enum var_table_entry_ty ty;
+  struct td_var_ty *var_ty;
 
-  struct ast_tyref *value;
-  int enum_cnst;
+  union {
+    struct td_var *var;
+  };
 };
 
 struct var_table {
@@ -54,10 +45,10 @@ int cur_scope(struct var_table *var_table);
 void push_scope(struct var_table *var_table);
 void pop_scope(struct var_table *var_table);
 
-struct var_table_entry *get_entry(struct var_table *var_table,
+struct var_table_entry *var_table_get_entry(struct var_table *var_table,
                                   const char *name);
 
-struct var_table_entry *get_or_create_entry(struct var_table *var_table,
+struct var_table_entry *var_table_get_or_create_entry(struct var_table *var_table,
                                             const char *name);
 
 typedef void (*debug_print_entries_callback)(FILE *file,

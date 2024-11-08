@@ -33,6 +33,10 @@ enum td_type_qualifier_flags {
 
 enum well_known_ty {
   // ir.c relies on the sizes being ascending
+  // macros below rely on signed being even and unsigned being odd
+  // TODO: WELL_KNOWN_TY_BOOL,
+  WELL_KNOWN_TY_CHAR = 1,
+
   WELL_KNOWN_TY_SIGNED_CHAR,
   WELL_KNOWN_TY_UNSIGNED_CHAR,
 
@@ -68,11 +72,6 @@ struct td_ty_pointer {
 struct td_ty_array {
   struct td_var_ty *underlying;
   size_t size;
-};
-
-struct td_struct_field {
-  const char *name;
-  struct td_var_ty *var_ty;
 };
 
 enum td_ty_aggregate_ty {
@@ -135,6 +134,29 @@ struct td_var_ty {
   };
 };
 
+struct td_struct_field {
+  const char *name;
+  struct td_var_ty var_ty;
+};
+
+extern struct td_var_ty TD_VAR_TY_VOID;
+extern struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER;
+
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_CHAR;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_CHAR;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_CHAR;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_SHORT;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_SHORT;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_INT;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_LONG;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_LONG;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_LONG_LONG;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_FLOAT;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_DOUBLE;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_LONG_DOUBLE;
+
 // TODO: try and parse init lists as expressions to give better error messages
 enum td_init_ty {
   TD_INIT_TY_EXPR,
@@ -148,20 +170,27 @@ struct td_arglist {
 
 /* Variable references */
 
-struct td_var {
-  struct token identifier;
-  int scope;
+enum td_var_var_ty {
+  TD_VAR_VAR_TY_ENUMERATOR,
+  TD_VAR_VAR_TY_AUTO, // `auto`
+  TD_VAR_VAR_TY_STATIC, // `static/extern`
 };
 
-enum td_param_ty {
-  TD_PARAM_TY_DECL,
-  TD_PARAM_TY_ABSTRACT_DECL,
+struct td_var {
+  enum td_var_var_ty ty;
+
+  struct token identifier;
+  int scope;
+
+  union {
+    unsigned long long enumerator;
+  };
 };
 
 struct td_param {
-  enum td_param_ty ty;
+  const char *name;
 
-
+  struct td_var_ty var_ty;
 };
 
 struct td_paramlist {
@@ -401,6 +430,7 @@ enum td_expr_ty {
 
 struct td_expr {
   enum td_expr_ty ty;
+  struct td_var_ty var_ty;
 
   union {
     struct td_ternary ternary;
@@ -435,6 +465,7 @@ struct td_init {
 struct td_var_declaration {
   struct td_var_ty var_ty;
   struct token identifier;
+
   struct td_init *init;
 };
 
@@ -490,12 +521,12 @@ struct td_labeledstmt {
 };
 
 struct td_ifstmt {
-  struct td_expr condition;
+  struct td_expr cond;
   struct td_stmt *body;
 };
 
 struct td_ifelsestmt {
-  struct td_expr condition;
+  struct td_expr cond;
   struct td_stmt *body;
   struct td_stmt *else_body;
 };
@@ -645,10 +676,6 @@ struct td_var_ty td_var_ty_make_pointer(struct typechk *tchk,
 
 struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
                                       const struct td_var_ty *ty_ref);
-
-struct td_var_ty td_var_ty_make_func(struct typechk *tchk,
-                                     enum td_ty_func_ty ty,
-                                     struct td_var_ty ret_ty, size_t num_params, const struct td_var_ty *params);
 
 struct td_translationunit td_typchk(struct ast_translationunit *translation_unit);
 

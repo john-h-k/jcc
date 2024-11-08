@@ -671,7 +671,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     case IR_OP_VAR_PRIMITIVE_TY_F16:
     case IR_OP_VAR_PRIMITIVE_TY_F32:
     case IR_OP_VAR_PRIMITIVE_TY_F64:
-      unreachable("CNST_TY_INT with var_ty of F32/F64 makes no sense");
+      unreachable();
     };
   }
 }
@@ -1338,7 +1338,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   }
   case IR_OP_TY_LOAD_GLB:
   case IR_OP_TY_STORE_GLB: {
-    unreachable("loadglb/storeglb should have been lowered");
+    bug("load/store glb should have been lowered");
   }
   case IR_OP_TY_LOAD_LCL: {
     codegen_load_lcl_op(state, op);
