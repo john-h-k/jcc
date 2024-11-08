@@ -130,6 +130,10 @@ enum compile_result compile(struct compiler *compiler) {
 
   struct typechk_result typechk_result = td_typechk(compiler->typechk, &parse_result.translation_unit);
 
+  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_TYPECHK) {
+    debug_print_td(compiler->typechk, &typechk_result.translation_unit);
+  }
+
   disable_log();
 
   const struct target *target = get_target(&compiler->args);

@@ -74,7 +74,8 @@ static struct ir_label *add_label(struct ir_func_builder *irb, const char *name,
 
 static struct var_key get_var_key(const struct td_var *var,
                                   struct ir_basicblock *basicblock) {
-  return (struct var_key){var->identifier, var->scope, .basicblock = basicblock};
+  return (struct var_key){var->identifier, var->scope,
+                          .basicblock = basicblock};
 }
 
 static void get_var_ref(struct ir_func_builder *irb,
@@ -1196,9 +1197,9 @@ UNUSED TODO_FUNC(static struct ir_op *build_ir_for_initlist(
     struct ir_func_builder *irb, struct ir_stmt *stmt,
     struct td_init_list *init_list, const struct td_var_ty *td_var_ty))
 
-static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
-                                       struct ir_stmt **stmt,
-                                       struct td_expr *expr) {
+    static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
+                                           struct ir_stmt **stmt,
+                                           struct td_expr *expr) {
   // need to generate args and target IR first to keep IR in order
   struct td_call *call = &expr->call;
 
@@ -1267,8 +1268,6 @@ static void var_assg_glb(struct ir_func_builder *irb, struct ir_stmt *stmt,
 
 static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
                               struct ir_op *op, struct td_var *var) {
-  debug_assert(op, "null expr in assignment!");
-
   struct var_key key;
   struct var_ref *ref;
   get_var_ref(irb, stmt->basicblock, var, &key, &ref);
@@ -2148,9 +2147,16 @@ static struct ir_op *build_ir_for_zero_init(struct ir_func_builder *irb,
   return value;
 }
 
-TODO_FUNC(static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
+static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
-                                       const struct td_init *init))
+                                       struct td_init *init) {
+  switch (init->ty) {
+  case TD_INIT_TY_EXPR:
+    return build_ir_for_expr(irb, stmt, &init->expr);
+  case TD_INIT_TY_INIT_LIST:
+    todo("init init list");
+  }
+}
 
 static struct ir_op *
 build_ir_for_array_initlist(struct ir_func_builder *irb, struct ir_stmt **stmt,
@@ -2457,13 +2463,14 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
       (struct ir_var){.ty = IR_VAR_TY_DATA, .var_ty = var_ty, .value = value};
 }
 
-
 static void
 build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
                                 struct var_refs *var_refs,
                                 struct td_declaration *declaration) {
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
-    build_ir_for_global_var(iru, func, var_refs, declaration->storage_class_specifier, &declaration->var_declarations[i]);
+    build_ir_for_global_var(iru, func, var_refs,
+                            declaration->storage_class_specifier,
+                            &declaration->var_declarations[i]);
   }
 }
 
@@ -2500,8 +2507,9 @@ build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
       struct ir_op_var_ty var_ty =
           var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
 
-      struct ir_glb *glb = add_global(irb->func->unit, IR_GLB_TY_FUNC, &var_ty,
-                                      IR_GLB_DEF_TY_UNDEFINED, decl->var.identifier);
+      struct ir_glb *glb =
+          add_global(irb->func->unit, IR_GLB_TY_FUNC, &var_ty,
+                     IR_GLB_DEF_TY_UNDEFINED, decl->var.identifier);
 
       glb->var = arena_alloc(irb->func->arena, sizeof(*glb->var));
 
@@ -3048,9 +3056,9 @@ build_ir_value_for_struct_init_list(struct ir_unit *iru,
                                .value_list = value_list};
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
-                                                  struct td_init *init,
-                                                  UNUSED_ARG(struct td_var_ty *var_ty)) {
+static struct ir_var_value
+build_ir_for_var_value(struct ir_unit *iru, struct td_init *init,
+                       UNUSED_ARG(struct td_var_ty *var_ty)) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR: {
     struct td_expr *expr = &init->expr;
@@ -3102,19 +3110,23 @@ build_ir_for_translationunit(struct typechk *tchk,
 
     switch (external_declaration->ty) {
     case TD_EXTERNAL_DECLARATION_TY_DECLARATION: {
-      build_ir_for_global_declaration(iru, NULL, global_var_refs, &external_declaration->declaration);
+      build_ir_for_global_declaration(iru, NULL, global_var_refs,
+                                      &external_declaration->declaration);
       break;
     }
     case TD_EXTERNAL_DECLARATION_TY_FUNC_DEF: {
       struct td_funcdef *def = &external_declaration->func_def;
 
       build_ir_for_global_var(iru, NULL, global_var_refs,
-                              def->storage_class_specifier, &def->var_declaration);
+                              def->storage_class_specifier,
+                              &def->var_declaration);
 
       struct ir_func_builder *builder =
           build_ir_for_function(iru, arena, def, global_var_refs);
 
-      struct var_key key = {.name = def->var_declaration.var.identifier, .scope = SCOPE_GLOBAL};
+      struct var_key key = {.name = def->var_declaration.var.identifier,
+                            .scope = SCOPE_GLOBAL};
+
       struct var_ref *ref = var_refs_get(global_var_refs, &key);
       ref->glb->def_ty = IR_GLB_DEF_TY_DEFINED;
       ref->glb->func = builder->func;
