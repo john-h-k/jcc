@@ -16,7 +16,7 @@ cd ..
 4. It will output a file next to it suffixed by `.obj` which will be your EEP assembly
 5. Rename this from `.c.obj` to `.ram` and then you can import it into Issie
 
-</detail>
+</details>
 
 # jcc
 
