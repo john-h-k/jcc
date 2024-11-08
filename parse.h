@@ -112,7 +112,7 @@ struct ast_struct_or_union_specifier {
   enum ast_struct_or_union_specifier_ty ty;
   
   struct token *identifier;
-  struct ast_declaration_list decl_list;
+  struct ast_declaration_list *decl_list;
 };
 
 struct ast_enumerator {
@@ -252,6 +252,8 @@ struct ast_var {
 enum ast_param_ty {
   AST_PARAM_TY_DECL,
   AST_PARAM_TY_ABSTRACT_DECL,
+  AST_PARAM_TY_VARIADIC,
+  AST_PARAM_TY_VOID
 };
 
 struct ast_param {
