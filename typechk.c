@@ -1223,7 +1223,7 @@ static struct td_expr type_unary_op(struct typechk *tchk,
     td_unary_op.ty = TD_UNARY_OP_TY_PLUS;
     goto promotion;
   case AST_UNARY_OP_TY_NOT:
-    td_unary_op.ty = TD_UNARY_OP_TY_PLUS;
+    td_unary_op.ty = TD_UNARY_OP_TY_NOT;
     goto promotion;
   case AST_UNARY_OP_TY_MINUS:
     td_unary_op.ty = TD_UNARY_OP_TY_MINUS;
@@ -2752,7 +2752,9 @@ DEBUG_FUNC(init, init) {
 DEBUG_FUNC(init_list_init, init) {
   TD_PRINTZ("INIT LIST INIT");
 
-  DEBUG_CALL(designator_list, init->designator_list);
+  if (init->designator_list) {
+    DEBUG_CALL(designator_list, init->designator_list);
+  }
 
   TD_PRINTZ("init");
 

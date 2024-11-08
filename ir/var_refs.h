@@ -13,7 +13,7 @@ struct var_key {
   struct ir_basicblock *basicblock;
 };
 
-enum var_ref_ty { VAR_REF_TY_SSA, VAR_REF_TY_AUTO, VAR_REF_TY_GLB };
+enum var_ref_ty { VAR_REF_TY_SSA, VAR_REF_TY_LCL, VAR_REF_TY_GLB };
 
 struct var_ref {
   enum var_ref_ty ty;
@@ -22,6 +22,7 @@ struct var_ref {
 
   union {
     struct ir_op *op;
+    struct ir_lcl *lcl;
     struct ir_glb *glb;
     unsigned long long enum_cnst;
   };
