@@ -187,7 +187,7 @@ struct td_var {
   int scope;
 
   union {
-    unsigned long long enumerator;
+    int enumerator;
   };
 };
 
@@ -701,5 +701,9 @@ enum typechk_create_result typechk_create(struct parser *parser,
 
 struct typechk_result td_typechk(struct typechk *tchk, struct ast_translationunit *translation_unit);
 void typechk_free(struct typechk **tchk);
+
+void debug_print_td(struct typechk *tchk,
+                    struct td_translationunit *translation_unit);
+
 
 #endif

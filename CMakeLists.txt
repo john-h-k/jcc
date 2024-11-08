@@ -75,6 +75,7 @@ else()
     -Werror
 
     -Wno-error=unused-parameter
+    -Wno-error=covered-switch-default
 
     -Wmissing-prototypes
     -Wsign-conversion
