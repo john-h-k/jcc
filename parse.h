@@ -102,11 +102,17 @@ enum ast_struct_or_union_specifier_ty {
   AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION,
 };
 
+
+struct ast_declaration_list {
+  size_t num_declarations;
+  struct ast_declaration *declarations;
+};
+
 struct ast_struct_or_union_specifier {
   enum ast_struct_or_union_specifier_ty ty;
   
   struct token *identifier;
-  struct ast_struct_declaration_list struct_decl_list;
+  struct ast_declaration_list decl_list;
 };
 
 struct ast_enumerator {
@@ -695,11 +701,6 @@ struct ast_stmt {
 };
 
 /* Function definitions and declarations */
-
-struct ast_declaration_list {
-  size_t num_declarations;
-  struct ast_declaration *declarations;
-};
 
 struct ast_funcdef {
   struct ast_declaration_specifier_list decl_specifiers;

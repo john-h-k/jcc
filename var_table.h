@@ -37,7 +37,7 @@ struct var_table_scope {
 };
 
 struct var_table var_table_create(struct arena_allocator *arena);
-struct var_table_entry *create_entry(struct var_table *var_table,
+struct var_table_entry *var_table_create_entry(struct var_table *var_table,
                                      const char *name);
 
 int cur_scope(struct var_table *var_table);

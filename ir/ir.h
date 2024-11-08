@@ -49,7 +49,7 @@ struct ir_op_phi {
   // not elegant, but phi needs ref to var so it can build itself in
   // `find_phi_exprs`
   // FIXME: ?
-  struct ast_var *var;
+  struct td_var *var;
 
   struct ir_op **values;
   size_t num_values;
@@ -648,6 +648,7 @@ struct ir_func {
 struct ir_unit {
   struct arena_allocator *arena;
   struct parser *parser;
+  struct typechk *tchk;
 
   struct ir_glb *first_global;
   struct ir_glb *last_global;

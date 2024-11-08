@@ -3,10 +3,11 @@
 
 #include "ir.h"
 #include "../parse.h"
+#include "../typechk.h"
 
 struct ir_unit *build_ir_for_translationunit(
-    /* needed for `associated_text */ struct parser *parser,
+    struct typechk *typechk,
     struct arena_allocator *arena,
-    struct ast_translationunit *translation_unit);
+    struct td_translationunit *translation_unit);
 
 #endif

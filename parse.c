@@ -388,6 +388,9 @@ static void parse_declaration_specifier_list(
     struct ast_declaration_specifier_list *specifier_list);
 
 static bool parse_declarator(struct parser *parser, struct ast_declarator *declarator);
+static void parse_declaration_list(struct parser *parser,
+                            struct ast_declaration_list *declaration_list);
+
 
 static bool parse_struct_or_union_specifier(
     struct parser *parser,
@@ -413,18 +416,18 @@ static bool parse_struct_or_union_specifier(
   }
 
   struct_or_union_specifier->ty = ty;
-  struct_or_union_specifier->struct_decl_list.num_declarations = 0;
-  struct_or_union_specifier->struct_decl_list.declarations = NULL;
+  struct_or_union_specifier->decl_list.num_declarations = 0;
+  struct_or_union_specifier->decl_list.declarations = NULL;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
     parse_declaration_list(parser,
-                                  &struct_or_union_specifier->struct_decl_list);
+                                  &struct_or_union_specifier->decl_list);
     EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
               "expected } after struct_or_union_declaration body");
   }
 
   if (!struct_or_union_specifier->identifier &&
-      !struct_or_union_specifier->struct_decl_list.num_struct_declarations) {
+      !struct_or_union_specifier->decl_list.num_declarations) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -868,7 +871,7 @@ static bool parse_declarator(struct parser *parser,
   struct ast_expr expr;
   if (parse_token(parser, LEX_TOKEN_TY_COLON) && parse_expr(parser, &expr)) {
     declarator->bitfield_size =
-        arena_alloc(parser->arena, sizeof(*struct_declarator->bitfield_size));
+        arena_alloc(parser->arena, sizeof(*declarator->bitfield_size));
     *declarator->bitfield_size = expr;
   } else {
     declarator->bitfield_size = NULL;
@@ -1276,8 +1279,11 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   return false;
 }
 
-TODO_FUNC(static bool parse_compound_literal(struct parser *parser,
-                            struct ast_compound_literal *compound_literal))
+static bool parse_compound_literal(UNUSED struct parser *parser,
+                            UNUSED struct ast_compound_literal *compound_literal) {
+  // TODO
+  return false;
+}
 
 // parses precedence level 0:
 // vars
@@ -2516,39 +2522,13 @@ DEBUG_FUNC_ENUM(type_specifier_kw, type_specifier_kw) {
 }
 
 DEBUG_FUNC(declarator, declarator);
+DEBUG_FUNC(declaration, declaration);
 DEBUG_FUNC(declaration_specifier_list, specifier_list);
 DEBUG_FUNC(expr, expr);
 
-DEBUG_FUNC(struct_declarator, struct_declarator) {
-  DEBUG_CALL(declarator, &struct_declarator->declarator);
-
-  if (struct_declarator->bitfield_size) {
-    AST_PRINTZ("BITFIELD");
-    INDENT();
-    DEBUG_CALL(expr, struct_declarator->bitfield_size);
-    UNINDENT();
-  }
-}
-
-DEBUG_FUNC(struct_declarator_list, struct_declarator_list) {
-  for (size_t i = 0; i < struct_declarator_list->num_declarators; i++) {
-    DEBUG_CALL(struct_declarator, &struct_declarator_list->declarators[i]);
-  }
-}
-
-DEBUG_FUNC(struct_declaration, struct_decl) {
-  AST_PRINTZ("STRUCT DECL");
-  INDENT();
-  DEBUG_CALL(declaration_specifier_list, &struct_decl->decl_specifiers);
-
-  DEBUG_CALL(struct_declarator_list, &struct_decl->struct_declarator_list);
-
-  UNINDENT();
-}
-
-DEBUG_FUNC(struct_declaration_list, struct_decl_list) {
-  for (size_t i = 0; i < struct_decl_list->num_struct_declarations; i++) {
-    DEBUG_CALL(struct_declaration, &struct_decl_list->struct_declarations[i]);
+DEBUG_FUNC(declaration_list, declaration_list) {
+  for (size_t i = 0; i < declaration_list->num_declarations; i++) {
+    DEBUG_CALL(declaration, &declaration_list->declarations[i]);
   }
 }
 
@@ -2576,7 +2556,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
     break;
   }
 
-  DEBUG_CALL(struct_declaration_list, &struct_or_union_specifier->struct_decl_list);
+  DEBUG_CALL(declaration_list, &struct_or_union_specifier->decl_list);
 }
 
 DEBUG_FUNC(enumerator, enumerator) {

@@ -97,8 +97,8 @@ enum td_ty_func_ty {
 struct td_ty_func {
   enum td_ty_func_ty ty;
 
-  struct td_var_ty *ret_var_ty;
-  struct td_var_ty *param_var_tys;
+  struct td_var_ty *ret;
+  struct td_ty_param *params;
   size_t num_params;
 };
 
@@ -135,8 +135,13 @@ struct td_var_ty {
 };
 
 struct td_struct_field {
-  const char *name;
+  const char *identifier;
   struct td_var_ty var_ty;
+};
+
+struct td_ty_param {
+  struct td_var_ty var_ty;
+  const char *identifier;
 };
 
 extern struct td_var_ty TD_VAR_TY_VOID;
@@ -172,14 +177,13 @@ struct td_arglist {
 
 enum td_var_var_ty {
   TD_VAR_VAR_TY_ENUMERATOR,
-  TD_VAR_VAR_TY_AUTO, // `auto`
-  TD_VAR_VAR_TY_STATIC, // `static/extern`
+  TD_VAR_VAR_TY_VAR, // `auto`
 };
 
 struct td_var {
   enum td_var_var_ty ty;
 
-  struct token identifier;
+  const char *identifier;
   int scope;
 
   union {
@@ -317,8 +321,8 @@ struct td_designator {
   enum td_designator_ty ty;
 
   union {
-    struct token field;
-    struct td_expr *index;
+    const char *field;
+    unsigned long long index;
   };
 };
 
@@ -371,12 +375,12 @@ struct td_arrayaccess {
 
 struct td_memberaccess {
   struct td_expr *lhs;
-  struct token member;
+  const char *member;
 };
 
 struct td_pointeraccess {
   struct td_expr *lhs;
-  struct token member;
+  const char *member;
 };
 
 enum td_sizeof_ty {
@@ -464,12 +468,14 @@ struct td_init {
 
 struct td_var_declaration {
   struct td_var_ty var_ty;
-  struct token identifier;
 
+  struct td_var var;
   struct td_init *init;
 };
 
 struct td_declaration {
+  enum td_storage_class_specifier storage_class_specifier;
+
   size_t num_var_declarations;
   struct td_var_declaration *var_declarations;
 };
@@ -481,7 +487,7 @@ struct td_returnstmt {
 };
 
 struct td_gotostmt {
-  struct token label;
+  const char *label;
 };
 
 enum td_jumpstmt_ty {
@@ -515,8 +521,8 @@ struct td_labeledstmt {
   struct td_stmt *stmt;
 
   union {
-    struct td_expr cnst;
-    struct token label;
+    unsigned long long cnst;
+    const char *label;
   };
 };
 
@@ -637,7 +643,8 @@ struct td_declaration_list {
 };
 
 struct td_funcdef {
-  struct td_var_ty func_ty;
+  enum td_storage_class_specifier storage_class_specifier;
+  struct td_var_declaration var_declaration;
   struct td_stmt body;
 };
 
@@ -677,6 +684,22 @@ struct td_var_ty td_var_ty_make_pointer(struct typechk *tchk,
 struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
                                       const struct td_var_ty *ty_ref);
 
-struct td_translationunit td_typchk(struct ast_translationunit *translation_unit);
+
+struct typechk;
+
+enum typechk_create_result {
+  TYPECHK_CREATE_RESULT_SUCCESS,
+  TYPECHK_CREATE_RESULT_FAILURE
+};
+
+struct typechk_result {
+  struct td_translationunit translation_unit;
+};
+
+enum typechk_create_result typechk_create(struct parser *parser,
+                                        struct typechk **tchk);
+
+struct typechk_result td_typechk(struct typechk *tchk, struct ast_translationunit *translation_unit);
+void typechk_free(struct typechk **tchk);
 
 #endif
