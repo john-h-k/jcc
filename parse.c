@@ -2280,14 +2280,24 @@ static bool parse_compoundstmt(struct parser *parser,
 }
 
 static bool parse_param(struct parser *parser, struct ast_param *param) {
-  if (parse_declarator(parser, &param->declarator)) {
-    param->ty = AST_PARAM_TY_DECL;
-    return true;
-  } else if (parse_abstract_declarator(parser, &param->abstract_declarator)) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  parse_declaration_specifier_list(parser, &param->specifier_list);
+
+  if (!param->specifier_list.num_decl_specifiers) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  if (parse_abstract_declarator(parser, &param->abstract_declarator)) {
     param->ty = AST_PARAM_TY_ABSTRACT_DECL;
+    return true;
+  } else if (parse_declarator(parser, &param->declarator)) {
+    param->ty = AST_PARAM_TY_DECL;
     return true;
   }
 
+  backtrack(parser->lexer, pos);
   return false;
 }
 
@@ -2313,6 +2323,7 @@ static bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_l
 
   // allow trailing comma
   parse_token(parser, LEX_TOKEN_TY_COMMA);
+
   EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
             "expected ) after params");
 
