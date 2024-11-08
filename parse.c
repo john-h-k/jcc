@@ -577,10 +577,13 @@ static bool parse_init(struct parser *parser, struct ast_init *init) {
 
 static bool parse_init_list_init(struct parser *parser,
                           struct ast_init_list_init *init_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
   *init_list =
       (struct ast_init_list_init){.designator_list = NULL, .init = NULL};
 
   struct ast_designator_list designator_list;
+  struct ast_init init;
   if (parse_designator_list(parser, &designator_list)) {
     EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_OP_ASSG),
               "expected = after designator in init list");
@@ -588,10 +591,15 @@ static bool parse_init_list_init(struct parser *parser,
     init_list->designator_list =
         arena_alloc(parser->arena, sizeof(*init_list->designator_list));
     *init_list->designator_list = designator_list;
+
+    
+    EXP_PARSE(parse_init(parser, &init), "expected init in init list");
+  } else if (!parse_init(parser, &init)) {
+    backtrack(parser->lexer, pos);
+    return false;
   }
 
-  struct ast_init init;
-  EXP_PARSE(parse_init(parser, &init), "expected init in init list");
+  parse_token(parser, LEX_TOKEN_TY_COMMA);
 
   init_list->init = arena_alloc(parser->arena, sizeof(*init_list->init));
   *init_list->init = init;
@@ -662,19 +670,23 @@ static bool parse_ast_array_declarator(struct parser *parser,
   if (parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
     ty = AST_ARRAY_DECLARATOR_TY_STAR;
   } else {
-
     bool is_static = parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
 
     parse_declaration_specifier_list(parser, &array_declarator->specifier_list);
 
     is_static = is_static || parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
 
+    struct ast_expr size;
     if (is_static) {
-      EXP_PARSE(parse_expr(parser, array_declarator->size),
+      EXP_PARSE(parse_expr(parser, &size),
                 "expected expr in static array type");
       ty = AST_ARRAY_DECLARATOR_TY_STATIC_SIZED;
-    } else if (parse_expr(parser, array_declarator->size)) {
+      array_declarator->size = arena_alloc(parser->arena, sizeof(*array_declarator->size));
+      *array_declarator->size = size;
+    } else if (parse_expr(parser, &size)) {
       ty = AST_ARRAY_DECLARATOR_TY_SIZED;
+      array_declarator->size = arena_alloc(parser->arena, sizeof(*array_declarator->size));
+      *array_declarator->size = size;
     } else {
       ty = AST_ARRAY_DECLARATOR_TY_UNSIZED;
     }
@@ -1206,6 +1218,8 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
     return false;
   }
 
+  consume_token(parser->lexer, token);
+
   struct ast_expr expr;
   EXP_PARSE(parse_expr(parser, &expr), "expected expr after assignment token");
 
@@ -1360,7 +1374,6 @@ static bool parse_member_access(struct parser *parser, struct ast_expr *sub_expr
 
 static bool parse_pointer_access(struct parser *parser, struct ast_expr *sub_expr,
                           struct ast_expr *expr) {
-
   struct text_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_ARROW)) {
@@ -2316,7 +2329,7 @@ static bool parse_paramlist(struct parser *parser, struct ast_paramlist *param_l
 static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos pos = get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, &func_def->decl_specifiers);
+  parse_declaration_specifier_list(parser, &func_def->specifier_list);
 
   if (!parse_declarator(parser, &func_def->declarator)) {
     backtrack(parser->lexer, pos);

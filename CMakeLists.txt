@@ -74,6 +74,7 @@ else()
     -Weverything
     -Werror
 
+    -Wno-error=unreachable-code-loop-increment
     -Wno-error=unused-parameter
     -Wno-error=covered-switch-default
 
