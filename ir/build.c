@@ -2487,6 +2487,8 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     assignment->ty = IR_OP_TY_UNDF;
     assignment->var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
   }
+
+  var_assg(irb, *stmt, assignment, &decl->var);
 }
 
 // this is called for decl lists WITHIN a function (i.e default is local
@@ -2744,6 +2746,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   struct ir_func_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = (struct ir_func_builder){
       .func = f,
+      .tchk = unit->tchk,
       .jumps = vector_create(sizeof(struct ir_jump)),
       .switch_cases = vector_create(sizeof(struct ir_case)),
       .var_refs = var_refs,

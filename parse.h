@@ -703,7 +703,7 @@ struct ast_stmt {
 /* Function definitions and declarations */
 
 struct ast_funcdef {
-  struct ast_declaration_specifier_list decl_specifiers;
+  struct ast_declaration_specifier_list specifier_list;
   struct ast_declarator declarator;
   struct ast_declaration_list declaration_list;
   struct ast_compoundstmt body;
