@@ -269,7 +269,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     break;
   }
   default:
-    unreachable("impossible type");
+    unreachable();
   }
 
   struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);

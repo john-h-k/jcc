@@ -123,10 +123,13 @@
 
 #if STDC_C23 && __GNUC__
 #define UNUSED_ARG(arg) [gcc::unused] arg
+#define UNUSED [gcc::unused]
 #elif __GNUC__
 #define UNUSED_ARG(arg) __attribute__((__unused__)) arg
+#define UNUSED __attribute__((__unused__))
 #else
 #define UNUSED_ARG(arg)
+#define UNUSED
 #endif
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -212,8 +215,8 @@ PRINTF_ARGS(0) NORETURN static inline void todo(const char *msg, ...) {
   EXIT_FAIL(-2);
 }
 
-PRINTF_ARGS(0) NORETURN static inline void unreachable(const char *msg, ...) {
-  FMTPRINT(stderr, "`unreachable` hit, program exiting: ", msg);
+NORETURN static inline void unreachable(void) {
+  fprintf(stderr, "`unreachable` hit, program exiting");
   EXIT_FAIL(-2);
 }
 
