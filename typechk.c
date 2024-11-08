@@ -706,6 +706,78 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   return var_ty;
 }
 
+
+static struct td_var_declaration
+type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
+                const struct ast_declarator *declarator);
+
+static struct td_var_ty type_abstract_declarator(
+    struct typechk *tchk, const struct td_specifiers *specifiers,
+    const struct ast_abstract_declarator *abstract_declarator);
+
+static struct td_var_ty
+type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
+                      struct ast_array_declarator *array_declarator) {
+  struct td_var_ty array_ty = {
+      .ty = TD_VAR_TY_TY_ARRAY,
+  };
+
+  array_ty.array.size = type_constant_integral_expr(
+      tchk, array_declarator->size);
+  array_ty.array.underlying =
+      arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
+  *array_ty.array.underlying = var_ty;
+
+  return array_ty;
+}
+
+static struct td_var_ty
+type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
+                     struct ast_func_declarator *func_declarator) {
+  struct td_var_ty func_ty = {
+      .ty = TD_VAR_TY_TY_FUNC,
+  };
+
+  func_ty.func.ty = TD_TY_FUNC_TY_UNKNOWN_ARGS;
+  func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
+  *func_ty.func.ret = var_ty;
+
+  struct ast_paramlist *param_list = func_declarator->param_list;
+
+  func_ty.func.num_params = param_list->num_params;
+  func_ty.func.params = arena_alloc(tchk->arena, sizeof(*func_ty.func.params) *
+                                                     param_list->num_params);
+
+  for (size_t j = 0; j < param_list->num_params; j++) {
+    struct ast_param *param = &param_list->params[j];
+    struct td_ty_param *td_param = &func_ty.func.params[j];
+
+    struct td_specifiers param_specifiers =
+        type_specifiers(tchk, &param->specifier_list,
+                        TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS |
+                            TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
+
+    switch (param->ty) {
+    case AST_PARAM_TY_DECL: {
+      struct td_var_declaration param_decl =
+          type_declarator(tchk, &param_specifiers, &param->declarator);
+      *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
+                                       .var_ty = param_decl.var_ty};
+      break;
+    }
+    case AST_PARAM_TY_ABSTRACT_DECL: {
+      struct td_var_ty param_var_ty = type_abstract_declarator(
+          tchk, &param_specifiers, &param->abstract_declarator);
+      *td_param =
+          (struct td_ty_param){.identifier = NULL, .var_ty = param_var_ty};
+      break;
+    }
+    }
+  }
+
+  return func_ty;
+}
+
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
     const struct ast_abstract_declarator *abstract_declarator) {
@@ -735,45 +807,14 @@ static struct td_var_ty type_abstract_declarator(
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR:
       todo("");
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR: {
-      struct td_var_ty array_ty = {
-          .ty = TD_VAR_TY_TY_ARRAY,
-      };
-
-      array_ty.array.size = type_constant_integral_expr(
-          tchk, direct_declarator->array_declarator->size);
-      array_ty.array.underlying =
-          arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
-      *array_ty.array.underlying = var_ty;
-
-      var_ty = array_ty;
+      var_ty = type_array_declarator(tchk, var_ty,
+                                    direct_declarator->array_declarator);
 
       break;
     }
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_FUNC_DECLARATOR: {
-      struct td_var_ty func_ty = {
-          .ty = TD_VAR_TY_TY_FUNC,
-      };
-
-      func_ty.func.ty = TD_TY_FUNC_TY_UNKNOWN_ARGS;
-      func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
-      *func_ty.func.ret = var_ty;
-
-      struct ast_paramlist *param_list =
-          direct_declarator->func_declarator->param_list;
-
-      func_ty.func.num_params = param_list->num_params;
-      func_ty.func.params = arena_alloc(
-          tchk->arena, sizeof(*func_ty.func.params) * param_list->num_params);
-
-      for (size_t j = 0; j < param_list->num_params; j++) {
-        todo("");
-        // func_ty.func.params[i] = (struct td_ty_param){
-        //   .identifier = param_list->params[i].specifier_list
-        // }
-      }
-
-      var_ty = func_ty;
-
+      var_ty = type_func_declarator(tchk, var_ty,
+                                    direct_declarator->func_declarator);
       break;
     }
     }
@@ -832,45 +873,14 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
     case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
       todo("");
     case AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR: {
-      struct td_var_ty array_ty = {
-          .ty = TD_VAR_TY_TY_ARRAY,
-      };
-
-      array_ty.array.size = type_constant_integral_expr(
-          tchk, direct_declarator->array_declarator->size);
-      array_ty.array.underlying =
-          arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
-      *array_ty.array.underlying = var_ty;
-
-      var_ty = array_ty;
+      var_ty = type_array_declarator(tchk, var_ty,
+                                    direct_declarator->array_declarator);
 
       break;
     }
     case AST_DIRECT_DECLARATOR_TY_FUNC_DECLARATOR: {
-      struct td_var_ty func_ty = {
-          .ty = TD_VAR_TY_TY_FUNC,
-      };
-
-      func_ty.func.ty = TD_TY_FUNC_TY_UNKNOWN_ARGS;
-      func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
-      *func_ty.func.ret = var_ty;
-
-      struct ast_paramlist *param_list =
-          direct_declarator->func_declarator->param_list;
-
-      func_ty.func.num_params = param_list->num_params;
-      func_ty.func.params = arena_alloc(
-          tchk->arena, sizeof(*func_ty.func.params) * param_list->num_params);
-
-      for (size_t j = 0; j < param_list->num_params; j++) {
-        todo("");
-        // func_ty.func.params[i] = (struct td_ty_param){
-        //   .identifier = param_list->params[i].specifier_list
-        // }
-      }
-
-      var_ty = func_ty;
-
+      var_ty = type_func_declarator(tchk, var_ty,
+                                    direct_declarator->func_declarator);
       break;
     }
     }
@@ -2016,8 +2026,37 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   struct td_var_declaration declaration =
       type_declarator(tchk, &specifiers, &func_def->declarator);
 
+    
+  struct var_table_entry *func_entry = var_table_create_entry(&tchk->var_table, declaration.var.identifier);
+  func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
+  *func_entry->var = declaration.var;
+  func_entry->var_ty = arena_alloc(tchk->arena, sizeof(*func_entry->var_ty));
+  *func_entry->var_ty = declaration.var_ty;
+
   // param scope
   tchk_push_scope(tchk);
+
+  for (size_t i = 0; i < declaration.var_ty.func.num_params; i++) {
+    struct td_ty_param *param = &declaration.var_ty.func.params[i];
+
+    const char *identifier = param->identifier;
+
+    if (!identifier) {
+      continue;
+    }
+
+    struct td_var var = {
+      .ty = TD_VAR_VAR_TY_VAR,
+      .identifier = identifier,
+      .scope = SCOPE_PARAMS,
+    };
+
+    struct var_table_entry *entry = var_table_create_entry(&tchk->var_table, identifier);
+    entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+    *entry->var = var;
+    entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+    *entry->var_ty = param->var_ty;
+  }
 
   struct td_funcdef td_funcdef = {
       .storage_class_specifier = specifiers.storage,
@@ -2039,14 +2078,12 @@ type_designator(struct typechk *tchk, const struct ast_designator *designator) {
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD:
     return (struct td_designator){
-      .ty = TD_DESIGNATOR_TY_FIELD,
-      .field = identifier_str(tchk->parser, &designator->field)
-    };
+        .ty = TD_DESIGNATOR_TY_FIELD,
+        .field = identifier_str(tchk->parser, &designator->field)};
   case AST_DESIGNATOR_TY_INDEX:
     return (struct td_designator){
-      .ty = TD_DESIGNATOR_TY_INDEX,
-      .index = type_constant_integral_expr(tchk, designator->index)
-    };
+        .ty = TD_DESIGNATOR_TY_INDEX,
+        .index = type_constant_integral_expr(tchk, designator->index)};
   }
 }
 

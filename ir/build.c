@@ -1247,7 +1247,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
 
   op->ty = IR_OP_TY_CALL;
-  op->var_ty = var_ty_for_td_var_ty(irb->func->unit, &call->target->var_ty);
+  op->var_ty = *func_ty.func.ret_ty;
 
   op->call.func_ty = func_ty;
   op->call.target = target;
