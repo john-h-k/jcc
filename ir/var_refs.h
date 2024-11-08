@@ -13,7 +13,7 @@ struct var_key {
   struct ir_basicblock *basicblock;
 };
 
-enum var_ref_ty { VAR_REF_TY_SSA, VAR_REF_TY_AUTO, VAR_REF_TY_STATIC };
+enum var_ref_ty { VAR_REF_TY_SSA, VAR_REF_TY_AUTO, VAR_REF_TY_GLB };
 
 struct var_ref {
   enum var_ref_ty ty;

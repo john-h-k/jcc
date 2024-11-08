@@ -27,6 +27,7 @@ struct compiler {
 
   struct compile_args args;
   struct parser *parser;
+  struct typechk *typechk;
 
   char *output;
 };
@@ -63,6 +64,12 @@ enum compiler_create_result create_compiler(struct program *program,
   if (parser_create(&preprocessed_program, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
+    return COMPILER_CREATE_RESULT_FAILURE;
+  }
+
+  if (typechk_create((*compiler)->parser, &(*compiler)->typechk) !=
+      TYPECHK_CREATE_RESULT_SUCCESS) {
+    err("failed to create typechk");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
@@ -104,13 +111,24 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("LEX + PARSE");
 
-  struct parse_result result = parse(compiler->parser);
+  struct parse_result parse_result = parse(compiler->parser);
 
   BEGIN_STAGE("AST");
 
   if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PARSE) {
-    debug_print_ast(compiler->parser, &result.translation_unit);
+    debug_print_ast(compiler->parser, &parse_result.translation_unit);
   }
+
+  disable_log();
+
+  
+  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_TYPECHK)) {
+    enable_log();
+  }
+
+  BEGIN_STAGE("TYPECHK");
+
+  struct typechk_result typechk_result = td_typechk(compiler->typechk, &parse_result.translation_unit);
 
   disable_log();
 
@@ -123,7 +141,7 @@ enum compile_result compile(struct compiler *compiler) {
   BEGIN_STAGE("IR BUILD");
 
   struct ir_unit *ir = build_ir_for_translationunit(
-      compiler->parser, compiler->arena, &result.translation_unit);
+      compiler->typechk, compiler->arena, &typechk_result.translation_unit);
 
   {
     BEGIN_STAGE("IR");

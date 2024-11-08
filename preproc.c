@@ -392,7 +392,7 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
 
     switch (token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
-      unreachable("unknown token (should never happen)");
+      unreachable();
     case PREPROC_TOKEN_TY_EOF:
       break;
     case PREPROC_TOKEN_TY_DIRECTIVE: {

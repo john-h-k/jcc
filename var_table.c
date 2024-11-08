@@ -26,16 +26,15 @@ struct var_table var_table_create(struct arena_allocator *arena) {
   return var_table;
 }
 
-struct var_table_entry *create_entry(struct var_table *var_table,
+struct var_table_entry *var_table_create_entry(struct var_table *var_table,
                                      const char *name) {
   struct var_table_scope *last = var_table->last;
 
   struct var_table_entry entry = {.name = name,
                                   .scope = last->scope,
-                                  .ty = VAR_TABLE_ENTRY_TY_NONE,
-                                  .value = NULL};
+                                  .var = NULL, .var_ty = NULL};
+
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
-  p->value = NULL;
 
   return p;
 }
@@ -75,11 +74,11 @@ void pop_scope(struct var_table *var_table) {
   last->prev = NULL;
 }
 
-struct var_table_entry *get_or_create_entry(struct var_table *var_table,
+struct var_table_entry *var_table_get_or_create_entry(struct var_table *var_table,
                                             const char *name) {
   debug_assert(name, "name must be non-null");
 
-  struct var_table_entry *entry = get_entry(var_table, name);
+  struct var_table_entry *entry = var_table_get_entry(var_table, name);
 
   if (entry) {
     return entry;
@@ -88,10 +87,10 @@ struct var_table_entry *get_or_create_entry(struct var_table *var_table,
   trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
         var_table->last->scope);
 
-  return create_entry(var_table, name);
+  return var_table_create_entry(var_table, name);
 }
 
-struct var_table_entry *get_entry(struct var_table *var_table,
+struct var_table_entry *var_table_get_entry(struct var_table *var_table,
                                   const char *name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at

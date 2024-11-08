@@ -151,6 +151,7 @@ static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
 
   LOG_FLAG(COMPILE_LOG_FLAGS_PREPROC, "preproc");
   LOG_FLAG(COMPILE_LOG_FLAGS_PARSE, "parse");
+  LOG_FLAG(COMPILE_LOG_FLAGS_TYPECHK, "typechk");
   LOG_FLAG(COMPILE_LOG_FLAGS_IR, "ir");
   LOG_FLAG(COMPILE_LOG_FLAGS_REGALLOC, "regalloc");
   LOG_FLAG(COMPILE_LOG_FLAGS_PRE_EMIT, "pre_emit");
