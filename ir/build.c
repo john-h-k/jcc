@@ -103,8 +103,8 @@ static void get_var_ref(struct ir_func_builder *irb,
   *ref = var_refs_get(irb->global_var_refs, key);
 }
 
-static bool var_ty_eq(struct ir_func *irb, const struct ir_op_var_ty *l,
-                      const struct ir_op_var_ty *r) {
+static bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
+                      const struct ir_var_ty *r) {
   if (l == r) {
     return true;
   }
@@ -187,8 +187,8 @@ static bool var_ty_eq(struct ir_func *irb, const struct ir_op_var_ty *l,
 }
 
 static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
-                                 const struct ir_op_var_ty *l,
-                                 const struct ir_op_var_ty *r) {
+                                 const struct ir_var_ty *l,
+                                 const struct ir_var_ty *r) {
   // note: `l` is TO, `r` is FROM, (as this is in the context of `l <- r`)
 
   if (l->ty == IR_OP_VAR_TY_TY_NONE) {
@@ -260,7 +260,7 @@ var_ty_for_well_known_ty(enum well_known_ty wkt) {
   }
 }
 
-static struct ir_op_var_ty
+static struct ir_var_ty
 var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
@@ -269,13 +269,13 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
-    struct ir_op_var_ty ty;
+    struct ir_var_ty ty;
     switch (aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
       ty.ty = IR_OP_VAR_TY_TY_STRUCT;
       ty.struct_ty.num_fields = aggregate.num_fields;
       ty.struct_ty.fields = arena_alloc(
-          iru->arena, sizeof(struct ir_op_var_ty) * ty.struct_ty.num_fields);
+          iru->arena, sizeof(struct ir_var_ty) * ty.struct_ty.num_fields);
 
       for (size_t i = 0; i < ty.struct_ty.num_fields; i++) {
         // handle nested types
@@ -287,7 +287,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
     case TD_TY_AGGREGATE_TY_UNION:
       ty.ty = IR_OP_VAR_TY_TY_UNION;
       ty.union_ty.num_fields = aggregate.num_fields;
-      ty.union_ty.fields = arena_alloc(iru->arena, sizeof(struct ir_op_var_ty) *
+      ty.union_ty.fields = arena_alloc(iru->arena, sizeof(struct ir_var_ty) *
                                                        ty.union_ty.num_fields);
 
       for (size_t i = 0; i < ty.union_ty.num_fields; i++) {
@@ -306,7 +306,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   case TD_VAR_TY_TY_VARIADIC:
     return IR_OP_VAR_TY_VARIADIC;
   case TD_VAR_TY_TY_WELL_KNOWN: {
-    struct ir_op_var_ty ty;
+    struct ir_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_PRIMITIVE;
     ty.primitive = var_ty_for_well_known_ty(var_ty->well_known);
     return ty;
@@ -314,7 +314,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   case TD_VAR_TY_TY_FUNC: {
     bool variadic = var_ty->func.ty == TD_TY_FUNC_TY_VARIADIC;
 
-    struct ir_op_var_ty ty;
+    struct ir_var_ty ty;
     ty.ty = IR_OP_VAR_TY_TY_FUNC;
     ty.func.ret_ty = arena_alloc(iru->arena, sizeof(*ty.func.ret_ty));
     *ty.func.ret_ty = var_ty_for_td_var_ty(iru, var_ty->func.ret);
@@ -338,7 +338,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
     return ty;
   }
   case TD_VAR_TY_TY_POINTER: {
-    struct ir_op_var_ty underlying;
+    struct ir_var_ty underlying;
     if (var_ty->pointer.underlying->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
       underlying = IR_OP_VAR_TY_NONE;
     } else {
@@ -348,7 +348,7 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
     return var_ty_make_pointer(iru, &underlying);
   }
   case TD_VAR_TY_TY_ARRAY: {
-    struct ir_op_var_ty underlying =
+    struct ir_var_ty underlying =
         var_ty_for_td_var_ty(iru, var_ty->array.underlying);
 
     return var_ty_make_array(iru, &underlying, var_ty->array.size);
@@ -356,20 +356,20 @@ var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   }
 }
 
-UNUSED struct ir_op_var_ty static var_ty_return_ty_for_td_var_ty(
+UNUSED struct ir_var_ty static var_ty_return_ty_for_td_var_ty(
     struct ir_func_builder *irb, const struct td_var_ty *ty_ref) {
   invariant_assert(ty_ref->ty == TD_VAR_TY_TY_FUNC,
                    "passed non-func to `return_ty_for_td_var_ty`");
 
-  struct ir_op_var_ty func_ty = var_ty_for_td_var_ty(irb->func->unit, ty_ref);
+  struct ir_var_ty func_ty = var_ty_for_td_var_ty(irb->func->unit, ty_ref);
   return *func_ty.func.ret_ty;
 }
 
 static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
                                                    const struct td_var_ty *from,
                                                    const struct td_var_ty *to) {
-  struct ir_op_var_ty from_var_ty = var_ty_for_td_var_ty(irb->func->unit, from);
-  struct ir_op_var_ty to_var_ty = var_ty_for_td_var_ty(irb->func->unit, to);
+  struct ir_var_ty from_var_ty = var_ty_for_td_var_ty(irb->func->unit, from);
+  struct ir_var_ty to_var_ty = var_ty_for_td_var_ty(irb->func->unit, to);
 
   if (from_var_ty.ty == IR_OP_VAR_TY_TY_POINTER &&
       to_var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
@@ -390,6 +390,12 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
       return IR_OP_CAST_OP_TY_ZEXT;
     }
   }
+
+  if (from_var_ty.ty == IR_OP_VAR_TY_TY_POINTER &&
+      to_var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE) {
+    return IR_OP_CAST_OP_TY_TRUNC;
+  }
+  
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
@@ -435,7 +441,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
 
 static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
                                         struct ir_stmt *stmt, struct ir_op *op,
-                                        const struct ir_op_var_ty *to,
+                                        const struct ir_var_ty *to,
                                         enum ir_op_cast_op_ty ty) {
   struct ir_op *cast = alloc_ir_op(irb->func, stmt);
 
@@ -456,13 +462,13 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
                        rhs->var_ty.ty != IR_OP_VAR_TY_TY_ARRAY,
                    "array should have decayed to ptr");
 
-  struct ir_op_var_ty var_ty = var_ty_for_td_var_ty(irb->func->unit, td_var_ty);
+  struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->func->unit, td_var_ty);
 
   if (!td_binary_op_is_comparison(ty) &&
       (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
        rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER)) {
     if (td_var_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-      struct ir_op_var_ty *pointer_ty =
+      struct ir_var_ty *pointer_ty =
           lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty
                                                     : &rhs->var_ty;
 
@@ -489,7 +495,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
 
       return op;
     } else {
-      struct ir_op_var_ty pointer_ty =
+      struct ir_var_ty pointer_ty =
           var_ty_for_td_var_ty(irb->func->unit, td_var_ty);
 
       // need to multiply rhs by the element size
@@ -655,7 +661,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
   struct var_ref *ref;
   get_var_ref(irb, NULL, var, &key, &ref);
 
-  struct ir_op_var_ty underlying_var_ty;
+  struct ir_var_ty underlying_var_ty;
   switch (ref->ty) {
   case VAR_REF_TY_SSA:
     underlying_var_ty = ref->op->var_ty;
@@ -668,7 +674,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
     break;
   }
 
-  struct ir_op_var_ty var_ty;
+  struct ir_var_ty var_ty;
   if (underlying_var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
     // decay T[] to T* (rather than to T[]*)
     var_ty = var_ty_make_pointer(irb->func->unit,
@@ -767,7 +773,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
                                           struct td_expr *expr) {
   struct td_unary_op *unary_op = &expr->unary_op;
 
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &expr->var_ty);
 
   if (unary_op->ty == TD_UNARY_OP_TY_ADDRESSOF) {
@@ -891,7 +897,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
                                            struct ir_stmt **stmt,
                                            struct td_expr *expr) {
   struct td_binary_op *binary_op = &expr->binary_op;
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &expr->var_ty);
 
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, binary_op->lhs);
@@ -948,10 +954,10 @@ static struct ir_op *build_ir_for_sizeof(struct ir_func_builder *irb,
                                          struct ir_stmt **stmt,
                                          struct td_expr *expr) {
   struct td_sizeof *size_of = &expr->size_of;
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &expr->var_ty);
 
-  struct ir_op_var_ty size_var_ty;
+  struct ir_var_ty size_var_ty;
   switch (size_of->ty) {
   case TD_SIZEOF_TY_TYPE:
     size_var_ty = var_ty_for_td_var_ty(irb->func->unit, &size_of->var_ty);
@@ -976,10 +982,10 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
                                           struct ir_stmt **stmt,
                                           struct td_expr *expr) {
   struct td_alignof *align_of = &expr->align_of;
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &expr->var_ty);
 
-  struct ir_op_var_ty align_var_ty =
+  struct ir_var_ty align_var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &align_of->var_ty);
   struct ir_var_ty_info info = var_ty_info(irb->func->unit, &align_var_ty);
 
@@ -994,7 +1000,7 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
 
 static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
-                                       struct ir_op_var_ty var_ty,
+                                       struct ir_var_ty var_ty,
                                        struct td_cnst *cnst) {
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
 
@@ -1042,7 +1048,7 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
 
 static struct ir_op *
 build_ir_for_compoundexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                          UNUSED_ARG(struct ir_op_var_ty var_ty),
+                          UNUSED_ARG(struct ir_var_ty var_ty),
                           struct td_compoundexpr *compound_expr) {
   struct ir_op *op = NULL;
   for (size_t i = 0; i < compound_expr->num_exprs; i++) {
@@ -1054,7 +1060,7 @@ build_ir_for_compoundexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
 static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                                           struct ir_stmt **stmt,
-                                          struct ir_op_var_ty var_ty,
+                                          struct ir_var_ty var_ty,
                                           struct td_ternary *ternary) {
   struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);
   struct ir_op *br_cond = alloc_ir_op(irb->func, *stmt);
@@ -1104,7 +1110,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
 
 static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
-                                      struct ir_op_var_ty var_ty,
+                                      struct ir_var_ty var_ty,
                                       struct td_var *var) {
   // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
   // same with functions
@@ -1216,7 +1222,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
-  struct ir_op_var_ty func_ty =
+  struct ir_var_ty func_ty =
       var_ty_for_td_var_ty(irb->func->unit, &call->target->var_ty);
 
   // one level deref can occur
@@ -1303,7 +1309,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
 static void get_member_info(struct ir_unit *iru,
                             const struct td_var_ty *aggregate,
                             const char *member_name,
-                            struct ir_op_var_ty *member_ty, size_t *member_idx,
+                            struct ir_var_ty *member_ty, size_t *member_idx,
                             size_t *member_offset,
                             struct td_var_ty *td_member_ty) {
   debug_assert(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
@@ -1332,7 +1338,7 @@ static void get_member_info(struct ir_unit *iru,
     }
   }
 
-  struct ir_op_var_ty ir_struct_ty = var_ty_for_td_var_ty(iru, aggregate);
+  struct ir_var_ty ir_struct_ty = var_ty_for_td_var_ty(iru, aggregate);
   struct ir_var_ty_info info = var_ty_info(iru, &ir_struct_ty);
 
   // offsets are null for a union
@@ -1342,7 +1348,7 @@ static void get_member_info(struct ir_unit *iru,
 static struct ir_op *build_ir_for_member_address_offset(
     struct ir_func_builder *irb, struct ir_stmt **stmt,
     const struct td_var_ty *struct_ty, const char *member_name,
-    struct ir_op_var_ty *member_ty, struct td_var_ty *td_member_ty) {
+    struct ir_var_ty *member_ty, struct td_var_ty *td_member_ty) {
 
   size_t member_offset;
   size_t idx;
@@ -1351,7 +1357,7 @@ static struct ir_op *build_ir_for_member_address_offset(
 
   struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
   offset->ty = IR_OP_TY_CNST;
-  offset->var_ty = (struct ir_op_var_ty){
+  offset->var_ty = (struct ir_var_ty){
       .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
   offset->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
@@ -1365,10 +1371,10 @@ static struct ir_op *build_ir_for_member_address(struct ir_func_builder *irb,
                                                  const char *member_name) {
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
-  struct ir_op_var_ty member_ty;
+  struct ir_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(
       irb, stmt, &lhs_expr->var_ty, member_name, &member_ty, NULL);
-  struct ir_op_var_ty pointer_ty =
+  struct ir_var_ty pointer_ty =
       var_ty_make_pointer(irb->func->unit, &member_ty);
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
@@ -1389,11 +1395,11 @@ static struct ir_op *build_ir_for_pointer_address(struct ir_func_builder *irb,
 
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, lhs_expr);
 
-  struct ir_op_var_ty member_ty;
+  struct ir_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(
       irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
       NULL);
-  struct ir_op_var_ty pointer_ty =
+  struct ir_var_ty pointer_ty =
       var_ty_make_pointer(irb->func->unit, &member_ty);
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
@@ -1533,7 +1539,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
 static struct ir_op *
 build_ir_for_arrayaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
                          struct td_arrayaccess *array_access) {
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &array_access->lhs->var_ty);
 
   struct ir_op *address = build_ir_for_array_address(
@@ -1580,7 +1586,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
                                        struct td_expr *expr) {
   struct ir_op *op;
 
-  struct ir_op_var_ty var_ty =
+  struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->func->unit, &expr->var_ty);
 
   switch (expr->ty) {
@@ -2233,7 +2239,7 @@ static void build_ir_for_array_initlist(struct ir_func_builder *irb,
 
   struct ir_op *zero_init = NULL;
 
-  struct ir_op_var_ty ir_el_ty = var_ty_for_td_var_ty(irb->func->unit, el_ty);
+  struct ir_var_ty ir_el_ty = var_ty_for_td_var_ty(irb->func->unit, el_ty);
   size_t el_size = var_ty_info(irb->func->unit, &ir_el_ty).size;
 
   for (size_t i = 0; i < num_elements; i++) {
@@ -2290,7 +2296,7 @@ static void build_ir_for_struct_initlist(struct ir_func_builder *irb,
     struct td_struct_field *field = &var_ty->aggregate.fields[i];
 
     struct td_var_ty td_member_ty;
-    struct ir_op_var_ty member_ty;
+    struct ir_var_ty member_ty;
     struct ir_op *offset = build_ir_for_member_address_offset(
         irb, stmt, var_ty, field->identifier, &member_ty, &td_member_ty);
 
@@ -2367,7 +2373,7 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
                         enum td_storage_class_specifier storage_class,
                         struct td_var_declaration *decl) {
 
-  struct ir_op_var_ty var_ty = var_ty_for_td_var_ty(iru, &decl->var_ty);
+  struct ir_var_ty var_ty = var_ty_for_td_var_ty(iru, &decl->var_ty);
 
   const char *name = decl->var.identifier;
   const char *symbol_name;
@@ -2506,7 +2512,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
   struct ir_op *address;
   if (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
       decl->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-    struct ir_op_var_ty var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
+    struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
 
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(&decl->var, (*stmt)->basicblock);
@@ -2548,7 +2554,7 @@ build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
     if (decl->var_ty.ty == TD_VAR_TY_TY_FUNC) {
       // tentative definition! make global
-      struct ir_op_var_ty var_ty =
+      struct ir_var_ty var_ty =
           var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
 
       struct ir_glb *glb =
@@ -2735,7 +2741,7 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   struct validate_metadata *metadata = cb_metadata;
   struct ir_op *consumer = metadata->consumer;
 
-  struct ir_op_var_ty res_ty = (*op)->var_ty;
+  struct ir_var_ty res_ty = (*op)->var_ty;
 
   // TODO: validate cast types (make sure they are valid)
   switch (consumer->ty) {
@@ -2818,11 +2824,11 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     struct var_key key = get_var_key(&var, basicblock);
     struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
-    struct ir_op_var_ty var_ty =
+    struct ir_var_ty var_ty =
         var_ty_for_td_var_ty(builder->func->unit, &param->var_ty);
     if (var_ty.ty == IR_OP_VAR_TY_TY_ARRAY) {
       // arrays are actually pointers
-      struct ir_op_var_ty array_ty = var_ty;
+      struct ir_var_ty array_ty = var_ty;
       var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
       var_ty.pointer.underlying =
           arena_alloc(builder->func->arena, sizeof(*var_ty.pointer.underlying));
@@ -2897,7 +2903,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
       struct ir_op *cnst = alloc_ir_op(builder->func, last_stmt);
       cnst->ty = IR_OP_TY_CNST;
-      cnst->var_ty = (struct ir_op_var_ty){
+      cnst->var_ty = (struct ir_var_ty){
           .ty = IR_OP_VAR_TY_TY_PRIMITIVE,
           .primitive = IR_OP_VAR_PRIMITIVE_TY_I32,
       };
@@ -2984,7 +2990,7 @@ static size_t get_member_index_offset(struct ir_unit *iru,
                                       struct td_var_ty *member_ty) {
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
     *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
-    struct ir_op_var_ty el_ty = var_ty_for_td_var_ty(iru, member_ty);
+    struct ir_var_ty el_ty = var_ty_for_td_var_ty(iru, member_ty);
     struct ir_var_ty_info info = var_ty_info(iru, &el_ty);
 
     return info.size * member_index;
@@ -2994,7 +3000,7 @@ static size_t get_member_index_offset(struct ir_unit *iru,
                  "bad type");
 
     const char *member_name = var_ty->aggregate.fields[member_index].identifier;
-    struct ir_op_var_ty ir_member_ty;
+    struct ir_var_ty ir_member_ty;
     size_t member_offset;
     size_t idx;
     get_member_info(iru, var_ty, member_name, &ir_member_ty, &idx,
@@ -3017,7 +3023,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
     switch (designator->ty) {
     case TD_DESIGNATOR_TY_FIELD: {
       const char *member_name = designator->field;
-      struct ir_op_var_ty ir_member_ty;
+      struct ir_var_ty ir_member_ty;
       size_t member_offset;
       get_member_info(iru, var_ty, member_name, &ir_member_ty, member_index,
                       &member_offset, member_ty);
@@ -3027,7 +3033,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
     }
     case TD_DESIGNATOR_TY_INDEX: {
       *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
-      struct ir_op_var_ty el_var_ty = var_ty_for_td_var_ty(iru, member_ty);
+      struct ir_var_ty el_var_ty = var_ty_for_td_var_ty(iru, member_ty);
       struct ir_var_ty_info info = var_ty_info(iru, &el_var_ty);
 
       offset += info.size * designator->index;

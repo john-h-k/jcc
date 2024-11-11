@@ -13,7 +13,7 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 
   detach_ir_op(func, op);
 
-  struct ir_op_var_ty var_ty = op->br_switch.value->var_ty;
+  struct ir_var_ty var_ty = op->br_switch.value->var_ty;
 
   size_t num_cases = bb_switch->num_cases;
   struct ir_split_case *split_cases = bb_switch->cases;
@@ -51,7 +51,7 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
+  struct ir_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
 
   struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
   addr->addr =
@@ -64,7 +64,7 @@ static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
+  struct ir_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
 
   struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
   addr->addr =

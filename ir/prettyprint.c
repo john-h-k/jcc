@@ -107,7 +107,7 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
 }
 
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
-                               const struct ir_op_var_ty *var_ty) {
+                               const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");

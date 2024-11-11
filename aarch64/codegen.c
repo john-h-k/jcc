@@ -309,7 +309,7 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
   }
 }
 
-static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_op_var_ty *var_ty) {
+static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
   case IR_OP_VAR_PRIMITIVE_TY_I8:
   case IR_OP_VAR_PRIMITIVE_TY_I16:
@@ -1068,7 +1068,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     for (size_t head = 0; head < op->call.num_args; head++) {
       size_t i = op->call.num_args - 1 - head;
-      struct ir_op_var_ty *var_ty = &op->call.args[i]->var_ty;
+      struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
 
       invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
                        "`lower_call` doesn't support non-prims");
@@ -1307,7 +1307,16 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
 
     if (!is_return_reg(source)) {
       struct instr *mov = alloc_instr(state->func);
-      *mov->aarch64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
+
+      if (aarch64_reg_ty_is_gp(source.ty)) {
+        *mov->aarch64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      } else {
+        mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
+        mov->aarch64->fmov = (struct aarch64_reg_1_source){
+          .dest = return_reg_for_ty(source.ty),
+          .source = source
+        };
+      }
     }
   }
 
