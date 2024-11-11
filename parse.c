@@ -2335,8 +2335,14 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
     param->ty = AST_PARAM_TY_VARIADIC;
     return true;
   } else if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
-    param->ty = AST_PARAM_TY_VOID;
-    return true;
+    struct token token;
+    peek_token(parser->lexer, &token);
+    if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {  
+      param->ty = AST_PARAM_TY_VOID;
+      return true;
+    }
+
+    backtrack(parser->lexer, pos);
   }
   
   parse_declaration_specifier_list(parser, &param->specifier_list);

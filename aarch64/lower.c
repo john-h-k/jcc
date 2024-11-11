@@ -137,9 +137,9 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
   }
 
   if (simple_copy) {
-    op->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    op->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
                                        .primitive = simple_copy_ty};
-    nxt_store->var_ty = (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    nxt_store->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
                                               .primitive = simple_copy_ty};
 
     return;
@@ -149,7 +149,7 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
     todo("non-pow2 copies < MAX_REG_SIZE");
   }
 
-  struct ir_op_var_ty copy_ty = var_ty_for_pointer_size(func->unit);
+  struct ir_var_ty copy_ty = var_ty_for_pointer_size(func->unit);
 
   struct ir_lcl *src_lcl = op->load_lcl.lcl;
   struct ir_lcl *dest_lcl = nxt_store->lcl;
@@ -238,7 +238,7 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
-  struct ir_op_var_ty int_ty;
+  struct ir_var_ty int_ty;
   unsigned long long int_value;
 
   debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");

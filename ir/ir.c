@@ -363,20 +363,20 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
-const struct ir_op_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
-const struct ir_op_var_ty IR_OP_VAR_TY_I8 = {
+const struct ir_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
+const struct ir_var_ty IR_OP_VAR_TY_I8 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I8};
-const struct ir_op_var_ty IR_OP_VAR_TY_I16 = {
+const struct ir_var_ty IR_OP_VAR_TY_I16 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I16};
-const struct ir_op_var_ty IR_OP_VAR_TY_I32 = {
+const struct ir_var_ty IR_OP_VAR_TY_I32 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I32};
-const struct ir_op_var_ty IR_OP_VAR_TY_I64 = {
+const struct ir_var_ty IR_OP_VAR_TY_I64 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
-const struct ir_op_var_ty IR_OP_VAR_TY_F32 = {
+const struct ir_var_ty IR_OP_VAR_TY_F32 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F32};
-const struct ir_op_var_ty IR_OP_VAR_TY_F64 = {
+const struct ir_var_ty IR_OP_VAR_TY_F64 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F64};
-const struct ir_op_var_ty IR_OP_VAR_TY_VARIADIC = {
+const struct ir_var_ty IR_OP_VAR_TY_VARIADIC = {
     .ty = IR_OP_VAR_TY_TY_VARIADIC};
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
@@ -384,7 +384,7 @@ bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
 }
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
-                      struct ir_op_var_ty var_ty, struct ir_reg reg,
+                      struct ir_var_ty var_ty, struct ir_reg reg,
                       struct ir_lcl *lcl) {
 
   op->id = id;
@@ -720,7 +720,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
 }
 
 struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
-                            enum ir_op_ty ty, struct ir_op_var_ty var_ty) {
+                            enum ir_op_ty ty, struct ir_var_ty var_ty) {
   debug_assert(op, "invalid replacement point!");
 
   op->ty = ty;
@@ -731,7 +731,7 @@ struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
 
 struct ir_op *insert_before_ir_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
-                                  struct ir_op_var_ty var_ty) {
+                                  struct ir_var_ty var_ty) {
   debug_assert(insert_before, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
@@ -761,7 +761,7 @@ void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
 
 struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
-                                 struct ir_op_var_ty var_ty) {
+                                 struct ir_var_ty var_ty) {
   debug_assert(insert_after, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
@@ -969,7 +969,7 @@ void make_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                             unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
-      (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = ty};
+      (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = ty};
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
@@ -980,7 +980,7 @@ void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty) {
+struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_OP_VAR_TY_TY_POINTER:
     return *var_ty->pointer.underlying;
@@ -991,27 +991,27 @@ struct ir_op_var_ty var_ty_get_underlying(const struct ir_op_var_ty *var_ty) {
   }
 }
 
-struct ir_op_var_ty var_ty_make_pointer(struct ir_unit *iru,
-                                        const struct ir_op_var_ty *underlying) {
-  struct ir_op_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
+struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
+                                        const struct ir_var_ty *underlying) {
+  struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
 
-  struct ir_op_var_ty var_ty;
+  struct ir_var_ty var_ty;
   var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
   var_ty.pointer = (struct ir_op_var_pointer_ty){.underlying = copied};
 
   return var_ty;
 }
 
-struct ir_op_var_ty var_ty_make_array(struct ir_unit *iru,
-                                      const struct ir_op_var_ty *underlying,
+struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
+                                      const struct ir_var_ty *underlying,
                                       size_t num_elements) {
-  struct ir_op_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
+  struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
 
-  struct ir_op_var_ty var_ty;
+  struct ir_var_ty var_ty;
   var_ty.ty = IR_OP_VAR_TY_TY_ARRAY;
   var_ty.array = (struct ir_op_var_array_ty){.num_elements = num_elements,
                                              .underlying = copied};
@@ -1019,11 +1019,11 @@ struct ir_op_var_ty var_ty_make_array(struct ir_unit *iru,
   return var_ty;
 }
 
-struct ir_op_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
+struct ir_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
-  return (struct ir_op_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+  return (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
                                .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
 }
 
@@ -1156,7 +1156,7 @@ struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
 }
 
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
-                          const struct ir_op_var_ty *var_ty,
+                          const struct ir_var_ty *var_ty,
                           enum ir_glb_def_ty def_ty, const char *name) {
   struct ir_glb *glb = arena_alloc(iru->arena, sizeof(*glb));
 
@@ -1187,7 +1187,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
   return glb;
 }
-struct ir_lcl *add_local(struct ir_func *irb, struct ir_op_var_ty *var_ty) {
+struct ir_lcl *add_local(struct ir_func *irb, struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
@@ -1222,18 +1222,18 @@ struct ir_lcl *add_local(struct ir_func *irb, struct ir_op_var_ty *var_ty) {
   return lcl;
 }
 
-bool var_ty_is_aggregate(const struct ir_op_var_ty *var_ty) {
+bool var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
   return var_ty->ty == IR_OP_VAR_TY_TY_STRUCT ||
          var_ty->ty == IR_OP_VAR_TY_TY_UNION;
 }
 
-bool var_ty_is_primitive(const struct ir_op_var_ty *var_ty,
+bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
                          enum ir_op_var_primitive_ty primitive) {
   return var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
          var_ty->primitive == primitive;
 }
 
-bool var_ty_is_integral(const struct ir_op_var_ty *var_ty) {
+bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
   if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
@@ -1251,7 +1251,7 @@ bool var_ty_is_integral(const struct ir_op_var_ty *var_ty) {
   }
 }
 
-bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
+bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
   if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
@@ -1270,7 +1270,7 @@ bool var_ty_is_fp(const struct ir_op_var_ty *var_ty) {
 }
 
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
-                                  const struct ir_op_var_ty *ty) {
+                                  const struct ir_var_ty *ty) {
   // FIXME: pointer size!
 
   switch (ty->ty) {
@@ -1311,7 +1311,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
     size_t *offsets = arena_alloc(iru->arena, sizeof(*offsets) * num_fields);
 
     for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
-      struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
+      struct ir_var_ty *field = &ty->struct_ty.fields[i];
       struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
@@ -1333,7 +1333,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
     size_t num_fields = ty->struct_ty.num_fields;
 
     for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
-      struct ir_op_var_ty *field = &ty->struct_ty.fields[i];
+      struct ir_var_ty *field = &ty->struct_ty.fields[i];
       struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 

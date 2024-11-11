@@ -77,6 +77,7 @@ else()
     -Wno-error=unreachable-code-loop-increment
     -Wno-error=unused-parameter
     -Wno-error=covered-switch-default
+    -Wno-error=unreachable-code
 
     -Wmissing-prototypes
     -Wsign-conversion

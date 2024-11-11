@@ -40,6 +40,9 @@ struct typechk {
 
   size_t next_anonymous_type_name_id;
 
+  // `returns` need to know what they coerce to
+  struct td_var_ty ret_ty;
+
   // `value` contains a `struct td_var_ty *` to the type of the variable
   // or NULL if the variable has been used without a declaration
   struct var_table var_table;
@@ -328,6 +331,16 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
 
   *td_expr.unary_op.expr = expr;
   return td_expr;
+}
+
+
+static struct td_expr add_cast_if_needed(struct typechk *tchk, struct td_expr expr,
+                                    struct td_var_ty target_ty) {
+  if (!td_var_ty_eq(tchk, &expr.var_ty, &target_ty)) {
+    return add_cast_expr(tchk, expr, target_ty);
+  }
+
+  return expr;
 }
 
 static struct td_expr perform_integer_promotion(struct typechk *tchk,
@@ -971,8 +984,17 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
       };
       found_ident = true;
       break;
-    case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
-      todo("paren declarators");
+    case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR: {
+      struct td_specifiers var_specifiers = {
+        .type_specifier = var_ty
+      };
+      struct td_var_declaration sub_var_decl = type_declarator(tchk, &var_specifiers, direct_declarator->paren_declarator);
+
+      var_ty = sub_var_decl.var_ty;
+      var_decl.var = sub_var_decl.var;
+      found_ident = true;
+      break;
+    }
     case AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
                                      direct_declarator->array_declarator);
@@ -1084,6 +1106,7 @@ type_specifiers(struct typechk *tchk,
         WARN("type specifier not valid");
       }
 
+      type_specifier_count++;
       if (specifier.type_specifier.ty == AST_TYPE_SPECIFIER_TY_KW) {
         enum ast_type_specifier_kw kw =
             specifier.type_specifier.type_specifier_kw;
@@ -1097,11 +1120,9 @@ type_specifiers(struct typechk *tchk,
           unsigned_count++;
         } else {
           last_specifier = specifier.type_specifier;
-          type_specifier_count++;
         }
       } else {
         last_specifier = specifier.type_specifier;
-        type_specifier_count++;
       }
     }
     }
@@ -1252,15 +1273,9 @@ static struct td_expr type_ternary(struct typechk *tchk,
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty);
 
-  if (!td_var_ty_eq(tchk, &result_ty, &td_ternary.true_expr->var_ty)) {
-    *td_ternary.true_expr =
-        add_cast_expr(tchk, *td_ternary.true_expr, result_ty);
-  }
 
-  if (!td_var_ty_eq(tchk, &result_ty, &td_ternary.false_expr->var_ty)) {
-    *td_ternary.false_expr =
-        add_cast_expr(tchk, *td_ternary.false_expr, result_ty);
-  }
+  *td_ternary.true_expr = add_cast_if_needed(tchk, *td_ternary.true_expr, result_ty);
+  *td_ternary.false_expr = add_cast_if_needed(tchk, *td_ternary.false_expr, result_ty);
 
   return (struct td_expr){
       .ty = TD_EXPR_TY_TERNARY, .var_ty = result_ty, .ternary = td_ternary};
@@ -1313,9 +1328,11 @@ static struct td_expr type_call(struct typechk *tchk,
   }
 
   size_t num_params = target_var_ty.func.num_params;
-  if (target_var_ty.func.ty != TD_TY_FUNC_TY_UNKNOWN_ARGS && call->arg_list.num_args < num_params) {
+  if (target_var_ty.func.ty != TD_TY_FUNC_TY_UNKNOWN_ARGS &&
+      call->arg_list.num_args < num_params) {
     WARN("too few params");
-  } else if (target_var_ty.func.ty == TD_TY_FUNC_TY_KNOWN_ARGS && call->arg_list.num_args > num_params) {
+  } else if (target_var_ty.func.ty == TD_TY_FUNC_TY_KNOWN_ARGS &&
+             call->arg_list.num_args > num_params) {
     WARN("too many params");
   }
 
@@ -1328,9 +1345,7 @@ static struct td_expr type_call(struct typechk *tchk,
       param_ty = get_target_for_variadic(&td_call.arg_list.args[i].var_ty);
     }
 
-    if (!td_var_ty_eq(tchk, &param_ty, &td_call.arg_list.args[i].var_ty)) {
-      td_call.arg_list.args[i] = add_cast_expr(tchk, td_call.arg_list.args[i], param_ty);
-    }
+    td_call.arg_list.args[i] = add_cast_if_needed(tchk, td_call.arg_list.args[i], param_ty);
   }
 
   struct td_var_ty var_ty = *target_var_ty.func.ret;
@@ -1491,15 +1506,10 @@ static struct td_expr type_binary_op(struct typechk *tchk,
 
   struct td_binary_op_tys op_tys = resolve_binary_op_types(tchk, &td_binary_op);
 
-  if (!td_var_ty_eq(tchk, &td_binary_op.lhs->var_ty, &op_tys.lhs_op_ty)) {
-    *td_binary_op.lhs =
-        add_cast_expr(tchk, *td_binary_op.lhs, op_tys.lhs_op_ty);
-  }
-
-  if (!td_var_ty_eq(tchk, &td_binary_op.rhs->var_ty, &op_tys.rhs_op_ty)) {
-    *td_binary_op.rhs =
-        add_cast_expr(tchk, *td_binary_op.rhs, op_tys.rhs_op_ty);
-  }
+  *td_binary_op.lhs =
+      add_cast_if_needed(tchk, *td_binary_op.lhs, op_tys.lhs_op_ty);
+  *td_binary_op.rhs =
+      add_cast_if_needed(tchk, *td_binary_op.rhs, op_tys.rhs_op_ty);
 
   return (struct td_expr){.ty = TD_EXPR_TY_BINARY_OP,
                           .var_ty = op_tys.result_ty,
@@ -1535,9 +1545,7 @@ type_arrayaccess(struct typechk *tchk,
 
   struct td_var_ty pointer_ty = td_var_ty_pointer_sized_int(tchk, false);
 
-  if (!td_var_ty_eq(tchk, &td_arrayaccess.rhs->var_ty, &pointer_ty)) {
-    *td_arrayaccess.rhs = add_cast_expr(tchk, *td_arrayaccess.rhs, pointer_ty);
-  }
+  *td_arrayaccess.rhs = add_cast_if_needed(tchk, *td_arrayaccess.rhs, pointer_ty);
 
   struct td_var_ty var_ty =
       td_var_ty_get_underlying(tchk, &td_arrayaccess.lhs->var_ty);
@@ -1683,8 +1691,8 @@ static struct td_expr type_assg(struct typechk *tchk,
     break;
   }
 
-  *td_assg.expr = type_expr(tchk, assg->expr);
   *td_assg.assignee = type_expr(tchk, assg->assignee);
+  *td_assg.expr = add_cast_if_needed(tchk, type_expr(tchk, assg->expr), td_assg.assignee->var_ty);
 
   struct td_var_ty var_ty = td_assg.assignee->var_ty;
 
@@ -2003,7 +2011,7 @@ static struct td_jumpstmt type_jumpstmt(struct typechk *tchk,
       td_jump.return_stmt = (struct td_returnstmt){
           .expr = arena_alloc(tchk->arena, sizeof(*td_jump.return_stmt.expr))};
 
-      *td_jump.return_stmt.expr = type_expr(tchk, jumpstmt->return_stmt.expr);
+      *td_jump.return_stmt.expr = add_cast_if_needed(tchk, type_expr(tchk, jumpstmt->return_stmt.expr), tchk->ret_ty);
     } else {
       td_jump.return_stmt = (struct td_returnstmt){.expr = NULL};
     }
@@ -2174,6 +2182,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   // param scope
   tchk_push_scope(tchk);
 
+  tchk->ret_ty = *declaration.var_ty.func.ret;
+
   for (size_t i = 0; i < declaration.var_ty.func.num_params; i++) {
     struct td_ty_param *param = &declaration.var_ty.func.params[i];
 
@@ -2332,6 +2342,7 @@ static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, const struct td_specifiers *specifiers,
     const struct ast_init_declarator_list *declarator_list) {
   struct td_declaration td_declaration = {
+      .storage_class_specifier = specifiers->storage,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
           arena_alloc(tchk->arena, sizeof(*td_declaration.var_declarations) *

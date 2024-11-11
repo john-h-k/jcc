@@ -54,7 +54,7 @@ typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
                                       void *metadata);
 
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
-                               const struct ir_op_var_ty *var_ty);
+                               const struct ir_var_ty *var_ty);
 
 void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                       debug_print_op_callback *cb, void *cb_metadata);
