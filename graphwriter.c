@@ -79,7 +79,6 @@ static const char *edge_connector(enum graph_ty ty) {
   }
 }
 
-
 static void write_end(struct graphwriter *gwr) { fprintf(gwr->file, "\n"); }
 
 // FIXME: these break with double quotes
@@ -93,7 +92,8 @@ static void write_edge(struct graph_edge *edge) {
           edge_connector(edge->gwr->ty), edge->to->id);
 }
 
-static struct graph_vertex *create_vertex(struct graphwriter *gwr, const char *id) {
+static struct graph_vertex *create_vertex(struct graphwriter *gwr,
+                                          const char *id) {
   struct graph_vertex *gvx = arena_alloc(gwr->arena, sizeof(*gvx));
 
   gvx->gwr = gwr;

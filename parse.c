@@ -892,7 +892,8 @@ static void parse_direct_declarator_list(
     if (vector_length(list) == 1) {
       // first must be param or sub decl
       const struct ast_direct_declarator *decl = vector_get(list, 0);
-      if (decl->ty != AST_DIRECT_DECLARATOR_TY_IDENTIFIER && decl->ty != AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
+      if (decl->ty != AST_DIRECT_DECLARATOR_TY_IDENTIFIER &&
+          decl->ty != AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
         vector_pop(list);
         break;
       }
@@ -2347,21 +2348,21 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
   } else if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
     struct token token;
     peek_token(parser->lexer, &token);
-    if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {  
+    if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {
       param->ty = AST_PARAM_TY_VOID;
       return true;
     }
 
     backtrack(parser->lexer, pos);
   }
-  
+
   parse_declaration_specifier_list(parser, &param->specifier_list);
 
   if (!param->specifier_list.num_decl_specifiers) {
     backtrack(parser->lexer, pos);
     return false;
   }
-  
+
   if (parse_declarator(parser, &param->declarator)) {
     param->ty = AST_PARAM_TY_DECL;
     return true;

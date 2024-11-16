@@ -4,19 +4,18 @@
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own
 // header
 
-#include <string.h>
+#include <assert.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <string.h>
 
 #ifdef __cplusplus
 #error "do not compile jcc as C++"
 #endif
-
 
 #if __STDC_VERSION__ >= 202311L
 #define STDC_C23 1
@@ -49,22 +48,20 @@
 #else
 #define EXPAND_INNER(x) "unrecognised C version '" #x "'"
 #define EXPAND(x) EXPAND_INNER(x)
-#pragma message (EXPAND(__STDC_VERSION__))
+#pragma message(EXPAND(__STDC_VERSION__))
 #undef EXPAND
 #undef EXPAND_INNER
 #endif
 
 #endif
 
-
 #if STDC_C23 && __GNUC__
 #define PRINTF_ARGS(idx) [gcc::format(printf, idx + 1, idx + 2)]
 #elif __GNUC__
-#define PRINTF_ARGS(idx) __attribute__ ((format (printf, idx + 1, idx + 2)))
+#define PRINTF_ARGS(idx) __attribute__((format(printf, idx + 1, idx + 2)))
 #else
 #define PRINTF_ARGS(idx)
 #endif
-
 
 #ifdef __has_feature
 #define HAS_FEATURE(name) __has_feature(name)
@@ -187,28 +184,25 @@ static inline int lzcnt(unsigned long long l) {
   exit(code);
 
 #if __clang__
-#define START_NO_UNUSED_ARGS \
-  _Pragma("clang diagnostic push") \
-  _Pragma("clang diagnostic ignored \"-Wunused-parameter\"")
+#define START_NO_UNUSED_ARGS                                                   \
+  _Pragma("clang diagnostic push")                                             \
+      _Pragma("clang diagnostic ignored \"-Wunused-parameter\"")
 #elif __GNUC__
-#define START_NO_UNUSED_ARGS \
-  _Pragma("GCC diagnostic push") \
-  _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")
+#define START_NO_UNUSED_ARGS                                                   \
+  _Pragma("GCC diagnostic push")                                               \
+      _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")
 #endif
 
 #if __clang__
-#define END_NO_UNUSED_ARGS \
-  _Pragma("clang diagnostic pop")
+#define END_NO_UNUSED_ARGS _Pragma("clang diagnostic pop")
 #elif __GNUC__
-#define END_NO_UNUSED_ARGS \
-  _Pragma("GCC diagnostic pop")
+#define END_NO_UNUSED_ARGS _Pragma("GCC diagnostic pop")
 #endif
 
-#define TODO_FUNC(sig) \
-  START_NO_UNUSED_ARGS \
-  sig { todo(__func__); } \
+#define TODO_FUNC(sig)                                                         \
+  START_NO_UNUSED_ARGS                                                         \
+  sig { todo(__func__); }                                                      \
   END_NO_UNUSED_ARGS
-
 
 PRINTF_ARGS(0) NORETURN static inline void todo(const char *msg, ...) {
   FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
@@ -226,7 +220,8 @@ PRINTF_ARGS(0) NORETURN static inline void bug(const char *msg, ...) {
 }
 
 // present in all mode, always causes program exit if fails
-PRINTF_ARGS(1) static inline void invariant_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1)
+static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
     EXIT_FAIL(-1);

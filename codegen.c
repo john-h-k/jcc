@@ -1,4 +1,5 @@
 #include "codegen.h"
+
 #include "alloc.h"
 #include "util.h"
 #include "vector.h"
@@ -25,9 +26,8 @@ struct instr *alloc_instr(struct codegen_function *func) {
   return instr;
 }
 
-struct move_set gen_move_order(struct arena_allocator *arena,
-                                      size_t *from, size_t *to, size_t num,
-                                      size_t tmp_index) {
+struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
+                               size_t *to, size_t num, size_t tmp_index) {
   size_t max = 0;
 
   for (size_t i = 0; i < num; i++) {

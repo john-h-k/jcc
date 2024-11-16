@@ -3,8 +3,9 @@
 #include "../ir/build.h"
 #include "../util.h"
 
-TODO_FUNC(void eep_debug_print_custom_ir_op(FILE *file, const struct ir_func *func,
-                                  const struct ir_op *op))
+TODO_FUNC(void eep_debug_print_custom_ir_op(FILE *file,
+                                            const struct ir_func *func,
+                                            const struct ir_op *op))
 
 // EEP has no mul, div, or quot functions
 // mul:

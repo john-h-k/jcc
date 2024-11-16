@@ -28,7 +28,8 @@ struct register_alloc_state {
   struct bitset *fp_reg_pool;
 };
 
-static void insert_active(struct register_alloc_state *state, size_t cur_interval) {
+static void insert_active(struct register_alloc_state *state,
+                          size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
   size_t *active = state->active;
 
@@ -49,8 +50,9 @@ static void insert_active(struct register_alloc_state *state, size_t cur_interva
   }
 }
 
-static void spill_at_interval(struct ir_func *irb, struct register_alloc_state *state,
-                       size_t cur_interval) {
+static void spill_at_interval(struct ir_func *irb,
+                              struct register_alloc_state *state,
+                              size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
 
   // spill the longest living variable
@@ -73,7 +75,7 @@ static void spill_at_interval(struct ir_func *irb, struct register_alloc_state *
 }
 
 static void expire_old_intervals(struct register_alloc_state *state,
-                          struct interval *cur_interval) {
+                                 struct interval *cur_interval) {
   size_t num_expired_intervals = 0;
 
   for (size_t i = 0; i < state->num_active; i++) {
@@ -214,7 +216,7 @@ static int compare_interval_id(const void *a, const void *b) {
 }
 
 static struct interval_data register_alloc_pass(struct ir_func *irb,
-                                         struct reg_info *info) {
+                                                struct reg_info *info) {
 
   struct interval_data data = construct_intervals(irb);
 

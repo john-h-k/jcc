@@ -1,11 +1,11 @@
 #include "liveness.h"
 
-#include "bit_twiddle.h"
-#include "util.h"
-#include "log.h"
 #include "alloc.h"
+#include "bit_twiddle.h"
 #include "bitset.h"
 #include "ir/ir.h"
+#include "log.h"
+#include "util.h"
 
 static void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
@@ -288,7 +288,8 @@ void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
   fslogsl(file, ")");
 }
 
-void print_ir_intervals(FILE *file, struct ir_op *op, UNUSED_ARG(void *metadata)) {
+void print_ir_intervals(FILE *file, struct ir_op *op,
+                        UNUSED_ARG(void *metadata)) {
   struct interval *interval = op->metadata;
   if (interval) {
     invariant_assert(interval->op->id == op->id, "intervals are not ID keyed");

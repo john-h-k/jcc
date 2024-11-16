@@ -138,9 +138,9 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
 
   if (simple_copy) {
     op->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                       .primitive = simple_copy_ty};
+                                    .primitive = simple_copy_ty};
     nxt_store->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                                              .primitive = simple_copy_ty};
+                                           .primitive = simple_copy_ty};
 
     return;
   }

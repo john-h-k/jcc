@@ -5,9 +5,9 @@
 #include "../util.h"
 
 #include <mach-o/arm64/reloc.h>
-#include <mach-o/x86_64/reloc.h>
 #include <mach-o/loader.h>
 #include <mach-o/reloc.h>
+#include <mach-o/x86_64/reloc.h>
 #include <mach/machine.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -73,7 +73,7 @@ static size_t count_relocation_instrs(const struct build_object_args *args) {
 }
 
 static void write_relocations(FILE *file, const struct build_object_args *args,
-                       const size_t *entry_offsets) {
+                              const size_t *entry_offsets) {
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
     size_t offset = entry_offsets[i];
@@ -147,7 +147,8 @@ static void write_relocations(FILE *file, const struct build_object_args *args,
   }
 }
 
-static void write_segment_command(FILE *file, const struct build_object_args *args) {
+static void write_segment_command(FILE *file,
+                                  const struct build_object_args *args) {
   size_t str_align = 1;
   size_t func_align = 1;
   size_t const_align = 1;

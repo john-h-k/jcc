@@ -58,7 +58,7 @@ static bool valid_first_identifier_char(char c) {
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
 static enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
-                            struct text_pos end) {
+                                   struct text_pos end) {
   struct keyword {
     const char *str;
     size_t len;
@@ -143,7 +143,8 @@ void consume_token(struct lexer *lexer, struct token token) {
 }
 
 static const char *process_raw_string(const struct lexer *lexer,
-                               const struct token *token, size_t *str_len) {
+                                      const struct token *token,
+                                      size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
@@ -645,7 +646,8 @@ const char *associated_text(const struct lexer *lexer,
   }
 }
 
-const char *token_name(UNUSED_ARG(const struct lexer *lexer), const struct token *token) {
+const char *token_name(UNUSED_ARG(const struct lexer *lexer),
+                       const struct token *token) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;

@@ -83,7 +83,8 @@ enum compiler_create_result create_compiler(struct program *program,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-static void debug_print_stage(struct ir_unit *ir, UNUSED_ARG(const char *name)) {
+static void debug_print_stage(struct ir_unit *ir,
+                              UNUSED_ARG(const char *name)) {
   debug_print_ir(stderr, ir, NULL, NULL);
 }
 
@@ -121,14 +122,14 @@ enum compile_result compile(struct compiler *compiler) {
 
   disable_log();
 
-  
   if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_TYPECHK)) {
     enable_log();
   }
 
   BEGIN_STAGE("TYPECHK");
 
-  struct typechk_result typechk_result = td_typechk(compiler->typechk, &parse_result.translation_unit);
+  struct typechk_result typechk_result =
+      td_typechk(compiler->typechk, &parse_result.translation_unit);
 
   if (compiler->args.log_flags & COMPILE_LOG_FLAGS_TYPECHK) {
     debug_print_td(compiler->typechk, &typechk_result.translation_unit);

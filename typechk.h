@@ -96,8 +96,8 @@ struct td_ty_incomplete_aggregate {
 
 enum td_ty_func_ty {
   TD_TY_FUNC_TY_UNKNOWN_ARGS, // e.g `int foo()`
-  TD_TY_FUNC_TY_KNOWN_ARGS, // e.g `int foo(void), int foo(int, float)`
-  TD_TY_FUNC_TY_VARIADIC // e.g `int foo(...)`
+  TD_TY_FUNC_TY_KNOWN_ARGS,   // e.g `int foo(void), int foo(int, float)`
+  TD_TY_FUNC_TY_VARIADIC      // e.g `int foo(...)`
 };
 
 struct td_ty_func {
@@ -107,7 +107,6 @@ struct td_ty_func {
   struct td_ty_param *params;
   size_t num_params;
 };
-
 
 enum td_var_ty_ty {
   /* Used for variables that were used without declaration and similar. Usually
@@ -333,7 +332,6 @@ struct td_designator {
   };
 };
 
-
 struct td_designator_list {
   size_t num_designators;
   struct td_designator *designators;
@@ -417,10 +415,10 @@ struct td_ternary {
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
- struct td_compound_literal {
-   struct td_var_ty var_ty;
-   struct td_init_list init_list;
- };
+struct td_compound_literal {
+  struct td_var_ty var_ty;
+  struct td_init_list init_list;
+};
 
 enum td_expr_ty {
   TD_EXPR_TY_TERNARY,
@@ -682,15 +680,15 @@ bool is_integral_ty(const struct td_var_ty *ty);
 bool is_fp_ty(const struct td_var_ty *ty);
 bool td_binary_op_is_comparison(enum td_binary_op_ty ty);
 
-struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk, bool is_signed);
+struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
+                                             bool is_signed);
 
-
-struct td_var_ty td_var_ty_make_pointer(struct typechk *tchk,
-                                    const struct td_var_ty *var_ty, enum td_type_qualifier_flags qualifiers);
+struct td_var_ty
+td_var_ty_make_pointer(struct typechk *tchk, const struct td_var_ty *var_ty,
+                       enum td_type_qualifier_flags qualifiers);
 
 struct td_var_ty td_var_ty_get_underlying(struct typechk *tchk,
-                                      const struct td_var_ty *ty_ref);
-
+                                          const struct td_var_ty *ty_ref);
 
 struct typechk;
 
@@ -704,13 +702,13 @@ struct typechk_result {
 };
 
 enum typechk_create_result typechk_create(struct parser *parser,
-                                        struct typechk **tchk);
+                                          struct typechk **tchk);
 
-struct typechk_result td_typechk(struct typechk *tchk, struct ast_translationunit *translation_unit);
+struct typechk_result td_typechk(struct typechk *tchk,
+                                 struct ast_translationunit *translation_unit);
 void typechk_free(struct typechk **tchk);
 
 void debug_print_td(struct typechk *tchk,
                     struct td_translationunit *translation_unit);
-
 
 #endif

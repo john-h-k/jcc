@@ -10,24 +10,24 @@ struct foo {
 };
 
 int main() {
-//   struct foo f = {
-//       .a = 10,
-//       .bar.a = 7,
-//   };
+  //   struct foo f = {
+  //       .a = 10,
+  //       .bar.a = 7,
+  //   };
 
-//   struct foo z = {.a = 10,
-//                   .bar = {
-//                       .a = 9,
-//                   }};
+  //   struct foo z = {.a = 10,
+  //                   .bar = {
+  //                       .a = 9,
+  //                   }};
 
-//   int arr[10][10] = {
-//       [7][5] = 66,
-//   };
+  //   int arr[10][10] = {
+  //       [7][5] = 66,
+  //   };
 
-//   struct bar b = {
-//       .a = 1,
-//   };
+  //   struct bar b = {
+  //       .a = 1,
+  //   };
 
-//   return b.a + f.a + f.bar.a + arr[7][5] + z.a + z.bar.a;
+  //   return b.a + f.a + f.bar.a + arr[7][5] + z.a + z.bar.a;
   return 103;
 }

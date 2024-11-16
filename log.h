@@ -7,9 +7,9 @@
 #include <stdio.h>
 
 #define DECL_LOG_FN(NAME)                                                      \
-  PRINTF_ARGS(0) void NAME(const char *format, ...);                                          \
-  PRINTF_ARGS(0) void NAME##sl(const char *format, ...);                                      \
-  PRINTF_ARGS(1) void f##NAME(FILE *file, const char *format, ...);                           \
+  PRINTF_ARGS(0) void NAME(const char *format, ...);                           \
+  PRINTF_ARGS(0) void NAME##sl(const char *format, ...);                       \
+  PRINTF_ARGS(1) void f##NAME(FILE *file, const char *format, ...);            \
   PRINTF_ARGS(1) void f##NAME##sl(FILE *file, const char *format, ...);
 
 void enable_log(void);

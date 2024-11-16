@@ -7,8 +7,6 @@
 #include "program.h"
 #include "util.h"
 
-
-
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
  * `<keyword>` */
 
@@ -102,7 +100,6 @@ enum ast_struct_or_union_specifier_ty {
   AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION,
 };
 
-
 struct ast_declaration_list {
   size_t num_declarations;
   struct ast_declaration *declarations;
@@ -110,7 +107,7 @@ struct ast_declaration_list {
 
 struct ast_struct_or_union_specifier {
   enum ast_struct_or_union_specifier_ty ty;
-  
+
   struct token *identifier;
   struct ast_declaration_list *decl_list;
 };
@@ -164,7 +161,6 @@ struct ast_type_specifier {
     struct token typedef_name;
   };
 };
-
 
 enum ast_decl_specifier_ty {
   AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER,
@@ -393,7 +389,6 @@ struct ast_designator {
   };
 };
 
-
 struct ast_designator_list {
   size_t num_designators;
   struct ast_designator *designators;
@@ -477,10 +472,10 @@ struct ast_ternary {
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
  * and `rvalue` (not an lvalue) */
 
- struct ast_compound_literal {
-   struct ast_type_name type_name;
-   struct ast_init_list init_list;
- };
+struct ast_compound_literal {
+  struct ast_type_name type_name;
+  struct ast_init_list init_list;
+};
 
 enum ast_expr_ty {
   AST_EXPR_TY_TERNARY,
@@ -754,4 +749,3 @@ void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);
 
 #endif
-
