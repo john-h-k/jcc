@@ -150,6 +150,7 @@ struct td_ty_param {
   const char *identifier;
 };
 
+extern struct td_var_ty TD_VAR_TY_UNKNOWN;
 extern struct td_var_ty TD_VAR_TY_VOID;
 extern struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER;
 
