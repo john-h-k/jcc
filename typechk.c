@@ -1022,12 +1022,11 @@ static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
                 enum td_specifier_allow allow) {
-  struct td_specifiers specifiers = {
-      .storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
-      .function = TD_FUNCTION_SPECIFIER_NONE,
-      .qualifier_flags = TD_TYPE_QUALIFIER_FLAG_NONE,
-      .type_specifier = TD_VAR_TY_UNKNOWN
-  };
+  struct td_specifiers specifiers = {.storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
+                                     .function = TD_FUNCTION_SPECIFIER_NONE,
+                                     .qualifier_flags =
+                                         TD_TYPE_QUALIFIER_FLAG_NONE,
+                                     .type_specifier = TD_VAR_TY_UNKNOWN};
 
   int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
   int type_specifier_count = 0;
@@ -2381,7 +2380,7 @@ static struct td_init type_init(struct typechk *tchk,
     td_init.ty = TD_INIT_TY_EXPR;
     td_init.expr = type_expr(tchk, &init->expr);
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
-    
+
     break;
   case AST_INIT_TY_INIT_LIST:
     td_init.ty = TD_INIT_TY_INIT_LIST;

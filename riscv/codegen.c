@@ -2,7 +2,8 @@
 
 #include "../vector.h"
 
-static const char *eep_mangle(UNUSED_ARG(struct arena_allocator *arena), const char *name) {
+static const char *eep_mangle(UNUSED_ARG(struct arena_allocator *arena),
+                              const char *name) {
   return name;
 }
 

@@ -3,7 +3,8 @@
 #include "util.h"
 #include "vector.h"
 
-static struct var_table_scope var_table_scope_create(struct var_table_scope *prev) {
+static struct var_table_scope
+var_table_scope_create(struct var_table_scope *prev) {
   struct var_table_scope var_table_scope = {
       .next = NULL,
       .prev = prev,
@@ -27,12 +28,11 @@ struct var_table var_table_create(struct arena_allocator *arena) {
 }
 
 struct var_table_entry *var_table_create_entry(struct var_table *var_table,
-                                     const char *name) {
+                                               const char *name) {
   struct var_table_scope *last = var_table->last;
 
-  struct var_table_entry entry = {.name = name,
-                                  .scope = last->scope,
-                                  .var = NULL, .var_ty = NULL};
+  struct var_table_entry entry = {
+      .name = name, .scope = last->scope, .var = NULL, .var_ty = NULL};
 
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
 
@@ -74,8 +74,8 @@ void pop_scope(struct var_table *var_table) {
   last->prev = NULL;
 }
 
-struct var_table_entry *var_table_get_or_create_entry(struct var_table *var_table,
-                                            const char *name) {
+struct var_table_entry *
+var_table_get_or_create_entry(struct var_table *var_table, const char *name) {
   debug_assert(name, "name must be non-null");
 
   struct var_table_entry *entry = var_table_get_entry(var_table, name);
@@ -91,7 +91,7 @@ struct var_table_entry *var_table_get_or_create_entry(struct var_table *var_tabl
 }
 
 struct var_table_entry *var_table_get_entry(struct var_table *var_table,
-                                  const char *name) {
+                                            const char *name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry

@@ -1,8 +1,8 @@
 #include "ir.h"
 
-#include "../vector.h"
 #include "../alloc.h"
 #include "../log.h"
+#include "../vector.h"
 #include "var_refs.h"
 
 #include <sys/stat.h>
@@ -144,43 +144,45 @@ bool op_is_branch(enum ir_op_ty ty) {
 }
 
 static void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
-                  void *cb_metadata) {
+                         void *cb_metadata) {
   cb(&br_cond->cond, cb_metadata);
 }
 
-static void walk_store_lcl(struct ir_op_store_lcl *store_lcl, walk_op_callback *cb,
-                    void *cb_metadata) {
+static void walk_store_lcl(struct ir_op_store_lcl *store_lcl,
+                           walk_op_callback *cb, void *cb_metadata) {
   cb(&store_lcl->value, cb_metadata);
 }
 
-static void walk_load_lcl(
-                          UNUSED_ARG(struct ir_op_load_lcl *load_lcl), UNUSED_ARG(walk_op_callback *cb),
-                   UNUSED_ARG(void *cb_metadata)) {
+static void walk_load_lcl(UNUSED_ARG(struct ir_op_load_lcl *load_lcl),
+                          UNUSED_ARG(walk_op_callback *cb),
+                          UNUSED_ARG(void *cb_metadata)) {
   // nada
 }
 
-static void walk_cnst(UNUSED_ARG(struct ir_op_cnst *cnst), UNUSED_ARG(walk_op_callback *cb),
-               UNUSED_ARG(void *cb_metadata)) {
+static void walk_cnst(UNUSED_ARG(struct ir_op_cnst *cnst),
+                      UNUSED_ARG(walk_op_callback *cb),
+                      UNUSED_ARG(void *cb_metadata)) {
   // nada
 }
 
-static void walk_binary_op(struct ir_op_binary_op *binary_op, walk_op_callback *cb,
-                    void *cb_metadata) {
+static void walk_binary_op(struct ir_op_binary_op *binary_op,
+                           walk_op_callback *cb, void *cb_metadata) {
   walk_op(binary_op->lhs, cb, cb_metadata);
   walk_op(binary_op->rhs, cb, cb_metadata);
 }
 
 static void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
-                   void *cb_metadata) {
+                          void *cb_metadata) {
   walk_op(unary_op->value, cb, cb_metadata);
 }
 
 static void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
-                  void *cb_metadata) {
+                         void *cb_metadata) {
   walk_op(cast_op->value, cb, cb_metadata);
 }
 
-static void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb, void *cb_metadata) {
+static void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb,
+                     void *cb_metadata) {
   if (ret->value) {
     walk_op(ret->value, cb, cb_metadata);
   }
@@ -376,8 +378,7 @@ const struct ir_var_ty IR_OP_VAR_TY_F32 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F32};
 const struct ir_var_ty IR_OP_VAR_TY_F64 = {
     .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F64};
-const struct ir_var_ty IR_OP_VAR_TY_VARIADIC = {
-    .ty = IR_OP_VAR_TY_TY_VARIADIC};
+const struct ir_var_ty IR_OP_VAR_TY_VARIADIC = {.ty = IR_OP_VAR_TY_TY_VARIADIC};
 
 bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
   return ty->flags & IR_OP_VAR_FUNC_TY_FLAG_VARIADIC;
@@ -992,7 +993,7 @@ struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty) {
 }
 
 struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
-                                        const struct ir_var_ty *underlying) {
+                                     const struct ir_var_ty *underlying) {
   struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
@@ -1005,8 +1006,8 @@ struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
 }
 
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
-                                      const struct ir_var_ty *underlying,
-                                      size_t num_elements) {
+                                   const struct ir_var_ty *underlying,
+                                   size_t num_elements) {
   struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
 
   *copied = *underlying;
@@ -1024,7 +1025,7 @@ struct ir_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
   return (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                               .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
+                            .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
 }
 
 struct ir_op *alloc_integral_constant(struct ir_func *irb, struct ir_stmt *stmt,

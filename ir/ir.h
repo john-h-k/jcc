@@ -1,8 +1,8 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
-#include <stdbool.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 enum ir_op_ty {
@@ -565,11 +565,7 @@ enum ir_glb_def_ty {
   IR_GLB_DEF_TY_TENTATIVE
 };
 
-enum ir_linkage {
-  IR_LINKAGE_NONE,
-  IR_LINKAGE_INTERNAL,
-  IR_LINKAGE_EXTERNAL
-};
+enum ir_linkage { IR_LINKAGE_NONE, IR_LINKAGE_INTERNAL, IR_LINKAGE_EXTERNAL };
 
 struct ir_glb {
   size_t id;
@@ -791,10 +787,10 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty);
 struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru);
 struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
-                                        const struct ir_var_ty *underlying);
+                                     const struct ir_var_ty *underlying);
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
-                                      const struct ir_var_ty *underlying,
-                                      size_t num_elements);
+                                   const struct ir_var_ty *underlying,
+                                   size_t num_elements);
 
 bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
                          enum ir_op_var_primitive_ty primitive);

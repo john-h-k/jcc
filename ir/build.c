@@ -260,8 +260,8 @@ var_ty_for_well_known_ty(enum well_known_ty wkt) {
   }
 }
 
-static struct ir_var_ty
-var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
+static struct ir_var_ty var_ty_for_td_var_ty(struct ir_unit *iru,
+                                             const struct td_var_ty *var_ty) {
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
@@ -395,7 +395,6 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
       to_var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE) {
     return IR_OP_CAST_OP_TY_TRUNC;
   }
-  
 
   if (from_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
@@ -468,9 +467,9 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       (lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ||
        rhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER)) {
     if (td_var_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-      struct ir_var_ty *pointer_ty =
-          lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER ? &lhs->var_ty
-                                                    : &rhs->var_ty;
+      struct ir_var_ty *pointer_ty = lhs->var_ty.ty == IR_OP_VAR_TY_TY_POINTER
+                                         ? &lhs->var_ty
+                                         : &rhs->var_ty;
 
       // need to multiply rhs by the element size
       struct ir_var_ty_info el_info =
@@ -702,8 +701,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
     }
 
     op->var_ty = var_ty;
-    op->addr =
-        (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
+    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
     break;
   case VAR_REF_TY_LCL:
     if (!ref->lcl) {
@@ -711,8 +709,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
     }
 
     op->var_ty = var_ty;
-    op->addr =
-        (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
+    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
     break;
   case VAR_REF_TY_GLB:
     op->var_ty = var_ty;
@@ -795,9 +792,9 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   switch (unary_op->ty) {
   case TD_UNARY_OP_TY_PREFIX_DEC:
   case TD_UNARY_OP_TY_PREFIX_INC: {
-    enum td_assg_ty assg_ty =
-        unary_op->ty == TD_UNARY_OP_TY_PREFIX_INC ? TD_ASSG_TY_ADD
-                                                   : TD_ASSG_TY_SUB;
+    enum td_assg_ty assg_ty = unary_op->ty == TD_UNARY_OP_TY_PREFIX_INC
+                                  ? TD_ASSG_TY_ADD
+                                  : TD_ASSG_TY_SUB;
 
     struct td_var_ty cnst_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
 
@@ -813,18 +810,15 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     };
 
     struct td_expr td_expr = {
-      .ty = TD_EXPR_TY_ASSG,
-      .var_ty = expr->var_ty,
-      .assg = td_assg
-    };
+        .ty = TD_EXPR_TY_ASSG, .var_ty = expr->var_ty, .assg = td_assg};
 
     return build_ir_for_assg(irb, stmt, &td_expr);
   }
   case TD_UNARY_OP_TY_POSTFIX_INC:
   case TD_UNARY_OP_TY_POSTFIX_DEC: {
-    enum td_assg_ty assg_ty =
-        unary_op->ty == TD_UNARY_OP_TY_POSTFIX_INC ? TD_ASSG_TY_ADD
-                                                   : TD_ASSG_TY_SUB;
+    enum td_assg_ty assg_ty = unary_op->ty == TD_UNARY_OP_TY_POSTFIX_INC
+                                  ? TD_ASSG_TY_ADD
+                                  : TD_ASSG_TY_SUB;
 
     struct td_var_ty cnst_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
 
@@ -840,13 +834,10 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     };
 
     struct td_expr td_expr = {
-      .ty = TD_EXPR_TY_ASSG,
-      .var_ty = expr->var_ty,
-      .assg = td_assg
-    };
+        .ty = TD_EXPR_TY_ASSG, .var_ty = expr->var_ty, .assg = td_assg};
 
     build_ir_for_assg(irb, stmt, &td_expr);
-  
+
     return ir_expr;
   }
   case TD_UNARY_OP_TY_PLUS:
@@ -1357,8 +1348,8 @@ static struct ir_op *build_ir_for_member_address_offset(
 
   struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
   offset->ty = IR_OP_TY_CNST;
-  offset->var_ty = (struct ir_var_ty){
-      .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
+  offset->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+                                      .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
   offset->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
 
@@ -1480,7 +1471,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     ty = TD_BINARY_OP_TY_RSHIFT;
     goto compound_assg;
 
-  compound_assg : {
+  compound_assg: {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
     struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr);
@@ -1833,9 +1824,9 @@ build_ir_for_selectstmt(struct ir_func_builder *irb,
   }
 }
 
-static void
-build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                         struct td_declaration *declaration);
+static void build_ir_for_declaration(struct ir_func_builder *irb,
+                                     struct ir_stmt **stmt,
+                                     struct td_declaration *declaration);
 
 static void
 build_ir_for_declorexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
@@ -2512,7 +2503,8 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
   struct ir_op *address;
   if (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
       decl->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-    struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
+    struct ir_var_ty var_ty =
+        var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
 
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(&decl->var, (*stmt)->basicblock);
@@ -2520,7 +2512,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     ref->lcl = add_local(irb->func, &var_ty);
 
     address = build_ir_for_addressof_var(irb, stmt, &decl->var);
-    } else {
+  } else {
     address = NULL;
   }
 
@@ -2538,7 +2530,8 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     struct ir_op *str = alloc_ir_op(irb->func, *stmt);
     str->ty = IR_OP_TY_STORE_ADDR;
     str->var_ty = IR_OP_VAR_TY_NONE;
-    str->store_addr = (struct ir_op_store_addr){.value = assignment, .addr =address};
+    str->store_addr =
+        (struct ir_op_store_addr){.value = assignment, .addr = address};
   } else {
     var_assg(irb, *stmt, assignment, &decl->var);
   }
@@ -2546,9 +2539,9 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
 
 // this is called for decl lists WITHIN a function (i.e default is local
 // storage)
-static void
-build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                         struct td_declaration *declaration) {
+static void build_ir_for_declaration(struct ir_func_builder *irb,
+                                     struct ir_stmt **stmt,
+                                     struct td_declaration *declaration) {
   if (declaration->storage_class_specifier ==
       TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
     return;
@@ -2578,7 +2571,7 @@ build_ir_for_declaration(struct ir_func_builder *irb, struct ir_stmt **stmt,
             TD_STORAGE_CLASS_SPECIFIER_AUTO) {
       build_ir_for_auto_var(irb, stmt, decl);
     } else {
-        build_ir_for_global_var(irb->func->unit, irb->func, irb->global_var_refs,
+      build_ir_for_global_var(irb->func->unit, irb->func, irb->global_var_refs,
                               declaration->storage_class_specifier, decl);
     }
   }

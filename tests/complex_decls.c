@@ -19,9 +19,7 @@ struct S const *s2;
 // int f5 (int (int()), fptr1);
 
 // int foo(int (int x)) {
-  
+
 // }
 
-int main() {
-  
-}
+int main() {}

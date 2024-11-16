@@ -437,9 +437,10 @@ struct prettyprint_file_metadata {
   void *cb_metadata;
 };
 
-static void prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
-                                             struct ir_basicblock *basicblock,
-                                             void *metadata) {
+static void
+prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
+                                        struct ir_basicblock *basicblock,
+                                        void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
   fslog(fm->file, "\n");
@@ -464,16 +465,15 @@ static void prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *i
 }
 
 static void prettyprint_end_visit_basicblock_file(
-                                          UNUSED_ARG(struct ir_func *irb),
-                                          UNUSED_ARG(struct ir_basicblock *basicblock),
-                                           void *metadata) {
+    UNUSED_ARG(struct ir_func *irb),
+    UNUSED_ARG(struct ir_basicblock *basicblock), void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
   fslog(fm->file, "");
 }
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
-                               void *metadata) {
+                                      void *metadata) {
   // if (op->ty == IR_OP_TY_GLB) {
   //   // TODO: stop this function needing to deal with GLB its a messy opcode
   //   return;
@@ -669,7 +669,8 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value, bool top) {
+static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
+                                     bool top) {
   switch (var_value->ty) {
   // case IR_VAR_VALUE_TY_STR:
   //   fprintf(file, "%s", var_value->str_value);
@@ -706,7 +707,8 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
   }
 }
 
-static void debug_print_ir_var(FILE *file, struct ir_unit *iru, struct ir_var *var) {
+static void debug_print_ir_var(FILE *file, struct ir_unit *iru,
+                               struct ir_var *var) {
   debug_print_var_ty_string(file, iru, &var->var_ty);
   fprintf(file, " = ");
   debug_print_ir_var_value(file, &var->value, true);
@@ -717,7 +719,8 @@ struct print_ir_graph_metadata {
   FILE *file;
 };
 
-static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *metadata) {
+static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
+                               void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
   debug_print_op(gm->file, irb, op);
@@ -726,9 +729,9 @@ static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op, void *meta
   fprintf(gm->file, "\\l");
 }
 
-static struct graph_vertex *get_basicblock_vertex(struct ir_func *irb,
-                                           struct ir_basicblock *basicblock,
-                                           struct graphwriter *gwr) {
+static struct graph_vertex *
+get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
+                      struct graphwriter *gwr) {
   if (!basicblock->metadata) {
     size_t digits = num_digits(irb->basicblock_count);
     digits = MAX(digits, 2);
@@ -812,7 +815,8 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
       switch (glb->ty) {
       case IR_GLB_TY_DATA:
-        // TODO: should either have name in `var` or remove it from `func` for consistency
+        // TODO: should either have name in `var` or remove it from `func` for
+        // consistency
         fprintf(file, "%s ", glb->name);
         debug_print_ir_var(file, iru, glb->var);
         break;

@@ -120,7 +120,7 @@ void preproc_free(struct preproc **preproc) {
 }
 
 static void find_multiline_comment_end(struct preproc *preproc,
-                                struct text_pos *cur_pos) {
+                                       struct text_pos *cur_pos) {
   while (/* token must be at least 2 chars */ cur_pos->idx + 1 < preproc->len) {
     if (preproc->text[cur_pos->idx] == '\n') {
       next_line(cur_pos);
@@ -146,7 +146,9 @@ static bool is_punctuator(char c) {
   return ispunct(c) && c != '$' && c != '@' && c != '`';
 }
 
-static bool is_identifier_char(char c) { return isalpha(c) || isdigit(c) || c == '_'; }
+static bool is_identifier_char(char c) {
+  return isalpha(c) || isdigit(c) || c == '_';
+}
 
 static bool is_first_identifier_char(char c) {
   return is_identifier_char(c) && !isdigit(c);
@@ -158,7 +160,8 @@ static bool is_preproc_number_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
 
-static void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
+static void preproc_next_token(struct preproc *preproc,
+                               struct preproc_token *token) {
   struct text_pos start = preproc->pos;
   struct text_pos end = start;
 
@@ -326,14 +329,14 @@ static void preproc_next_token(struct preproc *preproc, struct preproc_token *to
 }
 
 static void preproc_next_non_whitespace_token(struct preproc *preproc,
-                                       struct preproc_token *token) {
+                                              struct preproc_token *token) {
   do {
     preproc_next_token(preproc, token);
   } while (token->ty == PREPROC_TOKEN_TY_WHITESPACE);
 }
 
 static bool token_streq(struct preproc *preproc, struct preproc_token token,
-                 const char *str) {
+                        const char *str) {
   size_t token_len = token.span.end.idx - token.span.start.idx;
   size_t len = MIN(token_len, strlen(str));
 

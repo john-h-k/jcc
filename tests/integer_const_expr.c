@@ -7,6 +7,6 @@ int main() {
   // char c[1 ? 2 : 4];
   // char d[1 * 5 + 9 + (~-1)]:
 
-
-  // return !(sizeof(a) == 1 & sizeof(b) == 4 & sizeof(c) == 2 & sizeof(d) == 14);
+  // return !(sizeof(a) == 1 & sizeof(b) == 4 & sizeof(c) == 2 & sizeof(d) ==
+  // 14);
 }

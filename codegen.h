@@ -94,9 +94,7 @@ struct move_set {
   size_t num_moves;
 };
 
-
-struct move_set gen_move_order(struct arena_allocator *arena,
-                                      size_t *from, size_t *to, size_t num,
-                                      size_t tmp_index);
+struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
+                               size_t *to, size_t num, size_t tmp_index);
 
 #endif

@@ -19,8 +19,9 @@ enum parse_args_result {
 };
 
 static enum parse_args_result parse_args(int argc, char **argv,
-                                  struct compile_args *args,
-                                  const char ***sources, size_t *num_sources);
+                                         struct compile_args *args,
+                                         const char ***sources,
+                                         size_t *num_sources);
 
 static char *readfile(const char *path) {
   FILE *f = fopen(path, "r");
@@ -106,7 +107,7 @@ int main(int argc, char **argv) {
     enable_log();
   }
 
-  struct link_args link_args = {.objects = (const char * const *)objects,
+  struct link_args link_args = {.objects = (const char *const *)objects,
                                 .num_objects = num_sources,
                                 .output = args.output ? args.output : "a.out"};
 
@@ -163,7 +164,8 @@ static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
   return false;
 }
 
-static bool parse_target_flag(const char *flag, enum compile_target_arch *arch) {
+static bool parse_target_flag(const char *flag,
+                              enum compile_target_arch *arch) {
   if (strcmp(flag, "x64") == 0) {
     *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
     return true;
@@ -194,8 +196,9 @@ static bool parse_output(const char *str, char **output) {
 }
 
 static enum parse_args_result parse_args(int argc, char **argv,
-                                  struct compile_args *args,
-                                  const char ***sources, size_t *num_sources) {
+                                         struct compile_args *args,
+                                         const char ***sources,
+                                         size_t *num_sources) {
 
   memset(args, 0, sizeof(*args));
 
