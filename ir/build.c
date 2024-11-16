@@ -2534,7 +2534,12 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     assignment->var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
   }
 
-  if (!address) {
+  if (address) {
+    struct ir_op *str = alloc_ir_op(irb->func, *stmt);
+    str->ty = IR_OP_TY_STORE_ADDR;
+    str->var_ty = IR_OP_VAR_TY_NONE;
+    str->store_addr = (struct ir_op_store_addr){.value = assignment, .addr =address};
+  } else {
     var_assg(irb, *stmt, assignment, &decl->var);
   }
 }

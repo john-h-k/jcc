@@ -889,6 +889,15 @@ static void parse_direct_declarator_list(
   struct ast_direct_declarator direct_declarator;
 
   while (parse_direct_declarator(parser, &direct_declarator)) {
+    if (vector_length(list) == 1) {
+      // first must be param or sub decl
+      const struct ast_direct_declarator *decl = vector_get(list, 0);
+      if (decl->ty != AST_DIRECT_DECLARATOR_TY_IDENTIFIER && decl->ty != AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
+        vector_pop(list);
+        break;
+      }
+    }
+
     vector_push_back(list, &direct_declarator);
   }
 
@@ -908,7 +917,6 @@ static bool parse_declarator(struct parser *parser,
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
 
   bool has_declarator =
-      declarator->pointer_list.num_pointers ||
       declarator->direct_declarator_list.num_direct_declarators;
 
   struct text_pos end_of_declarator = get_position(parser->lexer);
@@ -1177,6 +1185,8 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 
   if (!is_string) {
+    vector_free(&strings);
+
     backtrack(parser->lexer, pos);
     return false;
   }

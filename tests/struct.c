@@ -4,7 +4,6 @@ struct bar;
 struct baz {
   struct baz *b;
 };
-struct bat l;
 
 struct foo {
   int a, b;
@@ -15,6 +14,8 @@ struct foo {
 struct bat {
   int a;
 };
+
+struct bat l;
 
 int main() {
   l.a = 1;
