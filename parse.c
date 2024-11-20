@@ -5,6 +5,7 @@
 #include "log.h"
 #include "program.h"
 #include "util.h"
+#include "var_table.h"
 #include "vector.h"
 
 #include <ctype.h>
@@ -21,6 +22,8 @@ struct parser {
   struct arena_allocator *arena;
   struct lexer *lexer;
 
+  struct var_table ty_table;
+
   struct vector *diagnostics;
 };
 
@@ -33,6 +36,8 @@ enum parser_create_result parser_create(struct preprocessed_program *program,
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }
+
+  p->ty_table = var_table_create(p->arena);
 
   *parser = p;
 
@@ -458,6 +463,27 @@ static bool parse_struct_or_union_specifier(
   return true;
 }
 
+static bool parse_typedef_name(struct parser *parser,
+                               struct token *typedef_name) {
+  struct token identifier;
+  peek_token(parser->lexer, &identifier);
+
+  if (identifier.ty != LEX_TOKEN_TY_IDENTIFIER) {
+    return false;
+  }
+
+  struct var_table_entry *entry = var_table_get_entry(
+      &parser->ty_table, identifier_str(parser, &identifier));
+  if (!entry) {
+    return false;
+  }
+
+  *typedef_name = identifier;
+
+  consume_token(parser->lexer, identifier);
+  return true;
+}
+
 static bool parse_type_specifier(struct parser *parser,
                                  struct ast_type_specifier *type_specifier) {
 
@@ -477,10 +503,10 @@ static bool parse_type_specifier(struct parser *parser,
     return true;
   }
 
-  // if (parse_identifier(parser, &type_specifier->typedef_name)) {
-  //   type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
-  //   return true;
-  // }
+  if (parse_typedef_name(parser, &type_specifier->typedef_name)) {
+    type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
+    return true;
+  }
 
   return false;
 }
@@ -1086,6 +1112,8 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   default:
     return false;
   }
+
+  consume_token(parser->lexer, token);
 
   cnst->ty = ty;
   cnst->int_value = int_value;
@@ -1832,6 +1860,39 @@ static bool parse_declaration(struct parser *parser,
     return false;
   }
 
+  // FIXME: inefficient
+  bool is_typedef = false;
+  for (size_t i = 0; i < declaration->specifier_list.num_decl_specifiers; i++) {
+    struct ast_declaration_specifier *spec =
+        &declaration->specifier_list.decl_specifiers[i];
+
+    if (spec->ty == AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER &&
+        spec->storage_class_specifier == AST_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
+      is_typedef = true;
+      break;
+    }
+  }
+
+  if (is_typedef) {
+    for (size_t i = 0; i < declaration->declarator_list.num_init_declarators;
+         i++) {
+      struct ast_init_declarator *decl =
+          &declaration->declarator_list.init_declarators[i];
+
+      for (size_t j = 0;
+           j < decl->declarator.direct_declarator_list.num_direct_declarators;
+           j++) {
+        struct ast_direct_declarator *direct_decl =
+            &decl->declarator.direct_declarator_list.direct_declarators[j];
+        if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
+          UNUSED struct var_table_entry *entry = var_table_create_entry(
+              &parser->ty_table,
+              identifier_str(parser, &direct_decl->identifier));
+        }
+      }
+    }
+  }
+
   return true;
 }
 
@@ -2316,8 +2377,11 @@ static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
+  push_scope(&parser->ty_table);
+
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
     backtrack(parser->lexer, pos);
+    pop_scope(&parser->ty_table);
     return false;
   }
 
@@ -2336,6 +2400,8 @@ static bool parse_compoundstmt(struct parser *parser,
 
   EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
             "expected } at end of compound stmt");
+
+  pop_scope(&parser->ty_table);
   return true;
 }
 
