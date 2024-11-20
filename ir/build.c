@@ -1281,10 +1281,22 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
     ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
   }
 
-  if (ref->ty == VAR_REF_TY_SSA) {
+  switch (ref->ty) {
+  case VAR_REF_TY_SSA:
     ref->op = op;
     return op;
-  } else {
+  case VAR_REF_TY_LCL: {
+    // FIXME: is this right
+    struct ir_op *ld = alloc_ir_op(irb->func, stmt);
+    ld->ty = IR_OP_TY_STORE_LCL;
+    ld->var_ty = op->var_ty;
+    ld->store_lcl = (struct ir_op_store_lcl){.value = op};
+
+    // its okay that we use the thing assigned to the global, rather than
+    // reloading the global
+    return op;
+  }
+  case VAR_REF_TY_GLB: {
     // FIXME: is this right
     struct ir_op *ld = alloc_ir_op(irb->func, stmt);
     ld->ty = IR_OP_TY_STORE_GLB;
@@ -1294,6 +1306,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
     // its okay that we use the thing assigned to the global, rather than
     // reloading the global
     return op;
+  }
   }
 }
 
@@ -1471,7 +1484,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     ty = TD_BINARY_OP_TY_RSHIFT;
     goto compound_assg;
 
-  compound_assg: {
+  compound_assg : {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
     struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr);
@@ -2500,39 +2513,49 @@ build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
 static void build_ir_for_auto_var(struct ir_func_builder *irb,
                                   struct ir_stmt **stmt,
                                   struct td_var_declaration *decl) {
-  struct ir_op *address;
+  struct ir_lcl *lcl;
+  struct ir_var_ty var_ty =
+      var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
+
   if (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
       decl->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-    struct ir_var_ty var_ty =
-        var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
-
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(&decl->var, (*stmt)->basicblock);
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
     ref->lcl = add_local(irb->func, &var_ty);
 
-    address = build_ir_for_addressof_var(irb, stmt, &decl->var);
+    // address = build_ir_for_addressof_var(irb, stmt, &decl->var);
+    lcl = ref->lcl;
   } else {
-    address = NULL;
+    lcl = NULL;
   }
 
-  struct ir_op *assignment;
+  struct ir_op *assignment = NULL;
   if (decl->init) {
+    struct ir_op *address = NULL;
+
+    if (lcl) {
+      address = alloc_ir_op(irb->func, *stmt);
+      address->ty = IR_OP_TY_ADDR;
+      address->var_ty = var_ty_make_pointer(irb->func->unit, &var_ty);
+      address->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+    }
+
     assignment =
         build_ir_for_init(irb, stmt, address, &decl->var_ty, decl->init);
-  } else {
+  } else if (!lcl) {
     assignment = alloc_ir_op(irb->func, *stmt);
     assignment->ty = IR_OP_TY_UNDF;
     assignment->var_ty = var_ty_for_td_var_ty(irb->func->unit, &decl->var_ty);
   }
 
-  if (address) {
+  if (lcl && assignment) {
     struct ir_op *str = alloc_ir_op(irb->func, *stmt);
-    str->ty = IR_OP_TY_STORE_ADDR;
+    str->ty = IR_OP_TY_STORE_LCL;
     str->var_ty = IR_OP_VAR_TY_NONE;
-    str->store_addr =
-        (struct ir_op_store_addr){.value = assignment, .addr = address};
-  } else {
+    str->lcl = lcl;
+    str->store_lcl = (struct ir_op_store_lcl){.value = assignment};
+  } else if (assignment) {
     var_assg(irb, *stmt, assignment, &decl->var);
   }
 }

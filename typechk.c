@@ -939,8 +939,17 @@ static struct td_var_ty type_abstract_declarator(
   return var_ty;
 }
 
-TODO_FUNC(static struct td_var_ty td_var_ty_for_typedef(
-    struct typechk *tchk, const struct token *identifier))
+static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
+                                              const struct token *identifier) {
+  struct var_table_entry *entry = var_table_get_entry(
+      &tchk->ty_table, identifier_str(tchk->parser, identifier));
+
+  if (!entry) {
+    WARN("typedef not recognised");
+  }
+
+  return *entry->var_ty;
+}
 
 struct td_declarator {
   struct td_var_ty var_ty;
@@ -2398,9 +2407,12 @@ type_init_declarator(struct typechk *tchk,
   struct td_var_declaration td_var_decl =
       type_declarator(tchk, specifiers, &init_declarator->declarator);
 
-  // FIXME: respect specifiers typedef
-  struct var_table_entry *entry =
-      var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
+  struct var_table_entry *entry;
+  if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
+    entry = var_table_create_entry(&tchk->ty_table, td_var_decl.var.identifier);
+  } else {
+    entry = var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
+  }
 
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = td_var_decl.var;
