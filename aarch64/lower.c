@@ -22,6 +22,14 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   op->binary_op.rhs = zero;
 }
 
+// variable shifts require both operands to be the same size, as they use the same register
+// this is fine, because we can just "fake" the type required and get the correct behaviour
+static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
+  struct ir_op_binary_op *binary_op = &op->binary_op;
+
+  binary_op->rhs->var_ty = binary_op->lhs->var_ty;
+}
+
 // ARM has no quotient function
 // so instead of `x = a % b` we do
 // `c = a / b; x = a - (c * b)`
@@ -343,9 +351,18 @@ void aarch64_lower(struct ir_unit *unit) {
               }
               break;
             case IR_OP_TY_BINARY_OP:
-              if (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
-                  op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT) {
-                lower_quot(func, op);
+              switch (op->binary_op.ty) {
+                case IR_OP_BINARY_OP_TY_UQUOT:
+                case IR_OP_BINARY_OP_TY_SQUOT:
+                  lower_quot(func, op);
+                  break;
+                case IR_OP_BINARY_OP_TY_SRSHIFT:
+                case IR_OP_BINARY_OP_TY_LSHIFT:
+                case IR_OP_BINARY_OP_TY_URSHIFT:
+                  lower_shift(func, op);
+                  break;
+                default:
+                  break;
               }
               break;
             }

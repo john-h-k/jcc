@@ -2528,11 +2528,6 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
     def_ty = IR_GLB_DEF_TY_UNDEFINED;
   }
 
-  if (ref && def_ty == IR_GLB_DEF_TY_TENTATIVE) {
-    // already defined, and this is tentative, so do nothing
-    return;
-  }
-
   if (ref && linkage == IR_LINKAGE_EXTERNAL &&
       ref->glb->linkage == IR_LINKAGE_INTERNAL) {
     // extern but prev was static, stays static
@@ -2549,6 +2544,11 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
 
   ref->glb->def_ty = def_ty;
   ref->glb->linkage = linkage;
+
+  if (ref && def_ty == IR_GLB_DEF_TY_TENTATIVE) {
+    // already defined, and this is tentative, so do nothing
+    return;
+  }
 
   if (def_ty != IR_GLB_DEF_TY_DEFINED) {
     return;
