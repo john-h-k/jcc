@@ -1,5 +1,6 @@
 #include "hashtbl.h"
 
+#include "hash.h"
 #include "util.h"
 #include "vector.h"
 
@@ -33,16 +34,9 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
 }
 
 hash_t hashtbl_hash_str(const void *obj) {
-  const char *str = obj;
-
-  hash_t hash = 5381;
-  int c;
-
-  while ((c = *str++)) {
-    hash = ((hash << 5) + hash) + c;
-  }
-
-  return hash;
+  struct hasher hasher = hasher_create();
+  hasher_hash_str(&hasher, obj);
+  return hasher_finish(&hasher);
 }
 
 bool hashtbl_eq_str(const void *l, const void *r) { return strcmp(l, r) == 0; }
