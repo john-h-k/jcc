@@ -52,15 +52,13 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       struct ir_basicblock *next_cond =
           insert_after_ir_basicblock(func, prev_bb);
 
-      prev_bb->ty = IR_BASICBLOCK_TY_SPLIT;
-      prev_bb->split = (struct ir_basicblock_split){
-          .true_target =  split_case->target, .false_target = next_cond};
+
+      make_basicblock_split(func, prev_bb, split_case->target, next_cond);
 
       prev_bb = next_cond;
     } else {
-      prev_bb->ty = IR_BASICBLOCK_TY_SPLIT;
-      prev_bb->split = (struct ir_basicblock_split){
-          .true_target =  split_case->target, .false_target = bb_switch->default_target};
+      make_basicblock_split(func, prev_bb, split_case->target,
+                                  bb_switch->default_target);
     }
   }
 }
