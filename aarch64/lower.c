@@ -117,19 +117,19 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty_info info = var_ty_info(func->unit, &op->var_ty);
 
   bool simple_copy = true;
-  enum ir_op_var_primitive_ty simple_copy_ty;
+  enum ir_var_primitive_ty simple_copy_ty;
   switch (info.size) {
   case 1:
-    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I8;
+    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I8;
     break;
   case 2:
-    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I16;
+    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I16;
     break;
   case 4:
-    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I32;
+    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I32;
     break;
   case 8:
-    simple_copy_ty = IR_OP_VAR_PRIMITIVE_TY_I64;
+    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I64;
     break;
 
   default:
@@ -137,7 +137,7 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
   }
 
   if (simple_copy) {
-    op->var_ty = (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
+    op->var_ty = (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
                                     .primitive = simple_copy_ty};
     return;
   }
@@ -190,7 +190,7 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
                                  .rhs = offset_cnst};
 
     struct ir_op *store = insert_after_ir_op(
-        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
     store->store_addr =
         (struct ir_op_store_addr){.addr = dest_addr, .value = load};
 
@@ -226,7 +226,7 @@ static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
                                  .rhs = offset_cnst};
 
     struct ir_op *store = insert_after_ir_op(
-        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
     store->store_addr =
         (struct ir_op_store_addr){.addr = dest_addr, .value = load};
   }
@@ -241,8 +241,8 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_F32: {
-    int_ty = IR_OP_VAR_TY_I32;
+  case IR_VAR_PRIMITIVE_TY_F32: {
+    int_ty = IR_VAR_TY_I32;
 
     union {
       float f;
@@ -253,8 +253,8 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
 
     break;
   }
-  case IR_OP_VAR_PRIMITIVE_TY_F64: {
-    int_ty = IR_OP_VAR_TY_I64;
+  case IR_VAR_PRIMITIVE_TY_F64: {
+    int_ty = IR_VAR_TY_I64;
 
     union {
       double d;

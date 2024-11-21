@@ -109,21 +109,21 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
-  case IR_OP_VAR_TY_TY_NONE: {
+  case IR_VAR_TY_TY_NONE: {
     fprintf(file, "<none>");
     return;
   }
-  case IR_OP_VAR_TY_TY_VARIADIC: {
+  case IR_VAR_TY_TY_VARIADIC: {
     fprintf(file, "<VARIADIC>");
     return;
   }
-  case IR_OP_VAR_TY_TY_POINTER: {
+  case IR_VAR_TY_TY_POINTER: {
     fprintf(file, "PTR [ ");
     debug_print_var_ty_string(file, iru, var_ty->pointer.underlying);
     fprintf(file, " ]");
     return;
   }
-  case IR_OP_VAR_TY_TY_ARRAY: {
+  case IR_VAR_TY_TY_ARRAY: {
     fprintf(file, "ARRAY [ ");
     debug_print_var_ty_string(file, iru, var_ty->array.underlying);
     fprintf(file, ", ");
@@ -131,7 +131,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     fprintf(file, " ]");
     return;
   }
-  case IR_OP_VAR_TY_TY_FUNC: {
+  case IR_VAR_TY_TY_FUNC: {
     fprintf(file, "(");
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       debug_print_var_ty_string(file, iru, &var_ty->func.params[i]);
@@ -144,7 +144,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     debug_print_var_ty_string(file, iru, var_ty->func.ret_ty);
     return;
   }
-  case IR_OP_VAR_TY_TY_STRUCT: {
+  case IR_VAR_TY_TY_STRUCT: {
     struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->struct_ty.num_fields; i++) {
@@ -157,7 +157,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     fprintf(file, " ]");
     break;
   }
-  case IR_OP_VAR_TY_TY_UNION: {
+  case IR_VAR_TY_TY_UNION: {
     struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->union_ty.num_fields; i++) {
@@ -170,28 +170,28 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     fprintf(file, " ]");
     break;
   }
-  case IR_OP_VAR_TY_TY_PRIMITIVE: {
+  case IR_VAR_TY_TY_PRIMITIVE: {
     const char *name;
     switch (var_ty->primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
+    case IR_VAR_PRIMITIVE_TY_I8:
       name = "i8";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
+    case IR_VAR_PRIMITIVE_TY_I16:
       name = "i16";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_I32:
       name = "i32";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_I64:
       name = "i64";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_F16:
       name = "f16";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
+    case IR_VAR_PRIMITIVE_TY_F32:
       name = "f32";
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
+    case IR_VAR_PRIMITIVE_TY_F64:
       name = "f64";
       break;
     }

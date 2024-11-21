@@ -98,7 +98,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_ADDR:
     return true;
   case IR_OP_TY_CALL:
-    return op->call.func_ty.func.ret_ty->ty != IR_OP_VAR_TY_TY_NONE;
+    return op->call.func_ty.func.ret_ty->ty != IR_VAR_TY_TY_NONE;
   case IR_OP_TY_STORE_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_STORE_ADDR:
@@ -365,23 +365,23 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   }
 }
 
-const struct ir_var_ty IR_OP_VAR_TY_NONE = {.ty = IR_OP_VAR_TY_TY_NONE};
-const struct ir_var_ty IR_OP_VAR_TY_I8 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I8};
-const struct ir_var_ty IR_OP_VAR_TY_I16 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I16};
-const struct ir_var_ty IR_OP_VAR_TY_I32 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I32};
-const struct ir_var_ty IR_OP_VAR_TY_I64 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
-const struct ir_var_ty IR_OP_VAR_TY_F32 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F32};
-const struct ir_var_ty IR_OP_VAR_TY_F64 = {
-    .ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = IR_OP_VAR_PRIMITIVE_TY_F64};
-const struct ir_var_ty IR_OP_VAR_TY_VARIADIC = {.ty = IR_OP_VAR_TY_TY_VARIADIC};
+const struct ir_var_ty IR_VAR_TY_NONE = {.ty = IR_VAR_TY_TY_NONE};
+const struct ir_var_ty IR_VAR_TY_I8 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I8};
+const struct ir_var_ty IR_VAR_TY_I16 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I16};
+const struct ir_var_ty IR_VAR_TY_I32 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I32};
+const struct ir_var_ty IR_VAR_TY_I64 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I64};
+const struct ir_var_ty IR_VAR_TY_F32 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_F32};
+const struct ir_var_ty IR_VAR_TY_F64 = {
+    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_F64};
+const struct ir_var_ty IR_VAR_TY_VARIADIC = {.ty = IR_VAR_TY_TY_VARIADIC};
 
-bool is_func_variadic(const struct ir_op_var_func_ty *ty) {
-  return ty->flags & IR_OP_VAR_FUNC_TY_FLAG_VARIADIC;
+bool is_func_variadic(const struct ir_var_func_ty *ty) {
+  return ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC;
 }
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -966,11 +966,11 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
 }
 
 void make_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
-                            enum ir_op_var_primitive_ty ty,
+                            enum ir_var_primitive_ty ty,
                             unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
-      (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE, .primitive = ty};
+      (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = ty};
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
@@ -983,9 +983,9 @@ void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
 
 struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
-  case IR_OP_VAR_TY_TY_POINTER:
+  case IR_VAR_TY_TY_POINTER:
     return *var_ty->pointer.underlying;
-  case IR_OP_VAR_TY_TY_ARRAY:
+  case IR_VAR_TY_TY_ARRAY:
     return *var_ty->array.underlying;
   default:
     bug("non pointer/array passed");
@@ -999,8 +999,8 @@ struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
   *copied = *underlying;
 
   struct ir_var_ty var_ty;
-  var_ty.ty = IR_OP_VAR_TY_TY_POINTER;
-  var_ty.pointer = (struct ir_op_var_pointer_ty){.underlying = copied};
+  var_ty.ty = IR_VAR_TY_TY_POINTER;
+  var_ty.pointer = (struct ir_var_pointer_ty){.underlying = copied};
 
   return var_ty;
 }
@@ -1013,8 +1013,8 @@ struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
   *copied = *underlying;
 
   struct ir_var_ty var_ty;
-  var_ty.ty = IR_OP_VAR_TY_TY_ARRAY;
-  var_ty.array = (struct ir_op_var_array_ty){.num_elements = num_elements,
+  var_ty.ty = IR_VAR_TY_TY_ARRAY;
+  var_ty.array = (struct ir_var_array_ty){.num_elements = num_elements,
                                              .underlying = copied};
 
   return var_ty;
@@ -1024,12 +1024,12 @@ struct ir_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
-  return (struct ir_var_ty){.ty = IR_OP_VAR_TY_TY_PRIMITIVE,
-                            .primitive = IR_OP_VAR_PRIMITIVE_TY_I64};
+  return (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
+                            .primitive = IR_VAR_PRIMITIVE_TY_I64};
 }
 
 struct ir_op *alloc_integral_constant(struct ir_func *irb, struct ir_stmt *stmt,
-                                      enum ir_op_var_primitive_ty primitive,
+                                      enum ir_var_primitive_ty primitive,
                                       unsigned long long value);
 
 bool valid_basicblock(struct ir_basicblock *basicblock) {
@@ -1224,48 +1224,48 @@ struct ir_lcl *add_local(struct ir_func *irb, struct ir_var_ty *var_ty) {
 }
 
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
-  return var_ty->ty == IR_OP_VAR_TY_TY_STRUCT ||
-         var_ty->ty == IR_OP_VAR_TY_TY_UNION;
+  return var_ty->ty == IR_VAR_TY_TY_STRUCT ||
+         var_ty->ty == IR_VAR_TY_TY_UNION;
 }
 
 bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
-                         enum ir_op_var_primitive_ty primitive) {
-  return var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
+                         enum ir_var_primitive_ty primitive) {
+  return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE &&
          var_ty->primitive == primitive;
 }
 
 bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
-  if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
+  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
 
   switch (var_ty->primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I8:
+  case IR_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_I64:
     return true;
-  case IR_OP_VAR_PRIMITIVE_TY_F16:
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
     return false;
   }
 }
 
 bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
-  if (var_ty->ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
+  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
 
   switch (var_ty->primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I8:
+  case IR_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_I64:
     return false;
-  case IR_OP_VAR_PRIMITIVE_TY_F16:
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
     return true;
   }
 }
@@ -1275,37 +1275,37 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   // FIXME: pointer size!
 
   switch (ty->ty) {
-  case IR_OP_VAR_TY_TY_NONE:
+  case IR_VAR_TY_TY_NONE:
     bug("IR_OP_VAR_TY_TY_NONE has no size");
-  case IR_OP_VAR_TY_TY_VARIADIC:
+  case IR_VAR_TY_TY_VARIADIC:
     bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
-  case IR_OP_VAR_TY_TY_FUNC:
-  case IR_OP_VAR_TY_TY_POINTER:
+  case IR_VAR_TY_TY_FUNC:
+  case IR_VAR_TY_TY_POINTER:
     return (struct ir_var_ty_info){.size = 8, .alignment = 8};
-  case IR_OP_VAR_TY_TY_PRIMITIVE:
+  case IR_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
+    case IR_VAR_PRIMITIVE_TY_I8:
       return (struct ir_var_ty_info){.size = 1, .alignment = 1};
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
+    case IR_VAR_PRIMITIVE_TY_I16:
       return (struct ir_var_ty_info){.size = 2, .alignment = 2};
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_I32:
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_I64:
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
-    case IR_OP_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_F16:
       return (struct ir_var_ty_info){.size = 2, .alignment = 2};
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
+    case IR_VAR_PRIMITIVE_TY_F32:
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
+    case IR_VAR_PRIMITIVE_TY_F64:
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
     }
-  case IR_OP_VAR_TY_TY_ARRAY: {
+  case IR_VAR_TY_TY_ARRAY: {
     struct ir_var_ty_info element_info = var_ty_info(iru, ty->array.underlying);
     size_t size = ty->array.num_elements * element_info.size;
     return (struct ir_var_ty_info){.size = size,
                                    .alignment = element_info.alignment};
   }
-  case IR_OP_VAR_TY_TY_STRUCT: {
+  case IR_VAR_TY_TY_STRUCT: {
     size_t max_alignment = 0;
     size_t size = 0;
     size_t num_fields = ty->struct_ty.num_fields;
@@ -1328,7 +1328,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                    .num_fields = num_fields,
                                    .offsets = offsets};
   }
-  case IR_OP_VAR_TY_TY_UNION: {
+  case IR_VAR_TY_TY_UNION: {
     size_t max_alignment = 0;
     size_t size = 0;
     size_t num_fields = ty->struct_ty.num_fields;
@@ -1363,7 +1363,7 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
     // storing undf makes no sense
     if (op->ty != IR_OP_TY_UNDF) {
       struct ir_op *store =
-          insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
+          insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL, IR_VAR_TY_NONE);
       store->lcl = op->lcl;
       store->store_lcl.value = op;
       store->reg = NO_REG;
