@@ -8,6 +8,10 @@ fi
 
 
 for file in $(find $(dirname $0) -name '*.c' -print | sort); do
+  if [[ $file == *"/programs/"* ]]; then
+    continue
+  fi
+
   echo "Testing $file..."
   expected=$(grep -i "Expected value:" $file | head -1 | grep -Eo '[0-9]+')
   stdin=$(grep -i "stdin" $file | head -1 | sed -n 's/^\/\/ stdin: //p')
