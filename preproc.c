@@ -1,12 +1,14 @@
 #include "preproc.h"
 
 #include "alloc.h"
+#include "hash.h"
+#include "hashtbl.h"
+#include "io.h"
 #include "liveness.h"
 #include "log.h"
 #include "program.h"
 #include "util.h"
 #include "vector.h"
-#include "io.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -336,6 +338,21 @@ static void preproc_next_non_whitespace_token(struct preproc *preproc,
   } while (token->ty == PREPROC_TOKEN_TY_WHITESPACE);
 }
 
+
+static struct vector *preproc_tokens_til_eol(struct preproc *preproc, struct vector *buffer) {
+  struct vector *tokens = vector_create(sizeof(struct preproc_token));
+
+  struct preproc_token token;
+  do {
+    preproc_next_token(preproc, &token);
+    vector_push_back(tokens, &token);
+  } while (token.ty != PREPROC_TOKEN_TY_NEWLINE);
+
+  vector_push_back(buffer, &token);
+
+  return tokens;
+}
+
 static bool token_streq(struct preproc *preproc, struct preproc_token token,
                         const char *str) {
   size_t token_len = token.span.end.idx - token.span.start.idx;
@@ -344,7 +361,38 @@ static bool token_streq(struct preproc *preproc, struct preproc_token token,
   return strncmp(&preproc->text[token.span.start.idx], str, len) == 0;
 }
 
+struct preproc_define {
+  struct preproc_token name;
+  struct vector *value;
+};
+
+struct preproc_identifier {
+  const char *value;
+  size_t length;
+};
+
+static void hash_preproc_ident(struct hasher *hasher, const void *value) {
+  const struct preproc_identifier *ident = value;
+
+  hasher_hash_bytes(hasher, ident->value, ident->length);
+}
+
+static bool preproc_ident_eq(const void *l, const void *r) {
+  const struct preproc_identifier *l_ident = l;
+  const struct preproc_identifier *r_ident = r;
+
+  if (l_ident->length != r_ident->length) {
+    return false;
+  }
+
+  return memcmp(l_ident->value, r_ident->value, l_ident->length) == 0;
+}
+
 struct preprocessed_program preproc_process(struct preproc *preproc) {
+  struct hashtbl *defines = hashtbl_create(
+      sizeof(struct preproc_identifier), sizeof(struct preproc_define),
+      hash_preproc_ident, preproc_ident_eq);
+
   const char *original_text = preproc->text;
   size_t original_len = preproc->len;
 
@@ -380,10 +428,17 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
 
   // now we do tokenization
 
+  struct vector *buffer_tokens = vector_create(sizeof(struct preproc_token));
+
   size_t cur_line = preproc->pos.line;
   struct preproc_token token = {.ty = PREPROC_TOKEN_TY_UNKNOWN};
   while (token.ty != PREPROC_TOKEN_TY_EOF) {
-    preproc_next_token(preproc, &token);
+    if (vector_empty(buffer_tokens)) {
+      preproc_next_token(preproc, &token);
+    } else {
+      token = *(struct preproc_token *)vector_pop(buffer_tokens);
+    }
+
     trace("found preproc token %s from %zu:%zu (%zu) to %zu:%zu (%zu)\n",
           preproc_token_name(token.ty), token.span.start.line,
           token.span.start.col, token.span.start.idx, token.span.end.line,
@@ -426,7 +481,8 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         const char *content = NULL;
         if (is_angle) {
           for (size_t i = 0; i < preproc->num_include_paths; i++) {
-            const char *path = path_combine(preproc->include_paths[i], filename);
+            const char *path =
+                path_combine(preproc->include_paths[i], filename);
             content = read_file(path);
             if (content) {
               break;
@@ -438,11 +494,28 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         todo("include");
         // break;
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-          token_streq(preproc, directive, "define")) {
-        todo("define");
-      }
+                 token_streq(preproc, directive, "define")) {
 
-      todo("other directives");
+        struct preproc_token def_name;
+        preproc_next_non_whitespace_token(preproc, &def_name);
+
+        struct vector *tokens = preproc_tokens_til_eol(preproc, buffer_tokens);
+
+        struct preproc_identifier ident = {
+          .value = &preproc->text[def_name.span.start.idx],
+          .length = text_span_len(&def_name.span)
+        };
+
+        struct preproc_define define = {
+          .name = def_name,
+          .value = tokens
+        };
+
+        hashtbl_insert(defines, &ident, &define);
+      } else {
+        todo("other directives");
+      }
+      break;
     }
     case PREPROC_TOKEN_TY_WHITESPACE:
       // keep leading whitespace
@@ -451,9 +524,23 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       } else {
         goto space;
       }
-    case PREPROC_TOKEN_TY_IDENTIFIER:
+    case PREPROC_TOKEN_TY_IDENTIFIER: {
       // if identifier is a macro do something else
+      struct preproc_identifier ident = {
+        .value = &preproc->text[token.span.start.idx],
+        .length = text_span_len(&token.span)
+      };
+
+      struct preproc_define *define = hashtbl_lookup(defines, &ident);
+
+      if (define) {
+        vector_extend(buffer_tokens, vector_head(define->value), vector_length(define->value));
+
+        break;
+      }
+
       goto copy;
+    }
     case PREPROC_TOKEN_TY_PREPROC_NUMBER:
     case PREPROC_TOKEN_TY_STRING_LITERAL:
     case PREPROC_TOKEN_TY_PUNCTUATOR:
@@ -469,7 +556,7 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       break;
     }
     case PREPROC_TOKEN_TY_COMMENT:
-    space: {
+    space : {
       // comments are replaced with a single space
       char space = ' ';
       vector_push_back(preprocessed, &space);
