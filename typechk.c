@@ -494,6 +494,9 @@ static unsigned long long
 type_constant_integral_expr(UNUSED struct typechk *tchk,
                             const struct ast_expr *expr);
 
+// static unsigned long long type_constant_expr(UNUSED struct typechk *tchk,
+//                                              const struct ast_expr *expr);
+
 static struct td_declaration
 type_declaration(struct typechk *tchk,
                  const struct ast_declaration *declaration);
@@ -648,7 +651,8 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
-                const struct ast_declarator *declarator);
+                const struct ast_declarator *declarator,
+                const struct ast_init *init);
 
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -656,13 +660,57 @@ static struct td_var_ty type_abstract_declarator(
 
 static struct td_var_ty
 type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
-                      struct ast_array_declarator *array_declarator) {
+                      const struct ast_array_declarator *array_declarator,
+                      const struct ast_init *init) {
   struct td_var_ty array_ty = {
       .ty = TD_VAR_TY_TY_ARRAY,
   };
 
-  array_ty.array.size =
-      type_constant_integral_expr(tchk, array_declarator->size);
+  switch (array_declarator->ty) {
+  case AST_ARRAY_DECLARATOR_TY_STAR:
+    todo("star arrays");
+  case AST_ARRAY_DECLARATOR_TY_STATIC_SIZED:
+  case AST_ARRAY_DECLARATOR_TY_SIZED:
+    array_ty.array.size =
+        type_constant_integral_expr(tchk, array_declarator->size);
+    break;
+  case AST_ARRAY_DECLARATOR_TY_UNSIZED:
+    switch (init->ty) {
+    case AST_INIT_TY_EXPR:
+      WARN("cannot initialize unsized array with expression");
+    case AST_INIT_TY_INIT_LIST: {
+      const struct ast_init_list *init_list = &init->init_list;
+
+      size_t max_size = 0;
+      size_t size = 0;
+      for (size_t i = 0; i < init_list->num_inits; i++) {
+        const struct ast_init_list_init *init_list_init = &init_list->inits[i];
+
+        if (init_list_init->designator_list &&
+            init_list_init->designator_list->num_designators) {
+          const struct ast_designator *designator =
+              &init_list_init->designator_list->designators[0];
+
+          switch (designator->ty) {
+          case AST_DESIGNATOR_TY_FIELD:
+            WARN("field designator in array init");
+          case AST_DESIGNATOR_TY_INDEX:
+            size = type_constant_integral_expr(tchk, designator->index) + 1;
+            break;
+          }
+        } else {
+          size++;
+        }
+
+        max_size = MAX(max_size, size);
+      }
+
+      array_ty.array.size = max_size;
+      break;
+    }
+    }
+    break;
+  }
   array_ty.array.underlying =
       arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
   *array_ty.array.underlying = var_ty;
@@ -717,7 +765,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       continue;
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
-          type_declarator(tchk, &param_specifiers, &param->declarator);
+          type_declarator(tchk, &param_specifiers, &param->declarator, NULL);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty};
       break;
@@ -770,7 +818,7 @@ static struct td_var_ty type_abstract_declarator_inner(
       break;
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
-                                     direct_declarator->array_declarator);
+                                     direct_declarator->array_declarator, NULL);
 
       break;
     }
@@ -818,9 +866,9 @@ struct td_declarator {
   const char *identifier;
 };
 
-static struct td_var_declaration
-type_declarator_inner(struct typechk *tchk, const struct td_var_ty *outer_var_ty,
-                const struct ast_declarator *declarator) {
+static struct td_var_declaration type_declarator_inner(
+    struct typechk *tchk, const struct td_var_ty *outer_var_ty,
+    const struct ast_declarator *declarator, const struct ast_init *init) {
   struct td_var_declaration var_decl;
 
   struct td_var_ty var_ty = *outer_var_ty;
@@ -867,7 +915,7 @@ type_declarator_inner(struct typechk *tchk, const struct td_var_ty *outer_var_ty
     }
     case AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
-                                     direct_declarator->array_declarator);
+                                     direct_declarator->array_declarator, init);
 
       break;
     }
@@ -880,13 +928,13 @@ type_declarator_inner(struct typechk *tchk, const struct td_var_ty *outer_var_ty
   }
 
   debug_assert(found_ident, "decl without identifier?");
-  
+
   if (inner_idx != -1) {
     struct ast_direct_declarator *direct_declarator =
         &decl_list.direct_declarators[inner_idx];
 
     return type_declarator_inner(tchk, &var_ty,
-                                          direct_declarator->paren_declarator);
+                                 direct_declarator->paren_declarator, init);
   } else {
     var_decl.init = NULL;
     var_decl.var_ty = var_ty;
@@ -897,11 +945,12 @@ type_declarator_inner(struct typechk *tchk, const struct td_var_ty *outer_var_ty
 
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
-                const struct ast_declarator *declarator) {
+                const struct ast_declarator *declarator,
+                const struct ast_init *init) {
 
   // TODO: handle storage class/qualifier/function specifiers
-  return type_declarator_inner(tchk, &specifiers->type_specifier,
-                                        declarator);
+  return type_declarator_inner(tchk, &specifiers->type_specifier, declarator,
+                               init);
 }
 
 static struct td_specifiers
@@ -1824,6 +1873,18 @@ type_constant_integral_expr(UNUSED struct typechk *tchk,
   WARN("constant integral expr was expected");
 }
 
+// static unsigned long long type_constant_expr(UNUSED struct typechk *tchk,
+//                                              const struct ast_expr *expr) {
+//   switch (expr->ty) {
+//   case AST_EXPR_TY_CNST:
+//     return expr->cnst.int_value;
+//   case AST_EXPR_TY_UNARY_OP:
+//     return
+//   default:
+//     WARN("constant integral expr was expected");
+//   }
+// }
+
 static struct td_stmt type_stmt(struct typechk *tchk,
                                 const struct ast_stmt *stmt);
 
@@ -2126,7 +2187,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
                           TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   struct td_var_declaration declaration =
-      type_declarator(tchk, &specifiers, &func_def->declarator);
+      type_declarator(tchk, &specifiers, &func_def->declarator, NULL);
 
   struct var_table_entry *func_entry =
       var_table_create_entry(&tchk->var_table, declaration.var.identifier);
@@ -2164,8 +2225,10 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
     // decay array params to pointers here
     if (entry->var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-      struct td_var_ty underlying = td_var_ty_get_underlying(tchk, entry->var_ty);
-      *entry->var_ty = td_var_ty_make_pointer(tchk, &underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+      struct td_var_ty underlying =
+          td_var_ty_get_underlying(tchk, entry->var_ty);
+      *entry->var_ty = td_var_ty_make_pointer(tchk, &underlying,
+                                              TD_TYPE_QUALIFIER_FLAG_NONE);
     }
   }
 
@@ -2335,8 +2398,8 @@ static struct td_var_declaration
 type_init_declarator(struct typechk *tchk,
                      const struct td_specifiers *specifiers,
                      const struct ast_init_declarator *init_declarator) {
-  struct td_var_declaration td_var_decl =
-      type_declarator(tchk, specifiers, &init_declarator->declarator);
+  struct td_var_declaration td_var_decl = type_declarator(
+      tchk, specifiers, &init_declarator->declarator, init_declarator->init);
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
