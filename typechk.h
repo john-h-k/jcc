@@ -326,6 +326,8 @@ enum td_designator_ty {
 struct td_designator {
   enum td_designator_ty ty;
 
+  struct td_var_ty var_ty;
+
   union {
     const char *field;
     unsigned long long index;
@@ -333,6 +335,8 @@ struct td_designator {
 };
 
 struct td_designator_list {
+  struct td_var_ty var_ty;
+
   size_t num_designators;
   struct td_designator *designators;
 };
@@ -343,6 +347,8 @@ struct td_init_list_init {
 };
 
 struct td_init_list {
+  struct td_var_ty var_ty;
+
   struct td_init_list_init *inits;
   size_t num_inits;
 };
