@@ -2253,16 +2253,106 @@ static struct ir_build_init_list_layout
 build_init_list_layout(struct ir_unit *iru,
                        const struct td_init_list *init_list);
 
+struct init_range {
+  size_t offset;
+  size_t size;
+};
+
+static int sort_ranges_by_offset(const void *l, const void *r) {
+  return (ssize_t)((const struct init_range *)l)->offset -
+         (ssize_t)((const struct init_range *)r)->offset;
+}
+
+static void build_ir_zero_range(struct ir_func_builder *irb,
+                                       struct ir_stmt **stmt,
+                                       struct ir_op *insert_before,
+                                       struct ir_op *address,
+                                       size_t base_offset,
+                                       size_t byte_size) {
+  if (!byte_size) {
+    return;
+  }
+  
+  struct ir_var_ty cnst_ty;
+  ssize_t chunk_size;
+  if (byte_size >= 8) {
+    cnst_ty = IR_VAR_TY_I64;
+    chunk_size = 8;
+  } else if (byte_size >= 4) {
+    cnst_ty = IR_VAR_TY_I32;
+    chunk_size = 4;
+  } else if (byte_size >= 2) {
+    cnst_ty = IR_VAR_TY_I16;
+    chunk_size = 2;
+  } else {
+    cnst_ty = IR_VAR_TY_I8;
+    chunk_size = 1;
+  }
+
+  struct ir_op *zero;
+  if (insert_before) {
+    zero = insert_before_ir_op(irb->func, insert_before, IR_OP_TY_CNST,
+                               var_ty_for_pointer_size(irb->unit));
+  } else {
+    zero = alloc_ir_op(irb->func, *stmt);
+    zero->ty = IR_OP_TY_CNST;
+    zero->var_ty = cnst_ty;
+  }
+
+  zero->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = 0};
+
+  ssize_t remaining = byte_size;
+  size_t head = 0;
+
+  struct ir_op *last = zero;
+
+  while (remaining > 0) {
+    size_t offset = remaining >= chunk_size ? head : byte_size - chunk_size;
+
+    struct ir_op *offset_cnst = insert_after_ir_op(
+        irb->func, last, IR_OP_TY_CNST, var_ty_for_pointer_size(irb->unit));
+    offset_cnst->cnst =
+        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = base_offset + offset};
+
+    struct ir_op *init_address = insert_after_ir_op(
+        irb->func, offset_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+    init_address->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset_cnst};
+
+    struct ir_op *store = insert_after_ir_op(
+        irb->func, init_address, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
+    store->store_addr =
+        (struct ir_op_store_addr){.addr = init_address, .value = zero};
+
+    last = store;
+
+    remaining -= chunk_size;
+    head += chunk_size;
+  }
+}
+
 static void build_ir_for_init_list(struct ir_func_builder *irb,
                                    struct ir_stmt **stmt, struct ir_op *address,
                                    struct td_init_list *init_list) {
   struct ir_build_init_list_layout layout =
       build_init_list_layout(irb->unit, init_list);
 
+  struct vector *init_ranges = vector_create(sizeof(struct init_range));
+
+  // add a "fake range" to cover the start of the struct
+  struct init_range start_range = {.offset = 0, .size = 0};
+  vector_push_back(init_ranges, &start_range);
+
+  struct ir_op *first_init = NULL;
+
   for (size_t i = 0; i < layout.num_inits; i++) {
     struct ir_build_init *init = &layout.inits[i];
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, init->expr);
+
+    if (!first_init) {
+      first_init = value;
+    }
 
     struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
     offset->ty = IR_OP_TY_CNST;
@@ -2281,6 +2371,52 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     store->var_ty = IR_VAR_TY_NONE;
     store->store_addr =
         (struct ir_op_store_addr){.addr = init_address, .value = value};
+
+    struct ir_var_ty var_ty =
+        var_ty_for_td_var_ty(irb->unit, &init->expr->var_ty);
+    struct ir_var_ty_info info = var_ty_info(irb->unit, &var_ty);
+
+    struct init_range range = {.offset = init->offset, .size = info.size};
+
+    vector_push_back(init_ranges, &range);
+  }
+
+  qsort(vector_head(init_ranges), vector_length(init_ranges),
+        vector_element_size(init_ranges), sort_ranges_by_offset);
+
+  struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &init_list->var_ty);
+  struct ir_var_ty_info info = var_ty_info(irb->unit, &var_ty);
+
+  // add a "fake range" to cover the end of the struct
+  struct init_range end_range = {.offset = info.size, .size = 0};
+  vector_push_back(init_ranges, &end_range);
+
+  // TODO: can be more efficient, just does 8 byte blocks
+  size_t num_offsets = vector_length(init_ranges);
+
+  size_t head = 0;
+  size_t end = info.size;
+  for (size_t i = 0; i < num_offsets + 1; i++) {
+    size_t new_head;
+    size_t offset;
+
+    if (i < num_offsets) {
+      struct init_range *init_range = vector_get(init_ranges, i);
+      new_head = init_range->offset + init_range->size;
+      offset = init_range->offset;
+    } else {
+      new_head = head;
+      offset = end;
+    }
+
+    if (i != 0) {
+      ssize_t gap = (ssize_t)offset - (ssize_t)head;
+      debug_assert(gap >= 0, "bad math");
+
+      build_ir_zero_range(irb, stmt, first_init, address, head, gap);
+    }
+
+    head = new_head;
   }
 }
 
@@ -2475,8 +2611,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
       address->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
     }
 
-    assignment =
-        build_ir_for_init(irb, stmt, address, decl->init);
+    assignment = build_ir_for_init(irb, stmt, address, decl->init);
   } else if (!lcl) {
     assignment = alloc_ir_op(irb->func, *stmt);
     assignment->ty = IR_OP_TY_UNDF;
@@ -2932,7 +3067,8 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 //   case TD_VAR_TY_TY_ARRAY:
 //   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
 //   case TD_VAR_TY_TY_AGGREGATE:
-//     return (struct ir_var_value){.var_ty = var_ty_for_td_var_ty(iru, var_ty)};
+//     return (struct ir_var_value){.var_ty = var_ty_for_td_var_ty(iru,
+//     var_ty)};
 //   }
 // }
 
@@ -2981,8 +3117,8 @@ static size_t get_designator_offset(struct ir_unit *iru,
       const char *member_name = designator->field;
       struct ir_var_ty ir_member_ty;
       size_t member_offset;
-      get_member_info(iru, &cur_var_ty, member_name, &ir_member_ty, member_index,
-                      &member_offset, member_ty);
+      get_member_info(iru, &cur_var_ty, member_name, &ir_member_ty,
+                      member_index, &member_offset, member_ty);
 
       offset += member_offset;
       break;
@@ -3026,7 +3162,8 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
 //   struct ir_var_value_list value_list = {
 //       .num_values = init_list->num_inits,
 //       .values = arena_alloc(iru->arena,
-//                             sizeof(*value_list.values) * init_list->num_inits),
+//                             sizeof(*value_list.values) *
+//                             init_list->num_inits),
 //       .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
 //                                              init_list->num_inits)};
 
@@ -3069,11 +3206,10 @@ enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_ARRAY,
 };
 
-static void
-build_init_list_layout_entry(struct ir_unit *iru,
-                             const struct td_init_list *init_list,
-                             const struct td_var_ty *var_ty, size_t offset,
-                             struct vector *inits) {
+static void build_init_list_layout_entry(struct ir_unit *iru,
+                                         const struct td_init_list *init_list,
+                                         const struct td_var_ty *var_ty,
+                                         size_t offset, struct vector *inits) {
 
   enum init_list_layout_ty ty;
   size_t el_size;
@@ -3085,7 +3221,8 @@ build_init_list_layout_entry(struct ir_unit *iru,
     break;
   case TD_VAR_TY_TY_ARRAY:
     ty = INIT_LIST_LAYOUT_TY_ARRAY;
-    struct ir_var_ty el_ty = var_ty_for_td_var_ty(iru, var_ty->array.underlying);
+    struct ir_var_ty el_ty =
+        var_ty_for_td_var_ty(iru, var_ty->array.underlying);
     el_size = var_ty_info(iru, &el_ty).size;
     break;
   default:
@@ -3101,8 +3238,7 @@ build_init_list_layout_entry(struct ir_unit *iru,
     size_t init_offset = offset;
     struct td_var_ty member_ty;
     if (init->designator_list && init->designator_list->num_designators) {
-      init_offset += get_designator_offset(iru,
-                                           &init_list->var_ty,
+      init_offset += get_designator_offset(iru, &init_list->var_ty,
                                            init_list->inits[i].designator_list,
                                            &member_idx, &member_ty);
     } else {

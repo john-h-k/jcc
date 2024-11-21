@@ -736,17 +736,14 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   return func_ty;
 }
 
-static struct td_var_ty type_abstract_declarator(
-    struct typechk *tchk, const struct td_specifiers *specifiers,
+static struct td_var_ty type_abstract_declarator_inner(
+    struct typechk *tchk, const struct td_var_ty *outer_var_ty,
     const struct ast_abstract_declarator *abstract_declarator) {
-
-  // FIXME: handle other specifiers/qualifiers/etc
-  struct td_var_ty var_ty = specifiers->type_specifier;
-  // struct td_var_ty *inner = &var_ty;
-
   struct ast_pointer_list pointer_list = abstract_declarator->pointer_list;
   struct ast_direct_abstract_declarator_list decl_list =
       abstract_declarator->direct_abstract_declarator_list;
+
+  struct td_var_ty var_ty = *outer_var_ty;
 
   for (size_t i = 0; i < pointer_list.num_pointers; i++) {
     struct ast_pointer *pointer = &pointer_list.pointers[i];
@@ -757,13 +754,20 @@ static struct td_var_ty type_abstract_declarator(
         td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.qualifier_flags);
   }
 
+  ssize_t inner_idx = -1;
+
   for (size_t i = decl_list.num_direct_abstract_declarators; i; i--) {
     struct ast_direct_abstract_declarator *direct_declarator =
         &decl_list.direct_abstract_declarators[i - 1];
 
     switch (direct_declarator->ty) {
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR:
-      todo("");
+      if (inner_idx != -1) {
+        WARN("declarator has multiple sub-declarators");
+      }
+
+      inner_idx = i - 1;
+      break;
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_ARRAY_DECLARATOR: {
       var_ty = type_array_declarator(tchk, var_ty,
                                      direct_declarator->array_declarator);
@@ -778,7 +782,23 @@ static struct td_var_ty type_abstract_declarator(
     }
   }
 
-  return var_ty;
+  if (inner_idx != -1) {
+    struct ast_direct_abstract_declarator *direct_declarator =
+        &decl_list.direct_abstract_declarators[inner_idx];
+
+    return type_abstract_declarator_inner(tchk, &var_ty,
+                                          direct_declarator->paren_declarator);
+  } else {
+    return var_ty;
+  }
+}
+
+static struct td_var_ty type_abstract_declarator(
+    struct typechk *tchk, const struct td_specifiers *specifiers,
+    const struct ast_abstract_declarator *abstract_declarator) {
+  // TODO: handle storage class/qualifier/function specifiers
+  return type_abstract_declarator_inner(tchk, &specifiers->type_specifier,
+                                        abstract_declarator);
 }
 
 static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
@@ -799,13 +819,11 @@ struct td_declarator {
 };
 
 static struct td_var_declaration
-type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
+type_declarator_inner(struct typechk *tchk, const struct td_var_ty *outer_var_ty,
                 const struct ast_declarator *declarator) {
   struct td_var_declaration var_decl;
 
-  // FIXME: handle other specifiers/qualifiers/etc
-  struct td_var_ty var_ty = specifiers->type_specifier;
-  // struct td_var_ty *inner = &var_ty;
+  struct td_var_ty var_ty = *outer_var_ty;
 
   struct ast_pointer_list pointer_list = declarator->pointer_list;
   struct ast_direct_declarator_list decl_list =
@@ -821,6 +839,7 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
   }
 
   bool found_ident = false;
+  ssize_t inner_idx = -1;
 
   for (size_t i = decl_list.num_direct_declarators; i; i--) {
     struct ast_direct_declarator *direct_declarator =
@@ -838,12 +857,11 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
       found_ident = true;
       break;
     case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR: {
-      struct td_specifiers var_specifiers = {.type_specifier = var_ty};
-      struct td_var_declaration sub_var_decl = type_declarator(
-          tchk, &var_specifiers, direct_declarator->paren_declarator);
+      if (inner_idx != -1) {
+        WARN("declarator has multiple sub-declarators");
+      }
 
-      var_ty = sub_var_decl.var_ty;
-      var_decl.var = sub_var_decl.var;
+      inner_idx = i - 1;
       found_ident = true;
       break;
     }
@@ -862,11 +880,28 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
   }
 
   debug_assert(found_ident, "decl without identifier?");
+  
+  if (inner_idx != -1) {
+    struct ast_direct_declarator *direct_declarator =
+        &decl_list.direct_declarators[inner_idx];
 
-  var_decl.init = NULL;
-  var_decl.var_ty = var_ty;
+    return type_declarator_inner(tchk, &var_ty,
+                                          direct_declarator->paren_declarator);
+  } else {
+    var_decl.init = NULL;
+    var_decl.var_ty = var_ty;
 
-  return var_decl;
+    return var_decl;
+  }
+}
+
+static struct td_var_declaration
+type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
+                const struct ast_declarator *declarator) {
+
+  // TODO: handle storage class/qualifier/function specifiers
+  return type_declarator_inner(tchk, &specifiers->type_specifier,
+                                        declarator);
 }
 
 static struct td_specifiers
@@ -1493,7 +1528,8 @@ static bool try_resolve_member_access_ty_by_index(
   return true;
 }
 
-static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk, const struct td_var_ty *var_ty) {
+static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk,
+                                               const struct td_var_ty *var_ty) {
   if (var_ty->ty != TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     return *var_ty;
   }
@@ -1508,8 +1544,8 @@ type_memberaccess(struct typechk *tchk,
       .member = identifier_str(tchk->parser, &memberaccess->member)};
 
   *td_memberaccess.lhs = type_expr(tchk, memberaccess->lhs);
-  td_memberaccess.lhs->var_ty = type_incomplete_var_ty(tchk, &td_memberaccess.lhs->var_ty);
-
+  td_memberaccess.lhs->var_ty =
+      type_incomplete_var_ty(tchk, &td_memberaccess.lhs->var_ty);
 
   const char *member_name = identifier_str(tchk->parser, &memberaccess->member);
 
@@ -1535,14 +1571,16 @@ type_pointeraccess(struct typechk *tchk,
   *td_pointeraccess.lhs = type_expr(tchk, pointeraccess->lhs);
 
   switch (td_pointeraccess.lhs->var_ty.ty) {
-    case TD_VAR_TY_TY_POINTER:
-      *td_pointeraccess.lhs->var_ty.pointer.underlying = type_incomplete_var_ty(tchk, td_pointeraccess.lhs->var_ty.pointer.underlying);
-      break;
-    case TD_VAR_TY_TY_ARRAY:
-      *td_pointeraccess.lhs->var_ty.array.underlying = type_incomplete_var_ty(tchk, td_pointeraccess.lhs->var_ty.array.underlying);
-      break;
-    default:
-      WARN("doesn't make sense for pointer access");
+  case TD_VAR_TY_TY_POINTER:
+    *td_pointeraccess.lhs->var_ty.pointer.underlying = type_incomplete_var_ty(
+        tchk, td_pointeraccess.lhs->var_ty.pointer.underlying);
+    break;
+  case TD_VAR_TY_TY_ARRAY:
+    *td_pointeraccess.lhs->var_ty.array.underlying = type_incomplete_var_ty(
+        tchk, td_pointeraccess.lhs->var_ty.array.underlying);
+    break;
+  default:
+    WARN("doesn't make sense for pointer access");
   }
 
   const char *pointer_name =
@@ -2142,7 +2180,8 @@ static struct td_init type_init(struct typechk *tchk,
                                 const struct ast_init *init);
 
 static struct td_designator
-type_designator(struct typechk *tchk, const struct td_var_ty *var_ty, const struct ast_designator *designator) {
+type_designator(struct typechk *tchk, const struct td_var_ty *var_ty,
+                const struct ast_designator *designator) {
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD: {
     const char *field = identifier_str(tchk->parser, &designator->field);
@@ -2153,9 +2192,7 @@ type_designator(struct typechk *tchk, const struct td_var_ty *var_ty, const stru
     }
 
     return (struct td_designator){
-        .ty = TD_DESIGNATOR_TY_FIELD,
-        .var_ty = field_ty,
-        .field = field};
+        .ty = TD_DESIGNATOR_TY_FIELD, .var_ty = field_ty, .field = field};
   }
   case AST_DESIGNATOR_TY_INDEX: {
     struct td_var_ty el_ty = td_var_ty_get_underlying(tchk, var_ty);
@@ -2169,8 +2206,7 @@ type_designator(struct typechk *tchk, const struct td_var_ty *var_ty, const stru
 }
 
 static struct td_designator_list
-type_designator_list(struct typechk *tchk,
-                     const struct td_var_ty *var_ty,
+type_designator_list(struct typechk *tchk, const struct td_var_ty *var_ty,
                      const struct ast_designator_list *designator_list) {
   struct td_designator_list td_designator_list = {
       .num_designators = designator_list->num_designators,
@@ -2212,7 +2248,8 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
     init_list_var_ty = *next_field_var_ty;
   }
 
-  *td_init_list_init.init = type_init(tchk, &init_list_var_ty, init_list_init->init);
+  *td_init_list_init.init =
+      type_init(tchk, &init_list_var_ty, init_list_init->init);
 
   return td_init_list_init;
 }
@@ -2250,14 +2287,16 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
       }
       }
     } else if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, field_index, &member_var_ty)) {
+      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, field_index,
+                                                 &member_var_ty)) {
         WARN("bad field");
       }
     } else {
       member_var_ty = td_var_ty_get_underlying(tchk, var_ty);
     }
 
-    td_init_list.inits[i] = type_init_list_init(tchk, var_ty, &member_var_ty, init);
+    td_init_list.inits[i] =
+        type_init_list_init(tchk, var_ty, &member_var_ty, init);
 
     field_index++;
   }
@@ -2297,7 +2336,8 @@ type_init_declarator(struct typechk *tchk,
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
     entry = var_table_create_entry(&tchk->ty_table, td_var_decl.var.identifier);
   } else {
-    entry = var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
+    entry =
+        var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
   }
 
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));

@@ -779,22 +779,6 @@ static bool parse_direct_abstract_declarator(
     struct ast_direct_abstract_declarator *direct_abstract_declarator) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct ast_abstract_declarator abstract_declarator;
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
-      parse_abstract_declarator(parser, &abstract_declarator)) {
-    EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
-              "expected ) after abstract declarator after");
-
-    direct_abstract_declarator->ty =
-        AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR;
-    direct_abstract_declarator->paren_declarator = arena_alloc(
-        parser->arena, sizeof(*direct_abstract_declarator->paren_declarator));
-    *direct_abstract_declarator->paren_declarator = abstract_declarator;
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
-
   struct ast_array_declarator array_declarator;
   if (parse_ast_array_declarator(parser, &array_declarator)) {
     direct_abstract_declarator->ty =
@@ -815,6 +799,21 @@ static bool parse_direct_abstract_declarator(
     return true;
   }
 
+  struct ast_abstract_declarator abstract_declarator;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_abstract_declarator(parser, &abstract_declarator)) {
+    EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
+              "expected ) after abstract declarator after");
+
+    direct_abstract_declarator->ty =
+        AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR;
+    direct_abstract_declarator->paren_declarator = arena_alloc(
+        parser->arena, sizeof(*direct_abstract_declarator->paren_declarator));
+    *direct_abstract_declarator->paren_declarator = abstract_declarator;
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
   return false;
 }
 
@@ -870,21 +869,6 @@ parse_direct_declarator(struct parser *parser,
     return true;
   }
 
-  struct ast_declarator declarator;
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
-      parse_declarator(parser, &declarator)) {
-    EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
-              "expected ) after declarator after");
-
-    direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
-    direct_declarator->paren_declarator = arena_alloc(
-        parser->arena, sizeof(*direct_declarator->paren_declarator));
-    *direct_declarator->paren_declarator = declarator;
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
-
   struct ast_array_declarator array_declarator;
   if (parse_ast_array_declarator(parser, &array_declarator)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_ARRAY_DECLARATOR;
@@ -903,9 +887,26 @@ parse_direct_declarator(struct parser *parser,
     return true;
   }
 
+  struct ast_declarator declarator;
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
+      parse_declarator(parser, &declarator)) {
+    EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
+              "expected ) after declarator after");
+
+    direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
+    direct_declarator->paren_declarator = arena_alloc(
+        parser->arena, sizeof(*direct_declarator->paren_declarator));
+    *direct_declarator->paren_declarator = declarator;
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
   return false;
 }
 
+// TODO: both this and abstract_declarator_list should really be a recursive
+// type, rather than list because you have to do hacks like check if you haven't
+// yet seen a sub decl
 static void parse_direct_declarator_list(
     struct parser *parser,
     struct ast_direct_declarator_list *direct_declarator_list) {
@@ -915,12 +916,10 @@ static void parse_direct_declarator_list(
   struct ast_direct_declarator direct_declarator;
 
   while (parse_direct_declarator(parser, &direct_declarator)) {
-    if (vector_length(list) == 1) {
-      // first must be param or sub decl
-      const struct ast_direct_declarator *decl = vector_get(list, 0);
-      if (decl->ty != AST_DIRECT_DECLARATOR_TY_IDENTIFIER &&
-          decl->ty != AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
-        vector_pop(list);
+    if (vector_empty(list)) {
+      // first must be identifier or sub decl
+      if (direct_declarator.ty != AST_DIRECT_DECLARATOR_TY_IDENTIFIER &&
+          direct_declarator.ty != AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
         break;
       }
     }
@@ -1847,6 +1846,24 @@ parse_compoundexpr_with_semicolon(struct parser *parser,
   return false;
 }
 
+static void add_typedefs_to_table(
+    struct parser *parser,
+    const struct ast_direct_declarator_list *direct_decl_list) {
+  for (size_t i = 0; i < direct_decl_list->num_direct_declarators; i++) {
+
+    const struct ast_direct_declarator *direct_decl =
+        &direct_decl_list->direct_declarators[i];
+
+    if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
+      var_table_create_entry(&parser->ty_table,
+                             identifier_str(parser, &direct_decl->identifier));
+    } else if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
+      add_typedefs_to_table(
+          parser, &direct_decl->paren_declarator->direct_declarator_list);
+    }
+  }
+}
+
 static bool parse_declaration(struct parser *parser,
                               struct ast_declaration *declaration) {
   struct text_pos pos = get_position(parser->lexer);
@@ -1879,17 +1896,7 @@ static bool parse_declaration(struct parser *parser,
       struct ast_init_declarator *decl =
           &declaration->declarator_list.init_declarators[i];
 
-      for (size_t j = 0;
-           j < decl->declarator.direct_declarator_list.num_direct_declarators;
-           j++) {
-        struct ast_direct_declarator *direct_decl =
-            &decl->declarator.direct_declarator_list.direct_declarators[j];
-        if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
-          UNUSED struct var_table_entry *entry = var_table_create_entry(
-              &parser->ty_table,
-              identifier_str(parser, &direct_decl->identifier));
-        }
-      }
+      add_typedefs_to_table(parser, &decl->declarator.direct_declarator_list);
     }
   }
 
@@ -2435,15 +2442,21 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
   } else if (parse_abstract_declarator(parser, &param->abstract_declarator)) {
     param->ty = AST_PARAM_TY_ABSTRACT_DECL;
     return true;
+  } else {
+    param->ty = AST_PARAM_TY_ABSTRACT_DECL;
+    param->abstract_declarator = (struct ast_abstract_declarator){
+        .direct_abstract_declarator_list = {.direct_abstract_declarators = NULL,
+                                            .num_direct_abstract_declarators =
+                                                0},
+        .pointer_list = {.pointers = NULL, .num_pointers = 0}};
+    return true;
   }
-
-  backtrack(parser->lexer, pos);
-  return false;
 }
 
 static bool parse_paramlist(struct parser *parser,
                             struct ast_paramlist *param_list) {
-  // TODO: merge with parse_compoundexpr?
+  struct text_pos pos = get_position(parser->lexer);
+
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
     return false;
   }
@@ -2465,8 +2478,10 @@ static bool parse_paramlist(struct parser *parser,
   // allow trailing comma
   parse_token(parser, LEX_TOKEN_TY_COMMA);
 
-  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
-            "expected ) after params");
+  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
 
   param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
   param_list->num_params = vector_length(params);
