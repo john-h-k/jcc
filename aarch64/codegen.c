@@ -1585,7 +1585,8 @@ static void codegen_write_var_value(struct ir_unit *iru,
 
   case IR_VAR_TY_TY_FUNC:
   case IR_VAR_TY_TY_POINTER:
-    todo("todo");
+    memcpy(data, &value->int_value, sizeof(void *));
+    break;
 
   case IR_VAR_TY_TY_ARRAY:
   case IR_VAR_TY_TY_STRUCT:
