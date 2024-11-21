@@ -368,7 +368,7 @@ resolve_ternary_ty(UNUSED_ARG(struct typechk *tchk),
 }
 
 static struct td_var_ty
-resolve_usual_arithmetic_conversions(UNUSED_ARG(struct typechk *tchk),
+resolve_usual_arithmetic_conversions(struct typechk *tchk,
                                      const struct td_var_ty *lhs_ty,
                                      const struct td_var_ty *rhs_ty) {
   // it is expected integer promotion has already been performed
@@ -376,6 +376,20 @@ resolve_usual_arithmetic_conversions(UNUSED_ARG(struct typechk *tchk),
   debug_assert(lhs_ty->ty != TD_VAR_TY_TY_UNKNOWN &&
                    rhs_ty->ty != TD_VAR_TY_TY_UNKNOWN,
                "unknown ty in call to `%s`", __func__);
+
+  if (lhs_ty->ty == TD_VAR_TY_TY_POINTER || rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
+    if (
+      (lhs_ty->ty == TD_VAR_TY_TY_POINTER && lhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID)
+       || is_integral_ty(lhs_ty)) {
+      return *rhs_ty;
+    } else if ((rhs_ty->ty == TD_VAR_TY_TY_POINTER && rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) || is_integral_ty(rhs_ty)) {
+      return *lhs_ty;
+    } else if (td_var_ty_eq(tchk, lhs_ty, rhs_ty)) {
+      return *lhs_ty;
+    } else {
+      WARN("incompatible pointer types");
+    }
+  } 
 
   if (lhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN ||
       rhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
