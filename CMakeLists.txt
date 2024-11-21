@@ -26,6 +26,7 @@ set(
   disasm.c
   codegen.c
   hashtbl.c
+  hash.c
   bitset.c
   var_table.c
   typechk.c

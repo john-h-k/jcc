@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,8 +38,6 @@
 #pragma message "unrecognised compiler"
 #endif
 
-#define FOO 99
-
 #if STDC_C23
 #pragma message "C version is C23"
 #elif STDC_C18
@@ -55,6 +54,18 @@
 
 #endif
 
+#ifdef INT128_C
+#define HAS_INT128 1
+#elif __clang__ || __GNUC__
+#define HAS_INT128 1
+typedef __int128 int128_t;
+typedef unsigned __int128 uint128_t;
+#elif STDC_C23 && BITINT_MAXWIDTH >= 128
+typedef _BitInt(128) int128_t;
+typedef unsigned _BitInt(128) uint128_t;
+#define HAS_INT128 1
+#endif
+
 #if STDC_C23 && __GNUC__
 #define PRINTF_ARGS(idx) [gcc::format(printf, idx + 1, idx + 2)]
 #elif __GNUC__
@@ -67,6 +78,12 @@
 #define HAS_FEATURE(name) __has_feature(name)
 #else
 #define HAS_FEATURE(name) 0
+#endif
+
+#ifdef __has_builtin
+#define HAS_BUILTIN(name) __has_builtin(name)
+#else
+#define HAS_BUILTIN(name) 0
 #endif
 
 #if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
@@ -144,8 +161,16 @@ static inline void debug_print_stack_trace(void) {
 #endif
 }
 
+static inline unsigned long long rotateright64(unsigned long long value, unsigned int amount) {
+#if HAS_BUILTIN(__builtin_rotateright64)
+  return __builtin_rotateright64(value, amount);
+#else
+  todo("rotaterightl not implemented outside of `__builtin_popcountll`");
+#endif
+}
+
 static inline int popcntl(unsigned long long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_popcountll)
+#if HAS_BUILTIN(__builtin_popcountll)
   return __builtin_popcountll(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_popcountll`");
@@ -153,7 +178,7 @@ static inline int popcntl(unsigned long long l) {
 }
 
 static inline int tzcnt(unsigned long long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_clzll)
+#if HAS_BUILTIN(__builtin_clzll)
   return __builtin_ctzll(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clzll`");
@@ -161,7 +186,7 @@ static inline int tzcnt(unsigned long long l) {
 }
 
 static inline int lzcnt(unsigned long long l) {
-#if defined(__has_builtin) && __has_builtin(__builtin_clzll)
+#if HAS_BUILTIN(__builtin_clzll)
   return __builtin_clzll(l);
 #else
   todo("lzcnt not implemented outside of `__builtin_clzll`");
