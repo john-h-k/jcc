@@ -32,14 +32,42 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
   return tbl;
 }
 
+void hashtbl_insert_with_hash(struct hashtbl *hashtbl, void *key, void *data,
+                              hash_t hash);
+
 // when len >= buckets * max_fill, double bucket size and rebuild
 static const float MAX_FILL = 0.8f;
 
-TODO_FUNC(static void hashtbl_rebuild(struct hashtbl *hashtbl))
+static void hashtbl_rebuild(struct hashtbl *hashtbl) {
+  struct vector *buckets = hashtbl->buckets;
+  size_t num_buckets = vector_length(buckets);
 
-void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
-  hash_t hash = hashtbl->hash_fn(key);
+  hashtbl->buckets = vector_create(sizeof(struct bucket));
+  vector_ensure_capacity(hashtbl->buckets, num_buckets * 2);
 
+  for (size_t i = 0; i < num_buckets; i++) {
+    struct bucket *bucket = vector_get(buckets, i);
+    struct vector *elems = bucket->elems;
+    hash_t hash = bucket->hash;
+
+    size_t num_elems = vector_length(elems);
+    for (size_t j = 0; j < num_elems; j++) {
+      void *key = vector_get(elems, j);
+      void *data = (char*)key + hashtbl->key_size;
+
+      hashtbl_insert_with_hash(hashtbl, key, data, hash);
+    }
+
+    vector_free(&elems);
+  }
+
+  vector_free(&buckets);
+
+  todo("");
+}
+
+void hashtbl_insert_with_hash(struct hashtbl *hashtbl, void *key, void *data,
+                              hash_t hash) {
   size_t num_buckets = vector_length(hashtbl->buckets);
 
   if (hashtbl->len + 1 > num_buckets * MAX_FILL) {
@@ -55,6 +83,12 @@ void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
   memcpy((char *)key_and_elem + hashtbl->key_size, data, hashtbl->element_size);
 
   hashtbl->len++;
+}
+
+void hashtbl_insert(struct hashtbl *hashtbl, void *key, void *data) {
+  hash_t hash = hashtbl->hash_fn(key);
+
+  hashtbl_insert_with_hash(hashtbl, key, data, hash);
 }
 
 void hashtbl_remove(struct hashtbl *hashtbl, void *key);

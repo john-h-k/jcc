@@ -470,169 +470,11 @@ resolve_binary_op_types(struct typechk *tchk,
       .lhs_op_ty = lhs_op_ty, .rhs_op_ty = rhs_op_ty, .result_ty = result_ty};
 }
 
-// bool parse_wkt(struct parser *parser, struct td_var_ty *ty_ref) {
-//   struct text_pos pos = get_position(parser->lexer);
-
-//   struct token token;
-//   peek_token(parser->lexer, &token);
-
-//   if (token.ty == LEX_TOKEN_TY_KW_VOID) {
-//     consume_token(parser->lexer, token);
-
-//     ty_ref->ty = TD_VAR_TY_TY_VOID;
-//     return true;
-//   }
-
-//   bool seen_unsigned = false;
-//   bool seen_signed = false;
-//   if (token.ty == LEX_TOKEN_TY_KW_SIGNED) {
-//     seen_signed = true;
-
-//     consume_token(parser->lexer, token);
-//   } else if (token.ty == LEX_TOKEN_TY_KW_UNSIGNED) {
-//     seen_unsigned = true;
-
-//     consume_token(parser->lexer, token);
-//   }
-
-//   bool enough_type_info =
-//       seen_signed ||
-//       seen_unsigned; // `signed` or `unsigned` is a type in itself
-
-//   enum well_known_ty wkt;
-//   if (!parse_wkt_item(parser, &wkt)) {
-//     if (enough_type_info) {
-//       wkt = seen_signed ? WELL_KNOWN_TY_SIGNED_INT :
-//       WELL_KNOWN_TY_UNSIGNED_INT;
-//     } else {
-//       backtrack(parser->lexer, pos);
-//       return false;
-//     }
-//   } else {
-//     if (seen_unsigned) {
-//       wkt = WKT_MAKE_UNSIGNED(wkt);
-//     } else if (!seen_signed && !seen_unsigned &&
-//                wkt == WELL_KNOWN_TY_SIGNED_CHAR) {
-//       wkt = WELL_KNOWN_TY_SIGNED_CHAR;
-//     }
-//   }
-
-//   ty_ref->ty = TD_VAR_TY_TY_WELL_KNOWN;
-//   ty_ref->well_known = wkt;
-
-//   return true;
-// }
-
 struct assg_ty_map {
   enum lex_token_ty token_ty;
   enum ast_assg_ty assg_ty;
   enum ast_binary_op_ty binary_op_ty;
 };
-
-// const struct assg_ty_map ASSG_TOKENS[11] = {
-//     {LEX_TOKEN_TY_OP_ASSG, AST_ASSG_TY_SIMPLEASSG, 0},
-//     {LEX_TOKEN_TY_OP_ADD_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//     AST_BINARY_OP_TY_ADD}, {LEX_TOKEN_TY_OP_DIV_ASSG,
-//     AST_ASSG_TY_COMPOUNDASSG, AST_BINARY_OP_TY_DIV},
-//     {LEX_TOKEN_TY_OP_MUL_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//     AST_BINARY_OP_TY_MUL}, {LEX_TOKEN_TY_OP_SUB_ASSG,
-//     AST_ASSG_TY_COMPOUNDASSG, AST_BINARY_OP_TY_SUB},
-//     {LEX_TOKEN_TY_OP_QUOT_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//      AST_BINARY_OP_TY_QUOT},
-
-//     {LEX_TOKEN_TY_OP_LSHIFT_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//      AST_BINARY_OP_TY_LSHIFT},
-//     {LEX_TOKEN_TY_OP_RSHIFT_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//      AST_BINARY_OP_TY_RSHIFT},
-//     {LEX_TOKEN_TY_OP_AND_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//     AST_BINARY_OP_TY_AND}, {LEX_TOKEN_TY_OP_OR_ASSG,
-//     AST_ASSG_TY_COMPOUNDASSG, AST_BINARY_OP_TY_OR},
-//     {LEX_TOKEN_TY_OP_XOR_ASSG, AST_ASSG_TY_COMPOUNDASSG,
-//     AST_BINARY_OP_TY_XOR},
-// };
-
-// bool try_resolve_member_access_ty(struct td_var_ty base_ty,
-//                                   const char *member_name,
-//                                   struct td_var_ty *ty_ref) {
-//   // TODO: super slow hashtable needed
-//   for (size_t i = 0; i < base_ty.aggregate.num_fields; i++) {
-//     const struct ast_struct_field *field = &base_ty.aggregate.fields[i];
-//     if (field->name == NULL) {
-//       if (try_resolve_member_access_ty(*field->var_ty, member_name, ty_ref))
-//       {
-//         return true;
-//       }
-//     }
-
-//     if (strcmp(field->name, member_name) == 0) {
-//       *ty_ref = *field->var_ty;
-//       return true;
-//     }
-//   }
-
-//   return false;
-// }
-
-// struct td_var_ty resolve_member_access_ty(struct parser *parser,
-//                                           struct td_var_ty *var_ty,
-//                                           const struct token *member) {
-//   invariant_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
-//                        var_ty->ty == TD_VAR_TY_TY_TAGGED,
-//                    "non struct/union in member access");
-
-//   struct td_var_ty base_ty;
-
-//   // incomplete type, look it up now it is defined
-//   if (var_ty->ty == TD_VAR_TY_TY_TAGGED) {
-//     base_ty = td_var_ty_get_defined(parser, var_ty);
-//   } else {
-//     base_ty = *var_ty;
-//   }
-
-//   *var_ty = base_ty;
-
-//   const char *member_name = identifier_str(parser, member);
-
-//   struct td_var_ty access_ty;
-//   if (try_resolve_member_access_ty(base_ty, member_name, &access_ty)) {
-//     return access_ty;
-//   }
-
-//   todo("member '%s' does not exist", member_name);
-// }
-
-// struct td_var_ty resolve_pointer_access_ty(struct parser *parser,
-//                                            const struct td_var_ty *var_ty,
-//                                            const struct token *member) {
-
-//   struct td_var_ty underlying_var_ty = td_var_ty_get_underlying(parser,
-//   var_ty); struct td_var_ty base_ty =
-//       underlying_var_ty.ty == TD_VAR_TY_TY_TAGGED
-//           ? td_var_ty_get_defined(parser, &underlying_var_ty)
-//           : underlying_var_ty;
-//   return resolve_member_access_ty(parser, &base_ty, member);
-// }
-
-// struct td_var_ty resolve_array_access_ty(struct parser *parser,
-//                                          const struct ast_expr *lhs,
-//                                          const struct ast_expr *rhs,
-//                                          bool *lhs_is_pointer) {
-//   if (lhs->var_ty.ty == TD_VAR_TY_TY_POINTER ||
-//       lhs->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-//     *lhs_is_pointer = true;
-//     return td_var_ty_get_underlying(parser, &lhs->var_ty);
-//   } else {
-//     *lhs_is_pointer = false;
-//     return td_var_ty_get_underlying(parser, &rhs->var_ty);
-//   }
-// }
-
-// void decay_array_params(struct ast_param *param) {
-//   if (param->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-//     param->var_ty.ty = TD_VAR_TY_TY_POINTER;
-//     param->var_ty.pointer.underlying = param->var_ty.array.element;
-//   }
-// }
 
 struct td_specifiers {
   enum td_storage_class_specifier storage;
@@ -1589,15 +1431,14 @@ get_completed_aggregate(struct typechk *tchk, const struct td_var_ty *var_ty) {
 }
 
 static bool try_resolve_member_access_ty(struct typechk *tchk,
-                                         const struct td_var_ty *td_var_ty,
+                                         const struct td_var_ty *var_ty,
                                          const char *member_name,
                                          struct td_var_ty *member_var_ty) {
-
-  const struct td_var_ty var_ty = get_completed_aggregate(tchk, td_var_ty);
+  debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
 
   // FIXME: super slow hashtable needed
-  for (size_t i = 0; i < var_ty.aggregate.num_fields; i++) {
-    const struct td_struct_field *field = &var_ty.aggregate.fields[i];
+  for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+    const struct td_struct_field *field = &var_ty->aggregate.fields[i];
     if (field->identifier == NULL) {
       if (try_resolve_member_access_ty(tchk, &field->var_ty, member_name,
                                        member_var_ty)) {
@@ -1652,6 +1493,13 @@ static bool try_resolve_member_access_ty_by_index(
   return true;
 }
 
+static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk, const struct td_var_ty *var_ty) {
+  if (var_ty->ty != TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    return *var_ty;
+  }
+
+  return get_completed_aggregate(tchk, var_ty);
+}
 static struct td_expr
 type_memberaccess(struct typechk *tchk,
                   const struct ast_memberaccess *memberaccess) {
@@ -1660,6 +1508,8 @@ type_memberaccess(struct typechk *tchk,
       .member = identifier_str(tchk->parser, &memberaccess->member)};
 
   *td_memberaccess.lhs = type_expr(tchk, memberaccess->lhs);
+  td_memberaccess.lhs->var_ty = type_incomplete_var_ty(tchk, &td_memberaccess.lhs->var_ty);
+
 
   const char *member_name = identifier_str(tchk->parser, &memberaccess->member);
 
@@ -1683,6 +1533,17 @@ type_pointeraccess(struct typechk *tchk,
       .member = identifier_str(tchk->parser, &pointeraccess->member)};
 
   *td_pointeraccess.lhs = type_expr(tchk, pointeraccess->lhs);
+
+  switch (td_pointeraccess.lhs->var_ty.ty) {
+    case TD_VAR_TY_TY_POINTER:
+      *td_pointeraccess.lhs->var_ty.pointer.underlying = type_incomplete_var_ty(tchk, td_pointeraccess.lhs->var_ty.pointer.underlying);
+      break;
+    case TD_VAR_TY_TY_ARRAY:
+      *td_pointeraccess.lhs->var_ty.array.underlying = type_incomplete_var_ty(tchk, td_pointeraccess.lhs->var_ty.array.underlying);
+      break;
+    default:
+      WARN("doesn't make sense for pointer access");
+  }
 
   const char *pointer_name =
       identifier_str(tchk->parser, &pointeraccess->member);
@@ -2637,12 +2498,13 @@ DEBUG_FUNC(var_ty, var_ty) {
     }
 
     INDENT();
-    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
-      TD_PRINT("FIELD %s", var_ty->aggregate.fields[i].identifier);
-      INDENT();
-      DEBUG_CALL(var_ty, &var_ty->aggregate.fields[i].var_ty);
-      UNINDENT();
-    }
+    // TEMP: reenable once we don't recursively print types (stack overflow)
+    // for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+    //   TD_PRINT("FIELD %s", var_ty->aggregate.fields[i].identifier);
+    //   INDENT();
+    //   DEBUG_CALL(var_ty, &var_ty->aggregate.fields[i].var_ty);
+    //   UNINDENT();
+    // }
     UNINDENT();
     break;
   case TD_VAR_TY_TY_VOID:
