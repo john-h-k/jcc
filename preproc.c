@@ -175,9 +175,19 @@ static void preproc_next_token(struct preproc *preproc,
     return;
   }
 
-  if (preproc->pos.idx < preproc->len &&
+  if (preproc->pos.idx + 1 < preproc->len && preproc->text[preproc->pos.idx] == '\\' && is_newline(preproc->text[preproc->pos.idx + 1])) {
+    // literally just skip this, don't even generate a token
+    next_col(&end);
+    next_line(&end);
+
+    preproc->pos = end;
+
+    start = preproc->pos;
+    end = start;
+  } else if (preproc->pos.idx < preproc->len &&
       is_newline(preproc->text[preproc->pos.idx])) {
     next_line(&end);
+
     preproc->line_has_nontrivial_token = false;
     preproc->in_angle_string_context = false;
 
@@ -393,37 +403,6 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       sizeof(struct preproc_identifier), sizeof(struct preproc_define),
       hash_preproc_ident, preproc_ident_eq);
 
-  const char *original_text = preproc->text;
-  size_t original_len = preproc->len;
-
-  // as line continuations can only ever shrink the file, this is okay
-  char *new_text = arena_alloc_strcpy(preproc->arena, original_text);
-
-  size_t head = 0;
-
-  // first step: remove all line continuations
-  for (size_t i = 0; i < original_len; i++) {
-    if (original_text[i] != '\\') {
-      new_text[head++] = original_text[i];
-      continue;
-    }
-
-    size_t end = i + 1;
-    while (end < original_len && is_whitespace(original_text[end])) {
-      end++;
-    }
-
-    if (end < original_len && is_newline(original_text[end])) {
-      // this was a line continuation
-      i = end;
-    } else {
-      new_text[head++] = original_text[i];
-    }
-  }
-
-  preproc->text = new_text;
-  preproc->len = head;
-
   struct vector *preprocessed = vector_create(sizeof(char));
 
   // now we do tokenization
@@ -512,6 +491,18 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         };
 
         hashtbl_insert(defines, &ident, &define);
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(preproc, directive, "undef")) {
+        struct preproc_token def_name;
+        preproc_next_non_whitespace_token(preproc, &def_name);
+
+        struct preproc_identifier ident = {
+          .value = &preproc->text[def_name.span.start.idx],
+          .length = text_span_len(&def_name.span)
+        };
+
+        hashtbl_remove(defines, &ident);
+
       } else {
         todo("other directives");
       }
