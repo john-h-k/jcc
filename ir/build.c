@@ -2236,66 +2236,57 @@ build_ir_for_jumpstmt(struct ir_func_builder *irb,
   }
 }
 
-static struct ir_op *build_ir_for_zero_init(struct ir_func_builder *irb,
-                                            struct ir_stmt **stmt,
-                                            const struct td_var_ty *var_ty) {
-  if (var_ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
-    todo("non well-known");
-  }
+// describes a fully flattened init list
+// init lists in functions then build `expr` to `ir_op`s, while global ones turn
+// it into `ir_var`s
+struct ir_build_init {
+  size_t offset;
+  struct td_expr *expr;
+};
 
-  enum ir_var_primitive_ty ty = var_ty_for_well_known_ty(var_ty->well_known);
+struct ir_build_init_list_layout {
+  size_t num_inits;
+  struct ir_build_init *inits;
+};
 
-  struct ir_op *value = alloc_ir_op(irb->func, *stmt);
-  make_integral_constant(irb->unit, value, ty, 0);
-  return value;
-}
-
-static void build_ir_for_array_initlist(struct ir_func_builder *irb,
-                                        struct ir_stmt **stmt,
-                                        struct ir_op *start_address,
-                                        struct td_init_list *init_list,
-                                        const struct td_var_ty *var_ty);
-
-static void build_ir_for_struct_initlist(struct ir_func_builder *irb,
-                                         struct ir_stmt **stmt,
-                                         struct ir_op *start_address,
-                                         struct td_init_list *init_list,
-                                         const struct td_var_ty *var_ty);
-
-static void build_ir_for_union_initlist(struct ir_func_builder *irb,
-                                        struct ir_stmt **stmt,
-                                        struct ir_op *start_address,
-                                        struct td_init_list *init_list,
-                                        const struct td_var_ty *var_ty);
+static struct ir_build_init_list_layout
+build_init_list_layout(struct ir_unit *iru,
+                       const struct td_init_list *init_list);
 
 static void build_ir_for_init_list(struct ir_func_builder *irb,
-                                   struct ir_stmt **stmt,
-                                   struct ir_op *start_address,
-                                   struct td_var_ty *var_ty,
+                                   struct ir_stmt **stmt, struct ir_op *address,
                                    struct td_init_list *init_list) {
-  switch (var_ty->ty) {
-  case TD_VAR_TY_TY_ARRAY:
-    build_ir_for_array_initlist(irb, stmt, start_address, init_list, var_ty);
-    break;
-  case TD_VAR_TY_TY_AGGREGATE:
-    switch (var_ty->aggregate.ty) {
-    case TD_TY_AGGREGATE_TY_STRUCT:
-      build_ir_for_struct_initlist(irb, stmt, start_address, init_list, var_ty);
-      break;
-    case TD_TY_AGGREGATE_TY_UNION:
-      build_ir_for_union_initlist(irb, stmt, start_address, init_list, var_ty);
-      break;
-    }
-    break;
-  default:
-    bug("initlist only makes sense for array/struct/union");
+  struct ir_build_init_list_layout layout =
+      build_init_list_layout(irb->unit, init_list);
+
+  for (size_t i = 0; i < layout.num_inits; i++) {
+    struct ir_build_init *init = &layout.inits[i];
+
+    struct ir_op *value = build_ir_for_expr(irb, stmt, init->expr);
+
+    struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
+    offset->ty = IR_OP_TY_CNST;
+    offset->var_ty = var_ty_for_pointer_size(irb->unit);
+    offset->cnst =
+        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = init->offset};
+
+    struct ir_op *init_address = alloc_ir_op(irb->func, *stmt);
+    init_address->ty = IR_OP_TY_BINARY_OP;
+    init_address->var_ty = IR_VAR_TY_POINTER;
+    init_address->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset};
+
+    struct ir_op *store = alloc_ir_op(irb->func, *stmt);
+    store->ty = IR_OP_TY_STORE_ADDR;
+    store->var_ty = IR_VAR_TY_NONE;
+    store->store_addr =
+        (struct ir_op_store_addr){.addr = init_address, .value = value};
   }
 }
 
 static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct ir_op *start_address,
-                                       struct td_var_ty *var_ty,
                                        struct td_init *init) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR:
@@ -2303,145 +2294,8 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
   case TD_INIT_TY_INIT_LIST:
     debug_assert(start_address,
                  "start_address required when building with init list");
-    build_ir_for_init_list(irb, stmt, start_address, var_ty, &init->init_list);
+    build_ir_for_init_list(irb, stmt, start_address, &init->init_list);
     return NULL;
-  }
-}
-
-static void build_ir_for_array_initlist(struct ir_func_builder *irb,
-                                        struct ir_stmt **stmt,
-                                        struct ir_op *start_address,
-                                        struct td_init_list *init_list,
-                                        const struct td_var_ty *var_ty) {
-  debug_assert(var_ty->ty == TD_VAR_TY_TY_ARRAY, "non array init list");
-
-  struct td_var_ty *el_ty = var_ty->array.underlying;
-  size_t num_elements = var_ty->array.size;
-
-  if (!num_elements) {
-    bug("empty arrays are GNU extension");
-  }
-
-  struct ir_op *zero_init = NULL;
-
-  struct ir_var_ty ir_el_ty = var_ty_for_td_var_ty(irb->unit, el_ty);
-  size_t el_size = var_ty_info(irb->unit, &ir_el_ty).size;
-
-  for (size_t i = 0; i < num_elements; i++) {
-    struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
-    make_pointer_constant(irb->unit, offset, i * el_size);
-
-    struct ir_op *address = alloc_ir_op(irb->func, *stmt);
-    address->ty = IR_OP_TY_BINARY_OP;
-    address->var_ty = start_address->var_ty;
-    address->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = start_address, .rhs = offset};
-
-    if (i < init_list->num_inits &&
-        init_list->inits[i].init->ty == TD_INIT_TY_INIT_LIST) {
-      build_ir_for_init_list(irb, stmt, address, el_ty,
-                             &init_list->inits[i].init->init_list);
-      continue;
-    } else {
-      struct ir_op *expr =
-          i < init_list->num_inits
-              ? build_ir_for_expr(irb, stmt, &init_list->inits[i].init->expr)
-              : (!zero_init
-                     ? zero_init = build_ir_for_zero_init(irb, stmt, el_ty)
-                     : zero_init);
-
-      struct ir_op *store = alloc_ir_op(irb->func, *stmt);
-      store->ty = IR_OP_TY_STORE_ADDR;
-      store->var_ty = IR_VAR_TY_NONE;
-      store->store_addr =
-          (struct ir_op_store_addr){.addr = address, .value = expr};
-    }
-  }
-}
-
-static void build_ir_for_struct_initlist(struct ir_func_builder *irb,
-                                         struct ir_stmt **stmt,
-                                         struct ir_op *start_address,
-                                         struct td_init_list *init_list,
-                                         const struct td_var_ty *var_ty) {
-
-  debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-                   var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT,
-               "non struct init list");
-
-  size_t num_elements = var_ty->aggregate.num_fields;
-
-  if (!num_elements) {
-    bug("empty structs are GNU extension");
-  }
-
-  for (size_t i = 0; i < num_elements; i++) {
-    debug_assert(i < var_ty->aggregate.num_fields,
-                 "too many items in struct init-list");
-    struct td_struct_field *field = &var_ty->aggregate.fields[i];
-
-    struct td_var_ty td_member_ty;
-    struct ir_var_ty member_ty;
-    struct ir_op *offset = build_ir_for_member_address_offset(
-        irb, stmt, var_ty, field->identifier, &member_ty, &td_member_ty);
-
-    struct ir_op *address = alloc_ir_op(irb->func, *stmt);
-    address->ty = IR_OP_TY_BINARY_OP;
-    address->var_ty = start_address->var_ty;
-    address->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = start_address, .rhs = offset};
-
-    if (i < init_list->num_inits &&
-        init_list->inits[i].init->ty == TD_INIT_TY_INIT_LIST) {
-      build_ir_for_init_list(irb, stmt, address, &td_member_ty,
-                             &init_list->inits[i].init->init_list);
-      continue;
-    } else {
-      struct ir_op *expr =
-          i < init_list->num_inits
-              ? build_ir_for_expr(irb, stmt, &init_list->inits[i].init->expr)
-              : build_ir_for_zero_init(irb, stmt, &field->var_ty);
-
-      struct ir_op *store = alloc_ir_op(irb->func, *stmt);
-      store->ty = IR_OP_TY_STORE_ADDR;
-      store->var_ty = IR_VAR_TY_NONE;
-      store->store_addr =
-          (struct ir_op_store_addr){.addr = address, .value = expr};
-    }
-  }
-}
-
-static void build_ir_for_union_initlist(struct ir_func_builder *irb,
-                                        struct ir_stmt **stmt,
-                                        struct ir_op *start_address,
-                                        struct td_init_list *init_list,
-                                        const struct td_var_ty *var_ty) {
-  debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-                   var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_UNION,
-               "non union init list");
-
-  invariant_assert(init_list->num_inits <= 1,
-                   "cannot have more than 1 element in union init-list");
-
-  debug_assert(var_ty->aggregate.num_fields, "empty union is GNU extension");
-
-  struct td_struct_field *field = &var_ty->aggregate.fields[0];
-
-  if (init_list->num_inits &&
-      init_list->inits[0].init->ty == TD_INIT_TY_INIT_LIST) {
-    build_ir_for_init_list(irb, stmt, start_address, &field->var_ty,
-                           &init_list->inits[0].init->init_list);
-  } else {
-    struct ir_op *expr =
-        init_list->num_inits
-            ? build_ir_for_expr(irb, stmt, &init_list->inits[0].init->expr)
-            : build_ir_for_zero_init(irb, stmt, &field->var_ty);
-
-    struct ir_op *store = alloc_ir_op(irb->func, *stmt);
-    store->ty = IR_OP_TY_STORE_ADDR;
-    store->var_ty = IR_VAR_TY_NONE;
-    store->store_addr =
-        (struct ir_op_store_addr){.addr = start_address, .value = expr};
   }
 }
 
@@ -2622,7 +2476,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     }
 
     assignment =
-        build_ir_for_init(irb, stmt, address, &decl->var_ty, decl->init);
+        build_ir_for_init(irb, stmt, address, decl->init);
   } else if (!lcl) {
     assignment = alloc_ir_op(irb->func, *stmt);
     assignment->ty = IR_OP_TY_UNDF;
@@ -3065,22 +2919,22 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   return builder;
 }
 
-static struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
-                                                 struct td_var_ty *var_ty) {
-  switch (var_ty->ty) {
-  case TD_VAR_TY_TY_UNKNOWN:
-  case TD_VAR_TY_TY_VOID:
-  case TD_VAR_TY_TY_VARIADIC:
-  case TD_VAR_TY_TY_FUNC:
-    bug("no sense");
-  case TD_VAR_TY_TY_WELL_KNOWN:
-  case TD_VAR_TY_TY_POINTER:
-  case TD_VAR_TY_TY_ARRAY:
-  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-  case TD_VAR_TY_TY_AGGREGATE:
-    return (struct ir_var_value){.var_ty = var_ty_for_td_var_ty(iru, var_ty)};
-  }
-}
+// static struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
+//                                                  struct td_var_ty *var_ty) {
+//   switch (var_ty->ty) {
+//   case TD_VAR_TY_TY_UNKNOWN:
+//   case TD_VAR_TY_TY_VOID:
+//   case TD_VAR_TY_TY_VARIADIC:
+//   case TD_VAR_TY_TY_FUNC:
+//     bug("no sense");
+//   case TD_VAR_TY_TY_WELL_KNOWN:
+//   case TD_VAR_TY_TY_POINTER:
+//   case TD_VAR_TY_TY_ARRAY:
+//   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+//   case TD_VAR_TY_TY_AGGREGATE:
+//     return (struct ir_var_value){.var_ty = var_ty_for_td_var_ty(iru, var_ty)};
+//   }
+// }
 
 static size_t get_member_index_offset(struct ir_unit *iru,
                                       const struct td_var_ty *var_ty,
@@ -3118,6 +2972,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
 
   size_t offset = 0;
 
+  struct td_var_ty cur_var_ty = *var_ty;
   for (size_t i = 0; i < designator_list->num_designators; i++) {
     struct td_designator *designator = &designator_list->designators[i];
 
@@ -3126,14 +2981,14 @@ static size_t get_designator_offset(struct ir_unit *iru,
       const char *member_name = designator->field;
       struct ir_var_ty ir_member_ty;
       size_t member_offset;
-      get_member_info(iru, var_ty, member_name, &ir_member_ty, member_index,
+      get_member_info(iru, &cur_var_ty, member_name, &ir_member_ty, member_index,
                       &member_offset, member_ty);
 
       offset += member_offset;
       break;
     }
     case TD_DESIGNATOR_TY_INDEX: {
-      *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
+      *member_ty = designator->var_ty;
       struct ir_var_ty el_var_ty = var_ty_for_td_var_ty(iru, member_ty);
       struct ir_var_ty_info info = var_ty_info(iru, &el_var_ty);
 
@@ -3142,6 +2997,8 @@ static size_t get_designator_offset(struct ir_unit *iru,
       break;
     }
     }
+
+    cur_var_ty = designator->var_ty;
   }
 
   return offset;
@@ -3151,84 +3008,16 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
 
-UNUSED static struct ir_var_value
-build_ir_value_for_struct_init_list(struct ir_unit *iru,
-                                    struct td_init_list *init_list,
-                                    const struct td_var_ty *var_ty) {
+// UNUSED static struct ir_var_value
+// build_ir_value_for_struct_init_list(struct ir_unit *iru,
+//                                     struct td_init_list *init_list,
+//                                     const struct td_var_ty *var_ty) {
 
-  // debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-  //                  var_ty->aggregate.ty == TD_TY__AGGREGATE_TY_STRUCT,
-  //              "non stuct init list");
+//   // debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
+//   //                  var_ty->aggregate.ty == TD_TY__AGGREGATE_TY_STRUCT,
+//   //              "non stuct init list");
 
-  size_t num_elements = var_ty->array.size;
-
-  if (!num_elements) {
-    bug("empty structs are GNU extension");
-  }
-
-  struct ir_var_value_list value_list = {
-      .num_values = init_list->num_inits,
-      .values = arena_alloc(iru->arena,
-                            sizeof(*value_list.values) * init_list->num_inits),
-      .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
-                                             init_list->num_inits)};
-
-  size_t member_idx = 0;
-  for (size_t i = 0; i < num_elements; i++) {
-    debug_assert(i < num_elements, "too many items in struct init-list");
-
-    struct td_init_list_init *init = &init_list->inits[i];
-
-    size_t offset;
-    struct td_var_ty member_ty;
-    if (i < init_list->num_inits && init->designator_list->num_designators) {
-      offset = get_designator_offset(iru, var_ty,
-                                     init_list->inits[i].designator_list,
-                                     &member_idx, &member_ty);
-    } else {
-      offset = get_member_index_offset(iru, var_ty, member_idx, &member_ty);
-    }
-    member_idx++;
-
-    struct ir_var_value value;
-    if (i < init_list->num_inits) {
-      value = build_ir_for_var_value(iru, init->init, &member_ty);
-    } else {
-      value = build_ir_for_zero_var(iru, &member_ty);
-    }
-
-    value_list.values[i] = value;
-    value_list.offsets[i] = offset;
-  }
-
-  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-                               .var_ty = var_ty_for_td_var_ty(iru, var_ty),
-                               .value_list = value_list};
-}
-
-// describes a fully flattened init list
-// init lists in functions then build `expr` to `ir_op`s, while global ones turn
-// it into `ir_var`s
-struct ir_build_init {
-  size_t offset;
-  struct td_expr *expr;
-};
-
-struct ir_build_init_list_layout {
-  size_t num_inits;
-  struct ir_build_init *inits;
-};
-
-// static struct ir_build_init_list_layout
-// build_init_list_layout(struct ir_unit *iru,
-//                        const struct td_init_list *init_list,
-//                        const struct td_var_ty *var_ty) {
-
-//   debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-//                    var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT,
-//                "non struct init list");
-
-//   size_t num_elements = var_ty->aggregate.num_fields;
+//   size_t num_elements = var_ty->array.size;
 
 //   if (!num_elements) {
 //     bug("empty structs are GNU extension");
@@ -3237,8 +3026,7 @@ struct ir_build_init_list_layout {
 //   struct ir_var_value_list value_list = {
 //       .num_values = init_list->num_inits,
 //       .values = arena_alloc(iru->arena,
-//                             sizeof(*value_list.values) *
-//                             init_list->num_inits),
+//                             sizeof(*value_list.values) * init_list->num_inits),
 //       .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
 //                                              init_list->num_inits)};
 
@@ -3270,7 +3058,101 @@ struct ir_build_init_list_layout {
 //     value_list.offsets[i] = offset;
 //   }
 
+//   return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
+//                                .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+//                                .value_list = value_list};
 // }
+
+enum init_list_layout_ty {
+  INIT_LIST_LAYOUT_TY_STRUCT,
+  INIT_LIST_LAYOUT_TY_UNION,
+  INIT_LIST_LAYOUT_TY_ARRAY,
+};
+
+static void
+build_init_list_layout_entry(struct ir_unit *iru,
+                             const struct td_init_list *init_list,
+                             const struct td_var_ty *var_ty, size_t offset,
+                             struct vector *inits) {
+
+  enum init_list_layout_ty ty;
+  size_t el_size;
+  switch (var_ty->ty) {
+  case TD_VAR_TY_TY_AGGREGATE:
+    ty = var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
+             ? INIT_LIST_LAYOUT_TY_STRUCT
+             : INIT_LIST_LAYOUT_TY_UNION;
+    break;
+  case TD_VAR_TY_TY_ARRAY:
+    ty = INIT_LIST_LAYOUT_TY_ARRAY;
+    struct ir_var_ty el_ty = var_ty_for_td_var_ty(iru, var_ty->array.underlying);
+    el_size = var_ty_info(iru, &el_ty).size;
+    break;
+  default:
+    bug("bad type for init list");
+  }
+
+  size_t num_elements = init_list->num_inits;
+
+  size_t member_idx = 0;
+  for (size_t i = 0; i < num_elements; i++) {
+    struct td_init_list_init *init = &init_list->inits[i];
+
+    size_t init_offset = offset;
+    struct td_var_ty member_ty;
+    if (init->designator_list && init->designator_list->num_designators) {
+      init_offset += get_designator_offset(iru,
+                                           &init_list->var_ty,
+                                           init_list->inits[i].designator_list,
+                                           &member_idx, &member_ty);
+    } else {
+      switch (ty) {
+      case INIT_LIST_LAYOUT_TY_STRUCT:
+        init_offset +=
+            get_member_index_offset(iru, var_ty, member_idx, &member_ty);
+        break;
+      case INIT_LIST_LAYOUT_TY_UNION:
+        break;
+      case INIT_LIST_LAYOUT_TY_ARRAY:
+        init_offset += member_idx * el_size;
+      }
+    }
+
+    member_idx++;
+
+    switch (init->init->ty) {
+    case TD_INIT_TY_EXPR: {
+      struct ir_build_init build_init = {
+          .offset = init_offset,
+          .expr = &init->init->expr,
+      };
+
+      vector_push_back(inits, &build_init);
+      break;
+    }
+    case TD_INIT_TY_INIT_LIST:
+      build_init_list_layout_entry(iru, &init->init->init_list, &member_ty,
+                                   init_offset, inits);
+      break;
+    }
+  }
+}
+
+static struct ir_build_init_list_layout
+build_init_list_layout(struct ir_unit *iru,
+                       const struct td_init_list *init_list) {
+  struct vector *inits = vector_create(sizeof(struct ir_build_init));
+
+  build_init_list_layout_entry(iru, init_list, &init_list->var_ty, 0, inits);
+
+  struct ir_build_init_list_layout layout = {
+      .num_inits = vector_length(inits),
+      .inits = arena_alloc(iru->arena, vector_byte_size(inits))};
+
+  vector_copy_to(inits, layout.inits);
+
+  return layout;
+}
 
 static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
                                                   struct td_init *init,
@@ -3324,8 +3206,8 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
       // }
 
       // return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-      //                              .var_ty = var_ty_for_td_var_ty(iru, var_ty),
-      //                              .value_list = value_list};
+      //                              .var_ty = var_ty_for_td_var_ty(iru,
+      //                              var_ty), .value_list = value_list};
     }
   }
   }

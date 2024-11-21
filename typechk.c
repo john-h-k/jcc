@@ -2142,21 +2142,35 @@ static struct td_init type_init(struct typechk *tchk,
                                 const struct ast_init *init);
 
 static struct td_designator
-type_designator(struct typechk *tchk, const struct ast_designator *designator) {
+type_designator(struct typechk *tchk, const struct td_var_ty *var_ty, const struct ast_designator *designator) {
   switch (designator->ty) {
-  case AST_DESIGNATOR_TY_FIELD:
+  case AST_DESIGNATOR_TY_FIELD: {
+    const char *field = identifier_str(tchk->parser, &designator->field);
+
+    struct td_var_ty field_ty;
+    if (!try_resolve_member_access_ty(tchk, var_ty, field, &field_ty)) {
+      WARN("unrecognised field in designator");
+    }
+
     return (struct td_designator){
         .ty = TD_DESIGNATOR_TY_FIELD,
-        .field = identifier_str(tchk->parser, &designator->field)};
-  case AST_DESIGNATOR_TY_INDEX:
+        .var_ty = field_ty,
+        .field = field};
+  }
+  case AST_DESIGNATOR_TY_INDEX: {
+    struct td_var_ty el_ty = td_var_ty_get_underlying(tchk, var_ty);
+
     return (struct td_designator){
         .ty = TD_DESIGNATOR_TY_INDEX,
+        .var_ty = el_ty,
         .index = type_constant_integral_expr(tchk, designator->index)};
+  }
   }
 }
 
 static struct td_designator_list
 type_designator_list(struct typechk *tchk,
+                     const struct td_var_ty *var_ty,
                      const struct ast_designator_list *designator_list) {
   struct td_designator_list td_designator_list = {
       .num_designators = designator_list->num_designators,
@@ -2164,29 +2178,41 @@ type_designator_list(struct typechk *tchk,
           arena_alloc(tchk->arena, sizeof(*td_designator_list.designators) *
                                        designator_list->num_designators)};
 
+  struct td_var_ty cur_var_ty = *var_ty;
+
   for (size_t i = 0; i < designator_list->num_designators; i++) {
     td_designator_list.designators[i] =
-        type_designator(tchk, &designator_list->designators[i]);
+        type_designator(tchk, &cur_var_ty, &designator_list->designators[i]);
+
+    cur_var_ty = td_designator_list.designators[i].var_ty;
   }
+
+  td_designator_list.var_ty = cur_var_ty;
 
   return td_designator_list;
 }
 
 static struct td_init_list_init
 type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
+                    const struct td_var_ty *next_field_var_ty,
                     const struct ast_init_list_init *init_list_init) {
   struct td_init_list_init td_init_list_init = {
       .designator_list = NULL,
       .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
+  struct td_var_ty init_list_var_ty;
   if (init_list_init->designator_list) {
     td_init_list_init.designator_list =
         arena_alloc(tchk->arena, sizeof(*td_init_list_init.designator_list));
     *td_init_list_init.designator_list =
-        type_designator_list(tchk, init_list_init->designator_list);
+        type_designator_list(tchk, var_ty, init_list_init->designator_list);
+
+    init_list_var_ty = td_init_list_init.designator_list->var_ty;
+  } else {
+    init_list_var_ty = *next_field_var_ty;
   }
 
-  *td_init_list_init.init = type_init(tchk, var_ty, init_list_init->init);
+  *td_init_list_init.init = type_init(tchk, &init_list_var_ty, init_list_init->init);
 
   return td_init_list_init;
 }
@@ -2195,6 +2221,7 @@ static struct td_init_list
 type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
                const struct ast_init_list *init_list) {
   struct td_init_list td_init_list = {
+      .var_ty = *var_ty,
       .num_inits = init_list->num_inits,
       .inits = arena_alloc(tchk->arena,
                            sizeof(*td_init_list.inits) * init_list->num_inits)};
@@ -2202,15 +2229,17 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
   size_t field_index = 0;
   for (size_t i = 0; i < init_list->num_inits; i++) {
     const struct ast_init_list_init *init = &init_list->inits[i];
+
+    struct td_var_ty member_var_ty;
     if (init->designator_list && init->designator_list->num_designators) {
       const struct ast_designator *designator =
           &init->designator_list->designators[0];
 
       switch (designator->ty) {
-      case AST_DESIGNATOR_TY_FIELD:
+      case AST_DESIGNATOR_TY_INDEX:
         field_index = type_constant_integral_expr(tchk, designator->index);
         break;
-      case AST_DESIGNATOR_TY_INDEX: {
+      case AST_DESIGNATOR_TY_FIELD: {
         if (!try_get_member_idx(
                 tchk, var_ty, identifier_str(tchk->parser, &designator->field),
                 &field_index)) {
@@ -2220,19 +2249,15 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
         break;
       }
       }
-    }
-
-    struct td_var_ty member_var_ty;
-
-    if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-      member_var_ty = td_var_ty_get_underlying(tchk, var_ty);
+    } else if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, field_index, &member_var_ty)) {
+        WARN("bad field");
+      }
     } else {
-      invariant_assert(try_resolve_member_access_ty_by_index(
-                           tchk, var_ty, field_index, &member_var_ty),
-                       "should succeed");
+      member_var_ty = td_var_ty_get_underlying(tchk, var_ty);
     }
 
-    td_init_list.inits[i] = type_init_list_init(tchk, &member_var_ty, init);
+    td_init_list.inits[i] = type_init_list_init(tchk, var_ty, &member_var_ty, init);
 
     field_index++;
   }
@@ -2892,6 +2917,8 @@ DEBUG_FUNC(arrayaccess, array_access) {
 DEBUG_FUNC(designator, designator) {
   TD_PRINTZ("DESIGNATOR");
 
+  DEBUG_CALL(var_ty, &designator->var_ty);
+
   INDENT();
   switch (designator->ty) {
   case TD_DESIGNATOR_TY_FIELD:
@@ -2906,6 +2933,9 @@ DEBUG_FUNC(designator, designator) {
 
 DEBUG_FUNC(designator_list, designator_list) {
   TD_PRINTZ("DESIGNATOR LIST");
+
+  DEBUG_CALL(var_ty, &designator_list->var_ty);
+
   INDENT();
   for (size_t i = 0; i < designator_list->num_designators; i++) {
     DEBUG_CALL(designator, &designator_list->designators[i]);
@@ -2945,6 +2975,8 @@ DEBUG_FUNC(init_list_init, init) {
 
 DEBUG_FUNC(init_list, init_list) {
   TD_PRINTZ("INIT LIST");
+
+  DEBUG_CALL(var_ty, &init_list->var_ty);
 
   INDENT();
   for (size_t i = 0; i < init_list->num_inits; i++) {
