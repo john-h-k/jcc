@@ -438,7 +438,10 @@ resolve_binary_op_types(struct typechk *tchk,
       }
 
       lhs_op_ty = rhs_op_ty = *lhs;
-      result_ty = td_var_ty_pointer_sized_int(tchk, false);
+      result_ty = td_var_ty_pointer_sized_int(tchk, true);
+    } else if (td_binary_op_is_comparison(ty)) {
+      lhs_op_ty = rhs_op_ty = *lhs;
+      result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
     } else {
       WARN("binary operations where both types are pointer only makes sense "
            "for subtraction or comparisons");
@@ -1340,11 +1343,17 @@ static struct td_expr type_unary_op(struct typechk *tchk,
     break;
   case AST_UNARY_OP_TY_INDIRECTION:
     td_unary_op.ty = TD_UNARY_OP_TY_INDIRECTION;
-    if (expr.var_ty.ty != TD_VAR_TY_TY_POINTER) {
-      WARN("cannot dereference a non pointer");
+    switch (expr.var_ty.ty) {
+      case TD_VAR_TY_TY_POINTER:
+        result_ty = *expr.var_ty.pointer.underlying;
+        break;
+      case TD_VAR_TY_TY_ARRAY:
+        result_ty = *expr.var_ty.array.underlying;
+        break;
+      default:
+        WARN("cannot dereference a non pointer/array");
     }
 
-    result_ty = *expr.var_ty.pointer.underlying;
     break;
   case AST_UNARY_OP_TY_ADDRESSOF:
     td_unary_op.ty = TD_UNARY_OP_TY_ADDRESSOF;
