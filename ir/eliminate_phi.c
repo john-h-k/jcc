@@ -42,13 +42,21 @@ void eliminate_phi(struct ir_func *irb) {
           //                         IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
           // storelcl->store_lcl.value = value;
           // storelcl->store_lcl.lcl_idx = lcl_idx;
-          struct ir_op *mov =
-              insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
-          mov->mov.value = value;
-          mov->reg = op->reg;
-
-          // HACK: using spills for phi
-          op->phi.values[i] = mov;
+          if (op->lcl) {
+            struct ir_op *load =
+                insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, op->var_ty);
+            load->load_lcl = (struct ir_op_load_lcl){
+              .lcl = op->lcl
+            };
+            load->reg = op->reg;
+            op->phi.values[i] = load;
+          } else {
+            struct ir_op *mov =
+                insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
+            mov->mov.value = value;
+            mov->reg = op->reg;
+            op->phi.values[i] = mov;
+          }
         }
 
         op = op->succ;

@@ -1035,11 +1035,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
   const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
 
-  invariant_assert(is_func_variadic(func_ty) ||
-                       func_ty->num_params == op->call.num_args,
-                   "mismatch of function param (%zu) and arg (%zu) count",
-                   func_ty->num_params, op->call.num_args);
-
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
 

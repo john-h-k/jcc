@@ -316,7 +316,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
         (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
         (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
-        !op_produces_value(interval->op) || interval->op->ty == IR_OP_TY_UNDF) {
+        !op_produces_value(interval->op)) {
       continue;
     }
 

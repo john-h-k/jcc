@@ -1828,7 +1828,6 @@ build_ir_for_switch(struct ir_func_builder *irb,
   vector_push_back(irb->jumps, &new_loop);
 
   struct ir_stmt *ctrl_stmt = alloc_ir_stmt(irb->func, basicblock);
-  // TODO: this should be coerced to integer type
   struct ir_op *ctrl_op =
       build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr);
 
