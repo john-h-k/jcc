@@ -4,7 +4,23 @@ build() {
     cd build
     cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" .. \
         && cmake --build .
-    cd -
+    cd - > /dev/null
+}
+
+debug() {
+    build
+    jcc=$(readlink -f ./build/jcc)
+    cd "$CALLER_DIR"
+    lldb -- "$jcc" "$@"
+    cd - > /dev/null
+}
+
+run() {
+    build
+    jcc=$(readlink -f ./build/jcc)
+    cd "$CALLER_DIR"
+    "$jcc" "$@"
+    cd - > /dev/null
 }
 
 test() {
@@ -19,7 +35,7 @@ cfg() {
         name=$(basename $file)
         dot -Tpng "$(dirname $0)/$file" > "$name.png" && open "$name.png"
     done
-    cd -
+    cd - > /dev/null
 }
 
 format() {
@@ -77,6 +93,7 @@ _invoke-subcommand() {
     fi
 }
 
+CALLER_DIR=$(pwd)
 cd "$(dirname "$0")"
 _invoke-subcommand "$@"
 

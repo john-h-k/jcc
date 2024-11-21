@@ -116,7 +116,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   BEGIN_STAGE("AST");
 
-  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PARSE) {
+  if (log_enabled()) {
     debug_print_ast(compiler->parser, &parse_result.translation_unit);
   }
 
@@ -131,7 +131,7 @@ enum compile_result compile(struct compiler *compiler) {
   struct typechk_result typechk_result =
       td_typechk(compiler->typechk, &parse_result.translation_unit);
 
-  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_TYPECHK) {
+  if (log_enabled()) {
     debug_print_td(compiler->typechk, &typechk_result.translation_unit);
   }
 
@@ -151,7 +151,7 @@ enum compile_result compile(struct compiler *compiler) {
   {
     BEGIN_STAGE("IR");
 
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_IR) {
+    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
       debug_print_stage(ir, "ir");
     }
 
@@ -159,9 +159,9 @@ enum compile_result compile(struct compiler *compiler) {
 
     lower(ir, target);
 
-    BEGIN_STAGE("POST PRE REG LOWER IR");
 
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PRE_EMIT) {
+    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PRE_EMIT)) {
+      BEGIN_STAGE("POST PRE REG LOWER IR");
       debug_print_stage(ir, "lower");
     }
 

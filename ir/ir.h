@@ -224,17 +224,12 @@ struct ir_var_array_ty {
   };
 };
 
-struct ir_var_pointer_ty {
-  struct ir_var_ty *underlying;
-};
-
 struct ir_var_ty {
   enum ir_var_ty_ty ty;
 
   union {
     enum ir_var_primitive_ty primitive;
     struct ir_var_func_ty func;
-    struct ir_var_pointer_ty pointer;
     struct ir_var_array_ty array;
     struct ir_var_struct_ty struct_ty;
     struct ir_var_union_ty union_ty;
@@ -242,6 +237,7 @@ struct ir_var_ty {
 };
 
 extern const struct ir_var_ty IR_VAR_TY_UNKNOWN;
+extern const struct ir_var_ty IR_VAR_TY_POINTER;
 extern const struct ir_var_ty IR_VAR_TY_NONE;
 extern const struct ir_var_ty IR_VAR_TY_I8;
 extern const struct ir_var_ty IR_VAR_TY_I16;
@@ -784,10 +780,7 @@ struct ir_var_ty_info {
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty);
 
-struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty);
 struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru);
-struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
-                                     const struct ir_var_ty *underlying);
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
                                    const struct ir_var_ty *underlying,
                                    size_t num_elements);

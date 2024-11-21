@@ -51,9 +51,7 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
-
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
+  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store_glb.glb};
 
@@ -64,9 +62,7 @@ static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_var_ty pointer_ty = var_ty_make_pointer(func->unit, &op->var_ty);
-
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, pointer_ty);
+  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
 
