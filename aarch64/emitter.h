@@ -30,6 +30,8 @@ void aarch64_emit_fcvt(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fcvt);
 void aarch64_emit_fmov(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fmov);
+void aarch64_emit_fneg(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fneg);
 
 /* Two reg FP data processing */
 

@@ -68,9 +68,7 @@ static enum lex_token_ty refine_ty(struct lexer *lexer, struct text_pos start,
   size_t len = text_pos_len(start, end);
 
 #define KEYWORD(kw, ty)                                                        \
-  {                                                                            \
-    kw, sizeof(kw) - 1, ty                                                     \
-  }
+  { kw, sizeof(kw) - 1, ty }
 
   // TODO: hashify
   static struct keyword keywords[] = {
@@ -172,24 +170,53 @@ static const char *process_raw_string(const struct lexer *lexer,
     buff[(*str_len)++] = esc;                                                  \
     break;
 
-      switch (lexer->text[i]) {
-        ADD_ESCAPED('0', '\0')
-        ADD_ESCAPED('a', '\a')
-        ADD_ESCAPED('b', '\b')
-        // non-standard so not included for now
-        // ADD_ESCAPED('e', '\e')
-        ADD_ESCAPED('f', '\f')
-        ADD_ESCAPED('n', '\n')
-        ADD_ESCAPED('r', '\r')
-        ADD_ESCAPED('t', '\t')
-        ADD_ESCAPED('v', '\v')
-        ADD_ESCAPED('\\', '\\')
-        ADD_ESCAPED('\'', '\'')
-        ADD_ESCAPED('"', '"')
-        ADD_ESCAPED('?', '\?')
-      default:
-        todo("\\x \\u \\U and \\octal escapes");
-        // either octal escape, or invalid
+      if (lexer->text[i] == '0') {
+        size_t octal_start = i + 1;
+
+        while (i + 1 < token->span.end.idx) {
+          if (lexer->text[i + 1] >= '0' && lexer->text[i + 1] <= '7') {
+            i++;
+          }
+
+          break;
+        }
+
+        size_t octal_len = MIN(2, i - octal_start);
+        char oct_buff[2] = { 0 };
+        for (size_t j = 0; j < octal_len; j++) {
+          oct_buff[j] = lexer->text[octal_start + j];
+        }
+
+        int value = strtol(oct_buff, NULL, 8);
+        buff[(*str_len)++] = (char)value;
+      } else if (lexer->text[i] == 'u') {
+        // FIXME: C23 allows arbitrary num digits, not just 4
+        char u_buff[4];
+        memcpy(buff, &lexer->text[i + 1], 4);
+        i += 4;
+
+        int value = strtol(u_buff, NULL, 16);
+        buff[(*str_len)++] = (char)value;
+      } else {
+        switch (lexer->text[i]) {
+          ADD_ESCAPED('0', '\0')
+          ADD_ESCAPED('a', '\a')
+          ADD_ESCAPED('b', '\b')
+          // non-standard so not included for now
+          // ADD_ESCAPED('e', '\e')
+          ADD_ESCAPED('f', '\f')
+          ADD_ESCAPED('n', '\n')
+          ADD_ESCAPED('r', '\r')
+          ADD_ESCAPED('t', '\t')
+          ADD_ESCAPED('v', '\v')
+          ADD_ESCAPED('\\', '\\')
+          ADD_ESCAPED('\'', '\'')
+          ADD_ESCAPED('"', '"')
+          ADD_ESCAPED('?', '\?')
+        default:
+          todo("\\x \\u \\U and \\octal escapes");
+          // either octal escape, or invalid
+        }
       }
 
 #undef ADD_ESCAPED
@@ -458,7 +485,7 @@ void peek_token(struct lexer *lexer, struct lex_token *token) {
   case '7':
   case '8':
   case '9':
-  number_literal: {
+  number_literal : {
     // all integers must begin with a digit
     // any digit for decimal, `0` for hex/octal
     // floats can be digit or `.`

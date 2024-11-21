@@ -145,6 +145,9 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_FMOV:
     aarch64_emit_fmov(state->emitter, instr->aarch64->fmov);
     break;
+  case AARCH64_INSTR_TY_FNEG:
+    aarch64_emit_fneg(state->emitter, instr->aarch64->fneg);
+    break;
   case AARCH64_INSTR_TY_FCVT:
     aarch64_emit_fcvt(state->emitter, instr->aarch64->fcvt);
     break;

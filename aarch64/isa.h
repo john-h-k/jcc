@@ -187,6 +187,8 @@
 #define FCVT(ftype_to, ftype_from, Rn, Rd)                                     \
   FP_1_REG(0b0, 0b0, ftype_from, (0b000100 | (ftype_to)), Rn, Rd)
 
+#define FNEG(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000010, Rn, Rd)
+
 /* Two reg FP data processing */
 
 #define FP_CMP(M, S, ftype, Rm, op, Rn, opcode2)                               \

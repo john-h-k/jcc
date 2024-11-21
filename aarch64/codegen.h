@@ -20,6 +20,8 @@ typedef unsigned long long imm_t;
 typedef long long simm_t;
 
 enum aarch64_instr_ty {
+  AARCH64_INSTR_TY_FNEG,
+
   AARCH64_INSTR_TY_FADD,
   AARCH64_INSTR_TY_FMUL,
   AARCH64_INSTR_TY_FDIV,
@@ -379,7 +381,7 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf;
+      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg;
     };
 
     union {

@@ -260,6 +260,12 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
   bad_instr();
 }
 
+void aarch64_emit_fneg(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fneg) {
+  aarch64_emit_instr(emitter, FNEG(FTYPE_FOR_REG(fneg.dest), fneg.source.idx, fneg.dest.idx));
+}
+
+
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,
                        const struct aarch64_fcmp fcmp) {
   aarch64_emit_instr(emitter, FCMP(FTYPE_FOR_REG(fcmp.lhs), fcmp.rhs.idx, fcmp.lhs.idx)));

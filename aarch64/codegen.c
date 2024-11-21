@@ -149,6 +149,7 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_FCMP_ZERO:
     return AARCH64_INSTR_CLASS_FCMP_ZERO;
   case AARCH64_INSTR_TY_FMOV:
+  case AARCH64_INSTR_TY_FNEG:
   case AARCH64_INSTR_TY_FCVT:
   case AARCH64_INSTR_TY_UCVTF:
   case AARCH64_INSTR_TY_SCVTF:
@@ -692,6 +693,13 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg source = codegen_reg(op->unary_op.value);
 
   switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_FNEG:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FNEG;
+    instr->aarch64->fneg = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = source,
+    };
+    return;
   case IR_OP_UNARY_OP_TY_NEG:
     instr->aarch64->ty = AARCH64_INSTR_TY_SUB;
     instr->aarch64->sub = (struct aarch64_addsub_reg){
@@ -2569,6 +2577,10 @@ static void debug_print_instr(FILE *file,
   case AARCH64_INSTR_TY_FMOV:
     fprintf(file, "fmov");
     debug_print_reg_1_source(file, &instr->aarch64->fmov);
+    break;
+  case AARCH64_INSTR_TY_FNEG:
+    fprintf(file, "fneg");
+    debug_print_reg_1_source(file, &instr->aarch64->fneg);
     break;
   case AARCH64_INSTR_TY_FCVT:
     fprintf(file, "fcvt");
