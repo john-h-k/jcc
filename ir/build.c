@@ -2185,7 +2185,7 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_RET;
-  op->var_ty = return_stmt
+  op->var_ty = return_stmt && return_stmt->expr
                    ? var_ty_for_td_var_ty(irb->unit, &return_stmt->expr->var_ty)
                    : IR_VAR_TY_NONE;
   op->ret.value = expr_op;
@@ -2264,15 +2264,14 @@ static int sort_ranges_by_offset(const void *l, const void *r) {
 }
 
 static void build_ir_zero_range(struct ir_func_builder *irb,
-                                       struct ir_stmt **stmt,
-                                       struct ir_op *insert_before,
-                                       struct ir_op *address,
-                                       size_t base_offset,
-                                       size_t byte_size) {
+                                struct ir_stmt **stmt,
+                                struct ir_op *insert_before,
+                                struct ir_op *address, size_t base_offset,
+                                size_t byte_size) {
   if (!byte_size) {
     return;
   }
-  
+
   struct ir_var_ty cnst_ty;
   ssize_t chunk_size;
   if (byte_size >= 8) {
@@ -2311,8 +2310,8 @@ static void build_ir_zero_range(struct ir_func_builder *irb,
 
     struct ir_op *offset_cnst = insert_after_ir_op(
         irb->func, last, IR_OP_TY_CNST, var_ty_for_pointer_size(irb->unit));
-    offset_cnst->cnst =
-        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = base_offset + offset};
+    offset_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                            .int_value = base_offset + offset};
 
     struct ir_op *init_address = insert_after_ir_op(
         irb->func, offset_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
@@ -3290,33 +3289,46 @@ build_init_list_layout(struct ir_unit *iru,
   return layout;
 }
 
+static struct ir_var_value
+build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
+                            struct td_var_ty *var_ty) {
+  switch (expr->ty) {
+  case TD_EXPR_TY_UNARY_OP: {
+    if (expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
+      return build_ir_for_var_value_expr(iru, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
+    } else {
+      todo("other unary ops");
+    }
+  }
+  case TD_EXPR_TY_CNST: {
+    struct td_cnst *cnst = &expr->cnst;
+    if (is_integral_ty(&expr->var_ty)) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
+                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .int_value = cnst->int_value};
+    } else if (is_fp_ty(&expr->var_ty)) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
+                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .flt_value = cnst->flt_value};
+    } else if (expr->var_ty.ty == TD_VAR_TY_TY_POINTER) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
+                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .int_value = cnst->int_value};
+    } else {
+      todo("other types");
+    }
+  }
+  default:
+    todo("other expr tys");
+  }
+}
+
 static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR: {
-    struct td_expr *expr = &init->expr;
-
-    switch (expr->ty) {
-    case TD_EXPR_TY_CNST: {
-      struct td_cnst *cnst = &expr->cnst;
-      if (is_integral_ty(&expr->var_ty)) {
-        return (struct ir_var_value){
-            .ty = IR_VAR_VALUE_TY_INT,
-            .var_ty = var_ty_for_td_var_ty(iru, &expr->var_ty),
-            .int_value = cnst->int_value};
-      } else if (is_fp_ty(&expr->var_ty)) {
-        return (struct ir_var_value){
-            .ty = IR_VAR_VALUE_TY_FLT,
-            .var_ty = var_ty_for_td_var_ty(iru, &expr->var_ty),
-            .flt_value = cnst->flt_value};
-      } else {
-        bug("bad var ty");
-      }
-    }
-    default:
-      todo("other expr tys");
-    }
+    return build_ir_for_var_value_expr(iru, &init->expr, &init->expr.var_ty);
   }
   case TD_INIT_TY_INIT_LIST: {
     const struct td_init_list *init_list = &init->init_list;
