@@ -138,12 +138,12 @@ void backtrack(struct lexer *lexer, struct text_pos position) {
   lexer->pos = position;
 }
 
-void consume_token(struct lexer *lexer, struct token token) {
+void consume_token(struct lexer *lexer, struct lex_token token) {
   lexer->pos = token.span.end;
 }
 
 static const char *process_raw_string(const struct lexer *lexer,
-                                      const struct token *token,
+                                      const struct lex_token *token,
                                       size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
@@ -226,13 +226,13 @@ static bool try_consume(struct lexer *lexer, struct text_pos *pos, char c) {
 
 bool lexer_at_eof(struct lexer *lexer) {
   // needed to skip whitespace
-  struct token token;
+  struct lex_token token;
   peek_token(lexer, &token);
 
   return lexer->pos.idx >= lexer->len;
 }
 
-void peek_token(struct lexer *lexer, struct token *token) {
+void peek_token(struct lexer *lexer, struct lex_token *token) {
   while (lexer->pos.idx < lexer->len && isspace(lexer->text[lexer->pos.idx])) {
     if (lexer->text[lexer->pos.idx] == '\n') {
       // skip newlines, adjust position
@@ -609,13 +609,13 @@ void peek_token(struct lexer *lexer, struct token *token) {
 }
 
 const char *strlike_associated_text(const struct lexer *lexer,
-                                    const struct token *token,
+                                    const struct lex_token *token,
                                     size_t *str_len) {
   return process_raw_string(lexer, token, str_len);
 }
 
 const char *associated_text(const struct lexer *lexer,
-                            const struct token *token) {
+                            const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
@@ -647,7 +647,7 @@ const char *associated_text(const struct lexer *lexer,
 }
 
 const char *token_name(UNUSED_ARG(const struct lexer *lexer),
-                       const struct token *token) {
+                       const struct lex_token *token) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;

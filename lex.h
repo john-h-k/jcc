@@ -147,7 +147,7 @@ enum lex_token_ty {
 
 enum lex_create_result { LEX_CREATE_RESULT_SUCCESS = 0 };
 
-struct token {
+struct lex_token {
   enum lex_token_ty ty;
 
   struct text_span span;
@@ -163,8 +163,8 @@ void lexer_free(struct lexer **lexer);
 struct text_pos get_position(struct lexer *lexer);
 void backtrack(struct lexer *lexer, struct text_pos position);
 
-void peek_token(struct lexer *lexer, struct token *token);
-void consume_token(struct lexer *lexer, struct token token);
+void peek_token(struct lexer *lexer, struct lex_token *token);
+void consume_token(struct lexer *lexer, struct lex_token token);
 
 // returns the associated text for a token, or NULL
 // e.g
@@ -172,11 +172,11 @@ void consume_token(struct lexer *lexer, struct token token);
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
 const char *associated_text(const struct lexer *lexer,
-                            const struct token *token);
+                            const struct lex_token *token);
 
 const char *strlike_associated_text(const struct lexer *lexer,
-                                    const struct token *token, size_t *str_len);
+                                    const struct lex_token *token, size_t *str_len);
 
-const char *token_name(const struct lexer *lexer, const struct token *token);
+const char *token_name(const struct lexer *lexer, const struct lex_token *token);
 
 #endif

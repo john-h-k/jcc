@@ -58,9 +58,6 @@ static void remove_critical_edges(struct ir_func *irb) {
 void eliminate_phi(struct ir_func *irb) {
   remove_critical_edges(irb);
 
-  printf("done\n\n\n");
-  remove_critical_edges(irb);
-
   struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {

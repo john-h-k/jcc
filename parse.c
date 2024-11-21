@@ -124,7 +124,7 @@ static struct ast_op_info op_info(enum ast_binary_op_ty ty) {
   return info;
 }
 
-static bool op_info_for_token(const struct token *token,
+static bool op_info_for_token(const struct lex_token *token,
                               struct ast_op_info *info) {
   switch (token->ty) {
   case LEX_TOKEN_TY_OP_EQ:
@@ -188,7 +188,7 @@ static bool op_info_for_token(const struct token *token,
 }
 
 static bool parse_token(struct parser *parser, enum lex_token_ty ty) {
-  struct token token;
+  struct lex_token token;
 
   peek_token(parser->lexer, &token);
   if (token.ty == ty) {
@@ -199,7 +199,7 @@ static bool parse_token(struct parser *parser, enum lex_token_ty ty) {
   return false;
 }
 
-static bool parse_identifier(struct parser *parser, struct token *token) {
+static bool parse_identifier(struct parser *parser, struct lex_token *token) {
   struct text_pos pos = get_position(parser->lexer);
 
   peek_token(parser->lexer, token);
@@ -216,7 +216,7 @@ static bool parse_identifier(struct parser *parser, struct token *token) {
 
 static bool parse_type_qualifier(struct parser *parser,
                                  enum ast_type_qualifier *qualifier) {
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   if (token.ty == LEX_TOKEN_TY_KW_CONST) {
@@ -233,7 +233,7 @@ static bool parse_type_qualifier(struct parser *parser,
 
 static bool parse_function_specifier(struct parser *parser,
                                      enum ast_function_specifier *specifier) {
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   if (token.ty == LEX_TOKEN_TY_KW_INLINE) {
@@ -249,7 +249,7 @@ static bool parse_function_specifier(struct parser *parser,
 static bool
 parse_storage_class_specifier(struct parser *parser,
                               enum ast_storage_class_specifier *specifier) {
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   if (token.ty == LEX_TOKEN_TY_KW_TYPEDEF) {
@@ -272,7 +272,7 @@ parse_storage_class_specifier(struct parser *parser,
 
 static bool parse_type_specifier_kw(struct parser *parser,
                                     enum ast_type_specifier_kw *wkt) {
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   switch (token.ty) {
@@ -380,7 +380,7 @@ static bool parse_enum_specifier(struct parser *parser,
     return false;
   }
 
-  struct token identifier;
+  struct lex_token identifier;
   if (parse_identifier(parser, &identifier)) {
     enum_specifier->identifier =
         arena_alloc(parser->arena, sizeof(*enum_specifier->identifier));
@@ -434,7 +434,7 @@ static bool parse_struct_or_union_specifier(
     return false;
   }
 
-  struct token identifier;
+  struct lex_token identifier;
   if (parse_identifier(parser, &identifier)) {
     struct_or_union_specifier->identifier = arena_alloc(
         parser->arena, sizeof(*struct_or_union_specifier->identifier));
@@ -464,8 +464,8 @@ static bool parse_struct_or_union_specifier(
 }
 
 static bool parse_typedef_name(struct parser *parser,
-                               struct token *typedef_name) {
-  struct token identifier;
+                               struct lex_token *typedef_name) {
+  struct lex_token identifier;
   peek_token(parser->lexer, &identifier);
 
   if (identifier.ty != LEX_TOKEN_TY_IDENTIFIER) {
@@ -571,7 +571,7 @@ static bool parse_designator(struct parser *parser,
 
     return true;
   } else if (parse_token(parser, LEX_TOKEN_TY_DOT)) {
-    struct token identifier;
+    struct lex_token identifier;
     EXP_PARSE(parse_identifier(parser, &identifier),
               "identifier after dot in designator");
 
@@ -1031,7 +1031,7 @@ static bool parse_var(struct parser *parser, struct ast_var *var) {
 }
 
 static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  struct token token;
+  struct lex_token token;
 
   peek_token(parser->lexer, &token);
 
@@ -1077,7 +1077,7 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  struct token token;
+  struct lex_token token;
 
   peek_token(parser->lexer, &token);
 
@@ -1121,7 +1121,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  struct token token;
+  struct lex_token token;
 
   peek_token(parser->lexer, &token);
 
@@ -1185,7 +1185,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
 static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
+  struct lex_token token;
 
   struct vector *strings = vector_create(sizeof(char));
 
@@ -1249,7 +1249,7 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
     return false;
   }
 
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   enum ast_assg_ty ty;
@@ -1341,7 +1341,7 @@ static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   // parenthesised expression
@@ -1437,7 +1437,7 @@ static bool parse_member_access(struct parser *parser,
     return false;
   }
 
-  struct token token;
+  struct lex_token token;
   EXP_PARSE(parse_identifier(parser, &token),
             "identifier after . in member access");
 
@@ -1458,7 +1458,7 @@ static bool parse_pointer_access(struct parser *parser,
     return false;
   }
 
-  struct token token;
+  struct lex_token token;
   EXP_PARSE(parse_identifier(parser, &token),
             "identifier after -> in pointer access");
 
@@ -1555,7 +1555,7 @@ static bool parse_unary_prefix_op(struct parser *parser,
                                   struct ast_expr *expr) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token token;
+  struct lex_token token;
   peek_token(parser->lexer, &token);
 
   bool has_unary_prefix = true;
@@ -1687,7 +1687,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
 
   // TODO: make iterative
   while (true) {
-    struct token lookahead;
+    struct lex_token lookahead;
     peek_token(parser->lexer, &lookahead);
     debug("looked ahead to %s", token_name(parser->lexer, &lookahead));
     struct ast_op_info info;
@@ -1803,7 +1803,7 @@ static bool parse_compoundexpr(struct parser *parser,
 
   struct vector *exprs = vector_create(sizeof(struct ast_expr));
 
-  struct token token;
+  struct lex_token token;
   struct ast_expr sub_expr;
   do {
     if (!parse_expr(parser, &sub_expr)) {
@@ -1966,7 +1966,7 @@ static bool parse_jumpstmt(struct parser *parser,
   backtrack(parser->lexer, pos);
 
   if (parse_token(parser, LEX_TOKEN_TY_KW_GOTO)) {
-    struct token label;
+    struct lex_token label;
     peek_token(parser->lexer, &label);
 
     if (label.ty == LEX_TOKEN_TY_IDENTIFIER) {
@@ -1990,7 +1990,7 @@ static bool parse_labeledstmt(struct parser *parser,
                               struct ast_labeledstmt *labeled_stmt) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct token label;
+  struct lex_token label;
   peek_token(parser->lexer, &label);
   consume_token(parser->lexer, label);
 
@@ -2419,7 +2419,7 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
     param->ty = AST_PARAM_TY_VARIADIC;
     return true;
   } else if (parse_token(parser, LEX_TOKEN_TY_KW_VOID)) {
-    struct token token;
+    struct lex_token token;
     peek_token(parser->lexer, &token);
     if (token.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {
       param->ty = AST_PARAM_TY_VOID;
@@ -2516,7 +2516,7 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
 
-const char *identifier_str(struct parser *parser, const struct token *token) {
+const char *identifier_str(struct parser *parser, const struct lex_token *token) {
   return associated_text(parser->lexer, token);
 }
 
