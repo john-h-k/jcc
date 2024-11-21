@@ -134,9 +134,24 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
   return 0;
 }
 
+
+struct lsra_reg_info {
+  size_t num_volatile_gp;
+  size_t num_volatile_fp;
+  size_t num_gp_regs;
+  size_t num_fp_regs;
+  size_t gp_spill_reg;
+  size_t fp_spill_reg;
+};
+
 struct fixup_spills_data {
   struct ir_func *irb;
   struct ir_op *consumer;
+
+  size_t gp_spill_reg;
+  size_t fp_spill_reg;
+
+  struct lsra_reg_info info;
 };
 
 static bool op_needs_reg(struct ir_op *op) {
@@ -168,7 +183,15 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
                                    (*op)->var_ty);
       }
       load->load_lcl.lcl = (*op)->lcl;
-      load->reg = data->consumer->reg;
+      
+      if (var_ty_is_integral(&load->var_ty)) {
+        load->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = data->info.gp_spill_reg };
+      } else if (var_ty_is_fp(&load->var_ty)) {
+        load->reg = (struct ir_reg){ .ty = IR_REG_TY_FP, .idx = data->info.fp_spill_reg };
+      } else {
+        bug("dont know what to allocate");
+      }
+
       load->flags |= IR_OP_FLAG_SPILL;
 
       *op = load;
@@ -178,7 +201,7 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
   }
 }
 
-static void fixup_spills(struct ir_func *irb) {
+static void fixup_spills(struct ir_func *irb, struct lsra_reg_info *info) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
 
@@ -194,7 +217,7 @@ static void fixup_spills(struct ir_func *irb) {
         }
 
         // walk all things this op uses, and add loads for any that are spilled
-        struct fixup_spills_data metadata = {.irb = irb, .consumer = op};
+        struct fixup_spills_data metadata = {.irb = irb, .info = *info, .consumer = op};
 
         walk_op_uses(op, fixup_spills_callback, &metadata);
 
@@ -216,27 +239,19 @@ static int compare_interval_id(const void *a, const void *b) {
 }
 
 static struct interval_data register_alloc_pass(struct ir_func *irb,
-                                                struct reg_info *info) {
+                                                struct lsra_reg_info *info) {
 
   struct interval_data data = construct_intervals(irb);
 
   // we reserve one reg in each bank for spills
 
-  size_t num_gp_regs =
-      info->gp_registers.num_volatile + info->gp_registers.num_nonvolatile - 1;
-  size_t num_fp_regs =
-      info->fp_registers.num_volatile + info->fp_registers.num_nonvolatile - 1;
-
-  size_t gp_spill_reg = num_gp_regs;
-  size_t fp_spill_reg = num_fp_regs;
-
   struct register_alloc_state state = {
       .interval_data = data,
       .active =
-          arena_alloc(irb->arena, sizeof(size_t) * (num_fp_regs + num_gp_regs)),
+          arena_alloc(irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
       .num_active = 0,
-      .gp_reg_pool = bitset_create(num_gp_regs, true),
-      .fp_reg_pool = bitset_create(num_fp_regs, true)};
+      .gp_reg_pool = bitset_create(info->num_gp_regs, true),
+      .fp_reg_pool = bitset_create(info->num_fp_regs, true)};
 
   bitset_clear(state.gp_reg_pool, true);
   bitset_clear(state.fp_reg_pool, true);
@@ -270,9 +285,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         }
 
         if ((reg.ty == IR_REG_TY_INTEGRAL &&
-             reg.idx < info->gp_registers.num_volatile) ||
+             reg.idx < info->num_volatile_gp) ||
             (reg.ty == IR_REG_TY_FP &&
-             reg.idx < info->fp_registers.num_volatile)) {
+             reg.idx < info->num_volatile_gp)) {
 
           struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
           struct ir_op *lcl_addr = insert_before_ir_op(
@@ -329,12 +344,12 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
       all_used_reg_pool = irb->reg_usage.gp_registers_used;
-      spill_reg = gp_spill_reg;
+      spill_reg = info->gp_spill_reg;
     } else if (var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
       all_used_reg_pool = irb->reg_usage.fp_registers_used;
-      spill_reg = fp_spill_reg;
+      spill_reg = info->fp_spill_reg;
     } else {
       bug("don't know what register type to allocate for op %zu",
           interval->op->id);
@@ -380,10 +395,28 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
                         false),
   };
 
+  size_t num_gp_regs =
+      reg_info.gp_registers.num_volatile + reg_info.gp_registers.num_nonvolatile - 1;
+  size_t num_fp_regs =
+      reg_info.fp_registers.num_volatile + reg_info.fp_registers.num_nonvolatile - 1;
+
+  size_t gp_spill_reg = num_gp_regs;
+  size_t fp_spill_reg = num_fp_regs;
+
+  struct lsra_reg_info lsra_reg_info = {
+    .num_volatile_gp = reg_info.gp_registers.num_volatile,
+    .num_volatile_fp = reg_info.fp_registers.num_volatile,
+    .num_gp_regs = num_gp_regs,
+    .num_fp_regs = num_fp_regs,
+    .gp_spill_reg = gp_spill_reg,
+    .fp_spill_reg = fp_spill_reg,
+  };
+  
+
   BEGIN_SUB_STAGE("REGALLOC");
 
   clear_metadata(irb);
-  struct interval_data data = register_alloc_pass(irb, &reg_info);
+  struct interval_data data = register_alloc_pass(irb, &lsra_reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
@@ -395,7 +428,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   BEGIN_SUB_STAGE("SPILL HANDLING");
 
   // insert LOAD and STORE ops as needed
-  fixup_spills(irb);
+  fixup_spills(irb, &lsra_reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),
         compare_interval_id);
