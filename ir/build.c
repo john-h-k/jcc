@@ -2066,6 +2066,10 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb->func);
   make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
 
+  if (!for_stmt->cond) {
+    before_body_basicblock = body_basicblock;
+  }
+
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, for_stmt->body);
 
@@ -2098,8 +2102,6 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   if (for_stmt->cond) {
     make_basicblock_split(irb->func, before_body_basicblock, body_basicblock,
                           after_body_basicblock);
-  } else {
-    make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
   }
 
   return (struct ir_loop){.entry = end_body_basicblock,
@@ -2967,7 +2969,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
-  if (!last_bb) {
+  if (!last_bb || (last_bb->last && last_bb->last->last && op_is_branch(last_bb->last->last->ty))) {
     debug("adding bb to create ret");
     last_bb = alloc_ir_basicblock(builder->func);
   }

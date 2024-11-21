@@ -407,6 +407,20 @@
 #define SUBS_REG(sf, shift, imm6, Rm, Rn, Rd)                                  \
   ADD_SUB_SHIFTED_REG(sf, 0b1, 0b1, shift, Rm, imm6, Rn, Rd)
 
+#define ADD_SUB_EXTENDED_REG(sf, op, S, opt, Rm, option, imm3, Rn, Rd)                \
+  (uint32_t)((U32(sf) << 31) | (U32(op) << 30) | (U32(S) << 29) |              \
+             (U32(0b01011) << 24) | (U32(opt) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |     \
+             (U32(option) << 13) | (U32(IMM(imm3, 3)) << 10) | (U32(Rn) << 5) | U32(Rd))
+
+#define ADD_EXT(sf, option, imm3, Rm, Rn, Rd)                                   \
+  ADD_SUB_EXTENDED_REG(sf, 0b0, 0b0, 0b00, Rm, option, imm3, Rn, Rd)
+#define SUB_EXT(sf, option, imm3, Rm, Rn, Rd)                                   \
+  ADD_SUB_EXTENDED_REG(sf, 0b1, 0b0, 0b00, Rm, option, imm3, Rn, Rd)
+#define ADDS_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
+  ADD_SUB_EXTENDED_REG(sf, 0b0, 0b1, 0b00, Rm, option, imm3, Rn, Rd)
+#define SUBS_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
+  ADD_SUB_EXTENDED_REG(sf, 0b1, 0b1, 0b00, Rm, option, imm3, Rn, Rd)
+
 #define REG_2_SOURCE(sf, S, opcode, Rm, Rn, Rd)                                \
   (uint32_t)((U32(sf) << 31) | (U32(S) << 29) | (U32(0b11010110) << 21) |      \
              (U32(Rm) << 16) | (U32(opcode) << 10) | (U32(Rn) << 5) | U32(Rd))

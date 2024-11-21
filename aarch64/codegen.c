@@ -129,6 +129,11 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_ADR:
   case AARCH64_INSTR_TY_ADRP:
     return AARCH64_INSTR_CLASS_ADDR_IMM;
+  case AARCH64_INSTR_TY_ADD_EXT:
+  case AARCH64_INSTR_TY_ADDS_EXT:
+  case AARCH64_INSTR_TY_SUB_EXT:
+  case AARCH64_INSTR_TY_SUBS_EXT:
+    return AARCH64_INSTR_CLASS_ADDSUB_EXT;
   case AARCH64_INSTR_TY_ADD:
   case AARCH64_INSTR_TY_ADDS:
   case AARCH64_INSTR_TY_SUB:
@@ -1115,7 +1120,15 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to};
 
     struct instr *mov = alloc_instr(state->func);
-    *mov->aarch64 = MOV_ALIAS(dest, source);
+
+    if (aarch64_reg_ty_is_gp(source.ty) && aarch64_reg_ty_is_gp(dest.ty)) {
+      *mov->aarch64 = MOV_ALIAS(dest, source);
+    } else {
+      // one is floating
+      mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
+      mov->aarch64->fmov =
+          (struct aarch64_reg_1_source){.dest = dest, .source = source};
+    }
   }
 
   // now we generate the actual call
@@ -1144,9 +1157,19 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     struct aarch64_reg ret_reg = return_reg_for_ty(ret_dest.ty);
 
     struct instr *ret_mov = alloc_instr(state->func);
-    *ret_mov->aarch64 = MOV_ALIAS(ret_dest, ret_reg);
+
+    if (aarch64_reg_ty_is_gp(ret_reg.ty) && aarch64_reg_ty_is_gp(ret_dest.ty)) {
+      *ret_mov->aarch64 = MOV_ALIAS(ret_dest, ret_reg);
+    } else {
+      // one is floating
+      ret_mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
+      ret_mov->aarch64->fmov =
+          (struct aarch64_reg_1_source){.dest = ret_dest, .source = ret_reg};
+    }
   }
 }
+
+#define MAX_IMM_SIZE 4095
 
 static void insert_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
@@ -1214,13 +1237,28 @@ static void insert_prologue(struct codegen_state *state) {
       .shift = 0};
 
   if (info.stack_size) {
-    struct instr *sub_stack = alloc_instr(state->func);
-    sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
-    sub_stack->aarch64->sub_imm =
-        (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
-                                    .source = STACK_PTR_REG,
-                                    .imm = info.stack_size,
-                                    .shift = 0};
+    if (info.stack_size > MAX_IMM_SIZE) {
+      struct aarch64_reg tmp =
+          (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 9};
+
+      struct instr *stack_cnst = alloc_instr(state->func);
+      stack_cnst->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
+      stack_cnst->aarch64->movz = (struct aarch64_mov_imm){
+          .dest = tmp, .imm = info.stack_size, .shift = 0};
+
+      struct instr *sub_stack = alloc_instr(state->func);
+      sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_EXT;
+      sub_stack->aarch64->sub_ext = (struct aarch64_addsub_ext){
+          .dest = STACK_PTR_REG, .lhs = STACK_PTR_REG, .rhs = tmp, .extend = AARCH64_EXTEND_UXTW};
+    } else {
+      struct instr *sub_stack = alloc_instr(state->func);
+      sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
+      sub_stack->aarch64->sub_imm =
+          (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
+                                      .source = STACK_PTR_REG,
+                                      .imm = info.stack_size,
+                                      .shift = 0};
+    }
 
     size_t save_idx = 0;
 
@@ -1281,13 +1319,29 @@ static void insert_epilogue(struct codegen_state *state) {
   }
 
   if (prologue_info->stack_size) {
-    struct instr *add_stack = alloc_instr(state->func);
-    add_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    add_stack->aarch64->add_imm =
-        (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
-                                    .source = STACK_PTR_REG,
-                                    .imm = prologue_info->stack_size,
-                                    .shift = 0};
+    if (prologue_info->stack_size > MAX_IMM_SIZE) {
+      struct aarch64_reg tmp =
+          (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 9};
+
+      struct instr *stack_cnst = alloc_instr(state->func);
+      stack_cnst->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
+      stack_cnst->aarch64->movz = (struct aarch64_mov_imm){
+          .dest = tmp, .imm = prologue_info->stack_size, .shift = 0};
+
+      struct instr *sub_stack = alloc_instr(state->func);
+      sub_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_EXT;
+      sub_stack->aarch64->add_ext = (struct aarch64_addsub_ext){
+          .dest = STACK_PTR_REG, .lhs = STACK_PTR_REG, .rhs = tmp, .extend = AARCH64_EXTEND_UXTW};
+
+    } else {
+      struct instr *add_stack = alloc_instr(state->func);
+      add_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+      add_stack->aarch64->add_imm =
+          (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
+                                      .source = STACK_PTR_REG,
+                                      .imm = prologue_info->stack_size,
+                                      .shift = 0};
+    }
   }
 
   struct instr *restore_lr_x30 = alloc_instr(state->func);
@@ -1438,10 +1492,10 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   if (usage_ty == AARCH64_REG_USAGE_TY_DEREF) {
     // deref only makes sense on an X register, and is ignored for comparisons
     // to other registers so back out early
-    invariant_assert(reg.ty == AARCH64_REG_TY_X,
-                     "entry %zu: usage DEREF only makes sense with REG_TY_X in %zu",
-                     data->entry->glb_id,
-                     instr->id);
+    invariant_assert(
+        reg.ty == AARCH64_REG_TY_X,
+        "entry %zu: usage DEREF only makes sense with REG_TY_X in %zu",
+        data->entry->glb_id, instr->id);
     return;
   }
 
@@ -1455,30 +1509,29 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     if (instr->aarch64->ty == AARCH64_INSTR_TY_FMOV) {
       size_t cur_size = reg_size(reg.ty);
       size_t last_size = reg_size(data->reg_ty);
-      invariant_assert(cur_size == last_size,
-                       "entry %zu: expected `fmov` %zu to have same size registers "
-                       "(expected %zu found %zu)",
-                     data->entry->glb_id,
-                       instr->id, cur_size, last_size);
-    } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
       invariant_assert(
-          aarch64_reg_ty_is_fp(reg.ty) && aarch64_reg_ty_is_fp(data->reg_ty),
-          "entry %zu: expected `fcvt` %zu to have all registers floating-point",
-                     data->entry->glb_id,
-          instr->id);
+          cur_size == last_size,
+          "entry %zu: expected `fmov` %zu to have same size registers "
+          "(expected %zu found %zu)",
+          data->entry->glb_id, instr->id, cur_size, last_size);
+    } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
+      invariant_assert(aarch64_reg_ty_is_fp(reg.ty) &&
+                           aarch64_reg_ty_is_fp(data->reg_ty),
+                       "entry %zu: expected `fcvt` %zu to have all registers "
+                       "floating-point",
+                       data->entry->glb_id, instr->id);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_UCVTF ||
                instr->aarch64->ty == AARCH64_INSTR_TY_SCVTF) {
-      invariant_assert(aarch64_reg_ty_is_fp(reg.ty) !=
-                           aarch64_reg_ty_is_fp(data->reg_ty),
-                       "entry %zu: expected `ucvtf`/`scvtf` %zu to have one fp register "
-                       "and one gp register",
-                     data->entry->glb_id,
-                       instr->id);
+      invariant_assert(
+          aarch64_reg_ty_is_fp(reg.ty) != aarch64_reg_ty_is_fp(data->reg_ty),
+          "entry %zu: expected `ucvtf`/`scvtf` %zu to have one fp register "
+          "and one gp register",
+          data->entry->glb_id, instr->id);
     } else {
-      invariant_assert(reg.ty == data->reg_ty,
-                       "entry %zu: reg ty mismatch in %zu (expected %d found %d)",
-                     data->entry->glb_id,
-                       instr->id, data->reg_ty, reg.ty);
+      invariant_assert(
+          reg.ty == data->reg_ty,
+          "entry %zu: reg ty mismatch in %zu (expected %d found %d)",
+          data->entry->glb_id, instr->id, data->reg_ty, reg.ty);
     }
   }
 
@@ -1765,7 +1818,8 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
     if (entry->ty == CODEGEN_ENTRY_TY_FUNC) {
       // codegen is now done
       // do some basic sanity checks
-      struct check_reg_type_data data = { .entry = entry, .last = NULL, .reg_ty = 0};
+      struct check_reg_type_data data = {
+          .entry = entry, .last = NULL, .reg_ty = 0};
       walk_regs(&entry->func, check_reg_type_callback, &data);
     }
   }
@@ -1823,6 +1877,13 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
       cb(instr, addsub_reg.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
       cb(instr, addsub_reg.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
       cb(instr, addsub_reg.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
+      break;
+    }
+    case AARCH64_INSTR_CLASS_ADDSUB_EXT: {
+      struct aarch64_addsub_ext addsub_ext = instr->aarch64->addsub_ext;
+      cb(instr, addsub_ext.lhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, addsub_ext.rhs, AARCH64_REG_USAGE_TY_READ, metadata);
+      cb(instr, addsub_ext.dest, AARCH64_REG_USAGE_TY_WRITE, metadata);
       break;
     }
     case AARCH64_INSTR_CLASS_ADDSUB_IMM: {
@@ -1980,6 +2041,42 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       }
 
       format += 8;
+    } else if (strncmp(format, "ext_imm", 7) == 0) {
+      // expects a shift + an immediate, and prints if shift != LSL or imm !=
+      // 0
+      enum aarch64_extend extend = va_arg(list, enum aarch64_extend);
+      size_t imm = va_arg(list, size_t);
+
+      if (extend != AARCH64_EXTEND_UXTW || imm) {
+        switch (extend) {
+        case AARCH64_EXTEND_UXTB:
+          fprintf(file, ", uxtb #%zu", imm);
+          break;
+        case AARCH64_EXTEND_UXTH:
+          fprintf(file, ", uxth #%zu", imm);
+          break;
+        case AARCH64_EXTEND_UXTW:
+          fprintf(file, ", uxtw #%zu", imm);
+          break;
+        case AARCH64_EXTEND_UXTX:
+          fprintf(file, ", uxtx #%zu", imm);
+          break;
+        case AARCH64_EXTEND_SXTB:
+          fprintf(file, ", sxtb #%zu", imm);
+          break;
+        case AARCH64_EXTEND_SXTH:
+          fprintf(file, ", sxth #%zu", imm);
+          break;
+        case AARCH64_EXTEND_SXTW:
+          fprintf(file, ", sxtw #%zu", imm);
+          break;
+        case AARCH64_EXTEND_SXTX:
+          fprintf(file, ", sxtx #%zu", imm);
+          break;
+        }
+      }
+
+      format += 7;
     } else if (strncmp(format, "shift_imm", 9) == 0) {
       // expects a shift + an immediate, and prints if shift != LSL or imm !=
       // 0
@@ -2160,6 +2257,14 @@ debug_print_addsub_reg(FILE *file,
   codegen_fprintf(file, " %reg, %reg, %reg%shift_imm", addsub_reg->dest,
                   addsub_reg->lhs, addsub_reg->rhs, addsub_reg->shift,
                   addsub_reg->imm6);
+}
+
+static void
+debug_print_addsub_ext(FILE *file,
+                       const struct aarch64_addsub_ext *addsub_ext) {
+  codegen_fprintf(file, " %reg, %reg, %reg%ext_imm", addsub_ext->dest,
+                  addsub_ext->lhs, addsub_ext->rhs, addsub_ext->extend,
+                  addsub_ext->imm3);
 }
 
 static void
@@ -2348,6 +2453,14 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "adds");
     debug_print_addsub_reg(file, &instr->aarch64->adds);
     break;
+  case AARCH64_INSTR_TY_ADDS_EXT:
+    fprintf(file, "adds");
+    debug_print_addsub_ext(file, &instr->aarch64->adds_ext);
+    break;
+  case AARCH64_INSTR_TY_ADD_EXT:
+    fprintf(file, "add");
+    debug_print_addsub_ext(file, &instr->aarch64->add_ext);
+    break;
   case AARCH64_INSTR_TY_ADD:
     fprintf(file, "add");
     debug_print_addsub_reg(file, &instr->aarch64->add);
@@ -2514,6 +2627,14 @@ static void debug_print_instr(FILE *file,
   case AARCH64_INSTR_TY_SUBS:
     fprintf(file, "subs");
     debug_print_addsub_reg(file, &instr->aarch64->subs);
+    break;
+  case AARCH64_INSTR_TY_SUBS_EXT:
+    fprintf(file, "subs");
+    debug_print_addsub_ext(file, &instr->aarch64->subs_ext);
+    break;
+  case AARCH64_INSTR_TY_SUB_EXT:
+    fprintf(file, "sub");
+    debug_print_addsub_ext(file, &instr->aarch64->sub_ext);
     break;
   case AARCH64_INSTR_TY_SUB:
     fprintf(file, "sub");
