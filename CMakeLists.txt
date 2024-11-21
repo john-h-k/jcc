@@ -17,6 +17,7 @@ set(
   compiler.c
   diagnostics.c
   lex.c
+  io.c
   parse.c
   preproc.c
   program.c

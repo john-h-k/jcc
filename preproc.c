@@ -6,6 +6,7 @@
 #include "program.h"
 #include "util.h"
 #include "vector.h"
+#include "io.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -420,8 +421,25 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         strncpy(filename, &preproc->text[filename_token.span.start.idx + 1],
                 filename_len);
 
-        todo("actually include file");
+        bool is_angle = preproc->text[filename_token.span.start.idx] == '<';
+
+        const char *content = NULL;
+        if (is_angle) {
+          for (size_t i = 0; i < preproc->num_include_paths; i++) {
+            const char *path = path_combine(preproc->include_paths[i], filename);
+            content = read_file(path);
+            if (content) {
+              break;
+            }
+          }
+        } else {
+          content = read_file(filename);
+        }
+        todo("include");
         // break;
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+          token_streq(preproc, directive, "define")) {
+        todo("define");
       }
 
       todo("other directives");

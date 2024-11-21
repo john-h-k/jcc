@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "io.h"
 #include "lex.h"
 #include "link.h"
 #include "log.h"
@@ -22,28 +23,6 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          struct compile_args *args,
                                          const char ***sources,
                                          size_t *num_sources);
-
-static char *readfile(const char *path) {
-  FILE *f = fopen(path, "r");
-
-  if (!f) {
-    return NULL;
-  }
-
-  fseek(f, 0, SEEK_END);
-  long fsize = ftell(f);
-
-  invariant_assert(fsize != -1L, "ftell failed");
-
-  rewind(f);
-
-  char *content = nonnull_malloc((unsigned long)fsize + 1);
-  fread(content, (unsigned long)fsize, 1, f);
-  fclose(f);
-
-  content[fsize] = '\0';
-  return content;
-}
 
 static bool target_needs_linking(const struct compile_args *args) {
   return args->target_arch != COMPILE_TARGET_ARCH_EEP;
@@ -74,7 +53,7 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     info("compiling source file \"%s\"", sources[i]);
 
-    const char *source = readfile(sources[i]);
+    const char *source = read_file(sources[i]);
 
     if (!source) {
       err("source file \"%s\" could not be read!", sources[i]);
