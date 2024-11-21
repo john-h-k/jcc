@@ -33,10 +33,8 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
   return tbl;
 }
 
-hash_t hashtbl_hash_str(const void *obj) {
-  struct hasher hasher = hasher_create();
-  hasher_hash_str(&hasher, obj);
-  return hasher_finish(&hasher);
+void hashtbl_hash_str(struct hasher *hasher, const void *obj) {
+  hasher_hash_str(hasher, obj);
 }
 
 bool hashtbl_eq_str(const void *l, const void *r) { return strcmp(l, r) == 0; }
@@ -121,14 +119,18 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
 
 void hashtbl_insert(struct hashtbl *hashtbl, const void *key,
                     const void *data) {
-  hash_t hash = hashtbl->hash_fn(key);
+  struct hasher hasher = hasher_create();
+  hashtbl->hash_fn(&hasher, key);
+  hash_t hash = hasher_finish(&hasher);
 
   hashtbl_insert_with_hash(hashtbl, key, data, hash);
 }
 
 void hashtbl_remove(struct hashtbl *hashtbl, const void *key);
 void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
-  hash_t hash = hashtbl->hash_fn(key);
+  struct hasher hasher = hasher_create();
+  hashtbl->hash_fn(&hasher, key);
+  hash_t hash = hasher_finish(&hasher);
 
   size_t num_buckets = vector_length(hashtbl->buckets);
 

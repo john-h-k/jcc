@@ -1,20 +1,20 @@
 #ifndef HASHTBL_H
 #define HASHTBL_H
 
+#include "hash.h"
+
 #include <stddef.h>
 #include <stdbool.h>
 
 struct hashtbl;
 
-typedef size_t hash_t;
-
-typedef hash_t (*hash_fn)(const void *obj);
+typedef void (*hash_fn)(struct hasher *hasher, const void *obj);
 typedef bool (*eq_fn)(const void *l, const void *r);
 
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_gn);
 
-hash_t hashtbl_hash_str(const void *obj);
+void hashtbl_hash_str(struct hasher *hasher, const void *obj);
 bool hashtbl_eq_str(const void *l, const void *r);
 
 struct hashtbl *hashtbl_create_str_keyed(size_t element_size);

@@ -58,8 +58,10 @@ void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
     hasher->sponge1 = 0;
     hasher->sponge_len = bits;
   } else {
-    uint64_t lo = value << hasher->sponge_len;
-    uint64_t hi = value >> (128 - hasher->sponge_len);
+    size_t shift = 128 - hasher->sponge_len;
+
+    uint64_t lo = hasher->sponge_len >= 64 ? 0 : value << hasher->sponge_len;
+    uint64_t hi = shift >= 64 ? 0 : value >> shift ;
 
     hasher->sponge0 |= lo;
     hasher->sponge1 |= hi;
