@@ -159,7 +159,6 @@ enum compile_result compile(struct compiler *compiler) {
 
     lower(ir, target);
 
-
     if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PRE_EMIT)) {
       BEGIN_STAGE("POST PRE REG LOWER IR");
       debug_print_stage(ir, "lower");
@@ -221,8 +220,10 @@ enum compile_result compile(struct compiler *compiler) {
     if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
       debug_print_stage(ir, "elim_phi");
     }
+  }
 
-    glb = ir->first_global;
+  {
+    struct ir_glb *glb = ir->first_global;
 
     while (glb) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
@@ -234,15 +235,11 @@ enum compile_result compile(struct compiler *compiler) {
       case IR_GLB_TY_DATA:
         break;
       case IR_GLB_TY_FUNC:
-        // eliminate_phi(glb->func);
+        rebuild_ids(glb->func);
         break;
       }
 
       glb = glb->succ;
-    }
-
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
-      debug_print_stage(ir, "elim_phi");
     }
   }
 
