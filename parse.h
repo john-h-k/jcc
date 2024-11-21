@@ -52,7 +52,7 @@ struct ast_direct_declarator {
   enum ast_direct_declarator_ty ty;
 
   union {
-    struct token identifier;
+    struct lex_token identifier;
     struct ast_declarator *paren_declarator;
     struct ast_array_declarator *array_declarator;
     struct ast_func_declarator *func_declarator;
@@ -108,12 +108,12 @@ struct ast_declaration_list {
 struct ast_struct_or_union_specifier {
   enum ast_struct_or_union_specifier_ty ty;
 
-  struct token *identifier;
+  struct lex_token *identifier;
   struct ast_declaration_list *decl_list;
 };
 
 struct ast_enumerator {
-  struct token identifier;
+  struct lex_token identifier;
   struct ast_expr *value;
 };
 
@@ -123,7 +123,7 @@ struct ast_enumerator_list {
 };
 
 struct ast_enum_specifier {
-  struct token *identifier;
+  struct lex_token *identifier;
   struct ast_enumerator_list *enumerator_list;
 };
 
@@ -158,7 +158,7 @@ struct ast_type_specifier {
     enum ast_type_specifier_kw type_specifier_kw;
     struct ast_struct_or_union_specifier struct_or_union_specifier;
     struct ast_enum_specifier enum_specifier;
-    struct token typedef_name;
+    struct lex_token typedef_name;
   };
 };
 
@@ -242,7 +242,7 @@ struct ast_arglist {
 /* Variable references */
 
 struct ast_var {
-  struct token identifier;
+  struct lex_token identifier;
 };
 
 enum ast_param_ty {
@@ -384,7 +384,7 @@ struct ast_designator {
   enum ast_designator_ty ty;
 
   union {
-    struct token field;
+    struct lex_token field;
     struct ast_expr *index;
   };
 };
@@ -437,12 +437,12 @@ struct ast_arrayaccess {
 
 struct ast_memberaccess {
   struct ast_expr *lhs;
-  struct token member;
+  struct lex_token member;
 };
 
 struct ast_pointeraccess {
   struct ast_expr *lhs;
-  struct token member;
+  struct lex_token member;
 };
 
 enum ast_sizeof_ty {
@@ -549,7 +549,7 @@ struct ast_returnstmt {
 };
 
 struct ast_gotostmt {
-  struct token label;
+  struct lex_token label;
 };
 
 enum ast_jumpstmt_ty {
@@ -584,7 +584,7 @@ struct ast_labeledstmt {
 
   union {
     struct ast_expr cnst;
-    struct token label;
+    struct lex_token label;
   };
 };
 
@@ -743,7 +743,7 @@ enum parser_create_result parser_create(struct preprocessed_program *program,
 struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
 
-const char *identifier_str(struct parser *parser, const struct token *token);
+const char *identifier_str(struct parser *parser, const struct lex_token *token);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

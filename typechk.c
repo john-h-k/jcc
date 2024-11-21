@@ -867,7 +867,7 @@ static struct td_var_ty type_abstract_declarator(
 }
 
 static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
-                                              const struct token *identifier) {
+                                              const struct lex_token *identifier) {
   struct var_table_entry *entry = var_table_get_entry(
       &tchk->ty_table, identifier_str(tchk->parser, identifier));
 
