@@ -126,8 +126,13 @@ void hashtbl_insert(struct hashtbl *hashtbl, const void *key,
   hashtbl_insert_with_hash(hashtbl, key, data, hash);
 }
 
-void hashtbl_remove(struct hashtbl *hashtbl, const void *key);
-void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
+struct lookup_internal {
+  void *triple;
+  struct bucket *bucket;
+  size_t idx;
+};
+
+static struct lookup_internal hashtbl_lookup_triple(struct hashtbl *hashtbl, const void *key) {
   struct hasher hasher = hasher_create();
   hashtbl->hash_fn(&hasher, key);
   hash_t hash = hasher_finish(&hasher);
@@ -135,7 +140,7 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
   size_t num_buckets = vector_length(hashtbl->buckets);
 
   if (!num_buckets) {
-    return NULL;
+    return (struct lookup_internal){ .triple = NULL, .bucket = NULL };
   }
 
   hash_t bucket_idx = hash % num_buckets;
@@ -155,10 +160,26 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
     }
 
     if (eq) {
-      void *entry_data = (char *)key_entry + hashtbl->key_size;
-      return entry_data;
+      return (struct lookup_internal){ .triple = triple, .bucket = bucket, .idx = i };
     }
   }
 
-  return NULL;
+  return (struct lookup_internal){ .triple = NULL, .bucket = NULL };
+}
+
+
+void hashtbl_remove(struct hashtbl *hashtbl, const void *key) {
+  struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
+
+  vector_remove_at(lookup.bucket->elems, lookup.idx);
+}
+
+void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
+  struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
+
+  if (lookup.triple) {
+    return (char *)lookup.triple + sizeof(hash_t) + hashtbl->key_size;
+  } else {
+    return NULL;
+  }
 }
