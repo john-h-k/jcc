@@ -102,6 +102,18 @@ void aarch64_emit_add(struct aarch64_emitter *emitter,
 void aarch64_emit_adds(struct aarch64_emitter *emitter,
                        const struct aarch64_addsub_reg adds);
 
+/* Add & subtract (extended register) */
+
+void aarch64_emit_sub_ext(struct aarch64_emitter *emitter,
+                      const struct aarch64_addsub_ext sub_ext);
+void aarch64_emit_subs_ext(struct aarch64_emitter *emitter,
+                       const struct aarch64_addsub_ext subs_ext);
+void aarch64_emit_add_ext(struct aarch64_emitter *emitter,
+                      const struct aarch64_addsub_ext add_ext);
+void aarch64_emit_adds_ext(struct aarch64_emitter *emitter,
+                       const struct aarch64_addsub_ext adds_ext);
+
+
 /* Addressing (immediate) */
 
 void aarch64_emit_adr(struct aarch64_emitter *emitter,

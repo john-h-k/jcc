@@ -655,7 +655,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
     while (lcl) {
       fprintf(file, "  ");
 
-      fprintf(file, "[%zu] : ", lcl->id);
+      fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
       debug_print_var_ty_string(file, irb->unit, &lcl->var_ty);
 
       fprintf(file, ",\n");

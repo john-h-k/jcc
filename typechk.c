@@ -360,13 +360,6 @@ static struct td_expr perform_integer_promotion(struct typechk *tchk,
 // TODO:
 #define WARN(s) bug(s)
 
-UNUSED static struct td_var_ty
-resolve_ternary_ty(UNUSED_ARG(struct typechk *tchk),
-                   const struct td_ternary *ternary) {
-  // FIXME: do logic
-  return ternary->false_expr->var_ty;
-}
-
 static struct td_var_ty
 resolve_usual_arithmetic_conversions(struct typechk *tchk,
                                      const struct td_var_ty *lhs_ty,
@@ -1220,8 +1213,8 @@ static struct td_expr type_ternary(struct typechk *tchk,
   };
 
   *td_ternary.cond = type_expr(tchk, ternary->cond);
-  *td_ternary.true_expr = type_expr(tchk, ternary->true_expr);
-  *td_ternary.false_expr = type_expr(tchk, ternary->false_expr);
+  *td_ternary.true_expr = perform_integer_promotion(tchk ,type_expr(tchk, ternary->true_expr));
+  *td_ternary.false_expr = perform_integer_promotion(tchk, type_expr(tchk, ternary->false_expr));
 
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty);

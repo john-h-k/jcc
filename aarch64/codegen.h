@@ -29,8 +29,10 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FCMP_ZERO,
 
   AARCH64_INSTR_TY_ADDS,
+  AARCH64_INSTR_TY_ADDS_EXT,
   AARCH64_INSTR_TY_ADDS_IMM,
   AARCH64_INSTR_TY_ADD,
+  AARCH64_INSTR_TY_ADD_EXT,
   AARCH64_INSTR_TY_ADD_IMM,
   AARCH64_INSTR_TY_ADR,
   AARCH64_INSTR_TY_ADRP,
@@ -83,7 +85,9 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_STORE_HALF_IMM,
   AARCH64_INSTR_TY_STORE_PAIR_IMM,
   AARCH64_INSTR_TY_SUBS,
+  AARCH64_INSTR_TY_SUBS_EXT,
   AARCH64_INSTR_TY_SUB,
+  AARCH64_INSTR_TY_SUB_EXT,
   AARCH64_INSTR_TY_SUB_IMM,
   AARCH64_INSTR_TY_SUBS_IMM,
   AARCH64_INSTR_TY_UBFM,
@@ -165,6 +169,7 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_LOGICAL_REG,
   AARCH64_INSTR_CLASS_LOGICAL_IMM,
   AARCH64_INSTR_CLASS_ADDSUB_REG,
+  AARCH64_INSTR_CLASS_ADDSUB_EXT,
   AARCH64_INSTR_CLASS_ADDSUB_IMM,
   AARCH64_INSTR_CLASS_ADDR_IMM,
   AARCH64_INSTR_CLASS_BITFIELD,
@@ -218,6 +223,26 @@ struct aarch64_addsub_reg {
 
   imm_t imm6;
   enum aarch64_shift shift;
+};
+
+enum aarch64_extend {
+  AARCH64_EXTEND_UXTB = 0b000,
+  AARCH64_EXTEND_UXTH = 0b001,
+  AARCH64_EXTEND_UXTW = 0b010,
+  AARCH64_EXTEND_UXTX = 0b011,
+  AARCH64_EXTEND_SXTB = 0b100,
+  AARCH64_EXTEND_SXTH = 0b101,
+  AARCH64_EXTEND_SXTW = 0b110,
+  AARCH64_EXTEND_SXTX = 0b111,
+};
+
+struct aarch64_addsub_ext {
+  struct aarch64_reg dest;
+  struct aarch64_reg lhs;
+  struct aarch64_reg rhs;
+
+  imm_t imm3;
+  enum aarch64_extend extend;
 };
 
 struct aarch64_addr_imm {
@@ -342,6 +367,10 @@ struct aarch64_instr {
 
     union {
       struct aarch64_addsub_reg addsub_reg, add, adds, sub, subs;
+    };
+
+    union {
+      struct aarch64_addsub_ext addsub_ext, add_ext, adds_ext, sub_ext, subs_ext;
     };
 
     union {

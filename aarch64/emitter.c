@@ -433,6 +433,37 @@ void aarch64_emit_adds(struct aarch64_emitter *emitter,
                               add.rhs.idx, add.lhs.idx, add.dest.idx));
 }
 
+/* Add & subtract (extended register) */
+
+void aarch64_emit_sub_ext(struct aarch64_emitter *emitter,
+                      const struct aarch64_addsub_ext sub_ext) {
+  aarch64_emit_instr(emitter,
+                     SUB_EXT(SF_FOR_REG(sub_ext.dest), sub_ext.extend, sub_ext.imm3,
+                              sub_ext.rhs.idx, sub_ext.lhs.idx, sub_ext.dest.idx));
+}
+
+void aarch64_emit_subs_ext(struct aarch64_emitter *emitter,
+                       const struct aarch64_addsub_ext subs_ext) {
+  aarch64_emit_instr(emitter,
+                     SUBS_EXT(SF_FOR_REG(subs_ext.dest), subs_ext.extend, subs_ext.imm3,
+                              subs_ext.rhs.idx, subs_ext.lhs.idx, subs_ext.dest.idx));
+}
+
+void aarch64_emit_add_ext(struct aarch64_emitter *emitter,
+                      const struct aarch64_addsub_ext add_ext) {
+  aarch64_emit_instr(emitter,
+                     ADD_EXT(SF_FOR_REG(add_ext.dest), add_ext.extend, add_ext.imm3,
+                              add_ext.rhs.idx, add_ext.lhs.idx, add_ext.dest.idx));
+}
+
+void aarch64_emit_adds_ext(struct aarch64_emitter *emitter,
+                       const struct aarch64_addsub_ext adds_ext) {
+  aarch64_emit_instr(emitter,
+                     ADDS_EXT(SF_FOR_REG(adds_ext.dest), adds_ext.extend, adds_ext.imm3,
+                              adds_ext.rhs.idx, adds_ext.lhs.idx, adds_ext.dest.idx));
+}
+
+
 /* Addressing (immediate) */
 
 void aarch64_emit_adr(struct aarch64_emitter *emitter,
