@@ -109,6 +109,8 @@ void vector_resize(struct vector *v, size_t size) {
 
 size_t vector_length(struct vector *v) { return v->len; }
 
+size_t vector_element_size(struct vector *v) { return v->element_size; }
+
 size_t vector_byte_size(struct vector *v) { return v->len * v->element_size; }
 
 void *vector_head(struct vector *v) { return v->data; }
