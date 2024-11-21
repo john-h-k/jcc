@@ -2161,6 +2161,12 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
     *entry->var = var;
     entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
     *entry->var_ty = param->var_ty;
+
+    // decay array params to pointers here
+    if (entry->var_ty->ty == TD_VAR_TY_TY_ARRAY) {
+      struct td_var_ty underlying = td_var_ty_get_underlying(tchk, entry->var_ty);
+      *entry->var_ty = td_var_ty_make_pointer(tchk, &underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+    }
   }
 
   struct td_funcdef td_funcdef = {
