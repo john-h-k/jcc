@@ -3211,6 +3211,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
                                          size_t offset, struct vector *inits) {
 
   enum init_list_layout_ty ty;
+  struct td_var_ty el_ty;
   size_t el_size;
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_AGGREGATE:
@@ -3220,9 +3221,10 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     break;
   case TD_VAR_TY_TY_ARRAY:
     ty = INIT_LIST_LAYOUT_TY_ARRAY;
-    struct ir_var_ty el_ty =
-        var_ty_for_td_var_ty(iru, var_ty->array.underlying);
-    el_size = var_ty_info(iru, &el_ty).size;
+    el_ty = *var_ty->array.underlying;
+    struct ir_var_ty ir_el_ty =
+        var_ty_for_td_var_ty(iru, &el_ty);
+    el_size = var_ty_info(iru, &ir_el_ty).size;
     break;
   default:
     bug("bad type for init list");
@@ -3243,12 +3245,12 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     } else {
       switch (ty) {
       case INIT_LIST_LAYOUT_TY_STRUCT:
+      case INIT_LIST_LAYOUT_TY_UNION:
         init_offset +=
             get_member_index_offset(iru, var_ty, member_idx, &member_ty);
         break;
-      case INIT_LIST_LAYOUT_TY_UNION:
-        break;
       case INIT_LIST_LAYOUT_TY_ARRAY:
+        member_ty = el_ty;
         init_offset += member_idx * el_size;
       }
     }
@@ -3295,7 +3297,8 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
   switch (expr->ty) {
   case TD_EXPR_TY_UNARY_OP: {
     if (expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
-      return build_ir_for_var_value_expr(iru, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
+      return build_ir_for_var_value_expr(iru, expr->unary_op.expr,
+                                         &expr->unary_op.cast.var_ty);
     } else {
       todo("other unary ops");
     }
@@ -3333,34 +3336,31 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
   case TD_INIT_TY_INIT_LIST: {
     const struct td_init_list *init_list = &init->init_list;
 
+    struct ir_build_init_list_layout layout =
+        build_init_list_layout(iru, init_list);
+
     struct ir_var_value_list value_list = {
-        .num_values = init_list->num_inits,
+        .num_values = layout.num_inits,
         .values = arena_alloc(iru->arena, sizeof(*value_list.values) *
-                                              init_list->num_inits),
+                                              layout.num_inits),
         .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
-                                               init_list->num_inits),
+                                               layout.num_inits),
     };
 
-    for (size_t i = 0; i < init_list->num_inits; i++) {
-      todo("");
-      // const struct td_init_list_init *init_list_init = &init_list->inits[i];
+    for (size_t i = 0; i < layout.num_inits; i++) {
+      struct ir_build_init *build_init = &layout.inits[i];
 
-      // size_t offset = get_designator_offset(
-      //     struct ir_unit * iru, const struct td_var_ty *var_ty,
-      //     struct td_designator_list *designator_list, size_t *member_index,
-      //     struct td_var_ty *member_ty) {
-
-      //   init_list_init
-      // }
-
-      // return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-      //                              .var_ty = var_ty_for_td_var_ty(iru,
-      //                              var_ty), .value_list = value_list};
+      value_list.values[i] = build_ir_for_var_value_expr(
+          iru, build_init->expr, &build_init->expr->var_ty);
+      value_list.offsets[i] = build_init->offset;
     }
-  }
-  }
 
-  todo("");
+    return (struct ir_var_value) {
+      .ty = IR_VAR_VALUE_TY_VALUE_LIST, .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+      .value_list = value_list
+    };
+  }
+  }
 }
 
 struct ir_unit *
