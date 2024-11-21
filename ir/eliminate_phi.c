@@ -12,45 +12,48 @@ static void remove_critical_edges(struct ir_func *irb) {
   while (basicblock) {
     size_t num_preds = basicblock->num_preds;
 
-    for (size_t i = 0; i < num_preds; i++) {
-      struct ir_basicblock *pred = basicblock->preds[i];
+    if (num_preds > 1) {
+      for (size_t i = 0; i < num_preds; i++) {
+        struct ir_basicblock *pred = basicblock->preds[i];
 
-      if (pred->ty != IR_BASICBLOCK_TY_SWITCH &&
-          pred->ty != IR_BASICBLOCK_TY_SPLIT) {
-        continue;
-      }
-
-      // we have a critical edge
-      struct ir_basicblock *intermediate =
-          insert_before_ir_basicblock(irb, basicblock);
-      intermediate->ty = IR_BASICBLOCK_TY_MERGE;
-      intermediate->merge = (struct ir_basicblock_merge){.target = basicblock};
-
-      struct ir_stmt *stmt = alloc_ir_stmt(irb, intermediate);
-      struct ir_op *op = alloc_ir_op(irb, stmt);
-      op->ty = IR_OP_TY_BR;
-      op->var_ty = IR_VAR_TY_NONE;
-
-      basicblock->preds[i] = intermediate;
-
-      switch (pred->ty) {
-      case IR_BASICBLOCK_TY_SPLIT:
-        if (pred->split.true_target == basicblock) {
-          pred->split.true_target = intermediate;
-        } else {
-          pred->split.false_target = intermediate;
+        if (pred->ty != IR_BASICBLOCK_TY_SWITCH &&
+            pred->ty != IR_BASICBLOCK_TY_SPLIT) {
+          continue;
         }
-        break;
-      case IR_BASICBLOCK_TY_SWITCH:
-        for (size_t j = 0; j < pred->switch_case.num_cases; j++) {
-          if (pred->switch_case.cases[j].target == basicblock) {
-            pred->switch_case.cases[j].target = intermediate;
-            break;
+
+        // we have a critical edge
+        struct ir_basicblock *intermediate =
+            insert_before_ir_basicblock(irb, basicblock);
+        intermediate->ty = IR_BASICBLOCK_TY_MERGE;
+        intermediate->merge =
+            (struct ir_basicblock_merge){.target = basicblock};
+
+        struct ir_stmt *stmt = alloc_ir_stmt(irb, intermediate);
+        struct ir_op *op = alloc_ir_op(irb, stmt);
+        op->ty = IR_OP_TY_BR;
+        op->var_ty = IR_VAR_TY_NONE;
+
+        basicblock->preds[i] = intermediate;
+
+        switch (pred->ty) {
+        case IR_BASICBLOCK_TY_SPLIT:
+          if (pred->split.true_target == basicblock) {
+            pred->split.true_target = intermediate;
+          } else {
+            pred->split.false_target = intermediate;
           }
+          break;
+        case IR_BASICBLOCK_TY_SWITCH:
+          for (size_t j = 0; j < pred->switch_case.num_cases; j++) {
+            if (pred->switch_case.cases[j].target == basicblock) {
+              pred->switch_case.cases[j].target = intermediate;
+              break;
+            }
+          }
+          break;
+        default:
+          unreachable();
         }
-        break;
-      default:
-        unreachable();
       }
     }
 

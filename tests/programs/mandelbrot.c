@@ -1,5 +1,5 @@
 
-int printf(const char *, ...);
+void printf(const char *, ...);
 
 int mandelbrot(double real, double imag) {
 	int limit = 100;
@@ -15,11 +15,11 @@ int mandelbrot(double real, double imag) {
 		zImag = 2.0 * zReal * zImag + imag;
 		zReal = r2 - i2 + real;
 	}
+
 	return limit;
 }
 
 int main() {
-	
 	int width = 379; //number of characters fitting horizontally on my screen 
 	int heigth = 98; //number of characters fitting vertically on my screen
 		
@@ -27,7 +27,12 @@ int main() {
 	double x_fin = 1.0;
 	double y_start = -1.0;
 	double y_fin = 1.0;
-	
+
+	const char *char_ = "\u2588";
+
+	const char *black = "\033[22;30m";
+
+
 	//~ double x_start = -0.25;
 	//~ double x_fin = 0.05;
 	//~ double y_start = -0.95;
@@ -59,6 +64,9 @@ int main() {
 	const char *gray = "\033[22;37m";
 	const char *white = "\033[01;37m";
 
+	printf("hello\n", black, white);
+	printf("foo\n");
+
 	for (int i = 0; i < heigth; i++) {
 		for (int j = 0; j < width; j++) {
 			
@@ -81,7 +89,7 @@ int main() {
 			else if (value > 1) {printf("%s%s", magenta, char_);}
 			else {printf("%s%s", l_magenta, char_);}
 			
-			printf("\033[0m");
+	// 		printf("\033[0m");
 		}
 
 		printf("\n");
