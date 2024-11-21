@@ -283,7 +283,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
           struct ir_op *save = insert_after_ir_op(
-              irb, lcl_addr, IR_OP_TY_STORE_ADDR, IR_OP_VAR_TY_NONE);
+              irb, lcl_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
           save->reg = reg;
           save->store_addr =
               (struct ir_op_store_addr){.addr = lcl_addr, .value = live->op};

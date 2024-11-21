@@ -29,13 +29,13 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 
     struct ir_op *cmp_op = alloc_ir_op(func, cmp_stmt);
     cmp_op->ty = IR_OP_TY_BINARY_OP;
-    cmp_op->var_ty = IR_OP_VAR_TY_I32;
+    cmp_op->var_ty = IR_VAR_TY_I32;
     cmp_op->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = op->br_switch.value, .rhs = cnst};
 
     struct ir_op *br_op = alloc_ir_op(func, cmp_stmt);
     br_op->ty = IR_OP_TY_BR_COND;
-    br_op->var_ty = IR_OP_VAR_TY_NONE;
+    br_op->var_ty = IR_VAR_TY_NONE;
     br_op->br_cond = (struct ir_op_br_cond){.cond = cmp_op};
 
     if (i + 1 < num_cases) {
@@ -147,7 +147,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
           struct ir_op *op = stmt->first;
 
           while (op) {
-            if (op->var_ty.ty == IR_OP_VAR_TY_TY_POINTER) {
+            if (op->var_ty.ty == IR_VAR_TY_TY_POINTER) {
               op->var_ty = var_ty_for_pointer_size(func->unit);
             }
 

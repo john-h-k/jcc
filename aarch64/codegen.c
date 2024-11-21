@@ -311,17 +311,17 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
 
 static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_I8:
+  case IR_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_I32:
     return AARCH64_REG_TY_W;
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I64:
     return AARCH64_REG_TY_X;
-  case IR_OP_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F16:
     return AARCH64_REG_TY_H;
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F32:
     return AARCH64_REG_TY_S;
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_VAR_PRIMITIVE_TY_F64:
     return AARCH64_REG_TY_D;
   }
 }
@@ -329,7 +329,7 @@ static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
 static struct aarch64_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
-  if (op->var_ty.ty != IR_OP_VAR_TY_TY_PRIMITIVE) {
+  if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
     todo("non primitives (op %zu)", op->id);
   }
 
@@ -394,8 +394,8 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   simm_t offset = get_lcl_stack_offset(state, op, lcl);
 
-  if (op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
     instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
   } else {
     instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
@@ -414,8 +414,8 @@ static void codegen_store_lcl_op(struct codegen_state *state,
   struct aarch64_reg source = codegen_reg(op->store_lcl.value);
   struct ir_lcl *lcl = op->lcl;
 
-  if (op->store_lcl.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE &&
-      op->store_lcl.value->var_ty.primitive == IR_OP_VAR_PRIMITIVE_TY_I8) {
+  if (op->store_lcl.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->store_lcl.value->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
     instr->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
   } else {
     instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
@@ -649,7 +649,7 @@ static void codegen_32_bit_int(struct codegen_state *state,
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
-  debug_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+  debug_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                "expects primitive type");
 
   struct aarch64_reg dest = codegen_reg(op);
@@ -661,18 +661,18 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     todo("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_I8:
+    case IR_VAR_PRIMITIVE_TY_I16:
+    case IR_VAR_PRIMITIVE_TY_I32:
       codegen_32_bit_int(state, dest,
                          (union b32){.u = (unsigned)op->cnst.int_value});
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_I64:
       codegen_64_bit_int(state, dest, (union b64){.ull = op->cnst.int_value});
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_F16:
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
+    case IR_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_F32:
+    case IR_VAR_PRIMITIVE_TY_F64:
       unreachable();
     };
   }
@@ -891,30 +891,30 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
                             struct aarch64_reg dest) {
   struct instr *instr = alloc_instr(state->func);
 
-  invariant_assert(op->cast_op.value->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+  invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't sext from non-primitive");
 
   switch (op->cast_op.value->var_ty.primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
+  case IR_VAR_PRIMITIVE_TY_I8:
     instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
     instr->aarch64->sbfm = (struct aarch64_bitfield){
         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b000111};
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_I16:
     instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
     instr->aarch64->sbfm = (struct aarch64_bitfield){
         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b001111};
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_I32:
     instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
     instr->aarch64->sbfm = (struct aarch64_bitfield){
         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I64:
     bug("can't sext from I64");
-  case IR_OP_VAR_PRIMITIVE_TY_F16:
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
     bug("todo cast floats");
   }
 }
@@ -932,13 +932,13 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
                              struct aarch64_reg source,
                              struct aarch64_reg dest) {
   struct instr *instr = alloc_instr(state->func);
-  invariant_assert(op->var_ty.ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+  invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't truncate non-primitive");
 
   // https://kddnewton.com/2022/08/11/aarch64-bitmask-immediates.html
   // for understanding the immediates
   switch (op->var_ty.primitive) {
-  case IR_OP_VAR_PRIMITIVE_TY_I8:
+  case IR_VAR_PRIMITIVE_TY_I8:
     instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
     instr->aarch64->and_imm = (struct aarch64_logical_imm){
         .dest = dest,
@@ -947,7 +947,7 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
         .imms = 0b111,
     };
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I16:
+  case IR_VAR_PRIMITIVE_TY_I16:
     instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
     instr->aarch64->and_imm = (struct aarch64_logical_imm){
         .dest = dest,
@@ -956,14 +956,14 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
         .imms = 0b1111,
     };
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I32:
+  case IR_VAR_PRIMITIVE_TY_I32:
     *instr->aarch64 = MOV_ALIAS(dest, source);
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I64:
     break;
-  case IR_OP_VAR_PRIMITIVE_TY_F16:
-  case IR_OP_VAR_PRIMITIVE_TY_F32:
-  case IR_OP_VAR_PRIMITIVE_TY_F64:
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
     bug("todo cast floats");
   }
 }
@@ -1029,9 +1029,9 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
-  invariant_assert(op->call.func_ty.ty == IR_OP_VAR_TY_TY_FUNC, "non-func");
+  invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
-  const struct ir_op_var_func_ty *func_ty = &op->call.func_ty.func;
+  const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
 
   invariant_assert(is_func_variadic(func_ty) ||
                        func_ty->num_params == op->call.num_args,
@@ -1072,7 +1072,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       size_t i = op->call.num_args - 1 - head;
       struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
 
-      invariant_assert(var_ty->ty == IR_OP_VAR_TY_TY_PRIMITIVE,
+      invariant_assert(var_ty->ty == IR_VAR_TY_TY_PRIMITIVE,
                        "`lower_call` doesn't support non-prims");
 
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
@@ -1141,7 +1141,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         .target = {.ty = AARCH64_REG_TY_X, .idx = blr_reg_idx}};
   }
 
-  if (func_ty->ret_ty->ty != IR_OP_VAR_TY_TY_NONE) {
+  if (func_ty->ret_ty->ty != IR_VAR_TY_TY_NONE) {
     struct aarch64_reg ret_dest = codegen_reg(op);
 
     struct aarch64_reg ret_reg = return_reg_for_ty(ret_dest.ty);
@@ -1551,37 +1551,37 @@ static void codegen_write_var_value(struct ir_unit *iru,
   }
 
   switch (value->var_ty.ty) {
-  case IR_OP_VAR_TY_TY_NONE:
-  case IR_OP_VAR_TY_TY_VARIADIC:
+  case IR_VAR_TY_TY_NONE:
+  case IR_VAR_TY_TY_VARIADIC:
     break;
-  case IR_OP_VAR_TY_TY_PRIMITIVE: {
+  case IR_VAR_TY_TY_PRIMITIVE: {
     switch (value->var_ty.primitive) {
-    case IR_OP_VAR_PRIMITIVE_TY_I8:
+    case IR_VAR_PRIMITIVE_TY_I8:
       memcpy(data, &value->int_value, 1);
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_F16:
-    case IR_OP_VAR_PRIMITIVE_TY_I16:
+    case IR_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_I16:
       memcpy(data, &value->int_value, 2);
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I32:
-    case IR_OP_VAR_PRIMITIVE_TY_F32:
+    case IR_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_F32:
       memcpy(data, &value->int_value, 4);
       break;
-    case IR_OP_VAR_PRIMITIVE_TY_I64:
-    case IR_OP_VAR_PRIMITIVE_TY_F64:
+    case IR_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_F64:
       memcpy(data, &value->int_value, sizeof(unsigned long));
       break;
     }
     break;
   }
 
-  case IR_OP_VAR_TY_TY_FUNC:
-  case IR_OP_VAR_TY_TY_POINTER:
+  case IR_VAR_TY_TY_FUNC:
+  case IR_VAR_TY_TY_POINTER:
     todo("todo");
 
-  case IR_OP_VAR_TY_TY_ARRAY:
-  case IR_OP_VAR_TY_TY_STRUCT:
-  case IR_OP_VAR_TY_TY_UNION:
+  case IR_VAR_TY_TY_ARRAY:
+  case IR_VAR_TY_TY_STRUCT:
+  case IR_VAR_TY_TY_UNION:
     for (size_t i = 0; i < value->value_list.num_values; i++) {
       codegen_write_var_value(iru, &value->value_list.values[i],
                               &data[value->value_list.offsets[i]]);

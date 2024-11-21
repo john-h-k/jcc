@@ -161,62 +161,62 @@ struct ir_op_binary_op {
 // IR does not have sign encoded in type (so `int` and `unsigned` are both
 // IR_OP_VAR_TY_32) and instead encodes it in operations (e.g there are
 // different IR ops for signed and unsigned division)
-enum ir_op_var_primitive_ty {
-  IR_OP_VAR_PRIMITIVE_TY_I8,
-  IR_OP_VAR_PRIMITIVE_TY_I16,
-  IR_OP_VAR_PRIMITIVE_TY_I32,
-  IR_OP_VAR_PRIMITIVE_TY_I64,
+enum ir_var_primitive_ty {
+  IR_VAR_PRIMITIVE_TY_I8,
+  IR_VAR_PRIMITIVE_TY_I16,
+  IR_VAR_PRIMITIVE_TY_I32,
+  IR_VAR_PRIMITIVE_TY_I64,
 
-  IR_OP_VAR_PRIMITIVE_TY_F16,
-  IR_OP_VAR_PRIMITIVE_TY_F32,
-  IR_OP_VAR_PRIMITIVE_TY_F64,
+  IR_VAR_PRIMITIVE_TY_F16,
+  IR_VAR_PRIMITIVE_TY_F32,
+  IR_VAR_PRIMITIVE_TY_F64,
 };
 
-enum ir_op_var_ty_ty {
+enum ir_var_ty_ty {
   /* Does not produce a value */
-  IR_OP_VAR_TY_TY_NONE,
+  IR_VAR_TY_TY_NONE,
 
   /* Primitives - integers, floats, pointers */
-  IR_OP_VAR_TY_TY_PRIMITIVE,
-  IR_OP_VAR_TY_TY_FUNC,
+  IR_VAR_TY_TY_PRIMITIVE,
+  IR_VAR_TY_TY_FUNC,
 
-  IR_OP_VAR_TY_TY_POINTER,
+  IR_VAR_TY_TY_POINTER,
 
   /* Aggregate */
-  IR_OP_VAR_TY_TY_ARRAY,
-  IR_OP_VAR_TY_TY_STRUCT,
-  IR_OP_VAR_TY_TY_UNION,
+  IR_VAR_TY_TY_ARRAY,
+  IR_VAR_TY_TY_STRUCT,
+  IR_VAR_TY_TY_UNION,
 
   /* Variadic */
-  IR_OP_VAR_TY_TY_VARIADIC,
+  IR_VAR_TY_TY_VARIADIC,
 };
 
-enum ir_op_var_func_ty_flags {
-  IR_OP_VAR_FUNC_TY_FLAG_NONE = 0,
-  IR_OP_VAR_FUNC_TY_FLAG_VARIADIC = 1
+enum ir_var_func_ty_flags {
+  IR_VAR_FUNC_TY_FLAG_NONE = 0,
+  IR_VAR_FUNC_TY_FLAG_VARIADIC = 1
 };
 
-struct ir_op_var_func_ty {
+struct ir_var_func_ty {
   struct ir_var_ty *ret_ty;
   size_t num_params;
   struct ir_var_ty *params;
 
-  enum ir_op_var_func_ty_flags flags;
+  enum ir_var_func_ty_flags flags;
 };
 
-bool is_func_variadic(const struct ir_op_var_func_ty *ty);
+bool is_func_variadic(const struct ir_var_func_ty *ty);
 
-struct ir_op_var_struct_ty {
+struct ir_var_struct_ty {
   size_t num_fields;
   struct ir_var_ty *fields;
 };
 
-struct ir_op_var_union_ty {
+struct ir_var_union_ty {
   size_t num_fields;
   struct ir_var_ty *fields;
 };
 
-struct ir_op_var_array_ty {
+struct ir_var_array_ty {
   struct ir_var_ty *underlying;
 
   union {
@@ -224,32 +224,32 @@ struct ir_op_var_array_ty {
   };
 };
 
-struct ir_op_var_pointer_ty {
+struct ir_var_pointer_ty {
   struct ir_var_ty *underlying;
 };
 
 struct ir_var_ty {
-  enum ir_op_var_ty_ty ty;
+  enum ir_var_ty_ty ty;
 
   union {
-    enum ir_op_var_primitive_ty primitive;
-    struct ir_op_var_func_ty func;
-    struct ir_op_var_pointer_ty pointer;
-    struct ir_op_var_array_ty array;
-    struct ir_op_var_struct_ty struct_ty;
-    struct ir_op_var_union_ty union_ty;
+    enum ir_var_primitive_ty primitive;
+    struct ir_var_func_ty func;
+    struct ir_var_pointer_ty pointer;
+    struct ir_var_array_ty array;
+    struct ir_var_struct_ty struct_ty;
+    struct ir_var_union_ty union_ty;
   };
 };
 
-extern const struct ir_var_ty IR_OP_VAR_TY_UNKNOWN;
-extern const struct ir_var_ty IR_OP_VAR_TY_NONE;
-extern const struct ir_var_ty IR_OP_VAR_TY_I8;
-extern const struct ir_var_ty IR_OP_VAR_TY_I16;
-extern const struct ir_var_ty IR_OP_VAR_TY_I32;
-extern const struct ir_var_ty IR_OP_VAR_TY_I64;
-extern const struct ir_var_ty IR_OP_VAR_TY_F32;
-extern const struct ir_var_ty IR_OP_VAR_TY_F64;
-extern const struct ir_var_ty IR_OP_VAR_TY_VARIADIC;
+extern const struct ir_var_ty IR_VAR_TY_UNKNOWN;
+extern const struct ir_var_ty IR_VAR_TY_NONE;
+extern const struct ir_var_ty IR_VAR_TY_I8;
+extern const struct ir_var_ty IR_VAR_TY_I16;
+extern const struct ir_var_ty IR_VAR_TY_I32;
+extern const struct ir_var_ty IR_VAR_TY_I64;
+extern const struct ir_var_ty IR_VAR_TY_F32;
+extern const struct ir_var_ty IR_VAR_TY_F64;
+extern const struct ir_var_ty IR_VAR_TY_VARIADIC;
 
 struct ir_op_call {
   struct ir_var_ty func_ty;
@@ -615,7 +615,7 @@ struct ir_func {
 
   const char *name;
 
-  struct ir_op_var_func_ty func_ty;
+  struct ir_var_func_ty func_ty;
 
   struct arena_allocator *arena;
 
@@ -685,7 +685,7 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
 void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
-                            enum ir_op_var_primitive_ty ty,
+                            enum ir_var_primitive_ty ty,
                             unsigned long long value);
 void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                            unsigned long long value);
@@ -793,7 +793,7 @@ struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
                                    size_t num_elements);
 
 bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
-                         enum ir_op_var_primitive_ty primitive);
+                         enum ir_var_primitive_ty primitive);
 bool var_ty_is_integral(const struct ir_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty);
