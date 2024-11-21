@@ -94,6 +94,7 @@ struct ir_op_cast_op {
 };
 
 enum ir_op_unary_op_ty {
+  IR_OP_UNARY_OP_TY_FNEG,
   IR_OP_UNARY_OP_TY_NEG,
   IR_OP_UNARY_OP_TY_LOGICAL_NOT,
   IR_OP_UNARY_OP_TY_NOT,

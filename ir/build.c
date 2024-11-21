@@ -847,7 +847,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   enum ir_op_unary_op_ty unary_op_ty;
   switch (unary_op->ty) {
   case TD_UNARY_OP_TY_MINUS:
-    unary_op_ty = IR_OP_UNARY_OP_TY_NEG;
+    unary_op_ty = is_fp_ty(&expr->var_ty) ? IR_OP_UNARY_OP_TY_FNEG : IR_OP_UNARY_OP_TY_NEG;
     break;
   case TD_UNARY_OP_TY_LOGICAL_NOT:
     unary_op_ty = IR_OP_UNARY_OP_TY_LOGICAL_NOT;
