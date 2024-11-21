@@ -1058,6 +1058,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   struct vector *move_from = vector_create(sizeof(size_t));
   struct vector *move_to = vector_create(sizeof(size_t));
 
+  struct vector *fp_move_from = vector_create(sizeof(size_t));
+  struct vector *fp_move_to = vector_create(sizeof(size_t));
+
   // reg 9 is not part of calling convention
   // and all registers have already been saved
   // so this is always safe
@@ -1065,6 +1068,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // `blr`
   size_t tmp_reg_idx = 9;
   size_t blr_reg_idx = 10;
+
+  size_t fp_tmp_reg_idx = 16;
 
   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
     struct aarch64_reg source = codegen_reg(op->call.target);
@@ -1089,8 +1094,13 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       size_t arg_reg_idx = i;
 
       if (i < num_normal_args) {
-        vector_push_back(move_from, &source.idx);
-        vector_push_back(move_to, &arg_reg_idx);
+        if (var_ty_is_fp(var_ty)) {
+          vector_push_back(fp_move_from, &source.idx);
+          vector_push_back(fp_move_to, &arg_reg_idx);
+        } else {
+          vector_push_back(move_from, &source.idx);
+          vector_push_back(move_to, &arg_reg_idx);
+        }
       } else {
         // this argument is variadic
         // the stack slot this local must live in, in terms of 8 byte slots
@@ -1121,6 +1131,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       state->ir->arena, vector_head(move_from), vector_head(move_to),
       vector_length(move_from), tmp_reg_idx);
 
+  struct move_set fp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
+      vector_length(fp_move_from), fp_tmp_reg_idx);
+
   for (size_t i = 0; i < arg_moves.num_moves; i++) {
     struct move move = arg_moves.moves[i];
 
@@ -1129,14 +1143,21 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     struct instr *mov = alloc_instr(state->func);
 
-    if (aarch64_reg_ty_is_gp(source.ty) && aarch64_reg_ty_is_gp(dest.ty)) {
-      *mov->aarch64 = MOV_ALIAS(dest, source);
-    } else {
-      // one is floating
-      mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
-      mov->aarch64->fmov =
-          (struct aarch64_reg_1_source){.dest = dest, .source = source};
-    }
+    *mov->aarch64 = MOV_ALIAS(dest, source);
+  }
+
+  // FIXME: doesn't support vectors
+  for (size_t i = 0; i < fp_arg_moves.num_moves; i++) {
+    struct move move = fp_arg_moves.moves[i];
+
+    struct aarch64_reg source = {.ty = AARCH64_REG_TY_D, .idx = move.from};
+    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_D, .idx = move.to};
+
+    struct instr *mov = alloc_instr(state->func);
+
+    mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
+    mov->aarch64->fmov =
+        (struct aarch64_reg_1_source){.dest = dest, .source = source};
   }
 
   // now we generate the actual call

@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "log.h"
 #include "util.h"
+#include "vector.h"
 
 #include <ctype.h>
 
@@ -146,9 +147,7 @@ static const char *process_raw_string(const struct lexer *lexer,
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
-  size_t max_str_len = token->span.end.idx - token->span.start.idx;
-
-  char *buff = arena_alloc(lexer->arena, max_str_len - 1);
+  struct vector *buff = vector_create(sizeof(char));
 
   char end_char = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                    token->ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
@@ -166,9 +165,11 @@ static const char *process_raw_string(const struct lexer *lexer,
        i++) {
     if (char_escaped) {
 #define ADD_ESCAPED(ch, esc)                                                   \
-  case ch:                                                                     \
-    buff[(*str_len)++] = esc;                                                  \
-    break;
+  case ch: {                                                              \
+    char c = esc;\
+    vector_push_back(buff, &c); \
+    break; \
+  }
 
       if (lexer->text[i] == '0') {
         size_t octal_start = i + 1;
@@ -176,27 +177,30 @@ static const char *process_raw_string(const struct lexer *lexer,
         while (i + 1 < token->span.end.idx) {
           if (lexer->text[i + 1] >= '0' && lexer->text[i + 1] <= '7') {
             i++;
+          } else {
+            break;
           }
-
-          break;
         }
 
-        size_t octal_len = MIN(2, i - octal_start);
-        char oct_buff[2] = { 0 };
+        size_t octal_len = MIN(2, i - octal_start + 1);
+        char oct_buff[3] = { 0 };
         for (size_t j = 0; j < octal_len; j++) {
           oct_buff[j] = lexer->text[octal_start + j];
         }
 
         int value = strtol(oct_buff, NULL, 8);
-        buff[(*str_len)++] = (char)value;
+        int lo = (char)value;
+        int hi = (char)(value >> 16);
+        vector_push_back(buff, &lo);
+        vector_push_back(buff, &hi);
       } else if (lexer->text[i] == 'u') {
         // FIXME: C23 allows arbitrary num digits, not just 4
-        char u_buff[4];
-        memcpy(buff, &lexer->text[i + 1], 4);
+        char u_buff[5] = { 0 };
+        memcpy(u_buff, &lexer->text[i + 1], 4);
         i += 4;
 
-        int value = strtol(u_buff, NULL, 16);
-        buff[(*str_len)++] = (char)value;
+        char value = (char)strtol(u_buff, NULL, 16);
+        vector_push_back(buff, &value);
       } else {
         switch (lexer->text[i]) {
           ADD_ESCAPED('0', '\0')
@@ -221,15 +225,23 @@ static const char *process_raw_string(const struct lexer *lexer,
 
 #undef ADD_ESCAPED
     } else if (lexer->text[i] != '\\') {
-      buff[(*str_len)++] = lexer->text[i];
+      vector_push_back(buff, &lexer->text[i]);
     }
 
     // next char is escaped if this char is a non-escaped backslash
     char_escaped = !char_escaped && lexer->text[i] == '\\';
   }
 
-  buff[*str_len] = 0;
-  return buff;
+  *str_len = vector_length(buff);
+
+  char null = 0;
+  vector_push_back(buff, &null);
+
+  char *value = nonnull_malloc(vector_byte_size(buff));
+  vector_copy_to(buff, value);
+  vector_free(&buff);
+  
+  return value;
 }
 
 /* Attempts to consume and move forward the position if it finds char `c` */

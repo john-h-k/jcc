@@ -7,7 +7,9 @@ typedef int a;
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   // lowers a `br.switch` into a series of if-else statements
 
-  struct ir_basicblock_switch *bb_switch = &op->stmt->basicblock->switch_case;
+
+  struct ir_basicblock *bb = op->stmt->basicblock;
+  struct ir_basicblock_switch *bb_switch = &bb->switch_case;
 
   struct ir_basicblock *prev_bb = op->stmt->basicblock;
 
@@ -19,6 +21,14 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   struct ir_split_case *split_cases = bb_switch->cases;
   for (size_t i = 0; i < num_cases; i++) {
     struct ir_split_case *split_case = &split_cases[i];
+
+    for (size_t j = 0; j < split_case->target->num_preds; j++) {
+      if (split_case->target->preds[j] == bb) {
+        // remove
+        memcpy(&split_case->target->preds[j], &split_case->target->preds[j + 1], split_case->target->num_preds - j);
+        split_case->target->num_preds--;
+      }
+    }
 
     struct ir_stmt *cmp_stmt = alloc_ir_stmt(func, prev_bb);
     struct ir_op *cnst = alloc_ir_op(func, cmp_stmt);
@@ -41,11 +51,16 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
     if (i + 1 < num_cases) {
       struct ir_basicblock *next_cond =
           insert_after_ir_basicblock(func, prev_bb);
-      make_basicblock_split(func, prev_bb, split_case->target, next_cond);
+
+      prev_bb->ty = IR_BASICBLOCK_TY_SPLIT;
+      prev_bb->split = (struct ir_basicblock_split){
+          .true_target =  split_case->target, .false_target = next_cond};
+
       prev_bb = next_cond;
     } else {
-      make_basicblock_split(func, prev_bb, split_case->target,
-                            bb_switch->default_target);
+      prev_bb->ty = IR_BASICBLOCK_TY_SPLIT;
+      prev_bb->split = (struct ir_basicblock_split){
+          .true_target =  split_case->target, .false_target = bb_switch->default_target};
     }
   }
 }
