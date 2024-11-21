@@ -12,10 +12,12 @@
 
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \
-    .ty = AARCH64_INSTR_TY_ORR, .orr = {.lhs = zero_reg_for_ty(dest_reg.ty),   \
-                                        .rhs = (source_reg),                   \
-                                        .dest = (dest_reg),                    \
-                                        .imm6 = 0}                             \
+    .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
+      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
+      .rhs = (source_reg),                                                     \
+      .dest = (dest_reg),                                                      \
+      .imm6 = 0                                                                \
+    }                                                                          \
   }
 
 size_t reg_size(enum aarch64_reg_ty reg_ty) {
@@ -1427,6 +1429,7 @@ static void codegen_stmt(struct codegen_state *state,
 
 struct check_reg_type_data {
   // used so we know when the instruction changes
+  const struct codegen_entry *entry;
   struct instr *last;
 
   enum aarch64_reg_ty reg_ty;
@@ -1441,7 +1444,8 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     // deref only makes sense on an X register, and is ignored for comparisons
     // to other registers so back out early
     invariant_assert(reg.ty == AARCH64_REG_TY_X,
-                     "usage DEREF only makes sense with REG_TY_X in %zu",
+                     "entry %zu: usage DEREF only makes sense with REG_TY_X in %zu",
+                     data->entry->glb_id,
                      instr->id);
     return;
   }
@@ -1457,24 +1461,28 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
       size_t cur_size = reg_size(reg.ty);
       size_t last_size = reg_size(data->reg_ty);
       invariant_assert(cur_size == last_size,
-                       "expected `fmov` %zu to have same size registers "
+                       "entry %zu: expected `fmov` %zu to have same size registers "
                        "(expected %zu found %zu)",
+                     data->entry->glb_id,
                        instr->id, cur_size, last_size);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
       invariant_assert(
           aarch64_reg_ty_is_fp(reg.ty) && aarch64_reg_ty_is_fp(data->reg_ty),
-          "expected `fcvt` %zu to have all registers floating-point",
+          "entry %zu: expected `fcvt` %zu to have all registers floating-point",
+                     data->entry->glb_id,
           instr->id);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_UCVTF ||
                instr->aarch64->ty == AARCH64_INSTR_TY_SCVTF) {
       invariant_assert(aarch64_reg_ty_is_fp(reg.ty) !=
                            aarch64_reg_ty_is_fp(data->reg_ty),
-                       "expected `ucvtf`/`scvtf` %zu to have one fp register "
+                       "entry %zu: expected `ucvtf`/`scvtf` %zu to have one fp register "
                        "and one gp register",
+                     data->entry->glb_id,
                        instr->id);
     } else {
       invariant_assert(reg.ty == data->reg_ty,
-                       "reg ty mismatch in %zu (expected %d found %d)",
+                       "entry %zu: reg ty mismatch in %zu (expected %d found %d)",
+                     data->entry->glb_id,
                        instr->id, data->reg_ty, reg.ty);
     }
   }
@@ -1622,130 +1630,129 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
   arena_allocator_create(&unit->arena);
 
   struct ir_glb *glb = ir->first_global;
-  size_t i = 0;
-  while (glb) {
-    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-      unit->entries[i] =
-          (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DECL,
-                                 .glb_id = glb->id,
-                                 .name = aarch64_mangle(ir->arena, glb->name)};
+
+  {
+    size_t i = 0;
+    while (glb) {
+      if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+        unit->entries[i] = (struct codegen_entry){
+            .ty = CODEGEN_ENTRY_TY_DECL,
+            .glb_id = glb->id,
+            .name = aarch64_mangle(ir->arena, glb->name)};
+
+        i++;
+        glb = glb->succ;
+        continue;
+      }
+
+      switch (glb->ty) {
+      case IR_GLB_TY_DATA: {
+        // TODO: non string literals
+
+        const char *name =
+            glb->name ? aarch64_mangle(ir->arena, glb->name)
+                      : mangle_str_cnst_name(ir->arena, "todo", glb->id);
+        switch (glb->var->ty) {
+        case IR_VAR_TY_STRING_LITERAL:
+          unit->entries[i] =
+              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
+                                     .glb_id = glb->id,
+                                     .name = name,
+                                     .str = glb->var->value.str_value};
+          break;
+        case IR_VAR_TY_CONST_DATA:
+          unit->entries[i] =
+              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
+                                     .glb_id = glb->id,
+                                     .name = name,
+                                     .data = codegen_var_data(ir, glb->var)};
+          break;
+        case IR_VAR_TY_DATA:
+          unit->entries[i] =
+              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
+                                     .glb_id = glb->id,
+                                     .name = name,
+                                     .data = codegen_var_data(ir, glb->var)};
+          break;
+        }
+        break;
+      }
+      case IR_GLB_TY_FUNC: {
+        struct ir_func *ir_func = glb->func;
+
+        clear_metadata(ir_func);
+
+        size_t max_variadic_args = 0;
+
+        struct ir_basicblock *basicblock = ir_func->first;
+        while (basicblock) {
+          struct ir_stmt *stmt = basicblock->first;
+
+          while (stmt) {
+            struct ir_op *op = stmt->first;
+
+            while (op) {
+              if (op->ty == IR_OP_TY_CALL) {
+                if (is_func_variadic(&op->call.func_ty.func)) {
+                  size_t num_variadic_args =
+                      op->call.num_args -
+                      op->call.target->var_ty.func.num_params + 1;
+
+                  max_variadic_args = MAX(max_variadic_args, num_variadic_args);
+                }
+              }
+
+              op = op->succ;
+            }
+
+            stmt = stmt->succ;
+          }
+
+          basicblock = basicblock->succ;
+        }
+
+        unit->entries[i] = (struct codegen_entry){
+            .ty = CODEGEN_ENTRY_TY_FUNC,
+            .glb_id = glb->id,
+            .name = aarch64_mangle(ir->arena, ir_func->name),
+            .func = {
+                .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
+
+        struct codegen_function *func = &unit->entries[i].func;
+        struct codegen_state state = {.func = func,
+                                      .ir = ir_func,
+                                      .max_variadic_args = max_variadic_args};
+
+        insert_prologue(&state);
+
+        func->prologue = state.prologue_info.prologue_generated;
+        func->stack_size = state.prologue_info.stack_size;
+
+        basicblock = ir_func->first;
+        while (basicblock) {
+          struct instr *first_pred = func->last;
+
+          struct ir_stmt *stmt = basicblock->first;
+
+          while (stmt) {
+            codegen_stmt(&state, stmt);
+
+            stmt = stmt->succ;
+          }
+
+          basicblock->first_instr = first_pred ? first_pred->succ : func->first;
+          basicblock->last_instr = func->last;
+
+          basicblock = basicblock->succ;
+        }
+
+        break;
+      }
+      }
 
       i++;
       glb = glb->succ;
-      continue;
     }
-
-    switch (glb->ty) {
-    case IR_GLB_TY_DATA: {
-      // TODO: non string literals
-
-      const char *name = glb->name
-                             ? aarch64_mangle(ir->arena, glb->name)
-                             : mangle_str_cnst_name(ir->arena, "todo", glb->id);
-      switch (glb->var->ty) {
-      case IR_VAR_TY_STRING_LITERAL:
-        unit->entries[i] =
-            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
-                                   .glb_id = glb->id,
-                                   .name = name,
-                                   .str = glb->var->value.str_value};
-        break;
-      case IR_VAR_TY_CONST_DATA:
-        unit->entries[i] =
-            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
-                                   .glb_id = glb->id,
-                                   .name = name,
-                                   .data = codegen_var_data(ir, glb->var)};
-        break;
-      case IR_VAR_TY_DATA:
-        unit->entries[i] =
-            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
-                                   .glb_id = glb->id,
-                                   .name = name,
-                                   .data = codegen_var_data(ir, glb->var)};
-        break;
-      }
-      break;
-    }
-    case IR_GLB_TY_FUNC: {
-      struct ir_func *ir_func = glb->func;
-
-      clear_metadata(ir_func);
-
-      size_t max_variadic_args = 0;
-
-      struct ir_basicblock *basicblock = ir_func->first;
-      while (basicblock) {
-        struct ir_stmt *stmt = basicblock->first;
-
-        while (stmt) {
-          struct ir_op *op = stmt->first;
-
-          while (op) {
-            if (op->ty == IR_OP_TY_CALL) {
-              if (is_func_variadic(&op->call.func_ty.func)) {
-                size_t num_variadic_args =
-                    op->call.num_args -
-                    op->call.target->var_ty.func.num_params + 1;
-
-                max_variadic_args = MAX(max_variadic_args, num_variadic_args);
-              }
-            }
-
-            op = op->succ;
-          }
-
-          stmt = stmt->succ;
-        }
-
-        basicblock = basicblock->succ;
-      }
-
-      unit->entries[i] = (struct codegen_entry){
-          .ty = CODEGEN_ENTRY_TY_FUNC,
-          .glb_id = glb->id,
-          .name = aarch64_mangle(ir->arena, ir_func->name),
-          .func = {
-              .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
-
-      struct codegen_function *func = &unit->entries[i].func;
-      struct codegen_state state = {
-          .func = func, .ir = ir_func, .max_variadic_args = max_variadic_args};
-
-      insert_prologue(&state);
-
-      func->prologue = state.prologue_info.prologue_generated;
-      func->stack_size = state.prologue_info.stack_size;
-
-      basicblock = ir_func->first;
-      while (basicblock) {
-        struct instr *first_pred = func->last;
-
-        struct ir_stmt *stmt = basicblock->first;
-
-        while (stmt) {
-          codegen_stmt(&state, stmt);
-
-          stmt = stmt->succ;
-        }
-
-        basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-        basicblock->last_instr = func->last;
-
-        basicblock = basicblock->succ;
-      }
-
-      // codegen is now done
-      // do some basic sanity checks
-      struct check_reg_type_data data = {.last = NULL, .reg_ty = 0};
-      walk_regs(state.func, check_reg_type_callback, &data);
-
-      break;
-    }
-    }
-
-    i++;
-    glb = glb->succ;
   }
 
   qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
@@ -1753,6 +1760,18 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
   if (log_enabled()) {
     aarch64_debug_print_codegen(stderr, unit);
+  }
+
+  // now do sanity checks
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    const struct codegen_entry *entry = &unit->entries[i];
+
+    if (entry->ty == CODEGEN_ENTRY_TY_FUNC) {
+      // codegen is now done
+      // do some basic sanity checks
+      struct check_reg_type_data data = { .entry = entry, .last = NULL, .reg_ty = 0};
+      walk_regs(&entry->func, check_reg_type_callback, &data);
+    }
   }
 
   return unit;

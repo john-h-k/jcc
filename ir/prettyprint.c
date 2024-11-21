@@ -118,9 +118,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     return;
   }
   case IR_VAR_TY_TY_POINTER: {
-    fprintf(file, "PTR [ ");
-    debug_print_var_ty_string(file, iru, var_ty->pointer.underlying);
-    fprintf(file, " ]");
+    fprintf(file, "PTR");
     return;
   }
   case IR_VAR_TY_TY_ARRAY: {

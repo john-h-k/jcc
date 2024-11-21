@@ -277,7 +277,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
           struct ir_op *lcl_addr = insert_before_ir_op(
               irb, interval->op, IR_OP_TY_ADDR,
-              var_ty_make_pointer(irb->unit, &live->op->var_ty));
+              IR_VAR_TY_POINTER);
           lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
           lcl_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};

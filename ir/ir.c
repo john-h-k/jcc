@@ -366,6 +366,7 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 }
 
 const struct ir_var_ty IR_VAR_TY_NONE = {.ty = IR_VAR_TY_TY_NONE};
+const struct ir_var_ty IR_VAR_TY_POINTER = {.ty = IR_VAR_TY_TY_POINTER};
 const struct ir_var_ty IR_VAR_TY_I8 = {
     .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I8};
 const struct ir_var_ty IR_VAR_TY_I16 = {
@@ -720,7 +721,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
   attach_ir_basicblock(irb, basicblock, move_before->pred, move_before);
 }
 
-struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty) {
   debug_assert(op, "invalid replacement point!");
 
@@ -979,30 +980,6 @@ void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty_for_pointer_size(iru);
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
-}
-
-struct ir_var_ty var_ty_get_underlying(const struct ir_var_ty *var_ty) {
-  switch (var_ty->ty) {
-  case IR_VAR_TY_TY_POINTER:
-    return *var_ty->pointer.underlying;
-  case IR_VAR_TY_TY_ARRAY:
-    return *var_ty->array.underlying;
-  default:
-    bug("non pointer/array passed");
-  }
-}
-
-struct ir_var_ty var_ty_make_pointer(struct ir_unit *iru,
-                                     const struct ir_var_ty *underlying) {
-  struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
-
-  *copied = *underlying;
-
-  struct ir_var_ty var_ty;
-  var_ty.ty = IR_VAR_TY_TY_POINTER;
-  var_ty.pointer = (struct ir_var_pointer_ty){.underlying = copied};
-
-  return var_ty;
 }
 
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
