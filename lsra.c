@@ -109,12 +109,6 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
   size_t a_start = a_int->start;
   size_t b_start = b_int->start;
 
-  if (a_start > b_start) {
-    return 1;
-  } else if (a_start < b_start) {
-    return -1;
-  }
-
   // put params at front, this is used for giving them the correct registers for
   // calling conv
   enum ir_op_flags a_flags = a_int->op->flags;
@@ -123,6 +117,12 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
     return -1;
   } else if ((a_flags & IR_OP_FLAG_PARAM) < (b_flags & IR_OP_FLAG_PARAM)) {
     return 1;
+  }
+
+  if (a_start > b_start) {
+    return 1;
+  } else if (a_start < b_start) {
+    return -1;
   }
 
   if (a_int->op->id > b_int->op->id) {
