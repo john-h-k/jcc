@@ -1,5 +1,5 @@
 // expected value: 0
-// stdout: -
+// stdout: -`
 
 int printf(const char *, ...);
 
