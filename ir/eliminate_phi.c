@@ -96,19 +96,25 @@ void eliminate_phi(struct ir_func *irb) {
           debug_assert(op->reg.ty != IR_REG_TY_NONE,
                        "expected op %zu to have reg by now", op->id);
 
-          debug_assert(!op->lcl, "phi %zu with local makes no sense", op->id);
-
-          // struct ir_op *load =
-          //     insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, op->var_ty);
-          // load->load_lcl = (struct ir_op_load_lcl){.lcl = op->lcl};
-          // load->reg = op->reg;
-          // op->phi.values[i].value = load;
-
-          struct ir_op *mov =
-              insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
-          mov->mov.value = value;
-          mov->reg = op->reg;
-          op->phi.values[i].value = mov;
+          // insert juuust before the branch
+          // struct ir_op *storelcl =
+          //     insert_before_ir_op(irb, last,
+          //                         IR_OP_TY_STORE_LCL, IR_OP_VAR_TY_NONE);
+          // storelcl->store_lcl.value = value;
+          // storelcl->store_lcl.lcl_idx = lcl_idx;
+          if (op->lcl) {
+            struct ir_op *load =
+                insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, op->var_ty);
+            load->load_lcl = (struct ir_op_load_lcl){.lcl = op->lcl};
+            load->reg = op->reg;
+            op->phi.values[i].value = load;
+          } else {
+            struct ir_op *mov =
+                insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
+            mov->mov.value = value;
+            mov->reg = op->reg;
+            op->phi.values[i].value = mov;
+          }
         }
 
         op = op->succ;
