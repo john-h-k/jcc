@@ -16,6 +16,7 @@ struct hasher {
 
 struct hasher hasher_create(void);
 
+void hasher_hash_pointer(struct hasher *hasher, void *value);
 void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
                          size_t byte_size);
 void hasher_hash_str(struct hasher *hasher, const char *value);

@@ -366,18 +366,18 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
 
 const struct ir_var_ty IR_VAR_TY_NONE = {.ty = IR_VAR_TY_TY_NONE};
 const struct ir_var_ty IR_VAR_TY_POINTER = {.ty = IR_VAR_TY_TY_POINTER};
-const struct ir_var_ty IR_VAR_TY_I8 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I8};
-const struct ir_var_ty IR_VAR_TY_I16 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I16};
-const struct ir_var_ty IR_VAR_TY_I32 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I32};
-const struct ir_var_ty IR_VAR_TY_I64 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_I64};
-const struct ir_var_ty IR_VAR_TY_F32 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_F32};
-const struct ir_var_ty IR_VAR_TY_F64 = {
-    .ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = IR_VAR_PRIMITIVE_TY_F64};
+const struct ir_var_ty IR_VAR_TY_I8 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                       .primitive = IR_VAR_PRIMITIVE_TY_I8};
+const struct ir_var_ty IR_VAR_TY_I16 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_I16};
+const struct ir_var_ty IR_VAR_TY_I32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_I32};
+const struct ir_var_ty IR_VAR_TY_I64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_I64};
+const struct ir_var_ty IR_VAR_TY_F32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_F32};
+const struct ir_var_ty IR_VAR_TY_F64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_F64};
 const struct ir_var_ty IR_VAR_TY_VARIADIC = {.ty = IR_VAR_TY_TY_VARIADIC};
 
 bool is_func_variadic(const struct ir_var_func_ty *ty) {
@@ -400,6 +400,8 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->metadata = NULL;
   op->comment = NULL;
 }
+
+#define DETACHED_BASICBLOCK (SIZE_T_MAX)
 
 void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock) {
@@ -428,6 +430,33 @@ void detach_ir_basicblock(struct ir_func *irb,
   irb->basicblock_count--;
   irb->stmt_count -= stmt_count;
   irb->op_count -= op_count;
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    break;
+
+  case IR_BASICBLOCK_TY_SPLIT:
+  case IR_BASICBLOCK_TY_SWITCH:
+    bug("can't detach SPLIT/SWITCH bb");
+
+  case IR_BASICBLOCK_TY_MERGE: {
+    struct ir_basicblock *target = basicblock->merge.target;
+
+    for (size_t i = 0; i < target->num_preds; i++) {
+      if (target->preds[i] == basicblock) {
+        if (i + 1 < target->num_preds) {
+          memmove(&target->preds[i], &target->preds[i + 1], (target->num_preds - i - 1) * sizeof(struct ir_basicblock *));
+        }
+
+        target->num_preds--;
+        break;
+      }
+    }
+    break;
+  }
+  }
+
+  basicblock->id = DETACHED_BASICBLOCK;
 
   // fix links on either side of basicblock
   if (basicblock->pred) {
@@ -774,8 +803,8 @@ struct ir_op *insert_after_ir_op(struct ir_func *irb,
   return op;
 }
 
-
-struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock, struct ir_var_ty var_ty) {
+struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
+                         struct ir_var_ty var_ty) {
   struct ir_stmt *stmt = basicblock->first;
   if (!stmt) {
     stmt = alloc_ir_stmt(irb, basicblock);
@@ -785,18 +814,14 @@ struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock, 
 
   struct ir_op *phi;
   if (op) {
-    phi = insert_before_ir_op(irb, op,
-                              IR_OP_TY_PHI, var_ty);
+    phi = insert_before_ir_op(irb, op, IR_OP_TY_PHI, var_ty);
   } else {
     phi = alloc_ir_op(irb, stmt);
     phi->ty = IR_OP_TY_PHI;
     phi->var_ty = var_ty;
   }
 
-  phi->phi = (struct ir_op_phi){
-    .num_values = 0,
-    .values = NULL
-  };
+  phi->phi = (struct ir_op_phi){.num_values = 0, .values = NULL};
 
   return phi;
 }
@@ -1018,7 +1043,7 @@ struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
   struct ir_var_ty var_ty;
   var_ty.ty = IR_VAR_TY_TY_ARRAY;
   var_ty.array = (struct ir_var_array_ty){.num_elements = num_elements,
-                                             .underlying = copied};
+                                          .underlying = copied};
 
   return var_ty;
 }
@@ -1111,6 +1136,8 @@ void make_basicblock_switch(struct ir_func *irb,
   for (size_t i = 0; i < num_cases; i++) {
     add_pred_to_basicblock(irb, cases[i].target, basicblock);
   }
+
+  add_pred_to_basicblock(irb, default_target, basicblock);
 }
 
 struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
@@ -1227,14 +1254,12 @@ struct ir_lcl *add_local(struct ir_func *irb, struct ir_var_ty *var_ty) {
 }
 
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
-  return var_ty->ty == IR_VAR_TY_TY_STRUCT ||
-         var_ty->ty == IR_VAR_TY_TY_UNION;
+  return var_ty->ty == IR_VAR_TY_TY_STRUCT || var_ty->ty == IR_VAR_TY_TY_UNION;
 }
 
 bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
                          enum ir_var_primitive_ty primitive) {
-  return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE &&
-         var_ty->primitive == primitive;
+  return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE && var_ty->primitive == primitive;
 }
 
 bool var_ty_is_integral(const struct ir_var_ty *var_ty) {

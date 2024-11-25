@@ -6,6 +6,12 @@ struct var_refs {
   struct vector *refs;
 };
 
+// static void hash_var_key(struct hasher *hasher, const struct var_key *key) {
+//   hasher_hash_str(hasher, key->name);
+//   hasher_hash_pointer(hasher, key->basicblock);
+//   hasher_hash_integer(hasher, key->scope, sizeof(key->scope));
+// }
+
 struct var_refs *var_refs_create(void) {
   struct var_refs refs = {.refs = vector_create(sizeof(struct var_ref))};
 

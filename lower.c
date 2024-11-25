@@ -7,7 +7,6 @@ typedef int a;
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   // lowers a `br.switch` into a series of if-else statements
 
-
   struct ir_basicblock *bb = op->stmt->basicblock;
   struct ir_basicblock_switch *bb_switch = &bb->switch_case;
 
@@ -24,8 +23,8 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 
     for (size_t j = 0; j < split_case->target->num_preds; j++) {
       if (split_case->target->preds[j] == bb) {
-        // remove
-        memcpy(&split_case->target->preds[j], &split_case->target->preds[j + 1], split_case->target->num_preds - j);
+        // remove pred
+        memmove(&split_case->target->preds[j], &split_case->target->preds[j + 1], (split_case->target->num_preds - j - 1) * sizeof(struct ir_basicblock *));
         split_case->target->num_preds--;
       }
     }
@@ -57,6 +56,16 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
 
       prev_bb = next_cond;
     } else {
+      struct ir_basicblock *default_target = bb_switch->default_target;
+
+      for (size_t j = 0; j < default_target->num_preds; j++) {
+        if (bb_switch->default_target->preds[j] == bb) {
+          // remove pred
+          memmove(&default_target->preds[j], &default_target->preds[j + 1], (default_target->num_preds - j - 1) * sizeof(struct ir_basicblock *));
+          default_target->num_preds--;
+        }
+      }
+
       make_basicblock_split(func, prev_bb, split_case->target,
                                   bb_switch->default_target);
     }
