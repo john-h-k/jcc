@@ -909,8 +909,8 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     phi->var_ty = var_ty;
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
-        .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2),
-        .var = NULL};
+        .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2)
+        };
 
     phi->phi.values[0] = lhs;
     phi->phi.values[1] = rhs;
@@ -1014,7 +1014,9 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
     glb->var = arena_alloc(irb->func->arena, sizeof(*glb->var));
     *glb->var = (struct ir_var){
         .ty = IR_VAR_TY_STRING_LITERAL,
-        .value = {.var_ty = var_ty, .str_value = cnst->str_value}};
+        .value = {
+        .ty = IR_VAR_VALUE_TY_STR,
+        .var_ty = var_ty, .str_value = cnst->str_value}};
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -1080,7 +1082,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
       .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2),
-      .var = NULL};
+      };
 
   phi->phi.values[0] = true_op;
   phi->phi.values[1] = false_op;
@@ -1177,8 +1179,9 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
     phi->var_ty = var_ty;
   }
 
-  phi->phi.var = arena_alloc(irb->func->arena, sizeof(*phi->phi.var));
-  *phi->phi.var = *var;
+  phi->metadata = arena_alloc(irb->func->arena, sizeof(struct td_var));
+  *(struct td_var *)phi->metadata = *var;
+
   phi->phi.values = NULL;
   phi->phi.num_values = 0;
 
@@ -2745,25 +2748,34 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
 static void walk_basicblock(struct ir_func_builder *irb,
                             bool *basicblocks_visited, struct ir_op *source_phi,
                             struct td_var *var,
+                            struct ir_basicblock *start,
                             struct ir_basicblock *basicblock,
                             struct ir_op ***exprs, size_t *num_exprs) {
   if (!basicblock || basicblocks_visited[basicblock->id]) {
     return;
   }
 
-  basicblocks_visited[basicblock->id] = true;
+    basicblocks_visited[basicblock->id] = true;
 
   struct var_key key = get_var_key(var, basicblock);
   struct var_ref *ref = var_refs_get(irb->var_refs, &key);
 
-  if (!ref) {
-    debug("bb %zu has %zu preds", basicblock->id, basicblock->num_preds);
+  // TODO: is this correct?
+  if (!ref || ref->op->ty == IR_OP_TY_PHI) {
+    debug("couldn't find %s in bb %zu\n", var->identifier, basicblock->id);
+
     for (size_t i = 0; i < basicblock->num_preds; i++) {
       walk_basicblock(irb, basicblocks_visited, source_phi, var,
-                      basicblock->preds[i], exprs, num_exprs);
+                      start, basicblock->preds[i], exprs, num_exprs);
     }
     return;
   }
+
+  if (basicblock == start) {
+    return;
+  }
+
+  debug("found %s in bb %zu\n", var->identifier, basicblock->id);
 
   switch (ref->ty) {
   case VAR_REF_TY_GLB:
@@ -2798,7 +2810,7 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
 
   for (size_t i = 0; i < phi->stmt->basicblock->num_preds; i++) {
     struct ir_basicblock *pred = phi->stmt->basicblock->preds[i];
-    walk_basicblock(irb, basicblocks_visited, phi, phi->phi.var, pred, &exprs,
+    walk_basicblock(irb, basicblocks_visited, phi, phi->metadata, phi->stmt->basicblock, pred, &exprs,
                     &num_exprs);
   }
 
@@ -3017,7 +3029,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     while (stmt) {
       struct ir_op *op = stmt->first;
       while (op) {
-        if (op->ty == IR_OP_TY_PHI && op->phi.var) {
+        if (op->ty == IR_OP_TY_PHI && op->metadata) {
           find_phi_exprs(builder, op);
         }
 

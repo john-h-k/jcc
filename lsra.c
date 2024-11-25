@@ -273,8 +273,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     if (interval->op->ty == IR_OP_TY_CALL) {
       // need to spill everything that is nonvolatile & active
-      // this is a "quiet" spill and does not actually spill the local,
-      // as after the call it is immediately reloaded
+
       for (size_t j = 0; j < state.num_active; j++) {
         struct interval *live = &intervals[state.active[j]];
         struct ir_reg reg = live->op->reg;

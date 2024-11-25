@@ -672,9 +672,9 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
                                      bool top) {
   switch (var_value->ty) {
-  // case IR_VAR_VALUE_TY_STR:
-  //   fprintf(file, "%s", var_value->str_value);
-  //   break;
+  case IR_VAR_VALUE_TY_STR:
+    fprintf(file, "%s", var_value->str_value);
+    break;
   case IR_VAR_VALUE_TY_ZERO:
     fprintf(file, "{ ZERO }");
     break;

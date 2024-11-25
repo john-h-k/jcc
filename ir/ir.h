@@ -46,11 +46,6 @@ struct ir_op_mov {
 };
 
 struct ir_op_phi {
-  // not elegant, but phi needs ref to var so it can build itself in
-  // `find_phi_exprs`
-  // FIXME: ?
-  struct td_var *var;
-
   struct ir_op **values;
   size_t num_values;
 };
@@ -528,6 +523,7 @@ enum ir_var_value_ty {
   IR_VAR_VALUE_TY_ZERO,
   IR_VAR_VALUE_TY_INT,
   IR_VAR_VALUE_TY_FLT,
+  IR_VAR_VALUE_TY_STR,
   IR_VAR_VALUE_TY_VALUE_LIST,
 };
 
