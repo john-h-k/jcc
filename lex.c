@@ -188,19 +188,19 @@ static const char *process_raw_string(const struct lexer *lexer,
           oct_buff[j] = lexer->text[octal_start + j];
         }
 
-        int value = strtol(oct_buff, NULL, 8);
-        int lo = (char)value;
-        int hi = (char)(value >> 16);
-        vector_push_back(buff, &lo);
-        vector_push_back(buff, &hi);
+        unsigned char value = (unsigned char)strtoul(oct_buff, NULL, 8);
+        vector_push_back(buff, &value);
       } else if (lexer->text[i] == 'u') {
         // FIXME: C23 allows arbitrary num digits, not just 4
         char u_buff[5] = { 0 };
         memcpy(u_buff, &lexer->text[i + 1], 4);
         i += 4;
 
-        char value = (char)strtol(u_buff, NULL, 16);
-        vector_push_back(buff, &value);
+        unsigned value = strtoul(u_buff, NULL, 16);
+        unsigned char lo = (unsigned char)value;
+        unsigned char hi = (unsigned char)(value >> 8);
+        vector_push_back(buff, &hi);
+        vector_push_back(buff, &lo);
       } else {
         switch (lexer->text[i]) {
           ADD_ESCAPED('0', '\0')

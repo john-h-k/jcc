@@ -379,7 +379,7 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
       bug("cast between primitive & pointer type of same size is implicit");
     }
 
-    if (WKT_IS_SIGNED(from->well_known)) {
+    if (WKT_IS_SIGNED(to->well_known)) {
       return IR_OP_CAST_OP_TY_SEXT;
     } else {
       return IR_OP_CAST_OP_TY_ZEXT;
@@ -421,7 +421,7 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   } else {
     invariant_assert(from_var_ty.primitive != to_var_ty.primitive,
                      "cast not needed for types of same size");
-    if (WKT_IS_SIGNED(from->well_known)) {
+    if (WKT_IS_SIGNED(to->well_known)) {
       return IR_OP_CAST_OP_TY_SEXT;
     } else {
       return IR_OP_CAST_OP_TY_ZEXT;
@@ -2807,10 +2807,8 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
   // }
 
   if (!num_exprs) {
-    err("undefined behaviour - reading from unassigned variable '%s'",
-        phi->phi.var->identifier);
+    // this can happen when basic blocks are unreachable
 
-    phi->var_ty = IR_VAR_TY_NONE;
     phi->phi.values = NULL;
     phi->phi.num_values = 0;
     return;
