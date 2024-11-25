@@ -199,7 +199,11 @@ static const char *process_raw_string(const struct lexer *lexer,
         unsigned value = strtoul(u_buff, NULL, 16);
         unsigned char lo = (unsigned char)value;
         unsigned char hi = (unsigned char)(value >> 8);
-        vector_push_back(buff, &hi);
+
+        if (hi) {
+          vector_push_back(buff, &hi);
+        }
+
         vector_push_back(buff, &lo);
       } else {
         switch (lexer->text[i]) {
