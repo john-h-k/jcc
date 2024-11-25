@@ -217,6 +217,13 @@ static const char *process_raw_string(const struct lexer *lexer,
                        0x80 | (codepoint & 0x3F)};
           vector_extend(buff, c, 4);
         }
+      } else if (lexer->text[i] == 'x') {
+        char x_buff[3] = {0};
+        memcpy(x_buff, &lexer->text[i + 1], 2);
+        i += 2;
+
+        unsigned char value = (unsigned char)strtoul(x_buff, NULL, 16);
+        vector_push_back(buff, &value);       
       } else {
         switch (lexer->text[i]) {
           ADD_ESCAPED('0', '\0')

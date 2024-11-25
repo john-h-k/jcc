@@ -516,6 +516,36 @@ static void codegen_store_addr_op(struct codegen_state *state,
   }
 }
 
+static void codegen_add_imm(struct codegen_state *state, struct aarch64_reg dest, struct aarch64_reg source, unsigned long long value) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+  instr->aarch64->add_imm = (struct aarch64_addsub_imm){
+      .dest = dest,
+      .source = source,
+      .imm = MIN(value, 4095),
+      .shift = 0,
+  };
+
+  if (value > 4095) {
+    value -= 4095;
+
+    while (value) {
+      unsigned long long imm = MIN(value, 4095);
+
+      struct instr *add = alloc_instr(state->func);
+      add->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+      add->aarch64->add_imm = (struct aarch64_addsub_imm){
+          .dest = dest,
+          .source = dest,
+          .imm = imm,
+          .shift = 0,
+      };
+
+      value -= imm;
+    }
+  }
+}
+
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
 
@@ -526,14 +556,8 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     // op is NULL as we want the absolute offset
     size_t offset = get_lcl_stack_offset(state, NULL, lcl);
 
-    struct instr *instr = alloc_instr(state->func);
-    instr->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    instr->aarch64->add_imm = (struct aarch64_addsub_imm){
-        .dest = dest,
-        .source = STACK_PTR_REG,
-        .imm = offset,
-        .shift = 0,
-    };
+    codegen_add_imm(state, dest, STACK_PTR_REG, offset);
+
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
@@ -1108,7 +1132,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
       size_t arg_reg_idx = i;
 
-      if (i < num_normal_args) {
+      if (i < num_normal_args || !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
         if (var_ty_is_fp(var_ty)) {
           vector_push_back(fp_move_from, &source.idx);
           vector_push_back(fp_move_to, &arg_reg_idx);
