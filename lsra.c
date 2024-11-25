@@ -52,17 +52,15 @@ static void insert_active(struct register_alloc_state *state,
 
 static void spill_at_interval(struct ir_func *irb,
                               struct register_alloc_state *state,
+                              struct interval *last_active,
                               size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
 
-  // spill the longest living variable
-  struct interval *spill = &intervals[state->active[state->num_active - 1]];
-  if (spill->end > intervals[cur_interval].end) {
+  if (last_active->end > intervals[cur_interval].end) {
     // spill active
-
-    intervals[cur_interval].op->reg = spill->op->reg;
-    spill_op(irb, spill->op);
-    spill->op->flags |= IR_OP_FLAG_SPILLED;
+    intervals[cur_interval].op->reg = last_active->op->reg;
+    spill_op(irb, last_active->op);
+    last_active->op->flags |= IR_OP_FLAG_SPILLED;
 
     state->num_active--;
 
@@ -370,7 +368,20 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     } else {
       // need to spill, no free registers
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = spill_reg};
-      spill_at_interval(irb, &state, i);
+
+      size_t *last_active = &state.active[state.num_active - 1];
+      while (true) {
+        struct ir_op *op = state.interval_data.intervals[*last_active].op;
+        if (reg_ty == IR_REG_TY_INTEGRAL && var_ty_is_integral(&op->var_ty)) {
+          break;
+        } else if (reg_ty == IR_REG_TY_FP && var_ty_is_fp(&op->var_ty)) {
+          break;
+        }
+
+        last_active--;
+      }
+
+      spill_at_interval(irb, &state, &state.interval_data.intervals[*last_active], i);
     }
   }
 
