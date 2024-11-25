@@ -218,7 +218,8 @@ struct aarch64_prologue_info {
   size_t stack_size;
   size_t lr_offset;
   size_t save_start;
-  unsigned long long saved_registers;
+  unsigned long long saved_gp_registers;
+  unsigned long long saved_fp_registers;
 };
 
 struct codegen_state {
@@ -394,6 +395,30 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 // TODO: we should remove load/store lcl/glb ops and lower all addressing
 // requirements earlier
 
+static enum aarch64_instr_ty load_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    return AARCH64_INSTR_TY_LOAD_BYTE_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    return AARCH64_INSTR_TY_LOAD_HALF_IMM;
+  } else {
+    return AARCH64_INSTR_TY_LOAD_IMM;
+  }
+}
+
+static enum aarch64_instr_ty store_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    return AARCH64_INSTR_TY_STORE_BYTE_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    return AARCH64_INSTR_TY_STORE_HALF_IMM;
+  } else {
+    return AARCH64_INSTR_TY_STORE_IMM;
+  }
+}
+
 static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
@@ -402,12 +427,7 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   simm_t offset = get_lcl_stack_offset(state, op, lcl);
 
-  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
-  } else {
-    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-  }
+  instr->aarch64->ty = load_ty_for_op(op);
   instr->aarch64->load_imm =
       (struct aarch64_load_imm){.dest = dest,
                                 .addr = STACK_PTR_REG,
@@ -422,12 +442,7 @@ static void codegen_store_lcl_op(struct codegen_state *state,
   struct aarch64_reg source = codegen_reg(op->store_lcl.value);
   struct ir_lcl *lcl = op->lcl;
 
-  if (op->store_lcl.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->store_lcl.value->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
-  } else {
-    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-  }
+  instr->aarch64->ty = store_ty_for_op(op->store_addr.value);
   instr->aarch64->str_imm = (struct aarch64_store_imm){
       .source = source,
       .addr = STACK_PTR_REG,
@@ -451,7 +466,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
       bug("can't CONTAIN operand in load_addr node");
     }
 
-    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    instr->aarch64->ty = load_ty_for_op(op);
     instr->aarch64->ldr_imm =
         (struct aarch64_load_imm){.dest = dest,
                                   .addr = STACK_PTR_REG,
@@ -459,7 +474,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
                                   .mode = AARCH64_ADDRESSING_MODE_OFFSET};
   } else {
     struct aarch64_reg addr = codegen_reg(op->load_addr.addr);
-    instr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    instr->aarch64->ty = load_ty_for_op(op);
     instr->aarch64->ldr_imm =
         (struct aarch64_load_imm){.dest = dest,
                                   .addr = addr,
@@ -484,7 +499,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
       bug("can't CONTAIN operand in store_addr node");
     }
 
-    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    instr->aarch64->ty = store_ty_for_op(op->store_addr.value);
     instr->aarch64->str_imm =
         (struct aarch64_store_imm){.source = source,
                                    .addr = STACK_PTR_REG,
@@ -492,7 +507,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
                                    .mode = AARCH64_ADDRESSING_MODE_OFFSET};
   } else {
     struct aarch64_reg addr = codegen_reg(op->store_addr.addr);
-    instr->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    instr->aarch64->ty = store_ty_for_op(op->store_addr.value);
     instr->aarch64->str_imm =
         (struct aarch64_store_imm){.source = source,
                                    .addr = addr,
@@ -1220,7 +1235,7 @@ static void insert_prologue(struct codegen_state *state) {
 
   const size_t LR_OFFSET = 2;
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
-                                       .saved_registers = 0,
+                                       .saved_gp_registers = 0,
                                        .save_start = stack_size,
                                        .lr_offset = LR_OFFSET,
                                        .stack_size = stack_size};
@@ -1230,13 +1245,22 @@ static void insert_prologue(struct codegen_state *state) {
     return;
   }
 
-  struct bitset_iter iter =
+  struct bitset_iter gp_iter =
       bitset_iter(ir->reg_usage.gp_registers_used,
                   AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
 
   size_t i;
-  while (bitset_iter_next(&iter, &i)) {
-    info.saved_registers |= (1 << i);
+  while (bitset_iter_next(&gp_iter, &i)) {
+    info.saved_gp_registers |= (1 << i);
+    info.stack_size += 8;
+  }
+
+  struct bitset_iter fp_iter =
+      bitset_iter(ir->reg_usage.fp_registers_used,
+                  AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+
+  while (bitset_iter_next(&fp_iter, &i)) {
+    info.saved_fp_registers |= (1 << i);
     info.stack_size += 8;
   }
 
@@ -1277,8 +1301,11 @@ static void insert_prologue(struct codegen_state *state) {
 
       struct instr *sub_stack = alloc_instr(state->func);
       sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_EXT;
-      sub_stack->aarch64->sub_ext = (struct aarch64_addsub_ext){
-          .dest = STACK_PTR_REG, .lhs = STACK_PTR_REG, .rhs = tmp, .extend = AARCH64_EXTEND_UXTW};
+      sub_stack->aarch64->sub_ext =
+          (struct aarch64_addsub_ext){.dest = STACK_PTR_REG,
+                                      .lhs = STACK_PTR_REG,
+                                      .rhs = tmp,
+                                      .extend = AARCH64_EXTEND_UXTW};
     } else {
       struct instr *sub_stack = alloc_instr(state->func);
       sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
@@ -1311,6 +1338,28 @@ static void insert_prologue(struct codegen_state *state) {
           .addr = STACK_PTR_REG,
       };
     }
+
+    
+
+    struct bitset_iter fp_reg_iter =
+        bitset_iter(ir->reg_usage.fp_registers_used,
+                    AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+
+    while (bitset_iter_next(&fp_reg_iter, &idx)) {
+      // guaranteed to be mod 8
+      size_t offset = (info.save_start / 8) + save_idx++;
+
+      struct instr *save = alloc_instr(state->func);
+      save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+      save->aarch64->str_imm = (struct aarch64_store_imm){
+          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+          .imm = offset,
+          .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
+                                         .idx = translate_reg_idx(
+                                             idx, IR_REG_TY_INTEGRAL)},
+          .addr = STACK_PTR_REG,
+      };
+    }
   }
 
   state->prologue_info = info;
@@ -1323,13 +1372,13 @@ static void insert_epilogue(struct codegen_state *state) {
     return;
   }
 
-  unsigned long max_saved = sizeof(prologue_info->saved_registers) * 8 -
-                            lzcnt(prologue_info->saved_registers);
+  unsigned long max_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
+                            lzcnt(prologue_info->saved_gp_registers);
 
   size_t save_idx = 0;
   for (size_t i = 0; i < max_saved; i++) {
     // FIXME: loop should start at i=first non volatile
-    if (!NTH_BIT(prologue_info->saved_registers, i)) {
+    if (!NTH_BIT(prologue_info->saved_gp_registers, i)) {
       continue;
     }
 
@@ -1341,6 +1390,27 @@ static void insert_epilogue(struct codegen_state *state) {
         .mode = AARCH64_ADDRESSING_MODE_OFFSET,
         .imm = offset,
         .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
+                                     .idx = translate_reg_idx(
+                                         i, IR_REG_TY_INTEGRAL)},
+        .addr = STACK_PTR_REG,
+    };
+  }
+
+  save_idx = 0;
+  for (size_t i = 0; i < max_saved; i++) {
+    // FIXME: loop should start at i=first non volatile
+    if (!NTH_BIT(prologue_info->saved_fp_registers, i)) {
+      continue;
+    }
+
+    size_t offset = (prologue_info->save_start / 8) + save_idx++;
+
+    struct instr *restore = alloc_instr(state->func);
+    restore->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    restore->aarch64->ldr_imm = (struct aarch64_load_imm){
+        .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+        .imm = offset,
+        .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
                                      .idx = translate_reg_idx(
                                          i, IR_REG_TY_INTEGRAL)},
         .addr = STACK_PTR_REG,
@@ -1359,8 +1429,11 @@ static void insert_epilogue(struct codegen_state *state) {
 
       struct instr *sub_stack = alloc_instr(state->func);
       sub_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_EXT;
-      sub_stack->aarch64->add_ext = (struct aarch64_addsub_ext){
-          .dest = STACK_PTR_REG, .lhs = STACK_PTR_REG, .rhs = tmp, .extend = AARCH64_EXTEND_UXTW};
+      sub_stack->aarch64->add_ext =
+          (struct aarch64_addsub_ext){.dest = STACK_PTR_REG,
+                                      .lhs = STACK_PTR_REG,
+                                      .rhs = tmp,
+                                      .extend = AARCH64_EXTEND_UXTW};
 
     } else {
       struct instr *add_stack = alloc_instr(state->func);
@@ -2518,7 +2591,7 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "bl");
 
     if (instr->aarch64->bl.target) {
-      debug_print_branch(file, &instr->aarch64->bl);
+      debug_print_branch(file, &instr->aarch64->bl);  
     } else {
       fprintf(file, " <unknown>");
     }

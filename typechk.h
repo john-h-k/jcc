@@ -35,7 +35,7 @@ enum well_known_ty {
   // ir.c relies on the sizes being ascending
   // macros below rely on signed being even and unsigned being odd
   // TODO: WELL_KNOWN_TY_BOOL,
-  WELL_KNOWN_TY_CHAR = 1,
+  WELL_KNOWN_TY_CHAR = 2,
 
   WELL_KNOWN_TY_SIGNED_CHAR,
   WELL_KNOWN_TY_UNSIGNED_CHAR,

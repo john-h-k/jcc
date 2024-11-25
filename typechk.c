@@ -1118,14 +1118,14 @@ type_specifiers(struct typechk *tchk,
         break;
       }
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.ty == AST_TYPE_SPECIFIER_KW_DOUBLE) {
+               last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_DOUBLE) {
       wk = WELL_KNOWN_TY_LONG_DOUBLE;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.ty == AST_TYPE_SPECIFIER_KW_CHAR) {
+               last_specifier.type_specifier_kw  == AST_TYPE_SPECIFIER_KW_CHAR) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_CHAR
                           : WELL_KNOWN_TY_SIGNED_CHAR;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.ty == AST_TYPE_SPECIFIER_KW_SHORT) {
+               last_specifier.type_specifier_kw  == AST_TYPE_SPECIFIER_KW_SHORT) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_SHORT
                           : WELL_KNOWN_TY_SIGNED_SHORT;
     }
@@ -1372,9 +1372,7 @@ static struct td_expr type_unary_op(struct typechk *tchk,
     struct td_var_ty target_ty =
         type_type_name(tchk, &unary_op->cast.type_name);
 
-    expr = add_cast_expr(tchk, expr, target_ty);
-    result_ty = expr.var_ty;
-    break;
+    return add_cast_expr(tchk, expr, target_ty);
   }
   }
 
