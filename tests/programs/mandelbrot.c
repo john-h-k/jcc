@@ -2,6 +2,7 @@
 int printf(const char *, ...);
 
 int mandelbrot(double real, double imag) {
+	return 0;
 	int limit = 100;
 	double zReal = real;
 	double zImag = imag;
@@ -21,7 +22,8 @@ int mandelbrot(double real, double imag) {
 
 int main() {
 	int width = 379; //number of characters fitting horizontally on my screen 
-	int heigth = 98; //number of characters fitting vertically on my screen
+	// int height = 98; //number of characters fitting vertically on my screen
+	int height = 2;
 		
 	double x_start = -2.0;
 	double x_fin = 1.0;
@@ -40,7 +42,7 @@ int main() {
 	//~ double y_fin = -0.88;
 	
 	double dx = (x_fin - x_start)/(width - 1);
-	double dy = (y_fin - y_start)/(heigth - 1);
+	double dy = (y_fin - y_start)/(height - 1);
 
 	// const char *char_ = "\u2588";
 
@@ -59,36 +61,52 @@ int main() {
 	// const char *l_cyan = "\033[01;36m";
 	// const char *gray = "\033[22;37m";
 	// const char *white = "\033[01;37m";
-	// const char *char_ = "";
+	const char *char_ = "";
 
-	// const char *black = "A";
-	// const char *red = "B";
-	// const char *l_red = "C";
-	// const char *green = "D";
-	// const char *l_green = "E";
-	// const char *orange = "F";
-	// const char *yellow = "G";
-	// const char *blue = "H";
-	// const char *l_blue = "I";
-	// const char *magenta = "J";
-	// const char *l_magenta = "K";
-	// const char *cyan = "L";
-	// const char *l_cyan = "M";
+	const char *black = "A";
+	const char *red = "B";
+	const char *l_red = "C";
+	const char *green = "D";
+	const char *l_green = "E";
+	const char *orange = "F";
+	const char *yellow = "G";
+	const char *blue = "H";
+	const char *l_blue = "I";
+	const char *magenta = "J";
+	const char *l_magenta = "K";
+	const char *cyan = "L";
+	const char *l_cyan = "M";
 	// const char *gray = "\033[22;37m";
 	// const char *white = "\033[01;37m";
 
+	// const char *foo = "foo";
+	// const char *bar = "bar";
 
-	for (int i = 0; i < heigth; i++) {
+	for (int i = 0; i < height; i++) {
 		for (int j = 0; j < width; j++) {
 			double x = x_start + j*dx; // current real value
 			double y = y_fin - i*dy; // current imaginary value
 
+			printf("%f, %f\n", x, y);
 			int value = mandelbrot(x,y);
-			
-			// printf("%d,%d - %d\n", i, j, value);
-			// if (value == 100) {printf("A");}
-			// else if (value > 90) {printf("B");}
-			// else if (value > 70) {printf("C");}
+			printf("%d\n", value);
+			continue;
+
+			// printf("%s%s", foo, bar);
+			// printf("%s", foo);
+			// if (value == 100) {printf("%s", " ");}
+			// else if (value > 90) {printf("%s%s", foo, bar);}
+			// else if (value > 70) {printf("%s%s", "fiz", "baz");}
+			// else if (value > 50) {printf("%s%s", "foo", "bar");}
+			// else if (value > 30) {printf("%s%s", "foo", "bar");}
+			// else if (value > 20) {printf("%s%s", "foo", "bar");}
+			// else if (value > 10) {printf("%s%s", "foo", "bar");}
+			// else if (value > 5) {printf("%s%s", "foo", "bar");}
+			// else if (value > 4) {printf("%s%s", "foo", "bar");}
+			// else if (value > 3) {printf("%s%s", "foo", "bar");}
+			// else if (value > 2) {printf("%s%s", "foo", "bar");}
+			// else if (value > 1) {printf("%s%s", "foo", "bar");}
+			// else {printf("%s%s", "foo", "bar");}
 			// else if (value > 50) {printf("D");}
 			// else if (value > 30) {printf("E");}
 			// else if (value > 20) {printf("F");}
