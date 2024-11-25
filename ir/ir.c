@@ -542,13 +542,8 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock) {
 }
 
 void prune_basicblocks(struct ir_func *irb) {
-  if (!irb->first) {
-    return;
-  }
-
   // skip first BB as it has an implicit predecessor
-  prune_stmts(irb, irb->first);
-  struct ir_basicblock *basicblock = irb->first->succ;
+  struct ir_basicblock *basicblock = irb->first ? irb->first->succ : NULL;
 
   while (basicblock) {
     prune_stmts(irb, basicblock);
@@ -556,11 +551,8 @@ void prune_basicblocks(struct ir_func *irb) {
     // save succ before we detach
     struct ir_basicblock *succ = basicblock->succ;
 
-    bool has_preds = basicblock->num_preds;
-    bool has_ops = basicblock->first && basicblock->first->first != basicblock->first->last;
-
     // remove if it has no preds (if it has preds, it is needed as a target)
-    if (!has_preds && !has_ops) {
+    if (!basicblock->num_preds) {
       detach_ir_basicblock(irb, basicblock);
     }
 

@@ -59,21 +59,21 @@ int main() {
 	// const char *l_cyan = "\033[01;36m";
 	// const char *gray = "\033[22;37m";
 	// const char *white = "\033[01;37m";
-	const char *char_ = "";
+	// const char *char_ = "";
 
 	// const char *black = "A";
-	const char *red = "B";
-	const char *l_red = "C";
-	const char *green = "D";
-	const char *l_green = "E";
-	const char *orange = "F";
-	const char *yellow = "G";
-	const char *blue = "H";
-	const char *l_blue = "I";
-	const char *magenta = "J";
-	const char *l_magenta = "K";
-	const char *cyan = "L";
-	const char *l_cyan = "M";
+	// const char *red = "B";
+	// const char *l_red = "C";
+	// const char *green = "D";
+	// const char *l_green = "E";
+	// const char *orange = "F";
+	// const char *yellow = "G";
+	// const char *blue = "H";
+	// const char *l_blue = "I";
+	// const char *magenta = "J";
+	// const char *l_magenta = "K";
+	// const char *cyan = "L";
+	// const char *l_cyan = "M";
 	// const char *gray = "\033[22;37m";
 	// const char *white = "\033[01;37m";
 
@@ -82,10 +82,12 @@ int main() {
 		for (int j = 0; j < width; j++) {
 			
 			double x = x_start + j*dx; // current real value
+			// printf("j*dx=%f\n", x);
 			double y = y_fin - i*dy; // current imaginary value
 
-
 			int value = mandelbrot(x,y);
+			printf("%d %d m(%f, %f) = %d\n", i, j, x, y, value);
+			continue;
 			
 			// if (value == 100) {printf("A");}
 			// else if (value > 90) {printf("B");}
@@ -100,23 +102,24 @@ int main() {
 			// else if (value > 2) {printf("K");}
 			// else if (value > 1) {printf("L");}
 			// else {printf("M");}
-			if (value == 100) {printf("%s", " ");}
-			else if (value > 90) {printf("%s%s", red, char_);}
-			else if (value > 70) {printf("%s%s", l_red, char_);}
-			else if (value > 50) {printf("%s%s", orange, char_);}
-			else if (value > 30) {printf("%s%s", yellow, char_);}
-			else if (value > 20) {printf("%s%s", l_green, char_);}
-			else if (value > 10) {printf("%s%s", green, char_);}
-			else if (value > 5) {printf("%s%s", l_cyan, char_);}
-			else if (value > 4) {printf("%s%s", cyan, char_);}
-			else if (value > 3) {printf("%s%s", l_blue, char_);}
-			else if (value > 2) {printf("%s%s", blue, char_);}
-			else if (value > 1) {printf("%s%s", magenta, char_);}
-			else {printf("%s%s", l_magenta, char_);}
+			// if (value == 100) {printf("%s", " ");}
+			// else if (value > 90) {printf("%s%s", red, char_);}
+			// else if (value > 70) {printf("%s%s", l_red, char_);}
+			// else if (value > 50) {printf("%s%s", orange, char_);}
+			// else if (value > 30) {printf("%s%s", yellow, char_);}
+			// else if (value > 20) {printf("%s%s", l_green, char_);}
+			// else if (value > 10) {printf("%s%s", green, char_);}
+			// else if (value > 5) {printf("%s%s", l_cyan, char_);}
+			// else if (value > 4) {printf("%s%s", cyan, char_);}
+			// else if (value > 3) {printf("%s%s", l_blue, char_);}
+			// else if (value > 2) {printf("%s%s", blue, char_);}
+			// else if (value > 1) {printf("%s%s", magenta, char_);}
+			// else {printf("%s%s", l_magenta, char_);}
 			
 			// printf("\033[0m");
 		}
 
+		break;
 		printf("\n");
 	}
 
