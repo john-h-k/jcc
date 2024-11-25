@@ -3,7 +3,6 @@
 #include "../alloc.h"
 #include "../log.h"
 #include "../vector.h"
-#include "var_refs.h"
 
 #include <sys/stat.h>
 
@@ -204,7 +203,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   }
   case IR_OP_TY_PHI: {
     for (size_t i = 0; i < op->phi.num_values; i++) {
-      cb(&op->phi.values[i], cb_metadata);
+      cb(&op->phi.values[i].value, cb_metadata);
     }
     break;
   }
@@ -773,6 +772,33 @@ struct ir_op *insert_after_ir_op(struct ir_func *irb,
   move_after_ir_op(irb, op, insert_after);
 
   return op;
+}
+
+
+struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock, struct ir_var_ty var_ty) {
+  struct ir_stmt *stmt = basicblock->first;
+  if (!stmt) {
+    stmt = alloc_ir_stmt(irb, basicblock);
+  }
+
+  struct ir_op *op = stmt->first;
+
+  struct ir_op *phi;
+  if (op) {
+    phi = insert_before_ir_op(irb, op,
+                              IR_OP_TY_PHI, var_ty);
+  } else {
+    phi = alloc_ir_op(irb, stmt);
+    phi->ty = IR_OP_TY_PHI;
+    phi->var_ty = var_ty;
+  }
+
+  phi->phi = (struct ir_op_phi){
+    .num_values = 0,
+    .values = NULL
+  };
+
+  return phi;
 }
 
 struct ir_basicblock *
@@ -1357,7 +1383,7 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
   // its values then, once spilled, propogate its local to all of its dependents
   struct ir_lcl *lcl = NULL;
   for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i];
+    struct ir_op *value = op->phi.values[i].value;
 
     if (value->lcl) {
       lcl = value->lcl;
@@ -1370,7 +1396,7 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
 
   op->lcl = lcl;
   for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i];
+    struct ir_op *value = op->phi.values[i].value;
 
     value->lcl = lcl;
   }

@@ -204,7 +204,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
 
 static void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
   for (size_t i = 0; i < phi->num_values; i++) {
-    fprintf(file, "%%%zu", phi->values[i]->id);
+    fprintf(file, "%%%zu (@%zu)", phi->values[i].value->id, phi->values[i].basicblock->id);
 
     if (i + 1 < phi->num_values) {
       fprintf(file, ", ");

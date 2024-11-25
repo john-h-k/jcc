@@ -81,7 +81,7 @@ void eliminate_phi(struct ir_func *irb) {
 
       while (op && op->ty == IR_OP_TY_PHI) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
-          struct ir_op *value = op->phi.values[i];
+          struct ir_op *value = op->phi.values[i].value;
           struct ir_basicblock *phi_basicblock = value->stmt->basicblock;
 
           struct ir_op *last = phi_basicblock->last->last;
@@ -107,13 +107,13 @@ void eliminate_phi(struct ir_func *irb) {
                 insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, op->var_ty);
             load->load_lcl = (struct ir_op_load_lcl){.lcl = op->lcl};
             load->reg = op->reg;
-            op->phi.values[i] = load;
+            op->phi.values[i].value = load;
           } else {
             struct ir_op *mov =
                 insert_before_ir_op(irb, last, IR_OP_TY_MOV, op->var_ty);
             mov->mov.value = value;
             mov->reg = op->reg;
-            op->phi.values[i] = mov;
+            op->phi.values[i].value = mov;
           }
         }
 

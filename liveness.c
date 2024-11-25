@@ -87,7 +87,7 @@ static unsigned *find_basicblock_ranges(struct ir_func *irb) {
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
           for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *value = op->phi.values[i];
+            struct ir_op *value = op->phi.values[i].value;
 
             // HACK: this flag needs to enter the phi node so LSRA spills phis
             // maybe ir_lcl should have flag instead?
@@ -211,7 +211,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           size_t end = interval->end;
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *dependent = op->phi.values[i];
+            struct ir_op *dependent = op->phi.values[i].value;
             struct interval *dependent_interval =
                 &data.intervals[dependent->id];
 
@@ -229,7 +229,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           interval->end = end;
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *dependent = op->phi.values[i];
+            struct ir_op *dependent = op->phi.values[i].value;
             struct interval *dependent_interval =
                 &data.intervals[dependent->id];
 

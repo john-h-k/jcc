@@ -45,8 +45,13 @@ struct ir_op_mov {
   struct ir_op *value;
 };
 
+struct ir_phi_entry {
+  struct ir_basicblock *basicblock;
+  struct ir_op *value;
+};
+
 struct ir_op_phi {
-  struct ir_op **values;
+  struct ir_phi_entry *values;
   size_t num_values;
 };
 
@@ -757,6 +762,8 @@ struct ir_op *insert_before_ir_op(struct ir_func *irb,
 struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty);
+
+struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock, struct ir_var_ty var_ty);
 
 struct ir_basicblock *
 insert_before_ir_basicblock(struct ir_func *irb,
