@@ -105,74 +105,68 @@ static const struct target *get_target(const struct compile_args *args) {
   bug("unexpected target in `get_target`");
 }
 
+#define COMPILER_STAGE(stage)                                                  \
+  {                                                                            \
+    BEGIN_STAGE(#stage);                                                       \
+    disable_log();                                                             \
+                                                                               \
+    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_##stage)) {           \
+      enable_log();                                                            \
+    }                                                                          \
+  }
+
 enum compile_result compile(struct compiler *compiler) {
-  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PARSE)) {
-    enable_log();
-  }
-
-  BEGIN_STAGE("LEX + PARSE");
-
-  struct parse_result parse_result = parse(compiler->parser);
-
-  BEGIN_STAGE("AST");
-
-  if (log_enabled()) {
-    debug_print_ast(compiler->parser, &parse_result.translation_unit);
-  }
-
-  disable_log();
-
-  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_TYPECHK)) {
-    enable_log();
-  }
-
-  BEGIN_STAGE("TYPECHK");
-
-  struct typechk_result typechk_result =
-      td_typechk(compiler->typechk, &parse_result.translation_unit);
-
-  if (log_enabled()) {
-    debug_print_td(compiler->typechk, &typechk_result.translation_unit);
-  }
-
-  disable_log();
-
-  const struct target *target = get_target(&compiler->args);
-
-  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
-    enable_log();
-  }
-
-  BEGIN_STAGE("IR BUILD");
-
-  struct ir_unit *ir = build_ir_for_translationunit(
-      compiler->typechk, compiler->arena, &typechk_result.translation_unit);
+  struct parse_result parse_result;
 
   {
-    BEGIN_STAGE("IR");
+    COMPILER_STAGE(PARSE);
 
-    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_IR)) {
+    parse_result = parse(compiler->parser);
+
+    BEGIN_STAGE("AST");
+
+    if (log_enabled()) {
+      debug_print_ast(compiler->parser, &parse_result.translation_unit);
+    }
+  }
+
+  struct typechk_result typechk_result;
+  {
+    COMPILER_STAGE(TYPECHK);
+
+    typechk_result =
+        td_typechk(compiler->typechk, &parse_result.translation_unit);
+
+    if (log_enabled()) {
+      debug_print_td(compiler->typechk, &typechk_result.translation_unit);
+    }
+  }
+
+  const struct target *target = get_target(&compiler->args);
+  struct ir_unit *ir;
+  {
+    COMPILER_STAGE(IR);
+
+    ir = build_ir_for_translationunit(compiler->typechk, compiler->arena,
+                                      &typechk_result.translation_unit);
+
+    if (log_enabled()) {
       debug_print_stage(ir, "ir");
     }
+  }
 
-    BEGIN_STAGE("LOWERING");
+  {
+    COMPILER_STAGE(LOWER);
 
     lower(ir, target);
 
-    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_PRE_EMIT)) {
-      BEGIN_STAGE("POST PRE REG LOWER IR");
+    if (log_enabled()) {
       debug_print_stage(ir, "lower");
     }
-
-    disable_log();
   }
 
   {
-    if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_REGALLOC)) {
-      enable_log();
-    }
-
-    BEGIN_STAGE("REGALLOC");
+    COMPILER_STAGE(REGALLOC);
 
     struct ir_glb *glb = ir->first_global;
 
@@ -193,7 +187,7 @@ enum compile_result compile(struct compiler *compiler) {
       glb = glb->succ;
     }
 
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+    if (log_enabled()) {
       debug_print_stage(ir, "regalloc");
     }
 
@@ -217,7 +211,7 @@ enum compile_result compile(struct compiler *compiler) {
       glb = glb->succ;
     }
 
-    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_REGALLOC) {
+    if (log_enabled()) {
       debug_print_stage(ir, "elim_phi");
     }
   }
@@ -243,49 +237,37 @@ enum compile_result compile(struct compiler *compiler) {
     }
   }
 
-  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_EMIT)) {
-    enable_log();
+  struct emitted_unit unit;
+  {
+    COMPILER_STAGE(EMIT);
+
+    struct codegen_unit *codegen = target->codegen(ir);
+
+    if (log_enabled()) {
+      target->debug_print_codegen(stderr, codegen);
+    }
+
+    unit = target->emit_function(codegen);
   }
-
-  BEGIN_STAGE("PRE-EMIT");
-
-  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
-    debug_print_stage(ir, "pre_emit");
-  }
-
-  BEGIN_STAGE("CODEGEN");
-
-  struct codegen_unit *codegen = target->codegen(ir);
-
-  BEGIN_STAGE("EMITTING");
-
-  if (compiler->args.log_flags & COMPILE_LOG_FLAGS_EMIT) {
-    target->debug_print_codegen(stderr, codegen);
-  }
-
-  struct emitted_unit unit = target->emit_function(codegen);
-
-  disable_log();
 
   struct build_object_args args = {.compile_args = &compiler->args,
                                    .output = compiler->output,
                                    .entries = unit.entries,
                                    .num_entries = unit.num_entries};
 
-  BEGIN_STAGE("OBJECT FILE");
+  {
+    COMPILER_STAGE(ASM);
 
-  target->build_object(&args);
+    target->build_object(&args);
 
-  if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_ASM)) {
-    enable_log();
-
-    if (!target->debug_disasm) {
-      warn("DISASM not supported for current target");
-    } else {
-      BEGIN_STAGE("DISASSEMBLY");
-      target->debug_disasm(args.output);
+    if (log_enabled()) {
+      if (!target->debug_disasm) {
+        warn("DISASM not supported for current target");
+      } else {
+        BEGIN_STAGE("DISASSEMBLY");
+        target->debug_disasm(args.output);
+      }
     }
-    disable_log();
   }
 
   return COMPILE_RESULT_SUCCESS;
