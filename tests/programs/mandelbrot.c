@@ -1,5 +1,5 @@
 
-void printf(const char *, ...);
+int printf(const char *, ...);
 
 int mandelbrot(double real, double imag) {
 	int limit = 100;
@@ -80,15 +80,12 @@ int main() {
 
 	for (int i = 0; i < heigth; i++) {
 		for (int j = 0; j < width; j++) {
-			
 			double x = x_start + j*dx; // current real value
-			// printf("j*dx=%f\n", x);
 			double y = y_fin - i*dy; // current imaginary value
 
 			int value = mandelbrot(x,y);
-			printf("%d %d m(%f, %f) = %d\n", i, j, x, y, value);
-			continue;
 			
+			// printf("%d,%d - %d\n", i, j, value);
 			// if (value == 100) {printf("A");}
 			// else if (value > 90) {printf("B");}
 			// else if (value > 70) {printf("C");}
@@ -119,7 +116,6 @@ int main() {
 			// printf("\033[0m");
 		}
 
-		break;
 		printf("\n");
 	}
 

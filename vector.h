@@ -20,6 +20,7 @@ size_t vector_length(struct vector *v);
 size_t vector_byte_size(struct vector *v);
 size_t vector_element_size(struct vector *v);
 
+void vector_clear(struct vector *v);
 void vector_truncate(struct vector *v, size_t new_len);
 
 void vector_remove_at(struct vector *v, size_t index);

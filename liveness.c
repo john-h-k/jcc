@@ -133,7 +133,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   rebuild_ids(irb);
 
-  unsigned *bb_ranges = find_basicblock_ranges(irb);
+  UNUSED unsigned *bb_ranges = find_basicblock_ranges(irb);
 
   struct interval_data data;
   data.intervals =
@@ -206,38 +206,36 @@ struct interval_data construct_intervals(struct ir_func *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
-          struct interval *interval = &data.intervals[op->id];
-          size_t start = interval->start;
-          size_t end = interval->end;
+          // struct interval *interval = &data.intervals[op->id];
+          // size_t start = interval->start;
+          // size_t end = interval->end;
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i].value;
             struct interval *dependent_interval =
                 &data.intervals[dependent->id];
 
-            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count +
-                             dependent->stmt->basicblock->id;
-
-            debug_assert(bb_ranges[path_id], "bb_len was 0");
-            size_t dependent_path_end = bb_ranges[path_id];
-
-            start = MIN(start, dependent_interval->start);
-            end = MAX(end, dependent_path_end);
+            // FIXME: tighter ranges
+            dependent_interval->start = dependent->stmt->basicblock->first->first->id;
+            dependent_interval->end = dependent->stmt->basicblock->last->last->id;
           }
 
-          interval->start = start;
-          interval->end = end;
+          // data.intervals[op->id].start = op->stmt->basicblock->first->id;
+          // data.intervals[op->id].end = op->stmt->basicblock->last->id;
 
-          for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *dependent = op->phi.values[i].value;
-            struct interval *dependent_interval =
-                &data.intervals[dependent->id];
+          // interval->start = start;
+          // interval->end = end;
 
-            dependent_interval->start =
-                MIN(dependent_interval->start, interval->start);
-            dependent_interval->end =
-                MAX(dependent_interval->end, interval->end);
-          }
+          // for (size_t i = 0; i < op->phi.num_values; i++) {
+          //   struct ir_op *dependent = op->phi.values[i].value;
+          //   struct interval *dependent_interval =
+          //       &data.intervals[dependent->id];
+
+          //   dependent_interval->start =
+          //       MIN(dependent_interval->start, interval->start);
+          //   dependent_interval->end =
+          //       MAX(dependent_interval->end, interval->end);
+          // }
         }
 
         op = op->succ;

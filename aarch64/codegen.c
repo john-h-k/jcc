@@ -1236,6 +1236,7 @@ static void insert_prologue(struct codegen_state *state) {
   const size_t LR_OFFSET = 2;
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
                                        .saved_gp_registers = 0,
+                                       .saved_fp_registers = 0,
                                        .save_start = stack_size,
                                        .lr_offset = LR_OFFSET,
                                        .stack_size = stack_size};
@@ -1372,11 +1373,11 @@ static void insert_epilogue(struct codegen_state *state) {
     return;
   }
 
-  unsigned long max_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
+  unsigned long max_gp_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
                             lzcnt(prologue_info->saved_gp_registers);
 
   size_t save_idx = 0;
-  for (size_t i = 0; i < max_saved; i++) {
+  for (size_t i = 0; i < max_gp_saved; i++) {
     // FIXME: loop should start at i=first non volatile
     if (!NTH_BIT(prologue_info->saved_gp_registers, i)) {
       continue;
@@ -1396,8 +1397,11 @@ static void insert_epilogue(struct codegen_state *state) {
     };
   }
 
+  unsigned long max_fp_saved = sizeof(prologue_info->saved_fp_registers) * 8 -
+                            lzcnt(prologue_info->saved_fp_registers);
+
   save_idx = 0;
-  for (size_t i = 0; i < max_saved; i++) {
+  for (size_t i = 0; i < max_fp_saved; i++) {
     // FIXME: loop should start at i=first non volatile
     if (!NTH_BIT(prologue_info->saved_fp_registers, i)) {
       continue;
