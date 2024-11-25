@@ -107,11 +107,11 @@ static const struct target *get_target(const struct compile_args *args) {
 
 #define COMPILER_STAGE(stage)                                                  \
   {                                                                            \
-    BEGIN_STAGE(#stage);                                                       \
     disable_log();                                                             \
                                                                                \
     if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_##stage)) {           \
       enable_log();                                                            \
+      BEGIN_STAGE(#stage);                                                       \
     }                                                                          \
   }
 
@@ -244,6 +244,7 @@ enum compile_result compile(struct compiler *compiler) {
     struct codegen_unit *codegen = target->codegen(ir);
 
     if (log_enabled()) {
+      debug_print_stage(ir, "emit");
       target->debug_print_codegen(stderr, codegen);
     }
 

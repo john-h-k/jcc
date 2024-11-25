@@ -42,6 +42,10 @@ struct hasher hasher_create(void) {
                             .expand_seed2 = SEEDS[4]};
 }
 
+void hasher_hash_pointer(struct hasher *hasher, void *value) {
+  hasher_hash_integer(hasher, (unsigned long long)value, sizeof(value));
+}
+
 void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
                          size_t byte_size) {
   uint8_t bits = (uint8_t)(8 * byte_size);

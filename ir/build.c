@@ -1267,6 +1267,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   struct var_ref *ref;
   get_var_ref(irb, stmt->basicblock, var, &key, &ref);
 
+
   if (!ref) {
     ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
   }
@@ -2753,17 +2754,18 @@ static void gen_var_phis(struct ir_func_builder *irb,
 
     struct ir_basicblock *basicblock = build->pred;
 
-    struct ir_op *op = basicblock_ops_for_var[basicblock->id];
-    if (!op) {
-      struct var_key key = get_var_key(var, basicblock);
-      struct var_ref *ref = var_refs_get(irb->var_refs, &key);
+    struct ir_op *op;
 
-      if (ref) {
-        debug_assert(ref->ty == VAR_REF_TY_SSA,
-                     "non-ssa ref ty makes no sense for phi");
+    struct var_key key = get_var_key(var, basicblock);
+    struct var_ref *ref = var_refs_get(irb->var_refs, &key);
 
-        op = ref->op;
-      }
+    if (ref) {
+      debug_assert(ref->ty == VAR_REF_TY_SSA,
+                   "non-ssa ref ty makes no sense for phi");
+
+      op = ref->op;
+    } else {
+     op = basicblock_ops_for_var[basicblock->id];
     }
 
     if (op) {
@@ -2786,13 +2788,15 @@ static void gen_var_phis(struct ir_func_builder *irb,
 
     basicblock_ops_for_var[basicblock->id] = phi;
 
+    ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
+    ref->op = phi;
+
     for (size_t i = 0; i < basicblock->num_preds; i++) {
       struct ir_basicblock *pred = basicblock->preds[i];
 
       struct ir_build_phi_build pred_build = {.entry = &phi->phi.values[i],
                                               .pred = pred};
 
-      printf("adding entry %zu from %zu\n", pred->id, basicblock->id);
       vector_push_back(preds, &pred_build);
     }
   }
@@ -2983,7 +2987,8 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
   if (!last_bb || (last_bb->last && last_bb->last->last &&
-                   op_is_branch(last_bb->last->last->ty))) {
+                   op_is_branch(last_bb->last->last->ty) && last_bb->last->last->ty != IR_OP_TY_RET)) {
+    // add extra bb if there is no last bb, or if there is one 
     debug("adding bb to create ret");
     last_bb = alloc_ir_basicblock(builder->func);
   }
