@@ -76,7 +76,8 @@ void vector_truncate(struct vector *v, size_t new_len) {
 
 void *vector_pop(struct vector *v) {
   void *data = vector_get(v, v->len - 1);
-  vector_truncate(v, v->len - 1);
+  v->len--;
+
   return data;
 }
 

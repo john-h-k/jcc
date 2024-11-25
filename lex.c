@@ -165,10 +165,10 @@ static const char *process_raw_string(const struct lexer *lexer,
        i++) {
     if (char_escaped) {
 #define ADD_ESCAPED(ch, esc)                                                   \
-  case ch: {                                                              \
-    char c = esc;\
-    vector_push_back(buff, &c); \
-    break; \
+  case ch: {                                                                   \
+    char c = esc;                                                              \
+    vector_push_back(buff, &c);                                                \
+    break;                                                                     \
   }
 
       if (lexer->text[i] == '0') {
@@ -183,7 +183,7 @@ static const char *process_raw_string(const struct lexer *lexer,
         }
 
         size_t octal_len = MIN(2, i - octal_start + 1);
-        char oct_buff[3] = { 0 };
+        char oct_buff[3] = {0};
         for (size_t j = 0; j < octal_len; j++) {
           oct_buff[j] = lexer->text[octal_start + j];
         }
@@ -192,19 +192,31 @@ static const char *process_raw_string(const struct lexer *lexer,
         vector_push_back(buff, &value);
       } else if (lexer->text[i] == 'u') {
         // FIXME: C23 allows arbitrary num digits, not just 4
-        char u_buff[5] = { 0 };
+        char u_buff[5] = {0};
         memcpy(u_buff, &lexer->text[i + 1], 4);
         i += 4;
 
-        unsigned value = strtoul(u_buff, NULL, 16);
-        unsigned char lo = (unsigned char)value;
-        unsigned char hi = (unsigned char)(value >> 8);
+        unsigned codepoint = strtoul(u_buff, NULL, 16);
 
-        if (hi) {
-          vector_push_back(buff, &hi);
+        if (codepoint <= 0x7F) {
+          char c = codepoint & 0x7F;
+          vector_push_back(buff, &c);
+        } else if (codepoint <= 0x7FF) {
+          char c[2] = {0xC0 | ((codepoint >> 6) & 0x1F),
+                       0x80 | (codepoint & 0x3F)};
+          vector_extend(buff, c, 2);
+        } else if (codepoint <= 0xFFFF) {
+          char c[3] = {0xE0 | ((codepoint >> 12) & 0x0F),
+                       0x80 | ((codepoint >> 6) & 0x3F),
+                       0x80 | (codepoint & 0x3F)};
+          vector_extend(buff, c, 3);
+        } else if (codepoint <= 0x10FFFF) {
+          char c[4] = {0xF0 | ((codepoint >> 18) & 0x07),
+                       0x80 | ((codepoint >> 12) & 0x3F),
+                       0x80 | ((codepoint >> 6) & 0x3F),
+                       0x80 | (codepoint & 0x3F)};
+          vector_extend(buff, c, 4);
         }
-
-        vector_push_back(buff, &lo);
       } else {
         switch (lexer->text[i]) {
           ADD_ESCAPED('0', '\0')
@@ -244,7 +256,7 @@ static const char *process_raw_string(const struct lexer *lexer,
   char *value = nonnull_malloc(vector_byte_size(buff));
   vector_copy_to(buff, value);
   vector_free(&buff);
-  
+
   return value;
 }
 
