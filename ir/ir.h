@@ -669,7 +669,7 @@ void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);
 
-struct ir_lcl *add_local(struct ir_func *irb, struct ir_var_ty *var_ty);
+struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty);
 
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_var_ty *var_ty,
@@ -810,5 +810,22 @@ struct ir_op_uses {
 };
 
 struct ir_op_uses build_op_uses_map(struct ir_func *func);
+
+size_t unique_idx_for_reg(struct ir_reg reg);
+struct ir_reg reg_for_unique_idx(size_t idx);
+
+struct move {
+  size_t from;
+  size_t to;
+};
+
+struct move_set {
+  struct move *moves;
+  size_t num_moves;
+};
+
+struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
+                               size_t *to, size_t num, size_t tmp_index);
+
 
 #endif

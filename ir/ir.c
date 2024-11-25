@@ -445,7 +445,8 @@ void detach_ir_basicblock(struct ir_func *irb,
     for (size_t i = 0; i < target->num_preds; i++) {
       if (target->preds[i] == basicblock) {
         if (i + 1 < target->num_preds) {
-          memmove(&target->preds[i], &target->preds[i + 1], (target->num_preds - i - 1) * sizeof(struct ir_basicblock *));
+          memmove(&target->preds[i], &target->preds[i + 1],
+                  (target->num_preds - i - 1) * sizeof(struct ir_basicblock *));
         }
 
         target->num_preds--;
@@ -557,7 +558,8 @@ void prune_basicblocks(struct ir_func *irb) {
     struct ir_basicblock *succ = basicblock->succ;
 
     bool has_preds = basicblock->num_preds;
-    bool has_ops = basicblock->first && basicblock->first->first != basicblock->first->last;
+    bool has_ops = basicblock->first &&
+                   basicblock->first->first != basicblock->first->last;
 
     // remove if it has no preds (if it has preds, it is needed as a target)
     if (!has_preds && !has_ops) {
@@ -1226,7 +1228,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
   return glb;
 }
-struct ir_lcl *add_local(struct ir_func *irb, struct ir_var_ty *var_ty) {
+struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
 
@@ -1508,4 +1510,92 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   }
 
   return uses;
+}
+
+size_t unique_idx_for_reg(struct ir_reg reg) {
+  return reg.idx * /* num tys */ 5 + reg.ty;
+}
+
+struct ir_reg reg_for_unique_idx(size_t idx) {
+  return (struct ir_reg){.ty = idx % 5, .idx = idx / 5};
+}
+
+struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
+                               size_t *to, size_t num, size_t tmp_index) {
+  enum stage { NOT_READY, READY };
+  enum status { TODO, INPROC, DONE };
+  struct item {
+    enum stage stage;
+    size_t idx;
+  };
+
+  struct vector *result = vector_create(sizeof(struct move));
+
+  enum status *status = arena_alloc(arena, sizeof(*status) * num);
+  memset(status, 0, sizeof(*status) * num);
+
+  struct vector *in_proc = vector_create(sizeof(struct item));
+  for (size_t i = 0; i < num; i++) {
+    vector_clear(in_proc);
+
+    if (status[i] != TODO) {
+      continue;
+    }
+
+    struct item init = {.stage = NOT_READY, .idx = i};
+    vector_push_back(in_proc, &init);
+
+    while (!vector_empty(in_proc)) {
+      struct item *item = vector_pop(in_proc);
+      size_t index = item->idx;
+
+      if (from[index] != to[index]) {
+        if (item->stage == NOT_READY) {
+          switch (status[index]) {
+          case TODO:
+            status[index] = INPROC;
+
+            // Finalise this relation later
+            struct item todo = {.stage = READY, .idx = index};
+
+            vector_push_back(in_proc, &todo);
+
+            // Add dependencies
+            for (int j = num - 1; j >= 0; j--) {
+              if (from[j] == to[index]) {
+                struct item start = {.stage = NOT_READY, .idx = j};
+                vector_push_back(in_proc, &start);
+              }
+            }
+            break;
+
+          case INPROC: {
+            struct move move = {.from = from[index], .to = tmp_index};
+            vector_push_back(result, &move);
+            from[index] = tmp_index;
+            break;
+          }
+
+          case DONE:
+            break;
+          }
+        } else if (item->stage == READY) {
+          // Emit the move
+          struct move move = {.from = from[index], .to = to[index]};
+          vector_push_back(result, &move);
+          status[index] = DONE;
+        }
+      }
+    }
+  }
+
+  struct move_set move_set = {.num_moves = vector_length(result),
+                              .moves =
+                                  arena_alloc(arena, vector_byte_size(result))};
+
+  vector_copy_to(result, move_set.moves);
+  vector_free(&result);
+  vector_free(&in_proc);
+
+  return move_set;
 }

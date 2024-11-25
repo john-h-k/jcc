@@ -53,6 +53,8 @@ void debug_visit_ir(struct ir_func *irb,
 typedef void(debug_print_op_callback)(FILE *file, struct ir_op *op,
                                       void *metadata);
 
+void debug_print_ir_reg(FILE *file, struct ir_reg reg);
+
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_var_ty *var_ty);
 

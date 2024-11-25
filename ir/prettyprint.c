@@ -226,7 +226,7 @@ static void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   }
 }
 
-static void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
+void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
   switch (reg.ty) {
   case IR_REG_TY_NONE:
     fprintf(file, "UNASSIGNED");
