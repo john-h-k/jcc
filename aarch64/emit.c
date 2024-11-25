@@ -2,7 +2,6 @@
 
 #include "../aarch64.h"
 #include "../ir/prettyprint.h"
-#include "../ir/var_refs.h"
 #include "../vector.h"
 #include "emitter.h"
 #include "isa.h"
