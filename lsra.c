@@ -325,7 +325,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       interval->op->flags &= ~IR_OP_FLAG_MUST_SPILL;
       if (interval->op->ty == IR_OP_TY_PHI) {
         for (size_t j = 0; j < interval->op->phi.num_values; j++) {
-          struct ir_op *value = interval->op->phi.values[j];
+          struct ir_op *value = interval->op->phi.values[j].value;
 
           value->flags &= ~IR_OP_FLAG_MUST_SPILL;
         }

@@ -47,6 +47,8 @@ struct ir_label {
 };
 
 struct ir_func_builder {
+  struct arena_allocator *arena;
+
   struct ir_unit *unit;
   struct ir_func *func;
 
@@ -63,7 +65,7 @@ struct ir_func_builder {
 
 static struct ir_label *add_label(struct ir_func_builder *irb, const char *name,
                                   struct ir_basicblock *basicblock) {
-  struct ir_label *label = arena_alloc(irb->func->arena, sizeof(*label));
+  struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
 
   label->name = name;
   label->basicblock = basicblock;
@@ -847,7 +849,8 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   enum ir_op_unary_op_ty unary_op_ty;
   switch (unary_op->ty) {
   case TD_UNARY_OP_TY_MINUS:
-    unary_op_ty = is_fp_ty(&expr->var_ty) ? IR_OP_UNARY_OP_TY_FNEG : IR_OP_UNARY_OP_TY_NEG;
+    unary_op_ty = is_fp_ty(&expr->var_ty) ? IR_OP_UNARY_OP_TY_FNEG
+                                          : IR_OP_UNARY_OP_TY_NEG;
     break;
   case TD_UNARY_OP_TY_LOGICAL_NOT:
     unary_op_ty = IR_OP_UNARY_OP_TY_LOGICAL_NOT;
@@ -909,11 +912,12 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     phi->var_ty = var_ty;
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
-        .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2)
-        };
+        .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry *) * 2)};
 
-    phi->phi.values[0] = lhs;
-    phi->phi.values[1] = rhs;
+    phi->phi.values[0] = (struct ir_phi_entry){
+        .basicblock = lhs->stmt->basicblock, .value = lhs};
+    phi->phi.values[1] = (struct ir_phi_entry){
+        .basicblock = rhs->stmt->basicblock, .value = rhs};
 
     *stmt = phi->stmt;
     return phi;
@@ -1011,12 +1015,11 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
   case TD_CNST_TY_WIDE_STR_LITERAL: {
     struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty,
                                     IR_GLB_DEF_TY_DEFINED, NULL);
-    glb->var = arena_alloc(irb->func->arena, sizeof(*glb->var));
-    *glb->var = (struct ir_var){
-        .ty = IR_VAR_TY_STRING_LITERAL,
-        .value = {
-        .ty = IR_VAR_VALUE_TY_STR,
-        .var_ty = var_ty, .str_value = cnst->str_value}};
+    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    *glb->var = (struct ir_var){.ty = IR_VAR_TY_STRING_LITERAL,
+                                .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                          .var_ty = var_ty,
+                                          .str_value = cnst->str_value}};
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -1081,11 +1084,13 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   phi->var_ty = var_ty;
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
-      .values = arena_alloc(irb->func->arena, sizeof(struct ir_op *) * 2),
-      };
+      .values = arena_alloc(irb->arena, sizeof(struct ir_op *) * 2),
+  };
 
-  phi->phi.values[0] = true_op;
-  phi->phi.values[1] = false_op;
+  phi->phi.values[0] =
+      (struct ir_phi_entry){.basicblock = false_bb, .value = false_op};
+  phi->phi.values[1] =
+      (struct ir_phi_entry){.basicblock = true_bb, .value = true_op};
 
   *stmt = end_stmt;
   return phi;
@@ -1168,22 +1173,10 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
   // we generate an empty phi and then after all blocks are built we insert the
   // correct values
   // all phis appear at the start of their bb as they execute ""
-  struct ir_op *phi;
-  struct ir_stmt *s = *stmt;
-  if (s->basicblock->first->first) {
-    phi = insert_before_ir_op(irb->func, s->basicblock->first->first,
-                              IR_OP_TY_PHI, var_ty);
-  } else {
-    phi = alloc_ir_op(irb->func, s->basicblock->first);
-    phi->ty = IR_OP_TY_PHI;
-    phi->var_ty = var_ty;
-  }
+  struct ir_op *phi = insert_phi(irb->func, (*stmt)->basicblock, var_ty);
 
-  phi->metadata = arena_alloc(irb->func->arena, sizeof(struct td_var));
+  phi->metadata = arena_alloc(irb->arena, sizeof(struct td_var));
   *(struct td_var *)phi->metadata = *var;
-
-  phi->phi.values = NULL;
-  phi->phi.num_values = 0;
 
   key = get_var_key(var, (*stmt)->basicblock);
   struct var_ref *new_ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
@@ -1199,8 +1192,8 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   // need to generate args and target IR first to keep IR in order
   struct td_call *call = &expr->call;
 
-  struct ir_op **args = arena_alloc(
-      irb->func->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+  struct ir_op **args =
+      arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
@@ -2168,7 +2161,7 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
   // put the label we target into metadata
   // copy it out to ignore const warnings
   size_t label_len = strlen(goto_stmt->label);
-  br->metadata = arena_alloc(irb->func->arena, label_len + 1);
+  br->metadata = arena_alloc(irb->arena, label_len + 1);
   memcpy(br->metadata, goto_stmt->label, label_len + 1);
 
   struct ir_basicblock *after_goto_basicblock = alloc_ir_basicblock(irb->func);
@@ -2653,7 +2646,7 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
           add_global(irb->unit, IR_GLB_TY_FUNC, &var_ty,
                      IR_GLB_DEF_TY_UNDEFINED, decl->var.identifier);
 
-      glb->var = arena_alloc(irb->func->arena, sizeof(*glb->var));
+      glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
 
       var_assg_glb(irb, *stmt, glb, &decl->var);
       continue;
@@ -2745,49 +2738,63 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
   }
 }
 
-static void walk_basicblock(struct ir_func_builder *irb,
-                            bool *basicblocks_visited, struct ir_op *source_phi,
-                            struct td_var *var,
-                            struct ir_basicblock *start,
-                            struct ir_basicblock *basicblock,
-                            struct ir_op ***exprs, size_t *num_exprs) {
-  if (!basicblock || basicblocks_visited[basicblock->id]) {
-    return;
-  }
+struct ir_build_phi_build {
+  struct ir_phi_entry *entry;
+  struct ir_basicblock *pred;
+};
 
-    basicblocks_visited[basicblock->id] = true;
+static void gen_var_phis(struct ir_func_builder *irb,
+                         struct ir_op **basicblock_ops_for_var,
+                         struct vector *preds, struct td_var *var,
+                         struct ir_var_ty *var_ty) {
+  size_t head = 0;
+  while (vector_length(preds) - head) {
+    struct ir_build_phi_build *build = vector_get(preds, head++);
 
-  struct var_key key = get_var_key(var, basicblock);
-  struct var_ref *ref = var_refs_get(irb->var_refs, &key);
+    struct ir_basicblock *basicblock = build->pred;
 
-  // TODO: is this correct?
-  if (!ref || ref->op->ty == IR_OP_TY_PHI) {
-    debug("couldn't find %s in bb %zu\n", var->identifier, basicblock->id);
+    struct ir_op *op = basicblock_ops_for_var[basicblock->id];
+    if (!op) {
+      struct var_key key = get_var_key(var, basicblock);
+      struct var_ref *ref = var_refs_get(irb->var_refs, &key);
+
+      if (ref) {
+        debug_assert(ref->ty == VAR_REF_TY_SSA,
+                     "non-ssa ref ty makes no sense for phi");
+
+        op = ref->op;
+      }
+    }
+
+    if (op) {
+      *build->entry =
+          (struct ir_phi_entry){.basicblock = basicblock, .value = op};
+
+      basicblock_ops_for_var[basicblock->id] = op;
+      continue;
+    }
+
+    // var is not in this bb, so gen phi
+    struct ir_op *phi = insert_phi(irb->func, basicblock, *var_ty);
+
+    phi->phi = (struct ir_op_phi){
+        .num_values = basicblock->num_preds,
+        .values = arena_alloc(irb->arena, sizeof(*phi->phi.values) *
+                                              basicblock->num_preds)};
+    *build->entry =
+        (struct ir_phi_entry){.basicblock = basicblock, .value = phi};
+
+    basicblock_ops_for_var[basicblock->id] = phi;
 
     for (size_t i = 0; i < basicblock->num_preds; i++) {
-      walk_basicblock(irb, basicblocks_visited, source_phi, var,
-                      start, basicblock->preds[i], exprs, num_exprs);
+      struct ir_basicblock *pred = basicblock->preds[i];
+
+      struct ir_build_phi_build pred_build = {.entry = &phi->phi.values[i],
+                                              .pred = pred};
+
+      printf("adding entry %zu from %zu\n", pred->id, basicblock->id);
+      vector_push_back(preds, &pred_build);
     }
-    return;
-  }
-
-  if (basicblock == start) {
-    return;
-  }
-
-  debug("found %s in bb %zu\n", var->identifier, basicblock->id);
-
-  switch (ref->ty) {
-  case VAR_REF_TY_GLB:
-  case VAR_REF_TY_LCL:
-  case VAR_REF_TY_SSA: {
-    if (ref->op) {
-      (*num_exprs)++;
-      *exprs = arena_realloc(irb->func->arena, *exprs,
-                             sizeof(struct ir_op *) * *num_exprs);
-      (*exprs)[*num_exprs - 1] = ref->op;
-    }
-  }
   }
 }
 
@@ -2799,36 +2806,31 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
   // * A) find a write
   // * B) re-reach current bb
   // * or C) reach end (first bb)
-  bool *basicblocks_visited =
-      arena_alloc(irb->func->arena,
-                  sizeof(*basicblocks_visited) * irb->func->basicblock_count);
-  memset(basicblocks_visited, 0,
-         sizeof(*basicblocks_visited) * irb->func->basicblock_count);
 
-  struct ir_op **exprs = NULL;
-  size_t num_exprs = 0;
+  struct ir_basicblock *basicblock = phi->stmt->basicblock;
 
-  for (size_t i = 0; i < phi->stmt->basicblock->num_preds; i++) {
-    struct ir_basicblock *pred = phi->stmt->basicblock->preds[i];
-    walk_basicblock(irb, basicblocks_visited, phi, phi->metadata, phi->stmt->basicblock, pred, &exprs,
-                    &num_exprs);
+  struct ir_op **basicblock_ops_for_var = arena_alloc(
+      irb->arena, sizeof(struct ir_op *) * irb->func->basicblock_count);
+  memset(basicblock_ops_for_var, 0,
+         sizeof(struct ir_op *) * irb->func->basicblock_count);
+  basicblock_ops_for_var[basicblock->id] = phi;
+
+  phi->phi = (struct ir_op_phi){
+      .num_values = basicblock->num_preds,
+      .values = arena_alloc(irb->arena,
+                            sizeof(*phi->phi.values) * basicblock->num_preds)};
+
+  struct vector *phi_builds = vector_create(sizeof(struct ir_build_phi_build));
+
+  for (size_t i = 0; i < basicblock->num_preds; i++) {
+    struct ir_build_phi_build build = {.entry = &phi->phi.values[i],
+                                       .pred = basicblock->preds[i]};
+
+    vector_push_back(phi_builds, &build);
   }
 
-  // if (num_exprs && (exprs[0]->flags & IR_OP_FLAG_PARAM)) {
-  //   return;
-  // }
-
-  if (!num_exprs) {
-    // this can happen when basic blocks are unreachable
-
-    phi->phi.values = NULL;
-    phi->phi.num_values = 0;
-    return;
-  }
-
-  phi->var_ty = exprs[0]->var_ty;
-  phi->phi.values = exprs;
-  phi->phi.num_values = num_exprs;
+  gen_var_phis(irb, basicblock_ops_for_var, phi_builds, phi->metadata,
+               &phi->var_ty);
 }
 
 struct validate_metadata {
@@ -2890,6 +2892,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
   struct ir_func_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = (struct ir_func_builder){
+      .arena = arena,
       .unit = unit,
       .func = f,
       .tchk = unit->tchk,
@@ -2979,7 +2982,8 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
-  if (!last_bb || (last_bb->last && last_bb->last->last && op_is_branch(last_bb->last->last->ty))) {
+  if (!last_bb || (last_bb->last && last_bb->last->last &&
+                   op_is_branch(last_bb->last->last->ty))) {
     debug("adding bb to create ret");
     last_bb = alloc_ir_basicblock(builder->func);
   }
@@ -3065,7 +3069,8 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 }
 
 // static struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
-//                                                  struct td_var_ty *var_ty) {
+//                                                  struct td_var_ty *var_ty)
+//                                                  {
 //   switch (var_ty->ty) {
 //   case TD_VAR_TY_TY_UNKNOWN:
 //   case TD_VAR_TY_TY_VOID:
@@ -3185,12 +3190,14 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
 
 //     size_t offset;
 //     struct td_var_ty member_ty;
-//     if (i < init_list->num_inits && init->designator_list->num_designators) {
+//     if (i < init_list->num_inits && init->designator_list->num_designators)
+//     {
 //       offset = get_designator_offset(iru, var_ty,
 //                                      init_list->inits[i].designator_list,
 //                                      &member_idx, &member_ty);
 //     } else {
-//       offset = get_member_index_offset(iru, var_ty, member_idx, &member_ty);
+//       offset = get_member_index_offset(iru, var_ty, member_idx,
+//       &member_ty);
 //     }
 //     member_idx++;
 
@@ -3233,8 +3240,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
   case TD_VAR_TY_TY_ARRAY:
     ty = INIT_LIST_LAYOUT_TY_ARRAY;
     el_ty = *var_ty->array.underlying;
-    struct ir_var_ty ir_el_ty =
-        var_ty_for_td_var_ty(iru, &el_ty);
+    struct ir_var_ty ir_el_ty = var_ty_for_td_var_ty(iru, &el_ty);
     el_size = var_ty_info(iru, &ir_el_ty).size;
     break;
   default:
@@ -3352,10 +3358,10 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
 
     struct ir_var_value_list value_list = {
         .num_values = layout.num_inits,
-        .values = arena_alloc(iru->arena, sizeof(*value_list.values) *
-                                              layout.num_inits),
-        .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
-                                               layout.num_inits),
+        .values = arena_alloc(iru->arena,
+                              sizeof(*value_list.values) * layout.num_inits),
+        .offsets = arena_alloc(iru->arena,
+                               sizeof(*value_list.offsets) * layout.num_inits),
     };
 
     for (size_t i = 0; i < layout.num_inits; i++) {
@@ -3366,10 +3372,9 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
       value_list.offsets[i] = build_init->offset;
     }
 
-    return (struct ir_var_value) {
-      .ty = IR_VAR_VALUE_TY_VALUE_LIST, .var_ty = var_ty_for_td_var_ty(iru, var_ty),
-      .value_list = value_list
-    };
+    return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
+                                 .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                 .value_list = value_list};
   }
   }
 }
