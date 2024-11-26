@@ -13,6 +13,13 @@ Index:
 
 ---
 
+If:
+  PathMatch: tests.*
+Index:
+  Background: Skip
+
+---
+
 # Flags for .h files
 If:
   PathMatch: .*\.h

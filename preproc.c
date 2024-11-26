@@ -4,6 +4,7 @@
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
+#include "lex.h"
 #include "liveness.h"
 #include "log.h"
 #include "program.h"
@@ -353,10 +354,15 @@ static struct vector *preproc_tokens_til_eol(struct preproc *preproc, struct vec
   struct vector *tokens = vector_create(sizeof(struct preproc_token));
 
   struct preproc_token token;
-  do {
+  while (true) {
     preproc_next_token(preproc, &token);
+
+    if (token.ty == PREPROC_TOKEN_TY_NEWLINE) {
+      break;
+    }
+
     vector_push_back(tokens, &token);
-  } while (token.ty != PREPROC_TOKEN_TY_NEWLINE);
+  }
 
   vector_push_back(buffer, &token);
 
@@ -525,7 +531,10 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
       struct preproc_define *define = hashtbl_lookup(defines, &ident);
 
       if (define) {
-        vector_extend(buffer_tokens, vector_head(define->value), vector_length(define->value));
+        for (size_t i = vector_length(define->value); i; i--) {
+          struct preproc_token *def_tok = vector_get(define->value, i - 1);
+          vector_push_back(buffer_tokens, def_tok);
+        }
 
         break;
       }
