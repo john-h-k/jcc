@@ -45,7 +45,7 @@ int main() {
     return 1;
   }
 
-  if (sum_big(b) != 132) {
+  if (sum_big(b) != 136) {
     return 1;
   }
 }

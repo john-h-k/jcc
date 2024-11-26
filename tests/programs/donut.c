@@ -3,8 +3,8 @@ int printf(const char *, ...);
 int putchar(int c);
 void *memset(void *str, int c, unsigned long n);
 
-          int k;double sin()
-         ,cos();int main(){float A=
+          int k;double sin(double)
+         ,cos(double);int main(){float A=
        0,B=0,i,j,z[1760];char b[
      1760];printf("\x1b[2J");for(;;
   ){memset(b,32,1760);memset(z,0,7040)

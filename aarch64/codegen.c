@@ -20,6 +20,14 @@
     }                                                                          \
   }
 
+#define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
+  (struct aarch64_instr) {                                                     \
+    .ty = AARCH64_INSTR_TY_FMOV, .fmov = {                                     \
+      .source = (source_reg),                                                  \
+      .dest = (dest_reg),                                                      \
+    }                                                                          \
+  }
+
 static enum aarch64_reg_ty gp_reg_ty_for_size(size_t size) {
   switch (size) {
   case 8:
@@ -425,9 +433,7 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
     *instr->aarch64 = MOV_ALIAS(dest, source);
   } else {
     // one is floating
-    instr->aarch64->ty = AARCH64_INSTR_TY_FMOV;
-    instr->aarch64->fmov =
-        (struct aarch64_reg_1_source){.dest = dest, .source = source};
+    *instr->aarch64 = FP_MOV_ALIAS(dest, source);
   }
 }
 
@@ -700,6 +706,7 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
       struct instr *ldr = alloc_instr(state->func);
       ldr->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
       ldr->aarch64->load_imm = (struct aarch64_load_imm){
+          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
           .dest = dest,
           .addr = dest,
           .imm = 0,
@@ -1301,13 +1308,26 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
                                      .source = from,
                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET};
     } else {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X,
-                                   .idx = move.from.idx};
-      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
+      // we move more of register than necessary here
 
       struct instr *mov = alloc_instr(state->func);
 
-      *mov->aarch64 = MOV_ALIAS(dest, source);
+      switch (reg_class) {
+      case AARCH64_REG_CLASS_GP: {
+        struct aarch64_reg source = {.ty = AARCH64_REG_TY_X,
+                                     .idx = move.from.idx};
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
+        *mov->aarch64 = MOV_ALIAS(dest, source);
+        break;
+      }
+      case AARCH64_REG_CLASS_FP: {
+        struct aarch64_reg source = {.ty = AARCH64_REG_TY_D,
+                                     .idx = move.from.idx};
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_D, .idx = move.to.idx};
+        *mov->aarch64 = FP_MOV_ALIAS(dest, source);
+        break;
+      }
+      }
     }
   }
 }
@@ -1435,7 +1455,12 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         // TODO: is this safe, and can it be improved?
         struct aarch64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
         struct instr *mov = alloc_instr(state->func);
-        *mov->aarch64 = MOV_ALIAS(dest, source);
+
+        if (aarch64_reg_ty_is_gp(dest.ty)) {
+          *mov->aarch64 = MOV_ALIAS(dest, source);
+        } else {
+          *mov->aarch64 = FP_MOV_ALIAS(dest, source);
+        }
 
         source = dest;
       }
@@ -1671,20 +1696,122 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         .target = {.ty = AARCH64_REG_TY_X, .idx = BLR_REG_IDX}};
   }
 
-  if (func_ty->ret_ty->ty != IR_VAR_TY_TY_NONE) {
-    struct aarch64_reg ret_dest = codegen_reg(op);
+  if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
+    return;
+  }
 
-    struct aarch64_reg ret_reg = return_reg_for_ty(ret_dest.ty);
+  struct aarch64_reg dest = codegen_reg(op);
 
-    struct instr *ret_mov = alloc_instr(state->func);
+  struct ir_var_ty *var_ty = func_ty->ret_ty;
+  struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
-    if (aarch64_reg_ty_is_gp(ret_reg.ty) && aarch64_reg_ty_is_gp(ret_dest.ty)) {
-      *ret_mov->aarch64 = MOV_ALIAS(ret_dest, ret_reg);
+  if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+    if (!is_return_reg(dest)) {
+      struct instr *mov = alloc_instr(state->func);
+
+      *mov->aarch64 = MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
+    }
+  } else if (var_ty_is_fp(var_ty)) {
+    if (!is_return_reg(dest)) {
+      struct instr *mov = alloc_instr(state->func);
+
+      *mov->aarch64 = FP_MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
+    }
+  } else {
+    struct ir_lcl *lcl = op->lcl;
+    size_t offset;
+    if (lcl) {
+      offset = lcl->offset;
+    }
+
+    // aggregate ty
+    size_t num_members;
+    size_t member_size;
+    if (lcl && try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
+        num_members <= 4) {
+      enum aarch64_reg_ty reg_ty;
+      switch (member_size) {
+      case 8:
+        reg_ty = AARCH64_REG_TY_D;
+        break;
+      case 4:
+        reg_ty = AARCH64_REG_TY_S;
+        break;
+      case 2:
+        reg_ty = AARCH64_REG_TY_H;
+        break;
+      }
+
+      for (size_t i = 0; i < num_members; i++) {
+        struct aarch64_reg source = {.ty = reg_ty, .idx = i};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+        mov->aarch64->store_imm =
+            (struct aarch64_store_imm){.addr = STACK_PTR_REG,
+                                       .imm = (offset / member_size) + i,
+                                       .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                       .source = source};
+      }
+    } else if (info.size == 1) {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
+      mov->aarch64->strb_imm =
+          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
+                                     .imm = offset,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                     .source = source};
+    } else if (info.size == 2) {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_HALF_IMM;
+      mov->aarch64->strh_imm =
+          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
+                                     .imm = offset / 2,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                     .source = source};
+    } else if (info.size <= 4) {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+      mov->aarch64->str_imm =
+          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
+                                     .imm = offset / 4,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                     .source = source};
+    } else if (info.size <= 8) {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+      mov->aarch64->str_imm =
+          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
+                                     .imm = offset / 8,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                     .source = source};
+    } else if (info.size <= 16) {
+      struct aarch64_reg source0 = {.ty = AARCH64_REG_TY_X, .idx = 0};
+      struct aarch64_reg source1 = {.ty = AARCH64_REG_TY_X, .idx = 1};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
+      mov->aarch64->store_pair_imm = (struct aarch64_store_pair_imm){
+          .addr = STACK_PTR_REG,
+          .imm = offset / 8,
+          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+          .source = {source0, source1}};
     } else {
-      // one is floating
-      ret_mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
-      ret_mov->aarch64->fmov =
-          (struct aarch64_reg_1_source){.dest = ret_dest, .source = ret_reg};
+      todo("larger than 16 byte types");
     }
   }
 }
@@ -1906,7 +2033,8 @@ static void codegen_params(struct codegen_state *state) {
 }
 
 static size_t calc_arg_stack_space(struct codegen_state *state,
-                                   struct ir_var_func_ty func_ty) {
+                                   struct ir_var_func_ty func_ty,
+                                   struct ir_op *op) {
   size_t ngrn = 0;
   size_t nsrn = 0;
   size_t nsaa = 0;
@@ -1969,6 +2097,17 @@ static size_t calc_arg_stack_space(struct codegen_state *state,
     size_t size = MAX(8, info.size);
 
     nsaa += size;
+  }
+
+  if (op) {
+    debug_assert(op->ty == IR_OP_TY_CALL, "needs call");
+    for (size_t i = func_ty.num_params; i < op->call.num_args; i++) {
+      struct ir_var_ty var_ty = op->call.args[i]->var_ty;
+      struct ir_var_ty_info info = var_ty_info(state->ir->unit, &var_ty);
+
+      size_t size = ROUND_UP(info.size, 8);
+      nsaa += size;
+    }
   }
 
   return nsaa;
@@ -2221,18 +2360,113 @@ static void codegen_epilogue(struct codegen_state *state) {
 }
 
 static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
-  if (op->ret.value) {
+  if (op->ret.value && op->ret.value->ty != IR_OP_TY_CALL) {
     struct aarch64_reg source = codegen_reg(op->ret.value);
 
-    if (!is_return_reg(source)) {
-      struct instr *mov = alloc_instr(state->func);
+    struct ir_var_ty *var_ty = state->ir->func_ty.ret_ty;
+    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
-      if (aarch64_reg_ty_is_gp(source.ty)) {
+    if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+      if (!is_return_reg(source)) {
+        struct instr *mov = alloc_instr(state->func);
+
         *mov->aarch64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      }
+    } else if (var_ty_is_fp(var_ty)) {
+      if (!is_return_reg(source)) {
+        struct instr *mov = alloc_instr(state->func);
+
+        *mov->aarch64 = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      }
+    } else {
+      // aggregate ty
+      size_t num_members;
+      size_t member_size;
+      if (try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
+          num_members <= 4) {
+        enum aarch64_reg_ty reg_ty;
+        switch (member_size) {
+        case 8:
+          reg_ty = AARCH64_REG_TY_D;
+          break;
+        case 4:
+          reg_ty = AARCH64_REG_TY_S;
+          break;
+        case 2:
+          reg_ty = AARCH64_REG_TY_H;
+          break;
+        }
+
+        for (size_t i = 0; i < num_members; i++) {
+          struct aarch64_reg dest = {.ty = reg_ty, .idx = i};
+
+          struct instr *mov = alloc_instr(state->func);
+
+          mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+          mov->aarch64->load_imm =
+              (struct aarch64_load_imm){.addr = source,
+                                        .imm = i,
+                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                        .dest = dest};
+        }
+      } else if (info.size == 1) {
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
+        mov->aarch64->ldrb_imm =
+            (struct aarch64_load_imm){.addr = source,
+                                      .imm = 0,
+                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                      .dest = dest};
+      } else if (info.size == 2) {
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_HALF_IMM;
+        mov->aarch64->ldrb_imm =
+            (struct aarch64_load_imm){.addr = source,
+                                      .imm = 0,
+                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                      .dest = dest};
+      } else if (info.size <= 4) {
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+        mov->aarch64->ldrb_imm =
+            (struct aarch64_load_imm){.addr = source,
+                                      .imm = 0,
+                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                      .dest = dest};
+      } else if (info.size <= 8) {
+        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = 0};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+        mov->aarch64->ldrb_imm =
+            (struct aarch64_load_imm){.addr = source,
+                                      .imm = 0,
+                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                      .dest = dest};
+      } else if (info.size <= 16) {
+        struct aarch64_reg dest0 = {.ty = AARCH64_REG_TY_X, .idx = 0};
+        struct aarch64_reg dest1 = {.ty = AARCH64_REG_TY_X, .idx = 1};
+
+        struct instr *mov = alloc_instr(state->func);
+
+        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_PAIR_IMM;
+        mov->aarch64->load_pair_imm = (struct aarch64_load_pair_imm){
+            .addr = source,
+            .imm = 0,
+            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+            .dest = {dest0, dest1}};
       } else {
-        mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
-        mov->aarch64->fmov = (struct aarch64_reg_1_source){
-            .dest = return_reg_for_ty(source.ty), .source = source};
+        todo("larger than 16 byte types");
       }
     }
   }
@@ -2623,7 +2857,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
             while (op) {
               if (op->ty == IR_OP_TY_CALL) {
                 size_t call_args_size =
-                    calc_arg_stack_space(&state, op->call.func_ty.func);
+                    calc_arg_stack_space(&state, op->call.func_ty.func, op);
                 state.stack_args_size =
                     MAX(state.stack_args_size, call_args_size);
               }
