@@ -142,6 +142,89 @@ bool op_is_branch(enum ir_op_ty ty) {
   }
 }
 
+bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
+                      const struct ir_var_ty *r) {
+  if (l == r) {
+    return true;
+  }
+
+  if (l->ty != r->ty) {
+    return false;
+  }
+
+  switch (l->ty) {
+  case IR_VAR_TY_TY_NONE:
+    return r->ty == IR_VAR_TY_TY_NONE;
+  case IR_VAR_TY_TY_PRIMITIVE:
+    return l->primitive == r->primitive;
+  case IR_VAR_TY_TY_VARIADIC:
+    return r->ty == IR_VAR_TY_TY_VARIADIC;
+  case IR_VAR_TY_TY_POINTER:
+    return true;
+  case IR_VAR_TY_TY_ARRAY:
+    return l->array.num_elements == r->array.num_elements &&
+           var_ty_eq(irb, l->array.underlying, r->array.underlying);
+  case IR_VAR_TY_TY_FUNC:
+    if (!var_ty_eq(irb, l->func.ret_ty, r->func.ret_ty)) {
+      return false;
+    }
+    if (l->func.num_params != r->func.num_params) {
+      return false;
+    }
+    for (size_t i = 0; i < l->func.num_params; i++) {
+      if (!var_ty_eq(irb, &l->func.params[i], &r->func.params[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  case IR_VAR_TY_TY_STRUCT: {
+    if (l->struct_ty.num_fields != r->struct_ty.num_fields) {
+      return false;
+    }
+
+    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
+    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
+
+    // currently we do not have custom alignment/size but it is possible
+    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
+      return false;
+    }
+
+    for (size_t i = 0; i < l->struct_ty.num_fields; i++) {
+      if (!var_ty_eq(irb, &l->struct_ty.fields[i], &r->struct_ty.fields[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+  case IR_VAR_TY_TY_UNION: {
+    if (l->union_ty.num_fields != r->union_ty.num_fields) {
+      return false;
+    }
+
+    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
+    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
+
+    // currently we do not have custom alignment/size but it is possible
+    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
+      return false;
+    }
+
+    for (size_t i = 0; i < l->union_ty.num_fields; i++) {
+      if (!var_ty_eq(irb, &l->union_ty.fields[i], &r->union_ty.fields[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+  }
+
+  unreachable();
+}
+
 static void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
                          void *cb_metadata) {
   cb(&br_cond->cond, cb_metadata);

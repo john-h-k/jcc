@@ -1082,6 +1082,39 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
+static bool try_get_hfa_info(struct codegen_state *state, const struct ir_var_ty *var_ty, size_t *num_members) {
+  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
+    return false;
+  }
+
+  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
+    todo("union hfa handling");
+  }
+
+  if (!var_ty->struct_ty.num_fields) {
+    return false;
+  }
+
+  struct ir_var_ty *field_ty = &var_ty->struct_ty.fields[0];
+
+  if (!var_ty_is_fp(field_ty)) {
+    return false;
+  }
+
+  if (var_ty->struct_ty.num_fields > 4) {
+    return false;
+  }
+
+  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
+    if (!var_ty_eq(state->ir, field_ty, &var_ty->struct_ty.fields[i])) {
+      return false;
+    }
+  }
+
+  *num_members = var_ty->struct_ty.num_fields;
+  return true;
+}
+
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
@@ -1092,7 +1125,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need
-  // to do a swap
 
   struct vector *move_from = vector_create(sizeof(size_t));
   struct vector *move_to = vector_create(sizeof(size_t));
@@ -1107,8 +1139,13 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // `blr`
   size_t tmp_reg_idx = 9;
   size_t blr_reg_idx = 10;
+  size_t addr_reg_idx = 11;
 
   size_t fp_tmp_reg_idx = 16;
+
+  size_t ngrn = 0;
+  size_t nsrn = 0;
+  size_t nsaa = 0;
 
   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
     struct aarch64_reg source = codegen_reg(op->call.target);
@@ -1118,24 +1155,49 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     vector_push_back(move_to, &blr_reg_idx);
   }
 
-  // TODO: handle fp reg
   if (op->call.num_args) {
     size_t num_normal_args = func_ty->num_params;
 
-    for (size_t head = 0; head < op->call.num_args; head++) {
-      size_t i = op->call.num_args - 1 - head;
+    struct arg_load { struct aarch64_reg source, dest; };
+    struct vector *loads = vector_create(sizeof(struct arg_load));
+
+    for (size_t i = 0; i < op->call.num_args; i++) {
       struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
 
-      invariant_assert(var_ty->ty == IR_VAR_TY_TY_PRIMITIVE,
-                       "`lower_call` doesn't support non-prims");
-
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
-      size_t arg_reg_idx = i;
 
       if (i < num_normal_args || !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+        size_t num_hfa_members;
+
         if (var_ty_is_fp(var_ty)) {
-          vector_push_back(fp_move_from, &source.idx);
-          vector_push_back(fp_move_to, &arg_reg_idx);
+          if (nsrn < 8) {
+            vector_push_back(fp_move_from, &source.idx);
+            vector_push_back(fp_move_to, &nsrn);
+            nsrn++;
+
+            continue;
+          } else if (try_get_hfa_info(state, var_ty, &num_hfa_members)) {
+            // generate a STP/STQ instr but we haven't added that yet for FP&SIMD
+
+            if (nsrn + num_hfa_members <= 8) {
+              for (size_t j = 0; j < num_hfa_members; j++) {
+                // given this is a composite, we assume `source` contains a pointer to it
+
+                struct instr *load = alloc_instr(state->func);
+                load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+                load->aarch64->load_imm = (struct aarch64_load_imm){
+                  .addr = source,
+                  .dest =  nsrn + j,
+                }
+
+                vector_push_back(fp_move_from, &source.idx);
+                vector_push_back(fp_move_to, &nsrn);
+              }
+              
+              nsrn += num_hfa_members;
+            }
+          }
+
         } else {
           vector_push_back(move_from, &source.idx);
           vector_push_back(move_to, &arg_reg_idx);

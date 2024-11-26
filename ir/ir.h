@@ -365,6 +365,8 @@ enum ir_op_flags {
 
   // op has been spilled and all consumers must reload it
   IR_OP_FLAG_SPILLED = 256,
+
+  IR_OP_FLAG_ARG_STORE = 512,
 };
 
 typedef unsigned long long regpool_t;
@@ -794,6 +796,9 @@ bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
 bool var_ty_is_integral(const struct ir_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty);
+
+bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
+                      const struct ir_var_ty *r);
 
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
 
