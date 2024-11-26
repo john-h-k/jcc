@@ -261,6 +261,8 @@ struct aarch64_prologue_info {
 };
 
 struct codegen_state {
+  struct arena_allocator *arena;
+
   struct codegen_function *func;
   struct ir_func *ir;
   struct aarch64_prologue_info prologue_info;
@@ -1160,7 +1162,7 @@ static bool try_get_hfa_info(struct codegen_state *state,
     }
   }
 
-  switch (var_ty->primitive) {
+  switch (field_ty->primitive) {
   case IR_VAR_PRIMITIVE_TY_F16:
     *member_size = 2;
     break;
@@ -1205,11 +1207,14 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
       struct aarch64_reg to = {.ty = reg_ty_for_size(reg_class, from->size),
                                .idx = move.to.idx};
 
+      debug_assert(from->offset % from->size == 0, "offset was not a multiple of size");
+      size_t offset = from->offset / from->size;
+
       struct instr *load = alloc_instr(state->func);
       load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
       load->aarch64->load_imm =
           (struct aarch64_load_imm){.addr = from->base,
-                                    .imm = from->offset,
+                                    .imm = offset,
                                     .dest = to,
                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET};
     } else if (IS_MEM_LOC(move.to)) {
@@ -1219,11 +1224,14 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
       struct aarch64_reg from = {.ty = reg_ty_for_size(reg_class, to->size),
                                  .idx = move.from.idx};
 
+      debug_assert(to->offset % to->size == 0, "offset was not a multiple of size");
+      size_t offset = to->offset / to->size;
+
       struct instr *store = alloc_instr(state->func);
       store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
       store->aarch64->store_imm =
           (struct aarch64_store_imm){.addr = to->base,
-                                     .imm = to->offset,
+                                     .imm = offset,
                                      .source = from,
                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET};
     } else {
@@ -1254,8 +1262,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
   struct vector *fp_move_from = vector_create(sizeof(struct location));
   struct vector *fp_move_to = vector_create(sizeof(struct location));
-
-  struct vector *mem_locs = vector_create(sizeof(struct mem_loc));
 
   struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
 
@@ -1296,8 +1302,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       if (i < num_normal_args ||
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
 
-        // note, it is important we use the func ty as the reference here for types
-        // as aggregates and similar will already have been turned into pointers
+        // note, it is important we use the func ty as the reference here for
+        // types as aggregates and similar will already have been turned into
+        // pointers this does mean we need to explicitly handle pointers
         struct ir_var_ty *var_ty = &func_ty->params[i];
         struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
@@ -1322,9 +1329,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                         .offset = hfa_member_size * j,
                                         .size = hfa_member_size};
 
-              struct location loc = {.idx = MEM_LOC(),
-                                     .metadata =
-                                         vector_push_back(mem_locs, &mem_loc)};
+              struct location loc = {
+                  .idx = MEM_LOC(),
+                  .metadata = arena_alloc_init(
+                      state->arena, sizeof(struct mem_loc), &mem_loc)};
 
               struct location to = {.idx = nsrn++};
               vector_push_back(fp_move_from, &loc);
@@ -1352,7 +1360,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
           continue;
 
-        } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
+        } else if ((var_ty_is_integral(var_ty) ||
+                    var_ty->ty == IR_VAR_TY_TY_POINTER) &&
+                   info.size <= 8 && ngrn <= 8) {
           struct location from = {.idx = source.idx};
           struct location to = {.idx = ngrn};
           vector_push_back(gp_move_from, &from);
@@ -1381,9 +1391,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
             struct mem_loc mem_loc = {
                 .base = source, .offset = 8 * j, .size = 8};
 
-            struct location loc = {.idx = MEM_LOC(),
-                                   .metadata =
-                                       vector_push_back(mem_locs, &mem_loc)};
+            struct location loc = {
+                .idx = MEM_LOC(),
+                .metadata = arena_alloc_init(state->arena,
+                                             sizeof(struct mem_loc), &mem_loc)};
 
             struct location to = {.idx = ngrn++};
             vector_push_back(gp_move_from, &loc);
@@ -1418,10 +1429,12 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
         struct location from = {.idx = source.idx};
 
-        struct location to = {.idx = MEM_LOC(),
-                              .metadata = vector_push_back(mem_locs, &mem_loc)};
+        struct location to = {
+            .idx = MEM_LOC(),
+            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
+                                         &mem_loc)};
 
-        if (var_ty_is_integral(var_ty)) {
+        if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
           vector_push_back(gp_move_from, &from);
           vector_push_back(gp_move_to, &to);
         } else if (var_ty_is_fp(var_ty)) {
@@ -1521,6 +1534,13 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_params(struct codegen_state *state) {
+  struct ir_var_func_ty func_ty = state->ir->func_ty;
+
+  for (size_t i = 0; i < func_ty.num_params; i++) {
+    UNUSED struct ir_var_ty var_ty = func_ty.params[i];
+
+     
+  }
 }
 
 #define MAX_IMM_SIZE 4095
@@ -2181,8 +2201,12 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
             .func = {
                 .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
+        struct arena_allocator *arena;
+        arena_allocator_create(&arena);
+
         struct codegen_function *func = &unit->entries[i].func;
-        struct codegen_state state = {.func = func,
+        struct codegen_state state = {.arena = arena,
+                                      .func = func,
                                       .ir = ir_func,
                                       .max_variadic_args = max_variadic_args};
 
