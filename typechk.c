@@ -176,9 +176,10 @@ static bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
   pointer:
   case TD_VAR_TY_TY_POINTER: {
-    struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
-    struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
-    return td_var_ty_eq(tchk, &l_underlying, &r_underlying);
+    return true;
+    // struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
+    // struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
+    // return td_var_ty_eq(tchk, &l_underlying, &r_underlying);
   }
 
   case TD_VAR_TY_TY_VARIADIC:
