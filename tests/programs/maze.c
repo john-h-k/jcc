@@ -9,8 +9,8 @@ int rand();
 int srand(unsigned int);
 long time(long *);
 void exit(int);
-void free(void *);
 void *malloc(unsigned long);
+void free(void *);
 int atoi(const char *);
 
 #define EXIT_FAILURE (-1)

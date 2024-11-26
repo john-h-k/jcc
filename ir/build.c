@@ -2578,6 +2578,10 @@ build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
                                 struct var_refs *var_refs,
                                 struct td_declaration *declaration) {
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
+    if (declaration->storage_class_specifier == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
+      continue;
+    }
+
     build_ir_for_global_var(iru, func, var_refs,
                             declaration->storage_class_specifier,
                             &declaration->var_declarations[i]);
