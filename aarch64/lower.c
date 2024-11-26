@@ -285,6 +285,23 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
+static void lower_call(struct ir_func *func, struct ir_op *op) {
+  for (size_t i = 0; i < op->call.num_args; i++) {
+    struct ir_op *arg = op->call.args[i];
+
+    if (arg->ty != IR_OP_TY_LOAD_LCL || !var_ty_is_aggregate(&arg->var_ty)) {
+      continue;
+    }
+
+    arg->flags |= IR_OP_FLAG_DONT_GIVE_REG;
+    arg->flags |= IR_OP_FLAG_ARG_STORE;
+  }
+}
+
+static void lower_params(struct ir_func *func) {
+  
+}
+
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -298,6 +315,9 @@ void aarch64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
+
+      lower_params(func);
+
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -344,6 +364,8 @@ void aarch64_lower(struct ir_unit *unit) {
                 op->call.target =
                     alloc_contained_ir_op(func, op->call.target, op);
               }
+
+              lower_call(func, op);
               break;
             case IR_OP_TY_UNARY_OP:
               if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {

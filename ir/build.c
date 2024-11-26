@@ -107,89 +107,6 @@ static void get_var_ref(struct ir_func_builder *irb,
   *ref = var_refs_get(irb->global_var_refs, key);
 }
 
-static bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
-                      const struct ir_var_ty *r) {
-  if (l == r) {
-    return true;
-  }
-
-  if (l->ty != r->ty) {
-    return false;
-  }
-
-  switch (l->ty) {
-  case IR_VAR_TY_TY_NONE:
-    return r->ty == IR_VAR_TY_TY_NONE;
-  case IR_VAR_TY_TY_PRIMITIVE:
-    return l->primitive == r->primitive;
-  case IR_VAR_TY_TY_VARIADIC:
-    return r->ty == IR_VAR_TY_TY_VARIADIC;
-  case IR_VAR_TY_TY_POINTER:
-    return true;
-  case IR_VAR_TY_TY_ARRAY:
-    return l->array.num_elements == r->array.num_elements &&
-           var_ty_eq(irb, l->array.underlying, r->array.underlying);
-  case IR_VAR_TY_TY_FUNC:
-    if (!var_ty_eq(irb, l->func.ret_ty, r->func.ret_ty)) {
-      return false;
-    }
-    if (l->func.num_params != r->func.num_params) {
-      return false;
-    }
-    for (size_t i = 0; i < l->func.num_params; i++) {
-      if (!var_ty_eq(irb, &l->func.params[i], &r->func.params[i])) {
-        return false;
-      }
-    }
-
-    return true;
-  case IR_VAR_TY_TY_STRUCT: {
-    if (l->struct_ty.num_fields != r->struct_ty.num_fields) {
-      return false;
-    }
-
-    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
-
-    // currently we do not have custom alignment/size but it is possible
-    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
-      return false;
-    }
-
-    for (size_t i = 0; i < l->struct_ty.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->struct_ty.fields[i], &r->struct_ty.fields[i])) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-  case IR_VAR_TY_TY_UNION: {
-    if (l->union_ty.num_fields != r->union_ty.num_fields) {
-      return false;
-    }
-
-    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
-
-    // currently we do not have custom alignment/size but it is possible
-    if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
-      return false;
-    }
-
-    for (size_t i = 0; i < l->union_ty.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->union_ty.fields[i], &r->union_ty.fields[i])) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-  }
-
-  unreachable();
-}
-
 static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
                                  const struct ir_var_ty *l,
                                  const struct ir_var_ty *r) {
@@ -2601,7 +2518,6 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
     ref->lcl = add_local(irb->func, &var_ty);
 
-    // address = build_ir_for_addressof_var(irb, stmt, &decl->var);
     lcl = ref->lcl;
   } else {
     lcl = NULL;
@@ -2931,6 +2847,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC || !param->identifier) {
       continue;
     }
+    
 
     // TODO: the whole decl code needs reworking
     struct td_var var = {
@@ -2944,8 +2861,8 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     struct ir_var_ty var_ty =
         var_ty_for_td_var_ty(builder->unit, &param->var_ty);
 
-    if (var_ty.ty == IR_VAR_TY_TY_ARRAY) {
-      // arrays are actually pointers
+    if (var_ty.ty == IR_VAR_TY_TY_STRUCT || var_ty.ty == IR_VAR_TY_TY_UNION || var_ty.ty == IR_VAR_TY_TY_ARRAY) {
+      // arrays/aggregates are actually pointers
       var_ty = IR_VAR_TY_POINTER;
     }
 
