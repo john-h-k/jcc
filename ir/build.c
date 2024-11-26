@@ -1269,6 +1269,10 @@ static struct ir_op *build_ir_for_member_address_offset(
   get_member_info(irb->unit, struct_ty, member_name, member_ty, &idx,
                   &member_offset, td_member_ty);
 
+  if (!member_offset) {
+    return NULL;
+  }
+
   struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
   offset->ty = IR_OP_TY_CNST;
   offset->var_ty = (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
@@ -1288,6 +1292,10 @@ static struct ir_op *build_ir_for_member_address(struct ir_func_builder *irb,
   struct ir_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(
       irb, stmt, &lhs_expr->var_ty, member_name, &member_ty, NULL);
+
+  if (!rhs) {
+    return lhs;
+  }
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -1311,6 +1319,10 @@ static struct ir_op *build_ir_for_pointer_address(struct ir_func_builder *irb,
   struct ir_op *rhs = build_ir_for_member_address_offset(
       irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
       NULL);
+
+  if (!rhs) {
+    return lhs;
+  }
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_BINARY_OP;
@@ -2274,17 +2286,21 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
       first_init = value;
     }
 
-    struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
-    offset->ty = IR_OP_TY_CNST;
-    offset->var_ty = var_ty_for_pointer_size(irb->unit);
-    offset->cnst =
-        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = init->offset};
+    struct ir_op *init_address = address;
 
-    struct ir_op *init_address = alloc_ir_op(irb->func, *stmt);
-    init_address->ty = IR_OP_TY_BINARY_OP;
-    init_address->var_ty = IR_VAR_TY_POINTER;
-    init_address->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset};
+    if (init->offset) {
+      struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
+      offset->ty = IR_OP_TY_CNST;
+      offset->var_ty = var_ty_for_pointer_size(irb->unit);
+      offset->cnst =
+          (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = init->offset};
+
+      init_address = alloc_ir_op(irb->func, *stmt);
+      init_address->ty = IR_OP_TY_BINARY_OP;
+      init_address->var_ty = IR_VAR_TY_POINTER;
+      init_address->binary_op = (struct ir_op_binary_op){
+          .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset};
+    }
 
     struct ir_op *store = alloc_ir_op(irb->func, *stmt);
     store->ty = IR_OP_TY_STORE_ADDR;
@@ -2808,6 +2824,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
                       struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {.unit = unit,
+                      .func_ty = var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
                       .name = def->var_declaration.var.identifier,
                       .arena = arena,
                       .flags = IR_FUNC_FLAG_NONE,
@@ -2856,14 +2873,14 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
     struct var_key key = get_var_key(&var, basicblock);
 
-    struct ir_var_ty var_ty =
+    struct ir_var_ty param_var_ty =
         var_ty_for_td_var_ty(builder->unit, &param->var_ty);
 
-    if (var_ty.ty == IR_VAR_TY_TY_STRUCT || var_ty.ty == IR_VAR_TY_TY_UNION) {
+    if (param_var_ty.ty == IR_VAR_TY_TY_STRUCT || param_var_ty.ty == IR_VAR_TY_TY_UNION) {
       struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_LCL);
 
       // add a local, and let codegen magically fill it with the param
-      struct ir_lcl *lcl = add_local(builder->func, &var_ty);
+      struct ir_lcl *lcl = add_local(builder->func, &param_var_ty);
 
       struct ir_op *addr = alloc_ir_op(builder->func, param_stmt);
       addr->ty = IR_OP_TY_ADDR;
@@ -2878,14 +2895,14 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     } else {
       struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
-      if (var_ty.ty == IR_VAR_TY_TY_ARRAY) {
+      if (param_var_ty.ty == IR_VAR_TY_TY_ARRAY) {
         // arrays/aggregates are actually pointers
-        var_ty = IR_VAR_TY_POINTER;
+        param_var_ty = IR_VAR_TY_POINTER;
       }
 
       struct ir_op *mov = alloc_ir_op(builder->func, param_stmt);
       mov->ty = IR_OP_TY_MOV;
-      mov->var_ty = var_ty;
+      mov->var_ty = param_var_ty;
       mov->flags |= IR_OP_FLAG_PARAM;
       mov->mov.value = NULL;
 
