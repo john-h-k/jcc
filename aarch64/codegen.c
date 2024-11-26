@@ -1288,9 +1288,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     size_t num_normal_args = func_ty->num_params;
 
     for (size_t i = 0; i < op->call.num_args; i++) {
-      struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
-      struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
 
       // hmm, we pretend all memory locations are different but they are not
@@ -1298,6 +1295,12 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
       if (i < num_normal_args ||
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+
+        // note, it is important we use the func ty as the reference here for types
+        // as aggregates and similar will already have been turned into pointers
+        struct ir_var_ty *var_ty = &func_ty->params[i];
+        struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
+
         size_t num_hfa_members;
         size_t hfa_member_size;
 
@@ -1428,6 +1431,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           bug("bad type");
         }
       } else {
+        struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
+
         // this argument is variadic
         // the stack slot this local must live in, in terms of 8 byte slots
         size_t variadic_arg_idx = i - num_normal_args;
@@ -1461,48 +1466,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
       vector_length(fp_move_from), fp_tmp_reg_idx);
 
-  // FIXME: doesn't support vectors
-  for (size_t i = 0; i < fp_arg_moves.num_moves; i++) {
-    struct move move = fp_arg_moves.moves[i];
-
-    if (IS_MEM_LOC(move.from)) {
-      debug_assert(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
-
-      struct mem_loc *from = move.from.metadata;
-      struct aarch64_reg to = {.ty = fp_reg_ty_for_size(from->size),
-                               .idx = move.to.idx};
-
-      struct instr *load = alloc_instr(state->func);
-      load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-      load->aarch64->load_imm =
-          (struct aarch64_load_imm){.addr = from->base,
-                                    .imm = from->offset,
-                                    .dest = to,
-                                    .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-    } else if (IS_MEM_LOC(move.to)) {
-      debug_assert(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
-
-      struct mem_loc *to = move.to.metadata;
-      struct aarch64_reg from = {.ty = fp_reg_ty_for_size(to->size),
-                                 .idx = move.from.idx};
-
-      struct instr *store = alloc_instr(state->func);
-      store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-      store->aarch64->store_imm =
-          (struct aarch64_store_imm){.addr = to->base,
-                                     .imm = to->offset,
-                                     .source = from,
-                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-    } else {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X,
-                                   .idx = move.from.idx};
-      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      *mov->aarch64 = MOV_ALIAS(dest, source);
-    }
-  }
+  codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
+  codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
 
   // then handle mem copies
   size_t num_copies = vector_length(mem_copies);
@@ -1555,9 +1520,12 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
+static void codegen_params(struct codegen_state *state) {
+}
+
 #define MAX_IMM_SIZE 4095
 
-static void insert_prologue(struct codegen_state *state) {
+static void codegen_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
 
   // TODO: super inefficient
@@ -1706,7 +1674,7 @@ static void insert_prologue(struct codegen_state *state) {
   state->prologue_info = info;
 }
 
-static void insert_epilogue(struct codegen_state *state) {
+static void codegen_epilogue(struct codegen_state *state) {
   const struct aarch64_prologue_info *prologue_info = &state->prologue_info;
 
   if (!prologue_info->prologue_generated) {
@@ -1817,7 +1785,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
     }
   }
 
-  insert_epilogue(state);
+  codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
 
@@ -2218,7 +2186,8 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
                                       .ir = ir_func,
                                       .max_variadic_args = max_variadic_args};
 
-        insert_prologue(&state);
+        codegen_prologue(&state);
+        codegen_params(&state);
 
         func->prologue = state.prologue_info.prologue_generated;
         func->stack_size = state.prologue_info.stack_size;
