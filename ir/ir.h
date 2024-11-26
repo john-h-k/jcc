@@ -820,9 +820,14 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func);
 size_t unique_idx_for_reg(struct ir_reg reg);
 struct ir_reg reg_for_unique_idx(size_t idx);
 
+struct location {
+  size_t idx;
+  void *metadata;
+};
+
 struct move {
-  size_t from;
-  size_t to;
+  struct location from;
+  struct location to;
 };
 
 struct move_set {
@@ -830,8 +835,8 @@ struct move_set {
   size_t num_moves;
 };
 
-struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
-                               size_t *to, size_t num, size_t tmp_index);
+struct move_set gen_move_order(struct arena_allocator *arena, struct location *from,
+                               struct location *to, size_t num, size_t tmp_index);
 
 
 #endif

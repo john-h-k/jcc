@@ -1126,11 +1126,11 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need
 
-  struct vector *move_from = vector_create(sizeof(size_t));
-  struct vector *move_to = vector_create(sizeof(size_t));
+  struct vector *move_from = vector_create(sizeof(struct location));
+  struct vector *move_to = vector_create(sizeof(struct location));
 
-  struct vector *fp_move_from = vector_create(sizeof(size_t));
-  struct vector *fp_move_to = vector_create(sizeof(size_t));
+  struct vector *fp_move_from = vector_create(sizeof(struct location));
+  struct vector *fp_move_to = vector_create(sizeof(struct location));
 
   // reg 9 is not part of calling convention
   // and all registers have already been saved
@@ -1169,8 +1169,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
         if (var_ty_is_fp(var_ty)) {
           if (nsrn < 8) {
-            vector_push_back(fp_move_from, &source.idx);
-            vector_push_back(fp_move_to, &nsrn);
+            struct location from = { .idx = source.idx };
+            struct location to = { .idx = nsrn };
+            vector_push_back(fp_move_from, &from);
+            vector_push_back(fp_move_to, &to);
             nsrn++;
 
             continue;
@@ -1189,8 +1191,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                 // }
                 todo("hfa loads");
 
-                vector_push_back(fp_move_from, &source.idx);
-                vector_push_back(fp_move_to, &nsrn);
+                struct location from = { .idx = source.idx };
+                struct location to = { .idx = nsrn };
+                vector_push_back(fp_move_from, &from);
+                vector_push_back(fp_move_to, &to);
               }
               
               nsrn += num_hfa_members;
@@ -1198,8 +1202,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           }
 
         } else {
-          vector_push_back(move_from, &source.idx);
-          vector_push_back(move_to, &arg_reg_idx);
+          struct location from = { .idx = source.idx };
+          struct location to = { .idx = arg_reg_idx };
+          vector_push_back(move_from, &from);
+          vector_push_back(move_to, &to);
         }
       } else {
         // this argument is variadic
@@ -1238,8 +1244,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   for (size_t i = 0; i < arg_moves.num_moves; i++) {
     struct move move = arg_moves.moves[i];
 
-    struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from};
-    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to};
+    struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from.idx};
+    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
 
     struct instr *mov = alloc_instr(state->func);
 
@@ -1250,8 +1256,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   for (size_t i = 0; i < fp_arg_moves.num_moves; i++) {
     struct move move = fp_arg_moves.moves[i];
 
-    struct aarch64_reg source = {.ty = AARCH64_REG_TY_D, .idx = move.from};
-    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_D, .idx = move.to};
+    struct aarch64_reg source = {.ty = AARCH64_REG_TY_D, .idx = move.from.idx};
+    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_D, .idx = move.to.idx};
 
     struct instr *mov = alloc_instr(state->func);
 
