@@ -4,8 +4,7 @@
  */
 
 int printf(const char *, ...);
-// TODO: (void) seems to be buggy?
-int rand();
+int rand(void);
 int srand(unsigned int);
 long time(long *);
 void exit(int);
