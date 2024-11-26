@@ -28,54 +28,24 @@
 
 /* Loads & Stores */
 
-#define LDR_STR_PAIR(opc, V, L, imm7, Rt2, Rn, Rt)                             \
+#define LDR_STR_PAIR(opc, V, mode, L, imm7, Rt2, Rn, Rt)                  \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b01) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
+             (U32(mode) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
-#define LDR_STR_PAIR_POST_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                  \
-  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b01) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
-
-#define LDR_STR_PAIR_PRE_INDEX(opc, V, L, imm7, Rt2, Rn, Rt)                   \
-  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b11) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
-
-#define LDR_STR_PAIR_OFFSET(opc, V, L, imm7, Rt2, Rn, Rt)                      \
-  (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
-             (U32(0b10) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
-             (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
-
-// TODO: use IMM(immK, K) for all immediates
-
-#define STP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
-  LDR_STR_PAIR_POST_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_POST_INDEX_32(imm7, Rt2, Rn, Rt)                                   \
-  LDR_STR_PAIR_POST_INDEX(0b00, 0, 1, imm7, Rt2, Rn, Rt)
-#define STP_POST_INDEX_64(imm7, Rt2, Rn, Rt)                                   \
-  LDR_STR_PAIR_POST_INDEX(0b10, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_POST_INDEX_64(imm7, Rt2, Rn, Rt)                                   \
-  LDR_STR_PAIR_POST_INDEX(0b10, 0, 1, imm7, Rt2, Rn, Rt)
-
-#define STP_PRE_INDEX_32(imm7, Rt2, Rn, Rt)                                    \
-  LDR_STR_PAIR_PRE_INDEX(0b00, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_PRE_INDEX_32(imm7, Rt2, Rn, Rt)                                    \
-  LDR_STR_PAIR_PRE_INDEX(0b00, 0, 1, imm7, Rt2, Rn, Rt)
-#define STP_PRE_INDEX_64(imm7, Rt2, Rn, Rt)                                    \
-  LDR_STR_PAIR_PRE_INDEX(0b10, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_PRE_INDEX_64(imm7, Rt2, Rn, Rt)                                    \
-  LDR_STR_PAIR_PRE_INDEX(0b10, 0, 1, imm7, Rt2, Rn, Rt)
-
-#define STP_OFFSET_32(imm7, Rt2, Rn, Rt)                                       \
-  LDR_STR_PAIR_OFFSET(0b00, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_OFFSET_32(imm7, Rt2, Rn, Rt)                                       \
-  LDR_STR_PAIR_OFFSET(0b00, 0, 1, imm7, Rt2, Rn, Rt)
-#define STP_OFFSET_64(imm7, Rt2, Rn, Rt)                                       \
-  LDR_STR_PAIR_OFFSET(0b10, 0, 0, imm7, Rt2, Rn, Rt)
-#define LDP_OFFSET_64(imm7, Rt2, Rn, Rt)                                       \
-  LDR_STR_PAIR_OFFSET(0b10, 0, 1, imm7, Rt2, Rn, Rt)
+#define STP_32(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR(0b00, fp, mode, 0, imm7, Rt2, Rn, Rt)
+#define LDP_32(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR(0b00, fp, mode, 1, imm7, Rt2, Rn, Rt)
+#define STP_64(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR((fp ? 0b01 : 0b10), fp, mode, 0, imm7, Rt2, Rn, Rt)
+#define LDP_64(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR((fp ? 0b01 : 0b10), fp, mode, 1, imm7, Rt2, Rn, Rt)
+#define STP_128(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR(0b10, fp, mode, 0, imm7, Rt2, Rn, Rt)
+#define LDP_128(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+  LDR_STR_PAIR(0b10, fp, mode, 1, imm7, Rt2, Rn, Rt)
+  
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \

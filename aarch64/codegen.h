@@ -137,9 +137,9 @@ enum aarch64_shift {
 };
 
 enum aarch64_addressing_mode {
-  AARCH64_ADDRESSING_MODE_OFFSET,
-  AARCH64_ADDRESSING_MODE_PREINDEX,
-  AARCH64_ADDRESSING_MODE_POSTINDEX,
+  AARCH64_ADDRESSING_MODE_OFFSET = 0b10,
+  AARCH64_ADDRESSING_MODE_PREINDEX = 0b11,
+  AARCH64_ADDRESSING_MODE_POSTINDEX = 0b01,
 };
 
 enum aarch64_reg_ty {
@@ -162,6 +162,14 @@ enum aarch64_reg_class {
   AARCH64_REG_CLASS_FP,
 };
 
+enum aarch64_reg_attr_flags {
+  AARCH64_REG_ATTR_FLAG_NONE = 0,
+  AARCH64_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
+  AARCH64_REG_ATTR_FLAG_ARG_REG = 2,
+  AARCH64_REG_ATTR_FLAG_RET_REG = 4,
+  AARCH64_REG_ATTR_FLAG_RESERVED = 8,
+};
+
 bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty);
 bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty);
 
@@ -170,6 +178,8 @@ struct aarch64_reg {
 
   size_t idx;
 };
+
+enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg);
 
 enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_NOP,

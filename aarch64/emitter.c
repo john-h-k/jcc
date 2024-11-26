@@ -21,6 +21,8 @@ struct aarch64_emitter {
 #define IS64(d) (d).dest.ty == AARCH64_REG_TY_X
 #define IS32(d) (d).dest.ty == AARCH64_REG_TY_W
 
+#define ISQUAD(d) (d).dest.ty == AARCH64_REG_TY_Q
+#define ISQUAD_REG(d) (d).ty == AARCH64_REG_TY_Q
 #define ISDBL(d) (d).dest.ty == AARCH64_REG_TY_D
 #define ISDBL_REG(d) (d).ty == AARCH64_REG_TY_D
 #define ISFLT(d) (d).dest.ty == AARCH64_REG_TY_S
@@ -262,9 +264,9 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
 
 void aarch64_emit_fneg(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fneg) {
-  aarch64_emit_instr(emitter, FNEG(FTYPE_FOR_REG(fneg.dest), fneg.source.idx, fneg.dest.idx));
+  aarch64_emit_instr(
+      emitter, FNEG(FTYPE_FOR_REG(fneg.dest), fneg.source.idx, fneg.dest.idx));
 }
-
 
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,
                        const struct aarch64_fcmp fcmp) {
@@ -442,33 +444,34 @@ void aarch64_emit_adds(struct aarch64_emitter *emitter,
 /* Add & subtract (extended register) */
 
 void aarch64_emit_sub_ext(struct aarch64_emitter *emitter,
-                      const struct aarch64_addsub_ext sub_ext) {
-  aarch64_emit_instr(emitter,
-                     SUB_EXT(SF_FOR_REG(sub_ext.dest), sub_ext.extend, sub_ext.imm3,
-                              sub_ext.rhs.idx, sub_ext.lhs.idx, sub_ext.dest.idx));
+                          const struct aarch64_addsub_ext sub_ext) {
+  aarch64_emit_instr(emitter, SUB_EXT(SF_FOR_REG(sub_ext.dest), sub_ext.extend,
+                                      sub_ext.imm3, sub_ext.rhs.idx,
+                                      sub_ext.lhs.idx, sub_ext.dest.idx));
 }
 
 void aarch64_emit_subs_ext(struct aarch64_emitter *emitter,
-                       const struct aarch64_addsub_ext subs_ext) {
+                           const struct aarch64_addsub_ext subs_ext) {
   aarch64_emit_instr(emitter,
-                     SUBS_EXT(SF_FOR_REG(subs_ext.dest), subs_ext.extend, subs_ext.imm3,
-                              subs_ext.rhs.idx, subs_ext.lhs.idx, subs_ext.dest.idx));
+                     SUBS_EXT(SF_FOR_REG(subs_ext.dest), subs_ext.extend,
+                              subs_ext.imm3, subs_ext.rhs.idx, subs_ext.lhs.idx,
+                              subs_ext.dest.idx));
 }
 
 void aarch64_emit_add_ext(struct aarch64_emitter *emitter,
-                      const struct aarch64_addsub_ext add_ext) {
-  aarch64_emit_instr(emitter,
-                     ADD_EXT(SF_FOR_REG(add_ext.dest), add_ext.extend, add_ext.imm3,
-                              add_ext.rhs.idx, add_ext.lhs.idx, add_ext.dest.idx));
+                          const struct aarch64_addsub_ext add_ext) {
+  aarch64_emit_instr(emitter, ADD_EXT(SF_FOR_REG(add_ext.dest), add_ext.extend,
+                                      add_ext.imm3, add_ext.rhs.idx,
+                                      add_ext.lhs.idx, add_ext.dest.idx));
 }
 
 void aarch64_emit_adds_ext(struct aarch64_emitter *emitter,
-                       const struct aarch64_addsub_ext adds_ext) {
+                           const struct aarch64_addsub_ext adds_ext) {
   aarch64_emit_instr(emitter,
-                     ADDS_EXT(SF_FOR_REG(adds_ext.dest), adds_ext.extend, adds_ext.imm3,
-                              adds_ext.rhs.idx, adds_ext.lhs.idx, adds_ext.dest.idx));
+                     ADDS_EXT(SF_FOR_REG(adds_ext.dest), adds_ext.extend,
+                              adds_ext.imm3, adds_ext.rhs.idx, adds_ext.lhs.idx,
+                              adds_ext.dest.idx));
 }
-
 
 /* Addressing (immediate) */
 
@@ -572,77 +575,56 @@ void aarch64_emit_udiv(struct aarch64_emitter *emitter,
 
 void aarch64_emit_load_pair_imm(struct aarch64_emitter *emitter,
                                 const struct aarch64_load_pair_imm ldp) {
-  switch (ldp.mode) {
-  case AARCH64_ADDRESSING_MODE_OFFSET:
-    if (IS64_REG(ldp.dest[0])) {
-      aarch64_emit_instr(emitter, LDP_OFFSET_64(ldp.imm, ldp.dest[1].idx,
-                                                ldp.addr.idx, ldp.dest[0].idx));
-    } else {
-      aarch64_emit_instr(emitter, LDP_OFFSET_32(ldp.imm, ldp.dest[1].idx,
-                                                ldp.addr.idx, ldp.dest[0].idx));
-    }
+  if (!ldp.mode) {
+    bad_instr();
+  }
+
+  size_t size = reg_size(ldp.dest[0].ty);
+  unsigned fp = aarch64_reg_ty_is_fp(ldp.dest[0].ty);
+
+  switch (size) {
+  case 16:
+    aarch64_emit_instr(emitter, LDP_128(ldp.mode, fp, ldp.imm, ldp.dest[1].idx,
+                                        ldp.addr.idx, ldp.dest[0].idx));
     break;
-  case AARCH64_ADDRESSING_MODE_PREINDEX:
-    if (IS64_REG(ldp.dest[0])) {
-      aarch64_emit_instr(emitter,
-                         LDP_PRE_INDEX_64(ldp.imm, ldp.dest[1].idx,
-                                          ldp.addr.idx, ldp.dest[0].idx));
-    } else {
-      aarch64_emit_instr(emitter,
-                         LDP_PRE_INDEX_32(ldp.imm, ldp.dest[1].idx,
-                                          ldp.addr.idx, ldp.dest[0].idx));
-    }
+  case 8:
+    aarch64_emit_instr(emitter, LDP_64(ldp.mode, fp, ldp.imm, ldp.dest[1].idx,
+                                       ldp.addr.idx, ldp.dest[0].idx));
     break;
-  case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    if (IS64_REG(ldp.dest[0])) {
-      aarch64_emit_instr(emitter,
-                         LDP_POST_INDEX_64(ldp.imm, ldp.dest[1].idx,
-                                           ldp.addr.idx, ldp.dest[0].idx));
-    } else {
-      aarch64_emit_instr(emitter,
-                         LDP_POST_INDEX_32(ldp.imm, ldp.dest[1].idx,
-                                           ldp.addr.idx, ldp.dest[0].idx));
-    }
+  case 4:
+    aarch64_emit_instr(emitter, LDP_32(ldp.mode, fp, ldp.imm, ldp.dest[1].idx,
+                                       ldp.addr.idx, ldp.dest[0].idx));
     break;
+  default:
+    bad_instr();
   }
 }
 
 void aarch64_emit_store_pair_imm(struct aarch64_emitter *emitter,
                                  const struct aarch64_store_pair_imm stp) {
-  switch (stp.mode) {
-  case AARCH64_ADDRESSING_MODE_OFFSET:
-    if (IS64_REG(stp.source[0])) {
-      aarch64_emit_instr(emitter,
-                         STP_OFFSET_64(stp.imm, stp.source[1].idx, stp.addr.idx,
-                                       stp.source[0].idx));
-    } else {
-      aarch64_emit_instr(emitter,
-                         STP_OFFSET_32(stp.imm, stp.source[1].idx, stp.addr.idx,
-                                       stp.source[0].idx));
-    }
+  if (!stp.mode) {
+    bad_instr();
+  }
+
+  size_t size = reg_size(stp.source[0].ty);
+  unsigned fp = aarch64_reg_ty_is_fp(stp.source[0].ty);
+
+  switch (size) {
+  case 16:
+    aarch64_emit_instr(emitter,
+                       STP_128(stp.mode, fp, stp.imm, stp.source[1].idx,
+                               stp.addr.idx, stp.source[0].idx));
     break;
-  case AARCH64_ADDRESSING_MODE_PREINDEX:
-    if (IS64_REG(stp.source[0])) {
-      aarch64_emit_instr(emitter,
-                         STP_PRE_INDEX_64(stp.imm, stp.source[1].idx,
-                                          stp.addr.idx, stp.source[0].idx));
-    } else {
-      aarch64_emit_instr(emitter,
-                         STP_PRE_INDEX_32(stp.imm, stp.source[1].idx,
-                                          stp.addr.idx, stp.source[0].idx));
-    }
+  case 8:
+    aarch64_emit_instr(emitter, STP_64(stp.mode, fp, stp.imm, stp.source[1].idx,
+                                       stp.addr.idx, stp.source[0].idx));
     break;
-  case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    if (IS64_REG(stp.source[0])) {
-      aarch64_emit_instr(emitter,
-                         STP_POST_INDEX_64(stp.imm, stp.source[1].idx,
-                                           stp.addr.idx, stp.source[0].idx));
-    } else {
-      aarch64_emit_instr(emitter,
-                         STP_POST_INDEX_32(stp.imm, stp.source[1].idx,
-                                           stp.addr.idx, stp.source[0].idx));
-    }
+  case 4:
+    aarch64_emit_instr(emitter, STP_32(stp.mode, fp, stp.imm, stp.source[1].idx,
+                                       stp.addr.idx, stp.source[0].idx));
     break;
+  default:
+    bad_instr();
   }
 }
 

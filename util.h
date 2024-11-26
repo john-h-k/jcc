@@ -193,6 +193,10 @@ static inline int lzcnt(unsigned long long l) {
 #endif
 }
 
+static inline unsigned long long ilog2(unsigned long long num) {
+  return (sizeof(num) * 8) - lzcnt(num) - 1;
+}
+
 #define FMTPRINT(file, message, format)                                        \
   do {                                                                         \
     va_list v;                                                                 \
