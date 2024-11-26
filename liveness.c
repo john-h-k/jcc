@@ -15,111 +15,6 @@ static void op_used_callback(struct ir_op **op, void *cb_metadata) {
   interval->end = MAX(interval->end, cb->op->id);
 }
 
-// walks across the blocks to determine the end range for a phi's dependency
-static size_t walk_basicblock(struct ir_func *irb, bool *basicblocks_visited,
-                              struct ir_op *source_phi,
-                              struct ir_basicblock *basicblock) {
-
-  if (!basicblock || basicblocks_visited[basicblock->id]) {
-    return 0;
-  }
-
-  basicblocks_visited[basicblock->id] = true;
-  debug("now walking %zu", basicblock->id);
-
-  size_t this = basicblock->last->last->id;
-  size_t target_bb = source_phi->stmt->basicblock->id;
-
-  switch (basicblock->ty) {
-  case IR_BASICBLOCK_TY_SWITCH: {
-    size_t m = 0;
-    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
-      size_t m_case = walk_basicblock(irb, basicblocks_visited, source_phi,
-                                      basicblock->switch_case.cases[i].target);
-      m = MAX(m, m_case);
-    }
-
-    return MAX(this, m);
-  }
-  case IR_BASICBLOCK_TY_SPLIT: {
-    size_t m_false = walk_basicblock(irb, basicblocks_visited, source_phi,
-                                     basicblock->split.false_target);
-    size_t m_true = walk_basicblock(irb, basicblocks_visited, source_phi,
-                                    basicblock->split.true_target);
-    return MAX(this, MAX(m_true, m_false));
-  }
-  case IR_BASICBLOCK_TY_MERGE:
-    if (basicblock->merge.target->id == target_bb) {
-      return this;
-    }
-
-    size_t target = walk_basicblock(irb, basicblocks_visited, source_phi,
-                                    basicblock->merge.target);
-    return MAX(this, target);
-  case IR_BASICBLOCK_TY_RET:
-    // this means this path did *not* reach the phi
-    return 0;
-  }
-}
-
-static unsigned *find_basicblock_ranges(struct ir_func *irb) {
-  // FIXME: *very* memory expensive |BBs|^2 space
-  unsigned *basicblock_max_id = arena_alloc(
-      irb->arena, sizeof(*basicblock_max_id) * irb->basicblock_count *
-                      irb->basicblock_count);
-
-  memset(basicblock_max_id, 0,
-         sizeof(*basicblock_max_id) * irb->basicblock_count *
-             irb->basicblock_count);
-
-  bool *basicblocks_visited = arena_alloc(
-      irb->arena, sizeof(*basicblocks_visited) * irb->basicblock_count);
-
-  struct ir_basicblock *basicblock = irb->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-    while (stmt) {
-      struct ir_op *op = stmt->first;
-      while (op) {
-        if (op->ty == IR_OP_TY_PHI) {
-          for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *value = op->phi.values[i].value;
-
-            // HACK: this flag needs to enter the phi node so LSRA spills phis
-            // maybe ir_lcl should have flag instead?
-            if (value->flags & IR_OP_FLAG_MUST_SPILL) {
-              op->flags |= IR_OP_FLAG_MUST_SPILL;
-            }
-
-            size_t len_id = (basicblock->id * irb->basicblock_count) +
-                            value->stmt->basicblock->id;
-
-            size_t len;
-            if (basicblock_max_id[len_id]) {
-              len = basicblock_max_id[len_id];
-            } else {
-              memset(basicblocks_visited, 0,
-                     sizeof(*basicblocks_visited) * irb->basicblock_count);
-
-              len = walk_basicblock(irb, basicblocks_visited, op,
-                                    value->stmt->basicblock);
-              basicblock_max_id[len_id] = (unsigned)len;
-            }
-          }
-        }
-
-        op = op->succ;
-      }
-
-      stmt = stmt->succ;
-    }
-
-    basicblock = basicblock->succ;
-  }
-
-  return basicblock_max_id;
-}
-
 /* Builds the intervals for each value in the SSA representation
      - IDs are rebuilt before calling this so that op ID can be used as an
    inreasing inex
@@ -128,8 +23,6 @@ static unsigned *find_basicblock_ranges(struct ir_func *irb) {
 struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   rebuild_ids(irb);
-
-  UNUSED unsigned *bb_ranges = find_basicblock_ranges(irb);
 
   struct interval_data data;
   data.intervals =
