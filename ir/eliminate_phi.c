@@ -72,8 +72,6 @@ static void remove_critical_edges(struct ir_func *irb) {
         if (phi_stmt) {
           struct ir_op *phi = phi_stmt->first;
           while (phi && phi->ty == IR_OP_TY_PHI) {
-            printf("checking phi %zu\n", phi->id);
-
             struct ir_op *int_phi = alloc_ir_op(irb, intermediate_phi_stmt);
             int_phi->ty = IR_OP_TY_PHI;
             int_phi->var_ty = phi->var_ty;
@@ -83,6 +81,7 @@ static void remove_critical_edges(struct ir_func *irb) {
                 .values =
                     arena_alloc(irb->arena, sizeof(*int_phi->phi.values))};
 
+            bool found = false;
             for (size_t j = 0; j < phi->phi.num_values; j++) {
               struct ir_phi_entry *entry = &phi->phi.values[j];
 
@@ -91,9 +90,12 @@ static void remove_critical_edges(struct ir_func *irb) {
                     .basicblock = pred, .value = entry->value};
                 *entry = (struct ir_phi_entry){.basicblock = intermediate,
                                                .value = int_phi};
+                found = true;
                 break;
               }
             }
+
+            debug_assert(found, "failed to gen phi");
 
             phi = phi->succ;
           }
@@ -196,8 +198,19 @@ void eliminate_phi(struct ir_func *irb) {
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 
-    if (basicblock->ty == IR_BASICBLOCK_TY_RET) {
-      // no phis
+    struct ir_basicblock *mov_bb;
+    struct ir_op *last;
+    size_t bb_move_id;
+
+    if (basicblock->num_preds == 1) {
+      mov_bb = basicblock;
+      last = basicblock->first->first;
+      bb_move_id = mov_bb->id * 2;
+    } else if (basicblock->num_preds > 1) {
+      mov_bb = basicblock->preds[0];
+      last = mov_bb->last->last;
+      bb_move_id = mov_bb->id * 2 + 1;
+    } else {
       basicblock = basicblock->succ;
       continue;
     }
@@ -209,20 +222,6 @@ void eliminate_phi(struct ir_func *irb) {
       while (op && op->ty == IR_OP_TY_PHI) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
           struct ir_op *value = op->phi.values[i].value;
-
-          struct ir_basicblock *mov_bb;
-          struct ir_op *last;
-
-          size_t bb_move_id;
-          if (basicblock->num_preds == 1) {
-            mov_bb = basicblock;
-            last = basicblock->first->first;
-            bb_move_id = mov_bb->id * 2;
-          } else {
-            mov_bb = basicblock->preds[0];
-            last = mov_bb->last->last;
-            bb_move_id = mov_bb->id * 2 + 1;
-          }
 
           struct vector *gp_move_from = bb_moves[bb_move_id].gp_from;
           struct vector *gp_move_to = bb_moves[bb_move_id].gp_to;
