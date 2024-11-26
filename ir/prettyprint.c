@@ -340,8 +340,6 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     debug_print_op_use(file, irb, ir->store_addr.value);
     break;
   case IR_OP_TY_LOAD_ADDR:
-    debug_lhs(file, irb, ir);
-
     fprintf(file, "loadaddr [");
     debug_print_op_use(file, irb, ir->load_addr.addr);
     fprintf(file, "]");
