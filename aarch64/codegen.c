@@ -2050,15 +2050,16 @@ static void codegen_prologue(struct codegen_state *state) {
       .imm = info.lr_offset * 8,
       .shift = 0};
 
-  if (info.stack_size) {
-    if (info.stack_size > MAX_IMM_SIZE) {
+  size_t stack_to_sub = info.stack_size - 16; // from the pre-index lr
+  if (stack_to_sub) {
+    if (stack_to_sub > MAX_IMM_SIZE) {
       struct aarch64_reg tmp =
           (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 9};
 
       struct instr *stack_cnst = alloc_instr(state->func);
       stack_cnst->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
       stack_cnst->aarch64->movz = (struct aarch64_mov_imm){
-          .dest = tmp, .imm = info.stack_size, .shift = 0};
+          .dest = tmp, .imm = stack_to_sub, .shift = 0};
 
       struct instr *sub_stack = alloc_instr(state->func);
       sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_EXT;
@@ -2073,7 +2074,7 @@ static void codegen_prologue(struct codegen_state *state) {
       sub_stack->aarch64->sub_imm =
           (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
                                       .source = STACK_PTR_REG,
-                                      .imm = info.stack_size,
+                                      .imm = stack_to_sub,
                                       .shift = 0};
     }
 
@@ -2179,15 +2180,16 @@ static void codegen_epilogue(struct codegen_state *state) {
     };
   }
 
-  if (prologue_info->stack_size) {
-    if (prologue_info->stack_size > MAX_IMM_SIZE) {
+  size_t stack_to_add = prologue_info->stack_size - 16;
+  if (stack_to_add) {
+    if (stack_to_add > MAX_IMM_SIZE) {
       struct aarch64_reg tmp =
           (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 9};
 
       struct instr *stack_cnst = alloc_instr(state->func);
       stack_cnst->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
       stack_cnst->aarch64->movz = (struct aarch64_mov_imm){
-          .dest = tmp, .imm = prologue_info->stack_size, .shift = 0};
+          .dest = tmp, .imm = stack_to_add, .shift = 0};
 
       struct instr *sub_stack = alloc_instr(state->func);
       sub_stack->aarch64->ty = AARCH64_INSTR_TY_ADD_EXT;
@@ -2203,7 +2205,7 @@ static void codegen_epilogue(struct codegen_state *state) {
       add_stack->aarch64->add_imm =
           (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
                                       .source = STACK_PTR_REG,
-                                      .imm = prologue_info->stack_size,
+                                      .imm = stack_to_add,
                                       .shift = 0};
     }
   }
