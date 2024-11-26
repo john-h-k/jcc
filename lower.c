@@ -2,7 +2,23 @@
 
 #include "ir/ir.h"
 
-typedef int a;
+static void propogate_switch_phis(UNUSED struct ir_func *func, struct ir_basicblock *bb_switch, struct ir_basicblock *pred_cond, struct ir_basicblock *basicblock) {
+  // FIXME: this does NOT properly propogate
+  // it needs to add phis to all intermediates too
+
+  struct ir_stmt *phi_stmt = basicblock->first;
+
+  struct ir_op *phi = phi_stmt ? phi_stmt->first : NULL;
+  while (phi && phi->ty == IR_OP_TY_PHI) {
+    for (size_t i = 0; i < phi->phi.num_values; i++) {
+      if (phi->phi.values[i].basicblock == bb_switch) {
+        phi->phi.values[i].basicblock = pred_cond;
+      }
+    }
+
+    phi = phi->succ;
+  }
+}
 
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   // lowers a `br.switch` into a series of if-else statements
@@ -51,7 +67,7 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       struct ir_basicblock *next_cond =
           insert_after_ir_basicblock(func, prev_bb);
 
-
+      propogate_switch_phis(func, bb, prev_bb, split_case->target);
       make_basicblock_split(func, prev_bb, split_case->target, next_cond);
 
       prev_bb = next_cond;
@@ -66,6 +82,8 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
         }
       }
 
+      propogate_switch_phis(func, bb, prev_bb, split_case->target);
+      propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
       make_basicblock_split(func, prev_bb, split_case->target,
                                   bb_switch->default_target);
     }
@@ -203,8 +221,6 @@ void lower(struct ir_unit *unit, const struct target *target) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      prune_basicblocks(func);
-
       struct ir_op_uses uses = build_op_uses_map(func);
 
       for (size_t i = 0; i < uses.num_use_datas; i++) {
@@ -215,6 +231,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
           detach_ir_op(func, use->op);
         }
       }
+
+      prune_basicblocks(func);
     }
     }
     glb = glb->succ;

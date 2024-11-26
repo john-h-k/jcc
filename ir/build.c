@@ -3069,7 +3069,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
     basicblock = basicblock->succ;
   }
-
+ 
   return builder;
 }
 
