@@ -1280,6 +1280,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
     // FIXME: is this right
     struct ir_op *ld = alloc_ir_op(irb->func, stmt);
     ld->ty = IR_OP_TY_STORE_LCL;
+    ld->lcl = ref->lcl;
     ld->var_ty = op->var_ty;
     ld->store_lcl = (struct ir_op_store_lcl){.value = op};
 
@@ -1941,11 +1942,16 @@ struct ir_loop {
 static struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
                                              struct ir_basicblock *basicblock,
                                              struct td_whilestmt *while_stmt) {
+
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb->func);
-  struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb->func);
 
   make_basicblock_merge(irb->func, before_cond_basicblock, cond_basicblock);
+  struct ir_stmt *pre_cond_stmt =
+      alloc_ir_stmt(irb->func, before_cond_basicblock);
+  struct ir_op *pre_cond_br = alloc_ir_op(irb->func, pre_cond_stmt);
+  pre_cond_br->ty = IR_OP_TY_BR;
+  pre_cond_br->var_ty = IR_VAR_TY_NONE;
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &while_stmt->cond);
@@ -1954,18 +1960,15 @@ static struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
 
+  struct ir_basicblock *cond_stmt_basicblock = cond_stmt->basicblock;
+
+  struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb->func);
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
-
   struct ir_basicblock *after_body_basicblock = alloc_ir_basicblock(irb->func);
-  make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
-                        after_body_basicblock);
 
-  struct ir_stmt *pre_cond_stmt =
-      alloc_ir_stmt(irb->func, before_cond_basicblock);
-  struct ir_op *pre_cond_br = alloc_ir_op(irb->func, pre_cond_stmt);
-  pre_cond_br->ty = IR_OP_TY_BR;
-  pre_cond_br->var_ty = IR_VAR_TY_NONE;
+  make_basicblock_split(irb->func, cond_stmt_basicblock, body_basicblock,
+                        after_body_basicblock);
 
   make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_stmt_basicblock);
@@ -1982,11 +1985,20 @@ build_ir_for_dowhilestmt(struct ir_func_builder *irb,
                          struct ir_basicblock *basicblock,
                          struct td_dowhilestmt *do_while_stmt) {
   struct ir_basicblock *before_body_basicblock = basicblock;
+  struct ir_stmt *pre_cond_stmt =
+      alloc_ir_stmt(irb->func, before_body_basicblock);
+  struct ir_op *pre_body_br = alloc_ir_op(irb->func, pre_cond_stmt);
+  pre_body_br->ty = IR_OP_TY_BR;
+  pre_body_br->var_ty = IR_VAR_TY_NONE;
+
   struct ir_basicblock *body_basicblock = alloc_ir_basicblock(irb->func);
-  struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb->func);
 
   make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
 
+  struct ir_basicblock *body_stmt_basicblock =
+      build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
+
+  struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb->func);
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &do_while_stmt->cond);
   struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
@@ -1994,24 +2006,17 @@ build_ir_for_dowhilestmt(struct ir_func_builder *irb,
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
 
-  struct ir_basicblock *body_stmt_basicblock =
-      build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
-
-  struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb->func);
-  make_basicblock_split(irb->func, cond_basicblock, body_basicblock,
-                        after_cond_basicblock);
-
-  struct ir_stmt *pre_cond_stmt =
-      alloc_ir_stmt(irb->func, before_body_basicblock);
-  struct ir_op *pre_body_br = alloc_ir_op(irb->func, pre_cond_stmt);
-  pre_body_br->ty = IR_OP_TY_BR;
-  pre_body_br->var_ty = IR_VAR_TY_NONE;
-
   make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
   struct ir_stmt *br_stmt = alloc_ir_stmt(irb->func, body_stmt_basicblock);
   struct ir_op *br = alloc_ir_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
+
+  struct ir_basicblock *cond_stmt_basicblock = cond_stmt->basicblock;
+
+  struct ir_basicblock *after_cond_basicblock = alloc_ir_basicblock(irb->func);
+  make_basicblock_split(irb->func, cond_stmt_basicblock, body_basicblock,
+                        after_cond_basicblock);
 
   return (struct ir_loop){.entry = cond_basicblock,
                           .exit = after_cond_basicblock};

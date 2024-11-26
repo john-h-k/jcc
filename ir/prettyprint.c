@@ -345,7 +345,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     break;
   case IR_OP_TY_STORE_LCL:
     debug_lhs(file, irb, ir);
-    if (ir->load_lcl.lcl) {
+    if (ir->lcl) {
       fprintf(file, "storelcl LCL(%zu), %%%zu", ir->lcl->id,
               ir->store_lcl.value->id);
     } else {
@@ -381,7 +381,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   case IR_OP_TY_BR: {
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                      "found `br` but bb wasn't MERGE");
-    struct ir_basicblock *bb = ir->stmt->basicblock;
+    struct ir_basicblock *bb = ir->stmt->basicblock;   
     struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE
                                        ? bb->merge.target
                                        : bb->split.false_target;
