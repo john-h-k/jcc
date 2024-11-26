@@ -286,6 +286,31 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
+static void lower_load_to_addr(struct ir_op *op) {
+  switch (op->ty) {
+  case IR_OP_TY_LOAD_LCL: {
+    struct ir_lcl *lcl = op->load_lcl.lcl;
+
+    op->ty = IR_OP_TY_ADDR;
+    op->var_ty = IR_VAR_TY_I64;
+    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+    break;
+  }
+  case IR_OP_TY_LOAD_ADDR: {
+    struct ir_op *addr = op->load_addr.addr;
+
+    op->ty = IR_OP_TY_MOV;
+    op->var_ty = IR_VAR_TY_I64;
+    op->mov = (struct ir_op_mov){.value = addr};
+    break;
+  }
+  case IR_OP_TY_LOAD_GLB:
+    bug("load glb should be gone by now");
+  default:
+    unreachable();
+  }
+}
+
 static void lower_call(UNUSED struct ir_func *func, struct ir_op *op) {
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
@@ -296,32 +321,30 @@ static void lower_call(UNUSED struct ir_func *func, struct ir_op *op) {
       continue;
     }
 
-    switch (arg->ty) {
-    case IR_OP_TY_LOAD_LCL: {
-      struct ir_lcl *lcl = arg->load_lcl.lcl;
+    lower_load_to_addr(arg);
+  }
 
-      arg->ty = IR_OP_TY_ADDR;
-      arg->var_ty = IR_VAR_TY_I64;
-      arg->addr = (struct ir_op_addr) { .ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
-      break;
-    }
-    case IR_OP_TY_LOAD_ADDR: {
-      struct ir_op *addr = arg->load_addr.addr;
-
-      arg->ty = IR_OP_TY_MOV;
-      arg->var_ty = IR_VAR_TY_I64;
-      arg->mov = (struct ir_op_mov) { .value = addr };
-      break;
-    }
-    case IR_OP_TY_LOAD_GLB:
-      bug("load glb should be gone by now");
-    default:
-      unreachable();
-    }
+  if (var_ty_is_aggregate(&op->var_ty)) {
+    // just switch to pointer type, let codegen handle
+    op->var_ty = IR_VAR_TY_I64;
   }
 }
 
-static void lower_params(struct ir_func *func) {}
+static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
+  if (!op->ret.value) {
+    return;
+  }
+
+  struct ir_op *value = op->ret.value;
+
+  if ((value->ty != IR_OP_TY_LOAD_LCL && value->ty != IR_OP_TY_LOAD_GLB &&
+       value->ty != IR_OP_TY_LOAD_ADDR) ||
+      !var_ty_is_aggregate(&value->var_ty)) {
+    return;
+  }
+
+  lower_load_to_addr(value);
+}
 
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
@@ -336,8 +359,6 @@ void aarch64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
-
-      lower_params(func);
 
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
@@ -355,6 +376,9 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_STORE_GLB:
             case IR_OP_TY_LOAD_GLB:
             case IR_OP_TY_PHI:
+              break;
+            case IR_OP_TY_RET:
+              lower_ret(func, op);
               break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
@@ -376,7 +400,6 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
-            case IR_OP_TY_RET:
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_CALL:
