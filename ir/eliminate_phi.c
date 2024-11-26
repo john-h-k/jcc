@@ -123,7 +123,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
   for (size_t j = 0; j < moves.num_moves; j++) {
     struct move move = moves.moves[j];
 
-    struct ir_reg to = reg_for_unique_idx(move.to.idx);
+    struct ir_reg to = ir_reg_for_unique_idx(move.to.idx);
 
     struct ir_op *value = NULL;
     if (move.from.idx != tmp_index) {
@@ -238,8 +238,8 @@ void eliminate_phi(struct ir_func *irb) {
             op->phi.values[i].value = load;
           } else if (op->reg.ty == IR_REG_TY_FP ||
                      op->reg.ty == IR_REG_TY_INTEGRAL) {
-            size_t from_reg = unique_idx_for_reg(value->reg);
-            size_t to_reg = unique_idx_for_reg(op->reg);
+            size_t from_reg = unique_idx_for_ir_reg(value->reg);
+            size_t to_reg = unique_idx_for_ir_reg(op->reg);
 
             if (from_reg != to_reg) {
               struct location from = {.idx = from_reg};

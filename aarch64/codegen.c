@@ -20,6 +20,44 @@
     }                                                                          \
   }
 
+static enum aarch64_reg_ty gp_reg_ty_for_size(size_t size) {
+  switch (size) {
+  case 8:
+    return AARCH64_REG_TY_X;
+  case 4:
+    return AARCH64_REG_TY_W;
+  }
+
+  bug("bad size %zu", size);
+}
+
+static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
+  switch (size) {
+  case 16:
+    return AARCH64_REG_TY_V;
+  case 8:
+    return AARCH64_REG_TY_D;
+  case 4:
+    return AARCH64_REG_TY_S;
+  case 2:
+    return AARCH64_REG_TY_H;
+  case 1:
+    return AARCH64_REG_TY_B;
+  }
+
+  bug("bad size %zu", size);
+}
+
+static enum aarch64_reg_ty reg_ty_for_size(enum aarch64_reg_class reg_class,
+                                           size_t size) {
+  switch (reg_class) {
+  case AARCH64_REG_CLASS_GP:
+    return gp_reg_ty_for_size(size);
+  case AARCH64_REG_CLASS_FP:
+    return fp_reg_ty_for_size(size);
+  }
+}
+
 size_t reg_size(enum aarch64_reg_ty reg_ty) {
   switch (reg_ty) {
   case AARCH64_REG_TY_NONE:
@@ -516,7 +554,16 @@ static void codegen_store_addr_op(struct codegen_state *state,
   }
 }
 
-static void codegen_add_imm(struct codegen_state *state, struct aarch64_reg dest, struct aarch64_reg source, unsigned long long value) {
+static void codegen_mem_copy(struct codegen_state *state,
+                             struct aarch64_reg source, size_t source_offset,
+                             struct aarch64_reg dest, size_t dest_offset,
+                             size_t num_bytes) {
+  todo("mem copy");
+}
+
+static void codegen_add_imm(struct codegen_state *state,
+                            struct aarch64_reg dest, struct aarch64_reg source,
+                            unsigned long long value) {
   struct instr *instr = alloc_instr(state->func);
   instr->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
   instr->aarch64->add_imm = (struct aarch64_addsub_imm){
@@ -1082,7 +1129,9 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static bool try_get_hfa_info(struct codegen_state *state, const struct ir_var_ty *var_ty, size_t *num_members) {
+static bool try_get_hfa_info(struct codegen_state *state,
+                             const struct ir_var_ty *var_ty,
+                             size_t *num_members, size_t *member_size) {
   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
     return false;
   }
@@ -1111,8 +1160,82 @@ static bool try_get_hfa_info(struct codegen_state *state, const struct ir_var_ty
     }
   }
 
+  switch (var_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_F16:
+    *member_size = 2;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    *member_size = 4;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    *member_size = 8;
+    break;
+  default:
+    unreachable();
+  }
+
   *num_members = var_ty->struct_ty.num_fields;
   return true;
+}
+
+// when generating reg moves, assume memory slots never conflict
+// use incrementing values from 128 onwards
+#define FIRST_MEM_LOC 128
+#define IS_MEM_LOC(v) ((v.idx) >= FIRST_MEM_LOC)
+#define MEM_LOC() (last_mem_loc++)
+
+struct mem_loc {
+  struct aarch64_reg base;
+  size_t offset;
+  size_t size;
+};
+struct mem_copy {
+  struct mem_loc src, dest;
+};
+
+static void codegen_moves(struct codegen_state *state, struct move_set moves,
+                          enum aarch64_reg_class reg_class) {
+  for (size_t i = 0; i < moves.num_moves; i++) {
+    struct move move = moves.moves[i];
+
+    if (IS_MEM_LOC(move.from)) {
+      debug_assert(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
+
+      struct mem_loc *from = move.from.metadata;
+      struct aarch64_reg to = {.ty = reg_ty_for_size(reg_class, from->size),
+                               .idx = move.to.idx};
+
+      struct instr *load = alloc_instr(state->func);
+      load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+      load->aarch64->load_imm =
+          (struct aarch64_load_imm){.addr = from->base,
+                                    .imm = from->offset,
+                                    .dest = to,
+                                    .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+    } else if (IS_MEM_LOC(move.to)) {
+      debug_assert(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
+
+      struct mem_loc *to = move.to.metadata;
+      struct aarch64_reg from = {.ty = reg_ty_for_size(reg_class, to->size),
+                                 .idx = move.from.idx};
+
+      struct instr *store = alloc_instr(state->func);
+      store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+      store->aarch64->store_imm =
+          (struct aarch64_store_imm){.addr = to->base,
+                                     .imm = to->offset,
+                                     .source = from,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+    } else {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X,
+                                   .idx = move.from.idx};
+      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      *mov->aarch64 = MOV_ALIAS(dest, source);
+    }
+  }
 }
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
@@ -1126,11 +1249,15 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need
 
-  struct vector *move_from = vector_create(sizeof(struct location));
-  struct vector *move_to = vector_create(sizeof(struct location));
+  struct vector *gp_move_from = vector_create(sizeof(struct location));
+  struct vector *gp_move_to = vector_create(sizeof(struct location));
 
   struct vector *fp_move_from = vector_create(sizeof(struct location));
   struct vector *fp_move_to = vector_create(sizeof(struct location));
+
+  struct vector *mem_locs = vector_create(sizeof(struct mem_loc));
+
+  struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
 
   // reg 9 is not part of calling convention
   // and all registers have already been saved
@@ -1143,69 +1270,162 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
   size_t fp_tmp_reg_idx = 16;
 
-  // size_t ngrn = 0;
+  size_t ngrn = 0;
   size_t nsrn = 0;
-  // size_t nsaa = 0;
+  size_t nsaa = 0;
 
   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
     struct aarch64_reg source = codegen_reg(op->call.target);
 
     // need to move it into reg 10
-    vector_push_back(move_from, &source.idx);
-    vector_push_back(move_to, &blr_reg_idx);
+    vector_push_back(gp_move_from, &source.idx);
+    vector_push_back(gp_move_to, &blr_reg_idx);
   }
+
+  size_t last_mem_loc = FIRST_MEM_LOC;
 
   if (op->call.num_args) {
     size_t num_normal_args = func_ty->num_params;
 
     for (size_t i = 0; i < op->call.num_args; i++) {
       struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
+      struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
-      size_t arg_reg_idx = i;
 
-      if (i < num_normal_args || !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+      // hmm, we pretend all memory locations are different but they are not
+      // can gen_move_order accidentally overwrite things because of this?
+
+      if (i < num_normal_args ||
+          !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
         size_t num_hfa_members;
+        size_t hfa_member_size;
 
-        if (var_ty_is_fp(var_ty)) {
-          if (nsrn < 8) {
-            struct location from = { .idx = source.idx };
-            struct location to = { .idx = nsrn };
-            vector_push_back(fp_move_from, &from);
-            vector_push_back(fp_move_to, &to);
-            nsrn++;
+        if (var_ty_is_fp(var_ty) && nsrn < 8) {
+          struct location from = {.idx = source.idx};
+          struct location to = {.idx = nsrn};
+          vector_push_back(fp_move_from, &from);
+          vector_push_back(fp_move_to, &to);
+          nsrn++;
+          continue;
+        } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
+                                    &hfa_member_size)) {
+          if (nsrn + num_hfa_members <= 8) {
+            for (size_t j = 0; j < num_hfa_members; j++) {
+              // given this is a composite, we assume `source` contains a
+              // pointer to it
+
+              struct mem_loc mem_loc = {.base = source,
+                                        .offset = hfa_member_size * j,
+                                        .size = hfa_member_size};
+
+              struct location loc = {.idx = MEM_LOC(),
+                                     .metadata =
+                                         vector_push_back(mem_locs, &mem_loc)};
+
+              struct location to = {.idx = nsrn++};
+              vector_push_back(fp_move_from, &loc);
+              vector_push_back(fp_move_to, &to);
+            }
 
             continue;
-          } else if (try_get_hfa_info(state, var_ty, &num_hfa_members)) {
-            // generate a STP/STQ instr but we haven't added that yet for FP&SIMD
-
-            if (nsrn + num_hfa_members <= 8) {
-              for (size_t j = 0; j < num_hfa_members; j++) {
-                // given this is a composite, we assume `source` contains a pointer to it
-
-                // struct instr *load = alloc_instr(state->func);
-                // load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-                // load->aarch64->load_imm = (struct aarch64_load_imm){
-                //   .addr = source,
-                //   .dest =  nsrn + j,
-                // }
-                todo("hfa loads");
-
-                struct location from = { .idx = source.idx };
-                struct location to = { .idx = nsrn };
-                vector_push_back(fp_move_from, &from);
-                vector_push_back(fp_move_to, &to);
-              }
-              
-              nsrn += num_hfa_members;
-            }
           }
 
+          nsrn = 8;
+          size_t nsaa_align = MAX(8, info.alignment);
+          size_t size = ROUND_UP(info.size, nsaa_align);
+
+          // TODO: overaligned HFAs and vectors
+          struct mem_loc mem_src = {.base = source, .offset = 0, .size = size};
+
+          struct mem_loc mem_dest = {
+              .base = STACK_PTR_REG, .offset = nsaa, .size = size};
+
+          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
+
+          vector_push_back(mem_copies, &copy);
+
+          nsaa += size;
+
+          continue;
+
+        } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
+          struct location from = {.idx = source.idx};
+          struct location to = {.idx = ngrn};
+          vector_push_back(gp_move_from, &from);
+          vector_push_back(gp_move_to, &to);
+          ngrn++;
+          continue;
+        }
+
+        if (info.alignment == 16) {
+          ngrn = (ngrn + 1) & 1;
+        }
+
+        if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
+          todo("128 bit reg alloc");
+          // // lo to ngrn, hi to ngrn+1
+          // ngrn += 2;
+          // continue;
+        }
+
+        size_t dw_size = info.size / 8;
+        if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+          for (size_t j = 0; j <= dw_size; j++) {
+            // given this is a composite, we assume `source` contains a
+            // pointer to it
+
+            struct mem_loc mem_loc = {
+                .base = source, .offset = 8 * j, .size = 8};
+
+            struct location loc = {.idx = MEM_LOC(),
+                                   .metadata =
+                                       vector_push_back(mem_locs, &mem_loc)};
+
+            struct location to = {.idx = ngrn++};
+            vector_push_back(gp_move_from, &loc);
+            vector_push_back(gp_move_to, &to);
+          }
+
+          continue;
+        }
+
+        ngrn = 8;
+        size_t nsaa_align = MAX(8, info.alignment);
+        nsaa = ROUND_UP(nsaa, nsaa_align);
+
+        if (var_ty_is_aggregate(var_ty)) {
+          struct mem_loc mem_src = {
+              .base = source, .offset = 0, .size = info.size};
+
+          struct mem_loc mem_dest = {
+              .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
+
+          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
+
+          vector_push_back(mem_copies, &copy);
+
+          continue;
+        }
+
+        size_t size = MAX(8, info.size);
+
+        struct mem_loc mem_loc = {
+            .base = STACK_PTR_REG, .offset = nsaa, .size = size};
+
+        struct location from = {.idx = source.idx};
+
+        struct location to = {.idx = MEM_LOC(),
+                              .metadata = vector_push_back(mem_locs, &mem_loc)};
+
+        if (var_ty_is_integral(var_ty)) {
+          vector_push_back(gp_move_from, &from);
+          vector_push_back(gp_move_to, &to);
+        } else if (var_ty_is_fp(var_ty)) {
+          vector_push_back(fp_move_from, &from);
+          vector_push_back(fp_move_to, &to);
         } else {
-          struct location from = { .idx = source.idx };
-          struct location to = { .idx = arg_reg_idx };
-          vector_push_back(move_from, &from);
-          vector_push_back(move_to, &to);
+          bug("bad type");
         }
       } else {
         // this argument is variadic
@@ -1233,37 +1453,68 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
   }
 
-  struct move_set arg_moves = gen_move_order(
-      state->ir->arena, vector_head(move_from), vector_head(move_to),
-      vector_length(move_from), tmp_reg_idx);
+  struct move_set gp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
+      vector_length(gp_move_from), tmp_reg_idx);
 
   struct move_set fp_arg_moves = gen_move_order(
       state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
       vector_length(fp_move_from), fp_tmp_reg_idx);
 
-  for (size_t i = 0; i < arg_moves.num_moves; i++) {
-    struct move move = arg_moves.moves[i];
-
-    struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = move.from.idx};
-    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
-
-    struct instr *mov = alloc_instr(state->func);
-
-    *mov->aarch64 = MOV_ALIAS(dest, source);
-  }
-
   // FIXME: doesn't support vectors
   for (size_t i = 0; i < fp_arg_moves.num_moves; i++) {
     struct move move = fp_arg_moves.moves[i];
 
-    struct aarch64_reg source = {.ty = AARCH64_REG_TY_D, .idx = move.from.idx};
-    struct aarch64_reg dest = {.ty = AARCH64_REG_TY_D, .idx = move.to.idx};
+    if (IS_MEM_LOC(move.from)) {
+      debug_assert(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
 
-    struct instr *mov = alloc_instr(state->func);
+      struct mem_loc *from = move.from.metadata;
+      struct aarch64_reg to = {.ty = fp_reg_ty_for_size(from->size),
+                               .idx = move.to.idx};
 
-    mov->aarch64->ty = AARCH64_INSTR_TY_FMOV;
-    mov->aarch64->fmov =
-        (struct aarch64_reg_1_source){.dest = dest, .source = source};
+      struct instr *load = alloc_instr(state->func);
+      load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+      load->aarch64->load_imm =
+          (struct aarch64_load_imm){.addr = from->base,
+                                    .imm = from->offset,
+                                    .dest = to,
+                                    .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+    } else if (IS_MEM_LOC(move.to)) {
+      debug_assert(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
+
+      struct mem_loc *to = move.to.metadata;
+      struct aarch64_reg from = {.ty = fp_reg_ty_for_size(to->size),
+                                 .idx = move.from.idx};
+
+      struct instr *store = alloc_instr(state->func);
+      store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+      store->aarch64->store_imm =
+          (struct aarch64_store_imm){.addr = to->base,
+                                     .imm = to->offset,
+                                     .source = from,
+                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET};
+    } else {
+      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X,
+                                   .idx = move.from.idx};
+      struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = move.to.idx};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      *mov->aarch64 = MOV_ALIAS(dest, source);
+    }
+  }
+
+  // then handle mem copies
+  size_t num_copies = vector_length(mem_copies);
+  for (size_t i = 0; i < num_copies; i++) {
+    struct mem_copy *copy = vector_get(mem_copies, i);
+    struct mem_loc *from = &copy->src;
+    struct mem_loc *to = &copy->dest;
+
+    debug_assert(from->size == to->size, "mem cpy with different sizes");
+
+    codegen_mem_copy(state, from->base, from->offset, to->base, to->offset,
+                     to->size);
   }
 
   // now we generate the actual call
@@ -1431,8 +1682,6 @@ static void insert_prologue(struct codegen_state *state) {
       };
     }
 
-    
-
     struct bitset_iter fp_reg_iter =
         bitset_iter(ir->reg_usage.fp_registers_used,
                     AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
@@ -1465,7 +1714,7 @@ static void insert_epilogue(struct codegen_state *state) {
   }
 
   unsigned long max_gp_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
-                            lzcnt(prologue_info->saved_gp_registers);
+                               lzcnt(prologue_info->saved_gp_registers);
 
   size_t save_idx = 0;
   for (size_t i = 0; i < max_gp_saved; i++) {
@@ -1489,7 +1738,7 @@ static void insert_epilogue(struct codegen_state *state) {
   }
 
   unsigned long max_fp_saved = sizeof(prologue_info->saved_fp_registers) * 8 -
-                            lzcnt(prologue_info->saved_fp_registers);
+                               lzcnt(prologue_info->saved_fp_registers);
 
   save_idx = 0;
   for (size_t i = 0; i < max_fp_saved; i++) {
@@ -2686,7 +2935,7 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "bl");
 
     if (instr->aarch64->bl.target) {
-      debug_print_branch(file, &instr->aarch64->bl);  
+      debug_print_branch(file, &instr->aarch64->bl);
     } else {
       fprintf(file, " <unknown>");
     }
