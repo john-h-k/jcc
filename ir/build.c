@@ -900,10 +900,11 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_stmt *rhs_stmt = alloc_ir_stmt(irb->func, rhs_bb);
     struct ir_op *rhs = build_ir_for_expr(irb, &rhs_stmt, binary_op->rhs);
 
+    struct ir_basicblock *rhs_stmt_bb = rhs_stmt->basicblock;
     struct ir_op *rhs_br = alloc_ir_op(irb->func, rhs_stmt);
     rhs_br->ty = IR_OP_TY_BR;
     rhs_br->var_ty = IR_VAR_TY_NONE;
-    make_basicblock_merge(irb->func, rhs_bb, end_bb);
+    make_basicblock_merge(irb->func, rhs_stmt_bb, end_bb);
 
     struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
     struct ir_op *phi = alloc_ir_op(irb->func, end_stmt);
