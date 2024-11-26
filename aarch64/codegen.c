@@ -555,11 +555,76 @@ static void codegen_store_addr_op(struct codegen_state *state,
   }
 }
 
-static void codegen_mem_copy(struct codegen_state *state,
-                             struct aarch64_reg source, size_t source_offset,
-                             struct aarch64_reg dest, size_t dest_offset,
-                             size_t num_bytes) {
-  todo("mem copy");
+// this method assumes it can safely you any non-argument volatile registers
+static void codegen_mem_copy_volatile(struct codegen_state *state,
+                                      struct aarch64_reg source,
+                                      size_t source_offset,
+                                      struct aarch64_reg dest,
+                                      size_t dest_offset, size_t num_bytes) {
+  debug_assert(num_bytes < 4096,
+               "doesn't support >4096 copies due to immediates");
+
+  if (source_offset % 32 || dest_offset % 32) {
+    todo("handle");
+  }
+
+  size_t remaining = num_bytes;
+  size_t head = 0;
+
+  // use v10/11 as the intermediates
+
+  while (remaining >= 32) {
+    struct instr *load = alloc_instr(state->func);
+    load->aarch64->ty = AARCH64_INSTR_TY_LOAD_PAIR_IMM;
+    load->aarch64->load_pair_imm =
+        (struct aarch64_load_pair_imm){.mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                       .imm = (head + source_offset) / 16,
+                                       .addr = source,
+                                       .dest = {
+                                           {.ty = AARCH64_REG_TY_Q, .idx = 10},
+                                           {.ty = AARCH64_REG_TY_Q, .idx = 11},
+                                       }};
+
+    struct instr *store = alloc_instr(state->func);
+    store->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
+    store->aarch64->store_pair_imm =
+        (struct aarch64_store_pair_imm){.mode = AARCH64_ADDRESSING_MODE_OFFSET,
+                                        .imm = (head + dest_offset) / 16,
+                                        .addr = dest,
+                                        .source = {
+                                            {.ty = AARCH64_REG_TY_Q, .idx = 10},
+                                            {.ty = AARCH64_REG_TY_Q, .idx = 11},
+                                        }};
+
+    head += 32;
+    remaining -= 32;
+  }
+
+  while (remaining) {
+    size_t chunk = ilog2(remaining);
+    enum aarch64_reg_ty ty = fp_reg_ty_for_size(chunk);
+
+    struct instr *load = alloc_instr(state->func);
+    load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+    load->aarch64->load_imm = (struct aarch64_load_imm){
+        .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+        .imm = (head + source_offset) / chunk,
+        .addr = source,
+        .dest = {.ty = ty, .idx = 10},
+    };
+
+    struct instr *store = alloc_instr(state->func);
+    store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+    store->aarch64->store_imm = (struct aarch64_store_imm){
+        .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+        .imm = (head + dest_offset) / chunk,
+        .addr = dest,
+        .source = {.ty = ty, .idx = 10},
+    };
+
+    head += chunk;
+    remaining -= chunk;
+  }
 }
 
 static void codegen_add_imm(struct codegen_state *state,
@@ -1247,6 +1312,67 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
   }
 }
 
+enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
+  switch (reg.ty) {
+  case AARCH64_REG_TY_NONE:
+    return AARCH64_REG_ATTR_FLAG_NONE;
+  case AARCH64_REG_TY_W:
+  case AARCH64_REG_TY_X:
+    if (!reg.idx) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG |
+             AARCH64_REG_ATTR_FLAG_RET_REG;
+    }
+
+    if (reg.idx <= 7) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG;
+    }
+
+    if (reg.idx < 18) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE;
+    }
+
+    if (reg.idx == 18) {
+      return AARCH64_REG_ATTR_FLAG_RESERVED;
+    }
+
+    if (reg.idx < 29) {
+      return AARCH64_REG_ATTR_FLAG_NONE;
+    }
+
+    return AARCH64_REG_ATTR_FLAG_RESERVED;
+  case AARCH64_REG_TY_V:
+  case AARCH64_REG_TY_Q:
+    if (!reg.idx) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG |
+             AARCH64_REG_ATTR_FLAG_RET_REG;
+    }
+
+    if (reg.idx <= 7) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG;
+    }
+
+    if (reg.idx <= 15) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE;
+    }
+
+    return AARCH64_REG_ATTR_FLAG_NONE;
+  case AARCH64_REG_TY_D:
+  case AARCH64_REG_TY_S:
+  case AARCH64_REG_TY_H:
+  case AARCH64_REG_TY_B:
+    if (!reg.idx) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG |
+             AARCH64_REG_ATTR_FLAG_RET_REG;
+    }
+
+    if (reg.idx <= 7) {
+      return AARCH64_REG_ATTR_FLAG_VOLATILE | AARCH64_REG_ATTR_FLAG_ARG_REG;
+    }
+
+    return AARCH64_REG_ATTR_FLAG_NONE;
+  }
+}
+
 // reg 9 is not part of calling convention
 // and all registers have already been saved
 // so this is always safe
@@ -1256,6 +1382,8 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
 #define BLR_REG_IDX ((size_t)10)
 #define ADDR_REG_IDX ((size_t)11)
 #define FP_TMP_REG_IDX ((size_t)16)
+
+// FIXME: apple do things differently!!!
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
@@ -1283,13 +1411,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
     struct aarch64_reg source = codegen_reg(op->call.target);
 
-    struct location from = {
-      .idx = source.idx
-    };
+    struct location from = {.idx = source.idx};
 
-    struct location to = {
-      .idx = BLR_REG_IDX
-    };
+    struct location to = {.idx = BLR_REG_IDX};
 
     // need to move it into reg 10
     vector_push_back(gp_move_from, &from);
@@ -1303,6 +1427,27 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     for (size_t i = 0; i < op->call.num_args; i++) {
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
+
+      enum aarch64_reg_attr_flags flags = reg_attr_flags(source);
+      if (flags & AARCH64_REG_ATTR_FLAG_ARG_REG) {
+        // bad, might be overwritten during param preparation
+        // preemptively add 9 so it is not an arg register
+        // TODO: is this safe, and can it be improved?
+        struct aarch64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
+        struct instr *mov = alloc_instr(state->func);
+        *mov->aarch64 = MOV_ALIAS(dest, source);
+
+        source = dest;
+      }
+    }
+
+    for (size_t i = 0; i < op->call.num_args; i++) {
+      struct aarch64_reg source = codegen_reg(op->call.args[i]);
+
+      enum aarch64_reg_attr_flags flags = reg_attr_flags(source);
+      if (flags & AARCH64_REG_ATTR_FLAG_ARG_REG) {
+        source.idx += 9;
+      }
 
       // hmm, we pretend all memory locations are different but they are not
       // can gen_move_order accidentally overwrite things because of this?
@@ -1480,30 +1625,30 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET};
       }
     }
-  }
 
-  struct move_set gp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-      vector_length(gp_move_from), GP_TMP_REG_IDX);
+    struct move_set gp_arg_moves = gen_move_order(
+        state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
+        vector_length(gp_move_from), GP_TMP_REG_IDX);
 
-  struct move_set fp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-      vector_length(fp_move_from), FP_TMP_REG_IDX);
+    struct move_set fp_arg_moves = gen_move_order(
+        state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
+        vector_length(fp_move_from), FP_TMP_REG_IDX);
 
-  codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
-  codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
+    codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
+    codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
 
-  // then handle mem copies
-  size_t num_copies = vector_length(mem_copies);
-  for (size_t i = 0; i < num_copies; i++) {
-    struct mem_copy *copy = vector_get(mem_copies, i);
-    struct mem_loc *from = &copy->src;
-    struct mem_loc *to = &copy->dest;
+    // then handle mem copies
+    size_t num_copies = vector_length(mem_copies);
+    for (size_t i = 0; i < num_copies; i++) {
+      struct mem_copy *copy = vector_get(mem_copies, i);
+      struct mem_loc *from = &copy->src;
+      struct mem_loc *to = &copy->dest;
 
-    debug_assert(from->size == to->size, "mem cpy with different sizes");
+      debug_assert(from->size == to->size, "mem cpy with different sizes");
 
-    codegen_mem_copy(state, from->base, from->offset, to->base, to->offset,
-                     to->size);
+      codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
+                                to->offset, to->size);
+    }
   }
 
   // now we generate the actual call
@@ -1549,10 +1694,12 @@ static void codegen_params(struct codegen_state *state) {
   // putting params in correct registers
   // and spilling aggregates to stack
   // we could try and merge the code in some way?
-  // we also do it again, below, to calculate how much arg space is needed for prologue
+  // we also do it again, below, to calculate how much arg space is needed for
+  // prologue
 
   // important note:
-  // to prevent overwriting things, we put all our locals beneath the arguments for the method
+  // to prevent overwriting things, we put all our locals beneath the arguments
+  // for the method
 
   // FIXME: this currently relies heavily on IR build
   // specifically, each aggregate must produce exactly one local
@@ -1574,7 +1721,9 @@ static void codegen_params(struct codegen_state *state) {
 
   struct ir_stmt *param_stmt = state->ir->first->first;
   struct ir_op *param_op = NULL;
-  if (param_stmt && param_stmt->first && param_stmt->first->ty == IR_OP_TY_MOV && (param_stmt->first->flags & IR_OP_FLAG_PARAM)) {
+  if (param_stmt && param_stmt->first &&
+      param_stmt->first->ty == IR_OP_TY_MOV &&
+      (param_stmt->first->flags & IR_OP_FLAG_PARAM)) {
     param_op = param_stmt->first;
   }
 
@@ -1639,15 +1788,7 @@ static void codegen_params(struct codegen_state *state) {
       size_t nsaa_align = MAX(8, info.alignment);
       size_t size = ROUND_UP(info.size, nsaa_align);
 
-      // TODO: overaligned HFAs and vectors
-      struct mem_loc mem_dest = {.base = STACK_PTR_REG, .offset = offset, .size = size};
-
-      struct mem_loc mem_src = {
-          .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-      struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-      vector_push_back(mem_copies, &copy);
+      lcl->offset = state->prologue_info.stack_size + nsaa;
 
       nsaa += size;
       lcl = lcl->succ;
@@ -1682,7 +1823,8 @@ static void codegen_params(struct codegen_state *state) {
         // given this is a composite, we assume `source` contains a
         // pointer to it
 
-        struct mem_loc mem_loc = {.base = STACK_PTR_REG, .offset = offset + (8 * j), .size = 8};
+        struct mem_loc mem_loc = {
+            .base = STACK_PTR_REG, .offset = offset + (8 * j), .size = 8};
 
         struct location to = {
             .idx = MEM_LOC(),
@@ -1703,14 +1845,7 @@ static void codegen_params(struct codegen_state *state) {
     nsaa = ROUND_UP(nsaa, nsaa_align);
 
     if (var_ty_is_aggregate(var_ty)) {
-      struct mem_loc mem_dest = {.base = STACK_PTR_REG, .offset = offset, .size = info.size};
-
-      struct mem_loc mem_src = {
-          .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
-
-      struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-      vector_push_back(mem_copies, &copy);
+      lcl->offset = state->prologue_info.stack_size + nsaa;
 
       nsaa += info.size;
 
@@ -1727,9 +1862,10 @@ static void codegen_params(struct codegen_state *state) {
 
     struct location to = {.idx = source.idx};
 
-    struct location from = {.idx = MEM_LOC(),
-                          .metadata = arena_alloc_init(
-                              state->arena, sizeof(struct mem_loc), &mem_loc)};
+    struct location from = {
+        .idx = MEM_LOC(),
+        .metadata =
+            arena_alloc_init(state->arena, sizeof(struct mem_loc), &mem_loc)};
 
     param_op = param_op->succ;
 
@@ -1764,12 +1900,13 @@ static void codegen_params(struct codegen_state *state) {
 
     debug_assert(from->size == to->size, "mem cpy with different sizes");
 
-    codegen_mem_copy(state, from->base, from->offset, to->base, to->offset,
-                     to->size);
+    codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
+                              to->offset, to->size);
   }
 }
 
-static size_t calc_arg_stack_space(struct codegen_state *state, struct ir_var_func_ty func_ty) {
+static size_t calc_arg_stack_space(struct codegen_state *state,
+                                   struct ir_var_func_ty func_ty) {
   size_t ngrn = 0;
   size_t nsrn = 0;
   size_t nsaa = 0;
@@ -1833,7 +1970,7 @@ static size_t calc_arg_stack_space(struct codegen_state *state, struct ir_var_fu
 
     nsaa += size;
   }
-  
+
   return nsaa;
 }
 
@@ -2469,11 +2606,10 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
         arena_allocator_create(&arena);
 
         struct codegen_function *func = &unit->entries[i].func;
-        struct codegen_state state = {.arena = arena,
-                                      .func = func,
-                                      .ir = ir_func};
+        struct codegen_state state = {
+            .arena = arena, .func = func, .ir = ir_func};
 
-        state.stack_args_size = calc_arg_stack_space(&state, ir_func->func_ty);
+        state.stack_args_size = 0;
 
         struct ir_basicblock *basicblock = ir_func->first;
         while (basicblock) {
@@ -2484,8 +2620,10 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
             while (op) {
               if (op->ty == IR_OP_TY_CALL) {
-                size_t call_args_size = calc_arg_stack_space(&state, op->call.func_ty.func);
-                state.stack_args_size = MAX(state.stack_args_size, call_args_size);
+                size_t call_args_size =
+                    calc_arg_stack_space(&state, op->call.func_ty.func);
+                state.stack_args_size =
+                    MAX(state.stack_args_size, call_args_size);
               }
 
               op = op->succ;

@@ -1314,6 +1314,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
   return glb;
 }
+
 struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->num_locals++;
