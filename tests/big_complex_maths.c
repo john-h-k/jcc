@@ -10,7 +10,7 @@ int main() {
 
   int discrim = b_squared - four_ac;
 
-  if (discrim < 0) { return 255; }
+  // if (discrim < 0) { return 255; }
 
   int guess = 1;
   while ((guess * guess) - discrim) {
