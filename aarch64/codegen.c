@@ -1139,13 +1139,13 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // `blr`
   size_t tmp_reg_idx = 9;
   size_t blr_reg_idx = 10;
-  size_t addr_reg_idx = 11;
+  // size_t addr_reg_idx = 11;
 
   size_t fp_tmp_reg_idx = 16;
 
-  size_t ngrn = 0;
+  // size_t ngrn = 0;
   size_t nsrn = 0;
-  size_t nsaa = 0;
+  // size_t nsaa = 0;
 
   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
     struct aarch64_reg source = codegen_reg(op->call.target);
@@ -1158,13 +1158,11 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   if (op->call.num_args) {
     size_t num_normal_args = func_ty->num_params;
 
-    struct arg_load { struct aarch64_reg source, dest; };
-    struct vector *loads = vector_create(sizeof(struct arg_load));
-
     for (size_t i = 0; i < op->call.num_args; i++) {
       struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
 
       struct aarch64_reg source = codegen_reg(op->call.args[i]);
+      size_t arg_reg_idx = i;
 
       if (i < num_normal_args || !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
         size_t num_hfa_members;
@@ -1183,12 +1181,13 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
               for (size_t j = 0; j < num_hfa_members; j++) {
                 // given this is a composite, we assume `source` contains a pointer to it
 
-                struct instr *load = alloc_instr(state->func);
-                load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-                load->aarch64->load_imm = (struct aarch64_load_imm){
-                  .addr = source,
-                  .dest =  nsrn + j,
-                }
+                // struct instr *load = alloc_instr(state->func);
+                // load->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
+                // load->aarch64->load_imm = (struct aarch64_load_imm){
+                //   .addr = source,
+                //   .dest =  nsrn + j,
+                // }
+                todo("hfa loads");
 
                 vector_push_back(fp_move_from, &source.idx);
                 vector_push_back(fp_move_to, &nsrn);

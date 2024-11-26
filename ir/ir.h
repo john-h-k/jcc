@@ -369,10 +369,11 @@ enum ir_op_flags {
   IR_OP_FLAG_ARG_STORE = 512,
 };
 
-typedef unsigned long long regpool_t;
+typedef unsigned long long ir_reglist;
+
 struct ir_reg_state {
-  regpool_t live_gp;
-  regpool_t live_fp;
+  ir_reglist live_gp;
+  ir_reglist live_fp;
 };
 
 struct ir_op {
