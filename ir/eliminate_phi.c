@@ -27,7 +27,6 @@ static void remove_critical_edges(struct ir_func *irb) {
         // we have a critical edge
         struct ir_basicblock *intermediate =
             insert_before_ir_basicblock(irb, basicblock);
-        intermediate->comment = "intermediate";
         intermediate->ty = IR_BASICBLOCK_TY_MERGE;
         intermediate->merge =
             (struct ir_basicblock_merge){.target = basicblock};

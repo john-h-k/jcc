@@ -75,10 +75,6 @@ static unsigned *find_basicblock_ranges(struct ir_func *irb) {
   bool *basicblocks_visited = arena_alloc(
       irb->arena, sizeof(*basicblocks_visited) * irb->basicblock_count);
 
-  // this calculates the maximum liveliness between two blocks
-  // the liveliness of a phi-dependent is `basicblock_max_id[phi->bb->id *
-  // num_bb + dependent->bb->id]`
-  // FIXME: this can be done MUCH more efficiently
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -133,7 +129,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   rebuild_ids(irb);
 
-  unsigned *bb_ranges = find_basicblock_ranges(irb);
+  UNUSED unsigned *bb_ranges = find_basicblock_ranges(irb);
 
   struct interval_data data;
   data.intervals =
@@ -206,40 +202,14 @@ struct interval_data construct_intervals(struct ir_func *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
-          struct interval *interval = &data.intervals[op->id];
-          size_t start = interval->start;
-          size_t end = interval->end;
 
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i].value;
             struct interval *dependent_interval =
                 &data.intervals[dependent->id];
 
-            size_t path_id = op->stmt->basicblock->id * irb->basicblock_count +
-                             dependent->stmt->basicblock->id;
-
-            debug_assert(bb_ranges[path_id], "bb_len was 0");
-            size_t dependent_path_end = bb_ranges[path_id];
-
-            start = MIN(start, dependent_interval->start);
-            end = MAX(end, dependent_path_end);
-          }
-
-          data.intervals[op->id].start = op->stmt->basicblock->first->id;
-          data.intervals[op->id].end = op->stmt->basicblock->last->id;
-
-          interval->start = start;
-          interval->end = end;
-
-          for (size_t i = 0; i < op->phi.num_values; i++) {
-            struct ir_op *dependent = op->phi.values[i].value;
-            struct interval *dependent_interval =
-                &data.intervals[dependent->id];
-
-            dependent_interval->start =
-                MIN(dependent_interval->start, interval->start);
-            dependent_interval->end =
-                MAX(dependent_interval->end, interval->end);
+            // force dependent to live until end of the bb
+            dependent_interval->end = op->phi.values[i].basicblock->last->last->id;
           }
         }
 
