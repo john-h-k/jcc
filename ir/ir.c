@@ -143,7 +143,7 @@ bool op_is_branch(enum ir_op_ty ty) {
 }
 
 bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
-                      const struct ir_var_ty *r) {
+               const struct ir_var_ty *r) {
   if (l == r) {
     return true;
   }
@@ -1075,7 +1075,8 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
     stmt->last->succ = op;
   }
 
-  if (op->id >= 1000) breakpoint();
+  if (op->id >= 1000)
+    breakpoint();
 
   stmt->last = op;
 
@@ -1605,8 +1606,9 @@ struct ir_reg reg_for_unique_idx(size_t idx) {
   return (struct ir_reg){.ty = idx % 5, .idx = idx / 5};
 }
 
-struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
-                               size_t *to, size_t num, size_t tmp_index) {
+struct move_set gen_move_order(struct arena_allocator *arena,
+                               struct location *from, struct location *to,
+                               size_t num, size_t tmp_index) {
   enum stage { NOT_READY, READY };
   enum status { TODO, INPROC, DONE };
   struct item {
@@ -1634,7 +1636,7 @@ struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
       struct item *item = vector_pop(in_proc);
       size_t index = item->idx;
 
-      if (from[index] != to[index]) {
+      if (from[index].idx != to[index].idx) {
         if (item->stage == NOT_READY) {
           switch (status[index]) {
           case TODO:
@@ -1647,7 +1649,7 @@ struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
 
             // Add dependencies
             for (int j = num - 1; j >= 0; j--) {
-              if (from[j] == to[index]) {
+              if (from[j].idx == to[index].idx) {
                 struct item start = {.stage = NOT_READY, .idx = j};
                 vector_push_back(in_proc, &start);
               }
@@ -1655,9 +1657,9 @@ struct move_set gen_move_order(struct arena_allocator *arena, size_t *from,
             break;
 
           case INPROC: {
-            struct move move = {.from = from[index], .to = tmp_index};
+            struct move move = {.from = from[index], .to = {.idx = tmp_index}};
             vector_push_back(result, &move);
-            from[index] = tmp_index;
+            from[index] = (struct location){.idx = tmp_index};
             break;
           }
 

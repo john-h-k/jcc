@@ -123,29 +123,29 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
   for (size_t j = 0; j < moves.num_moves; j++) {
     struct move move = moves.moves[j];
 
-    struct ir_reg to = reg_for_unique_idx(move.to);
+    struct ir_reg to = reg_for_unique_idx(move.to.idx);
 
     struct ir_op *value = NULL;
-    if (move.from != tmp_index) {
-      struct bb_reg key = {.reg = move.from, .bb = basicblock};
+    if (move.from.idx != tmp_index) {
+      struct bb_reg key = {.reg = move.from.idx, .bb = basicblock};
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
     } else {
-      struct bb_reg key = {.reg = move.to, .bb = basicblock};
+      struct bb_reg key = {.reg = move.to.idx, .bb = basicblock};
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
     }
 
-    if ((move.to == tmp_index || move.from == tmp_index) && !spill_lcl) {
+    if ((move.to.idx == tmp_index || move.from.idx == tmp_index) && !spill_lcl) {
       spill_lcl = add_local(irb, &IR_VAR_TY_I64);
     }
 
-    if (move.to == tmp_index) {
+    if (move.to.idx == tmp_index) {
       struct ir_op *store =
           insert_before_ir_op(irb, last, IR_OP_TY_STORE_LCL, value->var_ty);
       store->lcl = spill_lcl;
       store->store_lcl = (struct ir_op_store_lcl){.value = value};
 
       store_var_ty = value->var_ty;
-    } else if (move.from == tmp_index) {
+    } else if (move.from.idx == tmp_index) {
       struct ir_op *load =
           insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, store_var_ty);
       load->reg = to;
@@ -153,7 +153,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
           .lcl = spill_lcl,
       };
 
-      struct bb_reg key = {.reg = move.to, .bb = basicblock};
+      struct bb_reg key = {.reg = move.to.idx, .bb = basicblock};
       struct ir_op **op = hashtbl_lookup(reg_to_val, &key);
 
       if (op) {
@@ -165,7 +165,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       mov->reg = to;
       mov->mov.value = value;
 
-      struct bb_reg key = {.reg = move.to, .bb = basicblock};
+      struct bb_reg key = {.reg = move.to.idx, .bb = basicblock};
       hashtbl_insert(reg_to_val, &key, &mov);
     }
   }
@@ -185,10 +185,10 @@ void eliminate_phi(struct ir_func *irb) {
       arena_alloc(irb->arena, sizeof(*bb_moves) * irb->basicblock_count * 2);
 
   for (size_t i = 0; i < irb->basicblock_count * 2; i++) {
-    bb_moves[i].gp_from = vector_create(sizeof(size_t));
-    bb_moves[i].gp_to = vector_create(sizeof(size_t));
-    bb_moves[i].fp_from = vector_create(sizeof(size_t));
-    bb_moves[i].fp_to = vector_create(sizeof(size_t));
+    bb_moves[i].gp_from = vector_create(sizeof(struct location));
+    bb_moves[i].gp_to = vector_create(sizeof(struct location));
+    bb_moves[i].fp_from = vector_create(sizeof(struct location));
+    bb_moves[i].fp_to = vector_create(sizeof(struct location));
   }
 
   struct hashtbl *reg_to_val =
@@ -242,15 +242,18 @@ void eliminate_phi(struct ir_func *irb) {
             size_t to_reg = unique_idx_for_reg(op->reg);
 
             if (from_reg != to_reg) {
+              struct location from = {.idx = from_reg};
+              struct location to = {.idx = to_reg};
+
               struct bb_reg key = {.reg = from_reg, .bb = mov_bb};
               hashtbl_insert(reg_to_val, &key, &value);
 
               if (var_ty_is_integral(&value->var_ty)) {
-                vector_push_back(gp_move_from, &from_reg);
-                vector_push_back(gp_move_to, &to_reg);
+                vector_push_back(gp_move_from, &from);
+                vector_push_back(gp_move_to, &to);
               } else {
-                vector_push_back(fp_move_from, &from_reg);
-                vector_push_back(fp_move_to, &to_reg);
+                vector_push_back(fp_move_from, &from);
+                vector_push_back(fp_move_to, &to);
               }
             }
           }
