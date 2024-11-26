@@ -1598,11 +1598,11 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   return uses;
 }
 
-size_t unique_idx_for_reg(struct ir_reg reg) {
+size_t unique_idx_for_ir_reg(struct ir_reg reg) {
   return reg.idx * /* num tys */ 5 + reg.ty;
 }
 
-struct ir_reg reg_for_unique_idx(size_t idx) {
+struct ir_reg ir_reg_for_unique_idx(size_t idx) {
   return (struct ir_reg){.ty = idx % 5, .idx = idx / 5};
 }
 

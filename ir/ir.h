@@ -817,8 +817,8 @@ struct ir_op_uses {
 
 struct ir_op_uses build_op_uses_map(struct ir_func *func);
 
-size_t unique_idx_for_reg(struct ir_reg reg);
-struct ir_reg reg_for_unique_idx(size_t idx);
+size_t unique_idx_for_ir_reg(struct ir_reg reg);
+struct ir_reg ir_reg_for_unique_idx(size_t idx);
 
 struct location {
   size_t idx;

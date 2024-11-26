@@ -157,6 +157,11 @@ enum aarch64_reg_ty {
   AARCH64_REG_TY_B, // 8-bit float
 };
 
+enum aarch64_reg_class {
+  AARCH64_REG_CLASS_GP,
+  AARCH64_REG_CLASS_FP,
+};
+
 bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty);
 bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty);
 
