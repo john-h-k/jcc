@@ -12,6 +12,8 @@ void arena_allocator_free(struct arena_allocator **allocator);
 /* Alloc word-aligned block in arena */
 void *arena_alloc(struct arena_allocator *allocator, size_t size);
 
+void *arena_alloc_init(struct arena_allocator *allocator, size_t size, void *data);
+
 /* Alloc space necessary for `str` (including null-terminator), then copy it
    into that space. Returns the start of the new allocation */
 void *arena_alloc_strcpy(struct arena_allocator *allocator, const char *str);

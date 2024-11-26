@@ -365,8 +365,6 @@ enum ir_op_flags {
 
   // op has been spilled and all consumers must reload it
   IR_OP_FLAG_SPILLED = 256,
-
-  IR_OP_FLAG_ARG_STORE = 512,
 };
 
 typedef unsigned long long ir_reglist;

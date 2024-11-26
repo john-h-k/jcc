@@ -22,8 +22,9 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   op->binary_op.rhs = zero;
 }
 
-// variable shifts require both operands to be the same size, as they use the same register
-// this is fine, because we can just "fake" the type required and get the correct behaviour
+// variable shifts require both operands to be the same size, as they use the
+// same register this is fine, because we can just "fake" the type required and
+// get the correct behaviour
 static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
   struct ir_op_binary_op *binary_op = &op->binary_op;
 
@@ -285,22 +286,42 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
-static void lower_call(struct ir_func *func, struct ir_op *op) {
+static void lower_call(UNUSED struct ir_func *func, struct ir_op *op) {
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
 
-    if (arg->ty != IR_OP_TY_LOAD_LCL || !var_ty_is_aggregate(&arg->var_ty)) {
+    if ((arg->ty != IR_OP_TY_LOAD_LCL && arg->ty != IR_OP_TY_LOAD_GLB &&
+         arg->ty != IR_OP_TY_LOAD_ADDR) ||
+        !var_ty_is_aggregate(&arg->var_ty)) {
       continue;
     }
 
-    arg->flags |= IR_OP_FLAG_DONT_GIVE_REG;
-    arg->flags |= IR_OP_FLAG_ARG_STORE;
+    switch (arg->ty) {
+    case IR_OP_TY_LOAD_LCL: {
+      struct ir_lcl *lcl = arg->load_lcl.lcl;
+
+      arg->ty = IR_OP_TY_ADDR;
+      arg->var_ty = IR_VAR_TY_I64;
+      arg->addr = (struct ir_op_addr) { .ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
+      break;
+    }
+    case IR_OP_TY_LOAD_ADDR: {
+      struct ir_op *addr = arg->load_addr.addr;
+
+      arg->ty = IR_OP_TY_MOV;
+      arg->var_ty = IR_VAR_TY_I64;
+      arg->mov = (struct ir_op_mov) { .value = addr };
+      break;
+    }
+    case IR_OP_TY_LOAD_GLB:
+      bug("load glb should be gone by now");
+    default:
+      unreachable();
+    }
   }
 }
 
-static void lower_params(struct ir_func *func) {
-  
-}
+static void lower_params(struct ir_func *func) {}
 
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
@@ -374,17 +395,17 @@ void aarch64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_BINARY_OP:
               switch (op->binary_op.ty) {
-                case IR_OP_BINARY_OP_TY_UQUOT:
-                case IR_OP_BINARY_OP_TY_SQUOT:
-                  lower_quot(func, op);
-                  break;
-                case IR_OP_BINARY_OP_TY_SRSHIFT:
-                case IR_OP_BINARY_OP_TY_LSHIFT:
-                case IR_OP_BINARY_OP_TY_URSHIFT:
-                  lower_shift(func, op);
-                  break;
-                default:
-                  break;
+              case IR_OP_BINARY_OP_TY_UQUOT:
+              case IR_OP_BINARY_OP_TY_SQUOT:
+                lower_quot(func, op);
+                break;
+              case IR_OP_BINARY_OP_TY_SRSHIFT:
+              case IR_OP_BINARY_OP_TY_LSHIFT:
+              case IR_OP_BINARY_OP_TY_URSHIFT:
+                lower_shift(func, op);
+                break;
+              default:
+                break;
               }
               break;
             }
