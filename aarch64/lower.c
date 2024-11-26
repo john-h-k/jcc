@@ -311,7 +311,7 @@ static void lower_load_to_addr(struct ir_op *op) {
   }
 }
 
-static void lower_call(UNUSED struct ir_func *func, struct ir_op *op) {
+static void lower_call(struct ir_func *func, struct ir_op *op) {
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
 
@@ -325,6 +325,11 @@ static void lower_call(UNUSED struct ir_func *func, struct ir_op *op) {
   }
 
   if (var_ty_is_aggregate(&op->var_ty)) {
+    if (op->succ && op->succ->ty == IR_OP_TY_STORE_LCL && op->succ->store_lcl.value == op) {
+      op->lcl = op->succ->lcl;
+      detach_ir_op(func, op->succ);
+    }
+
     // just switch to pointer type, let codegen handle
     op->var_ty = IR_VAR_TY_I64;
   }
