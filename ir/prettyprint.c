@@ -212,10 +212,6 @@ static void debug_phi_string(FILE *file, struct ir_op_phi *phi) {
   }
 }
 
-static void debug_call_target_string(FILE *file, struct ir_op *target) {
-  fprintf(file, "%%%zu", target->id);
-}
-
 static void debug_call_arg_string(FILE *file, struct ir_op_call *call) {
   for (size_t i = 0; i < call->num_args; i++) {
     fprintf(file, "%%%zu", call->args[i]->id);
@@ -252,7 +248,17 @@ static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   fprintf(file, ") = ");
 }
 
-static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
+static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir, bool lhs);
+
+static void debug_print_op_use(FILE *file, struct ir_func *irb, struct ir_op *ir) {
+  if (ir->flags & IR_OP_FLAG_CONTAINED) {
+    debug_print_op(file, irb, ir, false);
+  } else {
+    fprintf(file, "%%%zu", ir->id);
+  }
+}
+
+static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir, bool lhs) {
   if (ir->comment) {
     fprintf(file, "// %s\n", ir->comment);
   }
@@ -261,29 +267,41 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   case IR_OP_TY_UNKNOWN:
     bug("unknown op!");
   case IR_OP_TY_UNDF:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     fprintf(file, "UNDF");
     break;
   case IR_OP_TY_CUSTOM:
     bug("custom ops no longer supported");
   case IR_OP_TY_CALL: {
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     fprintf(file, "call ");
 
-    debug_call_target_string(file, ir->call.target);
+    debug_print_op_use(file, irb, ir->call.target);
     fprintf(file, " ( ");
     debug_call_arg_string(file, &ir->call);
     fprintf(file, " )");
     break;
   }
   case IR_OP_TY_PHI:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     fprintf(file, "phi [ ");
     debug_phi_string(file, &ir->phi);
     fprintf(file, " ]");
     break;
   case IR_OP_TY_MOV:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     if (ir->mov.value) {
       fprintf(file, "%%%zu", ir->mov.value->id);
       fprintf(file, " - (");
@@ -296,7 +314,10 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_CNST:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     switch (ir->cnst.ty) {
     case IR_OP_CNST_TY_FLT:
       fprintf(file, "%Lf", ir->cnst.flt_value);
@@ -307,44 +328,67 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_BINARY_OP:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
 
-    fprintf(file, "%%%zu %s %%%zu", ir->binary_op.lhs->id,
-            binary_op_string(ir->binary_op.ty), ir->binary_op.rhs->id);
+    debug_print_op_use(file, irb, ir->binary_op.lhs);
+    fprintf(file, " %s ", binary_op_string(ir->binary_op.ty));
+    debug_print_op_use(file, irb, ir->binary_op.rhs);
     break;
   case IR_OP_TY_UNARY_OP:
-    debug_lhs(file, irb, ir);
-    fprintf(file, "%s %%%zu", unary_op_string(ir->unary_op.ty),
-            ir->unary_op.value->id);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
+    fprintf(file, "%s ", unary_op_string(ir->unary_op.ty));
+    debug_print_op_use(file, irb, ir->unary_op.value);
     break;
   case IR_OP_TY_CAST_OP:
-    debug_lhs(file, irb, ir);
-    fprintf(file, "%s %%%zu", cast_op_string(ir->cast_op.ty),
-            ir->cast_op.value->id);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
+    fprintf(file, "%s ", cast_op_string(ir->cast_op.ty));
+    debug_print_op_use(file, irb, ir->cast_op.value);
     break;
   case IR_OP_TY_STORE_ADDR:
-    debug_lhs(file, irb, ir);
-    fprintf(file, "storeaddr [%%%zu], %%%zu", ir->store_addr.addr->id,
-            ir->store_addr.value->id);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
+    fprintf(file, "storeaddr [");
+    debug_print_op_use(file, irb, ir->store_addr.addr);
+    fprintf(file, "], ");
+    debug_print_op_use(file, irb, ir->store_addr.value);
     break;
   case IR_OP_TY_LOAD_ADDR:
     debug_lhs(file, irb, ir);
-    fprintf(file, "loadaddr [%%%zu]", ir->load_addr.addr->id);
+
+    fprintf(file, "loadaddr [");
+    debug_print_op_use(file, irb, ir->load_addr.addr);
+    fprintf(file, "]");
     break;
   case IR_OP_TY_ADDR:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
       fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
               ir->addr.lcl->offset);
       break;
     case IR_OP_ADDR_TY_GLB:
-      fprintf(file, "addr GLB(%zu)", ir->addr.glb->id);
+      fprintf(file, "addr GLB(%zu) { \"%s\" }", ir->addr.glb->id, ir->addr.glb->name);
       break;
     }
     break;
   case IR_OP_TY_STORE_LCL:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     if (ir->lcl) {
       fprintf(file, "storelcl LCL(%zu), %%%zu", ir->lcl->id,
               ir->store_lcl.value->id);
@@ -353,7 +397,10 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_LOAD_LCL:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     if (ir->load_lcl.lcl) {
       fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl->id);
     } else {
@@ -361,7 +408,10 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_STORE_GLB:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     if (ir->load_glb.glb) {
       fprintf(file, "storeglb GLB(%zu), %%%zu", ir->store_glb.glb->id,
               ir->store_glb.value->id);
@@ -370,7 +420,10 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   case IR_OP_TY_LOAD_GLB:
-    debug_lhs(file, irb, ir);
+    if (lhs) {
+      debug_lhs(file, irb, ir);
+    }
+
     if (ir->load_glb.glb) {
       fprintf(file, "loadglb GLB(%zu)", ir->load_glb.glb->id);
     } else {
@@ -421,10 +474,6 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir) {
     }
     break;
   }
-
-  if (ir->flags & IR_OP_FLAG_CONTAINED) {
-    fprintf(file, " [CONTAINED] ");
-  }
 }
 
 extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
@@ -474,10 +523,9 @@ static void prettyprint_end_visit_basicblock_file(
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
                                       void *metadata) {
-  // if (op->ty == IR_OP_TY_GLB) {
-  //   // TODO: stop this function needing to deal with GLB its a messy opcode
-  //   return;
-  // }
+  if (op->flags & IR_OP_FLAG_CONTAINED) {
+    return;
+  }
 
   int op_pad = /* guess */ 50;
 
@@ -486,7 +534,7 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
-  debug_print_op(fm->file, irb, op);
+  debug_print_op(fm->file, irb, op, true);
 
   if (ftell(fm->file) == pos) {
     // no line was written
@@ -723,7 +771,7 @@ static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
                                void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
-  debug_print_op(gm->file, irb, op);
+  debug_print_op(gm->file, irb, op, true);
 
   // `\l` prints left-justified
   fprintf(gm->file, "\\l");
