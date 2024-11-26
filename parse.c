@@ -3646,7 +3646,6 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   AST_PRINTZ("PARAM");
   INDENT();
-  DEBUG_CALL(declaration_specifier_list, &param->specifier_list);
   switch (param->ty) {
   case AST_PARAM_TY_VARIADIC:
     AST_PRINTZ("VARIADIC");
@@ -3655,9 +3654,11 @@ DEBUG_FUNC(param, param) {
     AST_PRINTZ("VOID");
     break;
   case AST_PARAM_TY_DECL:
+    DEBUG_CALL(declaration_specifier_list, &param->specifier_list);
     DEBUG_CALL(declarator, &param->declarator);
     break;
   case AST_PARAM_TY_ABSTRACT_DECL:
+    DEBUG_CALL(declaration_specifier_list, &param->specifier_list);
     DEBUG_CALL(abstract_declarator, &param->abstract_declarator);
     break;
   }
