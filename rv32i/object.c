@@ -2,20 +2,30 @@
 
 #include "isa.h"
 
-void write_eep(const struct build_object_args *args) {
+void rv32i_write_object(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
   if (file == NULL) {
     perror("fopen");
     exit(EXIT_FAILURE);
   }
 
-  const unsigned short *const instr = (unsigned short *)args->data;
-  size_t num_instrs = args->len_data / EEP_INSTR_SIZE;
+  for (size_t i = 0; i < args->num_entries; i++) {
+    const struct object_entry *entry = &args->entries[i];
 
-  for (size_t i = 0; i < num_instrs; i++) {
-    fprintf(file, "0x%02zx ", i);
-    fprintf(file, "0x%04x", instr[i]);
-    fprintf(file, "\n");
+    if (entry->ty != OBJECT_ENTRY_TY_FUNC) {
+      todo("non funcs in rv32i");
+    }
+
+    const unsigned char *const data = (const unsigned char *)entry->data;
+
+    // fwrite(data, 1, entry->len_data, file);
+    for (size_t j = 0; j < entry->len_data; j++) {
+      fprintf(file, "%02x ", data[j]);
+
+      if (j && j % 32 == 0) {
+        fprintf(file, "\n");
+      }
+    }
   }
 
   fclose(file);

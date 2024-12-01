@@ -27,6 +27,7 @@
       .dest = (dest_reg),                                                      \
     }                                                                          \
   }
+  
 
 static enum aarch64_reg_ty gp_reg_ty_for_size(size_t size) {
   switch (size) {
@@ -112,11 +113,11 @@ bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
   return false;
 }
 
-struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty) {
+static struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty) {
   return (struct aarch64_reg){.ty = reg_ty, .idx = 0};
 }
 
-struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
+static struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
   return (struct aarch64_reg){.ty = reg_ty, .idx = 31};
 }
 
@@ -2636,55 +2637,6 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   }
 
   data->last = instr;
-}
-
-static const char *mangle_str_cnst_name(struct arena_allocator *arena,
-                                        const char *func_name, size_t id) {
-  // TODO: this should all really be handled by the mach-o file
-  func_name = "str";
-  size_t func_name_len = strlen(func_name);
-
-  size_t len = 0;
-  len += func_name_len;
-  len += 2; // strlen("l_"), required for local symbols
-  len += 1; // surround function name with `.` so it cannot conflict with real
-            // names
-
-  if (id) {
-    len += 1; // extra "." before id
-  }
-
-  size_t id_len = id ? num_digits(id) : 0;
-  len += id_len;
-
-  len += 1; // null char
-  char *buff = arena_alloc(arena, len);
-  size_t head = 0;
-
-  strcpy(&buff[head], "l_");
-  head += strlen("l_");
-
-  buff[head++] = '.';
-  strcpy(&buff[head], func_name);
-  head += func_name_len;
-
-  if (id) {
-    buff[head++] = '.';
-
-    size_t tail = head + id_len - 1;
-    while (tail >= head) {
-      buff[tail--] = (id % 10) + '0';
-      id /= 10;
-    }
-  }
-
-  head += id_len;
-  buff[head++] = 0;
-
-  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name",
-               head, len);
-
-  return buff;
 }
 
 static int sort_entries_by_id(const void *a, const void *b) {
