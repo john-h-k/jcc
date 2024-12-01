@@ -1,5 +1,5 @@
-#ifndef RISCV_H
-#define RISCV_H
+#ifndef RV32I_H
+#define RV32I_H
 
 #include "rv32i/disasm.h"
 #include "rv32i/emit.h"
@@ -7,8 +7,8 @@
 #include "rv32i/object.h"
 #include "target.h"
 
-#define RISCV_FUNCTION_ALIGNMENT (8)
+#define RV32I_FUNCTION_ALIGNMENT (8)
 
-extern const struct target RISCV_TARGET;
+extern const struct target RV32I_TARGET;
 
 #endif

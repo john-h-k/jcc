@@ -3,10 +3,10 @@
 #include "rv32i/codegen.h"
 #include "rv32i/lower.h"
 
-const struct target RISCV_TARGET = {
+const struct target RV32I_TARGET = {
     (struct reg_info){
-        .gp_registers = (struct reg_set_info){.num_volatile = 3,
-                                              .num_nonvolatile = 3,
+        .gp_registers = (struct reg_set_info){.num_volatile = 18,
+                                              .num_nonvolatile = 10,
                                               .num_reserved = 2},
         .fp_registers =
             (struct reg_set_info){
@@ -16,7 +16,7 @@ const struct target RISCV_TARGET = {
                 .num_nonvolatile = 0,
                 .num_reserved = 0},
     },
-    RISCV_FUNCTION_ALIGNMENT,
+    RV32I_FUNCTION_ALIGNMENT,
     NULL,
     rv32i_lower,
     rv32i_codegen,

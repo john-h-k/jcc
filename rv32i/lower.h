@@ -1,5 +1,5 @@
-#ifndef RISCV_LOWER_H
-#define RISCV_LOWER_H
+#ifndef RV32I_LOWER_H
+#define RV32I_LOWER_H
 
 #include "../ir/build.h"
 
