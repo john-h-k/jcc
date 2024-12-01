@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "parse.h"
+#include "target.h"
 #include "var_table.h"
 #include "vector.h"
 
@@ -39,6 +40,7 @@ MAKE_WKT(LONG_DOUBLE);
 struct typechk {
   struct arena_allocator *arena;
   struct parser *parser;
+  const struct target *target;
 
   size_t next_anonymous_type_name_id;
 
@@ -268,15 +270,23 @@ bool is_integral_ty(const struct td_var_ty *ty) {
   }
 }
 
-struct td_var_ty td_var_ty_pointer_sized_int(UNUSED_ARG(struct typechk *tchk),
+struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
                                              bool is_signed) {
   // returns the type for `size_t` effectively
-  // TODO: generalise - either we should have a special ptr-sized int type, or
-  // tchk should have a field for ptr size
-  return (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN,
-                            .well_known =
-                                is_signed ? WELL_KNOWN_TY_SIGNED_LONG_LONG
-                                          : WELL_KNOWN_TY_UNSIGNED_LONG_LONG};
+  // TODO: generalise - we should have a special ptr-sized int type
+
+  enum well_known_ty wkt;
+  switch (tchk->target->lp_sz) {
+  case TARGET_LP_SZ_LP32:
+    wkt = is_signed ? WELL_KNOWN_TY_SIGNED_INT : WELL_KNOWN_TY_UNSIGNED_INT;
+    break;
+  case TARGET_LP_SZ_LP64:
+    wkt = is_signed ? WELL_KNOWN_TY_SIGNED_LONG_LONG
+                    : WELL_KNOWN_TY_UNSIGNED_LONG_LONG;
+    break;
+  }
+
+  return (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known = wkt};
 }
 
 struct td_var_ty
@@ -371,19 +381,22 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
                    rhs_ty->ty != TD_VAR_TY_TY_UNKNOWN,
                "unknown ty in call to `%s`", __func__);
 
-  if (lhs_ty->ty == TD_VAR_TY_TY_POINTER || rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
-    if (
-      (lhs_ty->ty == TD_VAR_TY_TY_POINTER && lhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID)
-       || is_integral_ty(lhs_ty)) {
+  if (lhs_ty->ty == TD_VAR_TY_TY_POINTER ||
+      rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
+    if ((lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
+         lhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
+        is_integral_ty(lhs_ty)) {
       return *rhs_ty;
-    } else if ((rhs_ty->ty == TD_VAR_TY_TY_POINTER && rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) || is_integral_ty(rhs_ty)) {
+    } else if ((rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
+                rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
+               is_integral_ty(rhs_ty)) {
       return *lhs_ty;
     } else if (td_var_ty_eq(tchk, lhs_ty, rhs_ty)) {
       return *lhs_ty;
     } else {
       WARN("incompatible pointer types");
     }
-  } 
+  }
 
   if (lhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN ||
       rhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
@@ -860,8 +873,9 @@ static struct td_var_ty type_abstract_declarator(
                                         abstract_declarator);
 }
 
-static struct td_var_ty td_var_ty_for_typedef(struct typechk *tchk,
-                                              const struct lex_token *identifier) {
+static struct td_var_ty
+td_var_ty_for_typedef(struct typechk *tchk,
+                      const struct lex_token *identifier) {
   struct var_table_entry *entry = var_table_get_entry(
       &tchk->ty_table, identifier_str(tchk->parser, identifier));
 
@@ -1119,14 +1133,16 @@ type_specifiers(struct typechk *tchk,
         break;
       }
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_DOUBLE) {
+               last_specifier.type_specifier_kw ==
+                   AST_TYPE_SPECIFIER_KW_DOUBLE) {
       wk = WELL_KNOWN_TY_LONG_DOUBLE;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.type_specifier_kw  == AST_TYPE_SPECIFIER_KW_CHAR) {
+               last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_CHAR) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_CHAR
                           : WELL_KNOWN_TY_SIGNED_CHAR;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
-               last_specifier.type_specifier_kw  == AST_TYPE_SPECIFIER_KW_SHORT) {
+               last_specifier.type_specifier_kw ==
+                   AST_TYPE_SPECIFIER_KW_SHORT) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_SHORT
                           : WELL_KNOWN_TY_SIGNED_SHORT;
     }
@@ -1214,8 +1230,10 @@ static struct td_expr type_ternary(struct typechk *tchk,
   };
 
   *td_ternary.cond = type_expr(tchk, ternary->cond);
-  *td_ternary.true_expr = perform_integer_promotion(tchk ,type_expr(tchk, ternary->true_expr));
-  *td_ternary.false_expr = perform_integer_promotion(tchk, type_expr(tchk, ternary->false_expr));
+  *td_ternary.true_expr =
+      perform_integer_promotion(tchk, type_expr(tchk, ternary->true_expr));
+  *td_ternary.false_expr =
+      perform_integer_promotion(tchk, type_expr(tchk, ternary->false_expr));
 
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty);
@@ -1352,14 +1370,14 @@ static struct td_expr type_unary_op(struct typechk *tchk,
   case AST_UNARY_OP_TY_INDIRECTION:
     td_unary_op.ty = TD_UNARY_OP_TY_INDIRECTION;
     switch (expr.var_ty.ty) {
-      case TD_VAR_TY_TY_POINTER:
-        result_ty = *expr.var_ty.pointer.underlying;
-        break;
-      case TD_VAR_TY_TY_ARRAY:
-        result_ty = *expr.var_ty.array.underlying;
-        break;
-      default:
-        WARN("cannot dereference a non pointer/array");
+    case TD_VAR_TY_TY_POINTER:
+      result_ty = *expr.var_ty.pointer.underlying;
+      break;
+    case TD_VAR_TY_TY_ARRAY:
+      result_ty = *expr.var_ty.array.underlying;
+      break;
+    default:
+      WARN("cannot dereference a non pointer/array");
     }
 
     break;
@@ -2506,7 +2524,7 @@ static struct td_external_declaration type_external_declaration(
   }
 }
 
-enum typechk_create_result typechk_create(struct parser *parser,
+enum typechk_create_result typechk_create(const struct target *target, struct parser *parser,
                                           struct typechk **tchk) {
   struct typechk *t = nonnull_malloc(sizeof(*t));
 
@@ -2516,6 +2534,7 @@ enum typechk_create_result typechk_create(struct parser *parser,
   *t = (struct typechk){
       .arena = arena,
       .parser = parser,
+      .target = target,
       .next_anonymous_type_name_id = 0,
       .ty_table = var_table_create(arena),
       .var_table = var_table_create(arena),

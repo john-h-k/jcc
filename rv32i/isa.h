@@ -94,6 +94,16 @@
 #define FUNCT3_REM      U32(0b110)
 #define FUNCT3_REMU     U32(0b111)
 
+#define FUNCT3_LB       U32(0b000)
+#define FUNCT3_LH       U32(0b001)
+#define FUNCT3_LW       U32(0b010)
+#define FUNCT3_LBU      U32(0b100)
+#define FUNCT3_LHU      U32(0b101)
+
+#define FUNCT3_SB       U32(0b000)
+#define FUNCT3_SH       U32(0b001)
+#define FUNCT3_SW       U32(0b010)
+
 /* ----------------------------- */
 
 
@@ -103,9 +113,36 @@
 #define FUNCT7_ADD      U32(0b0000000)
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADDI, rd, OPC_OP_IMM)
+
 #define LUI(imm20, rd) U_TYPE(imm20, rd, OPC_LUI)
+#define AUIPC(imm20, rd) U_TYPE(imm20, rd, OPC_AUIPC)
 
 #define ADD(rs2, rs1, rd) R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_ADD, rd, OPC_OP)
+
+#define MUL(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MUL, rd, OPC_OP)
+#define DIV(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_DIV, rd, OPC_OP)
+#define REM(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_REM, rd, OPC_OP)
+#define DIVU(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_DIVU, rd, OPC_OP)
+#define REMU(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_REMU, rd, OPC_OP)
+
 #define JALR(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_JALR, rd, OPC_JALR)
+#define JAL(imm20, rd) J_TYPE(imm20, rd, OPC_JAL)
+
+#define BEQ(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BEQ, OPC_BRANCH)
+#define BNE(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BNE, OPC_BRANCH)
+#define BLT(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BLT, OPC_BRANCH)
+#define BGE(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGE, OPC_BRANCH)
+#define BLTU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BLTU, OPC_BRANCH)
+#define BGEU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGEU, OPC_BRANCH)
+
+#define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
+#define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)
+#define SW(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SW, OPC_STORE)
+
+#define LB(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LB, rd, OPC_LOAD)
+#define LBU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LBU, rd, OPC_LOAD)
+#define LH(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LH, rd, OPC_LOAD)
+#define LHU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LHU, rd, OPC_LOAD)
+#define LW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD)
 
 #endif

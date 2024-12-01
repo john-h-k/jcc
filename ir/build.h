@@ -5,9 +5,8 @@
 #include "../typechk.h"
 #include "ir.h"
 
-struct ir_unit *
-build_ir_for_translationunit(struct typechk *typechk,
-                             struct arena_allocator *arena,
-                             struct td_translationunit *translation_unit);
+struct ir_unit *build_ir_for_translationunit(
+    const struct target *target, struct typechk *typechk,
+    struct arena_allocator *arena, struct td_translationunit *translation_unit);
 
 #endif

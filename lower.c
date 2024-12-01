@@ -1,6 +1,8 @@
 #include "lower.h"
 
 #include "ir/ir.h"
+#include "util.h"
+#include "log.h"
 
 static void propogate_switch_phis(UNUSED struct ir_func *func, struct ir_basicblock *bb_switch, struct ir_basicblock *pred_cond, struct ir_basicblock *basicblock) {
   // FIXME: this does NOT properly propogate

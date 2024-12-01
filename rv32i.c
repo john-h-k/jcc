@@ -5,6 +5,7 @@
 #include "rv32i/object.h"
 
 const struct target RV32I_TARGET = {
+    TARGET_LP_SZ_LP32,
     (struct reg_info){
         .gp_registers = (struct reg_set_info){.num_volatile = 17,
                                               .num_nonvolatile = 10,

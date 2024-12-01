@@ -2,8 +2,10 @@
 
 #include "aarch64/codegen.h"
 #include "aarch64/lower.h"
+#include "target.h"
 
 const struct target AARCH64_TARGET = {
+    TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
     (struct reg_info){
         .gp_registers = (struct reg_set_info){.num_volatile = 18,
