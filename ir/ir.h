@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "../target.h"
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
@@ -642,8 +643,8 @@ struct ir_func {
 
 struct ir_unit {
   struct arena_allocator *arena;
-  struct parser *parser;
   struct typechk *tchk;
+  const struct target *target;
 
   struct ir_glb *first_global;
   struct ir_glb *last_global;
@@ -784,6 +785,8 @@ struct ir_var_ty_info {
 
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty);
+
+enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru);
 
 struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru);
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,

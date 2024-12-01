@@ -24,6 +24,16 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_ADD,
   RV32I_INSTR_TY_LUI,
   RV32I_INSTR_TY_JALR,
+
+  RV32I_INSTR_TY_SB,
+  RV32I_INSTR_TY_SH,
+  RV32I_INSTR_TY_SW,
+
+  RV32I_INSTR_TY_LB,
+  RV32I_INSTR_TY_LBU,
+  RV32I_INSTR_TY_LH,
+  RV32I_INSTR_TY_LHU,
+  RV32I_INSTR_TY_LW,
 };
 
 enum rv32i_reg_ty {
@@ -59,20 +69,22 @@ enum rv32i_reg_attr_flags reg_attr_flags(struct rv32i_reg reg);
 
 enum rv32i_instr_class {
   RV32I_INSTR_CLASS_NOP,
-  RV32I_INSTR_CLASS_ADDSUB_IMM,
-  RV32I_INSTR_CLASS_ADDSUB_REG,
+  RV32I_INSTR_CLASS_OP_IMM,
+  RV32I_INSTR_CLASS_OP,
   RV32I_INSTR_CLASS_LUI,
   RV32I_INSTR_CLASS_JALR,
+  RV32I_INSTR_CLASS_LOAD,
+  RV32I_INSTR_CLASS_STORE,
 };
 
-struct rv32i_addsub_imm {
+struct rv32i_op_imm {
   struct rv32i_reg dest;
   struct rv32i_reg source;
 
   imm_t imm;
 };
 
-struct rv32i_addsub_reg {
+struct rv32i_op {
   struct rv32i_reg dest;
   struct rv32i_reg lhs;
   struct rv32i_reg rhs;
@@ -91,17 +103,38 @@ struct rv32i_jalr {
   imm_t imm;
 };
 
+struct rv32i_load {
+  struct rv32i_reg dest;
+  struct rv32i_reg addr;
+
+  imm_t imm;
+};
+
+struct rv32i_store {
+  struct rv32i_reg source;
+  struct rv32i_reg addr;
+
+  imm_t imm;
+};
 
 struct rv32i_instr {
   enum rv32i_instr_ty ty;
 
   union {
     union {
-      struct rv32i_addsub_imm addsub_imm, addi;
+      struct rv32i_op_imm op_imm, addi;
     };
 
     union {
-      struct rv32i_addsub_reg addsub_reg, add;
+      struct rv32i_op op, add;
+    };
+
+    union {
+      struct rv32i_load load, lb, lbu, lh, lhu, lw;
+    };
+
+    union {
+      struct rv32i_store store, sb, sh, sw;
     };
 
     union {

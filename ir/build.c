@@ -138,12 +138,13 @@ static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  // TODO: hardcodes pointer size
+  enum ir_var_primitive_ty pointer_prim = var_ty_pointer_primitive_ty(irb->unit);
+
   if (((l->ty == IR_VAR_TY_TY_PRIMITIVE &&
-        l->primitive == IR_VAR_PRIMITIVE_TY_I64) ||
+        l->primitive == pointer_prim) ||
        l->ty == IR_VAR_TY_TY_POINTER) &&
       ((r->ty == IR_VAR_TY_TY_PRIMITIVE &&
-        r->primitive == IR_VAR_PRIMITIVE_TY_I64) ||
+        r->primitive == pointer_prim) ||
        r->ty == IR_VAR_TY_TY_POINTER)) {
     // same size int -> pointer needs no cast
     return false;
@@ -293,8 +294,7 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   if (from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
     // primitive -> pointer
-    // TODO: hardcodes pointer size
-    if (from_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I64) {
+    if (from_var_ty.primitive == var_ty_pointer_primitive_ty(irb->unit)) {
       bug("cast between primitive & pointer type of same size is implicit");
     }
 
@@ -1185,7 +1185,6 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   struct var_ref *ref;
   get_var_ref(irb, stmt->basicblock, var, &key, &ref);
 
-
   if (!ref) {
     ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_SSA);
   }
@@ -1275,8 +1274,7 @@ static struct ir_op *build_ir_for_member_address_offset(
 
   struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
   offset->ty = IR_OP_TY_CNST;
-  offset->var_ty = (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
-                                      .primitive = IR_VAR_PRIMITIVE_TY_I64};
+  offset->var_ty = var_ty_for_pointer_size(irb->unit);
   offset->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
 
@@ -2292,8 +2290,8 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
       struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
       offset->ty = IR_OP_TY_CNST;
       offset->var_ty = var_ty_for_pointer_size(irb->unit);
-      offset->cnst =
-          (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = init->offset};
+      offset->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                         .int_value = init->offset};
 
       init_address = alloc_ir_op(irb->func, *stmt);
       init_address->ty = IR_OP_TY_BINARY_OP;
@@ -2511,7 +2509,8 @@ build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
                                 struct var_refs *var_refs,
                                 struct td_declaration *declaration) {
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
-    if (declaration->storage_class_specifier == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
+    if (declaration->storage_class_specifier ==
+        TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
       continue;
     }
 
@@ -2707,7 +2706,7 @@ static void gen_var_phis(struct ir_func_builder *irb,
 
       op = ref->op;
     } else {
-     op = basicblock_ops_for_var[basicblock->id];
+      op = basicblock_ops_for_var[basicblock->id];
     }
 
     if (op) {
@@ -2823,16 +2822,17 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
                       struct td_funcdef *def,
                       struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
-  struct ir_func b = {.unit = unit,
-                      .func_ty = var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
-                      .name = def->var_declaration.var.identifier,
-                      .arena = arena,
-                      .flags = IR_FUNC_FLAG_NONE,
-                      .first = NULL,
-                      .last = NULL,
-                      .op_count = 0,
-                      .num_locals = 0,
-                      .total_locals_size = 0};
+  struct ir_func b = {
+      .unit = unit,
+      .func_ty = var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
+      .name = def->var_declaration.var.identifier,
+      .arena = arena,
+      .flags = IR_FUNC_FLAG_NONE,
+      .first = NULL,
+      .last = NULL,
+      .op_count = 0,
+      .num_locals = 0,
+      .total_locals_size = 0};
 
   struct ir_func *f = arena_alloc(arena, sizeof(b));
   *f = b;
@@ -2864,7 +2864,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC || !param->identifier) {
       continue;
     }
-    
+
     // TODO: the whole decl code needs reworking
     struct td_var var = {
         .scope = SCOPE_PARAMS,
@@ -2876,8 +2876,10 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     struct ir_var_ty param_var_ty =
         var_ty_for_td_var_ty(builder->unit, &param->var_ty);
 
-    if (param_var_ty.ty == IR_VAR_TY_TY_STRUCT || param_var_ty.ty == IR_VAR_TY_TY_UNION) {
-      struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_LCL);
+    if (param_var_ty.ty == IR_VAR_TY_TY_STRUCT ||
+        param_var_ty.ty == IR_VAR_TY_TY_UNION) {
+      struct var_ref *ref =
+          var_refs_add(builder->var_refs, &key, VAR_REF_TY_LCL);
 
       // add a local, and let codegen magically fill it with the param
       struct ir_lcl *lcl = add_local(builder->func, &param_var_ty);
@@ -2886,14 +2888,12 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
       addr->ty = IR_OP_TY_ADDR;
       addr->var_ty = IR_VAR_TY_POINTER;
       addr->flags |= IR_OP_FLAG_PARAM;
-      addr->addr = (struct ir_op_addr){
-        .ty = IR_OP_ADDR_TY_LCL,
-        .lcl = lcl
-      };
+      addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
       ref->lcl = lcl;
     } else {
-      struct var_ref *ref = var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
+      struct var_ref *ref =
+          var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
 
       if (param_var_ty.ty == IR_VAR_TY_TY_ARRAY) {
         // arrays/aggregates are actually pointers
@@ -2949,8 +2949,9 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
   if (!last_bb || (last_bb->last && last_bb->last->last &&
-                   op_is_branch(last_bb->last->last->ty) && last_bb->last->last->ty != IR_OP_TY_RET)) {
-    // add extra bb if there is no last bb, or if there is one 
+                   op_is_branch(last_bb->last->last->ty) &&
+                   last_bb->last->last->ty != IR_OP_TY_RET)) {
+    // add extra bb if there is no last bb, or if there is one
     debug("adding bb to create ret");
     last_bb = alloc_ir_basicblock(builder->func);
   }
@@ -3031,7 +3032,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
     basicblock = basicblock->succ;
   }
- 
+
   return builder;
 }
 
@@ -3347,13 +3348,14 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
 }
 
 struct ir_unit *
-build_ir_for_translationunit(struct typechk *tchk,
+build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                              struct arena_allocator *arena,
                              struct td_translationunit *translation_unit) {
 
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = (struct ir_unit){.arena = arena,
                           .tchk = tchk,
+                          .target = target,
                           .first_global = NULL,
                           .last_global = NULL,
                           .num_globals = 0};

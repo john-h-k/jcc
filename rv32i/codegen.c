@@ -47,6 +47,15 @@ struct codegen_state {
   size_t stack_args_size;
 };
 
+
+static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
+                                    UNUSED const struct ir_op *op,
+                                    const struct ir_lcl *lcl) {
+  ssize_t offset = state->stack_args_size + lcl->offset;
+
+  return offset;
+}
+
 static struct rv32i_reg return_reg_for_ty(enum rv32i_reg_ty reg_ty) {
   return (struct rv32i_reg){.ty = reg_ty, .idx = 10};
 }
@@ -185,9 +194,9 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
       struct instr *instr = alloc_instr(state->func);
       instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
       instr->rv32i->addi =
-          (struct rv32i_addsub_imm){.dest = dest,
-                                    .source = zero_reg_for_ty(dest.ty),
-                                    .imm = cnst & ((1ul << 12) - 1)};
+          (struct rv32i_op_imm){.dest = dest,
+                                .source = zero_reg_for_ty(dest.ty),
+                                .imm = cnst & ((1ul << 12) - 1)};
 
       break;
     }
@@ -319,7 +328,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     todo("other binops");
   case IR_OP_BINARY_OP_TY_ADD:
     instr->rv32i->ty = RV32I_INSTR_TY_ADD;
-    instr->rv32i->add = (struct rv32i_addsub_reg){
+    instr->rv32i->add = (struct rv32i_op){
         .dest = dest,
         .lhs = lhs,
         .rhs = rhs,
@@ -396,6 +405,173 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
+static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    return RV32I_INSTR_TY_LBU;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    return RV32I_INSTR_TY_LHU;
+  } else {
+    return RV32I_INSTR_TY_LW;
+  }
+}
+
+static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    return RV32I_INSTR_TY_SB;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    return RV32I_INSTR_TY_SH;
+  } else {
+    return RV32I_INSTR_TY_SW;
+  }
+}
+
+
+static void codegen_load_addr_op(struct codegen_state *state,
+                                 struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg dest = codegen_reg(op);
+
+  if (op->load_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->load_addr.addr;
+
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
+    } else {
+      bug("can't CONTAIN operand in load_addr node");
+    }
+
+    instr->rv32i->ty = load_ty_for_op(op);
+    instr->rv32i->load =
+        (struct rv32i_load){.dest = dest,
+                                  .addr = STACK_PTR_REG,
+                                  .imm = imm};
+  } else {
+    struct rv32i_reg addr = codegen_reg(op->load_addr.addr);
+    instr->rv32i->ty = load_ty_for_op(op);
+    instr->rv32i->load =
+        (struct rv32i_load){.dest = dest,
+                                  .addr = addr,
+                                  .imm = 0};
+  }
+}
+
+static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg dest = codegen_reg(op);
+  struct ir_lcl *lcl = op->load_lcl.lcl;
+
+  simm_t offset = get_lcl_stack_offset(state, op, lcl);
+
+  instr->rv32i->ty = load_ty_for_op(op);
+  instr->rv32i->load =
+      (struct rv32i_load){.dest = dest,
+                                .addr = STACK_PTR_REG,
+                                .imm = offset};
+}
+
+static void codegen_store_lcl_op(struct codegen_state *state,
+                                 struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg source = codegen_reg(op->store_lcl.value);
+  struct ir_lcl *lcl = op->lcl;
+
+  instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+  instr->rv32i->store = (struct rv32i_store){
+      .source = source,
+      .addr = STACK_PTR_REG,
+      .imm = get_lcl_stack_offset(state, op->store_lcl.value, lcl)};
+}
+
+
+static void codegen_store_addr_op(struct codegen_state *state,
+                                  struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg source = codegen_reg(op->store_addr.value);
+
+  if (op->store_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->store_addr.addr;
+
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op->store_addr.value, addr->addr.lcl);
+    } else {
+      bug("can't CONTAIN operand in store_addr node");
+    }
+
+    instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+    instr->rv32i->store =
+        (struct rv32i_store){.source = source,
+                                   .addr = STACK_PTR_REG,
+                                   .imm = imm};
+  } else {
+    struct rv32i_reg addr = codegen_reg(op->store_addr.addr);
+    instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+    instr->rv32i->store =
+        (struct rv32i_store){.source = source,
+                                   .addr = addr,
+                                   .imm = 0};
+  }
+}
+
+static void codegen_add_imm(struct codegen_state *state,
+                            struct rv32i_reg dest, struct rv32i_reg source,
+                            unsigned long long value) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
+  instr->rv32i->addi = (struct rv32i_op_imm){
+      .dest = dest,
+      .source = source,
+      .imm = MIN(value, 4095),
+  };
+
+  if (value > 4095) {
+    value -= 4095;
+
+    while (value) {
+      unsigned long long imm = MIN(value, 4095);
+
+      struct instr *add = alloc_instr(state->func);
+      add->rv32i->ty = RV32I_INSTR_TY_ADDI;
+      add->rv32i->addi = (struct rv32i_op_imm){
+          .dest = dest,
+          .source = dest,
+          .imm = imm,
+      };
+
+      value -= imm;
+    }
+  }
+}
+
+static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
+  struct rv32i_reg dest = codegen_reg(op);
+
+  switch (op->addr.ty) {
+  case IR_OP_ADDR_TY_LCL: {
+    struct ir_lcl *lcl = op->addr.lcl;
+
+    // op is NULL as we want the absolute offset
+    size_t offset = get_lcl_stack_offset(state, NULL, lcl);
+
+    codegen_add_imm(state, dest, STACK_PTR_REG, offset);
+
+    break;
+  }
+  case IR_OP_ADDR_TY_GLB: {
+      todo("rv32i global addr");
+    }
+  }
+}
+
 static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   trace("lowering op with id %zu, type %d", op->id, op->ty);
   switch (op->ty) {
@@ -418,29 +594,24 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     bug("load/store glb should have been lowered");
   }
   case IR_OP_TY_LOAD_LCL: {
-    todo("");
-    // codegen_load_lcl_op(state, op);
-    // break;
+    codegen_load_lcl_op(state, op);
+    break;
   }
   case IR_OP_TY_STORE_LCL: {
-    todo("");
-    // codegen_store_lcl_op(state, op);
-    // break;
+    codegen_store_lcl_op(state, op);
+    break;
   }
   case IR_OP_TY_LOAD_ADDR: {
-    todo("");
-    // codegen_load_addr_op(state, op);
-    // break;
+    codegen_load_addr_op(state, op);
+    break;
   }
   case IR_OP_TY_STORE_ADDR: {
-    todo("");
-    // codegen_store_addr_op(state, op);
-    // break;
+    codegen_store_addr_op(state, op);
+    break;
   }
   case IR_OP_TY_ADDR: {
-    todo("");
-    // codegen_addr_op(state, op);
-    // break;
+    codegen_addr_op(state, op);
+    break;
   }
   case IR_OP_TY_BR_COND: {
     codegen_br_cond_op(state, op);
@@ -671,22 +842,96 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   return unit;
 }
 
+static void debug_print_op_imm(FILE *file, const struct rv32i_op_imm *op_imm) {
+  fprintf(file, " x%zu, x%zu, %llu", op_imm->dest.idx, op_imm->source.idx,
+          op_imm->imm);
+}
+
+static void debug_print_op(FILE *file, const struct rv32i_op *op) {
+  fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
+}
+
+static void debug_print_lui(FILE *file, const struct rv32i_lui *lui) {
+  fprintf(file, " x%zu, %llu", lui->dest.idx, lui->imm);
+}
+
+static void debug_print_jalr(FILE *file, const struct rv32i_jalr *jalr) {
+  fprintf(file, " x%zu, x%zu, %llu", jalr->ret_addr.idx, jalr->target.idx,
+          jalr->imm);
+}
+
+static void debug_print_load(FILE *file, const struct rv32i_load *load) {
+  if (load->imm) {
+    fprintf(file, " x%zu, %llu(x%zu)", load->dest.idx, load->imm,
+            load->addr.idx);
+  } else {
+    fprintf(file, " x%zu, x%zu", load->dest.idx, load->addr.idx);
+  }
+}
+
+static void debug_print_store(FILE *file, const struct rv32i_store *store) {
+  if (store->imm) {
+    fprintf(file, " x%zu, %llu(x%zu)", store->source.idx, store->imm,
+            store->addr.idx);
+  } else {
+    fprintf(file, " x%zu, x%zu", store->source.idx, store->addr.idx);
+  }
+}
+
 static void debug_print_instr(FILE *file,
                               UNUSED_ARG(const struct codegen_function *func),
                               const struct instr *instr) {
 
   switch (instr->rv32i->ty) {
   case RV32I_INSTR_TY_ADDI:
-    fprintf(file, "addi x%zu, x%zu, %llu", instr->rv32i->addsub_imm.dest.idx, instr->rv32i->addsub_imm.source.idx, instr->rv32i->addsub_imm.imm);
+    fprintf(file, "addi");
+    debug_print_op_imm(file, &instr->rv32i->addi);
     break;
   case RV32I_INSTR_TY_ADD:
-    fprintf(file, "add x%zu, x%zu, x%zu", instr->rv32i->addsub_reg.dest.idx, instr->rv32i->addsub_reg.lhs.idx, instr->rv32i->addsub_reg.rhs.idx);
+    fprintf(file, "add");
+    debug_print_op(file, &instr->rv32i->add);
     break;
   case RV32I_INSTR_TY_LUI:
-    fprintf(file, "lui x%zu, %llu", instr->rv32i->lui.dest.idx, instr->rv32i->lui.imm);
+    fprintf(file, "lui");
+    debug_print_lui(file, &instr->rv32i->lui);
+    fprintf(file, "lui x%zu, %llu", instr->rv32i->lui.dest.idx,
+            instr->rv32i->lui.imm);
     break;
   case RV32I_INSTR_TY_JALR:
-    fprintf(file, "jalr x%zu, x%zu, %llu", instr->rv32i->jalr.ret_addr.idx, instr->rv32i->jalr.target.idx, instr->rv32i->jalr.imm);
+    fprintf(file, "jalr");
+    debug_print_jalr(file, &instr->rv32i->jalr);
+    break;
+  case RV32I_INSTR_TY_SB:
+    fprintf(file, "sb");
+    debug_print_store(file, &instr->rv32i->sb);
+    break;
+  case RV32I_INSTR_TY_SH:
+    fprintf(file, "sh");
+    debug_print_store(file, &instr->rv32i->sh);
+    break;
+  case RV32I_INSTR_TY_SW:
+    fprintf(file, "sw");
+    debug_print_store(file, &instr->rv32i->sw);
+    break;
+  case RV32I_INSTR_TY_LB:
+    fprintf(file, "lb");
+    debug_print_load(file, &instr->rv32i->lb);
+    break;
+  case RV32I_INSTR_TY_LBU:
+    fprintf(file, "lbu");
+    debug_print_load(file, &instr->rv32i->lbu);
+    break;
+  case RV32I_INSTR_TY_LH:
+    fprintf(file, "lh");
+    debug_print_load(file, &instr->rv32i->lh);
+    break;
+  case RV32I_INSTR_TY_LHU:
+    fprintf(file, "lhu");
+    debug_print_load(file, &instr->rv32i->lhu);
+    break;
+  case RV32I_INSTR_TY_LW:
+    fprintf(file, "lw");
+    debug_print_load(file, &instr->rv32i->lw);
     break;
   }
 }

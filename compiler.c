@@ -4,7 +4,6 @@
 #include "alloc.h"
 #include "codegen.h"
 #include "eep.h"
-#include "rv32i.h"
 #include "emit.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
@@ -17,6 +16,7 @@
 #include "macos/mach-o.h"
 #include "parse.h"
 #include "preproc.h"
+#include "rv32i.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
@@ -32,6 +32,25 @@ struct compiler {
 
   char *output;
 };
+
+static const struct target *get_target(const struct compile_args *args) {
+  switch (args->target_arch) {
+  case COMPILE_TARGET_ARCH_NATIVE:
+    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
+        "earlier");
+  case COMPILE_TARGET_ARCH_MACOS_X86_64:
+    todo("macOS x64 target not yet implemented");
+  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+    return &AARCH64_TARGET;
+  case COMPILE_TARGET_ARCH_RV32I:
+    return &RV32I_TARGET;
+  case COMPILE_TARGET_ARCH_EEP:
+    bug("redo eep");
+    // return &EEP_TARGET;
+  }
+
+  bug("unexpected target in `get_target`");
+}
 
 enum compiler_create_result create_compiler(struct program *program,
                                             const char *output,
@@ -68,7 +87,8 @@ enum compiler_create_result create_compiler(struct program *program,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (typechk_create((*compiler)->parser, &(*compiler)->typechk) !=
+  const struct target *target = get_target(args);
+  if (typechk_create(target, (*compiler)->parser, &(*compiler)->typechk) !=
       TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -89,32 +109,13 @@ static void debug_print_stage(struct ir_unit *ir,
   debug_print_ir(stderr, ir, NULL, NULL);
 }
 
-static const struct target *get_target(const struct compile_args *args) {
-  switch (args->target_arch) {
-  case COMPILE_TARGET_ARCH_NATIVE:
-    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
-        "earlier");
-  case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    todo("macOS x64 target not yet implemented");
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
-    return &AARCH64_TARGET;
-  case COMPILE_TARGET_ARCH_RV32I:
-    return &RV32I_TARGET;
-  case COMPILE_TARGET_ARCH_EEP:
-    bug("redo eep");
-    // return &EEP_TARGET;
-  }
-
-  bug("unexpected target in `get_target`");
-}
-
 #define COMPILER_STAGE(stage)                                                  \
   {                                                                            \
     disable_log();                                                             \
                                                                                \
     if (COMPILER_LOG_ENABLED(compiler, COMPILE_LOG_FLAGS_##stage)) {           \
       enable_log();                                                            \
-      BEGIN_STAGE(#stage);                                                       \
+      BEGIN_STAGE(#stage);                                                     \
     }                                                                          \
   }
 
@@ -150,8 +151,9 @@ enum compile_result compile(struct compiler *compiler) {
   {
     COMPILER_STAGE(IR);
 
-    ir = build_ir_for_translationunit(compiler->typechk, compiler->arena,
-                                      &typechk_result.translation_unit);
+    ir =
+        build_ir_for_translationunit(target, compiler->typechk, compiler->arena,
+                                     &typechk_result.translation_unit);
 
     if (log_enabled()) {
       debug_print_stage(ir, "ir");

@@ -3,8 +3,18 @@
 #include "../alloc.h"
 #include "../log.h"
 #include "../vector.h"
+#include "../target.h"
 
-#include <sys/stat.h>
+
+enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
+  switch (iru->target->lp_sz) {
+  case TARGET_LP_SZ_LP32:
+    return IR_VAR_PRIMITIVE_TY_I32;
+  case TARGET_LP_SZ_LP64:
+    return IR_VAR_PRIMITIVE_TY_I64;
+  }
+}
+
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   switch (ty) {
@@ -1144,12 +1154,12 @@ struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
   return var_ty;
 }
 
-struct ir_var_ty var_ty_for_pointer_size(UNUSED_ARG(struct ir_unit *iru)) {
+struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
   return (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
-                            .primitive = IR_VAR_PRIMITIVE_TY_I64};
+                            .primitive = var_ty_pointer_primitive_ty(iru)};
 }
 
 struct ir_op *alloc_integral_constant(struct ir_func *irb, struct ir_stmt *stmt,
@@ -1397,8 +1407,6 @@ bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
 
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty) {
-  // FIXME: pointer size!
-
   switch (ty->ty) {
   case IR_VAR_TY_TY_NONE:
     bug("IR_OP_VAR_TY_TY_NONE has no size");
@@ -1406,7 +1414,12 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
     bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_VAR_TY_TY_FUNC:
   case IR_VAR_TY_TY_POINTER:
-    return (struct ir_var_ty_info){.size = 8, .alignment = 8};
+    switch (iru->target->lp_sz) {
+    case TARGET_LP_SZ_LP32:
+      return (struct ir_var_ty_info){.size = 4, .alignment = 4};
+    case TARGET_LP_SZ_LP64:
+      return (struct ir_var_ty_info){.size = 8, .alignment = 8};
+    }
   case IR_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:

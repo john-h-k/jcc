@@ -2,9 +2,7 @@
 #define TARGET_H
 
 #include "alloc.h"
-#include "codegen.h"
-#include "ir/ir.h"
-#include "lsra.h"
+#include <stdio.h>
 
 enum relocation_ty {
   RELOCATION_TY_SINGLE,
@@ -82,6 +80,29 @@ struct build_object_args {
   size_t num_entries;
 };
 
+enum target_lp_sz {
+  TARGET_LP_SZ_LP32,
+  TARGET_LP_SZ_LP64,
+};
+
+struct ir_unit;
+
+// This follows a very specific ordering. Indices are used to represent
+// registers For register N, if `N < num_volatile`, it represents a volatile reg
+// For register N, if `N >= num_volatile && N < (num_volatile +
+// num_nonvolatile)`, it is an involatile reg Else, it is a reserved reg
+struct reg_set_info {
+  size_t num_volatile;
+  size_t num_nonvolatile;
+  size_t num_reserved; // e.g x29 and x30 - can't be touched by regalloc
+};
+
+struct reg_info {
+  struct reg_set_info gp_registers;
+  struct reg_set_info fp_registers;
+};
+
+
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*target_lower)(struct ir_unit *unit);
 typedef struct codegen_unit *(*codegen)(struct ir_unit *unit);
@@ -91,6 +112,7 @@ typedef void (*debug_disasm)(const char *filename);
 typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
 
 struct target {
+  enum target_lp_sz lp_sz;
   struct reg_info reg_info;
   size_t function_alignment;
   mangle mangle;
