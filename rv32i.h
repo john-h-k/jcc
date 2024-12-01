@@ -1,10 +1,10 @@
 #ifndef RISCV_H
 #define RISCV_H
 
-#include "riscv/disasm.h"
-#include "riscv/emit.h"
-#include "riscv/lower.h"
-#include "riscv/object.h"
+#include "rv32i/disasm.h"
+#include "rv32i/emit.h"
+#include "rv32i/lower.h"
+#include "rv32i/object.h"
 #include "target.h"
 
 #define RISCV_FUNCTION_ALIGNMENT (8)

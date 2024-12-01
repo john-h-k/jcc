@@ -1,7 +1,7 @@
-#include "riscv.h"
+#include "rv32i.h"
 
-#include "riscv/codegen.h"
-#include "riscv/lower.h"
+#include "rv32i/codegen.h"
+#include "rv32i/lower.h"
 
 const struct target RISCV_TARGET = {
     (struct reg_info){
@@ -18,9 +18,9 @@ const struct target RISCV_TARGET = {
     },
     RISCV_FUNCTION_ALIGNMENT,
     NULL,
-    riscv_lower,
-    riscv_codegen,
-    riscv_emit,
+    rv32i_lower,
+    rv32i_codegen,
+    rv32i_emit,
     NULL,
     NULL,
     NULL};
