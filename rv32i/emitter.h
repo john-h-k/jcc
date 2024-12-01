@@ -16,8 +16,16 @@ void rv32i_emit_copy_to(struct rv32i_emitter *emitter, void *dest);
 /* Nop */
 
 void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui);
-void rv32i_emit_jalr(struct rv32i_emitter *emitter, const struct rv32i_jalr jalr);
 void rv32i_emit_addi(struct rv32i_emitter *emitter, const struct rv32i_op_imm addi);
+void rv32i_emit_jalr(struct rv32i_emitter *emitter, const struct rv32i_jalr jalr);
+void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal);
+
+void rv32i_emit_beq(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch beq);
+void rv32i_emit_bne(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bne);
+void rv32i_emit_blt(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch blt);
+void rv32i_emit_bge(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bge);
+void rv32i_emit_bltu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bltu);
+void rv32i_emit_bgeu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bgeu);
 
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
 void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);

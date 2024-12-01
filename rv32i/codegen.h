@@ -30,7 +30,6 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_REMU,
 
   RV32I_INSTR_TY_LUI,
-  RV32I_INSTR_TY_JALR,
 
   RV32I_INSTR_TY_SB,
   RV32I_INSTR_TY_SH,
@@ -41,6 +40,16 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_LH,
   RV32I_INSTR_TY_LHU,
   RV32I_INSTR_TY_LW,
+
+  RV32I_INSTR_TY_JALR,
+  RV32I_INSTR_TY_JAL,
+
+  RV32I_INSTR_TY_BEQ,
+  RV32I_INSTR_TY_BNE,
+  RV32I_INSTR_TY_BLT,
+  RV32I_INSTR_TY_BGE,
+  RV32I_INSTR_TY_BLTU,
+  RV32I_INSTR_TY_BGEU,
 };
 
 enum rv32i_reg_ty {
@@ -88,7 +97,7 @@ struct rv32i_op_imm {
   struct rv32i_reg dest;
   struct rv32i_reg source;
 
-  imm_t imm;
+  simm_t imm;
 };
 
 struct rv32i_op {
@@ -100,28 +109,39 @@ struct rv32i_op {
 struct rv32i_lui {
   struct rv32i_reg dest;
 
-  imm_t imm;
+  simm_t imm;
 };
 
 struct rv32i_jalr {
   struct rv32i_reg ret_addr;
   struct rv32i_reg target;
 
-  imm_t imm;
+  simm_t imm;
 };
 
 struct rv32i_load {
   struct rv32i_reg dest;
   struct rv32i_reg addr;
 
-  imm_t imm;
+  simm_t imm;
 };
 
 struct rv32i_store {
   struct rv32i_reg source;
   struct rv32i_reg addr;
 
-  imm_t imm;
+  simm_t imm;
+};
+
+struct rv32i_jal {
+  struct rv32i_reg ret_addr;
+  struct ir_basicblock *target;
+};
+
+struct rv32i_conditional_branch {
+  struct rv32i_reg lhs;
+  struct rv32i_reg rhs;
+  struct ir_basicblock *target;
 };
 
 struct rv32i_instr {
@@ -150,6 +170,14 @@ struct rv32i_instr {
 
     union {
       struct rv32i_jalr jalr;
+    };
+
+    union {
+      struct rv32i_jal jal;
+    };
+
+    union {
+      struct rv32i_conditional_branch conditional_branch, beq, bne, blt, bge, bltu, bgeu;
     };
   };
 };
