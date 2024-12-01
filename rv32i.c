@@ -6,9 +6,9 @@
 
 const struct target RV32I_TARGET = {
     (struct reg_info){
-        .gp_registers = (struct reg_set_info){.num_volatile = 18,
+        .gp_registers = (struct reg_set_info){.num_volatile = 17,
                                               .num_nonvolatile = 10,
-                                              .num_reserved = 2},
+                                              .num_reserved = 0},
         .fp_registers =
             (struct reg_set_info){
                 // FIXME: technically v8-15 are non-volatile bottom half
