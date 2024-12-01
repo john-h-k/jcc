@@ -6,7 +6,7 @@
 typedef unsigned long long imm_t;
 typedef long long simm_t;
 
-enum riscv_instr_ty {
+enum rv32i_instr_ty {
   RISCV_INSTR_TY_MOV,
   RISCV_INSTR_TY_MOV_IMM,
 
@@ -39,7 +39,7 @@ enum riscv_instr_ty {
   RISCV_INSTR_TY_EXT
 };
 
-enum riscv_instr_class {
+enum rv32i_instr_class {
   RISCV_INSTR_CLASS_MOV,
   RISCV_INSTR_CLASS_MOV_IMM,
 
@@ -57,60 +57,60 @@ enum riscv_instr_class {
   RISCV_INSTR_CLASS_EXT
 };
 
-struct riscv_reg {
+struct rv32i_reg {
   unsigned long idx;
 };
 
-struct riscv_mov {
-  struct riscv_reg dest;
-  struct riscv_reg source;
+struct rv32i_mov {
+  struct rv32i_reg dest;
+  struct rv32i_reg source;
 };
 
-struct riscv_mov_imm {
-  struct riscv_reg dest;
+struct rv32i_mov_imm {
+  struct rv32i_reg dest;
   simm_t imm;
 };
 
-struct riscv_alu {
-  struct riscv_reg dest;
-  struct riscv_reg lhs;
-  struct riscv_reg rhs;
+struct rv32i_alu {
+  struct rv32i_reg dest;
+  struct rv32i_reg lhs;
+  struct rv32i_reg rhs;
 };
 
-struct riscv_alu_imm {
-  struct riscv_reg dest;
+struct rv32i_alu_imm {
+  struct rv32i_reg dest;
   simm_t imm;
 };
 
-struct riscv_alu_shift {
-  struct riscv_reg dest;
-  struct riscv_reg source;
+struct rv32i_alu_shift {
+  struct rv32i_reg dest;
+  struct rv32i_reg source;
   imm_t imm;
 };
 
-struct riscv_ldr_direct {
-  struct riscv_reg dest;
+struct rv32i_ldr_direct {
+  struct rv32i_reg dest;
   imm_t imm;
 };
 
-struct riscv_str_direct {
-  struct riscv_reg source;
+struct rv32i_str_direct {
+  struct rv32i_reg source;
   imm_t imm;
 };
 
-struct riscv_ldr_offset {
-  struct riscv_reg dest;
-  struct riscv_reg addr;
+struct rv32i_ldr_offset {
+  struct rv32i_reg dest;
+  struct rv32i_reg addr;
   imm_t imm;
 };
 
-struct riscv_str_offset {
-  struct riscv_reg source;
-  struct riscv_reg addr;
+struct rv32i_str_offset {
+  struct rv32i_reg source;
+  struct rv32i_reg addr;
   imm_t imm;
 };
 
-enum riscv_cond {
+enum rv32i_cond {
   RISCV_COND_JMP = 0b0000,
   RISCV_COND_NOOP = 0b0001,
 
@@ -136,65 +136,65 @@ enum riscv_cond {
   RISCV_COND_RET = 0b1111,
 };
 
-struct riscv_jmp {
-  enum riscv_cond cond;
+struct rv32i_jmp {
+  enum rv32i_cond cond;
   imm_t imm;
 };
 
-struct riscv_ext {
+struct rv32i_ext {
   imm_t imm;
 };
 
-struct riscv_instr {
-  enum riscv_instr_ty ty;
+struct rv32i_instr {
+  enum rv32i_instr_ty ty;
 
   union {
     union {
-      struct riscv_mov mov;
+      struct rv32i_mov mov;
     };
 
     union {
-      struct riscv_mov_imm mov_imm;
+      struct rv32i_mov_imm mov_imm;
     };
 
     union {
-      struct riscv_alu alu, add, sub, adc, sbc, and, cmp;
+      struct rv32i_alu alu, add, sub, adc, sbc, and, cmp;
     };
 
     union {
-      struct riscv_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm,
+      struct rv32i_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm,
           cmp_imm;
     };
 
     union {
-      struct riscv_alu_shift alu_shift, lsl, lsr, asr, xsr;
+      struct rv32i_alu_shift alu_shift, lsl, lsr, asr, xsr;
     };
 
     union {
-      struct riscv_str_direct str_direct;
+      struct rv32i_str_direct str_direct;
     };
 
     union {
-      struct riscv_ldr_direct ldr_direct;
+      struct rv32i_ldr_direct ldr_direct;
     };
 
     union {
-      struct riscv_str_offset str_offset;
+      struct rv32i_str_offset str_offset;
     };
 
     union {
-      struct riscv_ldr_offset ldr_offset;
+      struct rv32i_ldr_offset ldr_offset;
     };
 
     union {
-      struct riscv_jmp jmp;
+      struct rv32i_jmp jmp;
     };
 
     union {
-      struct riscv_ext ext;
+      struct rv32i_ext ext;
     };
   };
 };
 
-struct codegen_unit *riscv_codegen(struct ir_unit *ir);
+struct codegen_unit *rv32i_codegen(struct ir_unit *ir);
 #endif
