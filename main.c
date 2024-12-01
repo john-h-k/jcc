@@ -69,9 +69,15 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
-    char *object_file = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
-    strcpy(object_file, sources[i]);
-    strcat(object_file, ".obj");
+    char *object_file;
+    
+    if (target_needs_linking(&args) || !args.output) {
+      object_file = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
+      strcpy(object_file, sources[i]);
+      strcat(object_file, ".obj");
+    } else {
+      object_file = args.output;
+    }
 
     info("compiling source file '%s' into object file '%s'", sources[i],
          object_file);
@@ -95,14 +101,18 @@ int main(int argc, char **argv) {
     enable_log();
   }
 
-  struct link_args link_args = {.objects = (const char *const *)objects,
-                                .num_objects = num_sources,
-                                .output = args.output ? args.output : "a.out"};
-
   if (target_needs_linking(&args)) {
+    struct link_args link_args = {.objects = (const char *const *)objects,
+                                  .num_objects = num_sources,
+                                  .output = args.output ? args.output : "a.out"};
+
     if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
       err("link failed");
       exit(-1);
+    }
+  } else {
+    if (num_sources > 1) {
+      todo("multiple objects, but target does not support linking");
     }
   }
 

@@ -73,9 +73,15 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_FLAGS:
     bug("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
-    return idx + 1;
+    if (idx >= 17) {
+      return 18 + idx;
+    } else if (idx >= 14) {
+      return 28 + (idx - 14);
+    } else {
+      return 5 + idx;
+    }
   case IR_REG_TY_FP:
-    return idx >= 24 ? (idx - 24 + 8) : idx;
+    return idx >= 24 ? 8 + (idx - 24) : idx;
   }
 }
 
