@@ -22,6 +22,13 @@ typedef long long simm_t;
 enum rv32i_instr_ty {
   RV32I_INSTR_TY_ADDI,
   RV32I_INSTR_TY_ADD,
+  RV32I_INSTR_TY_SUB,
+  RV32I_INSTR_TY_MUL,
+  RV32I_INSTR_TY_DIV,
+  RV32I_INSTR_TY_REM,
+  RV32I_INSTR_TY_DIVU,
+  RV32I_INSTR_TY_REMU,
+
   RV32I_INSTR_TY_LUI,
   RV32I_INSTR_TY_JALR,
 
@@ -126,7 +133,7 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_op op, add;
+      struct rv32i_op op, add, sub, mul, div, rem, divu, remu;
     };
 
     union {

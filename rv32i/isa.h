@@ -75,6 +75,7 @@
 #define FUNCT3_ADDI     U32(0b000)
 
 #define FUNCT3_ADD      U32(0b000)
+#define FUNCT3_SUB      U32(0b000)
 
 #define FUNCT3_JALR     U32(0b000)
 
@@ -109,8 +110,9 @@
 
 /* ---------- funct7 ---------- */
 
-#define FUNCT7_MULDIV   U32(0b0000001)
 #define FUNCT7_ADD      U32(0b0000000)
+#define FUNCT7_MULDIV   U32(0b0000001)
+#define FUNCT7_SUB      U32(0b0100000)
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADDI, rd, OPC_OP_IMM)
 
@@ -118,6 +120,7 @@
 #define AUIPC(imm20, rd) U_TYPE(imm20, rd, OPC_AUIPC)
 
 #define ADD(rs2, rs1, rd) R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_ADD, rd, OPC_OP)
+#define SUB(rs2, rs1, rd) R_TYPE(FUNCT7_SUB, rs2, rs1, FUNCT3_SUB, rd, OPC_OP)
 
 #define MUL(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MUL, rd, OPC_OP)
 #define DIV(rs2, rs1, rd) R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_DIV, rd, OPC_OP)

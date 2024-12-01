@@ -18,7 +18,14 @@ void rv32i_emit_copy_to(struct rv32i_emitter *emitter, void *dest);
 void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui);
 void rv32i_emit_jalr(struct rv32i_emitter *emitter, const struct rv32i_jalr jalr);
 void rv32i_emit_addi(struct rv32i_emitter *emitter, const struct rv32i_op_imm addi);
+
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
+void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);
+void rv32i_emit_mul(struct rv32i_emitter *emitter, const struct rv32i_op mul);
+void rv32i_emit_div(struct rv32i_emitter *emitter, const struct rv32i_op div);
+void rv32i_emit_rem(struct rv32i_emitter *emitter, const struct rv32i_op rem);
+void rv32i_emit_divu(struct rv32i_emitter *emitter, const struct rv32i_op divu);
+void rv32i_emit_remu(struct rv32i_emitter *emitter, const struct rv32i_op remu);
 
 void rv32i_emit_sb(struct rv32i_emitter *emitter, const struct rv32i_store sb);
 void rv32i_emit_sh(struct rv32i_emitter *emitter, const struct rv32i_store sh);

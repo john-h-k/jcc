@@ -26,6 +26,24 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_ADD:
     rv32i_emit_add(state->emitter, instr->rv32i->add);
     break;
+  case RV32I_INSTR_TY_SUB:
+    rv32i_emit_sub(state->emitter, instr->rv32i->sub);
+    break;
+  case RV32I_INSTR_TY_MUL:
+    rv32i_emit_mul(state->emitter, instr->rv32i->mul);
+    break;
+  case RV32I_INSTR_TY_DIV:
+    rv32i_emit_div(state->emitter, instr->rv32i->div);
+    break;
+  case RV32I_INSTR_TY_REM:
+    rv32i_emit_rem(state->emitter, instr->rv32i->rem);
+    break;
+  case RV32I_INSTR_TY_DIVU:
+    rv32i_emit_divu(state->emitter, instr->rv32i->divu);
+    break;
+  case RV32I_INSTR_TY_REMU:
+    rv32i_emit_remu(state->emitter, instr->rv32i->remu);
+    break;
   case RV32I_INSTR_TY_LUI:
     rv32i_emit_lui(state->emitter, instr->rv32i->lui);
     break;

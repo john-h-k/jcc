@@ -74,8 +74,28 @@ void rv32i_emit_addi(struct rv32i_emitter *emitter, const struct rv32i_op_imm ad
 }
 
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add) {
-  rv32i_emit_instr(emitter, ADD(add.lhs.idx, add.rhs.idx, add.dest.idx));
+  rv32i_emit_instr(emitter, ADD(add.rhs.idx, add.lhs.idx, add.dest.idx));
 }
+
+void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub) {
+  rv32i_emit_instr(emitter, SUB(sub.rhs.idx, sub.lhs.idx, sub.dest.idx));
+}
+void rv32i_emit_mul(struct rv32i_emitter *emitter, const struct rv32i_op mul) {
+  rv32i_emit_instr(emitter, MUL(mul.rhs.idx, mul.lhs.idx, mul.dest.idx));
+}
+void rv32i_emit_div(struct rv32i_emitter *emitter, const struct rv32i_op div) {
+  rv32i_emit_instr(emitter, DIV(div.rhs.idx, div.lhs.idx, div.dest.idx));
+}
+void rv32i_emit_rem(struct rv32i_emitter *emitter, const struct rv32i_op rem) {
+  rv32i_emit_instr(emitter, REM(rem.rhs.idx, rem.lhs.idx, rem.dest.idx));
+}
+void rv32i_emit_divu(struct rv32i_emitter *emitter, const struct rv32i_op divu) {
+  rv32i_emit_instr(emitter, DIVU(divu.rhs.idx, divu.lhs.idx, divu.dest.idx));
+}
+void rv32i_emit_remu(struct rv32i_emitter *emitter, const struct rv32i_op remu) {
+  rv32i_emit_instr(emitter, REMU(remu.rhs.idx, remu.lhs.idx, remu.dest.idx));
+}
+
 
 void rv32i_emit_sb(struct rv32i_emitter *emitter, const struct rv32i_store sb) {
   rv32i_emit_instr(emitter, SB(sb.imm, sb.source.idx, sb.addr.idx));
