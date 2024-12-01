@@ -3,6 +3,18 @@
 #include "../ir/build.h"
 #include "../util.h"
 
+static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
+  invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
+                       binary_op_is_comparison(op->binary_op.ty),
+                   "non comparison op");
+
+  if (op->succ && op->succ->ty == IR_OP_TY_BR_COND) {
+    // contain within branch
+    UNUSED struct ir_op *contained = alloc_contained_ir_op(irb, op, op->succ);
+    return;
+  }
+}
+
 void rv32i_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
 
@@ -45,7 +57,11 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_CAST_OP:
+              break;
             case IR_OP_TY_BINARY_OP:
+              if (binary_op_is_comparison(op->binary_op.ty)) {
+                lower_comparison(func, op);
+              }
               break;
             case IR_OP_TY_CALL:
               todo("call");
