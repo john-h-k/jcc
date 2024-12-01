@@ -222,6 +222,180 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
                           .imm = 0};
 }
 
+static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg dest = codegen_reg(op);
+
+  struct rv32i_reg lhs = codegen_reg(op->binary_op.lhs);
+  struct rv32i_reg rhs = codegen_reg(op->binary_op.rhs);
+
+  bool is_fp = var_ty_is_fp(&op->var_ty);
+
+  enum ir_op_binary_op_ty ty = op->binary_op.ty;
+  debug_assert(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
+                   ty == IR_OP_BINARY_OP_TY_FMUL ||
+                   ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
+               "floating point with invalid binary op");
+
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_FEQ:
+  case IR_OP_BINARY_OP_TY_FNEQ:
+  case IR_OP_BINARY_OP_TY_FGT:
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+  case IR_OP_BINARY_OP_TY_FLT:
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    // instr->rv32i->ty = rv32i_INSTR_TY_FCMP;
+    // instr->rv32i->fcmp = (struct rv32i_fcmp){
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    // instr->rv32i->ty = rv32i_INSTR_TY_SUBS;
+    // instr->rv32i->subs = (struct rv32i_addsub_reg){
+    //     .dest = zero_reg_for_ty(lhs.ty),
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+    // instr->rv32i->ty = rv32i_INSTR_TY_LSLV;
+    // instr->rv32i->lslv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+    // instr->rv32i->ty = rv32i_INSTR_TY_ASRV;
+    // instr->rv32i->asrv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+    // instr->rv32i->ty = rv32i_INSTR_TY_LSRV;
+    // instr->rv32i->lsrv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_AND:
+    // instr->rv32i->ty = rv32i_INSTR_TY_AND;
+    // instr->rv32i->and = (struct rv32i_logical_reg){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_OR:
+    // instr->rv32i->ty = rv32i_INSTR_TY_ORR;
+    // instr->rv32i->orr = (struct rv32i_logical_reg){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_XOR:
+    // instr->rv32i->ty = rv32i_INSTR_TY_EOR;
+    // instr->rv32i->eor = (struct rv32i_logical_reg){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+    todo("other binops");
+  case IR_OP_BINARY_OP_TY_ADD:
+    instr->rv32i->ty = RV32I_INSTR_TY_ADD;
+    instr->rv32i->add = (struct rv32i_addsub_reg){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_SUB:
+    // instr->rv32i->ty = rv32i_INSTR_TY_SUB;
+    // instr->rv32i->sub = (struct rv32i_addsub_reg){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_MUL:
+    // instr->rv32i->ty = rv32i_INSTR_TY_MADD;
+    // instr->rv32i->madd =
+    //     (struct rv32i_fma){.dest = dest,
+    //                          .lhs = lhs,
+    //                          .rhs = rhs,
+    //                          .addsub = zero_reg_for_ty(lhs.ty)};
+    // break;
+  case IR_OP_BINARY_OP_TY_SDIV:
+    // instr->rv32i->ty = rv32i_INSTR_TY_SDIV;
+    // instr->rv32i->sdiv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_UDIV:
+    // instr->rv32i->ty = rv32i_INSTR_TY_UDIV;
+    // instr->rv32i->udiv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_FADD:
+    // instr->rv32i->ty = rv32i_INSTR_TY_FADD;
+    // instr->rv32i->fadd = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_FSUB:
+    // instr->rv32i->ty = rv32i_INSTR_TY_FSUB;
+    // instr->rv32i->fsub = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_FMUL:
+    // instr->rv32i->ty = rv32i_INSTR_TY_FMUL;
+    // instr->rv32i->fmul = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+  case IR_OP_BINARY_OP_TY_FDIV:
+    // instr->rv32i->ty = rv32i_INSTR_TY_FDIV;
+    // instr->rv32i->fdiv = (struct rv32i_reg_2_source){
+    //     .dest = dest,
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
+    todo("other binops");
+  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    bug("squot/uquot shoud have been lowered");
+  }
+}
+
 static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   trace("lowering op with id %zu, type %d", op->id, op->ty);
   switch (op->ty) {
@@ -286,9 +460,8 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     // break;
   }
   case IR_OP_TY_BINARY_OP: {
-    todo("");
-    // codegen_binary_op(state, op);
-    // break;
+    codegen_binary_op(state, op);
+    break;
   }
   case IR_OP_TY_CAST_OP: {
     todo("");
