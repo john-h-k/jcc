@@ -8,6 +8,7 @@
 enum codegen_unit_ty {
   CODEGEN_UNIT_TY_AARCH64,
   CODEGEN_UNIT_TY_EEP,
+  CODEGEN_UNIT_TY_RV32I,
 };
 
 struct codegen_var {
@@ -66,6 +67,7 @@ struct codegen_unit {
 
 struct aarch64_instr;
 struct eep_instr;
+struct rv32i_instr;
 
 struct instr {
   size_t id;
@@ -79,9 +81,13 @@ struct instr {
     void *p;
     struct aarch64_instr *aarch64;
     struct eep_instr *eep;
+    struct rv32i_instr *rv32i;
   };
 };
 
 struct instr *alloc_instr(struct codegen_function *func);
+const char *mangle_str_cnst_name(struct arena_allocator *arena,
+                                        const char *func_name, size_t id);
+
 
 #endif

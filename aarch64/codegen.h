@@ -469,9 +469,6 @@ enum aarch64_reg_usage_ty {
   AARCH64_REG_USAGE_TY_DEREF, // ldr ..., [x9]
 };
 
-struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty);
-struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty);
-
 size_t reg_size(enum aarch64_reg_ty reg_ty);
 
 struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg);

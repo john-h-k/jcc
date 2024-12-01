@@ -1,8 +1,8 @@
-#ifndef EEP_OBJECT_H
-#define EEP_OBJECT_H
+#ifndef RV32I_OBJECT_H
+#define RV32I_OBJECT_H
 
 #include "../target.h"
 
-void write_eep(const struct build_object_args *args);
+void rv32i_write_object(const struct build_object_args *args);
 
 #endif

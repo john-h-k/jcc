@@ -25,7 +25,16 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          size_t *num_sources);
 
 static bool target_needs_linking(const struct compile_args *args) {
-  return args->target_arch != COMPILE_TARGET_ARCH_EEP;
+  switch (args->target_arch) {
+  case COMPILE_TARGET_ARCH_NATIVE:
+    bug("native arch should not be here");
+  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+  case COMPILE_TARGET_ARCH_MACOS_X86_64:
+    return true;
+  case COMPILE_TARGET_ARCH_EEP:
+  case COMPILE_TARGET_ARCH_RV32I:
+    return false;
+  }
 }
 
 int main(int argc, char **argv) {
@@ -153,6 +162,9 @@ static bool parse_target_flag(const char *flag,
     return true;
   } else if (strcmp(flag, "eep") == 0) {
     *arch = COMPILE_TARGET_ARCH_EEP;
+    return true;
+  } else if (strcmp(flag, "rv32i") == 0) {
+    *arch = COMPILE_TARGET_ARCH_RV32I;
     return true;
   }
 

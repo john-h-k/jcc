@@ -4,6 +4,7 @@
 #include "alloc.h"
 #include "codegen.h"
 #include "eep.h"
+#include "rv32i.h"
 #include "emit.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
@@ -97,6 +98,8 @@ static const struct target *get_target(const struct compile_args *args) {
     todo("macOS x64 target not yet implemented");
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
     return &AARCH64_TARGET;
+  case COMPILE_TARGET_ARCH_RV32I:
+    return &RV32I_TARGET;
   case COMPILE_TARGET_ARCH_EEP:
     bug("redo eep");
     // return &EEP_TARGET;
@@ -244,7 +247,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     struct codegen_unit *codegen = target->codegen(ir);
 
-    if (log_enabled()) {
+    if (log_enabled() && target->debug_print_codegen) {
       debug_print_stage(ir, "emit");
       target->debug_print_codegen(stderr, codegen);
     }

@@ -7,13 +7,6 @@ Index:
 ---
 
 If:
-  PathMatch: riscv.*
-Index:
-  Background: Skip
-
----
-
-If:
   PathMatch: tests.*
 Index:
   Background: Skip

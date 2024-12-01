@@ -2,6 +2,7 @@
 
 #include "rv32i/codegen.h"
 #include "rv32i/lower.h"
+#include "rv32i/object.h"
 
 const struct target RV32I_TARGET = {
     (struct reg_info){
@@ -21,6 +22,6 @@ const struct target RV32I_TARGET = {
     rv32i_lower,
     rv32i_codegen,
     rv32i_emit,
+    rv32i_write_object,
     NULL,
-    NULL,
-    NULL};
+    rv32i_debug_print_codegen};

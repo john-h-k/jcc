@@ -3,198 +3,140 @@
 
 #include "../codegen.h"
 
+#include <stdio.h>
+
+#if defined(STACK_PTR_REG) || defined(FRAME_PTR_REG) || defined(RET_PTR_REG)
+#error                                                                         \
+    "STACK_PTR_REG/FRAME_PTR_REG/RET_PTR_REG already defined. Check your includes"
+#endif
+
+// `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
+// which is relevant
+#define STACK_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 2})
+#define FRAME_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 8})
+#define RET_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 1})
+
 typedef unsigned long long imm_t;
 typedef long long simm_t;
 
 enum rv32i_instr_ty {
-  RV32I_INSTR_TY_MOV,
-  RV32I_INSTR_TY_MOV_IMM,
-
+  RV32I_INSTR_TY_ADDI,
   RV32I_INSTR_TY_ADD,
-  RV32I_INSTR_TY_SUB,
-  RV32I_INSTR_TY_ADC,
-  RV32I_INSTR_TY_SBC,
-  RV32I_INSTR_TY_AND,
-  RV32I_INSTR_TY_CMP,
-
-  RV32I_INSTR_TY_ADD_IMM,
-  RV32I_INSTR_TY_SUB_IMM,
-  RV32I_INSTR_TY_ADC_IMM,
-  RV32I_INSTR_TY_SBC_IMM,
-  RV32I_INSTR_TY_AND_IMM,
-  RV32I_INSTR_TY_CMP_IMM,
-
-  RV32I_INSTR_TY_LSL,
-  RV32I_INSTR_TY_LSR,
-  RV32I_INSTR_TY_ASR,
-  RV32I_INSTR_TY_XSR,
-
-  RV32I_INSTR_TY_LDR_DIRECT,
-  RV32I_INSTR_TY_STR_DIRECT,
-
-  RV32I_INSTR_TY_LDR_OFFSET,
-  RV32I_INSTR_TY_STR_OFFSET,
-
-  RV32I_INSTR_TY_JMP,
-  RV32I_INSTR_TY_EXT
+  RV32I_INSTR_TY_LUI,
+  RV32I_INSTR_TY_JALR,
 };
 
-enum rv32i_instr_class {
-  RV32I_INSTR_CLASS_MOV,
-  RV32I_INSTR_CLASS_MOV_IMM,
+enum rv32i_reg_ty {
+  RV32I_REG_TY_NONE,
 
-  RV32I_INSTR_CLASS_ALU,
-  RV32I_INSTR_CLASS_ALU_IMM,
-  RV32I_INSTR_CLASS_ALU_SHIFT,
-
-  RV32I_INSTR_CLASS_LDR_DIRECT,
-  RV32I_INSTR_CLASS_STR_DIRECT,
-
-  RV32I_INSTR_CLASS_LDR_OFFSET,
-  RV32I_INSTR_CLASS_STR_OFFSET,
-
-  RV32I_INSTR_CLASS_JMP,
-  RV32I_INSTR_CLASS_EXT
+  RV32I_REG_TY_GP,
+  RV32I_REG_TY_FP,
 };
+
+enum rv32i_reg_class {
+  RV32I_REG_CLASS_GP,
+  RV32I_REG_CLASS_FP,
+};
+
+enum rv32i_reg_attr_flags {
+  RV32I_REG_ATTR_FLAG_NONE = 0,
+  RV32I_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
+  RV32I_REG_ATTR_FLAG_ARG_REG = 2,
+  RV32I_REG_ATTR_FLAG_RET_REG = 4,
+  RV32I_REG_ATTR_FLAG_RESERVED = 8,
+};
+
+bool rv32i_reg_ty_is_gp(enum rv32i_reg_ty ty);
+bool rv32i_reg_ty_is_fp(enum rv32i_reg_ty ty);
 
 struct rv32i_reg {
-  unsigned long idx;
+  enum rv32i_reg_ty ty;
+
+  size_t idx;
 };
 
-struct rv32i_mov {
+enum rv32i_reg_attr_flags reg_attr_flags(struct rv32i_reg reg);
+
+enum rv32i_instr_class {
+  RV32I_INSTR_CLASS_NOP,
+  RV32I_INSTR_CLASS_ADDSUB_IMM,
+  RV32I_INSTR_CLASS_ADDSUB_REG,
+  RV32I_INSTR_CLASS_LUI,
+  RV32I_INSTR_CLASS_JALR,
+};
+
+struct rv32i_addsub_imm {
   struct rv32i_reg dest;
   struct rv32i_reg source;
+
+  imm_t imm;
 };
 
-struct rv32i_mov_imm {
-  struct rv32i_reg dest;
-  simm_t imm;
-};
-
-struct rv32i_alu {
+struct rv32i_addsub_reg {
   struct rv32i_reg dest;
   struct rv32i_reg lhs;
   struct rv32i_reg rhs;
 };
 
-struct rv32i_alu_imm {
+struct rv32i_lui {
   struct rv32i_reg dest;
-  simm_t imm;
-};
 
-struct rv32i_alu_shift {
-  struct rv32i_reg dest;
-  struct rv32i_reg source;
   imm_t imm;
 };
 
-struct rv32i_ldr_direct {
-  struct rv32i_reg dest;
+struct rv32i_jalr {
+  struct rv32i_reg ret_addr;
+  struct rv32i_reg target;
+
   imm_t imm;
 };
 
-struct rv32i_str_direct {
-  struct rv32i_reg source;
-  imm_t imm;
-};
-
-struct rv32i_ldr_offset {
-  struct rv32i_reg dest;
-  struct rv32i_reg addr;
-  imm_t imm;
-};
-
-struct rv32i_str_offset {
-  struct rv32i_reg source;
-  struct rv32i_reg addr;
-  imm_t imm;
-};
-
-enum rv32i_cond {
-  RV32I_COND_JMP = 0b0000,
-  RV32I_COND_NOOP = 0b0001,
-
-  RV32I_COND_JEQ = 0b0010,
-  RV32I_COND_JNE = 0b0011,
-
-  RV32I_COND_JCS = 0b0100,
-  RV32I_COND_JCC = 0b0101,
-
-  RV32I_COND_JMI = 0b0110,
-  RV32I_COND_JPL = 0b0111,
-
-  RV32I_COND_JGE = 0b1000,
-  RV32I_COND_JLT = 0b1001,
-
-  RV32I_COND_JGT = 0b1010,
-  RV32I_COND_JLE = 0b1011,
-
-  RV32I_COND_JHI = 0b1100,
-  RV32I_COND_JLS = 0b1101,
-
-  RV32I_COND_JSR = 0b1110,
-  RV32I_COND_RET = 0b1111,
-};
-
-struct rv32i_jmp {
-  enum rv32i_cond cond;
-  imm_t imm;
-};
-
-struct rv32i_ext {
-  imm_t imm;
-};
 
 struct rv32i_instr {
   enum rv32i_instr_ty ty;
 
   union {
     union {
-      struct rv32i_mov mov;
+      struct rv32i_addsub_imm addsub_imm, addi;
     };
 
     union {
-      struct rv32i_mov_imm mov_imm;
+      struct rv32i_addsub_reg addsub_reg, add;
     };
 
     union {
-      struct rv32i_alu alu, add, sub, adc, sbc, and, cmp;
+      struct rv32i_lui lui;
     };
 
     union {
-      struct rv32i_alu_imm alu_imm, add_imm, sub_imm, adc_imm, sbc_imm, and_imm,
-          cmp_imm;
-    };
-
-    union {
-      struct rv32i_alu_shift alu_shift, lsl, lsr, asr, xsr;
-    };
-
-    union {
-      struct rv32i_str_direct str_direct;
-    };
-
-    union {
-      struct rv32i_ldr_direct ldr_direct;
-    };
-
-    union {
-      struct rv32i_str_offset str_offset;
-    };
-
-    union {
-      struct rv32i_ldr_offset ldr_offset;
-    };
-
-    union {
-      struct rv32i_jmp jmp;
-    };
-
-    union {
-      struct rv32i_ext ext;
+      struct rv32i_jalr jalr;
     };
   };
 };
 
+enum rv32i_reg_usage_ty {
+  RV32I_REG_USAGE_TY_WRITE, // mov x9, ...
+  RV32I_REG_USAGE_TY_READ,  // mov ..., x9
+  RV32I_REG_USAGE_TY_DEREF, // ldr ..., [x9]
+};
+
+size_t reg_size(enum rv32i_reg_ty reg_ty);
+
+struct rv32i_reg get_full_reg_for_ir_reg(struct ir_reg reg);
+
+bool is_return_reg(struct rv32i_reg reg);
+bool is_zero_reg(struct rv32i_reg reg);
+bool reg_eq(struct rv32i_reg l, struct rv32i_reg r);
+
+enum rv32i_instr_class instr_class(enum rv32i_instr_ty ty);
+
+typedef void(walk_regs_callback)(struct instr *instr, struct rv32i_reg reg,
+                                 enum rv32i_reg_usage_ty usage_ty,
+                                 void *metadata);
+void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
+               void *metadata);
+
 struct codegen_unit *rv32i_codegen(struct ir_unit *ir);
+void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit);
+
 #endif

@@ -46,11 +46,12 @@ set(
   aarch64/emit.c
   aarch64/emitter.c
 
-  # rv32i.c
-  # rv32i/codegen.c
-  # rv32i/lower.c
-  # rv32i/emit.c
-  # rv32i/emitter.c
+  rv32i.c
+  rv32i/codegen.c
+  rv32i/lower.c
+  rv32i/emit.c
+  rv32i/emitter.c
+  rv32i/object.c
 
   # eep.c
   # eep/codegen.c

@@ -1,56 +1,111 @@
-#ifndef EEP_ISA_H
-#define EEP_ISA_H
+#ifndef RV32I_ISA_H
+#define RV32I_ISA_H
 
-#define EEP_REG_SIZE (2)
-#define EEP_INSTR_SIZE (2)
+#define RV32I_REG_SIZE (2)
+#define RV32I_INSTR_SIZE (2)
 
-#define ALU_SHIFT(a, shift_opc1, b, shift_opc0, imm4)                          \
-  (uint16_t)((7 << 12) | ((a) << 9) | ((shift_opc1) << 8) | ((b) << 5) |       \
-             ((shift_opc0) << 4) | (imm4))
+// #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)
+// #define I_TYPE(imm12, rs1, funct3, rd, opcode)
+// #define S_TYPE(imm11_5, rs2, rs1, funct3, imm4_0, opcode)
+// #define B_TYPE(imm12, imm11_5, rs2, rs1, funct3, imm4_1, imm11, opcode)
+// #define U_TYPE(imm31_12, rd, opcode)
+// #define J_TYPE(imm20, imm10_1, imm11, imm19_12, rd, opcode)
 
-#define ALU(aluopc, a, b, c)                                                   \
-  (uint16_t)(((aluopc) << 12) | ((a) << 9) | ((b) << 5) | ((c) << 2))
+#define U32(v) ((uint32_t)(v))
+#define U32_S(v, hi, lo) ((v & ((1ul << (hi + 1)) - 1ul)) >> lo)
 
-#define ALU_IMM(aluopc, a, imms8)                                              \
-  (uint16_t)(((aluopc) << 12) | ((a) << 9) | (1 << 8) | (imms8))
+#define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode) \
+  (uint32_t)((U32(funct7) << 25) \
+  | (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
-#define MOV(Ra, Rb) ALU(0, Ra, Rb, 0)
-#define MOV_IMM(Ra, imm) ALU_IMM(0, Ra, imm)
+#define I_TYPE(imm12, rs1, funct3, rd, opcode) \
+  (uint32_t)((U32_S(imm12, 11, 0) << 20) \
+  | (U32(rs1) << 15) | (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
-#define ADD(Rc, Ra, Rb) ALU(1, Ra, Rb, Rc)
-#define SUB(Rc, Ra, Rb) ALU(2, Ra, Rb, Rc)
-#define ADC(Rc, Ra, Rb) ALU(3, Ra, Rb, Rc)
-#define SBC(Rc, Ra, Rb) ALU(4, Ra, Rb, Rc)
-#define AND(Rc, Ra, Rb) ALU(5, Ra, Rb, Rc)
-#define CMP(Ra, Rb) ALU(1, Ra, Rb, 0)
+#define S_TYPE(imm12, rs2, rs1, funct3, opcode) \
+  (uint32_t)((U32_S(imm12, 11, 5) << 25) \
+  | (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) | (U32_S(imm12, 4, 0) << 8) | U32(opcode))
 
-#define ADD_IMM(Ra, imm) ALU_IMM(1, Ra, imm)
-#define SUB_IMM(Ra, imm) ALU_IMM(2, Ra, imm)
-#define ADC_IMM(Ra, imm) ALU_IMM(3, Ra, imm)
-#define SBC_IMM(Ra, imm) ALU_IMM(4, Ra, imm)
-#define AND_IMM(Ra, imm) ALU_IMM(5, Ra, imm)
-#define CMP_IMM(Ra, imm) ALU(1, Ra, imm, 0)
+#define B_TYPE(imm12, rs2, rs1, funct3, opcode) \
+  (uint32_t)((U32_S(imm12, 12, 12) << 31) | (U32_S(imm12, 10, 5) << 25) \
+  | (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) | (U32_S(imm12, 4, 1) << 8) | (U32_S(imm12, 11, 11)) | U32(opcode))
 
-#define LSL(Ra, Rb, scnt) ALU_SHIFT(Ra, 0, Rb, 0, scnt)
-#define LSR(Ra, Rb, scnt) ALU_SHIFT(Ra, 0, Rb, 1, scnt)
-#define ASR(Ra, Rb, scnt) ALU_SHIFT(Ra, 1, Rb, 0, scnt)
-#define XSR(Ra, Rb, scnt) ALU_SHIFT(Ra, 1, Rb, 1, scnt)
+#define U_TYPE(imm20, rd, opcode) (uint32_t)((U32(imm20) << 12) | (U32(rd) << 7) | U32(opcode))
 
-#define LDR_STR_DIRECT(mopc, a, imm)                                           \
-  (uint16_t)((1 << 15) | ((mopc) << 13) | ((a) << 9) | (1 << 8) | (imm))
+#define J_TYPE(imm20, rd, opcode) (uint32_t)
 
-#define LDR_STR_OFFSET(mopc, a, b, offset)                                     \
-  (uint16_t)((1 << 15) | ((mopc) << 13) | ((a) << 9) | ((b) << 5) | (offset))
+#define OPC_LOAD     U32(0b0000011)
+#define OPC_LOAD_FP  U32(0b0000111)
+// custom 0
+#define OPC_MISC_MEM U32(0b0001111)
+#define OPC_OP_IMM   U32(0b0010011)
+#define OPC_AUIPC    U32(0b0010111)
+#define OPC_IMM_32   U32(0b0011011)
+// 48b
+#define OPC_STORE    U32(0b0100011)
+#define OPC_STORE_FP U32(0b0100111)
+// custom 1
+#define OPC_AMO      U32(0b0101111)
+#define OPC_OP       U32(0b0110011)
+#define OPC_LUI      U32(0b0110111)
+#define OPC_32       U32(0b0111011)
+// 64b
+#define OPC_OP_MADD  U32(0b1000011)
+#define OPC_OP_MSUB  U32(0b1000111)
+#define OPC_OP_NMSUB U32(0b1001011)
+#define OPC_OP_NMADD U32(0b1001111)
+#define OPC_OP_FP    U32(0b1010011)
+// reserved
+// custom 2 / rv128
+// 48b
+#define OPC_BRANCH   U32(0b1100011)
+#define OPC_JALR     U32(0b1100111)
+// reserved
+#define OPC_JAL      U32(0b1101111)
+#define OPC_SYSTEM   U32(0b1110011)
+// reserved
+// custom 3 / rv128
+// >=80b
 
-#define LDR_DIRECT(Ra, imm) LDR_STR_DIRECT(0, Ra, imm)
-#define STR_DIRECT(Ra, imm) LDR_STR_DIRECT(1, Ra, imm)
+/* ----------------------------- */
 
-#define LDR_OFFSET(Ra, Rb, offset) LDR_STR_OFFSET(0, Ra, Rb, offset)
-#define STR_OFFSET(Ra, Rb, offset) LDR_STR_OFFSET(1, Ra, Rb, offset)
 
-#define JUMP(jmpopc, offset)                                                   \
-  (uint16_t)((0b11 << 14) | ((jmpopc) << 8) | (uint8_t)(offset))
+/* ---------- funct3 ---------- */
 
-#define EXT(imm) (uint16_t)((0b1101 << 12) | (imm))
+#define FUNCT3_ADDI     U32(0b000)
+
+#define FUNCT3_ADD      U32(0b000)
+
+#define FUNCT3_JALR     U32(0b000)
+
+#define FUNCT3_BEQ      U32(0b000)
+#define FUNCT3_BNE      U32(0b001)
+#define FUNCT3_BLT      U32(0b100)
+#define FUNCT3_BGE      U32(0b101)
+#define FUNCT3_BLTU     U32(0b110)
+#define FUNCT3_BGEU     U32(0b111)
+
+#define FUNCT3_MUL      U32(0b000)
+#define FUNCT3_MULH     U32(0b001)
+#define FUNCT3_MULHU    U32(0b010)
+#define FUNCT3_MULHSU   U32(0b011)
+#define FUNCT3_DIV      U32(0b100)
+#define FUNCT3_DIVU     U32(0b101)
+#define FUNCT3_REM      U32(0b110)
+#define FUNCT3_REMU     U32(0b111)
+
+/* ----------------------------- */
+
+
+/* ---------- funct7 ---------- */
+
+#define FUNCT7_MULDIV   U32(0b0000001)
+#define FUNCT7_ADD      U32(0b0000000)
+
+#define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADDI, rd, OPC_OP_IMM)
+#define LUI(imm20, rd) U_TYPE(imm20, rd, OPC_LUI)
+
+#define ADD(rs2, rs1, rd) R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_ADD, rd, OPC_OP)
+#define JALR(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_JALR, rd, OPC_JALR)
 
 #endif
