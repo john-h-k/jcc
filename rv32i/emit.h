@@ -1,5 +1,5 @@
-#ifndef RISCV_EMIT_H
-#define RISCV_EMIT_H
+#ifndef RV32I_EMIT_H
+#define RV32I_EMIT_H
 
 #include "../emit.h"
 #include "../ir/build.h"
