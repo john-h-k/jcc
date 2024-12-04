@@ -122,6 +122,10 @@ void rv32i_emit_addi(struct rv32i_emitter *emitter, const struct rv32i_op_imm ad
   rv32i_emit_instr(emitter, ADDI(addi.imm, addi.source.idx, addi.dest.idx));
 }
 
+void rv32i_emit_xori(struct rv32i_emitter *emitter, const struct rv32i_op_imm xori) {
+  rv32i_emit_instr(emitter, XORI(xori.imm, xori.source.idx, xori.dest.idx));
+}
+
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add) {
   rv32i_emit_instr(emitter, ADD(add.rhs.idx, add.lhs.idx, add.dest.idx));
 }
@@ -144,6 +148,27 @@ void rv32i_emit_divu(struct rv32i_emitter *emitter, const struct rv32i_op divu) 
 void rv32i_emit_remu(struct rv32i_emitter *emitter, const struct rv32i_op remu) {
   rv32i_emit_instr(emitter, REMU(remu.rhs.idx, remu.lhs.idx, remu.dest.idx));
 }
+
+void rv32i_emit_or(struct rv32i_emitter *emitter, const struct rv32i_op or) {
+  rv32i_emit_instr(emitter, OR(or.rhs.idx, or.lhs.idx, or.dest.idx));
+}
+void rv32i_emit_xor(struct rv32i_emitter *emitter, const struct rv32i_op xor) {
+  rv32i_emit_instr(emitter, XOR(xor.rhs.idx, xor.lhs.idx, xor.dest.idx));
+}
+void rv32i_emit_and(struct rv32i_emitter *emitter, const struct rv32i_op and) {
+  rv32i_emit_instr(emitter, AND(and.rhs.idx, and.lhs.idx, and.dest.idx));
+}
+
+void rv32i_emit_sll(struct rv32i_emitter *emitter, const struct rv32i_op sll) {
+  rv32i_emit_instr(emitter, SLL(sll.rhs.idx, sll.lhs.idx, sll.dest.idx));
+}
+void rv32i_emit_srl(struct rv32i_emitter *emitter, const struct rv32i_op srl) {
+  rv32i_emit_instr(emitter, SRL(srl.rhs.idx, srl.lhs.idx, srl.dest.idx));
+}
+void rv32i_emit_sra(struct rv32i_emitter *emitter, const struct rv32i_op sra) {
+  rv32i_emit_instr(emitter, SRA(sra.rhs.idx, sra.lhs.idx, sra.dest.idx));
+}
+
 
 
 void rv32i_emit_sb(struct rv32i_emitter *emitter, const struct rv32i_store sb) {

@@ -135,7 +135,8 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
 
   struct ir_op *cond = op->br_cond.cond;
 
-  if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+  if (cond->ty == IR_OP_TY_BINARY_OP &&
+      binary_op_is_comparison(cond->binary_op.ty)) {
     debug_assert(cond->flags & IR_OP_FLAG_CONTAINED,
                  "expected to be contained");
 
@@ -191,8 +192,10 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
 
     struct instr *instr = alloc_instr(state->func);
     instr->rv32i->ty = br_ty;
-    instr->rv32i->conditional_branch = (struct rv32i_conditional_branch){
-        .lhs = invert ? rhs_reg : lhs_reg, .rhs = invert ? lhs_reg : rhs_reg, .target = true_target};
+    instr->rv32i->conditional_branch =
+        (struct rv32i_conditional_branch){.lhs = invert ? rhs_reg : lhs_reg,
+                                          .rhs = invert ? lhs_reg : rhs_reg,
+                                          .target = true_target};
   } else {
     struct rv32i_reg cmp_reg = codegen_reg(cond);
 
@@ -264,7 +267,8 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
 
       struct instr *instr = alloc_instr(state->func);
       instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
-      instr->rv32i->addi = (struct rv32i_op_imm){.dest = dest, .source = source_reg, .imm = lo};
+      instr->rv32i->addi =
+          (struct rv32i_op_imm){.dest = dest, .source = source_reg, .imm = lo};
 
       break;
     }
@@ -299,6 +303,36 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
                           .imm = 0};
 }
 
+static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
+
+  struct rv32i_reg dest = codegen_reg(op);
+  struct rv32i_reg source = codegen_reg(op->unary_op.value);
+
+  switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_FNEG:
+    todo("fneg");
+  case IR_OP_UNARY_OP_TY_NEG:
+    instr->rv32i->ty = RV32I_INSTR_TY_SUB;
+    instr->rv32i->sub = (struct rv32i_op){
+        .dest = dest,
+        .lhs = zero_reg_for_ty(source.ty),
+        .rhs = source,
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_NOT:
+    instr->rv32i->ty = RV32I_INSTR_TY_XORI;
+    instr->rv32i->xori = (struct rv32i_op_imm){
+        .dest = dest,
+        .source = source,
+        .imm = -1
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+    bug("logical not should never reach emitter, should be converted in lower");
+  }
+}
+
 static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
@@ -328,6 +362,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //     .rhs = rhs,
     // };
     // break;
+
+    todo("float comp binops");
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
@@ -345,55 +381,55 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //     .rhs = rhs,
     // };
     // break;
+    todo("comp binops");
   case IR_OP_BINARY_OP_TY_LSHIFT:
-    // instr->rv32i->ty = rv32i_INSTR_TY_LSLV;
-    // instr->rv32i->lslv = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_SLL;
+    instr->rv32i->sll = (struct rv32i_op){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
-    // instr->rv32i->ty = rv32i_INSTR_TY_ASRV;
-    // instr->rv32i->asrv = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_SRA;
+    instr->rv32i->sra = (struct rv32i_op){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_URSHIFT:
-    // instr->rv32i->ty = rv32i_INSTR_TY_LSRV;
-    // instr->rv32i->lsrv = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_SRL;
+    instr->rv32i->srl = (struct rv32i_op){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_AND:
-    // instr->rv32i->ty = rv32i_INSTR_TY_AND;
-    // instr->rv32i->and = (struct rv32i_logical_reg){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_AND;
+    instr->rv32i->and = (struct rv32i_op){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_OR:
-    // instr->rv32i->ty = rv32i_INSTR_TY_ORR;
-    // instr->rv32i->orr = (struct rv32i_logical_reg){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_OR;
+    instr->rv32i->or = (struct rv32i_op){
+                         .dest = dest,
+                         .lhs = lhs,
+                         .rhs = rhs,
+                     };
+    break;
   case IR_OP_BINARY_OP_TY_XOR:
-    // instr->rv32i->ty = rv32i_INSTR_TY_EOR;
-    // instr->rv32i->eor = (struct rv32i_logical_reg){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
-    todo("other binops");
+    instr->rv32i->ty = RV32I_INSTR_TY_XOR;
+    instr->rv32i->xor = (struct rv32i_op){
+                          .dest = dest,
+                          .lhs = lhs,
+                          .rhs = rhs,
+                      };
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->rv32i->ty = RV32I_INSTR_TY_ADD;
     instr->rv32i->add = (struct rv32i_op){
@@ -482,7 +518,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //     .rhs = rhs,
     // };
     // break;
-    todo("other binops");
+    todo("float binops");
   }
 }
 
@@ -694,9 +730,8 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_UNARY_OP: {
-    todo("");
-    // codegen_unary_op(state, op);
-    // break;
+    codegen_unary_op(state, op);
+    break;
   }
   case IR_OP_TY_BINARY_OP: {
     codegen_binary_op(state, op);
@@ -965,6 +1000,10 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "addi");
     debug_print_op_imm(file, &instr->rv32i->addi);
     break;
+  case RV32I_INSTR_TY_XORI:
+    fprintf(file, "xori");
+    debug_print_op_imm(file, &instr->rv32i->addi);
+    break;
   case RV32I_INSTR_TY_ADD:
     fprintf(file, "add");
     debug_print_op(file, &instr->rv32i->add);
@@ -1060,6 +1099,30 @@ static void debug_print_instr(FILE *file,
   case RV32I_INSTR_TY_BGEU:
     fprintf(file, "bgeu");
     debug_print_conditional_branch(file, &instr->rv32i->bgeu);
+    break;
+  case RV32I_INSTR_TY_OR:
+    fprintf(file, "or");
+    debug_print_op(file, &instr->rv32i->or);
+    break;
+  case RV32I_INSTR_TY_AND:
+    fprintf(file, "and");
+    debug_print_op(file, &instr->rv32i->and);
+    break;
+  case RV32I_INSTR_TY_XOR:
+    fprintf(file, "xor");
+    debug_print_op(file, &instr->rv32i->xor);
+    break;
+  case RV32I_INSTR_TY_SLL:
+    fprintf(file, "sll");
+    debug_print_op(file, &instr->rv32i->sll);
+    break;
+  case RV32I_INSTR_TY_SRL:
+    fprintf(file, "srl");
+    debug_print_op(file, &instr->rv32i->srl);
+    break;
+  case RV32I_INSTR_TY_SRA:
+    fprintf(file, "sra");
+    debug_print_op(file, &instr->rv32i->sra);
     break;
   }
 }
