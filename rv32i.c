@@ -12,10 +12,8 @@ const struct target RV32I_TARGET = {
                                               .num_reserved = 0},
         .fp_registers =
             (struct reg_set_info){
-                // FIXME: technically v8-15 are non-volatile bottom half
-                // but we don't suppport vectors yet
-                .num_volatile = 0,
-                .num_nonvolatile = 0,
+                .num_volatile = 20,
+                .num_nonvolatile = 12,
                 .num_reserved = 0},
     },
     RV32I_FUNCTION_ALIGNMENT,

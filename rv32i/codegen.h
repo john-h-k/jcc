@@ -47,12 +47,14 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_SB,
   RV32I_INSTR_TY_SH,
   RV32I_INSTR_TY_SW,
+  RV32I_INSTR_TY_FSW,
 
   RV32I_INSTR_TY_LB,
   RV32I_INSTR_TY_LBU,
   RV32I_INSTR_TY_LH,
   RV32I_INSTR_TY_LHU,
   RV32I_INSTR_TY_LW,
+  RV32I_INSTR_TY_FLW,
 
   RV32I_INSTR_TY_JALR,
   RV32I_INSTR_TY_JAL,
@@ -84,9 +86,6 @@ enum rv32i_reg_attr_flags {
   RV32I_REG_ATTR_FLAG_RET_REG = 4,
   RV32I_REG_ATTR_FLAG_RESERVED = 8,
 };
-
-bool rv32i_reg_ty_is_gp(enum rv32i_reg_ty ty);
-bool rv32i_reg_ty_is_fp(enum rv32i_reg_ty ty);
 
 struct rv32i_reg {
   enum rv32i_reg_ty ty;
@@ -189,11 +188,11 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_load load, lb, lbu, lh, lhu, lw;
+      struct rv32i_load load, lb, lbu, lh, lhu, lw, flw;
     };
 
     union {
-      struct rv32i_store store, sb, sh, sw;
+      struct rv32i_store store, sb, sh, sw, fsw;
     };
 
     union {

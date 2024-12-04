@@ -204,6 +204,15 @@ void rv32i_emit_sw(struct rv32i_emitter *emitter, const struct rv32i_store sw) {
   rv32i_emit_instr(emitter, SW(sw.imm, sw.source.idx, sw.addr.idx));
 }
 
+void rv32i_emit_fsw(struct rv32i_emitter *emitter, const struct rv32i_store fsw) {
+  rv32i_emit_instr(emitter, FSW(fsw.imm, fsw.source.idx, fsw.addr.idx));
+}
+
+
+void rv32i_emit_flw(struct rv32i_emitter *emitter, const struct rv32i_load flw) {
+  rv32i_emit_instr(emitter, FLW(flw.imm, flw.dest.idx, flw.addr.idx));
+}
+
 void rv32i_emit_lb(struct rv32i_emitter *emitter, const struct rv32i_load lb) {
   rv32i_emit_instr(emitter, LB(lb.imm, lb.addr.idx, lb.dest.idx));
 }
