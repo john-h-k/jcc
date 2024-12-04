@@ -28,6 +28,9 @@ void rv32i_emit_bge(struct rv32i_emitter *emitter, const struct rv32i_conditiona
 void rv32i_emit_bltu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bltu);
 void rv32i_emit_bgeu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bgeu);
 
+
+void rv32i_emit_fmv(struct rv32i_emitter *emitter, const struct rv32i_op_mov fmv);
+
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
 void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);
 void rv32i_emit_mul(struct rv32i_emitter *emitter, const struct rv32i_op mul);

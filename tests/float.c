@@ -3,7 +3,6 @@
 
 int printf(const char *format, ...);
 
-int raise(int a);
 int main() {
   double a = 1.4;
 
