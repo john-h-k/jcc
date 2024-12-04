@@ -23,6 +23,9 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_ADDI:
     rv32i_emit_addi(state->emitter, instr->rv32i->addi);
     break;
+  case RV32I_INSTR_TY_XORI:
+    rv32i_emit_xori(state->emitter, instr->rv32i->xori);
+    break;
   case RV32I_INSTR_TY_ADD:
     rv32i_emit_add(state->emitter, instr->rv32i->add);
     break;
@@ -94,6 +97,24 @@ static void emit_instr(const struct emit_state *state,
     break;
   case RV32I_INSTR_TY_BGEU:
     rv32i_emit_bgeu(state->emitter, instr->rv32i->bgeu);
+    break;
+  case RV32I_INSTR_TY_OR:
+    rv32i_emit_or(state->emitter, instr->rv32i->or);
+    break;
+  case RV32I_INSTR_TY_AND:
+    rv32i_emit_and(state->emitter, instr->rv32i->and);
+    break;
+  case RV32I_INSTR_TY_XOR:
+    rv32i_emit_xor(state->emitter, instr->rv32i->xor);
+    break;
+  case RV32I_INSTR_TY_SLL:
+    rv32i_emit_sll(state->emitter, instr->rv32i->sll);
+    break;
+  case RV32I_INSTR_TY_SRL:
+    rv32i_emit_srl(state->emitter, instr->rv32i->srl);
+    break;
+  case RV32I_INSTR_TY_SRA:
+    rv32i_emit_sra(state->emitter, instr->rv32i->sra);
     break;
   }
 }

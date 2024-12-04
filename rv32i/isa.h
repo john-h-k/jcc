@@ -70,10 +70,19 @@
 
 /* ---------- funct3 ---------- */
 
-#define FUNCT3_ADDI U32(0b000)
-
 #define FUNCT3_ADD U32(0b000)
 #define FUNCT3_SUB U32(0b000)
+
+#define FUNCT3_ADD U32(0b000)
+#define FUNCT3_SLT U32(0b010)
+#define FUNCT3_SLTU U32(0b011)
+#define FUNCT3_XOR U32(0b100)
+#define FUNCT3_OR U32(0b110)
+#define FUNCT3_AND U32(0b111)
+
+#define FUNCT3_SLL U32(0b001)
+#define FUNCT3_SRL U32(0b101)
+#define FUNCT3_SRA U32(0b101)
 
 #define FUNCT3_JALR U32(0b000)
 
@@ -110,8 +119,11 @@
 #define FUNCT7_ADD U32(0b0000000)
 #define FUNCT7_MULDIV U32(0b0000001)
 #define FUNCT7_SUB U32(0b0100000)
+#define FUNCT7_SRL U32(0b0000000)
+#define FUNCT7_SRA U32(0b0100000)
 
-#define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADDI, rd, OPC_OP_IMM)
+#define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADD, rd, OPC_OP_IMM)
+#define XORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_XOR, rd, OPC_OP_IMM)
 
 #define LUI(imm20, rd) U_TYPE(imm20, rd, OPC_LUI)
 #define AUIPC(imm20, rd) U_TYPE(imm20, rd, OPC_AUIPC)
@@ -130,6 +142,20 @@
 #define REMU(rs2, rs1, rd)                                                     \
   R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_REMU, rd, OPC_OP)
 
+#define OR(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_OR, rd, OPC_OP)
+#define XOR(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_XOR, rd, OPC_OP)
+#define AND(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_ADD, rs2, rs1, FUNCT3_AND, rd, OPC_OP)
+
+#define SLL(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_SRL, rs2, rs1, FUNCT3_SLL, rd, OPC_OP)
+#define SRL(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_SRL, rs2, rs1, FUNCT3_SRL, rd, OPC_OP)
+#define SRA(rs2, rs1, rd)                                                     \
+  R_TYPE(FUNCT7_SRA, rs2, rs1, FUNCT3_SRA, rd, OPC_OP)
+  
 #define JALR(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_JALR, rd, OPC_JALR)
 #define JAL(imm20, rd) J_TYPE(imm20, rd, OPC_JAL)
 
