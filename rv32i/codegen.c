@@ -322,11 +322,8 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     return;
   case IR_OP_UNARY_OP_TY_NOT:
     instr->rv32i->ty = RV32I_INSTR_TY_XORI;
-    instr->rv32i->xori = (struct rv32i_op_imm){
-        .dest = dest,
-        .source = source,
-        .imm = -1
-    };
+    instr->rv32i->xori =
+        (struct rv32i_op_imm){.dest = dest, .source = source, .imm = -1};
     return;
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
     bug("logical not should never reach emitter, should be converted in lower");
@@ -945,6 +942,20 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   return unit;
 }
 
+static void debug_print_reg(FILE *file, const struct rv32i_reg *reg) {
+  switch (reg->ty) {
+  case RV32I_REG_TY_NONE:
+    fprintf(file, "NONE");
+    break;
+  case RV32I_REG_TY_GP:
+    fprintf(file, "x%zu", reg->idx);
+    break;
+  case RV32I_REG_TY_FP:
+    fprintf(file, "f%zu", reg->idx);
+    break;
+  }
+}
+
 static void debug_print_op_imm(FILE *file, const struct rv32i_op_imm *op_imm) {
   fprintf(file, " x%zu, x%zu, %lld", op_imm->dest.idx, op_imm->source.idx,
           op_imm->imm);
@@ -952,6 +963,13 @@ static void debug_print_op_imm(FILE *file, const struct rv32i_op_imm *op_imm) {
 
 static void debug_print_op(FILE *file, const struct rv32i_op *op) {
   fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
+}
+
+static void debug_print_op_mov(FILE *file, const struct rv32i_op_mov *op_mov) {
+  fprintf(file, " ");
+  debug_print_reg(file, &op_mov->dest);
+  fprintf(file, ", ");
+  debug_print_reg(file, &op_mov->source);
 }
 
 static void debug_print_lui(FILE *file, const struct rv32i_lui *lui) {
@@ -1123,6 +1141,21 @@ static void debug_print_instr(FILE *file,
   case RV32I_INSTR_TY_SRA:
     fprintf(file, "sra");
     debug_print_op(file, &instr->rv32i->sra);
+    break;
+  case RV32I_INSTR_TY_FMV:
+    fprintf(file, "fmv");
+    switch (instr->rv32i->fmv.source.ty) {
+    case RV32I_REG_TY_NONE:
+      bug("none dest");
+    case RV32I_REG_TY_GP:
+      fprintf(file, "fmv.w.x");
+      break;
+    case RV32I_REG_TY_FP:
+      fprintf(file, "fmv.x.w");
+      break;
+    }
+
+    debug_print_op_mov(file, &instr->rv32i->fmv);
     break;
   }
 }

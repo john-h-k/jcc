@@ -112,6 +112,9 @@
 #define FUNCT3_SH U32(0b001)
 #define FUNCT3_SW U32(0b010)
 
+#define FUNCT3_FMV_WX U32(0b000)
+#define FUNCT3_FMV_XW U32(0b000)
+
 /* ----------------------------- */
 
 /* ---------- funct7 ---------- */
@@ -121,6 +124,10 @@
 #define FUNCT7_SUB U32(0b0100000)
 #define FUNCT7_SRL U32(0b0000000)
 #define FUNCT7_SRA U32(0b0100000)
+
+#define FUNCT7_FMV_WX U32(0b1110000)
+#define FUNCT7_FMV_XW U32(0b1111000)
+
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADD, rd, OPC_OP_IMM)
 #define XORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_XOR, rd, OPC_OP_IMM)
@@ -165,6 +172,9 @@
 #define BGE(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGE, OPC_BRANCH)
 #define BLTU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BLTU, OPC_BRANCH)
 #define BGEU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGEU, OPC_BRANCH)
+
+#define FMV_XW(rs1, rd) R_TYPE(FUNCT7_FMV_XW, 0b00, rs1, FUNCT3_FMV_XW, rd, OPC_OP_FP)
+#define FMV_WX(rs1, rd) R_TYPE(FUNCT7_FMV_WX, 0b00, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
 #define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)

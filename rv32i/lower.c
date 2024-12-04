@@ -21,6 +21,51 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   }
 }
 
+static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
+  // transform into creating an integer, and then mov to float reg
+
+  struct ir_var_ty int_ty;
+  unsigned long long int_value;
+
+  debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+
+  switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_F32: {
+    int_ty = IR_VAR_TY_I32;
+
+    union {
+      float f;
+      unsigned u;
+    } v;
+    v.f = (float)op->cnst.flt_value;
+    int_value = v.u;
+
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_F64: {
+    int_ty = IR_VAR_TY_I64;
+
+    union {
+      double d;
+      unsigned long long ull;
+    } v;
+    v.d = (double)op->cnst.flt_value;
+    int_value = v.ull;
+
+    break;
+  }
+  default:
+    unreachable();
+  }
+
+  struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+  int_mov->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
+
+  op->ty = IR_OP_TY_MOV;
+  op->mov = (struct ir_op_mov){.value = int_mov};
+}
+
 void rv32i_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
 
@@ -50,7 +95,6 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
-            case IR_OP_TY_CNST:
             case IR_OP_TY_RET:
             case IR_OP_TY_STORE_LCL:
             case IR_OP_TY_LOAD_LCL:
@@ -64,6 +108,14 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_CAST_OP:
               break;
+            case IR_OP_TY_CNST: {
+              if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
+                lower_fp_cnst(func, op);
+                break;
+              }
+
+              break;
+            }
             case IR_OP_TY_BINARY_OP:
               if (binary_op_is_comparison(op->binary_op.ty)) {
                 lower_comparison(func, op);

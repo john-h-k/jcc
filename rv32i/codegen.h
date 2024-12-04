@@ -10,8 +10,6 @@
     "STACK_PTR_REG/FRAME_PTR_REG/RET_PTR_REG already defined. Check your includes"
 #endif
 
-// `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
-// which is relevant
 #define STACK_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 2})
 #define FRAME_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 8})
 #define RET_PTR_REG ((struct rv32i_reg){RV32I_REG_TY_GP, 1})
@@ -30,6 +28,11 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_REM,
   RV32I_INSTR_TY_DIVU,
   RV32I_INSTR_TY_REMU,
+
+  // RV32I_INSTR_TY_SLT,
+  // RV32I_INSTR_TY_SLTU,
+
+  RV32I_INSTR_TY_FMV,
 
   RV32I_INSTR_TY_OR,
   RV32I_INSTR_TY_AND,
@@ -116,6 +119,17 @@ struct rv32i_op {
   struct rv32i_reg rhs;
 };
 
+struct rv32i_op_fp {
+  struct rv32i_reg dest;
+  struct rv32i_reg lhs;
+  struct rv32i_reg rhs;
+};
+
+struct rv32i_op_mov {
+  struct rv32i_reg dest;
+  struct rv32i_reg source;
+};
+
 struct rv32i_lui {
   struct rv32i_reg dest;
 
@@ -164,6 +178,14 @@ struct rv32i_instr {
 
     union {
       struct rv32i_op op, add, sub, mul, div, rem, divu, remu, and, or, xor, sll, srl, sra;
+    };
+
+    // union {
+    //   struct rv32i_op_fp op_fp;
+    // };
+
+    union {
+      struct rv32i_op_mov op_mov, fmv;
     };
 
     union {

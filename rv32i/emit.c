@@ -116,6 +116,9 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_SRA:
     rv32i_emit_sra(state->emitter, instr->rv32i->sra);
     break;
+  case RV32I_INSTR_TY_FMV:
+    rv32i_emit_fmv(state->emitter, instr->rv32i->fmv);
+    break;
   }
 }
 
