@@ -229,6 +229,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
         struct ir_op_use *use = &uses.use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
+          debug_assert(!(use->op->flags & IR_OP_FLAG_CONTAINED), "contained op must have uses");
+
           debug("detaching op %zu", use->op->id);
           detach_ir_op(func, use->op);
         }
