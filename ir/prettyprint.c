@@ -411,8 +411,10 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
   case IR_OP_TY_BR_COND:
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
-    fprintf(file, "br.cond %%%zu, TRUE(@%zu), FALSE(@%zu)",
-            ir->br_cond.cond->id, ir->stmt->basicblock->split.true_target->id,
+    fprintf(file, "br.cond ");
+    debug_print_op_use(file, irb, ir->br_cond.cond);
+    fprintf(file, ", TRUE(@%zu), FALSE(@%zu)",
+            ir->stmt->basicblock->split.true_target->id,
             ir->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_BR_SWITCH:

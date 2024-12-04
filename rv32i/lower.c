@@ -8,10 +8,16 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
                        binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");
 
-  if (op->succ && op->succ->ty == IR_OP_TY_BR_COND) {
-    // contain within branch
-    UNUSED struct ir_op *contained = alloc_contained_ir_op(irb, op, op->succ);
+  if (op->flags & IR_OP_FLAG_CONTAINED) {
     return;
+  }
+
+  struct ir_op *br_cond = op->succ;
+  if (br_cond && br_cond->ty == IR_OP_TY_BR_COND) {
+    // contain within branch
+    struct ir_op *contained = alloc_contained_ir_op(irb, op, br_cond);
+
+    br_cond->br_cond.cond = contained;
   }
 }
 
