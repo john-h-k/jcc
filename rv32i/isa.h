@@ -179,11 +179,14 @@
 #define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)
 #define SW(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SW, OPC_STORE)
+#define FSW(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SW, OPC_STORE_FP)
+
 
 #define LB(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LB, rd, OPC_LOAD)
 #define LBU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LBU, rd, OPC_LOAD)
 #define LH(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LH, rd, OPC_LOAD)
 #define LHU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LHU, rd, OPC_LOAD)
 #define LW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD)
+#define FLW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD_FP)
 
 #endif

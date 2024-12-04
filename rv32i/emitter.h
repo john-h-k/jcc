@@ -50,11 +50,13 @@ void rv32i_emit_sra(struct rv32i_emitter *emitter, const struct rv32i_op sra);
 void rv32i_emit_sb(struct rv32i_emitter *emitter, const struct rv32i_store sb);
 void rv32i_emit_sh(struct rv32i_emitter *emitter, const struct rv32i_store sh);
 void rv32i_emit_sw(struct rv32i_emitter *emitter, const struct rv32i_store sw);
+void rv32i_emit_fsw(struct rv32i_emitter *emitter, const struct rv32i_store fsw);
 
 void rv32i_emit_lb(struct rv32i_emitter *emitter, const struct rv32i_load lb);
 void rv32i_emit_lbu(struct rv32i_emitter *emitter, const struct rv32i_load lbu);
 void rv32i_emit_lh(struct rv32i_emitter *emitter, const struct rv32i_load lh);
 void rv32i_emit_lhu(struct rv32i_emitter *emitter, const struct rv32i_load lhu);
 void rv32i_emit_lw(struct rv32i_emitter *emitter, const struct rv32i_load lw);
+void rv32i_emit_flw(struct rv32i_emitter *emitter, const struct rv32i_load flw);
 
 #endif
