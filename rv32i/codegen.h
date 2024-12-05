@@ -34,6 +34,9 @@ enum rv32i_instr_ty {
 
   RV32I_INSTR_TY_FMV,
 
+  RV32I_INSTR_TY_FADD,
+  RV32I_INSTR_TY_FSGNJ,
+
   RV32I_INSTR_TY_OR,
   RV32I_INSTR_TY_AND,
   RV32I_INSTR_TY_XOR,
@@ -179,9 +182,9 @@ struct rv32i_instr {
       struct rv32i_op op, add, sub, mul, div, rem, divu, remu, and, or, xor, sll, srl, sra;
     };
 
-    // union {
-    //   struct rv32i_op_fp op_fp;
-    // };
+    union {
+      struct rv32i_op_fp op_fp, fadd, fsgnj;
+    };
 
     union {
       struct rv32i_op_mov op_mov, fmv;

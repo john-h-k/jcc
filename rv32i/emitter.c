@@ -129,12 +129,20 @@ void rv32i_emit_fmv(struct rv32i_emitter *emitter,
   case RV32I_REG_TY_NONE:
     bug("NONE type in fmv emit");
   case RV32I_REG_TY_GP:
-    rv32i_emit_instr(emitter, FMV_WX(fmv.source.idx, fmv.dest.idx));
-    break;
-  case RV32I_REG_TY_FP:
     rv32i_emit_instr(emitter, FMV_XW(fmv.source.idx, fmv.dest.idx));
     break;
+  case RV32I_REG_TY_FP:
+    rv32i_emit_instr(emitter, FMV_WX(fmv.source.idx, fmv.dest.idx));
+    break;
   }
+}
+
+void rv32i_emit_fadd(struct rv32i_emitter *emitter, const struct rv32i_op_fp fadd) {
+  rv32i_emit_instr(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
+}
+
+void rv32i_emit_fsgnj(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsgnj) {
+  rv32i_emit_instr(emitter, FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
 }
 
 void rv32i_emit_addi(struct rv32i_emitter *emitter,
