@@ -13,6 +13,15 @@
     }                                                                          \
   }
 
+#define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
+  (struct rv32i_instr) {                                                       \
+    .ty = RV32I_INSTR_TY_FSGNJ, .add = {                                       \
+      .lhs = (source_reg),                                     \
+      .rhs = (source_reg),                                                     \
+      .dest = (dest_reg),                                                      \
+    }                                                                          \
+  }
+
 static const char *rv32i_mangle(struct arena_allocator *arena,
                                 const char *name) {
   char *dest =
@@ -96,7 +105,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
     } else if (idx >= 8) {
       return 2 + idx;
     } else {
-      return idx;
+      return 1 + idx;
     }
   }
 }
@@ -301,7 +310,12 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
 
     if (source.idx != return_reg_for_ty(source.ty).idx) {
       struct instr *instr = alloc_instr(state->func);
-      *instr->rv32i = MOV_ALIAS(return_reg_for_ty(source.ty), source);
+
+      if (source.ty == RV32I_REG_TY_GP) {
+        *instr->rv32i = MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      } else {
+        *instr->rv32i = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      }
     }
   }
 
@@ -497,13 +511,13 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     };
     break;
   case IR_OP_BINARY_OP_TY_FADD:
-    // instr->rv32i->ty = rv32i_INSTR_TY_FADD;
-    // instr->rv32i->fadd = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_FADD;
+    instr->rv32i->fadd = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_FSUB:
     // instr->rv32i->ty = rv32i_INSTR_TY_FSUB;
     // instr->rv32i->fsub = (struct rv32i_reg_2_source){
@@ -777,13 +791,12 @@ static void codegen_uconv_op(struct codegen_state *state,
 
 static void codegen_sconv_op(struct codegen_state *state,
                              struct rv32i_reg source, struct rv32i_reg dest) {
-  todo("rv32i sconv");
+  // todo("rv32i sconv");
 
   // temporarily just move bits
-  // struct instr *instr = alloc_instr(state->func);
-  // instr->rv32i->ty = RV32I_INSTR_TY_SCVTF;
-  // instr->rv32i->fcvt =
-  //     (struct rv32i_reg_1_source){.dest = dest, .source = source};
+  struct instr *instr = alloc_instr(state->func);
+  instr->rv32i->ty = RV32I_INSTR_TY_FMV;
+  instr->rv32i->fmv = (struct rv32i_op_mov){.dest = dest, .source = source};
 }
 
 static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
@@ -1106,6 +1119,11 @@ static void debug_print_op_imm(FILE *file, const struct rv32i_op_imm *op_imm) {
           op_imm->imm);
 }
 
+static void debug_print_op_fp(FILE *file, const struct rv32i_op_fp *op_fp) {
+  fprintf(file, " f%zu, f%zu, f%zu", op_fp->dest.idx, op_fp->lhs.idx,
+          op_fp->rhs.idx);
+}
+
 static void debug_print_op(FILE *file, const struct rv32i_op *op) {
   fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
 }
@@ -1310,6 +1328,14 @@ static void debug_print_instr(FILE *file,
     }
 
     debug_print_op_mov(file, &instr->rv32i->fmv);
+    break;
+  case RV32I_INSTR_TY_FADD:
+    fprintf(file, "fadd");
+    debug_print_op_fp(file, &instr->rv32i->op_fp);
+    break;
+  case RV32I_INSTR_TY_FSGNJ:
+    fprintf(file, "fsgnj");
+    debug_print_op_fp(file, &instr->rv32i->op_fp);
     break;
   }
 }

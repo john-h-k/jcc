@@ -12,7 +12,7 @@ const struct target RV32I_TARGET = {
                                               .num_reserved = 0},
         .fp_registers =
             (struct reg_set_info){
-                .num_volatile = 20,
+                .num_volatile = 19,
                 .num_nonvolatile = 12,
                 .num_reserved = 0},
     },

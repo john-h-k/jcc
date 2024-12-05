@@ -121,6 +121,11 @@
 
 #define FUNCT7_ADD U32(0b0000000)
 #define FUNCT7_MULDIV U32(0b0000001)
+
+#define FUNCT7_FADD U32(0b0000000)
+#define FUNCT7_FSUB U32(0b0000100)
+#define FUNCT7_FSGNJ U32(0b0010000)
+
 #define FUNCT7_SUB U32(0b0100000)
 #define FUNCT7_SRL U32(0b0000000)
 #define FUNCT7_SRA U32(0b0100000)
@@ -175,6 +180,9 @@
 
 #define FMV_XW(rs1, rd) R_TYPE(FUNCT7_FMV_XW, 0b00, rs1, FUNCT3_FMV_XW, rd, OPC_OP_FP)
 #define FMV_WX(rs1, rd) R_TYPE(FUNCT7_FMV_WX, 0b00, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+
+#define FADD_S(rs2, rs1, rd) R_TYPE(FUNCT7_FADD, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FSGNJ_S(rs2, rs1, rd) R_TYPE(FUNCT7_FSGNJ, rs2, rs1, 0b000, rd, OPC_OP_FP)
 
 #define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)

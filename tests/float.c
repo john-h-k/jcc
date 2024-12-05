@@ -1,9 +1,9 @@
-// expected value: 7
+// expected value: 205
 
-int main() {
-  float a = 7.4f;
+float main() {
+  float a = 7.4f + 9.7f;
 
-  int *p = (int *)&a;
+  float b = a - 109.555f;
 
-  return *p;
+  return b;
 }
