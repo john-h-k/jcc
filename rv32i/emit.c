@@ -128,6 +128,15 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_FADD:
     rv32i_emit_fadd(state->emitter, instr->rv32i->fadd);
     break;
+  case RV32I_INSTR_TY_FSUB:
+    rv32i_emit_fsub(state->emitter, instr->rv32i->fsub);
+    break;
+  case RV32I_INSTR_TY_FMUL:
+    rv32i_emit_fmul(state->emitter, instr->rv32i->fmul);
+    break;
+  case RV32I_INSTR_TY_FDIV:
+    rv32i_emit_fdiv(state->emitter, instr->rv32i->fdiv);
+    break;
   case RV32I_INSTR_TY_FSGNJ:
     rv32i_emit_fsgnj(state->emitter, instr->rv32i->fsgnj);
     break;

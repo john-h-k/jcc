@@ -31,6 +31,10 @@ void rv32i_emit_bgeu(struct rv32i_emitter *emitter, const struct rv32i_condition
 
 void rv32i_emit_fmv(struct rv32i_emitter *emitter, const struct rv32i_op_mov fmv);
 void rv32i_emit_fadd(struct rv32i_emitter *emitter, const struct rv32i_op_fp fadd);
+void rv32i_emit_fsub(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsub);
+void rv32i_emit_fmul(struct rv32i_emitter *emitter, const struct rv32i_op_fp fmul);
+void rv32i_emit_fdiv(struct rv32i_emitter *emitter, const struct rv32i_op_fp fdiv);
+
 void rv32i_emit_fsgnj(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsgnj);
 
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);

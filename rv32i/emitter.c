@@ -141,6 +141,18 @@ void rv32i_emit_fadd(struct rv32i_emitter *emitter, const struct rv32i_op_fp fad
   rv32i_emit_instr(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
 }
 
+void rv32i_emit_fsub(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsub) {
+  rv32i_emit_instr(emitter, FSUB_S(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
+}
+
+void rv32i_emit_fmul(struct rv32i_emitter *emitter, const struct rv32i_op_fp fmul) {
+  rv32i_emit_instr(emitter, FMUL_S(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
+}
+
+void rv32i_emit_fdiv(struct rv32i_emitter *emitter, const struct rv32i_op_fp fdiv) {
+  rv32i_emit_instr(emitter, FDIV_S(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
+}
+
 void rv32i_emit_fsgnj(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsgnj) {
   rv32i_emit_instr(emitter, FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
 }

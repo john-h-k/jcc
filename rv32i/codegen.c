@@ -16,7 +16,7 @@
 #define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
   (struct rv32i_instr) {                                                       \
     .ty = RV32I_INSTR_TY_FSGNJ, .add = {                                       \
-      .lhs = (source_reg),                                     \
+      .lhs = (source_reg),                                                     \
       .rhs = (source_reg),                                                     \
       .dest = (dest_reg),                                                      \
     }                                                                          \
@@ -519,30 +519,29 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     };
     break;
   case IR_OP_BINARY_OP_TY_FSUB:
-    // instr->rv32i->ty = rv32i_INSTR_TY_FSUB;
-    // instr->rv32i->fsub = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_FSUB;
+    instr->rv32i->fsub = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_FMUL:
-    // instr->rv32i->ty = rv32i_INSTR_TY_FMUL;
-    // instr->rv32i->fmul = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr->rv32i->ty = RV32I_INSTR_TY_FMUL;
+    instr->rv32i->fmul = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_FDIV:
-    // instr->rv32i->ty = rv32i_INSTR_TY_FDIV;
-    // instr->rv32i->fdiv = (struct rv32i_reg_2_source){
-    //     .dest = dest,
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
-    todo("float binops");
+    instr->rv32i->ty = RV32I_INSTR_TY_FDIV;
+    instr->rv32i->fdiv = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   }
 }
 
@@ -1331,11 +1330,23 @@ static void debug_print_instr(FILE *file,
     break;
   case RV32I_INSTR_TY_FADD:
     fprintf(file, "fadd");
-    debug_print_op_fp(file, &instr->rv32i->op_fp);
+    debug_print_op_fp(file, &instr->rv32i->fadd);
+    break;
+  case RV32I_INSTR_TY_FSUB:
+    fprintf(file, "fsub");
+    debug_print_op_fp(file, &instr->rv32i->fsub);
     break;
   case RV32I_INSTR_TY_FSGNJ:
     fprintf(file, "fsgnj");
-    debug_print_op_fp(file, &instr->rv32i->op_fp);
+    debug_print_op_fp(file, &instr->rv32i->fsgnj);
+    break;
+  case RV32I_INSTR_TY_FMUL:
+    fprintf(file, "fmul");
+    debug_print_op_fp(file, &instr->rv32i->fmul);
+    break;
+  case RV32I_INSTR_TY_FDIV:
+    fprintf(file, "fdiv");
+    debug_print_op_fp(file, &instr->rv32i->fdiv);
     break;
   }
 }
