@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
+    const char *working_dir = path_dir(sources[i]);
     char *object_file;
     
     if (args.preproc_only && !args.output) {
@@ -95,7 +96,8 @@ int main(int argc, char **argv) {
 
     disable_log();
     struct compiler *compiler;
-    if (create_compiler(&program, object_file, &args, &compiler) !=
+
+    if (create_compiler(&program, object_file, working_dir, &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;

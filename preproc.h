@@ -2,6 +2,7 @@
 #define PREPROC_H
 
 #include "program.h"
+
 #include <stdio.h>
 
 enum preproc_create_result { PREPROC_CREATE_RESULT_SUCCESS = 0 };
@@ -9,6 +10,7 @@ enum preproc_create_result { PREPROC_CREATE_RESULT_SUCCESS = 0 };
 struct preproc;
 
 enum preproc_create_result preproc_create(struct program *program,
+                                          const char *working_dir,
                                           size_t num_include_paths,
                                           const char **include_paths,
                                           struct preproc **preproc);
@@ -110,8 +112,7 @@ struct preproc_token {
   };
 };
 
-void preproc_next_token(struct preproc *preproc,
-                               struct preproc_token *token);
+void preproc_next_token(struct preproc *preproc, struct preproc_token *token);
 
 void preproc_process(struct preproc *preproc, FILE *file);
 

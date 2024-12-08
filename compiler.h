@@ -51,6 +51,7 @@ enum compile_result { COMPILE_RESULT_SUCCESS = 0, COMPILE_RESULT_BAD_FILE, COMPI
 
 enum compiler_create_result create_compiler(struct program *program,
                                             const char *output,
+                                            const char *working_dir,
                                             const struct compile_args *args,
                                             struct compiler **compiler);
 enum compile_result compile(struct compiler *compiler);

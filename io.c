@@ -1,8 +1,34 @@
 #include "io.h"
+
 #include "util.h"
+
 #include <stdio.h>
 
 // FIXME: these all leak. make them use `arena`s
+
+char *path_dir(const char *path) {
+  const char *last_slash = strrchr(path, '/');
+
+  if (last_slash == NULL) {
+    char *dir = nonnull_malloc(2);
+
+    if (dir != NULL) {
+      dir[0] = '.';
+      dir[1] = '\0';
+    }
+
+    return dir;
+  }
+
+  size_t dir_len = last_slash - path;
+
+  char *dir = nonnull_malloc(dir_len + 1);
+
+  strncpy(dir, path, dir_len);
+  dir[dir_len] = '\0';
+
+  return dir;
+}
 
 char *path_combine(const char *l, const char *r) {
   size_t l_len = strlen(l);
@@ -26,8 +52,8 @@ char *path_replace_ext(const char *path, const char *ext) {
   debug_assert(ext[0] != '.', "ext should not start with the `.`");
 
   // NOTE: if given no extension, this will append
-  // this is useful because it gives the invariant that the returned file is always a valid different file
-  // e.g
+  // this is useful because it gives the invariant that the returned file is
+  // always a valid different file e.g
   //   * `path_replace_ext("foo.c", "o")` -> `foo.o`
   //   * `path_replace_ext("foo", "o")` -> `foo.o`
 
