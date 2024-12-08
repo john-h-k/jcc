@@ -176,7 +176,7 @@ static void preproc_next_token(struct preproc *preproc,
     return;
   }
 
-  if (preproc->pos.idx + 1 < preproc->len && preproc->text[preproc->pos.idx] == '\\' && is_newline(preproc->text[preproc->pos.idx + 1])) {
+  while (preproc->pos.idx + 1 < preproc->len && preproc->text[preproc->pos.idx] == '\\' && is_newline(preproc->text[preproc->pos.idx + 1])) {
     // literally just skip this, don't even generate a token
     next_col(&end);
     next_line(&end);
@@ -185,7 +185,9 @@ static void preproc_next_token(struct preproc *preproc,
 
     start = preproc->pos;
     end = start;
-  } else if (preproc->pos.idx < preproc->len &&
+  }
+  
+  if (preproc->pos.idx < preproc->len &&
       is_newline(preproc->text[preproc->pos.idx])) {
     next_line(&end);
 
