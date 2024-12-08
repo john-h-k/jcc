@@ -102,6 +102,7 @@ struct preproc_token_punctuator {
 struct preproc_token {
   enum preproc_token_ty ty;
 
+  const char *text;
   struct text_span span;
 
   union {

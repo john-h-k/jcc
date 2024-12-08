@@ -16,9 +16,6 @@ struct lexer {
   struct program *program;
   struct preproc *preproc;
 
-  const char *text;
-  size_t len;
-
   // once we generate a token, we put it here
   struct vector *tokens;
   size_t pos;
@@ -108,12 +105,8 @@ enum lex_create_result lexer_create(struct program *program,
   l->program = program;
   l->preproc = preproc;
 
-  l->text = program->text;
-  l->len = strlen(program->text);
-
   l->tokens = vector_create(sizeof(struct lex_token));
   l->pos = 0;
-  
 
   *lexer = l;
 
@@ -130,8 +123,7 @@ void lexer_free(struct lexer **lexer) {
 
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
-static enum lex_token_ty refine_ty(struct lexer *lexer,
-                                   const struct text_span *span) {
+static enum lex_token_ty refine_ty(struct preproc_token *token) {
   struct keyword {
     const char *str;
     size_t len;
@@ -140,8 +132,8 @@ static enum lex_token_ty refine_ty(struct lexer *lexer,
 
   debug_assert(KEYWORDS, "keywords should have been built");
 
-  struct sized_str key = {.str = &lexer->text[span->start.idx],
-                          .len = text_span_len(span)};
+  struct sized_str key = {.str = token->text,
+                          .len = text_span_len(&token->span)};
 
   enum lex_token_ty *kw_ty = hashtbl_lookup(KEYWORDS, &key);
 
@@ -152,11 +144,14 @@ static enum lex_token_ty refine_ty(struct lexer *lexer,
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
-static const char *process_raw_string(const struct lexer *lexer,
+static const char *process_raw_string(UNUSED const struct lexer *lexer,
                                       const struct lex_token *token,
                                       size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
+
+  const char *text = token->text;
+  size_t len = text_span_len(&token->span);
 
   struct vector *buff = vector_create(sizeof(char));
 
@@ -166,13 +161,12 @@ static const char *process_raw_string(const struct lexer *lexer,
                       : '"';
   size_t str_start = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                       token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL)
-                         ? token->span.start.idx + 2
-                         : token->span.start.idx + 1;
+                         ? 2
+                         : 1;
 
   *str_len = 0;
   bool char_escaped = false;
-  for (size_t i = str_start; i <= token->span.end.idx &&
-                             !(!char_escaped && lexer->text[i] == end_char);
+  for (size_t i = str_start; i < len && !(!char_escaped && text[i] == end_char);
        i++) {
     if (char_escaped) {
 #define ADD_ESCAPED(ch, esc)                                                   \
@@ -182,11 +176,11 @@ static const char *process_raw_string(const struct lexer *lexer,
     break;                                                                     \
   }
 
-      if (lexer->text[i] == '0') {
+      if (text[i] == '0') {
         size_t octal_start = i + 1;
 
         while (i + 1 < token->span.end.idx) {
-          if (lexer->text[i + 1] >= '0' && lexer->text[i + 1] <= '7') {
+          if (text[i + 1] >= '0' && text[i + 1] <= '7') {
             i++;
           } else {
             break;
@@ -196,15 +190,15 @@ static const char *process_raw_string(const struct lexer *lexer,
         size_t octal_len = MIN(2, i - octal_start + 1);
         char oct_buff[3] = {0};
         for (size_t j = 0; j < octal_len; j++) {
-          oct_buff[j] = lexer->text[octal_start + j];
+          oct_buff[j] = text[octal_start + j];
         }
 
         unsigned char value = (unsigned char)strtoul(oct_buff, NULL, 8);
         vector_push_back(buff, &value);
-      } else if (lexer->text[i] == 'u') {
+      } else if (text[i] == 'u') {
         // FIXME: C23 allows arbitrary num digits, not just 4
         char u_buff[5] = {0};
-        memcpy(u_buff, &lexer->text[i + 1], 4);
+        memcpy(u_buff, &text[i + 1], 4);
         i += 4;
 
         unsigned codepoint = strtoul(u_buff, NULL, 16);
@@ -228,15 +222,15 @@ static const char *process_raw_string(const struct lexer *lexer,
                        0x80 | (codepoint & 0x3F)};
           vector_extend(buff, c, 4);
         }
-      } else if (lexer->text[i] == 'x') {
+      } else if (text[i] == 'x') {
         char x_buff[3] = {0};
-        memcpy(x_buff, &lexer->text[i + 1], 2);
+        memcpy(x_buff, &text[i + 1], 2);
         i += 2;
 
         unsigned char value = (unsigned char)strtoul(x_buff, NULL, 16);
         vector_push_back(buff, &value);
       } else {
-        switch (lexer->text[i]) {
+        switch (text[i]) {
           ADD_ESCAPED('0', '\0')
           ADD_ESCAPED('a', '\a')
           ADD_ESCAPED('b', '\b')
@@ -258,12 +252,12 @@ static const char *process_raw_string(const struct lexer *lexer,
       }
 
 #undef ADD_ESCAPED
-    } else if (lexer->text[i] != '\\') {
-      vector_push_back(buff, &lexer->text[i]);
+    } else if (text[i] != '\\') {
+      vector_push_back(buff, &text[i]);
     }
 
     // next char is escaped if this char is a non-escaped backslash
-    char_escaped = !char_escaped && lexer->text[i] == '\\';
+    char_escaped = !char_escaped && text[i] == '\\';
   }
 
   *str_len = vector_length(buff);
@@ -278,7 +272,6 @@ static const char *process_raw_string(const struct lexer *lexer,
   return value;
 }
 
-
 bool lexer_at_eof(struct lexer *lexer) {
   // needed to skip whitespace
   struct lex_token token;
@@ -289,153 +282,156 @@ bool lexer_at_eof(struct lexer *lexer) {
 
 // FIXME: keeping this code so don't need to rewrite it, but not sure if needed
 // static void lex_literal() {
-  // // all integers must begin with a digit
-  // // any digit for decimal, `0` for hex/octal
-  // // floats can be digit or `.`
+// // all integers must begin with a digit
+// // any digit for decimal, `0` for hex/octal
+// // floats can be digit or `.`
 
-  // bool is_float = c == '.';
+// bool is_float = c == '.';
 
-  // next_col(&end);
+// next_col(&end);
 
-  // // remove hex prefix
-  // bool is_hex = try_consume(lexer, &end, 'x');
+// // remove hex prefix
+// bool is_hex = try_consume(lexer, &end, 'x');
 
-  // // this is generous and will allow 0BE for example, when only 0xBE is valid
-  // // that's okay, let parser handle it
-  // for (; end.idx < lexer->len; next_col(&end)) {
-  //   if (lexer->text[end.idx] == '.') {
-  //     is_float = true;
-  //     continue;
-  //   }
+// // this is generous and will allow 0BE for example, when only 0xBE is valid
+// // that's okay, let parser handle it
+// for (; end.idx < lexer->len; next_col(&end)) {
+//   if (lexer->text[end.idx] == '.') {
+//     is_float = true;
+//     continue;
+//   }
 
-  //   if (!is_hex &&
-  //       (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
-  //     is_float = true;
-  //     next_col(&end);
+//   if (!is_hex &&
+//       (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
+//     is_float = true;
+//     next_col(&end);
 
-  //     if (end.idx < lexer->len &&
-  //         (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
-  //       next_col(&end);
-  //     }
+//     if (end.idx < lexer->len &&
+//         (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
+//       next_col(&end);
+//     }
 
-  //     // skip the sign after exponent
-  //     continue;
-  //   }
+//     // skip the sign after exponent
+//     continue;
+//   }
 
-  //   if ((is_float && !isdigit(lexer->text[end.idx])) ||
-  //       (!is_float && !isxdigit(lexer->text[end.idx]))) {
-  //     break;
-  //   }
-  // }
-
-  // bool is_unsigned = false;
-
-  // ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
-  // while (end.idx < lexer->len) {
-  //   switch (tolower(lexer->text[end.idx])) {
-  //   case 'u':
-  //     is_unsigned = true;
-  //     next_col(&end);
-  //     continue;
-  //   case 'f':
-  //     ty = LEX_TOKEN_TY_FLOAT_LITERAL;
-  //     next_col(&end);
-  //     continue;
-  //   case 'l':
-  //     if (!is_float && end.idx + 2 < lexer->len &&
-  //         tolower(lexer->text[end.idx + 1]) == 'l') {
-  //       ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
-  //     } else if (is_float) {
-  //       ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
-  //     } else {
-  //       ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
-  //     }
-  //     next_col(&end);
-  //     continue;
-  //   default:
-  //     break;
-  //   }
-
-  //   break;
-  // }
-
-  // if (is_unsigned) {
-  //   invariant_assert(!is_float, "can't be unsigned and float");
-  //   ty++;
-  // }
-  // break;
-
-  // // default: {
-  // if (c == '\'' ||
-  //     (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '\'')) {
-  //   ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
-
-  //   // skip first single-quote
-  //   if (c == 'L') {
-  //     next_col(&end);
-  //     ty = LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
-  //   }
-  //   next_col(&end);
-
-  //   // move forward while
-  //   bool char_escaped = false;
-  //   for (size_t i = end.idx;
-  //        i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
-  //     // next char is escaped if this char is a non-escaped backslash
-  //     char_escaped = !char_escaped && lexer->text[i] == '\\';
-  //     next_col(&end);
-  //   }
-
-  //   // skip final single-quote
-  //   next_col(&end);
-  // } else if (c == '"' || (c == 'L' && end.idx < lexer->len &&
-  //                         lexer->text[end.idx + 1] == '"')) {
-  //   // TODO: logic is same as for char, could dedupe
-  //   ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
-
-  //   // skip first double-quote
-  //   if (c == 'L') {
-  //     next_col(&end);
-  //     ty = LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
-  //   }
-  //   next_col(&end);
-
-  //   // move forward while
-  //   bool char_escaped = false;
-  //   for (size_t i = end.idx;
-  //        i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
-  //     // next char is escaped if this char is a non-escaped backslash
-  //     char_escaped = !char_escaped && lexer->text[i] == '\\';
-  //     next_col(&end);
-  //   }
-
-  //   // skip final double-quote
-  //   next_col(&end);
+//   if ((is_float && !isdigit(lexer->text[end.idx])) ||
+//       (!is_float && !isxdigit(lexer->text[end.idx]))) {
+//     break;
+//   }
 // }
 
-static enum lex_token_ty preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty);
+// bool is_unsigned = false;
 
-static enum lex_token_ty lex_string_literal(struct lexer *lexer, const struct preproc_token *preproc_token) {
-  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL, "wrong preproc token ty");
+// ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL :
+// LEX_TOKEN_TY_SIGNED_INT_LITERAL; while (end.idx < lexer->len) {
+//   switch (tolower(lexer->text[end.idx])) {
+//   case 'u':
+//     is_unsigned = true;
+//     next_col(&end);
+//     continue;
+//   case 'f':
+//     ty = LEX_TOKEN_TY_FLOAT_LITERAL;
+//     next_col(&end);
+//     continue;
+//   case 'l':
+//     if (!is_float && end.idx + 2 < lexer->len &&
+//         tolower(lexer->text[end.idx + 1]) == 'l') {
+//       ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
+//     } else if (is_float) {
+//       ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
+//     } else {
+//       ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
+//     }
+//     next_col(&end);
+//     continue;
+//   default:
+//     break;
+//   }
 
-  struct text_pos start = preproc_token->span.start;
+//   break;
+// }
 
-  char c = lexer->text[start.idx];
+// if (is_unsigned) {
+//   invariant_assert(!is_float, "can't be unsigned and float");
+//   ty++;
+// }
+// break;
+
+// // default: {
+// if (c == '\'' ||
+//     (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '\'')) {
+//   ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
+
+//   // skip first single-quote
+//   if (c == 'L') {
+//     next_col(&end);
+//     ty = LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
+//   }
+//   next_col(&end);
+
+//   // move forward while
+//   bool char_escaped = false;
+//   for (size_t i = end.idx;
+//        i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
+//     // next char is escaped if this char is a non-escaped backslash
+//     char_escaped = !char_escaped && lexer->text[i] == '\\';
+//     next_col(&end);
+//   }
+
+//   // skip final single-quote
+//   next_col(&end);
+// } else if (c == '"' || (c == 'L' && end.idx < lexer->len &&
+//                         lexer->text[end.idx + 1] == '"')) {
+//   // TODO: logic is same as for char, could dedupe
+//   ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
+
+//   // skip first double-quote
+//   if (c == 'L') {
+//     next_col(&end);
+//     ty = LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
+//   }
+//   next_col(&end);
+
+//   // move forward while
+//   bool char_escaped = false;
+//   for (size_t i = end.idx;
+//        i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
+//     // next char is escaped if this char is a non-escaped backslash
+//     char_escaped = !char_escaped && lexer->text[i] == '\\';
+//     next_col(&end);
+//   }
+
+//   // skip final double-quote
+//   next_col(&end);
+// }
+
+static enum lex_token_ty
+preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty);
+
+static enum lex_token_ty
+lex_string_literal(const struct preproc_token *preproc_token) {
+  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL,
+               "wrong preproc token ty");
+
+  char c = preproc_token->text[0];
 
   switch (c) {
-    case '<':
-      bug("found angle-bracket string literal in lexer");
-    case '\"':
-      return LEX_TOKEN_TY_ASCII_STR_LITERAL;
-    case '\'':
-      return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
-    default:
-      todo("other string/char literal types");
+  case '<':
+    bug("found angle-bracket string literal in lexer");
+  case '\"':
+    return LEX_TOKEN_TY_ASCII_STR_LITERAL;
+  case '\'':
+    return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
+  default:
+    todo("other string/char literal types");
   }
 }
 
-static enum lex_token_ty lex_number_literal(struct lexer *lexer, const struct preproc_token *preproc_token) {
-  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_PREPROC_NUMBER, "wrong preproc token ty");
+static enum lex_token_ty
+lex_number_literal(const struct preproc_token *preproc_token) {
+  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_PREPROC_NUMBER,
+               "wrong preproc token ty");
 
   enum FLAG_ENUM lit_ty {
     LIT_TY_NONE = 0,
@@ -446,97 +442,97 @@ static enum lex_token_ty lex_number_literal(struct lexer *lexer, const struct pr
     LIT_TY_Z = 16,
     LIT_TY_F = 32,
   };
-  
+
   struct text_pos start = preproc_token->span.start;
   struct text_pos end = preproc_token->span.end;
 
+  const char *text = preproc_token->text;
   size_t len = text_pos_len(start, end);
 
   enum lit_ty lit_ty = LIT_TY_NONE;
 
-  bool is_hex = len >= 2 && (lexer->text[start.idx] == '0' && lexer->text[start.idx + 1] == 'x');
+  bool is_hex = len >= 2 && (text[0] == '0' && text[1] == 'x');
 
-  size_t start_idx = start.idx;
-  size_t end_idx = end.idx;
-  while (end_idx >= start_idx) {
-    char c = lexer->text[end_idx];
+  size_t end_idx = len;
+
+  while (end_idx) {
+    char c = text[end_idx];
 
     switch (c) {
-      case 'l':
-      case 'L':
-        if (end_idx > start_idx && (lexer->text[end_idx - 1] == 'l' || lexer->text[end_idx - 1] == 'L')) {
-          end_idx--;
-          lit_ty |= LIT_TY_LL;
-        } else {
-          lit_ty |= LIT_TY_L;
-        }
-        break;
-      case 'f':
-      case 'F':
-        if (!is_hex) {
-          lit_ty |= LIT_TY_F;
-        }
-        break;
-      case 'u':
-      case 'U':
-        lit_ty |= LIT_TY_U;
-        break;
-      case 'z':
-      case 'Z':
-        lit_ty |= LIT_TY_Z;
-        break;
+    case 'l':
+    case 'L':
+      if (end_idx && (text[end_idx - 1] == 'l' || text[end_idx - 1] == 'L')) {
+        end_idx--;
+        lit_ty |= LIT_TY_LL;
+      } else {
+        lit_ty |= LIT_TY_L;
+      }
+      break;
+    case 'f':
+    case 'F':
+      if (!is_hex) {
+        lit_ty |= LIT_TY_F;
+      }
+      break;
+    case 'u':
+    case 'U':
+      lit_ty |= LIT_TY_U;
+      break;
+    case 'z':
+    case 'Z':
+      lit_ty |= LIT_TY_Z;
+      break;
     }
 
     end_idx--;
   }
 
-  if (
-    (memchr(&lexer->text[start_idx], '.', len))
-    || (!is_hex && (memchr(&lexer->text[start_idx], 'e', len) || memchr(&lexer->text[start_idx], 'E', len)))
-    || (is_hex && (memchr(&lexer->text[start_idx], 'p', len) || memchr(&lexer->text[start_idx], 'P', len)))) {
-      lit_ty |= LIT_TY_FLT;
+  if ((memchr(text, '.', len)) ||
+      (!is_hex && (memchr(text, 'e', len) || memchr(text, 'E', len))) ||
+      (is_hex && (memchr(text, 'p', len) || memchr(text, 'P', len)))) {
+    lit_ty |= LIT_TY_FLT;
   }
 
   enum lex_token_ty ty;
   switch (lit_ty) {
-    // Integer
-    case LIT_TY_NONE:
-      ty = LEX_TOKEN_TY_SIGNED_INT_LITERAL;
-      break;
-    case LIT_TY_U:
-      ty = LEX_TOKEN_TY_UNSIGNED_INT_LITERAL;
-      break;
-    case LIT_TY_L:
-      ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
-      break;
-    case LIT_TY_LL:
-      ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
-      break;
-    case LIT_TY_Z:
-      todo("Z-sized literals");
-    case LIT_TY_U | LIT_TY_L:
-      ty = LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL;
-      break;
-    case LIT_TY_U | LIT_TY_LL:
-      ty = LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL;
-      break;
-    case LIT_TY_U | LIT_TY_Z:
-      todo("Z-sized literals");
+  // Integer
+  case LIT_TY_NONE:
+    ty = LEX_TOKEN_TY_SIGNED_INT_LITERAL;
+    break;
+  case LIT_TY_U:
+    ty = LEX_TOKEN_TY_UNSIGNED_INT_LITERAL;
+    break;
+  case LIT_TY_L:
+    ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
+    break;
+  case LIT_TY_LL:
+    ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
+    break;
+  case LIT_TY_Z:
+    todo("Z-sized literals");
+  case LIT_TY_U | LIT_TY_L:
+    ty = LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL;
+    break;
+  case LIT_TY_U | LIT_TY_LL:
+    ty = LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL;
+    break;
+  case LIT_TY_U | LIT_TY_Z:
+    todo("Z-sized literals");
 
-    // Floating-point
-    case LIT_TY_FLT:
-      ty = LEX_TOKEN_TY_DOUBLE_LITERAL;
-      break;
-    case LIT_TY_F:
-    case LIT_TY_FLT | LIT_TY_F:
-      ty = LEX_TOKEN_TY_FLOAT_LITERAL;
-      break;
-    case LIT_TY_FLT | LIT_TY_L:
-      ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
-      break;
+  // Floating-point
+  case LIT_TY_FLT:
+    ty = LEX_TOKEN_TY_DOUBLE_LITERAL;
+    break;
+  case LIT_TY_F:
+  case LIT_TY_FLT | LIT_TY_F:
+    ty = LEX_TOKEN_TY_FLOAT_LITERAL;
+    break;
+  case LIT_TY_FLT | LIT_TY_L:
+    ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
+    break;
 
-    default:
-      todo("handle bad suffixes for number literals");
+  default:
+    todo("handle bad suffixes for number literals");
   }
 
   return ty;
@@ -552,28 +548,37 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
     switch (preproc_token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
       *token = (struct lex_token){.ty = LEX_TOKEN_TY_UNKNOWN,
+                                  .text = preproc_token.text,
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_EOF:
       *token = (struct lex_token){.ty = LEX_TOKEN_TY_EOF,
+                                  .text = preproc_token.text,
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_DIRECTIVE:
       bug("directive token reached lexer");
     case PREPROC_TOKEN_TY_IDENTIFIER: {
-      enum lex_token_ty ty = refine_ty(lexer, &preproc_token.span);
-      *token = (struct lex_token){.ty = ty, .span = preproc_token.span};
+      enum lex_token_ty ty = refine_ty(&preproc_token);
+      *token = (struct lex_token){
+          .ty = ty, .text = preproc_token.text, .span = preproc_token.span};
       return;
     }
     case PREPROC_TOKEN_TY_PREPROC_NUMBER:
-      *token = (struct lex_token){.ty = lex_number_literal(lexer, &preproc_token), .span = preproc_token.span};
+      *token = (struct lex_token){.ty = lex_number_literal(&preproc_token),
+                                  .text = preproc_token.text,
+                                  .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_STRING_LITERAL:
-      *token = (struct lex_token){.ty = lex_string_literal(lexer, &preproc_token), .span = preproc_token.span};
+      *token = (struct lex_token){.ty = lex_string_literal(&preproc_token),
+                                  .text = preproc_token.text,
+                                  .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_PUNCTUATOR:
-      *token = (struct lex_token){.ty = preproc_punctuator_to_lex_token_ty(preproc_token.punctuator.ty),
-                                  .span = preproc_token.span};
+      *token = (struct lex_token){
+          .ty = preproc_punctuator_to_lex_token_ty(preproc_token.punctuator.ty),
+          .text = preproc_token.text,
+          .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_OTHER:
       todo("handler OTHER preproc tokens in lexer");
@@ -610,18 +615,20 @@ void backtrack(struct lexer *lexer, struct text_pos position) {
 }
 
 void consume_token(struct lexer *lexer, struct lex_token token) {
-  // FIXME: when you consume `token`, you jump to the next token regardless of if you have consumed previous tokens
-  // instead, it should move forward 1 token
-  // we have the `internal_lexer_pos` field which corresponds to `lexer->pos`
-  // and have assertions that are not jumping past tokens
-  // once we have checked these assertions are never hit, we can remove it all
-  // also see `backtrack` and `get_position` which generate fake `text_pos` for this purpose
+  // FIXME: when you consume `token`, you jump to the next token regardless of
+  // if you have consumed previous tokens instead, it should move forward 1
+  // token we have the `internal_lexer_pos` field which corresponds to
+  // `lexer->pos` and have assertions that are not jumping past tokens once we
+  // have checked these assertions are never hit, we can remove it all also see
+  // `backtrack` and `get_position` which generate fake `text_pos` for this
+  // purpose
 
-  debug_assert(token.internal_lexer_next_pos == lexer->pos + 1, "jumped %zu tokens (expected 1)", token.internal_lexer_next_pos - lexer->pos);
+  debug_assert(token.internal_lexer_next_pos == lexer->pos + 1,
+               "jumped %zu tokens (expected 1)",
+               token.internal_lexer_next_pos - lexer->pos);
   lexer->pos = token.internal_lexer_next_pos;
   // lexer->pos = token.span.end;
 }
-
 
 const char *strlike_associated_text(const struct lexer *lexer,
                                     const struct lex_token *token,
@@ -649,7 +656,7 @@ const char *associated_text(const struct lexer *lexer,
   case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL: {
     size_t len = text_span_len(&token->span);
     char *p = arena_alloc(lexer->arena, len + 1);
-    memcpy(p, &lexer->text[token->span.start.idx], len);
+    memcpy(p, token->text, len);
     p[len] = '\0';
     return p;
   }
@@ -794,106 +801,107 @@ const char *token_name(UNUSED_ARG(const struct lexer *lexer),
 #undef CASE_RET
 }
 
-static enum lex_token_ty preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty) {
+static enum lex_token_ty
+preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty) {
   switch (ty) {
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET:
-      return LEX_TOKEN_TY_OPEN_BRACKET;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET:
-      return LEX_TOKEN_TY_CLOSE_BRACKET;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE:
-      return LEX_TOKEN_TY_OPEN_BRACE;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE:
-      return LEX_TOKEN_TY_CLOSE_BRACE;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET:
-      return LEX_TOKEN_TY_OPEN_SQUARE_BRACKET;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET:
-      return LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET:
+    return LEX_TOKEN_TY_OPEN_BRACKET;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET:
+    return LEX_TOKEN_TY_CLOSE_BRACKET;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE:
+    return LEX_TOKEN_TY_OPEN_BRACE;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE:
+    return LEX_TOKEN_TY_CLOSE_BRACE;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET:
+    return LEX_TOKEN_TY_OPEN_SQUARE_BRACKET;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET:
+    return LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_COLON:
-      return LEX_TOKEN_TY_COLON;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_SEMICOLON:
-      return LEX_TOKEN_TY_SEMICOLON;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_COMMA:
-      return LEX_TOKEN_TY_COMMA;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_DOT:
-      return LEX_TOKEN_TY_DOT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_ARROW:
-      return LEX_TOKEN_TY_ARROW;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_QMARK:
-      return LEX_TOKEN_TY_QMARK;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_COLON:
+    return LEX_TOKEN_TY_COLON;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_SEMICOLON:
+    return LEX_TOKEN_TY_SEMICOLON;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_COMMA:
+    return LEX_TOKEN_TY_COMMA;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_DOT:
+    return LEX_TOKEN_TY_DOT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_ARROW:
+    return LEX_TOKEN_TY_ARROW;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_QMARK:
+    return LEX_TOKEN_TY_QMARK;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT:
-      return LEX_TOKEN_TY_OP_LOGICAL_NOT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_NOT:
-      return LEX_TOKEN_TY_OP_NOT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT:
+    return LEX_TOKEN_TY_OP_LOGICAL_NOT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_NOT:
+    return LEX_TOKEN_TY_OP_NOT;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_INC:
-      return LEX_TOKEN_TY_OP_INC;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DEC:
-      return LEX_TOKEN_TY_OP_DEC;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_INC:
+    return LEX_TOKEN_TY_OP_INC;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DEC:
+    return LEX_TOKEN_TY_OP_DEC;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_AND:
-      return LEX_TOKEN_TY_OP_LOGICAL_AND;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR:
-      return LEX_TOKEN_TY_OP_LOGICAL_OR;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND:
-      return LEX_TOKEN_TY_OP_AND;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND_ASSG:
-      return LEX_TOKEN_TY_OP_AND_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR:
-      return LEX_TOKEN_TY_OP_OR;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR_ASSG:
-      return LEX_TOKEN_TY_OP_OR_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR:
-      return LEX_TOKEN_TY_OP_XOR;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR_ASSG:
-      return LEX_TOKEN_TY_OP_XOR_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT:
-      return LEX_TOKEN_TY_OP_RSHIFT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT_ASSG:
-      return LEX_TOKEN_TY_OP_RSHIFT_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT:
-      return LEX_TOKEN_TY_OP_LSHIFT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT_ASSG:
-      return LEX_TOKEN_TY_OP_LSHIFT_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD:
-      return LEX_TOKEN_TY_OP_ADD;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD_ASSG:
-      return LEX_TOKEN_TY_OP_ADD_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB:
-      return LEX_TOKEN_TY_OP_SUB;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB_ASSG:
-      return LEX_TOKEN_TY_OP_SUB_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL:
-      return LEX_TOKEN_TY_OP_MUL;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL_ASSG:
-      return LEX_TOKEN_TY_OP_MUL_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV:
-      return LEX_TOKEN_TY_OP_DIV;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV_ASSG:
-      return LEX_TOKEN_TY_OP_DIV_ASSG;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT:
-      return LEX_TOKEN_TY_OP_QUOT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT_ASSG:
-      return LEX_TOKEN_TY_OP_QUOT_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_AND:
+    return LEX_TOKEN_TY_OP_LOGICAL_AND;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR:
+    return LEX_TOKEN_TY_OP_LOGICAL_OR;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND:
+    return LEX_TOKEN_TY_OP_AND;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND_ASSG:
+    return LEX_TOKEN_TY_OP_AND_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR:
+    return LEX_TOKEN_TY_OP_OR;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR_ASSG:
+    return LEX_TOKEN_TY_OP_OR_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR:
+    return LEX_TOKEN_TY_OP_XOR;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR_ASSG:
+    return LEX_TOKEN_TY_OP_XOR_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT:
+    return LEX_TOKEN_TY_OP_RSHIFT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT_ASSG:
+    return LEX_TOKEN_TY_OP_RSHIFT_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT:
+    return LEX_TOKEN_TY_OP_LSHIFT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT_ASSG:
+    return LEX_TOKEN_TY_OP_LSHIFT_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD:
+    return LEX_TOKEN_TY_OP_ADD;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD_ASSG:
+    return LEX_TOKEN_TY_OP_ADD_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB:
+    return LEX_TOKEN_TY_OP_SUB;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB_ASSG:
+    return LEX_TOKEN_TY_OP_SUB_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL:
+    return LEX_TOKEN_TY_OP_MUL;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL_ASSG:
+    return LEX_TOKEN_TY_OP_MUL_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV:
+    return LEX_TOKEN_TY_OP_DIV;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV_ASSG:
+    return LEX_TOKEN_TY_OP_DIV_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT:
+    return LEX_TOKEN_TY_OP_QUOT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT_ASSG:
+    return LEX_TOKEN_TY_OP_QUOT_ASSG;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG:
-      return LEX_TOKEN_TY_OP_ASSG;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG:
+    return LEX_TOKEN_TY_OP_ASSG;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_EQ:
-      return LEX_TOKEN_TY_OP_EQ;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_NEQ:
-      return LEX_TOKEN_TY_OP_NEQ;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LT:
-      return LEX_TOKEN_TY_OP_LT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LTEQ:
-      return LEX_TOKEN_TY_OP_LTEQ;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_GT:
-      return LEX_TOKEN_TY_OP_GT;
-    case PREPROC_TOKEN_PUNCTUATOR_TY_OP_GTEQ:
-      return LEX_TOKEN_TY_OP_GTEQ;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_EQ:
+    return LEX_TOKEN_TY_OP_EQ;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_NEQ:
+    return LEX_TOKEN_TY_OP_NEQ;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LT:
+    return LEX_TOKEN_TY_OP_LT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LTEQ:
+    return LEX_TOKEN_TY_OP_LTEQ;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_GT:
+    return LEX_TOKEN_TY_OP_GT;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_GTEQ:
+    return LEX_TOKEN_TY_OP_GTEQ;
 
-    case PREPROC_TOKEN_PUNCTUATOR_TY_ELLIPSIS:
-      return LEX_TOKEN_TY_ELLIPSIS;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_ELLIPSIS:
+    return LEX_TOKEN_TY_ELLIPSIS;
   }
 }
