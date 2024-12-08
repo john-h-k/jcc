@@ -13,6 +13,18 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
   fi
 
   echo "Testing $file..."
+
+  first_line=$(head -n 1 "$file")
+  if [[ "$first_line" == "// no-compile" ]]; then
+    if ./build/jcc "$file" >/dev/null 2>&1; then
+      echo "TEST FAILED: expected compilation to fail, but it succeeded"
+      break
+    else
+      echo "TEST PASSED: compilation failed as expected"
+    fi
+    continue
+  fi
+
   expected=$(grep -i "Expected value:" $file | head -1 | grep -Eo '[0-9]+')
   stdin=$(grep -i "stdin" $file | head -1 | sed -n 's/^\/\/ stdin: //p')
   stdout=$(grep -i "stdout" $file | head -1 | sed -n 's/^\/\/ stdout: //p')
