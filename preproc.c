@@ -30,6 +30,10 @@ struct preproc {
 
   struct hashtbl *defines;
 
+  struct vector *enabled;
+
+  const char *working_dir;
+
   size_t num_include_paths;
   const char **include_paths;
 
@@ -92,6 +96,7 @@ static bool preproc_ident_eq(const void *l, const void *r) {
 }
 
 enum preproc_create_result preproc_create(struct program *program,
+                                          const char *working_dir,
                                           size_t num_include_paths,
                                           const char **include_paths,
                                           struct preproc **preproc) {
@@ -102,10 +107,15 @@ enum preproc_create_result preproc_create(struct program *program,
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
+  p->working_dir = working_dir;
   p->num_include_paths = num_include_paths;
   p->include_paths = include_paths;
 
   p->texts = vector_create(sizeof(struct preproc_text));
+  p->enabled = vector_create(sizeof(bool));
+
+  bool enabled = true;
+  vector_push_back(p->enabled, &enabled);
 
   struct preproc_text text = {.text = program->text,
                               .len = strlen(program->text),
@@ -652,12 +662,35 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       *token = *(struct preproc_token *)vector_pop(preproc->buffer_tokens);
     }
 
-    switch (token->ty) {
-    case PREPROC_TOKEN_TY_UNKNOWN:
-      unreachable();
-    case PREPROC_TOKEN_TY_DIRECTIVE: {
-      struct preproc_token directive;
-      preproc_next_token(preproc, &directive);
+    // handle directives first, as they can change `enabled`
+
+    struct preproc_token directive;
+    if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
+      preproc_next_raw_token(preproc, &directive);
+
+      if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+          token_streq(directive, "endif")) {
+        vector_pop(preproc->enabled);
+        continue;
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "else")) {
+        bool *enabled = vector_tail(preproc->enabled);
+        *enabled = !*enabled;
+        continue;
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "elif")) {
+        todo("elif");
+      }
+
+      // TODO: elifdef, elifndef
+    }
+
+    if (!*(bool *)vector_tail(preproc->enabled)) {
+      continue;
+    }
+
+    if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
+      // `directive` token is already parsed
 
       if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
           token_streq(directive, "include")) {
@@ -666,11 +699,13 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         struct preproc_token filename_token;
         preproc_next_non_whitespace_token(preproc, &filename_token);
 
-        // remove quotes
         size_t filename_len = text_span_len(&filename_token.span);
 
         debug_assert(filename_len >= 2, "filename token can't be <2 chars");
 
+        filename_len -= 2;
+
+        // remove quotes
         char *filename = arena_alloc(preproc->arena, filename_len + 1);
         filename[filename_len] = 0;
 
@@ -683,16 +718,31 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           for (size_t i = 0; i < preproc->num_include_paths; i++) {
             const char *path =
                 path_combine(preproc->include_paths[i], filename);
+
             content = read_file(path);
             if (content) {
               break;
             }
           }
         } else {
-          content = read_file(filename);
+          const char *path = path_combine(preproc->working_dir, filename);
+          content = read_file(path);
         }
-        todo("include");
-        // break;
+
+        if (!content) {
+          todo("handle failed includes");
+        }
+
+        struct preproc_text include_text = {
+          .text = content,
+          .len = strlen(content),
+          .pos = { 0, 0, 0 }
+        };
+
+        vector_push_back(preproc->texts, &include_text);
+
+        preproc->line_has_nontrivial_token = false;
+        preproc->in_angle_string_context = false;
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "define")) {
 
@@ -718,11 +768,38 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             .value = def_name.text, .length = text_span_len(&def_name.span)};
 
         hashtbl_remove(preproc->defines, &ident);
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "ifdef")) {
+        struct preproc_token def_name;
+        preproc_next_non_whitespace_token(preproc, &def_name);
+
+        struct preproc_identifier ident = {
+            .value = def_name.text, .length = text_span_len(&def_name.span)};
+
+        bool enabled = hashtbl_lookup(preproc->defines, &ident);
+        vector_push_back(preproc->enabled, &enabled);
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "ifndef")) {
+        struct preproc_token def_name;
+        preproc_next_non_whitespace_token(preproc, &def_name);
+
+        struct preproc_identifier ident = {
+            .value = def_name.text, .length = text_span_len(&def_name.span)};
+
+        bool enabled = !hashtbl_lookup(preproc->defines, &ident);
+        vector_push_back(preproc->enabled, &enabled);
       } else {
-        todo("other directives");
+        todo("other directives ('%.*s')", (int)text_span_len(&directive.span),
+             directive.text);
       }
-      break;
+
+      continue;
     }
+
+    switch (token->ty) {
+    case PREPROC_TOKEN_TY_UNKNOWN:
+    case PREPROC_TOKEN_TY_DIRECTIVE:
+      unreachable();
     case PREPROC_TOKEN_TY_IDENTIFIER: {
       // if identifier is a macro do something else
       struct preproc_identifier ident = {.value = token->text,
