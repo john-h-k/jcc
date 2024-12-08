@@ -414,13 +414,18 @@ lex_string_literal(const struct preproc_token *preproc_token) {
   debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL,
                "wrong preproc token ty");
 
-  char c = preproc_token->text[0];
-
-  switch (c) {
+  switch (preproc_token->text[0]) {
   case '<':
     bug("found angle-bracket string literal in lexer");
   case '\"':
     return LEX_TOKEN_TY_ASCII_STR_LITERAL;
+  case 'L':
+    switch (preproc_token->text[1]) {
+    case '\"':
+      return LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
+    case '\'':
+      return LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
+    }
   case '\'':
     return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
   default:
