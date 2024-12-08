@@ -84,8 +84,6 @@ else()
     -Wno-error=covered-switch-default
     -Wno-error=unreachable-code
 
-    -Wno-switch
-
     -Wmissing-prototypes
     -Wsign-conversion
     -Wimplicit-fallthrough

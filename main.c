@@ -25,7 +25,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          size_t *num_sources);
 
 static bool target_needs_linking(const struct compile_args *args) {
-  if (args->build_object_file) {
+  if (args->preproc_only || args->build_object_file) {
     return false;
   }
 
@@ -76,7 +76,10 @@ int main(int argc, char **argv) {
     char *object_file;
     
     if (args.preproc_only && !args.output) {
-      object_file = path_add_ext(sources[i], "gch");
+      // FIXME: hacky
+      object_file = nonnull_malloc(strlen("stdout") + 1);
+      strcpy(object_file, "stdout");
+      object_file[strlen("stdout")] = 0;
     } else if (target_needs_linking(&args) || !args.output) {
       object_file = path_replace_ext(sources[i], "o");
     } else {

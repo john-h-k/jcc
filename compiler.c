@@ -118,7 +118,14 @@ enum compile_result compile(struct compiler *compiler) {
       enable_log();
     }
 
-    FILE *file = fopen(compiler->output, "w");
+    FILE *file;
+    // FIXME: hacky (and in main.c)
+    if (strcmp(compiler->output, "stdout") == 0) {
+      file = stdout;
+    } else {
+     file = fopen(compiler->output, "w");
+    }
+
     if (!file) {
       return COMPILE_RESULT_BAD_FILE;
     }
