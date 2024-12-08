@@ -1,7 +1,11 @@
-// expected value: 205
+// expected value: 10
+// stdout: 1.400000
 
-float main() {
-  float a = 7.4f * 9.7f;
+int printf(const char *format, ...);
 
-  return a;
+int main() {
+  double a = 1.4;
+
+  printf("%f\n", a);
+  return 10;
 }
