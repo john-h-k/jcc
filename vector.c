@@ -25,6 +25,10 @@ struct vector *vector_create(size_t element_size) {
 }
 
 void vector_ensure_capacity(struct vector *v, size_t capacity) {
+  if (capacity <= v->capacity) {
+    return;
+  }
+
   size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : 1);
   char *new_data = nonnull_malloc(new_capacity * v->element_size);
 
@@ -119,6 +123,7 @@ size_t vector_element_size(struct vector *v) { return v->element_size; }
 size_t vector_byte_size(struct vector *v) { return v->len * v->element_size; }
 
 void *vector_head(struct vector *v) { return v->data; }
+void *vector_tail(struct vector *v) { return vector_get(v, v->len - 1); }
 
 void *vector_get(struct vector *v, size_t index) {
   debug_assert(index < v->len, "index out of bounds!");

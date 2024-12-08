@@ -738,7 +738,7 @@ struct parse_result {
   struct ast_translationunit translation_unit;
 };
 
-enum parser_create_result parser_create(struct preprocessed_program *program,
+enum parser_create_result parser_create(struct program *program, struct preproc *preproc,
                                         struct parser **parser);
 struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);

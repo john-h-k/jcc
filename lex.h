@@ -3,6 +3,7 @@
 
 #include "program.h"
 #include "util.h"
+#include "preproc.h"
 
 #include <stdlib.h>
 
@@ -151,12 +152,15 @@ struct lex_token {
   enum lex_token_ty ty;
 
   struct text_span span;
+
+  // FIXME: this is temporary, see `consume_token`
+  size_t internal_lexer_next_pos;
 };
 
 struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
-enum lex_create_result lexer_create(struct preprocessed_program *program,
+enum lex_create_result lexer_create(struct program *program, struct preproc *preproc,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 

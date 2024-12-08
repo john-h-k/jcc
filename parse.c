@@ -27,12 +27,12 @@ struct parser {
   struct vector *diagnostics;
 };
 
-enum parser_create_result parser_create(struct preprocessed_program *program,
+enum parser_create_result parser_create(struct program *program, struct preproc *preproc,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   arena_allocator_create(&p->arena);
-  if (lexer_create(program, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
+  if (lexer_create(program, preproc, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }

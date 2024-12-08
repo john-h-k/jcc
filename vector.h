@@ -26,7 +26,9 @@ void vector_truncate(struct vector *v, size_t new_len);
 void vector_remove_at(struct vector *v, size_t index);
 
 void *vector_pop(struct vector *v);
+
 void *vector_head(struct vector *v);
+void *vector_tail(struct vector *v);
 void *vector_get(struct vector *v, size_t index);
 
 void vector_resize(struct vector *v, size_t size);

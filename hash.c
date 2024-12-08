@@ -42,7 +42,7 @@ struct hasher hasher_create(void) {
                             .expand_seed2 = SEEDS[4]};
 }
 
-void hasher_hash_pointer(struct hasher *hasher, void *value) {
+void hasher_hash_pointer(struct hasher *hasher, const void *value) {
   hasher_hash_integer(hasher, (unsigned long long)value, sizeof(value));
 }
 

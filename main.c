@@ -25,6 +25,10 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          size_t *num_sources);
 
 static bool target_needs_linking(const struct compile_args *args) {
+  if (args->build_object_file) {
+    return false;
+  }
+
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
     bug("native arch should not be here");
@@ -71,10 +75,10 @@ int main(int argc, char **argv) {
 
     char *object_file;
     
-    if (target_needs_linking(&args) || !args.output) {
-      object_file = nonnull_malloc(strlen(sources[i]) + sizeof(".obj"));
-      strcpy(object_file, sources[i]);
-      strcat(object_file, ".obj");
+    if (args.preproc_only && !args.output) {
+      object_file = path_add_ext(sources[i], "gch");
+    } else if (target_needs_linking(&args) || !args.output) {
+      object_file = path_replace_ext(sources[i], "o");
     } else {
       object_file = args.output;
     }
@@ -102,9 +106,11 @@ int main(int argc, char **argv) {
   }
 
   if (target_needs_linking(&args)) {
+    const char *output = args.output ? args.output : "a.out";
+
     struct link_args link_args = {.objects = (const char *const *)objects,
                                   .num_objects = num_sources,
-                                  .output = args.output ? args.output : "a.out"};
+                                  .output = output};
 
     if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
       err("link failed");
@@ -200,7 +206,6 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          struct compile_args *args,
                                          const char ***sources,
                                          size_t *num_sources) {
-
   memset(args, 0, sizeof(*args));
 
   // default to native arch
@@ -252,6 +257,20 @@ static enum parse_args_result parse_args(int argc, char **argv,
       if (!parse_output(output, &args->output)) {
         return PARSE_ARGS_RESULT_ERROR;
       }
+
+      continue;
+    }
+
+    const char *preproc_only = try_get_arg(arg, "-E");
+    if (preproc_only) {
+      args->preproc_only = true;
+
+      continue;
+    }
+
+    const char *build_object_file = try_get_arg(arg, "-c");
+    if (build_object_file) {
+      args->build_object_file = true;
 
       continue;
     }

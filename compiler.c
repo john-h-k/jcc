@@ -5,6 +5,7 @@
 #include "codegen.h"
 #include "eep.h"
 #include "emit.h"
+#include "io.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/ir.h"
@@ -27,6 +28,7 @@ struct compiler {
   struct arena_allocator *arena;
 
   struct compile_args args;
+  struct preproc *preproc;
   struct parser *parser;
   struct typechk *typechk;
 
@@ -60,28 +62,13 @@ enum compiler_create_result create_compiler(struct program *program,
 
   (*compiler)->args = *args;
 
-  // preproc is kept local as it is seperate to other stages
-  struct preproc *preproc;
-
   if (preproc_create(program, args->num_include_paths, args->include_paths,
-                     &preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
+                     &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  BEGIN_STAGE("PREPROC");
-
-  if (args->log_flags & COMPILE_LOG_FLAGS_PREPROC) {
-    enable_log();
-  }
-
-  struct preprocessed_program preprocessed_program = preproc_process(preproc);
-
-  slog("%s\n", preprocessed_program.text);
-
-  disable_log();
-
-  if (parser_create(&preprocessed_program, &(*compiler)->parser) !=
+  if (parser_create(program, (*compiler)->preproc, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -121,6 +108,27 @@ static void debug_print_stage(struct ir_unit *ir,
 
 enum compile_result compile(struct compiler *compiler) {
   struct parse_result parse_result;
+
+  if (compiler->args.preproc_only) {
+    // preproc is kept local as it is seperate to other stages
+
+    BEGIN_STAGE("PREPROC");
+
+    if (compiler->args.log_flags & COMPILE_LOG_FLAGS_PREPROC) {
+      enable_log();
+    }
+
+    FILE *file = fopen(compiler->output, "w");
+    if (!file) {
+      return COMPILE_RESULT_BAD_FILE;
+    }
+
+    preproc_process(compiler->preproc, file);
+
+    disable_log();
+
+    return COMPILE_RESULT_SUCCESS;
+  }
 
   {
     COMPILER_STAGE(PARSE);

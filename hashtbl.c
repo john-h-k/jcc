@@ -101,6 +101,11 @@ struct hashtbl *hashtbl_create_str_keyed(size_t element_size) {
                         hashtbl_eq_str);
 }
 
+struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size) {
+  return hashtbl_create(sizeof(struct sized_str), element_size, hashtbl_hash_sized_str,
+                        hashtbl_eq_sized_str);
+}
+
 void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
                               const void *data, hash_t hash);
 
@@ -255,3 +260,22 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
     return NULL;
   }
 }
+
+void hashtbl_hash_sized_str(struct hasher *hasher, const void *value) {
+  const struct sized_str *s = value;
+
+  hasher_hash_bytes(hasher, s->str, s->len);
+  hasher_hash_integer(hasher, s->len, sizeof(s->len));
+}
+
+bool hashtbl_eq_sized_str(const void *l, const void *r) {
+  const struct sized_str *sl = l;
+  const struct sized_str *sr = r;
+
+  if (sl->len != sr->len) {
+    return false;
+  }
+
+  return strncmp(sl->str, sr->str, sl->len) == 0;
+}
+
