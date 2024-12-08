@@ -5,12 +5,13 @@
 // header
 
 #include <assert.h>
+#include <ctype.h>
+#include <limits.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -133,7 +134,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NORETURN noreturn
 #endif
 
-#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
+#define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))
 
 #if STDC_C23 && __GNUC__
 #define UNUSED_ARG(arg) [gcc::unused] arg
@@ -161,7 +162,8 @@ static inline void debug_print_stack_trace(void) {
 #endif
 }
 
-static inline unsigned long long rotateright64(unsigned long long value, unsigned int amount) {
+static inline unsigned long long rotateright64(unsigned long long value,
+                                               unsigned int amount) {
 #if HAS_BUILTIN(__builtin_rotateright64)
   return __builtin_rotateright64(value, amount);
 #else
@@ -299,6 +301,56 @@ static inline char *malloc_strcpy(const char *s) {
   memcpy(cp, s, len * sizeof(*s));
 
   return cp;
+}
+
+static inline void fprint_str(FILE *file, const char *input) {
+  debug_assert(file, "null arg");
+
+  if (!input) {
+    fprintf(file, "(null)");
+    return;
+  }
+
+  fputc('"', file);
+
+  while (*input) {
+    switch (*input) {
+    case '\\':
+      fputs("\\\\", file);
+      break;
+    case '\"':
+      fputs("\\\"", file);
+      break;
+    case '\n':
+      fputs("\\n", file);
+      break;
+    case '\t':
+      fputs("\\t", file);
+      break;
+    case '\r':
+      fputs("\\r", file);
+      break;
+    case '\b':
+      fputs("\\b", file);
+      break;
+    case '\f':
+      fputs("\\f", file);
+      break;
+    case '\v':
+      fputs("\\v", file);
+      break;
+    default:
+      if (isprint((unsigned char)*input)) {
+        fputc(*input, file);
+      } else {
+        fprintf(file, "\\x%02x", (unsigned char)*input);
+      }
+      break;
+    }
+    input++;
+  }
+
+  fputc('"', file);
 }
 
 #endif

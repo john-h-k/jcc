@@ -2802,7 +2802,9 @@ DEBUG_FUNC(cnst, cnst) {
     TD_PRINT("CONSTANT '%Lf'", cnst->flt_value);
   } else {
     // must be string literal for now
-    TD_PRINT("CONSTANT '%s'", cnst->str_value);
+    TD_PRINTZ("CONSTANT ");
+    fprint_str(stderr, cnst->str_value);
+
   }
 }
 

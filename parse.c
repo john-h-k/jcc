@@ -2821,7 +2821,8 @@ DEBUG_FUNC(cnst, cnst) {
     AST_PRINT("CONSTANT (wide char) '%'llu", cnst->int_value);
     break;
   case AST_CNST_TY_STR_LITERAL:
-    AST_PRINT("CONSTANT '%s'", cnst->str_value);
+    AST_PRINTZ("CONSTANT ");
+    fprint_str(stderr, cnst->str_value);
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
     todo("wide strs");
