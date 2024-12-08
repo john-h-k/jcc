@@ -327,9 +327,19 @@ static void preproc_next_raw_token(struct preproc *preproc,
   }
 
   switch (c) {
+  case 'L':
   case '<':
   case '"':
   case '\'':
+    if (c == 'L') {
+      if (end.idx < preproc_text->len) {
+        c = preproc_text->text[end.idx + 1];
+        next_col(&end);
+      } else {
+        break;
+      }
+    }
+
     if (c == '<' && !preproc->in_angle_string_context) {
       break;
     }
@@ -652,6 +662,16 @@ static bool token_streq(struct preproc_token token, const char *str) {
   return strncmp(token.text, str, len) == 0;
 }
 
+static struct preproc_define *get_define(struct preproc *preproc) {
+  struct preproc_token def_name;
+  preproc_next_non_whitespace_token(preproc, &def_name);
+
+  struct preproc_identifier ident = {
+      .value = def_name.text, .length = text_span_len(&def_name.span)};
+  
+  return hashtbl_lookup(preproc->defines, &ident);
+}
+
 void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   // expands tokens, adds defines, etc
 
@@ -680,6 +700,26 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "elif")) {
         todo("elif");
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "elifdef")) {
+        bool *enabled = vector_tail(preproc->enabled);
+
+        if (*enabled) {
+          *enabled = false;
+        } else {
+          bool now_enabled = get_define(preproc);
+          vector_push_back(preproc->enabled, &now_enabled );
+        }
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "elifndef")) {
+        bool *enabled = vector_tail(preproc->enabled);
+
+        if (*enabled) {
+          *enabled = false;
+        } else {
+          bool now_enabled = !get_define(preproc);
+          vector_push_back(preproc->enabled, &now_enabled );
+        }
       }
 
       // TODO: elifdef, elifndef
@@ -770,23 +810,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         hashtbl_remove(preproc->defines, &ident);
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "ifdef")) {
-        struct preproc_token def_name;
-        preproc_next_non_whitespace_token(preproc, &def_name);
-
-        struct preproc_identifier ident = {
-            .value = def_name.text, .length = text_span_len(&def_name.span)};
-
-        bool enabled = hashtbl_lookup(preproc->defines, &ident);
+        bool enabled = get_define(preproc);
         vector_push_back(preproc->enabled, &enabled);
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "ifndef")) {
-        struct preproc_token def_name;
-        preproc_next_non_whitespace_token(preproc, &def_name);
-
-        struct preproc_identifier ident = {
-            .value = def_name.text, .length = text_span_len(&def_name.span)};
-
-        bool enabled = !hashtbl_lookup(preproc->defines, &ident);
+        bool enabled = !get_define(preproc);
         vector_push_back(preproc->enabled, &enabled);
       } else {
         todo("other directives ('%.*s')", (int)text_span_len(&directive.span),
