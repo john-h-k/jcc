@@ -15,10 +15,15 @@
 #include <stddef.h>
 #include <string.h>
 
-struct preproc {
-  struct arena_allocator *arena;
+struct preproc_text {
   const char *text;
   size_t len;
+};
+
+struct preproc {
+  struct arena_allocator *arena;
+
+  // struct vector *texts;
 
   size_t num_include_paths;
   const char **include_paths;
@@ -36,21 +41,6 @@ struct preproc {
   struct text_pos pos;
 
   const char **associated_texts;
-};
-
-enum preproc_token_ty {
-  PREPROC_TOKEN_TY_UNKNOWN,
-  PREPROC_TOKEN_TY_EOF,
-
-  PREPROC_TOKEN_TY_DIRECTIVE,
-  PREPROC_TOKEN_TY_IDENTIFIER,
-  PREPROC_TOKEN_TY_PREPROC_NUMBER,
-  PREPROC_TOKEN_TY_STRING_LITERAL,
-  PREPROC_TOKEN_TY_PUNCTUATOR,
-  PREPROC_TOKEN_TY_NEWLINE,
-  PREPROC_TOKEN_TY_WHITESPACE,
-  PREPROC_TOKEN_TY_COMMENT,
-  PREPROC_TOKEN_TY_OTHER,
 };
 
 static const char *preproc_token_name(enum preproc_token_ty ty) {
@@ -74,12 +64,6 @@ static const char *preproc_token_name(enum preproc_token_ty ty) {
 
 #undef CASE_RET
 }
-
-struct preproc_token {
-  enum preproc_token_ty ty;
-
-  struct text_span span;
-};
 
 enum preproc_create_result preproc_create(struct program *program,
                                           size_t num_include_paths,
@@ -146,10 +130,6 @@ static bool is_newline(char c) { return c == '\n'; }
 
 static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
 
-static bool is_punctuator(char c) {
-  return ispunct(c) && c != '$' && c != '@' && c != '`';
-}
-
 static bool is_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
 }
@@ -164,8 +144,40 @@ static bool is_preproc_number_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
 
-static void preproc_next_token(struct preproc *preproc,
-                               struct preproc_token *token) {
+static bool try_consume(struct preproc *preproc, struct text_pos *pos, char c) {
+  debug_assert(
+      preproc->pos.idx != pos->idx,
+      "calling `try_consume` with `pos` the same as preproc makes no sense");
+
+  debug_assert(c != '\n', "can't use on newlines");
+
+  if (pos->idx < preproc->len && preproc->text[pos->idx] == c) {
+    next_col(pos);
+
+    return true;
+  }
+
+  return false;
+}
+
+static bool try_consume2(struct preproc *preproc, struct text_pos *pos, char c0, char c1) {
+  debug_assert(
+      preproc->pos.idx != pos->idx,
+      "calling `try_consume` with `pos` the same as preproc makes no sense");
+
+  debug_assert(c0 != '\n' && c1 != '\n', "can't use on newlines");
+
+  if (pos->idx + 1 < preproc->len && preproc->text[pos->idx] == c0 && preproc->text[pos->idx + 1] == c1) {
+    next_col(pos);
+    next_col(pos);
+
+    return true;
+  }
+
+  return false;
+}
+
+static void preproc_next_raw_token(struct preproc *preproc, struct preproc_token *token) {
   struct text_pos start = preproc->pos;
   struct text_pos end = start;
 
@@ -176,7 +188,9 @@ static void preproc_next_token(struct preproc *preproc,
     return;
   }
 
-  while (preproc->pos.idx + 1 < preproc->len && preproc->text[preproc->pos.idx] == '\\' && is_newline(preproc->text[preproc->pos.idx + 1])) {
+  while (preproc->pos.idx + 1 < preproc->len &&
+         preproc->text[preproc->pos.idx] == '\\' &&
+         is_newline(preproc->text[preproc->pos.idx + 1])) {
     // literally just skip this, don't even generate a token
     next_col(&end);
     next_line(&end);
@@ -186,7 +200,7 @@ static void preproc_next_token(struct preproc *preproc,
     start = preproc->pos;
     end = start;
   }
-  
+
   if (preproc->pos.idx < preproc->len &&
       is_newline(preproc->text[preproc->pos.idx])) {
     next_line(&end);
@@ -314,15 +328,203 @@ static void preproc_next_token(struct preproc *preproc,
     }
   }
 
-  if (is_punctuator(c)) {
+  // Look for punctuators
+
+  enum preproc_token_punctuator_ty punc_ty;
+  switch (c) {
+  case '?':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_QMARK;
+    next_col(&end);
+    break;
+
+  case '(':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET;
+    next_col(&end);
+    break;
+  case ')':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET;
+    next_col(&end);
+    break;
+
+  case '[':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET;
+    next_col(&end);
+    break;
+  case ']':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET;
+    next_col(&end);
+    break;
+
+  case '{':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE;
+    next_col(&end);
+    break;
+  case '}':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE;
+    next_col(&end);
+    break;
+  case ':':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_COLON;
+    next_col(&end);
+    break;
+  case ';':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_SEMICOLON;
+    next_col(&end);
+    break;
+  case ',':
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_COMMA;
+    next_col(&end);
+    break;
+  case '.':
     next_col(&end);
 
-    token->ty = PREPROC_TOKEN_TY_PUNCTUATOR;
-    token->span = (struct text_span){.start = start, .end = end};
+    if (try_consume2(preproc, &end, '.', '.')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_ELLIPSIS;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_DOT;
+    }
+    break;
 
-    preproc->pos = end;
-    return;
+  case '>':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_GTEQ;
+    } else if (try_consume(preproc, &end, '>')) {
+      if (try_consume(preproc, &end, '=')) {
+        punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT_ASSG;
+      } else {
+        punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_RSHIFT;
+      }
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_GT;
+    }
+    break;
+  case '<':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LTEQ;
+    } else if (try_consume(preproc, &end, '<')) {
+      if (try_consume(preproc, &end, '=')) {
+        punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT_ASSG;
+      } else {
+        punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LSHIFT;
+      }
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LT;
+    }
+    break;
+  case '~':
+    next_col(&end);
+    punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_NOT;
+    break;
+  case '!':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_NEQ;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT;
+    }
+    break;
+  case '=':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_EQ;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG;
+    }
+    break;
+  case '&':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND_ASSG;
+    } else if (try_consume(preproc, &end, '&')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_AND;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND;
+    }
+    break;
+  case '|':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR_ASSG;
+    } else if (try_consume(preproc, &end, '|')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR;
+    }
+    break;
+  case '^':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR_ASSG;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR;
+    }
+    break;
+  case '+':
+    next_col(&end);
+    if (try_consume(preproc, &end, '+')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_INC;
+    } else if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD_ASSG;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD;
+    }
+    break;
+  case '-':
+    next_col(&end);
+    if (try_consume(preproc, &end, '-')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DEC;
+    } else if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB_ASSG;
+    } else if (try_consume(preproc, &end, '>')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_ARROW;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB;
+    }
+    break;
+  case '*':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL_ASSG;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL;
+    }
+    break;
+  case '/':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV_ASSG;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV;
+    }
+
+    break;
+  case '%':
+    next_col(&end);
+    if (try_consume(preproc, &end, '=')) {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT_ASSG;
+    } else {
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT;
+    }
+    break;
+
+  default:
+    goto not_punctuator;
   }
+
+  *token = (struct preproc_token){
+    .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
+    .span = {.start = start, .end = end},
+    .punctuator = {
+      .ty = punc_ty
+    }
+  };
+
+  preproc->pos = end;
+  return;
+
+  not_punctuator:
 
   if (is_first_identifier_char(c)) {
     while (end.idx < preproc->len &&
@@ -351,8 +553,8 @@ static void preproc_next_non_whitespace_token(struct preproc *preproc,
   } while (token->ty == PREPROC_TOKEN_TY_WHITESPACE);
 }
 
-
-static struct vector *preproc_tokens_til_eol(struct preproc *preproc, struct vector *buffer) {
+static struct vector *preproc_tokens_til_eol(struct preproc *preproc,
+                                             struct vector *buffer) {
   struct vector *tokens = vector_create(sizeof(struct preproc_token));
 
   struct preproc_token token;
@@ -406,20 +608,22 @@ static bool preproc_ident_eq(const void *l, const void *r) {
   return memcmp(l_ident->value, r_ident->value, l_ident->length) == 0;
 }
 
-struct preprocessed_program preproc_process(struct preproc *preproc) {
+// void preproc_process(struct preproc *preproc, FILE *file) {
+
+void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
+  // expands tokens, adds defines, etc
+
   struct hashtbl *defines = hashtbl_create(
       sizeof(struct preproc_identifier), sizeof(struct preproc_define),
       hash_preproc_ident, preproc_ident_eq);
-
-  struct vector *preprocessed = vector_create(sizeof(char));
 
   // now we do tokenization
 
   struct vector *buffer_tokens = vector_create(sizeof(struct preproc_token));
 
   size_t cur_line = preproc->pos.line;
-  struct preproc_token token = {.ty = PREPROC_TOKEN_TY_UNKNOWN};
-  while (token.ty != PREPROC_TOKEN_TY_EOF) {
+
+  while (true) {
     if (vector_empty(buffer_tokens)) {
       preproc_next_token(preproc, &token);
     } else {
@@ -489,14 +693,10 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         struct vector *tokens = preproc_tokens_til_eol(preproc, buffer_tokens);
 
         struct preproc_identifier ident = {
-          .value = &preproc->text[def_name.span.start.idx],
-          .length = text_span_len(&def_name.span)
-        };
+            .value = &preproc->text[def_name.span.start.idx],
+            .length = text_span_len(&def_name.span)};
 
-        struct preproc_define define = {
-          .name = def_name,
-          .value = tokens
-        };
+        struct preproc_define define = {.name = def_name, .value = tokens};
 
         hashtbl_insert(defines, &ident, &define);
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
@@ -505,9 +705,8 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
         preproc_next_non_whitespace_token(preproc, &def_name);
 
         struct preproc_identifier ident = {
-          .value = &preproc->text[def_name.span.start.idx],
-          .length = text_span_len(&def_name.span)
-        };
+            .value = &preproc->text[def_name.span.start.idx],
+            .length = text_span_len(&def_name.span)};
 
         hashtbl_remove(defines, &ident);
 
@@ -526,9 +725,8 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
     case PREPROC_TOKEN_TY_IDENTIFIER: {
       // if identifier is a macro do something else
       struct preproc_identifier ident = {
-        .value = &preproc->text[token.span.start.idx],
-        .length = text_span_len(&token.span)
-      };
+          .value = &preproc->text[token.span.start.idx],
+          .length = text_span_len(&token.span)};
 
       struct preproc_define *define = hashtbl_lookup(defines, &ident);
 
@@ -548,29 +746,19 @@ struct preprocessed_program preproc_process(struct preproc *preproc) {
     case PREPROC_TOKEN_TY_PUNCTUATOR:
     case PREPROC_TOKEN_TY_OTHER:
     copy:
-      for (size_t i = token.span.start.idx; i < token.span.end.idx; i++) {
-        vector_push_back(preprocessed, &preproc->text[i]);
-      }
+      fprintf(file, "%.*s", (int)text_span_len(&token.span),
+              &preproc->text[token.span.start.idx]);
       break;
     case PREPROC_TOKEN_TY_NEWLINE: {
-      char nl = '\n';
-      vector_push_back(preprocessed, &nl);
+      fprintf(file, "\n");
       break;
     }
     case PREPROC_TOKEN_TY_COMMENT:
     space : {
       // comments are replaced with a single space
-      char space = ' ';
-      vector_push_back(preprocessed, &space);
+      fprintf(file, " ");
       break;
     }
     }
   }
-
-  // FIXME: lifetimes are a mess here the vector is intentionally leaked because
-  // the data is used by lexer
-  char null = 0;
-  vector_push_back(preprocessed, &null);
-
-  return (struct preprocessed_program){.text = vector_head(preprocessed)};
 }

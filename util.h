@@ -75,6 +75,14 @@ typedef unsigned _BitInt(128) uint128_t;
 #define PRINTF_ARGS(idx)
 #endif
 
+#if STDC_C23 && __GNUC__
+#define FLAG_ENUM [gcc::flag_enum]
+#elif __GNUC__
+#define FLAG_ENUM __attribute__((flag_enum))
+#else
+#define FLAG_ENUM
+#endif
+
 #ifdef __has_feature
 #define HAS_FEATURE(name) __has_feature(name)
 #else
