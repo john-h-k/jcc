@@ -1028,6 +1028,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         bool now_enabled = enabled && !get_define(preproc, directive_tokens);
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
+      } else if (token_streq(directive, "if")) {
+        todo("#if");
       } else if (token_streq(directive, "endif")) {
         UNEXPANDED_DIR_TOKENS();
 
