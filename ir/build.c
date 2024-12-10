@@ -707,7 +707,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
                                                          : TD_ASSG_TY_SUB;
     goto inc_dec;
 
-  inc_dec: {
+  inc_dec : {
     // if we are decrementing a pointer/array, we need to make sure we don't
     // build an expr that is PTR - PTR as this will do a "pointer subtract"
     // rather than "pointer minus integer" so we give the constant a
@@ -1473,7 +1473,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     ty = TD_BINARY_OP_TY_RSHIFT;
     goto compound_assg;
 
-  compound_assg: {
+  compound_assg : {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
     struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr);
@@ -3278,18 +3278,73 @@ build_init_list_layout(struct ir_unit *iru,
 static struct ir_var_value
 build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
                             struct td_var_ty *var_ty) {
+  // it feels more elegant to do the resolving of constant expressions in
+  // typechk but this requires being able to evaluate `sizeof`, which it cannot
   switch (expr->ty) {
   case TD_EXPR_TY_UNARY_OP: {
     if (expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
-      return build_ir_for_var_value_expr(iru, expr->unary_op.expr,
-                                         &expr->unary_op.cast.var_ty);
+      const struct td_var_ty *from = &expr->unary_op.expr->var_ty;
+      const struct td_var_ty *to = &expr->unary_op.cast.var_ty;
+
+      debug_assert(td_var_ty_eq(iru->tchk, var_ty, to), "expr ty didn't equal cast ty");
+
+      struct ir_var_value value = build_ir_for_var_value_expr(
+          iru, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
+
+      if (from->ty == TD_VAR_TY_TY_POINTER || from->ty == TD_VAR_TY_TY_FUNC ||
+          from->ty == TD_VAR_TY_TY_ARRAY) {
+        if (to->ty == TD_VAR_TY_TY_POINTER || to->ty == TD_VAR_TY_TY_FUNC ||
+            to->ty == TD_VAR_TY_TY_ARRAY) {
+          // nop
+          value.var_ty = var_ty_for_td_var_ty(iru, var_ty);
+          return value;
+        } else if (to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+          debug_assert(is_integral_ty(to), "non integral cast from ptr-like");
+
+          todo("pointer -> int converts in statics");
+        }
+
+        todo("unsupported cast in const expr");
+      } else if (from->ty == TD_VAR_TY_TY_WELL_KNOWN &&
+                 to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+        enum well_known_ty fwk = from->well_known;
+        enum well_known_ty twk = to->well_known;
+
+        if (WKT_IS_INTEGRAL(fwk) && WKT_IS_FP(twk)) {
+          long double flt_value;
+
+          #define VALUE (WKT_IS_SIGNED(fwk) ? (signed long long)value.int_value : (unsigned long long)value.int_value)
+          switch (twk) {
+          case WELL_KNOWN_TY_HALF:
+            todo("constant cast to half");
+          case WELL_KNOWN_TY_FLOAT:
+            flt_value = (long double)(float)VALUE;
+            break;
+          case WELL_KNOWN_TY_DOUBLE:
+            flt_value = (long double)(double)VALUE;
+            break;
+          case WELL_KNOWN_TY_LONG_DOUBLE:
+            flt_value = (long double)VALUE;
+            break;
+          default:
+            unreachable();
+          }
+
+          return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
+                                       .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                       .flt_value = flt_value};
+        }
+      }
+
+      todo("unsupported cast in const expr");
     } else {
       todo("other unary ops");
     }
   }
   case TD_EXPR_TY_CNST: {
     struct td_cnst *cnst = &expr->cnst;
-    if (cnst->ty == TD_CNST_TY_STR_LITERAL || cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+    if (cnst->ty == TD_CNST_TY_STR_LITERAL ||
+        cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
                                    .var_ty = var_ty_for_td_var_ty(iru, var_ty),
                                    .str_value = cnst->str_value};
