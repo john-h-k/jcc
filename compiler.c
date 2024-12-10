@@ -56,15 +56,15 @@ static const struct target *get_target(const struct compile_args *args) {
 
 enum compiler_create_result create_compiler(struct program *program,
                                             const char *output,
-                                            const char *working_dir,
+                                            const char *path,
                                             const struct compile_args *args,
                                             struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
 
-  if (preproc_create(program, working_dir, args->num_include_paths,
-                     args->include_paths,
+  if (preproc_create(program, path, args->num_include_paths,
+                     args->include_paths, args->fixed_timestamp,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;

@@ -1,4 +1,5 @@
-#define NULL ((void *)0)
+#include <stdio.h>
+
 #define MAX_CELL_SIZE 30000
 
 struct State {
@@ -8,26 +9,6 @@ struct State {
 };
 
 typedef unsigned long size_t;
-
-typedef struct FILE FILE;
-// extern FILE *stderr;
-extern FILE *__stderrp;
-#define stderr __stderrp
-
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
-
-int fprintf(FILE *, const char *, ...);
-FILE *fopen(const char *, const char *);
-int fseek(FILE *, long, int);
-long ftell(FILE *);
-void rewind(FILE *);
-size_t fread(void *, size_t, size_t, FILE *);
-int fclose(FILE *);
-
-int putchar(int);
-int getchar();
 
 void *memset(void *str, int c, unsigned long n);
 void *malloc(size_t);

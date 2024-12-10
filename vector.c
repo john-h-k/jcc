@@ -60,13 +60,20 @@ void *vector_push_front(struct vector *v, const void *data) {
 }
 
 void vector_remove_at(struct vector *v, size_t index) {
-  debug_assert(index < v->len, "index out of range");
+  vector_remove_range(v, index, 1);
+}
 
-  v->len--;
+void vector_remove_range(struct vector *v, size_t index, size_t len) {
+  debug_assert(index + len <= v->len, "index out of range");
 
-  size_t tail = v->len - index;
-  char *pos = &v->data[index * v->element_size];
-  memmove(pos, &pos[v->element_size], tail * v->element_size);
+  size_t tail = v->len - (index + len);
+
+  char *start = &v->data[index * v->element_size];
+  char *end = &v->data[(index + len) * v->element_size];
+
+  memmove(start, end, tail * v->element_size);
+
+  v->len -= (len - index);
 }
 
 void vector_clear(struct vector *v) { v->len = 0; }
