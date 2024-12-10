@@ -261,6 +261,9 @@ struct ir_op_call {
   struct ir_op *target;
   size_t num_args;
   struct ir_op **args;
+
+  // must be preserved because of unspecified functions e.g `int foo(); foo(7, 8.3)`
+  struct ir_var_ty *arg_var_tys;
 };
 
 struct ir_op_store_lcl {

@@ -1111,6 +1111,8 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+  struct ir_var_ty *arg_var_tys =
+      arena_alloc(irb->arena, sizeof(struct ir_var_ty *) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
@@ -1133,6 +1135,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i]);
+    arg_var_tys[i] = args[i]->var_ty;
 
     if (i >= num_non_variadic_args) {
       args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
@@ -1158,6 +1161,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   op->call.target = target;
   op->call.num_args = call->arg_list.num_args;
   op->call.args = args;
+  op->call.arg_var_tys = arg_var_tys;
 
   return op;
 }

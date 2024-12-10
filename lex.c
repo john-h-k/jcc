@@ -66,6 +66,7 @@ enum lex_create_result lexer_create(struct program *program,
 
     KEYWORD("const", LEX_TOKEN_TY_KW_CONST);
     KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE);
+    KEYWORD("restrict", LEX_TOKEN_TY_KW_RESTRICT);
 
     KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
     KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
@@ -762,6 +763,7 @@ const char *token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_KW_CONST)
     CASE_RET(LEX_TOKEN_TY_KW_VOLATILE)
+    CASE_RET(LEX_TOKEN_TY_KW_RESTRICT)
 
     CASE_RET(LEX_TOKEN_TY_KW_VOID)
 

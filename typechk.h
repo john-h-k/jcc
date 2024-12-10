@@ -28,8 +28,9 @@ enum td_function_specifier {
 
 enum td_type_qualifier_flags {
   TD_TYPE_QUALIFIER_FLAG_NONE,
-  TD_TYPE_QUALIFIER_FLAG_CONST,
-  TD_TYPE_QUALIFIER_FLAG_VOLATILE,
+  TD_TYPE_QUALIFIER_FLAG_CONST = 1,
+  TD_TYPE_QUALIFIER_FLAG_VOLATILE = 2,
+  TD_TYPE_QUALIFIER_FLAG_RESTRICT = 4,
 };
 
 enum well_known_ty {

@@ -1439,10 +1439,23 @@ enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
 
 // FIXME: apple do things differently!!!
 
+#define INTEGRAL_OR_PTRLIKE(var_ty) (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER || (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
+
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
   const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
+  const struct ir_var_ty *param_tys;
+
+  // note, it is important we use the func ty as the reference here for
+  // types as aggregates and similar will already have been turned into
+  // pointers. this does mean we need to explicitly handle pointers
+  // in the case of unspecified functions, we use `arg_var_tys` which is preserved
+  if (func_ty->num_params == op->call.num_args || (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+    param_tys = func_ty->params;
+  } else {
+    param_tys = op->call.arg_var_tys;
+  }
 
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
@@ -1514,11 +1527,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       if (i < num_normal_args ||
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
 
-        // note, it is important we use the func ty as the reference here for
-        // types as aggregates and similar will already have been turned into
-        // pointers this does mean we need to explicitly handle pointers
-        struct ir_var_ty *var_ty = &func_ty->params[i];
-        struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
+        const struct ir_var_ty *var_ty = &param_tys[i];
+        struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
 
         size_t num_hfa_members;
         size_t hfa_member_size;
@@ -1572,8 +1582,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
           continue;
 
-        } else if ((var_ty_is_integral(var_ty) ||
-                    var_ty->ty == IR_VAR_TY_TY_POINTER) &&
+        } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
                    info.size <= 8 && ngrn <= 8) {
           struct location from = {.idx = source.idx};
           struct location to = {.idx = ngrn};
@@ -1649,7 +1658,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
             .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
                                          &mem_loc)};
 
-        if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+        if (INTEGRAL_OR_PTRLIKE(var_ty)) {
           vector_push_back(gp_move_from, &from);
           vector_push_back(gp_move_to, &to);
         } else if (var_ty_is_fp(var_ty)) {
@@ -1739,7 +1748,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   struct ir_var_ty *var_ty = func_ty->ret_ty;
   struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
-  if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+  if (INTEGRAL_OR_PTRLIKE(var_ty)) {
     if (!is_return_reg(dest)) {
       struct instr *mov = alloc_instr(state->func);
 
@@ -1894,7 +1903,7 @@ static void codegen_params(struct codegen_state *state) {
 
   for (size_t i = 0; i < func_ty.num_params; i++) {
     const struct ir_var_ty *var_ty = &func_ty.params[i];
-    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
+    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
 
     size_t offset;
     struct aarch64_reg source;
@@ -1955,8 +1964,7 @@ static void codegen_params(struct codegen_state *state) {
       lcl = lcl->succ;
       continue;
 
-    } else if ((var_ty_is_integral(var_ty) ||
-                var_ty->ty == IR_VAR_TY_TY_POINTER) &&
+    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
                info.size <= 8 && ngrn <= 8) {
       struct location from = {.idx = ngrn};
       struct location to = {.idx = source.idx};
@@ -2030,7 +2038,7 @@ static void codegen_params(struct codegen_state *state) {
 
     param_op = param_op->succ;
 
-    if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+    if (INTEGRAL_OR_PTRLIKE(var_ty)) {
       vector_push_back(gp_move_from, &from);
       vector_push_back(gp_move_to, &to);
     } else if (var_ty_is_fp(var_ty)) {
@@ -2097,8 +2105,7 @@ static size_t calc_arg_stack_space(struct codegen_state *state,
       nsaa += size;
       continue;
 
-    } else if ((var_ty_is_integral(var_ty) ||
-                var_ty->ty == IR_VAR_TY_TY_POINTER) &&
+    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
                info.size <= 8 && ngrn <= 8) {
       ngrn++;
       continue;
@@ -2400,7 +2407,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
     struct ir_var_ty *var_ty = state->ir->func_ty.ret_ty;
     struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
 
-    if (var_ty_is_integral(var_ty) || var_ty->ty == IR_VAR_TY_TY_POINTER) {
+    if (INTEGRAL_OR_PTRLIKE(var_ty)) {
       if (!is_return_reg(source)) {
         struct instr *mov = alloc_instr(state->func);
 

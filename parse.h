@@ -25,6 +25,7 @@ enum ast_function_specifier {
 enum ast_type_qualifier {
   AST_TYPE_QUALIFIER_CONST,
   AST_TYPE_QUALIFIER_VOLATILE,
+  AST_TYPE_QUALIFIER_RESTRICT,
 };
 
 struct ast_declaration_specifier_list {
