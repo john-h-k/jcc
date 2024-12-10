@@ -1,4 +1,4 @@
-// expected value: 4
+// expected value: 7
 
 #define FOO \
  4
@@ -15,7 +15,11 @@ invalid stuff
 #define BAT
 #endif
 
+#define A 0
+#define VAL A
+#define A 3
+
 int main() {
   int buzz = 1;
-  return FOO BAR BAT;
+  return FOO BAR BAT + VAL;
 }
