@@ -1684,30 +1684,30 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET};
       }
     }
+  }
 
-    struct move_set gp_arg_moves = gen_move_order(
-        state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-        vector_length(gp_move_from), GP_TMP_REG_IDX);
+  struct move_set gp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
+      vector_length(gp_move_from), GP_TMP_REG_IDX);
 
-    struct move_set fp_arg_moves = gen_move_order(
-        state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-        vector_length(fp_move_from), FP_TMP_REG_IDX);
+  struct move_set fp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
+      vector_length(fp_move_from), FP_TMP_REG_IDX);
 
-    codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
-    codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
+  codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
+  codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
 
-    // then handle mem copies
-    size_t num_copies = vector_length(mem_copies);
-    for (size_t i = 0; i < num_copies; i++) {
-      struct mem_copy *copy = vector_get(mem_copies, i);
-      struct mem_loc *from = &copy->src;
-      struct mem_loc *to = &copy->dest;
+  // then handle mem copies
+  size_t num_copies = vector_length(mem_copies);
+  for (size_t i = 0; i < num_copies; i++) {
+    struct mem_copy *copy = vector_get(mem_copies, i);
+    struct mem_loc *from = &copy->src;
+    struct mem_loc *to = &copy->dest;
 
-      debug_assert(from->size == to->size, "mem cpy with different sizes");
+    debug_assert(from->size == to->size, "mem cpy with different sizes");
 
-      codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
-                                to->offset, to->size);
-    }
+    codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
+                              to->offset, to->size);
   }
 
   // now we generate the actual call
@@ -2698,18 +2698,28 @@ static void codegen_write_var_value(struct ir_unit *iru,
   case IR_VAR_TY_TY_PRIMITIVE: {
     switch (value->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
+      debug_assert(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
       memcpy(data, &value->int_value, 1);
       break;
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_I16:
+      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
       memcpy(data, &value->int_value, 2);
       break;
     case IR_VAR_PRIMITIVE_TY_I32:
     case IR_VAR_PRIMITIVE_TY_F32:
+      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
       memcpy(data, &value->int_value, 4);
       break;
     case IR_VAR_PRIMITIVE_TY_I64:
     case IR_VAR_PRIMITIVE_TY_F64:
+      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
       memcpy(data, &value->int_value, sizeof(unsigned long));
       break;
     }
@@ -2717,13 +2727,33 @@ static void codegen_write_var_value(struct ir_unit *iru,
   }
 
   case IR_VAR_TY_TY_FUNC:
+    bug("func can not have data as a global var");
+
   case IR_VAR_TY_TY_POINTER:
-    memcpy(data, &value->int_value, sizeof(void *));
+  case IR_VAR_TY_TY_ARRAY:
+    switch (value->ty) {
+    case IR_VAR_VALUE_TY_ZERO:
+    case IR_VAR_VALUE_TY_FLT:
+      bug("doesn't make sense");
+    case IR_VAR_VALUE_TY_INT:
+      memcpy(data, &value->int_value, sizeof(void *));
+      break;
+    case IR_VAR_VALUE_TY_STR:
+      // FIXME: !!!! doesn't work with string literals containing null char
+      strcpy(data, value->str_value);
+      break;
+    case IR_VAR_VALUE_TY_VALUE_LIST:
+      for (size_t i = 0; i < value->value_list.num_values; i++) {
+        codegen_write_var_value(iru, &value->value_list.values[i],
+                                &data[value->value_list.offsets[i]]);
+      }
+      break;
+    }
     break;
 
-  case IR_VAR_TY_TY_ARRAY:
   case IR_VAR_TY_TY_STRUCT:
   case IR_VAR_TY_TY_UNION:
+    debug_assert(value->ty == IR_VAR_VALUE_TY_VALUE_LIST, "expected value list");
     for (size_t i = 0; i < value->value_list.num_values; i++) {
       codegen_write_var_value(iru, &value->value_list.values[i],
                               &data[value->value_list.offsets[i]]);
