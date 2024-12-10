@@ -73,7 +73,7 @@ void vector_remove_range(struct vector *v, size_t index, size_t len) {
 
   memmove(start, end, tail * v->element_size);
 
-  v->len -= (len - index);
+  v->len -= len;
 }
 
 void vector_clear(struct vector *v) { v->len = 0; }
