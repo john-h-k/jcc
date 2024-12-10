@@ -241,7 +241,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
     const char *include_path = try_get_arg(arg, "-I");
     GET_ARGUMENT(include_path);
     if (include_path) {
-      vector_push_back(include_path_vec, include_path);
+      vector_push_back(include_path_vec, &include_path);
 
       continue;
     }

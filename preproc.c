@@ -682,43 +682,56 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       *token = *(struct preproc_token *)vector_pop(preproc->buffer_tokens);
     }
 
-    // handle directives first, as they can change `enabled`
+    // handle conditional directives first, as they can change `enabled`
+
+    bool enabled = *(bool *)vector_tail(preproc->enabled);
+    bool outer_enabled;
+    if (vector_length(preproc->enabled) >= 2) {
+      outer_enabled = vector_get(preproc->enabled, vector_length(preproc->enabled) - 2);
+    } else {
+      outer_enabled = false;
+    }
 
     struct preproc_token directive;
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
       preproc_next_raw_token(preproc, &directive);
 
       if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+          token_streq(directive, "ifdef")) {
+        bool now_enabled = enabled && get_define(preproc);
+        vector_push_back(preproc->enabled, &now_enabled);
+        continue;
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
+                 token_streq(directive, "ifndef")) {
+        bool now_enabled = enabled && !get_define(preproc);
+        vector_push_back(preproc->enabled, &now_enabled);
+        continue;
+      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
           token_streq(directive, "endif")) {
         vector_pop(preproc->enabled);
         continue;
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "else")) {
-        bool *enabled = vector_tail(preproc->enabled);
-        *enabled = !*enabled;
+        *(bool *)vector_tail(preproc->enabled) = outer_enabled && !enabled;
         continue;
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "elif")) {
         todo("elif");
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "elifdef")) {
-        bool *enabled = vector_tail(preproc->enabled);
-
-        if (*enabled) {
-          *enabled = false;
+        if (enabled) {
+          *(bool *)vector_tail(preproc->enabled) = false;
         } else {
           bool now_enabled = get_define(preproc);
-          vector_push_back(preproc->enabled, &now_enabled);
+          *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
         }
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "elifndef")) {
-        bool *enabled = vector_tail(preproc->enabled);
-
-        if (*enabled) {
-          *enabled = false;
+        if (enabled) {
+          *(bool *)vector_tail(preproc->enabled) = false;
         } else {
           bool now_enabled = !get_define(preproc);
-          vector_push_back(preproc->enabled, &now_enabled);
+          *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
         }
       }
 
@@ -733,7 +746,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       // `directive` token is already parsed
 
       if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-          token_streq(directive, "include")) {
+                 token_streq(directive, "include")) {
         preproc->in_angle_string_context = true;
 
         struct preproc_token filename_token;
@@ -759,6 +772,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             const char *path =
                 path_combine(preproc->include_paths[i], filename);
 
+            printf("trying system include '%s'...\n", path);
             content = read_file(path);
             if (content) {
               break;
@@ -805,14 +819,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             .value = def_name.text, .length = text_span_len(&def_name.span)};
 
         hashtbl_remove(preproc->defines, &ident);
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "ifdef")) {
-        bool enabled = get_define(preproc);
-        vector_push_back(preproc->enabled, &enabled);
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "ifndef")) {
-        bool enabled = !get_define(preproc);
-        vector_push_back(preproc->enabled, &enabled);
       } else {
         todo("other directives ('%.*s')", (int)text_span_len(&directive.span),
              directive.text);
