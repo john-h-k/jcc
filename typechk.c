@@ -347,10 +347,16 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
   return td_expr;
 }
 
+static bool is_cast_needed(struct typechk *tchk,
+                                         const struct td_var_ty *var_ty,
+                                         const struct td_var_ty *target_ty) {
+  return !td_var_ty_eq(tchk, var_ty, target_ty);
+}
+
 static struct td_expr add_cast_if_needed(struct typechk *tchk,
                                          struct td_expr expr,
                                          struct td_var_ty target_ty) {
-  if (!td_var_ty_eq(tchk, &expr.var_ty, &target_ty)) {
+  if (is_cast_needed(tchk, &expr.var_ty, &target_ty)) {
     return add_cast_expr(tchk, expr, target_ty);
   }
 
@@ -370,7 +376,7 @@ static struct td_expr perform_integer_promotion(struct typechk *tchk,
 }
 
 // TODO:
-#define WARN(s) bug(s)
+#define WARN(...) bug(__VA_ARGS__)
 
 static struct td_var_ty
 resolve_usual_arithmetic_conversions(struct typechk *tchk,
@@ -440,13 +446,10 @@ struct td_binary_op_tys {
 
 static struct td_binary_op_tys
 resolve_binary_op_types(struct typechk *tchk,
-                        const struct td_binary_op *binary_op) {
+                        const struct td_expr *lhs_expr,
+                        const struct td_expr *rhs_expr,
+                        enum td_binary_op_ty ty) {
   // it is expected integer promotion has already been performed
-
-  enum td_binary_op_ty ty = binary_op->ty;
-
-  const struct td_expr *lhs_expr = binary_op->lhs;
-  const struct td_expr *rhs_expr = binary_op->rhs;
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
   const struct td_var_ty *rhs = &rhs_expr->var_ty;
@@ -1499,7 +1502,7 @@ static struct td_expr type_binary_op(struct typechk *tchk,
   *td_binary_op.lhs = lhs;
   *td_binary_op.rhs = rhs;
 
-  struct td_binary_op_tys op_tys = resolve_binary_op_types(tchk, &td_binary_op);
+  struct td_binary_op_tys op_tys = resolve_binary_op_types(tchk, td_binary_op.lhs,td_binary_op.rhs, td_binary_op.ty);
 
   *td_binary_op.lhs =
       add_cast_if_needed(tchk, *td_binary_op.lhs, op_tys.lhs_op_ty);
@@ -1716,45 +1719,75 @@ static struct td_expr type_assg(struct typechk *tchk,
   // FIXME: needs to be typed with an intermediate as `some_char += 5` results
   // in promotion then demotion
 
+  enum td_binary_op_ty bin_op;
+
   switch (assg->ty) {
   case AST_ASSG_TY_BASIC:
     td_assg.ty = TD_ASSG_TY_BASIC;
     break;
   case AST_ASSG_TY_ADD:
     td_assg.ty = TD_ASSG_TY_ADD;
+    bin_op = TD_BINARY_OP_TY_ADD;
     break;
   case AST_ASSG_TY_SUB:
     td_assg.ty = TD_ASSG_TY_SUB;
+    bin_op = TD_BINARY_OP_TY_SUB;
     break;
   case AST_ASSG_TY_MUL:
     td_assg.ty = TD_ASSG_TY_MUL;
+    bin_op = TD_BINARY_OP_TY_MUL;
     break;
   case AST_ASSG_TY_DIV:
     td_assg.ty = TD_ASSG_TY_DIV;
+    bin_op = TD_BINARY_OP_TY_DIV;
     break;
   case AST_ASSG_TY_QUOT:
     td_assg.ty = TD_ASSG_TY_QUOT;
+    bin_op = TD_BINARY_OP_TY_QUOT;
     break;
   case AST_ASSG_TY_AND:
     td_assg.ty = TD_ASSG_TY_AND;
+    bin_op = TD_BINARY_OP_TY_AND;
     break;
   case AST_ASSG_TY_OR:
     td_assg.ty = TD_ASSG_TY_OR;
+    bin_op = TD_BINARY_OP_TY_OR;
     break;
   case AST_ASSG_TY_XOR:
     td_assg.ty = TD_ASSG_TY_XOR;
+    bin_op = TD_BINARY_OP_TY_XOR;
     break;
   case AST_ASSG_TY_LSHIFT:
     td_assg.ty = TD_ASSG_TY_LSHIFT;
+    bin_op = TD_BINARY_OP_TY_LSHIFT;
     break;
   case AST_ASSG_TY_RSHIFT:
     td_assg.ty = TD_ASSG_TY_RSHIFT;
+    bin_op = TD_BINARY_OP_TY_RSHIFT;
     break;
   }
 
+  *td_assg.expr = type_expr(tchk, assg->expr);
   *td_assg.assignee = type_expr(tchk, assg->assignee);
-  *td_assg.expr = add_cast_if_needed(tchk, type_expr(tchk, assg->expr),
-                                     td_assg.assignee->var_ty);
+
+  if (td_assg.ty != TD_ASSG_TY_BASIC) {
+    struct td_binary_op_tys tys = resolve_binary_op_types(tchk, td_assg.assignee, td_assg.expr, bin_op);
+
+    *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr,
+       tys.rhs_op_ty);
+
+    td_assg.assignee_var_ty = tys.lhs_op_ty;
+    td_assg.result_var_ty = tys.result_ty;
+    td_assg.cast_assignee = is_cast_needed(tchk, &td_assg.assignee->var_ty, &tys.lhs_op_ty);
+    td_assg.cast_result = is_cast_needed(tchk, &tys.result_ty, &td_assg.assignee->var_ty);
+  } else {
+    td_assg.assignee_var_ty = td_assg.assignee->var_ty;
+    td_assg.result_var_ty = td_assg.expr->var_ty;
+    td_assg.cast_assignee = false;
+    td_assg.cast_result = false;
+    *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr,
+       td_assg.assignee->var_ty);
+  }
 
   struct td_var_ty var_ty = td_assg.assignee->var_ty;
 
@@ -1768,7 +1801,7 @@ static struct td_expr type_var(struct typechk *tchk,
   struct var_table_entry *entry = var_table_get_entry(&tchk->var_table, name);
 
   if (!entry) {
-    WARN("variable does not exist");
+    WARN("variable '%s' does not exist", name);
   }
 
   struct td_var_ty var_ty = *entry->var_ty;

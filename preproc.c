@@ -1120,10 +1120,10 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         hashtbl_remove(preproc->defines, &ident);
       } else if (token_streq(directive, "include")) {
+        preproc->in_angle_string_context = true;
+
         // these directives DO expand
         EXPANDED_DIR_TOKENS();
-
-        preproc->in_angle_string_context = true;
 
         if (num_directive_tokens != 1) {
           todo("handle bad include, had multiple tokens");

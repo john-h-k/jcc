@@ -365,6 +365,23 @@ static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
   return cast;
 }
 
+static struct ir_op *insert_ir_for_cast_if_needed(struct ir_func_builder *irb,
+                                        struct ir_stmt *stmt, struct ir_op *op,
+                                        const struct td_var_ty *from,
+                                        const struct td_var_ty *to) {
+  struct ir_var_ty from_ir = var_ty_for_td_var_ty(irb->unit, from);
+  struct ir_var_ty to_ir = var_ty_for_td_var_ty(irb->unit, to);
+
+  if (var_ty_needs_cast_op(irb, &to_ir, &from_ir)) {
+    return insert_ir_for_cast(
+        irb, stmt, op, &to_ir,
+        cast_ty_for_td_var_ty(irb, from, to));
+  } else {
+    op->var_ty = to_ir;
+    return op;
+  }
+}
+
 struct ir_build_binaryop {
   enum td_binary_op_ty ty;
   struct td_var_ty result_ty;
@@ -1480,18 +1497,30 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   compound_assg : {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
+    struct ir_op *lhs;
+
+    if (assg->cast_assignee) {
+      lhs = insert_ir_for_cast_if_needed(irb, *stmt, assignee, &assg->assignee->var_ty, &assg->assignee_var_ty);
+    } else {
+      lhs = assignee;
+    }
+
     struct ir_op *rhs = build_ir_for_expr(irb, stmt, assg->expr);
 
     struct ir_build_binaryop args = {
         .ty = ty,
-        .result_ty = expr->var_ty,
-        .lhs_ty = assg->assignee->var_ty,
+        .result_ty = assg->result_var_ty,
+        .lhs_ty = assg->assignee_var_ty,
         .rhs_ty = assg->expr->var_ty,
-        .lhs = assignee,
+        .lhs = lhs,
         .rhs = rhs,
     };
 
     value = alloc_binaryop(irb, *stmt, &args);
+
+    if (assg->cast_result) {
+      value = insert_ir_for_cast_if_needed(irb, *stmt, value, &assg->result_var_ty, &assg->assignee->var_ty);
+    }
 
     break;
   }
