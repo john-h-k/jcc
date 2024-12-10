@@ -64,9 +64,9 @@ enum well_known_ty {
 #define WKT_IS_FP(wkt) ((wkt) >= WELL_KNOWN_TY_HALF)
 
 #define WKT_MAKE_SIGNED(wkt)                                                   \
-  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
+  (((wkt) >= WELL_KNOWN_TY_HALF) ? (wkt) : ((wkt) & ~1))
 #define WKT_MAKE_UNSIGNED(wkt)                                                 \
-  (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) | 1))
+  (((wkt) >= WELL_KNOWN_TY_HALF) ? (wkt) : ((wkt) | 1))
 
 #define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
 
@@ -377,6 +377,9 @@ enum td_assg_ty {
 
 struct td_assg {
   enum td_assg_ty ty;
+
+  bool cast_assignee, cast_result;
+  struct td_var_ty assignee_var_ty, result_var_ty;
 
   struct td_expr *assignee;
   struct td_expr *expr;
