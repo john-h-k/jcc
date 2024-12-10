@@ -249,7 +249,9 @@ static struct lookup_internal hashtbl_lookup_triple(struct hashtbl *hashtbl,
 void hashtbl_remove(struct hashtbl *hashtbl, const void *key) {
   struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
 
-  vector_remove_at(lookup.bucket->elems, lookup.idx);
+  if (lookup.triple) {
+    vector_remove_at(lookup.bucket->elems, lookup.idx);
+  }
 }
 
 void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
