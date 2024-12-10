@@ -614,12 +614,13 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     name = anonymous_name(tchk);
   }
 
+  struct var_table_entry *entry = var_table_get_entry(&tchk->ty_table, name);
+
   if (!specifier->decl_list) {
     if (!specifier->identifier) {
       WARN("struct/union without identifier or decl list");
     }
 
-    struct var_table_entry *entry = var_table_get_entry(&tchk->ty_table, name);
     // FIXME: check scope too
     // if (entry && entry->scope == scope of this decl)
     if (entry) {
@@ -664,7 +665,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                        .identifier = name,
                        .scope = cur_scope(&tchk->ty_table)};
 
-  struct var_table_entry *entry = var_table_create_entry(&tchk->ty_table, name);
+  entry = var_table_get_or_create_entry(&tchk->ty_table, name);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
   entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -1221,6 +1222,8 @@ type_specifiers(struct typechk *tchk,
   return specifiers;
 }
 
+// FIXME: i don't think ty table scope changes same as var table does
+
 static void tchk_push_scope(struct typechk *tchk) {
   push_scope(&tchk->var_table);
   push_scope(&tchk->ty_table);
@@ -1631,6 +1634,7 @@ static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk,
 
   return get_completed_aggregate(tchk, var_ty);
 }
+
 static struct td_expr
 type_memberaccess(struct typechk *tchk,
                   const struct ast_memberaccess *memberaccess) {
