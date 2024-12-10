@@ -700,8 +700,21 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     break;
   case AST_ARRAY_DECLARATOR_TY_UNSIZED:
     switch (init->ty) {
-    case AST_INIT_TY_EXPR:
-      WARN("cannot initialize unsized array with expression");
+    case AST_INIT_TY_EXPR: {
+      // TODO: maybe this should be a helper func
+      if (init->expr.ty != AST_EXPR_TY_CNST ||
+          init->expr.cnst.ty != AST_CNST_TY_STR_LITERAL) {
+        WARN("cannot initialise unsized array except with normal string "
+             "literal");
+      }
+
+      const struct ast_cnst *cnst = &init->expr.cnst;
+
+      // FIXME: won't work for literals with null in them
+      // the cnst node needs to also hold string length
+      array_ty.array.size = strlen(cnst->str_value) + 1;
+      break;
+    }
     case AST_INIT_TY_INIT_LIST: {
       const struct ast_init_list *init_list = &init->init_list;
 
@@ -2803,7 +2816,7 @@ DEBUG_FUNC(cnst, cnst) {
     TD_PRINT("CONSTANT '%Lf'", cnst->flt_value);
   } else {
     // must be string literal for now
-    TD_PRINTZ("CONSTANT ");
+    TD_PRINT_SAMELINE_Z("CONSTANT ");
     fprint_str(stderr, cnst->str_value);
   }
 }
