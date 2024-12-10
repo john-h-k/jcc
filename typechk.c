@@ -123,13 +123,13 @@ bool is_fp_ty(const struct td_var_ty *ty) {
   }
 }
 
-static bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
+// FIXME: consider qualifiers, and "compatible" types rather than just equal
+// this method likely still needed, but most consumers of it care about "compatible"
+bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
                          const struct td_var_ty *r) {
   if (l->ty != r->ty) {
     return false;
   }
-
-  // FIXME: consider qualifiers, and "compatible" types rather than just equal
 
   switch (l->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
@@ -2465,14 +2465,6 @@ type_init_declarator(struct typechk *tchk,
         type_init(tchk, &td_var_decl.var_ty, init_declarator->init);
 
     td_var_decl.init = arena_alloc(tchk->arena, sizeof(*td_var_decl.init));
-
-    // TODO: validate/typecheck init lists
-
-    if (init.ty == TD_INIT_TY_EXPR &&
-        !td_var_ty_eq(tchk, &init.expr.var_ty, &td_var_decl.var_ty)) {
-      init.expr = add_cast_expr(tchk, init.expr, td_var_decl.var_ty);
-    }
-
     *td_var_decl.init = init;
   }
 

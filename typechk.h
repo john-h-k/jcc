@@ -59,6 +59,9 @@ enum well_known_ty {
   WELL_KNOWN_TY_LONG_DOUBLE,
 };
 
+#define WKT_IS_INTEGRAL(wkt) ((wkt) < WELL_KNOWN_TY_HALF)
+#define WKT_IS_FP(wkt) ((wkt) >= WELL_KNOWN_TY_HALF)
+
 #define WKT_MAKE_SIGNED(wkt)                                                   \
   (((wkt) >= WELL_KNOWN_TY_FLOAT) ? (wkt) : ((wkt) & ~1))
 #define WKT_MAKE_UNSIGNED(wkt)                                                 \
@@ -707,6 +710,9 @@ enum typechk_create_result {
 struct typechk_result {
   struct td_translationunit translation_unit;
 };
+
+bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
+                         const struct td_var_ty *r);
 
 enum typechk_create_result typechk_create(const struct target *target,
                                           struct parser *parser,
