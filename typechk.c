@@ -1716,9 +1716,6 @@ static struct td_expr type_assg(struct typechk *tchk,
       .expr = arena_alloc(tchk->arena, sizeof(*td_assg.expr)),
   };
 
-  // FIXME: needs to be typed with an intermediate as `some_char += 5` results
-  // in promotion then demotion
-
   enum td_binary_op_ty bin_op;
 
   switch (assg->ty) {
@@ -1767,11 +1764,12 @@ static struct td_expr type_assg(struct typechk *tchk,
     break;
   }
 
-  *td_assg.expr = type_expr(tchk, assg->expr);
+  *td_assg.expr = perform_integer_promotion(tchk, type_expr(tchk, assg->expr));
   *td_assg.assignee = type_expr(tchk, assg->assignee);
 
   if (td_assg.ty != TD_ASSG_TY_BASIC) {
-    struct td_binary_op_tys tys = resolve_binary_op_types(tchk, td_assg.assignee, td_assg.expr, bin_op);
+    struct td_expr promoted_assignee = perform_integer_promotion(tchk, *td_assg.assignee);
+    struct td_binary_op_tys tys = resolve_binary_op_types(tchk, &promoted_assignee, td_assg.expr, bin_op);
 
     *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr,
        tys.rhs_op_ty);
