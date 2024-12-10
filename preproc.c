@@ -743,7 +743,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 
   struct preproc_token token;
   while (true) {
-    preproc_next_raw_token(preproc, &token);
+    preproc_next_token(preproc, &token);
 
     // TODO: do we handle EOF properly everywhere? or do we assume files end in
     // newline
@@ -772,9 +772,9 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 
 static bool token_streq(struct preproc_token token, const char *str) {
   size_t token_len = token.span.end.idx - token.span.start.idx;
-  size_t len = MIN(token_len, strlen(str));
+  size_t len = strlen(str);
 
-  return strncmp(token.text, str, len) == 0;
+  return len == token_len && strncmp(token.text, str, len) == 0;
 }
 
 static struct preproc_define *get_define(struct preproc *preproc,
