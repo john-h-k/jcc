@@ -243,6 +243,18 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_FSUB:
     aarch64_emit_fsub(state->emitter, instr->aarch64->fsub);
     break;
+  case AARCH64_INSTR_TY_FABS:
+    aarch64_emit_fabs(state->emitter, instr->aarch64->fabs);
+    break;
+  case AARCH64_INSTR_TY_FSQRT:
+    aarch64_emit_fsqrt(state->emitter, instr->aarch64->fsqrt);
+    break;
+  case AARCH64_INSTR_TY_FMINNM:
+    aarch64_emit_fminnm(state->emitter, instr->aarch64->fminnm);
+    break;
+  case AARCH64_INSTR_TY_FMAXNM:
+    aarch64_emit_fmaxnm(state->emitter, instr->aarch64->fmaxnm);
+    break;
   }
 }
 

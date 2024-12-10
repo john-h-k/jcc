@@ -156,7 +156,10 @@
 #define FCVT(ftype_to, ftype_from, Rn, Rd)                                     \
   FP_1_REG(0b0, 0b0, ftype_from, (0b000100 | (ftype_to)), Rn, Rd)
 
-#define FNEG(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000010, Rn, Rd)
+#define FNEG(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000001, Rn, Rd)
+#define FABS(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000010, Rn, Rd)
+#define FSQRT(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000011, Rn, Rd)
+
 
 /* Two reg FP data processing */
 

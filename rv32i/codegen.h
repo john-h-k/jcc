@@ -199,7 +199,11 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_op_fp op_fp, fadd, fsub, fmul, fdiv, fsgnj, fsgnjn, fsgnjx;
+      struct rv32i_op_fp op_fp, fadd, fsub, fmul, fdiv, fsgnj, fsgnjn, fsgnjx, fmin, fmax;
+    };
+
+    union {
+      struct rv32i_op_unary_fp op_unary_fp, fsqrt;
     };
 
     union {
