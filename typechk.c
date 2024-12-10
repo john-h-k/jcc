@@ -1059,6 +1059,13 @@ type_specifiers(struct typechk *tchk,
 
         specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_VOLATILE;
         break;
+      case AST_TYPE_QUALIFIER_RESTRICT:
+        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_RESTRICT) {
+          WARN("duplicate restrict flag");
+        }
+
+        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_RESTRICT;
+        break;
       }
       break;
     case AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER:
@@ -2645,6 +2652,10 @@ DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
 
   if (*type_qualifier_flags & TD_TYPE_QUALIFIER_FLAG_VOLATILE) {
     TD_PRINTZ("VOLATILE");
+  }
+
+  if (*type_qualifier_flags & TD_TYPE_QUALIFIER_FLAG_RESTRICT) {
+    TD_PRINTZ("RESTRICT");
   }
 }
 

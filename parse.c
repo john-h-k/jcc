@@ -224,6 +224,8 @@ static bool parse_type_qualifier(struct parser *parser,
     *qualifier = AST_TYPE_QUALIFIER_CONST;
   } else if (token.ty == LEX_TOKEN_TY_KW_VOLATILE) {
     *qualifier = AST_TYPE_QUALIFIER_VOLATILE;
+  } else if (token.ty == LEX_TOKEN_TY_KW_RESTRICT) {
+    *qualifier = AST_TYPE_QUALIFIER_RESTRICT;
   } else {
     return false;
   }
@@ -741,13 +743,13 @@ parse_ast_array_declarator(struct parser *parser,
     return false;
   }
 
+  parse_declaration_specifier_list(parser, &array_declarator->specifier_list);
+
   enum ast_array_declarator_ty ty;
   if (parse_token(parser, LEX_TOKEN_TY_OP_MUL)) {
     ty = AST_ARRAY_DECLARATOR_TY_STAR;
   } else {
     bool is_static = parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
-
-    parse_declaration_specifier_list(parser, &array_declarator->specifier_list);
 
     is_static = is_static || parse_token(parser, LEX_TOKEN_TY_KW_STATIC);
 
@@ -2679,6 +2681,9 @@ DEBUG_FUNC_ENUM(type_qualifier, type_qualifier) {
     break;
   case AST_TYPE_QUALIFIER_VOLATILE:
     AST_PRINTZ("VOLATILE");
+    break;
+  case AST_TYPE_QUALIFIER_RESTRICT:
+    AST_PRINTZ("RESTRICT");
     break;
   }
 }
