@@ -52,6 +52,8 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_FSUB:
   case IR_OP_BINARY_OP_TY_FMUL:
   case IR_OP_BINARY_OP_TY_FDIV:
+  case IR_OP_BINARY_OP_TY_FMAX:
+  case IR_OP_BINARY_OP_TY_FMIN:
     return false;
   }
 }
@@ -437,6 +439,8 @@ enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_FLTEQ:
+  case IR_OP_BINARY_OP_TY_FMAX:
+  case IR_OP_BINARY_OP_TY_FMIN:
     return IR_OP_SIGN_NA;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_SDIV:

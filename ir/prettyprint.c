@@ -11,6 +11,10 @@ static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
   case IR_OP_UNARY_OP_TY_FNEG:
     return "f-";
+  case IR_OP_UNARY_OP_TY_FSQRT:
+    return "fsqrt";
+  case IR_OP_UNARY_OP_TY_FABS:
+    return "fabs";
   case IR_OP_UNARY_OP_TY_NEG:
     return "-";
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
@@ -105,6 +109,10 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "f*";
   case IR_OP_BINARY_OP_TY_FDIV:
     return "f/";
+  case IR_OP_BINARY_OP_TY_FMAX:
+    return "fmax";
+  case IR_OP_BINARY_OP_TY_FMIN:
+    return "fmin";
   }
 }
 
@@ -361,7 +369,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
         fprintf(file, "addr GLB(%zu)", ir->addr.glb->id);
 
         if (ir->addr.glb->name) {
-           fprintf(file, " { \"%s\" }", ir->addr.glb->name);
+          fprintf(file, " { \"%s\" }", ir->addr.glb->name);
         }
       }
       break;

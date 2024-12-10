@@ -338,7 +338,28 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 
   switch (op->unary_op.ty) {
   case IR_OP_UNARY_OP_TY_FNEG:
-    todo("fneg");
+    instr->rv32i->ty = RV32I_INSTR_TY_FSGNJN;
+    instr->rv32i->fsgnjn = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = source,
+        .rhs = source,
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_FABS:
+    instr->rv32i->ty = RV32I_INSTR_TY_FSGNJX;
+    instr->rv32i->fsgnjx = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = source,
+        .rhs = source,
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_FSQRT:
+    instr->rv32i->ty = RV32I_INSTR_TY_FABS;
+    instr->rv32i->sub = (struct rv32i_op){
+        .dest = dest,
+        .lhs = source,
+        .rhs = source,
+    };
   case IR_OP_UNARY_OP_TY_NEG:
     instr->rv32i->ty = RV32I_INSTR_TY_SUB;
     instr->rv32i->sub = (struct rv32i_op){
