@@ -43,7 +43,6 @@ enum lex_create_result lexer_create(struct program *program,
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
   } while (0);
 
-    // TODO: hashify
     KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
     KEYWORD("break", LEX_TOKEN_TY_KW_BREAK);
     KEYWORD("continue", LEX_TOKEN_TY_KW_CONTINUE);
@@ -91,7 +90,7 @@ enum lex_create_result lexer_create(struct program *program,
 
 #undef KEYWORD
 
-    debug("build kw table (len=%zu)", hashtbl_size(KEYWORDS));
+    debug("built kw table (len=%zu)", hashtbl_size(KEYWORDS));
   }
 
   info("beginning lex stage");
@@ -908,5 +907,8 @@ preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty) {
 
   case PREPROC_TOKEN_PUNCTUATOR_TY_ELLIPSIS:
     return LEX_TOKEN_TY_ELLIPSIS;
+  case PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY:
+  case PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT:
+    bug("stringify/concat tokens should not reach lexer");
   }
 }

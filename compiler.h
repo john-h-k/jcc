@@ -39,6 +39,8 @@ struct compile_args {
   size_t num_include_paths;
   const char **include_paths;
 
+  const char *fixed_timestamp;
+
   char *output;
 };
 

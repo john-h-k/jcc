@@ -6,28 +6,27 @@
 
 // FIXME: these all leak. make them use `arena`s
 
-char *path_dir(const char *path) {
+struct path_components path_components(const char *path) {
   const char *last_slash = strrchr(path, '/');
 
   if (last_slash == NULL) {
-    char *dir = nonnull_malloc(2);
-
-    if (dir != NULL) {
-      dir[0] = '.';
-      dir[1] = '\0';
-    }
-
-    return dir;
+    return (struct path_components){
+      .dir = ".",
+      .file = strdup(path)
+    };
   }
 
   size_t dir_len = last_slash - path;
+  const char *file_part = last_slash + 1;
 
   char *dir = nonnull_malloc(dir_len + 1);
-
   strncpy(dir, path, dir_len);
   dir[dir_len] = '\0';
 
-  return dir;
+  return (struct path_components){
+    .dir = dir,
+    .file = strdup(file_part)
+  };
 }
 
 char *path_combine(const char *l, const char *r) {
@@ -64,7 +63,7 @@ char *path_replace_ext(const char *path, const char *ext) {
 
   size_t res_sz = prefix_len + 1 + ext_len + 1;
 
-  char *buff = nonnull_malloc(sizeof(char) * res_sz);
+  char *buff = nonnull_malloc(sizeof(*buff) * res_sz);
   size_t head = 0;
 
   strncpy(&buff[head], path, prefix_len);
@@ -88,7 +87,7 @@ char *path_add_ext(const char *path, const char *ext) {
   size_t ext_len = strlen(ext);
 
   size_t res_sz = path_len + 1 + ext_len + 1;
-  char *buff = nonnull_malloc(sizeof(char) * res_sz);
+  char *buff = nonnull_malloc(sizeof(*buff) * res_sz);
   size_t head = 0;
 
   strncpy(&buff[head], path, path_len);

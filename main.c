@@ -73,7 +73,6 @@ int main(int argc, char **argv) {
       return COMPILE_RESULT_BAD_FILE;
     }
 
-    const char *working_dir = path_dir(sources[i]);
     char *object_file;
 
     if (args.preproc_only && !args.output) {
@@ -97,7 +96,7 @@ int main(int argc, char **argv) {
     disable_log();
     struct compiler *compiler;
 
-    if (create_compiler(&program, object_file, working_dir, &args, &compiler) !=
+    if (create_compiler(&program, object_file, sources[i], &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;
@@ -207,6 +206,18 @@ static bool parse_output(const char *str, char **output) {
   return false;
 }
 
+
+static bool parse_fixed_timestamp(const char *str, const char **fixed_timestamp) {
+  size_t len = strlen(str);
+  
+  if (len >= 19) {
+    *fixed_timestamp = str;
+    return true;
+  }
+
+  err("`fixed_timestamp` must be exactly at least 19 chars (for symmetry with `asctime`)");
+  return false;
+}
 static enum parse_args_result parse_args(int argc, char **argv,
                                          struct compile_args *args,
                                          const char ***sources,
@@ -260,6 +271,16 @@ static enum parse_args_result parse_args(int argc, char **argv,
     GET_ARGUMENT(output);
     if (output) {
       if (!parse_output(output, &args->output)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
+
+      continue;
+    }
+
+    const char *fixed_timestamp = try_get_arg(arg, "-tm");
+    GET_ARGUMENT(fixed_timestamp);
+    if (fixed_timestamp) {
+      if (!parse_fixed_timestamp(fixed_timestamp, &args->fixed_timestamp)) {
         return PARSE_ARGS_RESULT_ERROR;
       }
 
