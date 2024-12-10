@@ -4,6 +4,7 @@
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
+#include "ir/ir.h"
 #include "lex.h"
 #include "log.h"
 #include "program.h"
@@ -735,7 +736,10 @@ not_punctuator:
   preproc_text->pos = end;
 }
 
-static bool try_expand_token(struct preproc *preproc, struct preproc_text *preproc_text, struct preproc_token *token, struct vector *buffer) {
+static bool try_expand_token(struct preproc *preproc,
+                             struct preproc_text *preproc_text,
+                             struct preproc_token *token,
+                             struct vector *buffer) {
   if (token->ty != PREPROC_TOKEN_TY_IDENTIFIER) {
     return false;
   }
@@ -867,9 +871,15 @@ static bool try_expand_token(struct preproc *preproc, struct preproc_text *prepr
   return false;
 }
 
+enum preproc_token_mode {
+  PREPROC_TOKEN_MODE_NO_EXPAND,
+  PREPROC_TOKEN_MODE_EXPAND,
+};
+
 static void preproc_tokens_til_eol(struct preproc *preproc,
                                    struct preproc_text *preproc_text,
-                                   struct vector *buffer) {
+                                   struct vector *buffer,
+                                   enum preproc_token_mode mode) {
   // this skips leading and trailing whitespace
 
   ssize_t last_nontrivial_token = -1;
@@ -895,7 +905,8 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
       last_nontrivial_token = vector_length(buffer);
     }
 
-    if (!try_expand_token(preproc, preproc_text, &token, buffer)) {
+    if (mode == PREPROC_TOKEN_MODE_NO_EXPAND ||
+        !try_expand_token(preproc, preproc_text, &token, buffer)) {
       vector_push_back(buffer, &token);
     }
   }
@@ -927,15 +938,19 @@ static struct preproc_define *get_define(struct preproc *preproc,
   return hashtbl_lookup(preproc->defines, &ident);
 }
 
-
 void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   // expands tokens, adds defines, etc
 
   while (true) {
+    enum preproc_token_mode mode;
+
     if (vector_empty(preproc->buffer_tokens)) {
       preproc_next_raw_token(preproc, token);
+      mode = PREPROC_TOKEN_MODE_EXPAND;
     } else {
+      // values in buffer have already been expanded
       *token = *(struct preproc_token *)vector_pop(preproc->buffer_tokens);
+      mode = PREPROC_TOKEN_MODE_NO_EXPAND;
     }
 
     if (token->ty == PREPROC_TOKEN_TY_EOF) {
@@ -961,34 +976,37 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
       preproc_next_raw_token(preproc, &directive);
 
+      if (directive.ty != PREPROC_TOKEN_TY_IDENTIFIER) {
+        todo("error for non identifier directive");
+      }
+
+      // `define`s only expand at use sites
+      mode = token_streq(directive, "define")
+                                         ? PREPROC_TOKEN_MODE_NO_EXPAND
+                                         : PREPROC_TOKEN_MODE_EXPAND;
+
       directive_tokens = vector_create(sizeof(struct preproc_token));
-      preproc_tokens_til_eol(preproc, preproc_text, directive_tokens);
+      preproc_tokens_til_eol(preproc, preproc_text, directive_tokens, mode);
 
       num_directive_tokens = vector_length(directive_tokens);
 
-      if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-          token_streq(directive, "ifdef")) {
+      if (token_streq(directive, "ifdef")) {
         bool now_enabled = enabled && get_define(preproc, directive_tokens);
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "ifndef")) {
+      } else if (token_streq(directive, "ifndef")) {
         bool now_enabled = enabled && !get_define(preproc, directive_tokens);
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "endif")) {
+      } else if (token_streq(directive, "endif")) {
         vector_pop(preproc->enabled);
         continue;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "else")) {
+      } else if (token_streq(directive, "else")) {
         *(bool *)vector_tail(preproc->enabled) = outer_enabled && !enabled;
         continue;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "elif")) {
+      } else if (token_streq(directive, "elif")) {
         todo("elif");
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "elifdef")) {
+      } else if (token_streq(directive, "elifdef")) {
         if (enabled) {
           *(bool *)vector_tail(preproc->enabled) = false;
         } else {
@@ -996,8 +1014,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
         }
         continue;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "elifndef")) {
+      } else if (token_streq(directive, "elifndef")) {
         if (enabled) {
           *(bool *)vector_tail(preproc->enabled) = false;
         } else {
@@ -1017,8 +1034,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
       // `directive` token is already parsed
 
-      if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-          token_streq(directive, "include")) {
+      if (token_streq(directive, "include")) {
         preproc->in_angle_string_context = true;
 
         if (num_directive_tokens != 1) {
@@ -1076,8 +1092,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         preproc->line_has_nontrivial_token = false;
         preproc->in_angle_string_context = false;
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "define")) {
+      } else if (token_streq(directive, "define")) {
 
         struct preproc_token def_name =
             *(struct preproc_token *)vector_head(directive_tokens);
@@ -1103,8 +1118,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
                       .vec = directive_tokens}};
 
         hashtbl_insert(preproc->defines, &ident, &define);
-      } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
-                 token_streq(directive, "undef")) {
+      } else if (token_streq(directive, "undef")) {
 
         if (num_directive_tokens != 1) {
           todo("handle bad define, had multiple tokens");
@@ -1158,7 +1172,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       continue;
     }
 
-    if (try_expand_token(preproc, preproc_text, token, preproc->buffer_tokens)) {
+    if (mode == PREPROC_TOKEN_MODE_EXPAND && try_expand_token(preproc, preproc_text, token,
+                         preproc->buffer_tokens)) {
       continue;
     }
 
