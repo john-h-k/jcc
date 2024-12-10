@@ -33,13 +33,13 @@ static uint64_t folded_multiply(uint64_t l, uint64_t r) {
 
 struct hasher hasher_create(void) {
   return (struct hasher){.accumulator = SEEDS[0],
-                            .sponge0 = 0,
-                            .sponge1 = 0,
-                            .sponge_len = 0,
-                            .fold_seed = SEEDS[1],
-                            .expand_seed0 = SEEDS[2],
-                            .expand_seed1 = SEEDS[3],
-                            .expand_seed2 = SEEDS[4]};
+                         .sponge0 = 0,
+                         .sponge1 = 0,
+                         .sponge_len = 0,
+                         .fold_seed = SEEDS[1],
+                         .expand_seed0 = SEEDS[2],
+                         .expand_seed1 = SEEDS[3],
+                         .expand_seed2 = SEEDS[4]};
 }
 
 void hasher_hash_pointer(struct hasher *hasher, const void *value) {
@@ -65,7 +65,7 @@ void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
     size_t shift = 128 - hasher->sponge_len;
 
     uint64_t lo = hasher->sponge_len >= 64 ? 0 : value << hasher->sponge_len;
-    uint64_t hi = shift >= 64 ? 0 : value >> shift ;
+    uint64_t hi = shift >= 64 ? 0 : value >> shift;
 
     hasher->sponge0 |= lo;
     hasher->sponge1 |= hi;

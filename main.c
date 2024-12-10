@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
 
     const char *working_dir = path_dir(sources[i]);
     char *object_file;
-    
+
     if (args.preproc_only && !args.output) {
       // FIXME: hacky
       object_file = nonnull_malloc(strlen("stdout") + 1);

@@ -2524,7 +2524,8 @@ static struct td_external_declaration type_external_declaration(
   }
 }
 
-enum typechk_create_result typechk_create(const struct target *target, struct parser *parser,
+enum typechk_create_result typechk_create(const struct target *target,
+                                          struct parser *parser,
                                           struct typechk **tchk) {
   struct typechk *t = nonnull_malloc(sizeof(*t));
 
@@ -2804,7 +2805,6 @@ DEBUG_FUNC(cnst, cnst) {
     // must be string literal for now
     TD_PRINTZ("CONSTANT ");
     fprint_str(stderr, cnst->str_value);
-
   }
 }
 

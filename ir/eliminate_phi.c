@@ -134,7 +134,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
     }
 
-    if ((move.to.idx == tmp_index || move.from.idx == tmp_index) && !spill_lcl) {
+    if ((move.to.idx == tmp_index || move.from.idx == tmp_index) &&
+        !spill_lcl) {
       spill_lcl = add_local(irb, &IR_VAR_TY_I64);
     }
 

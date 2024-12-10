@@ -93,7 +93,8 @@ enum rv32i_reg_class {
 
 enum rv32i_reg_attr_flags {
   RV32I_REG_ATTR_FLAG_NONE = 0,
-  RV32I_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
+  RV32I_REG_ATTR_FLAG_VOLATILE =
+      1, // v8-15 are upper half only volatile, we don't support this yet
   RV32I_REG_ATTR_FLAG_ARG_REG = 2,
   RV32I_REG_ATTR_FLAG_RET_REG = 4,
   RV32I_REG_ATTR_FLAG_RESERVED = 8,
@@ -193,7 +194,8 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_op op, add, sub, mul, div, rem, divu, remu, and, or, xor, sll, srl, sra;
+      struct rv32i_op op, add, sub, mul, div, rem, divu, remu, and, or, xor,
+          sll, srl, sra;
     };
 
     union {
@@ -225,7 +227,8 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_conditional_branch conditional_branch, beq, bne, blt, bge, bltu, bgeu;
+      struct rv32i_conditional_branch conditional_branch, beq, bne, blt, bge,
+          bltu, bgeu;
     };
   };
 };

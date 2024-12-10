@@ -2,9 +2,8 @@
 
 #include "../alloc.h"
 #include "../log.h"
-#include "../vector.h"
 #include "../target.h"
-
+#include "../vector.h"
 
 enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
@@ -14,7 +13,6 @@ enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
     return IR_VAR_PRIMITIVE_TY_I64;
   }
 }
-
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   switch (ty) {

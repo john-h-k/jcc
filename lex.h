@@ -1,9 +1,9 @@
 #ifndef LEX_H
 #define LEX_H
 
+#include "preproc.h"
 #include "program.h"
 #include "util.h"
-#include "preproc.h"
 
 #include <stdlib.h>
 
@@ -161,7 +161,8 @@ struct lex_token {
 struct lexer;
 
 bool lexer_at_eof(struct lexer *lexer);
-enum lex_create_result lexer_create(struct program *program, struct preproc *preproc,
+enum lex_create_result lexer_create(struct program *program,
+                                    struct preproc *preproc,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
@@ -180,8 +181,10 @@ const char *associated_text(const struct lexer *lexer,
                             const struct lex_token *token);
 
 const char *strlike_associated_text(const struct lexer *lexer,
-                                    const struct lex_token *token, size_t *str_len);
+                                    const struct lex_token *token,
+                                    size_t *str_len);
 
-const char *token_name(const struct lexer *lexer, const struct lex_token *token);
+const char *token_name(const struct lexer *lexer,
+                       const struct lex_token *token);
 
 #endif

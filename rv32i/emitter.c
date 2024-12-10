@@ -137,24 +137,30 @@ void rv32i_emit_fmv(struct rv32i_emitter *emitter,
   }
 }
 
-void rv32i_emit_fadd(struct rv32i_emitter *emitter, const struct rv32i_op_fp fadd) {
+void rv32i_emit_fadd(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fadd) {
   rv32i_emit_instr(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
 }
 
-void rv32i_emit_fsub(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsub) {
+void rv32i_emit_fsub(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fsub) {
   rv32i_emit_instr(emitter, FSUB_S(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
 }
 
-void rv32i_emit_fmul(struct rv32i_emitter *emitter, const struct rv32i_op_fp fmul) {
+void rv32i_emit_fmul(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fmul) {
   rv32i_emit_instr(emitter, FMUL_S(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
 }
 
-void rv32i_emit_fdiv(struct rv32i_emitter *emitter, const struct rv32i_op_fp fdiv) {
+void rv32i_emit_fdiv(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fdiv) {
   rv32i_emit_instr(emitter, FDIV_S(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
 }
 
-void rv32i_emit_fsgnj(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsgnj) {
-  rv32i_emit_instr(emitter, FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
+void rv32i_emit_fsgnj(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fsgnj) {
+  rv32i_emit_instr(emitter,
+                   FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
 }
 
 void rv32i_emit_addi(struct rv32i_emitter *emitter,
@@ -224,12 +230,13 @@ void rv32i_emit_sw(struct rv32i_emitter *emitter, const struct rv32i_store sw) {
   rv32i_emit_instr(emitter, SW(sw.imm, sw.source.idx, sw.addr.idx));
 }
 
-void rv32i_emit_fsw(struct rv32i_emitter *emitter, const struct rv32i_store fsw) {
+void rv32i_emit_fsw(struct rv32i_emitter *emitter,
+                    const struct rv32i_store fsw) {
   rv32i_emit_instr(emitter, FSW(fsw.imm, fsw.source.idx, fsw.addr.idx));
 }
 
-
-void rv32i_emit_flw(struct rv32i_emitter *emitter, const struct rv32i_load flw) {
+void rv32i_emit_flw(struct rv32i_emitter *emitter,
+                    const struct rv32i_load flw) {
   rv32i_emit_instr(emitter, FLW(flw.imm, flw.dest.idx, flw.addr.idx));
 }
 

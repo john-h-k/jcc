@@ -1,8 +1,8 @@
 #ifndef TYPECHK_H
 #define TYPECHK_H
 
-#include "target.h"
 #include "parse.h"
+#include "target.h"
 #include "var_table.h"
 
 /* Typecheck */
@@ -708,7 +708,8 @@ struct typechk_result {
   struct td_translationunit translation_unit;
 };
 
-enum typechk_create_result typechk_create(const struct target *target, struct parser *parser,
+enum typechk_create_result typechk_create(const struct target *target,
+                                          struct parser *parser,
                                           struct typechk **tchk);
 
 struct typechk_result td_typechk(struct typechk *tchk,

@@ -63,7 +63,8 @@ enum compiler_create_result create_compiler(struct program *program,
 
   (*compiler)->args = *args;
 
-  if (preproc_create(program, working_dir, args->num_include_paths, args->include_paths,
+  if (preproc_create(program, working_dir, args->num_include_paths,
+                     args->include_paths,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -124,7 +125,7 @@ enum compile_result compile(struct compiler *compiler) {
     if (strcmp(compiler->output, "stdout") == 0) {
       file = stdout;
     } else {
-     file = fopen(compiler->output, "w");
+      file = fopen(compiler->output, "w");
     }
 
     if (!file) {

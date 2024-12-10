@@ -56,9 +56,11 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
     return false;
   }
 
-  struct bucket *bucket = vector_get(hashtbl->buckets, hashtbl_iter->bucket_idx);
+  struct bucket *bucket =
+      vector_get(hashtbl->buckets, hashtbl_iter->bucket_idx);
 
-  while (vector_empty(bucket->elems) && ++hashtbl_iter->bucket_idx < num_buckets) {
+  while (vector_empty(bucket->elems) &&
+         ++hashtbl_iter->bucket_idx < num_buckets) {
     hashtbl_iter->elem_idx = 0;
     bucket = vector_get(hashtbl->buckets, hashtbl_iter->bucket_idx);
   }
@@ -102,8 +104,8 @@ struct hashtbl *hashtbl_create_str_keyed(size_t element_size) {
 }
 
 struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size) {
-  return hashtbl_create(sizeof(struct sized_str), element_size, hashtbl_hash_sized_str,
-                        hashtbl_eq_sized_str);
+  return hashtbl_create(sizeof(struct sized_str), element_size,
+                        hashtbl_hash_sized_str, hashtbl_eq_sized_str);
 }
 
 void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
@@ -152,7 +154,6 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
 
   vector_free(&buckets);
 }
-
 
 struct lookup_internal {
   void *triple;
@@ -278,4 +279,3 @@ bool hashtbl_eq_sized_str(const void *l, const void *r) {
 
   return strncmp(sl->str, sr->str, sl->len) == 0;
 }
-

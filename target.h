@@ -2,6 +2,7 @@
 #define TARGET_H
 
 #include "alloc.h"
+
 #include <stdio.h>
 
 enum relocation_ty {
@@ -101,7 +102,6 @@ struct reg_info {
   struct reg_set_info gp_registers;
   struct reg_set_info fp_registers;
 };
-
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*target_lower)(struct ir_unit *unit);

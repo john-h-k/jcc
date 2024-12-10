@@ -26,9 +26,8 @@ struct instr *alloc_instr(struct codegen_function *func) {
   return instr;
 }
 
-
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
-                                        const char *func_name, size_t id) {
+                                 const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
   func_name = "str";
   size_t func_name_len = strlen(func_name);
