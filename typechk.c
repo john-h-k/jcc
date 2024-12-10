@@ -124,9 +124,10 @@ bool is_fp_ty(const struct td_var_ty *ty) {
 }
 
 // FIXME: consider qualifiers, and "compatible" types rather than just equal
-// this method likely still needed, but most consumers of it care about "compatible"
+// this method likely still needed, but most consumers of it care about
+// "compatible"
 bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
-                         const struct td_var_ty *r) {
+                  const struct td_var_ty *r) {
   if (l->ty != r->ty) {
     return false;
   }
@@ -1920,11 +1921,57 @@ static struct td_expr type_expr(struct typechk *tchk,
 }
 
 static unsigned long long
-type_constant_integral_expr(UNUSED struct typechk *tchk,
-                            const struct ast_expr *expr) {
+type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
   // FIXME: error on float/str
   if (expr->ty == AST_EXPR_TY_CNST) {
     return expr->cnst.int_value;
+  }
+
+  if (expr->ty == AST_EXPR_TY_BINARY_OP) {
+    unsigned long long lhs =
+        type_constant_integral_expr(tchk, expr->binary_op.lhs);
+    unsigned long long rhs =
+        type_constant_integral_expr(tchk, expr->binary_op.rhs);
+
+    // FIXME: maybe wrong wrt sizes, definitely wrong wrt to signs
+    switch (expr->binary_op.ty) {
+    case AST_BINARY_OP_TY_EQ:
+      return lhs == rhs;
+    case AST_BINARY_OP_TY_NEQ:
+      return lhs != rhs;
+    case AST_BINARY_OP_TY_GT:
+      return lhs > rhs;
+    case AST_BINARY_OP_TY_GTEQ:
+      return lhs >= rhs;
+    case AST_BINARY_OP_TY_LT:
+      return lhs < rhs;
+    case AST_BINARY_OP_TY_LTEQ:
+      return lhs <= rhs;
+    case AST_BINARY_OP_TY_LOGICAL_OR:
+      return lhs || rhs;
+    case AST_BINARY_OP_TY_LOGICAL_AND:
+      return lhs && rhs;
+    case AST_BINARY_OP_TY_OR:
+      return lhs | rhs;
+    case AST_BINARY_OP_TY_AND:
+      return lhs & rhs;
+    case AST_BINARY_OP_TY_XOR:
+      return lhs ^ rhs;
+    case AST_BINARY_OP_TY_LSHIFT:
+      return lhs << rhs;
+    case AST_BINARY_OP_TY_RSHIFT:
+      return lhs >> rhs;
+    case AST_BINARY_OP_TY_ADD:
+      return lhs + rhs;
+    case AST_BINARY_OP_TY_SUB:
+      return lhs - rhs;
+    case AST_BINARY_OP_TY_MUL:
+      return lhs * rhs;
+    case AST_BINARY_OP_TY_DIV:
+      return lhs / rhs;
+    case AST_BINARY_OP_TY_QUOT:
+      return lhs % rhs;
+    }
   }
 
   WARN("constant integral expr was expected");
