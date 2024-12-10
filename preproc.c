@@ -736,10 +736,18 @@ not_punctuator:
   preproc_text->pos = end;
 }
 
+static bool token_streq(struct preproc_token token, const char *str) {
+  size_t token_len = token.span.end.idx - token.span.start.idx;
+  size_t len = strlen(str);
+
+  return len == token_len && strncmp(token.text, str, len) == 0;
+}
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token,
-                             struct vector *buffer) {
+                             struct vector *buffer,
+                             struct hashtbl *parents
+                           ) {
   if (token->ty != PREPROC_TOKEN_TY_IDENTIFIER) {
     return false;
   }
@@ -748,19 +756,36 @@ static bool try_expand_token(struct preproc *preproc,
   struct sized_str ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
+  if (!parents) {
+    parents = hashtbl_create_sized_str_keyed(0);
+  } else {
+    void *parent = hashtbl_lookup(parents, &ident);
+
+    if (parent) {
+      // already seen this macro, do not expand it again
+      return false;
+    }
+  }
+
+  hashtbl_insert(parents, &ident, NULL);
+
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
 
   if (macro) {
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
-      vector_push_back(buffer, &value->token);
+      if (!try_expand_token(preproc, preproc_text, &value->token, buffer, parents)) {
+        vector_push_back(buffer, &value->token);
+      }
       break;
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
       size_t num_tokens = vector_length(value->vec);
       for (size_t i = num_tokens; i; i--) {
         struct preproc_token *def_tok = vector_get(value->vec, i - 1);
-        vector_push_back(buffer, def_tok);
+        if (!try_expand_token(preproc, preproc_text, def_tok, buffer, parents)) {
+          vector_push_back(buffer, def_tok);
+        }
       }
       break;
     }
@@ -906,7 +931,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
     }
 
     if (mode == PREPROC_TOKEN_MODE_NO_EXPAND ||
-        !try_expand_token(preproc, preproc_text, &token, buffer)) {
+        !try_expand_token(preproc, preproc_text, &token, buffer, NULL)) {
       vector_push_back(buffer, &token);
     }
   }
@@ -914,13 +939,6 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
   if (last_nontrivial_token != -1) {
     vector_resize(buffer, last_nontrivial_token + 1);
   }
-}
-
-static bool token_streq(struct preproc_token token, const char *str) {
-  size_t token_len = token.span.end.idx - token.span.start.idx;
-  size_t len = strlen(str);
-
-  return len == token_len && strncmp(token.text, str, len) == 0;
 }
 
 static struct preproc_define *get_define(struct preproc *preproc,
@@ -1173,7 +1191,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
     }
 
     if (mode == PREPROC_TOKEN_MODE_EXPAND && try_expand_token(preproc, preproc_text, token,
-                         preproc->buffer_tokens)) {
+                         preproc->buffer_tokens, NULL)) {
       continue;
     }
 
