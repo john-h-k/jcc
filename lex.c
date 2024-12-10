@@ -419,6 +419,8 @@ lex_string_literal(const struct preproc_token *preproc_token) {
     bug("found angle-bracket string literal in lexer");
   case '\"':
     return LEX_TOKEN_TY_ASCII_STR_LITERAL;
+  case '\'':
+    return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
   case 'L':
     switch (preproc_token->text[1]) {
     case '\"':
@@ -426,8 +428,6 @@ lex_string_literal(const struct preproc_token *preproc_token) {
     case '\'':
       return LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
     }
-  case '\'':
-    return LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
   default:
     todo("other string/char literal types");
   }
