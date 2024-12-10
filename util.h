@@ -142,7 +142,15 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NORETURN noreturn
 #endif
 
-#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
+#if __GNUC__ && STDC_32
+#define TRYFORCEINLINE [[gnu::always_inline]] inline
+#elif __GNUC__
+#define TRYFORCEINLINE __attribute__((always_inline)) inline
+#else
+#define TRYFORCEINLINE inline
+#endif
+
+#define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))
 
 #if STDC_C23 && __GNUC__
 #define UNUSED_ARG(arg) [gcc::unused] arg
@@ -267,7 +275,11 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
   }
 }
 
-static inline void breakpoint(void) { raise(SIGINT); }
+#if HAS_BUILTIN(__builtin_debugtrap)
+TRYFORCEINLINE static void breakpoint(void) { __builtin_debugtrap(); }
+#else
+TRYFORCEINLINE static void breakpoint(void) { raise(SIGINT); }
+#endif
 
 #if NDEBUG
 PRINTF_ARGS(1) static inline void debug_assert(bool, const char *, ...) {}
