@@ -39,6 +39,12 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_FMUL,
   RV32I_INSTR_TY_FDIV,
   RV32I_INSTR_TY_FSGNJ,
+  RV32I_INSTR_TY_FSGNJN,
+  RV32I_INSTR_TY_FSGNJX,
+  RV32I_INSTR_TY_FMAX,
+  RV32I_INSTR_TY_FMIN,
+
+  RV32I_INSTR_TY_FSQRT,
 
   RV32I_INSTR_TY_OR,
   RV32I_INSTR_TY_AND,
@@ -130,6 +136,11 @@ struct rv32i_op_fp {
   struct rv32i_reg rhs;
 };
 
+struct rv32i_op_unary_fp {
+  struct rv32i_reg dest;
+  struct rv32i_reg source;
+};
+
 struct rv32i_op_mov {
   struct rv32i_reg dest;
   struct rv32i_reg source;
@@ -186,7 +197,7 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_op_fp op_fp, fadd, fsub, fmul, fdiv, fsgnj;
+      struct rv32i_op_fp op_fp, fadd, fsub, fmul, fdiv, fsgnj, fsgnjn, fsgnjx;
     };
 
     union {
