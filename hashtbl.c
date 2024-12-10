@@ -186,7 +186,10 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
   void *key_entry = (char *)triple + sizeof(hash);
   void *data_entry = (char *)key_entry + hashtbl->key_size;
   memcpy(key_entry, key, hashtbl->key_size);
-  memcpy(data_entry, data, hashtbl->element_size);
+
+  if (data) {
+    memcpy(data_entry, data, hashtbl->element_size);
+  }
 
   hashtbl->len++;
 }
