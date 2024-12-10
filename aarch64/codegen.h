@@ -21,6 +21,11 @@ typedef long long simm_t;
 
 enum aarch64_instr_ty {
   AARCH64_INSTR_TY_FNEG,
+  AARCH64_INSTR_TY_FABS,
+  AARCH64_INSTR_TY_FSQRT,
+
+  AARCH64_INSTR_TY_FMINNM,
+  AARCH64_INSTR_TY_FMAXNM,
 
   AARCH64_INSTR_TY_FADD,
   AARCH64_INSTR_TY_FMUL,
@@ -398,12 +403,12 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg;
+      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg, fabs, fsqrt;
     };
 
     union {
       struct aarch64_reg_2_source reg_2_source, asrv, lslv, lsrv, rorv, sdiv,
-          udiv, fmul, fdiv, fadd, fsub;
+          udiv, fmul, fdiv, fadd, fsub, fmaxnm, fminnm;
     };
 
     union {

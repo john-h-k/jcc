@@ -163,6 +163,40 @@ void rv32i_emit_fsgnj(struct rv32i_emitter *emitter,
                    FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
 }
 
+void rv32i_emit_fsgnjn(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fsgnjn) {
+  rv32i_emit_instr(emitter,
+                   FSGNJN_S(fsgnjn.rhs.idx, fsgnjn.lhs.idx, fsgnjn.dest.idx));
+}
+
+void rv32i_emit_fsgnjx(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fsgnjx) {
+  rv32i_emit_instr(emitter,
+                   FSGNJX_S(fsgnjx.rhs.idx, fsgnjx.lhs.idx, fsgnjx.dest.idx));
+
+}
+
+void rv32i_emit_fmax(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fmax) {
+  rv32i_emit_instr(emitter,
+                   FMAX_S(fmax.rhs.idx, fmax.lhs.idx, fmax.dest.idx));
+  
+}
+
+void rv32i_emit_fmin(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fmin) {
+  rv32i_emit_instr(emitter,
+                   FMIN_S(fmin.rhs.idx, fmin.lhs.idx, fmin.dest.idx));
+  
+}
+
+void rv32i_emit_fsqrt(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_unary_fp fsqrt) {
+  rv32i_emit_instr(emitter,
+                   FSQRT_S(fsqrt.source.idx, fsqrt.dest.idx));
+}
+
+
 void rv32i_emit_addi(struct rv32i_emitter *emitter,
                      const struct rv32i_op_imm addi) {
   rv32i_emit_instr(emitter, ADDI(addi.imm, addi.source.idx, addi.dest.idx));

@@ -12,10 +12,12 @@
 
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \
-    .ty = AARCH64_INSTR_TY_ORR, .orr = {.lhs = zero_reg_for_ty(dest_reg.ty),   \
-                                        .rhs = (source_reg),                   \
-                                        .dest = (dest_reg),                    \
-                                        .imm6 = 0}                             \
+    .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
+      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
+      .rhs = (source_reg),                                                     \
+      .dest = (dest_reg),                                                      \
+      .imm6 = 0                                                                \
+    }                                                                          \
   }
 
 #define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
@@ -197,6 +199,8 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_FCVT:
   case AARCH64_INSTR_TY_UCVTF:
   case AARCH64_INSTR_TY_SCVTF:
+  case AARCH64_INSTR_TY_FABS:
+  case AARCH64_INSTR_TY_FSQRT:
     return AARCH64_INSTR_CLASS_REG_1_SOURCE;
   case AARCH64_INSTR_TY_ASRV:
   case AARCH64_INSTR_TY_LSLV:
@@ -208,6 +212,8 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty) {
   case AARCH64_INSTR_TY_FSUB:
   case AARCH64_INSTR_TY_FMUL:
   case AARCH64_INSTR_TY_FDIV:
+  case AARCH64_INSTR_TY_FMAXNM:
+  case AARCH64_INSTR_TY_FMINNM:
     return AARCH64_INSTR_CLASS_REG_2_SOURCE;
   case AARCH64_INSTR_TY_MADD:
   case AARCH64_INSTR_TY_MSUB:
@@ -850,6 +856,20 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg source = codegen_reg(op->unary_op.value);
 
   switch (op->unary_op.ty) {
+  case IR_OP_UNARY_OP_TY_FABS:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FABS;
+    instr->aarch64->fabs = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = source,
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_FSQRT:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FSQRT;
+    instr->aarch64->fsqrt = (struct aarch64_reg_1_source){
+        .dest = dest,
+        .source = source,
+    };
+    return;
   case IR_OP_UNARY_OP_TY_FNEG:
     instr->aarch64->ty = AARCH64_INSTR_TY_FNEG;
     instr->aarch64->fneg = (struct aarch64_reg_1_source){
@@ -1015,6 +1035,22 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_UDIV:
     instr->aarch64->ty = AARCH64_INSTR_TY_UDIV;
     instr->aarch64->udiv = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FMAX:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FMAXNM;
+    instr->aarch64->fmaxnm = (struct aarch64_reg_2_source){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FMIN:
+    instr->aarch64->ty = AARCH64_INSTR_TY_FMINNM;
+    instr->aarch64->fminnm = (struct aarch64_reg_2_source){
         .dest = dest,
         .lhs = lhs,
         .rhs = rhs,
@@ -3732,6 +3768,22 @@ static void debug_print_instr(FILE *file,
   case AARCH64_INSTR_TY_FSUB:
     fprintf(file, "fsub");
     debug_print_reg_2_source(file, &instr->aarch64->fsub);
+    break;
+  case AARCH64_INSTR_TY_FABS:
+    fprintf(file, "fabs");
+    debug_print_reg_1_source(file, &instr->aarch64->fabs);
+    break;
+  case AARCH64_INSTR_TY_FSQRT:
+    fprintf(file, "fsqrt");
+    debug_print_reg_1_source(file, &instr->aarch64->fsqrt);
+    break;
+  case AARCH64_INSTR_TY_FMINNM:
+    fprintf(file, "fminnm");
+    debug_print_reg_2_source(file, &instr->aarch64->fminnm);
+    break;
+  case AARCH64_INSTR_TY_FMAXNM:
+    fprintf(file, "fmaxnm");
+    debug_print_reg_2_source(file, &instr->aarch64->fmaxnm);
     break;
   }
 }

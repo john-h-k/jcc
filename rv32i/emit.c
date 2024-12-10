@@ -140,6 +140,21 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_FSGNJ:
     rv32i_emit_fsgnj(state->emitter, instr->rv32i->fsgnj);
     break;
+  case RV32I_INSTR_TY_FSGNJN:
+    rv32i_emit_fsgnjn(state->emitter, instr->rv32i->fsgnjn);
+    break;
+  case RV32I_INSTR_TY_FSGNJX:
+    rv32i_emit_fsgnjx(state->emitter, instr->rv32i->fsgnjx);
+    break;
+  case RV32I_INSTR_TY_FMAX:
+    rv32i_emit_fmax(state->emitter, instr->rv32i->fmax);
+    break;
+  case RV32I_INSTR_TY_FMIN:
+    rv32i_emit_fmin(state->emitter, instr->rv32i->fmin);
+    break;
+  case RV32I_INSTR_TY_FSQRT:
+    rv32i_emit_fsqrt(state->emitter, instr->rv32i->fsqrt);
+    break;
   }
 }
 

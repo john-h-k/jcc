@@ -268,6 +268,23 @@ void aarch64_emit_fneg(struct aarch64_emitter *emitter,
       emitter, FNEG(FTYPE_FOR_REG(fneg.dest), fneg.source.idx, fneg.dest.idx));
 }
 
+void aarch64_emit_fsqrt(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fsqrt) {
+  aarch64_emit_instr(
+      emitter, FSQRT(FTYPE_FOR_REG(fsqrt.dest), fsqrt.source.idx, fsqrt.dest.idx));
+  
+}
+
+void aarch64_emit_fabs(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fabs) {
+  aarch64_emit_instr(
+      emitter, FABS(FTYPE_FOR_REG(fabs.dest), fabs.source.idx, fabs.dest.idx));
+  
+}
+
+void aarch64_emit_fabs(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_1_source fabs);
+
 void aarch64_emit_fcmp(struct aarch64_emitter *emitter,
                        const struct aarch64_fcmp fcmp) {
   aarch64_emit_instr(emitter, FCMP(FTYPE_FOR_REG(fcmp.lhs), fcmp.rhs.idx, fcmp.lhs.idx)));
@@ -302,6 +319,17 @@ void aarch64_emit_fdiv(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_2_source fdiv) {
   aarch64_emit_instr(emitter, FDIV(FTYPE_FOR_REG(fdiv.dest), fdiv.rhs.idx,
                                    fdiv.lhs.idx, fdiv.dest.idx));
+}
+
+void aarch64_emit_fmaxnm(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fmax) {
+  aarch64_emit_instr(emitter, FMAXNM(FTYPE_FOR_REG(fmax.dest), fmax.rhs.idx,
+                                   fmax.lhs.idx, fmax.dest.idx));
+}
+void aarch64_emit_fminnm(struct aarch64_emitter *emitter,
+                       const struct aarch64_reg_2_source fmin) {
+  aarch64_emit_instr(emitter, FMINNM(FTYPE_FOR_REG(fmin.dest), fmin.rhs.idx,
+                                   fmin.lhs.idx, fmin.dest.idx));
 }
 
 /* Register moves */

@@ -354,12 +354,10 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     };
     return;
   case IR_OP_UNARY_OP_TY_FSQRT:
-    instr->rv32i->ty = RV32I_INSTR_TY_FABS;
-    instr->rv32i->sub = (struct rv32i_op){
-        .dest = dest,
-        .lhs = source,
-        .rhs = source,
-    };
+    instr->rv32i->ty = RV32I_INSTR_TY_FSQRT;
+    instr->rv32i->fsqrt =
+        (struct rv32i_op_unary_fp){.dest = dest, .source = source};
+    return;
   case IR_OP_UNARY_OP_TY_NEG:
     instr->rv32i->ty = RV32I_INSTR_TY_SUB;
     instr->rv32i->sub = (struct rv32i_op){
@@ -462,18 +460,18 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_OR:
     instr->rv32i->ty = RV32I_INSTR_TY_OR;
     instr->rv32i->or = (struct rv32i_op){
-        .dest = dest,
-        .lhs = lhs,
-        .rhs = rhs,
-    };
+                         .dest = dest,
+                         .lhs = lhs,
+                         .rhs = rhs,
+                     };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
-        .dest = dest,
-        .lhs = lhs,
-        .rhs = rhs,
-    };
+                          .dest = dest,
+                          .lhs = lhs,
+                          .rhs = rhs,
+                      };
     break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->rv32i->ty = RV32I_INSTR_TY_ADD;
@@ -558,6 +556,22 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FDIV:
     instr->rv32i->ty = RV32I_INSTR_TY_FDIV;
     instr->rv32i->fdiv = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FMAX:
+    instr->rv32i->ty = RV32I_INSTR_TY_FMAX;
+    instr->rv32i->fmax = (struct rv32i_op_fp){
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_FMIN:
+    instr->rv32i->ty = RV32I_INSTR_TY_FMIN;
+    instr->rv32i->fmin = (struct rv32i_op_fp){
         .dest = dest,
         .lhs = lhs,
         .rhs = rhs,
@@ -1144,6 +1158,11 @@ static void debug_print_op_fp(FILE *file, const struct rv32i_op_fp *op_fp) {
           op_fp->rhs.idx);
 }
 
+static void debug_print_op_unary_fp(FILE *file, const struct rv32i_op_unary_fp *op_unary_fp) {
+  fprintf(file, " f%zu, f%zu", op_unary_fp->dest.idx, op_unary_fp->source.idx);
+}
+
+
 static void debug_print_op(FILE *file, const struct rv32i_op *op) {
   fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
 }
@@ -1368,6 +1387,26 @@ static void debug_print_instr(FILE *file,
   case RV32I_INSTR_TY_FDIV:
     fprintf(file, "fdiv");
     debug_print_op_fp(file, &instr->rv32i->fdiv);
+    break;
+  case RV32I_INSTR_TY_FSGNJN:
+    fprintf(file, "fsgnjn");
+    debug_print_op_fp(file, &instr->rv32i->fsgnjn);
+    break;
+  case RV32I_INSTR_TY_FSGNJX:
+    fprintf(file, "fsgnjnx");
+    debug_print_op_fp(file, &instr->rv32i->fsgnjx);
+    break;
+  case RV32I_INSTR_TY_FMAX:
+    fprintf(file, "fmax");
+    debug_print_op_fp(file, &instr->rv32i->fmax);
+    break;
+  case RV32I_INSTR_TY_FMIN:
+    fprintf(file, "fmin");
+    debug_print_op_fp(file, &instr->rv32i->fmin);
+    break;
+  case RV32I_INSTR_TY_FSQRT:
+    fprintf(file, "fsqrt");
+    debug_print_op_unary_fp(file, &instr->rv32i->fsqrt);
     break;
   }
 }
