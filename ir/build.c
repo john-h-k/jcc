@@ -1111,8 +1111,8 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
-  struct ir_var_ty *arg_var_tys =
-      arena_alloc(irb->arena, sizeof(struct ir_var_ty *) * call->arg_list.num_args);
+  struct ir_var_ty *arg_var_tys = arena_alloc(
+      irb->arena, sizeof(struct ir_var_ty *) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
@@ -3290,7 +3290,8 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
       const struct td_var_ty *from = &expr->unary_op.expr->var_ty;
       const struct td_var_ty *to = &expr->unary_op.cast.var_ty;
 
-      debug_assert(td_var_ty_eq(iru->tchk, var_ty, to), "expr ty didn't equal cast ty");
+      debug_assert(td_var_ty_eq(iru->tchk, var_ty, to),
+                   "expr ty didn't equal cast ty");
 
       struct ir_var_value value = build_ir_for_var_value_expr(
           iru, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
@@ -3309,6 +3310,14 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
         }
 
         todo("unsupported cast in const expr");
+      } else if (to->ty == TD_VAR_TY_TY_POINTER ||
+                 to->ty == TD_VAR_TY_TY_FUNC || to->ty == TD_VAR_TY_TY_ARRAY) {
+        if (from->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+          value.var_ty = var_ty_for_td_var_ty(iru, var_ty);
+          return value;
+        }
+
+        todo("unsupported cast in const expr");
       } else if (from->ty == TD_VAR_TY_TY_WELL_KNOWN &&
                  to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
         enum well_known_ty fwk = from->well_known;
@@ -3317,7 +3326,9 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
         if (WKT_IS_INTEGRAL(fwk) && WKT_IS_FP(twk)) {
           long double flt_value;
 
-          #define VALUE (WKT_IS_SIGNED(fwk) ? (signed long long)value.int_value : (unsigned long long)value.int_value)
+#define VALUE                                                                  \
+  (WKT_IS_SIGNED(fwk) ? (signed long long)value.int_value                      \
+                      : (unsigned long long)value.int_value)
           switch (twk) {
           case WELL_KNOWN_TY_HALF:
             todo("constant cast to half");
@@ -3335,7 +3346,8 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
           }
 
           return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
-                                       .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                       .var_ty =
+                                           var_ty_for_td_var_ty(iru, var_ty),
                                        .flt_value = flt_value};
         }
       }
