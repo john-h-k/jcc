@@ -3289,7 +3289,13 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
   }
   case TD_EXPR_TY_CNST: {
     struct td_cnst *cnst = &expr->cnst;
-    if (is_integral_ty(&expr->var_ty)) {
+    if (cnst->ty == TD_CNST_TY_STR_LITERAL || cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
+                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .str_value = cnst->str_value};
+    } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+      todo("wide str globals");
+    } else if (is_integral_ty(&expr->var_ty)) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
                                    .var_ty = var_ty_for_td_var_ty(iru, var_ty),
                                    .int_value = cnst->int_value};
