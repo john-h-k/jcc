@@ -2836,6 +2836,12 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   case IR_OP_TY_CAST_OP:
     res_ty = consumer->var_ty;
     break;
+  case IR_OP_TY_UNARY_OP:
+    if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT && var_ty_is_integral(&consumer->var_ty) && var_ty_is_integral(&res_ty)) {
+      // logical not on other-sized int is fine
+      res_ty = consumer->var_ty;
+    }
+    break;
   case IR_OP_TY_ADDR:
     res_ty = IR_VAR_TY_POINTER;
     break;
