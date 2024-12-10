@@ -19,11 +19,6 @@ const struct target AARCH64_TARGET = {
                 .num_nonvolatile = 8,
                 .num_reserved = 0},
     },
-    AARCH64_FUNCTION_ALIGNMENT,
-    aarch64_mangle,
-    aarch64_lower,
-    aarch64_codegen,
-    aarch64_emit,
-    write_macho,
-    objdump_debug_disasm,
+    AARCH64_FUNCTION_ALIGNMENT, aarch64_mangle, aarch64_lower, aarch64_codegen,
+    aarch64_emit, write_macho, objdump_debug_disasm,
     aarch64_debug_print_codegen};

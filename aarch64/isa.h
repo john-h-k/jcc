@@ -28,24 +28,23 @@
 
 /* Loads & Stores */
 
-#define LDR_STR_PAIR(opc, V, mode, L, imm7, Rt2, Rn, Rt)                  \
+#define LDR_STR_PAIR(opc, V, mode, L, imm7, Rt2, Rn, Rt)                       \
   (uint32_t)((U32(opc) << 30) | (U32(0b101) << 27) | (U32(V) << 26) |          \
              (U32(mode) << 23) | (U32(L) << 22) | (U32(IMM(imm7, 7)) << 15) |  \
              (U32(Rt2) << 10) | (U32(Rn) << 5) | U32(Rt))
 
-#define STP_32(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define STP_32(mode, fp, imm7, Rt2, Rn, Rt)                                    \
   LDR_STR_PAIR(0b00, fp, mode, 0, imm7, Rt2, Rn, Rt)
-#define LDP_32(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define LDP_32(mode, fp, imm7, Rt2, Rn, Rt)                                    \
   LDR_STR_PAIR(0b00, fp, mode, 1, imm7, Rt2, Rn, Rt)
-#define STP_64(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define STP_64(mode, fp, imm7, Rt2, Rn, Rt)                                    \
   LDR_STR_PAIR((fp ? 0b01 : 0b10), fp, mode, 0, imm7, Rt2, Rn, Rt)
-#define LDP_64(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define LDP_64(mode, fp, imm7, Rt2, Rn, Rt)                                    \
   LDR_STR_PAIR((fp ? 0b01 : 0b10), fp, mode, 1, imm7, Rt2, Rn, Rt)
-#define STP_128(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define STP_128(mode, fp, imm7, Rt2, Rn, Rt)                                   \
   LDR_STR_PAIR(0b10, fp, mode, 0, imm7, Rt2, Rn, Rt)
-#define LDP_128(mode, fp, imm7, Rt2, Rn, Rt)                                       \
+#define LDP_128(mode, fp, imm7, Rt2, Rn, Rt)                                   \
   LDR_STR_PAIR(0b10, fp, mode, 1, imm7, Rt2, Rn, Rt)
-  
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \
@@ -379,18 +378,19 @@
 #define SUBS_REG(sf, shift, imm6, Rm, Rn, Rd)                                  \
   ADD_SUB_SHIFTED_REG(sf, 0b1, 0b1, shift, Rm, imm6, Rn, Rd)
 
-#define ADD_SUB_EXTENDED_REG(sf, op, S, opt, Rm, option, imm3, Rn, Rd)                \
+#define ADD_SUB_EXTENDED_REG(sf, op, S, opt, Rm, option, imm3, Rn, Rd)         \
   (uint32_t)((U32(sf) << 31) | (U32(op) << 30) | (U32(S) << 29) |              \
-             (U32(0b01011) << 24) | (U32(opt) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |     \
-             (U32(option) << 13) | (U32(IMM(imm3, 3)) << 10) | (U32(Rn) << 5) | U32(Rd))
+             (U32(0b01011) << 24) | (U32(opt) << 22) | (U32(0b1) << 21) |      \
+             (U32(Rm) << 16) | (U32(option) << 13) |                           \
+             (U32(IMM(imm3, 3)) << 10) | (U32(Rn) << 5) | U32(Rd))
 
-#define ADD_EXT(sf, option, imm3, Rm, Rn, Rd)                                   \
+#define ADD_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
   ADD_SUB_EXTENDED_REG(sf, 0b0, 0b0, 0b00, Rm, option, imm3, Rn, Rd)
-#define SUB_EXT(sf, option, imm3, Rm, Rn, Rd)                                   \
+#define SUB_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
   ADD_SUB_EXTENDED_REG(sf, 0b1, 0b0, 0b00, Rm, option, imm3, Rn, Rd)
-#define ADDS_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
+#define ADDS_EXT(sf, option, imm3, Rm, Rn, Rd)                                 \
   ADD_SUB_EXTENDED_REG(sf, 0b0, 0b1, 0b00, Rm, option, imm3, Rn, Rd)
-#define SUBS_EXT(sf, option, imm3, Rm, Rn, Rd)                                  \
+#define SUBS_EXT(sf, option, imm3, Rm, Rn, Rd)                                 \
   ADD_SUB_EXTENDED_REG(sf, 0b1, 0b1, 0b00, Rm, option, imm3, Rn, Rd)
 
 #define REG_2_SOURCE(sf, S, opcode, Rm, Rn, Rd)                                \

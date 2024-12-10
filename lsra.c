@@ -132,7 +132,6 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
   return 0;
 }
 
-
 struct lsra_reg_info {
   size_t num_volatile_gp;
   size_t num_volatile_fp;
@@ -181,11 +180,13 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
                                    (*op)->var_ty);
       }
       load->load_lcl.lcl = (*op)->lcl;
-      
+
       if (var_ty_is_integral(&load->var_ty)) {
-        load->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = data->info.gp_spill_reg };
+        load->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = data->info.gp_spill_reg};
       } else if (var_ty_is_fp(&load->var_ty)) {
-        load->reg = (struct ir_reg){ .ty = IR_REG_TY_FP, .idx = data->info.fp_spill_reg };
+        load->reg =
+            (struct ir_reg){.ty = IR_REG_TY_FP, .idx = data->info.fp_spill_reg};
       } else {
         bug("dont know what to allocate");
       }
@@ -215,7 +216,8 @@ static void fixup_spills(struct ir_func *irb, struct lsra_reg_info *info) {
         }
 
         // walk all things this op uses, and add loads for any that are spilled
-        struct fixup_spills_data metadata = {.irb = irb, .info = *info, .consumer = op};
+        struct fixup_spills_data metadata = {
+            .irb = irb, .info = *info, .consumer = op};
 
         walk_op_uses(op, fixup_spills_callback, &metadata);
 
@@ -245,8 +247,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
   struct register_alloc_state state = {
       .interval_data = data,
-      .active =
-          arena_alloc(irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
+      .active = arena_alloc(
+          irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
       .num_active = 0,
       .gp_reg_pool = bitset_create(info->num_gp_regs, true),
       .fp_reg_pool = bitset_create(info->num_fp_regs, true)};
@@ -281,15 +283,12 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           continue;
         }
 
-        if ((reg.ty == IR_REG_TY_INTEGRAL &&
-             reg.idx < info->num_volatile_gp) ||
-            (reg.ty == IR_REG_TY_FP &&
-             reg.idx < info->num_volatile_gp)) {
+        if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
+            (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_gp)) {
 
           struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
           struct ir_op *lcl_addr = insert_before_ir_op(
-              irb, interval->op, IR_OP_TY_ADDR,
-              IR_VAR_TY_POINTER);
+              irb, interval->op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
           lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
           lcl_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
@@ -381,7 +380,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         last_active--;
       }
 
-      spill_at_interval(irb, &state, &state.interval_data.intervals[*last_active], i);
+      spill_at_interval(irb, &state,
+                        &state.interval_data.intervals[*last_active], i);
     }
   }
 
@@ -405,23 +405,22 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
                         false),
   };
 
-  size_t num_gp_regs =
-      reg_info.gp_registers.num_volatile + reg_info.gp_registers.num_nonvolatile - 1;
-  size_t num_fp_regs =
-      reg_info.fp_registers.num_volatile + reg_info.fp_registers.num_nonvolatile - 1;
+  size_t num_gp_regs = reg_info.gp_registers.num_volatile +
+                       reg_info.gp_registers.num_nonvolatile - 1;
+  size_t num_fp_regs = reg_info.fp_registers.num_volatile +
+                       reg_info.fp_registers.num_nonvolatile - 1;
 
   size_t gp_spill_reg = num_gp_regs;
   size_t fp_spill_reg = num_fp_regs;
 
   struct lsra_reg_info lsra_reg_info = {
-    .num_volatile_gp = reg_info.gp_registers.num_volatile,
-    .num_volatile_fp = reg_info.fp_registers.num_volatile,
-    .num_gp_regs = num_gp_regs,
-    .num_fp_regs = num_fp_regs,
-    .gp_spill_reg = gp_spill_reg,
-    .fp_spill_reg = fp_spill_reg,
+      .num_volatile_gp = reg_info.gp_registers.num_volatile,
+      .num_volatile_fp = reg_info.fp_registers.num_volatile,
+      .num_gp_regs = num_gp_regs,
+      .num_fp_regs = num_fp_regs,
+      .gp_spill_reg = gp_spill_reg,
+      .fp_spill_reg = fp_spill_reg,
   };
-  
 
   BEGIN_SUB_STAGE("REGALLOC");
 

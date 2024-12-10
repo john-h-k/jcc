@@ -738,12 +738,14 @@ struct parse_result {
   struct ast_translationunit translation_unit;
 };
 
-enum parser_create_result parser_create(struct program *program, struct preproc *preproc,
+enum parser_create_result parser_create(struct program *program,
+                                        struct preproc *preproc,
                                         struct parser **parser);
 struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
 
-const char *identifier_str(struct parser *parser, const struct lex_token *token);
+const char *identifier_str(struct parser *parser,
+                           const struct lex_token *token);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

@@ -69,9 +69,7 @@ void vector_remove_at(struct vector *v, size_t index) {
   memmove(pos, &pos[v->element_size], tail * v->element_size);
 }
 
-void vector_clear(struct vector *v) {
-  v->len = 0;
-}
+void vector_clear(struct vector *v) { v->len = 0; }
 
 void vector_truncate(struct vector *v, size_t new_len) {
   debug_assert(new_len <= v->len, "truncating out of range");

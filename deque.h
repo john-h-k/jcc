@@ -44,4 +44,3 @@ void deque_to_array(struct deque *d, void **data, size_t *len);
 void deque_free(struct deque **d);
 
 #endif
-

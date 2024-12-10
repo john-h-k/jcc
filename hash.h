@@ -25,4 +25,3 @@ void hasher_hash_bytes(struct hasher *hasher, const void *value, size_t length);
 hash_t hasher_finish(struct hasher *hasher);
 
 #endif
-

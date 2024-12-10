@@ -1,10 +1,11 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
+#include "../target.h"
+
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "../target.h"
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
@@ -770,7 +771,8 @@ struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty);
 
-struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock, struct ir_var_ty var_ty);
+struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
+                         struct ir_var_ty var_ty);
 
 struct ir_basicblock *
 insert_before_ir_basicblock(struct ir_func *irb,
@@ -805,7 +807,7 @@ bool var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty);
 
 bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
-                      const struct ir_var_ty *r);
+               const struct ir_var_ty *r);
 
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
 
@@ -841,8 +843,8 @@ struct move_set {
   size_t num_moves;
 };
 
-struct move_set gen_move_order(struct arena_allocator *arena, struct location *from,
-                               struct location *to, size_t num, size_t tmp_index);
-
+struct move_set gen_move_order(struct arena_allocator *arena,
+                               struct location *from, struct location *to,
+                               size_t num, size_t tmp_index);
 
 #endif

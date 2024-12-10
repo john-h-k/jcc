@@ -16,26 +16,40 @@ void rv32i_emit_copy_to(struct rv32i_emitter *emitter, void *dest);
 /* Nop */
 
 void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui);
-void rv32i_emit_addi(struct rv32i_emitter *emitter, const struct rv32i_op_imm addi);
-void rv32i_emit_xori(struct rv32i_emitter *emitter, const struct rv32i_op_imm xori);
-void rv32i_emit_jalr(struct rv32i_emitter *emitter, const struct rv32i_jalr jalr);
+void rv32i_emit_addi(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_imm addi);
+void rv32i_emit_xori(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_imm xori);
+void rv32i_emit_jalr(struct rv32i_emitter *emitter,
+                     const struct rv32i_jalr jalr);
 void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal);
 
-void rv32i_emit_beq(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch beq);
-void rv32i_emit_bne(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bne);
-void rv32i_emit_blt(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch blt);
-void rv32i_emit_bge(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bge);
-void rv32i_emit_bltu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bltu);
-void rv32i_emit_bgeu(struct rv32i_emitter *emitter, const struct rv32i_conditional_branch bgeu);
+void rv32i_emit_beq(struct rv32i_emitter *emitter,
+                    const struct rv32i_conditional_branch beq);
+void rv32i_emit_bne(struct rv32i_emitter *emitter,
+                    const struct rv32i_conditional_branch bne);
+void rv32i_emit_blt(struct rv32i_emitter *emitter,
+                    const struct rv32i_conditional_branch blt);
+void rv32i_emit_bge(struct rv32i_emitter *emitter,
+                    const struct rv32i_conditional_branch bge);
+void rv32i_emit_bltu(struct rv32i_emitter *emitter,
+                     const struct rv32i_conditional_branch bltu);
+void rv32i_emit_bgeu(struct rv32i_emitter *emitter,
+                     const struct rv32i_conditional_branch bgeu);
 
+void rv32i_emit_fmv(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_mov fmv);
+void rv32i_emit_fadd(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fadd);
+void rv32i_emit_fsub(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fsub);
+void rv32i_emit_fmul(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fmul);
+void rv32i_emit_fdiv(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_fp fdiv);
 
-void rv32i_emit_fmv(struct rv32i_emitter *emitter, const struct rv32i_op_mov fmv);
-void rv32i_emit_fadd(struct rv32i_emitter *emitter, const struct rv32i_op_fp fadd);
-void rv32i_emit_fsub(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsub);
-void rv32i_emit_fmul(struct rv32i_emitter *emitter, const struct rv32i_op_fp fmul);
-void rv32i_emit_fdiv(struct rv32i_emitter *emitter, const struct rv32i_op_fp fdiv);
-
-void rv32i_emit_fsgnj(struct rv32i_emitter *emitter, const struct rv32i_op_fp fsgnj);
+void rv32i_emit_fsgnj(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fsgnj);
 
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
 void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);
@@ -56,7 +70,8 @@ void rv32i_emit_sra(struct rv32i_emitter *emitter, const struct rv32i_op sra);
 void rv32i_emit_sb(struct rv32i_emitter *emitter, const struct rv32i_store sb);
 void rv32i_emit_sh(struct rv32i_emitter *emitter, const struct rv32i_store sh);
 void rv32i_emit_sw(struct rv32i_emitter *emitter, const struct rv32i_store sw);
-void rv32i_emit_fsw(struct rv32i_emitter *emitter, const struct rv32i_store fsw);
+void rv32i_emit_fsw(struct rv32i_emitter *emitter,
+                    const struct rv32i_store fsw);
 
 void rv32i_emit_lb(struct rv32i_emitter *emitter, const struct rv32i_load lb);
 void rv32i_emit_lbu(struct rv32i_emitter *emitter, const struct rv32i_load lbu);

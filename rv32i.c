@@ -10,11 +10,9 @@ const struct target RV32I_TARGET = {
         .gp_registers = (struct reg_set_info){.num_volatile = 17,
                                               .num_nonvolatile = 10,
                                               .num_reserved = 0},
-        .fp_registers =
-            (struct reg_set_info){
-                .num_volatile = 19,
-                .num_nonvolatile = 12,
-                .num_reserved = 0},
+        .fp_registers = (struct reg_set_info){.num_volatile = 19,
+                                              .num_nonvolatile = 12,
+                                              .num_reserved = 0},
     },
     RV32I_FUNCTION_ALIGNMENT,
     NULL,

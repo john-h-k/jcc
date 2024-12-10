@@ -77,7 +77,8 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   return new;
 }
 
-void *arena_alloc_init(struct arena_allocator *allocator, size_t size, void *data) {
+void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
+                       void *data) {
   void *p = arena_alloc(allocator, size);
 
   memcpy(p, data, size);

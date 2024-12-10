@@ -11,7 +11,8 @@ bool text_span_eq(const void *l, const void *r) {
   const struct text_span *l_span = l;
   const struct text_span *r_span = r;
 
-  return text_pos_eq(&l_span->start, &r_span->start) && text_pos_eq(&l_span->end, &r_span->end);
+  return text_pos_eq(&l_span->start, &r_span->start) &&
+         text_pos_eq(&l_span->end, &r_span->end);
 }
 
 void hash_text_pos(struct hasher *hasher, const void *value) {
@@ -28,7 +29,6 @@ void hash_text_span(struct hasher *hasher, const void *value) {
   hash_text_pos(hasher, &token->start);
   hash_text_pos(hasher, &token->end);
 }
-
 
 size_t text_pos_len(struct text_pos start, struct text_pos end) {
   return end.idx - start.idx;

@@ -27,7 +27,8 @@ struct parser {
   struct vector *diagnostics;
 };
 
-enum parser_create_result parser_create(struct program *program, struct preproc *preproc,
+enum parser_create_result parser_create(struct program *program,
+                                        struct preproc *preproc,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
@@ -2516,7 +2517,8 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
 
-const char *identifier_str(struct parser *parser, const struct lex_token *token) {
+const char *identifier_str(struct parser *parser,
+                           const struct lex_token *token) {
   return associated_text(parser->lexer, token);
 }
 

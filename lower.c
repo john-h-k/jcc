@@ -1,10 +1,13 @@
 #include "lower.h"
 
 #include "ir/ir.h"
-#include "util.h"
 #include "log.h"
+#include "util.h"
 
-static void propogate_switch_phis(UNUSED struct ir_func *func, struct ir_basicblock *bb_switch, struct ir_basicblock *pred_cond, struct ir_basicblock *basicblock) {
+static void propogate_switch_phis(UNUSED struct ir_func *func,
+                                  struct ir_basicblock *bb_switch,
+                                  struct ir_basicblock *pred_cond,
+                                  struct ir_basicblock *basicblock) {
   // FIXME: this does NOT properly propogate
   // it needs to add phis to all intermediates too
 
@@ -42,7 +45,10 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
     for (size_t j = 0; j < split_case->target->num_preds; j++) {
       if (split_case->target->preds[j] == bb) {
         // remove pred
-        memmove(&split_case->target->preds[j], &split_case->target->preds[j + 1], (split_case->target->num_preds - j - 1) * sizeof(struct ir_basicblock *));
+        memmove(&split_case->target->preds[j],
+                &split_case->target->preds[j + 1],
+                (split_case->target->num_preds - j - 1) *
+                    sizeof(struct ir_basicblock *));
         split_case->target->num_preds--;
       }
     }
@@ -79,7 +85,9 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       for (size_t j = 0; j < default_target->num_preds; j++) {
         if (bb_switch->default_target->preds[j] == bb) {
           // remove pred
-          memmove(&default_target->preds[j], &default_target->preds[j + 1], (default_target->num_preds - j - 1) * sizeof(struct ir_basicblock *));
+          memmove(&default_target->preds[j], &default_target->preds[j + 1],
+                  (default_target->num_preds - j - 1) *
+                      sizeof(struct ir_basicblock *));
           default_target->num_preds--;
         }
       }
@@ -87,13 +95,14 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       propogate_switch_phis(func, bb, prev_bb, split_case->target);
       propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
       make_basicblock_split(func, prev_bb, split_case->target,
-                                  bb_switch->default_target);
+                            bb_switch->default_target);
     }
   }
 }
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  struct ir_op *addr =
+      insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store_glb.glb};
 
@@ -104,7 +113,8 @@ static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  struct ir_op *addr =
+      insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
 
@@ -229,7 +239,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
         struct ir_op_use *use = &uses.use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
-          debug_assert(!(use->op->flags & IR_OP_FLAG_CONTAINED), "contained op must have uses");
+          debug_assert(!(use->op->flags & IR_OP_FLAG_CONTAINED),
+                       "contained op must have uses");
 
           debug("detaching op %zu", use->op->id);
           detach_ir_op(func, use->op);

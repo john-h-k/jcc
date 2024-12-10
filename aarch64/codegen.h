@@ -164,7 +164,8 @@ enum aarch64_reg_class {
 
 enum aarch64_reg_attr_flags {
   AARCH64_REG_ATTR_FLAG_NONE = 0,
-  AARCH64_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
+  AARCH64_REG_ATTR_FLAG_VOLATILE =
+      1, // v8-15 are upper half only volatile, we don't support this yet
   AARCH64_REG_ATTR_FLAG_ARG_REG = 2,
   AARCH64_REG_ATTR_FLAG_RET_REG = 4,
   AARCH64_REG_ATTR_FLAG_RESERVED = 8,
@@ -387,7 +388,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_addsub_ext addsub_ext, add_ext, adds_ext, sub_ext, subs_ext;
+      struct aarch64_addsub_ext addsub_ext, add_ext, adds_ext, sub_ext,
+          subs_ext;
     };
 
     union {

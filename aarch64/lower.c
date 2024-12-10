@@ -325,7 +325,8 @@ static void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   if (var_ty_is_aggregate(&op->var_ty)) {
-    if (op->succ && op->succ->ty == IR_OP_TY_STORE_LCL && op->succ->store_lcl.value == op) {
+    if (op->succ && op->succ->ty == IR_OP_TY_STORE_LCL &&
+        op->succ->store_lcl.value == op) {
       op->lcl = op->succ->lcl;
       detach_ir_op(func, op->succ);
     }

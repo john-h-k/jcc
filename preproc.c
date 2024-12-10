@@ -666,9 +666,9 @@ static struct preproc_define *get_define(struct preproc *preproc) {
   struct preproc_token def_name;
   preproc_next_non_whitespace_token(preproc, &def_name);
 
-  struct preproc_identifier ident = {
-      .value = def_name.text, .length = text_span_len(&def_name.span)};
-  
+  struct preproc_identifier ident = {.value = def_name.text,
+                                     .length = text_span_len(&def_name.span)};
+
   return hashtbl_lookup(preproc->defines, &ident);
 }
 
@@ -708,7 +708,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           *enabled = false;
         } else {
           bool now_enabled = get_define(preproc);
-          vector_push_back(preproc->enabled, &now_enabled );
+          vector_push_back(preproc->enabled, &now_enabled);
         }
       } else if (directive.ty == PREPROC_TOKEN_TY_IDENTIFIER &&
                  token_streq(directive, "elifndef")) {
@@ -718,7 +718,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           *enabled = false;
         } else {
           bool now_enabled = !get_define(preproc);
-          vector_push_back(preproc->enabled, &now_enabled );
+          vector_push_back(preproc->enabled, &now_enabled);
         }
       }
 
@@ -774,10 +774,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         }
 
         struct preproc_text include_text = {
-          .text = content,
-          .len = strlen(content),
-          .pos = { 0, 0, 0 }
-        };
+            .text = content, .len = strlen(content), .pos = {0, 0, 0}};
 
         vector_push_back(preproc->texts, &include_text);
 

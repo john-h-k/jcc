@@ -87,7 +87,6 @@ struct instr {
 
 struct instr *alloc_instr(struct codegen_function *func);
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
-                                        const char *func_name, size_t id);
-
+                                 const char *func_name, size_t id);
 
 #endif
