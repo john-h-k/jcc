@@ -1781,12 +1781,13 @@ static struct td_expr type_assg(struct typechk *tchk,
     td_assg.cast_assignee = is_cast_needed(tchk, &td_assg.assignee->var_ty, &tys.lhs_op_ty);
     td_assg.cast_result = is_cast_needed(tchk, &tys.result_ty, &td_assg.assignee->var_ty);
   } else {
+    *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr,
+       td_assg.assignee->var_ty);
+
     td_assg.assignee_var_ty = td_assg.assignee->var_ty;
     td_assg.result_var_ty = td_assg.expr->var_ty;
     td_assg.cast_assignee = false;
     td_assg.cast_result = false;
-    *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr,
-       td_assg.assignee->var_ty);
   }
 
   struct td_var_ty var_ty = td_assg.assignee->var_ty;
