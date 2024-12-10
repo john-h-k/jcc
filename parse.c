@@ -487,8 +487,15 @@ static bool parse_typedef_name(struct parser *parser,
   return true;
 }
 
+
+enum type_specifier_mode {
+  TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+  TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS
+};
+
 static bool parse_type_specifier(struct parser *parser,
-                                 struct ast_type_specifier *type_specifier) {
+                                 struct ast_type_specifier *type_specifier,
+                                 enum type_specifier_mode mode) {
 
   if (parse_type_specifier_kw(parser, &type_specifier->type_specifier_kw)) {
     type_specifier->ty = AST_TYPE_SPECIFIER_TY_KW;
@@ -506,7 +513,7 @@ static bool parse_type_specifier(struct parser *parser,
     return true;
   }
 
-  if (parse_typedef_name(parser, &type_specifier->typedef_name)) {
+  if (mode == TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS && parse_typedef_name(parser, &type_specifier->typedef_name)) {
     type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
     return true;
   }
@@ -514,13 +521,9 @@ static bool parse_type_specifier(struct parser *parser,
   return false;
 }
 
-enum decl_specifier_mode {
-  DECL_SPECIFIER_MODE_ALLOW_TYPEDEFS,
-  DECL_SPECIFIER_MODE_DISALLOW_TYPEDEFS
-};
-
 static bool parse_decl_specifier(struct parser *parser,
-                                 struct ast_declaration_specifier *specifier, enum decl_specifier_mode mode) {
+                                 struct ast_declaration_specifier *specifier,
+                                 enum type_specifier_mode mode) {
   if (parse_storage_class_specifier(parser,
                                     &specifier->storage_class_specifier)) {
     specifier->ty = AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER;
@@ -537,7 +540,7 @@ static bool parse_decl_specifier(struct parser *parser,
     return true;
   }
 
-  if (mode == DECL_SPECIFIER_MODE_ALLOW_TYPEDEFS  && parse_type_specifier(parser, &specifier->type_specifier)) {
+  if (parse_type_specifier(parser, &specifier->type_specifier, mode)) {
     specifier->ty = AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER;
     return true;
   }
@@ -558,16 +561,16 @@ static void parse_declaration_specifier_list(
   //   	struct s1 { } s;
   //   } s2;
   // ```
-  // because it will take `struct s1 { }` as a type qualifier, and then `s` as a typedef name type qualifier
-  // so we do a hack
-  // if we have seen _any_ type specifiers so far, we do not look for typedef names anymore
+  // because it will take `struct s1 { }` as a type qualifier, and then `s` as a
+  // typedef name type qualifier so we do a hack if we have seen _any_ type
+  // specifiers so far, we do not look for typedef names anymore
 
-  enum decl_specifier_mode mode = DECL_SPECIFIER_MODE_ALLOW_TYPEDEFS;
+  enum type_specifier_mode mode = TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS;
 
   struct ast_declaration_specifier specifier;
   while (parse_decl_specifier(parser, &specifier, mode)) {
     if (specifier.ty == AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER) {
-      mode = DECL_SPECIFIER_MODE_DISALLOW_TYPEDEFS;
+      mode = TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS;
     }
 
     vector_push_back(list, &specifier);
