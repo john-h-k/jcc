@@ -2694,7 +2694,7 @@ static int sort_entries_by_id(const void *a, const void *b) {
 
 static void codegen_write_var_value(struct ir_unit *iru,
                                     struct ir_var_value *value, char *data) {
-  if (!value) {
+  if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
     return;
   }
 
@@ -2819,7 +2819,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
       switch (glb->ty) {
       case IR_GLB_TY_DATA: {
         // TODO: non string literals
-
         const char *name =
             glb->name ? aarch64_mangle(ir->arena, glb->name)
                       : mangle_str_cnst_name(ir->arena, "todo", glb->id);
@@ -3832,6 +3831,7 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
     struct codegen_entry *entry = &unit->entries[i];
 
     if (entry->ty != CODEGEN_ENTRY_TY_FUNC) {
+      fprintf(file, "DATA: %s\n\n", entry->name);
       continue;
     }
 

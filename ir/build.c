@@ -2490,7 +2490,7 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
   }
 
   enum ir_glb_def_ty def_ty;
-  if (decl->init) {
+  if (decl->init || !is_file_scope) {
     def_ty = IR_GLB_DEF_TY_DEFINED;
   } else if (is_file_scope && !is_func &&
              (is_unspecified_storage || is_static)) {
@@ -2529,7 +2529,7 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
   if (decl->init) {
     value = build_ir_for_var_value(iru, decl->init, &decl->var_ty);
   } else {
-    value = (struct ir_var_value){.var_ty = var_ty};
+    value = (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ZERO, .var_ty = var_ty};
   }
 
   if (!ref->glb->var) {
@@ -3515,6 +3515,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_TENTATIVE) {
       debug_assert(glb->ty == IR_GLB_TY_DATA, "tentative func makes no sense");
+
       glb->def_ty = IR_GLB_DEF_TY_DEFINED;
       glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
       *glb->var = (struct ir_var){.ty = IR_VAR_TY_DATA,
