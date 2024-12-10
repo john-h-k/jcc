@@ -744,6 +744,10 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
 
     struct td_assg td_assg = {
         .ty = assg_ty,
+        .cast_assignee = false,
+        .cast_result = false,
+        .assignee_var_ty = unary_op->expr->var_ty,
+        .result_var_ty = unary_op->expr->var_ty,
         .expr = &one,
         .assignee = unary_op->expr,
     };
