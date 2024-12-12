@@ -3364,8 +3364,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
 
   size_t offset_cnst = 0;
   if (offset) {
-    struct td_var_ty ptr_int_ty = td_var_ty_pointer_sized_int(irb->tchk, false);
-    struct ir_var_value offset_value = build_ir_for_var_value_expr(irb, offset, &ptr_int_ty);
+    struct ir_var_value offset_value = build_ir_for_var_value_expr(irb, offset, var_ty);
 
     if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
       todo("non-int global values offset");
