@@ -27,9 +27,16 @@ enum compile_log_flags {
   COMPILE_LOG_FLAGS_ALL = -1,
 };
 
+enum compile_c_standard {
+  COMPILE_C_STANDARD_C11,
+  COMPILE_C_STANDARD_C17,
+  COMPILE_C_STANDARD_C23,
+};
+
 #define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags &flag
 
 struct compile_args {
+  enum compile_c_standard c_standard;
   enum compile_target_arch target_arch;
   enum compile_log_flags log_flags;
 
