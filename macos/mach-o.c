@@ -3,14 +3,26 @@
 #include "../compiler.h"
 #include "../log.h"
 #include "../util.h"
+#include "../vector.h"
 
 #include <mach-o/arm64/reloc.h>
 #include <mach-o/loader.h>
+#include <mach-o/nlist.h>
 #include <mach-o/reloc.h>
 #include <mach-o/x86_64/reloc.h>
 #include <mach/machine.h>
 #include <stdint.h>
 #include <stdio.h>
+
+struct reloc_info {
+  size_t num_text_reloc_instrs;
+  size_t num_const_data_reloc_instrs;
+  size_t num_data_reloc_instrs;
+
+  struct vector *text_relocs;
+  struct vector *const_data_relocs;
+  struct vector *data_relocs;
+};
 
 static void write_mach_header(FILE *file, const struct compile_args *args) {
   struct mach_header_64 header;
@@ -50,102 +62,145 @@ static void write_mach_header(FILE *file, const struct compile_args *args) {
   ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
-static size_t count_relocation_instrs(const struct build_object_args *args) {
-  size_t num_instrs = 0;
+static struct reloc_info
+build_reloc_info(const struct build_object_args *args, const size_t *entry_offsets) {
+  struct reloc_info info = {
+      .text_relocs = vector_create(sizeof(struct relocation)),
+      .data_relocs = vector_create(sizeof(struct relocation)),
+      .const_data_relocs = vector_create(sizeof(struct relocation)),
+  };
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *entry = &args->entries[i];
+    size_t entry_offset = entry_offsets[i];
+
+    size_t *num_relocs;
+    struct vector *relocs;
+
+    switch (entry->ty) {
+    case OBJECT_ENTRY_TY_FUNC:
+      num_relocs = &info.num_text_reloc_instrs;
+      relocs = info.text_relocs;
+      break;
+    case OBJECT_ENTRY_TY_CONST_DATA:
+      num_relocs = &info.num_const_data_reloc_instrs;
+      relocs = info.const_data_relocs;
+      break;
+    case OBJECT_ENTRY_TY_MUT_DATA:
+      num_relocs = &info.num_data_reloc_instrs;
+      relocs = info.data_relocs;
+      break;
+    case OBJECT_ENTRY_TY_C_STRING:
+    case OBJECT_ENTRY_TY_DECL:
+      bug("reloc for cstring/decl makes no sense");
+    }
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
-      const struct relocation *reloc = &entry->relocations[j];
+      struct relocation reloc = entry->relocations[j];
 
-      switch (reloc->ty) {
+      reloc.address += entry_offset;
+
+      vector_push_back(relocs, &reloc);
+
+      switch (reloc.ty) {
+      case RELOCATION_TY_POINTER:
       case RELOCATION_TY_SINGLE:
-        num_instrs += 1;
+        *num_relocs += 1;
         break;
       case RELOCATION_TY_LOCAL_PAIR:
       case RELOCATION_TY_UNDEF_PAIR:
-        num_instrs += 2;
+        *num_relocs += 2;
       }
     }
   }
 
-  return num_instrs;
+  return info;
 }
 
-static void write_relocations(FILE *file, const struct build_object_args *args,
-                              const size_t *entry_offsets) {
-  for (size_t i = 0; i < args->num_entries; i++) {
-    const struct object_entry *entry = &args->entries[i];
-    size_t offset = entry_offsets[i];
+static void write_relocation(FILE *file, struct vector *relocations) {
+  size_t num_relocations = vector_length(relocations);
 
-    for (size_t j = 0; j < entry->num_relocations; j++) {
-      const struct relocation *reloc = &entry->relocations[j];
+  for (size_t i = 0; i < num_relocations; i++) {
+    const struct relocation *reloc = vector_get(relocations, i);
 
-      size_t index = reloc->symbol_index;
-      size_t addr = offset + reloc->address;
+    size_t index = reloc->symbol_index;
+    size_t addr = reloc->address;
 
-      debug_assert(index < args->num_entries,
-                   "symbol index %zu > num entries %zu", index,
-                   args->num_entries);
+    switch (reloc->ty) {
+    case RELOCATION_TY_POINTER: {
+      struct relocation_info info = {.r_address = addr,
+                                     .r_length = reloc->size,
+                                     .r_pcrel = 0,
+                                     .r_symbolnum = index,
+                                     .r_extern = 1,
+                                     .r_type = ARM64_RELOC_UNSIGNED};
 
-      switch (reloc->ty) {
-      case RELOCATION_TY_SINGLE: {
+      fwrite(&info, sizeof(info), 1, file);
 
-        struct relocation_info info = {.r_address = addr,
-                                       .r_length = reloc->size,
-                                       .r_pcrel = 1,
-                                       .r_symbolnum = index,
-                                       .r_extern = 1,
-                                       .r_type = ARM64_RELOC_BRANCH26};
+      break;
+    }
+    case RELOCATION_TY_SINGLE: {
 
-        fwrite(&info, sizeof(info), 1, file);
+      struct relocation_info info = {.r_address = addr,
+                                     .r_length = reloc->size,
+                                     .r_pcrel = 1,
+                                     .r_symbolnum = index,
+                                     .r_extern = 1,
+                                     .r_type = ARM64_RELOC_BRANCH26};
 
-        break;
-      }
-      case RELOCATION_TY_LOCAL_PAIR: {
-        struct relocation_info infos[2] = {
-            {.r_address = addr,
-             .r_length = reloc->size,
-             .r_pcrel = 1,
-             .r_symbolnum = index,
-             .r_extern = 1,
-             .r_type = ARM64_RELOC_PAGE21},
-            {.r_address = addr + 4,
-             .r_length = reloc->size,
-             .r_pcrel = 0,
-             .r_symbolnum = index,
-             .r_extern = 1,
-             .r_type = ARM64_RELOC_PAGEOFF12},
-        };
+      fwrite(&info, sizeof(info), 1, file);
 
-        fwrite(infos, sizeof(infos), 1, file);
+      break;
+    }
+    case RELOCATION_TY_LOCAL_PAIR: {
+      struct relocation_info infos[2] = {
+          {.r_address = addr,
+           .r_length = reloc->size,
+           .r_pcrel = 1,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_PAGE21},
+          {.r_address = addr + 4,
+           .r_length = reloc->size,
+           .r_pcrel = 0,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_PAGEOFF12},
+      };
 
-        break;
-      }
-      case RELOCATION_TY_UNDEF_PAIR: {
-        struct relocation_info infos[2] = {
-            {.r_address = addr,
-             .r_length = reloc->size,
-             .r_pcrel = 1,
-             .r_symbolnum = index,
-             .r_extern = 1,
-             .r_type = ARM64_RELOC_GOT_LOAD_PAGE21},
-            {.r_address = addr + 4,
-             .r_length = reloc->size,
-             .r_pcrel = 0,
-             .r_symbolnum = index,
-             .r_extern = 1,
-             .r_type = ARM64_RELOC_GOT_LOAD_PAGEOFF12},
-        };
+      fwrite(infos, sizeof(infos), 1, file);
 
-        fwrite(infos, sizeof(infos), 1, file);
+      break;
+    }
+    case RELOCATION_TY_UNDEF_PAIR: {
+      struct relocation_info infos[2] = {
+          {.r_address = addr,
+           .r_length = reloc->size,
+           .r_pcrel = 1,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_GOT_LOAD_PAGE21},
+          {.r_address = addr + 4,
+           .r_length = reloc->size,
+           .r_pcrel = 0,
+           .r_symbolnum = index,
+           .r_extern = 1,
+           .r_type = ARM64_RELOC_GOT_LOAD_PAGEOFF12},
+      };
 
-        break;
-      }
-      }
+      fwrite(infos, sizeof(infos), 1, file);
+
+      break;
+    }
     }
   }
+}
+
+static void write_relocations(FILE *file, const struct reloc_info *info) {
+
+  write_relocation(file, info->text_relocs);
+  write_relocation(file, info->const_data_relocs);
+  write_relocation(file, info->data_relocs);
 }
 
 static void write_segment_command(FILE *file,
@@ -211,27 +266,6 @@ static void write_segment_command(FILE *file,
     }
   }
 
-  // finally add offsets to the sections
-  for (size_t i = 0; i < args->num_entries; i++) {
-    const struct object_entry *entry = &args->entries[i];
-
-    switch (entry->ty) {
-    case OBJECT_ENTRY_TY_FUNC:
-      break;
-    case OBJECT_ENTRY_TY_C_STRING:
-      entry_offsets[i] += total_func_size;
-      break;
-    case OBJECT_ENTRY_TY_CONST_DATA:
-      entry_offsets[i] += total_func_size + total_str_size;
-      break;
-    case OBJECT_ENTRY_TY_MUT_DATA:
-      entry_offsets[i] += total_func_size + total_str_size + total_const_size;
-      break;
-    case OBJECT_ENTRY_TY_DECL:
-      break;
-    }
-  }
-
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;
 
@@ -254,6 +288,10 @@ static void write_segment_command(FILE *file,
   segment.nsects = 4;
   segment.flags = 0;
 
+  struct reloc_info info = build_reloc_info(args, entry_offsets);
+  size_t relocs_offset = segment.fileoff + total_size;
+  size_t total_reloc_instrs = info.num_text_reloc_instrs + info.num_data_reloc_instrs + info.num_const_data_reloc_instrs;
+
   struct section_64 text;
   memset(&text, 0, sizeof(text));
   strcpy(text.sectname, "__text");
@@ -262,8 +300,8 @@ static void write_segment_command(FILE *file,
   text.size = total_func_size;
   text.offset = segment.fileoff;
   text.align = LOG2(func_align);
-  text.reloff = segment.fileoff + total_size;
-  text.nreloc = count_relocation_instrs(args);
+  text.reloff = relocs_offset;
+  text.nreloc = info.num_text_reloc_instrs;
   text.flags = S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS;
   text.reserved1 = 0;
   text.reserved2 = 0;
@@ -292,8 +330,9 @@ static void write_segment_command(FILE *file,
   const_data.size = total_const_size;
   const_data.offset = segment.fileoff + text.size + cstrings.size;
   const_data.align = LOG2(const_align);
-  const_data.reloff = 0; // no relocs
-  const_data.nreloc = 0;
+  const_data.reloff =
+      text.reloff + (sizeof(struct relocation_info) * info.num_text_reloc_instrs);
+  const_data.nreloc = info.num_const_data_reloc_instrs;
   const_data.flags = S_REGULAR;
   const_data.reserved1 = 0;
   const_data.reserved2 = 0;
@@ -307,8 +346,9 @@ static void write_segment_command(FILE *file,
   data.size = total_data_size;
   data.offset = segment.fileoff + text.size + cstrings.size + const_data.size;
   data.align = LOG2(data_align);
-  data.reloff = 0; // no relocs
-  data.nreloc = 0;
+  data.reloff = const_data.reloff +
+                (sizeof(struct relocation_info) * info.num_const_data_reloc_instrs);
+  data.nreloc = info.num_data_reloc_instrs;
   data.flags = S_REGULAR;
   data.reserved1 = 0;
   data.reserved2 = 0;
@@ -326,9 +366,8 @@ static void write_segment_command(FILE *file,
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
-  symtab.symoff = segment.fileoff + text.size + cstrings.size +
-                  const_data.size + data.size +
-                  sizeof(struct relocation_info) * text.nreloc;
+  symtab.symoff = relocs_offset +
+                  sizeof(struct relocation_info) * total_reloc_instrs;
   symtab.nsyms = args->num_entries;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
 
@@ -440,7 +479,7 @@ static void write_segment_command(FILE *file,
   /* Relocations */
 
   fseek(file, text.reloff, SEEK_SET);
-  write_relocations(file, args, entry_offsets);
+  write_relocations(file, &info);
 
   /* Symbol table */
 

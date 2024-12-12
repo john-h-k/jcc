@@ -709,6 +709,12 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
   case IR_VAR_VALUE_TY_FLT:
     fprintf(file, "%Lf", var_value->flt_value);
     break;
+  case IR_VAR_VALUE_TY_ADDR:
+    fprintf(file, "addr GLB(%zu)", var_value->addr.glb->id);
+    if (var_value->addr.offset) {
+      fprintf(file, " + %llu", var_value->addr.offset);
+    }
+    break;
   case IR_VAR_VALUE_TY_VALUE_LIST:
     if (top) {
       fprintf(file, "{\n");

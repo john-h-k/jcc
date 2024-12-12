@@ -46,13 +46,22 @@ struct ir_label {
   struct ir_label *succ;
 };
 
+struct ir_var_builder {
+  struct arena_allocator *arena;
+  struct typechk *tchk;
+
+  struct ir_unit *unit;
+  struct ir_var *var;
+
+  struct var_refs *global_var_refs;
+};
+
 struct ir_func_builder {
   struct arena_allocator *arena;
+  struct typechk *tchk;
 
   struct ir_unit *unit;
   struct ir_func *func;
-
-  struct typechk *tchk;
 
   struct var_refs *var_refs;
   struct var_refs *global_var_refs;
@@ -366,16 +375,16 @@ static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
 }
 
 static struct ir_op *insert_ir_for_cast_if_needed(struct ir_func_builder *irb,
-                                        struct ir_stmt *stmt, struct ir_op *op,
-                                        const struct td_var_ty *from,
-                                        const struct td_var_ty *to) {
+                                                  struct ir_stmt *stmt,
+                                                  struct ir_op *op,
+                                                  const struct td_var_ty *from,
+                                                  const struct td_var_ty *to) {
   struct ir_var_ty from_ir = var_ty_for_td_var_ty(irb->unit, from);
   struct ir_var_ty to_ir = var_ty_for_td_var_ty(irb->unit, to);
 
   if (var_ty_needs_cast_op(irb, &to_ir, &from_ir)) {
-    return insert_ir_for_cast(
-        irb, stmt, op, &to_ir,
-        cast_ty_for_td_var_ty(irb, from, to));
+    return insert_ir_for_cast(irb, stmt, op, &to_ir,
+                              cast_ty_for_td_var_ty(irb, from, to));
   } else {
     op->var_ty = to_ir;
     return op;
@@ -1504,7 +1513,9 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     struct ir_op *lhs;
 
     if (assg->cast_assignee) {
-      lhs = insert_ir_for_cast_if_needed(irb, *stmt, assignee, &assg->assignee->var_ty, &assg->assignee_var_ty);
+      lhs = insert_ir_for_cast_if_needed(irb, *stmt, assignee,
+                                         &assg->assignee->var_ty,
+                                         &assg->assignee_var_ty);
     } else {
       lhs = assignee;
     }
@@ -1523,7 +1534,8 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     value = alloc_binaryop(irb, *stmt, &args);
 
     if (assg->cast_result) {
-      value = insert_ir_for_cast_if_needed(irb, *stmt, value, &assg->result_var_ty, &assg->assignee->var_ty);
+      value = insert_ir_for_cast_if_needed(
+          irb, *stmt, value, &assg->result_var_ty, &assg->assignee->var_ty);
     }
 
     break;
@@ -2408,17 +2420,17 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
 static void var_assg_glb(struct ir_func_builder *irb, struct ir_stmt *stmt,
                          struct ir_glb *glb, struct td_var *var);
 
-static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
+static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
 
 static void
-build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
+build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
                         enum td_storage_class_specifier storage_class,
                         struct td_var_declaration *decl) {
 
-  struct ir_var_ty var_ty = var_ty_for_td_var_ty(iru, &decl->var_ty);
+  struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
 
   const char *name = decl->var.identifier;
   const char *symbol_name;
@@ -2435,7 +2447,7 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
       len++; // for "."
     }
 
-    char *buff = arena_alloc(iru->arena, sizeof(*name) * len);
+    char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
     size_t head = 0;
 
     buff[head++] = '.';
@@ -2510,7 +2522,7 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
   }
 
   if (!ref->glb) {
-    ref->glb = add_global(iru, ty, &var_ty, def_ty, symbol_name);
+    ref->glb = add_global(irb->unit, ty, &var_ty, def_ty, symbol_name);
   }
 
   ref->glb->def_ty = def_ty;
@@ -2527,13 +2539,13 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
 
   struct ir_var_value value;
   if (decl->init) {
-    value = build_ir_for_var_value(iru, decl->init, &decl->var_ty);
+    value = build_ir_for_var_value(irb, decl->init, &decl->var_ty);
   } else {
     value = (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ZERO, .var_ty = var_ty};
   }
 
   if (!ref->glb->var) {
-    ref->glb->var = arena_alloc(iru->arena, sizeof(*ref->glb->var));
+    ref->glb->var = arena_alloc(irb->arena, sizeof(*ref->glb->var));
   }
 
   *ref->glb->var =
@@ -2541,8 +2553,8 @@ build_ir_for_global_var(struct ir_unit *iru, struct ir_func *func,
 }
 
 static void
-build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
-                                struct var_refs *var_refs,
+build_ir_for_global_declaration(struct ir_var_builder *irb,
+                                struct ir_func *func, struct var_refs *var_refs,
                                 struct td_declaration *declaration) {
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
     if (declaration->storage_class_specifier ==
@@ -2550,7 +2562,7 @@ build_ir_for_global_declaration(struct ir_unit *iru, struct ir_func *func,
       continue;
     }
 
-    build_ir_for_global_var(iru, func, var_refs,
+    build_ir_for_global_var(irb, func, var_refs,
                             declaration->storage_class_specifier,
                             &declaration->var_declarations[i]);
   }
@@ -2636,7 +2648,14 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
             TD_STORAGE_CLASS_SPECIFIER_AUTO) {
       build_ir_for_auto_var(irb, stmt, decl);
     } else {
-      build_ir_for_global_var(irb->unit, irb->func, irb->global_var_refs,
+      struct ir_var_builder builder = {
+          .arena = irb->arena,
+          .tchk = irb->tchk,
+          .unit = irb->unit,
+          .global_var_refs = irb->global_var_refs,
+      };
+
+      build_ir_for_global_var(&builder, irb->func, irb->global_var_refs,
                               declaration->storage_class_specifier, decl);
     }
   }
@@ -2837,7 +2856,8 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
     res_ty = consumer->var_ty;
     break;
   case IR_OP_TY_UNARY_OP:
-    if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT && var_ty_is_integral(&consumer->var_ty) && var_ty_is_integral(&res_ty)) {
+    if (consumer->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT &&
+        var_ty_is_integral(&consumer->var_ty) && var_ty_is_integral(&res_ty)) {
       // logical not on other-sized int is fine
       res_ty = consumer->var_ty;
     }
@@ -3165,7 +3185,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
   return offset;
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
+static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
 
@@ -3319,103 +3339,182 @@ build_init_list_layout(struct ir_unit *iru,
 }
 
 static struct ir_var_value
-build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
-                            struct td_var_ty *var_ty) {
-  // it feels more elegant to do the resolving of constant expressions in
-  // typechk but this requires being able to evaluate `sizeof`, which it cannot
-  switch (expr->ty) {
-  case TD_EXPR_TY_UNARY_OP: {
-    if (expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
-      const struct td_var_ty *from = &expr->unary_op.expr->var_ty;
-      const struct td_var_ty *to = &expr->unary_op.cast.var_ty;
+build_ir_for_var_value_expr(struct ir_var_builder *irb,
+                            const struct td_expr *expr,
+                            const struct td_var_ty *var_ty);
 
-      debug_assert(td_var_ty_eq(iru->tchk, var_ty, to),
-                   "expr ty didn't equal cast ty");
+static struct ir_var_value build_ir_for_var_value_addr(
+    struct ir_var_builder *irb, const struct td_expr *addr,
+    const struct td_expr *offset, const struct td_var_ty *var_ty) {
+  if (addr->ty == TD_EXPR_TY_UNARY_OP && addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
+    return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset, var_ty);
+  }
 
-      struct ir_var_value value = build_ir_for_var_value_expr(
-          iru, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
+  if (addr->ty != TD_EXPR_TY_VAR) {
+    todo("non var addr of global");
+  }
 
-      if (from->ty == TD_VAR_TY_TY_POINTER || from->ty == TD_VAR_TY_TY_FUNC ||
-          from->ty == TD_VAR_TY_TY_ARRAY) {
-        if (to->ty == TD_VAR_TY_TY_POINTER || to->ty == TD_VAR_TY_TY_FUNC ||
-            to->ty == TD_VAR_TY_TY_ARRAY) {
-          // nop
-          value.var_ty = var_ty_for_td_var_ty(iru, var_ty);
-          return value;
-        } else if (to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-          debug_assert(is_integral_ty(to), "non integral cast from ptr-like");
+  const struct td_var *var = &addr->var;
 
-          todo("pointer -> int converts in statics");
-        }
+  struct var_key key = get_var_key(var, NULL);
+  struct var_ref *ref = var_refs_get(irb->global_var_refs, &key);
 
-        todo("unsupported cast in const expr");
-      } else if (to->ty == TD_VAR_TY_TY_POINTER ||
-                 to->ty == TD_VAR_TY_TY_FUNC || to->ty == TD_VAR_TY_TY_ARRAY) {
-        if (from->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-          value.var_ty = var_ty_for_td_var_ty(iru, var_ty);
-          return value;
-        }
+  debug_assert(ref, "var did not exist");
+  debug_assert(ref->ty == VAR_REF_TY_GLB, "wasn't global");
 
-        todo("unsupported cast in const expr");
-      } else if (from->ty == TD_VAR_TY_TY_WELL_KNOWN &&
-                 to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-        enum well_known_ty fwk = from->well_known;
-        enum well_known_ty twk = to->well_known;
+  size_t offset_cnst = 0;
+  if (offset) {
+    struct td_var_ty ptr_int_ty = td_var_ty_pointer_sized_int(irb->tchk, false);
+    struct ir_var_value offset_value = build_ir_for_var_value_expr(irb, offset, &ptr_int_ty);
 
-        if (WKT_IS_INTEGRAL(fwk) && WKT_IS_FP(twk)) {
-          long double flt_value;
+    if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
+      todo("non-int global values offset");
+    }
+
+    offset_cnst = offset_value.int_value;
+  }
+
+  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
+                               .var_ty =
+                                   var_ty_for_td_var_ty(irb->unit, var_ty),
+                               .addr = {.glb = ref->glb, .offset = offset_cnst}};
+}
+
+static struct ir_var_value
+build_ir_for_var_value_binary_op(struct ir_var_builder *irb,
+                                 const struct td_expr *expr,
+                                 const struct td_var_ty *var_ty) {
+  const struct td_expr *lhs = expr->binary_op.lhs;
+  const struct td_expr *rhs = expr->binary_op.rhs;
+  enum td_binary_op_ty ty = expr->binary_op.ty;
+
+  // FIXME: whole thing needs reworking, won't work for non-ptr adds
+  switch (ty) {
+  case TD_BINARY_OP_TY_ADD:
+    return build_ir_for_var_value_addr(irb, lhs, rhs, var_ty);
+
+  default:
+    todo("other binary op tys in global vars");
+  }
+}
+
+static struct ir_var_value
+build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
+                                const struct td_expr *expr,
+                                const struct td_var_ty *var_ty) {
+  switch (expr->unary_op.ty) {
+  case TD_UNARY_OP_TY_CAST: {
+    const struct td_var_ty *from = &expr->unary_op.expr->var_ty;
+    const struct td_var_ty *to = &expr->unary_op.cast.var_ty;
+
+    debug_assert(td_var_ty_eq(irb->tchk, var_ty, to),
+                 "expr ty didn't equal cast ty");
+
+    struct ir_var_value value = build_ir_for_var_value_expr(
+        irb, expr->unary_op.expr, &expr->unary_op.cast.var_ty);
+
+    if (from->ty == TD_VAR_TY_TY_POINTER || from->ty == TD_VAR_TY_TY_FUNC ||
+        from->ty == TD_VAR_TY_TY_ARRAY) {
+      if (to->ty == TD_VAR_TY_TY_POINTER || to->ty == TD_VAR_TY_TY_FUNC ||
+          to->ty == TD_VAR_TY_TY_ARRAY) {
+        // nop
+        value.var_ty = var_ty_for_td_var_ty(irb->unit, var_ty);
+        return value;
+      } else if (to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+        debug_assert(is_integral_ty(to), "non integral cast from ptr-like");
+
+        todo("pointer -> int converts in statics");
+      }
+
+      todo("unsupported cast in const expr");
+    } else if (to->ty == TD_VAR_TY_TY_POINTER || to->ty == TD_VAR_TY_TY_FUNC ||
+               to->ty == TD_VAR_TY_TY_ARRAY) {
+      if (from->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+        value.var_ty = var_ty_for_td_var_ty(irb->unit, var_ty);
+        return value;
+      }
+
+      todo("unsupported cast in const expr");
+    } else if (from->ty == TD_VAR_TY_TY_WELL_KNOWN &&
+               to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+      enum well_known_ty fwk = from->well_known;
+      enum well_known_ty twk = to->well_known;
+
+      if (WKT_IS_INTEGRAL(fwk) && WKT_IS_FP(twk)) {
+        long double flt_value;
 
 #define VALUE                                                                  \
   (WKT_IS_SIGNED(fwk) ? (signed long long)value.int_value                      \
                       : (unsigned long long)value.int_value)
-          switch (twk) {
-          case WELL_KNOWN_TY_HALF:
-            todo("constant cast to half");
-          case WELL_KNOWN_TY_FLOAT:
-            flt_value = (long double)(float)VALUE;
-            break;
-          case WELL_KNOWN_TY_DOUBLE:
-            flt_value = (long double)(double)VALUE;
-            break;
-          case WELL_KNOWN_TY_LONG_DOUBLE:
-            flt_value = (long double)VALUE;
-            break;
-          default:
-            unreachable();
-          }
-
-          return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
-                                       .var_ty =
-                                           var_ty_for_td_var_ty(iru, var_ty),
-                                       .flt_value = flt_value};
+        switch (twk) {
+        case WELL_KNOWN_TY_HALF:
+          todo("constant cast to half");
+        case WELL_KNOWN_TY_FLOAT:
+          flt_value = (long double)(float)VALUE;
+          break;
+        case WELL_KNOWN_TY_DOUBLE:
+          flt_value = (long double)(double)VALUE;
+          break;
+        case WELL_KNOWN_TY_LONG_DOUBLE:
+          flt_value = (long double)VALUE;
+          break;
+        default:
+          unreachable();
         }
-      }
 
-      todo("unsupported cast in const expr");
-    } else {
-      todo("other unary ops");
+        return (struct ir_var_value){
+            .ty = IR_VAR_VALUE_TY_FLT,
+            .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+            .flt_value = flt_value};
+      }
     }
+
+    todo("unsupported cast in const expr");
   }
+  case TD_UNARY_OP_TY_ADDRESSOF: {
+    return build_ir_for_var_value_addr(irb, expr, NULL, var_ty);
+  }
+  default:
+    todo("other unary ops in globals");
+  }
+}
+
+static struct ir_var_value
+build_ir_for_var_value_expr(struct ir_var_builder *irb, const struct td_expr *expr,
+                            const struct td_var_ty *var_ty) {
+  // it feels more elegant to do the resolving of constant expressions in
+  // typechk but this requires being able to evaluate `sizeof`, which it cannot
+  switch (expr->ty) {
+  case TD_EXPR_TY_VAR:
+    return build_ir_for_var_value_addr(irb, expr, NULL, var_ty);
+  case TD_EXPR_TY_UNARY_OP:
+    return build_ir_for_var_value_unary_op(irb, expr, var_ty);
+  case TD_EXPR_TY_BINARY_OP:
+    return build_ir_for_var_value_binary_op(irb, expr, var_ty);
   case TD_EXPR_TY_CNST: {
-    struct td_cnst *cnst = &expr->cnst;
+    const struct td_cnst *cnst = &expr->cnst;
     if (cnst->ty == TD_CNST_TY_STR_LITERAL ||
         cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
-                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .var_ty =
+                                       var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .str_value = cnst->str_value};
     } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
       todo("wide str globals");
     } else if (is_integral_ty(&expr->var_ty)) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
-                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .var_ty =
+                                       var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .int_value = cnst->int_value};
     } else if (is_fp_ty(&expr->var_ty)) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
-                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .var_ty =
+                                       var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .flt_value = cnst->flt_value};
     } else if (expr->var_ty.ty == TD_VAR_TY_TY_POINTER) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
-                                   .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                   .var_ty =
+                                       var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .int_value = cnst->int_value};
     } else {
       todo("other types");
@@ -3426,24 +3525,24 @@ build_ir_for_var_value_expr(struct ir_unit *iru, struct td_expr *expr,
   }
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
+static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR: {
-    return build_ir_for_var_value_expr(iru, &init->expr, &init->expr.var_ty);
+    return build_ir_for_var_value_expr(irb, &init->expr, &init->expr.var_ty);
   }
   case TD_INIT_TY_INIT_LIST: {
     const struct td_init_list *init_list = &init->init_list;
 
     struct ir_build_init_list_layout layout =
-        build_init_list_layout(iru, init_list);
+        build_init_list_layout(irb->unit, init_list);
 
     struct ir_var_value_list value_list = {
         .num_values = layout.num_inits,
-        .values = arena_alloc(iru->arena,
+        .values = arena_alloc(irb->arena,
                               sizeof(*value_list.values) * layout.num_inits),
-        .offsets = arena_alloc(iru->arena,
+        .offsets = arena_alloc(irb->arena,
                                sizeof(*value_list.offsets) * layout.num_inits),
     };
 
@@ -3451,12 +3550,13 @@ static struct ir_var_value build_ir_for_var_value(struct ir_unit *iru,
       struct ir_build_init *build_init = &layout.inits[i];
 
       value_list.values[i] = build_ir_for_var_value_expr(
-          iru, build_init->expr, &build_init->expr->var_ty);
+          irb, build_init->expr, &build_init->expr->var_ty);
       value_list.offsets[i] = build_init->offset;
     }
 
     return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-                                 .var_ty = var_ty_for_td_var_ty(iru, var_ty),
+                                 .var_ty =
+                                     var_ty_for_td_var_ty(irb->unit, var_ty),
                                  .value_list = value_list};
   }
   }
@@ -3484,14 +3584,28 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
     switch (external_declaration->ty) {
     case TD_EXTERNAL_DECLARATION_TY_DECLARATION: {
-      build_ir_for_global_declaration(iru, NULL, global_var_refs,
+      struct ir_var_builder builder = {
+          .arena = iru->arena,
+          .tchk = iru->tchk,
+          .unit = iru,
+          .global_var_refs = global_var_refs,
+      };
+
+      build_ir_for_global_declaration(&builder, NULL, global_var_refs,
                                       &external_declaration->declaration);
       break;
     }
     case TD_EXTERNAL_DECLARATION_TY_FUNC_DEF: {
+      struct ir_var_builder var_builder = {
+          .arena = iru->arena,
+          .tchk = iru->tchk,
+          .unit = iru,
+          .global_var_refs = global_var_refs,
+      };
+
       struct td_funcdef *def = &external_declaration->func_def;
 
-      build_ir_for_global_var(iru, NULL, global_var_refs,
+      build_ir_for_global_var(&var_builder, NULL, global_var_refs,
                               def->storage_class_specifier,
                               &def->var_declaration);
 

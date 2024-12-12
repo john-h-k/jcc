@@ -6,7 +6,6 @@
 #include "emitter.h"
 #include "isa.h"
 
-#include <mach/message.h>
 #include <stdio.h>
 
 #define WORD_SIZE (8)
@@ -20,6 +19,8 @@ struct emit_state {
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
   switch (instr->rv32i->ty) {
+  default:
+    bug("");
   case RV32I_INSTR_TY_ADDI:
     rv32i_emit_addi(state->emitter, instr->rv32i->addi);
     break;
