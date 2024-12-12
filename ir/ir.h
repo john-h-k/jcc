@@ -529,6 +529,11 @@ enum ir_var_data_ty {
   IR_VAR_TY_DATA
 };
 
+struct ir_var_addr {
+  struct ir_glb *glb;
+  unsigned long long offset;
+};
+
 struct ir_var_value_list {
   struct ir_var_value *values;
   size_t *offsets;
@@ -540,6 +545,7 @@ enum ir_var_value_ty {
   IR_VAR_VALUE_TY_INT,
   IR_VAR_VALUE_TY_FLT,
   IR_VAR_VALUE_TY_STR,
+  IR_VAR_VALUE_TY_ADDR,
   IR_VAR_VALUE_TY_VALUE_LIST,
 };
 
@@ -551,7 +557,7 @@ struct ir_var_value {
     const char *str_value;
     unsigned long long int_value;
     long double flt_value;
-
+    struct ir_var_addr addr;
     struct ir_var_value_list value_list;
   };
 };

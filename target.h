@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 enum relocation_ty {
+  RELOCATION_TY_POINTER,
   RELOCATION_TY_SINGLE,
   RELOCATION_TY_LOCAL_PAIR,
   RELOCATION_TY_UNDEF_PAIR,

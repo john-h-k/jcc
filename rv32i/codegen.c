@@ -7,8 +7,8 @@
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct rv32i_instr) {                                                       \
     .ty = RV32I_INSTR_TY_ADD, .add = {                                         \
-      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
-      .rhs = (source_reg),                                                     \
+      .lhs = (source_reg),                                                     \
+      .rhs = zero_reg_for_ty(dest_reg.ty),                                     \
       .dest = (dest_reg),                                                      \
     }                                                                          \
   }
@@ -748,69 +748,103 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
 
 static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
                             struct rv32i_reg source, struct rv32i_reg dest) {
-  // struct instr *instr = alloc_instr(state->func);
-
   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't sext from non-primitive");
 
+  size_t sh_sz;
   switch (op->cast_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I8:
+    sh_sz = 24;
+    goto sext;
   case IR_VAR_PRIMITIVE_TY_I16:
+    sh_sz = 16;
+    goto sext;
+
+  sext : {
+    struct instr *sl = alloc_instr(state->func);
+    sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
+    sl->rv32i->slli =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = sh_sz};
+    struct instr *sr = alloc_instr(state->func);
+    sr->rv32i->ty = RV32I_INSTR_TY_SRAI;
+    sr->rv32i->srai =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = sh_sz};
+    break;
+  }
+
   case IR_VAR_PRIMITIVE_TY_I32:
-    todo("rv32i sext");
+    todo("rv32i i64");
   case IR_VAR_PRIMITIVE_TY_I64:
     bug("can't sext from I64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    bug("todo cast floats");
+    bug("can't sext float");
   }
 }
 
-static void codegen_zext_op(struct codegen_state *state,
+static void codegen_zext_op(struct codegen_state *state, struct ir_op *op,
                             struct rv32i_reg source, struct rv32i_reg dest) {
-  todo("rv32i zext");
+
+  invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+                   "can't sext from non-primitive");
+
+  switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I8: {
+    struct instr *and = alloc_instr(state->func);
+    and->rv32i->ty = RV32I_INSTR_TY_ANDI;
+    and->rv32i->andi =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 0xFF};
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I16: {
+    struct instr *sl = alloc_instr(state->func);
+    sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
+    sl->rv32i->slli =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
+    struct instr *sr = alloc_instr(state->func);
+    sr->rv32i->ty = RV32I_INSTR_TY_SRLI;
+    sr->rv32i->srli =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I32:
+    todo("rv32i i64");
+  case IR_VAR_PRIMITIVE_TY_I64:
+    bug("can't zext from I64");
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    bug("can't zext float");
+  }
 }
 
 static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
                              struct rv32i_reg source, struct rv32i_reg dest) {
-  todo("rv32i trunc");
-
-  // struct instr *instr = alloc_instr(state->func);
-  // invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
-  //                  "can't truncate non-primitive");
-
-  // // https://kddnewton.com/2022/08/11/rv32i-bitmask-immediates.html
-  // // for understanding the immediates
-  // switch (op->var_ty.primitive) {
-  // case IR_VAR_PRIMITIVE_TY_I8:
-  //   instr->rv32i->ty = RV32I_INSTR_TY_AND_IMM;
-  //   instr->rv32i->and_imm = (struct rv32i_logical_imm){
-  //       .dest = dest,
-  //       .source = source,
-  //       .immr = 0b0,
-  //       .imms = 0b111,
-  //   };
-  //   break;
-  // case IR_VAR_PRIMITIVE_TY_I16:
-  //   instr->rv32i->ty = RV32I_INSTR_TY_AND_IMM;
-  //   instr->rv32i->and_imm = (struct rv32i_logical_imm){
-  //       .dest = dest,
-  //       .source = source,
-  //       .immr = 0b0,
-  //       .imms = 0b1111,
-  //   };
-  //   break;
-  // case IR_VAR_PRIMITIVE_TY_I32:
-  //   *instr->rv32i = MOV_ALIAS(dest, source);
-  //   break;
-  // case IR_VAR_PRIMITIVE_TY_I64:
-  //   break;
-  // case IR_VAR_PRIMITIVE_TY_F16:
-  // case IR_VAR_PRIMITIVE_TY_F32:
-  // case IR_VAR_PRIMITIVE_TY_F64:
-  //   bug("todo cast floats");
-  // }
+  switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I8: {
+    struct instr *and = alloc_instr(state->func);
+    and->rv32i->ty = RV32I_INSTR_TY_ANDI;
+    and->rv32i->andi =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 0xFF};
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I16: {
+    struct instr *sl = alloc_instr(state->func);
+    sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
+    sl->rv32i->slli =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
+    struct instr *sr = alloc_instr(state->func);
+    sr->rv32i->ty = RV32I_INSTR_TY_SRLI;
+    sr->rv32i->srli =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I64:
+    break;
+  default:
+    bug("can't zext");
+  }
 }
 
 static void codegen_conv_op(struct codegen_state *state,
@@ -837,8 +871,8 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   struct rv32i_reg dest = codegen_reg(op);
   struct rv32i_reg source = codegen_reg(op->cast_op.value);
 
-  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg to
-  // the same type as the dest reg (mixed regs make no sense in an integer
+  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg
+  // to the same type as the dest reg (mixed regs make no sense in an integer
   // instruction)
 
   switch (op->cast_op.ty) {
@@ -848,7 +882,7 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
     source.ty = dest.ty;
-    codegen_zext_op(state, source, dest);
+    codegen_zext_op(state, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_TRUNC:
     source.ty = dest.ty;
@@ -1019,7 +1053,8 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
           //                            .glb_id = glb->id,
           //                            .name = name,
-          //                            .data = codegen_var_data(ir, glb->var)};
+          //                            .data = codegen_var_data(ir,
+          //                            glb->var)};
           // break;
         case IR_VAR_TY_DATA:
           todo("");
@@ -1027,7 +1062,8 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
           //                            .glb_id = glb->id,
           //                            .name = name,
-          //                            .data = codegen_var_data(ir, glb->var)};
+          //                            .data = codegen_var_data(ir,
+          //                            glb->var)};
           // break;
         }
         break;
@@ -1064,7 +1100,8 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
               if (op->ty == IR_OP_TY_CALL) {
                 todo("");
                 // size_t call_args_size =
-                //     calc_arg_stack_space(&state, op->call.func_ty.func, op);
+                //     calc_arg_stack_space(&state, op->call.func_ty.func,
+                //     op);
                 // state.stack_args_size =
                 //     MAX(state.stack_args_size, call_args_size);
               }
@@ -1158,10 +1195,11 @@ static void debug_print_op_fp(FILE *file, const struct rv32i_op_fp *op_fp) {
           op_fp->rhs.idx);
 }
 
-static void debug_print_op_unary_fp(FILE *file, const struct rv32i_op_unary_fp *op_unary_fp) {
+static void
+debug_print_op_unary_fp(FILE *file,
+                        const struct rv32i_op_unary_fp *op_unary_fp) {
   fprintf(file, " f%zu, f%zu", op_unary_fp->dest.idx, op_unary_fp->source.idx);
 }
-
 
 static void debug_print_op(FILE *file, const struct rv32i_op *op) {
   fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
@@ -1377,8 +1415,13 @@ static void debug_print_instr(FILE *file,
     debug_print_op_fp(file, &instr->rv32i->fsub);
     break;
   case RV32I_INSTR_TY_FSGNJ:
-    fprintf(file, "fsgnj");
-    debug_print_op_fp(file, &instr->rv32i->fsgnj);
+    if (instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
+      fprintf(file, "fmv f%zu, f%zu", instr->rv32i->fsgnj.dest.idx,
+              instr->rv32i->fsgnj.lhs.idx);
+    } else {
+      fprintf(file, "fsgnj");
+      debug_print_op_fp(file, &instr->rv32i->fsgnj);
+    }
     break;
   case RV32I_INSTR_TY_FMUL:
     fprintf(file, "fmul");
@@ -1407,6 +1450,26 @@ static void debug_print_instr(FILE *file,
   case RV32I_INSTR_TY_FSQRT:
     fprintf(file, "fsqrt");
     debug_print_op_unary_fp(file, &instr->rv32i->fsqrt);
+    break;
+  case RV32I_INSTR_TY_ORI:
+    fprintf(file, "ori");
+    debug_print_op_imm(file, &instr->rv32i->ori);
+    break;
+  case RV32I_INSTR_TY_ANDI:
+    fprintf(file, "andi");
+    debug_print_op_imm(file, &instr->rv32i->andi);
+    break;
+  case RV32I_INSTR_TY_SLLI:
+    fprintf(file, "slli");
+    debug_print_op_imm(file, &instr->rv32i->addi);
+    break;
+  case RV32I_INSTR_TY_SRLI:
+    fprintf(file, "srli");
+    debug_print_op_imm(file, &instr->rv32i->srli);
+    break;
+  case RV32I_INSTR_TY_SRAI:
+    fprintf(file, "srai");
+    debug_print_op_imm(file, &instr->rv32i->srai);
     break;
   }
 }

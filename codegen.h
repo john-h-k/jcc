@@ -2,6 +2,7 @@
 #define CODEGEN_H
 
 #include "ir/ir.h"
+#include "target.h"
 
 #include <stddef.h>
 
@@ -38,6 +39,9 @@ enum codegen_entry_ty {
 struct codegen_data {
   void *data;
   size_t len_data;
+
+  struct relocation *relocs;
+  size_t num_relocs;
 };
 
 struct codegen_entry {
@@ -45,6 +49,8 @@ struct codegen_entry {
 
   size_t glb_id;
   const char *name;
+
+  size_t alignment;
 
   union {
     struct codegen_function func;

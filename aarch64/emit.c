@@ -270,7 +270,7 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_STRING:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_C_STRING,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->str,
           .len_data = strlen(entry->str) + 1,
           .num_relocations = 0,
@@ -284,11 +284,12 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
       // TODO: relocations
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_CONST_DATA,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
+          // TODO: reloc lifetimes
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol =
               (struct symbol){.ty = SYMBOL_TY_CONST_DATA,
                               .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
@@ -297,11 +298,12 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_DATA:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_MUT_DATA,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
+          // TODO: reloc lifetimes
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol =
               (struct symbol){.ty = SYMBOL_TY_DATA,
                               .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
@@ -310,11 +312,12 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_DECL:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_DECL,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = NULL,
           .len_data = 0,
-          .num_relocations = 0,
-          .relocations = NULL,
+          // TODO: reloc lifetimes
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol = (struct symbol){.ty = SYMBOL_TY_DECL,
                                     .visibility = SYMBOL_VISIBILITY_UNDEF,
                                     .name = entry->name}};
@@ -371,12 +374,12 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
       // should really alloc in arena
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_FUNC,
+          .alignment = entry->alignment,
           .data = data,
           .len_data = len,
           .symbol = symbol,
           .relocations = vector_head(relocs),
           .num_relocations = vector_length(relocs),
-          .alignment = AARCH64_FUNCTION_ALIGNMENT,
       };
       break;
     }

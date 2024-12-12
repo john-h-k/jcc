@@ -1439,7 +1439,9 @@ enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
 
 // FIXME: apple do things differently!!!
 
-#define INTEGRAL_OR_PTRLIKE(var_ty) (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER || (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
+#define INTEGRAL_OR_PTRLIKE(var_ty)                                            \
+  (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER ||     \
+   (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
 
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
@@ -1450,8 +1452,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // note, it is important we use the func ty as the reference here for
   // types as aggregates and similar will already have been turned into
   // pointers. this does mean we need to explicitly handle pointers
-  // in the case of unspecified functions, we use `arg_var_tys` which is preserved
-  if (func_ty->num_params == op->call.num_args || (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+  // in the case of unspecified functions, we use `arg_var_tys` which is
+  // preserved
+  if (func_ty->num_params == op->call.num_args ||
+      (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
     param_tys = func_ty->params;
   } else {
     param_tys = op->call.arg_var_tys;
@@ -1528,7 +1532,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
 
         const struct ir_var_ty *var_ty = &param_tys[i];
-        struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
+        struct ir_var_ty_info info = var_ty_info(
+            state->ir->unit,
+            var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
 
         size_t num_hfa_members;
         size_t hfa_member_size;
@@ -1582,8 +1588,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
           continue;
 
-        } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
-                   info.size <= 8 && ngrn <= 8) {
+        } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 &&
+                   ngrn <= 8) {
           struct location from = {.idx = source.idx};
           struct location to = {.idx = ngrn};
           vector_push_back(gp_move_from, &from);
@@ -1903,7 +1909,9 @@ static void codegen_params(struct codegen_state *state) {
 
   for (size_t i = 0; i < func_ty.num_params; i++) {
     const struct ir_var_ty *var_ty = &func_ty.params[i];
-    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
+    struct ir_var_ty_info info = var_ty_info(
+        state->ir->unit,
+        var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
 
     size_t offset;
     struct aarch64_reg source;
@@ -1964,8 +1972,7 @@ static void codegen_params(struct codegen_state *state) {
       lcl = lcl->succ;
       continue;
 
-    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
-               info.size <= 8 && ngrn <= 8) {
+    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 && ngrn <= 8) {
       struct location from = {.idx = ngrn};
       struct location to = {.idx = source.idx};
       vector_push_back(gp_move_from, &from);
@@ -2105,8 +2112,7 @@ static size_t calc_arg_stack_space(struct codegen_state *state,
       nsaa += size;
       continue;
 
-    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) &&
-               info.size <= 8 && ngrn <= 8) {
+    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 && ngrn <= 8) {
       ngrn++;
       continue;
     }
@@ -2692,7 +2698,7 @@ static int sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
-static void codegen_write_var_value(struct ir_unit *iru,
+static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, size_t offset,
                                     struct ir_var_value *value, char *data) {
   if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
     return;
@@ -2736,12 +2742,27 @@ static void codegen_write_var_value(struct ir_unit *iru,
   case IR_VAR_TY_TY_FUNC:
     bug("func can not have data as a global var");
 
+  // FIXME: some bugs here around using compiler-ptr-size when we mean to use target-ptr-size
+
   case IR_VAR_TY_TY_POINTER:
   case IR_VAR_TY_TY_ARRAY:
     switch (value->ty) {
     case IR_VAR_VALUE_TY_ZERO:
     case IR_VAR_VALUE_TY_FLT:
       bug("doesn't make sense");
+    case IR_VAR_VALUE_TY_ADDR: {
+      struct relocation reloc = {
+        .ty = RELOCATION_TY_POINTER,
+        .size = 3,
+        .address = offset,
+        .symbol_index = value->addr.glb->id
+      };
+
+      vector_push_back(relocs, &reloc);
+
+      memcpy(data, &value->addr.offset, sizeof(void *));
+      break;
+    }
     case IR_VAR_VALUE_TY_INT:
       memcpy(data, &value->int_value, sizeof(void *));
       break;
@@ -2751,8 +2772,9 @@ static void codegen_write_var_value(struct ir_unit *iru,
       break;
     case IR_VAR_VALUE_TY_VALUE_LIST:
       for (size_t i = 0; i < value->value_list.num_values; i++) {
-        codegen_write_var_value(iru, &value->value_list.values[i],
-                                &data[value->value_list.offsets[i]]);
+        size_t value_offset = value->value_list.offsets[i];
+        codegen_write_var_value(iru, relocs, offset + value_offset, &value->value_list.values[i],
+                                &data[value_offset]);
       }
       break;
     }
@@ -2760,16 +2782,19 @@ static void codegen_write_var_value(struct ir_unit *iru,
 
   case IR_VAR_TY_TY_STRUCT:
   case IR_VAR_TY_TY_UNION:
-    debug_assert(value->ty == IR_VAR_VALUE_TY_VALUE_LIST, "expected value list");
+    debug_assert(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
+                 "expected value list");
     for (size_t i = 0; i < value->value_list.num_values; i++) {
-      codegen_write_var_value(iru, &value->value_list.values[i],
-                              &data[value->value_list.offsets[i]]);
+      size_t field_offset = value->value_list.offsets[i];
+      codegen_write_var_value(iru, relocs, offset + field_offset, &value->value_list.values[i],
+                              &data[field_offset]);
     }
   }
 }
 
-static struct codegen_data codegen_var_data(struct ir_unit *ir,
-                                            struct ir_var *var) {
+static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
+                                             const char *name,
+                                             struct ir_var *var) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
     bug("str literal should have been lowered seperately");
@@ -2778,13 +2803,26 @@ static struct codegen_data codegen_var_data(struct ir_unit *ir,
   case IR_VAR_TY_DATA: {
     struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
 
+    // TODO: this leak
+    struct vector *relocs = vector_create(sizeof(struct relocation));
+
     size_t len = info.size;
 
     char *data = arena_alloc(ir->arena, len);
     memset(data, 0, len);
-    codegen_write_var_value(ir, &var->value, data);
 
-    return (struct codegen_data){.data = data, .len_data = len};
+    codegen_write_var_value(ir, relocs, 0, &var->value, data);
+
+    // TODO: handle const data
+    return (struct codegen_entry){
+        .ty = CODEGEN_ENTRY_TY_DATA,
+        .glb_id = id,
+        .alignment = info.alignment,
+        .name = name,
+        .data = (struct codegen_data){.data = data,
+                                      .len_data = len,
+                                      .relocs = vector_head(relocs),
+                                      .num_relocs = vector_length(relocs)}};
   }
   }
 }
@@ -2808,6 +2846,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
         unit->entries[i] = (struct codegen_entry){
             .ty = CODEGEN_ENTRY_TY_DECL,
+            .alignment = 0,
             .glb_id = glb->id,
             .name = aarch64_mangle(ir->arena, glb->name)};
 
@@ -2826,23 +2865,14 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
         case IR_VAR_TY_STRING_LITERAL:
           unit->entries[i] =
               (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
+                                     .alignment = 1,
                                      .glb_id = glb->id,
                                      .name = name,
                                      .str = glb->var->value.str_value};
           break;
         case IR_VAR_TY_CONST_DATA:
-          unit->entries[i] =
-              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
-                                     .glb_id = glb->id,
-                                     .name = name,
-                                     .data = codegen_var_data(ir, glb->var)};
-          break;
         case IR_VAR_TY_DATA:
-          unit->entries[i] =
-              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
-                                     .glb_id = glb->id,
-                                     .name = name,
-                                     .data = codegen_var_data(ir, glb->var)};
+          unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
           break;
         }
         break;
@@ -2854,6 +2884,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
         unit->entries[i] = (struct codegen_entry){
             .ty = CODEGEN_ENTRY_TY_FUNC,
+            .alignment = AARCH64_FUNCTION_ALIGNMENT,
             .glb_id = glb->id,
             .name = aarch64_mangle(ir->arena, ir_func->name),
             .func = {
