@@ -191,6 +191,23 @@ static bool parse_target_flag(const char *flag,
   return false;
 }
 
+static bool parse_c_standard(const char *flag,
+                              enum compile_c_standard *c_standard) {
+  if (strcmp(flag, "c11") == 0) {
+    *c_standard = COMPILE_C_STANDARD_C11;
+    return true;
+  } else if (strcmp(flag, "c17") == 0) {
+    *c_standard = COMPILE_C_STANDARD_C17;
+    return true;
+  } else if (strcmp(flag, "c23") == 0) {
+    *c_standard = COMPILE_C_STANDARD_C23;
+    return true;
+  }
+
+  warn("JCC only supports c11/c17/c23");
+  return false;
+}
+
 static bool parse_output(const char *str, char **output) {
   size_t output_len = strlen(str);
 
@@ -297,6 +314,16 @@ static enum parse_args_result parse_args(int argc, char **argv,
     const char *build_object_file = try_get_arg(arg, "-c");
     if (build_object_file) {
       args->build_object_file = true;
+
+      continue;
+    }
+
+    const char *c_standard = try_get_arg(arg, "-stdc");
+    GET_ARGUMENT(c_standard);
+    if (c_standard) {
+      if (!parse_c_standard(c_standard, &args->c_standard)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
 
       continue;
     }

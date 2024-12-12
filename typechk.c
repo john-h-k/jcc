@@ -1,6 +1,7 @@
 #include "typechk.h"
 
 #include "alloc.h"
+#include "compiler.h"
 #include "parse.h"
 #include "target.h"
 #include "var_table.h"
@@ -41,6 +42,8 @@ struct typechk {
   struct arena_allocator *arena;
   struct parser *parser;
   const struct target *target;
+
+  const struct compile_args *args;
 
   size_t next_anonymous_type_name_id;
 
@@ -96,7 +99,7 @@ bool td_binary_op_is_comparison(enum td_binary_op_ty ty) {
   }
 }
 
-bool is_fp_ty(const struct td_var_ty *ty) {
+bool td_var_ty_is_fp_ty(const struct td_var_ty *ty) {
   if (ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
     return false;
   }
@@ -244,7 +247,7 @@ static bool is_cnst_ty_fp(enum td_cnst_ty ty) {
   }
 }
 
-bool is_integral_ty(const struct td_var_ty *ty) {
+bool td_var_ty_is_integral_ty(const struct td_var_ty *ty) {
   if (ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
     return false;
   }
@@ -269,6 +272,12 @@ bool is_integral_ty(const struct td_var_ty *ty) {
   case WELL_KNOWN_TY_LONG_DOUBLE:
     return false;
   }
+}
+
+bool td_var_ty_is_scalar_ty(const struct td_var_ty *ty) {
+  // FIXME: also nullptr_t in C23
+  return td_var_ty_is_integral_ty(ty) || td_var_ty_is_fp_ty(ty) ||
+         ty->ty == TD_VAR_TY_TY_POINTER;
 }
 
 struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
@@ -391,11 +400,11 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
       rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
     if ((lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
          lhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
-        is_integral_ty(lhs_ty)) {
+        td_var_ty_is_integral_ty(lhs_ty)) {
       return *rhs_ty;
     } else if ((rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
                 rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
-               is_integral_ty(rhs_ty)) {
+               td_var_ty_is_integral_ty(rhs_ty)) {
       return *lhs_ty;
     } else if (td_var_ty_eq(tchk, lhs_ty, rhs_ty)) {
       return *lhs_ty;
@@ -1262,10 +1271,10 @@ static struct td_expr type_ternary(struct typechk *tchk,
   };
 
   *td_ternary.cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->cond);
-  *td_ternary.true_expr =
-      perform_integer_promotion(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->true_expr));
-  *td_ternary.false_expr =
-      perform_integer_promotion(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
+  *td_ternary.true_expr = perform_integer_promotion(
+      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->true_expr));
+  *td_ternary.false_expr = perform_integer_promotion(
+      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
 
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty);
@@ -1300,7 +1309,8 @@ static struct td_arglist type_arglist(struct typechk *tchk,
       .num_args = arg_list->num_args};
 
   for (size_t i = 0; i < arg_list->num_args; i++) {
-    td_arg_list.args[i] = type_expr(tchk,TYPE_EXPR_FLAGS_NONE,  &arg_list->args[i]);
+    td_arg_list.args[i] =
+        type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &arg_list->args[i]);
   }
 
   return td_arg_list;
@@ -1363,12 +1373,12 @@ static struct td_expr type_unary_op(struct typechk *tchk,
 
   enum type_expr_flags flags;
   switch (unary_op->ty) {
-    case AST_UNARY_OP_TY_ADDRESSOF:
-      flags = TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY;
-      break;
-    default:
-      flags = TYPE_EXPR_FLAGS_NONE;
-      break;
+  case AST_UNARY_OP_TY_ADDRESSOF:
+    flags = TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY;
+    break;
+  default:
+    flags = TYPE_EXPR_FLAGS_NONE;
+    break;
   }
 
   struct td_expr expr = type_expr(tchk, flags, unary_op->expr);
@@ -1446,10 +1456,10 @@ static struct td_expr type_unary_op(struct typechk *tchk,
 static struct td_expr type_binary_op(struct typechk *tchk,
                                      const struct ast_binary_op *binary_op) {
   // all binary operations perform integer promotion
-  struct td_expr lhs =
-      perform_integer_promotion(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->lhs));
-  struct td_expr rhs =
-      perform_integer_promotion(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->rhs));
+  struct td_expr lhs = perform_integer_promotion(
+      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->lhs));
+  struct td_expr rhs = perform_integer_promotion(
+      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, binary_op->rhs));
 
   enum td_binary_op_ty ty;
   switch (binary_op->ty) {
@@ -1553,7 +1563,7 @@ type_arrayaccess(struct typechk *tchk,
     WARN("array access should have at least one pointer type");
   }
 
-  if (!is_integral_ty(&td_arrayaccess.rhs->var_ty)) {
+  if (!td_var_ty_is_integral_ty(&td_arrayaccess.rhs->var_ty)) {
     WARN("array access should have at least one integral type");
   }
 
@@ -1669,7 +1679,8 @@ type_memberaccess(struct typechk *tchk,
       .lhs = arena_alloc(tchk->arena, sizeof(*td_memberaccess.lhs)),
       .member = identifier_str(tchk->parser, &memberaccess->member)};
 
-  *td_memberaccess.lhs = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, memberaccess->lhs);
+  *td_memberaccess.lhs =
+      type_expr(tchk, TYPE_EXPR_FLAGS_NONE, memberaccess->lhs);
   td_memberaccess.lhs->var_ty =
       type_incomplete_var_ty(tchk, &td_memberaccess.lhs->var_ty);
 
@@ -1694,7 +1705,8 @@ type_pointeraccess(struct typechk *tchk,
       .lhs = arena_alloc(tchk->arena, sizeof(*td_pointeraccess.lhs)),
       .member = identifier_str(tchk->parser, &pointeraccess->member)};
 
-  *td_pointeraccess.lhs = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, pointeraccess->lhs);
+  *td_pointeraccess.lhs =
+      type_expr(tchk, TYPE_EXPR_FLAGS_NONE, pointeraccess->lhs);
 
   switch (td_pointeraccess.lhs->var_ty.ty) {
   case TD_VAR_TY_TY_POINTER:
@@ -1780,7 +1792,8 @@ static struct td_expr type_assg(struct typechk *tchk,
     break;
   }
 
-  *td_assg.expr = perform_integer_promotion(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, assg->expr));
+  *td_assg.expr = perform_integer_promotion(
+      tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, assg->expr));
   *td_assg.assignee = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, assg->assignee);
 
   if (td_assg.ty != TD_ASSG_TY_BASIC) {
@@ -1893,7 +1906,8 @@ static struct td_expr type_sizeof(struct typechk *tchk,
   case AST_SIZEOF_TY_EXPR:
     td_size_of.ty = TD_SIZEOF_TY_EXPR;
     td_size_of.expr = arena_alloc(tchk->arena, sizeof(*td_size_of.expr));
-    *td_size_of.expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, size_of->expr);
+    *td_size_of.expr =
+        type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, size_of->expr);
     break;
   }
 
@@ -1921,7 +1935,8 @@ type_compoundexpr(struct typechk *tchk,
                                             compoundexpr->num_exprs)};
 
   for (size_t i = 0; i < compoundexpr->num_exprs; i++) {
-    td_compoundexpr.exprs[i] = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &compoundexpr->exprs[i]);
+    td_compoundexpr.exprs[i] =
+        type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &compoundexpr->exprs[i]);
   }
 
   debug_assert(td_compoundexpr.num_exprs,
@@ -1987,13 +2002,12 @@ static struct td_expr type_expr(struct typechk *tchk,
     break;
   }
 
-  if (!(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY) && td_expr.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+  if (!(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY) &&
+      td_expr.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
     struct td_var_ty *el = td_expr.var_ty.array.underlying;
 
     td_expr.var_ty.ty = TD_VAR_TY_TY_POINTER;
-    td_expr.var_ty.pointer = (struct td_ty_pointer){
-      .underlying = el
-    };
+    td_expr.var_ty.pointer = (struct td_ty_pointer){.underlying = el};
   }
 
   return td_expr;
@@ -2107,7 +2121,8 @@ type_declaration_or_expr(struct typechk *tchk,
     break;
   case AST_DECLARATION_OR_EXPR_TY_EXPR:
     td_decl_or_expr.ty = TD_DECLARATION_OR_EXPR_TY_EXPR;
-    td_decl_or_expr.expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &decl_or_expr->expr);
+    td_decl_or_expr.expr =
+        type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &decl_or_expr->expr);
     break;
   }
 
@@ -2211,7 +2226,9 @@ static struct td_jumpstmt type_jumpstmt(struct typechk *tchk,
           .expr = arena_alloc(tchk->arena, sizeof(*td_jump.return_stmt.expr))};
 
       *td_jump.return_stmt.expr = add_cast_if_needed(
-          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, jumpstmt->return_stmt.expr), tchk->ret_ty);
+          tchk,
+          type_expr(tchk, TYPE_EXPR_FLAGS_NONE, jumpstmt->return_stmt.expr),
+          tchk->ret_ty);
     } else {
       td_jump.return_stmt = (struct td_returnstmt){.expr = NULL};
     }
@@ -2224,9 +2241,9 @@ static struct td_jumpstmt type_jumpstmt(struct typechk *tchk,
 
 static struct td_ifstmt type_ifstmt(struct typechk *tchk,
                                     const struct ast_ifstmt *ifstmt) {
-  struct td_ifstmt td_if = {.cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &ifstmt->cond),
-                            .body =
-                                arena_alloc(tchk->arena, sizeof(*td_if.body))};
+  struct td_ifstmt td_if = {
+      .cond = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &ifstmt->cond),
+      .body = arena_alloc(tchk->arena, sizeof(*td_if.body))};
 
   *td_if.body = type_stmt(tchk, ifstmt->body);
 
@@ -2249,7 +2266,8 @@ type_ifelsestmt(struct typechk *tchk, const struct ast_ifelsestmt *ifelsestmt) {
 static struct td_switchstmt
 type_switchstmt(struct typechk *tchk, const struct ast_switchstmt *switchstmt) {
   struct td_switchstmt td_switch = {
-      .ctrl_expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &switchstmt->ctrl_expr),
+      .ctrl_expr =
+          type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &switchstmt->ctrl_expr),
       .body = arena_alloc(tchk->arena, sizeof(*td_switch.body)),
   };
 
@@ -2309,8 +2327,9 @@ static struct td_stmt type_stmt(struct typechk *tchk,
                          .labeled = type_labeledstmt(tchk, &stmt->labeled)};
     break;
   case AST_STMT_TY_EXPR:
-    td_stmt = (struct td_stmt){.ty = TD_STMT_TY_EXPR,
-                               .expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &stmt->expr)};
+    td_stmt = (struct td_stmt){
+        .ty = TD_STMT_TY_EXPR,
+        .expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &stmt->expr)};
     break;
   case AST_STMT_TY_COMPOUND:
     td_stmt =
@@ -2506,9 +2525,41 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
   return td_init_list_init;
 }
 
+static struct td_expr
+type_zero_expr(struct typechk *tchk, const struct td_var_ty *var_ty) {
+  todo("type zero expr");
+}
+
+
+static struct td_expr
+type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
+                          const struct ast_init_list *init_list) {
+  if (init_list->num_inits == 0) {
+    // zero-init
+    return type_zero_expr(tchk, var_ty);
+  } else if (init_list->num_inits == 1) {
+    const struct ast_init_list_init *init_list_init = &init_list->inits[0];
+
+    if (init_list_init->designator_list) {
+      WARN("cannot use designator list in scalar initialization");
+    }
+
+    const struct ast_init *init = init_list_init->init;
+    switch (init->ty) {
+    case AST_INIT_TY_EXPR:
+      return add_cast_if_needed(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
+    case AST_INIT_TY_INIT_LIST:
+      return type_init_list_for_scalar(tchk, var_ty, &init->init_list);
+    }
+  } else {
+    WARN("trying to initialise scalar with init list with multiple values");
+  }
+}
+
 static struct td_init_list
-type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
-               const struct ast_init_list *init_list) {
+type_init_list_for_aggregate_or_array(struct typechk *tchk,
+                                      const struct td_var_ty *var_ty,
+                                      const struct ast_init_list *init_list) {
   struct td_init_list td_init_list = {
       .var_ty = *var_ty,
       .num_inits = init_list->num_inits,
@@ -2556,6 +2607,26 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
   return td_init_list;
 }
 
+static struct td_init_list
+type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
+               const struct ast_init_list *init_list) {
+  if (init_list->num_inits == 0 &&
+      tchk->args->c_standard < COMPILE_C_STANDARD_C23) {
+    WARN("empy initializer is a c23 feature");
+  }
+
+  debug_assert(
+      !td_var_ty_is_scalar_ty(var_ty),
+      "scalar init list should have been converted to expression init");
+
+  if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
+      var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+    return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list);
+  } else {
+    WARN("cannot use initializer list for type");
+  }
+}
+
 static struct td_init type_init(struct typechk *tchk,
                                 const struct td_var_ty *var_ty,
                                 const struct ast_init *init) {
@@ -2569,8 +2640,13 @@ static struct td_init type_init(struct typechk *tchk,
 
     break;
   case AST_INIT_TY_INIT_LIST:
-    td_init.ty = TD_INIT_TY_INIT_LIST;
-    td_init.init_list = type_init_list(tchk, var_ty, &init->init_list);
+    if (td_var_ty_is_scalar_ty(var_ty)) {
+      td_init.ty = TD_INIT_TY_EXPR;
+      td_init.expr = type_init_list_for_scalar(tchk, var_ty, &init->init_list);
+    } else {
+      td_init.ty = TD_INIT_TY_INIT_LIST;
+      td_init.init_list = type_init_list(tchk, var_ty, &init->init_list);
+    }
     break;
   }
 
@@ -2667,6 +2743,7 @@ static struct td_external_declaration type_external_declaration(
 }
 
 enum typechk_create_result typechk_create(const struct target *target,
+                                          const struct compile_args *args,
                                           struct parser *parser,
                                           struct typechk **tchk) {
   struct typechk *t = nonnull_malloc(sizeof(*t));
@@ -2676,6 +2753,7 @@ enum typechk_create_result typechk_create(const struct target *target,
 
   *t = (struct typechk){
       .arena = arena,
+      .args = args,
       .parser = parser,
       .target = target,
       .next_anonymous_type_name_id = 0,

@@ -77,7 +77,7 @@ enum compiler_create_result create_compiler(struct program *program,
   }
 
   const struct target *target = get_target(args);
-  if (typechk_create(target, (*compiler)->parser, &(*compiler)->typechk) !=
+  if (typechk_create(target, args, (*compiler)->parser, &(*compiler)->typechk) !=
       TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
     return COMPILER_CREATE_RESULT_FAILURE;
