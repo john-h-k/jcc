@@ -166,6 +166,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
     } else {
       struct ir_op *mov =
           insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
+      mov->flags |= IR_OP_FLAG_PHI_MOV;
       mov->reg = to;
       mov->mov.value = value;
 

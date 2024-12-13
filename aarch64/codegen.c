@@ -2629,8 +2629,17 @@ static void codegen_stmt(struct codegen_state *state,
                          const struct ir_stmt *stmt) {
   struct ir_op *op = stmt->first;
   while (op) {
+    struct instr *prev = state->func->last;
+
     if (!(op->flags & IR_OP_FLAG_CONTAINED)) {
       codegen_op(state, op);
+
+      struct instr *start = prev ? prev->succ : NULL;
+
+      while (start) {
+        start->op = op;
+        start = start->succ;
+      }
     }
 
     op = op->succ;

@@ -114,37 +114,36 @@ static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
 
   struct ir_op *load =
       insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
-  load->load = (struct ir_op_load){
-    .ty = IR_OP_LOAD_TY_ADDR,
-    .addr = op};
+  load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = op};
 
   unsigned int mask_val;
 
   switch (load_bitfield) {
   case LOAD_BITFIELD_MASK_IN:
-    mask_val = ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    mask_val =
+        ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
     break;
   case LOAD_BITFIELD_MASK_OUT:
-    mask_val = MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    mask_val =
+        MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
     break;
   }
 
-  // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned, bitfield.width + bitfield.offset, bitfield.offset));
-  // printf("mask hi %zu = %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width + bitfield.offset, bitfield.offset));
-  // bug("mask (%zu, %zu) = %u", bitfield.offset, bitfield.width, mask_val);
+  // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
+  // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
+  // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
+  // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
+  // bitfield.offset, bitfield.width, mask_val);
 
   struct ir_op *mask_cnst =
       insert_after_ir_op(func, load, IR_OP_TY_CNST, IR_VAR_TY_I32);
   mask_cnst->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
 
-  struct ir_op *mask = insert_after_ir_op(
-      func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  struct ir_op *mask =
+      insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
   mask->binary_op = (struct ir_op_binary_op){
-    .ty = IR_OP_BINARY_OP_TY_AND,
-    .lhs = load,
-    .rhs = mask_cnst
-  };
+      .ty = IR_OP_BINARY_OP_TY_AND, .lhs = load, .rhs = mask_cnst};
 
   return mask;
 }
@@ -154,7 +153,8 @@ static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store_bitfield.addr;
   struct ir_bitfield bitfield = op->store_bitfield.bitfield;
 
-  struct ir_op *masked_out = load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_OUT);
+  struct ir_op *masked_out =
+      load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_OUT);
   masked_out->comment = "masked out";
 
   struct ir_op *shifted_op;
@@ -182,24 +182,21 @@ static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
   op->ty = IR_OP_TY_STORE;
   op->var_ty = IR_VAR_TY_NONE;
   op->store = (struct ir_op_store){
-    .ty = IR_OP_STORE_TY_ADDR,
-    .addr = addr,
-    .value = mask_in
-  };
+      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = mask_in};
 }
 
 static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load_bitfield.addr;
   struct ir_bitfield bitfield = op->load_bitfield.bitfield;
 
-  struct ir_op *masked_in = load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_IN);
+  struct ir_op *masked_in =
+      load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_IN);
 
   if (bitfield.offset) {
-    struct ir_op *shift_cnst = insert_after_ir_op(func, masked_in, IR_OP_TY_CNST, IR_VAR_TY_I32);
-    shift_cnst->cnst = (struct ir_op_cnst){
-      .ty = IR_OP_CNST_TY_INT,
-      .int_value = bitfield.offset
-    };
+    struct ir_op *shift_cnst =
+        insert_after_ir_op(func, masked_in, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                           .int_value = bitfield.offset};
 
     op->ty = IR_OP_TY_BINARY_OP;
     op->var_ty = IR_VAR_TY_I32;
@@ -209,9 +206,7 @@ static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
     // ugly
     op->ty = IR_OP_TY_MOV;
     op->var_ty = IR_VAR_TY_I32;
-    op->mov = (struct ir_op_mov){
-      .value = masked_in
-    };
+    op->mov = (struct ir_op_mov){.value = masked_in};
   }
 }
 
@@ -224,8 +219,7 @@ static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
   struct ir_op *value = op->store.value;
 
   op->store = (struct ir_op_store){
-    .ty = IR_OP_STORE_TY_ADDR,
-    .addr = addr, .value = value};
+      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
 }
 
 static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
@@ -235,9 +229,50 @@ static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load.glb};
 
   op->ty = IR_OP_TY_LOAD;
-  op->load = (struct ir_op_load){
-    .ty = IR_OP_LOAD_TY_ADDR,
-    .addr = addr};
+  op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
+}
+
+static void lower_pointers(struct ir_unit *unit) {
+  // Final step: turn all TY_POINTER into TY_I64 as the information is no
+  // longer needed
+  struct ir_glb *glb = unit->first_global;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
+
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      break;
+    case IR_GLB_TY_FUNC: {
+      struct ir_func *func = glb->func;
+      struct ir_basicblock *basicblock = func->first;
+      while (basicblock) {
+        struct ir_stmt *stmt = basicblock->first;
+
+        while (stmt) {
+          struct ir_op *op = stmt->first;
+
+          while (op) {
+            if (op->var_ty.ty == IR_VAR_TY_TY_POINTER) {
+              op->var_ty = var_ty_for_pointer_size(func->unit);
+            }
+
+            op = op->succ;
+          }
+
+          stmt = stmt->succ;
+        }
+
+        basicblock = basicblock->succ;
+      }
+      break;
+    }
+    }
+
+    glb = glb->succ;
+  }
 }
 
 void lower(struct ir_unit *unit, const struct target *target) {
@@ -307,40 +342,21 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
         basicblock = basicblock->succ;
       }
-
-      // Final step: turn all TY_POINTER into TY_I64 as the information is no
-      // longer needed
-      basicblock = func->first;
-      while (basicblock) {
-        struct ir_stmt *stmt = basicblock->first;
-
-        while (stmt) {
-          struct ir_op *op = stmt->first;
-
-          while (op) {
-            if (op->var_ty.ty == IR_VAR_TY_TY_POINTER) {
-              op->var_ty = var_ty_for_pointer_size(func->unit);
-            }
-
-            op = op->succ;
-          }
-
-          stmt = stmt->succ;
-        }
-
-        basicblock = basicblock->succ;
-      }
-      break;
     }
     }
 
     glb = glb->succ;
   }
 
+  lower_pointers(unit);
+
   // now target-specific lowering
   if (target->lower) {
     target->lower(unit);
   }
+
+  // lower again, in case target lowering introduced any
+  lower_pointers(unit);
 
   // now we do pruning before regalloc
   glb = unit->first_global;
