@@ -68,19 +68,11 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 
 #if STDC_C23 && __GNUC__
-#define PRINTF_ARGS(idx) [gcc::format(printf, idx + 1, idx + 2)]
+#define PRINTF_ARGS(idx) [gnu::format(printf, idx + 1, idx + 2)]
 #elif __GNUC__
 #define PRINTF_ARGS(idx) __attribute__((format(printf, idx + 1, idx + 2)))
 #else
 #define PRINTF_ARGS(idx)
-#endif
-
-#if STDC_C23 && __GNUC__
-#define FLAG_ENUM [gcc::flag_enum]
-#elif __GNUC__
-#define FLAG_ENUM __attribute__((flag_enum))
-#else
-#define FLAG_ENUM
 #endif
 
 #ifdef __has_feature
@@ -93,6 +85,26 @@ typedef unsigned _BitInt(128) uint128_t;
 #define HAS_BUILTIN(name) __has_builtin(name)
 #else
 #define HAS_BUILTIN(name) 0
+#endif
+
+#ifdef __has_attribute
+#define HAS_ATTRIBUTE(name) __has_attribute(name)
+#else
+#define HAS_ATTRIBUTE(name) 0
+#endif
+
+#ifdef __has_c_attribute
+#define HAS_C_ATTRIBUTE(name) __has_c_attribute(name)
+#else
+#define HAS_C_ATTRIBUTE(name) 0
+#endif
+
+#if STDC_C23 && HAS_C_ATTRIBUTE(flag_enum)
+#define FLAG_ENUM [gnu::flag_enum]
+#elif HAS_ATTRIBUTE(flag_enum)
+#define FLAG_ENUM __attribute__((flag_enum))
+#else
+#define FLAG_ENUM
 #endif
 
 #if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
@@ -153,8 +165,8 @@ typedef unsigned _BitInt(128) uint128_t;
 #define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 
 #if STDC_C23 && __GNUC__
-#define UNUSED_ARG(arg) [gcc::unused] arg
-#define UNUSED [gcc::unused]
+#define UNUSED_ARG(arg) [gnu::unused] arg
+#define UNUSED [gnu::unused]
 #elif __GNUC__
 #define UNUSED_ARG(arg) __attribute__((__unused__)) arg
 #define UNUSED __attribute__((__unused__))
@@ -178,43 +190,6 @@ static inline void debug_print_stack_trace(void) {
 #endif
 }
 
-static inline unsigned long long rotateright64(unsigned long long value,
-                                               unsigned int amount) {
-#if HAS_BUILTIN(__builtin_rotateright64)
-  return __builtin_rotateright64(value, amount);
-#else
-  todo("rotaterightl not implemented outside of `__builtin_popcountll`");
-#endif
-}
-
-static inline int popcntl(unsigned long long l) {
-#if HAS_BUILTIN(__builtin_popcountll)
-  return __builtin_popcountll(l);
-#else
-  todo("lzcnt not implemented outside of `__builtin_popcountll`");
-#endif
-}
-
-static inline int tzcnt(unsigned long long l) {
-#if HAS_BUILTIN(__builtin_clzll)
-  return __builtin_ctzll(l);
-#else
-  todo("lzcnt not implemented outside of `__builtin_clzll`");
-#endif
-}
-
-static inline int lzcnt(unsigned long long l) {
-#if HAS_BUILTIN(__builtin_clzll)
-  return __builtin_clzll(l);
-#else
-  todo("lzcnt not implemented outside of `__builtin_clzll`");
-#endif
-}
-
-static inline unsigned long long ilog2(unsigned long long num) {
-  return (sizeof(num) * 8) - lzcnt(num) - 1;
-}
-
 #define FMTPRINT(file, message, format)                                        \
   do {                                                                         \
     va_list v;                                                                 \
@@ -234,16 +209,25 @@ static inline unsigned long long ilog2(unsigned long long num) {
 #define START_NO_UNUSED_ARGS                                                   \
   _Pragma("clang diagnostic push")                                             \
       _Pragma("clang diagnostic ignored \"-Wunused-parameter\"")
-#elif __GNUC__
+#elif __GNUC__ && 0
 #define START_NO_UNUSED_ARGS                                                   \
   _Pragma("GCC diagnostic push")                                               \
       _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")
+#else
+#define START_NO_UNUSED_ARGS
 #endif
 
 #if __clang__
 #define END_NO_UNUSED_ARGS _Pragma("clang diagnostic pop")
-#elif __GNUC__
+#elif __GNUC__ && 0
 #define END_NO_UNUSED_ARGS _Pragma("GCC diagnostic pop")
+#else
+#define END_NO_UNUSED_ARGS
+#endif
+
+#ifdef SIZE_T_MAX
+#undef SIZE_T_MAX
+#define SIZE_T_MAX (static_assert(false, "use SIZE_MAX instead"))
 #endif
 
 #define TODO_FUNC(sig)                                                         \
@@ -263,6 +247,11 @@ NORETURN static inline void unreachable(void) {
 
 PRINTF_ARGS(0) NORETURN static inline void bug(const char *msg, ...) {
   FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
+  EXIT_FAIL(-2);
+}
+
+PRINTF_ARGS(0) NORETURN static inline void unsupported(const char *msg, ...) {
+  FMTPRINT(stderr, "", msg);
   EXIT_FAIL(-2);
 }
 
@@ -291,6 +280,65 @@ PRINTF_ARGS(1) static inline void debug_assert(bool b, const char *msg, ...) {
   }
 }
 #endif
+
+static inline unsigned long long rotateright64(unsigned long long value,
+                                               unsigned int amount) {
+#if HAS_BUILTIN(__builtin_rotateright64)
+    return __builtin_rotateright64(value, amount);
+#else
+    amount %= sizeof(value) * 8; // Ensure amount is within [0, 63]
+    return (value >> amount) | (value << ((sizeof(value) * 8) - amount));
+#endif
+}
+
+static inline int popcntl(unsigned long long l) {
+#if HAS_BUILTIN(__builtin_popcountll)
+    return __builtin_popcountll(l);
+#else
+    int count = 0;
+    while (l) {
+        count += l & 1;
+        l >>= 1;
+    }
+    return count;
+#endif
+}
+
+static inline int tzcnt(unsigned long long l) {
+#if HAS_BUILTIN(__builtin_ctzll)
+    return __builtin_ctzll(l);
+#else
+    if (l == 0) return sizeof(l) * 8;
+
+    int count = 0;
+    while ((l & 1) == 0) {
+        count++;
+        l >>= 1;
+    }
+    return count;
+#endif
+}
+
+static inline int lzcnt(unsigned long long l) {
+#if HAS_BUILTIN(__builtin_clzll)
+    return __builtin_clzll(l);
+#else
+    if (l == 0) return sizeof(l * 8);
+
+    int count = 0;
+    for (int i = (sizeof(l) * 8) - 1; i >= 0; i--) {
+        if ((l >> i) & 1) {
+            break;
+        }
+        count++;
+    }
+    return count;
+#endif
+}
+
+static inline unsigned long long ilog2(unsigned long long num) {
+  return (sizeof(num) * 8) - lzcnt(num) - 1;
+}
 
 static inline void *nonnull_malloc(size_t size) {
   if (size == 0) {

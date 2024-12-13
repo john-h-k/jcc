@@ -23,8 +23,8 @@ struct text_span {
 };
 
 // invalid is a misnomer here. it just means it isn't actually in the file
-#define TEXT_POS_INVALID_COL (SIZE_T_MAX)
-#define TEXT_POS_INVALID_LINE (SIZE_T_MAX)
+#define TEXT_POS_INVALID_COL (SIZE_MAX)
+#define TEXT_POS_INVALID_LINE (SIZE_MAX)
 
 #define MK_INVALID_TEXT_POS(idx)                                               \
   (struct text_pos) { idx, TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }

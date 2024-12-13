@@ -321,7 +321,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
       continue;
     }
 
-    const char *c_standard = try_get_arg(arg, "-stdc");
+    const char *c_standard = try_get_arg(arg, "-std");
     GET_ARGUMENT(c_standard);
     if (c_standard) {
       if (!parse_c_standard(c_standard, &args->c_standard)) {

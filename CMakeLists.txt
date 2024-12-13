@@ -67,11 +67,18 @@ set(
   macos/mach-o.c
 )
 
-if(MSVC)
-  add_compile_option(/W4 /WX)
-else()
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  message(STATUS "Debug build detected")
+  
   add_link_options(-fsanitize=address,undefined)
   add_compile_options(-fsanitize=address,undefined)
+endif()
+
+if(MSVC)
+  add_compile_option(/W4 /WX)
+elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+  message(STATUS "Building with AppleClang")
+
   add_compile_options(
     -Wall
     -Wextra
@@ -102,10 +109,13 @@ else()
     -Wno-conditional-uninitialized
     -Wno-shorten-64-to-32
     -Wno-assign-enum
+    # TODO: remove binary literals in source
+    -Wno-gnu-binary-literal
   )
-  # TODO: remove binary literals in source
-  add_compile_options(-Wno-gnu-binary-literal)
+else()
+  message(WARNING "Unknown compiler: ${CMAKE_C_COMPILER_ID}")
 endif()
 
 add_executable(jcc ${SOURCE_FILES})
+target_link_libraries(jcc m)
 
