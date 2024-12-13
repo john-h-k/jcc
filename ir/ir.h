@@ -30,6 +30,8 @@ enum ir_op_ty {
   IR_OP_TY_LOAD_LCL,
   IR_OP_TY_STORE_ADDR,
   IR_OP_TY_LOAD_ADDR,
+  IR_OP_TY_LOAD_BITFIELD,
+  IR_OP_TY_STORE_BITFIELD,
 
   IR_OP_TY_ADDR,
 
@@ -285,6 +287,24 @@ struct ir_op_load_addr {
   struct ir_op *addr;
 };
 
+struct ir_bitfield {
+  size_t offset;
+  size_t width;
+};
+
+struct ir_op_store_bitfield {
+  struct ir_op *value;
+  struct ir_op *addr;
+
+  struct ir_bitfield bitfield;
+};
+
+struct ir_op_load_bitfield {
+  struct ir_op *addr;
+
+  struct ir_bitfield bitfield;
+};
+
 struct ir_op_store_glb {
   struct ir_op *value;
   struct ir_glb *glb;
@@ -409,6 +429,8 @@ struct ir_op {
     struct ir_op_load_lcl load_lcl;
     struct ir_op_store_addr store_addr;
     struct ir_op_load_addr load_addr;
+    struct ir_op_store_bitfield store_bitfield;
+    struct ir_op_load_bitfield load_bitfield;
     struct ir_op_addr addr;
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;

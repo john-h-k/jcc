@@ -145,9 +145,20 @@ struct td_var_ty {
   };
 };
 
+enum td_struct_field_flags {
+  TD_STRUCT_FIELD_FLAG_NONE = 0,
+  TD_STRUCT_FIELD_FLAG_BITFIELD = 1,
+};
+
 struct td_struct_field {
   const char *identifier;
   struct td_var_ty var_ty;
+
+  enum td_struct_field_flags flags;
+
+  union {
+    unsigned long long bitfield_width;
+  };
 };
 
 struct td_ty_param {
@@ -486,11 +497,20 @@ struct td_init {
   };
 };
 
+enum td_var_declaration_ty {
+  TD_VAR_DECLARATION_TY_VAR,
+  TD_VAR_DECLARATION_TY_BITFIELD,
+};
+
 struct td_var_declaration {
+  enum td_var_declaration_ty ty;
+
   struct td_var_ty var_ty;
 
   struct td_var var;
   struct td_init *init;
+
+  unsigned long long bitfield_width;
 };
 
 struct td_declaration {

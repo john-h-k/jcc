@@ -1,9 +1,9 @@
-// expected value: 6
+// expected value: 0
 
 struct foo {
-  int a : 1;
-  int b : 5;
-  int c : 1;
+  unsigned a : 1;
+  unsigned b : 5;
+  unsigned c : 1;
 };
 
 int main() {
@@ -13,5 +13,15 @@ int main() {
     .c = 0
   };
 
-  return f.a + f.b + f.c;
+  if (f.a != 1) {
+    return 1;
+  }
+
+  if (f.b != 3) {
+    return 2;
+  }
+
+  if (f.c != 0) {
+    return 3;
+  }
 }
