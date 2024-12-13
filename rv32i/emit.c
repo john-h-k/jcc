@@ -20,7 +20,7 @@ static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
   switch (instr->rv32i->ty) {
   default:
-    bug("");
+    BUG("");
   case RV32I_INSTR_TY_ADDI:
     rv32i_emit_addi(state->emitter, instr->rv32i->addi);
     break;
@@ -240,7 +240,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
 
         size_t generated_instrs = rv32i_emitted_count(state.emitter) - emitted;
 
-        debug_assert(
+        DEBUG_ASSERT(
             generated_instrs == 1,
             "expected instr %zu to generate exactly 1 instruction but it "
             "generated %zu",

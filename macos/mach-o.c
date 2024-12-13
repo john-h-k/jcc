@@ -34,7 +34,7 @@ static void write_mach_header(FILE *file, const struct compile_args *args) {
 
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
-    bug("NATIVE arch reached linker, should have been selected earlier");
+    BUG("NATIVE arch reached linker, should have been selected earlier");
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
     header.cputype = CPU_TYPE_ARM64;
     header.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
@@ -97,7 +97,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
       break;
     case OBJECT_ENTRY_TY_C_STRING:
     case OBJECT_ENTRY_TY_DECL:
-      bug("reloc for cstring/decl makes no sense");
+      BUG("reloc for cstring/decl makes no sense");
     }
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
@@ -533,7 +533,7 @@ static void write_segment_command(FILE *file,
         data_offset += ROUND_UP(entry->len_data, data_align);
         break;
       case SYMBOL_TY_DECL:
-        bug("DECL symbol must be VISIBILITY_UNDEF");
+        BUG("DECL symbol must be VISIBILITY_UNDEF");
       }
     }
 

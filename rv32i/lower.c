@@ -27,7 +27,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty int_ty;
   unsigned long long int_value;
 
-  debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+  DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F32: {
@@ -91,7 +91,7 @@ void rv32i_lower(struct ir_unit *unit) {
           while (op) {
             switch (op->ty) {
             case IR_OP_TY_UNKNOWN:
-              bug("unknown op!");
+              BUG("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
@@ -122,7 +122,7 @@ void rv32i_lower(struct ir_unit *unit) {
               }
               break;
             case IR_OP_TY_CALL:
-              todo("call");
+              TODO("call");
             }
 
             op = op->succ;

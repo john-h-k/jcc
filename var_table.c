@@ -60,12 +60,12 @@ void push_scope(struct var_table *var_table) {
 void pop_scope(struct var_table *var_table) {
   struct var_table_scope *last = var_table->last;
 
-  debug_assert(last->scope != SCOPE_GLOBAL,
+  DEBUG_ASSERT(last->scope != SCOPE_GLOBAL,
                "popping global scope is never correct");
 
   vector_free(&last->entries);
 
-  debug_assert(!last->next, "popping var_table_scope but it has a `next` "
+  DEBUG_ASSERT(!last->next, "popping var_table_scope but it has a `next` "
                             "entry? should be impossible");
 
   var_table->last = last->prev;
@@ -76,7 +76,7 @@ void pop_scope(struct var_table *var_table) {
 
 struct var_table_entry *
 var_table_get_or_create_entry(struct var_table *var_table, const char *name) {
-  debug_assert(name, "name must be non-null");
+  DEBUG_ASSERT(name, "name must be non-null");
 
   struct var_table_entry *entry = var_table_get_entry(var_table, name);
 

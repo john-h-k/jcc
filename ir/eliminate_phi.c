@@ -94,7 +94,7 @@ static void remove_critical_edges(struct ir_func *irb) {
               }
             }
 
-            debug_assert(found, "failed to gen phi");
+            DEBUG_ASSERT(found, "failed to gen phi");
 
             phi = phi->succ;
           }
@@ -232,7 +232,7 @@ void eliminate_phi(struct ir_func *irb) {
           struct vector *fp_move_from = bb_moves[bb_move_id].fp_from;
           struct vector *fp_move_to = bb_moves[bb_move_id].fp_to;
 
-          debug_assert(op->reg.ty != IR_REG_TY_NONE,
+          DEBUG_ASSERT(op->reg.ty != IR_REG_TY_NONE,
                        "expected op %zu to have reg by now", op->id);
 
           if (op->lcl) {

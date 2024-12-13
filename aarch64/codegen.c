@@ -35,7 +35,7 @@ static enum aarch64_reg_ty gp_reg_ty_for_size(size_t size) {
     return AARCH64_REG_TY_W;
   }
 
-  bug("bad size %zu", size);
+  BUG("bad size %zu", size);
 }
 
 static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
@@ -52,7 +52,7 @@ static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
     return AARCH64_REG_TY_B;
   }
 
-  bug("bad size %zu", size);
+  BUG("bad size %zu", size);
 }
 
 static enum aarch64_reg_ty reg_ty_for_size(enum aarch64_reg_class reg_class,
@@ -68,7 +68,7 @@ static enum aarch64_reg_ty reg_ty_for_size(enum aarch64_reg_class reg_class,
 size_t reg_size(enum aarch64_reg_ty reg_ty) {
   switch (reg_ty) {
   case AARCH64_REG_TY_NONE:
-    bug("NONE reg ty has no size");
+    BUG("NONE reg ty has no size");
   case AARCH64_REG_TY_W:
     return 4;
   case AARCH64_REG_TY_X:
@@ -104,7 +104,7 @@ bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
   }
 
   if (aarch64_reg_ty_is_gp(l.ty) == aarch64_reg_ty_is_gp(r.ty)) {
-    bug("comparing two registers with same index and type but different size "
+    BUG("comparing two registers with same index and type but different size "
         "(e.g w0 vs x0)");
   }
 
@@ -122,7 +122,7 @@ static struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
 bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty) {
   switch (ty) {
   case AARCH64_REG_TY_NONE:
-    bug("makes no sense");
+    BUG("makes no sense");
 
   case AARCH64_REG_TY_W:
   case AARCH64_REG_TY_X:
@@ -140,7 +140,7 @@ bool aarch64_reg_ty_is_gp(enum aarch64_reg_ty ty) {
 bool aarch64_reg_ty_is_fp(enum aarch64_reg_ty ty) {
   switch (ty) {
   case AARCH64_REG_TY_NONE:
-    bug("makes no sense");
+    BUG("makes no sense");
 
   case AARCH64_REG_TY_W:
   case AARCH64_REG_TY_X:
@@ -317,7 +317,7 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FGTEQ:
     return AARCH64_COND_GE;
   default:
-    bug("op was not a comparison");
+    BUG("op was not a comparison");
   }
 }
 
@@ -331,7 +331,7 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
   }
 
   struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
-  debug_assert(offset % info.size == 0,
+  DEBUG_ASSERT(offset % info.size == 0,
                "stack offset not divisible by type size");
 
   return offset / info.size;
@@ -342,7 +342,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_NONE:
   case IR_REG_TY_SPILLED:
   case IR_REG_TY_FLAGS:
-    bug("does not make sense for none/spilled/flags");
+    BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
     return idx < 18 ? idx : idx + 1;
   case IR_REG_TY_FP:
@@ -357,7 +357,7 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
   case IR_REG_TY_NONE:
   case IR_REG_TY_SPILLED:
   case IR_REG_TY_FLAGS:
-    bug("doesn't make sense for none/spilled/flags");
+    BUG("doesn't make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
     return (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
                                 .idx = translate_reg_idx(reg.idx, reg.ty)};
@@ -389,7 +389,7 @@ static struct aarch64_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
-    todo("non primitives (op %zu)", op->id);
+    TODO("non primitives (op %zu)", op->id);
   }
 
   enum aarch64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
@@ -405,7 +405,7 @@ static struct aarch64_reg codegen_reg(struct ir_op *op) {
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
     break;
   default:
-    todo("other reg tys (Q/V)");
+    TODO("other reg tys (Q/V)");
   }
 
   return (struct aarch64_reg){.ty = reg_ty, .idx = idx};
@@ -511,7 +511,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
       imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
     } else {
-      bug("can't CONTAIN operand in load_addr node");
+      BUG("can't CONTAIN operand in load_addr node");
     }
 
     instr->aarch64->ty = load_ty_for_op(op);
@@ -544,7 +544,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
       imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
     } else {
-      bug("can't CONTAIN operand in store_addr node");
+      BUG("can't CONTAIN operand in store_addr node");
     }
 
     instr->aarch64->ty = store_ty_for_op(op->store.value);
@@ -573,7 +573,7 @@ static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
     codegen_load_addr_op(state, op);
     break;
   case IR_OP_LOAD_TY_GLB:
-    bug("load.glb should have been lowered");
+    BUG("load.glb should have been lowered");
   }
 }
 
@@ -586,7 +586,7 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
     codegen_store_addr_op(state, op);
     break;
   case IR_OP_STORE_TY_GLB:
-    bug("store.glb should have been lowered");
+    BUG("store.glb should have been lowered");
   }
 }
 
@@ -596,11 +596,11 @@ static void codegen_mem_copy_volatile(struct codegen_state *state,
                                       size_t source_offset,
                                       struct aarch64_reg dest,
                                       size_t dest_offset, size_t num_bytes) {
-  debug_assert(num_bytes < 4096,
+  DEBUG_ASSERT(num_bytes < 4096,
                "doesn't support >4096 copies due to immediates");
 
   if (source_offset % 32 || dest_offset % 32) {
-    todo("handle");
+    TODO("handle");
   }
 
   size_t remaining = num_bytes;
@@ -845,7 +845,7 @@ static void codegen_32_bit_int(struct codegen_state *state,
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
-  debug_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+  DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                "expects primitive type");
 
   struct aarch64_reg dest = codegen_reg(op);
@@ -854,7 +854,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_CNST_TY_FLT:
     // currently all constants are lowered to an integer load and `fmov`
     // but lots of constants can be loaded directly, so do that here
-    todo("simple float constants (not lowered)");
+    TODO("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
@@ -923,7 +923,7 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     };
     return;
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-    bug("logical not should never reach emitter, should be converted in lower");
+    BUG("logical not should never reach emitter, should be converted in lower");
   }
 }
 
@@ -942,7 +942,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   bool is_fp = var_ty_is_fp(&op->var_ty);
 
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
-  debug_assert(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
+  DEBUG_ASSERT(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
                    ty == IR_OP_BINARY_OP_TY_FMUL ||
                    ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
                "floating point with invalid binary op");
@@ -1115,7 +1115,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
-    bug("squot/uquot shoud have been lowered");
+    BUG("squot/uquot shoud have been lowered");
   }
 }
 
@@ -1144,11 +1144,11 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
     break;
   case IR_VAR_PRIMITIVE_TY_I64:
-    bug("can't sext from I64");
+    BUG("can't sext from I64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    bug("todo cast floats");
+    BUG("todo cast floats");
   }
 }
 
@@ -1197,7 +1197,7 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    bug("todo cast floats");
+    BUG("todo cast floats");
   }
 }
 
@@ -1269,7 +1269,7 @@ static bool try_get_hfa_info(struct codegen_state *state,
   }
 
   if (var_ty->ty == IR_VAR_TY_TY_UNION) {
-    todo("union hfa handling");
+    TODO("union hfa handling");
   }
 
   if (!var_ty->struct_ty.num_fields) {
@@ -1331,13 +1331,13 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
     struct move move = moves.moves[i];
 
     if (IS_MEM_LOC(move.from)) {
-      debug_assert(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
+      DEBUG_ASSERT(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
 
       struct mem_loc *from = move.from.metadata;
       struct aarch64_reg to = {.ty = reg_ty_for_size(reg_class, from->size),
                                .idx = move.to.idx};
 
-      debug_assert(from->offset % from->size == 0,
+      DEBUG_ASSERT(from->offset % from->size == 0,
                    "offset was not a multiple of size");
       size_t offset = from->offset / from->size;
 
@@ -1349,13 +1349,13 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
                                     .dest = to,
                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET};
     } else if (IS_MEM_LOC(move.to)) {
-      debug_assert(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
+      DEBUG_ASSERT(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
 
       struct mem_loc *to = move.to.metadata;
       struct aarch64_reg from = {.ty = reg_ty_for_size(reg_class, to->size),
                                  .idx = move.from.idx};
 
-      debug_assert(to->offset % to->size == 0,
+      DEBUG_ASSERT(to->offset % to->size == 0,
                    "offset was not a multiple of size");
       size_t offset = to->offset / to->size;
 
@@ -1628,7 +1628,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         }
 
         if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-          todo("128 bit reg alloc");
+          TODO("128 bit reg alloc");
           // // lo to ngrn, hi to ngrn+1
           // ngrn += 2;
           // continue;
@@ -1696,7 +1696,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           vector_push_back(fp_move_from, &from);
           vector_push_back(fp_move_to, &to);
         } else {
-          bug("bad type");
+          BUG("bad type");
         }
       } else {
         struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
@@ -1744,7 +1744,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     struct mem_loc *from = &copy->src;
     struct mem_loc *to = &copy->dest;
 
-    debug_assert(from->size == to->size, "mem cpy with different sizes");
+    DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
 
     codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
                               to->offset, to->size);
@@ -1882,7 +1882,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           .mode = AARCH64_ADDRESSING_MODE_OFFSET,
           .source = {source0, source1}};
     } else {
-      todo("larger than 16 byte types");
+      TODO("larger than 16 byte types");
     }
   }
 }
@@ -2009,7 +2009,7 @@ static void codegen_params(struct codegen_state *state) {
     }
 
     if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-      todo("128 bit reg alloc");
+      TODO("128 bit reg alloc");
       // // lo to ngrn, hi to ngrn+1
       // ngrn += 2;
       // continue;
@@ -2074,7 +2074,7 @@ static void codegen_params(struct codegen_state *state) {
       vector_push_back(fp_move_from, &from);
       vector_push_back(fp_move_to, &to);
     } else {
-      bug("bad type");
+      BUG("bad type");
     }
   }
 
@@ -2096,7 +2096,7 @@ static void codegen_params(struct codegen_state *state) {
     struct mem_loc *from = &copy->src;
     struct mem_loc *to = &copy->dest;
 
-    debug_assert(from->size == to->size, "mem cpy with different sizes");
+    DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
 
     codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
                               to->offset, to->size);
@@ -2169,7 +2169,7 @@ static size_t calc_arg_stack_space(struct codegen_state *state,
   }
 
   if (op) {
-    debug_assert(op->ty == IR_OP_TY_CALL, "needs call");
+    DEBUG_ASSERT(op->ty == IR_OP_TY_CALL, "needs call");
     for (size_t i = func_ty.num_params; i < op->call.num_args; i++) {
       struct ir_var_ty var_ty = op->call.args[i]->var_ty;
       struct ir_var_ty_info info = var_ty_info(state->ir->unit, &var_ty);
@@ -2538,7 +2538,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
             .mode = AARCH64_ADDRESSING_MODE_OFFSET,
             .dest = {dest0, dest1}};
       } else {
-        todo("larger than 16 byte types");
+        TODO("larger than 16 byte types");
       }
     }
   }
@@ -2558,7 +2558,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_PHI:
     break;
   case IR_OP_TY_CUSTOM: {
-    bug("custom");
+    BUG("custom");
   }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
@@ -2611,7 +2611,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   default: {
-    todo("unsupported IR OP '%d'", op->ty);
+    TODO("unsupported IR OP '%d'", op->ty);
   }
   }
 }
@@ -2732,26 +2732,26 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
   case IR_VAR_TY_TY_PRIMITIVE: {
     switch (value->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
-      debug_assert(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
       memcpy(data, &value->int_value, 1);
       break;
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_I16:
-      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
                        value->ty == IR_VAR_VALUE_TY_FLT,
                    "expected int/flt");
       memcpy(data, &value->int_value, 2);
       break;
     case IR_VAR_PRIMITIVE_TY_I32:
     case IR_VAR_PRIMITIVE_TY_F32:
-      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
                        value->ty == IR_VAR_VALUE_TY_FLT,
                    "expected int/flt");
       memcpy(data, &value->int_value, 4);
       break;
     case IR_VAR_PRIMITIVE_TY_I64:
     case IR_VAR_PRIMITIVE_TY_F64:
-      debug_assert(value->ty == IR_VAR_VALUE_TY_INT ||
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
                        value->ty == IR_VAR_VALUE_TY_FLT,
                    "expected int/flt");
       memcpy(data, &value->int_value, sizeof(unsigned long));
@@ -2761,7 +2761,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
   }
 
   case IR_VAR_TY_TY_FUNC:
-    bug("func can not have data as a global var");
+    BUG("func can not have data as a global var");
 
     // FIXME: some bugs here around using compiler-ptr-size when we mean to use
     // target-ptr-size
@@ -2771,7 +2771,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     switch (value->ty) {
     case IR_VAR_VALUE_TY_ZERO:
     case IR_VAR_VALUE_TY_FLT:
-      bug("doesn't make sense");
+      BUG("doesn't make sense");
     case IR_VAR_VALUE_TY_ADDR: {
       struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
                                  .size = 3,
@@ -2803,7 +2803,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
 
   case IR_VAR_TY_TY_STRUCT:
   case IR_VAR_TY_TY_UNION:
-    debug_assert(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
+    DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
                  "expected value list");
     for (size_t i = 0; i < value->value_list.num_values; i++) {
       size_t field_offset = value->value_list.offsets[i];
@@ -2819,7 +2819,7 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
                                              struct ir_var *var) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
-    bug("str literal should have been lowered seperately");
+    BUG("str literal should have been lowered seperately");
   }
   case IR_VAR_TY_CONST_DATA:
   case IR_VAR_TY_DATA: {
@@ -3399,7 +3399,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       fputc('%', file);
       format++;
     } else {
-      bug("unrecognised format starting '%%%s'", format);
+      BUG("unrecognised format starting '%%%s'", format);
     }
   }
 }
@@ -3878,7 +3878,7 @@ static void debug_print_instr(FILE *file,
 }
 
 void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
-  debug_assert(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
+  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_AARCH64, "expected aarch64");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct codegen_entry *entry = &unit->entries[i];

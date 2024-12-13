@@ -63,7 +63,7 @@ bool op_has_side_effects(const struct ir_op *op) {
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op ty");
+    BUG("unknown op ty");
   case IR_OP_TY_PHI:
   case IR_OP_TY_UNDF:
   case IR_OP_TY_CNST:
@@ -84,14 +84,14 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_BR:
     return true;
   case IR_OP_TY_CUSTOM:
-    bug("not well defined for IR_OP_TY_CUSTOM");
+    BUG("not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
 bool op_produces_value(const struct ir_op *op) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op ty");
+    BUG("unknown op ty");
   case IR_OP_TY_PHI:
   case IR_OP_TY_UNDF:
   case IR_OP_TY_MOV:
@@ -113,14 +113,14 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BR:
     return false;
   case IR_OP_TY_CUSTOM:
-    bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
+    BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
 bool op_is_branch(enum ir_op_ty ty) {
   switch (ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op ty");
+    BUG("unknown op ty");
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
   case IR_OP_TY_RET:
@@ -142,7 +142,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_ADDR:
     return false;
   case IR_OP_TY_CUSTOM:
-    bug("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
+    BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
@@ -266,7 +266,7 @@ static void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb,
 void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op!");
+    BUG("unknown op!");
   case IR_OP_TY_CUSTOM:
   case IR_OP_TY_UNDF:
     break;
@@ -365,27 +365,27 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op!");
+    BUG("unknown op!");
   case IR_OP_TY_CUSTOM:
-    todo("walk custom");
+    TODO("walk custom");
   case IR_OP_TY_CALL:
-    todo("walk call");
+    TODO("walk call");
   case IR_OP_TY_PHI:
-    todo("walk phi");
+    TODO("walk phi");
   case IR_OP_TY_MOV:
-    todo("walk mov");
+    TODO("walk mov");
   case IR_OP_TY_LOAD:
-    todo("walk load");
+    TODO("walk load");
   case IR_OP_TY_STORE:
-    todo("walk store");
+    TODO("walk store");
   case IR_OP_TY_LOAD_BITFIELD:
-    todo("walk load bitfield");
+    TODO("walk load bitfield");
   case IR_OP_TY_STORE_BITFIELD:
-    todo("walk store bitfield");
+    TODO("walk store bitfield");
   case IR_OP_TY_ADDR:
-    todo("walk addr");
+    TODO("walk addr");
   case IR_OP_TY_BR_SWITCH:
-    todo("walk br.switch");
+    TODO("walk br.switch");
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_CNST:
@@ -534,7 +534,7 @@ void detach_ir_basicblock(struct ir_func *irb,
 
   case IR_BASICBLOCK_TY_SPLIT:
   case IR_BASICBLOCK_TY_SWITCH:
-    bug("can't detach SPLIT/SWITCH bb");
+    BUG("can't detach SPLIT/SWITCH bb");
 
   case IR_BASICBLOCK_TY_MERGE: {
     struct ir_basicblock *target = basicblock->merge.target;
@@ -858,7 +858,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
 
 struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty) {
-  debug_assert(op, "invalid replacement point!");
+  DEBUG_ASSERT(op, "invalid replacement point!");
 
   op->ty = ty;
   op->var_ty = var_ty;
@@ -869,7 +869,7 @@ struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
 struct ir_op *insert_before_ir_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty) {
-  debug_assert(insert_before, "invalid insertion point!");
+  DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
@@ -899,7 +899,7 @@ void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
 struct ir_op *insert_after_ir_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty) {
-  debug_assert(insert_after, "invalid insertion point!");
+  DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
@@ -936,7 +936,7 @@ struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
 struct ir_basicblock *
 insert_before_ir_basicblock(struct ir_func *irb,
                             struct ir_basicblock *insert_before) {
-  debug_assert(insert_before, "invalid insertion point!");
+  DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
@@ -951,7 +951,7 @@ insert_before_ir_basicblock(struct ir_func *irb,
 struct ir_basicblock *
 insert_after_ir_basicblock(struct ir_func *irb,
                            struct ir_basicblock *insert_after) {
-  debug_assert(insert_after, "invalid insertion point!");
+  DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
@@ -1121,7 +1121,7 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
     contained->unary_op = op->unary_op;
     break;
   default:
-    todo("unsupported type for contained op");
+    TODO("unsupported type for contained op");
   }
 
   return contained;
@@ -1144,7 +1144,7 @@ void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
 }
 
 struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
-  debug_assert(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE,
+  DEBUG_ASSERT(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE,
                "only makes sense on load/store ops");
 
   struct ir_op_addr addr;
@@ -1497,9 +1497,9 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty) {
   switch (ty->ty) {
   case IR_VAR_TY_TY_NONE:
-    bug("IR_OP_VAR_TY_TY_NONE has no size");
+    BUG("IR_OP_VAR_TY_TY_NONE has no size");
   case IR_VAR_TY_TY_VARIADIC:
-    bug("IR_OP_VAR_TY_TY_VARIADIC has no size");
+    BUG("IR_OP_VAR_TY_TY_VARIADIC has no size");
   case IR_VAR_TY_TY_FUNC:
   case IR_VAR_TY_TY_POINTER:
     switch (iru->target->lp_sz) {
@@ -1576,7 +1576,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 }
 
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
-  debug_assert(!(op->flags & IR_OP_FLAG_FIXED_REG),
+  DEBUG_ASSERT(!(op->flags & IR_OP_FLAG_FIXED_REG),
                "spilling fixed reg illegal");
 
   debug("spilling %zu\n", op->id);
@@ -1688,7 +1688,7 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   for (size_t i = 0; i < func->op_count; i++) {
     struct use_data *use_data = &data.use_data[i];
 
-    debug_assert(i == use_data->op->id, "ops were not keyed");
+    DEBUG_ASSERT(i == use_data->op->id, "ops were not keyed");
 
     uses.use_datas[i] = (struct ir_op_use){
         .op = use_data->op,

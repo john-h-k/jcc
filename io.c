@@ -42,7 +42,7 @@ char *path_combine(const char *l, const char *r) {
 }
 
 char *path_replace_ext(const char *path, const char *ext) {
-  debug_assert(ext[0] != '.', "ext should not start with the `.`");
+  DEBUG_ASSERT(ext[0] != '.', "ext should not start with the `.`");
 
   // NOTE: if given no extension, this will append
   // this is useful because it gives the invariant that the returned file is
@@ -70,12 +70,12 @@ char *path_replace_ext(const char *path, const char *ext) {
 
   buff[head++] = '\0';
 
-  debug_assert(head == res_sz, "str copy of wrong size");
+  DEBUG_ASSERT(head == res_sz, "str copy of wrong size");
   return buff;
 }
 
 char *path_add_ext(const char *path, const char *ext) {
-  debug_assert(ext[0] != '.', "ext should not start with the `.`");
+  DEBUG_ASSERT(ext[0] != '.', "ext should not start with the `.`");
 
   size_t path_len = strlen(path);
   size_t ext_len = strlen(ext);
@@ -94,7 +94,7 @@ char *path_add_ext(const char *path, const char *ext) {
 
   buff[head++] = '\0';
 
-  debug_assert(head == res_sz, "str copy of wrong size");
+  DEBUG_ASSERT(head == res_sz, "str copy of wrong size");
   return buff;
 }
 

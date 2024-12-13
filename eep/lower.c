@@ -338,7 +338,7 @@ static void lower_div(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_shift(UNUSED_ARG(struct ir_func *func), struct ir_op *op) {
-  debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
+  DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_LSHIFT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SRSHIFT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_URSHIFT),

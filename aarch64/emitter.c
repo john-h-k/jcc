@@ -33,7 +33,7 @@ struct aarch64_emitter {
 #define SF_FOR_REG(r)                                                          \
   (r).ty == AARCH64_REG_TY_X                                                   \
       ? SF_64                                                                  \
-      : (debug_assert((r).ty == AARCH64_REG_TY_W,                              \
+      : (DEBUG_ASSERT((r).ty == AARCH64_REG_TY_W,                              \
                       "SF_FOR_REG with non {X, W} register"),                  \
          SF_32)
 
@@ -42,12 +42,12 @@ struct aarch64_emitter {
       ? FTYPE_DOUBLE                                                           \
       : ((r).ty == AARCH64_REG_TY_S                                            \
              ? FTYPE_SINGLE                                                    \
-             : (debug_assert((r).ty == AARCH64_REG_TY_H,                       \
+             : (DEBUG_ASSERT((r).ty == AARCH64_REG_TY_H,                       \
                              "FTYPE_FOR_REG with non {D, S, H} register"),     \
                 FTYPE_HALF))
 
 static void bad_instr(void) {
-  bug("register types or arguments did not make sense");
+  BUG("register types or arguments did not make sense");
 }
 
 void create_aarch64_emitter(struct aarch64_emitter **emitter) {
@@ -662,9 +662,9 @@ void aarch64_emit_load_half_imm(struct aarch64_emitter *emitter,
         emitter, LDR_16_IMM_UNSIGNED(ldrh.imm, ldrh.addr.idx, ldrh.dest.idx));
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single loads");
+    TODO("preindex single loads");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single loads");
+    TODO("postindex single loads");
   }
 }
 
@@ -676,9 +676,9 @@ void aarch64_emit_store_half_imm(struct aarch64_emitter *emitter,
         emitter, STR_16_IMM_UNSIGNED(strh.imm, strh.addr.idx, strh.source.idx));
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single loads");
+    TODO("preindex single loads");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single loads");
+    TODO("postindex single loads");
   }
 }
 
@@ -690,9 +690,9 @@ void aarch64_emit_load_byte_imm(struct aarch64_emitter *emitter,
         emitter, LDR_8_IMM_UNSIGNED(ldrb.imm, ldrb.addr.idx, ldrb.dest.idx));
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single loads");
+    TODO("preindex single loads");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single loads");
+    TODO("postindex single loads");
   }
 }
 
@@ -704,9 +704,9 @@ void aarch64_emit_store_byte_imm(struct aarch64_emitter *emitter,
         emitter, STR_8_IMM_UNSIGNED(strb.imm, strb.addr.idx, strb.source.idx));
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single loads");
+    TODO("preindex single loads");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single loads");
+    TODO("postindex single loads");
   }
 }
 
@@ -732,9 +732,9 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
     }
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single loads");
+    TODO("preindex single loads");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single loads");
+    TODO("postindex single loads");
   }
 }
 
@@ -760,9 +760,9 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
     }
     break;
   case AARCH64_ADDRESSING_MODE_PREINDEX:
-    todo("preindex single stores");
+    TODO("preindex single stores");
   case AARCH64_ADDRESSING_MODE_POSTINDEX:
-    todo("postindex single stores");
+    TODO("postindex single stores");
   }
 }
 

@@ -22,7 +22,7 @@ struct var_refs *var_refs_create(void) {
 
 struct var_ref *var_refs_add(struct var_refs *var_refs,
                              const struct var_key *key, enum var_ref_ty ty) {
-  debug_assert(ty == VAR_REF_TY_GLB || key->basicblock,
+  DEBUG_ASSERT(ty == VAR_REF_TY_GLB || key->basicblock,
                "must provide basicblock for non globals!");
 
   struct var_ref ref = {.key = *key, .ty = ty, .op = NULL};

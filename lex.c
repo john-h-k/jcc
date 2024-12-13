@@ -130,7 +130,7 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
     enum lex_token_ty ty;
   };
 
-  debug_assert(KEYWORDS, "keywords should have been built");
+  DEBUG_ASSERT(KEYWORDS, "keywords should have been built");
 
   struct sized_str key = {.str = token->text,
                           .len = text_span_len(&token->span)};
@@ -246,7 +246,7 @@ static const char *process_raw_string(UNUSED const struct lexer *lexer,
           ADD_ESCAPED('"', '"')
           ADD_ESCAPED('?', '\?')
         default:
-          todo("\\x \\u \\U and \\octal escapes");
+          TODO("\\x \\u \\U and \\octal escapes");
           // either octal escape, or invalid
         }
       }
@@ -411,12 +411,12 @@ preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty);
 
 static enum lex_token_ty
 lex_string_literal(const struct preproc_token *preproc_token) {
-  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL,
+  DEBUG_ASSERT(preproc_token->ty == PREPROC_TOKEN_TY_STRING_LITERAL,
                "wrong preproc token ty");
 
   switch (preproc_token->text[0]) {
   case '<':
-    bug("found angle-bracket string literal in lexer");
+    BUG("found angle-bracket string literal in lexer");
   case '\"':
     return LEX_TOKEN_TY_ASCII_STR_LITERAL;
   case '\'':
@@ -429,13 +429,13 @@ lex_string_literal(const struct preproc_token *preproc_token) {
       return LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
     }
   default:
-    todo("other string/char literal types");
+    TODO("other string/char literal types");
   }
 }
 
 static enum lex_token_ty
 lex_number_literal(const struct preproc_token *preproc_token) {
-  debug_assert(preproc_token->ty == PREPROC_TOKEN_TY_PREPROC_NUMBER,
+  DEBUG_ASSERT(preproc_token->ty == PREPROC_TOKEN_TY_PREPROC_NUMBER,
                "wrong preproc token ty");
 
   enum FLAG_ENUM lit_ty {
@@ -514,7 +514,7 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
     break;
   case LIT_TY_Z:
-    todo("Z-sized literals");
+    TODO("Z-sized literals");
   case LIT_TY_U | LIT_TY_L:
     ty = LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL;
     break;
@@ -522,7 +522,7 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     ty = LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL;
     break;
   case LIT_TY_U | LIT_TY_Z:
-    todo("Z-sized literals");
+    TODO("Z-sized literals");
 
   // Floating-point
   case LIT_TY_FLT:
@@ -537,7 +537,7 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     break;
 
   default:
-    todo("handle bad suffixes for number literals");
+    TODO("handle bad suffixes for number literals");
   }
 
   return ty;
@@ -562,7 +562,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_DIRECTIVE:
-      bug("directive token reached lexer");
+      BUG("directive token reached lexer");
     case PREPROC_TOKEN_TY_IDENTIFIER: {
       enum lex_token_ty ty = refine_ty(&preproc_token);
       *token = (struct lex_token){
@@ -586,7 +586,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
           .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_OTHER:
-      todo("handler OTHER preproc tokens in lexer");
+      TODO("handler OTHER preproc tokens in lexer");
 
     case PREPROC_TOKEN_TY_COMMENT:
     case PREPROC_TOKEN_TY_NEWLINE:
@@ -628,7 +628,7 @@ void consume_token(struct lexer *lexer, struct lex_token token) {
   // `backtrack` and `get_position` which generate fake `text_pos` for this
   // purpose
 
-  debug_assert(token.internal_lexer_next_pos == lexer->pos + 1,
+  DEBUG_ASSERT(token.internal_lexer_next_pos == lexer->pos + 1,
                "jumped %zu tokens (expected 1)",
                token.internal_lexer_next_pos - lexer->pos);
   lexer->pos = token.internal_lexer_next_pos;
@@ -648,7 +648,7 @@ const char *associated_text(const struct lexer *lexer,
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
-    bug("use `strlike_associated_text` instead");
+    BUG("use `strlike_associated_text` instead");
   case LEX_TOKEN_TY_IDENTIFIER:
   case LEX_TOKEN_TY_FLOAT_LITERAL:
   case LEX_TOKEN_TY_DOUBLE_LITERAL:
@@ -668,7 +668,7 @@ const char *associated_text(const struct lexer *lexer,
   case LEX_TOKEN_TY_ELLIPSIS:
     return "...";
   default:
-    bug("associated text did not make sense for token '%s'",
+    BUG("associated text did not make sense for token '%s'",
         token_name(lexer, token));
   }
 }
@@ -911,6 +911,6 @@ preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty) {
     return LEX_TOKEN_TY_ELLIPSIS;
   case PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY:
   case PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT:
-    bug("stringify/concat tokens should not reach lexer");
+    BUG("stringify/concat tokens should not reach lexer");
   }
 }

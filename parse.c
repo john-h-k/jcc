@@ -14,7 +14,7 @@
 #define EXP_PARSE(e, diag)                                                     \
   do {                                                                         \
     if (!(e)) {                                                                \
-      bug("failure during parsing: %s", diag);                                 \
+      BUG("failure during parsing: %s", diag);                                 \
     }                                                                          \
   } while (0)
 
@@ -1082,7 +1082,7 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
   const char *literal_text = associated_text(parser->lexer, &token);
   size_t literal_len = strlen(literal_text);
 
-  debug_assert(literal_len, "literal_len was 0");
+  DEBUG_ASSERT(literal_len, "literal_len was 0");
 
   char *end_ptr;
   long double float_value = strtold(literal_text, &end_ptr);
@@ -1094,7 +1094,7 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
                            tolower(literal_text[literal_end]) == 'l'));
 
   if (end_ptr - 1 != &literal_text[literal_end]) {
-    todo("handle constant float parse failure");
+    TODO("handle constant float parse failure");
   }
 
   // TODO: handle unrepresentedly large values
@@ -1120,7 +1120,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     size_t literal_len;
     const char *literal_text =
         strlike_associated_text(parser->lexer, &token, &literal_len);
-    debug_assert(literal_len, "literal_len was 0");
+    DEBUG_ASSERT(literal_len, "literal_len was 0");
     int_value = (unsigned long long)literal_text[0];
     break;
   }
@@ -1130,7 +1130,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     size_t literal_len;
     const char *literal_text =
         strlike_associated_text(parser->lexer, &token, &literal_len);
-    debug_assert(literal_len, "literal_len was 0");
+    DEBUG_ASSERT(literal_len, "literal_len was 0");
 
     wchar_t wchar;
     mbtowc(&wchar, literal_text, literal_len);
@@ -1180,7 +1180,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   const char *literal_text = associated_text(parser->lexer, &token);
   size_t literal_len = strlen(literal_text);
-  debug_assert(literal_len, "literal_len was 0");
+  DEBUG_ASSERT(literal_len, "literal_len was 0");
 
   int base = 10;
   if (literal_len >= 2 && literal_text[0] == '0' && literal_text[1] == 'x') {
@@ -1200,7 +1200,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
                            tolower(literal_text[literal_end]) == 'l'));
 
   if (end_ptr - 1 != &literal_text[literal_end]) {
-    todo("handle constant int parse failure");
+    TODO("handle constant int parse failure");
   }
 
   // TODO: handle unrepresentedly large values
@@ -1226,7 +1226,7 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
          token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
 
     if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
-      todo("wide str literals (must be stored as cnst data)");
+      TODO("wide str literals (must be stored as cnst data)");
     }
 
     is_string = true;
@@ -1728,7 +1728,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
 
     consume_token(parser->lexer, lookahead);
 
-    debug_assert(info.associativity != AST_ASSOCIATIVITY_NONE,
+    DEBUG_ASSERT(info.associativity != AST_ASSOCIATIVITY_NONE,
                  "only operators with associativity should reach here!");
     unsigned next_min_precedence;
     if (info.associativity == AST_ASSOCIATIVITY_LEFT) {
@@ -2592,7 +2592,7 @@ struct parse_result parse(struct parser *parser) {
       break;
     }
 
-    bug("parser hit nothing");
+    BUG("parser hit nothing");
   }
 
   struct ast_translationunit translation_unit;
@@ -2641,7 +2641,7 @@ struct ast_printstate {
 #define UNINDENT()                                                             \
   do {                                                                         \
     state->indent--;                                                           \
-    debug_assert(state->indent >= 0, "indent negative!");                      \
+    DEBUG_ASSERT(state->indent >= 0, "indent negative!");                      \
   } while (0);
 
 #define PUSH_INDENT()                                                          \
@@ -2858,7 +2858,7 @@ DEBUG_FUNC(cnst, cnst) {
     fprint_str(stderr, cnst->str_value);
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    todo("wide strs");
+    TODO("wide strs");
   }
 }
 
@@ -3384,7 +3384,7 @@ DEBUG_FUNC(ternary, ternary) {
 
 DEBUG_FUNC(compound_literal, compound_literal) {
   if (state->parser) {
-    todo("compound literal");
+    TODO("compound literal");
   }
 }
 

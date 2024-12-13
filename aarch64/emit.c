@@ -342,7 +342,7 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
         size_t generated_instrs =
             aarch64_emitted_count(state.emitter) - emitted;
 
-        debug_assert(
+        DEBUG_ASSERT(
             generated_instrs == 1,
             "expected instr %zu to generate exactly 1 instruction but it "
             "generated %zu",

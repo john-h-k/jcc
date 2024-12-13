@@ -34,7 +34,7 @@ struct bitset *bitset_create(size_t num_elements, bool init_value) {
 size_t bitset_length(struct bitset *bitset) { return bitset->num_elements; }
 
 unsigned long long bitset_as_ull(struct bitset *bitset) {
-  debug_assert(bitset->num_chunks <= 1, "too many chunks to get bitset as ull");
+  DEBUG_ASSERT(bitset->num_chunks <= 1, "too many chunks to get bitset as ull");
 
   if (bitset->num_chunks) {
     return bitset->chunks[0];
@@ -84,7 +84,7 @@ unsigned long long bitset_tzcnt(struct bitset *bitset) {
 }
 
 bool bitset_get(struct bitset *bitset, size_t idx) {
-  debug_assert(idx < bitset->num_elements, "bitset idx out of range");
+  DEBUG_ASSERT(idx < bitset->num_elements, "bitset idx out of range");
 
   size_t chunk_idx = idx / (sizeof(chunk_t) * 8);
   size_t mod_idx = idx % (sizeof(chunk_t) * 8);
@@ -102,7 +102,7 @@ unsigned long long bitset_any(struct bitset *bitset, bool value) {
 }
 
 void bitset_set(struct bitset *bitset, size_t idx, bool value) {
-  debug_assert(idx < bitset->num_elements, "bitset idx out of range");
+  DEBUG_ASSERT(idx < bitset->num_elements, "bitset idx out of range");
 
   size_t chunk_idx = idx / (sizeof(chunk_t) * 8);
   size_t mod_idx = idx % (sizeof(chunk_t) * 8);

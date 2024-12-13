@@ -137,7 +137,7 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
   switch (l->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
-    bug("comparing unknown types");
+    BUG("comparing unknown types");
   case TD_VAR_TY_TY_VOID:
     return true;
   case TD_VAR_TY_TY_WELL_KNOWN:
@@ -203,7 +203,7 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
     return !strcmp(l_agg.name, r_agg.name);
   }
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    bug("can't check incomplete");
+    BUG("can't check incomplete");
   }
 }
 
@@ -321,14 +321,14 @@ struct td_var_ty td_var_ty_get_underlying(UNUSED_ARG(struct typechk *tchk),
   case TD_VAR_TY_TY_ARRAY:
     return *ty_ref->array.underlying;
   default:
-    bug("non pointer/array/tagged passed (type %d)", ty_ref->ty);
+    BUG("non pointer/array/tagged passed (type %d)", ty_ref->ty);
   }
 }
 
 UNUSED static struct td_var_ty
 td_var_ty_promote_integer(UNUSED_ARG(struct typechk *tchk),
                           const struct td_var_ty *ty_ref) {
-  debug_assert(ty_ref->ty != TD_VAR_TY_TY_UNKNOWN, "unknown ty in call to `%s`",
+  DEBUG_ASSERT(ty_ref->ty != TD_VAR_TY_TY_UNKNOWN, "unknown ty in call to `%s`",
                __func__);
 
   if (ty_ref->ty != TD_VAR_TY_TY_WELL_KNOWN ||
@@ -384,7 +384,7 @@ static struct td_expr perform_integer_promotion(struct typechk *tchk,
 }
 
 // TODO:
-#define WARN(...) bug(__VA_ARGS__)
+#define WARN(...) BUG(__VA_ARGS__)
 
 static struct td_var_ty
 resolve_usual_arithmetic_conversions(struct typechk *tchk,
@@ -392,7 +392,7 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
                                      const struct td_var_ty *rhs_ty) {
   // it is expected integer promotion has already been performed
 
-  debug_assert(lhs_ty->ty != TD_VAR_TY_TY_UNKNOWN &&
+  DEBUG_ASSERT(lhs_ty->ty != TD_VAR_TY_TY_UNKNOWN &&
                    rhs_ty->ty != TD_VAR_TY_TY_UNKNOWN,
                "unknown ty in call to `%s`", __func__);
 
@@ -415,10 +415,10 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
 
   if (lhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN ||
       rhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
-    todo("`%s` for types other than well known", __func__);
+    TODO("`%s` for types other than well known", __func__);
   }
 
-  debug_assert(lhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT &&
+  DEBUG_ASSERT(lhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT &&
                    rhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT,
                "integer promotion should have occurred");
 
@@ -720,7 +720,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   switch (array_declarator->ty) {
   case AST_ARRAY_DECLARATOR_TY_STAR: {
     if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
-      todo("star array VLAs");
+      TODO("star array VLAs");
     }
 
     struct td_var_ty pointer_ty = {
@@ -1015,7 +1015,7 @@ static struct td_var_declaration type_declarator_inner(
     }
   }
 
-  debug_assert(found_ident, "decl without identifier?");
+  DEBUG_ASSERT(found_ident, "decl without identifier?");
 
   if (inner_idx != -1) {
     struct ast_direct_declarator *direct_declarator =
@@ -1256,10 +1256,10 @@ type_specifiers(struct typechk *tchk,
           wk = WELL_KNOWN_TY_DOUBLE;
           break;
         case AST_TYPE_SPECIFIER_KW_BOOL:
-          todo("bool");
+          TODO("bool");
           // wk = WELL_KNOWN_TY_BOOL;
         case AST_TYPE_SPECIFIER_KW_COMPLEX:
-          todo("complex");
+          TODO("complex");
           // wk = WELL_KNOWN_TY_COMPLEX;
         case AST_TYPE_SPECIFIER_KW_HALF:
           wk = WELL_KNOWN_TY_HALF;
@@ -1645,10 +1645,10 @@ get_completed_aggregate(struct typechk *tchk, const struct td_var_ty *var_ty) {
       WARN("incomplete type in member access");
     }
 
-    debug_assert(entry->var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
+    DEBUG_ASSERT(entry->var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
     return *entry->var_ty;
   } else {
-    debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
+    DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
     return *var_ty;
   }
 }
@@ -1657,7 +1657,7 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
                                          const struct td_var_ty *var_ty,
                                          const char *member_name,
                                          struct td_var_ty *member_var_ty) {
-  debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
+  DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
 
   // FIXME: super slow hashtable needed
   for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
@@ -1975,7 +1975,7 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    todo("wide str");
+    TODO("wide str");
   }
 
 #undef CNST_TY_ENTRY
@@ -2027,7 +2027,7 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
     td_compoundexpr.exprs[i] = type_expr(tchk, flags, &compoundexpr->exprs[i]);
   }
 
-  debug_assert(td_compoundexpr.num_exprs,
+  DEBUG_ASSERT(td_compoundexpr.num_exprs,
                "compound expression must have at least one expression");
   struct td_var_ty var_ty =
       td_compoundexpr.exprs[td_compoundexpr.num_exprs - 1].var_ty;
@@ -2473,7 +2473,7 @@ type_compoundstmt(struct typechk *tchk,
 static struct td_funcdef type_funcdef(struct typechk *tchk,
                                       const struct ast_funcdef *func_def) {
   if (func_def->declaration_list.num_declarations) {
-    bug("old-style function arguments not currently supported");
+    BUG("old-style function arguments not currently supported");
   }
 
   // struct td_var_ty func_ty = func_def->declarator
@@ -2625,7 +2625,7 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
 
 static struct td_expr type_zero_expr(struct typechk *tchk,
                                      const struct td_var_ty *var_ty) {
-  todo("type zero expr");
+  TODO("type zero expr");
 }
 
 static struct td_expr
@@ -2713,7 +2713,7 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
     WARN("empy initializer is a c23 feature");
   }
 
-  debug_assert(
+  DEBUG_ASSERT(
       !td_var_ty_is_scalar_ty(var_ty),
       "scalar init list should have been converted to expression init");
 
@@ -2916,7 +2916,7 @@ struct td_printstate {
 #define UNINDENT()                                                             \
   do {                                                                         \
     state->indent--;                                                           \
-    debug_assert(state->indent >= 0, "indent negative!");                      \
+    DEBUG_ASSERT(state->indent >= 0, "indent negative!");                      \
   } while (0);
 
 #define PUSH_INDENT()                                                          \
@@ -3541,7 +3541,7 @@ DEBUG_FUNC(expr, expr) {
     DEBUG_CALL(alignof, &expr->align_of);
     break;
   case TD_EXPR_TY_COMPOUND_LITERAL:
-    todo("compound literal");
+    TODO("compound literal");
   }
   UNINDENT();
 }
