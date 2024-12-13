@@ -1793,10 +1793,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     }
   } else {
     struct ir_lcl *lcl = op->lcl;
-    size_t offset;
-    if (lcl) {
-      offset = lcl->offset;
-    }
+    size_t offset = lcl->offset;
 
     // aggregate ty
     size_t num_members;
