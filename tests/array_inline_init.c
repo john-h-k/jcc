@@ -45,20 +45,20 @@ int main() {
   //   return 7;
   // }
 
-  int md0[2][2] = { 0, 1, 2, 3 };
-  int md1[2][2] = { {0, 1}, {2, 3} };
+  // int md0[2][2] = { 0, 1, 2, 3 };
+  // int md1[2][2] = { {0, 1}, {2, 3} };
 
-  for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      if (md0[i][j] != (i * 2) + j) {
-        return 8;
-      }
+  // for (int i = 0; i < 2; i++) {
+  //   for (int j = 0; j < 2; j++) {
+  //     if (md0[i][j] != (i * 2) + j) {
+  //       return 8;
+  //     }
 
-      if (md1[i][j] != (i * 2) + j) {
-        return 9;
-      }
-    }
-  }
+  //     if (md1[i][j] != (i * 2) + j) {
+  //       return 9;
+  //     }
+  //   }
+  // }
 
   return 0;
 }

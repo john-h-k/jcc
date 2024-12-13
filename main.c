@@ -254,7 +254,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
 
 // allows both '-Tfoo' and '-T foo' by using the next argument if the current
 // one is empty (after prefix) if it uses the next argument it skips it
-#define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? v : argv[++i])
+#define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? ((v) && (v)[0] == '=' ? (v) + 1 : v) : argv[++i])
 
     const char *log = try_get_arg(arg, "-L");
     GET_ARGUMENT(log);

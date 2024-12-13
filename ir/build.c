@@ -338,7 +338,7 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
                      "other type must be an integer for float conversion");
 
     bool is_signed = td_var_ty_is_fp_ty(from) ? WKT_IS_SIGNED(to->well_known)
-                                    : WKT_IS_SIGNED(from->well_known);
+                                              : WKT_IS_SIGNED(from->well_known);
 
     return is_signed ? IR_OP_CAST_OP_TY_SCONV : IR_OP_CAST_OP_TY_UCONV;
   }
@@ -796,7 +796,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   switch (unary_op->ty) {
   case TD_UNARY_OP_TY_MINUS:
     unary_op_ty = td_var_ty_is_fp_ty(&expr->var_ty) ? IR_OP_UNARY_OP_TY_FNEG
-                                          : IR_OP_UNARY_OP_TY_NEG;
+                                                    : IR_OP_UNARY_OP_TY_NEG;
     break;
   case TD_UNARY_OP_TY_LOGICAL_NOT:
     unary_op_ty = IR_OP_UNARY_OP_TY_LOGICAL_NOT;
@@ -1047,6 +1047,12 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
                                       struct ir_var_ty var_ty,
                                       struct td_var *var) {
+  // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
+  // same with functions
+  if (var_ty.ty == IR_VAR_TY_TY_ARRAY || var_ty.ty == IR_VAR_TY_TY_FUNC) {
+    return build_ir_for_addressof_var(irb, stmt, var);
+  }
+
   if (var->ty == TD_VAR_VAR_TY_ENUMERATOR) {
     struct ir_op *op = alloc_ir_op(irb->func, *stmt);
     op->ty = IR_OP_TY_CNST;
@@ -1059,7 +1065,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
 
   struct var_key key;
   struct var_ref *ref;
-  get_var_ref(irb, (*stmt)->basicblock, var, &key, &ref);  
+  get_var_ref(irb, (*stmt)->basicblock, var, &key, &ref);
 
   switch (var->ty) {
   case TD_VAR_VAR_TY_ENUMERATOR:
@@ -1078,7 +1084,8 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
 
         // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
         // same with functions
-        if (ref->lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY || ref->lcl->var_ty.ty == IR_VAR_TY_TY_FUNC) {
+        if (ref->lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY ||
+            ref->lcl->var_ty.ty == IR_VAR_TY_TY_FUNC) {
           return build_ir_for_addressof_var(irb, stmt, var);
         }
 
@@ -1096,15 +1103,14 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
         return op;
       }
       case VAR_REF_TY_GLB: {
+        if (ref->glb->var_ty.ty == IR_VAR_TY_TY_ARRAY ||
+            ref->glb->var_ty.ty == IR_VAR_TY_TY_FUNC) {
+          return build_ir_for_addressof_var(irb, stmt, var);
+        }
+
         struct ir_op *op = alloc_ir_op(irb->func, *stmt);
         op->ty = IR_OP_TY_LOAD_GLB;
-
-        if (var_ty.ty == IR_VAR_TY_TY_ARRAY) {
-          // pointer decay
-          op->var_ty = IR_VAR_TY_POINTER;
-        } else {
-          op->var_ty = var_ty;
-        }
+        op->var_ty = var_ty;
         op->load_glb = (struct ir_op_load_glb){.glb = ref->glb};
 
         return op;
@@ -1400,9 +1406,20 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
   struct td_var_ty pointer_ty, lhs_ty;
   struct td_var_ty rhs_ty = rhs_expr->var_ty;
 
-  struct ir_op *lhs = build_ir_for_expr(irb, stmt, lhs_expr);
-  pointer_ty = lhs_expr->var_ty;
-  lhs_ty = lhs_expr->var_ty;
+  struct ir_op *lhs;
+  if (lhs_expr->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // need to decay the type to pointer
+    struct td_var_ty *underlying = lhs_expr->var_ty.array.underlying;
+    lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
+    pointer_ty = td_var_ty_make_pointer(irb->tchk, underlying,
+                                        TD_TYPE_QUALIFIER_FLAG_NONE);
+
+    lhs_ty = pointer_ty;
+  } else {
+    lhs = build_ir_for_expr(irb, stmt, lhs_expr);
+    pointer_ty = lhs_expr->var_ty;
+    lhs_ty = lhs_expr->var_ty;
+  }
 
   unsigned long long idx = 0;
   if (is_integral_cnst(irb, rhs_expr, &idx)) {
@@ -3340,8 +3357,10 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
 static struct ir_var_value build_ir_for_var_value_addr(
     struct ir_var_builder *irb, const struct td_expr *addr,
     const struct td_expr *offset, const struct td_var_ty *var_ty) {
-  if (addr->ty == TD_EXPR_TY_UNARY_OP && addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
-    return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset, var_ty);
+  if (addr->ty == TD_EXPR_TY_UNARY_OP &&
+      addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
+    return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset,
+                                       var_ty);
   }
 
   if (addr->ty != TD_EXPR_TY_VAR) {
@@ -3358,7 +3377,8 @@ static struct ir_var_value build_ir_for_var_value_addr(
 
   size_t offset_cnst = 0;
   if (offset) {
-    struct ir_var_value offset_value = build_ir_for_var_value_expr(irb, offset, var_ty);
+    struct ir_var_value offset_value =
+        build_ir_for_var_value_expr(irb, offset, var_ty);
 
     if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
       todo("non-int global values offset");
@@ -3367,10 +3387,10 @@ static struct ir_var_value build_ir_for_var_value_addr(
     offset_cnst = offset_value.int_value;
   }
 
-  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
-                               .var_ty =
-                                   var_ty_for_td_var_ty(irb->unit, var_ty),
-                               .addr = {.glb = ref->glb, .offset = offset_cnst}};
+  return (struct ir_var_value){
+      .ty = IR_VAR_VALUE_TY_ADDR,
+      .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+      .addr = {.glb = ref->glb, .offset = offset_cnst}};
 }
 
 static struct ir_var_value
@@ -3414,7 +3434,8 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
         value.var_ty = var_ty_for_td_var_ty(irb->unit, var_ty);
         return value;
       } else if (to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-        debug_assert(td_var_ty_is_integral_ty(to), "non integral cast from ptr-like");
+        debug_assert(td_var_ty_is_integral_ty(to),
+                     "non integral cast from ptr-like");
 
         todo("pointer -> int converts in statics");
       }
@@ -3459,6 +3480,12 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
             .ty = IR_VAR_VALUE_TY_FLT,
             .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
             .flt_value = flt_value};
+      } else if (WKT_IS_INTEGRAL(fwk) && WKT_IS_INTEGRAL(twk) &&
+                 value.ty == IR_VAR_VALUE_TY_INT) {
+        return (struct ir_var_value){
+            .ty = IR_VAR_VALUE_TY_INT,
+            .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+            .int_value = value.int_value};
       }
     }
 
@@ -3473,7 +3500,8 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
 }
 
 static struct ir_var_value
-build_ir_for_var_value_expr(struct ir_var_builder *irb, const struct td_expr *expr,
+build_ir_for_var_value_expr(struct ir_var_builder *irb,
+                            const struct td_expr *expr,
                             const struct td_var_ty *var_ty) {
   // it feels more elegant to do the resolving of constant expressions in
   // typechk but this requires being able to evaluate `sizeof`, which it cannot

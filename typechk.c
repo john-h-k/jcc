@@ -1253,9 +1253,9 @@ static void tchk_pop_scope(struct typechk *tchk) {
 }
 
 enum type_expr_flags {
-  TYPE_EXPR_FLAGS_NONE,
+  TYPE_EXPR_FLAGS_NONE = 0,
   // negative flag because in most places arrays *do* decay
-  TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
+  TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY = 1,
 };
 
 static struct td_expr type_expr(struct typechk *tchk,
@@ -1353,8 +1353,10 @@ static struct td_expr type_call(struct typechk *tchk,
       param_ty = get_target_for_variadic(&td_call.arg_list.args[i].var_ty);
     }
 
-    td_call.arg_list.args[i] =
-        add_cast_if_needed(tchk, td_call.arg_list.args[i], param_ty);
+    if (param_ty.ty != TD_VAR_TY_TY_ARRAY) {
+      td_call.arg_list.args[i] =
+          add_cast_if_needed(tchk, td_call.arg_list.args[i], param_ty);
+    }
   }
 
   struct td_var_ty var_ty = *target_var_ty.func.ret;
@@ -1928,6 +1930,7 @@ static struct td_expr type_alignof(struct typechk *tchk,
 
 static struct td_expr
 type_compoundexpr(struct typechk *tchk,
+                  enum type_expr_flags flags,
                   const struct ast_compoundexpr *compoundexpr) {
   struct td_compoundexpr td_compoundexpr = {
       .num_exprs = compoundexpr->num_exprs,
@@ -1936,7 +1939,7 @@ type_compoundexpr(struct typechk *tchk,
 
   for (size_t i = 0; i < compoundexpr->num_exprs; i++) {
     td_compoundexpr.exprs[i] =
-        type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &compoundexpr->exprs[i]);
+        type_expr(tchk, flags, &compoundexpr->exprs[i]);
   }
 
   debug_assert(td_compoundexpr.num_exprs,
@@ -1989,7 +1992,7 @@ static struct td_expr type_expr(struct typechk *tchk,
     td_expr = type_cnst(tchk, &expr->cnst);
     break;
   case AST_EXPR_TY_COMPOUNDEXPR:
-    td_expr = type_compoundexpr(tchk, &expr->compound_expr);
+    td_expr = type_compoundexpr(tchk, flags, &expr->compound_expr);
     break;
   case AST_EXPR_TY_SIZEOF:
     td_expr = type_sizeof(tchk, &expr->size_of);
