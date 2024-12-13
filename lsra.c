@@ -79,7 +79,7 @@ static void expire_old_intervals(struct register_alloc_state *state,
   for (size_t i = 0; i < state->num_active; i++) {
     struct interval *interval =
         &state->interval_data.intervals[state->active[i]];
-    if (interval->end >= cur_interval->start) {
+    if (interval->end > cur_interval->start) {
       break;
     }
 

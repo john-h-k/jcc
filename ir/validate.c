@@ -45,35 +45,35 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
     break;
   case IR_OP_TY_LOAD:
-    invariant_assert(!op->lcl, "loads should not have locals");
+    invariant_assert(!op->lcl, "op %zu: loads should not have locals", op->id);
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
-      invariant_assert(op->load.lcl, "load ty lcl must have lcl");
+      invariant_assert(op->load.lcl, "op %zu: load ty lcl must have lcl", op->id);
       break;
     case IR_OP_LOAD_TY_GLB:
-      invariant_assert(op->load.glb, "load ty glb must have glb");
+      invariant_assert(op->load.glb, "op %zu: load ty glb must have glb", op->id);
       break;
     case IR_OP_LOAD_TY_ADDR:
-      invariant_assert(op->load.addr, "load ty addr must have addr");
+      invariant_assert(op->load.addr, "op %zu: load ty addr must have addr", op->id);
       break;
     }
     break;
   case IR_OP_TY_STORE:
     invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_NONE,
-                     "store ops should not have a var ty");
+                     "op %zu: store ops should not have a var ty", op->id);
 
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
-      invariant_assert(op->store.lcl, "store ty lcl must have lcl");
+      invariant_assert(op->store.lcl, "op %zu: store ty lcl must have lcl", op->id);
       break;
     case IR_OP_STORE_TY_GLB:
-      invariant_assert(op->store.glb, "store ty glb must have glb");
+      invariant_assert(op->store.glb, "op %zu: store ty glb must have glb", op->id);
       break;
     case IR_OP_STORE_TY_ADDR:
-      invariant_assert(op->store.addr, "store ty addr must have addr");
+      invariant_assert(op->store.addr, "op %zu: store ty addr must have addr", op->id);
       break;
     }
-    invariant_assert(!op->lcl, "stores should not have locals");
+    invariant_assert(!op->lcl, "op %zu: stores should not have locals", op->id);
     break;
   case IR_OP_TY_STORE_BITFIELD:
     break;

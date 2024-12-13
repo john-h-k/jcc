@@ -440,13 +440,15 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
-            case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
             case IR_OP_TY_CAST_OP:
+              break;
+            case IR_OP_TY_BITFIELD_INSERT:
+              op->bitfield_insert.value->flags |= IR_OP_FLAG_READS_DEST;
               break;
             case IR_OP_TY_CALL:
               if (op->call.target->ty == IR_OP_TY_ADDR &&

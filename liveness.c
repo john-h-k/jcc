@@ -12,7 +12,8 @@ static void op_used_callback(struct ir_op **op, void *cb_metadata) {
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
-  interval->end = MAX(interval->end, cb->op->id);
+  size_t op_end = ((*op)->flags & IR_OP_FLAG_READS_DEST) ? cb->op->id + 1 : cb->op->id;
+  interval->end = MAX(interval->end, op_end);
 }
 
 /* Builds the intervals for each value in the SSA representation

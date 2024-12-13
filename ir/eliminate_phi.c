@@ -141,11 +141,13 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
     if (move.to.idx == tmp_index) {
       struct ir_op *store =
-          insert_before_ir_op(irb, last, IR_OP_TY_STORE, value->var_ty);
+          insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
         .ty = IR_OP_STORE_TY_LCL,
         .lcl = spill_lcl,
         .value = value};
+      store->flags |= IR_OP_FLAG_PHI_MOV;
+
 
       store_var_ty = value->var_ty;
     } else if (move.from.idx == tmp_index) {
