@@ -1694,9 +1694,28 @@ type_memberaccess(struct typechk *tchk,
     WARN("unknown member");
   }
 
-  return (struct td_expr){.ty = TD_EXPR_TY_MEMBERACCESS,
+  struct td_expr expr = {.ty = TD_EXPR_TY_MEMBERACCESS,
                           .var_ty = var_ty,
                           .member_access = td_memberaccess};
+
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // array member access
+    // decay this to addressof
+    struct td_unary_op addr = {
+      .ty = TD_UNARY_OP_TY_ADDRESSOF,
+      .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))
+    };
+
+    *addr.expr = expr;
+
+    return (struct td_expr){
+      .ty = TD_EXPR_TY_UNARY_OP,
+      .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying, var_ty.type_qualifiers),
+      .unary_op = addr
+    };
+  }
+
+  return expr;
 }
 
 static struct td_expr
@@ -1734,9 +1753,28 @@ type_pointeraccess(struct typechk *tchk,
     WARN("unknown member");
   }
 
-  return (struct td_expr){.ty = TD_EXPR_TY_POINTERACCESS,
+  struct td_expr expr = {.ty = TD_EXPR_TY_POINTERACCESS,
                           .var_ty = var_ty,
                           .pointer_access = td_pointeraccess};
+
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // array member access
+    // decay this to addressof
+    struct td_unary_op addr = {
+      .ty = TD_UNARY_OP_TY_ADDRESSOF,
+      .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))
+    };
+
+    *addr.expr = expr;
+
+    return (struct td_expr){
+      .ty = TD_EXPR_TY_UNARY_OP,
+      .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying, var_ty.type_qualifiers),
+      .unary_op = addr
+    };
+  }
+
+  return expr;
 }
 
 static struct td_expr type_assg(struct typechk *tchk,
