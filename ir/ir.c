@@ -1089,9 +1089,6 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
     stmt->last->succ = op;
   }
 
-  if (op->id >= 1000)
-    breakpoint();
-
   stmt->last = op;
 
   return op;

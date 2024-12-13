@@ -248,9 +248,23 @@ static inline void debug_print_stack_trace(void) {
     EXIT_FAIL(-2); \
   } while (0);
 
-PRINTF_ARGS(0) NORETURN static inline void BUG(const char *msg, ...) {
-  FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
-  EXIT_FAIL(-2);
+#define BUG(...) \
+  do { \
+    MACRO_FMTPRINT(stderr, "`bug` hit, program exiting: ", __VA_ARGS__); \
+    EXIT_FAIL(-2); \
+  } while (0);
+
+#if NDEBUG
+#define DEBUG_ASSERT(...)
+#else
+#define DEBUG_ASSERT(b, ...) util_debug_assert(b, __VA_ARGS__)
+#endif
+
+TRYFORCEINLINE PRINTF_ARGS(1) static void util_debug_assert(bool b, const char *msg, ...) {
+  if (!b) {
+    FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
+    EXIT_FAIL(-1);
+  }
 }
 
 NORETURN static inline void unreachable(void) {
@@ -273,20 +287,9 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 }
 
 #if HAS_BUILTIN(__builtin_debugtrap)
-TRYFORCEINLINE static void breakpoint(void) { __builtin_debugtrap(); }
+#define BREAKPOINT() __builtin_debugtrap()
 #else
-TRYFORCEINLINE static void breakpoint(void) { raise(SIGINT); }
-#endif
-
-#if NDEBUG
-PRINTF_ARGS(1) static inline void DEBUG_ASSERT(bool, const char *, ...) {}
-#else
-PRINTF_ARGS(1) static inline void DEBUG_ASSERT(bool b, const char *msg, ...) {
-  if (!b) {
-    FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
-    EXIT_FAIL(-1);
-  }
-}
+#define raise(SIGINT)
 #endif
 
 static inline unsigned long long rotateright64(unsigned long long value,
