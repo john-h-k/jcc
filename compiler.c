@@ -282,6 +282,25 @@ enum compile_result compile(struct compiler *compiler) {
       target->debug_print_codegen(stderr, codegen);
     }
 
+    if (compiler->args.build_asm_file) {
+      if (target->debug_print_codegen) {
+      FILE *file = fopen(compiler->output, "w");
+
+      if (!file) {
+        return COMPILE_RESULT_BAD_FILE;
+      }
+
+      target->debug_print_codegen(file, codegen);
+
+      fclose(file);
+
+      return COMPILE_RESULT_SUCCESS;
+      } else {
+        err("assembly not supported for this architecture");
+        return COMPILE_RESULT_FAILURE;
+      }
+    }
+
     unit = target->emit_function(codegen);
   }
 
@@ -300,7 +319,7 @@ enum compile_result compile(struct compiler *compiler) {
         warn("DISASM not supported for current target");
       } else {
         BEGIN_STAGE("DISASSEMBLY");
-        target->debug_disasm(args.output);
+        target->debug_disasm(args.output, NULL);
       }
     }
   }

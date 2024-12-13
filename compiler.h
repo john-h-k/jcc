@@ -42,6 +42,7 @@ struct compile_args {
   enum compile_log_flags log_flags;
 
   bool preproc_only;
+  bool build_asm_file;
   bool build_object_file;
 
   size_t num_include_paths;
