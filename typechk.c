@@ -703,14 +703,36 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   };
 
   switch (array_declarator->ty) {
-  case AST_ARRAY_DECLARATOR_TY_STAR:
-    todo("star arrays");
+  case AST_ARRAY_DECLARATOR_TY_STAR: {
+    if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+      todo("star array VLAs");
+    }
+
+    struct td_var_ty pointer_ty = {
+        .ty = TD_VAR_TY_TY_POINTER,
+        .pointer = {.underlying = arena_alloc(
+                        tchk->arena, sizeof(*array_ty.array.underlying))}};
+    *pointer_ty.pointer.underlying = var_ty;
+
+    return pointer_ty;
+  }
   case AST_ARRAY_DECLARATOR_TY_STATIC_SIZED:
   case AST_ARRAY_DECLARATOR_TY_SIZED:
     array_ty.array.size =
         type_constant_integral_expr(tchk, array_declarator->size);
     break;
   case AST_ARRAY_DECLARATOR_TY_UNSIZED:
+    if (!init) {
+      // FIXME: must be a param, else we need to erro
+      struct td_var_ty pointer_ty = {
+          .ty = TD_VAR_TY_TY_POINTER,
+          .pointer = {.underlying = arena_alloc(
+                          tchk->arena, sizeof(*array_ty.array.underlying))}};
+      *pointer_ty.pointer.underlying = var_ty;
+
+      return pointer_ty;
+    }
+
     switch (init->ty) {
     case AST_INIT_TY_EXPR: {
       // TODO: maybe this should be a helper func
@@ -760,6 +782,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     }
     break;
   }
+
   array_ty.array.underlying =
       arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
   *array_ty.array.underlying = var_ty;
@@ -1695,24 +1718,23 @@ type_memberaccess(struct typechk *tchk,
   }
 
   struct td_expr expr = {.ty = TD_EXPR_TY_MEMBERACCESS,
-                          .var_ty = var_ty,
-                          .member_access = td_memberaccess};
+                         .var_ty = var_ty,
+                         .member_access = td_memberaccess};
 
   if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
-      .ty = TD_UNARY_OP_TY_ADDRESSOF,
-      .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))
-    };
+        .ty = TD_UNARY_OP_TY_ADDRESSOF,
+        .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
     return (struct td_expr){
-      .ty = TD_EXPR_TY_UNARY_OP,
-      .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying, var_ty.type_qualifiers),
-      .unary_op = addr
-    };
+        .ty = TD_EXPR_TY_UNARY_OP,
+        .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying,
+                                         var_ty.type_qualifiers),
+        .unary_op = addr};
   }
 
   return expr;
@@ -1754,24 +1776,23 @@ type_pointeraccess(struct typechk *tchk,
   }
 
   struct td_expr expr = {.ty = TD_EXPR_TY_POINTERACCESS,
-                          .var_ty = var_ty,
-                          .pointer_access = td_pointeraccess};
+                         .var_ty = var_ty,
+                         .pointer_access = td_pointeraccess};
 
   if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
-      .ty = TD_UNARY_OP_TY_ADDRESSOF,
-      .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))
-    };
+        .ty = TD_UNARY_OP_TY_ADDRESSOF,
+        .expr = arena_alloc(tchk->arena, sizeof(*addr.expr))};
 
     *addr.expr = expr;
 
     return (struct td_expr){
-      .ty = TD_EXPR_TY_UNARY_OP,
-      .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying, var_ty.type_qualifiers),
-      .unary_op = addr
-    };
+        .ty = TD_EXPR_TY_UNARY_OP,
+        .var_ty = td_var_ty_make_pointer(tchk, var_ty.array.underlying,
+                                         var_ty.type_qualifiers),
+        .unary_op = addr};
   }
 
   return expr;
@@ -1967,8 +1988,7 @@ static struct td_expr type_alignof(struct typechk *tchk,
 }
 
 static struct td_expr
-type_compoundexpr(struct typechk *tchk,
-                  enum type_expr_flags flags,
+type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
                   const struct ast_compoundexpr *compoundexpr) {
   struct td_compoundexpr td_compoundexpr = {
       .num_exprs = compoundexpr->num_exprs,
@@ -1976,8 +1996,7 @@ type_compoundexpr(struct typechk *tchk,
                                             compoundexpr->num_exprs)};
 
   for (size_t i = 0; i < compoundexpr->num_exprs; i++) {
-    td_compoundexpr.exprs[i] =
-        type_expr(tchk, flags, &compoundexpr->exprs[i]);
+    td_compoundexpr.exprs[i] = type_expr(tchk, flags, &compoundexpr->exprs[i]);
   }
 
   debug_assert(td_compoundexpr.num_exprs,
@@ -2566,11 +2585,10 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
   return td_init_list_init;
 }
 
-static struct td_expr
-type_zero_expr(struct typechk *tchk, const struct td_var_ty *var_ty) {
+static struct td_expr type_zero_expr(struct typechk *tchk,
+                                     const struct td_var_ty *var_ty) {
   todo("type zero expr");
 }
-
 
 static struct td_expr
 type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
@@ -2588,7 +2606,8 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
     const struct ast_init *init = init_list_init->init;
     switch (init->ty) {
     case AST_INIT_TY_EXPR:
-      return add_cast_if_needed(tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
+      return add_cast_if_needed(
+          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
     case AST_INIT_TY_INIT_LIST:
       return type_init_list_for_scalar(tchk, var_ty, &init->init_list);
     }

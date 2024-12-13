@@ -176,18 +176,18 @@ static const char *process_raw_string(UNUSED const struct lexer *lexer,
     break;                                                                     \
   }
 
-      if (text[i] == '0') {
-        size_t octal_start = i + 1;
+      if (text[i] >= '0' && text[i] <= '7') {
+        size_t octal_start = i;
 
-        while (i + 1 < token->span.end.idx) {
-          if (text[i + 1] >= '0' && text[i + 1] <= '7') {
+        while (i < token->span.end.idx) {
+          if (text[i] >= '0' && text[i] <= '7') {
             i++;
           } else {
             break;
           }
         }
 
-        size_t octal_len = MIN(2, i - octal_start + 1);
+        size_t octal_len = MIN(3, i - octal_start + 1);
         char oct_buff[3] = {0};
         for (size_t j = 0; j < octal_len; j++) {
           oct_buff[j] = text[octal_start + j];
