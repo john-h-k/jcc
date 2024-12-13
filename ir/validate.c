@@ -23,7 +23,7 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
   }
 }
 
-static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
+static void ir_validate_op(UNUSED struct ir_func *func, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.consumer = op};
   walk_op_uses(op, validate_op_order, &metadata);
 
@@ -48,13 +48,16 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
     invariant_assert(!op->lcl, "op %zu: loads should not have locals", op->id);
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
-      invariant_assert(op->load.lcl, "op %zu: load ty lcl must have lcl", op->id);
+      invariant_assert(op->load.lcl, "op %zu: load ty lcl must have lcl",
+                       op->id);
       break;
     case IR_OP_LOAD_TY_GLB:
-      invariant_assert(op->load.glb, "op %zu: load ty glb must have glb", op->id);
+      invariant_assert(op->load.glb, "op %zu: load ty glb must have glb",
+                       op->id);
       break;
     case IR_OP_LOAD_TY_ADDR:
-      invariant_assert(op->load.addr, "op %zu: load ty addr must have addr", op->id);
+      invariant_assert(op->load.addr, "op %zu: load ty addr must have addr",
+                       op->id);
       break;
     }
     break;
@@ -64,13 +67,16 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
 
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
-      invariant_assert(op->store.lcl, "op %zu: store ty lcl must have lcl", op->id);
+      invariant_assert(op->store.lcl, "op %zu: store ty lcl must have lcl",
+                       op->id);
       break;
     case IR_OP_STORE_TY_GLB:
-      invariant_assert(op->store.glb, "op %zu: store ty glb must have glb", op->id);
+      invariant_assert(op->store.glb, "op %zu: store ty glb must have glb",
+                       op->id);
       break;
     case IR_OP_STORE_TY_ADDR:
-      invariant_assert(op->store.addr, "op %zu: store ty addr must have addr", op->id);
+      invariant_assert(op->store.addr, "op %zu: store ty addr must have addr",
+                       op->id);
       break;
     }
     invariant_assert(!op->lcl, "op %zu: stores should not have locals", op->id);
@@ -96,6 +102,12 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_BITFIELD_EXTRACT:
     break;
   case IR_OP_TY_BITFIELD_INSERT:
+    break;
+  case IR_OP_TY_MEM_SET:
+    break;
+  case IR_OP_TY_ADDR_OFFSET:
+      invariant_assert(popcntl(op->addr_offset.scale) == 1, "op %zu: scale must be power of 2",
+                       op->id);
     break;
   }
 }

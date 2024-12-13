@@ -125,6 +125,8 @@ void rv32i_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_CALL:
               TODO("call");
+            default:
+              break;
             }
 
             op = op->succ;

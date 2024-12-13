@@ -73,12 +73,14 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_BITFIELD_EXTRACT:
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_ADDR_OFFSET:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
     return false;
   case IR_OP_TY_MOV:
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE:
+  case IR_OP_TY_MEM_SET:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -106,6 +108,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_BITFIELD_EXTRACT:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_ADDR_OFFSET:
     return true;
   case IR_OP_TY_CALL:
     return op->call.func_ty.func.ret_ty->ty != IR_VAR_TY_TY_NONE;
@@ -115,6 +118,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BR_SWITCH:
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
+  case IR_OP_TY_MEM_SET:
     return false;
   case IR_OP_TY_CUSTOM:
     BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
@@ -141,11 +145,13 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_STORE:
   case IR_OP_TY_LOAD:
+  case IR_OP_TY_MEM_SET:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_BITFIELD_EXTRACT:
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_ADDR_OFFSET:
     return false;
   case IR_OP_TY_CUSTOM:
     BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
@@ -345,6 +351,10 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_ADDR:
     break;
+  case IR_OP_TY_ADDR_OFFSET:
+    cb(&op->addr_offset.base, cb_metadata);
+    cb(&op->addr_offset.offset, cb_metadata);
+    break;
   case IR_OP_TY_BR:
     break;
   case IR_OP_TY_BR_SWITCH:
@@ -369,6 +379,9 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_BITFIELD_INSERT:
     cb(&op->bitfield_insert.target, cb_metadata);
     cb(&op->bitfield_insert.value, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_SET:
+    cb(&op->mem_set.addr, cb_metadata);
     break;
   }
 }
@@ -1424,6 +1437,34 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
 
     iru->well_known_glbs.memmove = memmove;
     return memmove;
+  }
+  case IR_WELL_KNOWN_GLB_MEMSET: {
+    if (iru->well_known_glbs.memset) {
+      return iru->well_known_glbs.memset;
+    }
+
+    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    *ptr = IR_VAR_TY_POINTER;
+
+    size_t num_params = 3;
+    struct ir_var_ty *params =
+        arena_alloc(iru->arena, sizeof(*params) * num_params);
+
+    params[0] = IR_VAR_TY_POINTER;
+    params[1] = IR_VAR_TY_I32;
+    params[2] = var_ty_for_pointer_size(iru);
+
+    struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
+                               .func = {.ret_ty = ptr,
+                                        .num_params = num_params,
+                                        .params = params,
+                                        .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
+
+    struct ir_glb *memset = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+                                        IR_GLB_DEF_TY_UNDEFINED, "memset");
+
+    iru->well_known_glbs.memset = memset;
+    return memset;
   }
   }
 }

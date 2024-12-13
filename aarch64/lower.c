@@ -111,9 +111,6 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
-// actually more than this but we don't support that yet
-#define MAX_REG_SIZE (8)
-
 static void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *source = op->store.value;
 
@@ -132,21 +129,24 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *source_addr = build_addr(func, source);
   struct ir_op *dest_addr = build_addr(func, op);
 
-  struct ir_op *size = insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+  struct ir_op *size =
+      insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
   mk_pointer_constant(func->unit, size, info.size);
 
   struct ir_glb *memmove =
       add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
 
   struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
-  struct ir_op *memmove_addr = insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
+  struct ir_op *memmove_addr =
+      insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
   memmove_addr->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_GLB,
-    .glb = memmove,
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = memmove,
   };
 
   size_t num_args = 3;
-  struct ir_op **args = arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+  struct ir_op **args =
+      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = dest_addr;
   args[1] = source_addr;
@@ -155,10 +155,10 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
   op->ty = IR_OP_TY_CALL;
   op->var_ty = *memmove->var_ty.func.ret_ty;
   op->call = (struct ir_op_call){
-    .target = memmove_addr,
-    .num_args = num_args,
-    .args = args,
-    .func_ty = memmove->var_ty,
+      .target = memmove_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = memmove->var_ty,
   };
 }
 
@@ -288,6 +288,50 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
+static void try_contain_load(struct ir_func *func, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_LOAD_TY_LCL:
+  case IR_OP_LOAD_TY_GLB:
+    return;
+  case IR_OP_LOAD_TY_ADDR:
+    break;
+  }
+
+  struct ir_op *addr = op->load.addr;
+
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    struct ir_lcl *lcl = addr->addr.lcl;
+
+    op->load = (struct ir_op_load){
+      .ty = IR_OP_LOAD_TY_LCL,
+      .lcl = lcl
+    };
+  }
+}
+
+static void try_contain_store(struct ir_func *func, struct ir_op *op) {
+  switch (op->store.ty) {
+  case IR_OP_STORE_TY_LCL:
+  case IR_OP_STORE_TY_GLB:
+    return;
+  case IR_OP_STORE_TY_ADDR:
+    break;
+  }
+
+  struct ir_op *addr = op->store.addr;
+
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    struct ir_lcl *lcl = addr->addr.lcl;
+    struct ir_op *value = op->store.value;
+
+    op->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_LCL,
+      .value = value,
+      .lcl = lcl
+    };
+  }
+}
+
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
@@ -368,7 +412,8 @@ static void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   if (var_ty_is_aggregate(&op->var_ty)) {
-    if (op->succ && op->succ->ty == IR_OP_TY_STORE && op->succ->store.ty == IR_OP_STORE_TY_LCL &&
+    if (op->succ && op->succ->ty == IR_OP_TY_STORE &&
+        op->succ->store.ty == IR_OP_STORE_TY_LCL &&
         op->succ->store.value == op) {
       op->lcl = op->succ->store.lcl;
       detach_ir_op(func, op->succ);
@@ -433,10 +478,15 @@ void aarch64_lower(struct ir_unit *unit) {
 
               break;
             }
+            case IR_OP_TY_LOAD: {
+              try_contain_load(func, op);
+
+              break;
+            }
+
             case IR_OP_TY_STORE:
               lower_store(func, op);
               break;
-            case IR_OP_TY_LOAD:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
@@ -479,6 +529,8 @@ void aarch64_lower(struct ir_unit *unit) {
                 break;
               }
               break;
+            default:
+              break;
             }
 
             op = op->succ;
@@ -508,12 +560,17 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_PHI:
             case IR_OP_TY_CNST:
             case IR_OP_TY_STORE:
+              try_contain_store(func, op);
+              break;
             case IR_OP_TY_LOAD:
+              try_contain_load(func, op);
+              break;
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
+            case IR_OP_TY_ADDR_OFFSET:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_BR_SWITCH:
@@ -521,6 +578,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_RET:
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
+            case IR_OP_TY_MEM_SET:
             case IR_OP_TY_UNARY_OP:
               break;
             case IR_OP_TY_BINARY_OP:
