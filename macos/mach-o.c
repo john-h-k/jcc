@@ -74,6 +74,10 @@ build_reloc_info(const struct build_object_args *args, const size_t *entry_offse
     const struct object_entry *entry = &args->entries[i];
     size_t entry_offset = entry_offsets[i];
 
+    if (!entry->num_relocations) {
+      continue;
+    }
+
     size_t *num_relocs;
     struct vector *relocs;
 
