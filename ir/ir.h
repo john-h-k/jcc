@@ -3,7 +3,7 @@
 
 #include "../target.h"
 
-#include <limits.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -454,6 +454,9 @@ struct ir_stmt {
 bool valid_basicblock(struct ir_basicblock *basicblock);
 
 enum ir_basicblock_ty {
+  // a return has no explicit successors
+  IR_BASICBLOCK_TY_RET,
+
   // a split basicblock has 2 successors and occurs when there is a conditional
   // branch
   IR_BASICBLOCK_TY_SPLIT,
@@ -465,9 +468,6 @@ enum ir_basicblock_ty {
 
   // a list of possible values to jump to, and then false branch
   IR_BASICBLOCK_TY_SWITCH,
-
-  // a return has no explicit successors
-  IR_BASICBLOCK_TY_RET,
 };
 
 struct ir_basicblock_merge {

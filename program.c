@@ -2,8 +2,6 @@
 
 #include "util.h"
 
-#include <limits.h>
-
 #define POS_CHECK(p)                                                           \
   debug_assert((p).col != TEXT_POS_INVALID_COL, "invalid text pos")
 

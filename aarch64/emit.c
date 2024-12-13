@@ -6,7 +6,6 @@
 #include "emitter.h"
 #include "isa.h"
 
-#include <mach/message.h>
 #include <stdio.h>
 
 #define WORD_SIZE (8)

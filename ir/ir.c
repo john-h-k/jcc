@@ -496,7 +496,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->comment = NULL;
 }
 
-#define DETACHED_BASICBLOCK (SIZE_T_MAX)
+#define DETACHED_BASICBLOCK (SIZE_MAX)
 
 void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock) {

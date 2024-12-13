@@ -2,7 +2,7 @@
 
 build() {
     cd build
-    if ! (cmake -DCMAKE_BUILD_TYPE=debug -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined" .. && cmake --build .)
+    if ! (cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .)
     then
         echo "Build failed"
         exit

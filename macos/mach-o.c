@@ -5,12 +5,14 @@
 #include "../util.h"
 #include "../vector.h"
 
-#include <mach-o/arm64/reloc.h>
+#if __has_include(<mach/machine.h>)
+#include <mach/machine.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
 #include <mach-o/reloc.h>
 #include <mach-o/x86_64/reloc.h>
-#include <mach/machine.h>
+#include <mach-o/arm64/reloc.h>
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -582,3 +584,11 @@ void write_macho(const struct build_object_args *args) {
 
   fclose(file);
 }
+
+#else
+
+void write_macho(const struct build_object_args *args) {
+  unsupported("mach-o not supported target for this system");
+}
+
+#endif

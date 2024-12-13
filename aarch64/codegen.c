@@ -8,7 +8,6 @@
 #include "isa.h"
 
 #include <stdio.h>
-#include <sys/stat.h>
 
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \

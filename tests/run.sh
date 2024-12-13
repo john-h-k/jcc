@@ -17,7 +17,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
 
   first_line=$(head -n 1 "$file")
   if [[ "$first_line" == "// no-compile" ]]; then
-    if ./build/jcc -stdc=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
+    if ./build/jcc -std=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
       echo "TEST FAILED: expected compilation to fail, but it succeeded"
       break
     else
@@ -32,7 +32,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       expected="0"
     fi
 
-    if ! ./build/jcc -stdc=c23 -tm "$tm" $file >/dev/null 2>&1; then
+    if ! ./build/jcc -std=c23 -tm "$tm" $file >/dev/null 2>&1; then
       echo "compilation failed!"
       exit -1
     fi
