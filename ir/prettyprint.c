@@ -267,7 +267,8 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {
-  debug_assert(ir->stmt, "op used by other op but had no stmt (likely detached)");
+  debug_assert(ir->stmt,
+               "op used by other op but had no stmt (likely detached)");
 
   if (ir->flags & IR_OP_FLAG_CONTAINED) {
     debug_print_op(file, irb, ir, PRINT_OP_CTX_USE);
@@ -345,25 +346,69 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     fprintf(file, "%s ", cast_op_string(ir->cast_op.ty));
     debug_print_op_use(file, irb, ir->cast_op.value);
     break;
-  case IR_OP_TY_STORE_ADDR:
-    fprintf(file, "storeaddr [");
-    debug_print_op_use(file, irb, ir->store_addr.addr);
-    fprintf(file, "], ");
-    debug_print_op_use(file, irb, ir->store_addr.value);
+  case IR_OP_TY_STORE:
+    switch (ir->store.ty) {
+    case IR_OP_STORE_TY_LCL:
+      if (ir->lcl) {
+        fprintf(file, "store.lcl LCL(%zu), %%%zu", ir->store.lcl->id,
+                ir->store.value->id);
+      } else {
+        fprintf(file, "store.lcl LCL(UNASSIGNED), %%%zu", ir->store.value->id);
+      }
+      break;
+    case IR_OP_STORE_TY_GLB:
+      if (ir->load.glb) {
+        fprintf(file, "store.glb GLB(%zu), %%%zu", ir->store.glb->id,
+                ir->store.value->id);
+      } else {
+        fprintf(file, "store.glb GLB(UNASSIGNED), %%%zu", ir->store.value->id);
+      }
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      fprintf(file, "store.addr [");
+      debug_print_op_use(file, irb, ir->store.addr);
+      fprintf(file, "], ");
+      debug_print_op_use(file, irb, ir->store.value);
+      break;
+    }
+
     break;
-  case IR_OP_TY_LOAD_ADDR:
-    fprintf(file, "loadaddr [");
-    debug_print_op_use(file, irb, ir->load_addr.addr);
-    fprintf(file, "]");
+  case IR_OP_TY_LOAD:
+    switch (ir->load.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      if (ir->lcl) {
+        fprintf(file, "load.lcl LCL(%zu)", ir->load.lcl->id);
+      } else {
+        fprintf(file, "load.lcl LCL(UNASSIGNED)");
+      }
+      break;
+    case IR_OP_LOAD_TY_GLB:
+      if (ir->load.glb) {
+        fprintf(file, "load.glb GLB(%zu)", ir->load.glb->id);
+      } else {
+        fprintf(file, "load.glb GLB(UNASSIGNED)");
+      }
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      fprintf(file, "load.addr [");
+      debug_print_op_use(file, irb, ir->load.addr);
+      fprintf(file, "]");
+      break;
+    }
+
     break;
   case IR_OP_TY_STORE_BITFIELD:
-    fprintf(file, "store.bitfield (#%zu, #%zu) [", ir->store_bitfield.bitfield.offset, ir->store_bitfield.bitfield.width);
+    fprintf(file, "store.bitfield (#%zu, #%zu) [",
+            ir->store_bitfield.bitfield.offset,
+            ir->store_bitfield.bitfield.width);
     debug_print_op_use(file, irb, ir->store_bitfield.addr);
     fprintf(file, "], ");
     debug_print_op_use(file, irb, ir->store_bitfield.value);
     break;
   case IR_OP_TY_LOAD_BITFIELD:
-    fprintf(file, "load.bitfield (#%zu, #%zu) [", ir->load_bitfield.bitfield.offset, ir->load_bitfield.bitfield.width);
+    fprintf(file, "load.bitfield (#%zu, #%zu) [",
+            ir->load_bitfield.bitfield.offset,
+            ir->load_bitfield.bitfield.width);
     debug_print_op_use(file, irb, ir->load_bitfield.addr);
     fprintf(file, "]");
     break;
@@ -390,37 +435,6 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
       break;
     }
     break;
-  case IR_OP_TY_STORE_LCL:
-    if (ir->lcl) {
-      fprintf(file, "storelcl LCL(%zu), %%%zu", ir->lcl->id,
-              ir->store_lcl.value->id);
-    } else {
-      fprintf(file, "storelcl LCL(UNASSIGNED), %%%zu", ir->store_lcl.value->id);
-    }
-    break;
-  case IR_OP_TY_LOAD_LCL:
-    if (ir->load_lcl.lcl) {
-      fprintf(file, "loadlcl LCL(%zu)", ir->load_lcl.lcl->id);
-    } else {
-      fprintf(file, "loadlcl LCL(UNASSIGNED)");
-    }
-    break;
-  case IR_OP_TY_STORE_GLB:
-    if (ir->load_glb.glb) {
-      fprintf(file, "storeglb GLB(%zu), %%%zu", ir->store_glb.glb->id,
-              ir->store_glb.value->id);
-    } else {
-      fprintf(file, "storeglb GLB(UNASSIGNED), %%%zu", ir->store_glb.value->id);
-    }
-    break;
-  case IR_OP_TY_LOAD_GLB:
-    if (ir->load_glb.glb) {
-      fprintf(file, "loadglb GLB(%zu)", ir->load_glb.glb->id);
-    } else {
-      fprintf(file, "loadglb GLB(UNASSIGNED)");
-    }
-    break;
-
   case IR_OP_TY_BR: {
     invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                      "found `br` but bb wasn't MERGE");

@@ -41,6 +41,7 @@ set(
   ir/var_refs.c
   ir/eliminate_phi.c
   ir/prettyprint.c
+  ir/validate.c
 
   aarch64.c
   aarch64/codegen.c

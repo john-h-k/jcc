@@ -68,9 +68,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_CNST:
   case IR_OP_TY_CAST_OP:
-  case IR_OP_TY_LOAD_GLB:
-  case IR_OP_TY_LOAD_LCL:
-  case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_BINARY_OP:
@@ -78,9 +76,7 @@ bool op_has_side_effects(const struct ir_op *op) {
     return false;
   case IR_OP_TY_MOV:
   case IR_OP_TY_CALL:
-  case IR_OP_TY_STORE_GLB:
-  case IR_OP_TY_STORE_LCL:
-  case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -103,17 +99,13 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
-  case IR_OP_TY_LOAD_GLB:
-  case IR_OP_TY_LOAD_LCL:
-  case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
     return true;
   case IR_OP_TY_CALL:
     return op->call.func_ty.func.ret_ty->ty != IR_VAR_TY_TY_NONE;
-  case IR_OP_TY_STORE_GLB:
-  case IR_OP_TY_STORE_LCL:
-  case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -143,13 +135,9 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
   case IR_OP_TY_CAST_OP:
-  case IR_OP_TY_STORE_GLB:
-  case IR_OP_TY_LOAD_GLB:
-  case IR_OP_TY_STORE_LCL:
-  case IR_OP_TY_LOAD_LCL:
-  case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE:
+  case IR_OP_TY_LOAD:
   case IR_OP_TY_STORE_BITFIELD:
-  case IR_OP_TY_LOAD_ADDR:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
     return false;
@@ -246,17 +234,6 @@ static void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
   cb(&br_cond->cond, cb_metadata);
 }
 
-static void walk_store_lcl(struct ir_op_store_lcl *store_lcl,
-                           walk_op_callback *cb, void *cb_metadata) {
-  cb(&store_lcl->value, cb_metadata);
-}
-
-static void walk_load_lcl(UNUSED_ARG(struct ir_op_load_lcl *load_lcl),
-                          UNUSED_ARG(walk_op_callback *cb),
-                          UNUSED_ARG(void *cb_metadata)) {
-  // nada
-}
-
 static void walk_cnst(UNUSED_ARG(struct ir_op_cnst *cnst),
                       UNUSED_ARG(walk_op_callback *cb),
                       UNUSED_ARG(void *cb_metadata)) {
@@ -318,29 +295,47 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_CAST_OP:
     cb(&op->cast_op.value, cb_metadata);
     break;
-  case IR_OP_TY_STORE_ADDR:
-    cb(&op->store_addr.addr, cb_metadata);
-    cb(&op->store_addr.value, cb_metadata);
+  case IR_OP_TY_STORE:
+    cb(&op->store.value, cb_metadata);
+    switch (op->store.ty) {
+    case IR_OP_STORE_TY_LCL:
+    case IR_OP_STORE_TY_GLB:
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      cb(&op->store.addr, cb_metadata);
+      break;
+    }
     break;
   case IR_OP_TY_STORE_BITFIELD:
-    cb(&op->store_bitfield.addr, cb_metadata);
     cb(&op->store_bitfield.value, cb_metadata);
+    switch (op->store_bitfield.ty) {
+    case IR_OP_STORE_TY_LCL:
+    case IR_OP_STORE_TY_GLB:
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      cb(&op->store_bitfield.addr, cb_metadata);
+      break;
+    }
     break;
-  case IR_OP_TY_STORE_GLB:
-    cb(&op->store_glb.value, cb_metadata);
-    break;
-  case IR_OP_TY_LOAD_GLB:
-    break;
-  case IR_OP_TY_STORE_LCL:
-    cb(&op->store_lcl.value, cb_metadata);
-    break;
-  case IR_OP_TY_LOAD_LCL:
-    break;
-  case IR_OP_TY_LOAD_ADDR:
-    cb(&op->load_addr.addr, cb_metadata);
+  case IR_OP_TY_LOAD:
+    switch (op->load.ty) {
+    case IR_OP_LOAD_TY_LCL:
+    case IR_OP_LOAD_TY_GLB:
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      cb(&op->load.addr, cb_metadata);
+      break;
+    }
     break;
   case IR_OP_TY_LOAD_BITFIELD:
-    cb(&op->load_bitfield.addr, cb_metadata);
+    switch (op->load_bitfield.ty) {
+    case IR_OP_LOAD_TY_LCL:
+    case IR_OP_LOAD_TY_GLB:
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      cb(&op->load_bitfield.addr, cb_metadata);
+      break;
+    }
     break;
   case IR_OP_TY_ADDR:
     break;
@@ -379,14 +374,10 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     todo("walk phi");
   case IR_OP_TY_MOV:
     todo("walk mov");
-  case IR_OP_TY_LOAD_GLB:
-    todo("walk load glb");
-  case IR_OP_TY_STORE_GLB:
-    todo("walk store glb");
-  case IR_OP_TY_LOAD_ADDR:
-    todo("walk load addr");
-  case IR_OP_TY_STORE_ADDR:
-    todo("walk store addr");
+  case IR_OP_TY_LOAD:
+    todo("walk load");
+  case IR_OP_TY_STORE:
+    todo("walk store");
   case IR_OP_TY_LOAD_BITFIELD:
     todo("walk load bitfield");
   case IR_OP_TY_STORE_BITFIELD:
@@ -408,12 +399,6 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_CAST_OP:
     walk_cast_op(&op->cast_op, cb, cb_metadata);
-    break;
-  case IR_OP_TY_STORE_LCL:
-    walk_store_lcl(&op->store_lcl, cb, cb_metadata);
-    break;
-  case IR_OP_TY_LOAD_LCL:
-    walk_load_lcl(&op->load_lcl, cb, cb_metadata);
     break;
   case IR_OP_TY_BR:
     // nada
@@ -1520,9 +1505,13 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
     // storing undf makes no sense
     if (op->ty != IR_OP_TY_UNDF) {
       struct ir_op *store =
-          insert_after_ir_op(irb, op, IR_OP_TY_STORE_LCL, IR_VAR_TY_NONE);
-      store->lcl = op->lcl;
-      store->store_lcl.value = op;
+          insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_LCL,
+        .lcl = op->lcl,
+        .value = op
+      };
+
       store->reg = NO_REG;
       store->flags |= IR_OP_FLAG_SPILL;
 

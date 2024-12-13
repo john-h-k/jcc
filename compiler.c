@@ -10,6 +10,7 @@
 #include "ir/eliminate_phi.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
+#include "ir/validate.h"
 #include "lex.h"
 #include "log.h"
 #include "lower.h"
@@ -173,9 +174,12 @@ enum compile_result compile(struct compiler *compiler) {
         build_ir_for_translationunit(target, compiler->typechk, compiler->arena,
                                      &typechk_result.translation_unit);
 
+
     if (log_enabled()) {
       debug_print_stage(ir, "ir");
     }
+
+    ir_validate(ir);
   }
 
   {
@@ -186,6 +190,8 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_stage(ir, "lower");
     }
+
+    ir_validate(ir);
   }
 
   {
@@ -214,6 +220,8 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "regalloc");
     }
 
+    ir_validate(ir);
+
     BEGIN_STAGE("ELIM PHI");
     glb = ir->first_global;
 
@@ -238,6 +246,8 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_stage(ir, "elim_phi");
     }
+
+    ir_validate(ir);
   }
 
   {

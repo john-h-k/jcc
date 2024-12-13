@@ -141,16 +141,19 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
     if (move.to.idx == tmp_index) {
       struct ir_op *store =
-          insert_before_ir_op(irb, last, IR_OP_TY_STORE_LCL, value->var_ty);
-      store->lcl = spill_lcl;
-      store->store_lcl = (struct ir_op_store_lcl){.value = value};
+          insert_before_ir_op(irb, last, IR_OP_TY_STORE, value->var_ty);
+      store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_LCL,
+        .lcl = spill_lcl,
+        .value = value};
 
       store_var_ty = value->var_ty;
     } else if (move.from.idx == tmp_index) {
       struct ir_op *load =
-          insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, store_var_ty);
+          insert_before_ir_op(irb, last, IR_OP_TY_LOAD, store_var_ty);
       load->reg = to;
-      load->load_lcl = (struct ir_op_load_lcl){
+      load->load = (struct ir_op_load){
+        .ty = IR_OP_LOAD_TY_LCL,
           .lcl = spill_lcl,
       };
 
@@ -233,8 +236,10 @@ void eliminate_phi(struct ir_func *irb) {
 
           if (op->lcl) {
             struct ir_op *load =
-                insert_before_ir_op(irb, last, IR_OP_TY_LOAD_LCL, op->var_ty);
-            load->load_lcl = (struct ir_op_load_lcl){.lcl = op->lcl};
+                insert_before_ir_op(irb, last, IR_OP_TY_LOAD, op->var_ty);
+            load->load = (struct ir_op_load){
+              .ty = IR_OP_LOAD_TY_LCL,
+              .lcl = op->lcl};
             load->reg = op->reg;
             op->phi.values[i].value = load;
           } else if (op->reg.ty == IR_REG_TY_FP ||

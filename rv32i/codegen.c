@@ -622,8 +622,8 @@ static void codegen_load_addr_op(struct codegen_state *state,
 
   struct rv32i_reg dest = codegen_reg(op);
 
-  if (op->load_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
-    struct ir_op *addr = op->load_addr.addr;
+  if (op->load.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->load.addr;
 
     simm_t imm;
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
@@ -636,7 +636,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
     instr->rv32i->load =
         (struct rv32i_load){.dest = dest, .addr = STACK_PTR_REG, .imm = imm};
   } else {
-    struct rv32i_reg addr = codegen_reg(op->load_addr.addr);
+    struct rv32i_reg addr = codegen_reg(op->load.addr);
     instr->rv32i->ty = load_ty_for_op(op);
     instr->rv32i->load =
         (struct rv32i_load){.dest = dest, .addr = addr, .imm = 0};
@@ -647,7 +647,7 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
   struct rv32i_reg dest = codegen_reg(op);
-  struct ir_lcl *lcl = op->load_lcl.lcl;
+  struct ir_lcl *lcl = op->load.lcl;
 
   simm_t offset = get_lcl_stack_offset(state, op, lcl);
 
@@ -660,40 +660,66 @@ static void codegen_store_lcl_op(struct codegen_state *state,
                                  struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
-  struct rv32i_reg source = codegen_reg(op->store_lcl.value);
-  struct ir_lcl *lcl = op->lcl;
+  struct rv32i_reg source = codegen_reg(op->store.value);
+  struct ir_lcl *lcl = op->store.lcl;
 
-  instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+  instr->rv32i->ty = store_ty_for_op(op->store.value);
   instr->rv32i->store = (struct rv32i_store){
       .source = source,
       .addr = STACK_PTR_REG,
-      .imm = get_lcl_stack_offset(state, op->store_lcl.value, lcl)};
+      .imm = get_lcl_stack_offset(state, op->store.value, lcl)};
 }
 
 static void codegen_store_addr_op(struct codegen_state *state,
                                   struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
-  struct rv32i_reg source = codegen_reg(op->store_addr.value);
+  struct rv32i_reg source = codegen_reg(op->store.value);
 
-  if (op->store_addr.addr->flags & IR_OP_FLAG_CONTAINED) {
-    struct ir_op *addr = op->store_addr.addr;
+  if (op->store.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->store.addr;
 
     simm_t imm;
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-      imm = get_lcl_stack_offset(state, op->store_addr.value, addr->addr.lcl);
+      imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
     } else {
       bug("can't CONTAIN operand in store_addr node");
     }
 
-    instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+    instr->rv32i->ty = store_ty_for_op(op->store.value);
     instr->rv32i->store = (struct rv32i_store){
         .source = source, .addr = STACK_PTR_REG, .imm = imm};
   } else {
-    struct rv32i_reg addr = codegen_reg(op->store_addr.addr);
-    instr->rv32i->ty = store_ty_for_op(op->store_addr.value);
+    struct rv32i_reg addr = codegen_reg(op->store.addr);
+    instr->rv32i->ty = store_ty_for_op(op->store.value);
     instr->rv32i->store =
         (struct rv32i_store){.source = source, .addr = addr, .imm = 0};
+  }
+}
+
+static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_LOAD_TY_LCL:
+    codegen_load_lcl_op(state, op);
+    break;
+  case IR_OP_LOAD_TY_ADDR:
+    codegen_load_addr_op(state, op);
+    break;
+  case IR_OP_LOAD_TY_GLB:
+    bug("load.glb should have been lowered");
+  }
+}
+
+static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_STORE_TY_LCL:
+    codegen_store_lcl_op(state, op);
+    break;
+  case IR_OP_STORE_TY_ADDR:
+    codegen_store_addr_op(state, op);
+    break;
+  case IR_OP_STORE_TY_GLB:
+    bug("store.glb should have been lowered");
   }
 }
 
@@ -917,26 +943,12 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     }
     break;
   }
-  case IR_OP_TY_LOAD_GLB:
-  case IR_OP_TY_STORE_GLB: {
-    bug("load/store glb should have been lowered");
-  }
-  case IR_OP_TY_LOAD_LCL: {
-    codegen_load_lcl_op(state, op);
+  case IR_OP_TY_LOAD:
+    codegen_load_op(state, op);
     break;
-  }
-  case IR_OP_TY_STORE_LCL: {
-    codegen_store_lcl_op(state, op);
+  case IR_OP_TY_STORE:
+    codegen_store_op(state, op);
     break;
-  }
-  case IR_OP_TY_LOAD_ADDR: {
-    codegen_load_addr_op(state, op);
-    break;
-  }
-  case IR_OP_TY_STORE_ADDR: {
-    codegen_store_addr_op(state, op);
-    break;
-  }
   case IR_OP_TY_ADDR: {
     codegen_addr_op(state, op);
     break;

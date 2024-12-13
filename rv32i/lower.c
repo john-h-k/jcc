@@ -96,10 +96,8 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
             case IR_OP_TY_RET:
-            case IR_OP_TY_STORE_LCL:
-            case IR_OP_TY_LOAD_LCL:
-            case IR_OP_TY_STORE_ADDR:
-            case IR_OP_TY_LOAD_ADDR:
+            case IR_OP_TY_STORE:
+            case IR_OP_TY_LOAD:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_ADDR:
@@ -125,9 +123,6 @@ void rv32i_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_CALL:
               todo("call");
-            case IR_OP_TY_STORE_GLB:
-            case IR_OP_TY_LOAD_GLB:
-              bug("should have been lowered");
             }
 
             op = op->succ;

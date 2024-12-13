@@ -113,8 +113,10 @@ static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
   debug_assert(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
 
   struct ir_op *load =
-      insert_after_ir_op(func, op, IR_OP_TY_LOAD_ADDR, IR_VAR_TY_I32);
-  load->load_addr = (struct ir_op_load_addr){.addr = op};
+      insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
+  load->load = (struct ir_op_load){
+    .ty = IR_OP_LOAD_TY_ADDR,
+    .addr = op};
 
   unsigned int mask_val;
 
@@ -177,9 +179,10 @@ static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
   mask_in->binary_op = (struct ir_op_binary_op){
       .ty = IR_OP_BINARY_OP_TY_OR, .lhs = masked_out, .rhs = shifted_op};
 
-  op->ty = IR_OP_TY_STORE_ADDR;
+  op->ty = IR_OP_TY_STORE;
   op->var_ty = IR_VAR_TY_NONE;
-  op->store_addr = (struct ir_op_store_addr){
+  op->store = (struct ir_op_store){
+    .ty = IR_OP_STORE_TY_ADDR,
     .addr = addr,
     .value = mask_in
   };
@@ -216,22 +219,25 @@ static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr =
       insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store_glb.glb};
+      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store.glb};
 
-  struct ir_op *value = op->store_glb.value;
+  struct ir_op *value = op->store.value;
 
-  op->ty = IR_OP_TY_STORE_ADDR;
-  op->store_addr = (struct ir_op_store_addr){.addr = addr, .value = value};
+  op->store = (struct ir_op_store){
+    .ty = IR_OP_STORE_TY_ADDR,
+    .addr = addr, .value = value};
 }
 
 static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr =
       insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load_glb.glb};
+      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load.glb};
 
-  op->ty = IR_OP_TY_LOAD_ADDR;
-  op->load_addr = (struct ir_op_load_addr){.addr = addr};
+  op->ty = IR_OP_TY_LOAD;
+  op->load = (struct ir_op_load){
+    .ty = IR_OP_LOAD_TY_ADDR,
+    .addr = addr};
 }
 
 void lower(struct ir_unit *unit, const struct target *target) {
@@ -264,8 +270,6 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_PHI:
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BINARY_OP:
-            case IR_OP_TY_STORE_ADDR:
-            case IR_OP_TY_LOAD_ADDR:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR:
             case IR_OP_TY_MOV:
@@ -277,14 +281,15 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BR_SWITCH:
               lower_br_switch(func, op);
               break;
-            case IR_OP_TY_STORE_LCL:
-            case IR_OP_TY_LOAD_LCL:
+            case IR_OP_TY_STORE:
+              if (op->store.ty == IR_OP_STORE_TY_GLB) {
+                lower_store_glb(func, op);
+              }
               break;
-            case IR_OP_TY_STORE_GLB:
-              lower_store_glb(func, op);
-              break;
-            case IR_OP_TY_LOAD_GLB:
-              lower_load_glb(func, op);
+            case IR_OP_TY_LOAD:
+              if (op->load.ty == IR_OP_LOAD_TY_GLB) {
+                lower_load_glb(func, op);
+              }
               break;
             case IR_OP_TY_STORE_BITFIELD:
               lower_store_bitfield(func, op);
