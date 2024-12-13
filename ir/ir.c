@@ -1515,6 +1515,7 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
 
   irb->total_locals_size += lcl_pad;
 
+  lcl->flags = IR_LCL_FLAG_NONE;
   lcl->var_ty = *var_ty;
   lcl->offset = irb->total_locals_size;
   lcl->store = NULL;

@@ -285,7 +285,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     fprintf(file, "// %s\n", ir->comment);
   }
 
-  if (ctx != PRINT_OP_CTX_USE && op_produces_value(ir)) {
+  if (ctx != PRINT_OP_CTX_USE) {
     debug_lhs(file, irb, ir);
   }
 
@@ -795,7 +795,12 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
       fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
       debug_print_var_ty_string(file, irb->unit, &lcl->var_ty);
 
-      fprintf(file, ",\n");
+      if (lcl->flags & IR_LCL_FLAG_SPILL) {
+        fprintf(file, "    (SPILL),\n");
+      } else {
+        fprintf(file, ",\n");
+      }
+
       lcl = lcl->succ;
     }
     fprintf(file, "}");

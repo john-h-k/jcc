@@ -2342,6 +2342,18 @@ static void build_ir_zero_range(struct ir_func_builder *irb,
     return;
   }
 
+  if (byte_size > 32) {
+    struct ir_op *mem_set = insert_before_ir_op(irb->func, insert_before, IR_OP_TY_MEM_SET,
+                               IR_VAR_TY_NONE);
+    mem_set->mem_set = (struct ir_op_mem_set){
+      .addr = address,
+      .length = byte_size,
+      .value = 0
+    };
+
+    return;
+  }
+
   struct ir_var_ty cnst_ty;
   ssize_t chunk_size;
   if (byte_size >= 8) {

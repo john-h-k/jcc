@@ -7,6 +7,7 @@
 #include "ir/prettyprint.h"
 #include "liveness.h"
 #include "log.h"
+#include "rv32i/codegen.h"
 #include "util.h"
 #include "vector.h"
 
@@ -133,6 +134,9 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
 }
 
 struct lsra_reg_info {
+  bool has_ssp;
+  size_t ssp_reg;
+
   size_t num_volatile_gp;
   size_t num_volatile_fp;
   size_t num_gp_regs;
@@ -275,7 +279,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     expire_old_intervals(&state, interval);
 
     if (interval->op->ty == IR_OP_TY_CALL) {
-      // need to spill everything that is nonvolatile & active
+      // need to spill everything that is volatile & active
 
       for (size_t j = 0; j < state.num_active; j++) {
         struct interval *live = &intervals[state.active[j]];
@@ -289,10 +293,23 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
             (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_gp)) {
 
-          struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
+          if (!live->op->lcl) {
+            live->op->lcl = add_local(irb, &live->op->var_ty);
+          }
+
+          struct ir_lcl *lcl = live->op->lcl;
+          lcl->flags |= IR_LCL_FLAG_SPILL;
+
+          struct ir_var_ty ptr_int = var_ty_for_pointer_size(irb->unit);
           struct ir_op *lcl_addr = insert_before_ir_op(
-              irb, interval->op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-          lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
+              irb, interval->op, IR_OP_TY_ADDR, ptr_int);
+
+          if (info->has_ssp) {
+            lcl_addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg };
+          } else {
+            lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
+          }
+
           lcl_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
@@ -400,6 +417,19 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
 */
 void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
+  bool has_ssp = false;
+  size_t ssp_reg = 0;
+
+  size_t num_nonvolatile_gp = reg_info.gp_registers.num_nonvolatile;
+  // FIXME: need better logic
+  // this is tough because what if we only need ssp (secondary stack pointer) during lsra?
+  // at the start, all locals are within one-instr depth, but then during spilling we exceed this and need another
+  if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+    num_nonvolatile_gp--;
+    has_ssp = true;
+    ssp_reg = num_nonvolatile_gp;
+  }
+
   irb->reg_usage = (struct ir_reg_usage){
       .fp_registers_used =
           bitset_create(reg_info.fp_registers.num_volatile +
@@ -407,12 +437,12 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
                         false),
       .gp_registers_used =
           bitset_create(reg_info.gp_registers.num_volatile +
-                            reg_info.gp_registers.num_nonvolatile,
+                            num_nonvolatile_gp,
                         false),
   };
 
   size_t num_gp_regs = reg_info.gp_registers.num_volatile +
-                       reg_info.gp_registers.num_nonvolatile - 1;
+                       num_nonvolatile_gp- 1;
   size_t num_fp_regs = reg_info.fp_registers.num_volatile +
                        reg_info.fp_registers.num_nonvolatile - 1;
 
@@ -420,6 +450,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t fp_spill_reg = num_fp_regs;
 
   struct lsra_reg_info lsra_reg_info = {
+      .has_ssp = has_ssp,
+      .ssp_reg = ssp_reg,
       .num_volatile_gp = reg_info.gp_registers.num_volatile,
       .num_volatile_fp = reg_info.fp_registers.num_volatile,
       .num_gp_regs = num_gp_regs,

@@ -288,7 +288,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
-static void try_contain_load(struct ir_func *func, struct ir_op *op) {
+UNUSED static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   switch (op->load.ty) {
   case IR_OP_LOAD_TY_LCL:
   case IR_OP_LOAD_TY_GLB:
@@ -309,7 +309,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-static void try_contain_store(struct ir_func *func, struct ir_op *op) {
+UNUSED static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   switch (op->store.ty) {
   case IR_OP_STORE_TY_LCL:
   case IR_OP_STORE_TY_GLB:
@@ -478,15 +478,10 @@ void aarch64_lower(struct ir_unit *unit) {
 
               break;
             }
-            case IR_OP_TY_LOAD: {
-              try_contain_load(func, op);
-
-              break;
-            }
-
             case IR_OP_TY_STORE:
               lower_store(func, op);
               break;
+            case IR_OP_TY_LOAD:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
@@ -560,10 +555,10 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_PHI:
             case IR_OP_TY_CNST:
             case IR_OP_TY_STORE:
-              try_contain_store(func, op);
+              // try_contain_store(func, op);
               break;
             case IR_OP_TY_LOAD:
-              try_contain_load(func, op);
+              // try_contain_load(func, op);
               break;
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
