@@ -1117,7 +1117,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         struct sized_str ident = {.str = def_name.text,
                                   .len = text_span_len(&def_name.span)};
 
-
         hashtbl_remove(preproc->defines, &ident);
       } else if (token_streq(directive, "include")) {
         preproc->in_angle_string_context = true;

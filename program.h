@@ -3,9 +3,9 @@
 
 #include "hash.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <limits.h>
 
 struct program {
   const char *text;
@@ -26,8 +26,10 @@ struct text_span {
 #define TEXT_POS_INVALID_COL (SIZE_T_MAX)
 #define TEXT_POS_INVALID_LINE (SIZE_T_MAX)
 
-#define MK_INVALID_TEXT_POS(idx) (struct text_pos){ idx, TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
-#define MK_INVALID_TEXT_SPAN(start, end) (struct text_span){ MK_INVALID_TEXT_POS(start), MK_INVALID_TEXT_POS(end) }
+#define MK_INVALID_TEXT_POS(idx)                                               \
+  (struct text_pos) { idx, TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
+#define MK_INVALID_TEXT_SPAN(start, end)                                       \
+  (struct text_span) { MK_INVALID_TEXT_POS(start), MK_INVALID_TEXT_POS(end) }
 
 bool text_span_eq(const void *l, const void *r);
 bool text_pos_eq(const void *l, const void *r);

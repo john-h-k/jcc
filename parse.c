@@ -487,7 +487,6 @@ static bool parse_typedef_name(struct parser *parser,
   return true;
 }
 
-
 enum type_specifier_mode {
   TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
   TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS
@@ -513,7 +512,8 @@ static bool parse_type_specifier(struct parser *parser,
     return true;
   }
 
-  if (mode == TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS && parse_typedef_name(parser, &type_specifier->typedef_name)) {
+  if (mode == TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS &&
+      parse_typedef_name(parser, &type_specifier->typedef_name)) {
     type_specifier->ty = AST_TYPE_SPECIFIER_TYPEDEF_NAME;
     return true;
   }

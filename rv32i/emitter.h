@@ -51,17 +51,17 @@ void rv32i_emit_fdiv(struct rv32i_emitter *emitter,
 void rv32i_emit_fsgnj(struct rv32i_emitter *emitter,
                       const struct rv32i_op_fp fsgnj);
 void rv32i_emit_fsgnjn(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_fp fsgnjn);
+                       const struct rv32i_op_fp fsgnjn);
 void rv32i_emit_fsgnjx(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_fp fsgnjx);
+                       const struct rv32i_op_fp fsgnjx);
 
 void rv32i_emit_fmax(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_fp fmax);
+                     const struct rv32i_op_fp fmax);
 void rv32i_emit_fmin(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_fp fmin);
+                     const struct rv32i_op_fp fmin);
 
 void rv32i_emit_fsqrt(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_unary_fp fsqrt);
+                      const struct rv32i_op_unary_fp fsqrt);
 
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
 void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);

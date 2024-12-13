@@ -160,7 +160,6 @@
 #define FNEG(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000010, Rn, Rd)
 #define FSQRT(ftype, Rn, Rd) FP_1_REG(0b0, 0b0, ftype, 0b000011, Rn, Rd)
 
-
 /* Two reg FP data processing */
 
 #define FP_CMP(M, S, ftype, Rm, op, Rn, opcode2)                               \

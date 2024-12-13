@@ -9,13 +9,11 @@ enum preproc_create_result { PREPROC_CREATE_RESULT_SUCCESS = 0 };
 
 struct preproc;
 
-enum preproc_create_result preproc_create(struct program *program,
-                                          const char *path,
-                                          size_t num_include_paths,
-                                          const char **include_paths,
-                                          // for debugging: fixes the value of __TIME__ and __DATE__
-                                          const char *fixed_timestamp,
-                                          struct preproc **preproc);
+enum preproc_create_result
+preproc_create(struct program *program, const char *path,
+               size_t num_include_paths, const char **include_paths,
+               // for debugging: fixes the value of __TIME__ and __DATE__
+               const char *fixed_timestamp, struct preproc **preproc);
 
 struct preprocessed_program {
   const char *text;

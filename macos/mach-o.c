@@ -62,8 +62,8 @@ static void write_mach_header(FILE *file, const struct compile_args *args) {
   ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 #define ENCODE_SDK(x, y, z) ((x & 0xFF) << 16) | ((y & 0x0F) << 8) | (z & 0x0F)
 
-static struct reloc_info
-build_reloc_info(const struct build_object_args *args, const size_t *entry_offsets) {
+static struct reloc_info build_reloc_info(const struct build_object_args *args,
+                                          const size_t *entry_offsets) {
   struct reloc_info info = {
       .text_relocs = vector_create(sizeof(struct relocation)),
       .data_relocs = vector_create(sizeof(struct relocation)),
@@ -298,7 +298,9 @@ static void write_segment_command(FILE *file,
 
   struct reloc_info info = build_reloc_info(args, entry_offsets);
   size_t relocs_offset = segment.fileoff + total_size;
-  size_t total_reloc_instrs = info.num_text_reloc_instrs + info.num_data_reloc_instrs + info.num_const_data_reloc_instrs;
+  size_t total_reloc_instrs = info.num_text_reloc_instrs +
+                              info.num_data_reloc_instrs +
+                              info.num_const_data_reloc_instrs;
 
   struct section_64 text;
   memset(&text, 0, sizeof(text));
@@ -338,8 +340,8 @@ static void write_segment_command(FILE *file,
   const_data.size = total_const_size;
   const_data.offset = segment.fileoff + text.size + cstrings.size;
   const_data.align = LOG2(const_align);
-  const_data.reloff =
-      text.reloff + (sizeof(struct relocation_info) * info.num_text_reloc_instrs);
+  const_data.reloff = text.reloff + (sizeof(struct relocation_info) *
+                                     info.num_text_reloc_instrs);
   const_data.nreloc = info.num_const_data_reloc_instrs;
   const_data.flags = S_REGULAR;
   const_data.reserved1 = 0;
@@ -354,8 +356,8 @@ static void write_segment_command(FILE *file,
   data.size = total_data_size;
   data.offset = segment.fileoff + text.size + cstrings.size + const_data.size;
   data.align = LOG2(data_align);
-  data.reloff = const_data.reloff +
-                (sizeof(struct relocation_info) * info.num_const_data_reloc_instrs);
+  data.reloff = const_data.reloff + (sizeof(struct relocation_info) *
+                                     info.num_const_data_reloc_instrs);
   data.nreloc = info.num_data_reloc_instrs;
   data.flags = S_REGULAR;
   data.reserved1 = 0;
@@ -374,8 +376,8 @@ static void write_segment_command(FILE *file,
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
-  symtab.symoff = relocs_offset +
-                  sizeof(struct relocation_info) * total_reloc_instrs;
+  symtab.symoff =
+      relocs_offset + sizeof(struct relocation_info) * total_reloc_instrs;
   symtab.nsyms = args->num_entries;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
 

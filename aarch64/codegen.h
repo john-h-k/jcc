@@ -403,7 +403,8 @@ struct aarch64_instr {
     };
 
     union {
-      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg, fabs, fsqrt;
+      struct aarch64_reg_1_source reg_1_source, fmov, fcvt, ucvtf, scvtf, fneg,
+          fabs, fsqrt;
     };
 
     union {

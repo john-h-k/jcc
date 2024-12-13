@@ -10,10 +10,7 @@ struct path_components path_components(const char *path) {
   const char *last_slash = strrchr(path, '/');
 
   if (last_slash == NULL) {
-    return (struct path_components){
-      .dir = ".",
-      .file = strdup(path)
-    };
+    return (struct path_components){.dir = ".", .file = strdup(path)};
   }
 
   size_t dir_len = last_slash - path;
@@ -23,10 +20,7 @@ struct path_components path_components(const char *path) {
   strncpy(dir, path, dir_len);
   dir[dir_len] = '\0';
 
-  return (struct path_components){
-    .dir = dir,
-    .file = strdup(file_part)
-  };
+  return (struct path_components){.dir = dir, .file = strdup(file_part)};
 }
 
 char *path_combine(const char *l, const char *r) {

@@ -192,7 +192,7 @@ static bool parse_target_flag(const char *flag,
 }
 
 static bool parse_c_standard(const char *flag,
-                              enum compile_c_standard *c_standard) {
+                             enum compile_c_standard *c_standard) {
   if (strcmp(flag, "c11") == 0) {
     *c_standard = COMPILE_C_STANDARD_C11;
     return true;
@@ -223,16 +223,17 @@ static bool parse_output(const char *str, char **output) {
   return false;
 }
 
-
-static bool parse_fixed_timestamp(const char *str, const char **fixed_timestamp) {
+static bool parse_fixed_timestamp(const char *str,
+                                  const char **fixed_timestamp) {
   size_t len = strlen(str);
-  
+
   if (len >= 19) {
     *fixed_timestamp = str;
     return true;
   }
 
-  err("`fixed_timestamp` must be exactly at least 19 chars (for symmetry with `asctime`)");
+  err("`fixed_timestamp` must be exactly at least 19 chars (for symmetry with "
+      "`asctime`)");
   return false;
 }
 static enum parse_args_result parse_args(int argc, char **argv,
@@ -254,7 +255,9 @@ static enum parse_args_result parse_args(int argc, char **argv,
 
 // allows both '-Tfoo' and '-T foo' by using the next argument if the current
 // one is empty (after prefix) if it uses the next argument it skips it
-#define GET_ARGUMENT(v) v = (!(v) || (v)[0] || i + 1 == argc ? ((v) && (v)[0] == '=' ? (v) + 1 : v) : argv[++i])
+#define GET_ARGUMENT(v)                                                        \
+  v = (!(v) || (v)[0] || i + 1 == argc ? ((v) && (v)[0] == '=' ? (v) + 1 : v)  \
+                                       : argv[++i])
 
     const char *log = try_get_arg(arg, "-L");
     GET_ARGUMENT(log);
