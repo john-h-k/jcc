@@ -3,7 +3,7 @@
 #include "util.h"
 
 #define POS_CHECK(p)                                                           \
-  debug_assert((p).col != TEXT_POS_INVALID_COL, "invalid text pos")
+  DEBUG_ASSERT((p).col != TEXT_POS_INVALID_COL, "invalid text pos")
 
 bool text_pos_eq(const void *l, const void *r) {
   const struct text_pos *l_pos = l;

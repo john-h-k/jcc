@@ -14,7 +14,7 @@ void rv32i_write_object(const struct build_object_args *args) {
     const struct object_entry *entry = &args->entries[i];
 
     if (entry->ty != OBJECT_ENTRY_TY_FUNC) {
-      todo("non funcs in rv32i");
+      TODO("non funcs in rv32i");
     }
 
     const unsigned char *const data = (const unsigned char *)entry->data;

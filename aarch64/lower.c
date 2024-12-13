@@ -8,7 +8,7 @@
 #include <math.h>
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
-  debug_assert(op->ty == IR_OP_TY_UNARY_OP &&
+  DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
                    op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
 
@@ -35,7 +35,7 @@ static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
 // so instead of `x = a % b` we do
 // `c = a / b; x = a - (c * b)`
 static void lower_quot(struct ir_func *func, struct ir_op *op) {
-  debug_assert(op->ty == IR_OP_TY_BINARY_OP &&
+  DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP &&
                    (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
                     op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
                "lower_quot called on invalid op");
@@ -44,7 +44,7 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
   enum ir_op_sign sign = binary_op_sign(op->binary_op.ty);
   switch (sign) {
   case IR_OP_SIGN_NA:
-    bug("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
+    BUG("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
   case IR_OP_SIGN_SIGNED:
     div_ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
@@ -126,7 +126,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
 
   if (source->ty != IR_OP_TY_LOAD) {
-    bug("non-primitive store occured out of a non-load op?");
+    BUG("non-primitive store occured out of a non-load op?");
   }
 
   struct ir_op *source_addr = build_addr(func, source);
@@ -294,7 +294,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty int_ty;
   unsigned long long int_value;
 
-  debug_assert(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+  DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F32: {
@@ -352,7 +352,7 @@ static void lower_load_to_addr(struct ir_op *op) {
     break;
   }
   case IR_OP_LOAD_TY_GLB:
-    bug("load.glb should be gone by now");
+    BUG("load.glb should be gone by now");
   }
 }
 
@@ -417,7 +417,7 @@ void aarch64_lower(struct ir_unit *unit) {
           while (op) {
             switch (op->ty) {
             case IR_OP_TY_UNKNOWN:
-              bug("unknown op!");
+              BUG("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
@@ -498,7 +498,7 @@ void aarch64_lower(struct ir_unit *unit) {
           while (op) {
             switch (op->ty) {
             case IR_OP_TY_UNKNOWN:
-              bug("unknown op!");
+              BUG("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:

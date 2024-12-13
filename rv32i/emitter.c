@@ -127,7 +127,7 @@ void rv32i_emit_fmv(struct rv32i_emitter *emitter,
                     const struct rv32i_op_mov fmv) {
   switch (fmv.source.ty) {
   case RV32I_REG_TY_NONE:
-    bug("NONE type in fmv emit");
+    BUG("NONE type in fmv emit");
   case RV32I_REG_TY_GP:
     rv32i_emit_instr(emitter, FMV_XW(fmv.source.idx, fmv.dest.idx));
     break;

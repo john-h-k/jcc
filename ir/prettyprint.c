@@ -267,7 +267,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {
-  debug_assert(ir->stmt,
+  DEBUG_ASSERT(ir->stmt,
                "op used by other op but had no stmt (likely detached)");
 
   if (ir->flags & IR_OP_FLAG_CONTAINED) {
@@ -279,7 +279,7 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
 
 static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
                            enum print_op_ctx ctx) {
-  debug_assert(ir->stmt, "op had no stmt");
+  DEBUG_ASSERT(ir->stmt, "op had no stmt");
 
   if (ctx != PRINT_OP_CTX_USE && ir->comment) {
     fprintf(file, "// %s\n", ir->comment);
@@ -291,12 +291,12 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
 
   switch (ir->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("unknown op!");
+    BUG("unknown op!");
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
     break;
   case IR_OP_TY_CUSTOM:
-    bug("custom ops no longer supported");
+    BUG("custom ops no longer supported");
   case IR_OP_TY_CALL: {
     fprintf(file, "call ");
 

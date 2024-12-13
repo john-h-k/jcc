@@ -31,7 +31,7 @@ static bool target_needs_linking(const struct compile_args *args) {
 
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
-    bug("native arch should not be here");
+    BUG("native arch should not be here");
   case COMPILE_TARGET_ARCH_LINUX_ARM64:
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
     }
   } else {
     if (num_sources > 1) {
-      todo("multiple objects, but target does not support linking");
+      TODO("multiple objects, but target does not support linking");
     }
   }
 

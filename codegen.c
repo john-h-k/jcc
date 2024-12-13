@@ -70,7 +70,7 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   head += id_len;
   buff[head++] = 0;
 
-  debug_assert(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name",
+  DEBUG_ASSERT(head == len, "head (%zu) != len (%zu) in mangle_str_cnst_name",
                head, len);
 
   return buff;

@@ -54,7 +54,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           // }
         }
 
-        debug_assert(op->id < irb->op_count,
+        DEBUG_ASSERT(op->id < irb->op_count,
                      "out of range! (id %zu with opcount %zu)", op->id,
                      irb->op_count);
 
@@ -67,7 +67,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           interval->end = interval->start;
         }
 
-        debug_assert(op->metadata == NULL,
+        DEBUG_ASSERT(op->metadata == NULL,
                      "metadata left over in op during liveness analysis, will "
                      "be overwritten");
         op->metadata = interval;

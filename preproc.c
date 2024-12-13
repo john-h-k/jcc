@@ -171,7 +171,7 @@ preproc_create(struct program *program, const char *path,
                size_t num_include_paths, const char **include_paths,
                const char *fixed_timestamp, struct preproc **preproc) {
   if (fixed_timestamp) {
-    debug_assert(strlen(fixed_timestamp) >= 19,
+    DEBUG_ASSERT(strlen(fixed_timestamp) >= 19,
                  "`fixed_timestamp` must be at least 19");
   }
 
@@ -283,11 +283,11 @@ static bool is_preproc_number_char(char c) {
 
 static bool try_consume(struct preproc_text *preproc_text, struct text_pos *pos,
                         char c) {
-  debug_assert(
+  DEBUG_ASSERT(
       preproc_text->pos.idx != pos->idx,
       "calling `try_consume` with `pos` the same as preproc makes no sense");
 
-  debug_assert(c != '\n', "can't use on newlines");
+  DEBUG_ASSERT(c != '\n', "can't use on newlines");
 
   if (pos->idx < preproc_text->len && preproc_text->text[pos->idx] == c) {
     next_col(pos);
@@ -300,11 +300,11 @@ static bool try_consume(struct preproc_text *preproc_text, struct text_pos *pos,
 
 static bool try_consume2(struct preproc_text *preproc_text,
                          struct text_pos *pos, char c0, char c1) {
-  debug_assert(
+  DEBUG_ASSERT(
       preproc_text->pos.idx != pos->idx,
       "calling `try_consume` with `pos` the same as preproc makes no sense");
 
-  debug_assert(c0 != '\n' && c1 != '\n', "can't use on newlines");
+  DEBUG_ASSERT(c0 != '\n' && c1 != '\n', "can't use on newlines");
 
   if (pos->idx + 1 < preproc_text->len && preproc_text->text[pos->idx] == c0 &&
       preproc_text->text[pos->idx + 1] == c1) {
@@ -952,7 +952,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 static struct preproc_define *get_define(struct preproc *preproc,
                                          struct vector *directive_tokens) {
   if (vector_length(directive_tokens) != 1) {
-    todo("handle bad define, had multiple tokens");
+    TODO("handle bad define, had multiple tokens");
   }
 
   struct preproc_token def_name =
@@ -1019,7 +1019,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       preproc_next_raw_token(preproc, &directive);
 
       if (directive.ty != PREPROC_TOKEN_TY_IDENTIFIER) {
-        todo("error for non identifier directive");
+        TODO("error for non identifier directive");
       }
 
       if (token_streq(directive, "ifdef")) {
@@ -1035,7 +1035,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
       } else if (token_streq(directive, "if")) {
-        todo("#if");
+        TODO("#if");
       } else if (token_streq(directive, "endif")) {
         UNEXPANDED_DIR_TOKENS();
 
@@ -1049,7 +1049,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       } else if (token_streq(directive, "elif")) {
         UNEXPANDED_DIR_TOKENS();
 
-        todo("elif");
+        TODO("elif");
       } else if (token_streq(directive, "elifdef")) {
         UNEXPANDED_DIR_TOKENS();
 
@@ -1114,7 +1114,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         UNEXPANDED_DIR_TOKENS();
 
         if (num_directive_tokens != 1) {
-          todo("handle bad define, had multiple tokens");
+          TODO("handle bad define, had multiple tokens");
         }
 
         struct preproc_token def_name =
@@ -1131,7 +1131,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         EXPANDED_DIR_TOKENS();
 
         if (num_directive_tokens != 1) {
-          todo("handle bad include, had multiple tokens");
+          TODO("handle bad include, had multiple tokens");
         }
 
         struct preproc_token filename_token =
@@ -1139,7 +1139,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         size_t filename_len = text_span_len(&filename_token.span);
 
-        debug_assert(filename_len >= 2, "filename token can't be <2 chars");
+        DEBUG_ASSERT(filename_len >= 2, "filename token can't be <2 chars");
 
         filename_len -= 2;
 
@@ -1177,7 +1177,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         }
 
         if (!content) {
-          todo("handle failed includes");
+          TODO("handle failed includes");
         }
 
         struct preproc_text include_text = create_preproc_text(content, path);
@@ -1190,7 +1190,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         EXPANDED_DIR_TOKENS();
 
         if (num_directive_tokens < 1 || num_directive_tokens > 2) {
-          todo("handle bad line directive, had less than 1 / more than 2 "
+          TODO("handle bad line directive, had less than 1 / more than 2 "
                "tokens");
         }
 
@@ -1201,7 +1201,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         if (end - line_num_tok.text !=
             (long long)text_span_len(&line_num_tok.span)) {
-          todo("handle failed line number parse");
+          TODO("handle failed line number parse");
         }
 
         preproc_text->line = line_num;
@@ -1221,7 +1221,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           debug("set file to '%s'", file);
         }
       } else {
-        todo("other directives ('%.*s')", (int)text_span_len(&directive.span),
+        TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
              directive.text);
       }
 
@@ -1257,7 +1257,7 @@ void preproc_process(struct preproc *preproc, FILE *file) {
     case PREPROC_TOKEN_TY_EOF:
       break;
     case PREPROC_TOKEN_TY_DIRECTIVE:
-      bug("directive in process");
+      BUG("directive in process");
     case PREPROC_TOKEN_TY_IDENTIFIER:
     case PREPROC_TOKEN_TY_PREPROC_NUMBER:
     case PREPROC_TOKEN_TY_STRING_LITERAL:

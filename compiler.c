@@ -39,10 +39,10 @@ struct compiler {
 static const struct target *get_target(const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
-    bug("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
+    BUG("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
         "earlier");
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    todo("macOS x64 target not yet implemented");
+    TODO("macOS x64 target not yet implemented");
   // FIXME: linux is actually subtly different in register usage and calling conv
   case COMPILE_TARGET_ARCH_LINUX_ARM64:
     return &AARCH64_LINUX_TARGET;
@@ -51,11 +51,11 @@ static const struct target *get_target(const struct compile_args *args) {
   case COMPILE_TARGET_ARCH_RV32I:
     return &RV32I_TARGET;
   case COMPILE_TARGET_ARCH_EEP:
-    bug("redo eep");
+    BUG("redo eep");
     // return &EEP_TARGET;
   }
 
-  bug("unexpected target in `get_target`");
+  BUG("unexpected target in `get_target`");
 }
 
 enum compiler_create_result

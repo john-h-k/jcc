@@ -19,7 +19,7 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct ir_op *op = *ir;
 
   if (op->id > consumer->id) {
-    bug("op %zu uses op %zu which is ahead of it", consumer->id, op->id);
+    BUG("op %zu uses op %zu which is ahead of it", consumer->id, op->id);
   }
 }
 
@@ -31,7 +31,7 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
-    bug("should not have unknown ops");
+    BUG("should not have unknown ops");
   case IR_OP_TY_PHI:
     break;
   case IR_OP_TY_UNDF:
@@ -123,16 +123,16 @@ static void ir_validate_func(struct ir_unit *iru, struct ir_glb *glb) {
 
   case IR_GLB_DEF_TY_DEFINED:
     if (!glb->func) {
-      bug("defined global should have func");
+      BUG("defined global should have func");
     }
     break;
   case IR_GLB_DEF_TY_UNDEFINED:
     if (glb->func) {
-      bug("undefined global should not have func");
+      BUG("undefined global should not have func");
     }
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
-    bug("should not have tentative defs by now");
+    BUG("should not have tentative defs by now");
   }
 
   struct ir_func *func = glb->func;

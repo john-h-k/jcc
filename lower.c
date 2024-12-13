@@ -110,7 +110,7 @@ static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
                                              struct ir_op *op,
                                              struct ir_bitfield bitfield,
                                              enum load_bitfield load_bitfield) {
-  debug_assert(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
+  DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
 
   struct ir_op *load =
       insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
@@ -298,7 +298,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
           while (op) {
             switch (op->ty) {
             case IR_OP_TY_UNKNOWN:
-              bug("unknown op!");
+              BUG("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_CNST:
@@ -378,7 +378,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
         struct ir_op_use *use = &uses.use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
-          debug_assert(!(use->op->flags & IR_OP_FLAG_CONTAINED),
+          DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
                        "contained op must have uses");
 
           debug("detaching op %zu", use->op->id);

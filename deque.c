@@ -102,7 +102,7 @@ void deque_clear(struct deque *d) {
 }
 
 void deque_truncate(struct deque *d, size_t new_len) {
-  debug_assert(new_len <= d->len, "truncating out of range");
+  DEBUG_ASSERT(new_len <= d->len, "truncating out of range");
   d->len = new_len;
 }
 
@@ -122,7 +122,7 @@ void deque_extend(struct deque *d, const void *data, size_t num_elems) {
     deque_ensure_capacity(d, d->len + num_elems);
   }
 
-  debug_assert(d->capacity >= d->len + num_elems,
+  DEBUG_ASSERT(d->capacity >= d->len + num_elems,
                "deque did not expand properly");
 
   if (data) {
@@ -145,7 +145,7 @@ void deque_extend(struct deque *d, const void *data, size_t num_elems) {
 }
 
 void deque_resize(struct deque *d, size_t size) {
-  debug_assert(size <= deque_length(d), "resizing too big");
+  DEBUG_ASSERT(size <= deque_length(d), "resizing too big");
 
   d->len = size;
 }
@@ -164,7 +164,7 @@ void *deque_tail(struct deque *d) {
 }
 
 void *deque_get(struct deque *d, size_t index) {
-  debug_assert(index < d->len, "index out of bounds!");
+  DEBUG_ASSERT(index < d->len, "index out of bounds!");
 
   size_t idx = GET_IDX(index);
   return &d->data[idx * d->element_size];

@@ -94,9 +94,6 @@ static struct var_key get_var_key(const struct td_var *var,
 static void get_var_ref(struct ir_func_builder *irb,
                         struct ir_basicblock *basicblock, struct td_var *var,
                         struct var_key *key, struct var_ref **ref) {
-  // debug_assert(var->ty != TD_VAR_TY_ENUM_CNST,
-  //              "can't get var ref for enum cnst");
-
   *ref = NULL;
 
   // this is when we are _reading_ from the var
@@ -195,7 +192,7 @@ static struct ir_var_ty var_ty_for_td_var_ty(struct ir_unit *iru,
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    bug("shouldn't reach IR gen with unresolved type");
+    BUG("shouldn't reach IR gen with unresolved type");
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
@@ -296,14 +293,14 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
 
   if (from_var_ty.ty == IR_VAR_TY_TY_POINTER &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
-    bug("cast between pointer types is implicit");
+    BUG("cast between pointer types is implicit");
   }
 
   if (from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
     // primitive -> pointer
     if (from_var_ty.primitive == var_ty_pointer_primitive_ty(irb->unit)) {
-      bug("cast between primitive & pointer type of same size is implicit");
+      BUG("cast between primitive & pointer type of same size is implicit");
     }
 
     if (WKT_IS_SIGNED(to->well_known)) {
@@ -320,7 +317,7 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
 
   if (from_var_ty.ty != IR_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
-    todo("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty,
+    TODO("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty,
          to_var_ty.ty);
   }
 
@@ -444,7 +441,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
 
       return op;
     } else {
-      debug_assert(td_var_ty->ty == TD_VAR_TY_TY_POINTER, "non pointer");
+      DEBUG_ASSERT(td_var_ty->ty == TD_VAR_TY_TY_POINTER, "non pointer");
 
       // need to multiply rhs by the element size
       struct ir_var_ty el_ty =
@@ -483,7 +480,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   b->rhs = rhs;
 
   bool is_fp = var_ty_is_fp(&op->binary_op.lhs->var_ty);
-  debug_assert(is_fp == var_ty_is_fp(&op->binary_op.rhs->var_ty),
+  DEBUG_ASSERT(is_fp == var_ty_is_fp(&op->binary_op.rhs->var_ty),
                "type mismatch between lhs/rhs");
 
   invariant_assert(
@@ -495,7 +492,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   switch (ty) {
   case TD_BINARY_OP_TY_LOGICAL_AND:
   case TD_BINARY_OP_TY_LOGICAL_OR:
-    bug("logical and/or must be handled outside (as they need basicblock "
+    BUG("logical and/or must be handled outside (as they need basicblock "
         "adjustment)");
   case TD_BINARY_OP_TY_EQ:
     b->ty = is_fp ? IR_OP_BINARY_OP_TY_FEQ : IR_OP_BINARY_OP_TY_EQ;
@@ -685,7 +682,7 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
   }
 
   if (expr->ty != TD_EXPR_TY_VAR) {
-    todo("unknown type for addressof");
+    TODO("unknown type for addressof");
   }
 
   return build_ir_for_addressof_var(irb, stmt, &expr->var);
@@ -782,7 +779,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     return ir_expr;
   case TD_UNARY_OP_TY_SIZEOF:
   case TD_UNARY_OP_TY_ALIGNOF:
-    todo("sizeof/alignof build (will need different node as they take types "
+    TODO("sizeof/alignof build (will need different node as they take types "
          "not exprs)");
   case TD_UNARY_OP_TY_CAST:
     if (var_ty_needs_cast_op(irb, &var_ty, &ir_expr->var_ty)) {
@@ -810,7 +807,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     unary_op_ty = IR_OP_UNARY_OP_TY_NOT;
     break;
   default:
-    bug("unexpected unary_op_ty in `%s`", __func__);
+    BUG("unexpected unary_op_ty in `%s`", __func__);
   }
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
@@ -1084,7 +1081,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
       case VAR_REF_TY_SSA:
         return ref->op;
       case VAR_REF_TY_LCL: {
-        debug_assert(ref->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
+        DEBUG_ASSERT(ref->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
                      ref->op->id);
 
         // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
@@ -1176,7 +1173,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
     func_ty = var_ty_for_td_var_ty(irb->unit, &target_expr->var_ty);
   }
 
-  debug_assert(func_ty.ty == IR_VAR_TY_TY_FUNC,
+  DEBUG_ASSERT(func_ty.ty == IR_VAR_TY_TY_FUNC,
                "expected target to be func ty");
 
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
@@ -1215,7 +1212,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 static void var_assg_glb(struct ir_func_builder *irb, struct ir_stmt *stmt,
                          struct ir_glb *glb, struct td_var *var) {
 
-  debug_assert(glb, "null glb in assignment!");
+  DEBUG_ASSERT(glb, "null glb in assignment!");
 
   struct var_key key;
   struct var_ref *ref;
@@ -1279,7 +1276,7 @@ static void get_member_info(struct ir_unit *iru,
                             size_t *member_offset, bool *member_is_bitfield,
                             struct ir_bitfield *member_bitfield,
                             struct td_var_ty *td_member_ty) {
-  debug_assert(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
+  DEBUG_ASSERT(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
 
   *member_ty = IR_VAR_TY_NONE;
 
@@ -1379,7 +1376,7 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
                              struct td_expr *lhs_expr, const char *member_name,
                              bool *member_is_bitfield,
                              struct ir_bitfield *member_bitfield) {
-  debug_assert(lhs_expr->var_ty.ty == TD_VAR_TY_TY_POINTER,
+  DEBUG_ASSERT(lhs_expr->var_ty.ty == TD_VAR_TY_TY_POINTER,
                "makes no sense except on LHS pointer");
 
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, lhs_expr);
@@ -1485,7 +1482,7 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
   }
 
   // need to promote rhs to pointer size int
-  debug_assert(rhs_expr->var_ty.ty == TD_VAR_TY_TY_WELL_KNOWN,
+  DEBUG_ASSERT(rhs_expr->var_ty.ty == TD_VAR_TY_TY_WELL_KNOWN,
                "expected well-known ty rhs");
 
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr);
@@ -1612,11 +1609,11 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     break;
   }
   default:
-    todo("non var assignments");
+    TODO("non var assignments");
   }
 
   if (!address) {
-    todo("non var assignments");
+    TODO("non var assignments");
   }
 
   if (is_bitfield) {
@@ -1775,7 +1772,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     op = build_ir_for_alignof(irb, stmt, expr);
     break;
   case TD_EXPR_TY_COMPOUND_LITERAL:
-    todo("compound literals");
+    TODO("compound literals");
   }
 
   invariant_assert(op, "null op!");
@@ -2212,7 +2209,7 @@ build_ir_for_iterstmt(struct ir_func_builder *irb,
     br->var_ty = IR_VAR_TY_NONE;
   }
 
-  bug("should've found IR_JUMP_TY_NEW_LOOP in jump vector");
+  BUG("should've found IR_JUMP_TY_NEW_LOOP in jump vector");
 }
 
 static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
@@ -2492,7 +2489,7 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
 
     if (i != 0) {
       ssize_t gap = (ssize_t)offset - (ssize_t)head;
-      debug_assert(gap >= 0, "bad math");
+      DEBUG_ASSERT(gap >= 0, "bad math");
 
       build_ir_zero_range(irb, stmt, first_init, address, head, gap);
     }
@@ -2509,7 +2506,7 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
   case TD_INIT_TY_EXPR:
     return build_ir_for_expr(irb, stmt, &init->expr);
   case TD_INIT_TY_INIT_LIST:
-    debug_assert(start_address,
+    DEBUG_ASSERT(start_address,
                  "start_address required when building with init list");
     build_ir_for_init_list(irb, stmt, start_address, &init->init_list);
     return NULL;
@@ -2561,7 +2558,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
     head += base_len;
     buff[head++] = '\0';
 
-    debug_assert(head == len, "string/buff length mismatch");
+    DEBUG_ASSERT(head == len, "string/buff length mismatch");
 
     symbol_name = buff;
   } else {
@@ -2580,7 +2577,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   struct var_ref *ref = var_refs_get(var_refs, &key);
 
   if (ref) {
-    debug_assert(ref->glb, "ref but has no glb");
+    DEBUG_ASSERT(ref->glb, "ref but has no glb");
   }
 
   enum ir_linkage linkage;
@@ -2801,7 +2798,7 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
                                                struct ir_basicblock *basicblock,
                                                struct td_stmt *stmt) {
 
-  debug_assert(basicblock, "bb cannot be null");
+  DEBUG_ASSERT(basicblock, "bb cannot be null");
 
   switch (stmt->ty) {
   case TD_STMT_TY_DECLARATION: {
@@ -2857,7 +2854,7 @@ static void gen_var_phis(struct ir_func_builder *irb,
     struct var_ref *ref = var_refs_get(irb->var_refs, &key);
 
     if (ref) {
-      debug_assert(ref->ty == VAR_REF_TY_SSA,
+      DEBUG_ASSERT(ref->ty == VAR_REF_TY_SSA,
                    "non-ssa ref ty makes no sense for phi");
 
       op = ref->op;
@@ -2900,7 +2897,7 @@ static void gen_var_phis(struct ir_func_builder *irb,
 }
 
 static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
-  debug_assert(phi->ty == IR_OP_TY_PHI, "non-phi in `find_phi_exprs`");
+  DEBUG_ASSERT(phi->ty == IR_OP_TY_PHI, "non-phi in `find_phi_exprs`");
 
   // walk predecessor basic blocks (splitting into seperate walks each time we
   // have multiple predecessors) until we
@@ -3146,7 +3143,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     }
 
     basicblock = build_ir_for_ret(builder, &last_stmt, NULL);
-    debug_assert(last_stmt->last->ty == IR_OP_TY_RET,
+    DEBUG_ASSERT(last_stmt->last->ty == IR_OP_TY_RET,
                  "expected ret after call to build ret");
     last_stmt->last->ret.value = return_value;
   }
@@ -3233,7 +3230,7 @@ static size_t get_member_index_offset(struct ir_unit *iru,
 
     return info.size * member_index;
   } else {
-    debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
+    DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
                      var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
@@ -3254,7 +3251,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
                                     size_t *member_index,
                                     bool *is_bitfield, struct ir_bitfield *bitfield,
                                     struct td_var_ty *member_ty) {
-  debug_assert(designator_list->num_designators,
+  DEBUG_ASSERT(designator_list->num_designators,
                "not defined for 0 designators");
 
   size_t offset = 0;
@@ -3380,7 +3377,7 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     el_size = var_ty_info(iru, &ir_el_ty).size;
     break;
   default:
-    bug("bad type for init list");
+    BUG("bad type for init list");
   }
 
   size_t num_elements = init_list->num_inits;
@@ -3464,7 +3461,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
   }
 
   if (addr->ty != TD_EXPR_TY_VAR) {
-    todo("non var addr of global");
+    TODO("non var addr of global");
   }
 
   const struct td_var *var = &addr->var;
@@ -3472,8 +3469,8 @@ static struct ir_var_value build_ir_for_var_value_addr(
   struct var_key key = get_var_key(var, NULL);
   struct var_ref *ref = var_refs_get(irb->global_var_refs, &key);
 
-  debug_assert(ref, "var did not exist");
-  debug_assert(ref->ty == VAR_REF_TY_GLB, "wasn't global");
+  DEBUG_ASSERT(ref, "var did not exist");
+  DEBUG_ASSERT(ref->ty == VAR_REF_TY_GLB, "wasn't global");
 
   size_t offset_cnst = 0;
   if (offset) {
@@ -3481,7 +3478,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
         build_ir_for_var_value_expr(irb, offset, var_ty);
 
     if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
-      todo("non-int global values offset");
+      TODO("non-int global values offset");
     }
 
     offset_cnst = offset_value.int_value;
@@ -3507,7 +3504,7 @@ build_ir_for_var_value_binary_op(struct ir_var_builder *irb,
     return build_ir_for_var_value_addr(irb, lhs, rhs, var_ty);
 
   default:
-    todo("other binary op tys in global vars");
+    TODO("other binary op tys in global vars");
   }
 }
 
@@ -3520,7 +3517,7 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
     const struct td_var_ty *from = &expr->unary_op.expr->var_ty;
     const struct td_var_ty *to = &expr->unary_op.cast.var_ty;
 
-    debug_assert(td_var_ty_eq(irb->tchk, var_ty, to),
+    DEBUG_ASSERT(td_var_ty_eq(irb->tchk, var_ty, to),
                  "expr ty didn't equal cast ty");
 
     struct ir_var_value value = build_ir_for_var_value_expr(
@@ -3534,13 +3531,13 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
         value.var_ty = var_ty_for_td_var_ty(irb->unit, var_ty);
         return value;
       } else if (to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
-        debug_assert(td_var_ty_is_integral_ty(to),
+        DEBUG_ASSERT(td_var_ty_is_integral_ty(to),
                      "non integral cast from ptr-like");
 
-        todo("pointer -> int converts in statics");
+        TODO("pointer -> int converts in statics");
       }
 
-      todo("unsupported cast in const expr");
+      TODO("unsupported cast in const expr");
     } else if (to->ty == TD_VAR_TY_TY_POINTER || to->ty == TD_VAR_TY_TY_FUNC ||
                to->ty == TD_VAR_TY_TY_ARRAY) {
       if (from->ty == TD_VAR_TY_TY_WELL_KNOWN) {
@@ -3548,7 +3545,7 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
         return value;
       }
 
-      todo("unsupported cast in const expr");
+      TODO("unsupported cast in const expr");
     } else if (from->ty == TD_VAR_TY_TY_WELL_KNOWN &&
                to->ty == TD_VAR_TY_TY_WELL_KNOWN) {
       enum well_known_ty fwk = from->well_known;
@@ -3562,7 +3559,7 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
                       : (unsigned long long)value.int_value)
         switch (twk) {
         case WELL_KNOWN_TY_HALF:
-          todo("constant cast to half");
+          TODO("constant cast to half");
         case WELL_KNOWN_TY_FLOAT:
           flt_value = (long double)(float)VALUE;
           break;
@@ -3589,13 +3586,13 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
       }
     }
 
-    todo("unsupported cast in const expr");
+    TODO("unsupported cast in const expr");
   }
   case TD_UNARY_OP_TY_ADDRESSOF: {
     return build_ir_for_var_value_addr(irb, expr, NULL, var_ty);
   }
   default:
-    todo("other unary ops in globals");
+    TODO("other unary ops in globals");
   }
 }
 
@@ -3621,7 +3618,7 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
                                        var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .str_value = cnst->str_value};
     } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
-      todo("wide str globals");
+      TODO("wide str globals");
     } else if (td_var_ty_is_integral_ty(&expr->var_ty)) {
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
                                    .var_ty =
@@ -3638,11 +3635,11 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
                                        var_ty_for_td_var_ty(irb->unit, var_ty),
                                    .int_value = cnst->int_value};
     } else {
-      todo("other types");
+      TODO("other types");
     }
   }
   default:
-    todo("other expr tys");
+    TODO("other expr tys");
   }
 }
 
@@ -3671,7 +3668,7 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
       struct ir_build_init *build_init = &layout.inits[i];
 
       if (build_init->is_bitfield) {
-        todo("bitfield init for globals");
+        TODO("bitfield init for globals");
       }
 
       value_list.values[i] = build_ir_for_var_value_expr(
@@ -3753,7 +3750,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
   struct ir_glb *glb = iru->first_global;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_TENTATIVE) {
-      debug_assert(glb->ty == IR_GLB_TY_DATA, "tentative func makes no sense");
+      DEBUG_ASSERT(glb->ty == IR_GLB_TY_DATA, "tentative func makes no sense");
 
       glb->def_ty = IR_GLB_DEF_TY_DEFINED;
       glb->var = arena_alloc(iru->arena, sizeof(*glb->var));

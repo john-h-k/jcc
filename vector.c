@@ -64,7 +64,7 @@ void vector_remove_at(struct vector *v, size_t index) {
 }
 
 void vector_remove_range(struct vector *v, size_t index, size_t len) {
-  debug_assert(index + len <= v->len, "index out of range");
+  DEBUG_ASSERT(index + len <= v->len, "index out of range");
 
   size_t tail = v->len - (index + len);
 
@@ -79,7 +79,7 @@ void vector_remove_range(struct vector *v, size_t index, size_t len) {
 void vector_clear(struct vector *v) { v->len = 0; }
 
 void vector_truncate(struct vector *v, size_t new_len) {
-  debug_assert(new_len <= v->len, "truncating out of range");
+  DEBUG_ASSERT(new_len <= v->len, "truncating out of range");
   v->len = new_len;
 }
 
@@ -105,7 +105,7 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
     vector_ensure_capacity(v, v->len + num_elems);
   }
 
-  debug_assert(v->capacity >= v->len + num_elems,
+  DEBUG_ASSERT(v->capacity >= v->len + num_elems,
                "vector did not expand properly");
 
   if (data) {
@@ -117,7 +117,7 @@ void vector_extend(struct vector *v, const void *data, size_t num_elems) {
 }
 
 void vector_resize(struct vector *v, size_t size) {
-  debug_assert(size <= v->len, "resizing too big");
+  DEBUG_ASSERT(size <= v->len, "resizing too big");
   v->len = size;
 }
 
@@ -131,7 +131,7 @@ void *vector_head(struct vector *v) { return v->data; }
 void *vector_tail(struct vector *v) { return vector_get(v, v->len - 1); }
 
 void *vector_get(struct vector *v, size_t index) {
-  debug_assert(index < v->len, "index out of bounds!");
+  DEBUG_ASSERT(index < v->len, "index out of bounds!");
   return &v->data[index * v->element_size];
 }
 

@@ -168,7 +168,7 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
   }
 
   if ((*op)->flags & IR_OP_FLAG_SPILLED) {
-    debug_assert((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
+    DEBUG_ASSERT((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
                  __func__);
     if (op_needs_reg(data->consumer)) {
       struct ir_op *load;
@@ -191,7 +191,7 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
         load->reg =
             (struct ir_reg){.ty = IR_REG_TY_FP, .idx = data->info.fp_spill_reg};
       } else {
-        bug("dont know what to allocate");
+        BUG("dont know what to allocate");
       }
 
       load->flags |= IR_OP_FLAG_SPILL;
@@ -353,14 +353,14 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       all_used_reg_pool = irb->reg_usage.fp_registers_used;
       spill_reg = info->fp_spill_reg;
     } else {
-      bug("don't know what register type to allocate for op %zu",
+      BUG("don't know what register type to allocate for op %zu",
           interval->op->id);
     }
 
     if (bitset_any(reg_pool, true)) {
       // we can allocate a register from the pool
       size_t free_slot = bitset_tzcnt(reg_pool);
-      debug_assert(free_slot < bitset_length(reg_pool),
+      DEBUG_ASSERT(free_slot < bitset_length(reg_pool),
                    "reg pool unexpectedly empty!");
 
       bitset_set(reg_pool, free_slot, false);

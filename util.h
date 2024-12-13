@@ -200,6 +200,13 @@ static inline void debug_print_stack_trace(void) {
     va_end(v);                                                                 \
   } while (0);
 
+#define MACRO_FMTPRINT(file, message, ...)                                        \
+  do {                                                                         \
+    fprintf(file, message);                                                    \
+    fprintf(file, __VA_ARGS__);                                                 \
+    fprintf(file, "\n");                                                       \
+  } while (0);
+
 #define EXIT_FAIL(code)                                                        \
   debug_print_stack_trace();                                                   \
   raise(SIGINT);                                                               \
@@ -232,21 +239,22 @@ static inline void debug_print_stack_trace(void) {
 
 #define TODO_FUNC(sig)                                                         \
   START_NO_UNUSED_ARGS                                                         \
-  sig { todo(__func__); }                                                      \
+  sig { TODO(__func__); }                                                      \
   END_NO_UNUSED_ARGS
 
-PRINTF_ARGS(0) NORETURN static inline void todo(const char *msg, ...) {
-  FMTPRINT(stderr, "`todo` hit, program exiting: ", msg);
+#define TODO(...) \
+  do { \
+    MACRO_FMTPRINT(stderr, "`todo` hit, program exiting: ", __VA_ARGS__); \
+    EXIT_FAIL(-2); \
+  } while (0);
+
+PRINTF_ARGS(0) NORETURN static inline void BUG(const char *msg, ...) {
+  FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
   EXIT_FAIL(-2);
 }
 
 NORETURN static inline void unreachable(void) {
   fprintf(stderr, "`unreachable` hit, program exiting");
-  EXIT_FAIL(-2);
-}
-
-PRINTF_ARGS(0) NORETURN static inline void bug(const char *msg, ...) {
-  FMTPRINT(stderr, "`bug` hit, program exiting: ", msg);
   EXIT_FAIL(-2);
 }
 
@@ -271,9 +279,9 @@ TRYFORCEINLINE static void breakpoint(void) { raise(SIGINT); }
 #endif
 
 #if NDEBUG
-PRINTF_ARGS(1) static inline void debug_assert(bool, const char *, ...) {}
+PRINTF_ARGS(1) static inline void DEBUG_ASSERT(bool, const char *, ...) {}
 #else
-PRINTF_ARGS(1) static inline void debug_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1) static inline void DEBUG_ASSERT(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
     EXIT_FAIL(-1);
@@ -361,7 +369,7 @@ static inline void *nonnull_realloc(void *p, size_t size) {
 }
 
 static inline void fprint_str(FILE *file, const char *input) {
-  debug_assert(file, "null arg");
+  DEBUG_ASSERT(file, "null arg");
 
   if (!input) {
     fprintf(file, "(null)");

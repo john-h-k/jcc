@@ -51,7 +51,7 @@ enum link_result link_objects(const struct link_args *args) {
   head += strlen(args->output);
   buff[head++] = '\0';
 
-  debug_assert(head == total_size, "string buffer calculations went wrong!");
+  DEBUG_ASSERT(head == total_size, "string buffer calculations went wrong!");
 
   int ret_code = system(buff);
 

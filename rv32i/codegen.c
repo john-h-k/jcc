@@ -75,7 +75,7 @@ static enum rv32i_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   case IR_VAR_PRIMITIVE_TY_I32:
     return RV32I_REG_TY_GP;
   case IR_VAR_PRIMITIVE_TY_I64:
-    todo("i64");
+    TODO("i64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
@@ -88,7 +88,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_NONE:
   case IR_REG_TY_SPILLED:
   case IR_REG_TY_FLAGS:
-    bug("does not make sense for none/spilled/flags");
+    BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
     if (idx >= 17) {
       return 18 + idx;
@@ -114,7 +114,7 @@ static struct rv32i_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
-    todo("non primitives (op %zu)", op->id);
+    TODO("non primitives (op %zu)", op->id);
   }
 
   enum rv32i_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
@@ -127,7 +127,7 @@ static struct rv32i_reg codegen_reg(struct ir_op *op) {
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
     break;
   default:
-    todo("other reg tys (Q/V)");
+    TODO("other reg tys (Q/V)");
   }
 
   return (struct rv32i_reg){.ty = reg_ty, .idx = idx};
@@ -159,7 +159,7 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
 
   if (cond->ty == IR_OP_TY_BINARY_OP &&
       binary_op_is_comparison(cond->binary_op.ty)) {
-    debug_assert(cond->flags & IR_OP_FLAG_CONTAINED,
+    DEBUG_ASSERT(cond->flags & IR_OP_FLAG_CONTAINED,
                  "expected to be contained");
 
     struct rv32i_reg lhs_reg = codegen_reg(cond->binary_op.lhs);
@@ -209,7 +209,7 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
       invert = true;
       break;
     default:
-      bug("floating point etc");
+      BUG("floating point etc");
     }
 
     struct instr *instr = alloc_instr(state->func);
@@ -250,7 +250,7 @@ static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
-  debug_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+  DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                "expects primitive type");
 
   struct rv32i_reg dest = codegen_reg(op);
@@ -259,7 +259,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_CNST_TY_FLT:
     // currently all constants are lowered to an integer load and `fmov`
     // but lots of constants can be loaded directly, so do that here
-    todo("simple float constants (not lowered)");
+    TODO("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
@@ -295,7 +295,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
       break;
     }
     case IR_VAR_PRIMITIVE_TY_I64:
-      todo("i64");
+      TODO("i64");
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_F32:
     case IR_VAR_PRIMITIVE_TY_F64:
@@ -372,7 +372,7 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
         (struct rv32i_op_imm){.dest = dest, .source = source, .imm = -1};
     return;
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-    bug("logical not should never reach emitter, should be converted in lower");
+    BUG("logical not should never reach emitter, should be converted in lower");
   }
 }
 
@@ -387,7 +387,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   bool is_fp = var_ty_is_fp(&op->var_ty);
 
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
-  debug_assert(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
+  DEBUG_ASSERT(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
                    ty == IR_OP_BINARY_OP_TY_FMUL ||
                    ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
                "floating point with invalid binary op");
@@ -406,7 +406,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     // };
     // break;
 
-    todo("float comp binops");
+    TODO("float comp binops");
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
@@ -424,7 +424,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //     .rhs = rhs,
     // };
     // break;
-    todo("comp binops");
+    TODO("comp binops");
   case IR_OP_BINARY_OP_TY_LSHIFT:
     instr->rv32i->ty = RV32I_INSTR_TY_SLL;
     instr->rv32i->sll = (struct rv32i_op){
@@ -594,7 +594,7 @@ static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
     return RV32I_INSTR_TY_FLW;
   } else {
-    bug("unknown load ty");
+    BUG("unknown load ty");
   }
 }
 
@@ -612,7 +612,7 @@ static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
     return RV32I_INSTR_TY_FSW;
   } else {
-    bug("unknown store ty");
+    BUG("unknown store ty");
   }
 }
 
@@ -629,7 +629,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
       imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
     } else {
-      bug("can't CONTAIN operand in load_addr node");
+      BUG("can't CONTAIN operand in load_addr node");
     }
 
     instr->rv32i->ty = load_ty_for_op(op);
@@ -683,7 +683,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
       imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
     } else {
-      bug("can't CONTAIN operand in store_addr node");
+      BUG("can't CONTAIN operand in store_addr node");
     }
 
     instr->rv32i->ty = store_ty_for_op(op->store.value);
@@ -706,7 +706,7 @@ static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
     codegen_load_addr_op(state, op);
     break;
   case IR_OP_LOAD_TY_GLB:
-    bug("load.glb should have been lowered");
+    BUG("load.glb should have been lowered");
   }
 }
 
@@ -719,7 +719,7 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
     codegen_store_addr_op(state, op);
     break;
   case IR_OP_STORE_TY_GLB:
-    bug("store.glb should have been lowered");
+    BUG("store.glb should have been lowered");
   }
 }
 
@@ -767,7 +767,7 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
-    todo("rv32i global addr");
+    TODO("rv32i global addr");
   }
   }
 }
@@ -799,13 +799,13 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
   }
 
   case IR_VAR_PRIMITIVE_TY_I32:
-    todo("rv32i i64");
+    TODO("rv32i i64");
   case IR_VAR_PRIMITIVE_TY_I64:
-    bug("can't sext from I64");
+    BUG("can't sext from I64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    bug("can't sext float");
+    BUG("can't sext float");
   }
 }
 
@@ -835,13 +835,13 @@ static void codegen_zext_op(struct codegen_state *state, struct ir_op *op,
     break;
   }
   case IR_VAR_PRIMITIVE_TY_I32:
-    todo("rv32i i64");
+    TODO("rv32i i64");
   case IR_VAR_PRIMITIVE_TY_I64:
-    bug("can't zext from I64");
+    BUG("can't zext from I64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    bug("can't zext float");
+    BUG("can't zext float");
   }
 }
 
@@ -869,18 +869,18 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
   case IR_VAR_PRIMITIVE_TY_I64:
     break;
   default:
-    bug("can't zext");
+    BUG("can't zext");
   }
 }
 
 static void codegen_conv_op(struct codegen_state *state,
                             struct rv32i_reg source, struct rv32i_reg dest) {
-  todo("rv32i conv");
+  TODO("rv32i conv");
 }
 
 static void codegen_uconv_op(struct codegen_state *state,
                              struct rv32i_reg source, struct rv32i_reg dest) {
-  todo("rv32i uconv");
+  TODO("rv32i uconv");
 }
 
 static void codegen_sconv_op(struct codegen_state *state,
@@ -933,7 +933,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_PHI:
     break;
   case IR_OP_TY_CUSTOM: {
-    bug("custom");
+    BUG("custom");
   }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
@@ -978,7 +978,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_CALL: {
-    todo("");
+    TODO("");
     // codegen_call_op(state, op);
     // break;
   }
@@ -987,7 +987,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   default: {
-    todo("unsupported IR OP '%d'", op->ty);
+    TODO("unsupported IR OP '%d'", op->ty);
   }
   }
 }
@@ -1060,7 +1060,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
                                      .str = glb->var->value.str_value};
           break;
         case IR_VAR_TY_CONST_DATA:
-          todo("");
+          TODO("");
           // unit->entries[i] =
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
           //                            .glb_id = glb->id,
@@ -1069,7 +1069,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
           //                            glb->var)};
           // break;
         case IR_VAR_TY_DATA:
-          todo("");
+          TODO("");
           // unit->entries[i] =
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
           //                            .glb_id = glb->id,
@@ -1110,7 +1110,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
 
             while (op) {
               if (op->ty == IR_OP_TY_CALL) {
-                todo("");
+                TODO("");
                 // size_t call_args_size =
                 //     calc_arg_stack_space(&state, op->call.func_ty.func,
                 //     op);
@@ -1407,7 +1407,7 @@ static void debug_print_instr(FILE *file,
   case RV32I_INSTR_TY_FMV:
     switch (instr->rv32i->fmv.source.ty) {
     case RV32I_REG_TY_NONE:
-      bug("none dest");
+      BUG("none dest");
     case RV32I_REG_TY_GP:
       fprintf(file, "fmv.w.x");
       break;
@@ -1487,7 +1487,7 @@ static void debug_print_instr(FILE *file,
 }
 
 void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
-  debug_assert(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
+  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct codegen_entry *entry = &unit->entries[i];
