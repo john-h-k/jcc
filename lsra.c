@@ -173,13 +173,16 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
     if (op_needs_reg(data->consumer)) {
       struct ir_op *load;
       if (data->consumer->ty == IR_OP_TY_PHI) {
-        load = replace_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,
+        load = replace_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD,
                              (*op)->var_ty);
       } else {
-        load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD_LCL,
+        load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD,
                                    (*op)->var_ty);
       }
-      load->load_lcl.lcl = (*op)->lcl;
+      load->load = (struct ir_op_load){
+        .ty = IR_OP_LOAD_TY_LCL,
+        .lcl = (*op)->lcl
+      };
 
       if (var_ty_is_integral(&load->var_ty)) {
         load->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
@@ -294,15 +297,18 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
           struct ir_op *save = insert_after_ir_op(
-              irb, lcl_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
+              irb, lcl_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
           save->reg = reg;
-          save->store_addr =
-              (struct ir_op_store_addr){.addr = lcl_addr, .value = live->op};
+          save->store =
+              (struct ir_op_store){
+              .ty = IR_OP_STORE_TY_ADDR,
+              .addr = lcl_addr, .value = live->op};
 
           struct ir_op *reload = insert_after_ir_op(
-              irb, interval->op, IR_OP_TY_LOAD_ADDR, live->op->var_ty);
+              irb, interval->op, IR_OP_TY_LOAD, live->op->var_ty);
           reload->reg = reg;
-          reload->load_addr = (struct ir_op_load_addr){
+          reload->load = (struct ir_op_load){
+            .ty = IR_OP_LOAD_TY_ADDR,
               .addr = lcl_addr,
           };
         }

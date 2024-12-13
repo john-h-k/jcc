@@ -23,15 +23,10 @@ enum ir_op_ty {
   IR_OP_TY_UNARY_OP,
   IR_OP_TY_CAST_OP,
 
-  // we could merge this all into LOAD/STORE ops
-  IR_OP_TY_STORE_GLB,
-  IR_OP_TY_LOAD_GLB,
-  IR_OP_TY_STORE_LCL,
-  IR_OP_TY_LOAD_LCL,
-  IR_OP_TY_STORE_ADDR,
-  IR_OP_TY_LOAD_ADDR,
-  IR_OP_TY_LOAD_BITFIELD,
+  IR_OP_TY_STORE,
+  IR_OP_TY_LOAD,
   IR_OP_TY_STORE_BITFIELD,
+  IR_OP_TY_LOAD_BITFIELD,
 
   IR_OP_TY_ADDR,
 
@@ -269,49 +264,68 @@ struct ir_op_call {
   struct ir_var_ty *arg_var_tys;
 };
 
-struct ir_op_store_lcl {
-  // the local stored into is just the `lcl` assigned to this op
-  struct ir_op *value;
-};
-
-struct ir_op_load_lcl {
-  struct ir_lcl *lcl;
-};
-
-struct ir_op_store_addr {
-  struct ir_op *value;
-  struct ir_op *addr;
-};
-
-struct ir_op_load_addr {
-  struct ir_op *addr;
-};
-
 struct ir_bitfield {
   size_t offset;
   size_t width;
 };
 
-struct ir_op_store_bitfield {
-  struct ir_op *value;
-  struct ir_op *addr;
+enum ir_op_store_ty {
+  IR_OP_STORE_TY_LCL,
+  IR_OP_STORE_TY_GLB,
+  IR_OP_STORE_TY_ADDR,
+};
 
+struct ir_op_store {
+  enum ir_op_store_ty ty;
+
+  struct ir_op *value;
+
+  union {
+    struct ir_lcl *lcl;
+    struct ir_glb *glb;
+    struct ir_op *addr;
+  };
+};
+
+struct ir_op_store_bitfield {
+  enum ir_op_store_ty ty;
+
+  struct ir_op *value;
   struct ir_bitfield bitfield;
+
+  union {
+    struct ir_lcl *lcl;
+    struct ir_glb *glb;
+    struct ir_op *addr;
+  };
+};
+
+enum ir_op_load_ty {
+  IR_OP_LOAD_TY_LCL,
+  IR_OP_LOAD_TY_GLB,
+  IR_OP_LOAD_TY_ADDR,
+};
+
+struct ir_op_load {
+  enum ir_op_load_ty ty;
+
+  union {
+    struct ir_lcl *lcl;
+    struct ir_glb *glb;
+    struct ir_op *addr;
+  };
 };
 
 struct ir_op_load_bitfield {
-  struct ir_op *addr;
+  enum ir_op_load_ty ty;
 
   struct ir_bitfield bitfield;
-};
 
-struct ir_op_store_glb {
-  struct ir_op *value;
-  struct ir_glb *glb;
-};
-
-struct ir_op_load_glb {
-  struct ir_glb *glb;
+  union {
+    struct ir_lcl *lcl;
+    struct ir_glb *glb;
+    struct ir_op *addr;
+  };
 };
 
 enum ir_op_addr_ty {
@@ -423,12 +437,8 @@ struct ir_op {
     struct ir_op_unary_op unary_op;
     struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
-    struct ir_op_store_glb store_glb;
-    struct ir_op_load_glb load_glb;
-    struct ir_op_store_lcl store_lcl;
-    struct ir_op_load_lcl load_lcl;
-    struct ir_op_store_addr store_addr;
-    struct ir_op_load_addr load_addr;
+    struct ir_op_store store;
+    struct ir_op_load load;
     struct ir_op_store_bitfield store_bitfield;
     struct ir_op_load_bitfield load_bitfield;
     struct ir_op_addr addr;
@@ -705,6 +715,12 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock);
 
 void prune_basicblocks(struct ir_func *irb);
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
+
+enum ir_well_known_glb {
+  IR_WELL_KNOWN_GLB_MEMMOVE,
+};
+
+struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb)
 
 void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);

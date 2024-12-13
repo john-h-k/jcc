@@ -114,132 +114,132 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
 // actually more than this but we don't support that yet
 #define MAX_REG_SIZE (8)
 
-static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
-  // look for store after, in case this is a copy
-  // FIXME: not sure if this is perfect logic (could there be ops in between?)
-  struct ir_op *nxt_store = op->succ;
+// static void lower_load_lcl(struct ir_func *func, struct ir_op *op) {
+//   // look for store after, in case this is a copy
+//   // FIXME: not sure if this is perfect logic (could there be ops in between?)
+//   struct ir_op *nxt_store = op->succ;
 
-  if (!nxt_store || nxt_store->ty != IR_OP_TY_STORE_LCL) {
-    return;
-  }
+//   if (!nxt_store || nxt_store->ty != IR_OP_TY_STORE_LCL) {
+//     return;
+//   }
 
-  struct ir_var_ty_info info = var_ty_info(func->unit, &op->var_ty);
+//   struct ir_var_ty_info info = var_ty_info(func->unit, &op->var_ty);
 
-  bool simple_copy = true;
-  enum ir_var_primitive_ty simple_copy_ty;
-  switch (info.size) {
-  case 1:
-    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I8;
-    break;
-  case 2:
-    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I16;
-    break;
-  case 4:
-    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I32;
-    break;
-  case 8:
-    simple_copy_ty = IR_VAR_PRIMITIVE_TY_I64;
-    break;
+//   bool simple_copy = true;
+//   enum ir_var_primitive_ty simple_copy_ty;
+//   switch (info.size) {
+//   case 1:
+//     simple_copy_ty = IR_VAR_PRIMITIVE_TY_I8;
+//     break;
+//   case 2:
+//     simple_copy_ty = IR_VAR_PRIMITIVE_TY_I16;
+//     break;
+//   case 4:
+//     simple_copy_ty = IR_VAR_PRIMITIVE_TY_I32;
+//     break;
+//   case 8:
+//     simple_copy_ty = IR_VAR_PRIMITIVE_TY_I64;
+//     break;
 
-  default:
-    simple_copy = false;
-  }
+//   default:
+//     simple_copy = false;
+//   }
 
-  if (simple_copy) {
-    op->var_ty = (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
-                                    .primitive = simple_copy_ty};
-    return;
-  }
+//   if (simple_copy) {
+//     op->var_ty = (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
+//                                     .primitive = simple_copy_ty};
+//     return;
+//   }
 
-  if (info.size < MAX_REG_SIZE) {
-    todo("non-pow2 copies < MAX_REG_SIZE");
-  }
+//   if (info.size < MAX_REG_SIZE) {
+//     todo("non-pow2 copies < MAX_REG_SIZE");
+//   }
 
-  struct ir_var_ty copy_ty = var_ty_for_pointer_size(func->unit);
+//   struct ir_var_ty copy_ty = var_ty_for_pointer_size(func->unit);
 
-  struct ir_lcl *src_lcl = op->load_lcl.lcl;
-  struct ir_lcl *dest_lcl = nxt_store->lcl;
+//   struct ir_lcl *src_lcl = op->load_lcl.lcl;
+//   struct ir_lcl *dest_lcl = nxt_store->store.lcl;
 
-  struct ir_op *base_src_addr = op;
-  struct ir_op *base_dest_addr = nxt_store;
+//   struct ir_op *base_src_addr = op;
+//   struct ir_op *base_dest_addr = nxt_store;
 
-  base_src_addr->ty = IR_OP_TY_ADDR;
-  base_src_addr->var_ty = copy_ty;
-  base_src_addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = src_lcl};
+//   base_src_addr->ty = IR_OP_TY_ADDR;
+//   base_src_addr->var_ty = copy_ty;
+//   base_src_addr->addr =
+//       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = src_lcl};
 
-  base_dest_addr->ty = IR_OP_TY_ADDR;
-  base_dest_addr->var_ty = copy_ty;
-  base_dest_addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = dest_lcl};
+//   base_dest_addr->ty = IR_OP_TY_ADDR;
+//   base_dest_addr->var_ty = copy_ty;
+//   base_dest_addr->addr =
+//       (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = dest_lcl};
 
-  struct ir_op *last = base_dest_addr;
+//   struct ir_op *last = base_dest_addr;
 
-  size_t size_left = info.size;
-  size_t offset = 0;
-  while (size_left >= MAX_REG_SIZE) {
-    struct ir_op *offset_cnst =
-        insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
-    make_pointer_constant(func->unit, offset_cnst, offset);
+//   size_t size_left = info.size;
+//   size_t offset = 0;
+//   while (size_left >= MAX_REG_SIZE) {
+//     struct ir_op *offset_cnst =
+//         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
+//     make_pointer_constant(func->unit, offset_cnst, offset);
 
-    struct ir_op *src_addr =
-        insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
-    src_addr->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
+//     struct ir_op *src_addr =
+//         insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
+//     src_addr->binary_op = (struct ir_op_binary_op){
+//         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
-    struct ir_op *load =
-        insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
-    load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
+//     struct ir_op *load =
+//         insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+//     load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
-    struct ir_op *dest_addr =
-        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
-    dest_addr->binary_op =
-        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
-                                 .lhs = base_dest_addr,
-                                 .rhs = offset_cnst};
+//     struct ir_op *dest_addr =
+//         insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
+//     dest_addr->binary_op =
+//         (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
+//                                  .lhs = base_dest_addr,
+//                                  .rhs = offset_cnst};
 
-    struct ir_op *store = insert_after_ir_op(
-        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
-    store->store_addr =
-        (struct ir_op_store_addr){.addr = dest_addr, .value = load};
+//     struct ir_op *store = insert_after_ir_op(
+//         func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
+//     store->store_addr =
+//         (struct ir_op_store_addr){.addr = dest_addr, .value = load};
 
-    last = store;
-    size_left -= MAX_REG_SIZE;
-    offset += MAX_REG_SIZE;
-  }
+//     last = store;
+//     size_left -= MAX_REG_SIZE;
+//     offset += MAX_REG_SIZE;
+//   }
 
-  // now we have to do the last trailing load
-  // because size is >= MAX_REG_SIZE,
-  // we can just do a whole-reg copy starting from end-MAX_REG_SIZE
-  if (size_left) {
-    size_t trailing_offset = MAX_REG_SIZE - size_left;
+//   // now we have to do the last trailing load
+//   // because size is >= MAX_REG_SIZE,
+//   // we can just do a whole-reg copy starting from end-MAX_REG_SIZE
+//   if (size_left) {
+//     size_t trailing_offset = MAX_REG_SIZE - size_left;
 
-    struct ir_op *offset_cnst =
-        insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
-    make_pointer_constant(func->unit, offset_cnst, trailing_offset);
+//     struct ir_op *offset_cnst =
+//         insert_after_ir_op(func, last, IR_OP_TY_CNST, copy_ty);
+//     make_pointer_constant(func->unit, offset_cnst, trailing_offset);
 
-    struct ir_op *src_addr =
-        insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
-    src_addr->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
+//     struct ir_op *src_addr =
+//         insert_after_ir_op(func, offset_cnst, IR_OP_TY_BINARY_OP, copy_ty);
+//     src_addr->binary_op = (struct ir_op_binary_op){
+//         .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base_src_addr, .rhs = offset_cnst};
 
-    struct ir_op *load =
-        insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
-    load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
+//     struct ir_op *load =
+//         insert_after_ir_op(func, src_addr, IR_OP_TY_LOAD_ADDR, copy_ty);
+//     load->load_addr = (struct ir_op_load_addr){.addr = src_addr};
 
-    struct ir_op *dest_addr =
-        insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
-    dest_addr->binary_op =
-        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
-                                 .lhs = base_dest_addr,
-                                 .rhs = offset_cnst};
+//     struct ir_op *dest_addr =
+//         insert_after_ir_op(func, load, IR_OP_TY_BINARY_OP, copy_ty);
+//     dest_addr->binary_op =
+//         (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_ADD,
+//                                  .lhs = base_dest_addr,
+//                                  .rhs = offset_cnst};
 
-    struct ir_op *store = insert_after_ir_op(
-        func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
-    store->store_addr =
-        (struct ir_op_store_addr){.addr = dest_addr, .value = load};
-  }
-}
+//     struct ir_op *store = insert_after_ir_op(
+//         func, dest_addr, IR_OP_TY_STORE_ADDR, IR_VAR_TY_NONE);
+//     store->store_addr =
+//         (struct ir_op_store_addr){.addr = dest_addr, .value = load};
+//   }
+// }
 
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
@@ -287,27 +287,25 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_load_to_addr(struct ir_op *op) {
-  switch (op->ty) {
-  case IR_OP_TY_LOAD_LCL: {
-    struct ir_lcl *lcl = op->load_lcl.lcl;
+  switch (op->load.ty) {
+  case IR_OP_LOAD_TY_LCL: {
+    struct ir_lcl *lcl = op->load.lcl;
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = IR_VAR_TY_I64;
     op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
     break;
   }
-  case IR_OP_TY_LOAD_ADDR: {
-    struct ir_op *addr = op->load_addr.addr;
+  case IR_OP_LOAD_TY_ADDR: {
+    struct ir_op *addr = op->load.addr;
 
     op->ty = IR_OP_TY_MOV;
     op->var_ty = IR_VAR_TY_I64;
     op->mov = (struct ir_op_mov){.value = addr};
     break;
   }
-  case IR_OP_TY_LOAD_GLB:
-    bug("load glb should be gone by now");
-  default:
-    unreachable();
+  case IR_OP_LOAD_TY_GLB:
+    bug("load.glb should be gone by now");
   }
 }
 
@@ -315,8 +313,7 @@ static void lower_call(struct ir_func *func, struct ir_op *op) {
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
 
-    if ((arg->ty != IR_OP_TY_LOAD_LCL && arg->ty != IR_OP_TY_LOAD_GLB &&
-         arg->ty != IR_OP_TY_LOAD_ADDR) ||
+    if ((arg->ty != IR_OP_TY_LOAD) ||
         !var_ty_is_aggregate(&arg->var_ty)) {
       continue;
     }
@@ -325,8 +322,8 @@ static void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   if (var_ty_is_aggregate(&op->var_ty)) {
-    if (op->succ && op->succ->ty == IR_OP_TY_STORE_LCL &&
-        op->succ->store_lcl.value == op) {
+    if (op->succ && op->succ->ty == IR_OP_TY_STORE &&
+        op->succ->store.value == op) {
       op->lcl = op->succ->lcl;
       detach_ir_op(func, op->succ);
     }
@@ -343,8 +340,7 @@ static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *value = op->ret.value;
 
-  if ((value->ty != IR_OP_TY_LOAD_LCL && value->ty != IR_OP_TY_LOAD_GLB &&
-       value->ty != IR_OP_TY_LOAD_ADDR) ||
+  if ((value->ty != IR_OP_TY_LOAD) ||
       !var_ty_is_aggregate(&value->var_ty)) {
     return;
   }
@@ -379,8 +375,6 @@ void aarch64_lower(struct ir_unit *unit) {
               bug("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_STORE_GLB:
-            case IR_OP_TY_LOAD_GLB:
             case IR_OP_TY_PHI:
               break;
             case IR_OP_TY_RET:
@@ -394,13 +388,8 @@ void aarch64_lower(struct ir_unit *unit) {
 
               break;
             }
-            case IR_OP_TY_STORE_LCL:
-              break;
-            case IR_OP_TY_LOAD_LCL:
-              lower_load_lcl(func, op);
-              break;
-            case IR_OP_TY_STORE_ADDR:
-            case IR_OP_TY_LOAD_ADDR:
+            case IR_OP_TY_LOAD:
+            case IR_OP_TY_STORE:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_ADDR:
@@ -467,12 +456,8 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
             case IR_OP_TY_CNST:
-            case IR_OP_TY_STORE_GLB:
-            case IR_OP_TY_LOAD_GLB:
-            case IR_OP_TY_STORE_LCL:
-            case IR_OP_TY_LOAD_LCL:
-            case IR_OP_TY_STORE_ADDR:
-            case IR_OP_TY_LOAD_ADDR:
+            case IR_OP_TY_STORE:
+            case IR_OP_TY_LOAD:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_ADDR:
