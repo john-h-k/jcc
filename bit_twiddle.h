@@ -16,7 +16,11 @@
 
 #define NTH_BIT(value, bitn) (((value) & (1ull << (bitn))) >> (bitn))
 
-#define MASK(bitc) (1 << ((bitc) - 1))
 #define SIGN_EXT(value, bitc) (((value) ^ MASK(bitc)) - MASK(bitc))
+
+#define MASK_LO(ty, lo) ((ty)((1 << (lo)) - 1))
+#define MASK_HI(ty, hi) (~MASK_LO(ty, hi))
+
+#define MASK_OUT(ty, hi, lo) (MASK_HI(ty, hi) | MASK_LO(ty, lo))
 
 #endif

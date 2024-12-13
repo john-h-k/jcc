@@ -267,6 +267,8 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {
+  debug_assert(ir->stmt, "op used by other op but had no stmt (likely detached)");
+
   if (ir->flags & IR_OP_FLAG_CONTAINED) {
     debug_print_op(file, irb, ir, PRINT_OP_CTX_USE);
   } else {
@@ -276,6 +278,8 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
 
 static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
                            enum print_op_ctx ctx) {
+  debug_assert(ir->stmt, "op had no stmt");
+
   if (ctx != PRINT_OP_CTX_USE && ir->comment) {
     fprintf(file, "// %s\n", ir->comment);
   }
@@ -350,6 +354,17 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
   case IR_OP_TY_LOAD_ADDR:
     fprintf(file, "loadaddr [");
     debug_print_op_use(file, irb, ir->load_addr.addr);
+    fprintf(file, "]");
+    break;
+  case IR_OP_TY_STORE_BITFIELD:
+    fprintf(file, "store.bitfield (#%zu, #%zu) [", ir->store_bitfield.bitfield.offset, ir->store_bitfield.bitfield.width);
+    debug_print_op_use(file, irb, ir->store_bitfield.addr);
+    fprintf(file, "], ");
+    debug_print_op_use(file, irb, ir->store_bitfield.value);
+    break;
+  case IR_OP_TY_LOAD_BITFIELD:
+    fprintf(file, "load.bitfield (#%zu, #%zu) [", ir->load_bitfield.bitfield.offset, ir->load_bitfield.bitfield.width);
+    debug_print_op_use(file, irb, ir->load_bitfield.addr);
     fprintf(file, "]");
     break;
   case IR_OP_TY_ADDR:

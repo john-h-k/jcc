@@ -593,15 +593,18 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
                                                 struct td_expr *lhs_expr,
                                                 struct td_expr *rhs_expr);
 
-static struct ir_op *build_ir_for_member_address(struct ir_func_builder *irb,
-                                                 struct ir_stmt **stmt,
-                                                 struct td_expr *lhs_expr,
-                                                 const char *member_name);
+static struct ir_op *
+build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
+                            struct td_expr *lhs_expr, const char *member_name,
+                            bool *member_is_bitfield,
+                            struct ir_bitfield *member_bitfield);
 
 static struct ir_op *build_ir_for_pointer_address(struct ir_func_builder *irb,
                                                   struct ir_stmt **stmt,
                                                   struct td_expr *lhs_expr,
-                                                  const char *member_name);
+                                                  const char *member_name,
+                             bool *member_is_bitfield,
+                             struct ir_bitfield *member_bitfield);
 
 static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
                                                 struct ir_stmt **stmt,
@@ -660,11 +663,11 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
   }
   case TD_EXPR_TY_MEMBERACCESS: {
     return build_ir_for_member_address(irb, stmt, expr->member_access.lhs,
-                                       expr->member_access.member);
+                                       expr->member_access.member, NULL, NULL);
   }
   case TD_EXPR_TY_POINTERACCESS: {
     return build_ir_for_pointer_address(irb, stmt, expr->pointer_access.lhs,
-                                        expr->pointer_access.member);
+                                        expr->pointer_access.member, NULL, NULL);
   }
   case TD_EXPR_TY_COMPOUNDEXPR: {
     return build_ir_for_addressof(
@@ -733,7 +736,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
                                                          : TD_ASSG_TY_SUB;
     goto inc_dec;
 
-  inc_dec: {
+  inc_dec : {
     // if we are decrementing a pointer/array, we need to make sure we don't
     // build an expr that is PTR - PTR as this will do a "pointer subtract"
     // rather than "pointer minus integer" so we give the constant a
@@ -1262,7 +1265,8 @@ static void get_member_info(struct ir_unit *iru,
                             const struct td_var_ty *aggregate,
                             const char *member_name,
                             struct ir_var_ty *member_ty, size_t *member_idx,
-                            size_t *member_offset,
+                            size_t *member_offset, bool *member_is_bitfield,
+                            struct ir_bitfield *member_bitfield,
                             struct td_var_ty *td_member_ty) {
   debug_assert(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
 
@@ -1277,6 +1281,18 @@ static void get_member_info(struct ir_unit *iru,
   for (; *member_idx < aggregate->aggregate.num_fields; (*member_idx)++) {
     struct td_struct_field *field = &aggregate->aggregate.fields[*member_idx];
     if (strcmp(field->identifier, member_name) == 0) {
+      if (member_bitfield) {
+        if (field->flags & TD_STRUCT_FIELD_FLAG_BITFIELD) {
+          *member_is_bitfield = true;
+          *member_bitfield =
+              (struct ir_bitfield){
+              .offset = 0, // all bitfields are their own fields for now
+              .width = field->bitfield_width};
+        } else {
+          *member_is_bitfield = false;
+        }
+      }
+
       if (td_member_ty) {
         *td_member_ty = field->var_ty;
       }
@@ -1300,12 +1316,14 @@ static void get_member_info(struct ir_unit *iru,
 static struct ir_op *build_ir_for_member_address_offset(
     struct ir_func_builder *irb, struct ir_stmt **stmt,
     const struct td_var_ty *struct_ty, const char *member_name,
-    struct ir_var_ty *member_ty, struct td_var_ty *td_member_ty) {
+    struct ir_var_ty *member_ty, bool *member_is_bitfield,
+    struct ir_bitfield *member_bitfield, struct td_var_ty *td_member_ty) {
 
   size_t member_offset;
   size_t idx;
   get_member_info(irb->unit, struct_ty, member_name, member_ty, &idx,
-                  &member_offset, td_member_ty);
+                  &member_offset, member_is_bitfield, member_bitfield,
+                  td_member_ty);
 
   if (!member_offset) {
     return NULL;
@@ -1320,15 +1338,17 @@ static struct ir_op *build_ir_for_member_address_offset(
   return offset;
 }
 
-static struct ir_op *build_ir_for_member_address(struct ir_func_builder *irb,
-                                                 struct ir_stmt **stmt,
-                                                 struct td_expr *lhs_expr,
-                                                 const char *member_name) {
+static struct ir_op *
+build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
+                            struct td_expr *lhs_expr, const char *member_name,
+                            bool *member_is_bitfield,
+                            struct ir_bitfield *member_bitfield) {
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
   struct ir_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(
-      irb, stmt, &lhs_expr->var_ty, member_name, &member_ty, NULL);
+      irb, stmt, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
+      member_bitfield, NULL);
 
   if (!rhs) {
     return lhs;
@@ -1343,10 +1363,11 @@ static struct ir_op *build_ir_for_member_address(struct ir_func_builder *irb,
   return op;
 }
 
-static struct ir_op *build_ir_for_pointer_address(struct ir_func_builder *irb,
-                                                  struct ir_stmt **stmt,
-                                                  struct td_expr *lhs_expr,
-                                                  const char *member_name) {
+static struct ir_op *
+build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
+                             struct td_expr *lhs_expr, const char *member_name,
+                             bool *member_is_bitfield,
+                             struct ir_bitfield *member_bitfield) {
   debug_assert(lhs_expr->var_ty.ty == TD_VAR_TY_TY_POINTER,
                "makes no sense except on LHS pointer");
 
@@ -1355,7 +1376,7 @@ static struct ir_op *build_ir_for_pointer_address(struct ir_func_builder *irb,
   struct ir_var_ty member_ty;
   struct ir_op *rhs = build_ir_for_member_address_offset(
       irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
-      NULL);
+      NULL, NULL, NULL);
 
   if (!rhs) {
     return lhs;
@@ -1513,7 +1534,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     ty = TD_BINARY_OP_TY_RSHIFT;
     goto compound_assg;
 
-  compound_assg: {
+  compound_assg : {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
     struct ir_op *lhs;
@@ -1548,6 +1569,9 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   }
   }
 
+  bool is_bitfield = false;
+  struct ir_bitfield bitfield;
+
   struct ir_op *address = NULL;
   switch (assg->assignee->ty) {
   case TD_EXPR_TY_VAR:
@@ -1559,15 +1583,15 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   }
   case TD_EXPR_TY_MEMBERACCESS: {
     struct td_memberaccess *access = &assg->assignee->member_access;
-    address =
-        build_ir_for_member_address(irb, stmt, access->lhs, access->member);
+    address = build_ir_for_member_address(
+        irb, stmt, access->lhs, access->member, &is_bitfield, &bitfield);
 
     break;
   }
   case TD_EXPR_TY_POINTERACCESS: {
     struct td_pointeraccess *access = &assg->assignee->pointer_access;
-    address =
-        build_ir_for_pointer_address(irb, stmt, access->lhs, access->member);
+    address = build_ir_for_pointer_address(
+        irb, stmt, access->lhs, access->member, &is_bitfield, &bitfield);
     break;
   }
   case TD_EXPR_TY_UNARY_OP: {
@@ -1584,11 +1608,19 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     todo("non var assignments");
   }
 
-  struct ir_op *store = alloc_ir_op(irb->func, *stmt);
-  store->ty = IR_OP_TY_STORE_ADDR;
-  store->var_ty = IR_VAR_TY_NONE;
-  store->store_addr =
-      (struct ir_op_store_addr){.addr = address, .value = value};
+  if (is_bitfield) {
+    struct ir_op *store = alloc_ir_op(irb->func, *stmt);
+    store->ty = IR_OP_TY_STORE_BITFIELD;
+    store->var_ty = IR_VAR_TY_NONE;
+    store->store_bitfield =
+        (struct ir_op_store_bitfield){.addr = address, .value = value, .bitfield = bitfield};
+  } else {
+    struct ir_op *store = alloc_ir_op(irb->func, *stmt);
+    store->ty = IR_OP_TY_STORE_ADDR;
+    store->var_ty = IR_VAR_TY_NONE;
+    store->store_addr =
+        (struct ir_op_store_addr){.addr = address, .value = value};
+  }
 
   return value;
 }
@@ -1622,15 +1654,27 @@ build_ir_for_memberaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
                           const struct td_var_ty *member_ty) {
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, member_ty);
 
+  bool is_bitfield;
+  struct ir_bitfield bitfield;
+
   struct ir_op *address = build_ir_for_member_address(
-      irb, stmt, member_access->lhs, member_access->member);
+      irb, stmt, member_access->lhs, member_access->member, &is_bitfield, &bitfield);
 
-  struct ir_op *op = alloc_ir_op(irb->func, *stmt);
-  op->ty = IR_OP_TY_LOAD_ADDR;
-  op->var_ty = var_ty;
-  op->load_addr = (struct ir_op_load_addr){.addr = address};
+  if (is_bitfield) {
+    struct ir_op *op = alloc_ir_op(irb->func, *stmt);
+    op->ty = IR_OP_TY_LOAD_BITFIELD;
+    op->var_ty = var_ty;
+    op->load_bitfield = (struct ir_op_load_bitfield){.addr = address, .bitfield = bitfield};
 
-  return op;
+    return op;
+  } else {
+    struct ir_op *op = alloc_ir_op(irb->func, *stmt);
+    op->ty = IR_OP_TY_LOAD_ADDR;
+    op->var_ty = var_ty;
+    op->load_addr = (struct ir_op_load_addr){.addr = address};
+
+    return op;
+  }
 }
 
 static struct ir_op *
@@ -1639,15 +1683,27 @@ build_ir_for_pointeraccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
                            const struct td_var_ty *member_ty) {
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, member_ty);
 
+  bool is_bitfield;
+  struct ir_bitfield bitfield;
+
   struct ir_op *address = build_ir_for_pointer_address(
-      irb, stmt, pointer_access->lhs, pointer_access->member);
+      irb, stmt, pointer_access->lhs, pointer_access->member, &is_bitfield, &bitfield);
 
-  struct ir_op *op = alloc_ir_op(irb->func, *stmt);
-  op->ty = IR_OP_TY_LOAD_ADDR;
-  op->var_ty = var_ty;
-  op->load_addr = (struct ir_op_load_addr){.addr = address};
+  if (is_bitfield) {
+    struct ir_op *op = alloc_ir_op(irb->func, *stmt);
+    op->ty = IR_OP_TY_LOAD_BITFIELD;
+    op->var_ty = var_ty;
+    op->load_bitfield = (struct ir_op_load_bitfield){.addr = address, .bitfield = bitfield};
 
-  return op;
+    return op;
+  } else {
+    struct ir_op *op = alloc_ir_op(irb->func, *stmt);
+    op->ty = IR_OP_TY_LOAD_ADDR;
+    op->var_ty = var_ty;
+    op->load_addr = (struct ir_op_load_addr){.addr = address};
+
+    return op;
+  }
 }
 
 static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
@@ -2231,6 +2287,8 @@ build_ir_for_jumpstmt(struct ir_func_builder *irb,
 // it into `ir_var`s
 struct ir_build_init {
   size_t offset;
+  bool is_bitfield;
+  struct ir_bitfield bitfield;
   struct td_expr *expr;
 };
 
@@ -2360,10 +2418,17 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     }
 
     struct ir_op *store = alloc_ir_op(irb->func, *stmt);
-    store->ty = IR_OP_TY_STORE_ADDR;
-    store->var_ty = IR_VAR_TY_NONE;
-    store->store_addr =
-        (struct ir_op_store_addr){.addr = init_address, .value = value};
+    if (init->is_bitfield) {
+      store->ty = IR_OP_TY_STORE_BITFIELD;
+      store->var_ty = IR_VAR_TY_NONE;
+      store->store_bitfield =
+          (struct ir_op_store_bitfield){.addr = init_address, .value = value, .bitfield = init->bitfield};
+    } else {
+      store->ty = IR_OP_TY_STORE_ADDR;
+      store->var_ty = IR_VAR_TY_NONE;
+      store->store_addr =
+          (struct ir_op_store_addr){.addr = init_address, .value = value};
+    }
 
     struct ir_var_ty var_ty =
         var_ty_for_td_var_ty(irb->unit, &init->expr->var_ty);
@@ -2877,6 +2942,7 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
     res_ty = IR_VAR_TY_POINTER;
     break;
   case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD_BITFIELD:
     // loads happen on opaque pointers so we can't check types
     return;
   default:
@@ -3131,7 +3197,10 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 static size_t get_member_index_offset(struct ir_unit *iru,
                                       const struct td_var_ty *var_ty,
                                       size_t member_index,
-                                      struct td_var_ty *member_ty) {
+                                      struct td_var_ty *member_ty,
+                                      bool *is_bitfield,
+                                      struct ir_bitfield *bitfield
+                                    ) {
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
     *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
     struct ir_var_ty el_ty = var_ty_for_td_var_ty(iru, member_ty);
@@ -3148,7 +3217,7 @@ static size_t get_member_index_offset(struct ir_unit *iru,
     size_t member_offset;
     size_t idx;
     get_member_info(iru, var_ty, member_name, &ir_member_ty, &idx,
-                    &member_offset, member_ty);
+                    &member_offset, is_bitfield, bitfield, member_ty);
 
     return member_offset;
   }
@@ -3158,6 +3227,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
                                     const struct td_var_ty *var_ty,
                                     struct td_designator_list *designator_list,
                                     size_t *member_index,
+                                    bool *is_bitfield, struct ir_bitfield *bitfield,
                                     struct td_var_ty *member_ty) {
   debug_assert(designator_list->num_designators,
                "not defined for 0 designators");
@@ -3174,7 +3244,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
       struct ir_var_ty ir_member_ty;
       size_t member_offset;
       get_member_info(iru, &cur_var_ty, member_name, &ir_member_ty,
-                      member_index, &member_offset, member_ty);
+                      member_index, &member_offset, is_bitfield, bitfield, member_ty);
 
       offset += member_offset;
       break;
@@ -3294,18 +3364,21 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
   for (size_t i = 0; i < num_elements; i++) {
     struct td_init_list_init *init = &init_list->inits[i];
 
+    bool is_bitfield = false;
+    struct ir_bitfield bitfield;
+
     size_t init_offset = offset;
     struct td_var_ty member_ty;
     if (init->designator_list && init->designator_list->num_designators) {
       init_offset += get_designator_offset(iru, &init_list->var_ty,
                                            init_list->inits[i].designator_list,
-                                           &member_idx, &member_ty);
+                                           &member_idx, &is_bitfield, &bitfield, &member_ty);
     } else {
       switch (ty) {
       case INIT_LIST_LAYOUT_TY_STRUCT:
       case INIT_LIST_LAYOUT_TY_UNION:
         init_offset +=
-            get_member_index_offset(iru, var_ty, member_idx, &member_ty);
+            get_member_index_offset(iru, var_ty, member_idx, &member_ty, &is_bitfield, &bitfield);
         break;
       case INIT_LIST_LAYOUT_TY_ARRAY:
         member_ty = el_ty;
@@ -3318,6 +3391,8 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     switch (init->init->ty) {
     case TD_INIT_TY_EXPR: {
       struct ir_build_init build_init = {
+          .is_bitfield = is_bitfield,
+          .bitfield = bitfield,
           .offset = init_offset,
           .expr = &init->init->expr,
       };
@@ -3569,6 +3644,10 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
 
     for (size_t i = 0; i < layout.num_inits; i++) {
       struct ir_build_init *build_init = &layout.inits[i];
+
+      if (build_init->is_bitfield) {
+        todo("bitfield init for globals");
+      }
 
       value_list.values[i] = build_ir_for_var_value_expr(
           irb, build_init->expr, &build_init->expr->var_ty);

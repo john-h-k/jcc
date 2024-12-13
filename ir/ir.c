@@ -71,6 +71,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_LOAD_GLB:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
@@ -80,6 +81,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_STORE_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
   case IR_OP_TY_RET:
@@ -104,6 +106,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_LOAD_GLB:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
     return true;
   case IR_OP_TY_CALL:
@@ -111,6 +114,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_STORE_GLB:
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
   case IR_OP_TY_RET:
@@ -144,7 +148,9 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_STORE_LCL:
   case IR_OP_TY_LOAD_LCL:
   case IR_OP_TY_STORE_ADDR:
+  case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_LOAD_ADDR:
+  case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_ADDR:
     return false;
   case IR_OP_TY_CUSTOM:
@@ -316,6 +322,10 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->store_addr.addr, cb_metadata);
     cb(&op->store_addr.value, cb_metadata);
     break;
+  case IR_OP_TY_STORE_BITFIELD:
+    cb(&op->store_bitfield.addr, cb_metadata);
+    cb(&op->store_bitfield.value, cb_metadata);
+    break;
   case IR_OP_TY_STORE_GLB:
     cb(&op->store_glb.value, cb_metadata);
     break;
@@ -328,6 +338,9 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_LOAD_ADDR:
     cb(&op->load_addr.addr, cb_metadata);
+    break;
+  case IR_OP_TY_LOAD_BITFIELD:
+    cb(&op->load_bitfield.addr, cb_metadata);
     break;
   case IR_OP_TY_ADDR:
     break;
@@ -374,6 +387,10 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     todo("walk load addr");
   case IR_OP_TY_STORE_ADDR:
     todo("walk store addr");
+  case IR_OP_TY_LOAD_BITFIELD:
+    todo("walk load bitfield");
+  case IR_OP_TY_STORE_BITFIELD:
+    todo("walk store bitfield");
   case IR_OP_TY_ADDR:
     todo("walk addr");
   case IR_OP_TY_BR_SWITCH:
