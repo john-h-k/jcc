@@ -571,8 +571,10 @@ static void codegen_bitfield_insert(struct codegen_state *state, struct ir_op *o
   struct aarch64_reg target_reg = codegen_reg(op->bitfield_insert.target);
   struct aarch64_reg dest = codegen_reg(op);
 
-  struct instr *mov = alloc_instr(state->func);
-  *mov->aarch64 = MOV_ALIAS(dest, target_reg);
+  if (target_reg.idx != dest.idx) {
+    struct instr *mov = alloc_instr(state->func);
+    *mov->aarch64 = MOV_ALIAS(dest, target_reg);
+  }
 
   struct instr *instr = alloc_instr(state->func);
   instr->aarch64->ty = AARCH64_INSTR_TY_BFM;

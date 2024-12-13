@@ -428,7 +428,10 @@ enum ir_op_flags {
   IR_OP_FLAG_SPILLED = 256,
 
   // this op is a mov used to eliminate phis
-  IR_OP_FLAG_PHI_MOV = 512
+  IR_OP_FLAG_PHI_MOV = 512,
+
+  // this op reads from dest reg, so it cannot be overwritten
+  IR_OP_FLAG_READS_DEST = 1024
 };
 
 typedef unsigned long long ir_reglist;

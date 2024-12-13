@@ -1255,10 +1255,10 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   }
   case VAR_REF_TY_GLB: {
     // FIXME: is this right
-    struct ir_op *ld = alloc_ir_op(irb->func, stmt);
-    ld->ty = IR_OP_TY_STORE;
-    ld->var_ty = op->var_ty;
-    ld->store = (struct ir_op_store){
+    struct ir_op *store = alloc_ir_op(irb->func, stmt);
+    store->ty = IR_OP_TY_STORE;
+    store->var_ty = IR_VAR_TY_NONE;
+    store->store = (struct ir_op_store){
       .ty = IR_OP_STORE_TY_GLB,
       .glb = ref->glb, .value = op};
 
