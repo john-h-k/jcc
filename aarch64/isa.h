@@ -309,9 +309,9 @@
 #define SBFM_IMM(sf, immr, imms, Rn, Rd)                                       \
   BITFIELD_IMM(sf, 0b00, immr, imms, Rn, Rd)
 #define BFM_IMM(sf, immr, imms, Rn, Rd)                                        \
-  BITFIELD_IMM(sf, 0b10, immr, imms, Rn, Rd)
-#define UBFM_IMM(sf, immr, imms, Rn, Rd)                                       \
   BITFIELD_IMM(sf, 0b01, immr, imms, Rn, Rd)
+#define UBFM_IMM(sf, immr, imms, Rn, Rd)                                       \
+  BITFIELD_IMM(sf, 0b10, immr, imms, Rn, Rd)
 
 /* Addressing (Immediate) */
 

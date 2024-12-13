@@ -24,9 +24,7 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
 }
 
 static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
-  struct validate_op_order_metadata metadata = {
-    .consumer = op
-  };
+  struct validate_op_order_metadata metadata = {.consumer = op};
   walk_op_uses(op, validate_op_order, &metadata);
 
   switch (op->ty) {
@@ -61,6 +59,9 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
     }
     break;
   case IR_OP_TY_STORE:
+    invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_NONE,
+                     "store ops should not have a var ty");
+
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       invariant_assert(op->store.lcl, "store ty lcl must have lcl");
@@ -91,6 +92,10 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_CALL:
     break;
   case IR_OP_TY_CUSTOM:
+    break;
+  case IR_OP_TY_BITFIELD_EXTRACT:
+    break;
+  case IR_OP_TY_BITFIELD_INSERT:
     break;
   }
 }

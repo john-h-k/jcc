@@ -564,6 +564,43 @@ static void codegen_store_addr_op(struct codegen_state *state,
   }
 }
 
+static void codegen_bitfield_insert(struct codegen_state *state, struct ir_op *op) {
+  struct ir_bitfield bitfield = op->bitfield_insert.bitfield;
+
+  struct aarch64_reg value_reg = codegen_reg(op->bitfield_insert.value);
+  struct aarch64_reg target_reg = codegen_reg(op->bitfield_insert.target);
+  struct aarch64_reg dest = codegen_reg(op);
+
+  struct instr *mov = alloc_instr(state->func);
+  *mov->aarch64 = MOV_ALIAS(dest, target_reg);
+
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_BFM;
+  instr->aarch64->bfm = (struct aarch64_bitfield){
+    .dest = dest,
+    .source = value_reg,
+    .imms = bitfield.width - 1,
+    .immr = bitfield.offset,
+  };
+}
+
+
+static void codegen_bitfield_extract(struct codegen_state *state, struct ir_op *op) {
+  struct ir_bitfield bitfield = op->bitfield_extract.bitfield;
+
+  struct aarch64_reg value_reg = codegen_reg(op->bitfield_extract.value);
+  struct aarch64_reg dest = codegen_reg(op);
+
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
+  instr->aarch64->ubfm = (struct aarch64_bitfield){
+    .dest = dest,
+    .source = value_reg,
+    .imms = bitfield.width - 1,
+    .immr = bitfield.offset
+  };
+}
+
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
   switch (op->load.ty) {
   case IR_OP_LOAD_TY_LCL:
@@ -2568,6 +2605,12 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     }
     break;
   }
+  case IR_OP_TY_BITFIELD_INSERT:
+    codegen_bitfield_insert(state, op);
+    break;
+  case IR_OP_TY_BITFIELD_EXTRACT:
+    codegen_bitfield_extract(state, op);
+    break;
   case IR_OP_TY_LOAD:
     codegen_load_op(state, op);
     break;

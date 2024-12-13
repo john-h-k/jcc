@@ -106,108 +106,85 @@ enum load_bitfield {
   LOAD_BITFIELD_MASK_OUT,
 };
 
-static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
-                                             struct ir_op *op,
-                                             struct ir_bitfield bitfield,
-                                             enum load_bitfield load_bitfield) {
-  DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
+// will be useful for platforms without bitfield instructions
+// static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
+//                                              struct ir_op *op,
+//                                              struct ir_bitfield bitfield,
+//                                              enum load_bitfield load_bitfield) {
+//   DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
 
-  struct ir_op *load =
-      insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
-  load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = op};
+//   struct ir_op *load =
+//       insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
+//   load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = op};
 
-  unsigned int mask_val;
+//   unsigned int mask_val;
 
-  switch (load_bitfield) {
-  case LOAD_BITFIELD_MASK_IN:
-    mask_val =
-        ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
-    break;
-  case LOAD_BITFIELD_MASK_OUT:
-    mask_val =
-        MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
-    break;
-  }
+//   switch (load_bitfield) {
+//   case LOAD_BITFIELD_MASK_IN:
+//     mask_val =
+//         ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+//     break;
+//   case LOAD_BITFIELD_MASK_OUT:
+//     mask_val =
+//         MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+//     break;
+//   }
 
-  // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
-  // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
-  // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
-  // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
-  // bitfield.offset, bitfield.width, mask_val);
+//   // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
+//   // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
+//   // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
+//   // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
+//   // bitfield.offset, bitfield.width, mask_val);
 
-  struct ir_op *mask_cnst =
-      insert_after_ir_op(func, load, IR_OP_TY_CNST, IR_VAR_TY_I32);
-  mask_cnst->cnst =
-      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
+//   struct ir_op *mask_cnst =
+//       insert_after_ir_op(func, load, IR_OP_TY_CNST, IR_VAR_TY_I32);
+//   mask_cnst->cnst =
+//       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
 
-  struct ir_op *mask =
-      insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-  mask->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_AND, .lhs = load, .rhs = mask_cnst};
+//   struct ir_op *mask =
+//       insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+//   mask->binary_op = (struct ir_op_binary_op){
+//       .ty = IR_OP_BINARY_OP_TY_AND, .lhs = load, .rhs = mask_cnst};
 
-  return mask;
-}
+//   return mask;
+// }
 
 // TODO: signs and stuff are wrong
 static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr = op->store_bitfield.addr;
+  struct ir_op *value = op->store_bitfield.value;
+  struct ir_op *addr = build_addr(func, op);
+
   struct ir_bitfield bitfield = op->store_bitfield.bitfield;
 
-  struct ir_op *masked_out =
-      load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_OUT);
-  masked_out->comment = "masked out";
+  struct ir_op *load = insert_before_ir_op(func, op, IR_OP_TY_LOAD, value->var_ty);
+  load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
-  struct ir_op *shifted_op;
-  if (bitfield.offset) {
-    struct ir_op *shift_cnst =
-        insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
-    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                           .int_value = bitfield.offset};
+  op->ty = IR_OP_TY_BITFIELD_INSERT;
+  op->var_ty = value->var_ty;
+  op->bitfield_insert = (struct ir_op_bitfield_insert){
+    .value = value,
+    .target = load,
+    .bitfield = bitfield
+  };
 
-    shifted_op =
-        insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-    shifted_op->binary_op =
-        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_LSHIFT,
-                                 .lhs = op->store_bitfield.value,
-                                 .rhs = shift_cnst};
-  } else {
-    shifted_op = op->store_bitfield.value;
-  }
-
-  struct ir_op *mask_in =
-      insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-  mask_in->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_OR, .lhs = masked_out, .rhs = shifted_op};
-
-  op->ty = IR_OP_TY_STORE;
-  op->var_ty = IR_VAR_TY_NONE;
-  op->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = mask_in};
+  struct ir_op *store = insert_after_ir_op(func, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+  store->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = op};
 }
 
 static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr = op->load_bitfield.addr;
+  struct ir_op *addr = build_addr(func, op);
+
   struct ir_bitfield bitfield = op->load_bitfield.bitfield;
 
-  struct ir_op *masked_in =
-      load_unshifted_bitfield(func, addr, bitfield, LOAD_BITFIELD_MASK_IN);
+  struct ir_op *load = insert_before_ir_op(func, op, IR_OP_TY_LOAD, op->var_ty);
+  load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
-  if (bitfield.offset) {
-    struct ir_op *shift_cnst =
-        insert_after_ir_op(func, masked_in, IR_OP_TY_CNST, IR_VAR_TY_I32);
-    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                           .int_value = bitfield.offset};
-
-    op->ty = IR_OP_TY_BINARY_OP;
-    op->var_ty = IR_VAR_TY_I32;
-    op->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_URSHIFT, .lhs = masked_in, .rhs = shift_cnst};
-  } else {
-    // ugly
-    op->ty = IR_OP_TY_MOV;
-    op->var_ty = IR_VAR_TY_I32;
-    op->mov = (struct ir_op_mov){.value = masked_in};
-  }
+  op->ty = IR_OP_TY_BITFIELD_EXTRACT;
+  op->var_ty = op->var_ty;
+  op->bitfield_extract = (struct ir_op_bitfield_extract){
+    .value = load,
+    .bitfield = bitfield
+  };
 }
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
@@ -309,6 +286,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BR:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
+            case IR_OP_TY_BITFIELD_EXTRACT:
+            case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
