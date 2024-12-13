@@ -26,6 +26,49 @@ static void propogate_switch_phis(UNUSED struct ir_func *func,
   }
 }
 
+static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *addr = op->mem_set.addr;
+
+  struct ir_glb *memset =
+      add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
+
+  struct ir_op *value_cnst = insert_after_ir_op(func, addr, IR_OP_TY_CNST, IR_VAR_TY_I32);
+  value_cnst->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = op->mem_set.value
+  };
+
+  struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
+
+  struct ir_op *length_cnst = insert_after_ir_op(func, addr, IR_OP_TY_CNST, ptr_int);
+  length_cnst->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_INT,
+    .int_value = op->mem_set.length
+  };
+
+  struct ir_op *memset_addr = insert_after_ir_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
+  memset_addr->addr = (struct ir_op_addr){
+    .ty = IR_OP_ADDR_TY_GLB,
+    .glb = memset,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args = arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = addr;
+  args[1] = value_cnst;
+  args[2] = length_cnst;
+
+  op->ty = IR_OP_TY_CALL;
+  op->var_ty = *memset->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+    .target = memset_addr,
+    .num_args = num_args,
+    .args = args,
+    .func_ty = memset->var_ty,
+  };
+}
+
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   // lowers a `br.switch` into a series of if-else statements
 
@@ -100,11 +143,6 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
     }
   }
 }
-
-enum load_bitfield {
-  LOAD_BITFIELD_MASK_IN,
-  LOAD_BITFIELD_MASK_OUT,
-};
 
 // will be useful for platforms without bitfield instructions
 // static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
@@ -283,6 +321,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BINARY_OP:
             case IR_OP_TY_ADDR:
+            case IR_OP_TY_ADDR_OFFSET:
             case IR_OP_TY_BR:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
@@ -291,6 +330,9 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
+              break;
+            case IR_OP_TY_MEM_SET:
+              lower_mem_set(func, op);
               break;
             case IR_OP_TY_BR_SWITCH:
               lower_br_switch(func, op);

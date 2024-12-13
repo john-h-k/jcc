@@ -31,7 +31,10 @@ enum ir_op_ty {
   IR_OP_TY_BITFIELD_EXTRACT,
   IR_OP_TY_BITFIELD_INSERT,
 
+  IR_OP_TY_MEM_SET,
+
   IR_OP_TY_ADDR,
+  IR_OP_TY_ADDR_OFFSET,
 
   IR_OP_TY_BR,
   IR_OP_TY_BR_COND,
@@ -267,6 +270,12 @@ struct ir_op_call {
   struct ir_var_ty *arg_var_tys;
 };
 
+struct ir_op_addr_offset {
+  struct ir_op *base;
+  struct ir_op *offset;
+  size_t scale;
+};
+
 struct ir_bitfield {
   size_t offset;
   size_t width;
@@ -368,6 +377,12 @@ struct ir_op_br_cond {
   // targets on `ir_basicblock`
 };
 
+struct ir_op_mem_set {
+  struct ir_op *addr;
+  unsigned char value;
+  size_t length;
+};
+
 struct aarch64_op;
 struct eep_op;
 
@@ -459,6 +474,7 @@ struct ir_op {
     struct ir_op_unary_op unary_op;
     struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
+    struct ir_op_mem_set mem_set;
     struct ir_op_store store;
     struct ir_op_load load;
     struct ir_op_store_bitfield store_bitfield;
@@ -466,6 +482,7 @@ struct ir_op {
     struct ir_op_bitfield_extract bitfield_extract;
     struct ir_op_bitfield_insert bitfield_insert;
     struct ir_op_addr addr;
+    struct ir_op_addr_offset addr_offset;
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
@@ -725,11 +742,13 @@ struct ir_unit {
 
   struct {
     struct ir_glb *memmove;
+    struct ir_glb *memset;
   } well_known_glbs;
 };
 
 enum ir_well_known_glb {
   IR_WELL_KNOWN_GLB_MEMMOVE,
+  IR_WELL_KNOWN_GLB_MEMSET,
 };
 
 struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb);

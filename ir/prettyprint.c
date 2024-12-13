@@ -439,20 +439,20 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     switch (ir->load_bitfield.ty) {
     case IR_OP_LOAD_TY_LCL:
       if (ir->load_bitfield.glb) {
-        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(%zu)", bitfield.offset,
-                bitfield.width, ir->load_bitfield.lcl->id);
+        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(%zu)",
+                bitfield.offset, bitfield.width, ir->load_bitfield.lcl->id);
       } else {
-        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED)", bitfield.offset,
-                bitfield.width);
+        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED)",
+                bitfield.offset, bitfield.width);
       }
       break;
     case IR_OP_LOAD_TY_GLB:
       if (ir->load_bitfield.glb) {
-        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)", bitfield.offset,
-                bitfield.width, ir->load_bitfield.glb->id);
+        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)",
+                bitfield.offset, bitfield.width, ir->load_bitfield.glb->id);
       } else {
-        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)", bitfield.offset,
-                bitfield.width);
+        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)",
+                bitfield.offset, bitfield.width);
       }
       break;
     case IR_OP_LOAD_TY_ADDR:
@@ -465,6 +465,15 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
 
     break;
   }
+  case IR_OP_TY_ADDR_OFFSET:
+    fprintf(file, "addr.off ");
+    debug_print_op_use(file, irb, ir->addr_offset.base);
+    fprintf(file, " + ");
+    debug_print_op_use(file, irb, ir->addr_offset.offset);
+    if (ir->addr_offset.scale != 1) {
+      fprintf(file, " * %zu", ir->addr_offset.scale);
+    }
+    break;
   case IR_OP_TY_ADDR:
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
@@ -545,6 +554,11 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     debug_print_op_use(file, irb, ir->bitfield_insert.target);
     fprintf(file, ", ");
     debug_print_op_use(file, irb, ir->bitfield_insert.value);
+    break;
+  case IR_OP_TY_MEM_SET:
+    fprintf(file, "mem.set ");
+    debug_print_op_use(file, irb, ir->mem_set.addr);
+    fprintf(file, ", #%zu, #%d", ir->mem_set.length, ir->mem_set.value);
     break;
   }
 }
