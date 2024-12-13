@@ -109,7 +109,7 @@ typedef void (*target_lower)(struct ir_unit *unit);
 typedef struct codegen_unit *(*codegen)(struct ir_unit *unit);
 typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
-typedef void (*debug_disasm)(const char *filename);
+typedef void (*debug_disasm)(const char *filename, const char *output);
 typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
 
 struct target {

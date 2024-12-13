@@ -427,7 +427,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     num_nonvolatile_gp--;
     has_ssp = true;
-    ssp_reg = num_nonvolatile_gp;
+    ssp_reg = reg_info.gp_registers.num_volatile + num_nonvolatile_gp;
   }
 
   irb->reg_usage = (struct ir_reg_usage){
