@@ -2157,6 +2157,9 @@ static size_t calc_arg_stack_space(struct codegen_state *state,
   return nsaa;
 }
 
+// FIXME: do things more smarter
+#define AARCH64_TARGET (AARCH64_MACOS_TARGET)
+
 #define MAX_IMM_SIZE 4095
 
 static void codegen_prologue(struct codegen_state *state) {

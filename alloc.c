@@ -4,7 +4,7 @@
 #include "util.h"
 
 // TODO: allow larger allocs
-#define BLOCK_SIZE (4096 * 16 * 10)
+#define BLOCK_SIZE (4096 * 10)
 
 struct arena;
 

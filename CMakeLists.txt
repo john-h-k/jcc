@@ -64,7 +64,8 @@ set(
   # eep/disasm.c
 
   macos/mach-o.c
-  macos/mach-o.c
+
+  linux/elf.c
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
