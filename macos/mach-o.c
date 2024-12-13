@@ -43,9 +43,8 @@ static void write_mach_header(FILE *file, const struct compile_args *args) {
     header.cputype = CPU_TYPE_X86_64;
     header.cpusubtype = CPU_SUBTYPE_X86_64_ALL;
     break;
-  case COMPILE_TARGET_ARCH_EEP:
-  case COMPILE_TARGET_ARCH_RV32I:
-    todo("mach-o does not support EEP/RV32I");
+  default:
+    unsupported("unsupported arch for mach-o");
   }
 
   header.filetype = MH_OBJECT;

@@ -360,17 +360,6 @@ static inline void *nonnull_realloc(void *p, size_t size) {
   return ptr;
 }
 
-static inline char *malloc_strcpy(const char *s) {
-  size_t len = strlen(s);
-
-  char *cp = nonnull_malloc(len * sizeof(*s));
-
-  // use memcpy as we already have len
-  memcpy(cp, s, len * sizeof(*s));
-
-  return cp;
-}
-
 static inline void fprint_str(FILE *file, const char *input) {
   debug_assert(file, "null arg");
 

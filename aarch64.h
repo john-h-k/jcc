@@ -4,7 +4,6 @@
 #include "aarch64/emit.h"
 #include "aarch64/lower.h"
 #include "disasm.h"
-#include "macos/mach-o.h"
 #include "target.h"
 
 // FIXME: this unnecessarily ties arm64 to mach-o
@@ -12,7 +11,8 @@
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 #define AARCH64_STACK_ALIGNMENT (16)
 
-extern const struct target AARCH64_TARGET;
+extern const struct target AARCH64_MACOS_TARGET;
+extern const struct target AARCH64_LINUX_TARGET;
 
 struct aarch64_op_page {
   struct ir_op *glb_ref;

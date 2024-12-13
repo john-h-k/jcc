@@ -42,8 +42,11 @@ static const struct target *get_target(const struct compile_args *args) {
         "earlier");
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     todo("macOS x64 target not yet implemented");
+  // FIXME: linux is actually subtly different in register usage and calling conv
+  case COMPILE_TARGET_ARCH_LINUX_ARM64:
+    return &AARCH64_LINUX_TARGET;
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
-    return &AARCH64_TARGET;
+    return &AARCH64_MACOS_TARGET;
   case COMPILE_TARGET_ARCH_RV32I:
     return &RV32I_TARGET;
   case COMPILE_TARGET_ARCH_EEP:

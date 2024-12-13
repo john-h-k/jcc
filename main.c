@@ -32,6 +32,7 @@ static bool target_needs_linking(const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
     bug("native arch should not be here");
+  case COMPILE_TARGET_ARCH_LINUX_ARM64:
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     return true;
@@ -56,8 +57,21 @@ int main(int argc, char **argv) {
   }
 
   if (args.target_arch == COMPILE_TARGET_ARCH_NATIVE) {
+  #if defined(__APPLE__) && defined(__aarch64__)
     info("Compiling for native platform - assuming macOS ARM64...\n");
     args.target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
+  #elif defined(__APPLE__) && defined(__x86_64__)
+    info("Compiling for native platform - assuming macOS x64...\n");
+    args.target_arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
+  #elif defined(__linux__) && defined(__aarch64__)
+    info("Compiling for native platform - assuming Linux ARM64...\n");
+    args.target_arch = COMPILE_TARGET_ARCH_LINUX_ARM64;
+  #elif defined(__linux__) && defined(__x86_64__)
+    todo("linux x64 platform");
+  #else
+    err("Could not determine native platform");
+    return -1;
+  #endif
   }
 
   char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
