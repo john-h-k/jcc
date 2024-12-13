@@ -100,6 +100,8 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_LOAD:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
+            case IR_OP_TY_BITFIELD_EXTRACT:
+            case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_SWITCH:

@@ -349,7 +349,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
   case IR_OP_TY_STORE:
     switch (ir->store.ty) {
     case IR_OP_STORE_TY_LCL:
-      if (ir->lcl) {
+      if (ir->store.lcl) {
         fprintf(file, "store.lcl LCL(%zu), %%%zu", ir->store.lcl->id,
                 ir->store.value->id);
       } else {
@@ -376,7 +376,7 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
   case IR_OP_TY_LOAD:
     switch (ir->load.ty) {
     case IR_OP_LOAD_TY_LCL:
-      if (ir->lcl) {
+      if (ir->load.lcl) {
         fprintf(file, "load.lcl LCL(%zu)", ir->load.lcl->id);
       } else {
         fprintf(file, "load.lcl LCL(UNASSIGNED)");
@@ -397,21 +397,74 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     }
 
     break;
-  case IR_OP_TY_STORE_BITFIELD:
-    fprintf(file, "store.bitfield (#%zu, #%zu) [",
-            ir->store_bitfield.bitfield.offset,
-            ir->store_bitfield.bitfield.width);
-    debug_print_op_use(file, irb, ir->store_bitfield.addr);
-    fprintf(file, "], ");
-    debug_print_op_use(file, irb, ir->store_bitfield.value);
+
+  case IR_OP_TY_STORE_BITFIELD: {
+    struct ir_bitfield bitfield = ir->store_bitfield.bitfield;
+
+    switch (ir->store_bitfield.ty) {
+    case IR_OP_STORE_TY_LCL:
+      if (ir->store_bitfield.lcl) {
+        fprintf(file, "store.bitfield.lcl (#%zu, #%zu) LCL(%zu), %%%zu",
+                bitfield.offset, bitfield.width, ir->store_bitfield.lcl->id,
+                ir->store_bitfield.value->id);
+      } else {
+        fprintf(file, "store.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED), %%%zu",
+                bitfield.offset, bitfield.width, ir->store_bitfield.value->id);
+      }
+      break;
+    case IR_OP_STORE_TY_GLB:
+      if (ir->store_bitfield.glb) {
+        fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(%zu), %%%zu",
+                bitfield.offset, bitfield.width, ir->store_bitfield.glb->id,
+                ir->store_bitfield.value->id);
+      } else {
+        fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED), %%%zu",
+                bitfield.offset, bitfield.width, ir->store_bitfield.value->id);
+      }
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      fprintf(file, "store.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
+              bitfield.width);
+      debug_print_op_use(file, irb, ir->store_bitfield.addr);
+      fprintf(file, "], ");
+      debug_print_op_use(file, irb, ir->store_bitfield.value);
+      break;
+    }
+
     break;
-  case IR_OP_TY_LOAD_BITFIELD:
-    fprintf(file, "load.bitfield (#%zu, #%zu) [",
-            ir->load_bitfield.bitfield.offset,
-            ir->load_bitfield.bitfield.width);
-    debug_print_op_use(file, irb, ir->load_bitfield.addr);
-    fprintf(file, "]");
+  }
+  case IR_OP_TY_LOAD_BITFIELD: {
+    struct ir_bitfield bitfield = ir->load_bitfield.bitfield;
+
+    switch (ir->load_bitfield.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      if (ir->load_bitfield.glb) {
+        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(%zu)", bitfield.offset,
+                bitfield.width, ir->load_bitfield.lcl->id);
+      } else {
+        fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED)", bitfield.offset,
+                bitfield.width);
+      }
+      break;
+    case IR_OP_LOAD_TY_GLB:
+      if (ir->load_bitfield.glb) {
+        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)", bitfield.offset,
+                bitfield.width, ir->load_bitfield.glb->id);
+      } else {
+        fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)", bitfield.offset,
+                bitfield.width);
+      }
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      fprintf(file, "load.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
+              bitfield.width);
+      debug_print_op_use(file, irb, ir->load_bitfield.addr);
+      fprintf(file, "]");
+      break;
+    }
+
     break;
+  }
   case IR_OP_TY_ADDR:
     switch (ir->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
@@ -478,6 +531,20 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     } else {
       fprintf(file, "return");
     }
+    break;
+  case IR_OP_TY_BITFIELD_EXTRACT:
+    fprintf(file, "bitfield.extract #(%zu, %zu), ",
+            ir->bitfield_extract.bitfield.offset,
+            ir->bitfield_extract.bitfield.width);
+    debug_print_op_use(file, irb, ir->bitfield_extract.value);
+    break;
+  case IR_OP_TY_BITFIELD_INSERT:
+    fprintf(file, "bitfield.insert #(%zu, %zu), ",
+            ir->bitfield_insert.bitfield.offset,
+            ir->bitfield_insert.bitfield.width);
+    debug_print_op_use(file, irb, ir->bitfield_insert.target);
+    fprintf(file, ", ");
+    debug_print_op_use(file, irb, ir->bitfield_insert.value);
     break;
   }
 }

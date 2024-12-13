@@ -28,6 +28,9 @@ enum ir_op_ty {
   IR_OP_TY_STORE_BITFIELD,
   IR_OP_TY_LOAD_BITFIELD,
 
+  IR_OP_TY_BITFIELD_EXTRACT,
+  IR_OP_TY_BITFIELD_INSERT,
+
   IR_OP_TY_ADDR,
 
   IR_OP_TY_BR,
@@ -269,6 +272,19 @@ struct ir_bitfield {
   size_t width;
 };
 
+struct ir_op_bitfield_extract {
+  struct ir_op *value;
+
+  struct ir_bitfield bitfield;
+};
+
+struct ir_op_bitfield_insert {
+  struct ir_op *target;
+  struct ir_op *value;
+
+  struct ir_bitfield bitfield;
+};
+
 enum ir_op_store_ty {
   IR_OP_STORE_TY_LCL,
   IR_OP_STORE_TY_GLB,
@@ -444,6 +460,8 @@ struct ir_op {
     struct ir_op_load load;
     struct ir_op_store_bitfield store_bitfield;
     struct ir_op_load_bitfield load_bitfield;
+    struct ir_op_bitfield_extract bitfield_extract;
+    struct ir_op_bitfield_insert bitfield_insert;
     struct ir_op_addr addr;
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;

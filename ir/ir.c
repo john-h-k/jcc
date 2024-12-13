@@ -70,6 +70,8 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD:
   case IR_OP_TY_LOAD_BITFIELD:
+  case IR_OP_TY_BITFIELD_EXTRACT:
+  case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
@@ -101,6 +103,8 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
   case IR_OP_TY_LOAD:
   case IR_OP_TY_LOAD_BITFIELD:
+  case IR_OP_TY_BITFIELD_INSERT:
+  case IR_OP_TY_BITFIELD_EXTRACT:
   case IR_OP_TY_ADDR:
     return true;
   case IR_OP_TY_CALL:
@@ -139,6 +143,8 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_LOAD:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_LOAD_BITFIELD:
+  case IR_OP_TY_BITFIELD_EXTRACT:
+  case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_ADDR:
     return false;
   case IR_OP_TY_CUSTOM:
@@ -357,6 +363,13 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
       cb(&op->ret.value, cb_metadata);
     }
     break;
+  case IR_OP_TY_BITFIELD_EXTRACT:
+    cb(&op->bitfield_extract.value, cb_metadata);
+    break;
+  case IR_OP_TY_BITFIELD_INSERT:
+    cb(&op->bitfield_insert.target, cb_metadata);
+    cb(&op->bitfield_insert.value, cb_metadata);
+    break;
   }
 }
 
@@ -409,6 +422,8 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_RET:
     walk_ret(&op->ret, cb, cb_metadata);
     break;
+  default:
+    TODO("");
   }
 }
 
@@ -1141,7 +1156,9 @@ void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
 }
 
 struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
-  DEBUG_ASSERT(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE,
+  DEBUG_ASSERT(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE ||
+                   op->ty == IR_OP_TY_LOAD_BITFIELD ||
+                   op->ty == IR_OP_TY_STORE_BITFIELD,
                "only makes sense on load/store ops");
 
   struct ir_op_addr addr;
@@ -1162,6 +1179,40 @@ struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
       goto mk_op;
     case IR_OP_LOAD_TY_ADDR:
       return op->load.addr;
+    }
+  } else if (op->ty == IR_OP_TY_LOAD_BITFIELD) {
+    switch (op->load_bitfield.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = op->load_bitfield.lcl,
+      };
+      goto mk_op;
+    case IR_OP_LOAD_TY_GLB:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_GLB,
+          .glb = op->load_bitfield.glb,
+      };
+      goto mk_op;
+    case IR_OP_LOAD_TY_ADDR:
+      return op->load_bitfield.addr;
+    }
+  } else if (op->ty == IR_OP_TY_STORE_BITFIELD) {
+    switch (op->store_bitfield.ty) {
+    case IR_OP_STORE_TY_LCL:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = op->store_bitfield.lcl,
+      };
+      goto mk_op;
+    case IR_OP_STORE_TY_GLB:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_GLB,
+          .glb = op->store_bitfield.glb,
+      };
+      goto mk_op;
+    case IR_OP_STORE_TY_ADDR:
+      return op->store_bitfield.addr;
     }
   } else {
     switch (op->store.ty) {

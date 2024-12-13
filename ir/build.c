@@ -1621,7 +1621,9 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     store->ty = IR_OP_TY_STORE_BITFIELD;
     store->var_ty = IR_VAR_TY_NONE;
     store->store_bitfield =
-        (struct ir_op_store_bitfield){.addr = address, .value = value, .bitfield = bitfield};
+        (struct ir_op_store_bitfield){
+          .ty = IR_OP_STORE_TY_ADDR,
+        .addr = address, .value = value, .bitfield = bitfield};
   } else {
     struct ir_op *store = alloc_ir_op(irb->func, *stmt);
     store->ty = IR_OP_TY_STORE;
@@ -1676,7 +1678,9 @@ build_ir_for_memberaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
     struct ir_op *op = alloc_ir_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD_BITFIELD;
     op->var_ty = var_ty;
-    op->load_bitfield = (struct ir_op_load_bitfield){.addr = address, .bitfield = bitfield};
+    op->load_bitfield = (struct ir_op_load_bitfield){
+      .ty = IR_OP_LOAD_TY_ADDR,
+      .addr = address, .bitfield = bitfield};
 
     return op;
   } else {
@@ -1707,7 +1711,9 @@ build_ir_for_pointeraccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
     struct ir_op *op = alloc_ir_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD_BITFIELD;
     op->var_ty = var_ty;
-    op->load_bitfield = (struct ir_op_load_bitfield){.addr = address, .bitfield = bitfield};
+    op->load_bitfield = (struct ir_op_load_bitfield){
+      .ty = IR_OP_LOAD_TY_ADDR,
+      .addr = address, .bitfield = bitfield};
 
     return op;
   } else {
@@ -2440,7 +2446,9 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
       store->ty = IR_OP_TY_STORE_BITFIELD;
       store->var_ty = IR_VAR_TY_NONE;
       store->store_bitfield =
-          (struct ir_op_store_bitfield){.addr = init_address, .value = value, .bitfield = init->bitfield};
+          (struct ir_op_store_bitfield){
+          .ty = IR_OP_STORE_TY_ADDR,
+          .addr = init_address, .value = value, .bitfield = init->bitfield};
     } else {
       store->ty = IR_OP_TY_STORE;
       store->var_ty = IR_VAR_TY_NONE;
