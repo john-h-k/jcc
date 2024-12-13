@@ -1,5 +1,6 @@
 #define NULL ((void *)0)
 #define MAX_CELL_SIZE 30000
+// #define MAX_CELL_SIZE 10
 
 struct State {
   // int cells[MAX_CELL_SIZE];
@@ -82,6 +83,7 @@ int main(int argc, char **argv) {
   state.pos = 0;
   state.cells = malloc(sizeof(*state.cells) * MAX_CELL_SIZE);
   memset(state.cells, 0, sizeof(*state.cells) * MAX_CELL_SIZE);
+
   for (int i = 0; i < MAX_CELL_SIZE; i++)
     state.cells[i] = 0;
 

@@ -10,6 +10,7 @@
 
 #define AARCH64_FUNCTION_ALIGNMENT (16)
 #define AARCH64_STACK_ALIGNMENT (16)
+#define MAX_IMM_SIZE (4095)
 
 extern const struct target AARCH64_MACOS_TARGET;
 extern const struct target AARCH64_LINUX_TARGET;
