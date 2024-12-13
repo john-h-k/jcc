@@ -78,6 +78,8 @@ struct rv32i_instr;
 struct instr {
   size_t id;
 
+  struct ir_op *op;
+
   struct instr *pred;
   struct instr *succ;
 

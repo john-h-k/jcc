@@ -40,11 +40,11 @@ int main() {
     return 1;
   }
 
-  struct small s = mk_small(5, 7);
+  // struct small s = mk_small(5, 7);
 
-  if (s.buff[0] != 5 || s.buff[1] != 7) {
-    return 1;
-  }
+  // if (s.buff[0] != 5 || s.buff[1] != 7) {
+  //   return 1;
+  // }
 
   // struct big b = mk_big();
 

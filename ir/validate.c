@@ -3,7 +3,32 @@
 #include "../util.h"
 #include "ir.h"
 
+struct validate_op_order_metadata {
+  struct ir_op *consumer;
+};
+
+static void validate_op_order(struct ir_op **ir, void *metadata) {
+  struct validate_op_order_metadata *data = metadata;
+  struct ir_op *consumer = data->consumer;
+
+  if (consumer->ty == IR_OP_TY_PHI || (consumer->flags & IR_OP_FLAG_PHI_MOV)) {
+    // these can work across time
+    return;
+  }
+
+  struct ir_op *op = *ir;
+
+  if (op->id > consumer->id) {
+    bug("op %zu uses op %zu which is ahead of it", consumer->id, op->id);
+  }
+}
+
 static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
+  struct validate_op_order_metadata metadata = {
+    .consumer = op
+  };
+  walk_op_uses(op, validate_op_order, &metadata);
+
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     bug("should not have unknown ops");
@@ -112,6 +137,8 @@ static void ir_validate_func(struct ir_unit *iru, struct ir_glb *glb) {
 
   struct ir_func *func = glb->func;
   struct ir_basicblock *basicblock = func->first;
+
+  rebuild_ids(func);
 
   while (basicblock) {
     ir_validate_basicblock(func, basicblock);

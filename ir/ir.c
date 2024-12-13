@@ -1127,20 +1127,70 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   return contained;
 }
 
-void make_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
-                            enum ir_var_primitive_ty ty,
-                            unsigned long long value) {
+void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
+                          enum ir_var_primitive_ty ty,
+                          unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
       (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = ty};
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
-                           unsigned long long value) {
+void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
+                         unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty_for_pointer_size(iru);
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
+}
+
+struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
+  debug_assert(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE,
+               "only makes sense on load/store ops");
+
+  struct ir_op_addr addr;
+
+  if (op->ty == IR_OP_TY_LOAD) {
+    switch (op->load.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = op->load.lcl,
+      };
+      goto mk_op;
+    case IR_OP_LOAD_TY_GLB:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_GLB,
+          .glb = op->load.glb,
+      };
+      goto mk_op;
+    case IR_OP_LOAD_TY_ADDR:
+      return op->load.addr;
+    }
+  } else {
+    switch (op->store.ty) {
+    case IR_OP_STORE_TY_LCL:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = op->store.lcl,
+      };
+      goto mk_op;
+    case IR_OP_STORE_TY_GLB:
+      addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_GLB,
+          .glb = op->store.glb,
+      };
+      goto mk_op;
+    case IR_OP_STORE_TY_ADDR:
+      return op->store.addr;
+    }
+  }
+
+mk_op : {
+  struct ir_op *res =
+      insert_before_ir_op(irb, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  res->addr = addr;
+  return res;
+}
 }
 
 struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
@@ -1294,6 +1344,40 @@ struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
   orig_bb->merge.target = first;
 
   return end_bb;
+}
+
+struct ir_glb *add_well_known_global(struct ir_unit *iru,
+                                     enum ir_well_known_glb glb) {
+  switch (glb) {
+  case IR_WELL_KNOWN_GLB_MEMMOVE: {
+    if (iru->well_known_glbs.memmove) {
+      return iru->well_known_glbs.memmove;
+    }
+
+    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    *ptr = IR_VAR_TY_POINTER;
+
+    size_t num_params = 3;
+    struct ir_var_ty *params =
+        arena_alloc(iru->arena, sizeof(*params) * num_params);
+
+    params[0] = IR_VAR_TY_POINTER;
+    params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
+    params[2] = var_ty_for_pointer_size(iru);
+
+    struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
+                               .func = {.ret_ty = ptr,
+                                        .num_params = num_params,
+                                        .params = params,
+                                        .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
+
+    struct ir_glb *memmove = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+                                        IR_GLB_DEF_TY_UNDEFINED, "memmove");
+
+    iru->well_known_glbs.memmove = memmove;
+    return memmove;
+  }
+  }
 }
 
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
@@ -1507,10 +1591,7 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
       struct ir_op *store =
           insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_LCL,
-        .lcl = op->lcl,
-        .value = op
-      };
+          .ty = IR_OP_STORE_TY_LCL, .lcl = op->lcl, .value = op};
 
       store->reg = NO_REG;
       store->flags |= IR_OP_FLAG_SPILL;

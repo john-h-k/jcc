@@ -410,6 +410,9 @@ enum ir_op_flags {
 
   // op has been spilled and all consumers must reload it
   IR_OP_FLAG_SPILLED = 256,
+
+  // this op is a mov used to eliminate phis
+  IR_OP_FLAG_PHI_MOV = 512
 };
 
 typedef unsigned long long ir_reglist;
@@ -698,7 +701,17 @@ struct ir_unit {
   struct ir_glb *last_global;
 
   size_t num_globals;
+
+  struct {
+    struct ir_glb *memmove;
+  } well_known_glbs;
 };
+
+enum ir_well_known_glb {
+  IR_WELL_KNOWN_GLB_MEMMOVE,
+};
+
+struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb);
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
 
@@ -716,12 +729,6 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock);
 void prune_basicblocks(struct ir_func *irb);
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
-enum ir_well_known_glb {
-  IR_WELL_KNOWN_GLB_MEMMOVE,
-};
-
-struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb)
-
 void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);
 
@@ -738,11 +745,13 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
 struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
-void make_integral_constant(struct ir_unit *iru, struct ir_op *op,
+void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_var_primitive_ty ty,
                             unsigned long long value);
-void make_pointer_constant(struct ir_unit *iru, struct ir_op *op,
+void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                            unsigned long long value);
+
+struct ir_op *build_addr(struct ir_func *irb, struct ir_op *load);
 
 struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock);

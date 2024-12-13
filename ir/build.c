@@ -426,7 +426,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       struct ir_var_ty_info el_info = var_ty_info(irb->unit, &el_ty);
 
       struct ir_op *el_size_op = alloc_ir_op(irb->func, stmt);
-      make_pointer_constant(irb->unit, el_size_op, el_info.size);
+      mk_pointer_constant(irb->unit, el_size_op, el_info.size);
 
       struct ir_op *diff = alloc_ir_op(irb->func, stmt);
       diff->ty = IR_OP_TY_BINARY_OP;
@@ -452,7 +452,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       struct ir_var_ty_info el_info = var_ty_info(irb->unit, &el_ty);
 
       struct ir_op *el_size_op = alloc_ir_op(irb->func, stmt);
-      make_pointer_constant(irb->unit, el_size_op, el_info.size);
+      mk_pointer_constant(irb->unit, el_size_op, el_info.size);
 
       struct ir_op *rhs_mul = alloc_ir_op(irb->func, stmt);
       rhs_mul->ty = IR_OP_TY_BINARY_OP;
