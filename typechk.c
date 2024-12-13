@@ -2108,6 +2108,16 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     return expr->cnst.int_value;
   }
 
+  if (expr->ty == AST_EXPR_TY_VAR) {
+    struct td_expr var = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
+
+    if (var.var.ty != TD_VAR_VAR_TY_ENUMERATOR) {
+      WARN("variables in enum initializers must be other enum values");
+    }
+
+    return var.var.enumerator;
+  }
+
   if (expr->ty == AST_EXPR_TY_BINARY_OP) {
     unsigned long long lhs =
         type_constant_integral_expr(tchk, expr->binary_op.lhs);

@@ -426,17 +426,22 @@ static void preproc_next_raw_token(struct preproc *preproc,
 
   switch (c) {
   case 'L':
+    if (end.idx < preproc_text->len) {
+      c = preproc_text->text[end.idx + 1];
+
+      if (c == '<' || c == '"' || c == '\'') {
+        next_col(&end);
+        goto string_literal;
+      }
+    }
+
+    break;
+
   case '<':
   case '"':
   case '\'':
-    if (c == 'L') {
-      if (end.idx < preproc_text->len) {
-        c = preproc_text->text[end.idx + 1];
-        next_col(&end);
-      } else {
-        break;
-      }
-    }
+
+  string_literal : {
 
     if (c == '<' && !preproc->in_angle_string_context) {
       break;
@@ -468,6 +473,7 @@ static void preproc_next_raw_token(struct preproc *preproc,
 
     preproc_text->pos = end;
     return;
+  }
   case '#':
     next_col(&end);
 
