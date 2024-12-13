@@ -460,18 +460,18 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_OR:
     instr->rv32i->ty = RV32I_INSTR_TY_OR;
     instr->rv32i->or = (struct rv32i_op){
-                         .dest = dest,
-                         .lhs = lhs,
-                         .rhs = rhs,
-                     };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
-                          .dest = dest,
-                          .lhs = lhs,
-                          .rhs = rhs,
-                      };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->rv32i->ty = RV32I_INSTR_TY_ADD;
@@ -760,7 +760,7 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
     sh_sz = 16;
     goto sext;
 
-  sext : {
+  sext: {
     struct instr *sl = alloc_instr(state->func);
     sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
     sl->rv32i->slli =

@@ -54,11 +54,9 @@ static const struct target *get_target(const struct compile_args *args) {
   bug("unexpected target in `get_target`");
 }
 
-enum compiler_create_result create_compiler(struct program *program,
-                                            const char *output,
-                                            const char *path,
-                                            const struct compile_args *args,
-                                            struct compiler **compiler) {
+enum compiler_create_result
+create_compiler(struct program *program, const char *output, const char *path,
+                const struct compile_args *args, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
@@ -77,8 +75,8 @@ enum compiler_create_result create_compiler(struct program *program,
   }
 
   const struct target *target = get_target(args);
-  if (typechk_create(target, args, (*compiler)->parser, &(*compiler)->typechk) !=
-      TYPECHK_CREATE_RESULT_SUCCESS) {
+  if (typechk_create(target, args, (*compiler)->parser,
+                     &(*compiler)->typechk) != TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
     return COMPILER_CREATE_RESULT_FAILURE;
   }

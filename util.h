@@ -150,7 +150,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define TRYFORCEINLINE inline
 #endif
 
-#define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))
+#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 
 #if STDC_C23 && __GNUC__
 #define UNUSED_ARG(arg) [gcc::unused] arg

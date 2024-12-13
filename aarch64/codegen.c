@@ -12,12 +12,10 @@
 
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct aarch64_instr) {                                                     \
-    .ty = AARCH64_INSTR_TY_ORR, .orr = {                                       \
-      .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
-      .rhs = (source_reg),                                                     \
-      .dest = (dest_reg),                                                      \
-      .imm6 = 0                                                                \
-    }                                                                          \
+    .ty = AARCH64_INSTR_TY_ORR, .orr = {.lhs = zero_reg_for_ty(dest_reg.ty),   \
+                                        .rhs = (source_reg),                   \
+                                        .dest = (dest_reg),                    \
+                                        .imm6 = 0}                             \
   }
 
 #define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
@@ -2698,8 +2696,9 @@ static int sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
-static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, size_t offset,
-                                    struct ir_var_value *value, char *data) {
+static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
+                                    size_t offset, struct ir_var_value *value,
+                                    char *data) {
   if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
     return;
   }
@@ -2742,7 +2741,8 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, 
   case IR_VAR_TY_TY_FUNC:
     bug("func can not have data as a global var");
 
-  // FIXME: some bugs here around using compiler-ptr-size when we mean to use target-ptr-size
+    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
+    // target-ptr-size
 
   case IR_VAR_TY_TY_POINTER:
   case IR_VAR_TY_TY_ARRAY:
@@ -2751,12 +2751,10 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, 
     case IR_VAR_VALUE_TY_FLT:
       bug("doesn't make sense");
     case IR_VAR_VALUE_TY_ADDR: {
-      struct relocation reloc = {
-        .ty = RELOCATION_TY_POINTER,
-        .size = 3,
-        .address = offset,
-        .symbol_index = value->addr.glb->id
-      };
+      struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
+                                 .size = 3,
+                                 .address = offset,
+                                 .symbol_index = value->addr.glb->id};
 
       vector_push_back(relocs, &reloc);
 
@@ -2773,7 +2771,8 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, 
     case IR_VAR_VALUE_TY_VALUE_LIST:
       for (size_t i = 0; i < value->value_list.num_values; i++) {
         size_t value_offset = value->value_list.offsets[i];
-        codegen_write_var_value(iru, relocs, offset + value_offset, &value->value_list.values[i],
+        codegen_write_var_value(iru, relocs, offset + value_offset,
+                                &value->value_list.values[i],
                                 &data[value_offset]);
       }
       break;
@@ -2786,7 +2785,8 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs, 
                  "expected value list");
     for (size_t i = 0; i < value->value_list.num_values; i++) {
       size_t field_offset = value->value_list.offsets[i];
-      codegen_write_var_value(iru, relocs, offset + field_offset, &value->value_list.values[i],
+      codegen_write_var_value(iru, relocs, offset + field_offset,
+                              &value->value_list.values[i],
                               &data[field_offset]);
     }
   }

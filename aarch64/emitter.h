@@ -33,7 +33,7 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
 void aarch64_emit_fneg(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fneg);
 void aarch64_emit_fsqrt(struct aarch64_emitter *emitter,
-                       const struct aarch64_reg_1_source fsqrt);
+                        const struct aarch64_reg_1_source fsqrt);
 void aarch64_emit_fabs(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_1_source fabs);
 
@@ -54,9 +54,9 @@ void aarch64_emit_fdiv(struct aarch64_emitter *emitter,
                        const struct aarch64_reg_2_source fdiv);
 
 void aarch64_emit_fmaxnm(struct aarch64_emitter *emitter,
-                       const struct aarch64_reg_2_source fmaxnm);
+                         const struct aarch64_reg_2_source fmaxnm);
 void aarch64_emit_fminnm(struct aarch64_emitter *emitter,
-                       const struct aarch64_reg_2_source fminnm);
+                         const struct aarch64_reg_2_source fminnm);
 
 /* Register moves */
 

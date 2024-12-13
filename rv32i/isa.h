@@ -187,23 +187,25 @@
 #define FMV_WX(rs1, rd)                                                        \
   R_TYPE(FUNCT7_FMV_WX, 0b00, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FSQRT_S(rs1, rd) R_TYPE(FUNCT7_FSQRT, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
+#define FSQRT_S(rs1, rd)                                                       \
+  R_TYPE(FUNCT7_FSQRT, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
 
 #define FADD_S(rs2, rs1, rd) R_TYPE(FUNCT7_FADD, rs2, rs1, 0b000, rd, OPC_OP_FP)
 #define FSUB_S(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB, rs2, rs1, 0b000, rd, OPC_OP_FP)
 #define FMUL_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL, rs2, rs1, 0b000, rd, OPC_OP_FP)
 #define FDIV_S(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV, rs2, rs1, 0b000, rd, OPC_OP_FP)
 
-#define FMAX_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
-#define FMIN_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
+#define FMAX_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
+#define FMIN_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
 
 #define FSGNJ_S(rs2, rs1, rd)                                                  \
   R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)
-#define FSGNJN_S(rs2, rs1, rd)                                                  \
+#define FSGNJN_S(rs2, rs1, rd)                                                 \
   R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJN, rd, OPC_OP_FP)
-#define FSGNJX_S(rs2, rs1, rd)                                                  \
+#define FSGNJX_S(rs2, rs1, rd)                                                 \
   R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
-
 
 #define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)

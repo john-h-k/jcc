@@ -733,7 +733,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
                                                          : TD_ASSG_TY_SUB;
     goto inc_dec;
 
-  inc_dec : {
+  inc_dec: {
     // if we are decrementing a pointer/array, we need to make sure we don't
     // build an expr that is PTR - PTR as this will do a "pointer subtract"
     // rather than "pointer minus integer" so we give the constant a
@@ -1513,7 +1513,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
     ty = TD_BINARY_OP_TY_RSHIFT;
     goto compound_assg;
 
-  compound_assg : {
+  compound_assg: {
     struct ir_op *assignee = build_ir_for_expr(irb, stmt, assg->assignee);
 
     struct ir_op *lhs;

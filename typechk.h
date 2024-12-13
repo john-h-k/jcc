@@ -1,10 +1,10 @@
 #ifndef TYPECHK_H
 #define TYPECHK_H
 
+#include "compiler.h"
 #include "parse.h"
 #include "target.h"
 #include "var_table.h"
-#include "compiler.h"
 
 /* Typecheck */
 // Converts AST types into typed (`td_`) types
@@ -718,7 +718,7 @@ struct typechk_result {
 };
 
 bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
-                         const struct td_var_ty *r);
+                  const struct td_var_ty *r);
 
 enum typechk_create_result typechk_create(const struct target *target,
                                           const struct compile_args *args,
