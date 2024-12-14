@@ -103,7 +103,7 @@ struct td_ty_incomplete_aggregate {
 enum td_ty_func_ty {
   TD_TY_FUNC_TY_UNKNOWN_ARGS, // e.g `int foo()`
   TD_TY_FUNC_TY_KNOWN_ARGS,   // e.g `int foo(void), int foo(int, float)`
-  TD_TY_FUNC_TY_VARIADIC      // e.g `int foo(...)`
+  TD_TY_FUNC_TY_VARIADIC      // e.g `int foo(int, ...)`
 };
 
 struct td_ty_func {

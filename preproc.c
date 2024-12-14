@@ -1035,6 +1035,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
       } else if (token_streq(directive, "if")) {
+        UNEXPANDED_DIR_TOKENS();
         TODO("#if");
       } else if (token_streq(directive, "endif")) {
         UNEXPANDED_DIR_TOKENS();
