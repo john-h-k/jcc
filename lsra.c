@@ -293,40 +293,44 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
             (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_gp)) {
 
-          if (!live->op->lcl) {
-            live->op->lcl = add_local(irb, &live->op->var_ty);
-          }
-
-          struct ir_lcl *lcl = live->op->lcl;
+          struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
           lcl->flags |= IR_LCL_FLAG_SPILL;
 
           struct ir_var_ty ptr_int = var_ty_for_pointer_size(irb->unit);
-          struct ir_op *lcl_addr = insert_before_ir_op(
+          struct ir_op *store_addr = insert_before_ir_op(
+              irb, interval->op, IR_OP_TY_ADDR, ptr_int);
+
+          struct ir_op *load_addr = insert_after_ir_op(
               irb, interval->op, IR_OP_TY_ADDR, ptr_int);
 
           if (info->has_ssp) {
-            lcl_addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg };
+            store_addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg };
+            load_addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg };
           } else {
-            lcl_addr->flags |= IR_OP_FLAG_CONTAINED;
+            store_addr->flags |= IR_OP_FLAG_CONTAINED;
+            load_addr->flags |= IR_OP_FLAG_CONTAINED;
           }
 
-          lcl_addr->addr =
+          store_addr->addr =
+              (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+          load_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
           struct ir_op *save = insert_after_ir_op(
-              irb, lcl_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+              irb, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
           save->reg = reg;
           save->store =
               (struct ir_op_store){
               .ty = IR_OP_STORE_TY_ADDR,
-              .addr = lcl_addr, .value = live->op};
+              .addr = store_addr, .value = live->op};
 
           struct ir_op *reload = insert_after_ir_op(
-              irb, interval->op, IR_OP_TY_LOAD, live->op->var_ty);
+              irb, load_addr, IR_OP_TY_LOAD, live->op->var_ty);
           reload->reg = reg;
           reload->load = (struct ir_op_load){
             .ty = IR_OP_LOAD_TY_ADDR,
-              .addr = lcl_addr,
+              .addr = load_addr,
           };
         }
       }
@@ -433,13 +437,17 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   irb->reg_usage = (struct ir_reg_usage){
       .fp_registers_used =
           bitset_create(reg_info.fp_registers.num_volatile +
-                            reg_info.fp_registers.num_nonvolatile,
+                            reg_info.fp_registers.num_nonvolatile + 1,
                         false),
       .gp_registers_used =
           bitset_create(reg_info.gp_registers.num_volatile +
-                            num_nonvolatile_gp,
+                            num_nonvolatile_gp + 1,
                         false),
   };
+
+  if (has_ssp) {
+    bitset_set(irb->reg_usage.gp_registers_used, ssp_reg, true);
+  }
 
   size_t num_gp_regs = reg_info.gp_registers.num_volatile +
                        num_nonvolatile_gp- 1;

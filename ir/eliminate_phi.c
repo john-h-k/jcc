@@ -5,9 +5,6 @@
 #include "ir.h"
 #include "prettyprint.h"
 
-// TODO: properly handle critical edges
-// needs analysis to determine phi paths to a given BB
-
 static void remove_critical_edges(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
 

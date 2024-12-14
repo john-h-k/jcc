@@ -10,13 +10,18 @@ void objdump_debug_disasm(const char *filename, const char *output) {
   // macho mode causes some instructions to show wrongly (half instructions)
   static const char COMMAND[] = "objdump --no-show-raw-insn -d ";
 
-  char *command = nonnull_malloc(sizeof COMMAND + strlen(filename) + strlen(" > ") + strlen(output) + 1);
-  strcpy(command, COMMAND);
-  strcat(command, filename);
+  char *command;
 
   if (output) {
+    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + strlen(" > ") + strlen(output) + 1);
+    strcpy(command, COMMAND);
+    strcat(command, filename);
     strcat(command, " > ");
     strcat(command, output);
+  } else {
+    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + 1);
+    strcpy(command, COMMAND);
+    strcat(command, filename);
   }
 
   if (system(command)) {
