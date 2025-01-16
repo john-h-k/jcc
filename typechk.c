@@ -675,11 +675,11 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
       bitfield_width = var_decl->bitfield_width;
     }
 
-    var_ty.aggregate.fields[i] = (struct td_struct_field){
-        .identifier = var_decl->var.identifier, .var_ty = var_decl->var_ty,
-        .flags = flags,
-        .bitfield_width = bitfield_width
-      };
+    var_ty.aggregate.fields[i] =
+        (struct td_struct_field){.identifier = var_decl->var.identifier,
+                                 .var_ty = var_decl->var_ty,
+                                 .flags = flags,
+                                 .bitfield_width = bitfield_width};
   }
 
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
@@ -703,7 +703,8 @@ enum td_declarator_bitfields {
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init, enum td_declarator_bitfields bitfields);
+                const struct ast_init *init,
+                enum td_declarator_bitfields bitfields);
 
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -852,7 +853,8 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       continue;
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
-          type_declarator(tchk, &param_specifiers, &param->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
+          type_declarator(tchk, &param_specifiers, &param->declarator, NULL,
+                          TD_DECLARATOR_BITFIELDS_FORBID);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty};
       break;
@@ -1034,11 +1036,12 @@ static struct td_var_declaration type_declarator_inner(
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init, enum td_declarator_bitfields bitfields) {
+                const struct ast_init *init,
+                enum td_declarator_bitfields bitfields) {
 
   // TODO: handle storage class/qualifier/function specifiers
-  struct td_var_declaration declaration = type_declarator_inner(tchk, &specifiers->type_specifier, declarator,
-                               init);
+  struct td_var_declaration declaration = type_declarator_inner(
+      tchk, &specifiers->type_specifier, declarator, init);
 
   if (declarator->bitfield_size) {
     if (bitfields == TD_DECLARATOR_BITFIELDS_FORBID) {
@@ -1046,7 +1049,8 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
     }
 
     declaration.ty = TD_VAR_DECLARATION_TY_BITFIELD;
-    declaration.bitfield_width = type_constant_integral_expr(tchk, declarator->bitfield_size);
+    declaration.bitfield_width =
+        type_constant_integral_expr(tchk, declarator->bitfield_size);
   } else {
     declaration.ty = TD_VAR_DECLARATION_TY_VAR;
   }
@@ -1705,6 +1709,14 @@ static bool try_get_member_idx(struct typechk *tchk,
 static bool try_resolve_member_access_ty_by_index(
     struct typechk *tchk, const struct td_var_ty *td_var_ty, size_t member_idx,
     struct td_var_ty *member_var_ty) {
+  if (td_var_ty->ty == TD_VAR_TY_TY_ARRAY) {
+    if (member_idx >= td_var_ty->array.size) {
+      return false;
+    }
+
+    *member_var_ty = td_var_ty_get_underlying(tchk, td_var_ty);
+    return true;
+  }
 
   const struct td_var_ty var_ty = get_completed_aggregate(tchk, td_var_ty);
 
@@ -2487,7 +2499,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
                           TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   struct td_var_declaration declaration =
-      type_declarator(tchk, &specifiers, &func_def->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
+      type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
+                      TD_DECLARATOR_BITFIELDS_FORBID);
 
   struct var_table_entry *func_entry =
       var_table_create_entry(&tchk->var_table, declaration.var.identifier);
@@ -2654,18 +2667,33 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
   }
 }
 
-static struct td_init_list
-type_init_list_for_aggregate_or_array(struct typechk *tchk,
-                                      const struct td_var_ty *var_ty,
-                                      const struct ast_init_list *init_list) {
-  struct td_init_list td_init_list = {
-      .var_ty = *var_ty,
-      .num_inits = init_list->num_inits,
-      .inits = arena_alloc(tchk->arena,
-                           sizeof(*td_init_list.inits) * init_list->num_inits)};
+static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
+  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
+      var_ty->ty == TD_TY_AGGREGATE_TY_UNION) {
+    return 1;
+  }
+
+  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+    return var_ty->aggregate.num_fields;
+  }
+
+  if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
+    return var_ty->array.size;
+  }
+
+  BUG("doesn't make sense");
+}
+
+static struct td_init_list type_init_list_for_aggregate_or_array(
+    struct typechk *tchk, const struct td_var_ty *var_ty,
+    const struct ast_init_list *init_list, size_t start_idx, bool top) {
+
+  struct vector *inits = vector_create(sizeof(struct td_init_list_init));
+
+  size_t num_inits = top ? init_list->num_inits : td_num_init_fields(var_ty);
 
   size_t field_index = 0;
-  for (size_t i = 0; i < init_list->num_inits; i++) {
+  for (size_t i = start_idx; i < start_idx + num_inits; i++) {
     const struct ast_init_list_init *init = &init_list->inits[i];
 
     struct td_var_ty member_var_ty;
@@ -2673,6 +2701,7 @@ type_init_list_for_aggregate_or_array(struct typechk *tchk,
       const struct ast_designator *designator =
           &init->designator_list->designators[0];
 
+      // modify the top level position
       switch (designator->ty) {
       case AST_DESIGNATOR_TY_INDEX:
         field_index = type_constant_integral_expr(tchk, designator->index);
@@ -2687,20 +2716,45 @@ type_init_list_for_aggregate_or_array(struct typechk *tchk,
         break;
       }
       }
-    } else if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, field_index,
+    } else {
+      size_t cur_field_index = field_index;
+
+      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, cur_field_index,
                                                  &member_var_ty)) {
         WARN("bad field");
       }
-    } else {
-      member_var_ty = td_var_ty_get_underlying(tchk, var_ty);
     }
 
-    td_init_list.inits[i] =
-        type_init_list_init(tchk, var_ty, &member_var_ty, init);
+    struct td_init_list_init td_init_list_init;
+    if (init->init->ty == AST_INIT_TY_EXPR && !init->designator_list &&
+        (member_var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
+         member_var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
+      td_init_list_init = (struct td_init_list_init){
+          .designator_list = NULL,
+          .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
+
+      *td_init_list_init.init =
+          (struct td_init){.ty = TD_INIT_TY_INIT_LIST,
+                           .init_list = type_init_list_for_aggregate_or_array(
+                               tchk, &member_var_ty, init_list, i, false)};
+
+      i += td_init_list_init.init->init_list.num_inits - 1;
+    } else {
+      td_init_list_init =
+          type_init_list_init(tchk, var_ty, &member_var_ty, init);
+    }
+
+    vector_push_back(inits, &td_init_list_init);
 
     field_index++;
   }
+
+  struct td_init_list td_init_list = {
+      .var_ty = *var_ty,
+      .num_inits = vector_length(inits),
+      .inits = arena_alloc(tchk->arena, vector_byte_size(inits))};
+
+  vector_copy_to(inits, td_init_list.inits);
 
   return td_init_list;
 }
@@ -2719,7 +2773,8 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
       var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-    return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list);
+    return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list, 0,
+                                                 true);
   } else {
     WARN("cannot use initializer list for type");
   }
@@ -2754,9 +2809,11 @@ static struct td_init type_init(struct typechk *tchk,
 static struct td_var_declaration
 type_init_declarator(struct typechk *tchk,
                      const struct td_specifiers *specifiers,
-                     const struct ast_init_declarator *init_declarator, enum td_declarator_bitfields bitfields) {
-  struct td_var_declaration td_var_decl = type_declarator(
-      tchk, specifiers, &init_declarator->declarator, init_declarator->init, bitfields);
+                     const struct ast_init_declarator *init_declarator,
+                     enum td_declarator_bitfields bitfields) {
+  struct td_var_declaration td_var_decl =
+      type_declarator(tchk, specifiers, &init_declarator->declarator,
+                      init_declarator->init, bitfields);
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
@@ -2784,7 +2841,8 @@ type_init_declarator(struct typechk *tchk,
 
 static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, const struct td_specifiers *specifiers,
-    const struct ast_init_declarator_list *declarator_list, enum td_declarator_bitfields bitfields) {
+    const struct ast_init_declarator_list *declarator_list,
+    enum td_declarator_bitfields bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .num_var_declarations = declarator_list->num_init_declarators,
@@ -2810,7 +2868,8 @@ type_declaration(struct typechk *tchk,
           TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_FORBID);
+                                   &declaration->declarator_list,
+                                   TD_DECLARATOR_BITFIELDS_FORBID);
 }
 
 static struct td_declaration
@@ -2821,7 +2880,8 @@ type_struct_declaration(struct typechk *tchk,
       TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_ALLOW);
+                                   &declaration->declarator_list,
+                                   TD_DECLARATOR_BITFIELDS_ALLOW);
 }
 
 static struct td_external_declaration type_external_declaration(
@@ -2894,13 +2954,13 @@ struct td_printstate {
 };
 
 #define DEBUG_FUNC_ENUM(ty, name)                                              \
-  static void parse_debug_print_##ty(struct td_printstate *state,              \
-                                     enum td_##ty *name)
+  static void typechk_debug_print_##ty(struct td_printstate *state,            \
+                                       enum td_##ty *name)
 
 #define DEBUG_FUNC(ty, name)                                                   \
-  static void parse_debug_print_##ty(struct td_printstate *state,              \
-                                     struct td_##ty *name)
-#define DEBUG_CALL(ty, val) parse_debug_print_##ty(state, val)
+  static void typechk_debug_print_##ty(struct td_printstate *state,            \
+                                       struct td_##ty *name)
+#define DEBUG_CALL(ty, val) typechk_debug_print_##ty(state, val)
 
 #define TD_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
 #define TD_PRINT_SAMELINE_NOINDENT(fmt, ...) slogsl(fmt, __VA_ARGS__)
