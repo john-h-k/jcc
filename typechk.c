@@ -675,11 +675,11 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
       bitfield_width = var_decl->bitfield_width;
     }
 
-    var_ty.aggregate.fields[i] =
-        (struct td_struct_field){.identifier = var_decl->var.identifier,
-                                 .var_ty = var_decl->var_ty,
-                                 .flags = flags,
-                                 .bitfield_width = bitfield_width};
+    var_ty.aggregate.fields[i] = (struct td_struct_field){
+        .identifier = var_decl->var.identifier, .var_ty = var_decl->var_ty,
+        .flags = flags,
+        .bitfield_width = bitfield_width
+      };
   }
 
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
@@ -703,8 +703,7 @@ enum td_declarator_bitfields {
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init,
-                enum td_declarator_bitfields bitfields);
+                const struct ast_init *init, enum td_declarator_bitfields bitfields);
 
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -853,8 +852,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       continue;
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
-          type_declarator(tchk, &param_specifiers, &param->declarator, NULL,
-                          TD_DECLARATOR_BITFIELDS_FORBID);
+          type_declarator(tchk, &param_specifiers, &param->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty};
       break;
@@ -1036,12 +1034,11 @@ static struct td_var_declaration type_declarator_inner(
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init,
-                enum td_declarator_bitfields bitfields) {
+                const struct ast_init *init, enum td_declarator_bitfields bitfields) {
 
   // TODO: handle storage class/qualifier/function specifiers
-  struct td_var_declaration declaration = type_declarator_inner(
-      tchk, &specifiers->type_specifier, declarator, init);
+  struct td_var_declaration declaration = type_declarator_inner(tchk, &specifiers->type_specifier, declarator,
+                               init);
 
   if (declarator->bitfield_size) {
     if (bitfields == TD_DECLARATOR_BITFIELDS_FORBID) {
@@ -1049,8 +1046,7 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
     }
 
     declaration.ty = TD_VAR_DECLARATION_TY_BITFIELD;
-    declaration.bitfield_width =
-        type_constant_integral_expr(tchk, declarator->bitfield_size);
+    declaration.bitfield_width = type_constant_integral_expr(tchk, declarator->bitfield_size);
   } else {
     declaration.ty = TD_VAR_DECLARATION_TY_VAR;
   }
@@ -1709,14 +1705,6 @@ static bool try_get_member_idx(struct typechk *tchk,
 static bool try_resolve_member_access_ty_by_index(
     struct typechk *tchk, const struct td_var_ty *td_var_ty, size_t member_idx,
     struct td_var_ty *member_var_ty) {
-  if (td_var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    if (member_idx >= td_var_ty->array.size) {
-      return false;
-    }
-
-    *member_var_ty = td_var_ty_get_underlying(tchk, td_var_ty);
-    return true;
-  }
 
   const struct td_var_ty var_ty = get_completed_aggregate(tchk, td_var_ty);
 
@@ -2499,8 +2487,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
                           TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   struct td_var_declaration declaration =
-      type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
-                      TD_DECLARATOR_BITFIELDS_FORBID);
+      type_declarator(tchk, &specifiers, &func_def->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
 
   struct var_table_entry *func_entry =
       var_table_create_entry(&tchk->var_table, declaration.var.identifier);
@@ -2670,53 +2657,15 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
 static struct td_init_list
 type_init_list_for_aggregate_or_array(struct typechk *tchk,
                                       const struct td_var_ty *var_ty,
-                                      const struct ast_init_list *init_list,
-                                      size_t start_idx
-                                    ) {
+                                      const struct ast_init_list *init_list) {
   struct td_init_list td_init_list = {
       .var_ty = *var_ty,
       .num_inits = init_list->num_inits,
       .inits = arena_alloc(tchk->arena,
                            sizeof(*td_init_list.inits) * init_list->num_inits)};
 
-  struct ty_pos {
-    struct td_var_ty var_ty;
-    size_t field_index;
-  };
-
-  struct vector *positions = vector_create(sizeof(struct ty_pos));
-  struct ty_pos start = {.var_ty = *var_ty, .field_index = 0};
-
-  vector_push_back(positions, &start);
-
-  for (size_t i = start_idx; i < init_list->num_inits; i++) {
-    struct ty_pos *pos;
-    while (vector_length(positions)) {
-      pos = vector_tail(positions);
-
-      if (
-          /* union only inits 1 field */ (
-              pos->var_ty.ty == TD_VAR_TY_TY_AGGREGATE &&
-              pos->var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_UNION &&
-              pos->field_index)
-          /* struct inits all fields */
-          || (pos->var_ty.ty == TD_VAR_TY_TY_AGGREGATE &&
-              pos->field_index >= pos->var_ty.aggregate.num_fields)
-          /* array inits all fields */
-          || (pos->var_ty.ty == TD_VAR_TY_TY_ARRAY &&
-              pos->field_index >= pos->var_ty.array.size)) {
-        vector_pop(positions);
-      } else {
-        break;
-      }
-    }
-
-    if (vector_empty(positions)) {
-      WARN("too many fields");
-    }
-
-    const struct td_var_ty *cur_var_ty = &pos->var_ty;
-
+  size_t field_index = 0;
+  for (size_t i = 0; i < init_list->num_inits; i++) {
     const struct ast_init_list_init *init = &init_list->inits[i];
 
     struct td_var_ty member_var_ty;
@@ -2724,53 +2673,33 @@ type_init_list_for_aggregate_or_array(struct typechk *tchk,
       const struct ast_designator *designator =
           &init->designator_list->designators[0];
 
-      // modify the top level position
-      struct ty_pos *top = vector_head(positions);
       switch (designator->ty) {
       case AST_DESIGNATOR_TY_INDEX:
-        top->field_index = type_constant_integral_expr(tchk, designator->index);
+        field_index = type_constant_integral_expr(tchk, designator->index);
         break;
       case AST_DESIGNATOR_TY_FIELD: {
         if (!try_get_member_idx(
                 tchk, var_ty, identifier_str(tchk->parser, &designator->field),
-                &top->field_index)) {
+                &field_index)) {
           WARN("unrecognised member for init list");
         }
 
         break;
       }
       }
-    } else {
-      size_t cur_field_index = pos->field_index;
-
-      if (!try_resolve_member_access_ty_by_index(
-              tchk, cur_var_ty, cur_field_index, &member_var_ty)) {
+    } else if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+      if (!try_resolve_member_access_ty_by_index(tchk, var_ty, field_index,
+                                                 &member_var_ty)) {
         WARN("bad field");
       }
-
-      while (init->init->ty == AST_INIT_TY_EXPR &&
-             (member_var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
-              member_var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
-        // this is an expression initing an aggregate, push a new type into
-        // system
-        struct ty_pos new_pos = {.var_ty = member_var_ty, .field_index = 0};
-
-        vector_push_back(positions, &new_pos);
-
-        
-
-        if (!try_resolve_member_access_ty_by_index(
-                tchk, &new_pos.var_ty, new_pos.field_index, &member_var_ty)) {
-          WARN("bad field");
-        }
-      }
+    } else {
+      member_var_ty = td_var_ty_get_underlying(tchk, var_ty);
     }
 
     td_init_list.inits[i] =
         type_init_list_init(tchk, var_ty, &member_var_ty, init);
 
-    pos = vector_tail(positions);
-    pos->field_index++;
+    field_index++;
   }
 
   return td_init_list;
@@ -2825,11 +2754,9 @@ static struct td_init type_init(struct typechk *tchk,
 static struct td_var_declaration
 type_init_declarator(struct typechk *tchk,
                      const struct td_specifiers *specifiers,
-                     const struct ast_init_declarator *init_declarator,
-                     enum td_declarator_bitfields bitfields) {
-  struct td_var_declaration td_var_decl =
-      type_declarator(tchk, specifiers, &init_declarator->declarator,
-                      init_declarator->init, bitfields);
+                     const struct ast_init_declarator *init_declarator, enum td_declarator_bitfields bitfields) {
+  struct td_var_declaration td_var_decl = type_declarator(
+      tchk, specifiers, &init_declarator->declarator, init_declarator->init, bitfields);
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
@@ -2857,8 +2784,7 @@ type_init_declarator(struct typechk *tchk,
 
 static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, const struct td_specifiers *specifiers,
-    const struct ast_init_declarator_list *declarator_list,
-    enum td_declarator_bitfields bitfields) {
+    const struct ast_init_declarator_list *declarator_list, enum td_declarator_bitfields bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .num_var_declarations = declarator_list->num_init_declarators,
@@ -2884,8 +2810,7 @@ type_declaration(struct typechk *tchk,
           TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_FORBID);
+                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_FORBID);
 }
 
 static struct td_declaration
@@ -2896,8 +2821,7 @@ type_struct_declaration(struct typechk *tchk,
       TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_ALLOW);
+                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_ALLOW);
 }
 
 static struct td_external_declaration type_external_declaration(
