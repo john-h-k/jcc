@@ -560,10 +560,6 @@ static char *anonymous_name(struct typechk *tchk) {
   return buff;
 }
 
-static bool ty_is_anonymous(const struct td_var_ty *var_ty) {
-  return var_ty->ty == TD_VAR_TY_TY_AGGREGATE && var_ty->aggregate.name[0] == '<';
-}
-
 static struct td_var_ty
 td_var_ty_for_enum(struct typechk *tchk,
                    const struct ast_enum_specifier *specifier) {
@@ -1695,7 +1691,6 @@ static bool try_get_member_idx(struct typechk *tchk,
   // FIXME: super slow hashtable needed
   for (size_t i = 0; i < var_ty.aggregate.num_fields; i++) {
     const struct td_struct_field *field = &var_ty.aggregate.fields[i];
-    
     if (field->identifier == NULL) {
       if (try_get_member_idx(tchk, &field->var_ty, member_name, member_idx)) {
         return true;
