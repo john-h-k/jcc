@@ -12,7 +12,7 @@ It currently supports AArch64 almost fully, with partial WIP RISC-V support.
 ## Design
 
 * Preprocessor
-  * Has two moeds
+  * Has two modes
     * Self-contained - when invoked with the `-E` flag, will run the preprocessor and output the result
     * Streaming - in normal compilation, tokens from the preprocessor are consumed and fed to the lexer
   * Code is [`preproc.h`](preproc.h) and [`preproc.c`](preproc.c)
