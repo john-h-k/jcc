@@ -4,7 +4,6 @@
 #include "compiler.h"
 #include "parse.h"
 #include "target.h"
-#include "util.h"
 #include "var_table.h"
 #include "vector.h"
 
@@ -676,11 +675,11 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
       bitfield_width = var_decl->bitfield_width;
     }
 
-    var_ty.aggregate.fields[i] =
-        (struct td_struct_field){.identifier = var_decl->var.identifier,
-                                 .var_ty = var_decl->var_ty,
-                                 .flags = flags,
-                                 .bitfield_width = bitfield_width};
+    var_ty.aggregate.fields[i] = (struct td_struct_field){
+        .identifier = var_decl->var.identifier, .var_ty = var_decl->var_ty,
+        .flags = flags,
+        .bitfield_width = bitfield_width
+      };
   }
 
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
@@ -704,8 +703,7 @@ enum td_declarator_bitfields {
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init,
-                enum td_declarator_bitfields bitfields);
+                const struct ast_init *init, enum td_declarator_bitfields bitfields);
 
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -854,8 +852,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       continue;
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
-          type_declarator(tchk, &param_specifiers, &param->declarator, NULL,
-                          TD_DECLARATOR_BITFIELDS_FORBID);
+          type_declarator(tchk, &param_specifiers, &param->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty};
       break;
@@ -1037,12 +1034,11 @@ static struct td_var_declaration type_declarator_inner(
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init,
-                enum td_declarator_bitfields bitfields) {
+                const struct ast_init *init, enum td_declarator_bitfields bitfields) {
 
   // TODO: handle storage class/qualifier/function specifiers
-  struct td_var_declaration declaration = type_declarator_inner(
-      tchk, &specifiers->type_specifier, declarator, init);
+  struct td_var_declaration declaration = type_declarator_inner(tchk, &specifiers->type_specifier, declarator,
+                               init);
 
   if (declarator->bitfield_size) {
     if (bitfields == TD_DECLARATOR_BITFIELDS_FORBID) {
@@ -1050,8 +1046,7 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
     }
 
     declaration.ty = TD_VAR_DECLARATION_TY_BITFIELD;
-    declaration.bitfield_width =
-        type_constant_integral_expr(tchk, declarator->bitfield_size);
+    declaration.bitfield_width = type_constant_integral_expr(tchk, declarator->bitfield_size);
   } else {
     declaration.ty = TD_VAR_DECLARATION_TY_VAR;
   }
@@ -2492,8 +2487,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
                           TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   struct td_var_declaration declaration =
-      type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
-                      TD_DECLARATOR_BITFIELDS_FORBID);
+      type_declarator(tchk, &specifiers, &func_def->declarator, NULL, TD_DECLARATOR_BITFIELDS_FORBID);
 
   struct var_table_entry *func_entry =
       var_table_create_entry(&tchk->var_table, declaration.var.identifier);
@@ -2660,63 +2654,6 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
   }
 }
 
-struct recursive_field_iter {
-  struct td_var_ty var_ty;
-  size_t num_fields;
-  size_t idx;
-
-  struct recursive_field_iter *sub_field;
-};
-
-static struct recursive_field_iter
-begin_recursive_field_iter(struct typechk *tchk, struct td_var_ty var_ty) {
-  DEBUG_ASSERT(var_ty.ty == TD_VAR_TY_TY_ARRAY ||
-                   var_ty.ty == TD_VAR_TY_TY_AGGREGATE,
-               "expected aggregate/array");
-  return (struct recursive_field_iter){.var_ty = var_ty,
-                                       .num_fields =
-                                           var_ty.ty == TD_VAR_TY_TY_ARRAY
-                                               ? var_ty.array.size
-                                               : var_ty.aggregate.num_fields,
-                                       .idx = 0,
-                                       .sub_field = NULL
-                                     };
-}
-
-static bool recursive_field_iter_next(struct typechk *tchk, struct recursive_field_iter *iter,
-                                      struct td_var_ty *member_var_ty) {
-  if (iter->sub_field) {
-    if (recursive_field_iter_next(tchk, iter->sub_field, member_var_ty)) {
-      return true;
-    }
-
-    iter->sub_field = NULL;
-  }
-
-  if (iter->idx >= iter->num_fields) {
-    return false;
-  }
-
-  struct td_var_ty *var_ty = &iter->var_ty;
-
-  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-    *member_var_ty = iter->var_ty.aggregate.fields[iter->idx++].var_ty;
-  } else {
-    *member_var_ty = *iter->var_ty.array.underlying;
-  }
-
-  if (member_var_ty->ty == TD_VAR_TY_TY_ARRAY ||
-                   member_var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-
-    iter->sub_field = arena_alloc(tchk->arena, sizeof(*iter->sub_field));
-    *iter->sub_field = begin_recursive_field_iter(tchk, *member_var_ty);
-
-    return recursive_field_iter_next(tchk, iter, member_var_ty);
-  }
-
-  return true;
-}
-
 static struct td_init_list
 type_init_list_for_aggregate_or_array(struct typechk *tchk,
                                       const struct td_var_ty *var_ty,
@@ -2727,8 +2664,6 @@ type_init_list_for_aggregate_or_array(struct typechk *tchk,
       .inits = arena_alloc(tchk->arena,
                            sizeof(*td_init_list.inits) * init_list->num_inits)};
 
-  struct recursive_field_iter iter = begin_recursive_field_iter(tchk, *var_ty);
-    
   size_t field_index = 0;
   for (size_t i = 0; i < init_list->num_inits; i++) {
     const struct ast_init_list_init *init = &init_list->inits[i];
@@ -2819,11 +2754,9 @@ static struct td_init type_init(struct typechk *tchk,
 static struct td_var_declaration
 type_init_declarator(struct typechk *tchk,
                      const struct td_specifiers *specifiers,
-                     const struct ast_init_declarator *init_declarator,
-                     enum td_declarator_bitfields bitfields) {
-  struct td_var_declaration td_var_decl =
-      type_declarator(tchk, specifiers, &init_declarator->declarator,
-                      init_declarator->init, bitfields);
+                     const struct ast_init_declarator *init_declarator, enum td_declarator_bitfields bitfields) {
+  struct td_var_declaration td_var_decl = type_declarator(
+      tchk, specifiers, &init_declarator->declarator, init_declarator->init, bitfields);
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
@@ -2851,8 +2784,7 @@ type_init_declarator(struct typechk *tchk,
 
 static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, const struct td_specifiers *specifiers,
-    const struct ast_init_declarator_list *declarator_list,
-    enum td_declarator_bitfields bitfields) {
+    const struct ast_init_declarator_list *declarator_list, enum td_declarator_bitfields bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .num_var_declarations = declarator_list->num_init_declarators,
@@ -2878,8 +2810,7 @@ type_declaration(struct typechk *tchk,
           TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_FORBID);
+                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_FORBID);
 }
 
 static struct td_declaration
@@ -2890,8 +2821,7 @@ type_struct_declaration(struct typechk *tchk,
       TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
   return type_init_declarator_list(tchk, &specifiers,
-                                   &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_ALLOW);
+                                   &declaration->declarator_list, TD_DECLARATOR_BITFIELDS_ALLOW);
 }
 
 static struct td_external_declaration type_external_declaration(
