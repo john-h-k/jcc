@@ -831,12 +831,17 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
       binary_op->ty == TD_BINARY_OP_TY_LOGICAL_OR) {
     struct ir_basicblock *entry_bb = (*stmt)->basicblock;
     struct ir_basicblock *rhs_bb = alloc_ir_basicblock(irb->func);
+    struct ir_basicblock *true_bb = alloc_ir_basicblock(irb->func);
+    struct ir_basicblock *false_bb = alloc_ir_basicblock(irb->func);
     struct ir_basicblock *end_bb = alloc_ir_basicblock(irb->func);
 
+    make_basicblock_merge(irb->func, true_bb, end_bb);
+    make_basicblock_merge(irb->func, false_bb, end_bb);
+
     if (binary_op->ty == TD_BINARY_OP_TY_LOGICAL_AND) {
-      make_basicblock_split(irb->func, entry_bb, rhs_bb, end_bb);
+      make_basicblock_split(irb->func, entry_bb, rhs_bb, false_bb);
     } else {
-      make_basicblock_split(irb->func, entry_bb, end_bb, rhs_bb);
+      make_basicblock_split(irb->func, entry_bb, true_bb, rhs_bb);
     }
 
     struct ir_stmt *entry_stmt = alloc_ir_stmt(irb->func, entry_bb);
@@ -850,9 +855,25 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
 
     struct ir_basicblock *rhs_stmt_bb = rhs_stmt->basicblock;
     struct ir_op *rhs_br = alloc_ir_op(irb->func, rhs_stmt);
-    rhs_br->ty = IR_OP_TY_BR;
+    rhs_br->ty = IR_OP_TY_BR_COND;
     rhs_br->var_ty = IR_VAR_TY_NONE;
-    make_basicblock_merge(irb->func, rhs_stmt_bb, end_bb);
+    rhs_br->br_cond = (struct ir_op_br_cond){.cond = rhs};
+    
+    make_basicblock_split(irb->func, rhs_stmt_bb, true_bb, false_bb);
+
+    struct ir_stmt *true_stmt = alloc_ir_stmt(irb->func, true_bb);
+    struct ir_op *true_op = alloc_ir_op(irb->func, true_stmt);
+    mk_integral_constant(irb->unit, true_op, IR_VAR_PRIMITIVE_TY_I32, 1);
+    struct ir_op *true_br = alloc_ir_op(irb->func, true_stmt);
+    true_br->ty = IR_OP_TY_BR;
+    true_br->var_ty = IR_VAR_TY_NONE;
+
+    struct ir_stmt *false_stmt = alloc_ir_stmt(irb->func, false_bb);
+    struct ir_op *false_op = alloc_ir_op(irb->func, false_stmt);
+    mk_integral_constant(irb->unit, false_op, IR_VAR_PRIMITIVE_TY_I32, 0);
+    struct ir_op *false_br = alloc_ir_op(irb->func, false_stmt);
+    false_br->ty = IR_OP_TY_BR;
+    false_br->var_ty = IR_VAR_TY_NONE;
 
     struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
     struct ir_op *phi = alloc_ir_op(irb->func, end_stmt);
@@ -864,9 +885,9 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
         .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry *) * 2)};
 
     phi->phi.values[0] = (struct ir_phi_entry){
-        .basicblock = lhs->stmt->basicblock, .value = lhs};
+        .basicblock = true_op->stmt->basicblock, .value = true_op};
     phi->phi.values[1] = (struct ir_phi_entry){
-        .basicblock = rhs->stmt->basicblock, .value = rhs};
+        .basicblock = false_op->stmt->basicblock, .value = false_op};
 
     *stmt = phi->stmt;
     return phi;
