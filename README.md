@@ -2,12 +2,22 @@
 
 JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler. 
 
+Aims:
+* To be a complete C11 compiler with full functionality (WIP)
+* To follow best practices and have sensible compiler architecture
+  * Building the "smallest" C compiler is an explicit non-goal
+* To be useful for learning about compilers
+  * Uses proper IRs rather than AST -> ASM
+  * Generates machine code, not assembly
+  * Builds SSA form and puts values in registers rather than spilling everything
+  * Doesn't use hacks (mostly...)
+
 ## Is it sound?
 No, it is text based
 
 ## Support
 
-It currently supports AArch64 almost fully, with partial WIP RISC-V support.
+It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64 is in the pipeline
 
 ## Design
 
