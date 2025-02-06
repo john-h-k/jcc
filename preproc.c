@@ -72,7 +72,6 @@ UNUSED static const char *preproc_token_name(enum preproc_token_ty ty) {
 }
 
 enum preproc_define_value_ty {
-  PREPROC_DEFINE_VALUE_TY_FUNC,
   PREPROC_DEFINE_VALUE_TY_TOKEN,
   PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
 };
@@ -777,59 +776,6 @@ static bool try_expand_token(struct preproc *preproc,
   if (macro) {
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
-    case PREPROC_DEFINE_VALUE_TY_FUNC: {
-      struct preproc_token open_bracket;
-      while (true) {
-        preproc_next_token(preproc, &open_bracket);
-
-        if (open_bracket.ty == PREPROC_TOKEN_TY_WHITESPACE ||
-            open_bracket.ty == PREPROC_TOKEN_TY_COMMENT ||
-            open_bracket.ty == PREPROC_TOKEN_TY_NEWLINE) {
-          continue;
-        }
-
-        if (open_bracket.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
-            open_bracket.punctuator.ty !=
-                PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
-          BUG("fn-like macro must be followed by open bracket");
-        }
-
-        break;
-      }
-
-      struct vector *arguments = vector_create(sizeof(struct vector *));
-      struct vector *cur_argument = vector_create(sizeof(struct preproc_token));
-
-      ssize_t bracket_depth = 1;
-      struct preproc_token next_tok;
-      while (true) {
-        preproc_next_token(preproc, &next_tok);
-
-        if (next_tok.ty == PREPROC_TOKEN_TY_PUNCTUATOR) {
-          if (next_tok.punctuator.ty ==
-              PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
-            bracket_depth++;
-          } else if (next_tok.punctuator.ty ==
-                     PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
-            bracket_depth--;
-          }
-
-          if (bracket_depth == 1 &&
-              (next_tok.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA ||
-               next_tok.punctuator.ty ==
-                   PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET)) {
-            // new arg
-            vector_push_back(arguments, &cur_argument);
-
-            if (next_tok.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
-              cur_argument = vector_create(sizeof(struct preproc_token));
-            } else {
-              break;
-            }
-          }
-        }
-      }
-    }
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
       if (!try_expand_token(preproc, preproc_text, &value->token, buffer,
                             parents)) {
@@ -971,8 +917,8 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
   while (true) {
     preproc_next_raw_token(preproc, &token);
 
-    // TODO: do we handle EOF properly everywhere? or do we assume files end
-    // in newline
+    // TODO: do we handle EOF properly everywhere? or do we assume files end in
+    // newline
     if (token.ty == PREPROC_TOKEN_TY_NEWLINE ||
         token.ty == PREPROC_TOKEN_TY_EOF) {
       break;
@@ -1142,25 +1088,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         struct preproc_token def_name =
             *(struct preproc_token *)vector_head(directive_tokens);
 
-
         size_t first_def_tok = 1;
-        if (num_directive_tokens > 2) {
-          struct preproc_token *next = vector_get(directive_tokens, 1);
-
-          if (next->ty == PREPROC_TOKEN_TY_PUNCTUATOR && next->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
-            // fn-like macro
-
-            first_def_tok++;
-
-            struct vector *parameters = vector_create(sizeof(struct preproc_token));
-
-            struct preproc_token param_token;
-            for (; first_def_tok < num_directive_tokens; first_def_tok++) {
-              
-            }
-          }
-        }
-
         for (; first_def_tok < num_directive_tokens; first_def_tok++) {
           struct preproc_token *tok =
               vector_get(directive_tokens, first_def_tok);
