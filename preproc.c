@@ -1154,18 +1154,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         const char *path = NULL;
         const char *content = NULL;
-        if (is_angle) {
-          for (size_t i = 0; i < preproc->num_include_paths; i++) {
-            const char *search_path =
-                path_combine(preproc->include_paths[i], filename);
-
-            content = read_file(search_path);
-            if (content) {
-              path = search_path;
-              break;
-            }
-          }
-        } else {
+        if (!is_angle) {
           const char *search_path;
           if (preproc_text->path.dir) {
             search_path = path_combine(preproc_text->path.dir, filename);
@@ -1178,7 +1167,20 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         }
 
         if (!content) {
-          TODO("handle failed includes");
+          for (size_t i = 0; i < preproc->num_include_paths; i++) {
+            const char *search_path =
+                path_combine(preproc->include_paths[i], filename);
+
+            content = read_file(search_path);
+            if (content) {
+              path = search_path;
+              break;
+            }
+          }
+        }
+
+        if (!content) {
+          TODO("handle failed include for '%s'", filename);
         }
 
         struct preproc_text include_text = create_preproc_text(content, path);
