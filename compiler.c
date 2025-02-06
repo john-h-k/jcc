@@ -21,7 +21,6 @@
 #include "rv32i.h"
 #include "target.h"
 #include "util.h"
-#include "vector.h"
 
 #include <stdio.h>
 
@@ -44,6 +43,8 @@ static const struct target *get_target(const struct compile_args *args) {
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     TODO("macOS x64 target not yet implemented");
   // FIXME: linux is actually subtly different in register usage and calling conv
+  case COMPILE_TARGET_ARCH_LINUX_X86_64:
+    TODO("Linux x64 target not yet implemented");
   case COMPILE_TARGET_ARCH_LINUX_ARM64:
     return &AARCH64_LINUX_TARGET;
   case COMPILE_TARGET_ARCH_MACOS_ARM64:

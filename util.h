@@ -260,7 +260,7 @@ static inline void debug_print_stack_trace(void) {
 #define DEBUG_ASSERT(b, ...) util_debug_assert(b, __VA_ARGS__)
 #endif
 
-TRYFORCEINLINE PRINTF_ARGS(1) static void util_debug_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1) static void util_debug_assert(bool b, const char *msg, ...) {
   if (!b) {
     FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
     EXIT_FAIL(-1);
