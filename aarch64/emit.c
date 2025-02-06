@@ -1,23 +1,21 @@
 #include "emit.h"
 
-#include "../aarch64.h"
-#include "../ir/prettyprint.h"
 #include "../vector.h"
 #include "emitter.h"
-#include "isa.h"
 
 #include <stdio.h>
 
 #define WORD_SIZE (8)
 
 const char *aarch64_mangle(struct arena_allocator *arena, const char *name) {
-  char *dest =
-      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+  // char *dest =
+  //     arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
-  dest[0] = '_';
-  strcpy(dest + 1, name);
+  // dest[0] = '_';
+  // strcpy(dest + 1, name);
 
-  return dest;
+  // return dest;
+  return name;
 }
 
 struct emit_state {

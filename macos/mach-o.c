@@ -1,7 +1,6 @@
 #include "mach-o.h"
 
 #include "../compiler.h"
-#include "../log.h"
 #include "../util.h"
 #include "../vector.h"
 

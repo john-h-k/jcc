@@ -33,6 +33,7 @@ static bool target_needs_linking(const struct compile_args *args) {
   case COMPILE_TARGET_ARCH_NATIVE:
     BUG("native arch should not be here");
   case COMPILE_TARGET_ARCH_LINUX_ARM64:
+  case COMPILE_TARGET_ARCH_LINUX_X86_64:
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
     return true;
