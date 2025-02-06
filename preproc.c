@@ -4,8 +4,6 @@
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
-#include "ir/ir.h"
-#include "lex.h"
 #include "log.h"
 #include "program.h"
 #include "util.h"

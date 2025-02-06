@@ -528,6 +528,21 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
 
 #define DETACHED_BASICBLOCK (SIZE_MAX)
 
+static void remove_pred(struct ir_basicblock *basicblock,
+                        struct ir_basicblock *pred) {
+  for (size_t i = 0; i < basicblock->num_preds; i++) {
+    if (basicblock->preds[i] == pred) {
+      if (i + 1 < basicblock->num_preds) {
+        memmove(&basicblock->preds[i], &basicblock->preds[i + 1],
+                (basicblock->num_preds - i - 1) * sizeof(struct ir_basicblock *));
+      }
+
+      basicblock->num_preds--;
+      break;
+    }
+  }
+}
+
 void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock) {
   invariant_assert(irb->basicblock_count,
@@ -561,25 +576,23 @@ void detach_ir_basicblock(struct ir_func *irb,
     break;
 
   case IR_BASICBLOCK_TY_SPLIT:
+    remove_pred(basicblock->split.false_target, basicblock);
+    remove_pred(basicblock->split.true_target, basicblock);
+    break;
+
   case IR_BASICBLOCK_TY_SWITCH:
-    BUG("can't detach SPLIT/SWITCH bb");
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      remove_pred(basicblock->switch_case.cases[i].target, basicblock);
+    }
 
-  case IR_BASICBLOCK_TY_MERGE: {
-    struct ir_basicblock *target = basicblock->merge.target;
-
-    for (size_t i = 0; i < target->num_preds; i++) {
-      if (target->preds[i] == basicblock) {
-        if (i + 1 < target->num_preds) {
-          memmove(&target->preds[i], &target->preds[i + 1],
-                  (target->num_preds - i - 1) * sizeof(struct ir_basicblock *));
-        }
-
-        target->num_preds--;
-        break;
-      }
+    if (basicblock->switch_case.default_target) {
+      remove_pred(basicblock->switch_case.default_target, basicblock);
     }
     break;
-  }
+
+  case IR_BASICBLOCK_TY_MERGE:
+    remove_pred(basicblock->merge.target, basicblock);
+    break;
   }
 
   basicblock->id = DETACHED_BASICBLOCK;
@@ -1246,7 +1259,7 @@ struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
     }
   }
 
-mk_op : {
+mk_op: {
   struct ir_op *res =
       insert_before_ir_op(irb, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   res->addr = addr;
@@ -1461,7 +1474,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                         .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
 
     struct ir_glb *memset = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
-                                        IR_GLB_DEF_TY_UNDEFINED, "memset");
+                                       IR_GLB_DEF_TY_UNDEFINED, "memset");
 
     iru->well_known_glbs.memset = memset;
     return memset;
