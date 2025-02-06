@@ -3,7 +3,6 @@
 #include "../hashtbl.h"
 #include "../vector.h"
 #include "ir.h"
-#include "prettyprint.h"
 
 static void remove_critical_edges(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;

@@ -1,8 +1,6 @@
 #include "build.h"
 
 #include "../alloc.h"
-#include "../compiler.h"
-#include "../lex.h"
 #include "../typechk.h"
 #include "../util.h"
 #include "../var_table.h"
@@ -10,8 +8,6 @@
 #include "ir.h"
 #include "prettyprint.h"
 #include "var_refs.h"
-
-#include <math.h>
 
 // break/continues will add an entry into the jumps vector
 // and then at the end of the loop these will be traversed and fixed to point to
@@ -417,7 +413,6 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       struct td_var_ty *pointer_ty =
           lhs_ty.ty == TD_VAR_TY_TY_POINTER ? &lhs_ty : &rhs_ty;
 
-      // need to multiply rhs by the element size
       struct ir_var_ty el_ty =
           var_ty_for_td_var_ty(irb->unit, pointer_ty->pointer.underlying);
       struct ir_var_ty_info el_info = var_ty_info(irb->unit, &el_ty);

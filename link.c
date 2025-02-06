@@ -1,7 +1,6 @@
 #include "link.h"
 
 #include "alloc.h"
-#include "log.h"
 #include "util.h"
 
 #include <stdlib.h>
