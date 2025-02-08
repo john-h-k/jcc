@@ -1,4 +1,4 @@
-name: Test
+name: Debian AArch64 CI
 
 on:
   push:
@@ -7,22 +7,11 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04-arm, macos-latest]
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run tests
-        run: ./jcc.sh ci-test
-
   debian-test:
     runs-on: ubuntu-latest
-    container: debian:latest
+    container:
+      image: debian:latest
+      options: --platform linux/arm64
 
     steps:
       - name: Install dependencies
@@ -33,3 +22,4 @@ jobs:
 
       - name: Run tests
         run: ./jcc.sh ci-test
+
