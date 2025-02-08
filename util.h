@@ -289,7 +289,7 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 #if HAS_BUILTIN(__builtin_debugtrap)
 #define BREAKPOINT() __builtin_debugtrap()
 #else
-#define raise(SIGINT)
+#define BREAKPOINT() raise(SIGINT)
 #endif
 
 static inline unsigned long long rotateright64(unsigned long long value,
