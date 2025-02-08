@@ -9,17 +9,25 @@ on:
 jobs:
   debian-test:
     runs-on: ubuntu-latest
-    container:
-      image: debian:latest
-      options: --platform linux/arm64
 
     steps:
-      - name: Install dependencies
-        run: apt update && apt install -y git cmake make gcc
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run tests
-        run: ./jcc.sh ci-test
+      - name: Set up QEMU for aarch64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run tests in Debian aarch64 container
+        run: |
+          docker run --rm --platform linux/arm64 debian:latest bash -c "
+            apt update && apt install -y git cmake make gcc &&
+            git clone https://github.com/john-h-k/jcc.git &&
+            cd jcc &&
+            chmod +x jcc.sh &&
+            ./jcc.sh test
+          "
