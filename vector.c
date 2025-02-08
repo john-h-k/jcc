@@ -32,9 +32,8 @@ void vector_ensure_capacity(struct vector *v, size_t capacity) {
   size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : 1);
   char *new_data = nonnull_malloc(new_capacity * v->element_size);
 
-  memcpy(new_data, v->data, v->len * v->element_size);
-
   if (v->data) {
+    memcpy(new_data, v->data, v->len * v->element_size);
     free(v->data);
   }
 
@@ -136,7 +135,9 @@ void *vector_get(struct vector *v, size_t index) {
 }
 
 void vector_copy_to(struct vector *v, void *dest) {
-  memcpy(dest, v->data, v->len * v->element_size);
+  if (v->data) {
+    memcpy(dest, v->data, v->len * v->element_size);
+  }
 }
 
 void vector_free(struct vector **v) {

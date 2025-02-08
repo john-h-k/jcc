@@ -1,15 +1,13 @@
+#include "aarch64.h"
 #include "compiler.h"
 #include "io.h"
-#include "lex.h"
-#include "link.h"
 #include "log.h"
-#include "macos/mach-o.h"
-#include "parse.h"
 #include "program.h"
+#include "rv32i.h"
 #include "util.h"
 #include "vector.h"
+#include "target.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,23 +22,36 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          const char ***sources,
                                          size_t *num_sources);
 
-static bool target_needs_linking(const struct compile_args *args) {
+static bool target_needs_linking(const struct compile_args *args, const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
     return false;
   }
 
+  return target->link_objects != NULL;
+}
+
+static const struct target *get_target(const struct compile_args *args) {
   switch (args->target_arch) {
   case COMPILE_TARGET_ARCH_NATIVE:
-    BUG("native arch should not be here");
-  case COMPILE_TARGET_ARCH_LINUX_ARM64:
-  case COMPILE_TARGET_ARCH_LINUX_X86_64:
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+    BUG("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
+        "earlier");
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    return true;
-  case COMPILE_TARGET_ARCH_EEP:
+    TODO("macOS x64 target not yet implemented");
+  // FIXME: linux is actually subtly different in register usage and calling conv
+  case COMPILE_TARGET_ARCH_LINUX_X86_64:
+    TODO("Linux x64 target not yet implemented");
+  case COMPILE_TARGET_ARCH_LINUX_ARM64:
+    return &AARCH64_LINUX_TARGET;
+  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+    return &AARCH64_MACOS_TARGET;
   case COMPILE_TARGET_ARCH_RV32I:
-    return false;
+    return &RV32I_TARGET;
+  case COMPILE_TARGET_ARCH_EEP:
+    BUG("redo eep");
+    // return &EEP_TARGET;
   }
+
+  BUG("unexpected target in `get_target`");
 }
 
 int main(int argc, char **argv) {
@@ -75,6 +86,7 @@ int main(int argc, char **argv) {
   #endif
   }
 
+  const struct target *target = get_target(&args);
   char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
@@ -97,7 +109,7 @@ int main(int argc, char **argv) {
       object_file[strlen("stdout")] = 0; 
     } else if (args.build_asm_file && !args.output) {
       object_file = path_replace_ext(sources[i], ".s");
-    } else if (target_needs_linking(&args) || !args.output) {
+    } else if (target_needs_linking(&args, target) || !args.output) {
       object_file = path_replace_ext(sources[i], "o");
     } else {
       object_file = args.output;
@@ -113,7 +125,7 @@ int main(int argc, char **argv) {
     disable_log();
     struct compiler *compiler;
 
-    if (create_compiler(&program, object_file, sources[i], &args, &compiler) !=
+    if (create_compiler(&program, target, object_file, sources[i], &args, &compiler) !=
         COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;
@@ -126,14 +138,14 @@ int main(int argc, char **argv) {
     enable_log();
   }
 
-  if (target_needs_linking(&args)) {
+  if (target_needs_linking(&args, target)) {
     const char *output = args.output ? args.output : "a.out";
 
     struct link_args link_args = {.objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};
 
-    if (link_objects(&link_args) != LINK_RESULT_SUCCESS) {
+    if (target->link_objects(&link_args) != LINK_RESULT_SUCCESS) {
       err("link failed");
       exit(-1);
     }

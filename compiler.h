@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include "program.h"
+#include "target.h"
 
 struct compiler;
 
@@ -66,6 +67,7 @@ enum compile_result {
 };
 
 enum compiler_create_result create_compiler(struct program *program,
+                                            const struct target *target,
                                             const char *output,
                                             const char *working_dir,
                                             const struct compile_args *args,

@@ -21,4 +21,5 @@ const struct target RV32I_TARGET = {
     rv32i_emit,
     rv32i_write_object,
     NULL,
+    NULL,
     rv32i_debug_print_codegen};
