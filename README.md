@@ -81,10 +81,10 @@ It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64
   * Actually emits the instructions from code generation into memory
 * Object file building
   * Writes the object file to disk
-  * Currently only macOS Mach-O format supported
-  * Code is [`macos/mach-o.h`](macos/mach-o.h) and [`macos/mach-o.c`](macos/mach-o.c)
+  * Currently only macOS Mach-O (in [macos](./macos)) and ELF (in [linux](./linux)) are supported
 * Linking
   * Links using the platform linker
   * Effectively just runs the linker as one would from the command line
-  * Code is [`link.h`](link.h) and [`link.c`](link.c)
+  * Platform specific link-code in [macos](./macos) and [linux](./linux)
+
 
