@@ -11,13 +11,15 @@ JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 | Debian | ![Debian AArch64](https://github.com/john-h-k/jcc/actions/workflows/debian-aarch64.yml/badge.svg) | WIP |
 
 Aims:
-* To be a complete C11 compiler with full functionality (WIP)
+* To be a complete C11/C18/C23 compiler with full functionality (WIP)
+* To use zero third-party dependencies or helper tools (no parser generators, assemblers, lexers, etc) other than system linker
 * To follow best practices and have sensible compiler architecture
   * Building the "smallest" C compiler is an explicit non-goal
 * To be useful for learning about compilers
   * Uses proper IRs rather than AST -> ASM
   * Generates machine code, not assembly
   * Builds SSA form and puts values in registers rather than spilling everything
+  * Builds object files and invokes system linker manually (rather than via a compiler or an assembler)
   * Doesn't use hacks (mostly...)
 
 ## Is it sound?
@@ -27,7 +29,7 @@ No, it is text based
 
 It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64 is in the pipeline
 
-### Things that don't work yet
+#### Things that don't work yet
 
 1. Macro-like functions (soon!)
 2. `va_list` and variadic function implementation. Calling them works fine
