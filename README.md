@@ -27,6 +27,13 @@ No, it is text based
 
 It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64 is in the pipeline
 
+### Things that don't work yet
+
+1. Macro-like functions (soon!)
+2. `va_list` and variadic function implementation. Calling them works fine
+3. Compound literals
+4. Complex constant expressions like `int foo[7 * 3 + sizeof(int)]`
+
 ## Design
 
 * Preprocessor
