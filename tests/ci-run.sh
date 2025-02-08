@@ -13,15 +13,11 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     continue
   fi
 
-  echo "Testing $file..."
-
   first_line=$(head -n 1 "$file")
   if [[ "$first_line" == "// no-compile" ]]; then
     if ./build/jcc -std=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
-      echo "TEST FAILED: expected compilation to fail, but it succeeded"
+      echo "TEST FAILED: '$file' expected compilation to fail, but it succeeded"
       exit -1
-    else
-      echo "TEST PASSED: compilation failed as expected"
     fi
   else
     expected=$(grep -i "Expected value:" $file | head -1 | grep -Eo '[0-9]+')
@@ -33,7 +29,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     fi
 
     if ! ./build/jcc -std=c23 -tm "$tm" $file >/dev/null 2>&1; then
-      echo "compilation failed!"
+      echo "TEST FAILED: '$file' compilation failed!"
       exit -1
     fi
 
@@ -41,17 +37,16 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
 
     result=$?
     if [ "$result" != "$expected" ]; then
-      echo "TEST FAILED: expected return code $expected, got $result"
+      echo "TEST FAILED: '$file' expected return code $expected, got $result"
       exit -1
     elif [ "$output" != "$stdout" ]; then
-      echo "TEST FAILED: expected stdout '$stdout', got '$output'"
+      echo "TEST FAILED: '$file' expected stdout '$stdout', got '$output'"
       exit -1
-    else
-      echo "TEST PASSED"
     fi
   fi
 
 
   echo -e "\n"
 done
+
 
