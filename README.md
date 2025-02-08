@@ -4,11 +4,11 @@ JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 
 ## CI Status
 
-| OS     | AArch64 (Arm64)                                                                                   |                     
-|--------|---------------------------------------------------------------------------------------------------|
-| Ubuntu | ![Ubuntu AArch64](https://github.com/john-h-k/jcc/actions/workflows/ubuntu-aarch64.yml/badge.svg) |
-| macOS  | ![macOS AArch64](https://github.com/john-h-k/jcc/actions/workflows/macos-aarch64.yml/badge.svg)   |
-| Debian | ![Debian AArch64](https://github.com/john-h-k/jcc/actions/workflows/debian-aarch64.yml/badge.svg) |
+| OS     | AArch64 (Arm64)                                                                                   | x64 |
+|--------|---------------------------------------------------------------------------------------------------|     |
+| Ubuntu | ![Ubuntu AArch64](https://github.com/john-h-k/jcc/actions/workflows/ubuntu-aarch64.yml/badge.svg) | WIP |
+| macOS  | ![macOS AArch64](https://github.com/john-h-k/jcc/actions/workflows/macos-aarch64.yml/badge.svg)   | n/a |
+| Debian | ![Debian AArch64](https://github.com/john-h-k/jcc/actions/workflows/debian-aarch64.yml/badge.svg) | WIP |
 
 Aims:
 * To be a complete C11 compiler with full functionality (WIP)
