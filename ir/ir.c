@@ -437,7 +437,7 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     walk_ret(&op->ret, cb, cb_metadata);
     break;
   default:
-    TODO("");
+    TODO("other ops in walk op");
   }
 }
 

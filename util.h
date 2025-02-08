@@ -273,7 +273,7 @@ NORETURN static inline void unreachable(void) {
 }
 
 PRINTF_ARGS(0) NORETURN static inline void unsupported(const char *msg, ...) {
-  FMTPRINT(stderr, "", msg);
+  FMTPRINT(stderr, "unsupported: ", msg);
   EXIT_FAIL(-2);
 }
 
