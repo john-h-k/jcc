@@ -34,7 +34,7 @@ test() {
     exit $?
 }
 
-ci-est() {
+ci-test() {
     build
     ./tests/run.sh
     exit $?
