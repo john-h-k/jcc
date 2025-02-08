@@ -395,8 +395,6 @@ void lower(struct ir_unit *unit, const struct target *target) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      debug_print_ir_func(stderr, func, NULL, NULL);
-
       struct ir_op_uses uses = build_op_uses_map(func);
 
       for (size_t i = 0; i < uses.num_use_datas; i++) {
