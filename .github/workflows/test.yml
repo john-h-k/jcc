@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: ./jcc.sh test
+
+  debian-test:
+    runs-on: ubuntu-latest
+    container: debian:latest
+
+    steps:
+      - name: Install dependencies
+        run: apt update && apt install -y git cmake make gcc
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: ./jcc.sh test
