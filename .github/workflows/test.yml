@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest-arm, macos-latest]
+        os: [ubuntu-24.04-arm, macos-latest]
     
     steps:
       - name: Checkout repository
