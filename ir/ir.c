@@ -1825,7 +1825,9 @@ struct move_set gen_move_order(struct arena_allocator *arena,
   struct vector *result = vector_create(sizeof(struct move));
 
   enum status *status = arena_alloc(arena, sizeof(*status) * num);
-  memset(status, 0, sizeof(*status) * num);
+  if (status) {
+    memset(status, 0, sizeof(*status) * num);
+  }
 
   struct vector *in_proc = vector_create(sizeof(struct item));
   for (size_t i = 0; i < num; i++) {

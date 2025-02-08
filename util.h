@@ -332,6 +332,9 @@ static inline int tzcnt(unsigned long long l) {
 
 static inline int lzcnt(unsigned long long l) {
 #if HAS_BUILTIN(__builtin_clzll)
+    if (l == 0) {
+      return sizeof(l) * 8;
+    }
     return __builtin_clzll(l);
 #else
     if (l == 0) return sizeof(l * 8);

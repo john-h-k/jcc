@@ -4,7 +4,6 @@
 
 #if __has_include(<elf.h>)
 #include "../compiler.h"
-#include "../util.h"
 #include "../vector.h"
 
 #include <elf.h>
@@ -82,8 +81,8 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
   return info;
 }
 
-static void write_relocations_elf(FILE *file, struct vector *relocs,
-                                  int target_arch) {
+static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
+                                  struct vector *relocs, int target_arch) {
   size_t n = vector_length(relocs);
   for (size_t i = 0; i < n; i++) {
     const struct relocation *r = vector_get(relocs, i);
@@ -96,7 +95,7 @@ static void write_relocations_elf(FILE *file, struct vector *relocs,
       uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
                           ? R_X86_64_64
                           : R_AARCH64_ABS64;
-      rela.r_info = ELF64_R_INFO(r->symbol_index, type);
+      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
@@ -108,7 +107,7 @@ static void write_relocations_elf(FILE *file, struct vector *relocs,
       uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
                           ? R_X86_64_PC32
                           : R_AARCH64_CALL26;
-      rela.r_info = ELF64_R_INFO(r->symbol_index + 1, type);
+      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
@@ -119,11 +118,12 @@ static void write_relocations_elf(FILE *file, struct vector *relocs,
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
         rela1.r_addend = 0;
-        rela1.r_info =
-            ELF64_R_INFO(r->symbol_index, R_AARCH64_ADR_PREL_PG_HI21);
+        rela1.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_AARCH64_ADR_PREL_PG_HI21);
         rela2.r_offset = r->address + 4;
         rela2.r_addend = 0;
-        rela2.r_info = ELF64_R_INFO(r->symbol_index, R_AARCH64_ADD_ABS_LO12_NC);
+        rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_AARCH64_ADD_ABS_LO12_NC);
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
       } else {
@@ -138,12 +138,12 @@ static void write_relocations_elf(FILE *file, struct vector *relocs,
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
         rela1.r_addend = 0;
-        rela1.r_info =
-            ELF64_R_INFO(r->symbol_index, R_AARCH64_LD64_GOT_LO12_NC);
+        rela1.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_AARCH64_LD64_GOT_LO12_NC);
         rela2.r_offset = r->address + 4;
         rela2.r_addend = 0;
-        rela2.r_info =
-            ELF64_R_INFO(r->symbol_index, R_AARCH64_LD64_GOT_LO12_NC);
+        rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_AARCH64_LD64_GOT_LO12_NC);
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
       } else {
@@ -159,13 +159,10 @@ static void write_relocations_elf(FILE *file, struct vector *relocs,
 
 static void write_elf_object(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
-  if (!file) {
-    perror("fopen");
-    exit(EXIT_FAILURE);
-  }
+  invariant_assert(file, "could not open object output file");
 
-  size_t text_align = 1, cstr_align = 1, const_align = 1, data_align = 1;
-  size_t total_text = 0, total_cstr = 0, total_const = 0, total_data = 0;
+  size_t text_align = 1, const_align = 1, data_align = 1;
+  size_t total_text = 0, total_const = 0, total_data = 0;
   size_t *entry_offsets =
       nonnull_malloc(args->num_entries * sizeof(*entry_offsets));
   for (size_t i = 0; i < args->num_entries; i++) {
@@ -177,10 +174,6 @@ static void write_elf_object(const struct build_object_args *args) {
       total_text += ROUND_UP(e->len_data, text_align);
       break;
     case OBJECT_ENTRY_TY_C_STRING:
-      cstr_align = MAX(cstr_align, e->alignment);
-      entry_offsets[i] = total_cstr;
-      total_cstr += ROUND_UP(e->len_data, cstr_align);
-      break;
     case OBJECT_ENTRY_TY_CONST_DATA:
       const_align = MAX(const_align, e->alignment);
       entry_offsets[i] = total_const;
@@ -207,8 +200,6 @@ static void write_elf_object(const struct build_object_args *args) {
   size_t offset = sizeof(Elf64_Ehdr);
   size_t text_off = offset;
   offset += total_text;
-  size_t cstr_off = offset;
-  offset += total_cstr;
   size_t const_off = offset;
   offset += total_const;
   size_t data_off = offset;
@@ -228,14 +219,13 @@ static void write_elf_object(const struct build_object_args *args) {
   }
   offset += total_sym_str;
   size_t shstr_off = offset;
-  /* fixed shstrtab contents with known name offsets */
-  const char shstrtab[] = "\0.text\0.data\0.rodata\0.rela.text\0.rela."
-                          "data\0.rela.rodata\0.symtab\0.strtab\0.shstrtab\0";
+
+  const char shstrtab[] = "\0.text\0.rodata\0.data\0.rela.text\0.rela."
+                          "rodata\0.rela.data\0.symtab\0.strtab\0.shstrtab\0";
   size_t shstr_size = sizeof(shstrtab);
   offset += shstr_size;
   size_t shoff = offset;
 
-  /* prepare and write elf header */
   Elf64_Ehdr ehdr;
   memset(&ehdr, 0, sizeof(ehdr));
   ehdr.e_ident[EI_MAG0] = 0x7f;
@@ -261,14 +251,13 @@ static void write_elf_object(const struct build_object_args *args) {
   ehdr.e_ehsize = sizeof(Elf64_Ehdr);
   ehdr.e_shoff = shoff;
   ehdr.e_shentsize = sizeof(Elf64_Shdr);
-  ehdr.e_shnum = 11;    /* null + 10 sections */
-  ehdr.e_shstrndx = 10; /* .shstrtab is section 10 */
+  ehdr.e_shnum = 10;
+  ehdr.e_shstrndx = 9;
   fseek(file, 0, SEEK_SET);
   fwrite(&ehdr, sizeof(ehdr), 1, file);
 
   /* write section contents */
 
-  /* .text */
   fseek(file, text_off, SEEK_SET);
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
@@ -279,22 +268,12 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
-  /* .cstring */
-  fseek(file, cstr_off, SEEK_SET);
-  for (size_t i = 0; i < args->num_entries; i++) {
-    const struct object_entry *e = &args->entries[i];
-    if (e->ty == OBJECT_ENTRY_TY_C_STRING) {
-      fwrite(e->data, 1, e->len_data, file);
-      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, cstr_align); j++)
-        fputc(0, file);
-    }
-  }
-
-  /* .const */
+  /* .rodata */
   fseek(file, const_off, SEEK_SET);
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
-    if (e->ty == OBJECT_ENTRY_TY_CONST_DATA) {
+    if (e->ty == OBJECT_ENTRY_TY_CONST_DATA ||
+        e->ty == OBJECT_ENTRY_TY_C_STRING) {
       fwrite(e->data, 1, e->len_data, file);
       for (size_t j = e->len_data; j < ROUND_UP(e->len_data, const_align); j++)
         fputc(0, file);
@@ -312,52 +291,62 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
-  /* relocation sections */
-  fseek(file, rela_text_off, SEEK_SET);
-  write_relocations_elf(file, rinfo.text_relocs,
-                        args->compile_args->target_arch);
-  fseek(file, rela_const_off, SEEK_SET);
-  write_relocations_elf(file, rinfo.const_data_relocs,
-                        args->compile_args->target_arch);
-  fseek(file, rela_data_off, SEEK_SET);
-  write_relocations_elf(file, rinfo.data_relocs,
-                        args->compile_args->target_arch);
-
   /* symbol table */
   fseek(file, symtab_off, SEEK_SET);
-  {
-    Elf64_Sym sym;
-    memset(&sym, 0, sizeof(sym));
-    fwrite(&sym, sizeof(sym), 1, file); // first null entry
+  Elf64_Sym sym;
+  memset(&sym, 0, sizeof(sym));
+  fwrite(&sym, sizeof(sym), 1, file); // first null entry
 
-    /* fix: use 0-based offsets within sections, not file offsets */
-    size_t text_sym = 0, cstr_sym = 0, const_sym = 0, data_sym = 0;
-    size_t str_off = 1;
+  // FIXME: leak
+  size_t *sym_id_to_idx =
+      nonnull_malloc(sizeof(*sym_id_to_idx) * args->num_entries);
+
+  size_t *sym_order = nonnull_malloc(sizeof(*sym_order) * args->num_entries);
+
+  size_t text_sym = 0, const_sym = 0, data_sym = 0;
+  size_t str_off = 1;
+
+  enum symbol_visibility sym_vises[3] = {SYMBOL_VISIBILITY_PRIVATE,
+                                         SYMBOL_VISIBILITY_GLOBAL,
+                                         SYMBOL_VISIBILITY_UNDEF};
+
+  size_t last_sym_idx = 1;
+  size_t last_sym_pos = 0;
+  for (size_t j = 0; j < ARR_LENGTH(sym_vises); j++) {
+    enum symbol_visibility vis = sym_vises[j];
+
     for (size_t i = 0; i < args->num_entries; i++) {
       const struct symbol *s = &args->entries[i].symbol;
+
+      if (s->visibility != vis) {
+        continue;
+      }
+
+      sym_id_to_idx[i] = last_sym_idx++;
+      sym_order[last_sym_pos++] = i;
+
       memset(&sym, 0, sizeof(sym));
       sym.st_name = str_off;
       if (s->visibility != SYMBOL_VISIBILITY_UNDEF) {
         switch (s->ty) {
         case SYMBOL_TY_FUNC:
-          sym.st_shndx = 1; /* .text */
+          sym.st_shndx = 1;
           sym.st_value = text_sym;
-          text_sym += args->entries[i].len_data;
+          sym.st_size = args->entries[i].len_data;
+          text_sym += ROUND_UP(args->entries[i].len_data, text_align);
           break;
         case SYMBOL_TY_STRING:
-          sym.st_shndx = 2; /* .cstring */
-          sym.st_value = cstr_sym;
-          cstr_sym += args->entries[i].len_data;
-          break;
         case SYMBOL_TY_CONST_DATA:
-          sym.st_shndx = 3; /* .const */
+          sym.st_shndx = 2;
           sym.st_value = const_sym;
-          const_sym += args->entries[i].len_data;
+          sym.st_size = args->entries[i].len_data;
+          const_sym += ROUND_UP(args->entries[i].len_data, const_align);
           break;
         case SYMBOL_TY_DATA:
-          sym.st_shndx = 4; /* .data */
+          sym.st_shndx = 3;
           sym.st_value = data_sym;
-          data_sym += args->entries[i].len_data;
+          sym.st_size = args->entries[i].len_data;
+          data_sym += ROUND_UP(args->entries[i].len_data, data_align);
           break;
         case SYMBOL_TY_DECL:
           BUG("decl symbol must be undefined");
@@ -373,121 +362,117 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
+  /* relocations */
+  fseek(file, rela_text_off, SEEK_SET);
+  write_relocations_elf(file, sym_id_to_idx, rinfo.text_relocs,
+                        args->compile_args->target_arch);
+  fseek(file, rela_const_off, SEEK_SET);
+  write_relocations_elf(file, sym_id_to_idx, rinfo.const_data_relocs,
+                        args->compile_args->target_arch);
+  fseek(file, rela_data_off, SEEK_SET);
+  write_relocations_elf(file, sym_id_to_idx, rinfo.data_relocs,
+                        args->compile_args->target_arch);
+
   /* string table */
   fseek(file, strtab_off, SEEK_SET);
   fputc(0, file);
   for (size_t i = 0; i < args->num_entries; i++) {
-    fwrite(args->entries[i].symbol.name, 1,
-           strlen(args->entries[i].symbol.name) + 1, file);
+    size_t idx = sym_order[i];
+    fwrite(args->entries[idx].symbol.name, 1,
+           strlen(args->entries[idx].symbol.name) + 1, file);
   }
 
   /* section header string table */
   fseek(file, shstr_off, SEEK_SET);
   fwrite(shstrtab, 1, shstr_size, file);
 
-  /* build section header table (11 entries: null + 10 sections) */
-  {
-    Elf64_Shdr shdr[11];
-    memset(shdr, 0, sizeof(shdr));
+  Elf64_Shdr shdr[10];
+  memset(shdr, 0, sizeof(shdr));
 
-    /* entry 0: null section */
+  /* entry 0 is null section */
 
-    /* entry 1: .text */
-    shdr[1].sh_name = 1; /* offset in shstrtab for ".text" */
-    shdr[1].sh_type = SHT_PROGBITS;
-    shdr[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
-    shdr[1].sh_offset = text_off;
-    shdr[1].sh_size = total_text;
-    shdr[1].sh_addralign = text_align;
+  shdr[1].sh_name = 1;
+  shdr[1].sh_type = SHT_PROGBITS;
+  shdr[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+  shdr[1].sh_offset = text_off;
+  shdr[1].sh_size = total_text;
+  shdr[1].sh_addralign = text_align;
 
-    /* entry 2: .data */
-    shdr[2].sh_name = 7; /* ".data" */
-    shdr[2].sh_type = SHT_PROGBITS;
-    shdr[2].sh_flags = SHF_ALLOC;
-    shdr[2].sh_offset = cstr_off;
-    shdr[2].sh_size = total_cstr;
-    shdr[2].sh_addralign = cstr_align;
+  shdr[2].sh_name = 7;
+  shdr[2].sh_type = SHT_PROGBITS;
+  shdr[2].sh_flags = SHF_ALLOC;
+  shdr[2].sh_offset = const_off;
+  shdr[2].sh_size = total_const;
+  shdr[2].sh_addralign = const_align;
 
-    /* entry 3: .const */
-    shdr[3].sh_name = 16; /* ".const" */
-    shdr[3].sh_type = SHT_PROGBITS;
-    shdr[3].sh_flags = SHF_ALLOC;
-    shdr[3].sh_offset = const_off;
-    shdr[3].sh_size = total_const;
-    shdr[3].sh_addralign = const_align;
+  shdr[3].sh_name = 15;
+  shdr[3].sh_type = SHT_PROGBITS;
+  shdr[3].sh_flags = SHF_ALLOC;
+  shdr[3].sh_offset = data_off;
+  shdr[3].sh_size = total_data;
+  shdr[3].sh_addralign = data_align;
 
-    /* entry 4: .data */
-    shdr[4].sh_name = 23; /* ".data" */
-    shdr[4].sh_type = SHT_PROGBITS;
-    shdr[4].sh_flags = SHF_ALLOC | SHF_WRITE;
-    shdr[4].sh_offset = data_off;
-    shdr[4].sh_size = total_data;
-    shdr[4].sh_addralign = data_align;
+  shdr[4].sh_name = 21;
+  shdr[4].sh_type = SHT_RELA;
+  shdr[4].sh_offset = rela_text_off;
+  shdr[4].sh_size = rinfo.num_text_reloc_instrs * sizeof(Elf64_Rela);
+  shdr[4].sh_link = 7;
+  shdr[4].sh_info = 1;
+  shdr[4].sh_addralign = 8;
+  shdr[4].sh_entsize = sizeof(Elf64_Rela);
+  shdr[4].sh_flags = SHF_INFO_LINK;
 
-    /* entry 5: .rela.text */
-    shdr[5].sh_name = 29; /* ".rela.text" */
-    shdr[5].sh_type = SHT_RELA;
-    shdr[5].sh_offset = rela_text_off;
-    shdr[5].sh_size = rinfo.num_text_reloc_instrs * sizeof(Elf64_Rela);
-    shdr[5].sh_link = 8; /* symtab index */
-    shdr[5].sh_info = 1; /* associated with .text */
-    shdr[5].sh_addralign = 8;
-    shdr[5].sh_entsize = sizeof(Elf64_Rela);
+  shdr[5].sh_name = 32;
+  shdr[5].sh_type = SHT_RELA;
+  shdr[5].sh_offset = rela_const_off;
+  shdr[5].sh_size = rinfo.num_const_data_reloc_instrs * sizeof(Elf64_Rela);
+  shdr[5].sh_link = 7;
+  shdr[5].sh_info = 2;
+  shdr[5].sh_addralign = 8;
+  shdr[5].sh_entsize = sizeof(Elf64_Rela);
 
-    /* entry 6: .rela.const */
-    shdr[6].sh_name = 40; /* ".rela.const" */
-    shdr[6].sh_type = SHT_RELA;
-    shdr[6].sh_offset = rela_const_off;
-    shdr[6].sh_size = rinfo.num_const_data_reloc_instrs * sizeof(Elf64_Rela);
-    shdr[6].sh_link = 8;
-    shdr[6].sh_info = 3; /* .const */
-    shdr[6].sh_addralign = 8;
-    shdr[6].sh_entsize = sizeof(Elf64_Rela);
+  shdr[6].sh_name = 45;
+  shdr[6].sh_type = SHT_RELA;
+  shdr[6].sh_offset = rela_data_off;
+  shdr[6].sh_size = rinfo.num_data_reloc_instrs * sizeof(Elf64_Rela);
+  shdr[6].sh_link = 7;
+  shdr[6].sh_info = 3;
+  shdr[6].sh_addralign = 8;
+  shdr[6].sh_entsize = sizeof(Elf64_Rela);
 
-    /* entry 7: .rela.data */
-    shdr[7].sh_name = 53; /* ".rela.data" */
-    shdr[7].sh_type = SHT_RELA;
-    shdr[7].sh_offset = rela_data_off;
-    shdr[7].sh_size = rinfo.num_data_reloc_instrs * sizeof(Elf64_Rela);
-    shdr[7].sh_link = 8;
-    shdr[7].sh_info = 4; /* .data */
-    shdr[7].sh_addralign = 8;
-    shdr[7].sh_entsize = sizeof(Elf64_Rela);
+  shdr[7].sh_name = 56;
+  shdr[7].sh_type = SHT_SYMTAB;
+  shdr[7].sh_offset = symtab_off;
+  shdr[7].sh_size = (args->num_entries + 1) * sizeof(Elf64_Sym);
+  shdr[7].sh_link = 8;
+  shdr[7].sh_addralign = 8;
+  shdr[7].sh_entsize = sizeof(Elf64_Sym);
 
-    /* entry 8: .symtab */
-    shdr[8].sh_name = 65; /* ".symtab" */
-    shdr[8].sh_type = SHT_SYMTAB;
-    shdr[8].sh_offset = symtab_off;
-    shdr[8].sh_size = (args->num_entries + 1) * sizeof(Elf64_Sym);
-    shdr[8].sh_link = 9; /* .strtab index */
-    shdr[8].sh_addralign = 8;
-    shdr[8].sh_entsize = sizeof(Elf64_Sym);
-
-    size_t local_count = 1; // count the initial null symbol
-    for (size_t i = 0; i < args->num_entries; i++) {
-      const struct symbol *s = &args->entries[i].symbol;
-      if (s->visibility != SYMBOL_VISIBILITY_GLOBAL)
-        local_count++;
+  size_t local_count = 1; // initial null symbol
+  for (size_t i = 0; i < args->num_entries; i++) {
+    const struct symbol *s = &args->entries[i].symbol;
+    if (s->visibility != SYMBOL_VISIBILITY_GLOBAL) {
+      local_count++;
     }
-    shdr[8].sh_info = local_count;
-
-    /* entry 9: .strtab */
-    shdr[9].sh_name = 73; /* ".strtab" */
-    shdr[9].sh_type = SHT_STRTAB;
-    shdr[9].sh_offset = strtab_off;
-    shdr[9].sh_size = total_sym_str;
-    shdr[9].sh_addralign = 1;
-
-    /* entry 10: .shstrtab */
-    shdr[10].sh_name = 81; /* ".shstrtab" */
-    shdr[10].sh_type = SHT_STRTAB;
-    shdr[10].sh_offset = shstr_off;
-    shdr[10].sh_size = shstr_size;
-    shdr[10].sh_addralign = 1;
-
-    fseek(file, shoff, SEEK_SET);
-    fwrite(shdr, sizeof(shdr), 1, file);
   }
+  shdr[7].sh_info = 1;
+
+  /* entry 9: .strtab */
+  shdr[8].sh_name = 64;
+  shdr[8].sh_type = SHT_STRTAB;
+  shdr[8].sh_offset = strtab_off;
+  shdr[8].sh_size = total_sym_str;
+  shdr[8].sh_addralign = 1;
+
+  /* entry 10: .shstrtab */
+  shdr[9].sh_name = 72;
+  shdr[9].sh_type = SHT_STRTAB;
+  shdr[9].sh_offset = shstr_off;
+  shdr[9].sh_size = shstr_size;
+  shdr[9].sh_addralign = 1;
+
+  fseek(file, shoff, SEEK_SET);
+  fwrite(shdr, sizeof(shdr), 1, file);
 
   fclose(file);
 }

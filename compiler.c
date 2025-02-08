@@ -1,24 +1,17 @@
 #include "compiler.h"
 
-#include "aarch64.h"
 #include "alloc.h"
 #include "codegen.h"
-#include "eep.h"
-#include "emit.h"
-#include "io.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "ir/validate.h"
-#include "lex.h"
 #include "log.h"
 #include "lower.h"
 #include "lsra.h"
-#include "macos/mach-o.h"
 #include "parse.h"
 #include "preproc.h"
-#include "rv32i.h"
 #include "target.h"
 #include "util.h"
 
@@ -31,40 +24,18 @@ struct compiler {
   struct preproc *preproc;
   struct parser *parser;
   struct typechk *typechk;
+  struct target target;
 
   char *output;
 };
 
-static const struct target *get_target(const struct compile_args *args) {
-  switch (args->target_arch) {
-  case COMPILE_TARGET_ARCH_NATIVE:
-    BUG("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
-        "earlier");
-  case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    TODO("macOS x64 target not yet implemented");
-  // FIXME: linux is actually subtly different in register usage and calling conv
-  case COMPILE_TARGET_ARCH_LINUX_X86_64:
-    TODO("Linux x64 target not yet implemented");
-  case COMPILE_TARGET_ARCH_LINUX_ARM64:
-    return &AARCH64_LINUX_TARGET;
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
-    return &AARCH64_MACOS_TARGET;
-  case COMPILE_TARGET_ARCH_RV32I:
-    return &RV32I_TARGET;
-  case COMPILE_TARGET_ARCH_EEP:
-    BUG("redo eep");
-    // return &EEP_TARGET;
-  }
-
-  BUG("unexpected target in `get_target`");
-}
-
 enum compiler_create_result
-create_compiler(struct program *program, const char *output, const char *path,
+create_compiler(struct program *program, const struct target *target, const char *output, const char *path,
                 const struct compile_args *args, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
+  (*compiler)->target = *target;
 
   if (preproc_create(program, path, args->num_include_paths,
                      args->include_paths, args->fixed_timestamp,
@@ -79,7 +50,6 @@ create_compiler(struct program *program, const char *output, const char *path,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  const struct target *target = get_target(args);
   if (typechk_create(target, args, (*compiler)->parser,
                      &(*compiler)->typechk) != TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
@@ -166,7 +136,7 @@ enum compile_result compile(struct compiler *compiler) {
     }
   }
 
-  const struct target *target = get_target(&compiler->args);
+  const struct target *target = &compiler->target;
   struct ir_unit *ir;
   {
     COMPILER_STAGE(IR);
