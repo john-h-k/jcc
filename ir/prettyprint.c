@@ -597,7 +597,7 @@ prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
     fslogsl(fm->file, " ]");
   }
 
-  fslog(fm->file, "");
+  fslogsl(fm->file, "\n");
 }
 
 static void prettyprint_end_visit_basicblock_file(
@@ -605,7 +605,7 @@ static void prettyprint_end_visit_basicblock_file(
     UNUSED_ARG(struct ir_basicblock *basicblock), void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
-  fslog(fm->file, "");
+  fslogsl(fm->file, "\n");
 }
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,

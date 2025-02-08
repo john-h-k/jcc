@@ -978,7 +978,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_CALL: {
-    TODO("");
+    TODO("rv32i calls");
     // codegen_call_op(state, op);
     // break;
   }
@@ -1060,7 +1060,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
                                      .str = glb->var->value.str_value};
           break;
         case IR_VAR_TY_CONST_DATA:
-          TODO("");
+          TODO("rv32i cnst data");
           // unit->entries[i] =
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
           //                            .glb_id = glb->id,
@@ -1069,7 +1069,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
           //                            glb->var)};
           // break;
         case IR_VAR_TY_DATA:
-          TODO("");
+          TODO("rv32i data");
           // unit->entries[i] =
           //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
           //                            .glb_id = glb->id,
@@ -1110,7 +1110,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
 
             while (op) {
               if (op->ty == IR_OP_TY_CALL) {
-                TODO("");
+                TODO("rv32i calls");
                 // size_t call_args_size =
                 //     calc_arg_stack_space(&state, op->call.func_ty.func,
                 //     op);

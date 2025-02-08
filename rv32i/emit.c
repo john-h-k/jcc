@@ -19,8 +19,6 @@ struct emit_state {
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
   switch (instr->rv32i->ty) {
-  default:
-    BUG("");
   case RV32I_INSTR_TY_ADDI:
     rv32i_emit_addi(state->emitter, instr->rv32i->addi);
     break;
@@ -156,6 +154,8 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_FSQRT:
     rv32i_emit_fsqrt(state->emitter, instr->rv32i->fsqrt);
     break;
+  default:
+    BUG("other rv32i instruction emits");
   }
 }
 
