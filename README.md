@@ -64,7 +64,7 @@ It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64
     * Code is [`ir/build.h`](ir/build.h) and [`ir/build.c`](ir/build.c)
   * Lowering
     * Firstly, global lowering is performed. This lowers certain operations that are lowered on all platforms
-      * E.g `br.switch`s are converted into a series of if-elses, and `loadglb/storeglb` operations are transformed to `loadaddr/storeaddr`
+      * E.g `br.switch`s are converted into a series of if-elses, and `load.glb/store.glb` operations are transformed to `addr GLB + load.addr/store.addr`
     * This converts the IR into the platform-native form
     * Then, per-target lowering occurs
       * For example, AArch64 has no `%` instr, so `x = a % b` is converted to `c = a / b; x = a - (c * b)`
