@@ -36,7 +36,7 @@ test() {
 
 ci-test() {
     build
-    ./tests/run.sh
+    ./tests/ci-run.sh
     exit $?
 }
 
