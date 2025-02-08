@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 build() {
+    mkdir -p build
     cd build
     if ! (cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .)
     then
@@ -30,6 +31,13 @@ run() {
 test() {
     build
     ./tests/run.sh
+    exit $?
+}
+
+ci-est() {
+    build
+    ./tests/run.sh
+    exit $?
 }
 
 cfg() {
