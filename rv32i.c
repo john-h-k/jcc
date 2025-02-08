@@ -3,8 +3,10 @@
 #include "rv32i/codegen.h"
 #include "rv32i/lower.h"
 #include "rv32i/object.h"
+#include "target.h"
 
 const struct target RV32I_TARGET = {
+    TARGET_ID_RV32I_UNKNOWN,
     TARGET_LP_SZ_LP32,
     {
         .gp_registers = {.num_volatile = 17,

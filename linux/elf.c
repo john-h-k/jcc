@@ -91,7 +91,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       Elf64_Rela rela;
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
-      rela.r_addend = 0;
+      rela.r_addend = r->offset;
       uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
                           ? R_X86_64_64
                           : R_AARCH64_ABS64;
@@ -103,7 +103,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       Elf64_Rela rela;
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
-      rela.r_addend = 0;
+      rela.r_addend = r->offset;
       uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
                           ? R_X86_64_PC32
                           : R_AARCH64_CALL26;
@@ -117,11 +117,11 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
-        rela1.r_addend = 0;
+        rela1.r_addend = r->offset;
         rela1.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
                                     R_AARCH64_ADR_PREL_PG_HI21);
         rela2.r_offset = r->address + 4;
-        rela2.r_addend = 0;
+        rela2.r_addend = r->offset;
         rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
                                     R_AARCH64_ADD_ABS_LO12_NC);
         fwrite(&rela1, sizeof(rela1), 1, file);
@@ -137,11 +137,11 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
         rela1.r_offset = r->address;
-        rela1.r_addend = 0;
+        rela1.r_addend = r->offset;
         rela1.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
                                     R_AARCH64_LD64_GOT_LO12_NC);
         rela2.r_offset = r->address + 4;
-        rela2.r_addend = 0;
+        rela2.r_addend = r->offset;
         rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
                                     R_AARCH64_LD64_GOT_LO12_NC);
         fwrite(&rela1, sizeof(rela1), 1, file);

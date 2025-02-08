@@ -283,6 +283,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_CALL: {
+    printf("call target %zu\n", op->call.target->id);
     cb(&op->call.target, cb_metadata);
     for (size_t i = 0; i < op->call.num_args; i++) {
       cb(&op->call.args[i], cb_metadata);
@@ -1772,6 +1773,7 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
         data.op = op;
         data.use_data[op->id].op = op;
 
+        printf("walking usees for %zu\n", op->id);
         walk_op_uses(op, build_op_uses_callback, &data);
 
         op = op->succ;

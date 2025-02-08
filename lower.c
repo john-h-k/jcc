@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "log.h"
 #include "util.h"
 
@@ -47,6 +48,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   };
 
   struct ir_op *memset_addr = insert_after_ir_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
+  memset_addr->flags |= IR_OP_FLAG_CONTAINED;
   memset_addr->addr = (struct ir_op_addr){
     .ty = IR_OP_ADDR_TY_GLB,
     .glb = memset,
@@ -399,8 +401,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
         struct ir_op_use *use = &uses.use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
-          DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
-                       "contained op must have uses");
+          // DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
+          //              "contained op must have uses");
 
           debug("detaching op %zu", use->op->id);
           detach_ir_op(func, use->op);

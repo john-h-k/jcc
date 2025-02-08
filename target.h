@@ -18,6 +18,7 @@ struct relocation {
   size_t symbol_index;
 
   size_t address;
+  size_t offset;
   size_t size;
 };
 
@@ -122,7 +123,14 @@ typedef enum link_result (*link_objects)(const struct link_args *args);
 typedef void (*debug_disasm)(const char *filename, const char *output);
 typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
 
+enum target_id {
+  TARGET_ID_AARCH64_MACOS,
+  TARGET_ID_AARCH64_LINUX,
+  TARGET_ID_RV32I_UNKNOWN,
+};
+
 struct target {
+  enum target_id target_id;
   enum target_lp_sz lp_sz;
   struct reg_info reg_info;
   size_t function_alignment;
