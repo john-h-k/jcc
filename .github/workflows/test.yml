@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: ./jcc.sh test
+        run: ./jcc.sh ci-test
 
   debian-test:
     runs-on: ubuntu-latest
@@ -32,4 +32,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: ./jcc.sh test
+        run: ./jcc.sh ci-test
