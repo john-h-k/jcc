@@ -274,6 +274,7 @@ struct aarch64_prologue_info {
 struct codegen_state {
   struct arena_allocator *arena;
 
+  const struct target *target;
   struct codegen_function *func;
   struct ir_func *ir;
   struct aarch64_prologue_info prologue_info;
@@ -481,8 +482,7 @@ static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
 
   if (offset > MAX_IMM_SIZE) {
     size_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-    codegen_add_imm(state, state->ssp, STACK_PTR_REG,
-                    raw_offset);
+    codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
 
     struct instr *instr = alloc_instr(state->func);
     instr->aarch64->ty = load_ty_for_op(op);
@@ -511,8 +511,7 @@ static void codegen_store_lcl_op(struct codegen_state *state,
 
   if (offset > MAX_IMM_SIZE) {
     size_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-    codegen_add_imm(state, state->ssp, STACK_PTR_REG,
-                    raw_offset);
+    codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
 
     struct instr *instr = alloc_instr(state->func);
     instr->aarch64->ty = load_ty_for_op(op);
@@ -1597,6 +1596,17 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need
 
+  bool variadics_on_stack;
+  switch (state->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    variadics_on_stack = true;
+    break;
+  case TARGET_ID_AARCH64_LINUX:
+  case TARGET_ID_RV32I_UNKNOWN:
+    variadics_on_stack = false;
+    break;
+  }
+
   struct vector *gp_move_from = vector_create(sizeof(struct location));
   struct vector *gp_move_to = vector_create(sizeof(struct location));
 
@@ -1658,10 +1668,11 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       // hmm, we pretend all memory locations are different but they are not
       // can gen_move_order accidentally overwrite things because of this?
 
-      if (i < num_normal_args ||
+      if (!variadics_on_stack || i < num_normal_args ||
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
 
-        const struct ir_var_ty *var_ty = &param_tys[i];
+        const struct ir_var_ty *var_ty = i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
+
         struct ir_var_ty_info info = var_ty_info(
             state->ir->unit,
             var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
@@ -1870,6 +1881,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         .address = 0,
     };
   } else {
+    // NOTE: `blr` seems to segfault on linux aarch64
     instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
     instr->aarch64->blr = (struct aarch64_branch_reg){
         .target = {.ty = AARCH64_REG_TY_X, .idx = BLR_REG_IDX}};
@@ -2856,6 +2868,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
       struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
                                  .size = 3,
                                  .address = offset,
+                                 .offset = value->addr.offset,
                                  .symbol_index = value->addr.glb->id};
 
       vector_push_back(relocs, &reloc);
@@ -2950,7 +2963,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
             .ty = CODEGEN_ENTRY_TY_DECL,
             .alignment = 0,
             .glb_id = glb->id,
-            .name = aarch64_mangle(ir->arena, glb->name)};
+            .name = ir->target->mangle(ir->arena, glb->name)};
 
         i++;
         glb = glb->succ;
@@ -2961,7 +2974,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
       case IR_GLB_TY_DATA: {
         // TODO: non string literals
         const char *name =
-            glb->name ? aarch64_mangle(ir->arena, glb->name)
+            glb->name ? ir->target->mangle(ir->arena, glb->name)
                       : mangle_str_cnst_name(ir->arena, "todo", glb->id);
         switch (glb->var->ty) {
         case IR_VAR_TY_STRING_LITERAL:
@@ -2988,7 +3001,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
             .ty = CODEGEN_ENTRY_TY_FUNC,
             .alignment = AARCH64_FUNCTION_ALIGNMENT,
             .glb_id = glb->id,
-            .name = aarch64_mangle(ir->arena, ir_func->name),
+            .name = ir->target->mangle(ir->arena, ir_func->name),
             .func = {
                 .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
@@ -2998,6 +3011,7 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
         struct codegen_function *func = &unit->entries[i].func;
         struct codegen_state state = {
             .arena = arena,
+            .target = ir->target,
             .func = func,
             .ir = ir_func,
             .ssp = {.ty = AARCH64_REG_TY_X, .idx = 28}};

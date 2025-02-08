@@ -1,10 +1,10 @@
 // Expected value: 0
-// stdout: 0x0 5
+// stdout: 0 5
 
 int printf(const char *format, ...);
 
 int *const *volatile *foo(void *bar, int *const *volatile *baz) {
-  printf("%p %d", bar, ***baz);
+  printf("%d %d", (int)bar, ***baz);
   return baz;
 }
 

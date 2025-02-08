@@ -7,14 +7,17 @@
 
 #define WORD_SIZE (8)
 
-const char *aarch64_mangle(struct arena_allocator *arena, const char *name) {
-  // char *dest =
-  //     arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
+const char *aarch64_macos_mangle(struct arena_allocator *arena, const char *name) {
+  char *dest =
+      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
-  // dest[0] = '_';
-  // strcpy(dest + 1, name);
+  dest[0] = '_';
+  strcpy(dest + 1, name);
 
-  // return dest;
+  return dest;
+}
+
+const char *aarch64_linux_mangle(struct arena_allocator *arena, const char *name) {
   return name;
 }
 

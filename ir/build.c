@@ -3517,7 +3517,11 @@ static struct ir_var_value build_ir_for_var_value_addr(
       TODO("non-int global values offset");
     }
 
-    offset_cnst = offset_value.int_value;
+    struct td_var_ty underlying_td_var_ty = td_var_ty_get_underlying(irb->tchk, var_ty);
+    struct ir_var_ty underlying_var_ty = var_ty_for_td_var_ty(irb->unit, &underlying_td_var_ty);
+    struct ir_var_ty_info info = var_ty_info(irb->unit, &underlying_var_ty);
+
+    offset_cnst = offset_value.int_value * info.size;
   }
 
   return (struct ir_var_value){

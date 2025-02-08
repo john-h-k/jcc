@@ -610,20 +610,22 @@ static void prettyprint_end_visit_basicblock_file(
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
                                       void *metadata) {
-  if (op->flags & IR_OP_FLAG_CONTAINED) {
-    return;
-  }
+  // if (op->flags & IR_OP_FLAG_CONTAINED) {
+  //   return;
+  // }
 
   int op_pad = /* guess */ 50;
 
   struct prettyprint_file_metadata *fm = metadata;
+
+  bool supports_pos = ftell(fm->file) != -1;
 
   fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
   debug_print_op(fm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
 
-  if (ftell(fm->file) == pos) {
+  if (supports_pos && ftell(fm->file) == pos) {
     // no line was written
     return;
   }
@@ -631,8 +633,10 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   long width = ftell(fm->file) - pos;
   long pad = op_pad - width;
 
-  if (pad > 0) {
+  if (supports_pos && pad > 0) {
     fprintf(fm->file, "%*s", (int)pad, "");
+  } else {
+    fprintf(fm->file, "%*s", 50, "");
   }
 
   if (fm->cb) {

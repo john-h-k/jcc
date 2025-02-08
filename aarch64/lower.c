@@ -139,6 +139,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
   struct ir_op *memmove_addr =
       insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
+  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
   memmove_addr->addr = (struct ir_op_addr){
       .ty = IR_OP_ADDR_TY_GLB,
       .glb = memmove,
