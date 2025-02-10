@@ -40,15 +40,26 @@ enum x64_instr_ty {
   X64_INSTR_TY_MOV_IMM,
   X64_INSTR_TY_MOV_REG,
 
+  X64_INSTR_TY_MOVSX,
+
   X64_INSTR_TY_ADD_IMM,
   X64_INSTR_TY_SUB_IMM,
 
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
 
+  X64_INSTR_TY_MUL,
+  X64_INSTR_TY_IMUL,
+  X64_INSTR_TY_DIV,
+  X64_INSTR_TY_IDIV,
+
   X64_INSTR_TY_EOR,
   X64_INSTR_TY_OR,
   X64_INSTR_TY_AND,
+
+  X64_INSTR_TY_EOR_IMM,
+  X64_INSTR_TY_OR_IMM,
+  X64_INSTR_TY_AND_IMM,
 
   X64_INSTR_TY_NOT,
   X64_INSTR_TY_NEG,
@@ -66,9 +77,11 @@ enum x64_reg_class {
 };
 
 enum x64_reg_ty {
-  X64_REG_TY_R,
-  X64_REG_TY_E,
-  X64_REG_TY_RD,
+  X64_REG_TY_R, // 64 bit
+  X64_REG_TY_E, // 32 bit
+  X64_REG_TY_RD, // 32 bit
+  X64_REG_TY_W, // 16 bit
+  X64_REG_TY_L, // 8 bit
 };
 
 enum x64_reg_attr_flags {
@@ -137,6 +150,14 @@ struct x64_1_reg {
   struct x64_reg dest;
 };
 
+struct x64_div {
+  struct x64_reg dest;
+};
+
+struct x64_mul {
+  struct x64_reg dest;
+};
+
 struct x64_push {
   struct x64_reg source;
 };
@@ -182,7 +203,7 @@ struct x64_instr {
     };
 
     union {
-      struct x64_1_reg alu_unary, not, neg;
+      struct x64_1_reg one_reg, not, neg;
     };
 
     union {
@@ -191,6 +212,14 @@ struct x64_instr {
 
     union {
       struct x64_pop pop;
+    };
+
+    union {
+      struct x64_div div, idiv;
+    };
+
+    union {
+      struct x64_mul mul, imul;
     };
 
     union {
@@ -206,7 +235,7 @@ struct x64_instr {
     };
 
     union {
-      struct x64_mov_reg mov_reg;
+      struct x64_mov_reg mov_reg, movsx;
     };
   };
 };

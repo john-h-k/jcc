@@ -43,6 +43,9 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(ADD_IMM, add_imm);
     EMIT(SUB_IMM, sub_imm);
+    EMIT(OR_IMM, or_imm);
+    EMIT(AND_IMM, and_imm);
+    EMIT(EOR_IMM, eor_imm);
 
     EMIT(SHR, shr);
     EMIT(SHL, shl);
@@ -50,6 +53,8 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(NOT, not);
     EMIT(NEG, neg);
+
+    EMIT(MOVSX, movsx);
 
     EMIT(PUSH, push);
     EMIT(POP, pop);

@@ -481,21 +481,28 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_CX });
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_CX });
                 break;
               case IR_OP_BINARY_OP_TY_AND:
               case IR_OP_BINARY_OP_TY_OR:
               case IR_OP_BINARY_OP_TY_XOR:
               case IR_OP_BINARY_OP_TY_ADD:
               case IR_OP_BINARY_OP_TY_SUB:
-              case IR_OP_BINARY_OP_TY_MUL:
-              case IR_OP_BINARY_OP_TY_SDIV:
-              case IR_OP_BINARY_OP_TY_UDIV:
-              case IR_OP_BINARY_OP_TY_SQUOT:
-              case IR_OP_BINARY_OP_TY_UQUOT:
                 // TODO: only do this where actually applicable
                 op->flags |= IR_OP_FLAG_READS_DEST;
                 break;
+              case IR_OP_BINARY_OP_TY_MUL:
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_AX });
+                break;
+              case IR_OP_BINARY_OP_TY_SDIV:
+              case IR_OP_BINARY_OP_TY_UDIV:
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_AX });
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_DX });
+                break;
+              case IR_OP_BINARY_OP_TY_SQUOT:
+              case IR_OP_BINARY_OP_TY_UQUOT:
               default:
                 break;
               }

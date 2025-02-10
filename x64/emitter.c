@@ -87,8 +87,8 @@ void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or) {
   x64_emit_instr(emitter, OR_REG(or.dest, or.rhs));
 }
 
-void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not) {
-  x64_emit_instr(emitter, NOT_REG(not.dest));
+void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not ) {
+  x64_emit_instr(emitter, NOT_REG(not .dest));
 }
 
 void x64_emit_neg(struct x64_emitter *emitter, struct x64_1_reg neg) {
@@ -109,13 +109,44 @@ void x64_emit_sar(struct x64_emitter *emitter, struct x64_shift sar) {
 
 void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm) {
   x64_emit_instr(emitter, ADD_IMM(add_imm.dest, add_imm.imm));
-  
+}
+
+void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
+  struct x64_reg dest = movsx.dest;
+
+  DEBUG_ASSERT(dest.ty == X64_REG_TY_R || dest.ty == X64_REG_TY_RD || dest.ty == X64_REG_TY_E, "movsx dest must be 32 or 64 bit");
+
+  switch (movsx.source.ty) {
+  case X64_REG_TY_W:
+    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R ? MOVSX16_64(movsx.dest, movsx.source) : MOVSX16_32(movsx.dest, movsx.source));
+    break;
+  case X64_REG_TY_L:
+    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R ? MOVSX8_64(movsx.dest, movsx.source) : MOVSX8_32(movsx.dest, movsx.source));
+    break;
+  case X64_REG_TY_RD:
+  case X64_REG_TY_E:
+    x64_emit_instr(emitter, MOVSX32_64(movsx.dest, movsx.source));
+    break;
+  case X64_REG_TY_R:
+    BUG("source of movsx should be 8/16/32 bit register");
+  }
 }
 
 void x64_emit_sub_imm(struct x64_emitter *emitter, struct x64_alu_imm sub_imm) {
   x64_emit_instr(emitter, SUB_IMM(sub_imm.dest, sub_imm.imm));
 }
 
+void x64_emit_or_imm(struct x64_emitter *emitter, struct x64_alu_imm or_imm) {
+  x64_emit_instr(emitter, OR_IMM(or_imm.dest, or_imm.imm));
+}
+
+void x64_emit_eor_imm(struct x64_emitter *emitter, struct x64_alu_imm eor_imm) {
+  x64_emit_instr(emitter, EOR_IMM(eor_imm.dest, eor_imm.imm));
+}
+
+void x64_emit_and_imm(struct x64_emitter *emitter, struct x64_alu_imm and_imm) {
+  x64_emit_instr(emitter, AND_IMM(and_imm.dest, and_imm.imm));
+}
 
 void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {
   x64_emit_instr(emitter, MOV_IMM(mov_imm.dest, mov_imm.imm));
@@ -125,12 +156,16 @@ void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
   x64_emit_instr(emitter, MOV_REG(mov_reg.dest, mov_reg.source));
 }
 
-void x64_emit_mov_load_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_imm) {
-  x64_emit_instr(emitter, MOV_LOAD_IMM(mov_load_imm.dest, mov_load_imm.addr, mov_load_imm.imm));
+void x64_emit_mov_load_imm(struct x64_emitter *emitter,
+                           struct x64_mov_load_imm mov_load_imm) {
+  x64_emit_instr(emitter, MOV_LOAD_IMM(mov_load_imm.dest, mov_load_imm.addr,
+                                       mov_load_imm.imm));
 }
 
-void x64_emit_mov_store_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_imm) {
-  x64_emit_instr(emitter, MOV_STORE_IMM(mov_store_imm.source, mov_store_imm.addr, mov_store_imm.imm));
+void x64_emit_mov_store_imm(struct x64_emitter *emitter,
+                            struct x64_mov_store_imm mov_store_imm) {
+  x64_emit_instr(emitter, MOV_STORE_IMM(mov_store_imm.source,
+                                        mov_store_imm.addr, mov_store_imm.imm));
 }
 
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
