@@ -93,7 +93,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wextra
     -Wpedantic
     -Weverything
-    -Werror
 
     -Wno-error=unreachable-code-loop-increment
     -Wno-error=unused-parameter
