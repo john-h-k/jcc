@@ -41,6 +41,9 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     result=$?
     if [ "$result" != "$expected" ]; then
       echo "TEST FAILED: '$file' expected return code $expected, got $result"
+      echo "OUTPUT:"
+      echo "$output"
+      echo ""
       exit -1
     elif [ "$output" != "$stdout" ]; then
       echo "TEST FAILED: '$file' expected stdout '$stdout', got '$output'"

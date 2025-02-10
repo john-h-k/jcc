@@ -1,6 +1,5 @@
 // expected value: 5
 
-int printf(const char *, ...);
 int main() {
   int a = 1;
 
