@@ -53,13 +53,10 @@ unsigned long long bitset_lzcnt(struct bitset *bitset) {
 
   for (size_t i = 0; i < bitset->num_chunks; i++) {
     chunk_t chunk = bitset->chunks[bitset->num_chunks - i - 1];
-    printf("chunk %llu:\n", chunk);
-    printf("adj %zu:\n", bits_per_chunk - rem_bits);
     if (i == 0) {
       chunk <<= (bits_per_chunk - rem_bits);
     }
 
-    printf("chunk %llu:\n", chunk);
     size_t lz = (size_t)lzcnt(chunk);
 
     if (lz < bits_per_chunk) {
