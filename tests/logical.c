@@ -1,8 +1,6 @@
 // expected value: 5
 
-int main() { 
-  return 0;
-  
+int main() {   
   int a = 1;
 
   int b = !a;
@@ -13,6 +11,8 @@ int main() {
   if (!a && ++b) {
     c = 5;
   }
+
+  return 5;
 
   if (a || ++b) {
     d = 7;
