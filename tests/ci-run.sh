@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 ls build/jcc >/dev/null 2>&1
 if [ $? != 0 ]; then
@@ -53,6 +53,8 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     elif [ "$output" != "$stdout" ]; then
       echo "TEST FAILED: '$file' expected stdout '$stdout', got '$output'"
       exit -1
+    else
+      echo "$file passed"
     fi
   fi
 done
