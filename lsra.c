@@ -469,8 +469,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   // this is tough because what if we only need ssp (secondary stack pointer) during lsra?
   // at the start, all locals are within one-instr depth, but then during spilling we exceed this and need another
   // FIXME: temp disable SSP because it forces prologue
-  if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
-  // if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  // if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     num_nonvolatile_gp--;
     has_ssp = true;
     ssp_reg = reg_info.gp_registers.num_volatile + num_nonvolatile_gp;
