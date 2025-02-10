@@ -398,7 +398,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       // FIXME: logic here wrt active intervals definitely needs fixing      
       // also, this does not respect reg.ty but should
-    } else if (interval->op->ty == IR_OP_TY_BINARY_OP) {
+    } else if (false && interval->op->ty == IR_OP_TY_BINARY_OP) {
       // TODO: generalise this so it preferentially does it for other ops that read dest (e.g aarch64 bitfield insert, x64 `not`/`neg`)
       // probably by `IR_OP_FLAG_READS_DEST` having an associated field on `ir_op` for which operand it reads
       struct ir_op *lhs = interval->op->binary_op.lhs;
@@ -412,7 +412,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       force_spill_register(irb, &state, reg_pool, interval->op->write_info.writes[j]);
     }
      
-    if (false && (pref_reg != SIZE_MAX || bitset_any(reg_pool, true))) {
+    if (pref_reg != SIZE_MAX || bitset_any(reg_pool, true)) {
       size_t free_slot;
 
       if (pref_reg != SIZE_MAX) {
