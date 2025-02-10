@@ -79,8 +79,8 @@ set(
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
   
-  # add_link_options(-fsanitize=address,undefined)
-  # add_compile_options(-fsanitize=address,undefined)
+  add_link_options(-fsanitize=address,undefined)
+  add_compile_options(-fsanitize=address,undefined)
 endif()
 
 if(MSVC)
