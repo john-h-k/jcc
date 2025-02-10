@@ -57,6 +57,7 @@ void x64_emit_copy_to(struct x64_emitter *emitter, void *dest) {
 
 void free_x64_emitter(struct x64_emitter **emitter) {
   free((*emitter)->block);
+  vector_free(&(*emitter)->target_relocs);
 
   free(*emitter);
   *emitter = NULL;
@@ -211,10 +212,7 @@ const struct x64_target_reloc *x64_emit_jmp(struct x64_emitter *emitter,
   struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JMP,
                                    .offset = cur_pos};
 
-  struct x64_target_reloc *p = nonnull_malloc(sizeof(reloc));
-  memcpy(p, &reloc, sizeof(reloc));
-  return p;
-  // return vector_push_back(emitter->target_relocs, &reloc);
+  return vector_push_back(emitter->target_relocs, &reloc);
 }
 
 const struct x64_target_reloc *x64_emit_jcc(struct x64_emitter *emitter,
@@ -225,10 +223,7 @@ const struct x64_target_reloc *x64_emit_jcc(struct x64_emitter *emitter,
   struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JCC,
                                    .offset = cur_pos};
 
-  struct x64_target_reloc *p = nonnull_malloc(sizeof(reloc));
-  memcpy(p, &reloc, sizeof(reloc));
-  return p;
-  // return vector_push_back(emitter->target_relocs, &reloc);
+  return vector_push_back(emitter->target_relocs, &reloc);
 }
 
 void x64_reloc(struct x64_emitter *emitter,
