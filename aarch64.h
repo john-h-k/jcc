@@ -6,7 +6,7 @@
 // FIXME: this unnecessarily ties arm64 to mach-o
 
 // it seems for building the object files, 4 byte is fine
-#define AARCH64_FUNCTION_ALIGNMENT (4)
+#define AARCH64_FUNCTION_ALIGNMENT (16)
 #define AARCH64_STACK_ALIGNMENT (16)
 #define MAX_IMM_SIZE (4095)
 
