@@ -18,8 +18,6 @@ int main() {
 
   int s = 0;
 
-  return 5;
-
   int e = 8, f = 10;
   while (e && f) {
     e--;
