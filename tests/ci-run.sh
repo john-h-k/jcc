@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 
 ls build/jcc >/dev/null 2>&1
 if [ $? != 0 ]; then
