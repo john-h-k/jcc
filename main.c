@@ -1,4 +1,5 @@
 #include "aarch64.h"
+#include "x64.h"
 #include "compiler.h"
 #include "io.h"
 #include "log.h"
@@ -36,10 +37,10 @@ static const struct target *get_target(const struct compile_args *args) {
     BUG("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
         "earlier");
   case COMPILE_TARGET_ARCH_MACOS_X86_64:
-    TODO("macOS x64 target not yet implemented");
+    return &X64_MACOS_TARGET;
   // FIXME: linux is actually subtly different in register usage and calling conv
   case COMPILE_TARGET_ARCH_LINUX_X86_64:
-    TODO("Linux x64 target not yet implemented");
+    return &X64_LINUX_TARGET;
   case COMPILE_TARGET_ARCH_LINUX_ARM64:
     return &AARCH64_LINUX_TARGET;
   case COMPILE_TARGET_ARCH_MACOS_ARM64:
@@ -206,13 +207,22 @@ static bool parse_target_flag(const char *flag,
   if (strcmp(flag, "x64") == 0) {
     *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
     return true;
-  } else if (strcmp(flag, "aarch64") == 0) {
+  } else if (strcmp(flag, "aarch64-apple-darwin") == 0) {
     *arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
     return true;
-  } else if (strcmp(flag, "eep") == 0) {
+  } else if (strcmp(flag, "x86_64-apple-darwin") == 0) {
+    *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
+    return true;
+  } else if (strcmp(flag, "aarch64-unknown-linux-gnu") == 0) {
+    *arch = COMPILE_TARGET_ARCH_LINUX_ARM64;
+    return true;
+  } else if (strcmp(flag, "x86_64-unknown-linux-gnu") == 0) {
+    *arch = COMPILE_TARGET_ARCH_LINUX_X86_64;
+    return true;
+  } else if (strcmp(flag, "eep-unknown-unknown") == 0) {
     *arch = COMPILE_TARGET_ARCH_EEP;
     return true;
-  } else if (strcmp(flag, "rv32i") == 0) {
+  } else if (strcmp(flag, "rv32i-unknown-unknown") == 0) {
     *arch = COMPILE_TARGET_ARCH_RV32I;
     return true;
   }

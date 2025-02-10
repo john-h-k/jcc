@@ -8,6 +8,7 @@
 
 enum codegen_unit_ty {
   CODEGEN_UNIT_TY_AARCH64,
+  CODEGEN_UNIT_TY_X64,
   CODEGEN_UNIT_TY_EEP,
   CODEGEN_UNIT_TY_RV32I,
 };
@@ -90,6 +91,7 @@ struct instr {
     struct aarch64_instr *aarch64;
     struct eep_instr *eep;
     struct rv32i_instr *rv32i;
+    struct x64_instr *x64;
   };
 };
 
