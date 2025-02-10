@@ -479,11 +479,11 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   irb->reg_usage = (struct ir_reg_usage){
       .fp_registers_used =
           bitset_create(reg_info.fp_registers.num_volatile +
-                            reg_info.fp_registers.num_nonvolatile + 1,
+                            reg_info.fp_registers.num_nonvolatile,
                         false),
       .gp_registers_used =
           bitset_create(reg_info.gp_registers.num_volatile +
-                            num_nonvolatile_gp + 1,
+                            num_nonvolatile_gp,
                         false),
   };
 
