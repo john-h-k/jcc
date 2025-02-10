@@ -129,7 +129,7 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
 
 struct lsra_reg_info {
   // if true, reg allocator will preferentially try and assign the lhs reg as dest reg on binop IR ops
-  bool prefer_binop_lhs;
+  bool binops_clobber_rhs;
   bool has_ssp;
   size_t ssp_reg;
 
@@ -375,7 +375,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     size_t pref_reg = SIZE_MAX;
-    if (info->prefer_binop_lhs && interval->op->ty == IR_OP_TY_BINARY_OP) {
+    if (info->binops_clobber_rhs && interval->op->ty == IR_OP_TY_BINARY_OP) {
       struct ir_op *lhs = interval->op->binary_op.lhs;
 
       if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty && bitset_get(reg_pool, lhs->reg.idx)) {
@@ -469,7 +469,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t fp_spill_reg = num_fp_regs;
 
   struct lsra_reg_info lsra_reg_info = {
-      .prefer_binop_lhs = true, // FIXME: only for x64
+      .binops_clobber_rhs = true, // FIXME: only for x64
       .has_ssp = has_ssp,
       .ssp_reg = ssp_reg,
       .num_volatile_gp = reg_info.gp_registers.num_volatile,

@@ -256,7 +256,6 @@ struct rv32i_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 bool is_return_reg(struct rv32i_reg reg);
 bool is_zero_reg(struct rv32i_reg reg);
-bool reg_eq(struct rv32i_reg l, struct rv32i_reg r);
 
 enum rv32i_instr_class instr_class(enum rv32i_instr_ty ty);
 

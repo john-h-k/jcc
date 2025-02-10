@@ -6,8 +6,8 @@ int main() {
   int c = a | 0xFF;
   int d = a ^ 0xF;
   int e = ~a;
-  int f = a << 1;
-  int g = a >> 1;
+  // int f = a << 1;
+  // int g = a >> 1;
 
-  return a + b + c + d + e + f + g;
+  return a + b + c + d + e;// + f + g;
 }

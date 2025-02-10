@@ -67,12 +67,32 @@ static void x64_emit_instr(struct x64_emitter *emitter,
 
 void x64_emit_nop(struct x64_emitter *emitter) { x64_emit_instr(emitter, NOP); }
 
-void x64_emit_add(struct x64_emitter *emitter, struct x64_alu_reg alu_reg) {
-  x64_emit_instr(emitter, ADD_REG(alu_reg.dest, alu_reg.rhs));
+void x64_emit_add(struct x64_emitter *emitter, struct x64_alu_reg add) {
+  x64_emit_instr(emitter, ADD_REG(add.dest, add.rhs));
 }
 
-void x64_emit_sub(struct x64_emitter *emitter, struct x64_alu_reg alu_reg) {
-  x64_emit_instr(emitter, SUB_REG(alu_reg.dest, alu_reg.rhs));
+void x64_emit_sub(struct x64_emitter *emitter, struct x64_alu_reg sub) {
+  x64_emit_instr(emitter, SUB_REG(sub.dest, sub.rhs));
+}
+
+void x64_emit_and(struct x64_emitter *emitter, struct x64_alu_reg and) {
+  x64_emit_instr(emitter, AND_REG(and.dest, and.rhs));
+}
+
+void x64_emit_eor(struct x64_emitter *emitter, struct x64_alu_reg eor) {
+  x64_emit_instr(emitter, EOR_REG(eor.dest, eor.rhs));
+}
+
+void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or) {
+  x64_emit_instr(emitter, OR_REG(or.dest, or.rhs));
+}
+
+void x64_emit_not(struct x64_emitter *emitter, struct x64_alu_unary not) {
+  x64_emit_instr(emitter, NOT_REG(not.dest));
+}
+
+void x64_emit_neg(struct x64_emitter *emitter, struct x64_alu_unary neg) {
+  x64_emit_instr(emitter, NEG_REG(neg.dest));
 }
 
 void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {

@@ -483,7 +483,6 @@ struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 bool is_return_reg(struct aarch64_reg reg);
 bool is_zero_reg(struct aarch64_reg reg);
-bool reg_eq(struct aarch64_reg l, struct aarch64_reg r);
 
 enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty);
 

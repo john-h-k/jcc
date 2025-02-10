@@ -94,7 +94,7 @@ bool is_zero_reg(struct aarch64_reg reg) {
   return aarch64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
 }
 
-bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
+static bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
   if (l.idx != r.idx) {
     return false;
   }
