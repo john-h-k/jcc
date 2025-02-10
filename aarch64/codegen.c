@@ -1601,8 +1601,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   case TARGET_ID_AARCH64_MACOS:
     variadics_on_stack = true;
     break;
-  case TARGET_ID_AARCH64_LINUX:
-  case TARGET_ID_RV32I_UNKNOWN:
+  default:
     variadics_on_stack = false;
     break;
   }
