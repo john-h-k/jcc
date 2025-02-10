@@ -86,6 +86,8 @@ bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   case X64_REG_TY_R:
   case X64_REG_TY_RD:
   case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L:
     return true;
     // case X64_REG_TY_V:
     // case X64_REG_TY_Q:
@@ -353,6 +355,8 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
   case X64_REG_TY_R:
   case X64_REG_TY_RD:
   case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
     break;
     // case X64_REG_TY_:
@@ -980,22 +984,22 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //                              .rhs = rhs,
     //                              .addsub = zero_reg_for_ty(lhs.ty)};
     //     break;
-    //   case IR_OP_BINARY_OP_TY_SDIV:
-    //     instr->x64->ty = X64_INSTR_TY_SDIV;
-    //     instr->x64->sdiv = (struct x64_reg_2_source){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
-    //   case IR_OP_BINARY_OP_TY_UDIV:
-    //     instr->x64->ty = X64_INSTR_TY_UDIV;
-    //     instr->x64->udiv = (struct x64_reg_2_source){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+    case IR_OP_BINARY_OP_TY_SDIV:
+      instr->x64->ty = X64_INSTR_TY_IDIV;
+      instr->x64->sdiv = (struct x64_div){
+          .dest = dest,
+          .lhs = lhs,
+          .rhs = rhs,
+      };
+      break;
+    case IR_OP_BINARY_OP_TY_UDIV:
+      instr->x64->ty = X64_INSTR_TY_DIV;
+      instr->x64->udiv = (struct x64_reg_2_source){
+          .dest = dest,
+          .lhs = lhs,
+          .rhs = rhs,
+      };
+      break;
     //   case IR_OP_BINARY_OP_TY_FMAX:
     //     instr->x64->ty = X64_INSTR_TY_FMAXNM;
     //     instr->x64->fmaxnm = (struct x64_reg_2_source){
@@ -1052,87 +1056,110 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
-//                             struct x64_reg source,
-//                             struct x64_reg dest) {
-//   struct instr *instr = alloc_instr(state->func);
+static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
+                            struct x64_reg source,
+                            struct x64_reg dest) {
+  struct instr *instr = alloc_instr(state->func);
 
-//   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
-//                    "can't sext from non-primitive");
+  invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+                   "can't sext from non-primitive");
 
-//   switch (op->cast_op.value->var_ty.primitive) {
-//   case IR_VAR_PRIMITIVE_TY_I8:
-//     instr->x64->ty = X64_INSTR_TY_SBFM;
-//     instr->x64->sbfm = (struct x64_bitfield){
-//         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b000111};
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I16:
-//     instr->x64->ty = X64_INSTR_TY_SBFM;
-//     instr->x64->sbfm = (struct x64_bitfield){
-//         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b001111};
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I32:
-//     instr->x64->ty = X64_INSTR_TY_SBFM;
-//     instr->x64->sbfm = (struct x64_bitfield){
-//         .dest = dest, .source = source, .immr = 0b000000, .imms = 0b011111};
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I64:
-//     BUG("can't sext from I64");
-//   case IR_VAR_PRIMITIVE_TY_F16:
-//   case IR_VAR_PRIMITIVE_TY_F32:
-//   case IR_VAR_PRIMITIVE_TY_F64:
-//     BUG("todo cast floats");
-//   }
-// }
+  switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I8:
+    instr->x64->ty = X64_INSTR_TY_MOVSX;
+    instr->x64->movsx = (struct x64_mov_reg){
+      .dest = dest,
+      .source = source
+    };
+    break;
+  case IR_VAR_PRIMITIVE_TY_I16:
+    instr->x64->ty = X64_INSTR_TY_MOVSX;
+    instr->x64->movsx = (struct x64_mov_reg){
+      .dest = dest,
+      .source = source
+    };
+    break;
+  case IR_VAR_PRIMITIVE_TY_I32:
+    instr->x64->ty = X64_INSTR_TY_MOVSX;
+    instr->x64->movsx = (struct x64_mov_reg){
+      .dest = dest,
+      .source = source
+    };
+    break;
+  case IR_VAR_PRIMITIVE_TY_I64:
+    BUG("can't sext from I64");
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    BUG("todo cast floats");
+  }
+}
 
-// static void codegen_zext_op(struct codegen_state *state,
-//                             struct x64_reg source,
-//                             struct x64_reg dest) {
-//   // `mov`/`orr` with 32 bit operands zeroes top 32 bits
+static void codegen_zext_op(struct codegen_state *state,
+                            struct x64_reg source,
+                            struct x64_reg dest) {
+  // `mov` will zero top 32 bits
+  // do we ever need to explicitly zero extend?
 
-//   struct instr *instr = alloc_instr(state->func);
-//   *instr->x64 = MOV_ALIAS(dest, source);
-// }
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = X64_INSTR_TY_MOV_REG;
+  instr->x64->mov_reg = (struct x64_mov_reg){
+    .dest = dest,
+    .source = source
+  };
+}
 
-// static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
-//                              struct x64_reg source,
-//                              struct x64_reg dest) {
-//   struct instr *instr = alloc_instr(state->func);
-//   invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
-//                    "can't truncate non-primitive");
+static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
+                             struct x64_reg source,
+                             struct x64_reg dest) {
+  invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
+                   "can't truncate non-primitive");
 
-//   // https://kddnewton.com/2022/08/11/x64-bitmask-immediates.html
-//   // for understanding the immediates
-//   switch (op->var_ty.primitive) {
-//   case IR_VAR_PRIMITIVE_TY_I8:
-//     instr->x64->ty = X64_INSTR_TY_AND_IMM;
-//     instr->x64->and_imm = (struct x64_logical_imm){
-//         .dest = dest,
-//         .source = source,
-//         .immr = 0b0,
-//         .imms = 0b111,
-//     };
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I16:
-//     instr->x64->ty = X64_INSTR_TY_AND_IMM;
-//     instr->x64->and_imm = (struct x64_logical_imm){
-//         .dest = dest,
-//         .source = source,
-//         .immr = 0b0,
-//         .imms = 0b1111,
-//     };
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I32:
-//     *instr->x64 = MOV_ALIAS(dest, source);
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_I64:
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_F16:
-//   case IR_VAR_PRIMITIVE_TY_F32:
-//   case IR_VAR_PRIMITIVE_TY_F64:
-//     BUG("todo cast floats");
-//   }
-// }
+  switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I8: {
+    if (!reg_eq(dest, source)) {
+      struct instr *mov = alloc_instr(state->func);
+      mov->x64->ty = X64_INSTR_TY_MOV_REG;
+      mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+    }
+
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_AND_IMM;
+    instr->x64->and_imm = (struct x64_alu_imm){
+        .dest = dest,
+        .imm = 0xFF,
+    };
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I16: {
+    if (!reg_eq(dest, source)) {
+      struct instr *mov = alloc_instr(state->func);
+      mov->x64->ty = X64_INSTR_TY_MOV_REG;
+      mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+    }
+
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_AND_IMM;
+    instr->x64->and_imm = (struct x64_alu_imm){
+        .dest = dest,
+        .imm = 0xFFFF,
+    };
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I32: {
+    struct instr *mov = alloc_instr(state->func);
+    mov->x64->ty = X64_INSTR_TY_MOV_REG;
+    mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+    break;
+  }
+  case IR_VAR_PRIMITIVE_TY_I64:
+    break;
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    BUG("todo cast floats");
+  }
+}
 
 // static void codegen_conv_op(struct codegen_state *state,
 //                             struct x64_reg source,
@@ -1161,39 +1188,38 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 //       (struct x64_reg_1_source){.dest = dest, .source = source};
 // }
 
-// static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
-//   struct x64_reg dest = codegen_reg(op);
-//   struct x64_reg source = codegen_reg(op->cast_op.value);
+static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
+  struct x64_reg dest = codegen_reg(op);
+  struct x64_reg source = codegen_reg(op->cast_op.value);
 
-//   // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg
-//   to
-//   // the same type as the dest reg (mixed regs make no sense in an integer
-//   // instruction)
+  // NOTE: for the integer casts (sext/zext/trunc) we promote the source reg
+  // to
+  // the same type as the dest reg (mixed regs make no sense in an integer
+  // instruction)
 
-//   switch (op->cast_op.ty) {
-//   case IR_OP_CAST_OP_TY_SEXT:
-//     source.ty = dest.ty;
-//     codegen_sext_op(state, op, source, dest);
-//     break;
-//   case IR_OP_CAST_OP_TY_ZEXT:
-//     source.ty = dest.ty;
-//     codegen_zext_op(state, source, dest);
-//     break;
-//   case IR_OP_CAST_OP_TY_TRUNC:
-//     source.ty = dest.ty;
-//     codegen_trunc_op(state, op, source, dest);
-//     break;
-//   case IR_OP_CAST_OP_TY_CONV:
-//     codegen_conv_op(state, source, dest);
-//     break;
-//   case IR_OP_CAST_OP_TY_UCONV:
-//     codegen_uconv_op(state, source, dest);
-//     break;
-//   case IR_OP_CAST_OP_TY_SCONV:
-//     codegen_sconv_op(state, source, dest);
-//     break;
-//   }
-// }
+  switch (op->cast_op.ty) {
+  case IR_OP_CAST_OP_TY_SEXT:
+    codegen_sext_op(state, op, source, dest);
+    break;
+  case IR_OP_CAST_OP_TY_ZEXT:
+    codegen_zext_op(state, source, dest);
+    break;
+  case IR_OP_CAST_OP_TY_TRUNC:
+    codegen_trunc_op(state, op, source, dest);
+    break;
+  // case IR_OP_CAST_OP_TY_CONV:
+  //   codegen_conv_op(state, source, dest);
+  //   break;
+  // case IR_OP_CAST_OP_TY_UCONV:
+  //   codegen_uconv_op(state, source, dest);
+  //   break;
+  // case IR_OP_CAST_OP_TY_SCONV:
+  //   codegen_sconv_op(state, source, dest);
+  //   break;
+  default:
+    TODO("conversions on x64");
+  }
+}
 
 // static bool try_get_hfa_info(struct codegen_state *state,
 //                              const struct ir_var_ty *var_ty,
@@ -2423,10 +2449,10 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     codegen_binary_op(state, op);
     break;
   }
-    //   case IR_OP_TY_CAST_OP: {
-    //     codegen_cast_op(state, op);
-    //     break;
-    //   }
+  case IR_OP_TY_CAST_OP: {
+    codegen_cast_op(state, op);
+    break;
+  }
     //   case IR_OP_TY_CALL: {
     //     codegen_call_op(state, op);
     //     break;
@@ -3037,6 +3063,12 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       case X64_REG_TY_RD:
         fprintf(file, "dword ptr [");
         break;
+      case X64_REG_TY_W:
+        fprintf(file, "word ptr [");
+        break;
+      case X64_REG_TY_L:
+        fprintf(file, "byte ptr [");
+        break;
       }
 
       codegen_fprintf(file, "%reg", addr);
@@ -3062,11 +3094,27 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
         DEBUG_ASSERT(reg.idx > 7, "RD index should be > 7");
         fprintf(file, "r%zud", reg.idx);
         break;
-      case X64_REG_TY_E:
+      case X64_REG_TY_E: {
         invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
 
         const char *name = reg_names[reg.idx];
         fprintf(file, "e%s", name);
+        break;
+      }
+      case X64_REG_TY_W: {
+        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
+
+        const char *name = reg_names[reg.idx];
+        fprintf(file, "%s", name);
+        break;
+      }
+      case X64_REG_TY_L: {
+        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
+
+        const char *name = reg_names[reg.idx];
+        fprintf(file, "%cl", name[0]);
+        break;
+      }
       }
 
       format += 3;
@@ -3166,6 +3214,10 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "mov");
     debug_print_mov_reg(file, &instr->x64->mov_reg);
     break;
+  case X64_INSTR_TY_MOVSX:
+    fprintf(file, "movsx");
+    debug_print_mov_reg(file, &instr->x64->movsx);
+    break;
   case X64_INSTR_TY_ADD:
     fprintf(file, "add");
     debug_print_alu_reg(file, &instr->x64->add);
@@ -3209,6 +3261,18 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_SUB_IMM:
     fprintf(file, "sub");
     debug_print_alu_imm(file, &instr->x64->sub_imm);
+    break;
+  case X64_INSTR_TY_AND_IMM:
+    fprintf(file, "and");
+    debug_print_alu_imm(file, &instr->x64->and_imm);
+    break;
+  case X64_INSTR_TY_OR_IMM:
+    fprintf(file, "or");
+    debug_print_alu_imm(file, &instr->x64->or_imm);
+    break;
+  case X64_INSTR_TY_EOR_IMM:
+    fprintf(file, "eor");
+    debug_print_alu_imm(file, &instr->x64->eor_imm);
     break;
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");
