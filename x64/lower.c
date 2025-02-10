@@ -1,9 +1,9 @@
 #include "lower.h"
 
-#include "../x64.h"
 #include "../bit_twiddle.h"
 #include "../ir/build.h"
 #include "../util.h"
+#include "../x64.h"
 
 #include <math.h>
 
@@ -237,7 +237,6 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
-
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
@@ -403,7 +402,8 @@ void x64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_CALL:
               if (op->call.target->ty == IR_OP_TY_ADDR &&
-                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB && !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
+                  !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
                 op->call.target =
                     alloc_contained_ir_op(func, op->call.target, op);
               }
@@ -476,11 +476,42 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
-            case IR_OP_TY_UNARY_OP:
               break;
             case IR_OP_TY_BINARY_OP:
+              switch (op->binary_op.ty) {
+              case IR_OP_BINARY_OP_TY_LSHIFT:
+              case IR_OP_BINARY_OP_TY_SRSHIFT:
+              case IR_OP_BINARY_OP_TY_URSHIFT:
+              case IR_OP_BINARY_OP_TY_AND:
+              case IR_OP_BINARY_OP_TY_OR:
+              case IR_OP_BINARY_OP_TY_XOR:
+              case IR_OP_BINARY_OP_TY_ADD:
+              case IR_OP_BINARY_OP_TY_SUB:
+              case IR_OP_BINARY_OP_TY_MUL:
+              case IR_OP_BINARY_OP_TY_SDIV:
+              case IR_OP_BINARY_OP_TY_UDIV:
+              case IR_OP_BINARY_OP_TY_SQUOT:
+              case IR_OP_BINARY_OP_TY_UQUOT:
+                // TODO: only do this where actually applicable
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                break;
+              default:
+                break;
+              }
+
               if (binary_op_is_comparison(op->binary_op.ty)) {
                 lower_comparison(func, op);
+              }
+              break;
+            case IR_OP_TY_UNARY_OP:
+              switch (op->unary_op.ty) {
+              case IR_OP_UNARY_OP_TY_NEG:
+              case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+              case IR_OP_UNARY_OP_TY_NOT:
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                break;
+              default:
+                break;
               }
               break;
             }

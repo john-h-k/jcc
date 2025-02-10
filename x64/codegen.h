@@ -22,8 +22,17 @@ typedef long long simm_t;
 enum x64_instr_ty {
   X64_INSTR_TY_MOV_IMM,
   X64_INSTR_TY_MOV_REG,
+
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
+
+  X64_INSTR_TY_EOR,
+  X64_INSTR_TY_OR,
+  X64_INSTR_TY_AND,
+
+  X64_INSTR_TY_NOT,
+  X64_INSTR_TY_NEG,
+
   X64_INSTR_TY_RET,
 };
 
@@ -79,6 +88,10 @@ struct x64_alu_reg {
   struct x64_reg rhs;
 };
 
+struct x64_alu_unary {
+  struct x64_reg dest;
+};
+
 struct x64_conditional_select {
   // enum x64_cond cond;
   struct x64_reg true_source;
@@ -104,7 +117,11 @@ struct x64_instr {
 
   union {
     union {
-      struct x64_alu_reg alu_reg, add, sub;
+      struct x64_alu_reg alu_reg, add, sub, eor, or, and;
+    };
+
+    union {
+      struct x64_alu_unary alu_unary, not, neg;
     };
 
     union {
@@ -129,7 +146,6 @@ struct x64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 bool is_return_reg(struct x64_reg reg);
 bool is_zero_reg(struct x64_reg reg);
-bool reg_eq(struct x64_reg l, struct x64_reg r);
 
 enum x64_instr_class instr_class(enum x64_instr_ty ty);
 

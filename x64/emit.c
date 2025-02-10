@@ -30,23 +30,25 @@ struct emit_state {
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
+  #define EMIT(up, lo) \
+  case X64_INSTR_TY_ ## up: \
+    x64_emit_ ## lo (state->emitter, instr->x64->lo); \
+    break;
   switch (instr->x64->ty) {
-  case X64_INSTR_TY_ADD:
-    x64_emit_add(state->emitter, instr->x64->add);
-    break;
-  case X64_INSTR_TY_SUB:
-    x64_emit_sub(state->emitter, instr->x64->sub);
-    break;
-  case X64_INSTR_TY_MOV_IMM:
-    x64_emit_mov_imm(state->emitter, instr->x64->mov_imm);
-    break;
-  case X64_INSTR_TY_MOV_REG:
-    x64_emit_mov_reg(state->emitter, instr->x64->mov_reg);
-    break;
+    EMIT(OR, or);
+    EMIT(EOR, eor);
+    EMIT(AND, and);
+    EMIT(ADD, add);
+    EMIT(SUB, sub);
+    EMIT(NOT, not);
+    EMIT(NEG, neg);
+    EMIT(MOV_IMM, mov_imm);
+    EMIT(MOV_REG, mov_reg);
   case X64_INSTR_TY_RET:
     x64_emit_ret(state->emitter);
     break;
   }
+  #undef EMIT
 }
 
 struct emitted_unit x64_emit(const struct codegen_unit *unit) {

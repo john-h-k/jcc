@@ -58,23 +58,22 @@
 //   return x64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
 // }
 
-// bool reg_eq(struct x64_reg l, struct x64_reg r) {
-//   if (l.idx != r.idx) {
-//     return false;
-//   }
+static bool reg_eq(struct x64_reg l, struct x64_reg r) {
+  if (l.idx != r.idx) {
+    return false;
+  }
 
-//   if (l.ty == r.ty) {
-//     return true;
-//   }
+  if (l.ty == r.ty) {
+    return true;
+  }
 
-//   if (x64_reg_ty_is_gp(l.ty) == x64_reg_ty_is_gp(r.ty)) {
-//     BUG("comparing two registers with same index and type but different size
-//     "
-//         "(e.g w0 vs x0)");
-//   }
+  if (x64_reg_ty_is_gp(l.ty) == x64_reg_ty_is_gp(r.ty)) {
+    BUG("comparing two registers with same index and type but different size"
+        "(e.g w0 vs x0)");
+  }
 
-//   return false;
-// }
+  return false;
+}
 
 static struct x64_reg return_reg_for_ty(enum x64_reg_ty reg_ty) {
   return (struct x64_reg){.ty = reg_ty, .idx = 0};
@@ -896,13 +895,24 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
-//   struct instr *instr = alloc_instr(state->func);
+static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
+  struct x64_reg dest = codegen_reg(op);
+  struct x64_reg source = codegen_reg(op->unary_op.value);
 
-//   struct x64_reg dest = codegen_reg(op);
-//   struct x64_reg source = codegen_reg(op->unary_op.value);
+  if (!reg_eq(source, dest)) {
+    struct instr *mov = alloc_instr(state->func);
+    *mov->x64 = (struct x64_instr){
+      .ty = X64_INSTR_TY_MOV_REG,
+      .mov_reg = {
+        .dest = dest,
+        .source = source
+      }
+    };
+  }
 
-//   switch (op->unary_op.ty) {
+  struct instr *instr = alloc_instr(state->func);
+
+  switch (op->unary_op.ty) {
 //   case IR_OP_UNARY_OP_TY_FABS:
 //     instr->x64->ty = X64_INSTR_TY_FABS;
 //     instr->x64->fabs = (struct x64_reg_1_source){
@@ -924,43 +934,48 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
 //         .source = source,
 //     };
 //     return;
-//   case IR_OP_UNARY_OP_TY_NEG:
-//     instr->x64->ty = X64_INSTR_TY_SUB;
-//     instr->x64->sub = (struct x64_addsub_reg){
-//         .dest = dest,
-//         .lhs = zero_reg_for_ty(source.ty),
-//         .rhs = source,
-//         .shift = 0,
-//         .imm6 = 0,
-//     };
-//     return;
-//   case IR_OP_UNARY_OP_TY_NOT:
-//     instr->x64->ty = X64_INSTR_TY_ORN;
-//     instr->x64->orn = (struct x64_logical_reg){
-//         .dest = dest,
-//         .lhs = zero_reg_for_ty(source.ty),
-//         .rhs = source,
-//         .shift = 0,
-//         .imm6 = 0,
-//     };
-//     return;
+  case IR_OP_UNARY_OP_TY_NEG:
+    instr->x64->ty = X64_INSTR_TY_NEG;
+    instr->x64->neg = (struct x64_alu_unary){
+        .dest = dest,
+    };
+    return;
+  case IR_OP_UNARY_OP_TY_NOT:
+    instr->x64->ty = X64_INSTR_TY_NOT;
+    instr->x64->not = (struct x64_alu_unary){
+        .dest = dest,
+    };
+    return;
+  default:
+    TODO("other x64 unary ops");
 //   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
 //     BUG("logical not should never reach emitter, should be converted in
 //     lower");
-//   }
-// }
+  }
+}
 
 static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
-
   struct x64_reg dest = {0};
 
   if (!binary_op_is_comparison(op->binary_op.ty)) {
     dest = codegen_reg(op);
   }
 
-  // struct x64_reg lhs = codegen_reg(op->binary_op.lhs);
+  struct x64_reg lhs = codegen_reg(op->binary_op.lhs);
   struct x64_reg rhs = codegen_reg(op->binary_op.rhs);
+
+  if (!reg_eq(lhs, dest)) {
+    struct instr *mov = alloc_instr(state->func);
+    *mov->x64 = (struct x64_instr){
+      .ty = X64_INSTR_TY_MOV_REG,
+      .mov_reg = {
+        .dest = dest,
+        .source = lhs
+      }
+    };
+  }
+
+  struct instr *instr = alloc_instr(state->func);
 
   bool is_fp = var_ty_is_fp(&op->var_ty);
 
@@ -1024,30 +1039,27 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //         .rhs = rhs,
     //     };
     //     break;
-    //   case IR_OP_BINARY_OP_TY_AND:
-    //     instr->x64->ty = X64_INSTR_TY_AND;
-    //     instr->x64->and = (struct x64_logical_reg){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
-    //   case IR_OP_BINARY_OP_TY_OR:
-    //     instr->x64->ty = X64_INSTR_TY_ORR;
-    //     instr->x64->orr = (struct x64_logical_reg){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
-    //   case IR_OP_BINARY_OP_TY_XOR:
-    //     instr->x64->ty = X64_INSTR_TY_EOR;
-    //     instr->x64->eor = (struct x64_logical_reg){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+  case IR_OP_BINARY_OP_TY_AND:
+    instr->x64->ty = X64_INSTR_TY_AND;
+    instr->x64->and = (struct x64_alu_reg){
+        .dest = dest,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_OR:
+    instr->x64->ty = X64_INSTR_TY_OR;
+    instr->x64->or = (struct x64_alu_reg){
+        .dest = dest,
+        .rhs = rhs,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_XOR:
+    instr->x64->ty = X64_INSTR_TY_EOR;
+    instr->x64->eor = (struct x64_alu_reg){
+        .dest = dest,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->x64->ty = X64_INSTR_TY_ADD;
     instr->x64->add = (struct x64_alu_reg){
@@ -2472,6 +2484,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
         *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
                                        .mov_reg = {
                                            .dest = return_reg_for_ty(source.ty),
+                                           .source = source
                                        }};
       }
     } else if (var_ty_is_fp(var_ty)) {
@@ -2538,10 +2551,10 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     codegen_cnst_op(state, op);
     break;
   }
-    //   case IR_OP_TY_UNARY_OP: {
-    //     codegen_unary_op(state, op);
-    //     break;
-    //   }
+  case IR_OP_TY_UNARY_OP: {
+    codegen_unary_op(state, op);
+    break;
+  }
   case IR_OP_TY_BINARY_OP: {
     codegen_binary_op(state, op);
     break;
@@ -3183,6 +3196,11 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
   }
 }
 
+
+static void debug_print_alu_unary(FILE *file, const struct x64_alu_unary *alu_unary) {
+  codegen_fprintf(file, " %reg", alu_unary->dest);
+}
+
 static void debug_print_alu_reg(FILE *file, const struct x64_alu_reg *alu_reg) {
   codegen_fprintf(file, " %reg, %reg", alu_reg->dest, alu_reg->rhs);
 }
@@ -3215,6 +3233,26 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_SUB:
     fprintf(file, "sub");
     debug_print_alu_reg(file, &instr->x64->sub);
+    break;
+  case X64_INSTR_TY_OR:
+    fprintf(file, "or");
+    debug_print_alu_reg(file, &instr->x64->or);
+    break;
+  case X64_INSTR_TY_AND:
+    fprintf(file, "and");
+    debug_print_alu_reg(file, &instr->x64->and);
+    break;
+  case X64_INSTR_TY_EOR:
+    fprintf(file, "eor");
+    debug_print_alu_reg(file, &instr->x64->eor);
+    break;
+  case X64_INSTR_TY_NOT:
+    fprintf(file, "not");
+    debug_print_alu_unary(file, &instr->x64->not);
+    break;
+  case X64_INSTR_TY_NEG:
+    fprintf(file, "neg");
+    debug_print_alu_unary(file, &instr->x64->neg);
     break;
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");
