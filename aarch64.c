@@ -1,5 +1,7 @@
 #include "aarch64.h"
 
+#include "aarch64/emit.h"
+#include "disasm.h"
 #include "macos/link.h"
 #include "macos/mach-o.h"
 #include "linux/link.h"

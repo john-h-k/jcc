@@ -1,11 +1,11 @@
 #include "codegen.h"
 
+#include "../log.h"
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
 #include "../bitset.h"
 #include "../util.h"
 #include "../vector.h"
-#include "isa.h"
 
 #include <stdio.h>
 

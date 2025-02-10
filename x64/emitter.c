@@ -36,9 +36,7 @@ size_t x64_emit_bytesize(struct x64_emitter *emitter) {
   return emitter->head * sizeof(*emitter->block);
 }
 
-size_t x64_emitted_count(struct x64_emitter *emitter) {
-  return emitter->count;
-}
+size_t x64_emitted_count(struct x64_emitter *emitter) { return emitter->count; }
 
 void x64_emit_copy_to(struct x64_emitter *emitter, void *dest) {
   memcpy(dest, emitter->block, emitter->head * sizeof(*emitter->block));
@@ -52,7 +50,7 @@ void free_x64_emitter(struct x64_emitter **emitter) {
 }
 
 static void x64_emit_instr(struct x64_emitter *emitter,
-                               struct x64_raw_instr instr) {
+                           struct x64_raw_instr instr) {
   if (emitter->head + instr.len > emitter->len) {
     size_t new_len = emitter->len + BLOCK_SIZE;
     emitter->block =
@@ -67,49 +65,22 @@ static void x64_emit_instr(struct x64_emitter *emitter,
 
 /* Nop */
 
-void x64_emit_nop(struct x64_emitter *emitter) {
-  x64_emit_instr(emitter, NOP);
-}
+void x64_emit_nop(struct x64_emitter *emitter) { x64_emit_instr(emitter, NOP); }
 
 void x64_emit_add(struct x64_emitter *emitter, struct x64_alu_reg alu_reg) {
-  if (alu_reg.dest.ty == X64_REG_TY_E) {
-    if (alu_reg.dest.idx > 7) {
-      TODO("rXd moves");
-    }
+  x64_emit_instr(emitter, ADD_REG(alu_reg.dest, alu_reg.rhs));
+}
 
-    x64_emit_instr(emitter, ADD_REG(alu_reg.dest, alu_reg.rhs));
-  } else {
-    TODO("x64 64 bit move");
-  }
-  
+void x64_emit_sub(struct x64_emitter *emitter, struct x64_alu_reg alu_reg) {
+  x64_emit_instr(emitter, SUB_REG(alu_reg.dest, alu_reg.rhs));
 }
 
 void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {
-  if (mov_imm.dest.ty == X64_REG_TY_E) {
-    if (mov_imm.dest.idx > 7) {
-      TODO("rXd moves");
-    }
-
-    x64_emit_instr(emitter, MOV_REG_IMM32(mov_imm.dest, mov_imm.imm));
-  } else {
-    TODO("x64 64 bit move");
-  }
+  x64_emit_instr(emitter, MOV_IMM(mov_imm.dest, mov_imm.imm));
 }
-
 
 void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
-  if (mov_reg.dest.ty == X64_REG_TY_E) {
-    if (mov_reg.dest.idx > 7) {
-      TODO("rXd moves");
-    }
-
-    x64_emit_instr(emitter, MOV_REG_REG32(mov_reg.dest, mov_reg.source));
-  } else {
-    TODO("x64 64 bit move");
-  }
+  x64_emit_instr(emitter, MOV_REG(mov_reg.dest, mov_reg.source));
 }
 
-
-void x64_emit_ret(struct x64_emitter *emitter) {
-    x64_emit_instr(emitter, RET);
-}
+void x64_emit_ret(struct x64_emitter *emitter) { x64_emit_instr(emitter, RET); }

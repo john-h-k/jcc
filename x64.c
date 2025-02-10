@@ -13,7 +13,7 @@ const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
     {
-        .gp_registers = {.num_volatile = 9,
+        .gp_registers = {.num_volatile = 7,
                                               .num_nonvolatile = 6,
                                               .num_reserved = 0},
         .fp_registers =
@@ -30,7 +30,7 @@ const struct target X64_LINUX_TARGET = {
     TARGET_ID_X64_LINUX,
     TARGET_LP_SZ_LP64,
     {
-        .gp_registers = {.num_volatile = 9,
+        .gp_registers = {.num_volatile = 7,
                                               .num_nonvolatile = 6,
                                               .num_reserved = 0},
         .fp_registers =

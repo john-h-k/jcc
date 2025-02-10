@@ -210,32 +210,32 @@ static void write_relocations(FILE *file, const struct reloc_info *info) {
 static void write_segment_command(FILE *file,
                                   const struct build_object_args *args) {
   size_t str_align = 1;
-  size_t func_align = 1;
+  size_t func_align = 4;
   size_t const_align = 1;
   size_t data_align = 1;
 
   // TODO: sort by alignment instead of aligning each entry by max align
 
-  for (size_t i = 0; i < args->num_entries; i++) {
-    const struct object_entry *entry = &args->entries[i];
+  // for (size_t i = 0; i < args->num_entries; i++) {
+  //   const struct object_entry *entry = &args->entries[i];
 
-    switch (entry->ty) {
-    case OBJECT_ENTRY_TY_FUNC:
-      func_align = MAX(func_align, entry->alignment);
-      break;
-    case OBJECT_ENTRY_TY_C_STRING:
-      str_align = MAX(str_align, entry->alignment);
-      break;
-    case OBJECT_ENTRY_TY_CONST_DATA:
-      const_align = MAX(const_align, entry->alignment);
-      break;
-    case OBJECT_ENTRY_TY_MUT_DATA:
-      data_align = MAX(data_align, entry->alignment);
-      break;
-    case OBJECT_ENTRY_TY_DECL:
-      break;
-    }
-  }
+  //   switch (entry->ty) {
+  //   case OBJECT_ENTRY_TY_FUNC:
+  //     func_align = MAX(func_align, entry->alignment);
+  //     break;
+  //   case OBJECT_ENTRY_TY_C_STRING:
+  //     str_align = MAX(str_align, entry->alignment);
+  //     break;
+  //   case OBJECT_ENTRY_TY_CONST_DATA:
+  //     const_align = MAX(const_align, entry->alignment);
+  //     break;
+  //   case OBJECT_ENTRY_TY_MUT_DATA:
+  //     data_align = MAX(data_align, entry->alignment);
+  //     break;
+  //   case OBJECT_ENTRY_TY_DECL:
+  //     break;
+  //   }
+  // }
 
   size_t total_str_size = 0;
   size_t total_const_size = 0;

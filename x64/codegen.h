@@ -23,6 +23,7 @@ enum x64_instr_ty {
   X64_INSTR_TY_MOV_IMM,
   X64_INSTR_TY_MOV_REG,
   X64_INSTR_TY_ADD,
+  X64_INSTR_TY_SUB,
   X64_INSTR_TY_RET,
 };
 
@@ -34,6 +35,7 @@ enum x64_reg_class {
 enum x64_reg_ty {
   X64_REG_TY_R,
   X64_REG_TY_E,
+  X64_REG_TY_RD,
 };
 
 enum x64_reg_attr_flags {
@@ -102,7 +104,7 @@ struct x64_instr {
 
   union {
     union {
-      struct x64_alu_reg alu_reg, add;
+      struct x64_alu_reg alu_reg, add, sub;
     };
 
     union {
