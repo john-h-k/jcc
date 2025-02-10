@@ -12,13 +12,13 @@ int main() {
     c = 5;
   }
 
-  return 5;
-
   if (a || ++b) {
     d = 7;
   }
 
   int s = 0;
+
+  return 5;
 
   int e = 8, f = 10;
   while (e && f) {
