@@ -6,7 +6,7 @@
 #include "disasm.h"
 #include "target.h"
 
-#define X64_FUNCTION_ALIGNMENT (16)
+#define X64_FUNCTION_ALIGNMENT (4)
 #define X64_STACK_ALIGNMENT (16)
 #define MAX_IMM_SIZE (4095)
 

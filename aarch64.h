@@ -1,14 +1,12 @@
 #ifndef AARCH64_H
 #define AARCH64_H
 
-#include "aarch64/emit.h"
-#include "aarch64/lower.h"
-#include "disasm.h"
 #include "target.h"
 
 // FIXME: this unnecessarily ties arm64 to mach-o
 
-#define AARCH64_FUNCTION_ALIGNMENT (16)
+// it seems for building the object files, 4 byte is fine
+#define AARCH64_FUNCTION_ALIGNMENT (4)
 #define AARCH64_STACK_ALIGNMENT (16)
 #define MAX_IMM_SIZE (4095)
 

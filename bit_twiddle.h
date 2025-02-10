@@ -12,7 +12,7 @@
   //            unsigned long long                                                \
   //          : (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0))
 
-#define CLAMP_BITS(value, bitc) ((value) & ((1 << (bitc)) - 1))
+#define CLAMP_BITS(value, bitc) ((value) & ((1ull << (bitc)) - 1))
 
 #define NTH_BIT(value, bitn) (((value) & (1ull << (bitn))) >> (bitn))
 

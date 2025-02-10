@@ -1,17 +1,11 @@
 #include "lsra.h"
 
-#include "bit_twiddle.h"
 #include "bitset.h"
-#include "compiler.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "liveness.h"
 #include "log.h"
-#include "rv32i/codegen.h"
 #include "util.h"
-#include "vector.h"
-
-#include <limits.h>
 
 struct register_alloc_info {
   struct reg_info integral_reg_info;
@@ -134,6 +128,8 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
 }
 
 struct lsra_reg_info {
+  // if true, reg allocator will preferentially try and assign the lhs reg as dest reg on binop IR ops
+  bool prefer_binop_lhs;
   bool has_ssp;
   size_t ssp_reg;
 
@@ -378,11 +374,26 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           interval->op->id);
     }
 
+    size_t pref_reg = SIZE_MAX;
+    if (info->prefer_binop_lhs && interval->op->ty == IR_OP_TY_BINARY_OP) {
+      struct ir_op *lhs = interval->op->binary_op.lhs;
+
+      if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty && bitset_get(reg_pool, lhs->reg.idx)) {
+        pref_reg = lhs->reg.idx;
+      }
+    } 
+     
     if (bitset_any(reg_pool, true)) {
-      // we can allocate a register from the pool
-      size_t free_slot = bitset_tzcnt(reg_pool);
-      DEBUG_ASSERT(free_slot < bitset_length(reg_pool),
-                   "reg pool unexpectedly empty!");
+      size_t free_slot;
+
+      if (pref_reg != SIZE_MAX) {
+        free_slot = pref_reg;
+      } else {
+        // we can allocate a register from the pool
+        free_slot = bitset_tzcnt(reg_pool);
+        DEBUG_ASSERT(free_slot < bitset_length(reg_pool),
+                     "reg pool unexpectedly empty!");
+      }
 
       bitset_set(reg_pool, free_slot, false);
       bitset_set(all_used_reg_pool, free_slot, true);
@@ -458,6 +469,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t fp_spill_reg = num_fp_regs;
 
   struct lsra_reg_info lsra_reg_info = {
+      .prefer_binop_lhs = true, // FIXME: only for x64
       .has_ssp = has_ssp,
       .ssp_reg = ssp_reg,
       .num_volatile_gp = reg_info.gp_registers.num_volatile,

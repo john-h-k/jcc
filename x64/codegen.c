@@ -27,43 +27,7 @@
 //     }                                                                          \
 //   }
 
-static enum x64_reg_ty gp_reg_ty_for_size(size_t size) {
-  switch (size) {
-  case 8:
-    return X64_REG_TY_R;
-  case 4:
-    return X64_REG_TY_E;
-  }
 
-  BUG("bad size %zu", size);
-}
-
-static enum x64_reg_ty fp_reg_ty_for_size(size_t size) {
-  // switch (size) {
-  // case 16:
-  //   return X64_REG_TY_V;
-  // case 8:
-  //   return X64_REG_TY_D;
-  // case 4:
-  //   return X64_REG_TY_S;
-  // case 2:
-  //   return X64_REG_TY_H;
-  // case 1:
-  //   return X64_REG_TY_B;
-  // }
-
-  BUG("bad size %zu", size);
-}
-
-UNUSED static enum x64_reg_ty reg_ty_for_size(enum x64_reg_class reg_class,
-                                              size_t size) {
-  switch (reg_class) {
-  case X64_REG_CLASS_GP:
-    return gp_reg_ty_for_size(size);
-  case X64_REG_CLASS_FP:
-    return fp_reg_ty_for_size(size);
-  }
-}
 
 // size_t reg_size(enum x64_reg_ty reg_ty) {
 //   switch (reg_ty) {
@@ -123,6 +87,7 @@ static struct x64_reg return_reg_for_ty(enum x64_reg_ty reg_ty) {
 bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   switch (ty) {
   case X64_REG_TY_R:
+  case X64_REG_TY_RD:
   case X64_REG_TY_E:
     return true;
     // case X64_REG_TY_V:
@@ -343,7 +308,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_FLAGS:
     BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
-    return idx;
+    return idx < 4 ? idx : idx + 2;
   case IR_REG_TY_FP:
     return idx;
   }
@@ -367,12 +332,12 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 //   }
 // }
 
-static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
+static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty, size_t idx) {
   switch (var_ty->primitive) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
-    return X64_REG_TY_E;
+    return idx < 8 ? X64_REG_TY_E : X64_REG_TY_RD;
   case IR_VAR_PRIMITIVE_TY_I64:
     return X64_REG_TY_R;
   // case IR_VAR_PRIMITIVE_TY_F16:
@@ -393,10 +358,11 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
     TODO("non primitives (op %zu)", op->id);
   }
 
-  enum x64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
+  enum x64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty, idx);
 
   switch (reg_ty) {
   case X64_REG_TY_R:
+  case X64_REG_TY_RD:
   case X64_REG_TY_E:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
     break;
@@ -1089,14 +1055,13 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
         .rhs = rhs,
     };
     break;
-    //   case IR_OP_BINARY_OP_TY_SUB:
-    //     instr->x64->ty = X64_INSTR_TY_SUB;
-    //     instr->x64->sub = (struct x64_addsub_reg){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+  case IR_OP_BINARY_OP_TY_SUB:
+    instr->x64->ty = X64_INSTR_TY_SUB;
+    instr->x64->sub = (struct x64_alu_reg){
+        .dest = dest,
+        .rhs = rhs,
+    };
+    break;
     //   case IR_OP_BINARY_OP_TY_MUL:
     //     instr->x64->ty = X64_INSTR_TY_MADD;
     //     instr->x64->madd =
@@ -3167,9 +3132,8 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
 // }
 
 static void codegen_fprintf(FILE *file, const char *format, ...) {
-  static const char *e_reg_names[] = {
-    "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"
-  };
+  static const char *reg_names[] = {"ax", "cx", "dx", "bx",
+                                    "sp", "bp", "si", "di"};
 
   va_list list;
   va_start(list, format);
@@ -3186,12 +3150,22 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       struct x64_reg reg = va_arg(list, struct x64_reg);
       switch (reg.ty) {
       case X64_REG_TY_R:
-        BUG("print r registers");
+        if (reg.idx > 7) {
+          fprintf(file, "r%zud", reg.idx);
+        } else {
+          const char *name = reg_names[reg.idx];
+          fprintf(file, "r%s", name);
+        }
+        break;
+      case X64_REG_TY_RD:
+        DEBUG_ASSERT(reg.idx > 7, "RD index should be > 7");
+        fprintf(file, "r%zud", reg.idx);
+        break;
       case X64_REG_TY_E:
-        invariant_assert(reg.idx < ARR_LENGTH(e_reg_names), "reg idx too large");
+        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
 
-        const char *name = e_reg_names[reg.idx];
-        fprintf(file, "%s", name);
+        const char *name = reg_names[reg.idx];
+        fprintf(file, "e%s", name);
       }
 
       format += 3;
@@ -3237,6 +3211,10 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_ADD:
     fprintf(file, "add");
     debug_print_alu_reg(file, &instr->x64->add);
+    break;
+  case X64_INSTR_TY_SUB:
+    fprintf(file, "sub");
+    debug_print_alu_reg(file, &instr->x64->sub);
     break;
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");

@@ -34,6 +34,9 @@ static void emit_instr(const struct emit_state *state,
   case X64_INSTR_TY_ADD:
     x64_emit_add(state->emitter, instr->x64->add);
     break;
+  case X64_INSTR_TY_SUB:
+    x64_emit_sub(state->emitter, instr->x64->sub);
+    break;
   case X64_INSTR_TY_MOV_IMM:
     x64_emit_mov_imm(state->emitter, instr->x64->mov_imm);
     break;
@@ -146,12 +149,6 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
       }
 
       size_t len = x64_emit_bytesize(emitter);
-
-      size_t rem = ROUND_UP(len, X64_FUNCTION_ALIGNMENT) - len;
-      // for (size_t j = 0; j < rem; j++) {
-      //   x64_emit_nop(emitter);
-      // }
-      len = rem;
 
       struct symbol symbol = {
           .ty = SYMBOL_TY_FUNC,
