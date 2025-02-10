@@ -97,6 +97,10 @@ void x64_emit_idiv(struct x64_emitter *emitter, struct x64_div idiv) {
   x64_emit_instr(emitter, IDIV_REG(idiv.rhs));
 }
 
+void x64_emit_imul(struct x64_emitter *emitter, struct x64_mul imul) {
+  x64_emit_instr(emitter, IMUL_REG(imul.rhs));
+}
+
 void x64_emit_and(struct x64_emitter *emitter, struct x64_alu_reg and) {
   x64_emit_instr(emitter, AND_REG(and.dest, and.rhs));
 }

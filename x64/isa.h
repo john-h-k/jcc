@@ -116,24 +116,27 @@ struct x64_raw_instr {
                    U8(0xF7),                                  \
                MODRM(MOD_REG, (size_t)0b110, (rhs).idx % 8)}})
 
-#define IDIV_REG32(rhs) \
+#define IMULIDIV_REG32(opc, rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 2,                                                                \
       .buff = { U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b111, (rhs).idx % 8)}})
+               MODRM(MOD_REG, (size_t)opc, (rhs).idx % 8)}})
 
-#define IDIV_REG64(rhs) \
+#define IMULIDIV_REG64(opc, rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
       .buff = {REX(REX_W(rhs), (size_t)0, (size_t)0, (size_t)((rhs).idx >= 8)),            \
                    U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b111, (rhs).idx % 8)}})
+               MODRM(MOD_REG, (size_t)opc, (rhs).idx % 8)}})
 
 #define DIV_REG(rhs) \
   NEEDS_REX((rhs)) ? DIV_REG64((rhs)) : DIV_REG32((rhs))
 
 #define IDIV_REG(rhs) \
-  NEEDS_REX((rhs)) ? IDIV_REG64((rhs)) : IDIV_REG32((rhs))
+  NEEDS_REX((rhs)) ? IMULIDIV_REG64(0b111, (rhs)) : IMULIDIV_REG32(0b111, (rhs))
+
+#define IMUL_REG(rhs) \
+  NEEDS_REX((rhs)) ? IMULIDIV_REG64(0b100, (rhs)) : IMULIDIV_REG32(0b100, (rhs))
 
 
 #define MOVSX8_32_NOREX(dest, source) \
@@ -430,10 +433,5 @@ struct x64_raw_instr {
                                    (uint8_t)(((disp) >> 8) & 0xFF),            \
                                    (uint8_t)(((disp) >> 16) & 0xFF),           \
                                    (uint8_t)(((disp) >> 24) & 0xFF)}})
-
-#define IMUL_REG_REG(dst, src)                                                 \
-  ((struct x64_raw_instr){                                                     \
-      .len = 4,                                                                \
-      .buff = {0x48, 0x0f, 0xaf, (uint8_t)(0xc0 | ((dst) << 3) | (src))}})
 
 #endif

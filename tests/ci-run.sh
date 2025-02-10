@@ -13,8 +13,6 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     continue
   fi
 
-  echo $file
-
   first_line=$(head -n 1 "$file")
   if [[ "$first_line" == "// no-compile" ]]; then
     if ./build/jcc -std=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
@@ -53,8 +51,6 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     elif [ "$output" != "$stdout" ]; then
       echo "TEST FAILED: '$file' expected stdout '$stdout', got '$output'"
       exit -1
-    else
-      echo "$file passed"
     fi
   fi
 done

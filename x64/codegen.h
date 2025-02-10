@@ -48,7 +48,6 @@ enum x64_instr_ty {
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
 
-  X64_INSTR_TY_MUL,
   X64_INSTR_TY_IMUL,
   X64_INSTR_TY_DIV,
   X64_INSTR_TY_IDIV,
@@ -200,7 +199,7 @@ struct x64_div {
 };
 
 struct x64_mul {
-  struct x64_reg todo;
+  struct x64_reg rhs;
 };
 
 struct x64_push {
