@@ -67,6 +67,8 @@ static void emit_instr(const struct emit_state *state,
   case X64_INSTR_TY_RET:
     x64_emit_ret(state->emitter);
     break;
+  default:
+  TODO("foo");
   }
   #undef EMIT
 }

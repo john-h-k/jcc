@@ -498,6 +498,8 @@ struct ir_op {
   struct ir_reg reg;
   void *metadata;
 
+  // struct ir_reg clobbers[4];
+
   const char *comment;
 };
 
