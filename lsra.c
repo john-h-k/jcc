@@ -412,7 +412,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       force_spill_register(irb, &state, reg_pool, interval->op->write_info.writes[j]);
     }
      
-    if (pref_reg != SIZE_MAX || bitset_any(reg_pool, true)) {
+    if (false && (pref_reg != SIZE_MAX || bitset_any(reg_pool, true))) {
       size_t free_slot;
 
       if (pref_reg != SIZE_MAX) {
