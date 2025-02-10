@@ -48,6 +48,12 @@ set(
   aarch64/emit.c
   aarch64/emitter.c
 
+  x64.c
+  x64/codegen.c
+  x64/lower.c
+  x64/emit.c
+  x64/emitter.c
+
   rv32i.c
   rv32i/codegen.c
   rv32i/lower.c
