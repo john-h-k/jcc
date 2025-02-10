@@ -1048,14 +1048,14 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
         .rhs = rhs,
     };
     break;
-    //   case IR_OP_BINARY_OP_TY_MUL:
-    //     instr->x64->ty = X64_INSTR_TY_MADD;
-    //     instr->x64->madd =
-    //         (struct x64_fma){.dest = dest,
-    //                              .lhs = lhs,
-    //                              .rhs = rhs,
-    //                              .addsub = zero_reg_for_ty(lhs.ty)};
-    //     break;
+    // case IR_OP_BINARY_OP_TY_MUL:
+    //   instr->x64->ty = X64_INSTR_TY_MUL;
+    //   instr->x64->mul =
+    //   (struct x64_mul){.dest = dest,
+    //                        .lhs = lhs,
+    //                        .rhs = rhs,
+    //                        .addsub = zero_reg_for_ty(lhs.ty)};
+    //   break;
     //   case IR_OP_BINARY_OP_TY_FMAX:
     //     instr->x64->ty = X64_INSTR_TY_FMAXNM;
     //     instr->x64->fmaxnm = (struct x64_reg_2_source){

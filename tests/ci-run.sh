@@ -53,9 +53,6 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       exit -1
     fi
   fi
-
-
-  echo -e "\n"
 done
 
 
