@@ -27,8 +27,6 @@
 //     }                                                                          \
 //   }
 
-
-
 // size_t reg_size(enum x64_reg_ty reg_ty) {
 //   switch (reg_ty) {
 //   case X64_REG_TY_NONE:
@@ -224,14 +222,13 @@ bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
 //   return cond ^ 1;
 // }
 
-// struct x64_prologue_info {
-//   bool prologue_generated;
-//   size_t stack_size;
-//   size_t lr_offset;
-//   size_t save_start;
-//   unsigned long long saved_gp_registers;
-//   unsigned long long saved_fp_registers;
-// };
+struct x64_prologue_info {
+  bool prologue_generated;
+  size_t stack_size;
+  size_t save_start;
+  unsigned long long saved_gp_registers;
+  unsigned long long saved_fp_registers;
+};
 
 struct codegen_state {
   struct arena_allocator *arena;
@@ -239,9 +236,9 @@ struct codegen_state {
   const struct target *target;
   struct codegen_function *func;
   struct ir_func *ir;
-  // struct x64_prologue_info prologue_info;
+  struct x64_prologue_info prologue_info;
   // struct x64_reg ssp;
-  // size_t stack_args_size;
+  size_t stack_args_size;
 };
 
 // static enum x64_cond get_cond_for_op(struct ir_op *op) {
@@ -284,21 +281,13 @@ struct codegen_state {
 //   }
 // }
 
-// static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
-//                                     const struct ir_op *op,
-//                                     const struct ir_lcl *lcl) {
-//   ssize_t offset = state->stack_args_size + lcl->offset;
+static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
+                                    const struct ir_op *op,
+                                    const struct ir_lcl *lcl) {
+  ssize_t offset = state->stack_args_size + lcl->offset;
 
-//   if (!op) {
-//     return offset;
-//   }
-
-//   struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
-//   DEBUG_ASSERT(offset % info.size == 0,
-//                "stack offset not divisible by type size");
-
-//   return offset / info.size;
-// }
+  return offset;
+}
 
 static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   switch (ty) {
@@ -331,7 +320,8 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 //   }
 // }
 
-static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty, size_t idx) {
+static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty,
+                                         size_t idx) {
   switch (var_ty->primitive) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
@@ -402,157 +392,116 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 // // TODO: we should remove load/store lcl/glb ops and lower all addressing
 // // requirements earlier
 
-// static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
-//   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-//       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-//     return X64_INSTR_TY_LOAD_BYTE_IMM;
-//   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-//              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
-//     return X64_INSTR_TY_LOAD_HALF_IMM;
-//   } else {
-//     return X64_INSTR_TY_LOAD_IMM;
-//   }
-// }
+static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    TODO("x64 load byte");
+    // return X64_INSTR_TY_LOAD_BYTE_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    TODO("x64 load half");
+    // return X64_INSTR_TY_LOAD_HALF_IMM;
+  } else {
+    return X64_INSTR_TY_MOV_LOAD_IMM;
+  }
+}
 
-// static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
-//   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-//       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-//     return X64_INSTR_TY_STORE_BYTE_IMM;
-//   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-//              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
-//     return X64_INSTR_TY_STORE_HALF_IMM;
-//   } else {
-//     return X64_INSTR_TY_STORE_IMM;
-//   }
-// }
+static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
+  if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+    TODO("x64 store byte");
+    // return X64_INSTR_TY_STORE_BYTE_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
+    TODO("x64 store half");
+    // return X64_INSTR_TY_STORE_HALF_IMM;
+  } else {
+    return X64_INSTR_TY_MOV_STORE_IMM;
+  }
+}
 
 // static void codegen_add_imm(struct codegen_state *state,
 //                             struct x64_reg dest, struct x64_reg source,
 //                             unsigned long long value);
 
-// static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op
-// *op) {
-//   struct x64_reg dest = codegen_reg(op);
-//   struct ir_lcl *lcl = op->load.lcl;
+static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
+  struct x64_reg dest = codegen_reg(op);
+  struct ir_lcl *lcl = op->load.lcl;
 
-//   simm_t offset = get_lcl_stack_offset(state, op, lcl);
+  simm_t offset = get_lcl_stack_offset(state, op, lcl);
 
-//   if (offset > MAX_IMM_SIZE) {
-//     size_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-//     codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = load_ty_for_op(op);
+  instr->x64->mov_load_imm = (struct x64_mov_load_imm){
+      .dest = dest, .addr = STACK_PTR_REG, .imm = offset};
+}
 
-//     struct instr *instr = alloc_instr(state->func);
-//     instr->x64->ty = load_ty_for_op(op);
-//     instr->x64->load_imm =
-//         (struct x64_load_imm){.dest = dest,
-//                                   .addr = state->ssp,
-//                                   .imm = 0,
-//                                   .mode = X64_ADDRESSING_MODE_OFFSET};
-//   } else {
-//     struct instr *instr = alloc_instr(state->func);
-//     instr->x64->ty = load_ty_for_op(op);
-//     instr->x64->load_imm =
-//         (struct x64_load_imm){.dest = dest,
-//                                   .addr = STACK_PTR_REG,
-//                                   .imm = offset,
-//                                   .mode = X64_ADDRESSING_MODE_OFFSET};
-//   }
-// }
+static void codegen_store_lcl_op(struct codegen_state *state,
+                                 struct ir_op *op) {
+  struct x64_reg source = codegen_reg(op->store.value);
+  struct ir_lcl *lcl = op->store.lcl;
 
-// static void codegen_store_lcl_op(struct codegen_state *state,
-//                                  struct ir_op *op) {
-//   struct x64_reg source = codegen_reg(op->store.value);
-//   struct ir_lcl *lcl = op->store.lcl;
+  size_t offset = get_lcl_stack_offset(state, op->store.value, lcl);
 
-//   size_t offset = get_lcl_stack_offset(state, op->store.value, lcl);
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = store_ty_for_op(op->store.value);
+  instr->x64->mov_store_imm = (struct x64_mov_store_imm){
+      .source = source, .addr = STACK_PTR_REG, .imm = offset};
+}
 
-//   if (offset > MAX_IMM_SIZE) {
-//     size_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-//     codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
+static void codegen_load_addr_op(struct codegen_state *state,
+                                 struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
 
-//     struct instr *instr = alloc_instr(state->func);
-//     instr->x64->ty = load_ty_for_op(op);
-//     instr->x64->str_imm =
-//         (struct x64_store_imm){.source = source,
-//                                    .addr = state->ssp,
-//                                    .imm = 0,
-//                                    .mode = X64_ADDRESSING_MODE_OFFSET};
-//   } else {
-//     struct instr *instr = alloc_instr(state->func);
-//     instr->x64->ty = store_ty_for_op(op->store.value);
-//     instr->x64->str_imm =
-//         (struct x64_store_imm){.source = source,
-//                                    .addr = STACK_PTR_REG,
-//                                    .imm = offset,
-//                                    .mode = X64_ADDRESSING_MODE_OFFSET};
-//   }
-// }
+  struct x64_reg dest = codegen_reg(op);
 
-// static void codegen_load_addr_op(struct codegen_state *state,
-//                                  struct ir_op *op) {
-//   struct instr *instr = alloc_instr(state->func);
+  if (op->load.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->load.addr;
 
-//   struct x64_reg dest = codegen_reg(op);
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
+    } else {
+      BUG("can't CONTAIN operand in load_addr node");
+    }
 
-//   if (op->load.addr->flags & IR_OP_FLAG_CONTAINED) {
-//     struct ir_op *addr = op->load.addr;
+    instr->x64->ty = load_ty_for_op(op);
+    instr->x64->mov_load_imm = (struct x64_mov_load_imm){
+        .dest = dest, .addr = STACK_PTR_REG, .imm = imm};
+  } else {
+    struct x64_reg addr = codegen_reg(op->load.addr);
+    instr->x64->ty = load_ty_for_op(op);
+    instr->x64->mov_load_imm =
+        (struct x64_mov_load_imm){.dest = dest, .addr = addr, .imm = 0};
+  }
+}
 
-//     simm_t imm;
-//     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-//       imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
-//     } else {
-//       BUG("can't CONTAIN operand in load_addr node");
-//     }
+static void codegen_store_addr_op(struct codegen_state *state,
+                                  struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
 
-//     instr->x64->ty = load_ty_for_op(op);
-//     instr->x64->ldr_imm =
-//         (struct x64_load_imm){.dest = dest,
-//                                   .addr = STACK_PTR_REG,
-//                                   .imm = imm,
-//                                   .mode = X64_ADDRESSING_MODE_OFFSET};
-//   } else {
-//     struct x64_reg addr = codegen_reg(op->load.addr);
-//     instr->x64->ty = load_ty_for_op(op);
-//     instr->x64->ldr_imm =
-//         (struct x64_load_imm){.dest = dest,
-//                                   .addr = addr,
-//                                   .imm = 0,
-//                                   .mode = X64_ADDRESSING_MODE_OFFSET};
-//   }
-// }
+  struct x64_reg source = codegen_reg(op->store.value);
 
-// static void codegen_store_addr_op(struct codegen_state *state,
-//                                   struct ir_op *op) {
-//   struct instr *instr = alloc_instr(state->func);
+  if (op->store.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr = op->store.addr;
 
-//   struct x64_reg source = codegen_reg(op->store.value);
+    simm_t imm;
+    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+      imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
+    } else {
+      BUG("can't CONTAIN operand in store_addr node");
+    }
 
-//   if (op->store.addr->flags & IR_OP_FLAG_CONTAINED) {
-//     struct ir_op *addr = op->store.addr;
-
-//     simm_t imm;
-//     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-//       imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
-//     } else {
-//       BUG("can't CONTAIN operand in store_addr node");
-//     }
-
-//     instr->x64->ty = store_ty_for_op(op->store.value);
-//     instr->x64->str_imm =
-//         (struct x64_store_imm){.source = source,
-//                                    .addr = STACK_PTR_REG,
-//                                    .imm = imm,
-//                                    .mode = X64_ADDRESSING_MODE_OFFSET};
-//   } else {
-//     struct x64_reg addr = codegen_reg(op->store.addr);
-//     instr->x64->ty = store_ty_for_op(op->store.value);
-//     instr->x64->str_imm =
-//         (struct x64_store_imm){.source = source,
-//                                    .addr = addr,
-//                                    .imm = 0,
-//                                    .mode = X64_ADDRESSING_MODE_OFFSET};
-//   }
-// }
+    instr->x64->ty = store_ty_for_op(op->store.value);
+    instr->x64->mov_store_imm = (struct x64_mov_store_imm){
+        .source = source, .addr = STACK_PTR_REG, .imm = imm};
+  } else {
+    struct x64_reg addr = codegen_reg(op->store.addr);
+    instr->x64->ty = store_ty_for_op(op->store.value);
+    instr->x64->mov_store_imm =
+        (struct x64_mov_store_imm){.source = source, .addr = addr, .imm = 0};
+  }
+}
 
 // static void codegen_bitfield_insert(struct codegen_state *state,
 //                                     struct ir_op *op) {
@@ -593,31 +542,31 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 //                                                    bitfield.offset};
 // }
 
-// static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
-//   switch (op->load.ty) {
-//   case IR_OP_LOAD_TY_LCL:
-//     codegen_load_lcl_op(state, op);
-//     break;
-//   case IR_OP_LOAD_TY_ADDR:
-//     codegen_load_addr_op(state, op);
-//     break;
-//   case IR_OP_LOAD_TY_GLB:
-//     BUG("load.glb should have been lowered");
-//   }
-// }
+static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_LOAD_TY_LCL:
+    codegen_load_lcl_op(state, op);
+    break;
+  case IR_OP_LOAD_TY_ADDR:
+    codegen_load_addr_op(state, op);
+    break;
+  case IR_OP_LOAD_TY_GLB:
+    BUG("load.glb should have been lowered");
+  }
+}
 
-// static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
-//   switch (op->load.ty) {
-//   case IR_OP_STORE_TY_LCL:
-//     codegen_store_lcl_op(state, op);
-//     break;
-//   case IR_OP_STORE_TY_ADDR:
-//     codegen_store_addr_op(state, op);
-//     break;
-//   case IR_OP_STORE_TY_GLB:
-//     BUG("store.glb should have been lowered");
-//   }
-// }
+static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_STORE_TY_LCL:
+    codegen_store_lcl_op(state, op);
+    break;
+  case IR_OP_STORE_TY_ADDR:
+    codegen_store_addr_op(state, op);
+    break;
+  case IR_OP_STORE_TY_GLB:
+    BUG("store.glb should have been lowered");
+  }
+}
 
 // // this method assumes it can safely you any non-argument volatile registers
 // static void codegen_mem_copy_volatile(struct codegen_state *state,
@@ -693,69 +642,34 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 
 // #define IMM_BITS (12)
 
-// static void codegen_add_imm(struct codegen_state *state,
-//                             struct x64_reg dest, struct x64_reg source,
-//                             unsigned long long value) {
+static void codegen_add_imm(struct codegen_state *state, struct x64_reg dest,
+                            struct x64_reg source, unsigned long long value) {
 
-//   if (value & ~MASK_LO(unsigned long long, 24)) {
-//     TODO("imm >24 bits");
-//   }
+  if (!reg_eq(dest, source)) {
+    struct instr *mov = alloc_instr(state->func);
+    mov->x64->ty = X64_INSTR_TY_MOV_REG;
+    mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+  }
 
-//   unsigned long long lo = value & MASK_LO(unsigned long long, 12);
-//   unsigned long long hi = (value >> 12) & MASK_LO(unsigned long long, 12);
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = X64_INSTR_TY_ADD_IMM;
+  instr->x64->add_imm = (struct x64_alu_imm){.dest = dest, .imm = value};
+}
 
-//   struct instr *instr = alloc_instr(state->func);
-//   instr->x64->ty = X64_INSTR_TY_ADD_IMM;
-//   instr->x64->add_imm = (struct x64_addsub_imm){
-//       .dest = dest,
-//       .source = source,
-//       .imm = lo,
-//       .shift = 0,
-//   };
+static void codegen_sub_imm(struct codegen_state *state, struct x64_reg dest,
+                            struct x64_reg source, unsigned long long value) {
 
-//   if (hi) {
-//     instr = alloc_instr(state->func);
-//     instr->x64->ty = X64_INSTR_TY_ADD_IMM;
-//     instr->x64->add_imm = (struct x64_addsub_imm){
-//         .dest = dest,
-//         .source = dest,
-//         .imm = hi,
-//         .shift = 1,
-//     };
-//   }
-// }
+  if (!reg_eq(dest, source)) {
+    struct instr *mov = alloc_instr(state->func);
+    mov->x64->ty = X64_INSTR_TY_MOV_REG;
+    mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+  }
 
-// static void codegen_sub_imm(struct codegen_state *state,
-//                             struct x64_reg dest, struct x64_reg source,
-//                             unsigned long long value) {
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = X64_INSTR_TY_SUB_IMM;
+  instr->x64->sub_imm = (struct x64_alu_imm){.dest = dest, .imm = value};
+}
 
-//   if (value & ~MASK_LO(unsigned long long, 24)) {
-//     TODO("imm >24 bits");
-//   }
-
-//   unsigned long long lo = value & MASK_LO(unsigned long long, 12);
-//   unsigned long long hi = (value >> 12) & MASK_LO(unsigned long long, 12);
-
-//   struct instr *instr = alloc_instr(state->func);
-//   instr->x64->ty = X64_INSTR_TY_SUB_IMM;
-//   instr->x64->add_imm = (struct x64_addsub_imm){
-//       .dest = dest,
-//       .source = dest,
-//       .imm = lo,
-//       .shift = 0,
-//   };
-
-//   if (hi) {
-//     instr = alloc_instr(state->func);
-//     instr->x64->ty = X64_INSTR_TY_SUB_IMM;
-//     instr->x64->add_imm = (struct x64_addsub_imm){
-//         .dest = dest,
-//         .source = source,
-//         .imm = hi,
-//         .shift = 1,
-//     };
-//   }
-// }
 // static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
 //   struct x64_reg dest = codegen_reg(op);
 
@@ -901,56 +815,51 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 
   if (!reg_eq(source, dest)) {
     struct instr *mov = alloc_instr(state->func);
-    *mov->x64 = (struct x64_instr){
-      .ty = X64_INSTR_TY_MOV_REG,
-      .mov_reg = {
-        .dest = dest,
-        .source = source
-      }
-    };
+    *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
+                                   .mov_reg = {.dest = dest, .source = source}};
   }
 
   struct instr *instr = alloc_instr(state->func);
 
   switch (op->unary_op.ty) {
-//   case IR_OP_UNARY_OP_TY_FABS:
-//     instr->x64->ty = X64_INSTR_TY_FABS;
-//     instr->x64->fabs = (struct x64_reg_1_source){
-//         .dest = dest,
-//         .source = source,
-//     };
-//     return;
-//   case IR_OP_UNARY_OP_TY_FSQRT:
-//     instr->x64->ty = X64_INSTR_TY_FSQRT;
-//     instr->x64->fsqrt = (struct x64_reg_1_source){
-//         .dest = dest,
-//         .source = source,
-//     };
-//     return;
-//   case IR_OP_UNARY_OP_TY_FNEG:
-//     instr->x64->ty = X64_INSTR_TY_FNEG;
-//     instr->x64->fneg = (struct x64_reg_1_source){
-//         .dest = dest,
-//         .source = source,
-//     };
-//     return;
+    //   case IR_OP_UNARY_OP_TY_FABS:
+    //     instr->x64->ty = X64_INSTR_TY_FABS;
+    //     instr->x64->fabs = (struct x64_reg_1_source){
+    //         .dest = dest,
+    //         .source = source,
+    //     };
+    //     return;
+    //   case IR_OP_UNARY_OP_TY_FSQRT:
+    //     instr->x64->ty = X64_INSTR_TY_FSQRT;
+    //     instr->x64->fsqrt = (struct x64_reg_1_source){
+    //         .dest = dest,
+    //         .source = source,
+    //     };
+    //     return;
+    //   case IR_OP_UNARY_OP_TY_FNEG:
+    //     instr->x64->ty = X64_INSTR_TY_FNEG;
+    //     instr->x64->fneg = (struct x64_reg_1_source){
+    //         .dest = dest,
+    //         .source = source,
+    //     };
+    //     return;
   case IR_OP_UNARY_OP_TY_NEG:
     instr->x64->ty = X64_INSTR_TY_NEG;
-    instr->x64->neg = (struct x64_alu_unary){
+    instr->x64->neg = (struct x64_1_reg){
         .dest = dest,
     };
     return;
   case IR_OP_UNARY_OP_TY_NOT:
     instr->x64->ty = X64_INSTR_TY_NOT;
-    instr->x64->not = (struct x64_alu_unary){
+    instr->x64->not = (struct x64_1_reg){
         .dest = dest,
     };
     return;
   default:
     TODO("other x64 unary ops");
-//   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-//     BUG("logical not should never reach emitter, should be converted in
-//     lower");
+    //   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+    //     BUG("logical not should never reach emitter, should be converted in
+    //     lower");
   }
 }
 
@@ -966,13 +875,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
   if (!reg_eq(lhs, dest)) {
     struct instr *mov = alloc_instr(state->func);
-    *mov->x64 = (struct x64_instr){
-      .ty = X64_INSTR_TY_MOV_REG,
-      .mov_reg = {
-        .dest = dest,
-        .source = lhs
-      }
-    };
+    *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
+                                   .mov_reg = {.dest = dest, .source = lhs}};
   }
 
   struct instr *instr = alloc_instr(state->func);
@@ -1015,30 +919,24 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //         .rhs = rhs,
     //     };
     //     break;
-    //   case IR_OP_BINARY_OP_TY_LSHIFT:
-    //     instr->x64->ty = X64_INSTR_TY_LSLV;
-    //     instr->x64->lslv = (struct x64_reg_2_source){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
-    //   case IR_OP_BINARY_OP_TY_SRSHIFT:
-    //     instr->x64->ty = X64_INSTR_TY_ASRV;
-    //     instr->x64->asrv = (struct x64_reg_2_source){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
-    //   case IR_OP_BINARY_OP_TY_URSHIFT:
-    //     instr->x64->ty = X64_INSTR_TY_LSRV;
-    //     instr->x64->lsrv = (struct x64_reg_2_source){
-    //         .dest = dest,
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+    instr->x64->ty = X64_INSTR_TY_SHL;
+    instr->x64->shl = (struct x64_shift){
+        .dest = dest,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+    instr->x64->ty = X64_INSTR_TY_SAR;
+    instr->x64->sar = (struct x64_shift){
+        .dest = dest,
+    };
+    break;
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+    instr->x64->ty = X64_INSTR_TY_SHR;
+    instr->x64->shr = (struct x64_shift){
+        .dest = dest,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_AND:
     instr->x64->ty = X64_INSTR_TY_AND;
     instr->x64->and = (struct x64_alu_reg){
@@ -1049,9 +947,9 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_OR:
     instr->x64->ty = X64_INSTR_TY_OR;
     instr->x64->or = (struct x64_alu_reg){
-        .dest = dest,
-        .rhs = rhs,
-    };
+                       .dest = dest,
+                       .rhs = rhs,
+                   };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
     instr->x64->ty = X64_INSTR_TY_EOR;
@@ -2249,222 +2147,188 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 // // FIXME: do things more smarter
 // #define X64_TARGET (X64_MACOS_TARGET)
 
-// static void codegen_prologue(struct codegen_state *state) {
-//   struct ir_func *ir = state->ir;
+static void codegen_prologue(struct codegen_state *state) {
+  struct ir_func *ir = state->ir;
 
-//   // TODO: super inefficient
-//   bool nonvolatile_registers_used =
-//       (bitset_lzcnt(ir->reg_usage.gp_registers_used) <
-//        X64_TARGET.reg_info.gp_registers.num_nonvolatile) ||
-//       (bitset_lzcnt(ir->reg_usage.fp_registers_used) <
-//        X64_TARGET.reg_info.fp_registers.num_nonvolatile);
+  const struct target *target = state->ir->unit->target;
 
-//   bool leaf = !(nonvolatile_registers_used || ir->num_locals ||
-//                 ir->flags & IR_FUNC_FLAG_MAKES_CALL);
+  // TODO: super inefficient
+  bool nonvolatile_registers_used =
+      (bitset_lzcnt(ir->reg_usage.gp_registers_used) <
+       target->reg_info.gp_registers.num_nonvolatile) ||
+      (bitset_lzcnt(ir->reg_usage.fp_registers_used) <
+       target->reg_info.fp_registers.num_nonvolatile);
 
-//   size_t stack_size = state->stack_args_size;
-//   stack_size =
-//       ROUND_UP(stack_size + ir->total_locals_size, X64_STACK_ALIGNMENT);
+  bool leaf = !(nonvolatile_registers_used || ir->num_locals ||
+                ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
-//   const size_t LR_OFFSET = 2;
-//   struct x64_prologue_info info = {.prologue_generated = !leaf,
-//                                        .saved_gp_registers = 0,
-//                                        .saved_fp_registers = 0,
-//                                        .save_start = stack_size,
-//                                        .lr_offset = LR_OFFSET,
-//                                        .stack_size = stack_size};
+  size_t stack_size = state->stack_args_size;
+  stack_size =
+      ROUND_UP(stack_size + ir->total_locals_size, X64_STACK_ALIGNMENT);
 
-//   if (!info.prologue_generated) {
-//     state->prologue_info = info;
-//     return;
-//   }
+  struct x64_prologue_info info = {.prologue_generated = !leaf,
+                                   .saved_gp_registers = 0,
+                                   .saved_fp_registers = 0,
+                                   .save_start = stack_size,
+                                   .stack_size = stack_size};
 
-//   struct bitset_iter gp_iter =
-//       bitset_iter(ir->reg_usage.gp_registers_used,
-//                   X64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
+  if (!info.prologue_generated) {
+    state->prologue_info = info;
+    return;
+  }
 
-//   size_t i;
-//   while (bitset_iter_next(&gp_iter, &i)) {
-//     info.saved_gp_registers |= (1 << i);
-//     info.stack_size += 8;
-//   }
+  struct bitset_iter gp_iter =
+      bitset_iter(ir->reg_usage.gp_registers_used,
+                  target->reg_info.gp_registers.num_nonvolatile, true);
 
-//   struct bitset_iter fp_iter =
-//       bitset_iter(ir->reg_usage.fp_registers_used,
-//                   X64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+  size_t i;
+  while (bitset_iter_next(&gp_iter, &i)) {
+    info.saved_gp_registers |= (1 << i);
+    info.stack_size += 8;
+  }
 
-//   while (bitset_iter_next(&fp_iter, &i)) {
-//     info.saved_fp_registers |= (1 << i);
-//     info.stack_size += 8;
-//   }
+  struct bitset_iter fp_iter =
+      bitset_iter(ir->reg_usage.fp_registers_used,
+                  target->reg_info.fp_registers.num_nonvolatile, true);
 
-//   // need to save x29 and x30
-//   info.stack_size += 16;
+  while (bitset_iter_next(&fp_iter, &i)) {
+    info.saved_fp_registers |= (1 << i);
+    info.stack_size += 8;
+  }
 
-//   struct instr *save_lr_x30 = alloc_instr(state->func);
-//   save_lr_x30->x64->ty = X64_INSTR_TY_STORE_PAIR_IMM;
-//   save_lr_x30->x64->stp_imm = (struct x64_store_pair_imm){
-//       .mode = X64_ADDRESSING_MODE_PREINDEX,
-//       .imm = -info.lr_offset,
-//       .source = {FRAME_PTR_REG, RET_PTR_REG},
-//       .addr = STACK_PTR_REG,
-//   };
+  // need to save rbp
+  info.stack_size += 8;
 
-//   info.stack_size = ROUND_UP(info.stack_size, X64_STACK_ALIGNMENT);
+  struct instr *save_rbp = alloc_instr(state->func);
+  save_rbp->x64->ty = X64_INSTR_TY_PUSH;
+  save_rbp->x64->push = (struct x64_push){.source = FRAME_PTR_REG};
 
-//   // also save stack pointer into frame pointer as required by ABI
-//   // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
-//   // so `add x29, sp, #x` is used instead
-//   struct instr *save_x29 = alloc_instr(state->func);
-//   save_x29->x64->ty = X64_INSTR_TY_ADD_IMM;
-//   save_x29->x64->add_imm = (struct x64_addsub_imm){
-//       .dest = (struct x64_reg){.ty = X64_REG_TY_X, .idx = 29},
-//       .source = STACK_PTR_REG,
-//       .imm = info.lr_offset * 8,
-//       .shift = 0};
+  info.stack_size = ROUND_UP(info.stack_size, X64_STACK_ALIGNMENT);
 
-//   size_t stack_to_sub = info.stack_size - 16; // from the pre-index lr
-//   if (stack_to_sub) {
-//     if (stack_to_sub > MAX_IMM_SIZE) {
-//       codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
-//     } else {
-//       struct instr *sub_stack = alloc_instr(state->func);
-//       sub_stack->x64->ty = X64_INSTR_TY_SUB_IMM;
-//       sub_stack->x64->sub_imm =
-//           (struct x64_addsub_imm){.dest = STACK_PTR_REG,
-//                                       .source = STACK_PTR_REG,
-//                                       .imm = stack_to_sub,
-//                                       .shift = 0};
-//     }
+  size_t stack_to_sub = info.stack_size;
+  if (stack_to_sub) {
+    if (stack_to_sub > MAX_IMM_SIZE) {
+      codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
+    } else {
+      struct instr *sub_stack = alloc_instr(state->func);
+      sub_stack->x64->ty = X64_INSTR_TY_SUB_IMM;
+      sub_stack->x64->sub_imm =
+          (struct x64_alu_imm){.dest = STACK_PTR_REG, .imm = stack_to_sub};
+    }
 
-//     size_t save_idx = 0;
+    size_t save_idx = 0;
 
-//     struct bitset_iter gp_reg_iter =
-//         bitset_iter(ir->reg_usage.gp_registers_used,
-//                     X64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
+    struct bitset_iter gp_reg_iter =
+        bitset_iter(ir->reg_usage.gp_registers_used,
+                    target->reg_info.gp_registers.num_nonvolatile, true);
 
-//     size_t idx;
-//     while (bitset_iter_next(&gp_reg_iter, &idx)) {
-//       // guaranteed to be mod 8
-//       size_t offset = (info.save_start / 8) + save_idx++;
+    size_t idx;
+    while (bitset_iter_next(&gp_reg_iter, &idx)) {
+      // guaranteed to be mod 8
+      size_t offset = (info.save_start / 8) + save_idx++;
 
-//       struct instr *save = alloc_instr(state->func);
-//       save->x64->ty = X64_INSTR_TY_STORE_IMM;
-//       save->x64->str_imm = (struct x64_store_imm){
-//           .mode = X64_ADDRESSING_MODE_OFFSET,
-//           .imm = offset,
-//           .source = (struct x64_reg){.ty = X64_REG_TY_X,
-//                                          .idx = translate_reg_idx(
-//                                              idx, IR_REG_TY_INTEGRAL)},
-//           .addr = STACK_PTR_REG,
-//       };
-//     }
+      struct instr *save = alloc_instr(state->func);
+      save->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+      save->x64->mov_store_imm = (struct x64_mov_store_imm){
+          .imm = offset * 8,
+          .source = (struct x64_reg){.ty = X64_REG_TY_R,
+                                     .idx = translate_reg_idx(
+                                         idx, IR_REG_TY_INTEGRAL)},
+          .addr = STACK_PTR_REG,
+      };
+    }
 
-//     struct bitset_iter fp_reg_iter =
-//         bitset_iter(ir->reg_usage.fp_registers_used,
-//                     X64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+    struct bitset_iter fp_reg_iter =
+        bitset_iter(ir->reg_usage.fp_registers_used,
+                    target->reg_info.fp_registers.num_nonvolatile, true);
 
-//     while (bitset_iter_next(&fp_reg_iter, &idx)) {
-//       // guaranteed to be mod 8
-//       size_t offset = (info.save_start / 8) + save_idx++;
+    while (bitset_iter_next(&fp_reg_iter, &idx)) {
+      // guaranteed to be mod 8
 
-//       struct instr *save = alloc_instr(state->func);
-//       save->x64->ty = X64_INSTR_TY_STORE_IMM;
-//       save->x64->str_imm = (struct x64_store_imm){
-//           .mode = X64_ADDRESSING_MODE_OFFSET,
-//           .imm = offset,
-//           .source = (struct x64_reg){.ty = X64_REG_TY_D,
-//                                          .idx = translate_reg_idx(
-//                                              idx, IR_REG_TY_INTEGRAL)},
-//           .addr = STACK_PTR_REG,
-//       };
-//     }
-//   }
+      TODO("fp restore x64");
 
-//   state->prologue_info = info;
-// }
+      // size_t offset = (info.save_start / 8) + save_idx++;
 
-// static void codegen_epilogue(struct codegen_state *state) {
-//   const struct x64_prologue_info *prologue_info = &state->prologue_info;
+      // struct instr *save = alloc_instr(state->func);
+      // save->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+      // save->x64->mov_store_imm = (struct x64_store_imm){
+      //     .imm = offset,
+      //     .source = (struct x64_reg){.ty = X64_REG_TY_D,
+      //                                    .idx = translate_reg_idx(
+      //                                        idx, IR_REG_TY_INTEGRAL)},
+      //     .addr = STACK_PTR_REG,
+      // };
+    }
+  }
 
-//   if (!prologue_info->prologue_generated) {
-//     return;
-//   }
+  state->prologue_info = info;
+}
 
-//   unsigned long max_gp_saved = sizeof(prologue_info->saved_gp_registers) * 8
-//   -
-//                                lzcnt(prologue_info->saved_gp_registers);
+static void codegen_epilogue(struct codegen_state *state) {
+  const struct x64_prologue_info *prologue_info = &state->prologue_info;
 
-//   size_t save_idx = 0;
-//   for (size_t i = 0; i < max_gp_saved; i++) {
-//     // FIXME: loop should start at i=first non volatile
-//     if (!NTH_BIT(prologue_info->saved_gp_registers, i)) {
-//       continue;
-//     }
+  if (!prologue_info->prologue_generated) {
+    return;
+  }
 
-//     size_t offset = (prologue_info->save_start / 8) + save_idx++;
+  unsigned long max_gp_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
+                               lzcnt(prologue_info->saved_gp_registers);
 
-//     struct instr *restore = alloc_instr(state->func);
-//     restore->x64->ty = X64_INSTR_TY_LOAD_IMM;
-//     restore->x64->ldr_imm = (struct x64_load_imm){
-//         .mode = X64_ADDRESSING_MODE_OFFSET,
-//         .imm = offset,
-//         .dest = (struct x64_reg){.ty = X64_REG_TY_X,
-//                                      .idx = translate_reg_idx(
-//                                          i, IR_REG_TY_INTEGRAL)},
-//         .addr = STACK_PTR_REG,
-//     };
-//   }
+  size_t save_idx = 0;
+  for (size_t i = 0; i < max_gp_saved; i++) {
+    // FIXME: loop should start at i=first non volatile
+    if (!NTH_BIT(prologue_info->saved_gp_registers, i)) {
+      continue;
+    }
 
-//   unsigned long max_fp_saved = sizeof(prologue_info->saved_fp_registers) * 8
-//   -
-//                                lzcnt(prologue_info->saved_fp_registers);
+    size_t offset = (prologue_info->save_start / 8) + save_idx++;
 
-//   save_idx = 0;
-//   for (size_t i = 0; i < max_fp_saved; i++) {
-//     // FIXME: loop should start at i=first non volatile
-//     if (!NTH_BIT(prologue_info->saved_fp_registers, i)) {
-//       continue;
-//     }
+    struct instr *restore = alloc_instr(state->func);
+    restore->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
+    restore->x64->mov_load_imm = (struct x64_mov_load_imm){
+        .imm = offset * 8,
+        .dest =
+            (struct x64_reg){.ty = X64_REG_TY_R,
+                             .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL)},
+        .addr = STACK_PTR_REG,
+    };
+  }
 
-//     size_t offset = (prologue_info->save_start / 8) + save_idx++;
+  unsigned long max_fp_saved = sizeof(prologue_info->saved_fp_registers) * 8 -
+                               lzcnt(prologue_info->saved_fp_registers);
 
-//     struct instr *restore = alloc_instr(state->func);
-//     restore->x64->ty = X64_INSTR_TY_LOAD_IMM;
-//     restore->x64->ldr_imm = (struct x64_load_imm){
-//         .mode = X64_ADDRESSING_MODE_OFFSET,
-//         .imm = offset,
-//         .dest = (struct x64_reg){.ty = X64_REG_TY_D,
-//                                      .idx = translate_reg_idx(
-//                                          i, IR_REG_TY_INTEGRAL)},
-//         .addr = STACK_PTR_REG,
-//     };
-//   }
+  save_idx = 0;
+  for (size_t i = 0; i < max_fp_saved; i++) {
+    // FIXME: loop should start at i=first non volatile
+    if (!NTH_BIT(prologue_info->saved_fp_registers, i)) {
+      continue;
+    }
 
-//   size_t stack_to_add = prologue_info->stack_size - 16;
-//   if (stack_to_add) {
-//     if (stack_to_add > MAX_IMM_SIZE) {
-//       codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
-//     } else {
-//       struct instr *add_stack = alloc_instr(state->func);
-//       add_stack->x64->ty = X64_INSTR_TY_ADD_IMM;
-//       add_stack->x64->add_imm =
-//           (struct x64_addsub_imm){.dest = STACK_PTR_REG,
-//                                       .source = STACK_PTR_REG,
-//                                       .imm = stack_to_add,
-//                                       .shift = 0};
-//     }
-//   }
+    TODO("fp restore x64");
+    // size_t offset = (prologue_info->save_start / 8) + save_idx++;
 
-//   struct instr *restore_lr_x30 = alloc_instr(state->func);
-//   restore_lr_x30->x64->ty = X64_INSTR_TY_LOAD_PAIR_IMM;
-//   restore_lr_x30->x64->ldp_imm = (struct x64_load_pair_imm){
-//       .mode = X64_ADDRESSING_MODE_POSTINDEX,
-//       .imm = prologue_info->lr_offset,
-//       .dest = {FRAME_PTR_REG, RET_PTR_REG},
-//       .addr = STACK_PTR_REG,
-//   };
-// }
+    // struct instr *restore = alloc_instr(state->func);
+    // restore->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
+    // restore->x64->mov_load_imm = (struct x64_load_imm){
+    //     .imm = offset,
+    //     .dest = (struct x64_reg){.ty = X64_REG_TY_D,
+    //                                  .idx = translate_reg_idx(
+    //                                      i, IR_REG_TY_INTEGRAL)},
+    //     .addr = STACK_PTR_REG,
+    // };
+  }
+
+  size_t stack_to_add = prologue_info->stack_size;
+  if (stack_to_add) {
+    codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
+  }
+
+  struct instr *restore_rbp = alloc_instr(state->func);
+  restore_rbp->x64->ty = X64_INSTR_TY_POP;
+  restore_rbp->x64->pop = (struct x64_pop){
+      .dest = FRAME_PTR_REG,
+  };
+}
 
 #define INTEGRAL_OR_PTRLIKE(var_ty)                                            \
   (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER ||     \
@@ -2479,13 +2343,13 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
 
     if (INTEGRAL_OR_PTRLIKE(var_ty)) {
       if (!is_return_reg(source)) {
+        (void)return_reg_for_ty(0);
         struct instr *mov = alloc_instr(state->func);
 
-        *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
-                                       .mov_reg = {
-                                           .dest = return_reg_for_ty(source.ty),
-                                           .source = source
-                                       }};
+        *mov->x64 =
+            (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
+                               .mov_reg = {.dest = return_reg_for_ty(source.ty),
+                                           .source = source}};
       }
     } else if (var_ty_is_fp(var_ty)) {
       TODO("FP return x64");
@@ -2499,7 +2363,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
     }
   }
 
-  // codegen_epilogue(state);
+  codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
 
@@ -2529,24 +2393,24 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     //   case IR_OP_TY_BITFIELD_EXTRACT:
     //     codegen_bitfield_extract(state, op);
     //     break;
-    //   case IR_OP_TY_LOAD:
-    //     codegen_load_op(state, op);
-    //     break;
-    //   case IR_OP_TY_STORE:
-    //     codegen_store_op(state, op);
-    //     break;
-    //   case IR_OP_TY_ADDR: {
-    //     codegen_addr_op(state, op);
-    //     break;
-    //   }
-    //   case IR_OP_TY_BR_COND: {
-    //     codegen_br_cond_op(state, op);
-    //     break;
-    //   }
-    //   case IR_OP_TY_BR: {
-    //     codegen_br_op(state, op);
-    //     break;
-    //   }
+  case IR_OP_TY_LOAD:
+    codegen_load_op(state, op);
+    break;
+  case IR_OP_TY_STORE:
+    codegen_store_op(state, op);
+    break;
+    // case IR_OP_TY_ADDR: {
+    //   codegen_addr_op(state, op);
+    //   break;
+    // }
+    // case IR_OP_TY_BR_COND: {
+    //   codegen_br_cond_op(state, op);
+    //   break;
+    // }
+  // case IR_OP_TY_BR: {
+  //   codegen_br_op(state, op);
+  //   break;
+  // }
   case IR_OP_TY_CNST: {
     codegen_cnst_op(state, op);
     break;
@@ -2886,6 +2750,7 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
             .func = func,
             .ir = ir_func,
         };
+
         // .ssp = {.ty = X64_REG_TY_X, .idx = 28}};
 
         // state.stack_args_size = 0;
@@ -2914,11 +2779,11 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
           basicblock = basicblock->succ;
         }
 
-        // codegen_prologue(&state);
+        codegen_prologue(&state);
         // codegen_params(&state);
 
-        // func->prologue = state.prologue_info.prologue_generated;
-        // func->stack_size = state.prologue_info.stack_size;
+        func->prologue = state.prologue_info.prologue_generated;
+        func->stack_size = state.prologue_info.stack_size;
 
         basicblock = ir_func->first;
         while (basicblock) {
@@ -3159,12 +3024,35 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
 
     format++;
 
-    if (strncmp(format, "reg", 3) == 0) {
+    if (strncmp(format, "reg_imm_addr", 12) == 0) {
+      struct x64_reg reg = va_arg(list, struct x64_reg);
+      struct x64_reg addr = va_arg(list, struct x64_reg);
+      imm_t imm = va_arg(list, imm_t);
+
+      switch (reg.ty) {
+      case X64_REG_TY_R:
+        fprintf(file, "qword ptr [");
+        break;
+      case X64_REG_TY_E:
+      case X64_REG_TY_RD:
+        fprintf(file, "dword ptr [");
+        break;
+      }
+
+      codegen_fprintf(file, "%reg", addr);
+      if (imm) {
+        codegen_fprintf(file, " + %imm", imm);
+      }
+
+      fprintf(file, "]");
+
+      format += 12;
+    } else if (strncmp(format, "reg", 3) == 0) {
       struct x64_reg reg = va_arg(list, struct x64_reg);
       switch (reg.ty) {
       case X64_REG_TY_R:
         if (reg.idx > 7) {
-          fprintf(file, "r%zud", reg.idx);
+          fprintf(file, "r%zu", reg.idx);
         } else {
           const char *name = reg_names[reg.idx];
           fprintf(file, "r%s", name);
@@ -3196,13 +3084,36 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
   }
 }
 
+static void debug_print_shift(FILE *file, const struct x64_shift *shift) {
+  codegen_fprintf(file, " %reg, cl", shift->dest);
+}
 
-static void debug_print_alu_unary(FILE *file, const struct x64_alu_unary *alu_unary) {
+static void debug_print_alu_unary(FILE *file,
+                                  const struct x64_1_reg *alu_unary) {
   codegen_fprintf(file, " %reg", alu_unary->dest);
 }
 
 static void debug_print_alu_reg(FILE *file, const struct x64_alu_reg *alu_reg) {
   codegen_fprintf(file, " %reg, %reg", alu_reg->dest, alu_reg->rhs);
+}
+
+static void debug_print_alu_imm(FILE *file, const struct x64_alu_imm *alu_imm) {
+  codegen_fprintf(file, " %reg, %imm", alu_imm->dest, alu_imm->imm);
+}
+
+static void
+debug_print_mov_load_imm(FILE *file,
+                         const struct x64_mov_load_imm *mov_load_imm) {
+  codegen_fprintf(file, " %reg, %reg_imm_addr", mov_load_imm->dest,
+                  mov_load_imm->dest, mov_load_imm->addr, mov_load_imm->imm);
+}
+
+static void
+debug_print_mov_store_imm(FILE *file,
+                          const struct x64_mov_store_imm *mov_store_imm) {
+  codegen_fprintf(file, " %reg_imm_addr, %reg", mov_store_imm->source,
+                  mov_store_imm->addr, mov_store_imm->imm,
+                  mov_store_imm->source);
 }
 
 static void debug_print_mov_imm(FILE *file, const struct x64_mov_imm *mov_imm) {
@@ -3213,14 +3124,43 @@ static void debug_print_mov_reg(FILE *file, const struct x64_mov_reg *mov_reg) {
   codegen_fprintf(file, " %reg, %reg", mov_reg->dest, mov_reg->source);
 }
 
+
+static void debug_print_push(FILE *file, const struct x64_push *push) {
+  codegen_fprintf(file, " %reg", push->source);
+}
+
+static void debug_print_pop(FILE *file, const struct x64_pop *pop) {
+  codegen_fprintf(file, " %reg", pop->dest);
+}
+
 static void debug_print_instr(FILE *file,
                               UNUSED_ARG(const struct codegen_function *func),
                               const struct instr *instr) {
 
   switch (instr->x64->ty) {
+  case X64_INSTR_TY_SHL:
+    fprintf(file, "shl");
+    debug_print_shift(file, &instr->x64->shl);
+    break;
+  case X64_INSTR_TY_SHR:
+    fprintf(file, "shr");
+    debug_print_shift(file, &instr->x64->shr);
+    break;
+  case X64_INSTR_TY_SAR:
+    fprintf(file, "sar");
+    debug_print_shift(file, &instr->x64->sar);
+    break;
   case X64_INSTR_TY_MOV_IMM:
     fprintf(file, "mov");
     debug_print_mov_imm(file, &instr->x64->mov_imm);
+    break;
+  case X64_INSTR_TY_MOV_STORE_IMM:
+    fprintf(file, "mov");
+    debug_print_mov_store_imm(file, &instr->x64->mov_store_imm);
+    break;
+  case X64_INSTR_TY_MOV_LOAD_IMM:
+    fprintf(file, "mov");
+    debug_print_mov_load_imm(file, &instr->x64->mov_load_imm);
     break;
   case X64_INSTR_TY_MOV_REG:
     fprintf(file, "mov");
@@ -3248,11 +3188,27 @@ static void debug_print_instr(FILE *file,
     break;
   case X64_INSTR_TY_NOT:
     fprintf(file, "not");
-    debug_print_alu_unary(file, &instr->x64->not);
+    debug_print_alu_unary(file, &instr->x64->not );
     break;
   case X64_INSTR_TY_NEG:
     fprintf(file, "neg");
     debug_print_alu_unary(file, &instr->x64->neg);
+    break;
+  case X64_INSTR_TY_PUSH:
+    fprintf(file, "push");
+    debug_print_push(file, &instr->x64->push);
+    break;
+  case X64_INSTR_TY_POP:
+    fprintf(file, "pop");
+    debug_print_pop(file, &instr->x64->pop);
+    break;
+  case X64_INSTR_TY_ADD_IMM:
+    fprintf(file, "add");
+    debug_print_alu_imm(file, &instr->x64->add_imm);
+    break;
+  case X64_INSTR_TY_SUB_IMM:
+    fprintf(file, "sub");
+    debug_print_alu_imm(file, &instr->x64->sub_imm);
     break;
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");

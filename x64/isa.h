@@ -20,18 +20,11 @@ struct x64_raw_instr {
 #define IMM32(v) ((uint32_t)(v))
 #define IMM64(v) ((uint64_t)(v))
 
-// #define ADD_REG()
-
-#define MOD_REG ((size_t)0b11)
-
 #define NOP ((struct x64_raw_instr){.len = 1, .buff = {0x90}})
 
 #define IMM(imm, bitc)                                                         \
   (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate did not fit!"),            \
    CLAMP_BITS(imm, bitc))
-
-#define MODRM(mod, reg, rm)                                                    \
-  U8((IMM(mod, 2) << 6) | (IMM(reg, 3) << 3) | IMM(rm, 3))
 
 #define REX_W_64_OP ((size_t)0b1)
 #define REX_W_32_OP ((size_t)0b0)
@@ -45,15 +38,36 @@ struct x64_raw_instr {
 #define REX_X_4B_RM ((size_t)0b1)
 #define REX_X_2B_RM ((size_t)0b0)
 
-
-#define NBYTE(imm, n) (uint8_t)(((imm) >> ((n) * 8)) & 0xFF)
-
-#define IMM_BYTES32(imm) (IMM((imm), 32), NBYTE((imm), 0)), NBYTE((imm), 1), NBYTE((imm), 2), NBYTE((imm), 3)
-
-
 #define REX(W, R, X, B)                                                        \
   U8((0b0100 << 4) | (IMM((W), 1) << 3) | (IMM((R), 1) << 2) |                 \
      (IMM((X), 1) << 1) | IMM((B), 1))
+
+#define NEEDS_REX(reg) ((reg).ty == X64_REG_TY_R || (reg).ty == X64_REG_TY_RD)
+#define REX_W(reg) ((reg).ty == X64_REG_TY_R ? (size_t)1 : (size_t)0)
+
+#define MOD_REG ((size_t)0b11)
+#define MOD_RM_IMM8 ((size_t)0b01)
+#define MOD_RM_IMM32 ((size_t)0b10)
+
+#define MODRM(mod, reg, rm)                                                    \
+  U8((IMM(mod, 2) << 6) | (IMM(reg, 3) << 3) | IMM(rm, 3))
+
+#define SIB_SCALE_1 ((size_t)(0b00))
+#define SIB_INDEX_NONE ((size_t)(0b100))
+#define SIB_BASE_RSP ((size_t)(REG_IDX_SP))
+
+#define SIB(scale, index, base)                                                \
+  U8((IMM(scale, 2) << 6) | (IMM(index, 3) << 3) | IMM(base, 3))
+
+#define NEEDS_SIB(reg) ((reg).ty == X64_REG_TY_R && (reg).idx == REG_IDX_SP)
+
+#define NBYTE(imm, n) ((uint8_t)(((imm) >> ((n) * 8)) & 0xFF))
+
+#define IMM_BYTES8(imm) (IMM((imm), 32), NBYTE((imm), 0))
+#define IMM_BYTES16(imm) NBYTE((imm), 0), NBYTE((imm), 1)
+#define IMM_BYTES32(imm)                                                       \
+  NBYTE((imm), 0), NBYTE((imm), 1), NBYTE((imm), 2),         \
+      NBYTE((imm), 3)
 
 #define ALU_RM32(opc, dest, rhs)                                               \
   ((struct x64_raw_instr){                                                     \
@@ -62,111 +76,198 @@ struct x64_raw_instr {
 #define ALU_RM32_REX(opc, dest, rhs)                                           \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {                                                                \
-          REX((size_t)0, (size_t)((rhs).ty == X64_REG_TY_RD), (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),    \
-          (opc), \
-          MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}})
+      .buff = {REX((size_t)0, (size_t)((rhs).ty == X64_REG_TY_RD), (size_t)0,  \
+                   (size_t)((dest).ty == X64_REG_TY_RD)),                      \
+               (opc), MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}})
 
 #define ALU_RM64_REX(opc, dest, rhs)                                           \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {REX((size_t)1, (size_t)((rhs).idx > 7), (size_t)0, (size_t)((dest).idx > 7)), (opc),                \
-               MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}})
+      .buff = {REX((size_t)1, (size_t)((rhs).idx > 7), (size_t)0,              \
+                   (size_t)((dest).idx > 7)),                                  \
+               (opc), MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}})
 
 #define ALU_RM(opc, dest, rhs)                                                 \
-  ((dest).ty == X64_REG_TY_R                                                   \
-       ? ALU_RM64_REX((opc), (dest), (rhs))                                    \
-       : (NEEDS_REX(dest) || NEEDS_REX(rhs) ? ALU_RM32_REX((opc), (dest), (rhs))      \
-                                     : ALU_RM32((opc), (dest), (rhs))))
+  ((dest).ty == X64_REG_TY_R ? ALU_RM64_REX((opc), (dest), (rhs))              \
+                             : (NEEDS_REX(dest) || NEEDS_REX(rhs)              \
+                                    ? ALU_RM32_REX((opc), (dest), (rhs))       \
+                                    : ALU_RM32((opc), (dest), (rhs))))
 
-#define ADD_REG(dest, rhs) ALU_RM(0x1, (dest), (rhs))
-#define SUB_REG(dest, rhs) ALU_RM(0x29, (dest), (rhs))
+#define ADD_REG(dest, rhs) ALU_RM((size_t)0x1, (dest), (rhs))
+#define SUB_REG(dest, rhs) ALU_RM((size_t)0x29, (dest), (rhs))
 
-#define EOR_REG(dest, rhs) ALU_RM(0x31, (dest), (rhs))
-#define OR_REG(dest, rhs) ALU_RM(0x09, (dest), (rhs))
-#define AND_REG(dest, rhs) ALU_RM(0x21, (dest), (rhs))
+#define EOR_REG(dest, rhs) ALU_RM((size_t)0x31, (dest), (rhs))
+#define OR_REG(dest, rhs) ALU_RM((size_t)0x09, (dest), (rhs))
+#define AND_REG(dest, rhs) ALU_RM((size_t)0x21, (dest), (rhs))
 
-#define MOV_REG(dest, rhs) ALU_RM(0x89, (dest), (rhs))
+#define MOV_REG(dest, rhs) ALU_RM((size_t)0x89, (dest), (rhs))
 
-#define ALU_IMM32(opc, dest, imm)                                               \
+#define ALU_IMM32(opc0, opc1, dest, imm)                                                           \
   ((struct x64_raw_instr){                                                     \
-      .len = 2, .buff = {(opc), MODRM(MOD_REG, (rhs).idx, (dest).idx)}, IMM_BYTES32((imm))}})
+      .len = 6, .buff = {(opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx), IMM_BYTES32((imm))} \
+  })
 
-#define ALU_IMM32_REX(opc, dest, imm)                                           \
+#define ALU_IMM32_REX(opc0, opc1, dest, imm)                                          \
   ((struct x64_raw_instr){                                                     \
-      .len = 3,                                                                \
-      .buff = {                                                                \
-          REX((size_t)0, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),    \
-          (opc), \
-          MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}, IMM_BYTES32(imm)}})
-
-#define ALU_IMM64_REX(opc, dest, imm)                                           \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3,                                                                \
-      .buff = { \
-          REX((size_t)0, (size_t)0, (size_t)0, ((dest).ty == X64_REG_TY_RD)),    \
-               MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8), IMM_BYTES32(imm)}})
-
-#define ALU_IMM(opc, dest, imm)                                                 \
-  ((dest).ty == X64_REG_TY_R                                                   \
-       ? ALU_IMM64_REX((opc), (dest), (imm))                                    \
-       : (NEEDS_REX(dest) ? ALU_IMM32_REX((opc), (dest), (imm))      \
-                                     : ALU_IMM32((opc), (dest), (imm))))
-
-#define MOV_IMM32(dest, imm)                                               \
-  ((struct x64_raw_instr){                                                     \
-      .len = 5, .buff = {U8(0xB8 + (dest.idx)), IMM_BYTES32((imm))}})
-
-#define MOV_IMM32_REX(dest, imm)                                           \
-  ((struct x64_raw_instr){                                                     \
-      .len = 6,                                                                \
-      .buff = {                                                                \
-          REX((size_t)0, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),    \
-          U8(0xB8 + (dest.idx) % 8), \
-          IMM_BYTES32((imm))}})
-
-#define MOV_IMM64_REX(dest, imm)                                           \
-  ((struct x64_raw_instr){                                                     \
-      .len = 6,                                                                \
-      .buff = {REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)), U8(0xB8 + (dest.idx) % 8),                \
-               IMM_BYTES32((imm))}})
-
-#define MOV_IMM(dest, imm)                                                 \
-  ((dest).ty == X64_REG_TY_R                                                   \
-       ? MOV_IMM64_REX((dest), (imm))                                    \
-       : (NEEDS_REX(dest) ? MOV_IMM32_REX((dest), (imm))      \
-                                     : MOV_IMM32((dest), (imm))))
-                  
-#define NEEDS_REX(reg) ((reg).ty == X64_REG_TY_R || (reg).ty == X64_REG_TY_RD)
-
-
-#define ALU_UNARY_RM32(opc0, opc1, dest)                                               \
-  ((struct x64_raw_instr){                                                     \
-      .len = 2, .buff = {(opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx)}})
-
-#define ALU_UNARY_RM32_REX(opc0, opc1, dest)                                           \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3,                                                                \
+      .len = 7,                                                                \
       .buff = {                                                                \
           REX((size_t)0, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),    \
           (opc0), \
-          MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8)}})
+          MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8), IMM_BYTES32(imm)}    \
+  })
 
-#define ALU_UNARY_RM64_REX(opc0, opc1, dest)                                           \
+#define ALU_IMM64_REX(opc0, opc1, dest, imm)                                          \
+  ((struct x64_raw_instr){                                                     \
+      .len = 7,                                                                \
+      .buff = {                                                                \
+          REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),  \
+          (opc0),\
+          MODRM(MOD_REG, (opc1), (dest).idx % 8), IMM_BYTES32(imm)}})
+
+#define ALU_IMM(opc0, opc1, dest, imm)                                                \
+  ((dest).ty == X64_REG_TY_R                                                   \
+       ? ALU_IMM64_REX((opc0), (opc1), (dest), (imm))                                   \
+       : (NEEDS_REX(dest) ? ALU_IMM32_REX((opc0), (opc1), (dest), (imm))                \
+                          : ALU_IMM32((opc0), (opc1), (dest), (imm))))
+
+#define ADD_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b000, (dest), (imm))
+#define SUB_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b101, (dest), (imm))
+
+#define MOV_IMM32(dest, imm)                                                   \
+  ((struct x64_raw_instr){                                                     \
+      .len = 5, .buff = {U8(0xB8 + (dest.idx)), IMM_BYTES32((imm))}})
+
+#define MOV_IMM32_REX(dest, imm)                                               \
+  ((struct x64_raw_instr){.len = 6,                                            \
+                          .buff = {REX((size_t)0, (size_t)0, (size_t)0,        \
+                                       (size_t)((dest).ty == X64_REG_TY_RD)),  \
+                                   U8(0xB8 + (dest.idx) % 8),                  \
+                                   IMM_BYTES32((imm))}})
+
+#define MOV_IMM64_REX(dest, imm)                                               \
+  ((struct x64_raw_instr){                                                     \
+      .len = 6,                                                                \
+      .buff = {REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)), \
+               U8(0xB8 + (dest.idx) % 8), IMM_BYTES32((imm))}})
+
+#define MOV_IMM(dest, imm)                                                     \
+  ((dest).ty == X64_REG_TY_R ? MOV_IMM64_REX((dest), (imm))                    \
+                             : (NEEDS_REX(dest) ? MOV_IMM32_REX((dest), (imm)) \
+                                                : MOV_IMM32((dest), (imm))))
+
+#define ALU_UNARY_RM32(opc0, opc1, dest)                                       \
+  ((struct x64_raw_instr){                                                     \
+      .len = 2, .buff = {(opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx)}})
+
+#define ALU_UNARY_RM32_REX(opc0, opc1, dest)                                   \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)), (opc0),                \
-               MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8)}})
+      .buff = {REX((size_t)0, (size_t)0, (size_t)0,                            \
+                   (size_t)((dest).ty == X64_REG_TY_RD)),                      \
+               (opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8)}})
 
-#define ALU_UNARY_RM(opc0, opc1, dest)                                                 \
+#define ALU_UNARY_RM64_REX(opc0, opc1, dest)                                   \
+  ((struct x64_raw_instr){                                                     \
+      .len = 3,                                                                \
+      .buff = {REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)), \
+               (opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8)}})
+
+#define ALU_UNARY_RM(opc0, opc1, dest)                                         \
   ((dest).ty == X64_REG_TY_R                                                   \
-       ? ALU_UNARY_RM64_REX((opc0), (opc1), (dest))                                    \
-       : (NEEDS_REX(dest) ? ALU_UNARY_RM32_REX((opc0), (opc1), (dest))      \
-                                     : ALU_UNARY_RM32((opc0), (opc1), (dest))))
+       ? ALU_UNARY_RM64_REX((opc0), (opc1), (dest))                            \
+       : (NEEDS_REX(dest) ? ALU_UNARY_RM32_REX((opc0), (opc1), (dest))         \
+                          : ALU_UNARY_RM32((opc0), (opc1), (dest))))
 
 #define NOT_REG(dest) ALU_UNARY_RM(0xF7, 0b010, dest)
 #define NEG_REG(dest) ALU_UNARY_RM(0xF7, 0b010, dest)
-                                     
+
+#define SHL(dest) ALU_UNARY_RM(0xD3, 0b100, dest)
+#define SHR(dest) ALU_UNARY_RM(0xD3, 0b101, dest)
+#define SAR(dest) ALU_UNARY_RM(0xD3, 0b111, dest)
+
+#define REG_W(reg) ((reg.ty == X64_REG_TY_R) ? (size_t)1 : (size_t)0)
+
+#define MOV_MEM_IMM8(opc, reg, addr, imm)                                    \
+  ((struct x64_raw_instr){                                                     \
+      .len = 3,                                                                \
+      .buff = {(opc), MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               IMM_BYTES8((imm))}})
+
+#define MOV_MEM_IMM32(opc, reg, addr, imm)                                   \
+  ((struct x64_raw_instr){                                                     \
+      .len = 6,                                                                \
+      .buff = {(opc), MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               IMM_BYTES32((imm))}})
+
+#define MOV_MEM_IMM8_REX(opc, reg, addr, imm)                                \
+  ((struct x64_raw_instr){                                                     \
+      .len = 4,                                                                \
+      .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0, (size_t)((addr).idx > 7)),  \
+               (opc), MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               IMM_BYTES8((imm))}})
+
+#define MOV_MEM_IMM32_REX(opc, reg, addr, imm)                               \
+  ((struct x64_raw_instr){                                                     \
+      .len = 7,                                                                \
+      .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0, (size_t)((addr).idx > 7)),  \
+               (opc), MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               IMM_BYTES32((imm))}})
+
+#define MOV_MEM_IMM8_SIB(opc, reg, addr, imm)                                \
+  ((struct x64_raw_instr){                                                     \
+      .len = 4,                                                                \
+      .buff = {(opc), MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
+               IMM_BYTES8((imm))}})
+
+#define MOV_MEM_IMM32_SIB(opc, reg, addr, imm)                               \
+  ((struct x64_raw_instr){                                                     \
+      .len = 7,                                                                \
+      .buff = {(opc), MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
+               IMM_BYTES32((imm))}})
+
+#define MOV_MEM_IMM8_REX_SIB(opc, reg, addr, imm)                            \
+  ((struct x64_raw_instr){                                                     \
+      .len = 5,                                                                \
+      .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0, (size_t)((addr).idx > 7)),  \
+               (opc), MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
+               IMM_BYTES8((imm))}})
+
+#define MOV_MEM_IMM32_REX_SIB(opc, reg, addr, imm)                           \
+  ((struct x64_raw_instr){                                                     \
+      .len = 8,                                                                \
+      .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0, (size_t)((addr).idx > 7)),  \
+               (opc), MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
+               IMM_BYTES32((imm))}})
+
+#define MOV_MEM_IMM_SIB(opc, reg, addr, imm)                                    \
+  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+                        ? MOV_MEM_IMM8_REX_SIB((opc), (reg), (addr), (imm))  \
+                    : MOV_MEM_IMM8_SIB((opc), (reg), (addr), (imm)))          \
+      : (NEEDS_REX((reg))                                                      \
+                ? MOV_MEM_IMM32_REX_SIB((opc), (reg), (addr), (imm))         \
+            : MOV_MEM_IMM32_SIB((opc), (reg), (addr), (imm)))                 \
+
+#define MOV_MEM_IMM_NOSIB(opc, reg, addr, imm)                                    \
+  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+                        ? MOV_MEM_IMM8_REX((opc), (reg), (addr), (imm))  \
+                    : MOV_MEM_IMM8((opc), (reg), (addr), (imm)))          \
+      : (NEEDS_REX((reg))                                                      \
+                ? MOV_MEM_IMM32_REX((opc), (reg), (addr), (imm))         \
+            : MOV_MEM_IMM32((opc), (reg), (addr), (imm)))                 \
+
+#define MOV_MEM_IMM(opc, reg, addr, imm)                                    \
+  ((NEEDS_SIB(addr)) ? MOV_MEM_IMM_SIB((opc), (reg), (addr), (imm)) : MOV_MEM_IMM_NOSIB((opc), (reg), (addr), (imm)))
+
+
+#define MOV_STORE_IMM(reg, addr, imm)                                        \
+  MOV_MEM_IMM((size_t)0x89, (reg), (addr), (imm))
+#define MOV_LOAD_IMM(reg, addr, imm)                                         \
+  MOV_MEM_IMM((size_t)0x8B, (reg), (addr), (imm))
+
 #define JMP_REL32(disp)                                                        \
   ((struct x64_raw_instr){.len = 5,                                            \
                           .buff = {0xe9, (uint8_t)((disp) & 0xFF),             \
@@ -175,6 +276,21 @@ struct x64_raw_instr {
                                    (uint8_t)(((disp) >> 24) & 0xFF)}})
 
 #define RET ((struct x64_raw_instr){.len = 1, .buff = {0xc3}})
+
+#define PUSH_REG64(reg) \
+  (reg).idx < 8 ? \
+  ((struct x64_raw_instr){.len = 1,                                            \
+                          .buff = {0x50 + U8((reg).idx)}}) :  \
+    ((struct x64_raw_instr){.len = 2,                                            \
+                              .buff = {0x41, 0x50 + U8((reg).idx)}}) 
+
+#define POP_REG64(reg) \
+  (reg).idx < 8 ? \
+  ((struct x64_raw_instr){.len = 1,                                            \
+                          .buff = {0x58 + U8((reg).idx)}}) :  \
+    ((struct x64_raw_instr){.len = 2,                                            \
+                              .buff = {0x41, 0x58 + U8((reg).idx)}}) 
+
 
 #define CALL_REL32(disp)                                                       \
   ((struct x64_raw_instr){.len = 5,                                            \
