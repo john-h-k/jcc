@@ -68,6 +68,8 @@ enum x64_instr_ty {
   X64_INSTR_TY_SHR,
   X64_INSTR_TY_SAR,
 
+  X64_INSTR_TY_JMP,
+
   X64_INSTR_TY_RET,
 };
 
@@ -236,6 +238,10 @@ struct x64_instr {
 
     union {
       struct x64_mov_reg mov_reg, movsx;
+    };
+
+    union {
+      struct x64_branch branch, jmp;
     };
   };
 };

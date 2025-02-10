@@ -726,50 +726,48 @@ static void codegen_sub_imm(struct codegen_state *state, struct x64_reg dest,
 //   }
 // }
 
-// static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op)
-// {
-//   struct instr *instr = alloc_instr(state->func);
+static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
+  // struct instr *instr = alloc_instr(state->func);
 
-//   // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
-//   // we represent this as just the `true` part of the `br.cond`, and then a
-//   `br`
-//   // after branching to the false target
+  // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
+  // we represent this as just the `true` part of the `br.cond`, and then a
+  // `br`
+  // after branching to the false target
 
-//   struct ir_basicblock *true_target =
-//   op->stmt->basicblock->split.true_target; struct ir_basicblock *false_target
-//   = op->stmt->basicblock->split.false_target;
+  // struct ir_basicblock *true_target =
+  // op->stmt->basicblock->split.true_target; struct ir_basicblock *false_target
+  // = op->stmt->basicblock->split.false_target;
 
-//   if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
-//     // emit based on flags
-//     enum x64_cond cond = get_cond_for_op(op->br_cond.cond);
-//     instr->x64->ty = X64_INSTR_TY_B_COND;
-//     instr->x64->b_cond = (struct x64_conditional_branch){
-//         .cond = cond, .target = true_target};
-//   } else {
-//     struct x64_reg cmp_reg = codegen_reg(op->br_cond.cond);
+  // if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
+  //   // emit based on flags
+  //   enum x64_cond cond = get_cond_for_op(op->br_cond.cond);
+  //   instr->x64->ty = X64_INSTR_TY_B_COND;
+  //   instr->x64->b_cond = (struct x64_conditional_branch){
+  //       .cond = cond, .target = true_target};
+  // } else {
+  //   struct x64_reg cmp_reg = codegen_reg(op->br_cond.cond);
 
-//     instr->x64->ty = X64_INSTR_TY_CBNZ;
-//     instr->x64->cbnz = (struct x64_compare_and_branch){
-//         .cmp = cmp_reg, .target = true_target};
-//   }
+  //   instr->x64->ty = X64_INSTR_TY_CBNZ;
+  //   instr->x64->cbnz = (struct x64_compare_and_branch){
+  //       .cmp = cmp_reg, .target = true_target};
+  // }
 
-//   // now generate the `br`
-//   struct instr *br = alloc_instr(state->func);
-//   br->x64->ty = X64_INSTR_TY_B;
-//   br->x64->b = (struct x64_branch){.target = false_target};
-// }
+  // // now generate the `br`
+  // struct instr *br = alloc_instr(state->func);
+  // br->x64->ty = X64_INSTR_TY_B;
+  // br->x64->b = (struct x64_branch){.target = false_target};
+}
 
-// static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
-//   struct instr *instr = alloc_instr(state->func);
+static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
+  struct instr *instr = alloc_instr(state->func);
 
-//   instr->x64->ty = X64_INSTR_TY_B;
-//   instr->x64->b =
-//       (struct x64_branch){.target = op->stmt->basicblock->merge.target};
-// }
+  instr->x64->ty = X64_INSTR_TY_JMP;
+  instr->x64->jmp =
+      (struct x64_branch){.target = op->stmt->basicblock->merge.target};
+}
 
-// static_assert((sizeof(unsigned long long) == 8) & (sizeof(unsigned short) ==
-// 2),
-//               "type sizes not expected");
+static_assert((sizeof(unsigned long long) == 8) & (sizeof(unsigned short) == 2),
+              "type sizes not expected");
 
 union b64 {
   unsigned long long ull;
@@ -885,81 +883,85 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                    ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
                "floating point with invalid binary op");
 
-  switch(ty) {
-    case IR_OP_BINARY_OP_TY_SDIV: {
-      DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
-      DEBUG_ASSERT(dest.idx == REG_IDX_AX, "expected dest to be in an DX register");
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_SDIV: {
+    DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
+    DEBUG_ASSERT(dest.idx == REG_IDX_AX,
+                 "expected dest to be in an DX register");
 
-      struct instr *clear_hi = alloc_instr(state->func);
-      clear_hi->x64->ty = X64_INSTR_TY_EOR;
-      clear_hi->x64->eor = (struct x64_alu_reg){
-        .dest = { .ty = lhs.ty, .idx = REG_IDX_DX },
-        .rhs = { .ty = lhs.ty, .idx = REG_IDX_DX },
-      };
+    struct instr *clear_hi = alloc_instr(state->func);
+    clear_hi->x64->ty = X64_INSTR_TY_EOR;
+    clear_hi->x64->eor = (struct x64_alu_reg){
+        .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
+        .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
+    };
 
-      struct instr *instr = alloc_instr(state->func);
-      instr->x64->ty = X64_INSTR_TY_IDIV;
-      instr->x64->div = (struct x64_div){
-          .rhs = rhs,
-      };
-      return;
-    }
-    case IR_OP_BINARY_OP_TY_UDIV: {
-      DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
-      DEBUG_ASSERT(dest.idx == REG_IDX_AX, "expected dest to be in an DX register");
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_IDIV;
+    instr->x64->div = (struct x64_div){
+        .rhs = rhs,
+    };
+    return;
+  }
+  case IR_OP_BINARY_OP_TY_UDIV: {
+    DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
+    DEBUG_ASSERT(dest.idx == REG_IDX_AX,
+                 "expected dest to be in an DX register");
 
-      struct instr *clear_hi = alloc_instr(state->func);
-      clear_hi->x64->ty = X64_INSTR_TY_EOR;
-      clear_hi->x64->eor = (struct x64_alu_reg){
-        .dest = { .ty = lhs.ty, .idx = REG_IDX_DX },
-        .rhs = { .ty = lhs.ty, .idx = REG_IDX_DX },
-      };
+    struct instr *clear_hi = alloc_instr(state->func);
+    clear_hi->x64->ty = X64_INSTR_TY_EOR;
+    clear_hi->x64->eor = (struct x64_alu_reg){
+        .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
+        .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
+    };
 
-      struct instr *instr = alloc_instr(state->func);
-      instr->x64->ty = X64_INSTR_TY_DIV;
-      instr->x64->idiv = (struct x64_div){
-          .rhs = rhs,
-      };
-      return;
-    }
-    case IR_OP_BINARY_OP_TY_SQUOT: {
-      DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
-      DEBUG_ASSERT(dest.idx == REG_IDX_DX, "expected dest to be in an DX register");
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_DIV;
+    instr->x64->idiv = (struct x64_div){
+        .rhs = rhs,
+    };
+    return;
+  }
+  case IR_OP_BINARY_OP_TY_SQUOT: {
+    DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
+    DEBUG_ASSERT(dest.idx == REG_IDX_DX,
+                 "expected dest to be in an DX register");
 
-      struct instr *clear_hi = alloc_instr(state->func);
-      clear_hi->x64->ty = X64_INSTR_TY_EOR;
-      clear_hi->x64->eor = (struct x64_alu_reg){
-        .dest = { .ty = X64_REG_TY_R, .idx = REG_IDX_DX },
-        .rhs = { .ty = X64_REG_TY_R, .idx = REG_IDX_DX },
-      };
+    struct instr *clear_hi = alloc_instr(state->func);
+    clear_hi->x64->ty = X64_INSTR_TY_EOR;
+    clear_hi->x64->eor = (struct x64_alu_reg){
+        .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+        .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+    };
 
-      struct instr *instr = alloc_instr(state->func);
-      instr->x64->ty = X64_INSTR_TY_IDIV;
-      instr->x64->div = (struct x64_div){
-          .rhs = rhs,
-      };
-      return;
-    }
-    case IR_OP_BINARY_OP_TY_UQUOT: {
-      DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
-      DEBUG_ASSERT(dest.idx == REG_IDX_DX, "expected dest to be in an DX register");
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_IDIV;
+    instr->x64->div = (struct x64_div){
+        .rhs = rhs,
+    };
+    return;
+  }
+  case IR_OP_BINARY_OP_TY_UQUOT: {
+    DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
+    DEBUG_ASSERT(dest.idx == REG_IDX_DX,
+                 "expected dest to be in an DX register");
 
-      struct instr *clear_hi = alloc_instr(state->func);
-      clear_hi->x64->ty = X64_INSTR_TY_EOR;
-      clear_hi->x64->eor = (struct x64_alu_reg){
-        .dest = { .ty = X64_REG_TY_R, .idx = REG_IDX_DX },
-        .rhs = { .ty = X64_REG_TY_R, .idx = REG_IDX_DX },
-      };
+    struct instr *clear_hi = alloc_instr(state->func);
+    clear_hi->x64->ty = X64_INSTR_TY_EOR;
+    clear_hi->x64->eor = (struct x64_alu_reg){
+        .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+        .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+    };
 
-      struct instr *instr = alloc_instr(state->func);
-      instr->x64->ty = X64_INSTR_TY_DIV;
-      instr->x64->idiv = (struct x64_div){
-          .rhs = rhs,
-      };
-      return;
-    }
-    default:
-      break;
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_DIV;
+    instr->x64->idiv = (struct x64_div){
+        .rhs = rhs,
+    };
+    return;
+  }
+  default:
+    break;
   }
 
   if (!reg_eq(lhs, dest)) {
@@ -1115,8 +1117,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
-                            struct x64_reg source,
-                            struct x64_reg dest) {
+                            struct x64_reg source, struct x64_reg dest) {
   struct instr *instr = alloc_instr(state->func);
 
   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
@@ -1125,24 +1126,15 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
   switch (op->cast_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I8:
     instr->x64->ty = X64_INSTR_TY_MOVSX;
-    instr->x64->movsx = (struct x64_mov_reg){
-      .dest = dest,
-      .source = source
-    };
+    instr->x64->movsx = (struct x64_mov_reg){.dest = dest, .source = source};
     break;
   case IR_VAR_PRIMITIVE_TY_I16:
     instr->x64->ty = X64_INSTR_TY_MOVSX;
-    instr->x64->movsx = (struct x64_mov_reg){
-      .dest = dest,
-      .source = source
-    };
+    instr->x64->movsx = (struct x64_mov_reg){.dest = dest, .source = source};
     break;
   case IR_VAR_PRIMITIVE_TY_I32:
     instr->x64->ty = X64_INSTR_TY_MOVSX;
-    instr->x64->movsx = (struct x64_mov_reg){
-      .dest = dest,
-      .source = source
-    };
+    instr->x64->movsx = (struct x64_mov_reg){.dest = dest, .source = source};
     break;
   case IR_VAR_PRIMITIVE_TY_I64:
     BUG("can't sext from I64");
@@ -1153,23 +1145,18 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
   }
 }
 
-static void codegen_zext_op(struct codegen_state *state,
-                            struct x64_reg source,
+static void codegen_zext_op(struct codegen_state *state, struct x64_reg source,
                             struct x64_reg dest) {
   // `mov` will zero top 32 bits
   // do we ever need to explicitly zero extend?
 
   struct instr *instr = alloc_instr(state->func);
   instr->x64->ty = X64_INSTR_TY_MOV_REG;
-  instr->x64->mov_reg = (struct x64_mov_reg){
-    .dest = dest,
-    .source = source
-  };
+  instr->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
 }
 
 static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
-                             struct x64_reg source,
-                             struct x64_reg dest) {
+                             struct x64_reg source, struct x64_reg dest) {
   invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't truncate non-primitive");
 
@@ -2486,14 +2473,14 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     //   codegen_addr_op(state, op);
     //   break;
     // }
-    // case IR_OP_TY_BR_COND: {
-    //   codegen_br_cond_op(state, op);
-    //   break;
-    // }
-  // case IR_OP_TY_BR: {
-  //   codegen_br_op(state, op);
-  //   break;
-  // }
+  case IR_OP_TY_BR_COND: {
+    codegen_br_cond_op(state, op);
+    break;
+  }
+  case IR_OP_TY_BR: {
+    codegen_br_op(state, op);
+    break;
+  }
   case IR_OP_TY_CNST: {
     codegen_cnst_op(state, op);
     break;
@@ -3238,7 +3225,6 @@ static void debug_print_mov_reg(FILE *file, const struct x64_mov_reg *mov_reg) {
   codegen_fprintf(file, " %reg, %reg", mov_reg->dest, mov_reg->source);
 }
 
-
 static void debug_print_push(FILE *file, const struct x64_push *push) {
   codegen_fprintf(file, " %reg", push->source);
 }
@@ -3359,6 +3345,8 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");
     break;
+  case X64_INSTR_TY_JMP:
+    TODO("debug print jmp");
   }
 }
 
