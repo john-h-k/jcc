@@ -337,7 +337,7 @@ static inline int lzcnt(unsigned long long l) {
     }
     return __builtin_clzll(l);
 #else
-    if (l == 0) return sizeof(l * 8);
+    if (l == 0) return sizeof(l) * 8;
 
     int count = 0;
     for (int i = (sizeof(l) * 8) - 1; i >= 0; i--) {

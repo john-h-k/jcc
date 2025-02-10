@@ -1,9 +1,14 @@
 #include "lower.h"
 
 #include "../util.h"
-#include "codegen.h"
 
 #include <math.h>
+
+#define IR_REG_IDX_AX (0)
+#define IR_REG_IDX_CX (1)
+#define IR_REG_IDX_DX (2)
+#define IR_REG_IDX_SI (4)
+#define IR_REG_IDX_DI (5)
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
@@ -481,7 +486,7 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_CX });
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_CX });
                 break;
               case IR_OP_BINARY_OP_TY_AND:
               case IR_OP_BINARY_OP_TY_OR:
@@ -493,23 +498,37 @@ void x64_lower(struct ir_unit *unit) {
                 break;
               case IR_OP_BINARY_OP_TY_MUL:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_AX });
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
                 break;
               case IR_OP_BINARY_OP_TY_SDIV:
               case IR_OP_BINARY_OP_TY_UDIV:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_AX });
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_DX });
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
+
+                op->write_info = (struct ir_op_write_info){
+                  .num_reg_writes = 1,
+                  .writes[0] = {
+                    .ty = IR_REG_TY_INTEGRAL,
+                    .idx = IR_REG_IDX_DX
+                  }
+                };
+                
                 break;
               case IR_OP_BINARY_OP_TY_SQUOT:
               case IR_OP_BINARY_OP_TY_UQUOT:
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_DX });
+
+                break;
               default:
+                if (binary_op_is_comparison(op->binary_op.ty)) {
+                  lower_comparison(func, op);
+                }
                 break;
               }
 
-              if (binary_op_is_comparison(op->binary_op.ty)) {
-                lower_comparison(func, op);
-              }
               break;
             case IR_OP_TY_UNARY_OP:
               switch (op->unary_op.ty) {

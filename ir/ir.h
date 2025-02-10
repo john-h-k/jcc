@@ -456,6 +456,11 @@ struct ir_reg_state {
   ir_reglist live_fp;
 };
 
+struct ir_op_write_info {
+  size_t num_reg_writes;
+  struct ir_reg writes[4];
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -498,10 +503,12 @@ struct ir_op {
   struct ir_reg reg;
   void *metadata;
 
-  // struct ir_reg clobbers[4];
+  // contains any registers other than `reg` which this instruction writes to
+  struct ir_op_write_info write_info;
 
   const char *comment;
 };
+
 
 // set of ops with no SEQ_POINTs
 struct ir_stmt {
@@ -876,6 +883,9 @@ void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
 // swaps ops but does NOT swap their uses - expressions pointing to `left` will
 // now point to `right`
 void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
+
+// swaps ops AND their uses
+void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
 
 struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty);

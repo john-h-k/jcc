@@ -41,6 +41,9 @@ static void emit_instr(const struct emit_state *state,
     EMIT(ADD, add);
     EMIT(SUB, sub);
 
+    EMIT(DIV, div);
+    EMIT(IDIV, idiv);
+
     EMIT(ADD_IMM, add_imm);
     EMIT(SUB_IMM, sub_imm);
     EMIT(OR_IMM, or_imm);
@@ -68,7 +71,7 @@ static void emit_instr(const struct emit_state *state,
     x64_emit_ret(state->emitter);
     break;
   default:
-  TODO("foo");
+    TODO("implement instr for x64");
   }
   #undef EMIT
 }

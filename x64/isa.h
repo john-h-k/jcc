@@ -23,8 +23,8 @@ struct x64_raw_instr {
 #define NOP ((struct x64_raw_instr){.len = 1, .buff = {0x90}})
 
 #define IMM(imm, bitc)                                                         \
-  (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate did not fit!"),            \
-   CLAMP_BITS(imm, bitc))
+  (DEBUG_ASSERT(FITS_IN_BITS((imm), (bitc)), "immediate did not fit!"),            \
+   CLAMP_BITS((imm), (bitc)))
 
 #define REX_W_64_OP ((size_t)0b1)
 #define REX_W_32_OP ((size_t)0b0)
@@ -50,14 +50,14 @@ struct x64_raw_instr {
 #define MOD_RM_IMM32 ((size_t)0b10)
 
 #define MODRM(mod, reg, rm)                                                    \
-  U8((IMM(mod, 2) << 6) | (IMM(reg, 3) << 3) | IMM(rm, 3))
+  U8((IMM((mod), 2) << 6) | (IMM((reg), 3) << 3) | IMM((rm), 3))
 
 #define SIB_SCALE_1 ((size_t)(0b00))
 #define SIB_INDEX_NONE ((size_t)(0b100))
 #define SIB_BASE_RSP ((size_t)(REG_IDX_SP))
 
 #define SIB(scale, index, base)                                                \
-  U8((IMM(scale, 2) << 6) | (IMM(index, 3) << 3) | IMM(base, 3))
+  U8((IMM((scale), 2) << 6) | (IMM((index), 3) << 3) | IMM((base), 3))
 
 #define NEEDS_SIB(reg) ((reg).ty == X64_REG_TY_R && (reg).idx == REG_IDX_SP)
 
@@ -102,32 +102,37 @@ struct x64_raw_instr {
 
 #define MOV_REG(dest, rhs) ALU_RM((size_t)0x89, (dest), (rhs))
 
-#define DIV_REG32(lhs) \
+#define DIV_REG32(rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 2,                                                                \
       .buff = { U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b110, (dest).idx % 8)}})
+               MODRM(MOD_REG, (size_t)0b110, (rhs).idx % 8)}})
 
-#define DIV_REG64(lhs) \
+#define DIV_REG64(rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {REX_W(lhs), (size_t)0, (size_t)0, (size_t)((lhs).idx % 8))            \
+      .buff = {REX(REX_W(rhs), (size_t)0, (size_t)0, (size_t)((rhs).idx >= 8)),            \
                    U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b110, (lhs).idx % 8)}})
+               MODRM(MOD_REG, (size_t)0b110, (rhs).idx % 8)}})
 
-#define IDIV_REG32(lhs) \
+#define IDIV_REG32(rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 2,                                                                \
       .buff = { U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b111, (dest).idx % 8)}})
+               MODRM(MOD_REG, (size_t)0b111, (rhs).idx % 8)}})
 
-#define IDIV_REG64(lhs) \
+#define IDIV_REG64(rhs) \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {REX_W(lhs), (size_t)0, (size_t)0, (size_t)((lhs).idx % 8))            \
+      .buff = {REX(REX_W(rhs), (size_t)0, (size_t)0, (size_t)((rhs).idx >= 8)),            \
                    U8(0xF7),                                  \
-               MODRM(MOD_REG, (size_t)0b111, (lhs).idx % 8)}})
+               MODRM(MOD_REG, (size_t)0b111, (rhs).idx % 8)}})
 
+#define DIV_REG(rhs) \
+  NEEDS_REX((rhs)) ? DIV_REG64((rhs)) : DIV_REG32((rhs))
+
+#define IDIV_REG(rhs) \
+  NEEDS_REX((rhs)) ? IDIV_REG64((rhs)) : IDIV_REG32((rhs))
 
 
 #define MOVSX8_32_NOREX(dest, source) \

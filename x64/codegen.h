@@ -151,11 +151,11 @@ struct x64_1_reg {
 };
 
 struct x64_div {
-  struct x64_reg dest;
+  struct x64_reg rhs;
 };
 
 struct x64_mul {
-  struct x64_reg dest;
+  struct x64_reg todo;
 };
 
 struct x64_push {

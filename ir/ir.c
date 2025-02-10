@@ -523,6 +523,9 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
+  op->write_info = (struct ir_op_write_info){
+    .num_reg_writes = 0
+  };
   op->metadata = NULL;
   op->comment = NULL;
 }
@@ -1005,6 +1008,17 @@ insert_after_ir_basicblock(struct ir_func *irb,
   return basicblock;
 }
 
+void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
+  // WARN: known buggy!
+
+  DEBUG_ASSERT(left->succ == right && right->pred == left, "can only swap in place ops that are adjacent");
+
+  struct ir_op *tmp = arena_alloc(irb->arena, sizeof(*tmp));
+  *tmp = *left;
+  *left = *right;
+  *right = *tmp;
+}
+
 void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
   if (left == right) {
     return;
@@ -1126,6 +1140,9 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->comment = NULL;
   op->reg = NO_REG;
   op->lcl = NULL;
+  op->write_info = (struct ir_op_write_info){
+    .num_reg_writes = 0
+  };
 
   if (stmt->last) {
     stmt->last->succ = op;
@@ -1183,15 +1200,35 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
 
 struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
                                     struct ir_op *producer, struct ir_reg reg) {
-  struct ir_op *mov = insert_before_ir_op(irb, producer, IR_OP_TY_MOV, producer->var_ty);
+  struct ir_op *mov = insert_before_ir_op(irb, producer, producer->ty, producer->var_ty);
 
-  producer->flags |= IR_OP_FLAG_FIXED_REG;
-  producer->reg = reg;
-  mov->mov = (struct ir_op_mov){
-    .value = producer
+  switch (producer->ty) {
+  case IR_OP_TY_CNST:
+    mov->cnst = producer->cnst;
+    break;
+  case IR_OP_TY_ADDR:
+    mov->addr = producer->addr;
+    break;
+  case IR_OP_TY_CAST_OP:
+    mov->cast_op = producer->cast_op;
+    break;
+  case IR_OP_TY_BINARY_OP:
+    mov->binary_op = producer->binary_op;
+    break;
+  case IR_OP_TY_UNARY_OP:
+    mov->unary_op = producer->unary_op;
+    break;
+  default:
+    TODO("unsupported type for contained op");
+  }
+
+  mov->flags |= IR_OP_FLAG_FIXED_REG;
+  mov->reg = reg;
+
+  producer->ty = IR_OP_TY_MOV;
+  producer->mov = (struct ir_op_mov){
+    .value = mov
   };
-
-  swap_ir_ops(irb, producer, mov);
 
   return producer;
 }
