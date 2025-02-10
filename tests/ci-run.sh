@@ -28,7 +28,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       expected="0"
     fi
 
-    if ! ./build/jcc -std=c23 -tm "$tm" $file >build.txt 2>&1; then
+    if ! ./build/jcc -std=c23 -tm "$tm" $file -Lasm >build.txt 2>&1; then
       echo "TEST FAILED: '$file' compilation failed!"
       echo "BUILD:"
       cat build.txt
