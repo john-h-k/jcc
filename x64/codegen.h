@@ -69,6 +69,13 @@ enum x64_instr_ty {
   X64_INSTR_TY_SAR,
 
   X64_INSTR_TY_JMP,
+  X64_INSTR_TY_JCC,
+
+  X64_INSTR_TY_CMP,
+  X64_INSTR_TY_TEST,
+
+  X64_INSTR_TY_CMP_IMM,
+  X64_INSTR_TY_TEST_IMM,
 
   X64_INSTR_TY_RET,
 };
@@ -112,6 +119,32 @@ enum x64_instr_class {
   X64_INSTR_CLASS_MOV_IMM,
 };
 
+enum x64_cond {
+  X64_COND_OVERFLOW = 0x0,
+  X64_COND_NOT_OVERFLOW = 0x1,
+
+  X64_COND_BELOW = 0x2,
+  X64_COND_NOT_BELOW = 0x3,
+
+  X64_COND_ZERO = 0x4,
+  X64_COND_NOT_ZERO = 0x5,
+
+  X64_COND_BELOW_OR_EQUAL = 0x6,
+  X64_COND_NOT_BELOW_OR_EQUAL = 0x7,
+
+  X64_COND_SIGN = 0x8,
+  X64_COND_NOT_SIGN = 0x9,
+
+  X64_COND_PARITY = 0xA,
+  X64_COND_NOT_PARITY = 0xB,
+
+  X64_COND_LESS = 0xC,
+  X64_COND_NOT_LESS = 0xD,
+
+  X64_COND_LESS_OR_EQUAL = 0xE,
+  X64_COND_NOT_LESS_OR_EQUAL = 0xF,
+};
+
 struct x64_mov_load_imm {
   struct x64_reg dest;
   struct x64_reg addr;
@@ -148,6 +181,16 @@ struct x64_shift {
   struct x64_reg dest;
 };
 
+struct x64_cmp {
+  struct x64_reg lhs;
+  struct x64_reg rhs;
+};
+
+struct x64_cmp_imm {
+  struct x64_reg lhs;
+  imm_t imm;
+};
+
 struct x64_1_reg {
   struct x64_reg dest;
 };
@@ -176,7 +219,7 @@ struct x64_conditional_select {
 };
 
 struct x64_conditional_branch {
-  // enum x64_cond cond;
+  enum x64_cond cond;
   struct ir_basicblock *target;
 };
 
@@ -217,6 +260,14 @@ struct x64_instr {
     };
 
     union {
+      struct x64_cmp cmp, test;
+    };
+
+    union {
+      struct x64_cmp_imm cmp_imm, test_imm;
+    };
+
+    union {
       struct x64_div div, idiv;
     };
 
@@ -242,6 +293,10 @@ struct x64_instr {
 
     union {
       struct x64_branch branch, jmp;
+    };
+
+    union {
+      struct x64_conditional_branch conditional_branch, jcc;
     };
   };
 };

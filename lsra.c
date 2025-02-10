@@ -426,9 +426,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       bitset_set(reg_pool, free_slot, false);
       bitset_set(all_used_reg_pool, free_slot, true);
-      printf("lzcnt %llu\n", bitset_lzcnt(all_used_reg_pool));
-      printf("marked used %zu\n", free_slot);
-      printf("lzcnt %llu\n", bitset_lzcnt(all_used_reg_pool));
 
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = free_slot};
 

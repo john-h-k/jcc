@@ -48,6 +48,7 @@ struct x64_raw_instr {
 #define MOD_REG ((size_t)0b11)
 #define MOD_RM_IMM8 ((size_t)0b01)
 #define MOD_RM_IMM32 ((size_t)0b10)
+#define MOD_RM_NONE ((size_t)0b00)
 
 #define MODRM(mod, reg, rm)                                                    \
   U8((IMM((mod), 2) << 6) | (IMM((reg), 3) << 3) | IMM((rm), 3))
@@ -346,13 +347,37 @@ struct x64_raw_instr {
 #define MOV_LOAD_IMM(reg, addr, imm)                                         \
   MOV_MEM_IMM((size_t)0x8B, (reg), (addr), (imm))
 
+#define JMP_REL8(disp)                                                        \
+  ((struct x64_raw_instr){.len = 2,                                            \
+                          .buff = {0xEB, IMM_BYTES8(disp) }})
+
 #define JMP_REL32(disp)                                                        \
   ((struct x64_raw_instr){.len = 5,                                            \
-                          .buff = {0xe9, (uint8_t)((disp) & 0xFF),             \
-                                   (uint8_t)(((disp) >> 8) & 0xFF),            \
-                                   (uint8_t)(((disp) >> 16) & 0xFF),           \
-                                   (uint8_t)(((disp) >> 24) & 0xFF)}})
+                          .buff = {0xE9, IMM_BYTES32(disp) }})
 
+// #define JMP_REL(disp) (disp) < 256 ? JMP_REL8((disp)) : JMP_REL32((disp))
+#define JMP_REL() JMP_REL32((size_t)(0x0))
+
+#define JMP_REG_BASE(reg)                                                        \
+  ((struct x64_raw_instr){.len = 2,                                            \
+                          .buff = {0xFF, MODRM(MOD_RM_NONE, (size_t)0b100, (reg).idx) }})
+#define JMP_REG_REX(reg)                                                        \
+  ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = {REX_PREFIX(1, 0, 0, 1), 0xFF, MODRM(MOD_RM_NONE, (size_t)0b100, (reg).idx % 8) }})
+
+#define JMP_REG(reg) (reg).idx < 8 ? JMP_REG_BASE((reg)) : JMP_REG_REX((reg))
+
+#define JMP_COND_REL8(cc, disp)                                                        \
+  ((struct x64_raw_instr){.len = 2,                                            \
+                          .buff = {0x70 + U8(cc), IMM_BYTES8(disp) }})
+
+#define JMP_COND_REL32(cc, disp)                                                        \
+  ((struct x64_raw_instr){.len = 6,                                            \
+                          .buff = {0x0F, 0x80 + U8(cc), IMM_BYTES32(disp) }})
+
+// #define JMP_COND_REL(cc, disp) (disp) < 256 ? JMP_COND_REL8((cc), (disp)) : JMP_COND_REL32((cc), (disp))
+#define JMP_COND_REL(cc) JMP_COND_REL32((cc), (0x0))
+ 
 #define RET ((struct x64_raw_instr){.len = 1, .buff = {0xc3}})
 
 #define PUSH_REG64(reg) \
@@ -369,6 +394,14 @@ struct x64_raw_instr {
     ((struct x64_raw_instr){.len = 2,                                            \
                               .buff = {0x41, 0x58 + U8((reg).idx)}}) 
 
+#define TEST_REG(lhs, rhs) \
+  (NEEDS_REX((lhs)) || NEEDS_REX((rhs)) ? \
+  ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = {REX(REX_W(lhs), (size_t)((rhs).idx > 7), (size_t)0, (size_t)((lhs).idx > 7)),  \
+                          0x85, MODRM(MOD_REG, (rhs).idx % 8 , (lhs).idx) % 8 }}) \
+                            : \
+    ((struct x64_raw_instr){.len = 2,                                            \
+                          .buff = {0x85, MODRM(MOD_REG, (rhs).idx, (lhs).idx) }})) 
 
 #define CALL_REL32(disp)                                                       \
   ((struct x64_raw_instr){.len = 5,                                            \
@@ -389,21 +422,6 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){                                                     \
       .len = 3, .buff = {0x48, 0x39, (uint8_t)(0xc0 | ((src) << 3) | (dst))}})
 
-#define JMP_REG(reg)                                                           \
-  ((struct x64_raw_instr){.len = 3,                                            \
-                          .buff = {0x48, 0xFF, (uint8_t)(0xe0 | (reg))}})
-
-#define JCC_REL8(cc, disp)                                                     \
-  ((struct x64_raw_instr){                                                     \
-      .len = 2, .buff = {(uint8_t)(0x70 + (cc)), (uint8_t)((disp) & 0xFF)}})
-
-#define JCC_REL32(cc, disp)                                                    \
-  ((struct x64_raw_instr){.len = 6,                                            \
-                          .buff = {0x0f, (uint8_t)(0x80 + (cc)),               \
-                                   (uint8_t)((disp) & 0xFF),                   \
-                                   (uint8_t)(((disp) >> 8) & 0xFF),            \
-                                   (uint8_t)(((disp) >> 16) & 0xFF),           \
-                                   (uint8_t)(((disp) >> 24) & 0xFF)}})
 
 #define LEA_RIP_REL32(reg, disp)                                               \
   ((struct x64_raw_instr){.len = 7,                                            \
@@ -412,18 +430,6 @@ struct x64_raw_instr {
                                    (uint8_t)(((disp) >> 8) & 0xFF),            \
                                    (uint8_t)(((disp) >> 16) & 0xFF),           \
                                    (uint8_t)(((disp) >> 24) & 0xFF)}})
-
-#define XOR_REG_REG(dst, src)                                                  \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3, .buff = {0x48, 0x31, (uint8_t)(0xc0 | ((src) << 3) | (dst))}})
-
-#define AND_REG_REG(dst, src)                                                  \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3, .buff = {0x48, 0x21, (uint8_t)(0xc0 | ((src) << 3) | (dst))}})
-
-#define OR_REG_REG(dst, src)                                                   \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3, .buff = {0x48, 0x09, (uint8_t)(0xc0 | ((src) << 3) | (dst))}})
 
 #define IMUL_REG_REG(dst, src)                                                 \
   ((struct x64_raw_instr){                                                     \
