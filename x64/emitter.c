@@ -75,6 +75,14 @@ void x64_emit_sub(struct x64_emitter *emitter, struct x64_alu_reg sub) {
   x64_emit_instr(emitter, SUB_REG(sub.dest, sub.rhs));
 }
 
+void x64_emit_div(struct x64_emitter *emitter, struct x64_div div) {
+  x64_emit_instr(emitter, DIV_REG(div.rhs));
+}
+
+void x64_emit_idiv(struct x64_emitter *emitter, struct x64_div idiv) {
+  x64_emit_instr(emitter, IDIV_REG(idiv.rhs));
+}
+
 void x64_emit_and(struct x64_emitter *emitter, struct x64_alu_reg and) {
   x64_emit_instr(emitter, AND_REG(and.dest, and.rhs));
 }

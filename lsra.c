@@ -239,6 +239,22 @@ static int compare_interval_id(const void *a, const void *b) {
   return (int)((ssize_t)a_id - (ssize_t)b_id);
 }
 
+static void force_spill_register(struct ir_func *irb, struct register_alloc_state *state, struct bitset *reg_pool, struct ir_reg reg) {
+  if (bitset_get(reg_pool, reg.idx)) {
+    return;
+  }
+
+  // HACK: need to properly store reg->op map
+
+  for (size_t j = 0; j < state->num_active; j++) {
+    struct ir_op *op = state->interval_data.intervals[state->active[j]].op;
+    if (op->reg.ty == reg.ty && op->reg.idx == reg.idx) {
+      spill_op(irb, op);
+      op->flags |= IR_OP_FLAG_SPILLED;
+    }
+  }
+}
+
 static struct interval_data register_alloc_pass(struct ir_func *irb,
                                                 struct lsra_reg_info *info) {
 
@@ -374,20 +390,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
-      bool occupied = bitset_get(reg_pool, interval->op->reg.idx);
+      printf("force spilling for fixed reg op %zu\n", interval->op->id);
 
-      if (occupied) {
-        // HACK: need to properly store reg->op map
-
-        for (size_t j = 0; j < state.num_active; j++) {
-          struct ir_op *op = state.interval_data.intervals[state.active[j]].op;
-          if (op->reg.ty == interval->op->reg.ty && op->reg.idx == interval->op->reg.idx) {
-            spill_op(irb, op);
-            op->flags |= IR_OP_FLAG_SPILLED;
-            break;
-          }
-        }    
-      }
+      force_spill_register(irb, &state, reg_pool, interval->op->reg);
 
       pref_reg = interval->op->reg.idx;
 
@@ -401,7 +406,11 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty && bitset_get(reg_pool, lhs->reg.idx)) {
         pref_reg = lhs->reg.idx;
       }
-    } 
+    }
+
+    for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
+      force_spill_register(irb, &state, reg_pool, interval->op->write_info.writes[j]);
+    }
      
     if (pref_reg != SIZE_MAX || bitset_any(reg_pool, true)) {
       size_t free_slot;
@@ -417,6 +426,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       bitset_set(reg_pool, free_slot, false);
       bitset_set(all_used_reg_pool, free_slot, true);
+      printf("lzcnt %llu\n", bitset_lzcnt(all_used_reg_pool));
+      printf("marked used %zu\n", free_slot);
+      printf("lzcnt %llu\n", bitset_lzcnt(all_used_reg_pool));
 
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = free_slot};
 
@@ -459,7 +471,9 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   // FIXME: need better logic
   // this is tough because what if we only need ssp (secondary stack pointer) during lsra?
   // at the start, all locals are within one-instr depth, but then during spilling we exceed this and need another
-  if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  // FIXME: temp disable SSP because it forces prologue
+  if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  // if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     num_nonvolatile_gp--;
     has_ssp = true;
     ssp_reg = reg_info.gp_registers.num_volatile + num_nonvolatile_gp;
@@ -481,7 +495,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   }
 
   size_t num_gp_regs = reg_info.gp_registers.num_volatile +
-                       num_nonvolatile_gp- 1;
+                       num_nonvolatile_gp - 1;
   size_t num_fp_regs = reg_info.fp_registers.num_volatile +
                        reg_info.fp_registers.num_nonvolatile - 1;
 
