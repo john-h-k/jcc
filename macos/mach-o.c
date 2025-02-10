@@ -585,7 +585,7 @@ void write_macho(const struct build_object_args *args) {
 
 #else
 
-void write_macho(const struct build_object_args *args) {
+void write_macho(UNUSED const struct build_object_args *args) {
   unsupported("mach-o not supported target for this system");
 }
 

@@ -481,7 +481,7 @@ void write_elf(const struct build_object_args *args) { write_elf_object(args); }
 
 #else
 
-void write_elf(const struct build_object_args *args) {
+void write_elf(UNUSED const struct build_object_args *args) {
   unsupported("ELF not supported target for this system");
 }
 
