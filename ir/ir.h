@@ -794,6 +794,12 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
 struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
+// fixing an op is difficult, because fixed ops with overlapping lifetimes won't be able to allocate
+// so to fix an op, you provide the point it must be fixed at (`consumer`) and we insert a mov before then and fix that
+// we take `**op` so that we can then reassign the consumer op to the fixed move
+struct ir_op *alloc_fixed_reg_ir_op(struct ir_func *irb, struct ir_op **op,
+                                    struct ir_op *consumer, struct ir_reg reg);
+
 void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_var_primitive_ty ty,
                             unsigned long long value);

@@ -40,8 +40,23 @@ static void emit_instr(const struct emit_state *state,
     EMIT(AND, and);
     EMIT(ADD, add);
     EMIT(SUB, sub);
+
+    EMIT(ADD_IMM, add_imm);
+    EMIT(SUB_IMM, sub_imm);
+
+    EMIT(SHR, shr);
+    EMIT(SHL, shl);
+    EMIT(SAR, sar);
+
     EMIT(NOT, not);
     EMIT(NEG, neg);
+
+    EMIT(PUSH, push);
+    EMIT(POP, pop);
+
+    EMIT(MOV_LOAD_IMM, mov_load_imm);
+    EMIT(MOV_STORE_IMM, mov_store_imm);
+
     EMIT(MOV_IMM, mov_imm);
     EMIT(MOV_REG, mov_reg);
   case X64_INSTR_TY_RET:

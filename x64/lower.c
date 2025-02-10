@@ -1,9 +1,7 @@
 #include "lower.h"
 
-#include "../bit_twiddle.h"
-#include "../ir/build.h"
 #include "../util.h"
-#include "../x64.h"
+#include "codegen.h"
 
 #include <math.h>
 
@@ -482,6 +480,9 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_LSHIFT:
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
+                op->flags |= IR_OP_FLAG_READS_DEST;
+                alloc_fixed_reg_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = REG_IDX_CX });
+                break;
               case IR_OP_BINARY_OP_TY_AND:
               case IR_OP_BINARY_OP_TY_OR:
               case IR_OP_BINARY_OP_TY_XOR:

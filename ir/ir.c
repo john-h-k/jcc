@@ -1166,6 +1166,21 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   return contained;
 }
 
+struct ir_op *alloc_fixed_reg_ir_op(struct ir_func *irb, struct ir_op **op,
+                                    struct ir_op *consumer, struct ir_reg reg) {
+  struct ir_op *mov = insert_before_ir_op(irb, consumer, IR_OP_TY_MOV, (*op)->var_ty);
+
+  mov->flags |= IR_OP_FLAG_FIXED_REG;
+  mov->reg = reg;
+  mov->mov = (struct ir_op_mov){
+    .value = *op
+  };
+
+  *op = mov;
+
+  return mov;
+}
+
 void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                           enum ir_var_primitive_ty ty,
                           unsigned long long value) {

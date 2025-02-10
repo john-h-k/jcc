@@ -128,8 +128,6 @@ static int sort_interval_by_start_point(const void *a, const void *b) {
 }
 
 struct lsra_reg_info {
-  // if true, reg allocator will preferentially try and assign the lhs reg as dest reg on binop IR ops
-  bool binops_clobber_rhs;
   bool has_ssp;
   size_t ssp_reg;
 
@@ -375,7 +373,29 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     size_t pref_reg = SIZE_MAX;
-    if (info->binops_clobber_rhs && interval->op->ty == IR_OP_TY_BINARY_OP) {
+    if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
+      bool occupied = bitset_get(reg_pool, interval->op->reg.idx);
+
+      if (occupied) {
+        // HACK: need to properly store reg->op map
+
+        for (size_t j = 0; j < state.num_active; j++) {
+          struct ir_op *op = state.interval_data.intervals[state.active[j]].op;
+          if (op->reg.ty == interval->op->reg.ty && op->reg.idx == interval->op->reg.idx) {
+            spill_op(irb, op);
+            op->flags |= IR_OP_FLAG_SPILLED;
+            break;
+          }
+        }    
+      }
+
+      pref_reg = interval->op->reg.idx;
+
+      // FIXME: logic here wrt active intervals definitely needs fixing      
+      // also, this does not respect reg.ty but should
+    } else if (interval->op->ty == IR_OP_TY_BINARY_OP) {
+      // TODO: generalise this so it preferentially does it for other ops that read dest (e.g aarch64 bitfield insert, x64 `not`/`neg`)
+      // probably by `IR_OP_FLAG_READS_DEST` having an associated field on `ir_op` for which operand it reads
       struct ir_op *lhs = interval->op->binary_op.lhs;
 
       if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty && bitset_get(reg_pool, lhs->reg.idx)) {
@@ -383,7 +403,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       }
     } 
      
-    if (bitset_any(reg_pool, true)) {
+    if (pref_reg != SIZE_MAX || bitset_any(reg_pool, true)) {
       size_t free_slot;
 
       if (pref_reg != SIZE_MAX) {
@@ -469,7 +489,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t fp_spill_reg = num_fp_regs;
 
   struct lsra_reg_info lsra_reg_info = {
-      .binops_clobber_rhs = true, // FIXME: only for x64
       .has_ssp = has_ssp,
       .ssp_reg = ssp_reg,
       .num_volatile_gp = reg_info.gp_registers.num_volatile,

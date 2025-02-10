@@ -87,13 +87,35 @@ void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or) {
   x64_emit_instr(emitter, OR_REG(or.dest, or.rhs));
 }
 
-void x64_emit_not(struct x64_emitter *emitter, struct x64_alu_unary not) {
+void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not) {
   x64_emit_instr(emitter, NOT_REG(not.dest));
 }
 
-void x64_emit_neg(struct x64_emitter *emitter, struct x64_alu_unary neg) {
+void x64_emit_neg(struct x64_emitter *emitter, struct x64_1_reg neg) {
   x64_emit_instr(emitter, NEG_REG(neg.dest));
 }
+
+void x64_emit_shl(struct x64_emitter *emitter, struct x64_shift shl) {
+  x64_emit_instr(emitter, SHL(shl.dest));
+}
+
+void x64_emit_shr(struct x64_emitter *emitter, struct x64_shift shr) {
+  x64_emit_instr(emitter, SHR(shr.dest));
+}
+
+void x64_emit_sar(struct x64_emitter *emitter, struct x64_shift sar) {
+  x64_emit_instr(emitter, SAR(sar.dest));
+}
+
+void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm) {
+  x64_emit_instr(emitter, ADD_IMM(add_imm.dest, add_imm.imm));
+  
+}
+
+void x64_emit_sub_imm(struct x64_emitter *emitter, struct x64_alu_imm sub_imm) {
+  x64_emit_instr(emitter, SUB_IMM(sub_imm.dest, sub_imm.imm));
+}
+
 
 void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {
   x64_emit_instr(emitter, MOV_IMM(mov_imm.dest, mov_imm.imm));
@@ -101,6 +123,22 @@ void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {
 
 void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
   x64_emit_instr(emitter, MOV_REG(mov_reg.dest, mov_reg.source));
+}
+
+void x64_emit_mov_load_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_imm) {
+  x64_emit_instr(emitter, MOV_LOAD_IMM(mov_load_imm.dest, mov_load_imm.addr, mov_load_imm.imm));
+}
+
+void x64_emit_mov_store_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_imm) {
+  x64_emit_instr(emitter, MOV_STORE_IMM(mov_store_imm.source, mov_store_imm.addr, mov_store_imm.imm));
+}
+
+void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
+  x64_emit_instr(emitter, PUSH_REG64(push.source));
+}
+
+void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop) {
+  x64_emit_instr(emitter, POP_REG64(pop.dest));
 }
 
 void x64_emit_ret(struct x64_emitter *emitter) { x64_emit_instr(emitter, RET); }

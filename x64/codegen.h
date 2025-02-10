@@ -10,18 +10,38 @@
     "STACK_PTR_REG/FRAME_PTR_REG/RET_PTR_REG already defined. Check your includes"
 #endif
 
-// `[w|x]zr` and `sp` are encoded as the same thing and the instruction decides
-// which is relevant
-#define STACK_PTR_REG ((struct x64_reg){X64_REG_TY_X, 31})
-#define FRAME_PTR_REG ((struct x64_reg){X64_REG_TY_X, 29})
-#define RET_PTR_REG ((struct x64_reg){X64_REG_TY_X, 30})
+#define REG_IDX_AX (0)
+#define REG_IDX_CX (1)
+#define REG_IDX_DX (2)
+#define REG_IDX_BX (3)
+#define REG_IDX_SP (4)
+#define REG_IDX_BP (5)
+#define REG_IDX_SI (6)
+#define REG_IDX_DI (7)
+
+#define STACK_PTR_REG ((struct x64_reg){X64_REG_TY_R, REG_IDX_SP})
+#define FRAME_PTR_REG ((struct x64_reg){X64_REG_TY_R, REG_IDX_BP})
 
 typedef unsigned long long imm_t;
 typedef long long simm_t;
 
 enum x64_instr_ty {
+  // X64_INSTR_TY_LOAD_BYTE_IMM,
+  // X64_INSTR_TY_LOAD_HALF_IMM,
+  X64_INSTR_TY_MOV_LOAD_IMM,
+
+  // X64_INSTR_TY_STORE_BYTE_IMM,
+  // X64_INSTR_TY_STORE_HALF_IMM,
+  X64_INSTR_TY_MOV_STORE_IMM,
+
+  X64_INSTR_TY_PUSH,
+  X64_INSTR_TY_POP,
+
   X64_INSTR_TY_MOV_IMM,
   X64_INSTR_TY_MOV_REG,
+
+  X64_INSTR_TY_ADD_IMM,
+  X64_INSTR_TY_SUB_IMM,
 
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
@@ -32,6 +52,10 @@ enum x64_instr_ty {
 
   X64_INSTR_TY_NOT,
   X64_INSTR_TY_NEG,
+
+  X64_INSTR_TY_SHL,
+  X64_INSTR_TY_SHR,
+  X64_INSTR_TY_SAR,
 
   X64_INSTR_TY_RET,
 };
@@ -73,6 +97,18 @@ enum x64_instr_class {
   X64_INSTR_CLASS_MOV_IMM,
 };
 
+struct x64_mov_load_imm {
+  struct x64_reg dest;
+  struct x64_reg addr;
+  imm_t imm;
+};
+
+struct x64_mov_store_imm {
+  struct x64_reg source;
+  struct x64_reg addr;
+  imm_t imm;
+};
+
 struct x64_mov_imm {
   struct x64_reg dest;
   imm_t imm;
@@ -88,7 +124,24 @@ struct x64_alu_reg {
   struct x64_reg rhs;
 };
 
-struct x64_alu_unary {
+struct x64_alu_imm {
+  struct x64_reg dest;
+  imm_t imm;
+};
+
+struct x64_shift {
+  struct x64_reg dest;
+};
+
+struct x64_1_reg {
+  struct x64_reg dest;
+};
+
+struct x64_push {
+  struct x64_reg source;
+};
+
+struct x64_pop {
   struct x64_reg dest;
 };
 
@@ -121,11 +174,35 @@ struct x64_instr {
     };
 
     union {
-      struct x64_alu_unary alu_unary, not, neg;
+      struct x64_alu_imm alu_imm, add_imm, sub_imm, eor_imm, or_imm, and_imm;
+    };
+
+    union {
+      struct x64_shift shift, shl, shr, sar;
+    };
+
+    union {
+      struct x64_1_reg alu_unary, not, neg;
+    };
+
+    union {
+      struct x64_push push;
+    };
+
+    union {
+      struct x64_pop pop;
     };
 
     union {
       struct x64_mov_imm mov_imm;
+    };
+
+    union {
+      struct x64_mov_load_imm mov_load_imm, mov_load32_imm;
+    };
+
+    union {
+      struct x64_mov_store_imm mov_store_imm, mov_store32_imm;
     };
 
     union {
