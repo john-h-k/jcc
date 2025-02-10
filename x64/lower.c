@@ -497,9 +497,6 @@ void x64_lower(struct ir_unit *unit) {
                 op->flags |= IR_OP_FLAG_READS_DEST;
                 break;
               case IR_OP_BINARY_OP_TY_MUL:
-                op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
-                break;
               case IR_OP_BINARY_OP_TY_SDIV:
               case IR_OP_BINARY_OP_TY_UDIV:
                 op->flags |= IR_OP_FLAG_READS_DEST;
@@ -511,7 +508,7 @@ void x64_lower(struct ir_unit *unit) {
                   .writes[0] = {
                     .ty = IR_REG_TY_INTEGRAL,
                     .idx = IR_REG_IDX_DX
-                  }
+                  },
                 };
                 
                 break;

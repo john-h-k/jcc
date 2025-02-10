@@ -31,6 +31,7 @@ void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or);
 
 void x64_emit_div(struct x64_emitter *emitter, struct x64_div div);
 void x64_emit_idiv(struct x64_emitter *emitter, struct x64_div idiv);
+void x64_emit_imul(struct x64_emitter *emitter, struct x64_mul imul);
 
 void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm);
 void x64_emit_sub_imm(struct x64_emitter *emitter, struct x64_alu_imm sub_imm);

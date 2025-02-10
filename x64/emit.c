@@ -50,6 +50,8 @@ static void emit_instr(const struct emit_state *state,
     EMIT(DIV, div);
     EMIT(IDIV, idiv);
 
+    EMIT(IMUL, imul);
+
     EMIT(ADD_IMM, add_imm);
     EMIT(SUB_IMM, sub_imm);
     EMIT(OR_IMM, or_imm);

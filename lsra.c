@@ -244,6 +244,8 @@ static void force_spill_register(struct ir_func *irb, struct register_alloc_stat
     return;
   }
 
+  bitset_set(reg_pool, reg.idx, true);
+
   // HACK: need to properly store reg->op map
 
   for (size_t j = 0; j < state->num_active; j++) {
@@ -390,15 +392,13 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
-      printf("force spilling for fixed reg op %zu\n", interval->op->id);
-
       force_spill_register(irb, &state, reg_pool, interval->op->reg);
 
       pref_reg = interval->op->reg.idx;
 
       // FIXME: logic here wrt active intervals definitely needs fixing      
       // also, this does not respect reg.ty but should
-    } else if (false && interval->op->ty == IR_OP_TY_BINARY_OP) {
+    } else if (interval->op->ty == IR_OP_TY_BINARY_OP) {
       // TODO: generalise this so it preferentially does it for other ops that read dest (e.g aarch64 bitfield insert, x64 `not`/`neg`)
       // probably by `IR_OP_FLAG_READS_DEST` having an associated field on `ir_op` for which operand it reads
       struct ir_op *lhs = interval->op->binary_op.lhs;

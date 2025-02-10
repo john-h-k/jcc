@@ -877,6 +877,18 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                "floating point with invalid binary op");
 
   switch (ty) {
+  case IR_OP_BINARY_OP_TY_MUL: {
+    DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
+    DEBUG_ASSERT(dest.idx == REG_IDX_AX,
+                 "expected dest to be in an DX register");
+
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_IMUL;
+    instr->x64->mul = (struct x64_mul){
+        .rhs = rhs,
+    };
+    return;
+  }
   case IR_OP_BINARY_OP_TY_SDIV: {
     DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
     DEBUG_ASSERT(dest.idx == REG_IDX_AX,
@@ -3254,8 +3266,7 @@ static void debug_print_div(FILE *file, const struct x64_div *div) {
 }
 
 static void debug_print_mul(FILE *file, const struct x64_mul *mul) {
-  TODO("x64 mul");
-  // codegen_fprintf(file, " %reg", mul->lhs, mul->lhs);
+  codegen_fprintf(file, " %reg", mul->rhs);
 }
 
 static void
@@ -3363,10 +3374,6 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_IMUL:
     fprintf(file, "imul");
     debug_print_mul(file, &instr->x64->imul);
-    break;
-  case X64_INSTR_TY_MUL:
-    fprintf(file, "mul");
-    debug_print_mul(file, &instr->x64->mul);
     break;
   case X64_INSTR_TY_OR:
     fprintf(file, "or");
