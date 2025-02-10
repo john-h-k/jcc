@@ -1,8 +1,6 @@
 // expected value: 5
 
-int main() {
-  return 5;
-  
+int main() { 
   int a = 1;
 
   int b = !a;
