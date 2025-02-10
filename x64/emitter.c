@@ -1,9 +1,8 @@
 #include "emitter.h"
 
-#include "../alloc.h"
 #include "../bit_twiddle.h"
-#include "../log.h"
 #include "../util.h"
+#include "../vector.h"
 #include "codegen.h"
 #include "isa.h"
 
@@ -14,6 +13,19 @@ struct x64_emitter {
   size_t count;
   size_t len;
   size_t head;
+
+  struct vector *target_relocs;
+};
+
+enum x64_target_reloc_ty {
+  X64_TARGET_RELOC_TY_JMP,
+  X64_TARGET_RELOC_TY_JCC,
+};
+
+struct x64_target_reloc {
+  enum x64_target_reloc_ty ty;
+
+  size_t offset;
 };
 
 #define BLOCK_SIZE 4096
@@ -30,6 +42,7 @@ void create_x64_emitter(struct x64_emitter **emitter) {
       nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
   (*emitter)->head = 0;
   (*emitter)->count = 0;
+  (*emitter)->target_relocs = vector_create(sizeof(struct x64_target_reloc));
 }
 
 size_t x64_emit_bytesize(struct x64_emitter *emitter) {
@@ -122,14 +135,20 @@ void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm) {
 void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
   struct x64_reg dest = movsx.dest;
 
-  DEBUG_ASSERT(dest.ty == X64_REG_TY_R || dest.ty == X64_REG_TY_RD || dest.ty == X64_REG_TY_E, "movsx dest must be 32 or 64 bit");
+  DEBUG_ASSERT(dest.ty == X64_REG_TY_R || dest.ty == X64_REG_TY_RD ||
+                   dest.ty == X64_REG_TY_E,
+               "movsx dest must be 32 or 64 bit");
 
   switch (movsx.source.ty) {
   case X64_REG_TY_W:
-    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R ? MOVSX16_64(movsx.dest, movsx.source) : MOVSX16_32(movsx.dest, movsx.source));
+    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R
+                                ? MOVSX16_64(movsx.dest, movsx.source)
+                                : MOVSX16_32(movsx.dest, movsx.source));
     break;
   case X64_REG_TY_L:
-    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R ? MOVSX8_64(movsx.dest, movsx.source) : MOVSX8_32(movsx.dest, movsx.source));
+    x64_emit_instr(emitter, dest.ty == X64_REG_TY_R
+                                ? MOVSX8_64(movsx.dest, movsx.source)
+                                : MOVSX8_32(movsx.dest, movsx.source));
     break;
   case X64_REG_TY_RD:
   case X64_REG_TY_E:
@@ -182,6 +201,72 @@ void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
 
 void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop) {
   x64_emit_instr(emitter, POP_REG64(pop.dest));
+}
+
+const struct x64_target_reloc *x64_emit_jmp(struct x64_emitter *emitter,
+                                      UNUSED struct x64_branch jmp) {
+  size_t cur_pos = x64_emit_bytesize(emitter);
+  x64_emit_instr(emitter, JMP_REL());
+
+  struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JMP,
+                                   .offset = cur_pos};
+
+  struct x64_target_reloc *p = nonnull_malloc(sizeof(reloc));
+  memcpy(p, &reloc, sizeof(reloc));
+  return p;
+  // return vector_push_back(emitter->target_relocs, &reloc);
+}
+
+const struct x64_target_reloc *x64_emit_jcc(struct x64_emitter *emitter,
+                                      struct x64_conditional_branch jcc) {
+  size_t cur_pos = x64_emit_bytesize(emitter);
+  x64_emit_instr(emitter, JMP_COND_REL(jcc.cond));
+
+  struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JCC,
+                                   .offset = cur_pos};
+
+  struct x64_target_reloc *p = nonnull_malloc(sizeof(reloc));
+  memcpy(p, &reloc, sizeof(reloc));
+  return p;
+  // return vector_push_back(emitter->target_relocs, &reloc);
+}
+
+void x64_reloc(struct x64_emitter *emitter,
+               const struct x64_target_reloc *reloc, size_t offset) {
+  size_t base = reloc->offset;
+  size_t reloc_offset = reloc->offset;
+
+  switch (reloc->ty) {
+  case X64_TARGET_RELOC_TY_JMP:
+    base += 1;
+    reloc_offset += 5;
+    break;
+  case X64_TARGET_RELOC_TY_JCC:
+    base += 2;
+    reloc_offset += 6;
+    break;
+  }
+
+  ssize_t disp = offset - reloc_offset;
+
+  memcpy(&emitter->block[base], &disp, 4);
+}
+
+void x64_emit_cmp(struct x64_emitter *emitter, struct x64_cmp cmp) {
+  TODO("cmp");
+}
+
+void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test) {
+  x64_emit_instr(emitter, TEST_REG(test.lhs, test.rhs));
+}
+
+void x64_emit_cmp_imm(struct x64_emitter *emitter, struct x64_cmp_imm cmp_imm) {
+  TODO("cmp imm");
+}
+
+void x64_emit_test_imm(struct x64_emitter *emitter,
+                       struct x64_cmp_imm test_imm) {
+  TODO("test imm");
 }
 
 void x64_emit_ret(struct x64_emitter *emitter) { x64_emit_instr(emitter, RET); }

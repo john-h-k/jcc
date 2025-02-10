@@ -395,19 +395,19 @@ void lower(struct ir_unit *unit, const struct target *target) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      // struct ir_op_uses uses = build_op_uses_map(func);
+      struct ir_op_uses uses = build_op_uses_map(func);
 
-      // for (size_t i = 0; i < uses.num_use_datas; i++) {
-      //   struct ir_op_use *use = &uses.use_datas[i];
+      for (size_t i = 0; i < uses.num_use_datas; i++) {
+        struct ir_op_use *use = &uses.use_datas[i];
 
-      //   if (!use->num_uses && !op_has_side_effects(use->op)) {
-      //     DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
-      //                  "contained op must have uses");
+        if (!use->num_uses && !op_has_side_effects(use->op)) {
+          DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
+                       "contained op must have uses");
 
-      //     debug("detaching op %zu", use->op->id);
-      //     detach_ir_op(func, use->op);
-      //   }
-      // }
+          debug("detaching op %zu", use->op->id);
+          detach_ir_op(func, use->op);
+        }
+      }
 
       prune_basicblocks(func);
     }

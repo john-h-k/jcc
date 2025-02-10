@@ -243,45 +243,42 @@ struct codegen_state {
   size_t stack_args_size;
 };
 
-// static enum x64_cond get_cond_for_op(struct ir_op *op) {
-//   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
-//                    "`get_cond_for_op` expects a binary op");
+static enum x64_cond get_cond_for_op(struct ir_op *op) {
+  invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
+                   "`get_cond_for_op` expects a binary op");
 
-//   switch (op->binary_op.ty) {
-//   case IR_OP_BINARY_OP_TY_FEQ:
-//   case IR_OP_BINARY_OP_TY_EQ:
-//     return X64_COND_EQ;
-//   case IR_OP_BINARY_OP_TY_FNEQ:
-//   case IR_OP_BINARY_OP_TY_NEQ:
-//     return X64_COND_NE;
-//   case IR_OP_BINARY_OP_TY_UGT:
-//     return X64_COND_HI;
-//   case IR_OP_BINARY_OP_TY_SGT:
-//     return X64_COND_GT;
-//   case IR_OP_BINARY_OP_TY_UGTEQ:
-//     return X64_COND_HS;
-//   case IR_OP_BINARY_OP_TY_SGTEQ:
-//     return X64_COND_GE;
-//   case IR_OP_BINARY_OP_TY_ULT:
-//     return X64_COND_LO;
-//   case IR_OP_BINARY_OP_TY_SLT:
-//     return X64_COND_LT;
-//   case IR_OP_BINARY_OP_TY_ULTEQ:
-//     return X64_COND_LS;
-//   case IR_OP_BINARY_OP_TY_SLTEQ:
-//     return X64_COND_LE;
-//   case IR_OP_BINARY_OP_TY_FLT:
-//     return X64_COND_MI;
-//   case IR_OP_BINARY_OP_TY_FGT:
-//     return X64_COND_GT;
-//   case IR_OP_BINARY_OP_TY_FLTEQ:
-//     return X64_COND_LS;
-//   case IR_OP_BINARY_OP_TY_FGTEQ:
-//     return X64_COND_GE;
-//   default:
-//     BUG("op was not a comparison");
-//   }
-// }
+  switch (op->binary_op.ty) {
+  case IR_OP_BINARY_OP_TY_FEQ:
+  case IR_OP_BINARY_OP_TY_EQ:
+    return X64_COND_ZERO;
+  case IR_OP_BINARY_OP_TY_FNEQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+    return X64_COND_NOT_ZERO;
+  case IR_OP_BINARY_OP_TY_UGT:
+    return X64_COND_NOT_BELOW_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_SGT:
+    return X64_COND_NOT_LESS_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+    return X64_COND_NOT_BELOW;
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+    return X64_COND_NOT_LESS;
+  case IR_OP_BINARY_OP_TY_ULT:
+    return X64_COND_BELOW;
+  case IR_OP_BINARY_OP_TY_SLT:
+    return X64_COND_LESS;
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+    return X64_COND_BELOW_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return X64_COND_LESS_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_FLT:
+  case IR_OP_BINARY_OP_TY_FGT:
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    TODO("x64 floating point conditional jumps");
+  default:
+    BUG("op was not a comparison");
+  }
+}
 
 static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                     const struct ir_op *op,
@@ -727,35 +724,31 @@ static void codegen_sub_imm(struct codegen_state *state, struct x64_reg dest,
 // }
 
 static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
-  // struct instr *instr = alloc_instr(state->func);
+  struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
+  struct ir_basicblock *false_target = op->stmt->basicblock->split.false_target;
 
-  // AArch64 requires turning `br.cond <true> <false>` into 2 instructions
-  // we represent this as just the `true` part of the `br.cond`, and then a
-  // `br`
-  // after branching to the false target
+  enum x64_cond cond;
+  if (op->br_cond.cond->reg.ty != IR_REG_TY_FLAGS) {
+    struct x64_reg cmp_reg = codegen_reg(op->br_cond.cond);
 
-  // struct ir_basicblock *true_target =
-  // op->stmt->basicblock->split.true_target; struct ir_basicblock *false_target
-  // = op->stmt->basicblock->split.false_target;
+    struct instr *test = alloc_instr(state->func);
+    test->x64->ty = X64_INSTR_TY_TEST;
+    test->x64->test = (struct x64_cmp){.lhs = cmp_reg, .rhs = cmp_reg};
 
-  // if (op->br_cond.cond->reg.ty == IR_REG_TY_FLAGS) {
-  //   // emit based on flags
-  //   enum x64_cond cond = get_cond_for_op(op->br_cond.cond);
-  //   instr->x64->ty = X64_INSTR_TY_B_COND;
-  //   instr->x64->b_cond = (struct x64_conditional_branch){
-  //       .cond = cond, .target = true_target};
-  // } else {
-  //   struct x64_reg cmp_reg = codegen_reg(op->br_cond.cond);
+    cond = X64_COND_NOT_ZERO;
+  } else {
+    cond = get_cond_for_op(op->br_cond.cond);
+  }
 
-  //   instr->x64->ty = X64_INSTR_TY_CBNZ;
-  //   instr->x64->cbnz = (struct x64_compare_and_branch){
-  //       .cmp = cmp_reg, .target = true_target};
-  // }
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = X64_INSTR_TY_JCC;
+  instr->x64->jcc =
+      (struct x64_conditional_branch){.cond = cond, .target = true_target};
 
-  // // now generate the `br`
-  // struct instr *br = alloc_instr(state->func);
-  // br->x64->ty = X64_INSTR_TY_B;
-  // br->x64->b = (struct x64_branch){.target = false_target};
+  // now generate the `jmp`
+  struct instr *jmp = alloc_instr(state->func);
+  jmp->x64->ty = X64_INSTR_TY_JMP;
+  jmp->x64->jmp = (struct x64_branch){.target = false_target};
 }
 
 static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
@@ -3123,6 +3116,69 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       fprintf(file, "]");
 
       format += 12;
+    } else if (strncmp(format, "instr", 5) == 0) {
+      struct instr *instr = va_arg(list, struct instr *);
+      if (instr) {
+        fprintf(file, "%%%zx", instr->id);
+      } else {
+        fprintf(file, "%%(null)");
+      }
+
+      format += 5;
+    } else if (strncmp(format, "cond", 4) == 0) {
+      enum x64_cond cond = va_arg(list, enum x64_cond);
+      switch (cond) {
+      case X64_COND_OVERFLOW:
+        fprintf(file, "o");
+        break;
+      case X64_COND_NOT_OVERFLOW:
+        fprintf(file, "no");
+        break;
+      case X64_COND_BELOW:
+        fprintf(file, "b");
+        break;
+      case X64_COND_NOT_BELOW:
+        fprintf(file, "nb");
+        break;
+      case X64_COND_ZERO:
+        fprintf(file, "z");
+        break;
+      case X64_COND_NOT_ZERO:
+        fprintf(file, "nz");
+        break;
+      case X64_COND_BELOW_OR_EQUAL:
+        fprintf(file, "be");
+        break;
+      case X64_COND_NOT_BELOW_OR_EQUAL:
+        fprintf(file, "nbe");
+        break;
+      case X64_COND_SIGN:
+        fprintf(file, "s");
+        break;
+      case X64_COND_NOT_SIGN:
+        fprintf(file, "ns");
+        break;
+      case X64_COND_PARITY:
+        fprintf(file, "p");
+        break;
+      case X64_COND_NOT_PARITY:
+        fprintf(file, "np");
+        break;
+      case X64_COND_LESS:
+        fprintf(file, "l");
+        break;
+      case X64_COND_NOT_LESS:
+        fprintf(file, "nl");
+        break;
+      case X64_COND_LESS_OR_EQUAL:
+        fprintf(file, "le");
+        break;
+      case X64_COND_NOT_LESS_OR_EQUAL:
+        fprintf(file, "nle");
+        break;
+      }
+
+      format += 4;
     } else if (strncmp(format, "reg", 3) == 0) {
       struct x64_reg reg = va_arg(list, struct x64_reg);
       switch (reg.ty) {
@@ -3231,6 +3287,24 @@ static void debug_print_push(FILE *file, const struct x64_push *push) {
 
 static void debug_print_pop(FILE *file, const struct x64_pop *pop) {
   codegen_fprintf(file, " %reg", pop->dest);
+}
+
+static void debug_print_branch(FILE *file, const struct x64_branch *branch) {
+  codegen_fprintf(file, " %instr", branch->target->first_instr);
+}
+
+static void debug_print_conditional_branch(
+    FILE *file, const struct x64_conditional_branch *conditional_branch) {
+  codegen_fprintf(file, "%cond %instr", conditional_branch->cond,
+                  conditional_branch->target->first_instr);
+}
+
+static void debug_print_cmp(FILE *file, const struct x64_cmp *cmp) {
+  codegen_fprintf(file, " %reg, %reg", cmp->lhs, cmp->rhs);
+}
+
+static void debug_print_cmp_imm(FILE *file, const struct x64_cmp_imm *cmp_imm) {
+  codegen_fprintf(file, " %reg, %imm", cmp_imm->lhs, cmp_imm->imm);
 }
 
 static void debug_print_instr(FILE *file,
@@ -3346,7 +3420,29 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "ret");
     break;
   case X64_INSTR_TY_JMP:
-    TODO("debug print jmp");
+    fprintf(file, "jmp");
+    debug_print_branch(file, &instr->x64->jmp);
+    break;
+  case X64_INSTR_TY_JCC:
+    fprintf(file, "j");
+    debug_print_conditional_branch(file, &instr->x64->jcc);
+    break;
+  case X64_INSTR_TY_CMP:
+    fprintf(file, "cmp");
+    debug_print_cmp(file, &instr->x64->cmp);
+    break;
+  case X64_INSTR_TY_TEST:
+    fprintf(file, "test");
+    debug_print_cmp(file, &instr->x64->test);
+    break;
+  case X64_INSTR_TY_CMP_IMM:
+    fprintf(file, "cmp");
+    debug_print_cmp_imm(file, &instr->x64->cmp_imm);
+    break;
+  case X64_INSTR_TY_TEST_IMM:
+    fprintf(file, "test");
+    debug_print_cmp_imm(file, &instr->x64->test_imm);
+    break;
   }
 }
 

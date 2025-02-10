@@ -26,6 +26,12 @@ struct emit_state {
   const struct codegen_function *func;
   struct arena_allocator *arena;
   struct x64_emitter *emitter;
+  struct vector *local_relocs;
+};
+
+struct local_reloc_info {
+  struct instr *target;
+  const struct x64_target_reloc *reloc;
 };
 
 static void emit_instr(const struct emit_state *state,
@@ -57,6 +63,8 @@ static void emit_instr(const struct emit_state *state,
     EMIT(NOT, not);
     EMIT(NEG, neg);
 
+    EMIT(TEST, test);
+
     EMIT(MOVSX, movsx);
 
     EMIT(PUSH, push);
@@ -67,6 +75,24 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(MOV_IMM, mov_imm);
     EMIT(MOV_REG, mov_reg);
+  case X64_INSTR_TY_JMP: {
+    const struct x64_target_reloc *reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
+    struct local_reloc_info info = {
+      .target = instr->x64->jmp.target->first_instr,
+      .reloc = reloc
+    };
+    vector_push_back(state->local_relocs, &info);
+    break;
+  }
+  case X64_INSTR_TY_JCC: {
+    const struct x64_target_reloc *reloc = x64_emit_jcc(state->emitter, instr->x64->jcc);
+    struct local_reloc_info info = {
+      .target = instr->x64->jcc.target->first_instr,
+      .reloc = reloc
+    };
+    vector_push_back(state->local_relocs, &info);
+    break;
+  }
   case X64_INSTR_TY_RET:
     x64_emit_ret(state->emitter);
     break;
@@ -146,14 +172,21 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
       struct x64_emitter *emitter;
       create_x64_emitter(&emitter);
 
+      struct vector *local_relocs = vector_create(sizeof(struct local_reloc_info));
+
       struct emit_state state = {
-          .func = func, .arena = unit->arena, .emitter = emitter};
+          .func = func, .arena = unit->arena, .emitter = emitter, .local_relocs = local_relocs };
 
       struct vector *relocs = vector_create(sizeof(struct relocation));
+      struct vector *instr_offsets = vector_create(sizeof(size_t));
 
       struct instr *instr = func->first;
       while (instr) {
+        DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id, "expected emitted count to be same as instr id");
+
         size_t pos = x64_emit_bytesize(state.emitter);
+
+        vector_push_back(instr_offsets, &pos);
 
         size_t emitted = x64_emitted_count(state.emitter);
         emit_instr(&state, instr);
@@ -173,6 +206,15 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
         }
 
         instr = instr->succ;
+      }
+
+      size_t num_local_relocs = vector_length(state.local_relocs);
+      for (size_t j = 0; j < num_local_relocs; j++) {
+        struct local_reloc_info *info = vector_get(state.local_relocs, j);
+
+        size_t instr_pos = *(size_t *)vector_get(instr_offsets, info->target->id);
+
+        x64_reloc(state.emitter, info->reloc, instr_pos);
       }
 
       size_t len = x64_emit_bytesize(emitter);
