@@ -146,49 +146,6 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-// will be useful for platforms without bitfield instructions
-// static struct ir_op *load_unshifted_bitfield(struct ir_func *func,
-//                                              struct ir_op *op,
-//                                              struct ir_bitfield bitfield,
-//                                              enum load_bitfield load_bitfield) {
-//   DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_POINTER, "expected ptr");
-
-//   struct ir_op *load =
-//       insert_after_ir_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_I32);
-//   load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = op};
-
-//   unsigned int mask_val;
-
-//   switch (load_bitfield) {
-//   case LOAD_BITFIELD_MASK_IN:
-//     mask_val =
-//         ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
-//     break;
-//   case LOAD_BITFIELD_MASK_OUT:
-//     mask_val =
-//         MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
-//     break;
-//   }
-
-//   // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
-//   // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
-//   // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
-//   // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
-//   // bitfield.offset, bitfield.width, mask_val);
-
-//   struct ir_op *mask_cnst =
-//       insert_after_ir_op(func, load, IR_OP_TY_CNST, IR_VAR_TY_I32);
-//   mask_cnst->cnst =
-//       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
-
-//   struct ir_op *mask =
-//       insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-//   mask->binary_op = (struct ir_op_binary_op){
-//       .ty = IR_OP_BINARY_OP_TY_AND, .lhs = load, .rhs = mask_cnst};
-
-//   return mask;
-// }
-
 // TODO: signs and stuff are wrong
 static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
   struct ir_op *value = op->store_bitfield.value;

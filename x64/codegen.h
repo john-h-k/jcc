@@ -38,6 +38,7 @@ enum x64_instr_ty {
   // X64_INSTR_TY_MOVZX,
 
   X64_INSTR_TY_LEA,
+  X64_INSTR_TY_LEA_PCREL,
 
   X64_INSTR_TY_PUSH,
   X64_INSTR_TY_POP,
@@ -71,7 +72,13 @@ enum x64_instr_ty {
   X64_INSTR_TY_SAR,
 
   X64_INSTR_TY_JMP,
+  X64_INSTR_TY_JMP_REG,
   X64_INSTR_TY_JCC,
+
+  X64_INSTR_TY_SETCC,
+
+  X64_INSTR_TY_CALL,
+  X64_INSTR_TY_CALL_REG,
 
   X64_INSTR_TY_CMP,
   X64_INSTR_TY_TEST,
@@ -88,6 +95,7 @@ enum x64_reg_class {
 };
 
 enum x64_reg_ty {
+  X64_REG_TY_NONE,
   X64_REG_TY_R, // 64 bit
   X64_REG_TY_E, // 32 bit
   X64_REG_TY_RD, // 32 bit
@@ -212,6 +220,11 @@ struct x64_pop {
   struct x64_reg dest;
 };
 
+struct x64_lea_pcrel {
+  struct x64_reg dest;
+  size_t offset;
+};
+
 struct x64_lea {
   struct x64_reg dest;
   struct x64_reg base;
@@ -221,9 +234,7 @@ struct x64_lea {
 };
 
 struct x64_conditional_select {
-  // enum x64_cond cond;
-  struct x64_reg true_source;
-  struct x64_reg false_source;
+  enum x64_cond cond;
   struct x64_reg dest;
 };
 
@@ -269,6 +280,10 @@ struct x64_instr {
     };
 
     union {
+      struct x64_lea_pcrel lea_pcrel;
+    };
+
+    union {
       struct x64_pop pop;
     };
 
@@ -305,7 +320,15 @@ struct x64_instr {
     };
 
     union {
-      struct x64_branch branch, jmp;
+      struct x64_branch branch, jmp, call;
+    };
+
+    union {
+      struct x64_conditional_select conditional_select, setcc;
+    };
+
+    union {
+      struct x64_branch_reg branch_reg, jmp_reg, call_reg;
     };
 
     union {
@@ -323,9 +346,6 @@ enum x64_reg_usage_ty {
 size_t reg_size(enum x64_reg_ty reg_ty);
 
 struct x64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
-
-bool is_return_reg(struct x64_reg reg);
-bool is_zero_reg(struct x64_reg reg);
 
 enum x64_instr_class instr_class(enum x64_instr_ty ty);
 

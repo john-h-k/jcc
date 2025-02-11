@@ -65,7 +65,7 @@ static enum aarch64_reg_ty reg_ty_for_size(enum aarch64_reg_class reg_class,
   }
 }
 
-size_t reg_size(enum aarch64_reg_ty reg_ty) {
+size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty) {
   switch (reg_ty) {
   case AARCH64_REG_TY_NONE:
     BUG("NONE reg ty has no size");
@@ -87,9 +87,9 @@ size_t reg_size(enum aarch64_reg_ty reg_ty) {
   }
 }
 
-bool is_return_reg(struct aarch64_reg reg) { return reg.idx == 0; }
+static bool is_return_reg(struct aarch64_reg reg) { return reg.idx == 0; }
 
-bool is_zero_reg(struct aarch64_reg reg) {
+static bool is_zero_reg(struct aarch64_reg reg) {
   // this is a bit dodgy as it can also be SP in this context
   return aarch64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
 }
@@ -355,7 +355,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 
 // this is useful for save/restores where you don't know what is live in that
 // reg
-struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
+UNUSED static struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
   switch (reg.ty) {
   case IR_REG_TY_NONE:
   case IR_REG_TY_SPILLED:
@@ -815,9 +815,15 @@ static void codegen_addr_offset_op(struct codegen_state *state,
   struct ir_op_addr_offset *addr_offset = &op->addr_offset;
 
   struct aarch64_reg base = codegen_reg(addr_offset->base);
-  struct aarch64_reg index = codegen_reg(addr_offset->index);
 
-  DEBUG_ASSERT(popcntl(addr_offset->scale) == 1,
+  struct aarch64_reg index;
+  if (addr_offset->index) {
+    index = codegen_reg(addr_offset->index);
+  } else {
+    index = zero_reg_for_ty(dest.ty);
+  }
+
+  DEBUG_ASSERT(popcntl(addr_offset->scale) <= 1,
                "non pow2 addr offset op should have been lowered");
 
   size_t shift = tzcnt(addr_offset->scale);
@@ -1529,7 +1535,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
   }
 }
 
-enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
+static enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
   switch (reg.ty) {
   case AARCH64_REG_TY_NONE:
     return AARCH64_REG_ATTR_FLAG_NONE;
@@ -1909,7 +1915,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
     *instr->reloc = (struct relocation){
-        .ty = RELOCATION_TY_SINGLE,
+        .ty = RELOCATION_TY_CALL,
         .symbol_index = op->call.target->addr.glb->id,
         .size = 2,
         .address = 0,
@@ -2368,7 +2374,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   struct bitset_iter gp_iter =
       bitset_iter(ir->reg_usage.gp_registers_used,
-                  AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
+                  AARCH64_TARGET.reg_info.gp_registers.num_volatile, true);
 
   size_t i;
   while (bitset_iter_next(&gp_iter, &i)) {
@@ -2378,7 +2384,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   struct bitset_iter fp_iter =
       bitset_iter(ir->reg_usage.fp_registers_used,
-                  AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+                  AARCH64_TARGET.reg_info.fp_registers.num_volatile, true);
 
   while (bitset_iter_next(&fp_iter, &i)) {
     info.saved_fp_registers |= (1 << i);
@@ -2428,7 +2434,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
     struct bitset_iter gp_reg_iter =
         bitset_iter(ir->reg_usage.gp_registers_used,
-                    AARCH64_TARGET.reg_info.gp_registers.num_nonvolatile, true);
+                    AARCH64_TARGET.reg_info.gp_registers.num_volatile, true);
 
     size_t idx;
     while (bitset_iter_next(&gp_reg_iter, &idx)) {
@@ -2449,7 +2455,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
     struct bitset_iter fp_reg_iter =
         bitset_iter(ir->reg_usage.fp_registers_used,
-                    AARCH64_TARGET.reg_info.fp_registers.num_nonvolatile, true);
+                    AARCH64_TARGET.reg_info.fp_registers.num_volatile, true);
 
     while (bitset_iter_next(&fp_reg_iter, &idx)) {
       // guaranteed to be mod 8
@@ -2804,8 +2810,8 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     // FMOV is an exception as it can move GP<->FP
 
     if (instr->aarch64->ty == AARCH64_INSTR_TY_FMOV) {
-      size_t cur_size = reg_size(reg.ty);
-      size_t last_size = reg_size(data->reg_ty);
+      size_t cur_size = aarch64_reg_size(reg.ty);
+      size_t last_size = aarch64_reg_size(data->reg_ty);
       invariant_assert(
           cur_size == last_size,
           "entry %zu: expected `fmov` %zu to have same size registers "
@@ -2833,19 +2839,6 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   }
 
   data->last = instr;
-}
-
-static int sort_entries_by_id(const void *a, const void *b) {
-  const struct codegen_entry *l = a;
-  const struct codegen_entry *r = b;
-
-  if (l->glb_id > r->glb_id) {
-    return 1;
-  } else if (l->glb_id == r->glb_id) {
-    return 0;
-  } else {
-    return -1;
-  }
 }
 
 static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
@@ -3329,7 +3322,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       struct aarch64_reg reg = va_arg(list, struct aarch64_reg);
       ssize_t imm = va_arg(list, ssize_t);
 
-      size_t size = reg_size(reg.ty);
+      size_t size = aarch64_reg_size(reg.ty);
       char prefix = reg_prefix(reg);
 
       if (!imm) {

@@ -354,7 +354,9 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_ADDR_OFFSET:
     cb(&op->addr_offset.base, cb_metadata);
-    cb(&op->addr_offset.index, cb_metadata);
+    if (op->addr_offset.index) {
+      cb(&op->addr_offset.index, cb_metadata);
+    }
     break;
   case IR_OP_TY_BR:
     break;

@@ -1339,8 +1339,8 @@ static void get_member_info(struct ir_unit *iru,
   *member_offset = info.offsets ? info.offsets[*member_idx] : 0;
 }
 
-static struct ir_op *build_ir_for_member_address_offset(
-    struct ir_func_builder *irb, struct ir_stmt **stmt,
+static size_t get_member_address_offset(
+    struct ir_func_builder *irb,
     const struct td_var_ty *struct_ty, const char *member_name,
     struct ir_var_ty *member_ty, bool *member_is_bitfield,
     struct ir_bitfield *member_bitfield, struct td_var_ty *td_member_ty) {
@@ -1351,17 +1351,7 @@ static struct ir_op *build_ir_for_member_address_offset(
                   &member_offset, member_is_bitfield, member_bitfield,
                   td_member_ty);
 
-  if (!member_offset) {
-    return NULL;
-  }
-
-  struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
-  offset->ty = IR_OP_TY_CNST;
-  offset->var_ty = var_ty_for_pointer_size(irb->unit);
-  offset->cnst =
-      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = member_offset};
-
-  return offset;
+  return member_offset;
 }
 
 static struct ir_op *
@@ -1372,19 +1362,18 @@ build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
   struct ir_var_ty member_ty;
-  struct ir_op *rhs = build_ir_for_member_address_offset(
-      irb, stmt, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
+  size_t offset = get_member_address_offset(
+      irb, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
       member_bitfield, NULL);
 
-  if (!rhs) {
-    return lhs;
-  }
-
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
-  op->ty = IR_OP_TY_BINARY_OP;
+  op->ty = IR_OP_TY_ADDR_OFFSET;
   op->var_ty = IR_VAR_TY_POINTER;
-  op->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = rhs};
+  op->addr_offset = (struct ir_op_addr_offset){
+    .base = lhs,
+    .offset = offset,
+    .index = NULL
+  };
 
   return op;
 }
@@ -1400,19 +1389,18 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
   struct ir_op *lhs = build_ir_for_expr(irb, stmt, lhs_expr);
 
   struct ir_var_ty member_ty;
-  struct ir_op *rhs = build_ir_for_member_address_offset(
-      irb, stmt, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
-      member_is_bitfield, member_bitfield, NULL);
-
-  if (!rhs) {
-    return lhs;
-  }
+  size_t offset = get_member_address_offset(
+      irb, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
+      member_bitfield, NULL);
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
-  op->ty = IR_OP_TY_BINARY_OP;
+  op->ty = IR_OP_TY_ADDR_OFFSET;
   op->var_ty = IR_VAR_TY_POINTER;
-  op->binary_op = (struct ir_op_binary_op){
-      .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = rhs};
+  op->addr_offset = (struct ir_op_addr_offset){
+    .base = lhs,
+    .offset = offset,
+    .index = NULL
+  };
 
   return op;
 }

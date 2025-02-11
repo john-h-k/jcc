@@ -145,6 +145,8 @@ void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
                "movsx dest must be 32 or 64 bit");
 
   switch (movsx.source.ty) {
+  case X64_REG_TY_NONE:
+    BUG("doesn't make sense");
   case X64_REG_TY_W:
     x64_emit_instr(emitter, dest.ty == X64_REG_TY_R
                                 ? MOVSX16_64(movsx.dest, movsx.source)
@@ -220,8 +222,16 @@ void x64_emit_mov_store_byte_imm(struct x64_emitter *emitter, struct x64_mov_sto
                                         mov_store_byte_imm.addr, mov_store_byte_imm.imm));
 }
 
+void x64_emit_lea_pcrel(struct x64_emitter *emitter, struct x64_lea_pcrel lea_pcrel) {
+  x64_emit_instr(emitter, LEA_PCREL(lea_pcrel.dest, lea_pcrel.offset));
+}
+
 void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea) {
-  x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, lea.scale, lea.offset));
+  if (lea.scale) {
+    x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, (size_t)tzcnt(lea.scale), lea.offset));
+  } else {
+    x64_emit_instr(emitter, LEA_NOIDX_REG64(lea.dest, lea.base, lea.offset));
+  }
 }
 
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
@@ -230,6 +240,22 @@ void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
 
 void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop) {
   x64_emit_instr(emitter, POP_REG64(pop.dest));
+}
+
+void x64_emit_call(struct x64_emitter *emitter, struct x64_branch call) {
+  x64_emit_instr(emitter, CALL_REL32(0));
+}
+
+void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg) {
+  TODO("x64 emit jmp reg");
+}
+
+void x64_emit_call_reg(struct x64_emitter *emitter, struct x64_branch_reg call_reg) {
+  TODO("x64 emit call reg");
+}
+
+void x64_emit_setcc(struct x64_emitter *emitter, struct x64_conditional_select setcc) {
+  x64_emit_instr(emitter, SET_COND(setcc.cond, setcc.dest));
 }
 
 struct x64_target_reloc x64_emit_jmp(struct x64_emitter *emitter,

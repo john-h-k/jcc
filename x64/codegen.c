@@ -9,15 +9,13 @@
 
 #include <stdio.h>
 
-// #define MOV_ALIAS(dest_reg, source_reg)                                        \
-//   (struct x64_instr) {                                                     \
-//     .ty = X64_INSTR_TY_ORR, .orr = {                                       \
-//       .lhs = zero_reg_for_ty(dest_reg.ty),                                     \
-//       .rhs = (source_reg),                                                     \
-//       .dest = (dest_reg),                                                      \
-//       .imm6 = 0                                                                \
-//     }                                                                          \
-//   }
+#define MOV_ALIAS(dest_reg, source_reg)                                        \
+  (struct x64_instr) {                                                         \
+    .ty = X64_INSTR_TY_MOV_REG, .mov_reg = {                                   \
+      .dest = (dest_reg),                                                      \
+      .source = (source_reg),                                                  \
+    }                                                                          \
+  }
 
 // #define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
 //   (struct x64_instr) {                                                     \
@@ -74,7 +72,12 @@ static bool reg_eq(struct x64_reg l, struct x64_reg r) {
 }
 
 static struct x64_reg return_reg_for_ty(enum x64_reg_ty reg_ty) {
-  return (struct x64_reg){.ty = reg_ty, .idx = 0};
+  return (struct x64_reg){.ty = reg_ty,
+                          .idx = x64_reg_ty_is_gp(reg_ty) ? REG_IDX_AX : 0};
+}
+
+static bool is_return_reg(struct x64_reg reg) {
+  return reg.idx == return_reg_for_ty(reg.ty).idx;
 }
 
 // static struct x64_reg zero_reg_for_ty(enum x64_reg_ty reg_ty) {
@@ -83,6 +86,8 @@ static struct x64_reg return_reg_for_ty(enum x64_reg_ty reg_ty) {
 
 bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   switch (ty) {
+  case X64_REG_TY_NONE:
+    BUG("doesn't make sense");
   case X64_REG_TY_R:
   case X64_REG_TY_RD:
   case X64_REG_TY_E:
@@ -289,13 +294,22 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
 }
 
 static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
+  // don't modify without modifying the corresponding values in `x64/lower.c`
+
+  static size_t reg_map[16] = {
+      [0] = REG_IDX_DI, [1] = REG_IDX_SI, [2] = REG_IDX_DX,  [3] = REG_IDX_CX,
+      [4] = 8,          [5] = 9,          [6] = REG_IDX_AX,  [7] = 10,
+      [8] = 11,         [9] = REG_IDX_BX, [10] = 12,         [11] = 13,
+      [12] = 14,        [13] = 15,        [14] = REG_IDX_BP, [15] = REG_IDX_SP,
+  };
+
   switch (ty) {
   case IR_REG_TY_NONE:
   case IR_REG_TY_SPILLED:
   case IR_REG_TY_FLAGS:
     BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
-    return idx < 3 ? idx : (idx < 9 ? idx + 3 : (idx < 12 ? idx - 9 + 3 : idx));
+    return reg_map[idx];
   case IR_REG_TY_FP:
     return idx;
   }
@@ -349,6 +363,8 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
   enum x64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty, idx);
 
   switch (reg_ty) {
+  case X64_REG_TY_NONE:
+    BUG("doesn't make sense");
   case X64_REG_TY_R:
   case X64_REG_TY_RD:
   case X64_REG_TY_E:
@@ -372,7 +388,10 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   struct x64_reg dest = codegen_reg(op);
 
   if (op->mov.value->reg.ty == IR_REG_TY_FLAGS) {
-    TODO("flags mov x64");
+    struct instr *instr = alloc_instr(state->func);
+    instr->x64->ty = X64_INSTR_TY_SETCC;
+    instr->x64->setcc = (struct x64_conditional_select){
+        .dest = dest, .cond = get_cond_for_op(op->mov.value)};
 
     return;
   }
@@ -674,18 +693,25 @@ static void codegen_addr_offset_op(struct codegen_state *state,
   struct ir_op_addr_offset *addr_offset = &op->addr_offset;
 
   struct x64_reg base = codegen_reg(addr_offset->base);
-  struct x64_reg index = codegen_reg(addr_offset->index);
 
-  DEBUG_ASSERT(popcntl(addr_offset->scale) == 1,
+  DEBUG_ASSERT(popcntl(addr_offset->scale) <= 1,
                "non pow2 addr offset op should have been lowered");
 
   struct instr *instr = alloc_instr(state->func);
   instr->x64->ty = X64_INSTR_TY_LEA;
-  instr->x64->lea = (struct x64_lea){.dest = dest,
-                                     .base = base,
-                                     .index = index,
-                                     .scale = tzcnt(addr_offset->scale),
-                                     .offset = addr_offset->offset};
+
+  if (addr_offset->index) {
+    instr->x64->lea = (struct x64_lea){.dest = dest,
+                                       .base = base,
+                                       .index = codegen_reg(addr_offset->index),
+                                       .scale = addr_offset->scale,
+                                       .offset = addr_offset->offset};
+  } else {
+    instr->x64->lea = (struct x64_lea){.dest = dest,
+                                       .base = base,
+                                       .scale = 0,
+                                       .offset = addr_offset->offset};
+  }
 }
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
   struct x64_reg dest = codegen_reg(op);
@@ -702,41 +728,19 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
-    TODO("addr GLB x64");
-    //   struct ir_glb *glb = op->addr.glb;
+    struct ir_glb *glb = op->addr.glb;
 
-    //   struct instr *adrp = alloc_instr(state->func);
-    //   adrp->x64->ty = X64_INSTR_TY_ADRP;
-    //   adrp->x64->adrp = (struct x64_addr_imm){.dest = dest, .imm = 0};
+    struct instr *addr = alloc_instr(state->func);
+    addr->x64->ty = X64_INSTR_TY_LEA_PCREL;
+    addr->x64->lea_pcrel = (struct x64_lea_pcrel){.dest = dest, .offset = 0};
 
-    //   adrp->reloc = arena_alloc(state->func->unit->arena,
-    //   sizeof(*adrp->reloc)); *adrp->reloc = (struct relocation){
-    //       .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ?
-    //       RELOCATION_TY_LOCAL_PAIR
-    //                                                  :
-    //                                                  RELOCATION_TY_UNDEF_PAIR,
-    //       .symbol_index = glb->id,
-    //       .address = 0,
-    //       .size = 0};
-
-    //   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-    //     struct instr *add = alloc_instr(state->func);
-    //     add->x64->ty = X64_INSTR_TY_ADD_IMM;
-    //     add->x64->add_imm = (struct x64_addsub_imm){
-    //         .dest = dest,
-    //         .source = dest,
-    //         .imm = 0,
-    //     };
-    //   } else {
-    //     struct instr *ldr = alloc_instr(state->func);
-    //     ldr->x64->ty = X64_INSTR_TY_LOAD_IMM;
-    //     ldr->x64->load_imm = (struct x64_load_imm){
-    //         .mode = X64_ADDRESSING_MODE_OFFSET,
-    //         .dest = dest,
-    //         .addr = dest,
-    //         .imm = 0,
-    //     };
-    //   }
+    addr->reloc = arena_alloc(state->func->unit->arena, sizeof(*addr->reloc));
+    *addr->reloc = (struct relocation){
+        .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_SINGLE
+                                                   : RELOCATION_TY_UNDEF_PAIR,
+        .symbol_index = glb->id,
+        .address = 0,
+        .size = 0};
   }
   }
 }
@@ -1184,7 +1188,7 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I8: {
-    if (!reg_eq(dest, source)) {
+    if (dest.idx != source.idx) {
       struct instr *mov = alloc_instr(state->func);
       mov->x64->ty = X64_INSTR_TY_MOV_REG;
       mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
@@ -1199,7 +1203,7 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
     break;
   }
   case IR_VAR_PRIMITIVE_TY_I16: {
-    if (!reg_eq(dest, source)) {
+    if (dest.idx != source.idx) {
       struct instr *mov = alloc_instr(state->func);
       mov->x64->ty = X64_INSTR_TY_MOV_REG;
       mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
@@ -1288,652 +1292,660 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// static bool try_get_hfa_info(struct codegen_state *state,
-//                              const struct ir_var_ty *var_ty,
-//                              size_t *num_members, size_t *member_size) {
-//   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT)
-//   {
-//     return false;
-//   }
-
-//   if (var_ty->ty == IR_VAR_TY_TY_UNION) {
-//     TODO("union hfa handling");
-//   }
-
-//   if (!var_ty->struct_ty.num_fields) {
-//     return false;
-//   }
-
-//   struct ir_var_ty *field_ty = &var_ty->struct_ty.fields[0];
-
-//   if (!var_ty_is_fp(field_ty)) {
-//     return false;
-//   }
-
-//   if (var_ty->struct_ty.num_fields > 4) {
-//     return false;
-//   }
-
-//   for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-//     if (!var_ty_eq(state->ir, field_ty, &var_ty->struct_ty.fields[i])) {
-//       return false;
-//     }
-//   }
-
-//   switch (field_ty->primitive) {
-//   case IR_VAR_PRIMITIVE_TY_F16:
-//     *member_size = 2;
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_F32:
-//     *member_size = 4;
-//     break;
-//   case IR_VAR_PRIMITIVE_TY_F64:
-//     *member_size = 8;
-//     break;
-//   default:
-//     unreachable();
-//   }
-
-//   *num_members = var_ty->struct_ty.num_fields;
-//   return true;
-// }
-
-// // when generating reg moves, assume memory slots never conflict
-// // use incrementing values from 128 onwards
-// #define FIRST_MEM_LOC 128
-// #define IS_MEM_LOC(v) ((v.idx) >= FIRST_MEM_LOC)
-// #define MEM_LOC() (last_mem_loc++)
-
-// struct mem_loc {
-//   struct x64_reg base;
-//   size_t offset;
-//   size_t size;
-// };
-// struct mem_copy {
-//   struct mem_loc src, dest;
-// };
-
-// static void codegen_moves(struct codegen_state *state, struct move_set moves,
-//                           enum x64_reg_class reg_class) {
-//   for (size_t i = 0; i < moves.num_moves; i++) {
-//     struct move move = moves.moves[i];
-
-//     if (IS_MEM_LOC(move.from)) {
-//       DEBUG_ASSERT(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy
-//       list");
-
-//       struct mem_loc *from = move.from.metadata;
-//       struct x64_reg to = {.ty = reg_ty_for_size(reg_class, from->size),
-//                                .idx = move.to.idx};
-
-//       DEBUG_ASSERT(from->offset % from->size == 0,
-//                    "offset was not a multiple of size");
-//       size_t offset = from->offset / from->size;
-
-//       struct instr *load = alloc_instr(state->func);
-//       load->x64->ty = X64_INSTR_TY_LOAD_IMM;
-//       load->x64->load_imm =
-//           (struct x64_load_imm){.addr = from->base,
-//                                     .imm = offset,
-//                                     .dest = to,
-//                                     .mode = X64_ADDRESSING_MODE_OFFSET};
-//     } else if (IS_MEM_LOC(move.to)) {
-//       DEBUG_ASSERT(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy
-//       list");
-
-//       struct mem_loc *to = move.to.metadata;
-//       struct x64_reg from = {.ty = reg_ty_for_size(reg_class, to->size),
-//                                  .idx = move.from.idx};
-
-//       DEBUG_ASSERT(to->offset % to->size == 0,
-//                    "offset was not a multiple of size");
-//       size_t offset = to->offset / to->size;
-
-//       struct instr *store = alloc_instr(state->func);
-//       store->x64->ty = X64_INSTR_TY_STORE_IMM;
-//       store->x64->store_imm =
-//           (struct x64_store_imm){.addr = to->base,
-//                                      .imm = offset,
-//                                      .source = from,
-//                                      .mode = X64_ADDRESSING_MODE_OFFSET};
-//     } else {
-//       // we move more of register than necessary here
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       switch (reg_class) {
-//       case X64_REG_CLASS_GP: {
-//         struct x64_reg source = {.ty = X64_REG_TY_X,
-//                                      .idx = move.from.idx};
-//         struct x64_reg dest = {.ty = X64_REG_TY_X, .idx = move.to.idx};
-//         *mov->x64 = MOV_ALIAS(dest, source);
-//         break;
-//       }
-//       case X64_REG_CLASS_FP: {
-//         struct x64_reg source = {.ty = X64_REG_TY_D,
-//                                      .idx = move.from.idx};
-//         struct x64_reg dest = {.ty = X64_REG_TY_D, .idx = move.to.idx};
-//         *mov->x64 = FP_MOV_ALIAS(dest, source);
-//         break;
-//       }
-//       }
-//     }
-//   }
-// }
-
-// enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
-//   switch (reg.ty) {
-//   case X64_REG_TY_NONE:
-//     return X64_REG_ATTR_FLAG_NONE;
-//   case X64_REG_TY_W:
-//   case X64_REG_TY_X:
-//     if (!reg.idx) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
-//              X64_REG_ATTR_FLAG_RET_REG;
-//     }
-
-//     if (reg.idx <= 7) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
-//     }
-
-//     if (reg.idx < 18) {
-//       return X64_REG_ATTR_FLAG_VOLATILE;
-//     }
-
-//     if (reg.idx == 18) {
-//       return X64_REG_ATTR_FLAG_RESERVED;
-//     }
-
-//     if (reg.idx < 29) {
-//       return X64_REG_ATTR_FLAG_NONE;
-//     }
-
-//     return X64_REG_ATTR_FLAG_RESERVED;
-//   case X64_REG_TY_V:
-//   case X64_REG_TY_Q:
-//     if (!reg.idx) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
-//              X64_REG_ATTR_FLAG_RET_REG;
-//     }
-
-//     if (reg.idx <= 7) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
-//     }
-
-//     if (reg.idx <= 15) {
-//       return X64_REG_ATTR_FLAG_VOLATILE;
-//     }
-
-//     return X64_REG_ATTR_FLAG_NONE;
-//   case X64_REG_TY_D:
-//   case X64_REG_TY_S:
-//   case X64_REG_TY_H:
-//   case X64_REG_TY_B:
-//     if (!reg.idx) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
-//              X64_REG_ATTR_FLAG_RET_REG;
-//     }
-
-//     if (reg.idx <= 7) {
-//       return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
-//     }
-
-//     return X64_REG_ATTR_FLAG_NONE;
-//   }
-// }
-
-// // reg 9 is not part of calling convention
-// // and all registers have already been saved
-// // so this is always safe
-// // same with reg 10, which we use if a register branch target is needed for
-// // `blr`
-// #define GP_TMP_REG_IDX ((size_t)9)
-// #define BLR_REG_IDX ((size_t)10)
-// #define ADDR_REG_IDX ((size_t)11)
-// #define FP_TMP_REG_IDX ((size_t)16)
-
-// // FIXME: apple do things differently!!!
-
-// #define INTEGRAL_OR_PTRLIKE(var_ty)                                            \
-//   (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER ||     \
-//    (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
-
-// static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
-//   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
-
-//   const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
-//   const struct ir_var_ty *param_tys;
-
-//   // note, it is important we use the func ty as the reference here for
-//   // types as aggregates and similar will already have been turned into
-//   // pointers. this does mean we need to explicitly handle pointers
-//   // in the case of unspecified functions, we use `arg_var_tys` which is
-//   // preserved
-//   if (func_ty->num_params == op->call.num_args ||
-//       (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-//     param_tys = func_ty->params;
-//   } else {
-//     param_tys = op->call.arg_var_tys;
-//   }
-
-//   invariant_assert(func_ty->num_params <= 8,
-//                    "`%s` doesn't support more than 8 args yet", __func__);
-
-//   // now we need to move each argument into its correct register
-//   // it is possible there are no spare registers for this, and so we may need
-
-//   bool variadics_on_stack;
-//   switch (state->target->target_id) {
-//   case TARGET_ID_X64_MACOS:
-//     variadics_on_stack = true;
-//     break;
-//   case TARGET_ID_X64_LINUX:
-//   case TARGET_ID_RV32I_UNKNOWN:
-//     variadics_on_stack = false;
-//     break;
-//   }
-
-//   struct vector *gp_move_from = vector_create(sizeof(struct location));
-//   struct vector *gp_move_to = vector_create(sizeof(struct location));
-
-//   struct vector *fp_move_from = vector_create(sizeof(struct location));
-//   struct vector *fp_move_to = vector_create(sizeof(struct location));
-
-//   struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
-
-//   size_t ngrn = 0;
-//   size_t nsrn = 0;
-//   size_t nsaa = 0;
-
-//   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-//     struct x64_reg source = codegen_reg(op->call.target);
-
-//     struct location from = {.idx = source.idx};
-
-//     struct location to = {.idx = BLR_REG_IDX};
-
-//     // need to move it into reg 10
-//     vector_push_back(gp_move_from, &from);
-//     vector_push_back(gp_move_to, &to);
-//   }
-
-//   size_t last_mem_loc = FIRST_MEM_LOC;
-
-//   if (op->call.num_args) {
-//     size_t num_normal_args = func_ty->num_params;
-
-//     for (size_t i = 0; i < op->call.num_args; i++) {
-//       struct x64_reg source = codegen_reg(op->call.args[i]);
-
-//       enum x64_reg_attr_flags flags = reg_attr_flags(source);
-//       if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
-//         // bad, might be overwritten during param preparation
-//         // preemptively add 9 so it is not an arg register
-//         // TODO: is this safe, and can it be improved?
-//         struct x64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
-//         struct instr *mov = alloc_instr(state->func);
-
-//         if (x64_reg_ty_is_gp(dest.ty)) {
-//           *mov->x64 = MOV_ALIAS(dest, source);
-//         } else {
-//           *mov->x64 = FP_MOV_ALIAS(dest, source);
-//         }
-
-//         source = dest;
-//       }
-//     }
-
-//     for (size_t i = 0; i < op->call.num_args; i++) {
-//       struct x64_reg source = codegen_reg(op->call.args[i]);
-
-//       enum x64_reg_attr_flags flags = reg_attr_flags(source);
-//       if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
-//         source.idx += 9;
-//       }
-
-//       // hmm, we pretend all memory locations are different but they are not
-//       // can gen_move_order accidentally overwrite things because of this?
-
-//       if (!variadics_on_stack || i < num_normal_args ||
-//           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-
-//         const struct ir_var_ty *var_ty = i < num_normal_args ? &param_tys[i]
-//         : &op->call.args[i]->var_ty;
-
-//         struct ir_var_ty_info info = var_ty_info(
-//             state->ir->unit,
-//             var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
-
-//         size_t num_hfa_members;
-//         size_t hfa_member_size;
-
-//         if (var_ty_is_fp(var_ty) && nsrn < 8) {
-//           struct location from = {.idx = source.idx};
-//           struct location to = {.idx = nsrn};
-//           vector_push_back(fp_move_from, &from);
-//           vector_push_back(fp_move_to, &to);
-//           nsrn++;
-//           continue;
-//         } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
-//                                     &hfa_member_size)) {
-//           if (nsrn + num_hfa_members <= 8) {
-//             for (size_t j = 0; j < num_hfa_members; j++) {
-//               // given this is a composite, we assume `source` contains a
-//               // pointer to it
-
-//               struct mem_loc mem_loc = {.base = source,
-//                                         .offset = hfa_member_size * j,
-//                                         .size = hfa_member_size};
-
-//               struct location loc = {
-//                   .idx = MEM_LOC(),
-//                   .metadata = arena_alloc_init(
-//                       state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-//               struct location to = {.idx = nsrn++};
-//               vector_push_back(fp_move_from, &loc);
-//               vector_push_back(fp_move_to, &to);
-//             }
-
-//             continue;
-//           }
-
-//           nsrn = 8;
-//           size_t nsaa_align = MAX(8, info.alignment);
-//           size_t size = ROUND_UP(info.size, nsaa_align);
-
-//           // TODO: overaligned HFAs and vectors
-//           struct mem_loc mem_src = {.base = source, .offset = 0, .size =
-//           size};
-
-//           struct mem_loc mem_dest = {
-//               .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-//           struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-//           vector_push_back(mem_copies, &copy);
-
-//           nsaa += size;
-
-//           continue;
-
-//         } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 &&
-//                    ngrn <= 8) {
-//           struct location from = {.idx = source.idx};
-//           struct location to = {.idx = ngrn};
-//           vector_push_back(gp_move_from, &from);
-//           vector_push_back(gp_move_to, &to);
-//           ngrn++;
-//           continue;
-//         }
-
-//         if (info.alignment == 16) {
-//           ngrn = (ngrn + 1) & 1;
-//         }
-
-//         if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-//           TODO("128 bit reg alloc");
-//           // // lo to ngrn, hi to ngrn+1
-//           // ngrn += 2;
-//           // continue;
-//         }
-
-//         size_t dw_size = info.size / 8;
-//         if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-//           for (size_t j = 0; j <= dw_size; j++) {
-//             // given this is a composite, we assume `source` contains a
-//             // pointer to it
-
-//             struct mem_loc mem_loc = {
-//                 .base = source, .offset = 8 * j, .size = 8};
-
-//             struct location loc = {
-//                 .idx = MEM_LOC(),
-//                 .metadata = arena_alloc_init(state->arena,
-//                                              sizeof(struct mem_loc),
-//                                              &mem_loc)};
-
-//             struct location to = {.idx = ngrn++};
-//             vector_push_back(gp_move_from, &loc);
-//             vector_push_back(gp_move_to, &to);
-//           }
-
-//           continue;
-//         }
-
-//         ngrn = 8;
-//         size_t nsaa_align = MAX(8, info.alignment);
-//         nsaa = ROUND_UP(nsaa, nsaa_align);
-
-//         if (var_ty_is_aggregate(var_ty)) {
-//           struct mem_loc mem_src = {
-//               .base = source, .offset = 0, .size = info.size};
-
-//           struct mem_loc mem_dest = {
-//               .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
-
-//           struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-//           vector_push_back(mem_copies, &copy);
-
-//           nsaa += info.size;
-//           continue;
-//         }
-
-//         size_t size = MAX(8, info.size);
-
-//         struct mem_loc mem_loc = {
-//             .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-//         nsaa += size;
-
-//         struct location from = {.idx = source.idx};
-
-//         struct location to = {
-//             .idx = MEM_LOC(),
-//             .metadata = arena_alloc_init(state->arena, sizeof(struct
-//             mem_loc),
-//                                          &mem_loc)};
-
-//         if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-//           vector_push_back(gp_move_from, &from);
-//           vector_push_back(gp_move_to, &to);
-//         } else if (var_ty_is_fp(var_ty)) {
-//           vector_push_back(fp_move_from, &from);
-//           vector_push_back(fp_move_to, &to);
-//         } else {
-//           BUG("bad type");
-//         }
-//       } else {
-//         struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
-
-//         // this argument is variadic
-//         // the stack slot this local must live in, in terms of 8 byte slots
-//         size_t variadic_arg_idx = i - num_normal_args;
-
-//         if (source.ty == X64_REG_TY_W) {
-//           // because offsets are in terms of reg size, we need to double it
-//           // for the 8 byte slots
-//           variadic_arg_idx *= 2;
-//         } else {
-//           invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
-//                            "variadic arg with size < 8 has not been
-//                            promoted");
-//         }
-
-//         struct instr *store = alloc_instr(state->func);
-
-//         store->x64->ty = X64_INSTR_TY_STORE_IMM;
-//         store->x64->str_imm =
-//             (struct x64_store_imm){.source = source,
-//                                        .addr = STACK_PTR_REG,
-//                                        .imm = variadic_arg_idx,
-//                                        .mode = X64_ADDRESSING_MODE_OFFSET};
-//       }
-//     }
-//   }
-
-//   struct move_set gp_arg_moves = gen_move_order(
-//       state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-//       vector_length(gp_move_from), GP_TMP_REG_IDX);
-
-//   struct move_set fp_arg_moves = gen_move_order(
-//       state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-//       vector_length(fp_move_from), FP_TMP_REG_IDX);
-
-//   codegen_moves(state, gp_arg_moves, X64_REG_CLASS_GP);
-//   codegen_moves(state, fp_arg_moves, X64_REG_CLASS_FP);
-
-//   // then handle mem copies
-//   size_t num_copies = vector_length(mem_copies);
-//   for (size_t i = 0; i < num_copies; i++) {
-//     struct mem_copy *copy = vector_get(mem_copies, i);
-//     struct mem_loc *from = &copy->src;
-//     struct mem_loc *to = &copy->dest;
-
-//     DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
-
-//     codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
-//                               to->offset, to->size);
-//   }
-
-//   // now we generate the actual call
-
-//   struct instr *instr = alloc_instr(state->func);
-//   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
-//     instr->x64->ty = X64_INSTR_TY_BL;
-//     instr->x64->bl = (struct x64_branch){.target = NULL};
-
-//     instr->reloc = arena_alloc(state->func->unit->arena,
-//     sizeof(*instr->reloc)); *instr->reloc = (struct relocation){
-//         .ty = RELOCATION_TY_SINGLE,
-//         .symbol_index = op->call.target->addr.glb->id,
-//         .size = 2,
-//         .address = 0,
-//     };
-//   } else {
-//     // NOTE: `blr` seems to segfault on linux x64
-//     instr->x64->ty = X64_INSTR_TY_BLR;
-//     instr->x64->blr = (struct x64_branch_reg){
-//         .target = {.ty = X64_REG_TY_X, .idx = BLR_REG_IDX}};
-//   }
-
-//   if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
-//     return;
-//   }
-
-//   struct x64_reg dest = codegen_reg(op);
-
-//   struct ir_var_ty *var_ty = func_ty->ret_ty;
-//   struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-//   if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-//     if (!is_return_reg(dest)) {
-//       struct instr *mov = alloc_instr(state->func);
-
-//       *mov->x64 = MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-//     }
-//   } else if (var_ty_is_fp(var_ty)) {
-//     if (!is_return_reg(dest)) {
-//       struct instr *mov = alloc_instr(state->func);
-
-//       *mov->x64 = FP_MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-//     }
-//   } else {
-//     struct ir_lcl *lcl = op->lcl;
-//     size_t offset = lcl->offset;
-
-//     // aggregate ty
-//     size_t num_members;
-//     size_t member_size;
-//     if (lcl && try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-//         num_members <= 4) {
-//       enum x64_reg_ty reg_ty;
-//       switch (member_size) {
-//       case 8:
-//         reg_ty = X64_REG_TY_D;
-//         break;
-//       case 4:
-//         reg_ty = X64_REG_TY_S;
-//         break;
-//       case 2:
-//         reg_ty = X64_REG_TY_H;
-//         break;
-//       }
-
-//       for (size_t i = 0; i < num_members; i++) {
-//         struct x64_reg source = {.ty = reg_ty, .idx = i};
-
-//         struct instr *mov = alloc_instr(state->func);
-
-//         mov->x64->ty = X64_INSTR_TY_STORE_IMM;
-//         mov->x64->store_imm =
-//             (struct x64_store_imm){.addr = STACK_PTR_REG,
-//                                        .imm = (offset / member_size) + i,
-//                                        .mode = X64_ADDRESSING_MODE_OFFSET,
-//                                        .source = source};
-//       }
-//     } else if (info.size == 1) {
-//       struct x64_reg source = {.ty = X64_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->x64->ty = X64_INSTR_TY_STORE_BYTE_IMM;
-//       mov->x64->strb_imm =
-//           (struct x64_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset,
-//                                      .mode = X64_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size == 2) {
-//       struct x64_reg source = {.ty = X64_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->x64->ty = X64_INSTR_TY_STORE_HALF_IMM;
-//       mov->x64->strh_imm =
-//           (struct x64_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 2,
-//                                      .mode = X64_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 4) {
-//       struct x64_reg source = {.ty = X64_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->x64->ty = X64_INSTR_TY_STORE_IMM;
-//       mov->x64->str_imm =
-//           (struct x64_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 4,
-//                                      .mode = X64_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 8) {
-//       struct x64_reg source = {.ty = X64_REG_TY_X, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->x64->ty = X64_INSTR_TY_STORE_IMM;
-//       mov->x64->str_imm =
-//           (struct x64_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 8,
-//                                      .mode = X64_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 16) {
-//       struct x64_reg source0 = {.ty = X64_REG_TY_X, .idx = 0};
-//       struct x64_reg source1 = {.ty = X64_REG_TY_X, .idx = 1};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->x64->ty = X64_INSTR_TY_STORE_PAIR_IMM;
-//       mov->x64->store_pair_imm = (struct x64_store_pair_imm){
-//           .addr = STACK_PTR_REG,
-//           .imm = offset / 8,
-//           .mode = X64_ADDRESSING_MODE_OFFSET,
-//           .source = {source0, source1}};
-//     } else {
-//       TODO("larger than 16 byte types");
-//     }
-//   }
-// }
+static bool try_get_hfa_info(struct codegen_state *state,
+                             const struct ir_var_ty *var_ty,
+                             size_t *num_members, size_t *member_size) {
+  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
+    return false;
+  }
+
+  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
+    TODO("union hfa handling");
+  }
+
+  if (!var_ty->struct_ty.num_fields) {
+    return false;
+  }
+
+  struct ir_var_ty *field_ty = &var_ty->struct_ty.fields[0];
+
+  if (!var_ty_is_fp(field_ty)) {
+    return false;
+  }
+
+  if (var_ty->struct_ty.num_fields > 4) {
+    return false;
+  }
+
+  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
+    if (!var_ty_eq(state->ir, field_ty, &var_ty->struct_ty.fields[i])) {
+      return false;
+    }
+  }
+
+  switch (field_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_F16:
+    *member_size = 2;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    *member_size = 4;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    *member_size = 8;
+    break;
+  default:
+    unreachable();
+  }
+
+  *num_members = var_ty->struct_ty.num_fields;
+  return true;
+}
+
+// when generating reg moves, assume memory slots never conflict
+// use incrementing values from 128 onwards
+#define FIRST_MEM_LOC 128
+#define IS_MEM_LOC(v) ((v.idx) >= FIRST_MEM_LOC)
+#define MEM_LOC() (last_mem_loc++)
+
+struct mem_loc {
+  struct x64_reg base;
+  size_t offset;
+  size_t size;
+};
+struct mem_copy {
+  struct mem_loc src, dest;
+};
+
+static enum x64_reg_ty gp_reg_ty_for_size(size_t size, size_t idx) {
+  switch (size) {
+  case 8:
+    return X64_REG_TY_R;
+  case 4:
+    return idx > 7 ? X64_REG_TY_RD : X64_REG_TY_E;
+  }
+
+  BUG("bad size %zu", size);
+}
+
+static enum x64_reg_ty fp_reg_ty_for_size(size_t size, size_t idx) {
+  // switch (size) {
+  // case 16:
+  //   return X64_REG_TY_V;
+  // case 8:
+  //   return X64_REG_TY_D;
+  // case 4:
+  //   return X64_REG_TY_S;
+  // case 2:
+  //   return X64_REG_TY_H;
+  // case 1:
+  //   return X64_REG_TY_B;
+  // }
+
+  // BUG("bad size %zu", size);
+  TODO("x64 fp reg ty for size");
+}
+
+static enum x64_reg_ty reg_ty_for_size(enum x64_reg_class reg_class,
+                                       size_t size, size_t idx) {
+  switch (reg_class) {
+  case X64_REG_CLASS_GP:
+    return gp_reg_ty_for_size(size, idx);
+  case X64_REG_CLASS_FP:
+    return fp_reg_ty_for_size(size, idx);
+  }
+}
+
+static void codegen_moves(struct codegen_state *state, struct move_set moves,
+                          enum x64_reg_class reg_class) {
+  for (size_t i = 0; i < moves.num_moves; i++) {
+    struct move move = moves.moves[i];
+
+    if (IS_MEM_LOC(move.from)) {
+      DEBUG_ASSERT(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
+
+      struct mem_loc *from = move.from.metadata;
+      struct x64_reg to = {
+          .ty = reg_ty_for_size(reg_class, from->size, move.to.idx),
+          .idx = move.to.idx};
+
+      size_t offset = from->offset;
+
+      struct instr *load = alloc_instr(state->func);
+      load->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
+      load->x64->mov_load_imm = (struct x64_mov_load_imm){
+          .addr = from->base, .imm = offset, .dest = to};
+    } else if (IS_MEM_LOC(move.to)) {
+      DEBUG_ASSERT(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
+
+      struct mem_loc *to = move.to.metadata;
+      struct x64_reg from = {
+          .ty = reg_ty_for_size(reg_class, to->size, move.from.idx),
+          .idx = move.from.idx};
+
+      size_t offset = to->offset;
+
+      struct instr *store = alloc_instr(state->func);
+      store->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+      store->x64->mov_store_imm = (struct x64_mov_store_imm){
+          .addr = to->base, .imm = offset, .source = from};
+    } else {
+      // we move more of register than necessary here
+
+      struct instr *mov = alloc_instr(state->func);
+
+      switch (reg_class) {
+      case X64_REG_CLASS_GP: {
+        struct x64_reg source = {.ty = X64_REG_TY_R, .idx = move.from.idx};
+        struct x64_reg dest = {.ty = X64_REG_TY_R, .idx = move.to.idx};
+        mov->x64->ty = X64_INSTR_TY_MOV_REG;
+        mov->x64->mov_reg =
+            (struct x64_mov_reg){.dest = dest, .source = source};
+        break;
+      }
+      case X64_REG_CLASS_FP: {
+        TODO("x64 fp");
+        // struct x64_reg source = {.ty = X64_REG_TY_D,
+        //                              .idx = move.from.idx};
+        // struct x64_reg dest = {.ty = X64_REG_TY_D, .idx = move.to.idx};
+        // *mov->x64 = FP_MOV_ALIAS(dest, source);
+        // break;
+      }
+      }
+    }
+  }
+}
+
+enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
+  switch (reg.ty) {
+  case X64_REG_TY_NONE:
+    return X64_REG_ATTR_FLAG_NONE;
+  case X64_REG_TY_R:
+  case X64_REG_TY_RD:
+  case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L:
+    if (!reg.idx) {
+      return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_RET_REG;
+    }
+
+    switch (reg.idx) {
+    case REG_IDX_DI:
+    case REG_IDX_SI:
+    case REG_IDX_DX:
+    case REG_IDX_CX:
+    case 8:
+    case 9:
+      return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
+    case 10:
+    case 11:
+      return X64_REG_ATTR_FLAG_VOLATILE;
+    case REG_IDX_SP:
+    case REG_IDX_BP:
+      return X64_REG_ATTR_FLAG_RESERVED;
+    }
+
+    return X64_REG_ATTR_FLAG_NONE;
+    // case X64_REG_TY_V:
+    // case X64_REG_TY_Q:
+    //   if (!reg.idx) {
+    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
+    //            X64_REG_ATTR_FLAG_RET_REG;
+    //   }
+
+    //   if (reg.idx <= 7) {
+    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
+    //   }
+
+    //   if (reg.idx <= 15) {
+    //     return X64_REG_ATTR_FLAG_VOLATILE;
+    //   }
+
+    //   return X64_REG_ATTR_FLAG_NONE;
+    // case X64_REG_TY_D:
+    // case X64_REG_TY_S:
+    // case X64_REG_TY_H:
+    // case X64_REG_TY_B:
+    //   if (!reg.idx) {
+    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
+    //            X64_REG_ATTR_FLAG_RET_REG;
+    //   }
+
+    //   if (reg.idx <= 7) {
+    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
+    //   }
+
+    //   return X64_REG_ATTR_FLAG_NONE;
+  }
+}
+
+// reg 9 is not part of calling convention
+// and all registers have already been saved
+// so this is always safe
+// same with reg 10, which we use if a register branch target is needed for
+// `blr`
+#define GP_TMP_REG_IDX ((size_t)9)
+#define BLR_REG_IDX ((size_t)10)
+#define ADDR_REG_IDX ((size_t)11)
+#define FP_TMP_REG_IDX ((size_t)16)
+
+// FIXME: apple do things differently!!!
+
+#define INTEGRAL_OR_PTRLIKE(var_ty)                                            \
+  (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER ||     \
+   (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
+
+static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
+  invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
+
+  const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
+  const struct ir_var_ty *param_tys;
+
+  // note, it is important we use the func ty as the reference here for
+  // types as aggregates and similar will already have been turned into
+  // pointers. this does mean we need to explicitly handle pointers
+  // in the case of unspecified functions, we use `arg_var_tys` which is
+  // preserved
+  if (func_ty->num_params == op->call.num_args ||
+      (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+    param_tys = func_ty->params;
+  } else {
+    param_tys = op->call.arg_var_tys;
+  }
+
+  invariant_assert(func_ty->num_params <= 8,
+                   "`%s` doesn't support more than 8 args yet", __func__);
+
+  // now we need to move each argument into its correct register
+  // it is possible there are no spare registers for this, and so we may need
+
+  bool variadics_on_stack;
+  switch (state->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    variadics_on_stack = true;
+    break;
+  default:
+    variadics_on_stack = false;
+    break;
+  }
+
+  struct vector *gp_move_from = vector_create(sizeof(struct location));
+  struct vector *gp_move_to = vector_create(sizeof(struct location));
+
+  struct vector *fp_move_from = vector_create(sizeof(struct location));
+  struct vector *fp_move_to = vector_create(sizeof(struct location));
+
+  struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
+
+  size_t ngrn = 0;
+  size_t nsrn = 0;
+  size_t nsaa = 0;
+
+  if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+    struct x64_reg source = codegen_reg(op->call.target);
+
+    struct location from = {.idx = source.idx};
+
+    struct location to = {.idx = BLR_REG_IDX};
+
+    // need to move it into reg 10
+    vector_push_back(gp_move_from, &from);
+    vector_push_back(gp_move_to, &to);
+  }
+
+  size_t last_mem_loc = FIRST_MEM_LOC;
+
+  if (op->call.num_args) {
+    size_t num_normal_args = func_ty->num_params;
+
+    for (size_t i = 0; i < op->call.num_args; i++) {
+      struct x64_reg source = codegen_reg(op->call.args[i]);
+
+      enum x64_reg_attr_flags flags = reg_attr_flags(source);
+      if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
+        // bad, might be overwritten during param preparation
+        // preemptively add 9 so it is not an arg register
+        // TODO: is this safe, and can it be improved?
+        struct x64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
+        struct instr *mov = alloc_instr(state->func);
+
+        if (x64_reg_ty_is_gp(dest.ty)) {
+          *mov->x64 = (struct x64_instr){
+              .ty = X64_INSTR_TY_MOV_REG,
+              .mov_reg = {.dest = return_reg_for_ty(source.ty),
+                          .source = source}};
+        } else {
+          TODO("x64 fp mov");
+        }
+
+        source = dest;
+      }
+    }
+
+    for (size_t i = 0; i < op->call.num_args; i++) {
+      struct x64_reg source = codegen_reg(op->call.args[i]);
+
+      enum x64_reg_attr_flags flags = reg_attr_flags(source);
+      if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
+        // FIXME: logic here copied from arm definitely wrong
+        // source.idx += 9;
+      }
+
+      // hmm, we pretend all memory locations are different but they are not
+      // can gen_move_order accidentally overwrite things because of this?
+
+      if (!variadics_on_stack || i < num_normal_args ||
+          !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+
+        const struct ir_var_ty *var_ty =
+            i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
+
+        struct ir_var_ty_info info = var_ty_info(
+            state->ir->unit,
+            var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
+
+        size_t num_hfa_members;
+        size_t hfa_member_size;
+
+        if (var_ty_is_fp(var_ty) && nsrn < 8) {
+          struct location from = {.idx = source.idx};
+          struct location to = {.idx = nsrn};
+          vector_push_back(fp_move_from, &from);
+          vector_push_back(fp_move_to, &to);
+          nsrn++;
+          continue;
+        } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
+                                    &hfa_member_size)) {
+          if (nsrn + num_hfa_members <= 8) {
+            for (size_t j = 0; j < num_hfa_members; j++) {
+              // given this is a composite, we assume `source` contains a
+              // pointer to it
+
+              struct mem_loc mem_loc = {.base = source,
+                                        .offset = hfa_member_size * j,
+                                        .size = hfa_member_size};
+
+              struct location loc = {
+                  .idx = MEM_LOC(),
+                  .metadata = arena_alloc_init(
+                      state->arena, sizeof(struct mem_loc), &mem_loc)};
+
+              struct location to = {.idx = nsrn++};
+              vector_push_back(fp_move_from, &loc);
+              vector_push_back(fp_move_to, &to);
+            }
+
+            continue;
+          }
+
+          nsrn = 8;
+          size_t nsaa_align = MAX(8, info.alignment);
+          size_t size = ROUND_UP(info.size, nsaa_align);
+
+          // TODO: overaligned HFAs and vectors
+          struct mem_loc mem_src = {.base = source, .offset = 0, .size = size};
+
+          struct mem_loc mem_dest = {
+              .base = STACK_PTR_REG, .offset = nsaa, .size = size};
+
+          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
+
+          vector_push_back(mem_copies, &copy);
+
+          nsaa += size;
+
+          continue;
+
+        } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 &&
+                   ngrn <= 8) {
+          struct location from = {.idx = source.idx};
+          struct location to = {
+              .idx = translate_reg_idx(ngrn, IR_REG_TY_INTEGRAL)};
+          vector_push_back(gp_move_from, &from);
+          vector_push_back(gp_move_to, &to);
+          ngrn++;
+          continue;
+        }
+
+        if (info.alignment == 16) {
+          ngrn = (ngrn + 1) & 1;
+        }
+
+        if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
+          TODO("128 bit reg alloc");
+          // // lo to ngrn, hi to ngrn+1
+          // ngrn += 2;
+          // continue;
+        }
+
+        size_t dw_size = info.size / 8;
+        if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+          for (size_t j = 0; j <= dw_size; j++) {
+            // given this is a composite, we assume `source` contains a
+            // pointer to it
+
+            struct mem_loc mem_loc = {
+                .base = source, .offset = 8 * j, .size = 8};
+
+            struct location loc = {
+                .idx = MEM_LOC(),
+                .metadata = arena_alloc_init(state->arena,
+                                             sizeof(struct mem_loc), &mem_loc)};
+
+            struct location to = {.idx = ngrn++};
+            vector_push_back(gp_move_from, &loc);
+            vector_push_back(gp_move_to, &to);
+          }
+
+          continue;
+        }
+
+        ngrn = 8;
+        size_t nsaa_align = MAX(8, info.alignment);
+        nsaa = ROUND_UP(nsaa, nsaa_align);
+
+        if (var_ty_is_aggregate(var_ty)) {
+          struct mem_loc mem_src = {
+              .base = source, .offset = 0, .size = info.size};
+
+          struct mem_loc mem_dest = {
+              .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
+
+          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
+
+          vector_push_back(mem_copies, &copy);
+
+          nsaa += info.size;
+          continue;
+        }
+
+        size_t size = MAX(8, info.size);
+
+        struct mem_loc mem_loc = {
+            .base = STACK_PTR_REG, .offset = nsaa, .size = size};
+
+        nsaa += size;
+
+        struct location from = {.idx = source.idx};
+
+        struct location to = {
+            .idx = MEM_LOC(),
+            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
+                                         &mem_loc)};
+
+        if (INTEGRAL_OR_PTRLIKE(var_ty)) {
+          vector_push_back(gp_move_from, &from);
+          vector_push_back(gp_move_to, &to);
+        } else if (var_ty_is_fp(var_ty)) {
+          vector_push_back(fp_move_from, &from);
+          vector_push_back(fp_move_to, &to);
+        } else {
+          BUG("bad type");
+        }
+      } else {
+        struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
+
+        // this argument is variadic
+        // the stack slot this local must live in, in terms of 8 byte slots
+        size_t variadic_arg_idx = i - num_normal_args;
+
+        if (source.ty == X64_REG_TY_RD || source.ty == X64_REG_TY_E) {
+          // because offsets are in terms of reg size, we need to double it
+          // for the 8 byte slots
+          variadic_arg_idx *= 2;
+        } else {
+          invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
+                           "variadic arg with size < 8 has not been promoted");
+        }
+
+        struct instr *store = alloc_instr(state->func);
+
+        store->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+        store->x64->mov_store_imm =
+            (struct x64_mov_store_imm){.source = source,
+                                       .addr = STACK_PTR_REG,
+                                       .imm = variadic_arg_idx * 8};
+      }
+    }
+  }
+
+  struct move_set gp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
+      vector_length(gp_move_from), GP_TMP_REG_IDX);
+
+  struct move_set fp_arg_moves = gen_move_order(
+      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
+      vector_length(fp_move_from), FP_TMP_REG_IDX);
+
+  codegen_moves(state, gp_arg_moves, X64_REG_CLASS_GP);
+  codegen_moves(state, fp_arg_moves, X64_REG_CLASS_FP);
+
+  // then handle mem copies
+  size_t num_copies = vector_length(mem_copies);
+  for (size_t i = 0; i < num_copies; i++) {
+    struct mem_copy *copy = vector_get(mem_copies, i);
+    struct mem_loc *from = &copy->src;
+    struct mem_loc *to = &copy->dest;
+
+    DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
+
+    TODO("x64 mem copy");
+    // codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
+    //                           to->offset, to->size);
+  }
+
+  // now we generate the actual call
+
+  struct instr *instr = alloc_instr(state->func);
+  if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
+    instr->x64->ty = X64_INSTR_TY_CALL;
+    instr->x64->call = (struct x64_branch){.target = NULL};
+
+    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+    *instr->reloc = (struct relocation){
+        .ty = RELOCATION_TY_CALL,
+        .symbol_index = op->call.target->addr.glb->id,
+        .size = 2,
+        .address = 0,
+    };
+  } else {
+    instr->x64->ty = X64_INSTR_TY_CALL_REG;
+    instr->x64->call_reg = (struct x64_branch_reg){
+        .target = {.ty = X64_REG_TY_W, .idx = BLR_REG_IDX}};
+  }
+
+  if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
+    return;
+  }
+
+  struct x64_reg dest = codegen_reg(op);
+
+  struct ir_var_ty *var_ty = func_ty->ret_ty;
+  struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
+
+  if (INTEGRAL_OR_PTRLIKE(var_ty)) {
+    if (!is_return_reg(dest)) {
+      struct instr *mov = alloc_instr(state->func);
+
+      *mov->x64 = MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
+    }
+  } else if (var_ty_is_fp(var_ty)) {
+    if (!is_return_reg(dest)) {
+      TODO("x64 fp mov alias");
+      // struct instr *mov = alloc_instr(state->func);
+      // *mov->x64 = FP_MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
+    }
+  } else {
+    struct ir_lcl *lcl = op->lcl;
+    size_t offset = lcl->offset;
+
+    // aggregate ty
+    size_t num_members;
+    size_t member_size;
+    if (lcl && try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
+        num_members <= 4) {
+      TODO("x64 hfa");
+      // enum x64_reg_ty reg_ty;
+      // switch (member_size) {
+      // case 8:
+      //   reg_ty = X64_REG_TY_D;
+      //   break;
+      // case 4:
+      //   reg_ty = X64_REG_TY_S;
+      //   break;
+      // case 2:
+      //   reg_ty = X64_REG_TY_H;
+      //   break;
+      // }
+
+      // for (size_t i = 0; i < num_members; i++) {
+      //   struct x64_reg source = {.ty = reg_ty, .idx = i};
+
+      //   struct instr *mov = alloc_instr(state->func);
+
+      //   mov->x64->ty = X64_INSTR_TY_STORE_IMM;
+      //   mov->x64->store_imm =
+      //       (struct x64_store_imm){.addr = STACK_PTR_REG,
+      //                                  .imm = (offset / member_size) + i,
+      //                                  .mode = X64_ADDRESSING_MODE_OFFSET,
+      //                                  .source = source};
+      // }
+    } else if (info.size == 1) {
+      struct x64_reg source = {.ty = X64_REG_TY_W, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->x64->ty = X64_INSTR_TY_MOV_STORE_BYTE_IMM;
+      mov->x64->mov_store_byte_imm = (struct x64_mov_store_imm){
+          .addr = STACK_PTR_REG, .imm = offset, .source = source};
+    } else if (info.size == 2) {
+      struct x64_reg source = {.ty = X64_REG_TY_W, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->x64->ty = X64_INSTR_TY_MOV_STORE_HALF_IMM;
+      mov->x64->mov_store_half_imm = (struct x64_mov_store_imm){
+          .addr = STACK_PTR_REG, .imm = offset, .source = source};
+    } else if (info.size <= 4) {
+      struct x64_reg source = {.ty = X64_REG_TY_E, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+      mov->x64->mov_store_imm = (struct x64_mov_store_imm){
+          .addr = STACK_PTR_REG, .imm = offset, .source = source};
+    } else if (info.size <= 8) {
+      struct x64_reg source = {.ty = X64_REG_TY_R, .idx = 0};
+
+      struct instr *mov = alloc_instr(state->func);
+
+      mov->x64->ty = X64_INSTR_TY_MOV_STORE_IMM;
+      mov->x64->mov_store_imm = (struct x64_mov_store_imm){
+          .addr = STACK_PTR_REG, .imm = offset, .source = source};
+    } else {
+      TODO("larger than 8 byte types");
+    }
+  }
+}
 
 // static void codegen_params(struct codegen_state *state) {
 //   // we effectively do the reverse of what we do in `codegen_call_op`
@@ -2272,7 +2284,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   struct bitset_iter gp_iter =
       bitset_iter(ir->reg_usage.gp_registers_used,
-                  target->reg_info.gp_registers.num_nonvolatile, true);
+                  target->reg_info.gp_registers.num_volatile, true);
 
   size_t i;
   while (bitset_iter_next(&gp_iter, &i)) {
@@ -2282,7 +2294,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   struct bitset_iter fp_iter =
       bitset_iter(ir->reg_usage.fp_registers_used,
-                  target->reg_info.fp_registers.num_nonvolatile, true);
+                  target->reg_info.fp_registers.num_volatile, true);
 
   while (bitset_iter_next(&fp_iter, &i)) {
     info.saved_fp_registers |= (1 << i);
@@ -2313,7 +2325,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
     struct bitset_iter gp_reg_iter =
         bitset_iter(ir->reg_usage.gp_registers_used,
-                    target->reg_info.gp_registers.num_nonvolatile, true);
+                    target->reg_info.gp_registers.num_volatile, true);
 
     size_t idx;
     while (bitset_iter_next(&gp_reg_iter, &idx)) {
@@ -2333,7 +2345,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
     struct bitset_iter fp_reg_iter =
         bitset_iter(ir->reg_usage.fp_registers_used,
-                    target->reg_info.fp_registers.num_nonvolatile, true);
+                    target->reg_info.fp_registers.num_volatile, true);
 
     while (bitset_iter_next(&fp_reg_iter, &idx)) {
       // guaranteed to be mod 8
@@ -2518,11 +2530,9 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
     codegen_cast_op(state, op);
     break;
-
-    //   case IR_OP_TY_CALL:
-    //     codegen_call_op(state, op);
-    //     break;
-    //
+  case IR_OP_TY_CALL:
+    codegen_call_op(state, op);
+    break;
   case IR_OP_TY_RET:
     codegen_ret_op(state, op);
     break;
@@ -2622,152 +2632,137 @@ static void codegen_stmt(struct codegen_state *state,
 //   data->last = instr;
 // }
 
-// static int sort_entries_by_id(const void *a, const void *b) {
-//   const struct codegen_entry *l = a;
-//   const struct codegen_entry *r = b;
+static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
+                                    size_t offset, struct ir_var_value *value,
+                                    char *data) {
+  if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
+    return;
+  }
 
-//   if (l->glb_id > r->glb_id) {
-//     return 1;
-//   } else if (l->glb_id == r->glb_id) {
-//     return 0;
-//   } else {
-//     return -1;
-//   }
-// }
+  switch (value->var_ty.ty) {
+  case IR_VAR_TY_TY_NONE:
+  case IR_VAR_TY_TY_VARIADIC:
+    break;
+  case IR_VAR_TY_TY_PRIMITIVE: {
+    switch (value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I8:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      memcpy(data, &value->int_value, 1);
+      break;
+    case IR_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_I16:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, 2);
+      break;
+    case IR_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_F32:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, 4);
+      break;
+    case IR_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_F64:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, sizeof(unsigned long));
+      break;
+    }
+    break;
+  }
 
-// static void codegen_write_var_value(struct ir_unit *iru, struct vector
-// *relocs,
-//                                     size_t offset, struct ir_var_value
-//                                     *value, char *data) {
-//   if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
-//     return;
-//   }
+  case IR_VAR_TY_TY_FUNC:
+    BUG("func can not have data as a global var");
 
-//   switch (value->var_ty.ty) {
-//   case IR_VAR_TY_TY_NONE:
-//   case IR_VAR_TY_TY_VARIADIC:
-//     break;
-//   case IR_VAR_TY_TY_PRIMITIVE: {
-//     switch (value->var_ty.primitive) {
-//     case IR_VAR_PRIMITIVE_TY_I8:
-//       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-//       memcpy(data, &value->int_value, 1);
-//       break;
-//     case IR_VAR_PRIMITIVE_TY_F16:
-//     case IR_VAR_PRIMITIVE_TY_I16:
-//       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-//                        value->ty == IR_VAR_VALUE_TY_FLT,
-//                    "expected int/flt");
-//       memcpy(data, &value->int_value, 2);
-//       break;
-//     case IR_VAR_PRIMITIVE_TY_I32:
-//     case IR_VAR_PRIMITIVE_TY_F32:
-//       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-//                        value->ty == IR_VAR_VALUE_TY_FLT,
-//                    "expected int/flt");
-//       memcpy(data, &value->int_value, 4);
-//       break;
-//     case IR_VAR_PRIMITIVE_TY_I64:
-//     case IR_VAR_PRIMITIVE_TY_F64:
-//       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-//                        value->ty == IR_VAR_VALUE_TY_FLT,
-//                    "expected int/flt");
-//       memcpy(data, &value->int_value, sizeof(unsigned long));
-//       break;
-//     }
-//     break;
-//   }
+    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
+    // target-ptr-size
 
-//   case IR_VAR_TY_TY_FUNC:
-//     BUG("func can not have data as a global var");
+  case IR_VAR_TY_TY_POINTER:
+  case IR_VAR_TY_TY_ARRAY:
+    switch (value->ty) {
+    case IR_VAR_VALUE_TY_ZERO:
+    case IR_VAR_VALUE_TY_FLT:
+      BUG("doesn't make sense");
+    case IR_VAR_VALUE_TY_ADDR: {
+      struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
+                                 .size = 3,
+                                 .address = offset,
+                                 .offset = value->addr.offset,
+                                 .symbol_index = value->addr.glb->id};
 
-//     // FIXME: some bugs here around using compiler-ptr-size when we mean to
-//     use
-//     // target-ptr-size
+      vector_push_back(relocs, &reloc);
 
-//   case IR_VAR_TY_TY_POINTER:
-//   case IR_VAR_TY_TY_ARRAY:
-//     switch (value->ty) {
-//     case IR_VAR_VALUE_TY_ZERO:
-//     case IR_VAR_VALUE_TY_FLT:
-//       BUG("doesn't make sense");
-//     case IR_VAR_VALUE_TY_ADDR: {
-//       struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
-//                                  .size = 3,
-//                                  .address = offset,
-//                                  .offset = value->addr.offset,
-//                                  .symbol_index = value->addr.glb->id};
+      memcpy(data, &value->addr.offset, sizeof(void *));
+      break;
+    }
+    case IR_VAR_VALUE_TY_INT:
+      memcpy(data, &value->int_value, sizeof(void *));
+      break;
+    case IR_VAR_VALUE_TY_STR:
+      // FIXME: !!!! doesn't work with string literals containing null char
+      strcpy(data, value->str_value);
+      break;
+    case IR_VAR_VALUE_TY_VALUE_LIST:
+      for (size_t i = 0; i < value->value_list.num_values; i++) {
+        size_t value_offset = value->value_list.offsets[i];
+        codegen_write_var_value(iru, relocs, offset + value_offset,
+                                &value->value_list.values[i],
+                                &data[value_offset]);
+      }
+      break;
+    }
+    break;
 
-//       vector_push_back(relocs, &reloc);
+  case IR_VAR_TY_TY_STRUCT:
+  case IR_VAR_TY_TY_UNION:
+    DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
+                 "expected value list");
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      size_t field_offset = value->value_list.offsets[i];
+      codegen_write_var_value(iru, relocs, offset + field_offset,
+                              &value->value_list.values[i],
+                              &data[field_offset]);
+    }
+  }
+}
 
-//       memcpy(data, &value->addr.offset, sizeof(void *));
-//       break;
-//     }
-//     case IR_VAR_VALUE_TY_INT:
-//       memcpy(data, &value->int_value, sizeof(void *));
-//       break;
-//     case IR_VAR_VALUE_TY_STR:
-//       // FIXME: !!!! doesn't work with string literals containing null char
-//       strcpy(data, value->str_value);
-//       break;
-//     case IR_VAR_VALUE_TY_VALUE_LIST:
-//       for (size_t i = 0; i < value->value_list.num_values; i++) {
-//         size_t value_offset = value->value_list.offsets[i];
-//         codegen_write_var_value(iru, relocs, offset + value_offset,
-//                                 &value->value_list.values[i],
-//                                 &data[value_offset]);
-//       }
-//       break;
-//     }
-//     break;
+static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
+                                             const char *name,
+                                             struct ir_var *var) {
+  switch (var->ty) {
+  case IR_VAR_TY_STRING_LITERAL: {
+    BUG("str literal should have been lowered seperately");
+  }
+  case IR_VAR_TY_CONST_DATA:
+  case IR_VAR_TY_DATA: {
+    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
 
-//   case IR_VAR_TY_TY_STRUCT:
-//   case IR_VAR_TY_TY_UNION:
-//     DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
-//                  "expected value list");
-//     for (size_t i = 0; i < value->value_list.num_values; i++) {
-//       size_t field_offset = value->value_list.offsets[i];
-//       codegen_write_var_value(iru, relocs, offset + field_offset,
-//                               &value->value_list.values[i],
-//                               &data[field_offset]);
-//     }
-//   }
-// }
+    // TODO: this leak
+    struct vector *relocs = vector_create(sizeof(struct relocation));
 
-// static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
-//                                              const char *name,
-//                                              struct ir_var *var) {
-//   switch (var->ty) {
-//   case IR_VAR_TY_STRING_LITERAL: {
-//     BUG("str literal should have been lowered seperately");
-//   }
-//   case IR_VAR_TY_CONST_DATA:
-//   case IR_VAR_TY_DATA: {
-//     struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
+    size_t len = info.size;
 
-//     // TODO: this leak
-//     struct vector *relocs = vector_create(sizeof(struct relocation));
+    char *data = arena_alloc(ir->arena, len);
+    memset(data, 0, len);
 
-//     size_t len = info.size;
+    codegen_write_var_value(ir, relocs, 0, &var->value, data);
 
-//     char *data = arena_alloc(ir->arena, len);
-//     memset(data, 0, len);
-
-//     codegen_write_var_value(ir, relocs, 0, &var->value, data);
-
-//     // TODO: handle const data
-//     return (struct codegen_entry){
-//         .ty = CODEGEN_ENTRY_TY_DATA,
-//         .glb_id = id,
-//         .alignment = info.alignment,
-//         .name = name,
-//         .data = (struct codegen_data){.data = data,
-//                                       .len_data = len,
-//                                       .relocs = vector_head(relocs),
-//                                       .num_relocs = vector_length(relocs)}};
-//   }
-//   }
-// }
+    // TODO: handle const data
+    return (struct codegen_entry){
+        .ty = CODEGEN_ENTRY_TY_DATA,
+        .glb_id = id,
+        .alignment = info.alignment,
+        .name = name,
+        .data = (struct codegen_data){.data = data,
+                                      .len_data = len,
+                                      .relocs = vector_head(relocs),
+                                      .num_relocs = vector_length(relocs)}};
+  }
+  }
+}
 
 struct codegen_unit *x64_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
@@ -2814,7 +2809,7 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
           break;
         case IR_VAR_TY_CONST_DATA:
         case IR_VAR_TY_DATA:
-          // unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
+          unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
           break;
         }
         break;
@@ -2904,8 +2899,8 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
     }
   }
 
-  // qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
-  //       sort_entries_by_id);
+  qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
+        sort_entries_by_id);
 
   if (log_enabled()) {
     x64_debug_print_codegen(stderr, unit);
@@ -3211,7 +3206,15 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       format += 4;
     } else if (strncmp(format, "reg", 3) == 0) {
       struct x64_reg reg = va_arg(list, struct x64_reg);
+
+      if (format[3] == '8') {
+        reg.ty = X64_REG_TY_L;
+      }
+
       switch (reg.ty) {
+      case X64_REG_TY_NONE:
+        BUG("doesn't make sense");
+        break;
       case X64_REG_TY_R:
         if (reg.idx > 7) {
           fprintf(file, "r%zu", reg.idx);
@@ -3221,7 +3224,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
         }
         break;
       case X64_REG_TY_RD:
-        DEBUG_ASSERT(reg.idx > 7, "RD index should be > 7");
+        // DEBUG_ASSERT(reg.idx > 7, "RD index should be > 7");
         fprintf(file, "r%zud", reg.idx);
         break;
       case X64_REG_TY_E: {
@@ -3247,7 +3250,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       }
       }
 
-      format += 3;
+      format += format[3] == '8' ? 4 : 3;
     } else if (strncmp(format, "rimm", 4) == 0) {
       ssize_t imm = va_arg(list, ssize_t);
       fprintf(file, "%zd", imm);
@@ -3295,16 +3298,15 @@ static void debug_print_mul(FILE *file, const struct x64_mul *mul) {
 static void
 debug_print_mov_load_imm(FILE *file, size_t sz,
                          const struct x64_mov_load_imm *mov_load_imm) {
-  codegen_fprintf(file, " %reg, %sz_imm_addr",
-                  mov_load_imm->dest, sz, mov_load_imm->addr, mov_load_imm->imm);
+  codegen_fprintf(file, " %reg, %sz_imm_addr", mov_load_imm->dest, sz,
+                  mov_load_imm->addr, mov_load_imm->imm);
 }
 
 static void
 debug_print_mov_store_imm(FILE *file, size_t sz,
                           const struct x64_mov_store_imm *mov_store_imm) {
-  codegen_fprintf(file, " %sz_imm_addr, %reg", sz,
-                  mov_store_imm->addr, mov_store_imm->imm,
-                  mov_store_imm->source);
+  codegen_fprintf(file, " %sz_imm_addr, %reg", sz, mov_store_imm->addr,
+                  mov_store_imm->imm, mov_store_imm->source);
 }
 
 static void debug_print_mov_imm(FILE *file, const struct x64_mov_imm *mov_imm) {
@@ -3315,15 +3317,27 @@ static void debug_print_mov_reg(FILE *file, const struct x64_mov_reg *mov_reg) {
   codegen_fprintf(file, " %reg, %reg", mov_reg->dest, mov_reg->source);
 }
 
-static void debug_print_lea(FILE *file, const struct x64_lea *lea) {
-  codegen_fprintf(file, " %reg, [%reg + %reg", lea->dest, lea->base, lea->index, 1 << lea->scale, lea->offset);
+static void debug_print_lea_pcrel(FILE *file,
+                                  const struct x64_lea_pcrel *lea_pcrel) {
+  if (lea_pcrel->offset) {
+    codegen_fprintf(file, " %reg, [rip + %rimm]", lea_pcrel->dest,
+                    lea_pcrel->offset);
+  } else {
+    codegen_fprintf(file, " %reg, [rip]", lea_pcrel->dest);
+  }
+}
 
-  if (lea->scale) {
-    codegen_fprintf(file, "*%rimm", 1 << lea->scale);
+static void debug_print_lea(FILE *file, const struct x64_lea *lea) {
+  codegen_fprintf(file, " %reg, [%reg", lea->dest, lea->base);
+
+  if (lea->scale == 1) {
+    codegen_fprintf(file, " + %reg", lea->index);
+  } else if (lea->scale > 1) {
+    codegen_fprintf(file, " + %reg*%rimm", lea->index, lea->scale);
   }
 
   if (lea->offset) {
-    codegen_fprintf(file, "+ %rimm", lea->offset);
+    codegen_fprintf(file, " + %rimm", lea->offset);
   }
 
   codegen_fprintf(file, "]");
@@ -3341,10 +3355,21 @@ static void debug_print_branch(FILE *file, const struct x64_branch *branch) {
   codegen_fprintf(file, " %instr", branch->target->first_instr);
 }
 
+static void debug_print_branch_reg(FILE *file,
+                                   const struct x64_branch_reg *branch_reg) {
+  codegen_fprintf(file, " %reg", branch_reg->target);
+}
+
 static void debug_print_conditional_branch(
     FILE *file, const struct x64_conditional_branch *conditional_branch) {
   codegen_fprintf(file, "%cond %instr", conditional_branch->cond,
                   conditional_branch->target->first_instr);
+}
+
+static void debug_print_conditional_select(
+    FILE *file, const struct x64_conditional_select *conditional_select) {
+  codegen_fprintf(file, "%cond %reg8", conditional_select->cond,
+                  conditional_select->dest);
 }
 
 static void debug_print_cmp(FILE *file, const struct x64_cmp *cmp) {
@@ -3378,7 +3403,9 @@ static void debug_print_instr(FILE *file,
     break;
   case X64_INSTR_TY_MOV_STORE_IMM:
     fprintf(file, "mov");
-    debug_print_mov_store_imm(file, instr->x64->mov_store_imm.source.ty == X64_REG_TY_R ? 8 : 4,  &instr->x64->mov_store_imm);
+    debug_print_mov_store_imm(
+        file, instr->x64->mov_store_imm.source.ty == X64_REG_TY_R ? 8 : 4,
+        &instr->x64->mov_store_imm);
     break;
   case X64_INSTR_TY_MOV_STORE_HALF_IMM:
     fprintf(file, "mov");
@@ -3390,7 +3417,9 @@ static void debug_print_instr(FILE *file,
     break;
   case X64_INSTR_TY_MOV_LOAD_IMM:
     fprintf(file, "mov");
-    debug_print_mov_load_imm(file, instr->x64->mov_load_imm.dest.ty == X64_REG_TY_R ? 8 : 4, &instr->x64->mov_load_imm);
+    debug_print_mov_load_imm(
+        file, instr->x64->mov_load_imm.dest.ty == X64_REG_TY_R ? 8 : 4,
+        &instr->x64->mov_load_imm);
     break;
   case X64_INSTR_TY_MOVZX_LOAD_HALF_IMM:
     fprintf(file, "movzx");
@@ -3456,6 +3485,10 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "lea");
     debug_print_lea(file, &instr->x64->lea);
     break;
+  case X64_INSTR_TY_LEA_PCREL:
+    fprintf(file, "lea");
+    debug_print_lea_pcrel(file, &instr->x64->lea_pcrel);
+    break;
   case X64_INSTR_TY_POP:
     fprintf(file, "pop");
     debug_print_pop(file, &instr->x64->pop);
@@ -3487,9 +3520,30 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "jmp");
     debug_print_branch(file, &instr->x64->jmp);
     break;
+  case X64_INSTR_TY_CALL:
+    fprintf(file, "call");
+
+    if (instr->x64->call.target) {
+      debug_print_branch(file, &instr->x64->call);
+    } else {
+      fprintf(file, " <unknown>");
+    }
+    break;
+  case X64_INSTR_TY_JMP_REG:
+    fprintf(file, "jmp");
+    debug_print_branch_reg(file, &instr->x64->jmp_reg);
+    break;
+  case X64_INSTR_TY_CALL_REG:
+    fprintf(file, "call");
+    debug_print_branch_reg(file, &instr->x64->call_reg);
+    break;
   case X64_INSTR_TY_JCC:
     fprintf(file, "j");
     debug_print_conditional_branch(file, &instr->x64->jcc);
+    break;
+  case X64_INSTR_TY_SETCC:
+    fprintf(file, "set");
+    debug_print_conditional_select(file, &instr->x64->setcc);
     break;
   case X64_INSTR_TY_CMP:
     fprintf(file, "cmp");
