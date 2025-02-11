@@ -32,7 +32,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       expected="0"
     fi
 
-    if ! ./build/jcc -T x86_64-apple-darwin -std=c23 -tm "$tm" $file >/dev/null 2>&1; then
+    if ! ./build/jcc -std=c23 -tm "$tm" $file >/dev/null 2>&1; then
       echo "compilation failed!"
       exit -1
     fi
