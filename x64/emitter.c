@@ -82,6 +82,26 @@ void x64_emit_nop(struct x64_emitter *emitter) { x64_emit_instr(emitter, NOP); }
 
 /* SSE */
 
+void x64_emit_mov_store_ss_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_ss) {
+  x64_emit_instr(emitter, MOV_STORE_SS(mov_store_ss.source, mov_store_ss.addr, mov_store_ss.imm));
+}
+void x64_emit_mov_store_sd_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_sd) {
+  x64_emit_instr(emitter, MOV_STORE_SD(mov_store_sd.source, mov_store_sd.addr, mov_store_sd.imm));
+}
+void x64_emit_mov_load_ss_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_ss) {
+  x64_emit_instr(emitter,MOV_LOAD_SS(mov_load_ss.dest, mov_load_ss.addr, mov_load_ss.imm));
+}
+void x64_emit_mov_load_sd_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_sd) {
+  x64_emit_instr(emitter,MOV_LOAD_SD(mov_load_sd.dest, mov_load_sd.addr, mov_load_sd.imm));
+}
+
+void x64_emit_ucomiss(struct x64_emitter *emitter, struct x64_cmp ucomiss) {
+  x64_emit_instr(emitter, UCOMISS(ucomiss.lhs, ucomiss.rhs));
+}
+void x64_emit_ucomisd(struct x64_emitter *emitter, struct x64_cmp ucomisd) {
+  x64_emit_instr(emitter, UCOMISD(ucomisd.lhs, ucomisd.rhs));
+}
+
 void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps) {
   x64_emit_instr(emitter, MOVAPS(movaps.dest, movaps.source));
 }
@@ -349,7 +369,7 @@ void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg
 }
 
 void x64_emit_call_reg(struct x64_emitter *emitter, struct x64_branch_reg call_reg) {
-  TODO("x64 emit call reg");
+  x64_emit_instr(emitter, CALL_REG(call_reg.target));
 }
 
 void x64_emit_setcc(struct x64_emitter *emitter, struct x64_conditional_select setcc) {

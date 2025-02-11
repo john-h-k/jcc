@@ -99,8 +99,16 @@ static void emit_instr(const struct emit_state *state,
     EMIT(MOVQ, movq);
     EMIT(MOVD, movd);
 
+    EMIT(MOV_STORE_SS_IMM, mov_store_ss_imm);
+    EMIT(MOV_STORE_SD_IMM, mov_store_sd_imm);
+    EMIT(MOV_LOAD_SS_IMM, mov_load_ss_imm);
+    EMIT(MOV_LOAD_SD_IMM, mov_load_sd_imm);
+
     EMIT(MOVAPS, movaps);
     EMIT(MOVAPD, movapd);
+
+    EMIT(UCOMISS, ucomiss);
+    EMIT(UCOMISD, ucomisd);
 
     EMIT(SQRTSS, sqrtss);
     EMIT(SQRTSD, sqrtsd);

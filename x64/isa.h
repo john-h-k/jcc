@@ -522,7 +522,8 @@ struct x64_raw_instr {
 #define CMP_REG(lhs, rhs) \
   (NEEDS_REX((lhs)) || NEEDS_REX((rhs)) ? \
   ((struct x64_raw_instr){.len = 3,                                            \
-                          .buff = {REX(REX_W(lhs), (size_t)((lhs).idx > 7), (size_t)0, (size_t)((rhs).idx > 7)),  \
+                          .buff = { \
+                          REX(REX_W(lhs), (size_t)((lhs).idx > 7), (size_t)0, (size_t)((rhs).idx > 7)),  \
                           0x3B, MODRM(MOD_REG, (lhs).idx % 8 , (rhs).idx % 8) }}) \
                             : \
     ((struct x64_raw_instr){.len = 2,                                            \
@@ -531,6 +532,17 @@ struct x64_raw_instr {
 #define CALL_REL32(disp)                                                       \
   ((struct x64_raw_instr){.len = 5,                                            \
                           .buff = {0xE8, IMM_BYTES32((disp)) }})
+
+#define CALL_REG(reg)                                                       \
+  ((reg).idx ? \
+  ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((reg).idx > 7), (size_t)0, (size_t)(0)),  \
+                          0xFF, \
+                          MODRM(MOD_REG, (size_t)2, (reg).idx % 8) }}) \
+                          : \
+  ((struct x64_raw_instr){.len = 2,                                            \
+                          .buff = {0xFF, MODRM(MOD_REG, (size_t)2, (reg).idx % 8) }}))
 
 
 #define LEA_PCREL(dest, offset) \
@@ -701,6 +713,55 @@ struct x64_raw_instr {
                           opc, \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
 
+#define SSE_INSTR_PS_IMM32(opc, dest, source, imm) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
+   ((struct x64_raw_instr){.len = 9,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((source).idx % 8)), \
+                          SIB(SIB_SCALE_1, SIB_INDEX_NONE, (source).idx % 8),               \
+                          IMM_BYTES32(imm) \
+                          }}) \
+    : \
+   ((struct x64_raw_instr){.len = 8,                                            \
+                          .buff = { \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((source).idx % 8)), \
+                          SIB(SIB_SCALE_1, SIB_INDEX_NONE, (source).idx % 8),               \
+                          IMM_BYTES32(imm) \
+                          }}))
+
+#define SSE_INSTR_NON_PS_IMM32(opc, pref, dest, source, imm) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
+   ((struct x64_raw_instr){.len = 10,                                            \
+                          .buff = { \
+                          U8(pref), \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((source).idx % 8)), \
+                          SIB(SIB_SCALE_1, SIB_INDEX_NONE, (source).idx % 8),               \
+                          IMM_BYTES32(imm) \
+                          }}) \
+    : \
+   ((struct x64_raw_instr){.len = 9,                                            \
+                          .buff = { \
+                          U8(pref), \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((source).idx % 8)), \
+                          SIB(SIB_SCALE_1, SIB_INDEX_NONE, (source).idx % 8),               \
+                          IMM_BYTES32(imm) \
+                           }}))
+
+#define MOV_LOAD_SS(dest, source, imm) SSE_INSTR_NON_PS_IMM32(0x10, SCALAR_SINGLE, (dest), (source), (imm))
+#define MOV_STORE_SS(dest, source, imm) SSE_INSTR_NON_PS_IMM32(0x11, SCALAR_SINGLE, (dest), (source), (imm))
+#define MOV_LOAD_SD(dest, source, imm) SSE_INSTR_NON_PS_IMM32(0x10, SCALAR_DOUBLE, (dest), (source), (imm))
+#define MOV_STORE_SD(dest, source, imm) SSE_INSTR_NON_PS_IMM32(0x11, SCALAR_DOUBLE, (dest), (source), (imm))
+
 #define MOVAPS(dest, source) SSE_INSTR_PS(0x28, (dest), (source))
 #define MOVAPD(dest, source) SSE_INSTR_NON_PS(0x28, PACKED_DOUBLE, (dest), (source))
 
@@ -711,6 +772,9 @@ struct x64_raw_instr {
 #define ANDPD(dest, source) SSE_INSTR_NON_PS(0x54, PACKED_DOUBLE, (dest), (source))
 #define ORPD(dest, source) SSE_INSTR_NON_PS(0x56, PACKED_DOUBLE, (dest), (source))
 #define XORPD(dest, source) SSE_INSTR_NON_PS(0x57, PACKED_DOUBLE, (dest), (source))
+
+#define UCOMISS(dest, source) SSE_INSTR_PS(0x2E, (dest), (source))
+#define UCOMISD(dest, source) SSE_INSTR_NON_PS(0x2E, PACKED_DOUBLE, (dest), (source))
 
 #define SQRTSS(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_SINGLE, (dest), (source))
 #define SQRTSD(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_DOUBLE, (dest), (source))
