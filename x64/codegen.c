@@ -671,6 +671,26 @@ static void codegen_sub_imm(struct codegen_state *state, struct x64_reg dest,
   instr->x64->sub_imm = (struct x64_alu_imm){.dest = dest, .imm = value};
 }
 
+static void codegen_addr_offset_op(struct codegen_state *state,
+                                   struct ir_op *op) {
+  struct x64_reg dest = codegen_reg(op);
+
+  struct ir_op_addr_offset *addr_offset = &op->addr_offset;
+
+  struct x64_reg base = codegen_reg(addr_offset->base);
+  struct x64_reg index = codegen_reg(addr_offset->index);
+
+  DEBUG_ASSERT(popcntl(addr_offset->scale) == 1,
+               "non pow2 addr offset op should have been lowered");
+
+  struct instr *instr = alloc_instr(state->func);
+  instr->x64->ty = X64_INSTR_TY_LEA;
+  instr->x64->lea = (struct x64_lea){.dest = dest,
+                                     .base = base,
+                                     .index = index,
+                                     .scale = tzcnt(addr_offset->scale),
+                                     .offset = addr_offset->offset};
+}
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
   struct x64_reg dest = codegen_reg(op);
 
@@ -686,40 +706,41 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
-      TODO("addr GLB x64");
-  //   struct ir_glb *glb = op->addr.glb;
+    TODO("addr GLB x64");
+    //   struct ir_glb *glb = op->addr.glb;
 
-  //   struct instr *adrp = alloc_instr(state->func);
-  //   adrp->x64->ty = X64_INSTR_TY_ADRP;
-  //   adrp->x64->adrp = (struct x64_addr_imm){.dest = dest, .imm = 0};
+    //   struct instr *adrp = alloc_instr(state->func);
+    //   adrp->x64->ty = X64_INSTR_TY_ADRP;
+    //   adrp->x64->adrp = (struct x64_addr_imm){.dest = dest, .imm = 0};
 
-  //   adrp->reloc = arena_alloc(state->func->unit->arena,
-  //   sizeof(*adrp->reloc)); *adrp->reloc = (struct relocation){
-  //       .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
-  //                                                  :
-  //                                                  RELOCATION_TY_UNDEF_PAIR,
-  //       .symbol_index = glb->id,
-  //       .address = 0,
-  //       .size = 0};
+    //   adrp->reloc = arena_alloc(state->func->unit->arena,
+    //   sizeof(*adrp->reloc)); *adrp->reloc = (struct relocation){
+    //       .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ?
+    //       RELOCATION_TY_LOCAL_PAIR
+    //                                                  :
+    //                                                  RELOCATION_TY_UNDEF_PAIR,
+    //       .symbol_index = glb->id,
+    //       .address = 0,
+    //       .size = 0};
 
-  //   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-  //     struct instr *add = alloc_instr(state->func);
-  //     add->x64->ty = X64_INSTR_TY_ADD_IMM;
-  //     add->x64->add_imm = (struct x64_addsub_imm){
-  //         .dest = dest,
-  //         .source = dest,
-  //         .imm = 0,
-  //     };
-  //   } else {
-  //     struct instr *ldr = alloc_instr(state->func);
-  //     ldr->x64->ty = X64_INSTR_TY_LOAD_IMM;
-  //     ldr->x64->load_imm = (struct x64_load_imm){
-  //         .mode = X64_ADDRESSING_MODE_OFFSET,
-  //         .dest = dest,
-  //         .addr = dest,
-  //         .imm = 0,
-  //     };
-  //   }
+    //   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+    //     struct instr *add = alloc_instr(state->func);
+    //     add->x64->ty = X64_INSTR_TY_ADD_IMM;
+    //     add->x64->add_imm = (struct x64_addsub_imm){
+    //         .dest = dest,
+    //         .source = dest,
+    //         .imm = 0,
+    //     };
+    //   } else {
+    //     struct instr *ldr = alloc_instr(state->func);
+    //     ldr->x64->ty = X64_INSTR_TY_LOAD_IMM;
+    //     ldr->x64->load_imm = (struct x64_load_imm){
+    //         .mode = X64_ADDRESSING_MODE_OFFSET,
+    //         .dest = dest,
+    //         .addr = dest,
+    //         .imm = 0,
+    //     };
+    //   }
   }
   }
 }
@@ -2477,6 +2498,9 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_ADDR:
     codegen_addr_op(state, op);
     break;
+  case IR_OP_TY_ADDR_OFFSET:
+    codegen_addr_offset_op(state, op);
+    break;
   case IR_OP_TY_BR_COND:
     codegen_br_cond_op(state, op);
     break;
@@ -3227,6 +3251,11 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       }
 
       format += 3;
+    } else if (strncmp(format, "rimm", 4) == 0) {
+      ssize_t imm = va_arg(list, ssize_t);
+      fprintf(file, "%zd", imm);
+
+      format += 4;
     } else if (strncmp(format, "imm", 3) == 0) {
       ssize_t imm = va_arg(list, ssize_t);
       fprintf(file, "#%zd", imm);
@@ -3287,6 +3316,20 @@ static void debug_print_mov_imm(FILE *file, const struct x64_mov_imm *mov_imm) {
 
 static void debug_print_mov_reg(FILE *file, const struct x64_mov_reg *mov_reg) {
   codegen_fprintf(file, " %reg, %reg", mov_reg->dest, mov_reg->source);
+}
+
+static void debug_print_lea(FILE *file, const struct x64_lea *lea) {
+  codegen_fprintf(file, " %reg, [%reg + %reg", lea->dest, lea->base, lea->index, 1 << lea->scale, lea->offset);
+
+  if (lea->scale) {
+    codegen_fprintf(file, "*%rimm", 1 << lea->scale);
+  }
+
+  if (lea->offset) {
+    codegen_fprintf(file, "+ %rimm", lea->offset);
+  }
+
+  codegen_fprintf(file, "]");
 }
 
 static void debug_print_push(FILE *file, const struct x64_push *push) {
@@ -3395,6 +3438,10 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_PUSH:
     fprintf(file, "push");
     debug_print_push(file, &instr->x64->push);
+    break;
+  case X64_INSTR_TY_LEA:
+    fprintf(file, "lea");
+    debug_print_lea(file, &instr->x64->lea);
     break;
   case X64_INSTR_TY_POP:
     fprintf(file, "pop");

@@ -200,6 +200,10 @@ void x64_emit_mov_store_imm(struct x64_emitter *emitter,
                                         mov_store_imm.addr, mov_store_imm.imm));
 }
 
+void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea) {
+  x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, lea.scale, lea.offset));
+}
+
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push) {
   x64_emit_instr(emitter, PUSH_REG64(push.source));
 }

@@ -51,6 +51,8 @@ void x64_emit_sar(struct x64_emitter *emitter, struct x64_shift sar);
 void x64_emit_mov_load_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_imm);
 void x64_emit_mov_store_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_imm);
 
+void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea);
+
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push);
 void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop);
 
