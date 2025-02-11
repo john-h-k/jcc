@@ -1,14 +1,109 @@
 #include "lower.h"
 
+#include "../bit_twiddle.h"
 #include "../util.h"
 
-#include <math.h>
-
-#define IR_REG_IDX_AX (0)
-#define IR_REG_IDX_CX (1)
+#define IR_REG_IDX_AX (6)
+#define IR_REG_IDX_CX (3)
 #define IR_REG_IDX_DX (2)
-#define IR_REG_IDX_SI (4)
-#define IR_REG_IDX_DI (5)
+#define IR_REG_IDX_SI (1)
+#define IR_REG_IDX_DI (0)
+
+enum load_bitfield {
+  LOAD_BITFIELD_MASK_IN,
+  LOAD_BITFIELD_MASK_OUT,
+};
+
+static struct ir_op *get_unshifted_bitfield(struct ir_func *func,
+                                            struct ir_op *op,
+                                            struct ir_bitfield bitfield,
+                                            enum load_bitfield load_bitfield) {
+  unsigned int mask_val;
+
+  switch (load_bitfield) {
+  case LOAD_BITFIELD_MASK_IN:
+    mask_val =
+        ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    break;
+  case LOAD_BITFIELD_MASK_OUT:
+    mask_val =
+        MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    break;
+  }
+
+  // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
+  // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
+  // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
+  // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
+  // bitfield.offset, bitfield.width, mask_val);
+
+  struct ir_op *mask_cnst =
+      insert_after_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+  mask_cnst->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
+
+  struct ir_op *mask =
+      insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  mask->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_AND, .lhs = op, .rhs = mask_cnst};
+
+  return mask;
+}
+
+// TODO: signs and stuff are wrong
+static void lower_bitfield_insert(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_bitfield_insert *insert = &op->bitfield_insert;
+  struct ir_bitfield bitfield = op->store_bitfield.bitfield;
+
+  struct ir_op *masked_out = get_unshifted_bitfield(
+      func, insert->target, bitfield, LOAD_BITFIELD_MASK_OUT);
+
+  struct ir_op *shifted_op;
+  if (bitfield.offset) {
+    struct ir_op *shift_cnst =
+        insert_after_ir_op(func, insert->target, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                           .int_value = bitfield.offset};
+    shifted_op =
+        insert_after_ir_op(func, shift_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+    shifted_op->binary_op =
+        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_LSHIFT,
+                                 .lhs = insert->value,
+                                 .rhs = shift_cnst};
+  } else {
+    shifted_op = insert->value;
+  }
+
+  struct ir_op *mask_in =
+      replace_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+
+  mask_in->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_OR, .lhs = masked_out, .rhs = shifted_op};
+}
+
+static void lower_bitfield_extract(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_bitfield_extract *extract = &op->bitfield_extract;
+  struct ir_bitfield bitfield = op->load_bitfield.bitfield;
+
+  struct ir_op *masked_in = get_unshifted_bitfield(
+      func, extract->value, bitfield, LOAD_BITFIELD_MASK_IN);
+
+  if (bitfield.offset) {
+    struct ir_op *shift_cnst =
+        insert_after_ir_op(func, masked_in, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                           .int_value = bitfield.offset};
+    op->ty = IR_OP_TY_BINARY_OP;
+    op->var_ty = IR_VAR_TY_I32;
+    op->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_URSHIFT, .lhs = masked_in, .rhs = shift_cnst};
+  } else {
+    // ugly
+    op->ty = IR_OP_TY_MOV;
+    op->var_ty = IR_VAR_TY_I32;
+    op->mov = (struct ir_op_mov){.value = masked_in};
+  }
+}
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
@@ -390,18 +485,20 @@ void x64_lower(struct ir_unit *unit) {
               lower_store(func, op);
               break;
             case IR_OP_TY_LOAD:
-            case IR_OP_TY_STORE_BITFIELD:
-            case IR_OP_TY_LOAD_BITFIELD:
-            case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
             case IR_OP_TY_CAST_OP:
+            case IR_OP_TY_STORE_BITFIELD:
+            case IR_OP_TY_LOAD_BITFIELD:
+              break;
+            case IR_OP_TY_BITFIELD_EXTRACT:
+              lower_bitfield_extract(func, op);
               break;
             case IR_OP_TY_BITFIELD_INSERT:
-              op->bitfield_insert.value->flags |= IR_OP_FLAG_READS_DEST;
+              lower_bitfield_insert(func, op);
               break;
             case IR_OP_TY_CALL:
               if (op->call.target->ty == IR_OP_TY_ADDR &&
@@ -470,7 +567,6 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
-            case IR_OP_TY_ADDR_OFFSET:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_BR_SWITCH:
@@ -486,7 +582,10 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.rhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_CX });
+                alloc_fixed_reg_dest_ir_op(
+                    func, &op->binary_op.rhs, op,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_CX});
                 break;
               case IR_OP_BINARY_OP_TY_AND:
               case IR_OP_BINARY_OP_TY_OR:
@@ -502,22 +601,32 @@ void x64_lower(struct ir_unit *unit) {
                 op->flags |= IR_OP_FLAG_READS_DEST;
 
                 op->write_info = (struct ir_op_write_info){
-                  .num_reg_writes = 1,
-                  .writes[0] = {
-                    .ty = IR_REG_TY_INTEGRAL,
-                    .idx = IR_REG_IDX_DX
-                  },
+                    .num_reg_writes = 1,
+                    .writes[0] = {.ty = IR_REG_TY_INTEGRAL,
+                                  .idx = IR_REG_IDX_DX},
                 };
 
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
-                
+                alloc_fixed_reg_dest_ir_op(
+                    func, &op->binary_op.lhs, op,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_AX});
+                alloc_fixed_reg_source_ir_op(
+                    func, op,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_AX});
+
                 break;
               case IR_OP_BINARY_OP_TY_SQUOT:
               case IR_OP_BINARY_OP_TY_UQUOT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_DX });
+                alloc_fixed_reg_dest_ir_op(
+                    func, &op->binary_op.lhs, op,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_AX});
+                alloc_fixed_reg_source_ir_op(
+                    func, op,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_DX});
 
                 break;
               default:
@@ -537,6 +646,42 @@ void x64_lower(struct ir_unit *unit) {
                 break;
               default:
                 break;
+              }
+              break;
+            case IR_OP_TY_ADDR_OFFSET:
+              if (op->addr_offset.index && popcntl(op->addr_offset.scale) != 1) {
+                // do mul beforehand and set scale to 1
+                struct ir_op *cnst = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
+                                     op->addr_offset.scale);
+
+                struct ir_op *mul = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mul->binary_op =
+                    (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
+                                             .lhs = op->addr_offset.index,
+                                             .rhs = cnst};
+
+                mul->flags |= IR_OP_FLAG_READS_DEST;
+
+                mul->write_info = (struct ir_op_write_info){
+                    .num_reg_writes = 1,
+                    .writes[0] = {.ty = IR_REG_TY_INTEGRAL,
+                                  .idx = IR_REG_IDX_DX},
+                };
+
+                alloc_fixed_reg_dest_ir_op(
+                    func, &mul->binary_op.lhs, mul,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_AX});
+                alloc_fixed_reg_source_ir_op(
+                    func, mul,
+                    (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = IR_REG_IDX_AX});
+
+                op->addr_offset.scale = 1;
+                op->addr_offset.index = mul;
               }
               break;
             }

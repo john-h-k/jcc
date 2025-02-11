@@ -185,8 +185,6 @@ struct aarch64_reg {
   size_t idx;
 };
 
-enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg);
-
 enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_NOP,
   AARCH64_INSTR_CLASS_LOGICAL_REG,
@@ -477,12 +475,7 @@ enum aarch64_reg_usage_ty {
   AARCH64_REG_USAGE_TY_DEREF, // ldr ..., [x9]
 };
 
-size_t reg_size(enum aarch64_reg_ty reg_ty);
-
-struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
-
-bool is_return_reg(struct aarch64_reg reg);
-bool is_zero_reg(struct aarch64_reg reg);
+size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty);
 
 enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty);
 

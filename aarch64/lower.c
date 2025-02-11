@@ -582,7 +582,7 @@ void aarch64_lower(struct ir_unit *unit) {
               }
               break;
             case IR_OP_TY_ADDR_OFFSET:
-              if (popcntl(op->addr_offset.scale) != 1) {
+              if (op->addr_offset.index && popcntl(op->addr_offset.scale) != 1) {
                 // do mul beforehand and set scale to 1
                 struct ir_op *cnst = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64, op->addr_offset.scale);

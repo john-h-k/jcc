@@ -57,13 +57,21 @@ void x64_emit_mov_store_imm(struct x64_emitter *emitter, struct x64_mov_store_im
 void x64_emit_mov_store_half_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_half_imm);
 void x64_emit_mov_store_byte_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_byte_imm);
 
+void x64_emit_lea_pcrel(struct x64_emitter *emitter, struct x64_lea_pcrel lea_pcrel);
 void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea);
 
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push);
 void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop);
 
+void x64_emit_call(struct x64_emitter *emitter, struct x64_branch call);
+
+void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg);
+void x64_emit_call_reg(struct x64_emitter *emitter, struct x64_branch_reg call_reg);
+
 struct x64_target_reloc x64_emit_jmp(struct x64_emitter *emitter, struct x64_branch jmp);
 struct x64_target_reloc x64_emit_jcc(struct x64_emitter *emitter, struct x64_conditional_branch jcc);
+
+void x64_emit_setcc(struct x64_emitter *emitter, struct x64_conditional_select setcc);
 
 void x64_emit_cmp(struct x64_emitter *emitter, struct x64_cmp cmp);
 void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test);

@@ -108,7 +108,8 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
       switch (reloc.ty) {
       case RELOCATION_TY_POINTER:
-      case RELOCATION_TY_SINGLE:
+      case RELOCATION_TY_CALL:
+      case RELOCATION_TY_LOCAL_SINGLE:
         *num_relocs += 1;
         break;
       case RELOCATION_TY_LOCAL_PAIR:
@@ -143,14 +144,25 @@ static void write_relocation(FILE *file, struct vector *relocations) {
 
       break;
     }
-    case RELOCATION_TY_SINGLE: {
-
-      struct relocation_info info = {.r_address = addr,
+    case RELOCATION_TY_CALL: {
+      struct relocation_info info = {.r_address = addr + 1,
                                      .r_length = reloc->size,
                                      .r_pcrel = 1,
                                      .r_symbolnum = index,
                                      .r_extern = 1,
                                      .r_type = ARM64_RELOC_BRANCH26};
+
+      fwrite(&info, sizeof(info), 1, file);
+
+      break;
+    }
+    case RELOCATION_TY_LOCAL_SINGLE: {
+      struct relocation_info info = {.r_address = addr + 3,
+                                     .r_length = reloc->size,
+                                     .r_pcrel = 1,
+                                     .r_symbolnum = index,
+                                     .r_extern = 1,
+                                     .r_type = X86_64_RELOC_SIGNED};
 
       fwrite(&info, sizeof(info), 1, file);
 

@@ -53,6 +53,7 @@ static void emit_instr(const struct emit_state *state,
     EMIT(IMUL, imul);
 
     EMIT(LEA, lea);
+    EMIT(LEA_PCREL, lea_pcrel);
 
     EMIT(ADD_IMM, add_imm);
     EMIT(SUB_IMM, sub_imm);
@@ -69,6 +70,12 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(TEST, test);
     EMIT(CMP, cmp);
+
+    EMIT(SETCC, setcc);
+
+    EMIT(CALL, call);
+    EMIT(JMP_REG, jmp_reg);
+    EMIT(CALL_REG, call_reg);
 
     EMIT(TEST_IMM, test_imm);
     EMIT(CMP_IMM, cmp_imm);

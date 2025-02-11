@@ -330,7 +330,7 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM_IMM_SIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                              \
                         ? MOV_MEM_IMM8_REX_SIB((opc), (reg), (addr), (imm))  \
                     : MOV_MEM_IMM8_SIB((opc), (reg), (addr), (imm)))          \
       : (NEEDS_REX((reg))                                                      \
@@ -338,7 +338,7 @@ struct x64_raw_instr {
             : MOV_MEM_IMM32_SIB((opc), (reg), (addr), (imm)))                 \
 
 #define MOV_MEM_IMM_NOSIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                             \
                         ? MOV_MEM_IMM8_REX((opc), (reg), (addr), (imm))  \
                     : MOV_MEM_IMM8((opc), (reg), (addr), (imm)))          \
       : (NEEDS_REX((reg))                                                      \
@@ -411,7 +411,7 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM16_IMM_SIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                             \
                         ? MOV_MEM16_IMM8_REX_SIB((opc), (reg), (addr), (imm))  \
                     : MOV_MEM16_IMM8_SIB((opc), (reg), (addr), (imm)))          \
       : (NEEDS_REX((reg))                                                      \
@@ -419,7 +419,7 @@ struct x64_raw_instr {
             : MOV_MEM16_IMM32_SIB((opc), (reg), (addr), (imm)))                 \
 
 #define MOV_MEM16_IMM_NOSIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg))                                              \
+  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                          \
                         ? MOV_MEM16_IMM8_REX((opc), (reg), (addr), (imm))  \
                     : MOV_MEM16_IMM8((opc), (reg), (addr), (imm)))          \
       : (NEEDS_REX((reg))                                                      \
@@ -483,6 +483,14 @@ struct x64_raw_instr {
 
 // #define JMP_COND_REL(cc, disp) (disp) < 256 ? JMP_COND_REL8((cc), (disp)) : JMP_COND_REL32((cc), (disp))
 #define JMP_COND_REL(cc) JMP_COND_REL32((cc), (0x0))
+
+#define SET_COND(cc, dest)  \
+  ((dest).idx < 4 ? \
+  ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = {0x0F, 0x90 + U8(cc), MODRM(MOD_REG, (size_t)0, (size_t)((dest).idx))}}) :  \
+    ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { REX((size_t)1, (size_t)0, (size_t)0, (size_t)(((dest).idx) > 8)),  \
+                          0x0F, 0x90 + U8(cc), MODRM(MOD_REG, (size_t)0, (size_t)((dest).idx) % 8)}}))  \
  
 #define RET ((struct x64_raw_instr){.len = 1, .buff = {0xc3}})
 
@@ -524,6 +532,15 @@ struct x64_raw_instr {
                           .buff = {0xE8, IMM_BYTES32((disp)) }})
 
 
+#define LEA_PCREL(dest, offset) \
+  ((struct x64_raw_instr){.len = 7,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest.idx) > 7), (size_t)0, (size_t)0), \
+                          0x8D, \
+                          MODRM(MOD_RM_MEM, ((dest).idx % 8), (size_t)0b101), \
+                          IMM_BYTES32(offset) \
+                          }}) \
+
 #define LEA_REG64(dest, index, base, scale, offset) \
   ((offset) == 0 \
     ? LEA_REG64_IMM0((dest), (index), (base), (scale), (offset))  \
@@ -557,6 +574,39 @@ struct x64_raw_instr {
                           0x8D, \
                           MODRM(MOD_RM_IMM32, ((dest).idx % 8), (size_t)0b100), \
                           SIB(scale, index.idx, base.idx), \
+                          IMM_BYTES32(offset) \
+                          }}) \
+
+#define LEA_NOIDX_REG64(dest, base, offset) \
+  ((offset) == 0 \
+    ? LEA_NOIDX_REG64_IMM0((dest), (base), (offset))  \
+    : ((offset) < 256) ? LEA_NOIDX_REG64_IMM8((dest), (base), (offset))  \
+      : LEA_NOIDX_REG64_IMM32((dest), (base), (offset))  \
+    )
+
+#define LEA_NOIDX_REG64_IMM0(dest, base, offset)                                                       \
+  ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_MEM, ((dest).idx % 8), ((base).idx % 8)), \
+                          }}) \
+
+#define LEA_NOIDX_REG64_IMM8(dest, base, offset)                                                       \
+  ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_IMM8, ((dest).idx % 8), ((base).idx % 8)), \
+                          IMM_BYTES8(offset) \
+                          }}) \
+
+#define LEA_NOIDX_REG64_IMM32(dest, base, offset)                                                       \
+  ((struct x64_raw_instr){.len = 7,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((base).idx % 8)), \
                           IMM_BYTES32(offset) \
                           }}) \
 

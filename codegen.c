@@ -4,6 +4,20 @@
 #include "util.h"
 #include "vector.h"
 
+int sort_entries_by_id(const void *a, const void *b) {
+  const struct codegen_entry *l = a;
+  const struct codegen_entry *r = b;
+
+  if (l->glb_id > r->glb_id) {
+    return 1;
+  } else if (l->glb_id == r->glb_id) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+
 struct instr *alloc_instr(struct codegen_function *func) {
   struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
 
@@ -50,7 +64,7 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   char *buff = arena_alloc(arena, len);
   size_t head = 0;
 
-  strcpy(&buff[head], "l_");
+  strcpy(&buff[head], "p_");
   head += strlen("l_");
 
   buff[head++] = '.';

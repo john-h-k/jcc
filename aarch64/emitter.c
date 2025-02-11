@@ -605,7 +605,7 @@ void aarch64_emit_load_pair_imm(struct aarch64_emitter *emitter,
     bad_instr();
   }
 
-  size_t size = reg_size(ldp.dest[0].ty);
+  size_t size = aarch64_reg_size(ldp.dest[0].ty);
   unsigned fp = aarch64_reg_ty_is_fp(ldp.dest[0].ty);
 
   switch (size) {
@@ -632,7 +632,7 @@ void aarch64_emit_store_pair_imm(struct aarch64_emitter *emitter,
     bad_instr();
   }
 
-  size_t size = reg_size(stp.source[0].ty);
+  size_t size = aarch64_reg_size(stp.source[0].ty);
   unsigned fp = aarch64_reg_ty_is_fp(stp.source[0].ty);
 
   switch (size) {

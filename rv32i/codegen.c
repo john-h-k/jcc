@@ -1004,19 +1004,6 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
-static int sort_entries_by_id(const void *a, const void *b) {
-  const struct codegen_entry *l = a;
-  const struct codegen_entry *r = b;
-
-  if (l->glb_id > r->glb_id) {
-    return 1;
-  } else if (l->glb_id == r->glb_id) {
-    return 0;
-  } else {
-    return -1;
-  }
-}
-
 struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
   *unit = (struct codegen_unit){
