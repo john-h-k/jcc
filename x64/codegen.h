@@ -34,9 +34,15 @@ enum x64_instr_ty {
   X64_INSTR_TY_MOVZX_LOAD_HALF_IMM,
   X64_INSTR_TY_MOV_LOAD_IMM,
 
+  X64_INSTR_TY_MOV_LOAD_SS_IMM,
+  X64_INSTR_TY_MOV_LOAD_SD_IMM,
+
   X64_INSTR_TY_MOV_STORE_BYTE_IMM,
   X64_INSTR_TY_MOV_STORE_HALF_IMM,
   X64_INSTR_TY_MOV_STORE_IMM,
+
+  X64_INSTR_TY_MOV_STORE_SS_IMM,
+  X64_INSTR_TY_MOV_STORE_SD_IMM,
 
   X64_INSTR_TY_MOVSX,
   // X64_INSTR_TY_MOVZX,
@@ -58,6 +64,9 @@ enum x64_instr_ty {
 
   X64_INSTR_TY_SQRTSS,
   X64_INSTR_TY_SQRTSD,
+
+  X64_INSTR_TY_UCOMISS,
+  X64_INSTR_TY_UCOMISD,
 
   X64_INSTR_TY_ANDPS,
   X64_INSTR_TY_ANDPD,
@@ -339,7 +348,7 @@ struct x64_instr {
     };
 
     union {
-      struct x64_cmp cmp, test;
+      struct x64_cmp cmp, test, ucomiss, ucomisd;
     };
 
     union {
@@ -359,11 +368,11 @@ struct x64_instr {
     };
 
     union {
-      struct x64_mov_load_imm mov_load_imm, movzx_load_half_imm, movzx_load_byte_imm;
+      struct x64_mov_load_imm mov_load_imm, movzx_load_half_imm, movzx_load_byte_imm, mov_load_ss_imm, mov_load_sd_imm;
     };
 
     union {
-      struct x64_mov_store_imm mov_store_imm, mov_store_half_imm, mov_store_byte_imm;
+      struct x64_mov_store_imm mov_store_imm, mov_store_half_imm, mov_store_byte_imm, mov_store_ss_imm, mov_store_sd_imm;
     };
 
     union {

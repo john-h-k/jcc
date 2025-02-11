@@ -21,6 +21,11 @@ void x64_emit_nop(struct x64_emitter *emitter);
 
 /* SSE */
 
+void x64_emit_mov_store_ss_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_ss);
+void x64_emit_mov_store_sd_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_sd);
+void x64_emit_mov_load_ss_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_ss);
+void x64_emit_mov_load_sd_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_sd);
+
 void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps);
 void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd);
 
@@ -44,6 +49,9 @@ void x64_emit_mulss(struct x64_emitter *emitter, struct x64_alu_reg mulss);
 void x64_emit_mulsd(struct x64_emitter *emitter, struct x64_alu_reg mulsd);
 void x64_emit_divss(struct x64_emitter *emitter, struct x64_alu_reg divss);
 void x64_emit_divsd(struct x64_emitter *emitter, struct x64_alu_reg divsd);
+
+void x64_emit_ucomiss(struct x64_emitter *emitter, struct x64_cmp ucomiss);
+void x64_emit_ucomisd(struct x64_emitter *emitter, struct x64_cmp ucomisd);
 
 void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss);
 void x64_emit_sqrtsd(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtsd);

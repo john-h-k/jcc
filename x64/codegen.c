@@ -240,25 +240,24 @@ static enum x64_cond get_cond_for_op(struct ir_op *op) {
     return X64_COND_NOT_ZERO;
   case IR_OP_BINARY_OP_TY_UGT:
     return X64_COND_NOT_BELOW_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_FGT:
   case IR_OP_BINARY_OP_TY_SGT:
     return X64_COND_NOT_LESS_OR_EQUAL;
   case IR_OP_BINARY_OP_TY_UGTEQ:
     return X64_COND_NOT_BELOW;
+  case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_SGTEQ:
     return X64_COND_NOT_LESS;
   case IR_OP_BINARY_OP_TY_ULT:
     return X64_COND_BELOW;
+  case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_SLT:
     return X64_COND_LESS;
   case IR_OP_BINARY_OP_TY_ULTEQ:
     return X64_COND_BELOW_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_FLTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     return X64_COND_LESS_OR_EQUAL;
-  case IR_OP_BINARY_OP_TY_FLT:
-  case IR_OP_BINARY_OP_TY_FGT:
-  case IR_OP_BINARY_OP_TY_FLTEQ:
-  case IR_OP_BINARY_OP_TY_FGTEQ:
-    TODO("x64 floating point conditional jumps");
   default:
     BUG("op was not a comparison");
   }
@@ -401,6 +400,12 @@ static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
     return X64_INSTR_TY_MOVZX_LOAD_HALF_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
+    return X64_INSTR_TY_MOV_LOAD_SS_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64) {
+    return X64_INSTR_TY_MOV_LOAD_SD_IMM;
   } else {
     return X64_INSTR_TY_MOV_LOAD_IMM;
   }
@@ -413,6 +418,12 @@ static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
     return X64_INSTR_TY_MOV_STORE_HALF_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
+    return X64_INSTR_TY_MOV_STORE_SS_IMM;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64) {
+    return X64_INSTR_TY_MOV_STORE_SD_IMM;
   } else {
     return X64_INSTR_TY_MOV_STORE_IMM;
   }
@@ -1004,18 +1015,18 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
    : primitive == IR_VAR_PRIMITIVE_TY_F32 ? (integral##PS)                     \
                                           : (integral))
   switch (ty) {
-    //   case IR_OP_BINARY_OP_TY_FEQ:
-    //   case IR_OP_BINARY_OP_TY_FNEQ:
-    //   case IR_OP_BINARY_OP_TY_FGT:
-    //   case IR_OP_BINARY_OP_TY_FGTEQ:
-    //   case IR_OP_BINARY_OP_TY_FLT:
-    //   case IR_OP_BINARY_OP_TY_FLTEQ:
-    //     instr->x64->ty = X64_INSTR_TY_FCMP;
-    //     instr->x64->fcmp = (struct x64_fcmp){
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+  case IR_OP_BINARY_OP_TY_FEQ:
+  case IR_OP_BINARY_OP_TY_FNEQ:
+  case IR_OP_BINARY_OP_TY_FGT:
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+  case IR_OP_BINARY_OP_TY_FLT:
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    instr->x64->ty = GET_FP_OP(op->binary_op.lhs->var_ty, X64_INSTR_TY_UCOMI);
+    instr->x64->cmp = (struct x64_cmp){
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
@@ -1515,7 +1526,7 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
 // same with reg 10, which we use if a register branch target is needed for
 // `blr`
 #define GP_TMP_REG_IDX ((size_t)9)
-#define BLR_REG_IDX ((size_t)10)
+#define CALL_REG_IDX ((size_t)0)
 #define ADDR_REG_IDX ((size_t)11)
 #define FP_TMP_REG_IDX ((size_t)16)
 
@@ -1576,7 +1587,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
     struct location from = {.idx = source.idx};
 
-    struct location to = {.idx = BLR_REG_IDX};
+    struct location to = {.idx = CALL_REG_IDX};
 
     // need to move it into reg 10
     vector_push_back(gp_move_from, &from);
@@ -1861,7 +1872,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   } else {
     instr->x64->ty = X64_INSTR_TY_CALL_REG;
     instr->x64->call_reg = (struct x64_branch_reg){
-        .target = {.ty = X64_REG_TY_W, .idx = BLR_REG_IDX}};
+        .target = {.ty = X64_REG_TY_R, .idx = CALL_REG_IDX}};
   }
 
   if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
@@ -3248,17 +3259,21 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
         break;
       }
       case X64_REG_TY_W: {
-        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
-
-        const char *name = reg_names[reg.idx];
-        fprintf(file, "%s", name);
+        if (reg.idx < ARR_LENGTH(reg_names)) {
+          const char *name = reg_names[reg.idx];
+          fprintf(file, "%s", name);
+        } else {
+          fprintf(file, "r%zul", reg.idx);
+        }
         break;
       }
       case X64_REG_TY_L: {
-        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
-
-        const char *name = reg_names[reg.idx];
-        fprintf(file, "%cl", name[0]);
+        if (reg.idx < ARR_LENGTH(reg_names)) {
+          const char *name = reg_names[reg.idx];
+          fprintf(file, "%cl", name[0]);
+        } else {
+          fprintf(file, "r%zub", reg.idx);
+        }
         break;
       }
       case X64_REG_TY_XMM: {
@@ -3408,6 +3423,23 @@ static void debug_print_instr(FILE *file,
                               const struct instr *instr) {
 
   switch (instr->x64->ty) {
+  case X64_INSTR_TY_MOV_LOAD_SS_IMM:
+    fprintf(file, "movss");
+    debug_print_mov_load_imm(file, 4, &instr->x64->mov_load_ss_imm);
+    break;
+  case X64_INSTR_TY_MOV_LOAD_SD_IMM:
+    fprintf(file, "movsd");
+    debug_print_mov_load_imm(file, 8, &instr->x64->mov_load_sd_imm);
+    break;
+  case X64_INSTR_TY_MOV_STORE_SS_IMM:
+    fprintf(file, "movss");
+    debug_print_mov_store_imm(file, 4, &instr->x64->mov_store_ss_imm);
+    break;
+  case X64_INSTR_TY_MOV_STORE_SD_IMM:
+    fprintf(file, "movsd");
+    debug_print_mov_store_imm(file, 8, &instr->x64->mov_store_sd_imm);
+    break;
+
   case X64_INSTR_TY_CVTSI2SS:
     fprintf(file, "cvtsi2ss");
     debug_print_2_reg_unary(file, &instr->x64->cvtsi2ss);
@@ -3487,6 +3519,14 @@ static void debug_print_instr(FILE *file,
   case X64_INSTR_TY_SQRTSD:
     fprintf(file, "sqrtsd");
     debug_print_2_reg_unary(file, &instr->x64->sqrtsd);
+    break;
+  case X64_INSTR_TY_UCOMISS:
+    fprintf(file, "ucomiss");
+    debug_print_cmp(file, &instr->x64->ucomiss);
+    break;
+  case X64_INSTR_TY_UCOMISD:
+    fprintf(file, "ucomisd");
+    debug_print_cmp(file, &instr->x64->ucomisd);
     break;
   case X64_INSTR_TY_ANDPS:
     fprintf(file, "andps");
