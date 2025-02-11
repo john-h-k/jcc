@@ -1755,44 +1755,23 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
     op->lcl = add_local(irb, &op->var_ty);
   }
 
-  if (op->ty != IR_OP_TY_PHI) {
-    // storing undf makes no sense
-    if (op->ty != IR_OP_TY_UNDF) {
-      struct ir_op *store =
-          insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-      store->store = (struct ir_op_store){
-          .ty = IR_OP_STORE_TY_LCL, .lcl = op->lcl, .value = op};
-
-      store->reg = NO_REG;
-      store->flags |= IR_OP_FLAG_SPILL;
-
-      op->lcl->store = store;
-      return store;
-    }
-
+  if (op->flags & IR_OP_FLAG_SPILLED) {
     return NULL;
   }
 
-  // if phi is spilled, first ensure it doesn't already have a local via one of
-  // its values then, once spilled, propogate its local to all of its dependents
-  struct ir_lcl *lcl = NULL;
-  for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i].value;
+  if (op->ty != IR_OP_TY_UNDF && !(op->flags & IR_OP_FLAG_SPILLED)) {
+    op->flags |= IR_OP_FLAG_SPILLED;
 
-    if (value->lcl) {
-      lcl = value->lcl;
-    }
-  }
+    struct ir_op *store =
+        insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_LCL, .lcl = op->lcl, .value = op};
 
-  if (!lcl) {
-    lcl = add_local(irb, &op->var_ty);
-  }
+    store->reg = NO_REG;
+    store->flags |= IR_OP_FLAG_SPILL;
 
-  op->lcl = lcl;
-  for (size_t i = 0; i < op->phi.num_values; i++) {
-    struct ir_op *value = op->phi.values[i].value;
-
-    value->lcl = lcl;
+    op->lcl->store = store;
+    return store;
   }
 
   return NULL;

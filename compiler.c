@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "codegen.h"
+#include "graphcol.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/ir.h"
@@ -180,7 +181,8 @@ enum compile_result compile(struct compiler *compiler) {
       case IR_GLB_TY_DATA:
         break;
       case IR_GLB_TY_FUNC:
-        lsra_register_alloc(glb->func, target->reg_info);
+        graphcol_register_alloc(glb->func, target->reg_info);
+        // lsra_register_alloc(glb->func, target->reg_info);
         break;
       }
 

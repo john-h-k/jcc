@@ -954,6 +954,8 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
                                        struct td_cnst *cnst) {
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
 
+  op->flags |= IR_OP_FLAG_MUST_SPILL;
+
   switch (cnst->ty) {
   case TD_CNST_TY_CHAR:
   case TD_CNST_TY_WIDE_CHAR:

@@ -711,6 +711,19 @@ struct ir_lcl {
   size_t offset;
 };
 
+struct ir_reg_info {
+  struct ir_reg reg;
+  struct ir_op *live;
+};
+
+struct ir_reg_state {
+  size_t num_gp_registers;
+  struct ir_reg_info *gp_registers;
+
+  size_t num_fp_registers;
+  struct ir_reg_info *fp_registers;
+};
+
 struct ir_reg_usage {
   struct bitset *gp_registers_used;
   struct bitset *fp_registers_used;

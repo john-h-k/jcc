@@ -257,12 +257,18 @@ static inline void debug_print_stack_trace(void) {
 #if NDEBUG
 #define DEBUG_ASSERT(...)
 #else
-#define DEBUG_ASSERT(b, ...) util_debug_assert(b, __VA_ARGS__)
+#define DEBUG_ASSERT(b, ...) util_debug_assert(b, # b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 #endif
 
-PRINTF_ARGS(1) static void util_debug_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(5) static void util_debug_assert(bool b, const char *cond, const char *func, const char *file, int line, const char *msg, ...) {
   if (!b) {
-    FMTPRINT(stderr, "debug_assertion failed, program exiting: ", msg);
+    fprintf(stderr, "DEBUG_ASSERT failed %s:%d:%s: \nexpected `%s`", file, line, func, cond);
+
+    va_list v;
+    va_start(v, msg);
+    vfprintf(stderr, msg, v);
+    fprintf(stderr, "\n");
+    va_end(v);
     EXIT_FAIL(-1);
   }
 }

@@ -27,4 +27,6 @@ struct interval_data construct_intervals(struct ir_func *irb);
 void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage);
 void print_ir_intervals(FILE *file, struct ir_op *op, void *metadata);
 
+int sort_interval_by_start_point(const void *a, const void *b);
+
 #endif
