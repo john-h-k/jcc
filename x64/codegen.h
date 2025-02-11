@@ -58,12 +58,34 @@ enum x64_instr_ty {
 
   X64_INSTR_TY_SQRTSS,
   X64_INSTR_TY_SQRTSD,
+
   X64_INSTR_TY_ANDPS,
   X64_INSTR_TY_ANDPD,
   X64_INSTR_TY_XORPS,
   X64_INSTR_TY_XORPD,
   X64_INSTR_TY_ORPS,
   X64_INSTR_TY_ORPD,
+
+  X64_INSTR_TY_ADDSS,
+  X64_INSTR_TY_ADDSD,
+  X64_INSTR_TY_SUBSS,
+  X64_INSTR_TY_SUBSD,
+  X64_INSTR_TY_MULSS,
+  X64_INSTR_TY_MULSD,
+  X64_INSTR_TY_DIVSS,
+  X64_INSTR_TY_DIVSD,
+
+  X64_INSTR_TY_CVTSI2SS,
+  X64_INSTR_TY_CVTSI2SD,
+
+  X64_INSTR_TY_CVTTSS2SI,
+  X64_INSTR_TY_CVTTSD2SI,
+
+  X64_INSTR_TY_CVTSS2SI,
+  X64_INSTR_TY_CVTSD2SI,
+
+  X64_INSTR_TY_CVTSS2SD,
+  X64_INSTR_TY_CVTSD2SS,
 
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
@@ -281,7 +303,7 @@ struct x64_instr {
 
   union {
     union {
-      struct x64_alu_reg alu_reg, add, sub, xor, or, and, andps, andpd, xorps, xorpd, orps, orpd;
+      struct x64_alu_reg alu_reg, add, sub, xor, or, and, andps, andpd, xorps, xorpd, orps, orpd, addss, addsd, subss, subsd, mulss, mulsd, divss, divsd;
     };
 
     union {
@@ -293,7 +315,7 @@ struct x64_instr {
     };
 
     union {
-      struct x64_2_reg_unary two_reg_unary, sqrtss, sqrtsd, movaps, movapd;
+      struct x64_2_reg_unary two_reg_unary, sqrtss, sqrtsd, movaps, movapd, cvt, cvtsi2ss, cvtsi2sd, cvttss2si, cvttsd2si, cvtss2si, cvtsd2si, cvtsd2ss, cvtss2sd;
     };
 
     union {

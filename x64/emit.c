@@ -110,6 +110,27 @@ static void emit_instr(const struct emit_state *state,
     EMIT(XORPD, xorpd);
     EMIT(ORPS, orps);
     EMIT(ORPD, orpd);
+
+    EMIT(ADDSS, addss);
+    EMIT(ADDSD, addsd);
+    EMIT(SUBSS, subss);
+    EMIT(SUBSD, subsd);
+    EMIT(MULSS, mulss);
+    EMIT(MULSD, mulsd);
+    EMIT(DIVSS, divss);
+    EMIT(DIVSD, divsd);
+
+    EMIT(CVTSI2SS, cvtsi2ss);
+    EMIT(CVTSI2SD, cvtsi2sd);
+
+    EMIT(CVTTSS2SI, cvttss2si);
+    EMIT(CVTTSD2SI, cvttsd2si);
+
+    EMIT(CVTSS2SI, cvtss2si);
+    EMIT(CVTSD2SI, cvtsd2si);
+
+    EMIT(CVTSS2SD, cvtss2sd);
+    EMIT(CVTSD2SS, cvtsd2ss);
   case X64_INSTR_TY_JMP: {
     struct x64_target_reloc reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {

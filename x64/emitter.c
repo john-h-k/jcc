@@ -90,6 +90,60 @@ void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd)
   x64_emit_instr(emitter, MOVAPD(movapd.dest, movapd.source));
 }
 
+void x64_emit_cvtsi2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2ss) {
+  x64_emit_instr(emitter, CVTSI2SS(cvtsi2ss.dest, cvtsi2ss.source));
+}
+void x64_emit_cvtsi2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2sd) {
+  x64_emit_instr(emitter, CVTSI2SD(cvtsi2sd.dest, cvtsi2sd.source));
+}
+
+void x64_emit_cvttss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttss2si) {
+  x64_emit_instr(emitter, CVTTSS2SI(cvttss2si.dest, cvttss2si.source));
+}
+void x64_emit_cvttsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttsd2si) {
+  x64_emit_instr(emitter, CVTTSD2SI(cvttsd2si.dest, cvttsd2si.source));
+}
+
+void x64_emit_cvtss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2si) {
+  x64_emit_instr(emitter, CVTSS2SI(cvtss2si.dest, cvtss2si.source));
+}
+void x64_emit_cvtsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2si) {
+  x64_emit_instr(emitter, CVTSD2SI(cvtsd2si.dest, cvtsd2si.source));
+}
+
+void x64_emit_cvtss2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2sd) {
+  x64_emit_instr(emitter, CVTSS2SD(cvtss2sd.dest, cvtss2sd.source));
+}
+void x64_emit_cvtsd2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2ss) {
+  x64_emit_instr(emitter, CVTSD2SS(cvtsd2ss.dest, cvtsd2ss.source));
+}
+
+void x64_emit_addss(struct x64_emitter *emitter, struct x64_alu_reg addss) {
+  x64_emit_instr(emitter, ADDSS(addss.dest, addss.rhs));
+}
+void x64_emit_addsd(struct x64_emitter *emitter, struct x64_alu_reg addsd) {
+  x64_emit_instr(emitter, ADDSD(addsd.dest, addsd.rhs));
+}
+void x64_emit_subss(struct x64_emitter *emitter, struct x64_alu_reg subss) {
+  x64_emit_instr(emitter, SUBSS(subss.dest, subss.rhs));
+}
+void x64_emit_subsd(struct x64_emitter *emitter, struct x64_alu_reg subsd) {
+  x64_emit_instr(emitter, SUBSD(subsd.dest, subsd.rhs));
+}
+void x64_emit_mulss(struct x64_emitter *emitter, struct x64_alu_reg mulss) {
+  x64_emit_instr(emitter, MULSS(mulss.dest, mulss.rhs));
+}
+void x64_emit_mulsd(struct x64_emitter *emitter, struct x64_alu_reg mulsd) {
+  x64_emit_instr(emitter, MULSD(mulsd.dest, mulsd.rhs));
+}
+void x64_emit_divss(struct x64_emitter *emitter, struct x64_alu_reg divss) {
+  x64_emit_instr(emitter, DIVSS(divss.dest, divss.rhs));
+}
+void x64_emit_divsd(struct x64_emitter *emitter, struct x64_alu_reg divsd) {
+  x64_emit_instr(emitter, DIVSD(divsd.dest, divsd.rhs));
+}
+
+
 void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss) {
   x64_emit_instr(emitter, SQRTSS(sqrtss.dest, sqrtss.source));
 }
