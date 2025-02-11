@@ -566,7 +566,6 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
-            case IR_OP_TY_ADDR_OFFSET:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_BR_SWITCH:
@@ -582,7 +581,25 @@ void aarch64_lower(struct ir_unit *unit) {
                 lower_comparison(func, op);
               }
               break;
+            case IR_OP_TY_ADDR_OFFSET:
+              if (popcntl(op->addr_offset.scale) != 1) {
+                // do mul beforehand and set scale to 1
+                struct ir_op *cnst = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64, op->addr_offset.scale);
+
+                struct ir_op *mul = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mul->binary_op = (struct ir_op_binary_op){
+                  .ty = IR_OP_BINARY_OP_TY_MUL,
+                  .lhs = op->addr_offset.index,
+                  .rhs = cnst
+                };
+
+                op->addr_offset.scale = 1;
+                op->addr_offset.index = mul;
+              }
+              break;
             }
+
 
             op = op->succ;
           }

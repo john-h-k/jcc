@@ -106,8 +106,6 @@ static void ir_validate_op(UNUSED struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_MEM_SET:
     break;
   case IR_OP_TY_ADDR_OFFSET:
-      invariant_assert(popcntl(op->addr_offset.scale) == 1, "op %zu: scale must be power of 2",
-                       op->id);
     break;
   }
 }
