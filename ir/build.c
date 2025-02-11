@@ -1415,7 +1415,7 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
   return op;
 }
 
-static bool is_integral_cnst(struct ir_func_builder *irb,
+UNUSED static bool is_integral_cnst(struct ir_func_builder *irb,
                              const struct td_expr *expr,
                              unsigned long long *value) {
   if (expr->ty == TD_EXPR_TY_UNARY_OP &&
@@ -1449,7 +1449,6 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
                                                 struct td_expr *lhs_expr,
                                                 struct td_expr *rhs_expr) {
   struct td_var_ty pointer_ty, lhs_ty;
-  struct td_var_ty rhs_ty = rhs_expr->var_ty;
 
   struct ir_op *lhs;
   if (lhs_expr->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
@@ -1466,53 +1465,26 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
     lhs_ty = lhs_expr->var_ty;
   }
 
-  unsigned long long idx = 0;
-  if (is_integral_cnst(irb, rhs_expr, &idx)) {
-    // make IR clearer for constant indices even when optimisation is turned off
-
-    if (idx == 0) {
-      return lhs;
-    }
-
-    struct td_var_ty underlying = td_var_ty_get_underlying(irb->tchk, &lhs_ty);
-    struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
-    struct ir_var_ty_info info = var_ty_info(irb->unit, &el_ty);
-    unsigned long long offset_value = idx * info.size;
-
-    struct ir_op *cnst = alloc_ir_op(irb->func, *stmt);
-    cnst->ty = IR_OP_TY_CNST;
-    cnst->var_ty = IR_VAR_TY_POINTER;
-    cnst->cnst =
-        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = offset_value};
-
-    struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
-    offset->ty = IR_OP_TY_BINARY_OP;
-    offset->var_ty = IR_VAR_TY_POINTER;
-    offset->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD,
-        .lhs = lhs,
-        .rhs = cnst,
-    };
-
-    return offset;
-  }
-
   // need to promote rhs to pointer size int
   DEBUG_ASSERT(rhs_expr->var_ty.ty == TD_VAR_TY_TY_WELL_KNOWN,
                "expected well-known ty rhs");
 
   struct ir_op *rhs = build_ir_for_expr(irb, stmt, rhs_expr);
 
-  struct ir_build_binaryop args = {
-      .ty = TD_BINARY_OP_TY_ADD,
-      .result_ty = pointer_ty,
-      .lhs_ty = lhs_ty,
-      .rhs_ty = rhs_ty,
-      .lhs = lhs,
-      .rhs = rhs,
+  struct td_var_ty underlying = td_var_ty_get_underlying(irb->tchk, &lhs_ty);
+  struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
+  struct ir_var_ty_info info = var_ty_info(irb->unit, &el_ty);
+
+  struct ir_op *addr = alloc_ir_op(irb->func, *stmt);
+  addr->ty = IR_OP_TY_ADDR_OFFSET;
+  addr->var_ty = IR_VAR_TY_POINTER;
+  addr->addr_offset = (struct ir_op_addr_offset){
+      .base = lhs,
+      .scale = info.size,
+      .index = rhs
   };
 
-  return alloc_binaryop(irb, *stmt, &args);
+  return addr;
 }
 
 static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,

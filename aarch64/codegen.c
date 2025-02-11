@@ -1,9 +1,9 @@
 #include "codegen.h"
 
-#include "../log.h"
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
 #include "../bitset.h"
+#include "../log.h"
 #include "../util.h"
 #include "../vector.h"
 
@@ -798,6 +798,46 @@ static void codegen_sub_imm(struct codegen_state *state,
     };
   }
 }
+
+union b32 {
+  unsigned u;
+  float f;
+  unsigned short b[2];
+};
+
+static void codegen_32_bit_int(struct codegen_state *state,
+                               struct aarch64_reg dest, union b32 value);
+
+static void codegen_addr_offset_op(struct codegen_state *state,
+                                   struct ir_op *op) {
+  struct aarch64_reg dest = codegen_reg(op);
+
+  struct ir_op_addr_offset *addr_offset = &op->addr_offset;
+
+  struct aarch64_reg base = codegen_reg(addr_offset->base);
+  struct aarch64_reg index = codegen_reg(addr_offset->index);
+
+  DEBUG_ASSERT(popcntl(addr_offset->scale) == 1,
+               "non pow2 addr offset op should have been lowered");
+
+  size_t shift = tzcnt(addr_offset->scale);
+
+  struct instr *instr = alloc_instr(state->func);
+  instr->aarch64->ty = AARCH64_INSTR_TY_ADD;
+  instr->aarch64->add = (struct aarch64_addsub_reg){.dest = dest,
+                                                    .lhs = base,
+                                                    .rhs = index,
+                                                    .imm6 = shift,
+                                                    .shift = AARCH64_SHIFT_LSL};
+
+  if (addr_offset->offset) {
+    struct instr *offset = alloc_instr(state->func);
+    offset->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+    offset->aarch64->add_imm = (struct aarch64_addsub_imm){
+        .dest = dest, .source = dest, .imm = addr_offset->offset};
+  }
+}
+
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
   struct aarch64_reg dest = codegen_reg(op);
 
@@ -926,12 +966,6 @@ static void codegen_64_bit_int(struct codegen_state *state,
 
 static_assert((sizeof(unsigned) == 4) & (sizeof(unsigned short) == 2),
               "type sizes not expected");
-
-union b32 {
-  unsigned u;
-  float f;
-  unsigned short b[2];
-};
 
 static void codegen_32_bit_int(struct codegen_state *state,
                                struct aarch64_reg dest, union b32 value) {
@@ -1670,7 +1704,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       if (!variadics_on_stack || i < num_normal_args ||
           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
 
-        const struct ir_var_ty *var_ty = i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
+        const struct ir_var_ty *var_ty =
+            i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
 
         struct ir_var_ty_info info = var_ty_info(
             state->ir->unit,
@@ -2701,6 +2736,10 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     codegen_ret_op(state, op);
     break;
   }
+  case IR_OP_TY_ADDR_OFFSET: {
+    codegen_addr_offset_op(state, op);
+    break;
+  }
   default: {
     TODO("unsupported IR OP '%d'", op->ty);
   }
@@ -3648,7 +3687,8 @@ static void debug_print_mov_imm(FILE *file,
 }
 
 static void debug_print_fma(FILE *file, const struct aarch64_fma *fma) {
-  codegen_fprintf(file, " %reg, %reg, %reg", fma->lhs, fma->rhs, fma->addsub);
+  codegen_fprintf(file, " %reg, %reg, %reg, %reg", fma->dest, fma->lhs,
+                  fma->rhs, fma->addsub);
 }
 
 static void debug_print_instr(FILE *file,
@@ -3822,8 +3862,13 @@ static void debug_print_instr(FILE *file,
     debug_print_reg_2_source(file, &instr->aarch64->lsrv);
     break;
   case AARCH64_INSTR_TY_MADD:
-    fprintf(file, "madd");
-    debug_print_fma(file, &instr->aarch64->madd);
+    if (is_zero_reg(instr->aarch64->madd.addsub)) {
+      codegen_fprintf(file, "mul %reg, %reg, %reg", instr->aarch64->madd.dest,
+                      instr->aarch64->madd.lhs, instr->aarch64->madd.rhs);
+    } else {
+      fprintf(file, "madd");
+      debug_print_fma(file, &instr->aarch64->madd);
+    }
     break;
   case AARCH64_INSTR_TY_MOVN:
     fprintf(file, "movn");

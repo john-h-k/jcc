@@ -469,9 +469,12 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
     fprintf(file, "addr.off ");
     debug_print_op_use(file, irb, ir->addr_offset.base);
     fprintf(file, " + ");
-    debug_print_op_use(file, irb, ir->addr_offset.offset);
+    debug_print_op_use(file, irb, ir->addr_offset.index);
     if (ir->addr_offset.scale != 1) {
-      fprintf(file, " * %zu", ir->addr_offset.scale);
+      fprintf(file, " * #%zu", ir->addr_offset.scale);
+    }
+    if (ir->addr_offset.offset) {
+      fprintf(file, " + #%zu", ir->addr_offset.offset);
     }
     break;
   case IR_OP_TY_ADDR:

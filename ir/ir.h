@@ -271,9 +271,13 @@ struct ir_op_call {
 };
 
 struct ir_op_addr_offset {
+  // `addr = base + (index * scale) + offset`
+
   struct ir_op *base;
-  struct ir_op *offset;
+  struct ir_op *index;
   size_t scale;
+
+  size_t offset;
 };
 
 struct ir_bitfield {
