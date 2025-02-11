@@ -26,13 +26,16 @@ typedef unsigned long long imm_t;
 typedef long long simm_t;
 
 enum x64_instr_ty {
-  // X64_INSTR_TY_LOAD_BYTE_IMM,
-  // X64_INSTR_TY_LOAD_HALF_IMM,
+  X64_INSTR_TY_MOVZX_LOAD_BYTE_IMM,
+  X64_INSTR_TY_MOVZX_LOAD_HALF_IMM,
   X64_INSTR_TY_MOV_LOAD_IMM,
 
-  // X64_INSTR_TY_STORE_BYTE_IMM,
-  // X64_INSTR_TY_STORE_HALF_IMM,
+  X64_INSTR_TY_MOV_STORE_BYTE_IMM,
+  X64_INSTR_TY_MOV_STORE_HALF_IMM,
   X64_INSTR_TY_MOV_STORE_IMM,
+
+  X64_INSTR_TY_MOVSX,
+  // X64_INSTR_TY_MOVZX,
 
   X64_INSTR_TY_LEA,
 
@@ -41,8 +44,6 @@ enum x64_instr_ty {
 
   X64_INSTR_TY_MOV_IMM,
   X64_INSTR_TY_MOV_REG,
-
-  X64_INSTR_TY_MOVSX,
 
   X64_INSTR_TY_ADD_IMM,
   X64_INSTR_TY_SUB_IMM,
@@ -292,15 +293,15 @@ struct x64_instr {
     };
 
     union {
-      struct x64_mov_load_imm mov_load_imm, mov_load32_imm;
+      struct x64_mov_load_imm mov_load_imm, movzx_load_half_imm, movzx_load_byte_imm;
     };
 
     union {
-      struct x64_mov_store_imm mov_store_imm, mov_store32_imm;
+      struct x64_mov_store_imm mov_store_imm, mov_store_half_imm, mov_store_byte_imm;
     };
 
     union {
-      struct x64_mov_reg mov_reg, movsx;
+      struct x64_mov_reg mov_reg, movsx, movzx;
     };
 
     union {

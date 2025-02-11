@@ -396,12 +396,10 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-    TODO("x64 load byte");
-    // return X64_INSTR_TY_LOAD_BYTE_IMM;
+    return X64_INSTR_TY_MOVZX_LOAD_BYTE_IMM;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
-    TODO("x64 load half");
-    // return X64_INSTR_TY_LOAD_HALF_IMM;
+    return X64_INSTR_TY_MOVZX_LOAD_HALF_IMM;
   } else {
     return X64_INSTR_TY_MOV_LOAD_IMM;
   }
@@ -410,12 +408,10 @@ static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
 static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
-    TODO("x64 store byte");
-    // return X64_INSTR_TY_STORE_BYTE_IMM;
+    return X64_INSTR_TY_MOV_STORE_BYTE_IMM;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
-    TODO("x64 store half");
-    // return X64_INSTR_TY_STORE_HALF_IMM;
+    return X64_INSTR_TY_MOV_STORE_HALF_IMM;
   } else {
     return X64_INSTR_TY_MOV_STORE_IMM;
   }
@@ -3120,25 +3116,26 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
 
     format++;
 
-    if (strncmp(format, "reg_imm_addr", 12) == 0) {
-      struct x64_reg reg = va_arg(list, struct x64_reg);
+    if (strncmp(format, "sz_imm_addr", 11) == 0) {
+      size_t sz = va_arg(list, size_t);
       struct x64_reg addr = va_arg(list, struct x64_reg);
       imm_t imm = va_arg(list, imm_t);
 
-      switch (reg.ty) {
-      case X64_REG_TY_R:
+      switch (sz) {
+      case 8:
         fprintf(file, "qword ptr [");
         break;
-      case X64_REG_TY_E:
-      case X64_REG_TY_RD:
+      case 4:
         fprintf(file, "dword ptr [");
         break;
-      case X64_REG_TY_W:
+      case 2:
         fprintf(file, "word ptr [");
         break;
-      case X64_REG_TY_L:
+      case 1:
         fprintf(file, "byte ptr [");
         break;
+      default:
+        BUG("bad size");
       }
 
       codegen_fprintf(file, "%reg", addr);
@@ -3148,7 +3145,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
 
       fprintf(file, "]");
 
-      format += 12;
+      format += 11;
     } else if (strncmp(format, "instr", 5) == 0) {
       struct instr *instr = va_arg(list, struct instr *);
       if (instr) {
@@ -3296,16 +3293,16 @@ static void debug_print_mul(FILE *file, const struct x64_mul *mul) {
 }
 
 static void
-debug_print_mov_load_imm(FILE *file,
+debug_print_mov_load_imm(FILE *file, size_t sz,
                          const struct x64_mov_load_imm *mov_load_imm) {
-  codegen_fprintf(file, " %reg, %reg_imm_addr", mov_load_imm->dest,
-                  mov_load_imm->dest, mov_load_imm->addr, mov_load_imm->imm);
+  codegen_fprintf(file, " %reg, %sz_imm_addr",
+                  mov_load_imm->dest, sz, mov_load_imm->addr, mov_load_imm->imm);
 }
 
 static void
-debug_print_mov_store_imm(FILE *file,
+debug_print_mov_store_imm(FILE *file, size_t sz,
                           const struct x64_mov_store_imm *mov_store_imm) {
-  codegen_fprintf(file, " %reg_imm_addr, %reg", mov_store_imm->source,
+  codegen_fprintf(file, " %sz_imm_addr, %reg", sz,
                   mov_store_imm->addr, mov_store_imm->imm,
                   mov_store_imm->source);
 }
@@ -3381,11 +3378,27 @@ static void debug_print_instr(FILE *file,
     break;
   case X64_INSTR_TY_MOV_STORE_IMM:
     fprintf(file, "mov");
-    debug_print_mov_store_imm(file, &instr->x64->mov_store_imm);
+    debug_print_mov_store_imm(file, instr->x64->mov_store_imm.source.ty == X64_REG_TY_R ? 8 : 4,  &instr->x64->mov_store_imm);
+    break;
+  case X64_INSTR_TY_MOV_STORE_HALF_IMM:
+    fprintf(file, "mov");
+    debug_print_mov_store_imm(file, 2, &instr->x64->mov_store_half_imm);
+    break;
+  case X64_INSTR_TY_MOV_STORE_BYTE_IMM:
+    fprintf(file, "mov");
+    debug_print_mov_store_imm(file, 1, &instr->x64->mov_store_byte_imm);
     break;
   case X64_INSTR_TY_MOV_LOAD_IMM:
     fprintf(file, "mov");
-    debug_print_mov_load_imm(file, &instr->x64->mov_load_imm);
+    debug_print_mov_load_imm(file, instr->x64->mov_load_imm.dest.ty == X64_REG_TY_R ? 8 : 4, &instr->x64->mov_load_imm);
+    break;
+  case X64_INSTR_TY_MOVZX_LOAD_HALF_IMM:
+    fprintf(file, "movzx");
+    debug_print_mov_load_imm(file, 2, &instr->x64->movzx_load_half_imm);
+    break;
+  case X64_INSTR_TY_MOVZX_LOAD_BYTE_IMM:
+    fprintf(file, "movzx");
+    debug_print_mov_load_imm(file, 1, &instr->x64->movzx_load_byte_imm);
     break;
   case X64_INSTR_TY_MOV_REG:
     fprintf(file, "mov");

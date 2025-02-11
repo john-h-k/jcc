@@ -70,13 +70,22 @@ static void emit_instr(const struct emit_state *state,
     EMIT(TEST, test);
     EMIT(CMP, cmp);
 
+    EMIT(TEST_IMM, test_imm);
+    EMIT(CMP_IMM, cmp_imm);
+
     EMIT(MOVSX, movsx);
 
     EMIT(PUSH, push);
     EMIT(POP, pop);
 
     EMIT(MOV_LOAD_IMM, mov_load_imm);
+
+    EMIT(MOVZX_LOAD_HALF_IMM, movzx_load_half_imm);
+    EMIT(MOVZX_LOAD_BYTE_IMM, movzx_load_byte_imm);
+
     EMIT(MOV_STORE_IMM, mov_store_imm);
+    EMIT(MOV_STORE_HALF_IMM, mov_store_half_imm);
+    EMIT(MOV_STORE_BYTE_IMM, mov_store_byte_imm);
 
     EMIT(MOV_IMM, mov_imm);
     EMIT(MOV_REG, mov_reg);
@@ -101,8 +110,6 @@ static void emit_instr(const struct emit_state *state,
   case X64_INSTR_TY_RET:
     x64_emit_ret(state->emitter);
     break;
-  default:
-    TODO("unimplemented x64 instr");
   }
   #undef EMIT
 }

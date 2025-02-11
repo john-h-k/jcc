@@ -200,6 +200,26 @@ void x64_emit_mov_store_imm(struct x64_emitter *emitter,
                                         mov_store_imm.addr, mov_store_imm.imm));
 }
 
+void x64_emit_movzx_load_half_imm(struct x64_emitter *emitter, struct x64_mov_load_imm movzx_load_half_imm) {
+  x64_emit_instr(emitter, MOVZX_LOAD_HALF_IMM(movzx_load_half_imm.dest,
+                                        movzx_load_half_imm.addr, movzx_load_half_imm.imm));
+}
+
+void x64_emit_movzx_load_byte_imm(struct x64_emitter *emitter, struct x64_mov_load_imm movzx_load_byte_imm) {
+  x64_emit_instr(emitter, MOVZX_LOAD_BYTE_IMM(movzx_load_byte_imm.dest,
+                                        movzx_load_byte_imm.addr, movzx_load_byte_imm.imm));
+}
+
+void x64_emit_mov_store_half_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_half_imm) {
+  x64_emit_instr(emitter, MOV_STORE_HALF_IMM(mov_store_half_imm.source,
+                                        mov_store_half_imm.addr, mov_store_half_imm.imm));
+}
+
+void x64_emit_mov_store_byte_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_byte_imm) {
+  x64_emit_instr(emitter, MOV_STORE_BYTE_IMM(mov_store_byte_imm.source,
+                                        mov_store_byte_imm.addr, mov_store_byte_imm.imm));
+}
+
 void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea) {
   x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, lea.scale, lea.offset));
 }

@@ -181,8 +181,8 @@ enum compile_result compile(struct compiler *compiler) {
       case IR_GLB_TY_DATA:
         break;
       case IR_GLB_TY_FUNC:
-        graphcol_register_alloc(glb->func, target->reg_info);
-        // lsra_register_alloc(glb->func, target->reg_info);
+        // graphcol_register_alloc(glb->func, target->reg_info);
+        lsra_register_alloc(glb->func, target->reg_info);
         break;
       }
 
