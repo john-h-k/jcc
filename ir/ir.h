@@ -422,42 +422,37 @@ struct ir_reg {
 
 enum ir_op_flags {
   IR_OP_FLAG_NONE = 0,
+
+  // Force this variable to spill
   IR_OP_FLAG_MUST_SPILL = 1,
+
+  // Indicates this is a magic mov representing a parameter
   IR_OP_FLAG_PARAM = 2,
+
   // indicates this value is passed as a variadic
   IR_OP_FLAG_VARIADIC_PARAM = 4,
-  // do not give this a reg/local as it is a phi node that will take the
-  // reg/local of that phi
-  IR_OP_FLAG_DONT_GIVE_REG = 8,
 
   // indicates the op is a load_lcl/store_lcl used for a spill
-  IR_OP_FLAG_SPILL = 16,
+  IR_OP_FLAG_SPILL = 8,
 
   // indicates this op does not generate any instructions and it is encoded in
   // its uses
-  IR_OP_FLAG_CONTAINED = 32,
+  IR_OP_FLAG_CONTAINED = 16,
 
   // reg is assigned and cannot change
-  IR_OP_FLAG_FIXED_REG = 64,
+  IR_OP_FLAG_FIXED_REG = 32,
 
   // op has side effects (e.g is an assignment)
-  IR_OP_FLAG_SIDE_EFFECTS = 128,
+  IR_OP_FLAG_SIDE_EFFECTS = 64,
 
   // op has been spilled and all consumers must reload it
-  IR_OP_FLAG_SPILLED = 256,
+  IR_OP_FLAG_SPILLED = 128,
 
   // this op is a mov used to eliminate phis
-  IR_OP_FLAG_PHI_MOV = 512,
+  IR_OP_FLAG_PHI_MOV = 256,
 
   // this op reads from dest reg, so it cannot be overwritten
-  IR_OP_FLAG_READS_DEST = 1024
-};
-
-typedef unsigned long long ir_reglist;
-
-struct ir_reg_state {
-  ir_reglist live_gp;
-  ir_reglist live_fp;
+  IR_OP_FLAG_READS_DEST = 512
 };
 
 struct ir_op_write_info {

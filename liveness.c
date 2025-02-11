@@ -181,18 +181,10 @@ void print_ir_intervals(FILE *file, struct ir_op *op,
     fslogsl(file, "    (FLAGS)");
     break;
   case IR_REG_TY_INTEGRAL:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-      fslogsl(file, "    (DONT)");
-    } else {
-      fslogsl(file, "    register=R%zu", op->reg.idx);
-    }
+    fslogsl(file, "    register=R%zu", op->reg.idx);
     break;
   case IR_REG_TY_FP:
-    if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-      fslogsl(file, "    (DONT)");
-    } else {
-      fslogsl(file, "    register=F%zu", op->reg.idx);
-    }
+    fslogsl(file, "    register=F%zu", op->reg.idx);
     break;
   }
 

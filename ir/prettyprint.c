@@ -654,6 +654,10 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
       fprintf(fm->file, "    (FIXED) ");
     }
 
+    if (op->flags & IR_OP_FLAG_SPILLED) {
+      fprintf(fm->file, "    (SPILLED) ");
+    }
+
     switch (op->reg.ty) {
     case IR_REG_TY_NONE:
       fprintf(fm->file, "    (UNASSIGNED)");
@@ -669,18 +673,10 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
       fprintf(fm->file, "    (FLAGS)");
       break;
     case IR_REG_TY_INTEGRAL:
-      if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-        fprintf(fm->file, "    (DONT)");
-      } else {
-        fprintf(fm->file, "    register=R%zu", op->reg.idx);
-      }
+      fprintf(fm->file, "    register=R%zu", op->reg.idx);
       break;
     case IR_REG_TY_FP:
-      if (op->flags & IR_OP_FLAG_DONT_GIVE_REG) {
-        fprintf(fm->file, "    (DONT)");
-      } else {
-        fprintf(fm->file, "    register=F%zu", op->reg.idx);
-      }
+      fprintf(fm->file, "    register=F%zu", op->reg.idx);
       break;
     }
   }

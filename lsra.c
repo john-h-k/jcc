@@ -55,7 +55,6 @@ static void spill_at_interval(struct ir_func *irb,
     // spill active
     intervals[cur_interval].op->reg = last_active->op->reg;
     spill_op(irb, last_active->op);
-    last_active->op->flags |= IR_OP_FLAG_SPILLED;
 
     state->num_active--;
 
@@ -63,7 +62,6 @@ static void spill_at_interval(struct ir_func *irb,
   } else {
     // spill current interval
     spill_op(irb, intervals[cur_interval].op);
-    intervals[cur_interval].op->flags |= IR_OP_FLAG_SPILLED;
   }
 }
 
@@ -351,7 +349,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
-        (interval->op->flags & IR_OP_FLAG_DONT_GIVE_REG) ||
         (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
         !op_produces_value(interval->op)) {
       continue;
