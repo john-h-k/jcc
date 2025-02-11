@@ -4,8 +4,6 @@
 #include "ir/ir.h"
 #include "target.h"
 
-#include <stddef.h>
-
 enum codegen_unit_ty {
   CODEGEN_UNIT_TY_AARCH64,
   CODEGEN_UNIT_TY_X64,
@@ -99,6 +97,6 @@ struct instr *alloc_instr(struct codegen_function *func);
 const char *mangle_str_cnst_name(struct arena_allocator *arena,
                                  const char *func_name, size_t id);
 
-int sort_entries_by_id(const void *a, const void *b);
+int codegen_sort_entries_by_id(const void *a, const void *b);
 
 #endif

@@ -1148,7 +1148,7 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   }
 
   qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
-        sort_entries_by_id);
+        codegen_sort_entries_by_id);
 
   if (log_enabled()) {
     rv32i_debug_print_codegen(stderr, unit);

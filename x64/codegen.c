@@ -5,7 +5,6 @@
 #include "../util.h"
 #include "../vector.h"
 #include "../x64.h"
-#include "isa.h"
 
 #include <stdio.h>
 
@@ -47,13 +46,6 @@
 //   }
 // }
 
-// bool is_return_reg(struct x64_reg reg) { return reg.idx == 0; }
-
-// bool is_zero_reg(struct x64_reg reg) {
-//   // this is a bit dodgy as it can also be SP in this context
-//   return x64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
-// }
-
 static bool reg_eq(struct x64_reg l, struct x64_reg r) {
   if (l.idx != r.idx) {
     return false;
@@ -80,16 +72,11 @@ static bool is_return_reg(struct x64_reg reg) {
   return reg.idx == return_reg_for_ty(reg.ty).idx;
 }
 
-// static struct x64_reg zero_reg_for_ty(enum x64_reg_ty reg_ty) {
-//   return (struct x64_reg){.ty = reg_ty, .idx = 31};
-// }
-
 bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   switch (ty) {
   case X64_REG_TY_NONE:
     BUG("doesn't make sense");
   case X64_REG_TY_R:
-  case X64_REG_TY_RD:
   case X64_REG_TY_E:
   case X64_REG_TY_W:
   case X64_REG_TY_L:
@@ -339,7 +326,7 @@ static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty,
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
-    return idx < 8 ? X64_REG_TY_E : X64_REG_TY_RD;
+    return X64_REG_TY_E;
   case IR_VAR_PRIMITIVE_TY_I64:
     return X64_REG_TY_R;
   // case IR_VAR_PRIMITIVE_TY_F16:
@@ -366,7 +353,6 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
   case X64_REG_TY_NONE:
     BUG("doesn't make sense");
   case X64_REG_TY_R:
-  case X64_REG_TY_RD:
   case X64_REG_TY_E:
   case X64_REG_TY_W:
   case X64_REG_TY_L:
@@ -1361,7 +1347,7 @@ static enum x64_reg_ty gp_reg_ty_for_size(size_t size, size_t idx) {
   case 8:
     return X64_REG_TY_R;
   case 4:
-    return idx > 7 ? X64_REG_TY_RD : X64_REG_TY_E;
+    return X64_REG_TY_E;
   }
 
   BUG("bad size %zu", size);
@@ -1460,7 +1446,6 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
   case X64_REG_TY_NONE:
     return X64_REG_ATTR_FLAG_NONE;
   case X64_REG_TY_R:
-  case X64_REG_TY_RD:
   case X64_REG_TY_E:
   case X64_REG_TY_W:
   case X64_REG_TY_L:
@@ -1788,7 +1773,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         // the stack slot this local must live in, in terms of 8 byte slots
         size_t variadic_arg_idx = i - num_normal_args;
 
-        if (source.ty == X64_REG_TY_RD || source.ty == X64_REG_TY_E) {
+        if (source.ty == X64_REG_TY_E) {
           // because offsets are in terms of reg size, we need to double it
           // for the 8 byte slots
           variadic_arg_idx *= 2;
@@ -2900,7 +2885,7 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
   }
 
   qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
-        sort_entries_by_id);
+        codegen_sort_entries_by_id);
 
   if (log_enabled()) {
     x64_debug_print_codegen(stderr, unit);
@@ -3223,15 +3208,13 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
           fprintf(file, "r%s", name);
         }
         break;
-      case X64_REG_TY_RD:
-        // DEBUG_ASSERT(reg.idx > 7, "RD index should be > 7");
-        fprintf(file, "r%zud", reg.idx);
-        break;
       case X64_REG_TY_E: {
-        invariant_assert(reg.idx < ARR_LENGTH(reg_names), "reg idx too large");
-
-        const char *name = reg_names[reg.idx];
-        fprintf(file, "e%s", name);
+        if (reg.idx < ARR_LENGTH(reg_names)) {
+          const char *name = reg_names[reg.idx];
+          fprintf(file, "e%s", name);
+        } else {
+          fprintf(file, "r%zud", reg.idx);
+        }
         break;
       }
       case X64_REG_TY_W: {
