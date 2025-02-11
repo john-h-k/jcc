@@ -24,6 +24,27 @@ void x64_emit_nop(struct x64_emitter *emitter);
 void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps);
 void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd);
 
+void x64_emit_cvtsi2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2ss);
+void x64_emit_cvtsi2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2sd);
+
+void x64_emit_cvttss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttss2si);
+void x64_emit_cvttsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttsd2si);
+
+void x64_emit_cvtss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2si);
+void x64_emit_cvtsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2si);
+
+void x64_emit_cvtss2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2sd);
+void x64_emit_cvtsd2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2ss);
+
+void x64_emit_addss(struct x64_emitter *emitter, struct x64_alu_reg addss);
+void x64_emit_addsd(struct x64_emitter *emitter, struct x64_alu_reg addsd);
+void x64_emit_subss(struct x64_emitter *emitter, struct x64_alu_reg subss);
+void x64_emit_subsd(struct x64_emitter *emitter, struct x64_alu_reg subsd);
+void x64_emit_mulss(struct x64_emitter *emitter, struct x64_alu_reg mulss);
+void x64_emit_mulsd(struct x64_emitter *emitter, struct x64_alu_reg mulsd);
+void x64_emit_divss(struct x64_emitter *emitter, struct x64_alu_reg divss);
+void x64_emit_divsd(struct x64_emitter *emitter, struct x64_alu_reg divsd);
+
 void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss);
 void x64_emit_sqrtsd(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtsd);
 

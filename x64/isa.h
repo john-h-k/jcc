@@ -613,13 +613,22 @@ struct x64_raw_instr {
 
 
 #define SSE_MOVQ(dest, source) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
   ((struct x64_raw_instr){.len = 5,                                            \
                           .buff = { \
                           0x66,\
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
                           0x6E, \
-                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
+                          : \
+  ((struct x64_raw_instr){.len = 5,                                            \
+                          .buff = { \
+                          0x66,\
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
 
 #define AVX_MOVQ(dest, source) \
   ((struct x64_raw_instr){.len = 5,                                            \
@@ -630,16 +639,22 @@ struct x64_raw_instr {
                           0x6E, \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
 
-// TODO: only have REX for high regs                          
-
 #define SSE_MOVD(dest, source) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
   ((struct x64_raw_instr){.len = 4,                                            \
                           .buff = { \
                           0x66,\
                           REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
                           0x6E, \
-                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
+                          : \
+  ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          0x66,\
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
 
 #define AVX_MOVD(dest, source) \
   ((struct x64_raw_instr){.len = 4,                                            \
@@ -658,7 +673,7 @@ struct x64_raw_instr {
   (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
    ((struct x64_raw_instr){.len = 4,                                            \
                           .buff = { \
-                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
                           opc, \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
@@ -673,8 +688,8 @@ struct x64_raw_instr {
   (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
    ((struct x64_raw_instr){.len = 5,                                            \
                           .buff = { \
-                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           U8(pref), \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
                           opc, \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
@@ -699,5 +714,29 @@ struct x64_raw_instr {
 
 #define SQRTSS(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_SINGLE, (dest), (source))
 #define SQRTSD(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_DOUBLE, (dest), (source))
+
+#define ADDSS(dest, source) SSE_INSTR_NON_PS(0x58, SCALAR_SINGLE, (dest), (source))
+#define ADDSD(dest, source) SSE_INSTR_NON_PS(0x58, SCALAR_DOUBLE, (dest), (source))
+
+#define SUBSS(dest, source) SSE_INSTR_NON_PS(0x5C, SCALAR_SINGLE, (dest), (source))
+#define SUBSD(dest, source) SSE_INSTR_NON_PS(0x5C, SCALAR_DOUBLE, (dest), (source))
+
+#define MULSS(dest, source) SSE_INSTR_NON_PS(0x59, SCALAR_SINGLE, (dest), (source))
+#define MULSD(dest, source) SSE_INSTR_NON_PS(0x59, SCALAR_DOUBLE, (dest), (source))
+
+#define DIVSS(dest, source) SSE_INSTR_NON_PS(0x5E, SCALAR_SINGLE, (dest), (source))
+#define DIVSD(dest, source) SSE_INSTR_NON_PS(0x5E, SCALAR_DOUBLE, (dest), (source))
+
+#define CVTSI2SS(dest, source) SSE_INSTR_NON_PS(0x2A, SCALAR_SINGLE, (dest), (source))
+#define CVTSI2SD(dest, source) SSE_INSTR_NON_PS(0x2A, SCALAR_DOUBLE, (dest), (source))
+
+#define CVTSS2SI(dest, source) SSE_INSTR_NON_PS(0x2D, SCALAR_SINGLE, (dest), (source))
+#define CVTSD2SI(dest, source) SSE_INSTR_NON_PS(0x2D, SCALAR_DOUBLE, (dest), (source))
+
+#define CVTTSS2SI(dest, source) SSE_INSTR_NON_PS(0x2C, SCALAR_SINGLE, (dest), (source))
+#define CVTTSD2SI(dest, source) SSE_INSTR_NON_PS(0x2C, SCALAR_DOUBLE, (dest), (source))
+
+#define CVTSS2SD(dest, source) SSE_INSTR_NON_PS(0x5A, SCALAR_SINGLE, (dest), (source))
+#define CVTSD2SS(dest, source) SSE_INSTR_NON_PS(0x5A, SCALAR_DOUBLE, (dest), (source))
 
 #endif
