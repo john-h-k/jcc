@@ -67,7 +67,7 @@ static bool reg_eq(struct x64_reg l, struct x64_reg r) {
 
   if (x64_reg_ty_is_gp(l.ty) == x64_reg_ty_is_gp(r.ty)) {
     BUG("comparing two registers with same index and type but different size"
-        "(e.g w0 vs x0)");
+        "(e.g eax vs rax)");
   }
 
   return false;
@@ -671,57 +671,58 @@ static void codegen_sub_imm(struct codegen_state *state, struct x64_reg dest,
   instr->x64->sub_imm = (struct x64_alu_imm){.dest = dest, .imm = value};
 }
 
-// static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
-//   struct x64_reg dest = codegen_reg(op);
+static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
+  struct x64_reg dest = codegen_reg(op);
 
-//   switch (op->addr.ty) {
-//   case IR_OP_ADDR_TY_LCL: {
-//     struct ir_lcl *lcl = op->addr.lcl;
+  switch (op->addr.ty) {
+  case IR_OP_ADDR_TY_LCL: {
+    struct ir_lcl *lcl = op->addr.lcl;
 
-//     // op is NULL as we want the absolute offset
-//     size_t offset = get_lcl_stack_offset(state, NULL, lcl);
+    // op is NULL as we want the absolute offset
+    size_t offset = get_lcl_stack_offset(state, NULL, lcl);
 
-//     codegen_add_imm(state, dest, STACK_PTR_REG, offset);
+    codegen_add_imm(state, dest, STACK_PTR_REG, offset);
 
-//     break;
-//   }
-//   case IR_OP_ADDR_TY_GLB: {
-//     struct ir_glb *glb = op->addr.glb;
+    break;
+  }
+  case IR_OP_ADDR_TY_GLB: {
+      TODO("addr GLB x64");
+  //   struct ir_glb *glb = op->addr.glb;
 
-//     struct instr *adrp = alloc_instr(state->func);
-//     adrp->x64->ty = X64_INSTR_TY_ADRP;
-//     adrp->x64->adrp = (struct x64_addr_imm){.dest = dest, .imm = 0};
+  //   struct instr *adrp = alloc_instr(state->func);
+  //   adrp->x64->ty = X64_INSTR_TY_ADRP;
+  //   adrp->x64->adrp = (struct x64_addr_imm){.dest = dest, .imm = 0};
 
-//     adrp->reloc = arena_alloc(state->func->unit->arena,
-//     sizeof(*adrp->reloc)); *adrp->reloc = (struct relocation){
-//         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
-//                                                    :
-//                                                    RELOCATION_TY_UNDEF_PAIR,
-//         .symbol_index = glb->id,
-//         .address = 0,
-//         .size = 0};
+  //   adrp->reloc = arena_alloc(state->func->unit->arena,
+  //   sizeof(*adrp->reloc)); *adrp->reloc = (struct relocation){
+  //       .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_PAIR
+  //                                                  :
+  //                                                  RELOCATION_TY_UNDEF_PAIR,
+  //       .symbol_index = glb->id,
+  //       .address = 0,
+  //       .size = 0};
 
-//     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-//       struct instr *add = alloc_instr(state->func);
-//       add->x64->ty = X64_INSTR_TY_ADD_IMM;
-//       add->x64->add_imm = (struct x64_addsub_imm){
-//           .dest = dest,
-//           .source = dest,
-//           .imm = 0,
-//       };
-//     } else {
-//       struct instr *ldr = alloc_instr(state->func);
-//       ldr->x64->ty = X64_INSTR_TY_LOAD_IMM;
-//       ldr->x64->load_imm = (struct x64_load_imm){
-//           .mode = X64_ADDRESSING_MODE_OFFSET,
-//           .dest = dest,
-//           .addr = dest,
-//           .imm = 0,
-//       };
-//     }
-//   }
-//   }
-// }
+  //   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+  //     struct instr *add = alloc_instr(state->func);
+  //     add->x64->ty = X64_INSTR_TY_ADD_IMM;
+  //     add->x64->add_imm = (struct x64_addsub_imm){
+  //         .dest = dest,
+  //         .source = dest,
+  //         .imm = 0,
+  //     };
+  //   } else {
+  //     struct instr *ldr = alloc_instr(state->func);
+  //     ldr->x64->ty = X64_INSTR_TY_LOAD_IMM;
+  //     ldr->x64->load_imm = (struct x64_load_imm){
+  //         .mode = X64_ADDRESSING_MODE_OFFSET,
+  //         .dest = dest,
+  //         .addr = dest,
+  //         .imm = 0,
+  //     };
+  //   }
+  }
+  }
+}
 
 static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
   struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
@@ -969,7 +970,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
 
-  if (!reg_eq(lhs, dest)) {
+  if (!binary_op_is_comparison(ty) && !reg_eq(lhs, dest)) {
     struct instr *mov = alloc_instr(state->func);
     *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
                                    .mov_reg = {.dest = dest, .source = lhs}};
@@ -990,23 +991,22 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     //         .rhs = rhs,
     //     };
     //     break;
-    //   case IR_OP_BINARY_OP_TY_EQ:
-    //   case IR_OP_BINARY_OP_TY_NEQ:
-    //   case IR_OP_BINARY_OP_TY_UGT:
-    //   case IR_OP_BINARY_OP_TY_SGT:
-    //   case IR_OP_BINARY_OP_TY_UGTEQ:
-    //   case IR_OP_BINARY_OP_TY_SGTEQ:
-    //   case IR_OP_BINARY_OP_TY_ULT:
-    //   case IR_OP_BINARY_OP_TY_SLT:
-    //   case IR_OP_BINARY_OP_TY_ULTEQ:
-    //   case IR_OP_BINARY_OP_TY_SLTEQ:
-    //     instr->x64->ty = X64_INSTR_TY_SUBS;
-    //     instr->x64->subs = (struct x64_addsub_reg){
-    //         .dest = zero_reg_for_ty(lhs.ty),
-    //         .lhs = lhs,
-    //         .rhs = rhs,
-    //     };
-    //     break;
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    instr->x64->ty = X64_INSTR_TY_CMP;
+    instr->x64->cmp = (struct x64_cmp){
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     instr->x64->ty = X64_INSTR_TY_SHL;
     instr->x64->shl = (struct x64_shift){
@@ -2474,42 +2474,39 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_STORE:
     codegen_store_op(state, op);
     break;
-    // case IR_OP_TY_ADDR: {
-    //   codegen_addr_op(state, op);
-    //   break;
-    // }
-  case IR_OP_TY_BR_COND: {
+  case IR_OP_TY_ADDR:
+    codegen_addr_op(state, op);
+    break;
+  case IR_OP_TY_BR_COND:
     codegen_br_cond_op(state, op);
     break;
-  }
-  case IR_OP_TY_BR: {
+  case IR_OP_TY_BR:
     codegen_br_op(state, op);
     break;
-  }
-  case IR_OP_TY_CNST: {
+  case IR_OP_TY_CNST:
     codegen_cnst_op(state, op);
     break;
-  }
-  case IR_OP_TY_UNARY_OP: {
+
+  case IR_OP_TY_UNARY_OP:
     codegen_unary_op(state, op);
     break;
-  }
-  case IR_OP_TY_BINARY_OP: {
+
+  case IR_OP_TY_BINARY_OP:
     codegen_binary_op(state, op);
     break;
-  }
-  case IR_OP_TY_CAST_OP: {
+
+  case IR_OP_TY_CAST_OP:
     codegen_cast_op(state, op);
     break;
-  }
-    //   case IR_OP_TY_CALL: {
+
+    //   case IR_OP_TY_CALL:
     //     codegen_call_op(state, op);
     //     break;
-    //   }
-  case IR_OP_TY_RET: {
+    //
+  case IR_OP_TY_RET:
     codegen_ret_op(state, op);
     break;
-  }
+
   default: {
     TODO("unsupported IR OP '%d'", op->ty);
   }

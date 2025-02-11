@@ -22,7 +22,7 @@ enum x64_target_reloc_ty {
   X64_TARGET_RELOC_TY_JCC,
 };
 
-struct x64_target_reloc {
+struct x64_target_reloc_data {
   enum x64_target_reloc_ty ty;
 
   size_t offset;
@@ -42,7 +42,7 @@ void create_x64_emitter(struct x64_emitter **emitter) {
       nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
   (*emitter)->head = 0;
   (*emitter)->count = 0;
-  (*emitter)->target_relocs = vector_create(sizeof(struct x64_target_reloc));
+  (*emitter)->target_relocs = vector_create(sizeof(struct x64_target_reloc_data));
 }
 
 size_t x64_emit_bytesize(struct x64_emitter *emitter) {
@@ -208,34 +208,39 @@ void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop) {
   x64_emit_instr(emitter, POP_REG64(pop.dest));
 }
 
-const struct x64_target_reloc *x64_emit_jmp(struct x64_emitter *emitter,
+struct x64_target_reloc x64_emit_jmp(struct x64_emitter *emitter,
                                       UNUSED struct x64_branch jmp) {
   size_t cur_pos = x64_emit_bytesize(emitter);
   x64_emit_instr(emitter, JMP_REL());
 
-  struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JMP,
+  struct x64_target_reloc_data reloc = {.ty = X64_TARGET_RELOC_TY_JMP,
                                    .offset = cur_pos};
 
-  return vector_push_back(emitter->target_relocs, &reloc);
+  size_t idx = vector_length(emitter->target_relocs);
+  vector_push_back(emitter->target_relocs, &reloc);
+  return (struct x64_target_reloc){ idx };
 }
 
-const struct x64_target_reloc *x64_emit_jcc(struct x64_emitter *emitter,
+struct x64_target_reloc x64_emit_jcc(struct x64_emitter *emitter,
                                       struct x64_conditional_branch jcc) {
   size_t cur_pos = x64_emit_bytesize(emitter);
   x64_emit_instr(emitter, JMP_COND_REL(jcc.cond));
 
-  struct x64_target_reloc reloc = {.ty = X64_TARGET_RELOC_TY_JCC,
+  struct x64_target_reloc_data reloc = {.ty = X64_TARGET_RELOC_TY_JCC,
                                    .offset = cur_pos};
 
-  return vector_push_back(emitter->target_relocs, &reloc);
+  size_t idx = vector_length(emitter->target_relocs);
+  vector_push_back(emitter->target_relocs, &reloc);
+  return (struct x64_target_reloc){ idx };
 }
 
 void x64_reloc(struct x64_emitter *emitter,
-               const struct x64_target_reloc *reloc, size_t offset) {
-  size_t base = reloc->offset;
-  size_t reloc_offset = reloc->offset;
+               struct x64_target_reloc reloc, size_t offset) {
+  struct x64_target_reloc_data *data = vector_get(emitter->target_relocs, reloc.idx);
+  size_t base = data->offset;
+  size_t reloc_offset = data->offset;
 
-  switch (reloc->ty) {
+  switch (data->ty) {
   case X64_TARGET_RELOC_TY_JMP:
     base += 1;
     reloc_offset += 5;
@@ -252,7 +257,7 @@ void x64_reloc(struct x64_emitter *emitter,
 }
 
 void x64_emit_cmp(struct x64_emitter *emitter, struct x64_cmp cmp) {
-  TODO("cmp");
+  x64_emit_instr(emitter, CMP_REG(cmp.lhs, cmp.rhs));
 }
 
 void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test) {
