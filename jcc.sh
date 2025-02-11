@@ -30,7 +30,7 @@ run() {
 
 test() {
     build
-    ./tests/run.sh
+    ./tests/run.sh "$@"
     exit $?
 }
 
