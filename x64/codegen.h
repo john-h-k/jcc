@@ -98,7 +98,6 @@ enum x64_reg_ty {
   X64_REG_TY_NONE,
   X64_REG_TY_R, // 64 bit
   X64_REG_TY_E, // 32 bit
-  X64_REG_TY_RD, // 32 bit
   X64_REG_TY_W, // 16 bit
   X64_REG_TY_L, // 8 bit
 };

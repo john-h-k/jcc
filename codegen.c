@@ -2,9 +2,8 @@
 
 #include "alloc.h"
 #include "util.h"
-#include "vector.h"
 
-int sort_entries_by_id(const void *a, const void *b) {
+int codegen_sort_entries_by_id(const void *a, const void *b) {
   const struct codegen_entry *l = a;
   const struct codegen_entry *r = b;
 

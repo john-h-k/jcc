@@ -1,6 +1,5 @@
 #include "emitter.h"
 
-#include "../bit_twiddle.h"
 #include "../util.h"
 #include "../vector.h"
 #include "codegen.h"
@@ -140,7 +139,7 @@ void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm) {
 void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
   struct x64_reg dest = movsx.dest;
 
-  DEBUG_ASSERT(dest.ty == X64_REG_TY_R || dest.ty == X64_REG_TY_RD ||
+  DEBUG_ASSERT(dest.ty == X64_REG_TY_R ||
                    dest.ty == X64_REG_TY_E,
                "movsx dest must be 32 or 64 bit");
 
@@ -157,7 +156,6 @@ void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
                                 ? MOVSX8_64(movsx.dest, movsx.source)
                                 : MOVSX8_32(movsx.dest, movsx.source));
     break;
-  case X64_REG_TY_RD:
   case X64_REG_TY_E:
     x64_emit_instr(emitter, MOVSX32_64(movsx.dest, movsx.source));
     break;

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "../bit_twiddle.h"
 
 #define FITS_IN_BITS(value, bitc)                                              \
   _Generic((value),                                                            \
@@ -42,7 +43,7 @@ struct x64_raw_instr {
   U8((0b0100 << 4) | (IMM((W), 1) << 3) | (IMM((R), 1) << 2) |                 \
      (IMM((X), 1) << 1) | IMM((B), 1))
 
-#define NEEDS_REX(reg) ((reg).ty == X64_REG_TY_R || (reg).ty == X64_REG_TY_RD)
+#define NEEDS_REX(reg) ((reg).ty == X64_REG_TY_R || (reg).idx > 7)
 #define REX_W(reg) ((reg).ty == X64_REG_TY_R ? (size_t)1 : (size_t)0)
 
 #define MOD_REG ((size_t)0b11)
@@ -81,8 +82,8 @@ struct x64_raw_instr {
 #define ALU_RM32_REX(opc, dest, rhs)                                           \
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
-      .buff = {REX((size_t)0, (size_t)((rhs).ty == X64_REG_TY_RD), (size_t)0,  \
-                   (size_t)((dest).ty == X64_REG_TY_RD)),                      \
+      .buff = {REX((size_t)0, (size_t)((rhs).idx > 7), (size_t)0,  \
+                   (size_t)((dest).idx > 7)),                      \
                (opc), MODRM(MOD_REG, (rhs).idx % 8, (dest).idx % 8)}})
 
 #define ALU_RM64_REX(opc, dest, rhs)                                           \
@@ -193,7 +194,7 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){                                                     \
       .len = 7,                                                                \
       .buff = {                                                                \
-          REX((size_t)0, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),    \
+          REX((size_t)0, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)),    \
           (opc0), \
           MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8), IMM_BYTES32(imm)}    \
   })
@@ -202,7 +203,7 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){                                                     \
       .len = 7,                                                                \
       .buff = {                                                                \
-          REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).ty == X64_REG_TY_RD)),  \
+          REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)),  \
           (opc0),\
           MODRM(MOD_REG, (opc1), (dest).idx % 8), IMM_BYTES32(imm)}})
 
@@ -226,7 +227,7 @@ struct x64_raw_instr {
 #define MOV_IMM32_REX(dest, imm)                                               \
   ((struct x64_raw_instr){.len = 6,                                            \
                           .buff = {REX((size_t)0, (size_t)0, (size_t)0,        \
-                                       (size_t)((dest).ty == X64_REG_TY_RD)),  \
+                                       (size_t)((dest).idx > 7)),  \
                                    U8(0xB8 + ((dest).idx % 8)),                  \
                                    IMM_BYTES32((imm))}})
 
@@ -249,7 +250,7 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){                                                     \
       .len = 3,                                                                \
       .buff = {REX((size_t)0, (size_t)0, (size_t)0,                            \
-                   (size_t)((dest).ty == X64_REG_TY_RD)),                      \
+                   (size_t)((dest).idx > 7)),                      \
                (opc0), MODRM(MOD_REG, (size_t)(opc1), (dest).idx % 8)}})
 
 #define ALU_UNARY_RM64_REX(opc0, opc1, dest)                                   \
