@@ -5,6 +5,8 @@
 #include "ir.h"
 
 static void remove_critical_edges(struct ir_func *irb) {
+  // FIXME: i believe this doesn't properly propogate phis through the arms of a switch expr. see lower.c
+
   struct ir_basicblock *basicblock = irb->first;
 
   while (basicblock) {
@@ -19,6 +21,11 @@ static void remove_critical_edges(struct ir_func *irb) {
     if (num_preds > 1) {
       for (size_t i = 0; i < num_preds; i++) {
         struct ir_basicblock *pred = basicblock->preds[i];
+
+        if (pred->ty == IR_BASICBLOCK_TY_MERGE) {
+          // not critical edge
+          continue;
+        }
 
         // we have a critical edge
         struct ir_basicblock *intermediate =
