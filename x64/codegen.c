@@ -81,33 +81,25 @@ bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   case X64_REG_TY_W:
   case X64_REG_TY_L:
     return true;
-    // case X64_REG_TY_V:
-    // case X64_REG_TY_Q:
-    // case X64_REG_TY_D:
-    // case X64_REG_TY_S:
-    // case X64_REG_TY_H:
-    // case X64_REG_TY_B:
-    //   return false;
+  case X64_REG_TY_XMM:
+    return false;
   }
 }
 
-// bool x64_reg_ty_is_fp(enum x64_reg_ty ty) {
-//   switch (ty) {
-//   case X64_REG_TY_NONE:
-//     BUG("makes no sense");
+bool x64_reg_ty_is_fp(enum x64_reg_ty ty) {
+  switch (ty) {
+  case X64_REG_TY_NONE:
+    BUG("makes no sense");
 
-//   case X64_REG_TY_W:
-//   case X64_REG_TY_X:
-//     return false;
-//   case X64_REG_TY_V:
-//   case X64_REG_TY_Q:
-//   case X64_REG_TY_D:
-//   case X64_REG_TY_S:
-//   case X64_REG_TY_H:
-//   case X64_REG_TY_B:
-//     return true;
-//   }
-// }
+  case X64_REG_TY_R:
+  case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L:
+    return false;
+  case X64_REG_TY_XMM:
+    return true;
+  }
+}
 
 // enum x64_instr_class instr_class(enum x64_instr_ty ty) {
 //   switch (ty) {
@@ -329,14 +321,10 @@ static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty,
     return X64_REG_TY_E;
   case IR_VAR_PRIMITIVE_TY_I64:
     return X64_REG_TY_R;
-  // case IR_VAR_PRIMITIVE_TY_F16:
-  //   return X64_REG_TY_H;
-  // case IR_VAR_PRIMITIVE_TY_F32:
-  //   return X64_REG_TY_S;
-  // case IR_VAR_PRIMITIVE_TY_F64:
-  //   return X64_REG_TY_D;
-  default:
-    TODO("other reg tys");
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    return X64_REG_TY_XMM;
   }
 }
 
@@ -358,13 +346,9 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
   case X64_REG_TY_L:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
     break;
-    // case X64_REG_TY_:
-    // case X64_REG_TY_S:
-    // case X64_REG_TY_D:
-    //   invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
-    //   break;
-    // default:
-    //   TODO("other reg tys (Q/V)");
+  case X64_REG_TY_XMM:
+    invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
+    break;
   }
 
   return (struct x64_reg){.ty = reg_ty, .idx = idx};
@@ -391,7 +375,19 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
                            .mov_reg = {.dest = dest, .source = source}};
   } else {
     // one is floating
-    TODO("fp move x64");
+
+    switch (op->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_F32:
+      instr->x64->ty = X64_INSTR_TY_MOVD;
+      instr->x64->movd = (struct x64_mov_reg){.dest = dest, .source = source};
+      break;
+    case IR_VAR_PRIMITIVE_TY_F64:
+      instr->x64->ty = X64_INSTR_TY_MOVQ;
+      instr->x64->movq = (struct x64_mov_reg){.dest = dest, .source = source};
+      break;
+    default:
+      BUG("unsupported fp type for mov (f16 not available on x64 currently)");
+    }
   }
 }
 
@@ -693,10 +689,8 @@ static void codegen_addr_offset_op(struct codegen_state *state,
                                        .scale = addr_offset->scale,
                                        .offset = addr_offset->offset};
   } else {
-    instr->x64->lea = (struct x64_lea){.dest = dest,
-                                       .base = base,
-                                       .scale = 0,
-                                       .offset = addr_offset->offset};
+    instr->x64->lea = (struct x64_lea){
+        .dest = dest, .base = base, .scale = 0, .offset = addr_offset->offset};
   }
 }
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
@@ -818,34 +812,42 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 
   if (!reg_eq(source, dest)) {
     struct instr *mov = alloc_instr(state->func);
-    *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
-                                   .mov_reg = {.dest = dest, .source = source}};
+    if (x64_reg_ty_is_gp(dest.ty)) {
+      *mov->x64 = (struct x64_instr){
+          .ty = X64_INSTR_TY_MOV_REG,
+          .mov_reg = {.dest = dest,
+                      .source = source}};
+    } else {
+      *mov->x64 = (struct x64_instr){
+          .ty = op->unary_op.value->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64 ? X64_INSTR_TY_MOVAPD : X64_INSTR_TY_MOVAPS,
+          .mov_reg = {.dest = dest,
+                      .source = source}};
+    }
   }
 
   struct instr *instr = alloc_instr(state->func);
 
   switch (op->unary_op.ty) {
-    //   case IR_OP_UNARY_OP_TY_FABS:
-    //     instr->x64->ty = X64_INSTR_TY_FABS;
-    //     instr->x64->fabs = (struct x64_reg_1_source){
-    //         .dest = dest,
-    //         .source = source,
-    //     };
-    //     return;
-    //   case IR_OP_UNARY_OP_TY_FSQRT:
-    //     instr->x64->ty = X64_INSTR_TY_FSQRT;
-    //     instr->x64->fsqrt = (struct x64_reg_1_source){
-    //         .dest = dest,
-    //         .source = source,
-    //     };
-    //     return;
-    //   case IR_OP_UNARY_OP_TY_FNEG:
-    //     instr->x64->ty = X64_INSTR_TY_FNEG;
-    //     instr->x64->fneg = (struct x64_reg_1_source){
-    //         .dest = dest,
-    //         .source = source,
-    //     };
-    //     return;
+  case IR_OP_UNARY_OP_TY_FABS:
+  case IR_OP_UNARY_OP_TY_FNEG:
+    BUG("should have been removed in lowering");
+  case IR_OP_UNARY_OP_TY_FSQRT:
+    switch (op->unary_op.value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_F32:
+      instr->x64->ty = X64_INSTR_TY_SQRTSS;
+      break;
+    case IR_VAR_PRIMITIVE_TY_F64:
+      instr->x64->ty = X64_INSTR_TY_SQRTSD;
+      break;
+    default:
+      unreachable();
+    }
+
+    instr->x64->sqrtss = (struct x64_2_reg_unary){
+        .dest = dest,
+        .source = source,
+    };
+    return;
   case IR_OP_UNARY_OP_TY_NEG:
     instr->x64->ty = X64_INSTR_TY_NEG;
     instr->x64->neg = (struct x64_1_reg){
@@ -860,9 +862,6 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     return;
   default:
     TODO("other x64 unary ops");
-    //   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-    //     BUG("logical not should never reach emitter, should be converted in
-    //     lower");
   }
 }
 
@@ -881,7 +880,11 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
   DEBUG_ASSERT(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
                    ty == IR_OP_BINARY_OP_TY_FMUL ||
-                   ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
+                   ty == IR_OP_BINARY_OP_TY_FDIV ||
+                   ty == IR_OP_BINARY_OP_TY_OR ||
+                   ty == IR_OP_BINARY_OP_TY_AND ||
+                   ty == IR_OP_BINARY_OP_TY_XOR
+                   || !is_fp,
                "floating point with invalid binary op");
 
   switch (ty) {
@@ -903,8 +906,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                  "expected dest to be in an DX register");
 
     struct instr *clear_hi = alloc_instr(state->func);
-    clear_hi->x64->ty = X64_INSTR_TY_EOR;
-    clear_hi->x64->eor = (struct x64_alu_reg){
+    clear_hi->x64->ty = X64_INSTR_TY_XOR;
+    clear_hi->x64->xor = (struct x64_alu_reg){
         .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
         .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
     };
@@ -922,8 +925,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                  "expected dest to be in an DX register");
 
     struct instr *clear_hi = alloc_instr(state->func);
-    clear_hi->x64->ty = X64_INSTR_TY_EOR;
-    clear_hi->x64->eor = (struct x64_alu_reg){
+    clear_hi->x64->ty = X64_INSTR_TY_XOR;
+    clear_hi->x64->xor = (struct x64_alu_reg){
         .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
         .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
     };
@@ -941,8 +944,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                  "expected dest to be in an DX register");
 
     struct instr *clear_hi = alloc_instr(state->func);
-    clear_hi->x64->ty = X64_INSTR_TY_EOR;
-    clear_hi->x64->eor = (struct x64_alu_reg){
+    clear_hi->x64->ty = X64_INSTR_TY_XOR;
+    clear_hi->x64->xor = (struct x64_alu_reg){
         .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
         .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
     };
@@ -960,8 +963,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                  "expected dest to be in an DX register");
 
     struct instr *clear_hi = alloc_instr(state->func);
-    clear_hi->x64->ty = X64_INSTR_TY_EOR;
-    clear_hi->x64->eor = (struct x64_alu_reg){
+    clear_hi->x64->ty = X64_INSTR_TY_XOR;
+    clear_hi->x64->xor = (struct x64_alu_reg){
         .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
         .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
     };
@@ -979,12 +982,24 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
   if (!binary_op_is_comparison(ty) && !reg_eq(lhs, dest)) {
     struct instr *mov = alloc_instr(state->func);
-    *mov->x64 = (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
-                                   .mov_reg = {.dest = dest, .source = lhs}};
+
+    if (x64_reg_ty_is_gp(dest.ty)) {
+      *mov->x64 = (struct x64_instr){
+          .ty = X64_INSTR_TY_MOV_REG,
+          .mov_reg = {.dest = dest,
+                      .source = lhs}};
+    } else {
+      *mov->x64 = (struct x64_instr){
+          .ty = op->binary_op.lhs->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64 ? X64_INSTR_TY_MOVAPD : X64_INSTR_TY_MOVAPS,
+          .mov_reg = {.dest = dest,
+                      .source = lhs}};
+    }
   }
 
   struct instr *instr = alloc_instr(state->func);
 
+  enum ir_var_primitive_ty primitive = op->binary_op.lhs->var_ty.primitive;
+  #define GET_BITWISE(integral) (primitive == IR_VAR_PRIMITIVE_TY_F64 ? (integral ## PD) : primitive == IR_VAR_PRIMITIVE_TY_F32 ? (integral ## PS) : (integral))
   switch (ty) {
     //   case IR_OP_BINARY_OP_TY_FEQ:
     //   case IR_OP_BINARY_OP_TY_FNEQ:
@@ -1033,22 +1048,22 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     };
     break;
   case IR_OP_BINARY_OP_TY_AND:
-    instr->x64->ty = X64_INSTR_TY_AND;
+    instr->x64->ty = GET_BITWISE(X64_INSTR_TY_AND);
     instr->x64->and = (struct x64_alu_reg){
         .dest = dest,
         .rhs = rhs,
     };
     break;
   case IR_OP_BINARY_OP_TY_OR:
-    instr->x64->ty = X64_INSTR_TY_OR;
+    instr->x64->ty = GET_BITWISE(X64_INSTR_TY_OR);
     instr->x64->or = (struct x64_alu_reg){
                        .dest = dest,
                        .rhs = rhs,
                    };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
-    instr->x64->ty = X64_INSTR_TY_EOR;
-    instr->x64->eor = (struct x64_alu_reg){
+    instr->x64->ty = GET_BITWISE(X64_INSTR_TY_XOR);
+    instr->x64->xor = (struct x64_alu_reg){
         .dest = dest,
         .rhs = rhs,
     };
@@ -1126,6 +1141,8 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   default:
     TODO("x64 other binops");
   }
+
+  #undef GET_BITWISE
 }
 
 static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
@@ -1429,12 +1446,15 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
         break;
       }
       case X64_REG_CLASS_FP: {
-        TODO("x64 fp");
-        // struct x64_reg source = {.ty = X64_REG_TY_D,
-        //                              .idx = move.from.idx};
-        // struct x64_reg dest = {.ty = X64_REG_TY_D, .idx = move.to.idx};
-        // *mov->x64 = FP_MOV_ALIAS(dest, source);
-        // break;
+        struct x64_reg source = {.ty = X64_REG_TY_XMM,
+                                     .idx = move.from.idx};
+        struct x64_reg dest = {.ty = X64_REG_TY_XMM, .idx = move.to.idx};
+
+        // no acccess to op here just use MOVAPS
+        mov->x64->ty = X64_INSTR_TY_MOVAPS;
+        mov->x64->mov_reg =
+            (struct x64_mov_reg){.dest = dest, .source = source};
+        break;
       }
       }
     }
@@ -1470,36 +1490,17 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
     }
 
     return X64_REG_ATTR_FLAG_NONE;
-    // case X64_REG_TY_V:
-    // case X64_REG_TY_Q:
-    //   if (!reg.idx) {
-    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
-    //            X64_REG_ATTR_FLAG_RET_REG;
-    //   }
+  case X64_REG_TY_XMM:
+    if (!reg.idx) {
+      return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
+             X64_REG_ATTR_FLAG_RET_REG;
+    }
 
-    //   if (reg.idx <= 7) {
-    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
-    //   }
+    if (reg.idx <= 7) {
+      return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
+    }
 
-    //   if (reg.idx <= 15) {
-    //     return X64_REG_ATTR_FLAG_VOLATILE;
-    //   }
-
-    //   return X64_REG_ATTR_FLAG_NONE;
-    // case X64_REG_TY_D:
-    // case X64_REG_TY_S:
-    // case X64_REG_TY_H:
-    // case X64_REG_TY_B:
-    //   if (!reg.idx) {
-    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG |
-    //            X64_REG_ATTR_FLAG_RET_REG;
-    //   }
-
-    //   if (reg.idx <= 7) {
-    //     return X64_REG_ATTR_FLAG_VOLATILE | X64_REG_ATTR_FLAG_ARG_REG;
-    //   }
-
-    //   return X64_REG_ATTR_FLAG_NONE;
+    return X64_REG_ATTR_FLAG_VOLATILE;
   }
 }
 
@@ -1590,16 +1591,19 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         // bad, might be overwritten during param preparation
         // preemptively add 9 so it is not an arg register
         // TODO: is this safe, and can it be improved?
-        struct x64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
+        struct x64_reg dest = {.ty = source.ty, .idx = source.idx};
         struct instr *mov = alloc_instr(state->func);
 
         if (x64_reg_ty_is_gp(dest.ty)) {
           *mov->x64 = (struct x64_instr){
               .ty = X64_INSTR_TY_MOV_REG,
-              .mov_reg = {.dest = return_reg_for_ty(source.ty),
+              .mov_reg = {.dest = dest,
                           .source = source}};
         } else {
-          TODO("x64 fp mov");
+          *mov->x64 = (struct x64_instr){
+              .ty = op->call.args[i]->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64 ? X64_INSTR_TY_MOVAPD : X64_INSTR_TY_MOVAPS,
+              .mov_reg = {.dest = dest,
+                          .source = source}};
         }
 
         source = dest;
@@ -1816,6 +1820,24 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     TODO("x64 mem copy");
     // codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
     //                           to->offset, to->size);
+  }
+
+  if (op->call.func_ty.func.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC) {
+    // macOS x64 requires number of variadic args to be put in `eax`
+
+    size_t count;
+    if (op->call.num_args >= op->call.func_ty.func.num_params) {
+      count = op->call.num_args - op->call.func_ty.func.num_params;
+    } else {
+      count = 0;
+    }
+
+    struct instr *num_variadic = alloc_instr(state->func);
+    num_variadic->x64->ty = X64_INSTR_TY_MOV_IMM;
+    num_variadic->x64->mov_imm = (struct x64_mov_imm){
+      .dest = (struct x64_reg){ .ty = X64_REG_TY_E, .idx = REG_IDX_AX },
+      .imm = count
+    };
   }
 
   // now we generate the actual call
@@ -3231,6 +3253,10 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
         fprintf(file, "%cl", name[0]);
         break;
       }
+      case X64_REG_TY_XMM: {
+        fprintf(file, "xmm%zu", reg.idx);
+        break;
+      }
       }
 
       format += format[3] == '8' ? 4 : 3;
@@ -3257,9 +3283,14 @@ static void debug_print_shift(FILE *file, const struct x64_shift *shift) {
   codegen_fprintf(file, " %reg, cl", shift->dest);
 }
 
-static void debug_print_alu_unary(FILE *file,
-                                  const struct x64_1_reg *alu_unary) {
-  codegen_fprintf(file, " %reg", alu_unary->dest);
+static void debug_print_1_reg(FILE *file,
+                                  const struct x64_1_reg *one_reg) {
+  codegen_fprintf(file, " %reg", one_reg->dest);
+}
+
+static void debug_print_2_reg_unary(FILE *file,
+                                  const struct x64_2_reg_unary *two_reg_unary) {
+  codegen_fprintf(file, " %reg, %reg", two_reg_unary->dest, two_reg_unary->source);
 }
 
 static void debug_print_alu_reg(FILE *file, const struct x64_alu_reg *alu_reg) {
@@ -3368,6 +3399,46 @@ static void debug_print_instr(FILE *file,
                               const struct instr *instr) {
 
   switch (instr->x64->ty) {
+  case X64_INSTR_TY_MOVAPS:
+    fprintf(file, "movaps");
+    debug_print_2_reg_unary(file, &instr->x64->movaps);
+    break;
+  case X64_INSTR_TY_MOVAPD:
+    fprintf(file, "movapd");
+    debug_print_2_reg_unary(file, &instr->x64->movapd);
+    break;
+  case X64_INSTR_TY_SQRTSS:
+    fprintf(file, "sqrtss");
+    debug_print_2_reg_unary(file, &instr->x64->sqrtss);
+    break;
+  case X64_INSTR_TY_SQRTSD:
+    fprintf(file, "sqrtsd");
+    debug_print_2_reg_unary(file, &instr->x64->sqrtsd);
+    break;
+  case X64_INSTR_TY_ANDPS:
+    fprintf(file, "andps");
+    debug_print_alu_reg(file, &instr->x64->andps);
+    break;
+  case X64_INSTR_TY_ANDPD:
+    fprintf(file, "andpd");
+    debug_print_alu_reg(file, &instr->x64->andpd);
+    break;
+  case X64_INSTR_TY_XORPS:
+    fprintf(file, "xorps");
+    debug_print_alu_reg(file, &instr->x64->xorps);
+    break;
+  case X64_INSTR_TY_XORPD:
+    fprintf(file, "xorpd");
+    debug_print_alu_reg(file, &instr->x64->xorpd);
+    break;
+  case X64_INSTR_TY_ORPS:
+    fprintf(file, "orps");
+    debug_print_alu_reg(file, &instr->x64->orps);
+    break;
+  case X64_INSTR_TY_ORPD:
+    fprintf(file, "orpd");
+    debug_print_alu_reg(file, &instr->x64->orpd);
+    break;
   case X64_INSTR_TY_SHL:
     fprintf(file, "shl");
     debug_print_shift(file, &instr->x64->shl);
@@ -3416,6 +3487,14 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "mov");
     debug_print_mov_reg(file, &instr->x64->mov_reg);
     break;
+  case X64_INSTR_TY_MOVQ:
+    fprintf(file, "movq");
+    debug_print_mov_reg(file, &instr->x64->movq);
+    break;
+  case X64_INSTR_TY_MOVD:
+    fprintf(file, "movd");
+    debug_print_mov_reg(file, &instr->x64->movd);
+    break;
   case X64_INSTR_TY_MOVSX:
     fprintf(file, "movsx");
     debug_print_mov_reg(file, &instr->x64->movsx);
@@ -3448,17 +3527,17 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "and");
     debug_print_alu_reg(file, &instr->x64->and);
     break;
-  case X64_INSTR_TY_EOR:
-    fprintf(file, "eor");
-    debug_print_alu_reg(file, &instr->x64->eor);
+  case X64_INSTR_TY_XOR:
+    fprintf(file, "xor");
+    debug_print_alu_reg(file, &instr->x64->xor);
     break;
   case X64_INSTR_TY_NOT:
     fprintf(file, "not");
-    debug_print_alu_unary(file, &instr->x64->not );
+    debug_print_1_reg(file, &instr->x64->not );
     break;
   case X64_INSTR_TY_NEG:
     fprintf(file, "neg");
-    debug_print_alu_unary(file, &instr->x64->neg);
+    debug_print_1_reg(file, &instr->x64->neg);
     break;
   case X64_INSTR_TY_PUSH:
     fprintf(file, "push");
@@ -3492,9 +3571,9 @@ static void debug_print_instr(FILE *file,
     fprintf(file, "or");
     debug_print_alu_imm(file, &instr->x64->or_imm);
     break;
-  case X64_INSTR_TY_EOR_IMM:
+  case X64_INSTR_TY_XOR_IMM:
     fprintf(file, "eor");
-    debug_print_alu_imm(file, &instr->x64->eor_imm);
+    debug_print_alu_imm(file, &instr->x64->xor_imm);
     break;
   case X64_INSTR_TY_RET:
     fprintf(file, "ret");

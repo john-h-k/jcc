@@ -19,15 +19,32 @@ void x64_emit_copy_to(struct x64_emitter *emitter, void *dest);
 
 void x64_emit_nop(struct x64_emitter *emitter);
 
+/* SSE */
+
+void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps);
+void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd);
+
+void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss);
+void x64_emit_sqrtsd(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtsd);
+
+void x64_emit_andps(struct x64_emitter *emitter, struct x64_alu_reg andps);
+void x64_emit_andpd(struct x64_emitter *emitter, struct x64_alu_reg andpd);
+void x64_emit_xorps(struct x64_emitter *emitter, struct x64_alu_reg xorps);
+void x64_emit_xorpd(struct x64_emitter *emitter, struct x64_alu_reg xorpd);
+void x64_emit_orps(struct x64_emitter *emitter, struct x64_alu_reg orps);
+void x64_emit_orpd(struct x64_emitter *emitter, struct x64_alu_reg orpd);
+
 /* Move immediate */
 
 void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm);
 void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg);
+void x64_emit_movq(struct x64_emitter *emitter, struct x64_mov_reg movq);
+void x64_emit_movd(struct x64_emitter *emitter, struct x64_mov_reg movd);
 void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx);
 
 void x64_emit_add(struct x64_emitter *emitter, struct x64_alu_reg add);
 void x64_emit_sub(struct x64_emitter *emitter, struct x64_alu_reg sub);
-void x64_emit_eor(struct x64_emitter *emitter, struct x64_alu_reg eor);
+void x64_emit_xor(struct x64_emitter *emitter, struct x64_alu_reg xor);
 void x64_emit_and(struct x64_emitter *emitter, struct x64_alu_reg and);
 void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or);
 
@@ -38,7 +55,7 @@ void x64_emit_imul(struct x64_emitter *emitter, struct x64_mul imul);
 void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm);
 void x64_emit_sub_imm(struct x64_emitter *emitter, struct x64_alu_imm sub_imm);
 void x64_emit_or_imm(struct x64_emitter *emitter, struct x64_alu_imm or_imm);
-void x64_emit_eor_imm(struct x64_emitter *emitter, struct x64_alu_imm eor_imm);
+void x64_emit_xor_imm(struct x64_emitter *emitter, struct x64_alu_imm xor_imm);
 void x64_emit_and_imm(struct x64_emitter *emitter, struct x64_alu_imm and_imm);
 
 void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not);

@@ -42,7 +42,7 @@ static void emit_instr(const struct emit_state *state,
     break;
   switch (instr->x64->ty) {
     EMIT(OR, or);
-    EMIT(EOR, eor);
+    EMIT(XOR, xor);
     EMIT(AND, and);
     EMIT(ADD, add);
     EMIT(SUB, sub);
@@ -59,7 +59,7 @@ static void emit_instr(const struct emit_state *state,
     EMIT(SUB_IMM, sub_imm);
     EMIT(OR_IMM, or_imm);
     EMIT(AND_IMM, and_imm);
-    EMIT(EOR_IMM, eor_imm);
+    EMIT(XOR_IMM, xor_imm);
 
     EMIT(SHR, shr);
     EMIT(SHL, shl);
@@ -96,6 +96,20 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(MOV_IMM, mov_imm);
     EMIT(MOV_REG, mov_reg);
+    EMIT(MOVQ, movq);
+    EMIT(MOVD, movd);
+
+    EMIT(MOVAPS, movaps);
+    EMIT(MOVAPD, movapd);
+
+    EMIT(SQRTSS, sqrtss);
+    EMIT(SQRTSD, sqrtsd);
+    EMIT(ANDPS, andps);
+    EMIT(ANDPD, andpd);
+    EMIT(XORPS, xorps);
+    EMIT(XORPD, xorpd);
+    EMIT(ORPS, orps);
+    EMIT(ORPD, orpd);
   case X64_INSTR_TY_JMP: {
     struct x64_target_reloc reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {

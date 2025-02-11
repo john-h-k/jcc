@@ -9,7 +9,7 @@
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
-                   op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
+                   op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
 
   struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
