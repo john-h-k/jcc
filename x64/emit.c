@@ -52,6 +52,8 @@ static void emit_instr(const struct emit_state *state,
 
     EMIT(IMUL, imul);
 
+    EMIT(LEA, lea);
+
     EMIT(ADD_IMM, add_imm);
     EMIT(SUB_IMM, sub_imm);
     EMIT(OR_IMM, or_imm);

@@ -34,6 +34,8 @@ enum x64_instr_ty {
   // X64_INSTR_TY_STORE_HALF_IMM,
   X64_INSTR_TY_MOV_STORE_IMM,
 
+  X64_INSTR_TY_LEA,
+
   X64_INSTR_TY_PUSH,
   X64_INSTR_TY_POP,
 
@@ -94,8 +96,7 @@ enum x64_reg_ty {
 
 enum x64_reg_attr_flags {
   X64_REG_ATTR_FLAG_NONE = 0,
-  X64_REG_ATTR_FLAG_VOLATILE =
-      1, // v8-15 are upper half only volatile, we don't support this yet
+  X64_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
   X64_REG_ATTR_FLAG_ARG_REG = 2,
   X64_REG_ATTR_FLAG_RET_REG = 4,
   X64_REG_ATTR_FLAG_RESERVED = 8,
@@ -210,6 +211,14 @@ struct x64_pop {
   struct x64_reg dest;
 };
 
+struct x64_lea {
+  struct x64_reg dest;
+  struct x64_reg base;
+  struct x64_reg index;
+  size_t scale;
+  size_t offset;
+};
+
 struct x64_conditional_select {
   // enum x64_cond cond;
   struct x64_reg true_source;
@@ -252,6 +261,10 @@ struct x64_instr {
 
     union {
       struct x64_push push;
+    };
+
+    union {
+      struct x64_lea lea;
     };
 
     union {

@@ -421,30 +421,43 @@ struct x64_raw_instr {
 
 #define CALL_REL32(disp)                                                       \
   ((struct x64_raw_instr){.len = 5,                                            \
-                          .buff = {0xe8, (uint8_t)((disp) & 0xFF),             \
-                                   (uint8_t)(((disp) >> 8) & 0xFF),            \
-                                   (uint8_t)(((disp) >> 16) & 0xFF),           \
-                                   (uint8_t)(((disp) >> 24) & 0xFF)}})
-
-#define CMP_REG_IMM32(reg, imm)                                                \
-  ((struct x64_raw_instr){.len = 7,                                            \
-                          .buff = {0x48, 0x81, (uint8_t)(0xf8 | (reg)),        \
-                                   (uint8_t)((imm) & 0xFF),                    \
-                                   (uint8_t)(((imm) >> 8) & 0xFF),             \
-                                   (uint8_t)(((imm) >> 16) & 0xFF),            \
-                                   (uint8_t)(((imm) >> 24) & 0xFF)}})
-
-#define CMP_REG_REG(dst, src)                                                  \
-  ((struct x64_raw_instr){                                                     \
-      .len = 3, .buff = {0x48, 0x39, (uint8_t)(0xc0 | ((src) << 3) | (dst))}})
+                          .buff = {0xE8, IMM_BYTES32((disp)) }})
 
 
-#define LEA_RIP_REL32(reg, disp)                                               \
-  ((struct x64_raw_instr){.len = 7,                                            \
-                          .buff = {0x48, 0x8d, (uint8_t)(((reg) << 3) | 5),    \
-                                   (uint8_t)((disp) & 0xFF),                   \
-                                   (uint8_t)(((disp) >> 8) & 0xFF),            \
-                                   (uint8_t)(((disp) >> 16) & 0xFF),           \
-                                   (uint8_t)(((disp) >> 24) & 0xFF)}})
+#define LEA_REG64(dest, index, base, scale, offset) \
+  ((offset) == 0 \
+    ? LEA_REG64_IMM0((dest), (index), (base), (scale), (offset))  \
+    : ((offset) < 256) ? LEA_REG64_IMM8((dest), (index), (base), (scale), (offset))  \
+      : LEA_REG64_IMM32((dest), (index), (base), (scale), (offset))  \
+    )
+
+#define LEA_REG64_IMM0(dest, index, base, scale, offset)                                                       \
+  ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_NONE, ((dest).idx % 8), (size_t)0b100), \
+                          SIB(scale, index.idx, base.idx) \
+                          }}) \
+
+#define LEA_REG64_IMM8(dest, index, base, scale, offset)                                                       \
+  ((struct x64_raw_instr){.len = 5,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_IMM8, ((dest).idx % 8), (size_t)0b100), \
+                          SIB(scale, index.idx, base.idx), \
+                          IMM_BYTES8(offset) \
+                          }}) \
+
+#define LEA_REG64_IMM32(dest, index, base, scale, offset)                                                       \
+  ((struct x64_raw_instr){.len = 8,                                            \
+                          .buff = { \
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
+                          0x8D, \
+                          MODRM(MOD_RM_IMM32, ((dest).idx % 8), (size_t)0b100), \
+                          SIB(scale, index.idx, base.idx), \
+                          IMM_BYTES32(offset) \
+                          }}) \
 
 #endif
