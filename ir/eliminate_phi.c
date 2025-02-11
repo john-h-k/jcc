@@ -5,7 +5,8 @@
 #include "ir.h"
 
 static void remove_critical_edges(struct ir_func *irb) {
-  // FIXME: i believe this doesn't properly propogate phis through the arms of a switch expr. see lower.c
+  // FIXME: i believe this doesn't properly propogate phis through the arms of a
+  // switch expr. see lower.c
 
   struct ir_basicblock *basicblock = irb->first;
 
@@ -114,6 +115,9 @@ struct bb_reg {
   struct ir_basicblock *bb;
 };
 
+#define REG_POS(reg) (reg)
+#define LCL_POS(lcl) (SIZE_MAX - 1 - lcl)
+
 static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
                       size_t tmp_index, struct ir_lcl *spill_lcl,
@@ -143,14 +147,13 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
     }
 
     if (move.to.idx == tmp_index) {
+      DEBUG_ASSERT(move.from.idx < SIZE_MAX / 2, "can't do stack<->stack move");
+
       struct ir_op *store =
           insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_LCL,
-        .lcl = spill_lcl,
-        .value = value};
+          .ty = IR_OP_STORE_TY_LCL, .lcl = spill_lcl, .value = value};
       store->flags |= IR_OP_FLAG_PHI_MOV;
-
 
       store_var_ty = value->var_ty;
     } else if (move.from.idx == tmp_index) {
@@ -158,7 +161,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
           insert_before_ir_op(irb, last, IR_OP_TY_LOAD, store_var_ty);
       load->reg = to;
       load->load = (struct ir_op_load){
-        .ty = IR_OP_LOAD_TY_LCL,
+          .ty = IR_OP_LOAD_TY_LCL,
           .lcl = spill_lcl,
       };
 
@@ -168,6 +171,16 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       if (op) {
         *op = load;
       }
+    } else if (move.from.idx >= SIZE_MAX / 2) {
+      struct ir_lcl *lcl = move.from.metadata;
+
+      struct ir_op *load =
+          insert_before_ir_op(irb, last, IR_OP_TY_LOAD, lcl->var_ty);
+      load->reg = to;
+      load->load = (struct ir_op_load){
+          .ty = IR_OP_LOAD_TY_LCL,
+          .lcl = lcl,
+      };
     } else {
       struct ir_op *mov =
           insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
@@ -207,18 +220,12 @@ void eliminate_phi(struct ir_func *irb) {
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 
-    struct ir_basicblock *mov_bb;
-    struct ir_op *last;
-    size_t bb_move_id;
+    bool moves_in_preds;
 
     if (basicblock->num_preds == 1) {
-      mov_bb = basicblock;
-      last = basicblock->first->first;
-      bb_move_id = mov_bb->id * 2;
+      moves_in_preds = false;
     } else if (basicblock->num_preds > 1) {
-      mov_bb = basicblock->preds[0];
-      last = mov_bb->last->last;
-      bb_move_id = mov_bb->id * 2 + 1;
+      moves_in_preds = true;
     } else {
       basicblock = basicblock->succ;
       continue;
@@ -232,6 +239,16 @@ void eliminate_phi(struct ir_func *irb) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
           struct ir_op *value = op->phi.values[i].value;
 
+          struct ir_basicblock *mov_bb;
+          size_t bb_move_id;
+          if (moves_in_preds) {
+            mov_bb = value->stmt->basicblock;
+            bb_move_id = mov_bb->id * 2 + 1;
+          } else {
+            mov_bb = basicblock;
+            bb_move_id = mov_bb->id * 2;
+          }
+
           struct vector *gp_move_from = bb_moves[bb_move_id].gp_from;
           struct vector *gp_move_to = bb_moves[bb_move_id].gp_to;
           struct vector *fp_move_from = bb_moves[bb_move_id].fp_from;
@@ -240,24 +257,40 @@ void eliminate_phi(struct ir_func *irb) {
           DEBUG_ASSERT(op->reg.ty != IR_REG_TY_NONE,
                        "expected op %zu to have reg by now", op->id);
 
-          if (op->lcl) {
-            struct ir_op *load =
-                insert_before_ir_op(irb, last, IR_OP_TY_LOAD, op->var_ty);
-            load->load = (struct ir_op_load){
-              .ty = IR_OP_LOAD_TY_LCL,
-              .lcl = op->lcl};
-            load->reg = op->reg;
-            op->phi.values[i].value = load;
-          } else if (op->reg.ty == IR_REG_TY_FP ||
-                     op->reg.ty == IR_REG_TY_INTEGRAL) {
-            size_t from_reg = unique_idx_for_ir_reg(value->reg);
-            size_t to_reg = unique_idx_for_ir_reg(op->reg);
+          // FIXME: logic here is iffy at best
+          // we should move to a model where all ops have registers, but may or
+          // may not be in them (and so need reloads)
 
-            if (from_reg != to_reg) {
-              struct location from = {.idx = from_reg};
-              struct location to = {.idx = to_reg};
+          // TODO: disabled for new phi logic. keeping in case it is needed to
+          // undo if (op->lcl) {
+          //   struct ir_op *load =
+          //       insert_before_ir_op(irb, last, IR_OP_TY_LOAD, op->var_ty);
+          //   load->load = (struct ir_op_load){
+          //     .ty = IR_OP_LOAD_TY_LCL,
+          //     .lcl = op->lcl};
+          //   load->reg = op->reg;
+          //   op->phi.values[i].value = load;
+          if (op->reg.ty == IR_REG_TY_FP || op->reg.ty == IR_REG_TY_INTEGRAL) {
+            size_t from_pos;
+            void *metadata = NULL;
 
-              struct bb_reg key = {.reg = from_reg, .bb = mov_bb};
+            // this should really be done by regalloc, but we need crit edges to be split first
+            // and we get better regalloc if we don't split crit edges beforehand
+
+            if (value->lcl) {
+              from_pos = LCL_POS(value->lcl->id);
+              metadata = value->lcl;
+            } else {
+              from_pos = REG_POS(unique_idx_for_ir_reg(value->reg));
+            }
+
+            size_t to_pos = REG_POS(unique_idx_for_ir_reg(op->reg));
+
+            if (from_pos != to_pos) {
+              struct location from = {.idx = from_pos, .metadata = metadata };
+              struct location to = {.idx = to_pos};
+
+              struct bb_reg key = {.reg = from_pos, .bb = mov_bb};
               hashtbl_insert(reg_to_val, &key, &value);
 
               if (var_ty_is_integral(&value->var_ty)) {
@@ -288,7 +321,7 @@ void eliminate_phi(struct ir_func *irb) {
       struct vector *fp_move_from = bb_moves[basicblock->id * 2 + j].fp_from;
       struct vector *fp_move_to = bb_moves[basicblock->id * 2 + j].fp_to;
 
-      size_t tmp_index = 3333;
+      size_t tmp_index = SIZE_MAX;
 
       struct ir_lcl *spill_lcl = NULL;
 

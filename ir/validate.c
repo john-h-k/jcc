@@ -45,7 +45,6 @@ static void ir_validate_op(UNUSED struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
     break;
   case IR_OP_TY_LOAD:
-    invariant_assert(!op->lcl, "op %zu: loads should not have locals", op->id);
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
       invariant_assert(op->load.lcl, "op %zu: load ty lcl must have lcl",

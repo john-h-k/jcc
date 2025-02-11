@@ -6,6 +6,7 @@
 #include "liveness.h"
 #include "log.h"
 #include "util.h"
+#include "vector.h"
 
 struct register_alloc_info {
   struct reg_info integral_reg_info;

@@ -38,8 +38,8 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
     fi
 
     output=$(echo "$stdin" | ./a.out)
-
     result=$?
+
     if [ "$result" != "$expected" ]; then
       echo "TEST FAILED: expected return code $expected, got $result"
       exit -1

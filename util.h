@@ -262,7 +262,7 @@ static inline void debug_print_stack_trace(void) {
 
 PRINTF_ARGS(5) static void util_debug_assert(bool b, const char *cond, const char *func, const char *file, int line, const char *msg, ...) {
   if (!b) {
-    fprintf(stderr, "DEBUG_ASSERT failed %s:%d:%s: \nexpected `%s`", file, line, func, cond);
+    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`\n", file, line, func, cond);
 
     va_list v;
     va_start(v, msg);
