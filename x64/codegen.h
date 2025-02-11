@@ -4,6 +4,7 @@
 #include "../codegen.h"
 
 #include <stdio.h>
+#include <assert.h>
 
 #if defined(STACK_PTR_REG) || defined(FRAME_PTR_REG) || defined(RET_PTR_REG)
 #error                                                                         \
@@ -24,6 +25,9 @@
 
 typedef unsigned long long imm_t;
 typedef long long simm_t;
+
+static_assert(sizeof(imm_t) == 8, "imm_t must be 8 bytes");
+static_assert(sizeof(simm_t) == 8, "imm_t must be 8 bytes");
 
 enum x64_instr_ty {
   X64_INSTR_TY_MOVZX_LOAD_BYTE_IMM,
@@ -49,6 +53,18 @@ enum x64_instr_ty {
   X64_INSTR_TY_ADD_IMM,
   X64_INSTR_TY_SUB_IMM,
 
+  X64_INSTR_TY_MOVAPS,
+  X64_INSTR_TY_MOVAPD,
+
+  X64_INSTR_TY_SQRTSS,
+  X64_INSTR_TY_SQRTSD,
+  X64_INSTR_TY_ANDPS,
+  X64_INSTR_TY_ANDPD,
+  X64_INSTR_TY_XORPS,
+  X64_INSTR_TY_XORPD,
+  X64_INSTR_TY_ORPS,
+  X64_INSTR_TY_ORPD,
+
   X64_INSTR_TY_ADD,
   X64_INSTR_TY_SUB,
 
@@ -56,11 +72,11 @@ enum x64_instr_ty {
   X64_INSTR_TY_DIV,
   X64_INSTR_TY_IDIV,
 
-  X64_INSTR_TY_EOR,
+  X64_INSTR_TY_XOR,
   X64_INSTR_TY_OR,
   X64_INSTR_TY_AND,
 
-  X64_INSTR_TY_EOR_IMM,
+  X64_INSTR_TY_XOR_IMM,
   X64_INSTR_TY_OR_IMM,
   X64_INSTR_TY_AND_IMM,
 
@@ -87,6 +103,9 @@ enum x64_instr_ty {
   X64_INSTR_TY_TEST_IMM,
 
   X64_INSTR_TY_RET,
+
+  X64_INSTR_TY_MOVQ,
+  X64_INSTR_TY_MOVD,
 };
 
 enum x64_reg_class {
@@ -100,6 +119,8 @@ enum x64_reg_ty {
   X64_REG_TY_E, // 32 bit
   X64_REG_TY_W, // 16 bit
   X64_REG_TY_L, // 8 bit
+
+  X64_REG_TY_XMM, // 128 bit
 };
 
 enum x64_reg_attr_flags {
@@ -203,6 +224,11 @@ struct x64_1_reg {
   struct x64_reg dest;
 };
 
+struct x64_2_reg_unary {
+  struct x64_reg dest;
+  struct x64_reg source;
+};
+
 struct x64_div {
   struct x64_reg rhs;
 };
@@ -255,15 +281,19 @@ struct x64_instr {
 
   union {
     union {
-      struct x64_alu_reg alu_reg, add, sub, eor, or, and;
+      struct x64_alu_reg alu_reg, add, sub, xor, or, and, andps, andpd, xorps, xorpd, orps, orpd;
     };
 
     union {
-      struct x64_alu_imm alu_imm, add_imm, sub_imm, eor_imm, or_imm, and_imm;
+      struct x64_alu_imm alu_imm, add_imm, sub_imm, xor_imm, or_imm, and_imm;
     };
 
     union {
       struct x64_shift shift, shl, shr, sar;
+    };
+
+    union {
+      struct x64_2_reg_unary two_reg_unary, sqrtss, sqrtsd, movaps, movapd;
     };
 
     union {
@@ -315,7 +345,7 @@ struct x64_instr {
     };
 
     union {
-      struct x64_mov_reg mov_reg, movsx, movzx;
+      struct x64_mov_reg mov_reg, movsx, movzx, movq, movd;
     };
 
     union {

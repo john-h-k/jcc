@@ -40,8 +40,8 @@ struct x64_raw_instr {
 #define REX_X_2B_RM ((size_t)0b0)
 
 #define REX(W, R, X, B)                                                        \
-  U8((0b0100 << 4) | (IMM((W), 1) << 3) | (IMM((R), 1) << 2) |                 \
-     (IMM((X), 1) << 1) | IMM((B), 1))
+  U8((0b0100 << 4) | (IMM(((size_t)W), 1) << 3) | (IMM(((size_t)R), 1) << 2) |                 \
+     (IMM(((size_t)X), 1) << 1) | IMM(((size_t)B), 1))
 
 #define NEEDS_REX(reg) ((reg).ty == X64_REG_TY_R || (reg).idx > 7)
 #define REX_W(reg) ((reg).ty == X64_REG_TY_R ? (size_t)1 : (size_t)0)
@@ -102,7 +102,7 @@ struct x64_raw_instr {
 #define ADD_REG(dest, rhs) ALU_RM((size_t)0x1, (dest), (rhs))
 #define SUB_REG(dest, rhs) ALU_RM((size_t)0x29, (dest), (rhs))
 
-#define EOR_REG(dest, rhs) ALU_RM((size_t)0x31, (dest), (rhs))
+#define XOR_REG(dest, rhs) ALU_RM((size_t)0x31, (dest), (rhs))
 #define OR_REG(dest, rhs) ALU_RM((size_t)0x09, (dest), (rhs))
 #define AND_REG(dest, rhs) ALU_RM((size_t)0x21, (dest), (rhs))
 
@@ -217,7 +217,7 @@ struct x64_raw_instr {
 #define SUB_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b101, (dest), (imm))
 
 #define OR_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b001, (dest), (imm))
-#define EOR_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b110, (dest), (imm))
+#define XOR_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b110, (dest), (imm))
 #define AND_IMM(dest, imm) ALU_IMM((size_t)0x81, (size_t)0b100, (dest), (imm))
 
 #define MOV_IMM32(dest, imm)                                                   \
@@ -235,7 +235,7 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){                                                     \
       .len = 10,                                                                \
       .buff = {REX((size_t)1, (size_t)0, (size_t)0, (size_t)((dest).idx > 7)), \
-               U8(0xB8 + ((dest).idx % 8)), IMM_BYTES32((imm))}})
+               U8(0xB8 + ((dest).idx % 8)), IMM_BYTES64((imm))}})
 
 #define MOV_IMM(dest, imm)                                                     \
   ((dest).ty == X64_REG_TY_R ? MOV_IMM64_REX((dest), (imm))                    \
@@ -610,5 +610,94 @@ struct x64_raw_instr {
                           MODRM(MOD_RM_IMM32, ((dest).idx % 8), ((base).idx % 8)), \
                           IMM_BYTES32(offset) \
                           }}) \
+
+
+#define SSE_MOVQ(dest, source) \
+  ((struct x64_raw_instr){.len = 5,                                            \
+                          .buff = { \
+                          0x66,\
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+
+#define AVX_MOVQ(dest, source) \
+  ((struct x64_raw_instr){.len = 5,                                            \
+                          .buff = { \
+                          0x66,\
+                          REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+
+// TODO: only have REX for high regs                          
+
+#define SSE_MOVD(dest, source) \
+  ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          0x66,\
+                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+
+#define AVX_MOVD(dest, source) \
+  ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          0x66,\
+                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          0x6E, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
+
+#define SCALAR_SINGLE ((size_t)0xF3)
+#define SCALAR_DOUBLE ((size_t)0xF2)
+#define PACKED_DOUBLE ((size_t)0x66)
+
+#define SSE_INSTR_PS(opc, dest, source) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
+   ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
+    : \
+   ((struct x64_raw_instr){.len = 3,                                            \
+                          .buff = { \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
+
+#define SSE_INSTR_NON_PS(opc, pref, dest, source) \
+  (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
+   ((struct x64_raw_instr){.len = 5,                                            \
+                          .buff = { \
+                          REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
+                          U8(pref), \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
+    : \
+   ((struct x64_raw_instr){.len = 4,                                            \
+                          .buff = { \
+                          U8(pref), \
+                          0x0F, \
+                          opc, \
+                          MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
+
+#define MOVAPS(dest, source) SSE_INSTR_PS(0x28, (dest), (source))
+#define MOVAPD(dest, source) SSE_INSTR_NON_PS(0x28, PACKED_DOUBLE, (dest), (source))
+
+#define ANDPS(dest, source) SSE_INSTR_PS(0x54, (dest), (source))
+#define ORPS(dest, source) SSE_INSTR_PS(0x56, (dest), (source))
+#define XORPS(dest, source) SSE_INSTR_PS(0x57, (dest), (source))
+
+#define ANDPD(dest, source) SSE_INSTR_NON_PS(0x54, PACKED_DOUBLE, (dest), (source))
+#define ORPD(dest, source) SSE_INSTR_NON_PS(0x56, PACKED_DOUBLE, (dest), (source))
+#define XORPD(dest, source) SSE_INSTR_NON_PS(0x57, PACKED_DOUBLE, (dest), (source))
+
+#define SQRTSS(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_SINGLE, (dest), (source))
+#define SQRTSD(dest, source) SSE_INSTR_NON_PS(0x51, SCALAR_DOUBLE, (dest), (source))
 
 #endif

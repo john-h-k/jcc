@@ -80,6 +80,43 @@ static void x64_emit_instr(struct x64_emitter *emitter,
 
 void x64_emit_nop(struct x64_emitter *emitter) { x64_emit_instr(emitter, NOP); }
 
+/* SSE */
+
+void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps) {
+  x64_emit_instr(emitter, MOVAPS(movaps.dest, movaps.source));
+}
+
+void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd) {
+  x64_emit_instr(emitter, MOVAPD(movapd.dest, movapd.source));
+}
+
+void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss) {
+  x64_emit_instr(emitter, SQRTSS(sqrtss.dest, sqrtss.source));
+}
+
+void x64_emit_sqrtsd(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtsd) {
+  x64_emit_instr(emitter, SQRTSD(sqrtsd.dest, sqrtsd.source));
+}
+
+void x64_emit_andps(struct x64_emitter *emitter, struct x64_alu_reg andps) {
+  x64_emit_instr(emitter, ANDPS(andps.dest, andps.rhs));
+}
+void x64_emit_andpd(struct x64_emitter *emitter, struct x64_alu_reg andpd) {
+  x64_emit_instr(emitter, ANDPD(andpd.dest, andpd.rhs));
+}
+void x64_emit_xorps(struct x64_emitter *emitter, struct x64_alu_reg xorps) {
+  x64_emit_instr(emitter, XORPS(xorps.dest, xorps.rhs));
+}
+void x64_emit_xorpd(struct x64_emitter *emitter, struct x64_alu_reg xorpd) {
+  x64_emit_instr(emitter, XORPD(xorpd.dest, xorpd.rhs));
+}
+void x64_emit_orps(struct x64_emitter *emitter, struct x64_alu_reg orps) {
+  x64_emit_instr(emitter, ORPS(orps.dest, orps.rhs));
+}
+void x64_emit_orpd(struct x64_emitter *emitter, struct x64_alu_reg orpd) {
+  x64_emit_instr(emitter, ORPD(orpd.dest, orpd.rhs));
+}
+
 void x64_emit_add(struct x64_emitter *emitter, struct x64_alu_reg add) {
   x64_emit_instr(emitter, ADD_REG(add.dest, add.rhs));
 }
@@ -104,8 +141,8 @@ void x64_emit_and(struct x64_emitter *emitter, struct x64_alu_reg and) {
   x64_emit_instr(emitter, AND_REG(and.dest, and.rhs));
 }
 
-void x64_emit_eor(struct x64_emitter *emitter, struct x64_alu_reg eor) {
-  x64_emit_instr(emitter, EOR_REG(eor.dest, eor.rhs));
+void x64_emit_xor(struct x64_emitter *emitter, struct x64_alu_reg xor) {
+  x64_emit_instr(emitter, XOR_REG(xor.dest, xor.rhs));
 }
 
 void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or) {
@@ -160,6 +197,7 @@ void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
     x64_emit_instr(emitter, MOVSX32_64(movsx.dest, movsx.source));
     break;
   case X64_REG_TY_R:
+  case X64_REG_TY_XMM:
     BUG("source of movsx should be 8/16/32 bit register");
   }
 }
@@ -172,8 +210,8 @@ void x64_emit_or_imm(struct x64_emitter *emitter, struct x64_alu_imm or_imm) {
   x64_emit_instr(emitter, OR_IMM(or_imm.dest, or_imm.imm));
 }
 
-void x64_emit_eor_imm(struct x64_emitter *emitter, struct x64_alu_imm eor_imm) {
-  x64_emit_instr(emitter, EOR_IMM(eor_imm.dest, eor_imm.imm));
+void x64_emit_xor_imm(struct x64_emitter *emitter, struct x64_alu_imm xor_imm) {
+  x64_emit_instr(emitter, XOR_IMM(xor_imm.dest, xor_imm.imm));
 }
 
 void x64_emit_and_imm(struct x64_emitter *emitter, struct x64_alu_imm and_imm) {
@@ -186,6 +224,14 @@ void x64_emit_mov_imm(struct x64_emitter *emitter, struct x64_mov_imm mov_imm) {
 
 void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
   x64_emit_instr(emitter, MOV_REG(mov_reg.dest, mov_reg.source));
+}
+
+void x64_emit_movq(struct x64_emitter *emitter, struct x64_mov_reg movq) {
+  x64_emit_instr(emitter, SSE_MOVQ(movq.dest, movq.source));
+}
+
+void x64_emit_movd(struct x64_emitter *emitter, struct x64_mov_reg movd) {
+  x64_emit_instr(emitter, SSE_MOVD(movd.dest, movd.source));
 }
 
 void x64_emit_mov_load_imm(struct x64_emitter *emitter,

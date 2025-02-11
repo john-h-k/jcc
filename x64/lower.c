@@ -107,7 +107,7 @@ static void lower_bitfield_extract(struct ir_func *func, struct ir_op *op) {
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
-                   op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
+                   op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
 
   struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
@@ -118,6 +118,86 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   op->binary_op.ty = IR_OP_BINARY_OP_TY_EQ;
   op->binary_op.lhs = op->unary_op.value;
   op->binary_op.rhs = zero;
+}
+
+static void lower_fabs(struct ir_func *func, struct ir_op *op) {
+  DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
+                   op->unary_op.ty == IR_OP_UNARY_OP_TY_FABS,
+               "called on invalid op");
+
+  size_t mask_cnst;
+  enum ir_var_primitive_ty integral;
+  switch (op->unary_op.value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_F16:
+      mask_cnst = 0x7FFF;
+      integral = IR_VAR_PRIMITIVE_TY_I16;
+      break;
+    case IR_VAR_PRIMITIVE_TY_F32:
+      mask_cnst = 0x7FFFFFFF;
+      integral = IR_VAR_PRIMITIVE_TY_I32;
+      break;
+    case IR_VAR_PRIMITIVE_TY_F64:
+      mask_cnst = 0x7FFFFFFFFFFFFFFF;
+      integral = IR_VAR_PRIMITIVE_TY_I64;
+      break;
+    default:
+      unreachable();
+  }
+
+  struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  mk_integral_constant(func->unit, mask, integral, mask_cnst);
+
+  struct ir_op *fp_mask = insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+  fp_mask->ty = IR_OP_TY_MOV;
+  fp_mask->mov = (struct ir_op_mov){
+    .value = mask
+  };
+
+  op->ty = IR_OP_TY_BINARY_OP;
+  op->flags |= IR_OP_FLAG_READS_DEST;
+  op->binary_op.ty = IR_OP_BINARY_OP_TY_AND;
+  op->binary_op.lhs = op->unary_op.value;
+  op->binary_op.rhs = fp_mask;
+}
+
+static void lower_fneg(struct ir_func *func, struct ir_op *op) {
+  DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
+                   op->unary_op.ty == IR_OP_UNARY_OP_TY_FNEG,
+               "called on invalid op");
+
+  size_t mask_cnst;
+  enum ir_var_primitive_ty integral;
+  switch (op->unary_op.value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_F16:
+      mask_cnst = 0x8000;
+      integral = IR_VAR_PRIMITIVE_TY_I16;
+      break;
+    case IR_VAR_PRIMITIVE_TY_F32:
+      mask_cnst = 0x80000000;
+      integral = IR_VAR_PRIMITIVE_TY_I32;
+      break;
+    case IR_VAR_PRIMITIVE_TY_F64:
+      mask_cnst = 0x8000000000000000;
+      integral = IR_VAR_PRIMITIVE_TY_I64;
+      break;
+    default:
+      unreachable();
+  }
+
+  struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  mk_integral_constant(func->unit, mask, integral, mask_cnst);
+
+  struct ir_op *fp_mask = insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+  fp_mask->ty = IR_OP_TY_MOV;
+  fp_mask->mov = (struct ir_op_mov){
+    .value = mask
+  };
+
+  op->ty = IR_OP_TY_BINARY_OP;
+  op->flags |= IR_OP_FLAG_READS_DEST;
+  op->binary_op.ty = IR_OP_BINARY_OP_TY_XOR;
+  op->binary_op.lhs = op->unary_op.value;
+  op->binary_op.rhs = fp_mask;
 }
 
 // variable shifts require both operands to be the same size, as they use the
@@ -643,6 +723,12 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
               case IR_OP_UNARY_OP_TY_NOT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
+                break;
+              case IR_OP_UNARY_OP_TY_FNEG:
+                lower_fneg(func, op);
+                break;
+              case IR_OP_UNARY_OP_TY_FABS:
+                lower_fabs(func, op);
                 break;
               default:
                 break;
