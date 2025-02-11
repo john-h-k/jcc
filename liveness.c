@@ -192,3 +192,35 @@ void print_ir_intervals(FILE *file, struct ir_op *op,
   //   print_live_regs(file, &interval->op->reg_usage);
   // }
 }
+
+
+int sort_interval_by_start_point(const void *a, const void *b) {
+  const struct interval *a_int = (const struct interval *)a;
+  const struct interval *b_int = (const struct interval *)b;
+  size_t a_start = a_int->start;
+  size_t b_start = b_int->start;
+
+  // put params at front, this is used for giving them the correct registers for
+  // calling conv
+  enum ir_op_flags a_flags = a_int->op->flags;
+  enum ir_op_flags b_flags = b_int->op->flags;
+  if ((a_flags & IR_OP_FLAG_PARAM) > (b_flags & IR_OP_FLAG_PARAM)) {
+    return -1;
+  } else if ((a_flags & IR_OP_FLAG_PARAM) < (b_flags & IR_OP_FLAG_PARAM)) {
+    return 1;
+  }
+
+  if (a_start > b_start) {
+    return 1;
+  } else if (a_start < b_start) {
+    return -1;
+  }
+
+  if (a_int->op->id > b_int->op->id) {
+    return 1;
+  } else if (a_int->op->id < b_int->op->id) {
+    return -1;
+  }
+
+  return 0;
+}
