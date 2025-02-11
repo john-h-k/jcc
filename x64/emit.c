@@ -31,7 +31,7 @@ struct emit_state {
 
 struct local_reloc_info {
   struct instr *target;
-  const struct x64_target_reloc *reloc;
+  struct x64_target_reloc reloc;
 };
 
 static void emit_instr(const struct emit_state *state,
@@ -66,6 +66,7 @@ static void emit_instr(const struct emit_state *state,
     EMIT(NEG, neg);
 
     EMIT(TEST, test);
+    EMIT(CMP, cmp);
 
     EMIT(MOVSX, movsx);
 
@@ -78,7 +79,7 @@ static void emit_instr(const struct emit_state *state,
     EMIT(MOV_IMM, mov_imm);
     EMIT(MOV_REG, mov_reg);
   case X64_INSTR_TY_JMP: {
-    const struct x64_target_reloc *reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
+    struct x64_target_reloc reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {
       .target = instr->x64->jmp.target->first_instr,
       .reloc = reloc
@@ -87,7 +88,7 @@ static void emit_instr(const struct emit_state *state,
     break;
   }
   case X64_INSTR_TY_JCC: {
-    const struct x64_target_reloc *reloc = x64_emit_jcc(state->emitter, instr->x64->jcc);
+    struct x64_target_reloc reloc = x64_emit_jcc(state->emitter, instr->x64->jcc);
     struct local_reloc_info info = {
       .target = instr->x64->jcc.target->first_instr,
       .reloc = reloc
@@ -99,7 +100,7 @@ static void emit_instr(const struct emit_state *state,
     x64_emit_ret(state->emitter);
     break;
   default:
-    TODO("implement instr for x64");
+    TODO("unimplemented x64 instr");
   }
   #undef EMIT
 }

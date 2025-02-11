@@ -4,7 +4,9 @@
 #include "codegen.h"
 
 struct x64_emitter;
-struct x64_target_reloc;
+struct x64_target_reloc {
+  size_t idx;
+};
 
 void create_x64_emitter(struct x64_emitter **emitter);
 void free_x64_emitter(struct x64_emitter **emitter);
@@ -52,8 +54,8 @@ void x64_emit_mov_store_imm(struct x64_emitter *emitter, struct x64_mov_store_im
 void x64_emit_push(struct x64_emitter *emitter, struct x64_push push);
 void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop);
 
-const struct x64_target_reloc *x64_emit_jmp(struct x64_emitter *emitter, struct x64_branch jmp);
-const struct x64_target_reloc *x64_emit_jcc(struct x64_emitter *emitter, struct x64_conditional_branch jcc);
+struct x64_target_reloc x64_emit_jmp(struct x64_emitter *emitter, struct x64_branch jmp);
+struct x64_target_reloc x64_emit_jcc(struct x64_emitter *emitter, struct x64_conditional_branch jcc);
 
 void x64_emit_cmp(struct x64_emitter *emitter, struct x64_cmp cmp);
 void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test);
@@ -63,6 +65,6 @@ void x64_emit_test_imm(struct x64_emitter *emitter, struct x64_cmp_imm test_imm)
 
 void x64_emit_ret(struct x64_emitter *emitter);
 
-void x64_reloc(struct x64_emitter *emitter, const struct x64_target_reloc *reloc, size_t offset);
+void x64_reloc(struct x64_emitter *emitter, struct x64_target_reloc reloc, size_t offset);
 
 #endif
