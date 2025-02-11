@@ -294,6 +294,7 @@ void eliminate_phi(struct ir_func *irb) {
               hashtbl_insert(reg_to_val, &key, &value);
 
               if (var_ty_is_integral(&value->var_ty)) {
+                printf("bb %zu op %zu: move %zu -> %zu\n", basicblock->id, op->id, from.idx, to.idx);
                 vector_push_back(gp_move_from, &from);
                 vector_push_back(gp_move_to, &to);
               } else {

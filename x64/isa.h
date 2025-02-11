@@ -513,11 +513,11 @@ struct x64_raw_instr {
 #define CMP_REG(lhs, rhs) \
   (NEEDS_REX((lhs)) || NEEDS_REX((rhs)) ? \
   ((struct x64_raw_instr){.len = 3,                                            \
-                          .buff = {REX(REX_W(lhs), (size_t)((rhs).idx > 7), (size_t)0, (size_t)((lhs).idx > 7)),  \
-                          0x3B, MODRM(MOD_REG, (rhs).idx % 8 , (lhs).idx % 8) }}) \
+                          .buff = {REX(REX_W(lhs), (size_t)((lhs).idx > 7), (size_t)0, (size_t)((rhs).idx > 7)),  \
+                          0x3B, MODRM(MOD_REG, (lhs).idx % 8 , (rhs).idx % 8) }}) \
                             : \
     ((struct x64_raw_instr){.len = 2,                                            \
-                          .buff = {0x3B, MODRM(MOD_REG, (rhs).idx, (lhs).idx) }})) 
+                          .buff = {0x3B, MODRM(MOD_REG, (lhs).idx, (rhs).idx) }})) 
 
 #define CALL_REL32(disp)                                                       \
   ((struct x64_raw_instr){.len = 5,                                            \

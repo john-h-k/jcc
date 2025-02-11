@@ -1043,8 +1043,8 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
-  struct ir_op *phi = alloc_ir_op(irb->func, end_stmt);
+  struct ir_stmt *phi_stmt = alloc_ir_stmt(irb->func, end_bb);
+  struct ir_op *phi = alloc_ir_op(irb->func, phi_stmt);
   phi->ty = IR_OP_TY_PHI;
   phi->var_ty = var_ty;
   phi->phi = (struct ir_op_phi){
@@ -1056,6 +1056,8 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
       (struct ir_phi_entry){.basicblock = false_bb, .value = false_op};
   phi->phi.values[1] =
       (struct ir_phi_entry){.basicblock = true_bb, .value = true_op};
+
+  struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
 
   *stmt = end_stmt;
   return phi;

@@ -209,7 +209,7 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         eliminate_phi(glb->func);
-        rebuild_ids(glb->func);
+        // rebuild_ids(glb->func);
         break;
       }
 

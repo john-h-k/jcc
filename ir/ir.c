@@ -1,9 +1,9 @@
 #include "ir.h"
 
-#include "../util.h"
 #include "../alloc.h"
 #include "../log.h"
 #include "../target.h"
+#include "../util.h"
 #include "../vector.h"
 
 enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
@@ -523,9 +523,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
-  op->write_info = (struct ir_op_write_info){
-    .num_reg_writes = 0
-  };
+  op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
   op->metadata = NULL;
   op->comment = NULL;
 }
@@ -538,7 +536,8 @@ static void remove_pred(struct ir_basicblock *basicblock,
     if (basicblock->preds[i] == pred) {
       if (i + 1 < basicblock->num_preds) {
         memmove(&basicblock->preds[i], &basicblock->preds[i + 1],
-                (basicblock->num_preds - i - 1) * sizeof(struct ir_basicblock *));
+                (basicblock->num_preds - i - 1) *
+                    sizeof(struct ir_basicblock *));
       }
 
       basicblock->num_preds--;
@@ -1008,10 +1007,12 @@ insert_after_ir_basicblock(struct ir_func *irb,
   return basicblock;
 }
 
-void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
+void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
+                          struct ir_op *right) {
   // WARN: known buggy!
 
-  DEBUG_ASSERT(left->succ == right && right->pred == left, "can only swap in place ops that are adjacent");
+  DEBUG_ASSERT(left->succ == right && right->pred == left,
+               "can only swap in place ops that are adjacent");
 
   struct ir_op *tmp = arena_alloc(irb->arena, sizeof(*tmp));
   *tmp = *left;
@@ -1091,6 +1092,9 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
 
   irb->last = basicblock;
 
+  // this is the statement used by phis
+  alloc_ir_stmt(irb, basicblock);
+
   return basicblock;
 }
 
@@ -1140,9 +1144,7 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->comment = NULL;
   op->reg = NO_REG;
   op->lcl = NULL;
-  op->write_info = (struct ir_op_write_info){
-    .num_reg_writes = 0
-  };
+  op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
 
   if (stmt->last) {
     stmt->last->succ = op;
@@ -1184,14 +1186,14 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
 }
 
 struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
-                                    struct ir_op *consumer, struct ir_reg reg) {
-  struct ir_op *mov = insert_before_ir_op(irb, consumer, IR_OP_TY_MOV, (*op)->var_ty);
+                                         struct ir_op *consumer,
+                                         struct ir_reg reg) {
+  struct ir_op *mov =
+      insert_before_ir_op(irb, consumer, IR_OP_TY_MOV, (*op)->var_ty);
 
   mov->flags |= IR_OP_FLAG_FIXED_REG;
   mov->reg = reg;
-  mov->mov = (struct ir_op_mov){
-    .value = *op
-  };
+  mov->mov = (struct ir_op_mov){.value = *op};
 
   *op = mov;
 
@@ -1199,8 +1201,10 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
 }
 
 struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
-                                    struct ir_op *producer, struct ir_reg reg) {
-  struct ir_op *mov = insert_before_ir_op(irb, producer, producer->ty, producer->var_ty);
+                                           struct ir_op *producer,
+                                           struct ir_reg reg) {
+  struct ir_op *mov =
+      insert_before_ir_op(irb, producer, producer->ty, producer->var_ty);
 
   switch (producer->ty) {
   case IR_OP_TY_CNST:
@@ -1226,9 +1230,7 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   mov->reg = reg;
 
   producer->ty = IR_OP_TY_MOV;
-  producer->mov = (struct ir_op_mov){
-    .value = mov
-  };
+  producer->mov = (struct ir_op_mov){.value = mov};
 
   return producer;
 }
@@ -1762,8 +1764,24 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
   if (op->ty != IR_OP_TY_UNDF && !(op->flags & IR_OP_FLAG_SPILLED)) {
     op->flags |= IR_OP_FLAG_SPILLED;
 
-    struct ir_op *store =
-        insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    struct ir_op *store;
+    if (op->ty == IR_OP_TY_PHI) {
+      // FIXME: phis should be in their own statement!
+
+      struct ir_stmt *succ = op->stmt->succ;
+      DEBUG_ASSERT(!succ || !succ->first || succ->first->ty != IR_OP_TY_PHI, "expected all phi to be in same stmt");
+
+      if (succ->first) {
+        store = insert_before_ir_op(irb, succ->first, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      } else {
+        store = alloc_ir_op(irb, succ);
+        store->ty = IR_OP_TY_STORE;
+        store->var_ty = IR_VAR_TY_NONE;
+      }
+    } else {
+      store = insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    }
+
     store->store = (struct ir_op_store){
         .ty = IR_OP_STORE_TY_LCL, .lcl = op->lcl, .value = op};
 
