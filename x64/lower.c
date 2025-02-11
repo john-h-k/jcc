@@ -500,8 +500,6 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SDIV:
               case IR_OP_BINARY_OP_TY_UDIV:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
-                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
 
                 op->write_info = (struct ir_op_write_info){
                   .num_reg_writes = 1,
@@ -510,6 +508,9 @@ void x64_lower(struct ir_unit *unit) {
                     .idx = IR_REG_IDX_DX
                   },
                 };
+
+                alloc_fixed_reg_dest_ir_op(func, &op->binary_op.lhs, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
+                alloc_fixed_reg_source_ir_op(func, op, (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX });
                 
                 break;
               case IR_OP_BINARY_OP_TY_SQUOT:

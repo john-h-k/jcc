@@ -240,9 +240,10 @@ static int compare_interval_id(const void *a, const void *b) {
 }
 
 static void force_spill_register(struct ir_func *irb, struct register_alloc_state *state, struct bitset *reg_pool, struct ir_reg reg) {
-  if (bitset_get(reg_pool, reg.idx)) {
-    return;
-  }
+  // for some reason this check leads to regs not being spilled
+  // if (!bitset_get(reg_pool, reg.idx)) {
+  //   return;
+  // }
 
   bitset_set(reg_pool, reg.idx, true);
 
@@ -250,6 +251,7 @@ static void force_spill_register(struct ir_func *irb, struct register_alloc_stat
 
   for (size_t j = 0; j < state->num_active; j++) {
     struct ir_op *op = state->interval_data.intervals[state->active[j]].op;
+
     if (op->reg.ty == reg.ty && op->reg.idx == reg.idx) {
       spill_op(irb, op);
       op->flags |= IR_OP_FLAG_SPILLED;

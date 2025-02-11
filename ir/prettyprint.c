@@ -647,6 +647,10 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   if (op_produces_value(op)) {
     fprintf(fm->file, " | ");
 
+    if (op->flags & IR_OP_FLAG_FIXED_REG) {
+      fprintf(fm->file, "    (FIXED) ");
+    }
+
     switch (op->reg.ty) {
     case IR_REG_TY_NONE:
       fprintf(fm->file, "    (UNASSIGNED)");
