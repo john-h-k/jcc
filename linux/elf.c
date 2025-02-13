@@ -68,7 +68,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
       switch (reloc.ty) {
       case RELOCATION_TY_POINTER:
-      case RELOCATION_TY_SINGLE:
+      case RELOCATION_TY_CALL:
         *num_relocs += 1;
         break;
       case RELOCATION_TY_LOCAL_PAIR:
@@ -99,7 +99,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
-    case RELOCATION_TY_SINGLE: {
+    case RELOCATION_TY_CALL: {
       Elf64_Rela rela;
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
