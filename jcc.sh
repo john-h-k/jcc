@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 build() {
+    mode="${1:-Debug}"
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .)
+    if ! (cmake -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .)
     then
         echo "Build failed"
         exit -1
@@ -35,7 +36,7 @@ test() {
 }
 
 ci-test() {
-    build
+    build Release
     ./tests/ci-run.sh
     exit $?
 }
