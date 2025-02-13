@@ -730,7 +730,8 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_SINGLE
                                                    : RELOCATION_TY_UNDEF_PAIR,
         .symbol_index = glb->id,
-        .address = 0,
+        // offset into current instr
+        .address = 3,
         .size = 0};
   }
   }
@@ -1867,7 +1868,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         .ty = RELOCATION_TY_CALL,
         .symbol_index = op->call.target->addr.glb->id,
         .size = 2,
-        .address = 0,
+        .address = 1,
     };
   } else {
     instr->x64->ty = X64_INSTR_TY_CALL_REG;

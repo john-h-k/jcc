@@ -364,7 +364,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       pref_reg = interval->op->reg.idx;
 
-      printf("fixed slot %zu for op %zu\n", pref_reg, interval->op->id);
       // FIXME: logic here wrt active intervals definitely needs fixing      
       // also, this does not respect reg.ty but should
     } else if (interval->op->ty == IR_OP_TY_BINARY_OP) {
@@ -373,7 +372,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       struct ir_op *lhs = interval->op->binary_op.lhs;
 
       if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty && bitset_get(reg_pool, lhs->reg.idx)) {
-        printf("used rhs %zu for op %zu\n", pref_reg, interval->op->id);
         pref_reg = lhs->reg.idx;
       }
     }
@@ -393,8 +391,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         DEBUG_ASSERT(free_slot < bitset_length(reg_pool),
                      "reg pool unexpectedly empty!");
       }
-
-      printf("found slot %zu for op %zu\n", free_slot, interval->op->id);
 
       bitset_set(reg_pool, free_slot, false);
       bitset_set(all_used_reg_pool, free_slot, true);

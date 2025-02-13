@@ -9,6 +9,10 @@
 static void op_used_callback(struct ir_op **op, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
 
+  if (cb->op->ty == IR_OP_TY_PHI) {
+    return;
+  }
+
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
   size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST) ? cb->op->id + 1 : cb->op->id;

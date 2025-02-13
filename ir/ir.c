@@ -719,6 +719,11 @@ void prune_basicblocks(struct ir_func *irb) {
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
+  // skip phi stmt
+  if (stmt) {
+    stmt = stmt->succ;
+  }
+
   while (stmt) {
     // save succ before we detach
     struct ir_stmt *succ = stmt->succ;

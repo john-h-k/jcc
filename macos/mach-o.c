@@ -145,7 +145,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
       break;
     }
     case RELOCATION_TY_CALL: {
-      struct relocation_info info = {.r_address = addr + 1,
+      struct relocation_info info = {.r_address = addr,
                                      .r_length = reloc->size,
                                      .r_pcrel = 1,
                                      .r_symbolnum = index,
@@ -157,7 +157,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
       break;
     }
     case RELOCATION_TY_LOCAL_SINGLE: {
-      struct relocation_info info = {.r_address = addr + 3,
+      struct relocation_info info = {.r_address = addr,
                                      .r_length = reloc->size,
                                      .r_pcrel = 1,
                                      .r_symbolnum = index,
