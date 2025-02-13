@@ -870,8 +870,8 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     false_br->ty = IR_OP_TY_BR;
     false_br->var_ty = IR_VAR_TY_NONE;
 
+    struct ir_op *phi = alloc_ir_op(irb->func, end_bb->first);
     struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
-    struct ir_op *phi = alloc_ir_op(irb->func, end_stmt);
 
     phi->ty = IR_OP_TY_PHI;
     phi->var_ty = var_ty;
@@ -884,7 +884,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     phi->phi.values[1] = (struct ir_phi_entry){
         .basicblock = false_op->stmt->basicblock, .value = false_op};
 
-    *stmt = phi->stmt;
+    *stmt = end_stmt;
     return phi;
   }
 
@@ -1043,8 +1043,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_stmt *phi_stmt = alloc_ir_stmt(irb->func, end_bb);
-  struct ir_op *phi = alloc_ir_op(irb->func, phi_stmt);
+  struct ir_op *phi = alloc_ir_op(irb->func, end_bb->first);
   phi->ty = IR_OP_TY_PHI;
   phi->var_ty = var_ty;
   phi->phi = (struct ir_op_phi){
@@ -3010,7 +3009,9 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
   // needs at letd one initial basic block
   alloc_ir_basicblock(builder->func);
   struct ir_basicblock *basicblock = builder->func->first;
-  struct ir_stmt *param_stmt = alloc_ir_stmt(builder->func, basicblock);
+
+  // params live in the first stmt normally reserved for phis (as they have similar function)
+  struct ir_stmt *param_stmt = basicblock->first;
 
   // first statement is a bunch of magic MOV commands that explain to the rest
   // of the IR that these are params this is encoded as MOV NULL with the

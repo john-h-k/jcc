@@ -262,7 +262,7 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
             instr->id, generated_instrs);
 
         if (instr->reloc) {
-          instr->reloc->address = pos;
+          instr->reloc->address += pos;
           instr->reloc->size = 2;
           vector_push_back(relocs, instr->reloc);
         }

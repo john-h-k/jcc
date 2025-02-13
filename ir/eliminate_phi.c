@@ -181,6 +181,16 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
           .ty = IR_OP_LOAD_TY_LCL,
           .lcl = lcl,
       };
+    } else if (move.to.idx >= SIZE_MAX / 2) {
+      struct ir_lcl *lcl = move.to.metadata;
+
+      struct ir_op *store =
+          insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store->store = (struct ir_op_store){
+          .ty = IR_OP_STORE_TY_LCL,
+          .value = value,
+          .lcl = lcl,
+      };
     } else {
       struct ir_op *mov =
           insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
@@ -272,29 +282,35 @@ void eliminate_phi(struct ir_func *irb) {
           //   op->phi.values[i].value = load;
           if (op->reg.ty == IR_REG_TY_FP || op->reg.ty == IR_REG_TY_INTEGRAL) {
             size_t from_pos;
-            void *metadata = NULL;
+            size_t to_pos;
+            void *from_metadata = NULL;
+            void *to_metadata = NULL;
 
             // this should really be done by regalloc, but we need crit edges to be split first
             // and we get better regalloc if we don't split crit edges beforehand
 
             if (value->lcl) {
               from_pos = LCL_POS(value->lcl->id);
-              metadata = value->lcl;
+              from_metadata = value->lcl;
             } else {
               from_pos = REG_POS(unique_idx_for_ir_reg(value->reg));
             }
 
-            size_t to_pos = REG_POS(unique_idx_for_ir_reg(op->reg));
+            if (op->lcl) {
+              to_pos = LCL_POS(op->lcl->id);
+              to_metadata = op->lcl;
+            } else {
+              to_pos = REG_POS(unique_idx_for_ir_reg(op->reg));
+            }
 
             if (from_pos != to_pos) {
-              struct location from = {.idx = from_pos, .metadata = metadata };
-              struct location to = {.idx = to_pos};
+              struct location from = {.idx = from_pos, .metadata = from_metadata };
+              struct location to = {.idx = to_pos, .metadata = to_metadata };
 
               struct bb_reg key = {.reg = from_pos, .bb = mov_bb};
               hashtbl_insert(reg_to_val, &key, &value);
 
               if (var_ty_is_integral(&value->var_ty)) {
-                printf("bb %zu op %zu: move %zu -> %zu\n", basicblock->id, op->id, from.idx, to.idx);
                 vector_push_back(gp_move_from, &from);
                 vector_push_back(gp_move_to, &to);
               } else {
