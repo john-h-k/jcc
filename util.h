@@ -255,7 +255,7 @@ static inline void debug_print_stack_trace(void) {
   } while (0);
 
 #if NDEBUG
-#define DEBUG_ASSERT(...)
+#define DEBUG_ASSERT(b, ...) (void)(b)
 #else
 #define DEBUG_ASSERT(b, ...) util_debug_assert(b, # b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
