@@ -1389,7 +1389,7 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
   struct ir_var_ty member_ty;
   size_t offset = get_member_address_offset(
-      irb, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
+      irb, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty, member_is_bitfield,
       member_bitfield, NULL);
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
