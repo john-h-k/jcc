@@ -258,7 +258,6 @@ static inline void debug_print_stack_trace(void) {
 #define DEBUG_ASSERT(...)
 #else
 #define DEBUG_ASSERT(b, ...) util_debug_assert(b, # b, __func__, __FILE__, __LINE__, __VA_ARGS__)
-#endif
 
 PRINTF_ARGS(5) static void util_debug_assert(bool b, const char *cond, const char *func, const char *file, int line, const char *msg, ...) {
   if (!b) {
@@ -272,6 +271,8 @@ PRINTF_ARGS(5) static void util_debug_assert(bool b, const char *cond, const cha
     EXIT_FAIL(-1);
   }
 }
+
+#endif
 
 NORETURN static inline void unreachable(void) {
   fprintf(stderr, "`unreachable` hit, program exiting");
