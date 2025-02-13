@@ -1017,7 +1017,7 @@ static struct td_var_declaration type_declarator_inner(
     }
   }
 
-  DEBUG_ASSERT(found_ident, "decl without identifier?");
+  invariant_assert(found_ident, "decl without identifier?");
 
   if (inner_idx != -1) {
     struct ast_direct_declarator *direct_declarator =
