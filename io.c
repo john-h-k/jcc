@@ -113,8 +113,12 @@ char *read_file(const char *path) {
   rewind(f);
 
   char *content = nonnull_malloc((unsigned long)fsize + 1);
-  fread(content, (unsigned long)fsize, 1, f);
+  long read = fread(content, (unsigned long)fsize, 1, f);
   fclose(f);
+
+  if (read != fsize) {
+    return NULL;
+  }
 
   content[fsize] = '\0';
   return content;
