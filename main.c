@@ -1,13 +1,13 @@
 #include "aarch64.h"
-#include "x64.h"
 #include "compiler.h"
 #include "io.h"
 #include "log.h"
 #include "program.h"
 #include "rv32i.h"
+#include "target.h"
 #include "util.h"
 #include "vector.h"
-#include "target.h"
+#include "x64.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +23,8 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          const char ***sources,
                                          size_t *num_sources);
 
-static bool target_needs_linking(const struct compile_args *args, const struct target *target) {
+static bool target_needs_linking(const struct compile_args *args,
+                                 const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
     return false;
   }
@@ -32,22 +33,23 @@ static bool target_needs_linking(const struct compile_args *args, const struct t
 }
 
 static const struct target *get_target(const struct compile_args *args) {
-  switch (args->target_arch) {
-  case COMPILE_TARGET_ARCH_NATIVE:
+  switch (args->target) {
+  case COMPILE_TARGET_NATIVE:
     BUG("hit COMPILE_TARGET_ARCH_NATIVE in compiler! should have been chosen "
         "earlier");
-  case COMPILE_TARGET_ARCH_MACOS_X86_64:
+  case COMPILE_TARGET_MACOS_X86_64:
     return &X64_MACOS_TARGET;
-  // FIXME: linux is actually subtly different in register usage and calling conv
-  case COMPILE_TARGET_ARCH_LINUX_X86_64:
+  // FIXME: linux is actually subtly different in register usage and calling
+  // conv
+  case COMPILE_TARGET_LINUX_X86_64:
     return &X64_LINUX_TARGET;
-  case COMPILE_TARGET_ARCH_LINUX_ARM64:
+  case COMPILE_TARGET_LINUX_ARM64:
     return &AARCH64_LINUX_TARGET;
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+  case COMPILE_TARGET_MACOS_ARM64:
     return &AARCH64_MACOS_TARGET;
-  case COMPILE_TARGET_ARCH_RV32I:
+  case COMPILE_TARGET_RV32I:
     return &RV32I_TARGET;
-  case COMPILE_TARGET_ARCH_EEP:
+  case COMPILE_TARGET_EEP:
     BUG("redo eep");
     // return &EEP_TARGET;
   }
@@ -69,22 +71,58 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  if (args.target_arch == COMPILE_TARGET_ARCH_NATIVE) {
-  #if defined(__APPLE__) && defined(__aarch64__)
+  if (args.arch != COMPILE_ARCH_NATIVE) {
+    if (args.target != COMPILE_TARGET_NATIVE) {
+      err("cannot provide both `-arch` and `-T/--target` flags");
+      return -1;
+    }
+
+    switch (args.arch) {
+    case COMPILE_ARCH_NATIVE:
+      unreachable();
+    case COMPILE_ARCH_X86_64:
+#if defined(__APPLE__)
+      args.target = COMPILE_TARGET_MACOS_X86_64;
+#elif defined(__linux__)
+      args.target = COMPILE_TARGET_LINUX_X86_64;
+#else
+      err("Could not determine native platform");
+      return -1;
+#endif
+      break;
+    case COMPILE_ARCH_ARM64:
+#if defined(__APPLE__)
+      args.target = COMPILE_TARGET_MACOS_ARM64;
+#elif defined(__linux__)
+      args.target = COMPILE_TARGET_LINUX_ARM64;
+#else
+      err("Could not determine native platform");
+      return -1;
+#endif
+      break;
+    case COMPILE_ARCH_RV32I:
+      args.target = COMPILE_TARGET_RV32I;
+      break;
+    case COMPILE_ARCH_EEP:
+      args.target = COMPILE_TARGET_EEP;
+      break;
+    }
+  } else if (args.target == COMPILE_TARGET_NATIVE) {
+#if defined(__APPLE__) && defined(__aarch64__)
     info("Compiling for native platform - assuming macOS ARM64...\n");
-    args.target_arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
-  #elif defined(__APPLE__) && defined(__x86_64__)
+    args.target = COMPILE_TARGET_MACOS_ARM64;
+#elif defined(__APPLE__) && defined(__x86_64__)
     info("Compiling for native platform - assuming macOS x64...\n");
-    args.target_arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
-  #elif defined(__linux__) && defined(__aarch64__)
+    args.target = COMPILE_TARGET_MACOS_X86_64;
+#elif defined(__linux__) && defined(__aarch64__)
     info("Compiling for native platform - assuming Linux ARM64...\n");
-    args.target_arch = COMPILE_TARGET_ARCH_LINUX_ARM64;
-  #elif defined(__linux__) && defined(__x86_64__)
+    args.target = COMPILE_TARGET_LINUX_ARM64;
+#elif defined(__linux__) && defined(__x86_64__)
     TODO("linux x64 platform");
-  #else
+#else
     err("Could not determine native platform");
     return -1;
-  #endif
+#endif
   }
 
   const struct target *target = get_target(&args);
@@ -107,7 +145,7 @@ int main(int argc, char **argv) {
       // FIXME: hacky
       object_file = nonnull_malloc(strlen("stdout") + 1);
       strcpy(object_file, "stdout");
-      object_file[strlen("stdout")] = 0; 
+      object_file[strlen("stdout")] = 0;
     } else if (args.build_asm_file && !args.output) {
       object_file = path_replace_ext(sources[i], ".s");
     } else if (target_needs_linking(&args, target) || !args.output) {
@@ -126,8 +164,8 @@ int main(int argc, char **argv) {
     disable_log();
     struct compiler *compiler;
 
-    if (create_compiler(&program, target, object_file, sources[i], &args, &compiler) !=
-        COMPILER_CREATE_RESULT_SUCCESS) {
+    if (create_compiler(&program, target, object_file, sources[i], &args,
+                        &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       return -1;
     }
@@ -202,28 +240,42 @@ static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
   return false;
 }
 
-static bool parse_target_flag(const char *flag,
-                              enum compile_target_arch *arch) {
-  if (strcmp(flag, "x64") == 0) {
-    *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
-    return true;
-  } else if (strcmp(flag, "aarch64-apple-darwin") == 0) {
-    *arch = COMPILE_TARGET_ARCH_MACOS_ARM64;
+static bool parse_target_flag(const char *flag, enum compile_target *arch) {
+  if (strcmp(flag, "aarch64-apple-darwin") == 0) {
+    *arch = COMPILE_TARGET_MACOS_ARM64;
     return true;
   } else if (strcmp(flag, "x86_64-apple-darwin") == 0) {
-    *arch = COMPILE_TARGET_ARCH_MACOS_X86_64;
+    *arch = COMPILE_TARGET_MACOS_X86_64;
     return true;
   } else if (strcmp(flag, "aarch64-unknown-linux-gnu") == 0) {
-    *arch = COMPILE_TARGET_ARCH_LINUX_ARM64;
+    *arch = COMPILE_TARGET_LINUX_ARM64;
     return true;
   } else if (strcmp(flag, "x86_64-unknown-linux-gnu") == 0) {
-    *arch = COMPILE_TARGET_ARCH_LINUX_X86_64;
+    *arch = COMPILE_TARGET_LINUX_X86_64;
     return true;
   } else if (strcmp(flag, "eep-unknown-unknown") == 0) {
-    *arch = COMPILE_TARGET_ARCH_EEP;
+    *arch = COMPILE_TARGET_EEP;
     return true;
   } else if (strcmp(flag, "rv32i-unknown-unknown") == 0) {
-    *arch = COMPILE_TARGET_ARCH_RV32I;
+    *arch = COMPILE_TARGET_RV32I;
+    return true;
+  }
+
+  return false;
+}
+
+static bool parse_arch_flag(const char *flag, enum compile_arch *arch) {
+  if (strcmp(flag, "x86_64") == 0) {
+    *arch = COMPILE_ARCH_X86_64;
+    return true;
+  } else if (strcmp(flag, "arm64") == 0) {
+    *arch = COMPILE_ARCH_ARM64;
+    return true;
+  } else if (strcmp(flag, "rv32i") == 0) {
+    *arch = COMPILE_ARCH_RV32I;
+    return true;
+  } else if (strcmp(flag, "eep") == 0) {
+    *arch = COMPILE_ARCH_EEP;
     return true;
   }
 
@@ -282,7 +334,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
   memset(args, 0, sizeof(*args));
 
   // default to native arch
-  args->target_arch = COMPILE_TARGET_ARCH_NATIVE;
+  args->target = COMPILE_TARGET_NATIVE;
 
   // should always be true as argv[0] is program namr
   invariant_assert(argc > 0, "argc must be >0");
@@ -319,7 +371,17 @@ static enum parse_args_result parse_args(int argc, char **argv,
     const char *target = try_get_arg(arg, "-T");
     GET_ARGUMENT(target);
     if (target) {
-      if (!parse_target_flag(target, &args->target_arch)) {
+      if (!parse_target_flag(target, &args->target)) {
+        return PARSE_ARGS_RESULT_ERROR;
+      }
+
+      continue;
+    }
+
+    const char *arch = try_get_arg(arg, "-arch");
+    GET_ARGUMENT(arch);
+    if (arch) {
+      if (!parse_arch_flag(arch, &args->arch)) {
         return PARSE_ARGS_RESULT_ERROR;
       }
 
