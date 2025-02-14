@@ -37,7 +37,7 @@ test() {
 
 ci-test() {
     build Release
-    ./tests/ci-run.sh
+    ./tests/ci-run.sh "$@"
     exit $?
 }
 
