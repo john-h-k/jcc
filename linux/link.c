@@ -15,7 +15,7 @@ enum link_result linux_link_objects(const struct link_args *args) {
 
     // using ld for elf linking (linux x86_64, adjust as needed)
     // ld -o output_binary your_object.o 
-    const char *template = "ld -m aarch64linux -dynamic-linker /lib/ld-linux-aarch64.so.1 -L/usr/bin/../lib/gcc/aarch64-linux-gnu/12 -L/lib/aarch64-linux-gnu -L/usr/lib/aarch64-linux-gnu -L/lib -L/usr/lib --no-as-needed /lib/aarch64-linux-gnu/crt1.o --no-as-needed /lib/aarch64-linux-gnu/crtn.o";  
+    const char *template = "ld -dynamic-linker /lib/ld-linux-aarch64.so.1 -L/usr/bin/../lib/gcc/aarch64-linux-gnu/12 -L/lib/aarch64-linux-gnu -L/usr/lib/aarch64-linux-gnu -L/lib -L/usr/lib --no-as-needed /lib/aarch64-linux-gnu/crt1.o --no-as-needed /lib/aarch64-linux-gnu/crtn.o";  
 
     size_t template_size = strlen(template);
     size_t total_size = template_size;

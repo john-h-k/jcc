@@ -8,6 +8,7 @@ fi
 
 arch=$(for ((i=1; i<$#; i++)); do [[ ${!i} == "-arch" ]] && echo "${!((i+1))}" && break; done)
 arch=${arch:-$(arch)}
+arch=${arch/arm64/aarch64}
 
 tm="Tue Dec 10 10:04:33 2024"
 
