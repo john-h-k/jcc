@@ -2389,17 +2389,19 @@ static void codegen_prologue(struct codegen_state *state) {
   // we should really do a prepass to check what we need to save
   // but for now just save them all if a call occurs
   // FIXME: update: we sometimes do this even without making a call. just always do it
-  info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){
-                                  .ty = X64_REG_TY_R, .idx = REG_IDX_BX}));
-  info.saved_gp_registers |=
-      (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 12}));
-  info.saved_gp_registers |=
-      (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 13}));
-  info.saved_gp_registers |=
-      (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 14}));
-  info.saved_gp_registers |=
-      (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 15}));
-  info.stack_size += 8 * 5;
+  if (ir->flags & IR_FUNC_FLAG_MAKES_CALL) {
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){
+                                    .ty = X64_REG_TY_R, .idx = REG_IDX_BX}));
+    info.saved_gp_registers |=
+        (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 12}));
+    info.saved_gp_registers |=
+        (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 13}));
+    info.saved_gp_registers |=
+        (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 14}));
+    info.saved_gp_registers |=
+        (1 << get_ir_reg_idx((struct x64_reg){.ty = X64_REG_TY_R, .idx = 15}));
+    info.stack_size += 8 * 5;
+  }
 
   struct bitset_iter fp_iter =
       bitset_iter(ir->reg_usage.fp_registers_used,

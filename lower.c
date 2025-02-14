@@ -61,6 +61,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   args[1] = value_cnst;
   args[2] = length_cnst;
 
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
   op->ty = IR_OP_TY_CALL;
   op->var_ty = *memset->var_ty.func.ret_ty;
   op->call = (struct ir_op_call){
