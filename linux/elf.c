@@ -69,6 +69,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
       switch (reloc.ty) {
       case RELOCATION_TY_POINTER:
       case RELOCATION_TY_CALL:
+      case RELOCATION_TY_LOCAL_SINGLE:
         *num_relocs += 1;
         break;
       case RELOCATION_TY_LOCAL_PAIR:
@@ -81,7 +82,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
   return info;
 }
 
-static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
+static void write_relocations_elf(FILE *file, const struct build_object_args *args, size_t *sym_id_to_idx,
                                   struct vector *relocs, enum compile_target target) {
   size_t n = vector_length(relocs);
   for (size_t i = 0; i < n; i++) {
@@ -100,14 +101,37 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       break;
     }
     case RELOCATION_TY_CALL: {
+      const struct symbol *symbol = &args->entries[r->symbol_index].symbol;
+
       Elf64_Rela rela;
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
-      rela.r_addend = r->offset;
-      uint32_t type = (target == COMPILE_TARGET_LINUX_X86_64)
-                          ? R_X86_64_PC32
-                          : R_AARCH64_CALL26;
+      // for some reason x64 needs a -4 addend on call relocs
+      rela.r_addend = (target == COMPILE_TARGET_LINUX_X86_64)
+                          ? -4
+                          : 0;
+
+      uint32_t type;
+      if (symbol->visibility == SYMBOL_VISIBILITY_UNDEF) {       
+        type = (target == COMPILE_TARGET_LINUX_X86_64)
+                            ? R_X86_64_PLT32
+                            : R_AARCH64_CALL26;
+      } else {
+        type = (target == COMPILE_TARGET_LINUX_X86_64)
+                            ? R_X86_64_PC32
+                            : R_AARCH64_CALL26;
+      }
+
       rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
+      fwrite(&rela, sizeof(rela), 1, file);
+      break;
+    }
+    case RELOCATION_TY_LOCAL_SINGLE: {
+      Elf64_Rela rela;
+      memset(&rela, 0, sizeof(rela));
+      rela.r_offset = r->address;
+      rela.r_addend = r->offset - 4;
+      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_PC32);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
@@ -364,13 +388,13 @@ static void write_elf_object(const struct build_object_args *args) {
 
   /* relocations */
   fseek(file, rela_text_off, SEEK_SET);
-  write_relocations_elf(file, sym_id_to_idx, rinfo.text_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, rinfo.text_relocs,
                         args->compile_args->target);
   fseek(file, rela_const_off, SEEK_SET);
-  write_relocations_elf(file, sym_id_to_idx, rinfo.const_data_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, rinfo.const_data_relocs,
                         args->compile_args->target);
   fseek(file, rela_data_off, SEEK_SET);
-  write_relocations_elf(file, sym_id_to_idx, rinfo.data_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, rinfo.data_relocs,
                         args->compile_args->target);
 
   /* string table */
