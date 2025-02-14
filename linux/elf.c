@@ -82,7 +82,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 }
 
 static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
-                                  struct vector *relocs, int target_arch) {
+                                  struct vector *relocs, enum compile_target target) {
   size_t n = vector_length(relocs);
   for (size_t i = 0; i < n; i++) {
     const struct relocation *r = vector_get(relocs, i);
@@ -92,7 +92,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
       rela.r_addend = r->offset;
-      uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
+      uint32_t type = (target == COMPILE_TARGET_LINUX_X86_64)
                           ? R_X86_64_64
                           : R_AARCH64_ABS64;
       rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
@@ -104,7 +104,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
       rela.r_addend = r->offset;
-      uint32_t type = (target_arch == COMPILE_TARGET_ARCH_LINUX_X86_64)
+      uint32_t type = (target == COMPILE_TARGET_LINUX_X86_64)
                           ? R_X86_64_PC32
                           : R_AARCH64_CALL26;
       rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
@@ -112,7 +112,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       break;
     }
     case RELOCATION_TY_LOCAL_PAIR: {
-      if (target_arch == COMPILE_TARGET_ARCH_LINUX_ARM64) {
+      if (target == COMPILE_TARGET_LINUX_ARM64) {
         Elf64_Rela rela1, rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
@@ -132,7 +132,7 @@ static void write_relocations_elf(FILE *file, size_t *sym_id_to_idx,
       break;
     }
     case RELOCATION_TY_UNDEF_PAIR: {
-      if (target_arch == COMPILE_TARGET_ARCH_LINUX_ARM64) {
+      if (target == COMPILE_TARGET_LINUX_ARM64) {
         Elf64_Rela rela1, rela2;
         memset(&rela1, 0, sizeof(rela1));
         memset(&rela2, 0, sizeof(rela2));
@@ -237,11 +237,11 @@ static void write_elf_object(const struct build_object_args *args) {
   ehdr.e_ident[EI_VERSION] = EV_CURRENT;
   ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
   ehdr.e_type = ET_REL;
-  switch (args->compile_args->target_arch) {
-  case COMPILE_TARGET_ARCH_LINUX_ARM64:
+  switch (args->compile_args->target) {
+  case COMPILE_TARGET_LINUX_ARM64:
     ehdr.e_machine = EM_AARCH64;
     break;
-  case COMPILE_TARGET_ARCH_LINUX_X86_64:
+  case COMPILE_TARGET_LINUX_X86_64:
     ehdr.e_machine = EM_X86_64;
     break;
   default:
@@ -365,13 +365,13 @@ static void write_elf_object(const struct build_object_args *args) {
   /* relocations */
   fseek(file, rela_text_off, SEEK_SET);
   write_relocations_elf(file, sym_id_to_idx, rinfo.text_relocs,
-                        args->compile_args->target_arch);
+                        args->compile_args->target);
   fseek(file, rela_const_off, SEEK_SET);
   write_relocations_elf(file, sym_id_to_idx, rinfo.const_data_relocs,
-                        args->compile_args->target_arch);
+                        args->compile_args->target);
   fseek(file, rela_data_off, SEEK_SET);
   write_relocations_elf(file, sym_id_to_idx, rinfo.data_relocs,
-                        args->compile_args->target_arch);
+                        args->compile_args->target);
 
   /* string table */
   fseek(file, strtab_off, SEEK_SET);

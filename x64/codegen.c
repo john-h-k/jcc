@@ -296,7 +296,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   }
 }
 
-static struct x64_reg get_non_arg_reg(struct x64_reg reg) {
+static size_t get_ir_reg_idx(struct x64_reg reg) {
   static size_t reg_map[16] = {
       [REG_IDX_DI] = 0, [REG_IDX_SI] = 1, [REG_IDX_DX] = 2,  [REG_IDX_CX] = 3,
       [8] = 4,          [9] = 5,          [REG_IDX_AX] = 6,  [10] = 7,
@@ -313,12 +313,29 @@ static struct x64_reg get_non_arg_reg(struct x64_reg reg) {
   case X64_REG_TY_L: {
     DEBUG_ASSERT(reg.idx < ARR_LENGTH(reg_map), "invalid reg");
     size_t idx = reg_map[reg.idx];
+    return idx;
+  }
+  case X64_REG_TY_XMM:
+    return reg.idx;
+  }
+}
+
+static struct x64_reg get_non_arg_reg(struct x64_reg reg) {
+  size_t idx = get_ir_reg_idx(reg);
+
+  switch (reg.ty) {
+  case X64_REG_TY_NONE:
+    BUG("does not make sense");
+  case X64_REG_TY_R:
+  case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L: {
     DEBUG_ASSERT(idx < 7, "was not arg reg");
     return (struct x64_reg){ .ty = reg.ty, .idx = translate_reg_idx(idx + 7, IR_REG_TY_INTEGRAL) };
   }
   case X64_REG_TY_XMM:
     DEBUG_ASSERT(reg.idx < 8, "was not arg reg");
-    return (struct x64_reg){ .ty = reg.ty, .idx = reg.idx + 8 };
+    return (struct x64_reg){ .ty = reg.ty, .idx = idx + 8 };
   }
 }
 // // this is useful for save/restores where you don't know what is live in that
@@ -2364,6 +2381,19 @@ static void codegen_prologue(struct codegen_state *state) {
   while (bitset_iter_next(&gp_iter, &i)) {
     info.saved_gp_registers |= (1 << i);
     info.stack_size += 8;
+  }
+
+  // if we do a call, we may clobber these
+  // and we can't easily save them after doing so
+  // we should really do a prepass to check what we need to save
+  // but for now just save them all if a call occurs
+  if (ir->flags & IR_FUNC_FLAG_MAKES_CALL) {
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){ .ty = X64_REG_TY_R, .idx = REG_IDX_BX }));
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){ .ty = X64_REG_TY_R, .idx = 12 }));
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){ .ty = X64_REG_TY_R, .idx = 13 }));
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){ .ty = X64_REG_TY_R, .idx = 14 }));
+    info.saved_gp_registers |= (1 << get_ir_reg_idx((struct x64_reg){ .ty = X64_REG_TY_R, .idx = 15 }));
+    info.stack_size += 8 * 5;
   }
 
   struct bitset_iter fp_iter =
