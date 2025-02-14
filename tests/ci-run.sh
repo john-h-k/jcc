@@ -6,6 +6,17 @@ if [ $? != 0 ]; then
   exit -1
 fi
 
+arch=""
+for ((i=1; i<$#; i++)); do
+  if [[ ${!i} == "-arch" ]]; then
+    next_index=$((i + 1))
+    arch=${!next_index}
+    break
+  fi
+done
+arch=${arch:-$(arch)}
+arch=${arch/arm64/aarch64}
+
 tm="Tue Dec 10 10:04:33 2024"
 
 for file in $(find $(dirname $0) -name '*.c' -print | sort); do
@@ -20,6 +31,13 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       exit -1
     fi
   else
+    target_arch=$(grep -i "arch" $file | head -1 | sed -n 's/^\/\/ arch: //p')
+    if [[ -n $target_arch && $target_arch != $arch ]]; then
+      echo "Skipping test (arch=$arch, test_arch=$target_arch)"
+      continue
+    fi
+
+
     expected=$(grep -i "Expected value:" $file | head -1 | grep -Eo '[0-9]+')
     stdin=$(grep -i "stdin" $file | head -1 | sed -n 's/^\/\/ stdin: //p')
     stdout=$(grep -i "stdout" $file | head -1 | sed -n 's/^\/\/ stdout: //p')
