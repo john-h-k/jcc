@@ -8,6 +8,8 @@
 
 #include <stdio.h>
 
+static void codegen_fprintf(FILE *file, const char *format, ...);
+
 #define MOV_ALIAS(dest_reg, source_reg)                                        \
   (struct x64_instr) {                                                         \
     .ty = X64_INSTR_TY_MOV_REG, .mov_reg = {                                   \
@@ -287,12 +289,38 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_FLAGS:
     BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
+    DEBUG_ASSERT(idx < ARR_LENGTH(reg_map), "invalid reg");
     return reg_map[idx];
   case IR_REG_TY_FP:
     return idx;
   }
 }
 
+static struct x64_reg get_non_arg_reg(struct x64_reg reg) {
+  static size_t reg_map[16] = {
+      [REG_IDX_DI] = 0, [REG_IDX_SI] = 1, [REG_IDX_DX] = 2,  [REG_IDX_CX] = 3,
+      [8] = 4,          [9] = 5,          [REG_IDX_AX] = 6,  [10] = 7,
+      [11] = 8,         [REG_IDX_BX] = 9, [12] = 10,         [13] = 11,
+      [14] = 12,        [15] = 13,        [REG_IDX_BP] = 14, [REG_IDX_SP] = 15,
+  };
+
+  switch (reg.ty) {
+  case X64_REG_TY_NONE:
+    BUG("does not make sense");
+  case X64_REG_TY_R:
+  case X64_REG_TY_E:
+  case X64_REG_TY_W:
+  case X64_REG_TY_L: {
+    DEBUG_ASSERT(reg.idx < ARR_LENGTH(reg_map), "invalid reg");
+    size_t idx = reg_map[reg.idx];
+    DEBUG_ASSERT(idx < 7, "was not arg reg");
+    return (struct x64_reg){ .ty = reg.ty, .idx = translate_reg_idx(idx + 7, IR_REG_TY_INTEGRAL) };
+  }
+  case X64_REG_TY_XMM:
+    DEBUG_ASSERT(reg.idx < 8, "was not arg reg");
+    return (struct x64_reg){ .ty = reg.ty, .idx = reg.idx + 8 };
+  }
+}
 // // this is useful for save/restores where you don't know what is live in that
 // // reg
 // struct x64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
@@ -1564,7 +1592,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   bool variadics_on_stack;
   switch (state->target->target_id) {
   case TARGET_ID_AARCH64_MACOS:
-    variadics_on_stack = true;
+    variadics_on_stack = false;
     break;
   default:
     variadics_on_stack = false;
@@ -1606,9 +1634,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       enum x64_reg_attr_flags flags = reg_attr_flags(source);
       if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
         // bad, might be overwritten during param preparation
-        // preemptively add 9 so it is not an arg register
+        // preemptively add 6 so it is not an arg register
         // TODO: is this safe, and can it be improved?
-        struct x64_reg dest = {.ty = source.ty, .idx = source.idx + 8};
+        struct x64_reg dest = get_non_arg_reg(source);
         struct instr *mov = alloc_instr(state->func);
 
         if (x64_reg_ty_is_gp(dest.ty)) {
@@ -1633,7 +1661,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
       enum x64_reg_attr_flags flags = reg_attr_flags(source);
       if (flags & X64_REG_ATTR_FLAG_ARG_REG) {
-        source.idx += 8;
+        source = get_non_arg_reg(source);
       }
 
       // hmm, we pretend all memory locations are different but they are not
@@ -1708,6 +1736,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
               .idx = translate_reg_idx(ngrn, IR_REG_TY_INTEGRAL)};
           vector_push_back(gp_move_from, &from);
           vector_push_back(gp_move_to, &to);
+          codegen_fprintf(stderr, "moving from %reg -> %reg\n", source,
+                          (struct x64_reg){.ty = X64_REG_TY_R, to.idx});
           ngrn++;
           continue;
         }
@@ -1918,20 +1948,20 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
         struct instr *mov = alloc_instr(state->func);
         switch (sz) {
-          case 8:
-            mov->x64->ty = X64_INSTR_TY_MOV_STORE_SD_IMM;
-            break;
-          case 4:
-            mov->x64->ty = X64_INSTR_TY_MOV_STORE_SS_IMM;
-            break;
-          default:
-            BUG("hfa had unsupported remainder %zu (expected 4/8)", sz);
+        case 8:
+          mov->x64->ty = X64_INSTR_TY_MOV_STORE_SD_IMM;
+          break;
+        case 4:
+          mov->x64->ty = X64_INSTR_TY_MOV_STORE_SS_IMM;
+          break;
+        default:
+          BUG("hfa had unsupported remainder %zu (expected 4/8)", sz);
         }
 
-        mov->x64->mov_store_imm = (struct x64_mov_store_imm) {
-          .source = source,
-          .addr = STACK_PTR_REG,
-          .imm = offset + pos,
+        mov->x64->mov_store_imm = (struct x64_mov_store_imm){
+            .source = source,
+            .addr = STACK_PTR_REG,
+            .imm = offset + pos,
         };
 
         total_size -= sz;
@@ -2505,7 +2535,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
       //   *mov->x64 = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
       // }
     } else if (try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-        num_members <= 4) {
+               num_members <= 4) {
 
       size_t total_size = num_members * member_size;
 
@@ -2518,20 +2548,20 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
 
         struct instr *mov = alloc_instr(state->func);
         switch (sz) {
-          case 8:
-            mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SD_IMM;
-            break;
-          case 4:
-            mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SS_IMM;
-            break;
-          default:
-            BUG("hfa had unsupported remainder %zu (expected 4/8)", sz);
+        case 8:
+          mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SD_IMM;
+          break;
+        case 4:
+          mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SS_IMM;
+          break;
+        default:
+          BUG("hfa had unsupported remainder %zu (expected 4/8)", sz);
         }
 
-        mov->x64->mov_load_imm = (struct x64_mov_load_imm) {
-          .dest = dest,
-          .addr = STACK_PTR_REG,
-          .imm = pos,
+        mov->x64->mov_load_imm = (struct x64_mov_load_imm){
+            .dest = dest,
+            .addr = STACK_PTR_REG,
+            .imm = pos,
         };
 
         total_size -= sz;
@@ -3489,8 +3519,8 @@ static void debug_print_cmp_imm(FILE *file, const struct x64_cmp_imm *cmp_imm) {
 }
 
 void x64_debug_print_instr(FILE *file,
-                              UNUSED_ARG(const struct codegen_function *func),
-                              const struct instr *instr) {
+                           UNUSED_ARG(const struct codegen_function *func),
+                           const struct instr *instr) {
 
   switch (instr->x64->ty) {
   case X64_INSTR_TY_MOV_LOAD_SS_IMM:
