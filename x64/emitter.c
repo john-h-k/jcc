@@ -50,6 +50,12 @@ size_t x64_emit_bytesize(struct x64_emitter *emitter) {
 
 size_t x64_emitted_count(struct x64_emitter *emitter) { return emitter->count; }
 
+void x64_get_bytes(struct x64_emitter *emitter, size_t start, size_t count, char *buff) {
+  DEBUG_ASSERT(start < emitter->head && start + count <= emitter->head, "out of range");
+  memcpy(buff, &emitter->block[start], count);
+}
+
+
 void x64_emit_copy_to(struct x64_emitter *emitter, void *dest) {
   memcpy(dest, emitter->block, emitter->head * sizeof(*emitter->block));
 }

@@ -15,6 +15,8 @@ size_t x64_emitted_count(struct x64_emitter *emitter);
 size_t x64_emit_bytesize(struct x64_emitter *emitter);
 void x64_emit_copy_to(struct x64_emitter *emitter, void *dest);
 
+void x64_get_bytes(struct x64_emitter *emitter, size_t start, size_t count, char *buff);
+
 /* Nop */
 
 void x64_emit_nop(struct x64_emitter *emitter);
