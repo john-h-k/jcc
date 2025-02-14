@@ -6,14 +6,22 @@
 
 struct compiler;
 
-enum compile_target_arch {
-  COMPILE_TARGET_ARCH_NATIVE,
-  COMPILE_TARGET_ARCH_MACOS_ARM64,
-  COMPILE_TARGET_ARCH_MACOS_X86_64,
-  COMPILE_TARGET_ARCH_LINUX_ARM64,
-  COMPILE_TARGET_ARCH_LINUX_X86_64,
-  COMPILE_TARGET_ARCH_EEP,
-  COMPILE_TARGET_ARCH_RV32I
+enum compile_arch {
+  COMPILE_ARCH_NATIVE,
+  COMPILE_ARCH_X86_64,
+  COMPILE_ARCH_ARM64,
+  COMPILE_ARCH_RV32I,
+  COMPILE_ARCH_EEP,
+};
+
+enum compile_target {
+  COMPILE_TARGET_NATIVE,
+  COMPILE_TARGET_MACOS_ARM64,
+  COMPILE_TARGET_MACOS_X86_64,
+  COMPILE_TARGET_LINUX_ARM64,
+  COMPILE_TARGET_LINUX_X86_64,
+  COMPILE_TARGET_EEP,
+  COMPILE_TARGET_RV32I
 };
 
 enum compile_log_flags {
@@ -40,7 +48,8 @@ enum compile_c_standard {
 
 struct compile_args {
   enum compile_c_standard c_standard;
-  enum compile_target_arch target_arch;
+  enum compile_target target;
+  enum compile_arch arch;
   enum compile_log_flags log_flags;
 
   bool preproc_only;
