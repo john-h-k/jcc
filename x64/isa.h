@@ -332,18 +332,18 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM_IMM_SIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX_MEM((addr))                                              \
+  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                              \
                         ? MOV_MEM_IMM8_REX_SIB((opc), (reg), (addr), (imm))  \
                     : MOV_MEM_IMM8_SIB((opc), (reg), (addr), (imm)))          \
-      : (NEEDS_REX_MEM((reg))                                                      \
+      : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                                      \
                 ? MOV_MEM_IMM32_REX_SIB((opc), (reg), (addr), (imm))         \
             : MOV_MEM_IMM32_SIB((opc), (reg), (addr), (imm)))                 \
 
 #define MOV_MEM_IMM_NOSIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX_MEM((addr))                                             \
+  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                             \
                         ? MOV_MEM_IMM8_REX((opc), (reg), (addr), (imm))  \
                     : MOV_MEM_IMM8((opc), (reg), (addr), (imm)))          \
-      : (NEEDS_REX_MEM((reg))                                                      \
+      : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                                      \
                 ? MOV_MEM_IMM32_REX((opc), (reg), (addr), (imm))         \
             : MOV_MEM_IMM32((opc), (reg), (addr), (imm)))                 \
 
@@ -413,18 +413,18 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM16_IMM_SIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX_MEM((addr))                                             \
+  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                             \
                         ? MOV_MEM16_IMM8_REX_SIB((opc), (reg), (addr), (imm))  \
                     : MOV_MEM16_IMM8_SIB((opc), (reg), (addr), (imm)))          \
-      : (NEEDS_REX((reg))                                                      \
+      : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                                      \
                 ? MOV_MEM16_IMM32_REX_SIB((opc), (reg), (addr), (imm))         \
             : MOV_MEM16_IMM32_SIB((opc), (reg), (addr), (imm)))                 \
 
 #define MOV_MEM16_IMM_NOSIB(opc, reg, addr, imm)                                    \
-  (imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX_MEM((addr))                                          \
+  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                          \
                         ? MOV_MEM16_IMM8_REX((opc), (reg), (addr), (imm))  \
                     : MOV_MEM16_IMM8((opc), (reg), (addr), (imm)))          \
-      : (NEEDS_REX((reg))                                                      \
+      : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                                      \
                 ? MOV_MEM16_IMM32_REX((opc), (reg), (addr), (imm))         \
             : MOV_MEM16_IMM32((opc), (reg), (addr), (imm)))                 \
 
