@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  macos-test:
+  test:
     runs-on: ubuntu-24.04
 
     steps:

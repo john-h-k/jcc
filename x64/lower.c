@@ -279,6 +279,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
   args[1] = source_addr;
   args[2] = size;
 
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
   op->ty = IR_OP_TY_CALL;
   op->var_ty = *memmove->var_ty.func.ret_ty;
   op->call = (struct ir_op_call){
