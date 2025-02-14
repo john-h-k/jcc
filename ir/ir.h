@@ -781,6 +781,21 @@ enum ir_well_known_glb {
   IR_WELL_KNOWN_GLB_MEMSET,
 };
 
+enum ir_func_iter_flags {
+  IR_FUNC_ITER_FLAG_NONE = 0
+};
+
+struct ir_func_iter {
+  struct ir_func *func;
+  struct ir_basicblock *basicblock;
+  struct ir_stmt *stmt;
+  struct ir_op *op;
+  enum ir_func_iter_flags flags;
+};
+
+struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags flags);
+bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op);
+
 struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb);
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);

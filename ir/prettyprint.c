@@ -685,6 +685,29 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     }
   }
 
+  if (op->write_info.num_reg_writes) {
+    fprintf(fm->file, "        |    writes=");
+
+    for (size_t i = 0; i < op->write_info.num_reg_writes; i++) {
+      struct ir_reg *write = &op->write_info.writes[i];
+
+      switch (write->ty) {
+      case IR_REG_TY_INTEGRAL:
+        fprintf(fm->file, "R%zu", write->idx);
+        break;
+      case IR_REG_TY_FP:
+        fprintf(fm->file, "F%zu", write->idx);
+        break;
+      default:
+        BUG("doesn't make sense as reg write");
+      }
+
+      if (i + 1 != op->write_info.num_reg_writes) {
+        fprintf(fm->file, ",");
+      }
+    }
+  }
+
   fprintf(fm->file, "\n");
 }
 

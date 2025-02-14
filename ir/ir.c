@@ -1235,11 +1235,15 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
 
   mov->flags |= IR_OP_FLAG_FIXED_REG;
   mov->reg = reg;
+  mov->write_info = producer->write_info;
 
   producer->ty = IR_OP_TY_MOV;
   producer->mov = (struct ir_op_mov){.value = mov};
+  producer->write_info = (struct ir_op_write_info){
+    .num_reg_writes = 0
+  };
 
-  return producer;
+  return mov;
 }
 void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                           enum ir_var_primitive_ty ty,
@@ -1965,3 +1969,38 @@ struct move_set gen_move_order(struct arena_allocator *arena,
 
   return move_set;
 }
+
+struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags flags) {
+  return (struct ir_func_iter){
+    .func = func,
+    .flags = flags,
+    .basicblock = NULL,
+    .stmt = NULL,
+    .op = NULL,
+  };
+}
+
+bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
+  iter->op = iter->op->succ;
+
+  while (!iter->op) {
+    iter->stmt = iter->stmt->succ;
+
+    while (!iter->stmt) {
+      iter->basicblock = iter->basicblock->succ;
+
+      if (!iter->basicblock) {
+        *op = NULL;
+        return false;
+      }
+
+      iter->stmt = iter->basicblock->first;
+    }
+
+    iter->op = iter->stmt->first;
+  }
+
+  *op = iter->op;
+  return true;
+}
+
