@@ -23,7 +23,7 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
   }
 }
 
-static void ir_validate_op(UNUSED struct ir_func *func, struct ir_op *op) {
+static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.consumer = op};
   walk_op_uses(op, validate_op_order, &metadata);
 
@@ -95,6 +95,7 @@ static void ir_validate_op(UNUSED struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_RET:
     break;
   case IR_OP_TY_CALL:
+    invariant_assert(func->flags & IR_FUNC_FLAG_MAKES_CALL, "CALL op present but IR_FUNC_FLAG_MAKES_CALL not set");
     break;
   case IR_OP_TY_CUSTOM:
     break;
