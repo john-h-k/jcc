@@ -31,14 +31,14 @@ static void write_mach_header(FILE *file, const struct compile_args *args) {
 
   header.magic = MH_MAGIC_64;
 
-  switch (args->target_arch) {
-  case COMPILE_TARGET_ARCH_NATIVE:
+  switch (args->target) {
+  case COMPILE_TARGET_NATIVE:
     BUG("NATIVE arch reached linker, should have been selected earlier");
-  case COMPILE_TARGET_ARCH_MACOS_ARM64:
+  case COMPILE_TARGET_MACOS_ARM64:
     header.cputype = CPU_TYPE_ARM64;
     header.cpusubtype = CPU_SUBTYPE_ARM64_ALL;
     break;
-  case COMPILE_TARGET_ARCH_MACOS_X86_64:
+  case COMPILE_TARGET_MACOS_X86_64:
     header.cputype = CPU_TYPE_X86_64;
     header.cpusubtype = CPU_SUBTYPE_X86_64_ALL;
     break;

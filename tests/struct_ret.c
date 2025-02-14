@@ -32,7 +32,6 @@ struct small mk_small(long a, long b) {
 //   return b;
 // }
 
-int printf(const char *, ...);
 int main() {
   struct vec3 v = mk_vec3(1, 2, 3);
 
@@ -43,7 +42,7 @@ int main() {
   struct small s = mk_small(5, 7);
 
   if (s.buff[0] != 5 || s.buff[1] != 7) {
-    return 1;
+    return 2;
   }
 
   // struct big b = mk_big();

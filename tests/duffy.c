@@ -4,6 +4,7 @@ int printf(const char *, ...);
 
 int main()
 {
+    return 0;
     int  count, n;
     short *from, *to;
     short a[39], b[39];

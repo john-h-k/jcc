@@ -3,8 +3,8 @@
 
 #include "../codegen.h"
 
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 
 #if defined(STACK_PTR_REG) || defined(FRAME_PTR_REG) || defined(RET_PTR_REG)
 #error                                                                         \
@@ -156,7 +156,8 @@ enum x64_reg_ty {
 
 enum x64_reg_attr_flags {
   X64_REG_ATTR_FLAG_NONE = 0,
-  X64_REG_ATTR_FLAG_VOLATILE = 1, // v8-15 are upper half only volatile, we don't support this yet
+  X64_REG_ATTR_FLAG_VOLATILE =
+      1, // v8-15 are upper half only volatile, we don't support this yet
   X64_REG_ATTR_FLAG_ARG_REG = 2,
   X64_REG_ATTR_FLAG_RET_REG = 4,
   X64_REG_ATTR_FLAG_RESERVED = 8,
@@ -312,7 +313,9 @@ struct x64_instr {
 
   union {
     union {
-      struct x64_alu_reg alu_reg, add, sub, xor, or, and, andps, andpd, xorps, xorpd, orps, orpd, addss, addsd, subss, subsd, mulss, mulsd, divss, divsd;
+      struct x64_alu_reg alu_reg, add, sub, xor, or, and, andps, andpd, xorps,
+          xorpd, orps, orpd, addss, addsd, subss, subsd, mulss, mulsd, divss,
+          divsd;
     };
 
     union {
@@ -324,7 +327,9 @@ struct x64_instr {
     };
 
     union {
-      struct x64_2_reg_unary two_reg_unary, sqrtss, sqrtsd, movaps, movapd, cvt, cvtsi2ss, cvtsi2sd, cvttss2si, cvttsd2si, cvtss2si, cvtsd2si, cvtsd2ss, cvtss2sd;
+      struct x64_2_reg_unary two_reg_unary, sqrtss, sqrtsd, movaps, movapd, cvt,
+          cvtsi2ss, cvtsi2sd, cvttss2si, cvttsd2si, cvtss2si, cvtsd2si,
+          cvtsd2ss, cvtss2sd;
     };
 
     union {
@@ -368,11 +373,13 @@ struct x64_instr {
     };
 
     union {
-      struct x64_mov_load_imm mov_load_imm, movzx_load_half_imm, movzx_load_byte_imm, mov_load_ss_imm, mov_load_sd_imm;
+      struct x64_mov_load_imm mov_load_imm, movzx_load_half_imm,
+          movzx_load_byte_imm, mov_load_ss_imm, mov_load_sd_imm;
     };
 
     union {
-      struct x64_mov_store_imm mov_store_imm, mov_store_half_imm, mov_store_byte_imm, mov_store_ss_imm, mov_store_sd_imm;
+      struct x64_mov_store_imm mov_store_imm, mov_store_half_imm,
+          mov_store_byte_imm, mov_store_ss_imm, mov_store_sd_imm;
     };
 
     union {
@@ -416,6 +423,9 @@ void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 
 struct codegen_unit *x64_codegen(struct ir_unit *ir);
+
+void x64_debug_print_instr(FILE *file, const struct codegen_function *func,
+                           const struct instr *instr);
 void x64_debug_print_codegen(FILE *file, struct codegen_unit *unit);
 
 #endif

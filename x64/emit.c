@@ -255,6 +255,25 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
 
         size_t generated_instrs = x64_emitted_count(state.emitter) - emitted;
 
+        size_t new_pos = x64_emit_bytesize(state.emitter);
+        size_t len = new_pos - pos;
+        invariant_assert(len <= 16, "instr too big");
+        char buff[16];
+        x64_get_bytes(state.emitter, pos, len, buff);
+
+        fprintf(stderr, "Emitted instruction: ");
+        x64_debug_print_instr(stderr, func, instr);
+        fprintf(stderr, "\nValue: ");
+
+        fprintf(stderr, "{ ");
+        for (size_t j = 0; j < len; j++) {
+          fprintf(stderr, "%02hhX", buff[j]);
+          if (j + 1 != len) {
+            fprintf(stderr, ", ");
+          }
+        }
+        fprintf(stderr, " }\n");
+
         DEBUG_ASSERT(
             generated_instrs == 1,
             "expected instr %zu to generate exactly 1 instruction but it "

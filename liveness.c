@@ -106,9 +106,13 @@ struct interval_data construct_intervals(struct ir_func *irb) {
                 &data.intervals[dependent->id];
 
             // force dependent to live until end of the bb
-            // dependent_interval->end =
-            //     op->phi.values[i].basicblock->last->last->id;
-            dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
+
+            // FIXME: awkward scenario. Some tests pass using the first line only, some only with the second line
+            // it also varies across arm64 vs x64...
+
+            dependent_interval->end =
+                op->phi.values[i].basicblock->last->last->id;
+            // dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
           }
         }
 
