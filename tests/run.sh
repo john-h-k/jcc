@@ -6,7 +6,14 @@ if [ $? != 0 ]; then
   exit -1
 fi
 
-arch=$(for ((i=1; i<$#; i++)); do [[ ${!i} == "-arch" ]] && echo "${!((i+1))}" && break; done)
+arch=""
+for ((i=1; i<$#; i++)); do
+  if [[ ${!i} == "-arch" ]]; then
+    next_index=$((i + 1))
+    arch=${!next_index}
+    break
+  fi
+done
 arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
