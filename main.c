@@ -118,7 +118,8 @@ int main(int argc, char **argv) {
     info("Compiling for native platform - assuming Linux ARM64...\n");
     args.target = COMPILE_TARGET_LINUX_ARM64;
 #elif defined(__linux__) && defined(__x86_64__)
-    TODO("linux x64 platform");
+    info("Compiling for native platform - assuming Linux x64...\n");
+    args.target = COMPILE_TARGET_LINUX_X86_64;
 #else
     err("Could not determine native platform");
     return -1;

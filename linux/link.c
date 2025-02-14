@@ -17,17 +17,17 @@ enum link_result linux_link_objects(const struct link_args *args) {
   switch (args->args->target) {
   case COMPILE_TARGET_LINUX_ARM64:
     template = "ld -dynamic-linker /lib/ld-linux-aarch64.so.1 "
-               "-L/usr/bin/../lib/gcc/aarch64-linux-gnu/12 "
+               "-L/usr/lib/gcc/aarch64-linux-gnu/12 "
                "-L/lib/aarch64-linux-gnu -L/usr/lib/aarch64-linux-gnu -L/lib "
                "-L/usr/lib --no-as-needed /lib/aarch64-linux-gnu/crt1.o "
                "--no-as-needed /lib/aarch64-linux-gnu/crtn.o";
     break;
   case COMPILE_TARGET_LINUX_X86_64:
-    template = "ld -dynamic-linker /lib64/ld-linux-x86-64.so.1 "
-               "-L/usr/bin/../lib64/gcc/x86-64-linux-gnu/12 "
-               "-L/lib/x86-64-linux-gnu -L/usr/lib64/x86-64-linux-gnu -L/lib "
-               "-L/usr/lib --no-as-needed /lib64/x86-64-linux-gnu/crt1.o "
-               "--no-as-needed /lib64/x86-64-linux-gnu/crtn.o";
+    template = "ld -dynamic-linker /lib64/ld-linux-x86-64.so.2 "
+               "-L/usr/lib/gcc/x86_64-linux-gnu/12 "
+               "-L/lib64/x86-64-linux-gnu -L/usr/lib/x86_64-linux-gnu -L/lib "
+               "-L/usr/lib --no-as-needed /usr/lib/x86_64-linux-gnu/crt1.o "
+               "--no-as-needed /usr/lib/x86_64-linux-gnu/crtn.o";
     break;
   default:
     unsupported("bad target for linux linker");
