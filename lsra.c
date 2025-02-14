@@ -328,9 +328,11 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
   }
 
-  qsort(vector_head(fixed_reg_intervals), vector_length(fixed_reg_intervals),
-        vector_element_size(fixed_reg_intervals),
-        sort_interval_by_desc_start_point);
+  if (vector_length(fixed_reg_intervals)) {
+    qsort(vector_head(fixed_reg_intervals), vector_length(fixed_reg_intervals),
+          vector_element_size(fixed_reg_intervals),
+          sort_interval_by_desc_start_point);
+  }
 
   // we reserve one reg in each bank for spills
 
