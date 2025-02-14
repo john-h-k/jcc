@@ -1,4 +1,4 @@
-// arch: arm64
+// arch: aarch64
 // expected value: 3
 
 int main() {
