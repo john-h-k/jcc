@@ -180,7 +180,9 @@ int main(int argc, char **argv) {
   if (target_needs_linking(&args, target)) {
     const char *output = args.output ? args.output : "a.out";
 
-    struct link_args link_args = {.objects = (const char *const *)objects,
+    struct link_args link_args = {
+      .args = &args,
+      .objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};
 

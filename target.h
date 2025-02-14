@@ -107,6 +107,7 @@ struct reg_info {
 };
 
 struct link_args {
+  const struct compile_args *args;
   const char *const *objects;
   size_t num_objects;
 
