@@ -1,4 +1,4 @@
-name: macOS AArch64 CI
+name: macOS x86_64 CI
 
 on:
   push:
@@ -15,5 +15,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: ./jcc.sh ci-test -arch arm64
+        run: ./jcc.sh ci-test -arch x86_64
+
 

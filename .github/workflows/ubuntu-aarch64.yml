@@ -15,6 +15,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: ./jcc.sh ci-test
+        run: ./jcc.sh ci-test -arch arm64
 
 
