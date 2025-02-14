@@ -1836,20 +1836,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           BUG("bad type");
         }
       } else {
-        struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
-
         // this argument is variadic
         // the stack slot this local must live in, in terms of 8 byte slots
         size_t variadic_arg_idx = i - num_normal_args;
-
-        if (source.ty == X64_REG_TY_E) {
-          // because offsets are in terms of reg size, we need to double it
-          // for the 8 byte slots
-          variadic_arg_idx *= 2;
-        } else {
-          invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
-                           "variadic arg with size < 8 has not been promoted");
-        }
 
         struct instr *store = alloc_instr(state->func);
 
@@ -1857,7 +1846,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
         store->x64->mov_store_imm =
             (struct x64_mov_store_imm){.source = source,
                                        .addr = STACK_PTR_REG,
-                                       .imm = variadic_arg_idx * 8};
+                                       .imm = variadic_arg_idx};
       }
     }
   }
