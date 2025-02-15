@@ -47,8 +47,8 @@ static const struct target *get_target(const struct compile_args *args) {
     return &AARCH64_LINUX_TARGET;
   case COMPILE_TARGET_MACOS_ARM64:
     return &AARCH64_MACOS_TARGET;
-  case COMPILE_TARGET_RV32I:
-    return &RV32I_TARGET;
+  case COMPILE_TARGET_LINUX_RV32I:
+    return &RV32I_LINUX_TARGET;
   case COMPILE_TARGET_EEP:
     BUG("redo eep");
     // return &EEP_TARGET;
@@ -83,26 +83,33 @@ int main(int argc, char **argv) {
     case COMPILE_ARCH_X86_64:
 #if defined(__APPLE__)
       args.target = COMPILE_TARGET_MACOS_X86_64;
+      break;
 #elif defined(__linux__)
       args.target = COMPILE_TARGET_LINUX_X86_64;
+      break;
 #else
       err("Could not determine native platform");
       return -1;
 #endif
-      break;
     case COMPILE_ARCH_ARM64:
 #if defined(__APPLE__)
       args.target = COMPILE_TARGET_MACOS_ARM64;
+      break;
 #elif defined(__linux__)
       args.target = COMPILE_TARGET_LINUX_ARM64;
+      break;
 #else
       err("Could not determine native platform");
       return -1;
 #endif
-      break;
     case COMPILE_ARCH_RV32I:
-      args.target = COMPILE_TARGET_RV32I;
+#if defined(__linux__)
+      args.target = COMPILE_TARGET_LINUX_RV32I;
       break;
+#else
+      err("Could not determine native platform");
+      return -1;
+#endif
     case COMPILE_ARCH_EEP:
       args.target = COMPILE_TARGET_EEP;
       break;
@@ -259,8 +266,8 @@ static bool parse_target_flag(const char *flag, enum compile_target *arch) {
   } else if (strcmp(flag, "eep-unknown-unknown") == 0) {
     *arch = COMPILE_TARGET_EEP;
     return true;
-  } else if (strcmp(flag, "rv32i-unknown-unknown") == 0) {
-    *arch = COMPILE_TARGET_RV32I;
+  } else if (strcmp(flag, "rv32i-unknown-elf") == 0) {
+    *arch = COMPILE_TARGET_LINUX_RV32I;
     return true;
   }
 
