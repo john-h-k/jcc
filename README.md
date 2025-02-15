@@ -26,7 +26,8 @@ No, it is text based
 
 ## Support
 
-It currently supports AArch64 almost fully, with partial WIP RISC-V support. x64 is in the pipeline
+AArch64 and x64 are both supported, although some of the x64 ABI is not yet fully implemented.
+RISC-V (specifically RV32I) is supported but only to emit raw instructions, not object files.
 
 #### Things that don't work yet
 

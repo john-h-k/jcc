@@ -22,15 +22,9 @@
     }                                                                          \
   }
 
-static const char *rv32i_mangle(struct arena_allocator *arena,
+const char *rv32i_mangle(struct arena_allocator *arena,
                                 const char *name) {
-  char *dest =
-      arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
-
-  dest[0] = '_';
-  strcpy(dest + 1, name);
-
-  return dest;
+  return name;
 }
 
 static struct rv32i_reg zero_reg_for_ty(enum rv32i_reg_ty reg_ty) {

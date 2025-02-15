@@ -250,6 +250,10 @@ enum rv32i_reg_usage_ty {
   RV32I_REG_USAGE_TY_DEREF, // ldr ..., [x9]
 };
 
+const char *rv32i_mangle(struct arena_allocator *arena,
+                                const char *name);
+
+
 size_t reg_size(enum rv32i_reg_ty reg_ty);
 
 struct rv32i_reg get_full_reg_for_ir_reg(struct ir_reg reg);

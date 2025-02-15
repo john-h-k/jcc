@@ -2,11 +2,10 @@
 
 #include "../util.h"
 
-#if __has_include(<elf.h>)
 #include "../compiler.h"
 #include "../vector.h"
 
-#include <elf.h>
+#include "elf_types.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -262,6 +261,10 @@ static void write_elf_object(const struct build_object_args *args) {
   ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
   ehdr.e_type = ET_REL;
   switch (args->compile_args->target) {
+  case COMPILE_TARGET_LINUX_RV32I:
+    ehdr.e_machine = EM_RISCV;
+    ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
+    break;
   case COMPILE_TARGET_LINUX_ARM64:
     ehdr.e_machine = EM_AARCH64;
     break;
@@ -479,6 +482,9 @@ static void write_elf_object(const struct build_object_args *args) {
       local_count++;
     }
   }
+  (void)local_count;
+  // FIXME: why aren't local symbols working?
+  // i think this is related to `l.` constants
   shdr[7].sh_info = 1;
 
   /* entry 9: .strtab */
@@ -502,11 +508,3 @@ static void write_elf_object(const struct build_object_args *args) {
 }
 
 void write_elf(const struct build_object_args *args) { write_elf_object(args); }
-
-#else
-
-void write_elf(UNUSED const struct build_object_args *args) {
-  unsupported("ELF not supported target for this system");
-}
-
-#endif
