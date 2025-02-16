@@ -924,11 +924,9 @@ static void codegen_mem_copy_volatile(struct codegen_state *state,
 
 #define IMM_BITS (12)
 
-
 static void codegen_sub_imm(struct codegen_state *state,
                             struct aarch64_reg dest, struct aarch64_reg source,
                             long long value);
-  
 
 static void codegen_add_imm(struct codegen_state *state,
                             struct aarch64_reg dest, struct aarch64_reg source,
@@ -1161,10 +1159,12 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
         .cmp = cmp_reg, .target = true_target};
   }
 
-  // now generate the `br`
-  struct instr *br = alloc_instr(state->func);
-  br->aarch64->ty = AARCH64_INSTR_TY_B;
-  br->aarch64->b = (struct aarch64_branch){.target = false_target};
+  if (op->stmt->basicblock->succ != false_target) {
+    // now generate the `br`
+    struct instr *br = alloc_instr(state->func);
+    br->aarch64->ty = AARCH64_INSTR_TY_B;
+    br->aarch64->b = (struct aarch64_branch){.target = false_target};
+  }
 }
 
 static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
@@ -1383,28 +1383,61 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     CONTAINED_OP(addsub, SUBS, subs);
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
-    instr->aarch64->ty = AARCH64_INSTR_TY_LSLV;
-    instr->aarch64->lslv = (struct aarch64_reg_2_source){
-        .dest = dest,
-        .lhs = codegen_reg(lhs_op),
-        .rhs = codegen_reg(rhs_op),
-    };
+    if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
+      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+      size_t imms = (size * 8 - 1) - rhs_op->cnst.int_value;
+      instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
+      instr->aarch64->ubfm =
+          (struct aarch64_bitfield){.dest = dest,
+                                    .source = codegen_reg(lhs_op),
+                                    .immr = imms + 1,
+                                    .imms = imms};
+    } else {
+      instr->aarch64->ty = AARCH64_INSTR_TY_LSLV;
+      instr->aarch64->lslv = (struct aarch64_reg_2_source){
+          .dest = dest,
+          .lhs = codegen_reg(lhs_op),
+          .rhs = codegen_reg(rhs_op),
+      };
+    }
     break;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
-    instr->aarch64->ty = AARCH64_INSTR_TY_ASRV;
-    instr->aarch64->asrv = (struct aarch64_reg_2_source){
-        .dest = dest,
-        .lhs = codegen_reg(lhs_op),
-        .rhs = codegen_reg(rhs_op),
-    };
+    if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
+      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+      size_t immr = rhs_op->cnst.int_value;
+      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+      instr->aarch64->sbfm =
+          (struct aarch64_bitfield){.dest = dest,
+                                    .source = codegen_reg(lhs_op),
+                                    .immr = immr,
+                                    .imms = size * 8 - 1};
+    } else {
+      instr->aarch64->ty = AARCH64_INSTR_TY_ASRV;
+      instr->aarch64->asrv = (struct aarch64_reg_2_source){
+          .dest = dest,
+          .lhs = codegen_reg(lhs_op),
+          .rhs = codegen_reg(rhs_op),
+      };
+    }
     break;
   case IR_OP_BINARY_OP_TY_URSHIFT:
-    instr->aarch64->ty = AARCH64_INSTR_TY_LSRV;
-    instr->aarch64->lsrv = (struct aarch64_reg_2_source){
-        .dest = dest,
-        .lhs = codegen_reg(lhs_op),
-        .rhs = codegen_reg(rhs_op),
-    };
+    if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
+      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+      size_t immr = rhs_op->cnst.int_value;
+      instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
+      instr->aarch64->ubfm =
+          (struct aarch64_bitfield){.dest = dest,
+                                    .source = codegen_reg(lhs_op),
+                                    .immr = immr,
+                                    .imms = size * 8 - 1};
+    } else {
+      instr->aarch64->ty = AARCH64_INSTR_TY_LSRV;
+      instr->aarch64->lsrv = (struct aarch64_reg_2_source){
+          .dest = dest,
+          .lhs = codegen_reg(lhs_op),
+          .rhs = codegen_reg(rhs_op),
+      };
+    }
     break;
   case IR_OP_BINARY_OP_TY_AND:
     instr->aarch64->ty = AARCH64_INSTR_TY_AND;
@@ -1728,7 +1761,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
     if (IS_MEM_LOC(move.from)) {
       DEBUG_ASSERT(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
 
-      struct mem_loc *from = move.from.metadata;
+      struct mem_loc *from = move.from.metadata[0];
       struct aarch64_reg to = {.ty = reg_ty_for_size(reg_class, from->size),
                                .idx = move.to.idx};
 
@@ -1746,7 +1779,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
     } else if (IS_MEM_LOC(move.to)) {
       DEBUG_ASSERT(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
 
-      struct mem_loc *to = move.to.metadata;
+      struct mem_loc *to = move.to.metadata[0];
       struct aarch64_reg from = {.ty = reg_ty_for_size(reg_class, to->size),
                                  .idx = move.from.idx};
 
@@ -1991,7 +2024,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
               struct location loc = {
                   .idx = MEM_LOC(),
-                  .metadata = arena_alloc_init(
+                  .metadata[0] = arena_alloc_init(
                       state->arena, sizeof(struct mem_loc), &mem_loc)};
 
               struct location to = {.idx = nsrn++};
@@ -2052,8 +2085,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
             struct location loc = {
                 .idx = MEM_LOC(),
-                .metadata = arena_alloc_init(state->arena,
-                                             sizeof(struct mem_loc), &mem_loc)};
+                .metadata[0] = arena_alloc_init(
+                    state->arena, sizeof(struct mem_loc), &mem_loc)};
 
             struct location to = {.idx = ngrn++};
             vector_push_back(gp_move_from, &loc);
@@ -2093,8 +2126,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
         struct location to = {
             .idx = MEM_LOC(),
-            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
-                                         &mem_loc)};
+            .metadata[0] = arena_alloc_init(state->arena,
+                                            sizeof(struct mem_loc), &mem_loc)};
 
         if (INTEGRAL_OR_PTRLIKE(var_ty)) {
           vector_push_back(gp_move_from, &from);
@@ -2381,8 +2414,8 @@ static void codegen_params(struct codegen_state *state) {
 
           struct location to = {
               .idx = MEM_LOC(),
-              .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
-                                           &mem_loc)};
+              .metadata[0] = arena_alloc_init(
+                  state->arena, sizeof(struct mem_loc), &mem_loc)};
 
           vector_push_back(fp_move_from, &from);
           vector_push_back(fp_move_to, &to);
@@ -2434,8 +2467,8 @@ static void codegen_params(struct codegen_state *state) {
 
         struct location to = {
             .idx = MEM_LOC(),
-            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
-                                         &mem_loc)};
+            .metadata[0] = arena_alloc_init(state->arena,
+                                            sizeof(struct mem_loc), &mem_loc)};
 
         struct location from = {.idx = ngrn++};
         vector_push_back(gp_move_from, &from);
@@ -2470,7 +2503,7 @@ static void codegen_params(struct codegen_state *state) {
 
     struct location from = {
         .idx = MEM_LOC(),
-        .metadata =
+        .metadata[0] =
             arena_alloc_init(state->arena, sizeof(struct mem_loc), &mem_loc)};
 
     param_op = param_op->succ;
@@ -2626,12 +2659,10 @@ static void codegen_prologue(struct codegen_state *state) {
     stack_size += 8;
   }
 
-  // TODO: implement red zone. requires _subtracting_ from `sp` instead of adding for all local addressing
-  // bool leaf =
+  // TODO: implement red zone. requires _subtracting_ from `sp` instead of
+  // adding for all local addressing bool leaf =
   //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
-  bool leaf =
-      !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
-  
+  bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
                                        .saved_gp_registers = saved_gp_registers,
@@ -3346,6 +3377,21 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
           basicblock->first_instr = first_pred ? first_pred->succ : func->first;
           basicblock->last_instr = func->last;
+
+          basicblock = basicblock->succ;
+        }
+
+        // TODO: move this somewhere else so it runs on all platforms
+        basicblock = ir_func->first;
+        while (basicblock) {
+          if (!basicblock->first_instr) {
+            struct ir_basicblock *succ = basicblock->succ;
+            while (!succ->first_instr) {
+              succ = succ->succ;
+            }
+
+            basicblock->first_instr = succ->first_instr;
+          }
 
           basicblock = basicblock->succ;
         }

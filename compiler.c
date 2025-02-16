@@ -221,7 +221,7 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         eliminate_phi(glb->func);
-        // rebuild_ids(glb->func);
+        rebuild_ids(glb->func);
         break;
       }
 
@@ -233,6 +233,31 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     ir_validate(ir);
+
+    glb = ir->first_global;
+
+    while (glb) {
+      if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+        glb = glb->succ;
+        continue;
+      }
+
+      switch (glb->ty) {
+      case IR_GLB_TY_DATA:
+        break;
+      case IR_GLB_TY_FUNC:
+        ir_order_basicblocks(glb->func);
+        eliminate_redundant_ops(glb->func);
+        // rebuild_ids(glb->func);
+        break;
+      }
+
+      glb = glb->succ;
+    }
+
+    if (log_enabled()) {
+      debug_print_stage(ir, "elim_redundant");
+    }
   }
 
   {

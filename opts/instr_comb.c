@@ -10,6 +10,17 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
   struct ir_op *rhs = op->binary_op.rhs;
 
   switch (ty) {
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+  case IR_OP_BINARY_OP_TY_LSHIFT: {
+    if (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty) && rhs->cnst.int_value == 0) {
+      op->ty = IR_OP_TY_MOV;
+      op->mov = (struct ir_op_mov){
+        .value = lhs
+      };
+    }
+    return true;
+  }
   case IR_OP_BINARY_OP_TY_MUL: {
     struct ir_op *cnst;
     bool is_lhs;
