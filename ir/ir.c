@@ -1641,6 +1641,10 @@ bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
 }
 
 bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
+  if (var_ty->ty == IR_VAR_TY_TY_POINTER) {
+    return true;
+  }
+
   if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
@@ -1971,36 +1975,58 @@ struct move_set gen_move_order(struct arena_allocator *arena,
 }
 
 struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags flags) {
+  struct ir_basicblock *basicblock = func->first;
+
+  while (basicblock && !basicblock->first) {
+    basicblock = basicblock->succ;
+  }
+
+  struct ir_stmt *stmt = basicblock ? basicblock->first : NULL;
+
+  while (stmt && !stmt->first) {
+    stmt = stmt->succ;
+  }
+  
+  struct ir_op *op = stmt ? stmt->first : NULL;
+
   return (struct ir_func_iter){
     .func = func,
     .flags = flags,
-    .basicblock = NULL,
-    .stmt = NULL,
-    .op = NULL,
+    .basicblock = basicblock,
+    .stmt = stmt,
+    .op = op,
   };
 }
 
 bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
-  iter->op = iter->op->succ;
-
-  while (!iter->op) {
-    iter->stmt = iter->stmt->succ;
-
-    while (!iter->stmt) {
-      iter->basicblock = iter->basicblock->succ;
-
-      if (!iter->basicblock) {
-        *op = NULL;
-        return false;
-      }
-
-      iter->stmt = iter->basicblock->first;
-    }
-
-    iter->op = iter->stmt->first;
+  if (!iter->op) {
+    return false;
   }
 
   *op = iter->op;
+
+  iter->op = iter->op->succ;
+  if (!iter->op) {
+    do {
+      iter->stmt = iter->stmt->succ;
+
+      if (!iter->stmt) {
+        do {
+          iter->basicblock = iter->basicblock->succ;
+
+          if (!iter->basicblock) {
+            iter->op = NULL;
+            return true;
+          }
+
+          iter->stmt = iter->basicblock->first;
+        } while (!iter->basicblock->first);
+      }
+
+      iter->op = iter->stmt->first;
+    } while (!iter->stmt->first);
+  }
+
   return true;
 }
 

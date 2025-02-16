@@ -10,12 +10,19 @@ bool log_enabled(void) { return LOG_ENABLED; }
 
 #ifdef NLOG
 #define DEF_LOG_FN(NAME, _PREFIX)                                              \
+  void NAME##_nl(void) { (void)format; }                         \
   void NAME(const char *format, ...) { (void)format; }                         \
   void NAME##sl(const char *format, ...) { (void)format; }                     \
   void f##NAME(const char *format, ...) { (void)format; }                      \
   void f##NAME##sl(const char *format, ...) { (void)format; }
 #else
 #define DEF_LOG_FN(NAME, PREFIX)                                               \
+  void NAME##_nl(void) {                                         \
+    if (!LOG_ENABLED) {                                                        \
+      return;                                                                  \
+    }                                                                          \
+    fprintf(stderr, "\n");                                                     \
+  } \
   void NAME(const char *format, ...) {                                         \
     if (!LOG_ENABLED) {                                                        \
       return;                                                                  \

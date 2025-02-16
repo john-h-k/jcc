@@ -323,6 +323,8 @@ static inline int popcntl(unsigned long long l) {
 }
 
 static inline int tzcnt(unsigned long long l) {
+  DEBUG_ASSERT(l != 0, "zero is UB");
+
 #if HAS_BUILTIN(__builtin_ctzll)
     return __builtin_ctzll(l);
 #else

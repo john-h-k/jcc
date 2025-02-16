@@ -290,7 +290,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
-UNUSED static void try_contain_load(struct ir_func *func, struct ir_op *op) {
+static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   switch (op->load.ty) {
   case IR_OP_LOAD_TY_LCL:
   case IR_OP_LOAD_TY_GLB:
@@ -311,7 +311,7 @@ UNUSED static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-UNUSED static void try_contain_store(struct ir_func *func, struct ir_op *op) {
+static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   switch (op->store.ty) {
   case IR_OP_STORE_TY_LCL:
   case IR_OP_STORE_TY_GLB:
@@ -487,7 +487,6 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
-            case IR_OP_TY_ADDR:
             case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_BR:
             case IR_OP_TY_BR_COND:
@@ -556,12 +555,6 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
             case IR_OP_TY_CNST:
-            case IR_OP_TY_STORE:
-              // try_contain_store(func, op);
-              break;
-            case IR_OP_TY_LOAD:
-              // try_contain_load(func, op);
-              break;
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
             case IR_OP_TY_BITFIELD_EXTRACT:
@@ -576,6 +569,12 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
             case IR_OP_TY_UNARY_OP:
+              break;
+            case IR_OP_TY_STORE:
+              try_contain_store(func, op);
+              break;
+            case IR_OP_TY_LOAD:
+              try_contain_load(func, op);
               break;
             case IR_OP_TY_BINARY_OP:
               if (binary_op_is_comparison(op->binary_op.ty)) {

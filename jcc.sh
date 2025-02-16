@@ -17,7 +17,7 @@ debug() {
     build
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
-    lldb -- "$jcc" "$@"
+    lldb -o run -- "$jcc" "$@"
     cd - > /dev/null
 }
 
