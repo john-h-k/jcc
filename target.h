@@ -118,7 +118,7 @@ enum link_result { LINK_RESULT_SUCCESS, LINK_RESULT_FAILURE };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*target_lower)(struct ir_unit *unit);
-typedef struct codegen_unit *(*codegen)(struct ir_unit *unit);
+typedef struct codegen_unit *(*target_codegen)(struct ir_unit *unit);
 typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
@@ -140,7 +140,7 @@ struct target {
   size_t function_alignment;
   mangle mangle;
   target_lower lower;
-  codegen codegen;
+  target_codegen codegen;
   emit_function emit_function;
   build_object build_object;
   link_objects link_objects;

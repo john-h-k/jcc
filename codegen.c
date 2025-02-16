@@ -16,7 +16,6 @@ int codegen_sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
-
 struct instr *alloc_instr(struct codegen_function *func) {
   struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
 
@@ -87,4 +86,42 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
                head, len);
 
   return buff;
+}
+
+struct codegen_unit *codegen(struct ir_unit *unit) {
+  struct codegen_unit *codegen_unit = unit->target->codegen(unit);
+
+  struct ir_glb *glb = unit->first_global;
+
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
+
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      break;
+    case IR_GLB_TY_FUNC: {
+      struct ir_basicblock *basicblock = glb->func->first;
+      while (basicblock) {
+        if (!basicblock->first_instr) {
+          struct ir_basicblock *succ = basicblock->succ;
+          while (!succ->first_instr) {
+            succ = succ->succ;
+          }
+
+          basicblock->first_instr = succ->first_instr;
+        }
+
+        basicblock = basicblock->succ;
+      }
+      break;
+    }
+    }
+
+    glb = glb->succ;
+  }
+
+  return codegen_unit;
 }

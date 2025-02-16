@@ -733,13 +733,14 @@ static void codegen_addr_offset_op(struct codegen_state *state,
 
   struct x64_reg base = codegen_reg(addr_offset->base);
 
-  DEBUG_ASSERT(popcntl(addr_offset->scale) <= 1,
-               "non pow2 addr offset op should have been lowered");
 
   struct instr *instr = alloc_instr(state->func);
   instr->x64->ty = X64_INSTR_TY_LEA;
 
   if (addr_offset->index) {
+    DEBUG_ASSERT(popcntl(addr_offset->scale) <= 1,
+                 "non pow2 addr offset op should have been lowered");
+
     instr->x64->lea = (struct x64_lea){.dest = dest,
                                        .base = base,
                                        .index = codegen_reg(addr_offset->index),
@@ -1754,8 +1755,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
               .idx = translate_reg_idx(ngrn, IR_REG_TY_INTEGRAL)};
           vector_push_back(gp_move_from, &from);
           vector_push_back(gp_move_to, &to);
-          codegen_fprintf(stderr, "moving from %reg -> %reg\n", source,
-                          (struct x64_reg){.ty = X64_REG_TY_R, to.idx});
           ngrn++;
           continue;
         }

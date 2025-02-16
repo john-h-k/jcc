@@ -99,4 +99,6 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
 
 int codegen_sort_entries_by_id(const void *a, const void *b);
 
+struct codegen_unit *codegen(struct ir_unit *unit);
+
 #endif
