@@ -1338,8 +1338,11 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   case IR_OP_TY_UNARY_OP:
     mov->unary_op = producer->unary_op;
     break;
+  case IR_OP_TY_CALL:
+    mov->call = producer->call;
+    break;
   default:
-    TODO("unsupported type for contained op");
+    TODO("unsupported type for fixed op");
   }
 
   mov->flags |= IR_OP_FLAG_FIXED_REG;
