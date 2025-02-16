@@ -290,17 +290,96 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
+static bool fits_in_alu_imm(unsigned long long value) { return value < 0xFFFF; }
+
+static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
+  DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP, "expected binary op");
+
+  struct ir_op *lhs = op->binary_op.lhs;
+  struct ir_op *rhs = op->binary_op.rhs;
+
+  bool supports_lhs_contained, supports_rhs_contained;
+  switch (op->binary_op.ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+  case IR_OP_BINARY_OP_TY_NEQ:
+  case IR_OP_BINARY_OP_TY_UGT:
+  case IR_OP_BINARY_OP_TY_SGT:
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+  case IR_OP_BINARY_OP_TY_ULT:
+  case IR_OP_BINARY_OP_TY_SLT:
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    supports_lhs_contained = true;
+    supports_rhs_contained = true;
+    break;
+  case IR_OP_BINARY_OP_TY_FMAX:
+  case IR_OP_BINARY_OP_TY_FMIN:
+  case IR_OP_BINARY_OP_TY_FEQ:
+  case IR_OP_BINARY_OP_TY_FNEQ:
+  case IR_OP_BINARY_OP_TY_FGT:
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+  case IR_OP_BINARY_OP_TY_FLT:
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    supports_lhs_contained = false;
+    supports_rhs_contained = false;
+    break;
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+    supports_lhs_contained = false;
+    // TODO: support rhs immediate shifts in codegen
+    supports_rhs_contained = false;
+    // supports_rhs_contained = true;
+    break;
+  case IR_OP_BINARY_OP_TY_AND:
+  case IR_OP_BINARY_OP_TY_OR:
+  case IR_OP_BINARY_OP_TY_XOR:
+  case IR_OP_BINARY_OP_TY_ADD:
+    supports_lhs_contained = true;
+    supports_rhs_contained = true;
+    break;
+  case IR_OP_BINARY_OP_TY_SUB:
+    supports_lhs_contained = false;
+    supports_rhs_contained = true;
+    break;
+  case IR_OP_BINARY_OP_TY_MUL:
+  case IR_OP_BINARY_OP_TY_SDIV:
+  case IR_OP_BINARY_OP_TY_UDIV:
+  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_UQUOT:
+    supports_lhs_contained = false;
+    supports_rhs_contained = true;
+    break;
+  case IR_OP_BINARY_OP_TY_FADD:
+  case IR_OP_BINARY_OP_TY_FSUB:
+  case IR_OP_BINARY_OP_TY_FMUL:
+  case IR_OP_BINARY_OP_TY_FDIV:
+    supports_lhs_contained = false;
+    supports_rhs_contained = true;
+    break;
+  }
+
+  if (supports_lhs_contained && (lhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&lhs->var_ty) &&
+      fits_in_alu_imm(lhs->cnst.int_value))) {
+    op->binary_op.lhs = alloc_contained_ir_op(func, lhs, op);
+  } else if (supports_rhs_contained && (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty) &&
+             fits_in_alu_imm(rhs->cnst.int_value))) {
+    op->binary_op.rhs = alloc_contained_ir_op(func, rhs, op);
+  }
+}
+
 static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *base = op->addr_offset.base;
-  if (base->ty != IR_OP_TY_ADDR) {
+  if (op->flags & IR_OP_FLAG_CONTAINED) {
     return;
   }
 
-  struct ir_op_addr *addr = &base->addr;
-
-  if (addr->ty == IR_OP_ADDR_TY_LCL) {
-    op->addr_offset.base = alloc_contained_ir_op(func, base, op);
+  struct ir_op *base = op->addr_offset.base;
+  if (base->ty != IR_OP_TY_ADDR || base->addr.ty != IR_OP_ADDR_TY_LCL) {
+    return;
   }
+
+  op->addr_offset.base = alloc_contained_ir_op(func, base, op);
 }
 
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
@@ -317,10 +396,29 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
     struct ir_lcl *lcl = addr->addr.lcl;
 
-    op->load = (struct ir_op_load){
-      .ty = IR_OP_LOAD_TY_LCL,
-      .lcl = lcl
-    };
+    op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+    struct ir_op_addr_offset addr_offset = addr->addr_offset;
+
+    // FIXME: this will lower e.g `(i32) load.addr [addr.offset %0 + #7]` which
+    // is not valid because it needs to be a multiple of the size
+
+    bool offset_contain = !addr_offset.index;
+    bool index_contain =
+        !addr_offset.offset &&
+        (addr_offset.scale == 1 ||
+         addr_offset.scale == var_ty_info(func->unit, &op->var_ty).size);
+
+    if (offset_contain || index_contain) {
+      op->load.addr = alloc_contained_ir_op(func, addr, op);
+
+      struct ir_op *base = op->load.addr->addr_offset.base;
+      if (base->ty == IR_OP_TY_ADDR && (base->flags & IR_OP_FLAG_CONTAINED)) {
+        if (base->addr.ty != IR_OP_ADDR_TY_LCL || base->addr.lcl->offset) {
+          base->flags &= ~IR_OP_FLAG_CONTAINED;
+        }
+      }
+    }
   }
 }
 
@@ -340,10 +438,27 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
     struct ir_op *value = op->store.value;
 
     op->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_LCL,
-      .value = value,
-      .lcl = lcl
-    };
+        .ty = IR_OP_STORE_TY_LCL, .value = value, .lcl = lcl};
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+    struct ir_op_addr_offset addr_offset = addr->addr_offset;
+
+    bool offset_contain = !addr_offset.index;
+    bool index_contain =
+        !addr_offset.offset &&
+        (addr_offset.scale == 1 ||
+         addr_offset.scale ==
+             var_ty_info(func->unit, &op->store.value->var_ty).size);
+
+    if (offset_contain || index_contain) {
+      op->store.addr = alloc_contained_ir_op(func, addr, op);
+
+      struct ir_op *base = op->store.addr->addr_offset.base;
+      if (base->ty == IR_OP_TY_ADDR && (base->flags & IR_OP_FLAG_CONTAINED)) {
+        if (base->addr.ty != IR_OP_ADDR_TY_LCL || base->addr.lcl->offset) {
+          base->flags &= ~IR_OP_FLAG_CONTAINED;
+        }
+      }
+    }
   }
 }
 
@@ -511,7 +626,8 @@ void aarch64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_CALL:
               if (op->call.target->ty == IR_OP_TY_ADDR &&
-                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB && !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
+                  !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
                 op->call.target =
                     alloc_contained_ir_op(func, op->call.target, op);
               }
@@ -593,19 +709,24 @@ void aarch64_lower(struct ir_unit *unit) {
               if (binary_op_is_comparison(op->binary_op.ty)) {
                 lower_comparison(func, op);
               }
+
+              try_contain_binary_op(func, op);
               break;
             case IR_OP_TY_ADDR_OFFSET:
-              if (op->addr_offset.index && popcntl(op->addr_offset.scale) != 1) {
+              if (op->addr_offset.index &&
+                  popcntl(op->addr_offset.scale) != 1) {
                 // do mul beforehand and set scale to 1
-                struct ir_op *cnst = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64, op->addr_offset.scale);
+                struct ir_op *cnst = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
+                                     op->addr_offset.scale);
 
-                struct ir_op *mul = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mul->binary_op = (struct ir_op_binary_op){
-                  .ty = IR_OP_BINARY_OP_TY_MUL,
-                  .lhs = op->addr_offset.index,
-                  .rhs = cnst
-                };
+                struct ir_op *mul = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mul->binary_op =
+                    (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
+                                             .lhs = op->addr_offset.index,
+                                             .rhs = cnst};
 
                 op->addr_offset.scale = 1;
                 op->addr_offset.index = mul;
@@ -614,7 +735,6 @@ void aarch64_lower(struct ir_unit *unit) {
               }
               break;
             }
-
 
             op = op->succ;
           }

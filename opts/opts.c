@@ -13,8 +13,10 @@ static void opts_run_pass_func(struct ir_func *func, const struct opts_pass *pas
 
     if (opt) {
       debug("%s: optimised %%%zu", pass->name, op->id);
-      debug_print_op(stderr, func, &prev);
-      debug_print_op(stderr, func, op);
+      if (debug_enabled()) {
+        debug_print_op(stderr, func, &prev);
+        debug_print_op(stderr, func, op);
+      }
       debug_nl();
     }
   }

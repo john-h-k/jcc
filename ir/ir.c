@@ -1176,6 +1176,9 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   case IR_OP_TY_ADDR:
     contained->addr = op->addr;
     break;
+  case IR_OP_TY_ADDR_OFFSET:
+    contained->addr_offset = op->addr_offset;
+    break;
   case IR_OP_TY_CAST_OP:
     contained->cast_op = op->cast_op;
     break;
