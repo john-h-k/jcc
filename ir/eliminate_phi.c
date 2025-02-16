@@ -1,5 +1,6 @@
 #include "eliminate_phi.h"
 
+#include "../bitset.h"
 #include "../hashtbl.h"
 #include "../vector.h"
 #include "ir.h"
@@ -121,11 +122,42 @@ struct bb_reg {
 static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
                       size_t tmp_index, struct ir_lcl *spill_lcl,
-                      bool early_moves) {
+                      enum ir_reg_ty reg_ty, bool early_moves) {
   struct ir_op *last =
       early_moves ? basicblock->first->first : basicblock->last->last;
 
+  struct bitset *reg_usage;
+  struct ir_var_ty lcl_ty;
+  struct reg_set_info reg_info;
+  switch (reg_ty) {
+  case IR_REG_TY_INTEGRAL:
+    reg_usage = irb->reg_usage.gp_registers_used;
+    lcl_ty = IR_VAR_TY_I64;
+    reg_info = irb->unit->target->reg_info.gp_registers;
+    break;
+  case IR_REG_TY_FP:
+    reg_usage = irb->reg_usage.fp_registers_used;
+    lcl_ty = IR_VAR_TY_F64;
+    reg_info = irb->unit->target->reg_info.fp_registers;
+    break;
+  default:
+    unreachable();
+  }
+
   struct ir_var_ty store_var_ty;
+
+  size_t next_free = bitset_length(reg_usage) - bitset_lzcnt(reg_usage);
+
+  bool has_free_reg;
+  struct ir_reg free_reg;
+  if (next_free <= reg_info.num_volatile) {
+    has_free_reg = true;
+    free_reg = (struct ir_reg){.ty = reg_ty, .idx = next_free};
+  } else {
+    has_free_reg = false;
+  }
+
+  struct ir_op *tmp_mov = NULL;
 
   for (size_t j = 0; j < moves.num_moves; j++) {
     struct move move = moves.moves[j];
@@ -141,35 +173,61 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
     }
 
-    if ((move.to.idx == tmp_index || move.from.idx == tmp_index) &&
+    if (!has_free_reg &&
+        (move.to.idx == tmp_index || move.from.idx == tmp_index) &&
         !spill_lcl) {
-      spill_lcl = add_local(irb, &IR_VAR_TY_I64);
+      spill_lcl = add_local(irb, &lcl_ty);
     }
 
     if (move.to.idx == tmp_index) {
       DEBUG_ASSERT(move.from.idx < SIZE_MAX / 2, "can't do stack<->stack move");
 
-      struct ir_op *store =
-          insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-      store->store = (struct ir_op_store){
-          .ty = IR_OP_STORE_TY_LCL, .lcl = spill_lcl, .value = value};
-      store->flags |= IR_OP_FLAG_PHI_MOV;
+      if (has_free_reg) {
+        struct ir_op *mov =
+            insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
+        mov->mov = (struct ir_op_mov){.value = value};
+        mov->reg = free_reg;
+        mov->flags |= IR_OP_FLAG_PHI_MOV;
+        store_var_ty = value->var_ty;
 
-      store_var_ty = value->var_ty;
+        tmp_mov = mov;
+      } else {
+        struct ir_op *store =
+            insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        store->store = (struct ir_op_store){
+            .ty = IR_OP_STORE_TY_LCL, .lcl = spill_lcl, .value = value};
+        store->flags |= IR_OP_FLAG_PHI_MOV;
+        store_var_ty = value->var_ty;
+      }
     } else if (move.from.idx == tmp_index) {
-      struct ir_op *load =
-          insert_before_ir_op(irb, last, IR_OP_TY_LOAD, store_var_ty);
-      load->reg = to;
-      load->load = (struct ir_op_load){
-          .ty = IR_OP_LOAD_TY_LCL,
-          .lcl = spill_lcl,
-      };
+      struct ir_op *phi_op;
+
+      if (has_free_reg) {
+        struct ir_op *mov =
+            insert_before_ir_op(irb, last, IR_OP_TY_MOV, tmp_mov->var_ty);
+        mov->mov = (struct ir_op_mov){.value = tmp_mov};
+        mov->reg = to;
+        mov->flags |= IR_OP_FLAG_PHI_MOV;
+        store_var_ty = value->var_ty;
+
+        phi_op = mov;
+      } else {
+        struct ir_op *load =
+            insert_before_ir_op(irb, last, IR_OP_TY_LOAD, store_var_ty);
+        load->reg = to;
+        load->load = (struct ir_op_load){
+            .ty = IR_OP_LOAD_TY_LCL,
+            .lcl = spill_lcl,
+        };
+
+        phi_op = load;
+      }
 
       struct bb_reg key = {.reg = move.to.idx, .bb = basicblock};
       struct ir_op **op = hashtbl_lookup(reg_to_val, &key);
 
       if (op) {
-        *op = load;
+        *op = phi_op;
       }
     } else if (move.from.idx >= SIZE_MAX / 2) {
       struct ir_lcl *lcl = move.from.metadata[0];
@@ -286,8 +344,9 @@ void eliminate_phi(struct ir_func *irb) {
             void *from_metadata = NULL;
             void *to_metadata = NULL;
 
-            // this should really be done by regalloc, but we need crit edges to be split first
-            // and we get better regalloc if we don't split crit edges beforehand
+            // this should really be done by regalloc, but we need crit edges to
+            // be split first and we get better regalloc if we don't split crit
+            // edges beforehand
 
             if (value->lcl) {
               from_pos = LCL_POS(value->lcl->id);
@@ -304,8 +363,9 @@ void eliminate_phi(struct ir_func *irb) {
             }
 
             if (from_pos != to_pos) {
-              struct location from = {.idx = from_pos, .metadata[0] = from_metadata };
-              struct location to = {.idx = to_pos, .metadata[0] = to_metadata };
+              struct location from = {.idx = from_pos,
+                                      .metadata[0] = from_metadata};
+              struct location to = {.idx = to_pos, .metadata[0] = to_metadata};
 
               struct bb_reg key = {.reg = from_pos, .bb = mov_bb};
               hashtbl_insert(reg_to_val, &key, &value);
@@ -347,13 +407,13 @@ void eliminate_phi(struct ir_func *irb) {
       struct move_set gp_moves = gen_move_order(
           irb->arena, vector_head(gp_move_from), vector_head(gp_move_to),
           vector_length(gp_move_from), tmp_index);
-      gen_moves(irb, basicblock, reg_to_val, gp_moves, tmp_index, spill_lcl,
+      gen_moves(irb, basicblock, reg_to_val, gp_moves, tmp_index, spill_lcl, IR_REG_TY_INTEGRAL,
                 early);
 
       struct move_set fp_moves = gen_move_order(
           irb->arena, vector_head(fp_move_from), vector_head(fp_move_to),
           vector_length(fp_move_from), tmp_index);
-      gen_moves(irb, basicblock, reg_to_val, fp_moves, tmp_index, spill_lcl,
+      gen_moves(irb, basicblock, reg_to_val, fp_moves, tmp_index, spill_lcl, IR_REG_TY_FP,
                 early);
     }
   }

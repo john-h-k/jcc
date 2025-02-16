@@ -1364,11 +1364,23 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_FLTEQ:
-    instr->aarch64->ty = AARCH64_INSTR_TY_FCMP;
-    instr->aarch64->fcmp = (struct aarch64_fcmp){
-        .lhs = codegen_reg(lhs_op),
-        .rhs = codegen_reg(rhs_op),
-    };
+    if (lhs_op->flags &IR_OP_FLAG_CONTAINED) {
+      instr->aarch64->ty = AARCH64_INSTR_TY_FCMP_ZERO;
+      instr->aarch64->fcmp_zero = (struct aarch64_fcmp_zero){
+          .lhs = codegen_reg(rhs_op),
+      };
+    } else if (rhs_op->flags &IR_OP_FLAG_CONTAINED) {
+      instr->aarch64->ty = AARCH64_INSTR_TY_FCMP_ZERO;
+      instr->aarch64->fcmp_zero = (struct aarch64_fcmp_zero){
+          .lhs = codegen_reg(lhs_op),
+      };
+    } else {
+      instr->aarch64->ty = AARCH64_INSTR_TY_FCMP;
+      instr->aarch64->fcmp = (struct aarch64_fcmp){
+          .lhs = codegen_reg(lhs_op),
+          .rhs = codegen_reg(rhs_op),
+      };
+    }
     break;
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
@@ -3097,7 +3109,7 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
       size_t cur_size = aarch64_reg_size(reg.ty);
       size_t last_size = aarch64_reg_size(data->reg_ty);
       invariant_assert(
-          cur_size == last_size,
+          cur_size == last_size || (cur_size < 4 && last_size == 4),
           "entry %zu: expected `fmov` %zu to have same size registers "
           "(expected %zu found %zu)",
           data->entry->glb_id, instr->id, cur_size, last_size);
