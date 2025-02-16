@@ -335,6 +335,10 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_AND:
   case IR_OP_BINARY_OP_TY_OR:
   case IR_OP_BINARY_OP_TY_XOR:
+    // TODO: support lgs/rhs immediates in bitwise ops (the immr/imms field is complex)
+    supports_lhs_contained = false;
+    supports_rhs_contained = false;
+    break;
   case IR_OP_BINARY_OP_TY_ADD:
     supports_lhs_contained = true;
     supports_rhs_contained = true;
@@ -349,14 +353,14 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SQUOT:
   case IR_OP_BINARY_OP_TY_UQUOT:
     supports_lhs_contained = false;
-    supports_rhs_contained = true;
+    supports_rhs_contained = false;
     break;
   case IR_OP_BINARY_OP_TY_FADD:
   case IR_OP_BINARY_OP_TY_FSUB:
   case IR_OP_BINARY_OP_TY_FMUL:
   case IR_OP_BINARY_OP_TY_FDIV:
     supports_lhs_contained = false;
-    supports_rhs_contained = true;
+    supports_rhs_contained = false;
     break;
   }
 
@@ -706,11 +710,11 @@ void aarch64_lower(struct ir_unit *unit) {
               try_contain_load(func, op);
               break;
             case IR_OP_TY_BINARY_OP:
+              try_contain_binary_op(func, op);
+
               if (binary_op_is_comparison(op->binary_op.ty)) {
                 lower_comparison(func, op);
               }
-
-              try_contain_binary_op(func, op);
               break;
             case IR_OP_TY_ADDR_OFFSET:
               if (op->addr_offset.index &&

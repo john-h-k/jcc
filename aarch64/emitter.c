@@ -740,6 +740,8 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
                             const struct aarch64_store_imm str) {
+  if (str.imm < 0)
+  BREAKPOINT();
   switch (str.mode) {
   case AARCH64_ADDRESSING_MODE_OFFSET:
     if (IS64_REG(str.source)) {
