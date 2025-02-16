@@ -262,7 +262,7 @@ enum print_op_ctx {
   PRINT_OP_CTX_USE,
 };
 
-static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
+static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_op *ir,
                            enum print_op_ctx ctx);
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
@@ -271,13 +271,13 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
                "op used by other op but had no stmt (likely detached)");
 
   if (ir->flags & IR_OP_FLAG_CONTAINED) {
-    debug_print_op(file, irb, ir, PRINT_OP_CTX_USE);
+    debug_print_op_with_ctx(file, irb, ir, PRINT_OP_CTX_USE);
   } else {
     fprintf(file, "%%%zu", ir->id);
   }
 }
 
-static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
+static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_op *ir,
                            enum print_op_ctx ctx) {
   DEBUG_ASSERT(ir->stmt, "op had no stmt");
 
@@ -570,6 +570,12 @@ static void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *ir,
   }
 }
 
+void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op) {
+  debug_print_op_with_ctx(file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+  fprintf(file, "\n");
+}
+
+
 extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
 struct prettyprint_file_metadata {
@@ -617,9 +623,9 @@ static void prettyprint_end_visit_basicblock_file(
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
                                       void *metadata) {
-  // if (op->flags & IR_OP_FLAG_CONTAINED) {
-  //   return;
-  // }
+  if (op->flags & IR_OP_FLAG_CONTAINED) {
+    return;
+  }
 
   int op_pad = /* guess */ 50;
 
@@ -630,7 +636,7 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   fprintf(fm->file, "%0*zu: ", fm->ctr_pad, fm->ctr++);
 
   long pos = ftell(fm->file);
-  debug_print_op(fm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(fm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
 
   if (supports_pos && ftell(fm->file) == pos) {
     // no line was written
@@ -915,7 +921,7 @@ static void visit_op_for_graph(struct ir_func *irb, struct ir_op *op,
                                void *metadata) {
   struct print_ir_graph_metadata *gm = metadata;
 
-  debug_print_op(gm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
+  debug_print_op_with_ctx(gm->file, irb, op, PRINT_OP_CTX_TOP_LEVEL);
 
   // `\l` prints left-justified
   fprintf(gm->file, "\\l");

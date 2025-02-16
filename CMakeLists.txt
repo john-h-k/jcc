@@ -42,6 +42,10 @@ set(
   ir/prettyprint.c
   ir/validate.c
 
+  opts/opts.c
+  opts/cnst_fold.c
+  opts/instr_comb.c
+
   aarch64.c
   aarch64/codegen.c
   aarch64/lower.c

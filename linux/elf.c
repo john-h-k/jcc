@@ -255,20 +255,22 @@ static void write_elf_object(const struct build_object_args *args) {
   ehdr.e_ident[EI_MAG1] = 'E';
   ehdr.e_ident[EI_MAG2] = 'L';
   ehdr.e_ident[EI_MAG3] = 'F';
-  ehdr.e_ident[EI_CLASS] = ELFCLASS64;
   ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
   ehdr.e_ident[EI_VERSION] = EV_CURRENT;
   ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
   ehdr.e_type = ET_REL;
   switch (args->compile_args->target) {
   case COMPILE_TARGET_LINUX_RV32I:
+    ehdr.e_ident[EI_CLASS] = ELFCLASS32;
     ehdr.e_machine = EM_RISCV;
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
     break;
   case COMPILE_TARGET_LINUX_ARM64:
+    ehdr.e_ident[EI_CLASS] = ELFCLASS64;
     ehdr.e_machine = EM_AARCH64;
     break;
   case COMPILE_TARGET_LINUX_X86_64:
+    ehdr.e_ident[EI_CLASS] = ELFCLASS64;
     ehdr.e_machine = EM_X86_64;
     break;
   default:

@@ -8,6 +8,8 @@
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "ir/validate.h"
+#include "opts/instr_comb.h"
+#include "opts/cnst_fold.h"
 #include "log.h"
 #include "lower.h"
 #include "lsra.h"
@@ -68,7 +70,8 @@ create_compiler(struct program *program, const struct target *target, const char
 }
 
 static void debug_print_stage(struct ir_unit *ir,
-                              UNUSED_ARG(const char *name)) {
+                              const char *name) {
+  slog("\n\n----------  %s  ----------\n", name);
   debug_print_ir(stderr, ir, NULL, NULL);
 }
 
@@ -155,6 +158,15 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   {
+    COMPILER_STAGE(OPTS);
+
+    opts_cnst_fold(ir);
+    opts_instr_comb(ir);
+
+    if (log_enabled()) {
+      debug_print_stage(ir, "opts");
+    }
+
     COMPILER_STAGE(LOWER);
 
     lower(ir, target);

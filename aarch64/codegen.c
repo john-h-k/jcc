@@ -816,31 +816,36 @@ static void codegen_addr_offset_op(struct codegen_state *state,
 
   struct aarch64_reg base = codegen_reg(addr_offset->base);
 
-  struct aarch64_reg index;
-  if (addr_offset->index) {
-    index = codegen_reg(addr_offset->index);
-  } else {
-    index = zero_reg_for_ty(dest.ty);
-  }
-
-  DEBUG_ASSERT(popcntl(addr_offset->scale) <= 1,
+  DEBUG_ASSERT(!addr_offset->index || popcntl(addr_offset->scale) == 1,
                "non pow2 addr offset op should have been lowered");
 
-  size_t shift = tzcnt(addr_offset->scale);
+  struct aarch64_reg reg = base;
+  if (addr_offset->index) {
+    reg = dest;
 
-  struct instr *instr = alloc_instr(state->func);
-  instr->aarch64->ty = AARCH64_INSTR_TY_ADD;
-  instr->aarch64->add = (struct aarch64_addsub_reg){.dest = dest,
-                                                    .lhs = base,
-                                                    .rhs = index,
-                                                    .imm6 = shift,
-                                                    .shift = AARCH64_SHIFT_LSL};
+    struct aarch64_reg index = codegen_reg(addr_offset->index);
+    size_t shift = tzcnt(addr_offset->scale);
+
+    struct instr *instr = alloc_instr(state->func);
+    instr->aarch64->ty = AARCH64_INSTR_TY_ADD;
+    instr->aarch64->add = (struct aarch64_addsub_reg){.dest = dest,
+                                                      .lhs = base,
+                                                      .rhs = index,
+                                                      .imm6 = shift,
+                                                      .shift = AARCH64_SHIFT_LSL};
+  }
 
   if (addr_offset->offset) {
     struct instr *offset = alloc_instr(state->func);
     offset->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
     offset->aarch64->add_imm = (struct aarch64_addsub_imm){
-        .dest = dest, .source = dest, .imm = addr_offset->offset};
+        .dest = dest, .source = reg, .imm = addr_offset->offset};
+  }
+
+  if (!addr_offset->index && !addr_offset->offset) {
+    // just a mov
+    struct instr *mov = alloc_instr(state->func);
+    *mov->aarch64 = MOV_ALIAS(dest, base);
   }
 }
 
