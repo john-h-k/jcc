@@ -766,6 +766,44 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
   }
 }
 
+#define MEM_SIZE_8 (0b00)
+#define MEM_SIZE_16 (0b01)
+#define MEM_SIZE_32 (0b10)
+#define MEM_SIZE_64 (0b11)
+
+void aarch64_emit_load_byte(struct aarch64_emitter *emitter,
+                                const struct aarch64_load ldrb) {
+  aarch64_emit_instr(emitter, LDR_REG(MEM_SIZE_8, ldrb.offset.idx, ldrb.extend, ldrb.amount, ldrb.addr.idx, ldrb.dest.idx));
+}
+
+void aarch64_emit_store_byte(struct aarch64_emitter *emitter,
+                                 const struct aarch64_store strb) {
+  aarch64_emit_instr(emitter, STR_REG(MEM_SIZE_8, strb.offset.idx, strb.extend, strb.amount, strb.addr.idx, strb.source.idx));
+}
+
+void aarch64_emit_load_half(struct aarch64_emitter *emitter,
+                                const struct aarch64_load ldrh) {
+  aarch64_emit_instr(emitter, LDR_REG(MEM_SIZE_16, ldrh.offset.idx, ldrh.extend, ldrh.amount, ldrh.addr.idx, ldrh.dest.idx));
+}
+
+void aarch64_emit_store_half(struct aarch64_emitter *emitter,
+                                 const struct aarch64_store strh) {
+  aarch64_emit_instr(emitter, STR_REG(MEM_SIZE_16, strh.offset.idx, strh.extend, strh.amount, strh.addr.idx, strh.source.idx));
+}
+
+void aarch64_emit_load(struct aarch64_emitter *emitter,
+                           const struct aarch64_load ldr) {
+  size_t sz = ldr.dest.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
+  aarch64_emit_instr(emitter, LDR_REG(sz, ldr.offset.idx, ldr.extend, ldr.amount, ldr.addr.idx, ldr.dest.idx));
+}
+
+void aarch64_emit_store(struct aarch64_emitter *emitter,
+                            const struct aarch64_store str) {
+  size_t sz = str.source.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
+  aarch64_emit_instr(emitter, STR_REG(sz, str.offset.idx, str.extend, str.amount, str.addr.idx, str.source.idx));
+}
+
+
 /* Conditional selects */
 
 void aarch64_emit_csel(struct aarch64_emitter *emitter,

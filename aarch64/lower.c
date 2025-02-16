@@ -290,6 +290,19 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
+static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *base = op->addr_offset.base;
+  if (base->ty != IR_OP_TY_ADDR) {
+    return;
+  }
+
+  struct ir_op_addr *addr = &base->addr;
+
+  if (addr->ty == IR_OP_ADDR_TY_LCL) {
+    op->addr_offset.base = alloc_contained_ir_op(func, base, op);
+  }
+}
+
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   switch (op->load.ty) {
   case IR_OP_LOAD_TY_LCL:
@@ -596,6 +609,8 @@ void aarch64_lower(struct ir_unit *unit) {
 
                 op->addr_offset.scale = 1;
                 op->addr_offset.index = mul;
+              } else {
+                try_contain_addr_offset(func, op);
               }
               break;
             }

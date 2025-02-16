@@ -64,6 +64,9 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_EON,
   AARCH64_INSTR_TY_EOR,
   AARCH64_INSTR_TY_EOR_IMM,
+  AARCH64_INSTR_TY_LOAD,
+  AARCH64_INSTR_TY_LOAD_BYTE,
+  AARCH64_INSTR_TY_LOAD_HALF,
   AARCH64_INSTR_TY_LOAD_IMM,
   AARCH64_INSTR_TY_LOAD_BYTE_IMM,
   AARCH64_INSTR_TY_LOAD_HALF_IMM,
@@ -91,6 +94,9 @@ enum aarch64_instr_ty {
   AARCH64_INSTR_TY_STORE_BYTE_IMM,
   AARCH64_INSTR_TY_STORE_HALF_IMM,
   AARCH64_INSTR_TY_STORE_PAIR_IMM,
+  AARCH64_INSTR_TY_STORE,
+  AARCH64_INSTR_TY_STORE_BYTE,
+  AARCH64_INSTR_TY_STORE_HALF,
   AARCH64_INSTR_TY_SUBS,
   AARCH64_INSTR_TY_SUBS_EXT,
   AARCH64_INSTR_TY_SUB,
@@ -206,7 +212,9 @@ enum aarch64_instr_class {
   AARCH64_INSTR_CLASS_BRANCH_REG,
   AARCH64_INSTR_CLASS_COMPARE_AND_BRANCH,
   AARCH64_INSTR_CLASS_LOAD_IMM,
+  AARCH64_INSTR_CLASS_LOAD,
   AARCH64_INSTR_CLASS_STORE_IMM,
+  AARCH64_INSTR_CLASS_STORE,
   AARCH64_INSTR_CLASS_LOAD_PAIR_IMM,
   AARCH64_INSTR_CLASS_STORE_PAIR_IMM,
 };
@@ -229,12 +237,17 @@ struct aarch64_logical_imm {
   imm_t imms;
 };
 
+enum aarch64_binary_shift {
+  AARCH64_BINARY_SHIFT_LSL_0,
+  AARCH64_BINARY_SHIFT_LSL_12,
+};
+
 struct aarch64_addsub_imm {
   struct aarch64_reg dest;
   struct aarch64_reg source;
 
   imm_t imm;
-  size_t shift;
+  enum aarch64_binary_shift shift;
 };
 
 struct aarch64_addsub_reg {
@@ -251,6 +264,7 @@ enum aarch64_extend {
   AARCH64_EXTEND_UXTH = 0b001,
   AARCH64_EXTEND_UXTW = 0b010,
   AARCH64_EXTEND_UXTX = 0b011,
+  AARCH64_EXTEND_LSL = AARCH64_EXTEND_UXTX,
   AARCH64_EXTEND_SXTB = 0b100,
   AARCH64_EXTEND_SXTH = 0b101,
   AARCH64_EXTEND_SXTW = 0b110,
@@ -335,6 +349,36 @@ struct aarch64_branch_reg {
 struct aarch64_compare_and_branch {
   struct aarch64_reg cmp;
   struct ir_basicblock *target;
+};
+
+enum aarch64_lsl {
+  AARCH64_LSL_0,
+  AARCH64_LSL_OPSZ,
+};
+
+enum aarch64_op_size {
+  AARCH64_OP_SIZE_DWORD,
+  AARCH64_OP_SIZE_WORD,
+  AARCH64_OP_SIZE_HALF,
+  AARCH64_OP_SIZE_BYTE,
+};
+
+struct aarch64_load {
+  struct aarch64_reg dest;
+  struct aarch64_reg addr;
+  struct aarch64_reg offset;
+
+  enum aarch64_extend extend;
+  enum aarch64_lsl amount;
+};
+
+struct aarch64_store {
+  struct aarch64_reg source;
+  struct aarch64_reg addr;
+  struct aarch64_reg offset;
+
+  enum aarch64_extend extend;
+  enum aarch64_lsl amount;
 };
 
 struct aarch64_load_imm {
@@ -445,6 +489,14 @@ struct aarch64_instr {
 
     union {
       struct aarch64_compare_and_branch compare_and_branch, cbz, cbnz;
+    };
+
+    union {
+      struct aarch64_load load, ldr, ldrh, ldrb;
+    };
+
+    union {
+      struct aarch64_store store, str, strh, strb;
     };
 
     union {
