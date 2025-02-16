@@ -218,7 +218,10 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // it
   op->reg = REG_FLAGS;
 
-  if (op->succ && op->succ->ty == IR_OP_TY_BR_COND) {
+  // FIXME: there are other places where we check `op->succ` but we actually want to go to next stmt if needed
+  struct ir_op *succ = op->succ ? op->succ : op->stmt->succ->first;
+
+  if (succ && succ->ty == IR_OP_TY_BR_COND) {
     // don't need to insert `mov` because emitter understands how to emit a
     // branch depending on REG_FLAGS
     return;

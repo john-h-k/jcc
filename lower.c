@@ -25,6 +25,34 @@ static void propogate_switch_phis(UNUSED struct ir_func *func,
   }
 }
 
+static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *cond = op->br_cond.cond;
+  if (!var_ty_is_fp(&cond->var_ty)) {
+    return;
+  }
+
+  if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+    return;
+  }
+
+  // turn `if (float)` into `if (float != 0.0)`
+
+  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
+  zero->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_FLT,
+    .flt_value = 0
+  };
+
+  struct ir_op *neq = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  neq->binary_op = (struct ir_op_binary_op){
+    .ty = IR_OP_BINARY_OP_TY_FNEQ,
+    .lhs = cond,
+    .rhs = zero
+  };
+
+  op->br_cond.cond = neq;
+}
+
 static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->mem_set.addr;
 
@@ -287,7 +315,9 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
+              break;
             case IR_OP_TY_BR_COND:
+              lower_br_cond(func, op);
               break;
             case IR_OP_TY_MEM_SET:
               lower_mem_set(func, op);
