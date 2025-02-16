@@ -110,6 +110,47 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_CAST_OP:
               break;
+            case IR_OP_TY_ADDR_OFFSET: {
+              struct ir_op *base = op->addr_offset.base;
+
+              if (op->addr_offset.offset) {
+                struct ir_op *cnst = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
+                                     op->addr_offset.offset);
+
+                struct ir_op *offset = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP,
+                                           IR_VAR_TY_POINTER);
+                offset->binary_op = (struct ir_op_binary_op){
+                    .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base, .rhs = cnst};
+
+                base = offset;
+              }
+
+              if (op->addr_offset.index) {
+                struct ir_op *cnst = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
+                                     op->addr_offset.scale);
+
+                struct ir_op *mul = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                mul->binary_op =
+                    (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
+                                             .lhs = op->addr_offset.index,
+                                             .rhs = cnst};
+
+                struct ir_op *offset = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                offset->binary_op = (struct ir_op_binary_op){
+                    .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base, .rhs = mul};
+
+                base = offset;
+              }
+
+              op->ty = IR_OP_TY_MOV;
+              op->mov = (struct ir_op_mov) { .value = base };
+            } break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
                 lower_fp_cnst(func, op);

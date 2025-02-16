@@ -54,8 +54,9 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       exit -1
     fi
 
-    output=$(echo "$stdin" | ./a.out)
+    output=$(echo "$stdin" | spike pk a.out)
     result=$?
+    output=$(echo "$output" | tail -n + 2)
 
     if [ "$result" != "$expected" ]; then
       echo "TEST FAILED: expected return code $expected, got $result"

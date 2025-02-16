@@ -5,20 +5,39 @@
 
 // Mostly pulled from `elf.h`
 
-typedef uint64_t Elf64_Addr;
+typedef uint32_t Elf32_Addr;
+typedef uint16_t Elf32_Half;
+typedef uint32_t Elf32_Word;
+typedef int32_t Elf32_Sword;
+typedef uint32_t Elf32_Off;
 
+typedef uint64_t Elf64_Addr;
 typedef uint16_t Elf64_Half;
 typedef int16_t Elf64_Shalf;
-
 typedef uint32_t Elf64_Word;
 typedef int32_t Elf64_Sword;
-
 typedef uint64_t Elf64_Off;
-
 typedef uint64_t Elf64_Xword;
 typedef int64_t Elf64_Sxword;
 
 #define EI_NIDENT 16
+
+typedef struct elf32_hdr {
+  unsigned char e_ident[EI_NIDENT];
+  Elf32_Half e_type;
+  Elf32_Half e_machine;
+  Elf32_Word e_version;
+  Elf32_Addr e_entry; /* Entry point */
+  Elf32_Off e_phoff;
+  Elf32_Off e_shoff;
+  Elf32_Word e_flags;
+  Elf32_Half e_ehsize;
+  Elf32_Half e_phentsize;
+  Elf32_Half e_phnum;
+  Elf32_Half e_shentsize;
+  Elf32_Half e_shnum;
+  Elf32_Half e_shstrndx;
+} Elf32_Ehdr;
 
 typedef struct elf64_hdr {
   unsigned char e_ident[EI_NIDENT]; /* ELF "magic number" */
@@ -51,6 +70,15 @@ typedef struct elf64_hdr {
 #define STT_COMMON 5
 #define STT_TLS 6
 
+typedef struct elf32_sym {
+  Elf32_Word st_name;
+  Elf32_Addr st_value;
+  Elf32_Word st_size;
+  unsigned char st_info;
+  unsigned char st_other;
+  Elf32_Half st_shndx;
+} Elf32_Sym;
+
 typedef struct elf64_sym {
   Elf64_Word st_name;     /* Symbol name, index in string tbl */
   unsigned char st_info;  /* Type and binding attributes */
@@ -60,7 +88,14 @@ typedef struct elf64_sym {
   Elf64_Xword st_size;    /* Associated symbol size */
 } Elf64_Sym;
 
+#define ELF32_ST_INFO(b, t) (((b) << 4) + ((t) & 0xF))
 #define ELF64_ST_INFO(b, t) (((b) << 4) + ((t) & 0xF))
+
+typedef struct elf32_rela {
+  Elf32_Addr r_offset;
+  Elf32_Word r_info;
+  Elf32_Sword r_addend;
+} Elf32_Rela;
 
 typedef struct elf64_rela {
   Elf64_Addr r_offset;   /* Location at which to apply the action */
@@ -68,6 +103,7 @@ typedef struct elf64_rela {
   Elf64_Sxword r_addend; /* Constant addend used to compute value */
 } Elf64_Rela;
 
+#define ELF32_R_INFO(s, t) (((s) << 8) + (unsigned char)(t))
 #define ELF64_R_INFO(s, t) (((s) << 32) + ((t) & 0xFFFFFFFFL))
 
 #define SHT_NULL 0
@@ -101,6 +137,19 @@ typedef struct elf64_rela {
 #define SHN_ABS 0xfff1
 #define SHN_COMMON 0xfff2
 #define SHN_HIRESERVE 0xffff
+
+typedef struct elf32_shdr {
+  Elf32_Word sh_name;
+  Elf32_Word sh_type;
+  Elf32_Word sh_flags;
+  Elf32_Addr sh_addr;
+  Elf32_Off sh_offset;
+  Elf32_Word sh_size;
+  Elf32_Word sh_link;
+  Elf32_Word sh_info;
+  Elf32_Word sh_addralign;
+  Elf32_Word sh_entsize;
+} Elf32_Shdr;
 
 typedef struct elf64_shdr {
   Elf64_Word sh_name;       /* Section name, index in string tbl */

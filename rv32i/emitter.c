@@ -60,6 +60,26 @@ static void rv32i_emit_instr(struct rv32i_emitter *emitter, uint32_t instr) {
   emitter->block[emitter->head++] = instr;
 }
 
+void rv32i_emit_ori(struct rv32i_emitter *emitter, const struct rv32i_op_imm ori) {
+  rv32i_emit_instr(emitter, ORI(ori.imm, ori.source.idx, ori.dest.idx));
+}
+
+void rv32i_emit_andi(struct rv32i_emitter *emitter, const struct rv32i_op_imm andi) {
+  rv32i_emit_instr(emitter, ANDI(andi.imm, andi.source.idx, andi.dest.idx));
+}
+
+void rv32i_emit_slli(struct rv32i_emitter *emitter, const struct rv32i_op_imm slli) {
+  rv32i_emit_instr(emitter, SLLI(slli.imm, slli.source.idx, slli.dest.idx));
+}
+
+void rv32i_emit_srli(struct rv32i_emitter *emitter, const struct rv32i_op_imm srli) {
+  rv32i_emit_instr(emitter, SRLI(srli.imm, srli.source.idx, srli.dest.idx));
+}
+
+void rv32i_emit_srai(struct rv32i_emitter *emitter, const struct rv32i_op_imm srai) {
+  rv32i_emit_instr(emitter, SRAI(srai.imm, srai.source.idx, srai.dest.idx));
+}
+
 void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui) {
   rv32i_emit_instr(emitter, LUI(lui.imm, lui.dest.idx));
 }

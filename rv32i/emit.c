@@ -154,8 +154,21 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_FSQRT:
     rv32i_emit_fsqrt(state->emitter, instr->rv32i->fsqrt);
     break;
-  default:
-    BUG("other rv32i instruction emits");
+  case RV32I_INSTR_TY_ORI:
+    rv32i_emit_ori(state->emitter, instr->rv32i->ori);
+    break;
+  case RV32I_INSTR_TY_ANDI:
+    rv32i_emit_andi(state->emitter, instr->rv32i->andi);
+    break;
+  case RV32I_INSTR_TY_SLLI:
+    rv32i_emit_slli(state->emitter, instr->rv32i->slli);
+    break;
+  case RV32I_INSTR_TY_SRLI:
+    rv32i_emit_srli(state->emitter, instr->rv32i->srli);
+    break;
+  case RV32I_INSTR_TY_SRAI:
+    rv32i_emit_srai(state->emitter, instr->rv32i->srai);
+    break;
   }
 }
 
