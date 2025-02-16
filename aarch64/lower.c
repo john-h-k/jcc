@@ -290,7 +290,7 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
-static bool fits_in_alu_imm(unsigned long long value) { return value < 0xFFFF; }
+static bool fits_in_alu_imm(unsigned long long value) { return value < MAX_IMM_SIZE; }
 
 static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP, "expected binary op");
