@@ -248,7 +248,7 @@ enum compile_result compile(struct compiler *compiler) {
       case IR_GLB_TY_FUNC:
         ir_order_basicblocks(glb->func);
         eliminate_redundant_ops(glb->func);
-        // rebuild_ids(glb->func);
+        rebuild_ids(glb->func);
         break;
       }
 

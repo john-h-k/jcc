@@ -321,8 +321,8 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_FLTEQ:
-    supports_lhs_contained = false;
-    supports_rhs_contained = false;
+    supports_lhs_contained = true;
+    supports_rhs_contained = true;
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
   case IR_OP_BINARY_OP_TY_SRSHIFT:
@@ -362,10 +362,10 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
     break;
   }
 
-  if (supports_lhs_contained && (lhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&lhs->var_ty) &&
+  if (supports_lhs_contained && (lhs->ty == IR_OP_TY_CNST && (var_ty_is_integral(&lhs->var_ty) || (var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
       fits_in_alu_imm(lhs->cnst.int_value))) {
     op->binary_op.lhs = alloc_contained_ir_op(func, lhs, op);
-  } else if (supports_rhs_contained && (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty) &&
+  } else if (supports_rhs_contained && (rhs->ty == IR_OP_TY_CNST && (var_ty_is_integral(&rhs->var_ty) || (var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
              fits_in_alu_imm(rhs->cnst.int_value))) {
     op->binary_op.rhs = alloc_contained_ir_op(func, rhs, op);
   }
@@ -464,6 +464,34 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   }
 }
 
+static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *cond = op->br_cond.cond;
+  if (!var_ty_is_fp(&cond->var_ty)) {
+    return;
+  }
+
+  if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+    return;
+  }
+
+  // turn `if (float)` into `if (float != 0.0)`
+
+  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
+  zero->flags |= IR_OP_FLAG_CONTAINED;
+  zero->cnst = (struct ir_op_cnst){
+    .ty = IR_OP_CNST_TY_FLT,
+    .flt_value = 0
+  };
+
+  struct ir_op *neq = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  neq->binary_op = (struct ir_op_binary_op){
+    .ty = IR_OP_BINARY_OP_TY_FNEQ,
+    .lhs = cond,
+    .rhs = zero
+  };
+
+  op->br_cond.cond = neq;
+}
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
@@ -473,6 +501,13 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_F16: {
+    DEBUG_ASSERT(op->cnst.int_value == 0, "can only load f16 for 0");
+    int_ty = IR_VAR_TY_I16;
+    int_value = 0;
+
+    break;
+  }
   case IR_VAR_PRIMITIVE_TY_F32: {
     int_ty = IR_VAR_TY_I32;
 
@@ -692,7 +727,6 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_BR:
-            case IR_OP_TY_BR_COND:
             case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_MOV:
             case IR_OP_TY_RET:
@@ -700,6 +734,9 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
             case IR_OP_TY_UNARY_OP:
+              break;
+            case IR_OP_TY_BR_COND:
+              lower_br_cond(func, op);
               break;
             case IR_OP_TY_STORE:
               try_contain_store(func, op);

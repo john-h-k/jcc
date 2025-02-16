@@ -1,8 +1,6 @@
 #include "lower.h"
 
-#include "bit_twiddle.h"
 #include "ir/ir.h"
-#include "ir/prettyprint.h"
 #include "log.h"
 #include "util.h"
 
@@ -287,9 +285,9 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_RET:
             case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_BITFIELD_INSERT:
-            case IR_OP_TY_BR_COND:
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
+            case IR_OP_TY_BR_COND:
               break;
             case IR_OP_TY_MEM_SET:
               lower_mem_set(func, op);
@@ -360,7 +358,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
           DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
-                       "contained op must have uses");
+                       "contained op %zu must have uses", use->op->id);
 
           debug("detaching op %zu", use->op->id);
           detach_ir_op(func, use->op);

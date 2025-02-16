@@ -73,7 +73,7 @@ unsigned long long bitset_tzcnt(struct bitset *bitset) {
   for (size_t i = 0; i < bitset->num_chunks; i++) {
     chunk_t chunk = bitset->chunks[i];
 
-    size_t tz = (size_t)tzcnt(chunk);
+    size_t tz = chunk ? (size_t)tzcnt(chunk) : bits_per_chunk;
 
     if (tz < bits_per_chunk) {
       return MIN(i * bits_per_chunk + tz, bitset->num_elements);

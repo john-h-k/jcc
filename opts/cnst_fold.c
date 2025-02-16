@@ -152,20 +152,26 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_CAST_OP_TY_SEXT:
   case IR_OP_CAST_OP_TY_ZEXT:
   case IR_OP_CAST_OP_TY_TRUNC:
-    new_cnst = cnst;
-    // nop
-    break;
+    new_cnst = round_integral(func, cnst, op->var_ty);
+    mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+    op->var_ty = var_ty;
+
+    return true;
   case IR_OP_CAST_OP_TY_CONV:
   case IR_OP_CAST_OP_TY_UCONV:
   case IR_OP_CAST_OP_TY_SCONV:
-    return false;
+    if (cnst != 0) {
+      return false;
+    }
+
+    op->ty = IR_OP_TY_CNST;
+    op->var_ty = var_ty;
+    op->cnst = (struct ir_op_cnst){
+      .ty = IR_OP_CNST_TY_FLT,
+      .flt_value = 0
+    };
+    return true;
   }
-
-  new_cnst = round_integral(func, new_cnst, op->var_ty);
-  mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
-  op->var_ty = var_ty;
-
-  return true;
 }
 
 static bool opts_cnst_fold_addr_offset(struct ir_func *func, struct ir_op *op) {
