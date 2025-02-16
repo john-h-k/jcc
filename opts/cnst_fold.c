@@ -168,6 +168,20 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   return true;
 }
 
+static bool opts_cnst_fold_addr_offset(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_addr_offset *addr_offset = &op->addr_offset;
+
+  // only need to fold `index * scale` as the rest is already constant-ified
+  if (addr_offset->index && addr_offset->index->ty == IR_OP_TY_CNST) {
+    unsigned long long value = addr_offset->index->cnst.int_value * addr_offset->scale;
+    addr_offset->index = NULL;
+    addr_offset->offset += value;
+    return true;
+  }
+
+  return false;
+}
+
 static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
   switch (op->ty) {
   case IR_OP_TY_BINARY_OP:
@@ -176,6 +190,8 @@ static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
     return opts_cnst_fold_unary_op(func, op);
   case IR_OP_TY_CAST_OP:
     return opts_cnst_fold_cast_op(func, op);
+  case IR_OP_TY_ADDR_OFFSET:
+    return opts_cnst_fold_addr_offset(func, op);
   default:
     return false;
   }
