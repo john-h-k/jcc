@@ -443,23 +443,14 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
           var_ty_for_td_var_ty(irb->unit, td_var_ty->pointer.underlying);
       struct ir_var_ty_info el_info = var_ty_info(irb->unit, &el_ty);
 
-      struct ir_op *el_size_op = alloc_ir_op(irb->func, stmt);
-      mk_pointer_constant(irb->unit, el_size_op, el_info.size);
-
-      struct ir_op *rhs_mul = alloc_ir_op(irb->func, stmt);
-      rhs_mul->ty = IR_OP_TY_BINARY_OP;
-      rhs_mul->var_ty = var_ty;
-      rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
-      rhs_mul->binary_op.lhs = el_size_op;
-      rhs_mul->binary_op.rhs = rhs;
-
       struct ir_op *op = alloc_ir_op(irb->func, stmt);
-      op->ty = IR_OP_TY_BINARY_OP;
+      op->ty = IR_OP_TY_ADDR_OFFSET;
       op->var_ty = var_ty;
-      op->binary_op.ty = ty == TD_BINARY_OP_TY_ADD ? IR_OP_BINARY_OP_TY_ADD
-                                                   : IR_OP_BINARY_OP_TY_SUB;
-      op->binary_op.lhs = lhs;
-      op->binary_op.rhs = rhs_mul;
+      op->addr_offset = (struct ir_op_addr_offset){
+        .base = lhs,
+        .index = rhs,
+        .scale = el_info.size
+      };
 
       return op;
     }
