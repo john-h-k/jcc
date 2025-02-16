@@ -1,7 +1,7 @@
 #include "cnst_fold.h"
 
-#include "opts.h"
 #include "../util.h"
+#include "opts.h"
 
 static unsigned long long round_integral(struct ir_func *func,
                                          unsigned long long value,
@@ -30,10 +30,10 @@ static unsigned long long round_integral(struct ir_func *func,
 }
 
 static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
+  struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
   struct ir_op *lhs = op->binary_op.lhs;
   struct ir_op *rhs = op->binary_op.rhs;
-  struct ir_var_ty var_ty = op->var_ty;
 
   unsigned long long lhs_cnst, rhs_cnst;
 
@@ -84,6 +84,7 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
     BUG("bad type");
   }
 #undef CNST_FLD_BINOP
+#undef CNST_FLD_SBINOP
 
   value = round_integral(func, value, op->var_ty);
   mk_integral_constant(func->unit, op, op->var_ty.primitive, value);
@@ -92,21 +93,96 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
   return true;
 }
 
+static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
+  struct ir_var_ty var_ty = op->var_ty;
+  enum ir_op_unary_op_ty ty = op->unary_op.ty;
+  struct ir_op *value = op->unary_op.value;
+
+  unsigned long long cnst;
+
+  if (value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+    return false;
+  }
+
+  cnst = value->cnst.int_value;
+
+  unsigned long long new_cnst;
+#define CNST_FLD_UNNOP(ty, op)                                                 \
+  case IR_OP_UNARY_OP_TY_##ty:                                                 \
+    new_cnst = op cnst;                                                        \
+    break;
+
+#define CNST_FLD_SUNNOP(ty, op)                                                \
+  case IR_OP_UNARY_OP_TY_##ty:                                                 \
+    new_cnst = op(signed long long) cnst;                                      \
+    break;
+
+  switch (ty) {
+    CNST_FLD_SUNNOP(NEG, -);
+    CNST_FLD_UNNOP(NOT, ~);
+    CNST_FLD_UNNOP(LOGICAL_NOT, !);
+  default:
+    BUG("bad type");
+  }
+#undef CNST_FLD_UNNOP
+#undef CNST_FLD_SUNNOP
+
+  new_cnst = round_integral(func, new_cnst, op->var_ty);
+  mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+  op->var_ty = var_ty;
+
+  return true;
+}
+
+static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
+  struct ir_var_ty var_ty = op->var_ty;
+  enum ir_op_cast_op_ty ty = op->cast_op.ty;
+  struct ir_op *value = op->cast_op.value;
+
+  unsigned long long cnst;
+
+  if (value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+    return false;
+  }
+
+  cnst = value->cnst.int_value;
+
+  unsigned long long new_cnst;
+  switch (ty) {
+  case IR_OP_CAST_OP_TY_SEXT:
+  case IR_OP_CAST_OP_TY_ZEXT:
+  case IR_OP_CAST_OP_TY_TRUNC:
+    new_cnst = cnst;
+    // nop
+    break;
+  case IR_OP_CAST_OP_TY_CONV:
+  case IR_OP_CAST_OP_TY_UCONV:
+  case IR_OP_CAST_OP_TY_SCONV:
+    return false;
+  }
+
+  new_cnst = round_integral(func, new_cnst, op->var_ty);
+  mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+  op->var_ty = var_ty;
+
+  return true;
+}
+
 static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
   switch (op->ty) {
-    case IR_OP_TY_BINARY_OP:
-      return opts_cnst_fold_binary_op(func, op);
-    default:
-      return false;
+  case IR_OP_TY_BINARY_OP:
+    return opts_cnst_fold_binary_op(func, op);
+  case IR_OP_TY_UNARY_OP:
+    return opts_cnst_fold_unary_op(func, op);
+  case IR_OP_TY_CAST_OP:
+    return opts_cnst_fold_cast_op(func, op);
+  default:
+    return false;
   }
 }
 
-
 void opts_cnst_fold(struct ir_unit *unit) {
-  struct opts_pass pass = {
-    .name = __func__,
-    .op_callback = opts_cnst_fold_op
-  };
+  struct opts_pass pass = {.name = __func__, .op_callback = opts_cnst_fold_op};
 
   opts_run_pass(unit, &pass);
 }

@@ -111,6 +111,15 @@ static void emit_instr(const struct emit_state *state,
   case AARCH64_INSTR_TY_EOR_IMM:
     aarch64_emit_eor_imm(state->emitter, instr->aarch64->eor_imm);
     break;
+  case AARCH64_INSTR_TY_LOAD:
+    aarch64_emit_load(state->emitter, instr->aarch64->ldr);
+    break;
+  case AARCH64_INSTR_TY_LOAD_BYTE:
+    aarch64_emit_load_byte(state->emitter, instr->aarch64->ldrb);
+    break;
+  case AARCH64_INSTR_TY_LOAD_HALF:
+    aarch64_emit_load_half(state->emitter, instr->aarch64->ldrh);
+    break;
   case AARCH64_INSTR_TY_LOAD_IMM:
     aarch64_emit_load_imm(state->emitter, instr->aarch64->ldr_imm);
     break;
@@ -188,6 +197,15 @@ static void emit_instr(const struct emit_state *state,
     break;
   case AARCH64_INSTR_TY_SDIV:
     aarch64_emit_sdiv(state->emitter, instr->aarch64->sdiv);
+    break;
+  case AARCH64_INSTR_TY_STORE:
+    aarch64_emit_store(state->emitter, instr->aarch64->str);
+    break;
+  case AARCH64_INSTR_TY_STORE_BYTE:
+    aarch64_emit_store_byte(state->emitter, instr->aarch64->strb);
+    break;
+  case AARCH64_INSTR_TY_STORE_HALF:
+    aarch64_emit_store_half(state->emitter, instr->aarch64->strh);
     break;
   case AARCH64_INSTR_TY_STORE_IMM:
     aarch64_emit_store_imm(state->emitter, instr->aarch64->str_imm);
