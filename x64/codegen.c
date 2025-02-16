@@ -18,13 +18,13 @@ static void codegen_fprintf(FILE *file, const char *format, ...);
     }                                                                          \
   }
 
-// #define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
-//   (struct x64_instr) {                                                     \
-//     .ty = X64_INSTR_TY_FMOV, .fmov = {                                     \
-//       .source = (source_reg),                                                  \
-//       .dest = (dest_reg),                                                      \
-//     }                                                                          \
-//   }
+#define FP_MOV_ALIAS(dest_reg, source_reg)                                     \
+  (struct x64_instr) {                                                     \
+    .ty = X64_INSTR_TY_MOVAPS, .movaps = {                                     \
+      .source = (source_reg),                                                  \
+      .dest = (dest_reg),                                                      \
+    }                                                                          \
+  }
 
 // size_t reg_size(enum x64_reg_ty reg_ty) {
 //   switch (reg_ty) {
@@ -415,9 +415,9 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 
   struct instr *instr = alloc_instr(state->func);
   if (x64_reg_ty_is_gp(source.ty) && x64_reg_ty_is_gp(dest.ty)) {
-    *instr->x64 =
-        (struct x64_instr){.ty = X64_INSTR_TY_MOV_REG,
-                           .mov_reg = {.dest = dest, .source = source}};
+    *instr->x64 = MOV_ALIAS(dest, source);
+  } else if (x64_reg_ty_is_fp(source.ty) && x64_reg_ty_is_fp(dest.ty)) {
+    *instr->x64 = FP_MOV_ALIAS(dest, source);
   } else {
     // one is floating
 

@@ -467,34 +467,6 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *cond = op->br_cond.cond;
-  if (!var_ty_is_fp(&cond->var_ty)) {
-    return;
-  }
-
-  if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
-    return;
-  }
-
-  // turn `if (float)` into `if (float != 0.0)`
-
-  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
-  zero->flags |= IR_OP_FLAG_CONTAINED;
-  zero->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_FLT,
-    .flt_value = 0
-  };
-
-  struct ir_op *neq = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-  neq->binary_op = (struct ir_op_binary_op){
-    .ty = IR_OP_BINARY_OP_TY_FNEQ,
-    .lhs = cond,
-    .rhs = zero
-  };
-
-  op->br_cond.cond = neq;
-}
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
@@ -737,9 +709,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
             case IR_OP_TY_UNARY_OP:
-              break;
             case IR_OP_TY_BR_COND:
-              lower_br_cond(func, op);
               break;
             case IR_OP_TY_STORE:
               try_contain_store(func, op);
