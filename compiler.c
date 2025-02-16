@@ -285,11 +285,11 @@ enum compile_result compile(struct compiler *compiler) {
   {
     COMPILER_STAGE(EMIT);
 
-    struct codegen_unit *codegen = target->codegen(ir);
+    struct codegen_unit *codegen_unit = codegen(ir);
 
     if (log_enabled() && target->debug_print_codegen) {
       debug_print_stage(ir, "emit");
-      target->debug_print_codegen(stderr, codegen);
+      target->debug_print_codegen(stderr, codegen_unit);
     }
 
     if (compiler->args.build_asm_file) {
@@ -300,7 +300,7 @@ enum compile_result compile(struct compiler *compiler) {
         return COMPILE_RESULT_BAD_FILE;
       }
 
-      target->debug_print_codegen(file, codegen);
+      target->debug_print_codegen(file, codegen_unit);
 
       fclose(file);
 
@@ -311,7 +311,7 @@ enum compile_result compile(struct compiler *compiler) {
       }
     }
 
-    unit = target->emit_function(codegen);
+    unit = target->emit_function(codegen_unit);
   }
 
   struct build_object_args args = {.compile_args = &compiler->args,

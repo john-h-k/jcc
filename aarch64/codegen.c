@@ -3381,21 +3381,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
           basicblock = basicblock->succ;
         }
 
-        // TODO: move this somewhere else so it runs on all platforms
-        basicblock = ir_func->first;
-        while (basicblock) {
-          if (!basicblock->first_instr) {
-            struct ir_basicblock *succ = basicblock->succ;
-            while (!succ->first_instr) {
-              succ = succ->succ;
-            }
-
-            basicblock->first_instr = succ->first_instr;
-          }
-
-          basicblock = basicblock->succ;
-        }
-
         break;
       }
       }
