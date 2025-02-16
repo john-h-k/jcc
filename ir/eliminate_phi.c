@@ -132,7 +132,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
   switch (reg_ty) {
   case IR_REG_TY_INTEGRAL:
     reg_usage = irb->reg_usage.gp_registers_used;
-    lcl_ty = IR_VAR_TY_I64;
+    lcl_ty = var_ty_for_pointer_size(irb->unit);
     reg_info = irb->unit->target->reg_info.gp_registers;
     break;
   case IR_REG_TY_FP:

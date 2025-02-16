@@ -411,6 +411,10 @@ static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
 }
 
 static struct aarch64_reg codegen_reg(struct ir_op *op) {
+  if (op->ty == IR_OP_TY_CNST && (op->flags & IR_OP_FLAG_CONTAINED) && op->cnst.int_value == 0) {
+    return zero_reg_for_ty(reg_ty_for_var_ty(&op->var_ty));
+  }
+
   DEBUG_ASSERT(!(op->flags & IR_OP_FLAG_CONTAINED),
                "contained ops have no reg");
 
@@ -1345,13 +1349,13 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                "floating point with invalid binary op");
 
 #define CONTAINED_OP(str, ins_up, ins)                                         \
-  if (lhs_op->flags & IR_OP_FLAG_CONTAINED) {                                  \
+  if ((lhs_op->flags & IR_OP_FLAG_CONTAINED) && lhs_op->cnst.int_value) {                                  \
     instr->aarch64->ty = AARCH64_INSTR_TY_##ins_up##_IMM;                      \
     instr->aarch64->ins##_imm =                                                \
         (struct aarch64_##str##_imm){.dest = dest,                             \
                                      .source = codegen_reg(rhs_op),            \
                                      .imm = lhs_op->cnst.int_value};           \
-  } else if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {                           \
+  } else if ((rhs_op->flags & IR_OP_FLAG_CONTAINED) && rhs_op->cnst.int_value) {                           \
     instr->aarch64->ty = AARCH64_INSTR_TY_##ins_up##_IMM;                      \
     instr->aarch64->ins##_imm =                                                \
         (struct aarch64_##str##_imm){.dest = dest,                             \

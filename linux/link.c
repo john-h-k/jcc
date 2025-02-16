@@ -36,27 +36,56 @@ enum link_result linux_link_objects(const struct link_args *args) {
   case COMPILE_TARGET_LINUX_RV32I:
     // FIXME: this will only work on mac
     // need a way to get the riscv paths xplat
-    template_prefix = "riscv64-unknown-elf-ld "
-                      "--sysroot=/opt/riscv/bin/../riscv64-unknown-elf "
-                      "-plugin "
-                      "/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/"
-                      "12.2.0/liblto_plugin.so "
-                      "-plugin-opt=/opt/riscv/bin/../libexec/gcc/"
-                      "riscv64-unknown-elf/12.2.0/lto-wrapper "
-                      "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../"
-                      "../../../riscv64-unknown-elf/lib/crt0.o "
-                      "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0 "
-                      "-L/opt/riscv/bin/../lib/gcc "
-                      "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/"
-                      "../../../../riscv64-unknown-elf/lib "
-                      "-L/opt/riscv/bin/../riscv64-unknown-elf/lib";
 
-    template_suffix =
-        " -lgcc "
-        "--start-group "
-        "-lc "
-        "-lgloss "
-        " --end-group ";
+    template_prefix =
+        "riscv64-unknown-elf-ld "
+        "-plugin "
+        "/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/12.2.0/"
+        "liblto_plugin.so "
+        "-plugin-opt=/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/12.2.0/"
+        "lto-wrapper -plugin-opt=-fresolution=/tmp/ccI4xWdp.res "
+        "-plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc "
+        "-plugin-opt=-pass-through=-lgloss -plugin-opt=-pass-through=-lgcc "
+        "--sysroot=/opt/riscv/bin/../riscv64-unknown-elf -melf32lriscv "
+        "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../"
+        "riscv64-unknown-elf/lib/rv32imfd/ilp32d/crt0.o "
+        "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/"
+        "crtbegin.o "
+        "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/"
+        "ilp32d "
+        "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../"
+        "riscv64-unknown-elf/lib/rv32imfd/ilp32d "
+        "-L/opt/riscv/bin/../riscv64-unknown-elf/lib/rv32imfd/ilp32d "
+        "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0 "
+        "-L/opt/riscv/bin/../lib/gcc "
+        "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../"
+        "riscv64-unknown-elf/lib -L/opt/riscv/bin/../riscv64-unknown-elf/lib ";
+
+    template_suffix = " -lgcc --start-group -lc -lgloss --end-group -lgcc "
+        "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/"
+        "crtend.o";
+    // template_prefix = "riscv64-unknown-elf-ld "
+    //                   "-melf32lriscv "
+    //                   "--sysroot=/opt/riscv/bin/../riscv64-unknown-elf "
+    //                   "-plugin "
+    //                   "/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/"
+    //                   "12.2.0/liblto_plugin.so "
+    //                   "-plugin-opt=/opt/riscv/bin/../libexec/gcc/"
+    //                   "riscv64-unknown-elf/12.2.0/lto-wrapper "
+    //                   "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../"
+    //                   "../../../riscv64-unknown-elf/lib/crt0.o "
+    //                   "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0
+    //                   "
+    //                   "-L/opt/riscv/bin/../lib/gcc "
+    //                   "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/"
+    //                   "../../../../riscv64-unknown-elf/lib "
+    //                   "-L/opt/riscv/bin/../riscv64-unknown-elf/lib";
+
+    // template_suffix = " -lgcc "
+    //                   "--start-group "
+    //                   "-lc "
+    //                   "-lgloss "
+    //                   " --end-group ";
 
     break;
   default:

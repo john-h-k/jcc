@@ -37,6 +37,16 @@ void rv32i_emit_bltu(struct rv32i_emitter *emitter,
 void rv32i_emit_bgeu(struct rv32i_emitter *emitter,
                      const struct rv32i_conditional_branch bgeu);
 
+void rv32i_emit_ori(struct rv32i_emitter *emitter, const struct rv32i_op_imm ori);
+
+void rv32i_emit_andi(struct rv32i_emitter *emitter, const struct rv32i_op_imm andi);
+
+void rv32i_emit_slli(struct rv32i_emitter *emitter, const struct rv32i_op_imm slli);
+
+void rv32i_emit_srli(struct rv32i_emitter *emitter, const struct rv32i_op_imm srli);
+
+void rv32i_emit_srai(struct rv32i_emitter *emitter, const struct rv32i_op_imm srai);
+
 void rv32i_emit_fmv(struct rv32i_emitter *emitter,
                     const struct rv32i_op_mov fmv);
 void rv32i_emit_fadd(struct rv32i_emitter *emitter,

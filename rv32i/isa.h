@@ -122,6 +122,10 @@
 #define FUNCT3_MIN U32(0b000)
 #define FUNCT3_MAX U32(0b001)
 
+#define FUNCT3_SLLI U32(0b001)
+#define FUNCT3_SLRI U32(0b101)
+#define FUNCT3_SRAI U32(0b101)
+
 /* ----------------------------- */
 
 /* ---------- funct7 ---------- */
@@ -146,6 +150,13 @@
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADD, rd, OPC_OP_IMM)
 #define XORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_XOR, rd, OPC_OP_IMM)
+
+#define ORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_OR, rd, OPC_OP_IMM)
+#define ANDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_AND, rd, OPC_OP_IMM)
+
+#define SLLI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLLI, rd, OPC_OP_IMM)
+#define SRLI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLRI, rd, OPC_OP_IMM)
+#define SRAI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRA << 5) | shamt), rs1, FUNCT3_SRAI, rd, OPC_OP_IMM)
 
 #define LUI(imm20, rd) U_TYPE(imm20, rd, OPC_LUI)
 #define AUIPC(imm20, rd) U_TYPE(imm20, rd, OPC_AUIPC)
