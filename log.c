@@ -10,6 +10,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
 
 #ifdef NLOG
 #define DEF_LOG_FN(NAME, _PREFIX)                                              \
+  bool NAME##_enabled(void)  { return false; }                         \
   void NAME##_nl(void) { (void)format; }                         \
   void NAME(const char *format, ...) { (void)format; }                         \
   void NAME##sl(const char *format, ...) { (void)format; }                     \
@@ -17,6 +18,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
   void f##NAME##sl(const char *format, ...) { (void)format; }
 #else
 #define DEF_LOG_FN(NAME, PREFIX)                                               \
+  bool NAME##_enabled(void)  { return LOG_ENABLED; }                         \
   void NAME##_nl(void) {                                         \
     if (!LOG_ENABLED) {                                                        \
       return;                                                                  \

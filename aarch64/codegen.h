@@ -352,8 +352,8 @@ struct aarch64_compare_and_branch {
 };
 
 enum aarch64_lsl {
-  AARCH64_LSL_0,
-  AARCH64_LSL_OPSZ,
+  AARCH64_LSL_0 = 0b0,
+  AARCH64_LSL_OPSZ = 0b1,
 };
 
 enum aarch64_op_size {
