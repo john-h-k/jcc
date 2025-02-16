@@ -328,9 +328,7 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_URSHIFT:
     supports_lhs_contained = false;
-    // TODO: support rhs immediate shifts in codegen
-    supports_rhs_contained = false;
-    // supports_rhs_contained = true;
+    supports_rhs_contained = true;
     break;
   case IR_OP_BINARY_OP_TY_AND:
   case IR_OP_BINARY_OP_TY_OR:

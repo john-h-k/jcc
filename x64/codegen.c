@@ -1470,7 +1470,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
     if (IS_MEM_LOC(move.from)) {
       DEBUG_ASSERT(!IS_MEM_LOC(move.to), "mem -> mem but not in memcpy list");
 
-      struct mem_loc *from = move.from.metadata;
+      struct mem_loc *from = move.from.metadata[0];
       struct x64_reg to = {
           .ty = reg_ty_for_size(reg_class, from->size, move.to.idx),
           .idx = move.to.idx};
@@ -1484,7 +1484,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
     } else if (IS_MEM_LOC(move.to)) {
       DEBUG_ASSERT(!IS_MEM_LOC(move.from), "mem -> mem but not in memcpy list");
 
-      struct mem_loc *to = move.to.metadata;
+      struct mem_loc *to = move.to.metadata[0];
       struct x64_reg from = {
           .ty = reg_ty_for_size(reg_class, to->size, move.from.idx),
           .idx = move.from.idx};
@@ -1718,7 +1718,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
               struct location loc = {
                   .idx = MEM_LOC(),
-                  .metadata = arena_alloc_init(
+                  .metadata[0] = arena_alloc_init(
                       state->arena, sizeof(struct mem_loc), &mem_loc)};
 
               struct location to = {.idx = nsrn++};
@@ -1782,7 +1782,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
             struct location loc = {
                 .idx = MEM_LOC(),
-                .metadata = arena_alloc_init(state->arena,
+                .metadata[0] = arena_alloc_init(state->arena,
                                              sizeof(struct mem_loc), &mem_loc)};
 
             struct location to = {.idx = ngrn++};
@@ -1823,7 +1823,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
         struct location to = {
             .idx = MEM_LOC(),
-            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
+            .metadata[0] = arena_alloc_init(state->arena, sizeof(struct mem_loc),
                                          &mem_loc)};
 
         if (INTEGRAL_OR_PTRLIKE(var_ty)) {
@@ -2117,7 +2117,7 @@ static void codegen_params(struct codegen_state *state) {
 
           struct location to = {
               .idx = MEM_LOC(),
-              .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
+              .metadata[0] = arena_alloc_init(state->arena, sizeof(struct mem_loc),
                                            &mem_loc)};
 
           vector_push_back(fp_move_from, &from);
@@ -2171,7 +2171,7 @@ static void codegen_params(struct codegen_state *state) {
 
         struct location to = {
             .idx = MEM_LOC(),
-            .metadata = arena_alloc_init(state->arena, sizeof(struct mem_loc),
+            .metadata[0] = arena_alloc_init(state->arena, sizeof(struct mem_loc),
                                          &mem_loc)};
 
         struct location from = {.idx = ngrn++};
@@ -2207,7 +2207,7 @@ static void codegen_params(struct codegen_state *state) {
 
     struct location from = {
         .idx = MEM_LOC(),
-        .metadata =
+        .metadata[0] =
             arena_alloc_init(state->arena, sizeof(struct mem_loc), &mem_loc)};
 
     param_op = param_op->succ;
@@ -2734,8 +2734,8 @@ static void codegen_stmt(struct codegen_state *state,
 // static void check_reg_type_callback(struct instr *instr, struct x64_reg
 // reg,
 //                                     enum x64_reg_usage_ty usage_ty,
-//                                     void *metadata) {
-//   struct check_reg_type_data *data = metadata;
+//                                     void *metadata[0]) {
+//   struct check_reg_type_data *data = metadata[0];
 
 //   if (usage_ty == X64_REG_USAGE_TY_DEREF) {
 //     // deref only makes sense on an X register, and is ignored for
@@ -3101,7 +3101,7 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
 // }
 
 // void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
-//                void *metadata) {
+//                void *metadata[0]) {
 //   struct instr *instr = func->first;
 
 //   while (instr) {
@@ -3111,93 +3111,93 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
 //       break;
 //     case X64_INSTR_CLASS_LOGICAL_REG: {
 //       struct x64_logical_reg logical_reg = instr->x64->logical_reg;
-//       cb(instr, logical_reg.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, logical_reg.rhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, logical_reg.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, logical_reg.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, logical_reg.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, logical_reg.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_LOGICAL_IMM: {
 //       struct x64_logical_imm logical_imm = instr->x64->logical_imm;
-//       cb(instr, logical_imm.source, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, logical_imm.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, logical_imm.source, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, logical_imm.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_ADDSUB_REG: {
 //       struct x64_addsub_reg addsub_reg = instr->x64->addsub_reg;
-//       cb(instr, addsub_reg.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, addsub_reg.rhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, addsub_reg.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, addsub_reg.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, addsub_reg.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, addsub_reg.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_ADDSUB_EXT: {
 //       struct x64_addsub_ext addsub_ext = instr->x64->addsub_ext;
-//       cb(instr, addsub_ext.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, addsub_ext.rhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, addsub_ext.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, addsub_ext.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, addsub_ext.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, addsub_ext.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_ADDSUB_IMM: {
 //       struct x64_addsub_imm addsub_imm = instr->x64->addsub_imm;
-//       cb(instr, addsub_imm.source, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, addsub_imm.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, addsub_imm.source, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, addsub_imm.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_ADDR_IMM: {
 //       struct x64_addr_imm addr_imm = instr->x64->addr_imm;
-//       cb(instr, addr_imm.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, addr_imm.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_BITFIELD: {
 //       struct x64_bitfield bitfield = instr->x64->bitfield;
-//       cb(instr, bitfield.source, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, bitfield.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, bitfield.source, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, bitfield.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_FCMP: {
 //       struct x64_fcmp fcmp = instr->x64->fcmp;
-//       cb(instr, fcmp.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, fcmp.rhs, X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, fcmp.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, fcmp.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_FCMP_ZERO: {
 //       struct x64_fcmp_zero fcmp_zero = instr->x64->fcmp_zero;
-//       cb(instr, fcmp_zero.lhs, X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, fcmp_zero.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_REG_1_SOURCE: {
 //       struct x64_reg_1_source reg_1_source = instr->x64->reg_1_source;
-//       cb(instr, reg_1_source.source, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, reg_1_source.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, reg_1_source.source, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, reg_1_source.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_REG_2_SOURCE: {
 //       struct x64_reg_2_source reg_2_source = instr->x64->reg_2_source;
-//       cb(instr, reg_2_source.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, reg_2_source.rhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, reg_2_source.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, reg_2_source.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, reg_2_source.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, reg_2_source.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_MOV_IMM: {
 //       struct x64_mov_imm mov_imm = instr->x64->mov_imm;
-//       cb(instr, mov_imm.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, mov_imm.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_FMA: {
 //       struct x64_fma fma = instr->x64->fma;
-//       cb(instr, fma.lhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, fma.rhs, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, fma.addsub, X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, fma.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, fma.lhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, fma.rhs, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, fma.addsub, X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, fma.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_CONDITIONAL_SELECT: {
 //       struct x64_conditional_select conditional_select =
 //           instr->x64->conditional_select;
 //       cb(instr, conditional_select.false_source, X64_REG_USAGE_TY_READ,
-//          metadata);
+//          metadata[0]);
 //       cb(instr, conditional_select.true_source, X64_REG_USAGE_TY_READ,
-//          metadata);
-//       cb(instr, conditional_select.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//          metadata[0]);
+//       cb(instr, conditional_select.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_CONDITIONAL_BRANCH: {
@@ -3208,41 +3208,41 @@ struct codegen_unit *x64_codegen(struct ir_unit *ir) {
 //     }
 //     case X64_INSTR_CLASS_BRANCH_REG: {
 //       struct x64_branch_reg branch_reg = instr->x64->branch_reg;
-//       cb(instr, branch_reg.target, X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, branch_reg.target, X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_COMPARE_AND_BRANCH: {
 //       struct x64_compare_and_branch compare_and_branch =
 //           instr->x64->compare_and_branch;
-//       cb(instr, compare_and_branch.cmp, X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, compare_and_branch.cmp, X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_LOAD_IMM: {
 //       struct x64_load_imm load_imm = instr->x64->load_imm;
-//       cb(instr, load_imm.addr, X64_REG_USAGE_TY_DEREF, metadata);
-//       cb(instr, load_imm.dest, X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, load_imm.addr, X64_REG_USAGE_TY_DEREF, metadata[0]);
+//       cb(instr, load_imm.dest, X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_STORE_IMM: {
 //       struct x64_store_imm store_imm = instr->x64->store_imm;
-//       cb(instr, store_imm.addr, X64_REG_USAGE_TY_DEREF, metadata);
-//       cb(instr, store_imm.source, X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, store_imm.addr, X64_REG_USAGE_TY_DEREF, metadata[0]);
+//       cb(instr, store_imm.source, X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_LOAD_PAIR_IMM: {
 //       struct x64_load_pair_imm load_pair_imm =
 //           instr->x64->load_pair_imm;
-//       cb(instr, load_pair_imm.addr, X64_REG_USAGE_TY_DEREF, metadata);
-//       cb(instr, load_pair_imm.dest[0], X64_REG_USAGE_TY_WRITE, metadata);
-//       cb(instr, load_pair_imm.dest[1], X64_REG_USAGE_TY_WRITE, metadata);
+//       cb(instr, load_pair_imm.addr, X64_REG_USAGE_TY_DEREF, metadata[0]);
+//       cb(instr, load_pair_imm.dest[0], X64_REG_USAGE_TY_WRITE, metadata[0]);
+//       cb(instr, load_pair_imm.dest[1], X64_REG_USAGE_TY_WRITE, metadata[0]);
 //       break;
 //     }
 //     case X64_INSTR_CLASS_STORE_PAIR_IMM: {
 //       struct x64_store_pair_imm store_pair_imm =
 //           instr->x64->store_pair_imm;
-//       cb(instr, store_pair_imm.addr, X64_REG_USAGE_TY_DEREF, metadata);
-//       cb(instr, store_pair_imm.source[0], X64_REG_USAGE_TY_READ, metadata);
-//       cb(instr, store_pair_imm.source[1], X64_REG_USAGE_TY_READ, metadata);
+//       cb(instr, store_pair_imm.addr, X64_REG_USAGE_TY_DEREF, metadata[0]);
+//       cb(instr, store_pair_imm.source[0], X64_REG_USAGE_TY_READ, metadata[0]);
+//       cb(instr, store_pair_imm.source[1], X64_REG_USAGE_TY_READ, metadata[0]);
 //       break;
 //     }
 //     }

@@ -355,7 +355,7 @@ void aarch64_emit_movn(struct aarch64_emitter *emitter,
 void aarch64_emit_sbfm(struct aarch64_emitter *emitter,
                        const struct aarch64_bitfield bf) {
   aarch64_emit_instr(
-      emitter, SBFM_IMM(0b1, bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
+      emitter, SBFM_IMM(SF_FOR_REG(bf.dest), bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
 }
 
 void aarch64_emit_bfm(struct aarch64_emitter *emitter,

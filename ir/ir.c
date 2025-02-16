@@ -57,6 +57,45 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   }
 }
 
+enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty) {
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+    return IR_OP_BINARY_OP_TY_NEQ;
+  case IR_OP_BINARY_OP_TY_NEQ:
+    return IR_OP_BINARY_OP_TY_EQ;
+  case IR_OP_BINARY_OP_TY_UGT:
+    return IR_OP_BINARY_OP_TY_ULTEQ;
+  case IR_OP_BINARY_OP_TY_SGT:
+    return IR_OP_BINARY_OP_TY_SLTEQ;
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+    return IR_OP_BINARY_OP_TY_ULT;
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+    return IR_OP_BINARY_OP_TY_SLT;
+  case IR_OP_BINARY_OP_TY_ULT:
+    return IR_OP_BINARY_OP_TY_UGTEQ;
+  case IR_OP_BINARY_OP_TY_SLT:
+    return IR_OP_BINARY_OP_TY_SGTEQ;
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+    return IR_OP_BINARY_OP_TY_UGT;
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return IR_OP_BINARY_OP_TY_SGT;
+  case IR_OP_BINARY_OP_TY_FEQ:
+    return IR_OP_BINARY_OP_TY_FNEQ;
+  case IR_OP_BINARY_OP_TY_FNEQ:
+    return IR_OP_BINARY_OP_TY_FEQ;
+  case IR_OP_BINARY_OP_TY_FGT:
+    return IR_OP_BINARY_OP_TY_FLTEQ;
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    return IR_OP_BINARY_OP_TY_FLT;
+  case IR_OP_BINARY_OP_TY_FLT:
+    return IR_OP_BINARY_OP_TY_FGTEQ;
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    return IR_OP_BINARY_OP_TY_FGT;
+  default:
+    BUG("binary op was not comparison");
+  }
+}
+
 bool op_has_side_effects(const struct ir_op *op) {
   if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
     return true;
@@ -685,6 +724,73 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock) {
                                 basicblock->first->first->ty == IR_OP_TY_BR);
 }
 
+bool ir_reg_eq(struct ir_reg left, struct ir_reg right) {
+  return left.ty == right.ty && left.idx == right.idx;
+}
+
+void ir_order_basicblocks(struct ir_func *func) {
+  // TODO: topological sort basicblocks
+
+  // for now, just swap conditions that result in two branches becoming one
+
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    if (basicblock->ty == IR_BASICBLOCK_TY_SPLIT) {
+      struct ir_basicblock_split *split = &basicblock->split;
+
+      if (split->true_target == basicblock->succ) {
+        struct ir_op *br_cond = basicblock->last->last;
+        DEBUG_ASSERT(br_cond->ty == IR_OP_TY_BR_COND,
+                     "expected `br.cond` at end of SPLIT bb");
+        struct ir_op *cond = br_cond->br_cond.cond;
+
+        if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+          cond->binary_op.ty = invert_binary_comparison(cond->binary_op.ty);
+
+          struct ir_basicblock *tmp = split->true_target;
+          split->true_target = split->false_target;
+          split->false_target = tmp;
+        }
+      }
+    }
+
+    basicblock = basicblock->succ;
+  }
+}
+
+void eliminate_redundant_ops(struct ir_func *func) {
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op_use_map use_map = build_op_uses_map(func);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    struct ir_basicblock *basicblock = op->stmt->basicblock;
+    switch (op->ty) {
+    case IR_OP_TY_MOV:
+      if (op->mov.value && ir_reg_eq(op->reg, op->mov.value->reg)) {
+        struct ir_op_usage usage = use_map.use_datas[op->id];
+
+        for (size_t i = 0; i < usage.num_uses; i++) {
+          *usage.uses[i].op = op->mov.value;
+        }
+
+        detach_ir_op(func, op);
+      }
+      break;
+    case IR_OP_TY_BR:
+      DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+                   "br op in non MERGE bb");
+      if (basicblock->succ == basicblock->merge.target) {
+        detach_ir_op(func, op);
+      }
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 void prune_basicblocks(struct ir_func *irb) {
   if (!irb->first) {
     return;
@@ -1242,9 +1348,7 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
 
   producer->ty = IR_OP_TY_MOV;
   producer->mov = (struct ir_op_mov){.value = mov};
-  producer->write_info = (struct ir_op_write_info){
-    .num_reg_writes = 0
-  };
+  producer->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
 
   return mov;
 }
@@ -1787,10 +1891,12 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
       // FIXME: phis should be in their own statement!
 
       struct ir_stmt *succ = op->stmt->succ;
-      DEBUG_ASSERT(!succ || !succ->first || succ->first->ty != IR_OP_TY_PHI, "expected all phi to be in same stmt");
+      DEBUG_ASSERT(!succ || !succ->first || succ->first->ty != IR_OP_TY_PHI,
+                   "expected all phi to be in same stmt");
 
       if (succ->first) {
-        store = insert_before_ir_op(irb, succ->first, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        store = insert_before_ir_op(irb, succ->first, IR_OP_TY_STORE,
+                                    IR_VAR_TY_NONE);
       } else {
         store = alloc_ir_op(irb, succ);
         store->ty = IR_OP_TY_STORE;
@@ -1826,10 +1932,15 @@ struct use_data {
 static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
   struct build_op_uses_callback_data *data = cb_metadata;
 
-  vector_push_back(data->use_data[(*op)->id].uses, data->op);
+  struct ir_op_use use = {
+    .op = op,
+    .consumer = data->op
+  };
+
+  vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
-struct ir_op_uses build_op_uses_map(struct ir_func *func) {
+struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
   rebuild_ids(func);
 
   struct build_op_uses_callback_data data = {
@@ -1840,7 +1951,7 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
   for (size_t i = 0; i < func->op_count; i++) {
     // because walk_op_uses can be out of order we need to create the vectors in
     // advance
-    data.use_data[i].uses = vector_create(sizeof(struct ir_op *));
+    data.use_data[i].uses = vector_create(sizeof(struct ir_op_use));
   }
 
   struct ir_basicblock *basicblock = func->first;
@@ -1865,7 +1976,7 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
     basicblock = basicblock->succ;
   }
 
-  struct ir_op_uses uses = {
+  struct ir_op_use_map uses = {
       .num_use_datas = func->op_count,
       .use_datas =
           arena_alloc(func->arena, sizeof(*uses.use_datas) * func->op_count)};
@@ -1875,7 +1986,7 @@ struct ir_op_uses build_op_uses_map(struct ir_func *func) {
 
     DEBUG_ASSERT(i == use_data->op->id, "ops were not keyed");
 
-    uses.use_datas[i] = (struct ir_op_use){
+    uses.use_datas[i] = (struct ir_op_usage){
         .op = use_data->op,
         .num_uses = vector_length(use_data->uses),
         .uses = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
@@ -1977,7 +2088,8 @@ struct move_set gen_move_order(struct arena_allocator *arena,
   return move_set;
 }
 
-struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags flags) {
+struct ir_func_iter ir_func_iter(struct ir_func *func,
+                                 enum ir_func_iter_flags flags) {
   struct ir_basicblock *basicblock = func->first;
 
   while (basicblock && !basicblock->first) {
@@ -1989,15 +2101,15 @@ struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags f
   while (stmt && !stmt->first) {
     stmt = stmt->succ;
   }
-  
+
   struct ir_op *op = stmt ? stmt->first : NULL;
 
   return (struct ir_func_iter){
-    .func = func,
-    .flags = flags,
-    .basicblock = basicblock,
-    .stmt = stmt,
-    .op = op,
+      .func = func,
+      .flags = flags,
+      .basicblock = basicblock,
+      .stmt = stmt,
+      .op = op,
   };
 }
 
@@ -2032,4 +2144,3 @@ bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
 
   return true;
 }
-

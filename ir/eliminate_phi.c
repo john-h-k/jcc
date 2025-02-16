@@ -172,7 +172,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
         *op = load;
       }
     } else if (move.from.idx >= SIZE_MAX / 2) {
-      struct ir_lcl *lcl = move.from.metadata;
+      struct ir_lcl *lcl = move.from.metadata[0];
 
       struct ir_op *load =
           insert_before_ir_op(irb, last, IR_OP_TY_LOAD, lcl->var_ty);
@@ -182,7 +182,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
           .lcl = lcl,
       };
     } else if (move.to.idx >= SIZE_MAX / 2) {
-      struct ir_lcl *lcl = move.to.metadata;
+      struct ir_lcl *lcl = move.to.metadata[0];
 
       struct ir_op *store =
           insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
@@ -304,8 +304,8 @@ void eliminate_phi(struct ir_func *irb) {
             }
 
             if (from_pos != to_pos) {
-              struct location from = {.idx = from_pos, .metadata = from_metadata };
-              struct location to = {.idx = to_pos, .metadata = to_metadata };
+              struct location from = {.idx = from_pos, .metadata[0] = from_metadata };
+              struct location to = {.idx = to_pos, .metadata[0] = to_metadata };
 
               struct bb_reg key = {.reg = from_pos, .bb = mov_bb};
               hashtbl_insert(reg_to_val, &key, &value);

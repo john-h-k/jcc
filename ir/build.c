@@ -2417,17 +2417,11 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     struct ir_op *init_address = address;
 
     if (init->offset) {
-      struct ir_op *offset = alloc_ir_op(irb->func, *stmt);
-      offset->ty = IR_OP_TY_CNST;
-      offset->var_ty = var_ty_for_pointer_size(irb->unit);
-      offset->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                         .int_value = init->offset};
-
       init_address = alloc_ir_op(irb->func, *stmt);
-      init_address->ty = IR_OP_TY_BINARY_OP;
+      init_address->ty = IR_OP_TY_ADDR_OFFSET;
       init_address->var_ty = IR_VAR_TY_POINTER;
-      init_address->binary_op = (struct ir_op_binary_op){
-          .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset};
+      init_address->addr_offset = (struct ir_op_addr_offset){
+          .base = address, .offset = init->offset};
     }
 
     struct ir_op *store = alloc_ir_op(irb->func, *stmt);

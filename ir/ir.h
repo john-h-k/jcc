@@ -158,6 +158,7 @@ enum ir_op_binary_op_ty {
 };
 
 bool binary_op_is_comparison(enum ir_op_binary_op_ty ty);
+enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty);
 
 enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 
@@ -412,6 +413,8 @@ struct ir_reg {
     unsigned long idx;
   };
 };
+
+bool ir_reg_eq(struct ir_reg left, struct ir_reg right);
 
 #define NO_REG                                                                 \
   (struct ir_reg) { .ty = IR_REG_TY_NONE }
@@ -814,6 +817,9 @@ bool basicblock_is_empty(struct ir_basicblock *basicblock);
 void prune_basicblocks(struct ir_func *irb);
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
+void ir_order_basicblocks(struct ir_func *func);
+void eliminate_redundant_ops(struct ir_func *func);
+
 void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);
 
@@ -966,25 +972,30 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
 
 struct ir_op_use {
+  struct ir_op *consumer;
+  struct ir_op **op;
+};
+
+struct ir_op_usage {
   struct ir_op *op;
 
-  struct ir_op *uses;
+  struct ir_op_use *uses;
   size_t num_uses;
 };
 
-struct ir_op_uses {
-  struct ir_op_use *use_datas;
+struct ir_op_use_map {
+  struct ir_op_usage *use_datas;
   size_t num_use_datas;
 };
 
-struct ir_op_uses build_op_uses_map(struct ir_func *func);
+struct ir_op_use_map build_op_uses_map(struct ir_func *func);
 
 size_t unique_idx_for_ir_reg(struct ir_reg reg);
 struct ir_reg ir_reg_for_unique_idx(size_t idx);
 
 struct location {
   size_t idx;
-  void *metadata;
+  void *metadata[2];
 };
 
 struct move {
