@@ -184,11 +184,12 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
       if (has_free_reg) {
         struct ir_op *mov =
-            insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
+            insert_before_ir_op(irb, last, IR_OP_TY_MOV, lcl_ty);
         mov->mov = (struct ir_op_mov){.value = value};
         mov->reg = free_reg;
         mov->flags |= IR_OP_FLAG_PHI_MOV;
-        store_var_ty = value->var_ty;
+        // store_var_ty = value->var_ty;
+        store_var_ty = lcl_ty;
 
         tmp_mov = mov;
       } else {
@@ -197,14 +198,15 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
         store->store = (struct ir_op_store){
             .ty = IR_OP_STORE_TY_LCL, .lcl = spill_lcl, .value = value};
         store->flags |= IR_OP_FLAG_PHI_MOV;
-        store_var_ty = value->var_ty;
+        // store_var_ty = value->var_ty;
+        store_var_ty = lcl_ty;
       }
     } else if (move.from.idx == tmp_index) {
       struct ir_op *phi_op;
 
       if (has_free_reg) {
         struct ir_op *mov =
-            insert_before_ir_op(irb, last, IR_OP_TY_MOV, tmp_mov->var_ty);
+            insert_before_ir_op(irb, last, IR_OP_TY_MOV, lcl_ty);
         mov->mov = (struct ir_op_mov){.value = tmp_mov};
         mov->reg = to;
         mov->flags |= IR_OP_FLAG_PHI_MOV;
@@ -269,6 +271,7 @@ struct bb_moves {
 
 void eliminate_phi(struct ir_func *irb) {
   remove_critical_edges(irb);
+  rebuild_ids(irb);
 
   struct ir_basicblock *basicblock = irb->first;
 
@@ -311,10 +314,10 @@ void eliminate_phi(struct ir_func *irb) {
           size_t bb_move_id;
           if (moves_in_preds) {
             mov_bb = value->stmt->basicblock;
-            bb_move_id = mov_bb->id * 2 + 1;
+            bb_move_id = mov_bb->id * 2;
           } else {
             mov_bb = basicblock;
-            bb_move_id = mov_bb->id * 2;
+            bb_move_id = mov_bb->id * 2 + 1;
           }
 
           struct vector *gp_move_from = bb_moves[bb_move_id].gp_from;
@@ -402,19 +405,19 @@ void eliminate_phi(struct ir_func *irb) {
 
       struct ir_lcl *spill_lcl = NULL;
 
-      bool early = !j;
+      bool early = j;
 
       struct move_set gp_moves = gen_move_order(
           irb->arena, vector_head(gp_move_from), vector_head(gp_move_to),
           vector_length(gp_move_from), tmp_index);
-      gen_moves(irb, basicblock, reg_to_val, gp_moves, tmp_index, spill_lcl, IR_REG_TY_INTEGRAL,
-                early);
+      gen_moves(irb, basicblock, reg_to_val, gp_moves, tmp_index, spill_lcl,
+                IR_REG_TY_INTEGRAL, early);
 
       struct move_set fp_moves = gen_move_order(
           irb->arena, vector_head(fp_move_from), vector_head(fp_move_to),
           vector_length(fp_move_from), tmp_index);
-      gen_moves(irb, basicblock, reg_to_val, fp_moves, tmp_index, spill_lcl, IR_REG_TY_FP,
-                early);
+      gen_moves(irb, basicblock, reg_to_val, fp_moves, tmp_index, spill_lcl,
+                IR_REG_TY_FP, early);
     }
   }
 }

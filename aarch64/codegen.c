@@ -492,8 +492,17 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 
   struct instr *instr = alloc_instr(state->func);
   if (aarch64_reg_ty_is_gp(source.ty) && aarch64_reg_ty_is_gp(dest.ty)) {
+    if (op->flags & IR_OP_FLAG_PHI_MOV) {
+      dest.ty = AARCH64_REG_TY_X;
+      source.ty = AARCH64_REG_TY_X;
+    }
+
     *instr->aarch64 = MOV_ALIAS(dest, source);
   } else {
+    if (op->flags & IR_OP_FLAG_PHI_MOV) {
+      dest.ty = AARCH64_REG_TY_D;
+      source.ty = AARCH64_REG_TY_D;
+    }
     // one is floating
     *instr->aarch64 = FP_MOV_ALIAS(dest, source);
   }

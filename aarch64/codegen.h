@@ -525,6 +525,7 @@ enum aarch64_reg_usage_ty {
   AARCH64_REG_USAGE_TY_WRITE, // mov x9, ...
   AARCH64_REG_USAGE_TY_READ,  // mov ..., x9
   AARCH64_REG_USAGE_TY_DEREF, // ldr ..., [x9]
+  AARCH64_REG_USAGE_TY_NULL, // means the op may be overwritten and so reading from it is meaningless
 };
 
 size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty);
