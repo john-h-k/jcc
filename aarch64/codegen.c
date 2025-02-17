@@ -1946,21 +1946,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
 
-  // now we need to move each argument into its correct register
-  // it is possible there are no spare registers for this, and so we may need
-
-  // bool variadics_on_stack;
-  // switch (state->target->target_id) {
-  // case TARGET_ID_AARCH64_MACOS:
-  //   variadics_on_stack = true;
-  //   break;
-  // default:
-  //   variadics_on_stack = false;
-  //   break;
-  // }
-
-  // now we generate the actual call
-
   struct instr *instr = alloc_instr(state->func);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;
