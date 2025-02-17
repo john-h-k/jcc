@@ -602,6 +602,16 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     }
   }
 
+  if (func_info.call_info.flags & IR_CALL_INFO_FLAG_NUM_VARIADIC) {
+    struct ir_op *cnst = insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    cnst->cnst = (struct ir_op_cnst){
+      .ty = IR_OP_CNST_TY_INT,
+      .int_value = func_info.call_info.num_variadics
+    };
+    cnst->reg = func_info.call_info.num_variadics_reg;
+    cnst->flags |= IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG;
+  }
+
   op->call.args = vector_head(new_args);
   op->call.num_args = vector_length(new_args);
 

@@ -920,442 +920,49 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// when generating reg moves, assume memory slots never conflict
-// use incrementing values from 128 onwards
-#define FIRST_MEM_LOC 128
-#define IS_MEM_LOC(v) ((v.idx) >= FIRST_MEM_LOC)
-#define MEM_LOC() (last_mem_loc++)
 
-struct mem_loc {
-  struct rv32i_reg base;
-  size_t offset;
-  size_t size;
-};
-struct mem_copy {
-  struct mem_loc src, dest;
-};
+static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
+  invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
+
+  const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
+  const struct ir_var_ty *param_tys;
+
+  // note, it is important we use the func ty as the reference here for
+  // types as aggregates and similar will already have been turned into
+  // pointers. this does mean we need to explicitly handle pointers
+  // in the case of unspecified functions, we use `arg_var_tys` which is
+  // preserved
+  if (func_ty->num_params == op->call.num_args ||
+      (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
+    param_tys = func_ty->params;
+  } else {
+    param_tys = op->call.arg_var_tys;
+  }
+  (void)param_tys;
+
+  invariant_assert(func_ty->num_params <= 8,
+                   "`%s` doesn't support more than 8 args yet", __func__);
+
+  struct instr *instr = alloc_instr(state->func);
+  if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
+    instr->rv32i->ty = RV32I_INSTR_TY_JAL;
+    instr->rv32i->jal = (struct rv32i_jal){.target = NULL};
+
+    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+    *instr->reloc = (struct relocation){
+        .ty = RELOCATION_TY_CALL,
+        .symbol_index = op->call.target->addr.glb->id,
+        .size = 2,
+        .address = 0,
+    };
+  } else {
+    // NOTE: `blr` seems to segfault on linux rv32i
+    instr->rv32i->ty = RV32I_INSTR_TY_JALR;
+    instr->rv32i->jalr = (struct rv32i_jalr){
+        .target = codegen_reg(op->call.target) };
+  }
+}
 
-// static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
-//   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
-
-//   const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
-//   const struct ir_var_ty *param_tys;
-
-//   // note, it is important we use the func ty as the reference here for
-//   // types as aggregates and similar will already have been turned into
-//   // pointers. this does mean we need to explicitly handle pointers
-//   // in the case of unspecified functions, we use `arg_var_tys` which is
-//   // preserved
-//   if (func_ty->num_params == op->call.num_args ||
-//       (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-//     param_tys = func_ty->params;
-//   } else {
-//     param_tys = op->call.arg_var_tys;
-//   }
-
-//   invariant_assert(func_ty->num_params <= 8,
-//                    "`%s` doesn't support more than 8 args yet", __func__);
-
-//   // now we need to move each argument into its correct register
-//   // it is possible there are no spare registers for this, and so we may need
-
-//   struct vector *gp_move_from = vector_create(sizeof(struct location));
-//   struct vector *gp_move_to = vector_create(sizeof(struct location));
-
-//   struct vector *fp_move_from = vector_create(sizeof(struct location));
-//   struct vector *fp_move_to = vector_create(sizeof(struct location));
-
-//   struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
-
-//   size_t ngrn = 0;
-//   size_t nsrn = 0;
-//   size_t nsaa = 0;
-
-//   if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-//     struct rv32i_reg source = codegen_reg(op->call.target);
-
-//     struct location from = {.idx = source.idx};
-
-//     struct location to = {.idx = BLR_REG_IDX};
-
-//     // need to move it into reg 10
-//     vector_push_back(gp_move_from, &from);
-//     vector_push_back(gp_move_to, &to);
-//   }
-
-//   size_t last_mem_loc = FIRST_MEM_LOC;
-
-//   if (op->call.num_args) {
-//     size_t num_normal_args = func_ty->num_params;
-
-//     for (size_t i = 0; i < op->call.num_args; i++) {
-//       struct rv32i_reg source = codegen_reg(op->call.args[i]);
-
-//       enum rv32i_reg_attr_flags flags = reg_attr_flags(source);
-//       if (flags & RV32I_REG_ATTR_FLAG_ARG_REG) {
-//         // bad, might be overwritten during param preparation
-//         // preemptively add 9 so it is not an arg register
-//         // TODO: is this safe, and can it be improved?
-//         struct rv32i_reg dest = {.ty = source.ty, .idx = source.idx + 9};
-//         struct instr *mov = alloc_instr(state->func);
-
-//         if (rv32i_reg_ty_is_gp(dest.ty)) {
-//           *mov->rv32i = MOV_ALIAS(dest, source);
-//         } else {
-//           *mov->rv32i = FP_MOV_ALIAS(dest, source);
-//         }
-
-//         source = dest;
-//       }
-//     }
-
-//     for (size_t i = 0; i < op->call.num_args; i++) {
-//       struct rv32i_reg source = codegen_reg(op->call.args[i]);
-
-//       enum rv32i_reg_attr_flags flags = reg_attr_flags(source);
-//       if (flags & RV32I_REG_ATTR_FLAG_ARG_REG) {
-//         source.idx += 9;
-//       }
-
-//       // hmm, we pretend all memory locations are different but they are not
-//       // can gen_move_order accidentally overwrite things because of this?
-
-//       if (!variadics_on_stack || i < num_normal_args ||
-//           !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-
-//         const struct ir_var_ty *var_ty =
-//             i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
-
-//         struct ir_var_ty_info info = var_ty_info(
-//             state->ir->unit,
-//             var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
-
-//         size_t num_hfa_members;
-//         size_t hfa_member_size;
-
-//         if (var_ty_is_fp(var_ty) && nsrn < 8) {
-//           struct location from = {.idx = source.idx};
-//           struct location to = {.idx = nsrn};
-//           vector_push_back(fp_move_from, &from);
-//           vector_push_back(fp_move_to, &to);
-//           nsrn++;
-//           continue;
-//         } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
-//                                     &hfa_member_size)) {
-//           if (nsrn + num_hfa_members <= 8) {
-//             for (size_t j = 0; j < num_hfa_members; j++) {
-//               // given this is a composite, we assume `source` contains a
-//               // pointer to it
-
-//               struct mem_loc mem_loc = {.base = source,
-//                                         .offset = hfa_member_size * j,
-//                                         .size = hfa_member_size};
-
-//               struct location loc = {
-//                   .idx = MEM_LOC(),
-//                   .metadata[0] = arena_alloc_init(
-//                       state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-//               struct location to = {.idx = nsrn++};
-//               vector_push_back(fp_move_from, &loc);
-//               vector_push_back(fp_move_to, &to);
-//             }
-
-//             continue;
-//           }
-
-//           nsrn = 8;
-//           size_t nsaa_align = MAX(8, info.alignment);
-//           size_t size = ROUND_UP(info.size, nsaa_align);
-
-//           // TODO: overaligned HFAs and vectors
-//           struct mem_loc mem_src = {.base = source, .offset = 0, .size = size};
-
-//           struct mem_loc mem_dest = {
-//               .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-//           struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-//           vector_push_back(mem_copies, &copy);
-
-//           nsaa += size;
-
-//           continue;
-
-//         } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 &&
-//                    ngrn <= 8) {
-//           struct location from = {.idx = source.idx};
-//           struct location to = {.idx = ngrn};
-//           vector_push_back(gp_move_from, &from);
-//           vector_push_back(gp_move_to, &to);
-//           ngrn++;
-//           continue;
-//         }
-
-//         if (info.alignment == 16) {
-//           ngrn = (ngrn + 1) & 1;
-//         }
-
-//         if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-//           TODO("128 bit reg alloc");
-//           // // lo to ngrn, hi to ngrn+1
-//           // ngrn += 2;
-//           // continue;
-//         }
-
-//         size_t dw_size = info.size / 8;
-//         if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-//           for (size_t j = 0; j <= dw_size; j++) {
-//             // given this is a composite, we assume `source` contains a
-//             // pointer to it
-
-//             struct mem_loc mem_loc = {
-//                 .base = source, .offset = 8 * j, .size = 8};
-
-//             struct location loc = {
-//                 .idx = MEM_LOC(),
-//                 .metadata[0] = arena_alloc_init(
-//                     state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-//             struct location to = {.idx = ngrn++};
-//             vector_push_back(gp_move_from, &loc);
-//             vector_push_back(gp_move_to, &to);
-//           }
-
-//           continue;
-//         }
-
-//         ngrn = 8;
-//         size_t nsaa_align = MAX(8, info.alignment);
-//         nsaa = ROUND_UP(nsaa, nsaa_align);
-
-//         if (var_ty_is_aggregate(var_ty)) {
-//           struct mem_loc mem_src = {
-//               .base = source, .offset = 0, .size = info.size};
-
-//           struct mem_loc mem_dest = {
-//               .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
-
-//           struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-//           vector_push_back(mem_copies, &copy);
-
-//           nsaa += info.size;
-//           continue;
-//         }
-
-//         size_t size = MAX(8, info.size);
-
-//         struct mem_loc mem_loc = {
-//             .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-//         nsaa += size;
-
-//         struct location from = {.idx = source.idx};
-
-//         struct location to = {
-//             .idx = MEM_LOC(),
-//             .metadata[0] = arena_alloc_init(state->arena,
-//                                             sizeof(struct mem_loc), &mem_loc)};
-
-//         if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-//           vector_push_back(gp_move_from, &from);
-//           vector_push_back(gp_move_to, &to);
-//         } else if (var_ty_is_fp(var_ty)) {
-//           vector_push_back(fp_move_from, &from);
-//           vector_push_back(fp_move_to, &to);
-//         } else {
-//           BUG("bad type");
-//         }
-//       } else {
-//         struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
-
-//         // this argument is variadic
-//         // the stack slot this local must live in, in terms of 8 byte slots
-//         size_t variadic_arg_idx = i - num_normal_args;
-
-//         if (source.ty == RV32I_REG_TY_W) {
-//           // because offsets are in terms of reg size, we need to double it
-//           // for the 8 byte slots
-//           variadic_arg_idx *= 2;
-//         } else {
-//           invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
-//                            "variadic arg with size < 8 has not been promoted");
-//         }
-
-//         struct instr *store = alloc_instr(state->func);
-
-//         store->rv32i->ty = RV32I_INSTR_TY_STORE_IMM;
-//         store->rv32i->str_imm =
-//             (struct rv32i_store_imm){.source = source,
-//                                        .addr = STACK_PTR_REG,
-//                                        .imm = variadic_arg_idx,
-//                                        .mode = RV32I_ADDRESSING_MODE_OFFSET};
-//       }
-//     }
-//   }
-
-//   struct move_set gp_arg_moves = gen_move_order(
-//       state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-//       vector_length(gp_move_from), GP_TMP_REG_IDX);
-
-//   struct move_set fp_arg_moves = gen_move_order(
-//       state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-//       vector_length(fp_move_from), FP_TMP_REG_IDX);
-
-//   codegen_moves(state, gp_arg_moves, RV32I_REG_CLASS_GP);
-//   codegen_moves(state, fp_arg_moves, RV32I_REG_CLASS_FP);
-
-//   // then handle mem copies
-//   size_t num_copies = vector_length(mem_copies);
-//   for (size_t i = 0; i < num_copies; i++) {
-//     struct mem_copy *copy = vector_get(mem_copies, i);
-//     struct mem_loc *from = &copy->src;
-//     struct mem_loc *to = &copy->dest;
-
-//     DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
-
-//     codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
-//                               to->offset, to->size);
-//   }
-
-//   // now we generate the actual call
-
-//   struct instr *instr = alloc_instr(state->func);
-//   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
-//     instr->rv32i->ty = RV32I_INSTR_TY_BL;
-//     instr->rv32i->bl = (struct rv32i_branch){.target = NULL};
-
-//     instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
-//     *instr->reloc = (struct relocation){
-//         .ty = RELOCATION_TY_CALL,
-//         .symbol_index = op->call.target->addr.glb->id,
-//         .size = 2,
-//         .address = 0,
-//     };
-//   } else {
-//     // NOTE: `blr` seems to segfault on linux rv32i
-//     instr->rv32i->ty = RV32I_INSTR_TY_BLR;
-//     instr->rv32i->blr = (struct rv32i_branch_reg){
-//         .target = {.ty = RV32I_REG_TY_X, .idx = BLR_REG_IDX}};
-//   }
-
-//   if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
-//     return;
-//   }
-
-//   struct rv32i_reg dest = codegen_reg(op);
-
-//   struct ir_var_ty *var_ty = func_ty->ret_ty;
-//   struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-//   if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-//     if (!is_return_reg(dest)) {
-//       struct instr *mov = alloc_instr(state->func);
-
-//       *mov->rv32i = MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-//     }
-//   } else if (var_ty_is_fp(var_ty)) {
-//     if (!is_return_reg(dest)) {
-//       struct instr *mov = alloc_instr(state->func);
-
-//       *mov->rv32i = FP_MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-//     }
-//   } else {
-//     struct ir_lcl *lcl = op->lcl;
-//     size_t offset = lcl->offset;
-
-//     // aggregate ty
-//     size_t num_members;
-//     size_t member_size;
-//     if (lcl && try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-//         num_members <= 4) {
-//       enum rv32i_reg_ty reg_ty;
-//       switch (member_size) {
-//       case 8:
-//         reg_ty = RV32I_REG_TY_D;
-//         break;
-//       case 4:
-//         reg_ty = RV32I_REG_TY_S;
-//         break;
-//       case 2:
-//         reg_ty = RV32I_REG_TY_H;
-//         break;
-//       }
-
-//       for (size_t i = 0; i < num_members; i++) {
-//         struct rv32i_reg source = {.ty = reg_ty, .idx = i};
-
-//         struct instr *mov = alloc_instr(state->func);
-
-//         mov->rv32i->ty = RV32I_INSTR_TY_STORE_IMM;
-//         mov->rv32i->store_imm =
-//             (struct rv32i_store_imm){.addr = STACK_PTR_REG,
-//                                        .imm = (offset / member_size) + i,
-//                                        .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//                                        .source = source};
-//       }
-//     } else if (info.size == 1) {
-//       struct rv32i_reg source = {.ty = RV32I_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->rv32i->ty = RV32I_INSTR_TY_STORE_BYTE_IMM;
-//       mov->rv32i->strb_imm =
-//           (struct rv32i_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset,
-//                                      .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size == 2) {
-//       struct rv32i_reg source = {.ty = RV32I_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->rv32i->ty = RV32I_INSTR_TY_STORE_HALF_IMM;
-//       mov->rv32i->strh_imm =
-//           (struct rv32i_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 2,
-//                                      .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 4) {
-//       struct rv32i_reg source = {.ty = RV32I_REG_TY_W, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->rv32i->ty = RV32I_INSTR_TY_STORE_IMM;
-//       mov->rv32i->str_imm =
-//           (struct rv32i_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 4,
-//                                      .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 8) {
-//       struct rv32i_reg source = {.ty = RV32I_REG_TY_X, .idx = 0};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->rv32i->ty = RV32I_INSTR_TY_STORE_IMM;
-//       mov->rv32i->str_imm =
-//           (struct rv32i_store_imm){.addr = STACK_PTR_REG,
-//                                      .imm = offset / 8,
-//                                      .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//                                      .source = source};
-//     } else if (info.size <= 16) {
-//       struct rv32i_reg source0 = {.ty = RV32I_REG_TY_X, .idx = 0};
-//       struct rv32i_reg source1 = {.ty = RV32I_REG_TY_X, .idx = 1};
-
-//       struct instr *mov = alloc_instr(state->func);
-
-//       mov->rv32i->ty = RV32I_INSTR_TY_STORE_PAIR_IMM;
-//       mov->rv32i->store_pair_imm = (struct rv32i_store_pair_imm){
-//           .addr = STACK_PTR_REG,
-//           .imm = offset / 8,
-//           .mode = RV32I_ADDRESSING_MODE_OFFSET,
-//           .source = {source0, source1}};
-//     } else {
-//       TODO("larger than 16 byte types");
-//     }
-//   }
-// }
 static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   trace("lowering op with id %zu, type %d", op->id, op->ty);
   switch (op->ty) {
@@ -1408,8 +1015,7 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_TY_CALL: {
-    TODO("rv32i call");
-    // codegen_call_op(state, op);
+    codegen_call_op(state, op);
     break;
   }
   case IR_OP_TY_RET: {
@@ -1545,7 +1151,6 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
         }
 
         // codegen_prologue(&state);
-        // codegen_params(&state);
 
         func->prologue = state.prologue_info.prologue_generated;
         func->stack_size = state.prologue_info.stack_size;

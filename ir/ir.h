@@ -791,6 +791,13 @@ struct ir_param_info {
   };
 };
 
+enum ir_call_info_flags {
+  IR_CALL_INFO_FLAG_NONE = 0,
+
+  // place the number of variadic arguments into the specified register
+  IR_CALL_INFO_FLAG_NUM_VARIADIC = 1,
+};
+
 struct ir_call_info {
   size_t stack_size;
 
@@ -798,6 +805,13 @@ struct ir_call_info {
   struct ir_param_info *params;
 
   struct ir_param_info *ret;
+
+  size_t num_variadics;
+  enum ir_call_info_flags flags;
+
+  union {
+    struct ir_reg num_variadics_reg;
+  };
 };
 
 struct ir_func_info {
