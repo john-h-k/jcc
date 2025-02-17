@@ -160,7 +160,9 @@ static void expire_old_intervals(struct register_alloc_state *state,
       continue;
     }
 
+    // if (!(interval->op->flags & IR_OP_FLAG_SPILLED)) {
     mark_register_free(state, interval->op->reg);
+    // }
 
     for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
       struct ir_reg write = interval->op->write_info.writes[j];
@@ -287,7 +289,7 @@ static int compare_interval_id(const void *a, const void *b) {
 
 static void force_spill_register(struct ir_func *irb,
                                  struct register_alloc_state *state,
-                                 struct ir_reg reg, struct ir_op *op) {
+                                 struct ir_reg reg, struct interval *interval) {
   // for some reason this check leads to regs not being spilled
   // if (!bitset_get(reg_pool, reg.idx)) {
   //   return;
@@ -296,8 +298,12 @@ static void force_spill_register(struct ir_func *irb,
   // HACK: need to properly store reg->op map
 
   for (size_t j = 0; j < state->num_active; j++) {
-    struct ir_op *consumer =
-        state->interval_data.intervals[state->active[j]].op;
+    struct interval *active = &state->interval_data.intervals[state->active[j]];
+    struct ir_op *consumer = active->op;
+
+    if (active->start > interval->end) {
+      continue;
+    }
 
     if (consumer->reg.ty == reg.ty && consumer->reg.idx == reg.idx) {
       spill_op(irb, consumer);
@@ -305,7 +311,7 @@ static void force_spill_register(struct ir_func *irb,
     }
   }
 
-  mark_register_live(state, reg, op);
+  mark_register_live(state, reg, interval->op);
 }
 
 static int sort_interval_by_desc_start_point(const void *a, const void *b) {
@@ -384,6 +390,11 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       for (size_t j = 0; j < state.num_active; j++) {
         struct interval *live = &intervals[state.active[j]];
         struct ir_reg reg = live->op->reg;
+
+        if (live->start >= interval->op->id) {
+          // not yet live
+          continue;
+        }
 
         if (live->end <= interval->op->id) {
           // don't need save
@@ -482,7 +493,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
-      force_spill_register(irb, &state, interval->op->reg, interval->op);
+      force_spill_register(irb, &state, interval->op->reg, interval);
 
       pref_reg = interval->op->reg.idx;
 
@@ -504,7 +515,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
       force_spill_register(irb, &state, interval->op->write_info.writes[j],
-                           interval->op);
+                           interval);
     }
 
     if (pref_reg == SIZE_MAX) {

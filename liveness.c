@@ -35,10 +35,6 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
-  // NOTE: this logic relies on MOV <PARAM> instructions existing for all params
-  // AND being in order of params
-  size_t arg_regs = 0;
-
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
@@ -46,17 +42,6 @@ struct interval_data construct_intervals(struct ir_func *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         struct interval *interval = &data.intervals[op->id];
-
-        if (op->ty == IR_OP_TY_MOV && op->mov.value == NULL) {
-          op->reg =
-              (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = arg_regs++};
-        } else {
-          // // reset registers unless flags because flags is never allocated
-          // if (op->reg != REG_FLAGS && !(op->flags &
-          // IR_OP_FLAG_DONT_GIVE_SLOT)) {
-          //   op->reg = NO_REG;
-          // }
-        }
 
         DEBUG_ASSERT(op->id < irb->op_count,
                      "out of range! (id %zu with opcount %zu)", op->id,
@@ -207,16 +192,6 @@ int sort_interval_by_start_point(const void *a, const void *b) {
   const struct interval *b_int = (const struct interval *)b;
   size_t a_start = a_int->start;
   size_t b_start = b_int->start;
-
-  // put params at front, this is used for giving them the correct registers for
-  // calling conv
-  enum ir_op_flags a_flags = a_int->op->flags;
-  enum ir_op_flags b_flags = b_int->op->flags;
-  if ((a_flags & IR_OP_FLAG_PARAM) > (b_flags & IR_OP_FLAG_PARAM)) {
-    return -1;
-  } else if ((a_flags & IR_OP_FLAG_PARAM) < (b_flags & IR_OP_FLAG_PARAM)) {
-    return 1;
-  }
 
   if (a_start > b_start) {
     return 1;
