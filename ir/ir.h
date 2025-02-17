@@ -32,6 +32,7 @@ enum ir_op_ty {
   IR_OP_TY_BITFIELD_INSERT,
 
   IR_OP_TY_MEM_SET,
+  IR_OP_TY_MEM_COPY,
 
   IR_OP_TY_ADDR,
   IR_OP_TY_ADDR_OFFSET,
@@ -42,8 +43,17 @@ enum ir_op_ty {
   IR_OP_TY_RET,
   IR_OP_TY_CALL,
 
+  // Low-level operations that only occur after lowering
+  // IR_OP_TY_STORE_REG,
+  // IR_OP_TY_LOAD_REG,
+  // IR_OP_TY_MOV_REG,
+
   // represents a custom instruction understood by a particular backend
   IR_OP_TY_CUSTOM,
+};
+
+struct ir_op_store_reg {
+  struct ir_lcl *lcl;
 };
 
 struct ir_op_mov {
@@ -255,6 +265,7 @@ extern const struct ir_var_ty IR_VAR_TY_I8;
 extern const struct ir_var_ty IR_VAR_TY_I16;
 extern const struct ir_var_ty IR_VAR_TY_I32;
 extern const struct ir_var_ty IR_VAR_TY_I64;
+extern const struct ir_var_ty IR_VAR_TY_F16;
 extern const struct ir_var_ty IR_VAR_TY_F32;
 extern const struct ir_var_ty IR_VAR_TY_F64;
 extern const struct ir_var_ty IR_VAR_TY_VARIADIC;
@@ -388,6 +399,22 @@ struct ir_op_mem_set {
   size_t length;
 };
 
+// enum ir_mem_copy_flags {
+//   IR_MEM_COPY_FLAG_NONE = 0,
+
+//   // the instruction is free to use any volatile registers
+//   IR_MEM_COPY_FLAG_VOLATILE = 1
+// };
+
+struct ir_op_mem_copy {
+  struct ir_op *source;
+  struct ir_op *dest;
+
+  size_t length;
+
+  // enum ir_mem_copy_flags flags;
+};
+
 struct aarch64_op;
 struct eep_op;
 
@@ -445,17 +472,20 @@ enum ir_op_flags {
   // reg is assigned and cannot change
   IR_OP_FLAG_FIXED_REG = 32,
 
+  // reg is assigned but can be changed
+  IR_OP_FLAG_PREFERRED_REG = 64,
+
   // op has side effects (e.g is an assignment)
-  IR_OP_FLAG_SIDE_EFFECTS = 64,
+  IR_OP_FLAG_SIDE_EFFECTS = 128,
 
   // op has been spilled and all consumers must reload it
-  IR_OP_FLAG_SPILLED = 128,
+  IR_OP_FLAG_SPILLED = 256,
 
   // this op is a mov used to eliminate phis
-  IR_OP_FLAG_PHI_MOV = 256,
+  IR_OP_FLAG_PHI_MOV = 512,
 
   // this op reads from dest reg, so it cannot be overwritten
-  IR_OP_FLAG_READS_DEST = 512
+  IR_OP_FLAG_READS_DEST = 1024
 };
 
 struct ir_op_write_info {
@@ -482,6 +512,7 @@ struct ir_op {
     struct ir_op_cast_op cast_op;
     struct ir_op_ret ret;
     struct ir_op_mem_set mem_set;
+    struct ir_op_mem_copy mem_copy;
     struct ir_op_store store;
     struct ir_op_load load;
     struct ir_op_store_bitfield store_bitfield;
@@ -732,12 +763,46 @@ struct ir_reg_usage {
   struct bitset *fp_registers_used;
 };
 
+enum ir_param_info_ty {
+  IR_PARAM_INFO_TY_REGISTER,
+  IR_PARAM_INFO_TY_STACK,
+  IR_PARAM_INFO_TY_POINTER,
+};
+
+struct ir_param_reg {
+  // e.g `struct { float[3] }` would have size 4, but `struct { char[16] } would have size 8`
+
+  struct ir_reg start_reg;
+  size_t size;
+};
+
+struct ir_param_info {
+  enum ir_param_info_ty ty;
+
+  const struct ir_var_ty *var_ty;
+
+  union {
+    struct ir_param_reg reg; // also used for pointer
+    size_t stack_offset;
+  };
+};
+
+struct ir_call_info {
+  size_t stack_size;
+
+  size_t num_params;
+  struct ir_param_info *params;
+
+  struct ir_param_info *ret;
+};
+
 struct ir_func {
   struct ir_unit *unit;
 
   const char *name;
 
   struct ir_var_func_ty func_ty;
+  struct ir_call_info call_info;
 
   struct arena_allocator *arena;
 
@@ -775,12 +840,14 @@ struct ir_unit {
 
   struct {
     struct ir_glb *memmove;
+    struct ir_glb *memcpy;
     struct ir_glb *memset;
   } well_known_glbs;
 };
 
 enum ir_well_known_glb {
   IR_WELL_KNOWN_GLB_MEMMOVE,
+  IR_WELL_KNOWN_GLB_MEMCPY,
   IR_WELL_KNOWN_GLB_MEMSET,
 };
 

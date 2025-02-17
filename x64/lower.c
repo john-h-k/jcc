@@ -659,6 +659,7 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
+            case IR_OP_TY_MEM_COPY:
               break;
             case IR_OP_TY_BINARY_OP:
               switch (op->binary_op.ty) {

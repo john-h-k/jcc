@@ -35,6 +35,10 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
+    if (op->flags & IR_OP_FLAG_PARAM) {
+      invariant_assert(!op->mov.value, "op %zu: param mov must have null value",
+                       op->id);
+    }
     break;
   case IR_OP_TY_CNST:
     break;
@@ -104,6 +108,8 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_BITFIELD_INSERT:
     break;
   case IR_OP_TY_MEM_SET:
+    break;
+  case IR_OP_TY_MEM_COPY:
     break;
   case IR_OP_TY_ADDR_OFFSET:
     break;
