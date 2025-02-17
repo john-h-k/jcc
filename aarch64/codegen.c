@@ -297,8 +297,6 @@ struct codegen_state {
   struct aarch64_prologue_info prologue_info;
 
   struct aarch64_reg ssp;
-
-  size_t stack_args_size;
 };
 
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
@@ -344,7 +342,10 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
 static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                     const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
-  ssize_t offset = state->stack_args_size + lcl->offset;
+  ssize_t offset = lcl->offset;
+  if (!(lcl->flags & IR_LCL_FLAG_FIXED_OFFSET)) {
+    offset += state->ir->caller_stack_needed;
+  }
 
   if (!state->prologue_info.prologue_generated) {
     // using red zone
@@ -865,7 +866,7 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 // this method assumes it can safely you any non-argument volatile registers
-static void codegen_mem_copy_volatile(struct codegen_state *state,
+UNUSED static void codegen_mem_copy_volatile(struct codegen_state *state,
                                       struct aarch64_reg source,
                                       size_t source_offset,
                                       struct aarch64_reg dest,
@@ -1780,7 +1781,7 @@ struct mem_copy {
   struct mem_loc src, dest;
 };
 
-static void codegen_moves(struct codegen_state *state, struct move_set moves,
+UNUSED static void codegen_moves(struct codegen_state *state, struct move_set moves,
                           enum aarch64_reg_class reg_class) {
   for (size_t i = 0; i < moves.num_moves; i++) {
     struct move move = moves.moves[i];
@@ -1976,357 +1977,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     // NOTE: `blr` seems to segfault on linux aarch64
     instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
     instr->aarch64->blr = (struct aarch64_branch_reg){
-        .target = {.ty = AARCH64_REG_TY_X, .idx = BLR_REG_IDX}};
-  }
-
-  if (func_ty->ret_ty->ty == IR_VAR_TY_TY_NONE) {
-    return;
-  }
-
-  struct aarch64_reg dest = codegen_reg(op);
-
-  struct ir_var_ty *var_ty = func_ty->ret_ty;
-  struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-  if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-    if (!is_return_reg(dest)) {
-      struct instr *mov = alloc_instr(state->func);
-
-      *mov->aarch64 = MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-    }
-  } else if (var_ty_is_fp(var_ty)) {
-    if (!is_return_reg(dest)) {
-      struct instr *mov = alloc_instr(state->func);
-
-      *mov->aarch64 = FP_MOV_ALIAS(dest, return_reg_for_ty(dest.ty));
-    }
-  } else {
-    struct ir_lcl *lcl = op->lcl;
-    size_t offset = lcl->offset;
-
-    // aggregate ty
-    size_t num_members;
-    size_t member_size;
-    if (lcl && try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-        num_members <= 4) {
-      enum aarch64_reg_ty reg_ty;
-      switch (member_size) {
-      case 8:
-        reg_ty = AARCH64_REG_TY_D;
-        break;
-      case 4:
-        reg_ty = AARCH64_REG_TY_S;
-        break;
-      case 2:
-        reg_ty = AARCH64_REG_TY_H;
-        break;
-      }
-
-      for (size_t i = 0; i < num_members; i++) {
-        struct aarch64_reg source = {.ty = reg_ty, .idx = i};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-        mov->aarch64->store_imm =
-            (struct aarch64_store_imm){.addr = STACK_PTR_REG,
-                                       .imm = (offset / member_size) + i,
-                                       .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                       .source = source};
-      }
-    } else if (info.size == 1) {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_BYTE_IMM;
-      mov->aarch64->strb_imm =
-          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
-                                     .imm = offset,
-                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                     .source = source};
-    } else if (info.size == 2) {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_HALF_IMM;
-      mov->aarch64->strh_imm =
-          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
-                                     .imm = offset / 2,
-                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                     .source = source};
-    } else if (info.size <= 4) {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-      mov->aarch64->str_imm =
-          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
-                                     .imm = offset / 4,
-                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                     .source = source};
-    } else if (info.size <= 8) {
-      struct aarch64_reg source = {.ty = AARCH64_REG_TY_X, .idx = 0};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-      mov->aarch64->str_imm =
-          (struct aarch64_store_imm){.addr = STACK_PTR_REG,
-                                     .imm = offset / 8,
-                                     .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                     .source = source};
-    } else if (info.size <= 16) {
-      struct aarch64_reg source0 = {.ty = AARCH64_REG_TY_X, .idx = 0};
-      struct aarch64_reg source1 = {.ty = AARCH64_REG_TY_X, .idx = 1};
-
-      struct instr *mov = alloc_instr(state->func);
-
-      mov->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
-      mov->aarch64->store_pair_imm = (struct aarch64_store_pair_imm){
-          .addr = STACK_PTR_REG,
-          .imm = offset / 8,
-          .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-          .source = {source0, source1}};
-    } else {
-      TODO("larger than 16 byte types");
-    }
-  }
-}
-
-static void codegen_params(struct codegen_state *state) {
-  // we effectively do the reverse of what we do in `codegen_call_op`
-  // putting params in correct registers
-  // and spilling aggregates to stack
-  // we could try and merge the code in some way?
-  // we also do it again, below, to calculate how much arg space is needed for
-  // prologue
-
-  // important note:
-  // to prevent overwriting things, we put all our locals beneath the arguments
-  // for the method
-
-  // FIXME: this currently relies heavily on IR build
-  // specifically, each aggregate must produce exactly one local
-  // and do it in order of params
-
-  struct ir_call_info call_info = state->ir->call_info;
-  for (size_t i = 0; i < call_info.num_params; i++) {
-    struct ir_param_info param_info = call_info.params[i];
-
-    // struct ir_var_ty_info info =
-    //     var_ty_info(state->ir->unit, &param_info.var_ty);
-
-    switch (param_info.ty) {
-    case IR_PARAM_INFO_TY_REGISTER:
-      break;
-    case IR_PARAM_INFO_TY_STACK:
-      break;
-    case IR_PARAM_INFO_TY_POINTER:
-      break;
-    }
-  }
-
-  struct ir_var_func_ty func_ty = state->ir->func_ty;
-
-  size_t ngrn = 0;
-  size_t nsrn = 0;
-  size_t nsaa = 0;
-
-  struct vector *gp_move_from = vector_create(sizeof(struct location));
-  struct vector *gp_move_to = vector_create(sizeof(struct location));
-
-  struct vector *fp_move_from = vector_create(sizeof(struct location));
-  struct vector *fp_move_to = vector_create(sizeof(struct location));
-
-  struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
-  return;
-
-  struct ir_stmt *param_stmt = state->ir->first->first;
-  struct ir_op *param_op = NULL;
-  if (param_stmt && param_stmt->first &&
-      param_stmt->first->ty == IR_OP_TY_MOV &&
-      (param_stmt->first->flags & IR_OP_FLAG_PARAM)) {
-    param_op = param_stmt->first;
-  }
-
-  struct ir_lcl *lcl = state->ir->first_local;
-
-  size_t last_mem_loc = FIRST_MEM_LOC;
-
-  for (size_t i = 0; i < func_ty.num_params; i++) {
-    const struct ir_var_ty *var_ty = &func_ty.params[i];
-    struct ir_var_ty_info info = var_ty_info(
-        state->ir->unit,
-        var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
-
-    size_t offset;
-    struct aarch64_reg source;
-
-    if (lcl) {
-      offset = lcl->offset;
-    }
-
-    if (param_op) {
-      source = codegen_reg(param_op);
-    }
-
-    size_t num_hfa_members;
-    size_t hfa_member_size;
-
-    if (var_ty_is_fp(var_ty) && nsrn < 8) {
-      struct location from = {.idx = nsrn};
-      struct location to = {.idx = source.idx};
-      vector_push_back(fp_move_from, &from);
-      vector_push_back(fp_move_to, &to);
-      nsrn++;
-
-      param_op = param_op->succ;
-      continue;
-    } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
-                                &hfa_member_size)) {
-      if (nsrn + num_hfa_members <= 8) {
-        for (size_t j = 0; j < num_hfa_members; j++) {
-          // given this is a composite, we assume `source` contains a
-          // pointer to it
-
-          struct location from = {.idx = nsrn++};
-
-          struct mem_loc mem_loc = {.base = STACK_PTR_REG,
-                                    .offset = hfa_member_size * j,
-                                    .size = hfa_member_size};
-
-          struct location to = {
-              .idx = MEM_LOC(),
-              .metadata[0] = arena_alloc_init(
-                  state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-          vector_push_back(fp_move_from, &from);
-          vector_push_back(fp_move_to, &to);
-        }
-
-        lcl = lcl->succ;
-        continue;
-      }
-
-      nsrn = 8;
-      size_t nsaa_align = MAX(8, info.alignment);
-      size_t size = ROUND_UP(info.size, nsaa_align);
-
-      lcl->offset = state->prologue_info.stack_size + nsaa;
-
-      nsaa += size;
-      lcl = lcl->succ;
-      continue;
-
-    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 && ngrn <= 8) {
-      struct location from = {.idx = ngrn};
-      struct location to = {.idx = source.idx};
-      vector_push_back(gp_move_from, &from);
-      vector_push_back(gp_move_to, &to);
-      ngrn++;
-      param_op = param_op->succ;
-      continue;
-    }
-
-    if (info.alignment == 16) {
-      ngrn = (ngrn + 1) & 1;
-    }
-
-    if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-      TODO("128 bit reg alloc");
-      // // lo to ngrn, hi to ngrn+1
-      // ngrn += 2;
-      // continue;
-    }
-
-    size_t dw_size = (info.size + 7) / 8;
-    if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-      for (size_t j = 0; j < dw_size; j++) {
-        // given this is a composite, we assume `source` contains a
-        // pointer to it
-
-        struct mem_loc mem_loc = {
-            .base = STACK_PTR_REG, .offset = offset + (8 * j), .size = 8};
-
-        struct location to = {
-            .idx = MEM_LOC(),
-            .metadata[0] = arena_alloc_init(state->arena,
-                                            sizeof(struct mem_loc), &mem_loc)};
-
-        struct location from = {.idx = ngrn++};
-        vector_push_back(gp_move_from, &from);
-        vector_push_back(gp_move_to, &to);
-      }
-
-      lcl = lcl->succ;
-      continue;
-    }
-
-    ngrn = 8;
-    size_t nsaa_align = MAX(8, info.alignment);
-    nsaa = ROUND_UP(nsaa, nsaa_align);
-
-    if (var_ty_is_aggregate(var_ty)) {
-      lcl->offset = state->prologue_info.stack_size + nsaa;
-
-      nsaa += info.size;
-
-      lcl = lcl->succ;
-      continue;
-    }
-
-    size_t size = MAX(8, info.size);
-
-    struct mem_loc mem_loc = {
-        .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-    nsaa += size;
-
-    struct location to = {.idx = source.idx};
-
-    struct location from = {
-        .idx = MEM_LOC(),
-        .metadata[0] =
-            arena_alloc_init(state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-    param_op = param_op->succ;
-
-    if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-      vector_push_back(gp_move_from, &from);
-      vector_push_back(gp_move_to, &to);
-    } else if (var_ty_is_fp(var_ty)) {
-      vector_push_back(fp_move_from, &from);
-      vector_push_back(fp_move_to, &to);
-    } else {
-      BUG("bad type");
-    }
-  }
-
-  struct move_set gp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-      vector_length(gp_move_from), GP_TMP_REG_IDX);
-
-  struct move_set fp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-      vector_length(fp_move_from), FP_TMP_REG_IDX);
-
-  codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
-  codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
-
-  // then handle mem copies
-  size_t num_copies = vector_length(mem_copies);
-  for (size_t i = 0; i < num_copies; i++) {
-    struct mem_copy *copy = vector_get(mem_copies, i);
-    struct mem_loc *from = &copy->src;
-    struct mem_loc *to = &copy->dest;
-
-    DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
-
-    codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
-                              to->offset, to->size);
+        .target = codegen_reg(op->call.target) };
   }
 }
 
@@ -2338,7 +1989,7 @@ static void codegen_params(struct codegen_state *state) {
 static void codegen_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
 
-  size_t stack_size = state->stack_args_size;
+  size_t stack_size = state->ir->total_locals_size + state->ir->caller_stack_needed;
   stack_size =
       ROUND_UP(stack_size + ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
 
@@ -3038,8 +2689,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
             .ir = ir_func,
             .ssp = {.ty = AARCH64_REG_TY_X, .idx = 28}};
 
-        state.stack_args_size = 0;
-
         struct ir_basicblock *basicblock = ir_func->first;
         while (basicblock) {
           struct ir_stmt *stmt = basicblock->first;
@@ -3063,7 +2712,6 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
         }
 
         codegen_prologue(&state);
-        codegen_params(&state);
 
         func->prologue = state.prologue_info.prologue_generated;
         func->stack_size = state.prologue_info.stack_size;
