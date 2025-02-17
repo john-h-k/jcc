@@ -27,7 +27,7 @@ const struct target AARCH64_MACOS_TARGET = {
                 .num_nonvolatile = 8,
                 .num_reserved = 0},
     },
-    AARCH64_FUNCTION_ALIGNMENT, aarch64_macos_mangle, aarch64_lower, aarch64_codegen,
+    AARCH64_FUNCTION_ALIGNMENT, aarch64_macos_mangle, aarch64_lower, aarch64_lower_func_ty, aarch64_codegen,
     aarch64_emit, write_macho, macos_link_objects, objdump_debug_disasm,
     aarch64_debug_print_codegen};
 
@@ -47,6 +47,6 @@ const struct target AARCH64_LINUX_TARGET = {
                 .num_nonvolatile = 8,
                 .num_reserved = 0},
     },
-    AARCH64_FUNCTION_ALIGNMENT, aarch64_linux_mangle, aarch64_lower, aarch64_codegen,
+    AARCH64_FUNCTION_ALIGNMENT, aarch64_linux_mangle, aarch64_lower, aarch64_lower_func_ty, aarch64_codegen,
     aarch64_emit, write_elf, linux_link_objects, objdump_debug_disasm,
     aarch64_debug_print_codegen};

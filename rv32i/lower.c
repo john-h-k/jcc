@@ -3,6 +3,12 @@
 #include "../ir/build.h"
 #include "../util.h"
 
+struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
+                                         struct ir_var_func_ty func_ty,
+                                         struct ir_op **args, size_t num_args) {
+  TODO(__func__);
+}
+
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
                        binary_op_is_comparison(op->binary_op.ty),
