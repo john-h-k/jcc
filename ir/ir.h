@@ -800,6 +800,11 @@ struct ir_call_info {
   struct ir_param_info *ret;
 };
 
+struct ir_func_info {
+  struct ir_var_func_ty func_ty;
+  struct ir_call_info call_info;
+};
+
 struct ir_func {
   struct ir_unit *unit;
 

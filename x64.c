@@ -22,7 +22,9 @@ const struct target X64_MACOS_TARGET = {
                 .num_nonvolatile = 0,
                 .num_reserved = 0},
     },
-    X64_FUNCTION_ALIGNMENT, x64_macos_mangle, x64_lower, x64_codegen,
+    X64_FUNCTION_ALIGNMENT, x64_macos_mangle, x64_lower,
+    x64_lower_func_ty,
+     x64_codegen,
     x64_emit, write_macho, macos_link_objects, objdump_debug_disasm,
     x64_debug_print_codegen};
 
@@ -39,6 +41,7 @@ const struct target X64_LINUX_TARGET = {
                 .num_nonvolatile = 0,
                 .num_reserved = 0},
     },
-    X64_FUNCTION_ALIGNMENT, x64_linux_mangle, x64_lower, x64_codegen,
+    X64_FUNCTION_ALIGNMENT, x64_linux_mangle, x64_lower,
+    x64_lower_func_ty, x64_codegen,
     x64_emit, write_elf, linux_link_objects, objdump_debug_disasm,
     x64_debug_print_codegen};

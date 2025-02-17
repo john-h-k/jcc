@@ -24,6 +24,7 @@ const struct target RV32I_LINUX_TARGET = {
     RV32I_FUNCTION_ALIGNMENT,
     rv32i_mangle,
     rv32i_lower,
+    rv32i_lower_func_ty,
     rv32i_codegen,
     rv32i_emit,
     // rv32i_write_object,

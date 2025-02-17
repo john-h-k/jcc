@@ -9,6 +9,13 @@
 #define IR_REG_IDX_SI (1)
 #define IR_REG_IDX_DI (0)
 
+struct ir_func_info x64_lower_func_ty(struct ir_func *func,
+                                         struct ir_var_func_ty func_ty,
+                                         struct ir_op **args, size_t num_args) {
+  TODO(__func__);
+}
+
+
 enum load_bitfield {
   LOAD_BITFIELD_MASK_IN,
   LOAD_BITFIELD_MASK_OUT,
