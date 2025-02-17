@@ -575,6 +575,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_o
   case IR_OP_TY_MEM_COPY:
     fprintf(file, "mem.copy ");
     debug_print_op_use(file, irb, ir->mem_copy.dest);
+    fprintf(file, ", ");
     debug_print_op_use(file, irb, ir->mem_copy.source);
     fprintf(file, ", #%zu", ir->mem_set.length);
     break;
@@ -836,7 +837,8 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_print_func_ty_string(file, irb->unit, &irb->func_ty);
   fprintf(file, "\n");
   fprintf(file, "    num_locals: %zu\n", irb->num_locals);
-  fprintf(file, "    total_locals_size: %zu", irb->total_locals_size);
+  fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
+  fprintf(file, "    caller_stack_needed: %zu", irb->caller_stack_needed);
 
   if (irb->num_locals) {
     fprintf(file, "\n\n");

@@ -2,6 +2,7 @@
 
 #include "../util.h"
 #include "ir.h"
+#include "prettyprint.h"
 
 struct validate_op_order_metadata {
   struct ir_op *consumer;

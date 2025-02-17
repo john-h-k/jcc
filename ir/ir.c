@@ -152,7 +152,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_ADDR_OFFSET:
     return true;
   case IR_OP_TY_CALL:
-    return op->call.func_ty.func.ret_ty->ty != IR_VAR_TY_TY_NONE;
+    return op->var_ty.ty != IR_VAR_TY_TY_NONE;
   case IR_OP_TY_STORE:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
