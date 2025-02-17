@@ -1,4 +1,5 @@
 #include "lower.h"
+#include "../lower.h"
 
 #include "../bit_twiddle.h"
 #include "../util.h"
@@ -580,6 +581,8 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
       .args = args,
       .func_ty = memmove->var_ty,
   };
+
+  lower_call(func, op);
 }
 
 //   // look for store after, in case this is a copy
@@ -776,30 +779,6 @@ static void lower_load_to_addr(struct ir_op *op) {
   }
 }
 
-static void lower_call(struct ir_func *func, struct ir_op *op) {
-  for (size_t i = 0; i < op->call.num_args; i++) {
-    struct ir_op *arg = op->call.args[i];
-
-    if ((arg->ty != IR_OP_TY_LOAD) || !var_ty_is_aggregate(&arg->var_ty)) {
-      continue;
-    }
-
-    lower_load_to_addr(arg);
-  }
-
-  if (var_ty_is_aggregate(&op->var_ty)) {
-    if (op->succ && op->succ->ty == IR_OP_TY_STORE &&
-        op->succ->store.ty == IR_OP_STORE_TY_LCL &&
-        op->succ->store.value == op) {
-      op->lcl = op->succ->store.lcl;
-      detach_ir_op(func, op->succ);
-    }
-
-    // just switch to pointer type, let codegen handle
-    op->var_ty = IR_VAR_TY_I64;
-  }
-}
-
 static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
   if (!op->ret.value) {
     return;
@@ -864,6 +843,7 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR_COND:
             case IR_OP_TY_MOV:
             case IR_OP_TY_CAST_OP:
+            case IR_OP_TY_CALL:
             case IR_OP_TY_STORE_BITFIELD:
             case IR_OP_TY_LOAD_BITFIELD:
               break;
@@ -872,16 +852,6 @@ void x64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_BITFIELD_INSERT:
               lower_bitfield_insert(func, op);
-              break;
-            case IR_OP_TY_CALL:
-              if (op->call.target->ty == IR_OP_TY_ADDR &&
-                  op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
-                  !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-                op->call.target =
-                    alloc_contained_ir_op(func, op->call.target, op);
-              }
-
-              lower_call(func, op);
               break;
             case IR_OP_TY_UNARY_OP:
               if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
