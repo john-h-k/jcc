@@ -333,7 +333,7 @@ static void lower_params(struct ir_func *func) {
               func, after_params, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
           addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL,
                                            .lcl = param_op->addr.lcl};
-          addr->flags |= IR_OP_FLAG_CONTAINED;
+          // addr->flags |= IR_OP_FLAG_CONTAINED;
 
           for (size_t j = num_reg; j; j--) {
             struct ir_op *store =
@@ -356,7 +356,7 @@ static void lower_params(struct ir_func *func) {
                 (struct ir_reg){.ty = param_info.reg.start_reg.ty,
                                 .idx = param_info.reg.start_reg.idx + j - 1};
 
-            addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+            // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
             store->store = (struct ir_op_store){
                 .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
@@ -434,7 +434,7 @@ static void lower_params(struct ir_func *func) {
           addr_offset->addr_offset = (struct ir_op_addr_offset){
               .base = addr, .offset = (j - 1) * param_info.reg.size};
 
-          addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+          // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = addr_offset};
@@ -487,7 +487,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_op *arg = op->call.args[i];
-
     DEBUG_ASSERT(i < func_info.call_info.num_params, "out of range");
     struct ir_param_info param_info = func_info.call_info.params[i];
 
@@ -514,7 +513,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           addr_offset->addr_offset = (struct ir_op_addr_offset){
               .base = addr, .offset = (j - 1) * param_info.reg.size};
 
-          addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+          // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = addr_offset};
@@ -559,8 +558,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
               func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
           load_addr_offset->addr_offset =
               (struct ir_op_addr_offset){.base = addr, .offset = offset};
-          load_addr_offset->comment = "offset";
-          load_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+          // load_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
           struct ir_op *load = insert_after_ir_op(func, load_addr_offset,
                                                   IR_OP_TY_LOAD, store_ty);
@@ -571,7 +569,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           struct ir_op *store =
               insert_after_ir_op(func, load, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
-          store->comment = "boz";
           store->store = (struct ir_op_store){
               .ty = IR_OP_STORE_TY_LCL, .lcl = lcl, .value = load};
 
@@ -651,7 +648,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       addr_offset->addr_offset = (struct ir_op_addr_offset){
           .base = addr, .offset = j * param_info.reg.size};
 
-      addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+      // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
       struct ir_op *store = insert_after_ir_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
