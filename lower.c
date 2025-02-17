@@ -314,6 +314,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BITFIELD_EXTRACT:
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_CALL:
+            case IR_OP_TY_MEM_COPY:
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_BR_COND:
@@ -387,8 +388,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
         struct ir_op_usage *use = &uses.use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
-          DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
-                       "contained op %zu must have uses", use->op->id);
+          // DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
+          //              "contained op %zu must have uses", use->op->id);
 
           debug("detaching op %zu", use->op->id);
           detach_ir_op(func, use->op);

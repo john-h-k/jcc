@@ -1,11 +1,8 @@
 #include "lower.h"
 
 #include "../aarch64.h"
-#include "../bit_twiddle.h"
-#include "../ir/build.h"
 #include "../util.h"
-
-#include <math.h>
+#include "../vector.h"
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_UNARY_OP &&
@@ -92,7 +89,8 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // it
   op->reg = REG_FLAGS;
 
-  // FIXME: there are other places where we check `op->succ` but we actually want to go to next stmt if needed
+  // FIXME: there are other places where we check `op->succ` but we actually
+  // want to go to next stmt if needed
   struct ir_op *succ = op->succ ? op->succ : op->stmt->succ->first;
 
   if (succ && succ->ty == IR_OP_TY_BR_COND) {
@@ -114,6 +112,12 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
+// this is carefully chosen so that all types passed on the stack will generate inline code
+// because else `lower_call` needs to deal with this function potentially generating calls _itself_
+// biggest thing passed on stack: 4 element HVA of 16 byte vectors, so 64
+// but we do 128 anyway
+#define MEMMOVE_THRESHOLD 128
+
 static void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *source = op->store.value;
 
@@ -131,6 +135,16 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *source_addr = build_addr(func, source);
   struct ir_op *dest_addr = build_addr(func, op);
+
+  if (info.size <= MEMMOVE_THRESHOLD) {
+    op->ty = IR_OP_TY_MEM_COPY;
+    op->mem_copy = (struct ir_op_mem_copy){
+      .dest = dest_addr,
+      .source = source_addr,
+      .length = info.size
+    };
+    return;
+  }
 
   struct ir_op *size =
       insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
@@ -293,7 +307,9 @@ static void lower_store(struct ir_func *func, struct ir_op *op) {
 //   }
 // }
 
-static bool fits_in_alu_imm(unsigned long long value) { return value < MAX_IMM_SIZE; }
+static bool fits_in_alu_imm(unsigned long long value) {
+  return value < MAX_IMM_SIZE;
+}
 
 static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP, "expected binary op");
@@ -336,7 +352,8 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_AND:
   case IR_OP_BINARY_OP_TY_OR:
   case IR_OP_BINARY_OP_TY_XOR:
-    // TODO: support lgs/rhs immediates in bitwise ops (the immr/imms field is complex)
+    // TODO: support lgs/rhs immediates in bitwise ops (the immr/imms field is
+    // complex)
     supports_lhs_contained = false;
     supports_rhs_contained = false;
     break;
@@ -365,11 +382,17 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
     break;
   }
 
-  if (supports_lhs_contained && (lhs->ty == IR_OP_TY_CNST && (var_ty_is_integral(&lhs->var_ty) || (var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
-      fits_in_alu_imm(lhs->cnst.int_value))) {
+  if (supports_lhs_contained &&
+      (lhs->ty == IR_OP_TY_CNST &&
+       (var_ty_is_integral(&lhs->var_ty) ||
+        (var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
+       fits_in_alu_imm(lhs->cnst.int_value))) {
     op->binary_op.lhs = alloc_contained_ir_op(func, lhs, op);
-  } else if (supports_rhs_contained && (rhs->ty == IR_OP_TY_CNST && (var_ty_is_integral(&rhs->var_ty) || (var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
-             fits_in_alu_imm(rhs->cnst.int_value))) {
+  } else if (supports_rhs_contained &&
+             (rhs->ty == IR_OP_TY_CNST &&
+              (var_ty_is_integral(&rhs->var_ty) ||
+               (var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
+              fits_in_alu_imm(rhs->cnst.int_value))) {
     op->binary_op.rhs = alloc_contained_ir_op(func, rhs, op);
   }
 }
@@ -542,15 +565,524 @@ static void lower_load_to_addr(struct ir_op *op) {
   }
 }
 
-static void lower_call(struct ir_func *func, struct ir_op *op) {
-  for (size_t i = 0; i < op->call.num_args; i++) {
-    struct ir_op *arg = op->call.args[i];
+static bool try_get_hfa_info(struct ir_func *func,
+                             const struct ir_var_ty *var_ty,
+                             struct ir_var_ty *member_ty, size_t *num_members,
+                             size_t *member_size) {
+  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
+    return false;
+  }
 
-    if ((arg->ty != IR_OP_TY_LOAD) || !var_ty_is_aggregate(&arg->var_ty)) {
+  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
+    TODO("union hfa handling");
+  }
+
+  if (!var_ty->struct_ty.num_fields) {
+    return false;
+  }
+
+  *member_ty = var_ty->struct_ty.fields[0];
+
+  if (!var_ty_is_fp(member_ty)) {
+    return false;
+  }
+
+  if (var_ty->struct_ty.num_fields > 4) {
+    return false;
+  }
+
+  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
+    if (!var_ty_eq(func, member_ty, &var_ty->struct_ty.fields[i])) {
+      return false;
+    }
+  }
+
+  switch (member_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_F16:
+    *member_size = 2;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    *member_size = 4;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    *member_size = 8;
+    break;
+  default:
+    unreachable();
+  }
+
+  *num_members = var_ty->struct_ty.num_fields;
+  return true;
+}
+#define FIRST_MEM_LOC 128
+#define IS_MEM_LOC(v) ((v.idx) >= FIRST_MEM_LOC)
+#define MEM_LOC() (last_mem_loc++)
+
+struct mem_loc {
+  struct ir_reg base;
+  size_t offset;
+  size_t size;
+};
+struct mem_copy {
+  struct mem_loc src, dest;
+};
+
+struct ir_func_info {
+  struct ir_var_func_ty func_ty;
+  struct ir_call_info call_info;
+};
+
+static struct ir_func_info lower_func_ty(struct ir_func *func,
+                                         struct ir_var_func_ty func_ty,
+                                         struct ir_op **args,
+                                         size_t num_args) {
+
+  size_t ngrn = 0;
+  size_t nsrn = 0;
+  size_t nsaa = 0;
+
+  // struct vector *gp_move_from = vector_create(sizeof(struct location));
+  // struct vector *gp_move_to = vector_create(sizeof(struct location));
+
+  // struct vector *fp_move_from = vector_create(sizeof(struct location));
+  // struct vector *fp_move_to = vector_create(sizeof(struct location));
+
+  // struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
+
+  // struct ir_op *param_op = NULL;
+  // if (param_stmt && param_stmt->first &&
+  //     param_stmt->first->ty == IR_OP_TY_MOV &&
+  //     (param_stmt->first->flags & IR_OP_FLAG_PARAM)) {
+  //   param_op = param_stmt->first;
+  // }
+
+  // struct ir_lcl *lcl = state->ir->first_local;
+
+  // size_t last_mem_loc = FIRST_MEM_LOC;
+
+  struct vector *param_infos = vector_create(sizeof(struct ir_param_info));
+  struct vector *params = vector_create(sizeof(struct ir_var_ty));
+
+  struct ir_var_ty ret_ty = *func_ty.ret_ty;
+  struct ir_param_info *ret_info;
+  if (func_ty.ret_ty->ty == IR_VAR_TY_TY_NONE) {
+    ret_ty = IR_VAR_TY_NONE;
+    ret_info = NULL;
+  } else {
+    struct ir_var_ty_info info =
+        var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
+                                    ? &IR_VAR_TY_POINTER
+                                    : func_ty.ret_ty);
+
+    ret_info = arena_alloc(func->arena, sizeof(*ret_info));
+
+    struct ir_var_ty member_ty;
+    size_t num_hfa_members, hfa_member_size;
+    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
+                         &hfa_member_size)) {
+      // nop
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
+                  .size = hfa_member_size},
+      };
+    } else if (info.size > 16) {
+      ret_ty = IR_VAR_TY_NONE;
+
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_POINTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+      };
+
+      vector_push_front(params, &IR_VAR_TY_POINTER);
+    } else {
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+      };
+    }
+  }
+
+  // NOTE: on windows, SIMD&FP registers are not used in variadics, ever
+
+  bool variadics_on_stack;
+  switch (func->unit->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    variadics_on_stack = true;
+    break;
+  default:
+    variadics_on_stack = false;
+    break;
+  }
+
+  size_t num = MAX(func_ty.num_params, num_args);
+  for (size_t i = 0; i < num; i++) {
+    const struct ir_var_ty *var_ty;
+
+    bool variadic;
+    if (i < func_ty.num_params) {
+      var_ty = &func_ty.params[i];
+      variadic = false;
+    } else {
+      DEBUG_ASSERT(func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC, "more args than params but not variadic");
+      var_ty = &args[i]->var_ty;
+      variadic = true;
+    }
+
+    struct ir_var_ty_info info = var_ty_info(
+        func->unit,
+        var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
+
+    if (info.size > 16) {
+      // copy to mem
+      var_ty = &IR_VAR_TY_POINTER;
+      info = var_ty_info(func->unit, var_ty);
+    }
+
+    if (var_ty_is_aggregate(var_ty)) {
+      info.size = ROUND_UP(info.size, 8);
+    }
+
+    // size_t offset;
+    // struct aarch64_reg source;
+
+    // if (lcl) {
+    //   offset = lcl->offset;
+    // }
+
+    // if (param_op) {
+    //   source = codegen_reg(param_op);
+    // }
+
+    size_t num_hfa_members;
+    size_t hfa_member_size;
+    struct ir_var_ty member_ty;
+
+    if (!variadic || !variadics_on_stack) {
+      if (var_ty_is_fp(var_ty) && nsrn < 8) {
+        // struct location from = {.idx = nsrn};
+        // struct location to = {.idx = source.idx};
+        // vector_push_back(fp_move_from, &from);
+        // vector_push_back(fp_move_to, &to);
+        nsrn++;
+
+        vector_push_back(params, var_ty);
+
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                    .size = info.size},
+        };
+        vector_push_back(param_infos, &param_info);
+
+        continue;
+      } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
+                                  &hfa_member_size)) {
+        if (nsrn + num_hfa_members <= 8) {
+          for (size_t j = 0; j < num_hfa_members; j++) {
+            // given this is a composite, we assume `source` contains a
+            // pointer to it
+
+            vector_push_back(params, &member_ty);
+
+            // struct location from = {.idx = nsrn++};
+
+            // struct mem_loc mem_loc = {.base = STACK_PTR_REG,
+            //                           .offset = hfa_member_size * j,
+            //                           .size = hfa_member_size};
+
+            // struct location to = {
+            //     .idx = MEM_LOC(),
+            //     .metadata[0] = arena_alloc_init(
+            //         state->arena, sizeof(struct mem_loc), &mem_loc)};
+
+            // vector_push_back(fp_move_from, &from);
+            // vector_push_back(fp_move_to, &to);
+          }
+
+          struct ir_param_info param_info = {
+              .ty = IR_PARAM_INFO_TY_REGISTER,
+              .var_ty = var_ty,
+              .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                      .size = hfa_member_size},
+          };
+          vector_push_back(param_infos, &param_info);
+
+          nsrn += num_hfa_members;
+          continue;
+        }
+
+        nsrn = 8;
+        size_t nsaa_align = MAX(8, info.alignment);
+        size_t size = ROUND_UP(info.size, nsaa_align);
+
+        struct ir_param_info param_info = {.ty = IR_PARAM_INFO_TY_STACK,
+                                           .var_ty = var_ty,
+                                           .stack_offset = nsaa};
+        vector_push_back(param_infos, &param_info);
+
+        nsaa += size;
+        continue;
+
+      } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
+        // struct location from = {.idx = ngrn};
+        // struct location to = {.idx = source.idx};
+        // vector_push_back(gp_move_from, &from);
+        // vector_push_back(gp_move_to, &to);
+
+        vector_push_back(params, var_ty);
+
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                    .size = info.size}};
+        vector_push_back(param_infos, &param_info);
+
+        ngrn++;
+
+        continue;
+      }
+
+      if (info.alignment == 16) {
+        ngrn = (ngrn + 1) & 1;
+      }
+
+      if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
+        // // lo to ngrn, hi to ngrn+1
+
+        vector_push_back(params, &IR_VAR_TY_I64);
+        vector_push_back(params, &IR_VAR_TY_I64);
+
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                    .size = 8}};
+        vector_push_back(param_infos, &param_info);
+
+        ngrn += 2;
+        continue;
+      }
+
+      size_t dw_size = (info.size + 7) / 8;
+      if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+        for (size_t j = 0; j < dw_size; j++) {
+          // given this is a composite, we assume `source` contains a
+          // pointer to it
+          vector_push_back(params, &IR_VAR_TY_I64);
+
+          // struct mem_loc mem_loc = {
+          //     .base = STACK_PTR_REG, .offset = offset + (8 * j), .size = 8};
+
+          // struct location to = {
+          //     .idx = MEM_LOC(),
+          //     .metadata[0] = arena_alloc_init(state->arena,
+          //                                     sizeof(struct mem_loc),
+          //                                     &mem_loc)};
+
+          // struct location from = {.idx = ngrn++};
+          // vector_push_back(gp_move_from, &from);
+          // vector_push_back(gp_move_to, &to);
+        }
+
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                    .size = 8}};
+        vector_push_back(param_infos, &param_info);
+
+        ngrn += dw_size;
+        continue;
+      }
+    }
+
+    ngrn = 8;
+    size_t nsaa_align = MAX(8, info.alignment);
+    nsaa = ROUND_UP(nsaa, nsaa_align);
+
+    if (var_ty_is_aggregate(var_ty)) {
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
+      vector_push_back(param_infos, &param_info);
+
+      nsaa += info.size;
       continue;
     }
 
-    lower_load_to_addr(arg);
+    size_t size = MAX(8, info.size);
+
+    struct ir_param_info param_info = {
+        .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
+    vector_push_back(param_infos, &param_info);
+
+    nsaa += size;
+  }
+
+  struct ir_var_func_ty new_func_ty = {
+      .flags = func_ty.flags,
+      .num_params = vector_length(params),
+      .params = vector_head(params),
+      .ret_ty = arena_alloc(func->arena, sizeof(ret_ty))};
+
+  *new_func_ty.ret_ty = ret_ty;
+
+  struct ir_call_info call_info = {.params = vector_head(param_infos),
+                                   .num_params = vector_length(param_infos),
+                                   .ret = ret_info,
+                                   .stack_size = nsaa};
+
+  return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
+}
+
+static struct ir_var_ty get_var_ty_for_size(enum ir_reg_ty reg_ty,
+                                            size_t size) {
+  if (reg_ty == IR_REG_TY_INTEGRAL) {
+    DEBUG_ASSERT(
+        size == 8,
+        "arm64 abi only uses 8 byte chunks in general purpose registers");
+    return IR_VAR_TY_I64;
+  } else {
+    DEBUG_ASSERT(reg_ty == IR_REG_TY_FP, "expected integral or fp reg");
+
+    switch (size) {
+    case 2:
+      return IR_VAR_TY_F16;
+    case 4:
+      return IR_VAR_TY_F32;
+    case 8:
+      return IR_VAR_TY_F64;
+    default:
+      unreachable();
+    }
+  }
+}
+
+static void lower_call(struct ir_func *func, struct ir_op *op) {
+  struct ir_func_info func_info = lower_func_ty(func, op->call.func_ty.func, op->call.args, op->call.num_args);
+
+  struct vector *new_args = vector_create(sizeof(struct ir_op *));
+
+  op->call.func_ty.func = func_info.func_ty;
+
+  for (size_t i = 0; i < op->call.num_args; i++) {
+    struct ir_op *arg = op->call.args[i];
+
+    DEBUG_ASSERT(i < func_info.call_info.num_params, "out of range");
+    struct ir_param_info param_info = func_info.call_info.params[i];
+
+    struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
+
+    switch (param_info.ty) {
+    case IR_PARAM_INFO_TY_REGISTER:
+      if (arg->ty == IR_OP_TY_LOAD) {
+        struct ir_var_ty load_ty = get_var_ty_for_size(
+            param_info.reg.start_reg.ty, param_info.reg.size);
+
+        size_t num_reg =
+            (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+
+        struct ir_op *addr;
+        switch (arg->load.ty) {
+        case IR_OP_LOAD_TY_LCL: {
+          struct ir_lcl *lcl = arg->load.lcl;
+
+          addr = replace_ir_op(func, arg, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+          addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+          addr->flags |= IR_OP_FLAG_CONTAINED;
+          break;
+        }
+        case IR_OP_LOAD_TY_GLB: {
+          struct ir_glb *glb = arg->load.glb;
+
+          addr = replace_ir_op(func, arg, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+          addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
+          addr->flags |= IR_OP_FLAG_CONTAINED;
+          break;
+        }
+        case IR_OP_LOAD_TY_ADDR:
+          addr = arg->load.addr;
+
+          detach_ir_op(func, arg);
+          break;
+        }
+
+        struct ir_op *last = op;
+
+        for (size_t j = num_reg; j; j--) {
+          struct ir_op *load =
+              insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
+
+          struct ir_op *addr_offset = insert_before_ir_op(
+              func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+          addr_offset->addr_offset = (struct ir_op_addr_offset){
+              .base = addr, .offset = (j - 1) * param_info.reg.size};
+
+          addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+
+          load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
+                                           .addr = addr_offset};
+          load->reg =
+              (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                              .idx = param_info.reg.start_reg.idx + j - 1};
+
+          vector_push_back(new_args, &load);
+
+          last = load;
+        }
+      } else {
+        struct ir_op *mov =
+            insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
+        mov->mov = (struct ir_op_mov){.value = arg};
+        mov->reg = param_info.reg.start_reg;
+
+        vector_push_back(new_args, &mov);
+      }
+      break;
+    case IR_PARAM_INFO_TY_STACK: {
+        if(arg->ty == IR_OP_TY_LOAD) {
+        // struct ir_op *addr = build_addr(func, arg);
+
+        // struct ir_op *copy =
+        //     insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY, arg->var_ty);
+        // copy->mem_copy = (struct ir_op_mem_copy){
+        //    .source = addr,
+        //    .dest = dest,
+        //   .lenth = info.size
+        // };
+        // copy->reg = param_info.reg.start_reg;
+        // vector_push_back(new_args, &copy);
+        TODO("stack composites");
+      } else {
+        struct ir_op *store =
+            insert_before_ir_op(func, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        struct ir_lcl *lcl = add_local(func, &arg->var_ty);
+        lcl->offset = param_info.stack_offset;
+        store->store = (struct ir_op_store){
+          .ty = IR_OP_STORE_TY_LCL,
+          .lcl = lcl,
+          .value = arg
+        };
+        vector_push_back(new_args, &store);
+      }
+      break;
+    }
+    case IR_PARAM_INFO_TY_POINTER: {
+      DEBUG_ASSERT(arg->ty == IR_OP_TY_LOAD, "expected load");
+
+      struct ir_op *mov =
+          insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
+      mov->mov = (struct ir_op_mov){.value = arg};
+      mov->reg = param_info.reg.start_reg;
+      vector_push_back(new_args, &mov);
+      break;
+    }
+    }
   }
 
   if (var_ty_is_aggregate(&op->var_ty)) {
@@ -564,6 +1096,9 @@ static void lower_call(struct ir_func *func, struct ir_op *op) {
     // just switch to pointer type, let codegen handle
     op->var_ty = IR_VAR_TY_I64;
   }
+
+  op->call.args = vector_head(new_args);
+  op->call.num_args = vector_length(new_args);
 }
 
 static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
@@ -580,6 +1115,88 @@ static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
   lower_load_to_addr(value);
 }
 
+static void lower_params(struct ir_func *func) {
+  // struct ir_var_func_ty func_ty = func->func_ty;
+  struct ir_call_info call_info = func->call_info;
+
+  if (call_info.num_params == 0) {
+    return;
+  }
+
+  struct ir_op *param_op = func->first->first->first;
+
+  struct ir_op *after_params = param_op->stmt->succ->first;
+  // struct ir_op *last = NULL;
+
+  // if (strcmp(func->name, "sum_small") == 0)
+  //   BREAKPOINT();
+
+  for (size_t i = 0; i < call_info.num_params; i++) {
+    DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
+
+    struct ir_param_info param_info = call_info.params[i];
+    struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
+
+    switch (param_info.ty) {
+    case IR_PARAM_INFO_TY_REGISTER:
+      if (var_ty_is_aggregate(param_info.var_ty)) {
+        DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR, "expected addr");
+
+        struct ir_var_ty store_ty = get_var_ty_for_size(
+            param_info.reg.start_reg.ty, param_info.reg.size);
+
+        size_t num_reg =
+            (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+
+        struct ir_op *addr = insert_before_ir_op(
+            func, after_params, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+        addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL,
+                                         .lcl = param_op->addr.lcl};
+        addr->flags |= IR_OP_FLAG_CONTAINED;
+
+        for (size_t j = num_reg; j; j--) {
+          struct ir_op *store =
+              insert_after_ir_op(func, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+          struct ir_op *addr_offset = insert_before_ir_op(
+              func, store, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+          addr_offset->addr_offset = (struct ir_op_addr_offset){
+              .base = addr, .offset = (j - 1) * param_info.reg.size};
+
+          struct ir_op *mov;
+          if (j - 1 == 0) {
+            mov = replace_ir_op(func, param_op, IR_OP_TY_MOV, store_ty);
+          } else {
+            mov = insert_after_ir_op(func, param_op, IR_OP_TY_MOV, store_ty);
+          }
+          mov->mov = (struct ir_op_mov){.value = NULL};
+          mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
+          mov->reg =
+              (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                              .idx = param_info.reg.start_reg.idx + j - 1};
+
+          addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+
+          store->store = (struct ir_op_store){
+              .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
+        }
+      } else {
+        param_op->flags |= IR_OP_FLAG_FIXED_REG;
+        param_op->reg = param_info.reg.start_reg;
+      }
+      break;
+    case IR_PARAM_INFO_TY_STACK:
+      break;
+    case IR_PARAM_INFO_TY_POINTER:
+      break;
+    }
+
+    // there is exactly one op per param
+
+    param_op = param_op->succ;
+  }
+}
+
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -593,6 +1210,14 @@ void aarch64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
+
+      // TODO: make this lowering global (and call a target-specific function)
+      // and also do it for undef symbols
+      struct ir_func_info info = lower_func_ty(func, func->func_ty, NULL, 0);
+      func->func_ty = info.func_ty;
+      func->call_info = info.call_info;
+
+      lower_params(func);
 
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
@@ -708,6 +1333,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_CALL:
             case IR_OP_TY_CAST_OP:
             case IR_OP_TY_MEM_SET:
+            case IR_OP_TY_MEM_COPY:
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BR_COND:
               break;

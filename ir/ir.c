@@ -121,6 +121,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE:
   case IR_OP_TY_MEM_SET:
+  case IR_OP_TY_MEM_COPY:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -159,6 +160,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
   case IR_OP_TY_MEM_SET:
+  case IR_OP_TY_MEM_COPY:
     return false;
   case IR_OP_TY_CUSTOM:
     BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
@@ -186,6 +188,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_STORE:
   case IR_OP_TY_LOAD:
   case IR_OP_TY_MEM_SET:
+  case IR_OP_TY_MEM_COPY:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_BITFIELD_EXTRACT:
@@ -406,7 +409,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     cb(&op->br_cond.cond, cb_metadata);
     break;
   case IR_OP_TY_MOV:
-    if (op->mov.value) {
+    if (op->mov.value && !(op->flags & IR_OP_FLAG_PARAM)) {
       cb(&op->mov.value, cb_metadata);
     }
     break;
@@ -424,6 +427,10 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_MEM_SET:
     cb(&op->mem_set.addr, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_COPY:
+    cb(&op->mem_copy.source, cb_metadata);
+    cb(&op->mem_copy.dest, cb_metadata);
     break;
   }
 }
@@ -541,6 +548,8 @@ const struct ir_var_ty IR_VAR_TY_I32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_I32};
 const struct ir_var_ty IR_VAR_TY_I64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_I64};
+const struct ir_var_ty IR_VAR_TY_F16 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
+                                        .primitive = IR_VAR_PRIMITIVE_TY_F16};
 const struct ir_var_ty IR_VAR_TY_F32 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_F32};
 const struct ir_var_ty IR_VAR_TY_F64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
@@ -1311,6 +1320,9 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
   mov->reg = reg;
   mov->mov = (struct ir_op_mov){.value = *op};
 
+  (*op)->flags |= IR_OP_FLAG_PREFERRED_REG;
+  (*op)->reg = reg;
+
   *op = mov;
 
   return mov;
@@ -1352,6 +1364,9 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   producer->ty = IR_OP_TY_MOV;
   producer->mov = (struct ir_op_mov){.value = mov};
   producer->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
+
+  producer->flags |= IR_OP_FLAG_PREFERRED_REG;
+  producer->reg = reg;
 
   return mov;
 }
@@ -1640,6 +1655,35 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
 
     iru->well_known_glbs.memmove = memmove;
     return memmove;
+  }
+
+  case IR_WELL_KNOWN_GLB_MEMCPY: {
+    if (iru->well_known_glbs.memcpy) {
+      return iru->well_known_glbs.memcpy;
+    }
+
+    struct ir_var_ty *ptr = arena_alloc(iru->arena, sizeof(*ptr));
+    *ptr = IR_VAR_TY_POINTER;
+
+    size_t num_params = 3;
+    struct ir_var_ty *params =
+        arena_alloc(iru->arena, sizeof(*params) * num_params);
+
+    params[0] = IR_VAR_TY_POINTER;
+    params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
+    params[2] = var_ty_for_pointer_size(iru);
+
+    struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
+                               .func = {.ret_ty = ptr,
+                                        .num_params = num_params,
+                                        .params = params,
+                                        .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
+
+    struct ir_glb *memcpy = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+                                        IR_GLB_DEF_TY_UNDEFINED, "memcpy");
+
+    iru->well_known_glbs.memcpy = memcpy;
+    return memcpy;
   }
   case IR_WELL_KNOWN_GLB_MEMSET: {
     if (iru->well_known_glbs.memset) {

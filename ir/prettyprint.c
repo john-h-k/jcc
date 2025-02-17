@@ -116,6 +116,20 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
   }
 }
 
+static void debug_print_func_ty_string(FILE *file, struct ir_unit *iru,
+                               const struct ir_var_func_ty *func_ty) {
+    fprintf(file, "(");
+    for (size_t i = 0; i < func_ty->num_params; i++) {
+      debug_print_var_ty_string(file, iru, &func_ty->params[i]);
+      if (i + 1 < func_ty->num_params) {
+        fprintf(file, ", ");
+      }
+    }
+    fprintf(file, ")");
+    fprintf(file, " -> ");
+    debug_print_var_ty_string(file, iru, func_ty->ret_ty);
+}
+
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
@@ -140,16 +154,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     return;
   }
   case IR_VAR_TY_TY_FUNC: {
-    fprintf(file, "(");
-    for (size_t i = 0; i < var_ty->func.num_params; i++) {
-      debug_print_var_ty_string(file, iru, &var_ty->func.params[i]);
-      if (i + 1 < var_ty->func.num_params) {
-        fprintf(file, ", ");
-      }
-    }
-    fprintf(file, ")");
-    fprintf(file, " -> ");
-    debug_print_var_ty_string(file, iru, var_ty->func.ret_ty);
+    debug_print_func_ty_string(file, iru, &var_ty->func);
     return;
   }
   case IR_VAR_TY_TY_STRUCT: {
@@ -567,6 +572,12 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_o
     debug_print_op_use(file, irb, ir->mem_set.addr);
     fprintf(file, ", #%zu, #%d", ir->mem_set.length, ir->mem_set.value);
     break;
+  case IR_OP_TY_MEM_COPY:
+    fprintf(file, "mem.copy ");
+    debug_print_op_use(file, irb, ir->mem_copy.dest);
+    debug_print_op_use(file, irb, ir->mem_copy.source);
+    fprintf(file, ", #%zu", ir->mem_set.length);
+    break;
   }
 }
 
@@ -821,7 +832,9 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
                                                .cb = cb,
                                                .cb_metadata = cb_metadata};
 
-  fprintf(file, "FUNCTION: %s\n", irb->name);
+  fprintf(file, "FUNCTION: %s", irb->name);
+  debug_print_func_ty_string(file, irb->unit, &irb->func_ty);
+  fprintf(file, "\n");
   fprintf(file, "    num_locals: %zu\n", irb->num_locals);
   fprintf(file, "    total_locals_size: %zu", irb->total_locals_size);
 

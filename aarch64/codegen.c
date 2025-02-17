@@ -411,7 +411,8 @@ static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
 }
 
 static struct aarch64_reg codegen_reg(struct ir_op *op) {
-  if (op->ty == IR_OP_TY_CNST && (op->flags & IR_OP_FLAG_CONTAINED) && op->cnst.int_value == 0) {
+  if (op->ty == IR_OP_TY_CNST && (op->flags & IR_OP_FLAG_CONTAINED) &&
+      op->cnst.int_value == 0) {
     return zero_reg_for_ty(reg_ty_for_var_ty(&op->var_ty));
   }
 
@@ -1349,13 +1350,14 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                "floating point with invalid binary op");
 
 #define CONTAINED_OP(str, ins_up, ins)                                         \
-  if ((lhs_op->flags & IR_OP_FLAG_CONTAINED) && lhs_op->cnst.int_value) {                                  \
+  if ((lhs_op->flags & IR_OP_FLAG_CONTAINED) && lhs_op->cnst.int_value) {      \
     instr->aarch64->ty = AARCH64_INSTR_TY_##ins_up##_IMM;                      \
     instr->aarch64->ins##_imm =                                                \
         (struct aarch64_##str##_imm){.dest = dest,                             \
                                      .source = codegen_reg(rhs_op),            \
                                      .imm = lhs_op->cnst.int_value};           \
-  } else if ((rhs_op->flags & IR_OP_FLAG_CONTAINED) && rhs_op->cnst.int_value) {                           \
+  } else if ((rhs_op->flags & IR_OP_FLAG_CONTAINED) &&                         \
+             rhs_op->cnst.int_value) {                                         \
     instr->aarch64->ty = AARCH64_INSTR_TY_##ins_up##_IMM;                      \
     instr->aarch64->ins##_imm =                                                \
         (struct aarch64_##str##_imm){.dest = dest,                             \
@@ -1377,12 +1379,12 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_FLTEQ:
-    if (lhs_op->flags &IR_OP_FLAG_CONTAINED) {
+    if (lhs_op->flags & IR_OP_FLAG_CONTAINED) {
       instr->aarch64->ty = AARCH64_INSTR_TY_FCMP_ZERO;
       instr->aarch64->fcmp_zero = (struct aarch64_fcmp_zero){
           .lhs = codegen_reg(rhs_op),
       };
-    } else if (rhs_op->flags &IR_OP_FLAG_CONTAINED) {
+    } else if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
       instr->aarch64->ty = AARCH64_INSTR_TY_FCMP_ZERO;
       instr->aarch64->fcmp_zero = (struct aarch64_fcmp_zero){
           .lhs = codegen_reg(lhs_op),
@@ -1844,7 +1846,7 @@ static void codegen_moves(struct codegen_state *state, struct move_set moves,
   }
 }
 
-static enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
+UNUSED static enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
   switch (reg.ty) {
   case AARCH64_REG_TY_NONE:
     return AARCH64_REG_ATTR_FLAG_NONE;
@@ -1938,6 +1940,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   } else {
     param_tys = op->call.arg_var_tys;
   }
+  (void)param_tys;
 
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
@@ -1945,275 +1948,15 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   // now we need to move each argument into its correct register
   // it is possible there are no spare registers for this, and so we may need
 
-  bool variadics_on_stack;
-  switch (state->target->target_id) {
-  case TARGET_ID_AARCH64_MACOS:
-    variadics_on_stack = true;
-    break;
-  default:
-    variadics_on_stack = false;
-    break;
-  }
-
-  struct vector *gp_move_from = vector_create(sizeof(struct location));
-  struct vector *gp_move_to = vector_create(sizeof(struct location));
-
-  struct vector *fp_move_from = vector_create(sizeof(struct location));
-  struct vector *fp_move_to = vector_create(sizeof(struct location));
-
-  struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
-
-  size_t ngrn = 0;
-  size_t nsrn = 0;
-  size_t nsaa = 0;
-
-  if (!(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-    struct aarch64_reg source = codegen_reg(op->call.target);
-
-    struct location from = {.idx = source.idx};
-
-    struct location to = {.idx = BLR_REG_IDX};
-
-    // need to move it into reg 10
-    vector_push_back(gp_move_from, &from);
-    vector_push_back(gp_move_to, &to);
-  }
-
-  size_t last_mem_loc = FIRST_MEM_LOC;
-
-  if (op->call.num_args) {
-    size_t num_normal_args = func_ty->num_params;
-
-    for (size_t i = 0; i < op->call.num_args; i++) {
-      struct aarch64_reg source = codegen_reg(op->call.args[i]);
-
-      enum aarch64_reg_attr_flags flags = reg_attr_flags(source);
-      if (flags & AARCH64_REG_ATTR_FLAG_ARG_REG) {
-        // bad, might be overwritten during param preparation
-        // preemptively add 9 so it is not an arg register
-        // TODO: is this safe, and can it be improved?
-        struct aarch64_reg dest = {.ty = source.ty, .idx = source.idx + 9};
-        struct instr *mov = alloc_instr(state->func);
-
-        if (aarch64_reg_ty_is_gp(dest.ty)) {
-          *mov->aarch64 = MOV_ALIAS(dest, source);
-        } else {
-          *mov->aarch64 = FP_MOV_ALIAS(dest, source);
-        }
-
-        source = dest;
-      }
-    }
-
-    for (size_t i = 0; i < op->call.num_args; i++) {
-      struct aarch64_reg source = codegen_reg(op->call.args[i]);
-
-      enum aarch64_reg_attr_flags flags = reg_attr_flags(source);
-      if (flags & AARCH64_REG_ATTR_FLAG_ARG_REG) {
-        source.idx += 9;
-      }
-
-      // hmm, we pretend all memory locations are different but they are not
-      // can gen_move_order accidentally overwrite things because of this?
-
-      if (!variadics_on_stack || i < num_normal_args ||
-          !(func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-
-        const struct ir_var_ty *var_ty =
-            i < num_normal_args ? &param_tys[i] : &op->call.args[i]->var_ty;
-
-        struct ir_var_ty_info info = var_ty_info(
-            state->ir->unit,
-            var_ty->ty == IR_VAR_TY_TY_ARRAY ? &IR_VAR_TY_POINTER : var_ty);
-
-        size_t num_hfa_members;
-        size_t hfa_member_size;
-
-        if (var_ty_is_fp(var_ty) && nsrn < 8) {
-          struct location from = {.idx = source.idx};
-          struct location to = {.idx = nsrn};
-          vector_push_back(fp_move_from, &from);
-          vector_push_back(fp_move_to, &to);
-          nsrn++;
-          continue;
-        } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
-                                    &hfa_member_size)) {
-          if (nsrn + num_hfa_members <= 8) {
-            for (size_t j = 0; j < num_hfa_members; j++) {
-              // given this is a composite, we assume `source` contains a
-              // pointer to it
-
-              struct mem_loc mem_loc = {.base = source,
-                                        .offset = hfa_member_size * j,
-                                        .size = hfa_member_size};
-
-              struct location loc = {
-                  .idx = MEM_LOC(),
-                  .metadata[0] = arena_alloc_init(
-                      state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-              struct location to = {.idx = nsrn++};
-              vector_push_back(fp_move_from, &loc);
-              vector_push_back(fp_move_to, &to);
-            }
-
-            continue;
-          }
-
-          nsrn = 8;
-          size_t nsaa_align = MAX(8, info.alignment);
-          size_t size = ROUND_UP(info.size, nsaa_align);
-
-          // TODO: overaligned HFAs and vectors
-          struct mem_loc mem_src = {.base = source, .offset = 0, .size = size};
-
-          struct mem_loc mem_dest = {
-              .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-          vector_push_back(mem_copies, &copy);
-
-          nsaa += size;
-
-          continue;
-
-        } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 &&
-                   ngrn <= 8) {
-          struct location from = {.idx = source.idx};
-          struct location to = {.idx = ngrn};
-          vector_push_back(gp_move_from, &from);
-          vector_push_back(gp_move_to, &to);
-          ngrn++;
-          continue;
-        }
-
-        if (info.alignment == 16) {
-          ngrn = (ngrn + 1) & 1;
-        }
-
-        if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-          TODO("128 bit reg alloc");
-          // // lo to ngrn, hi to ngrn+1
-          // ngrn += 2;
-          // continue;
-        }
-
-        size_t dw_size = info.size / 8;
-        if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-          for (size_t j = 0; j <= dw_size; j++) {
-            // given this is a composite, we assume `source` contains a
-            // pointer to it
-
-            struct mem_loc mem_loc = {
-                .base = source, .offset = 8 * j, .size = 8};
-
-            struct location loc = {
-                .idx = MEM_LOC(),
-                .metadata[0] = arena_alloc_init(
-                    state->arena, sizeof(struct mem_loc), &mem_loc)};
-
-            struct location to = {.idx = ngrn++};
-            vector_push_back(gp_move_from, &loc);
-            vector_push_back(gp_move_to, &to);
-          }
-
-          continue;
-        }
-
-        ngrn = 8;
-        size_t nsaa_align = MAX(8, info.alignment);
-        nsaa = ROUND_UP(nsaa, nsaa_align);
-
-        if (var_ty_is_aggregate(var_ty)) {
-          struct mem_loc mem_src = {
-              .base = source, .offset = 0, .size = info.size};
-
-          struct mem_loc mem_dest = {
-              .base = STACK_PTR_REG, .offset = nsaa, .size = info.size};
-
-          struct mem_copy copy = {.src = mem_src, .dest = mem_dest};
-
-          vector_push_back(mem_copies, &copy);
-
-          nsaa += info.size;
-          continue;
-        }
-
-        size_t size = MAX(8, info.size);
-
-        struct mem_loc mem_loc = {
-            .base = STACK_PTR_REG, .offset = nsaa, .size = size};
-
-        nsaa += size;
-
-        struct location from = {.idx = source.idx};
-
-        struct location to = {
-            .idx = MEM_LOC(),
-            .metadata[0] = arena_alloc_init(state->arena,
-                                            sizeof(struct mem_loc), &mem_loc)};
-
-        if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-          vector_push_back(gp_move_from, &from);
-          vector_push_back(gp_move_to, &to);
-        } else if (var_ty_is_fp(var_ty)) {
-          vector_push_back(fp_move_from, &from);
-          vector_push_back(fp_move_to, &to);
-        } else {
-          BUG("bad type");
-        }
-      } else {
-        struct ir_var_ty *var_ty = &op->call.args[i]->var_ty;
-
-        // this argument is variadic
-        // the stack slot this local must live in, in terms of 8 byte slots
-        size_t variadic_arg_idx = i - num_normal_args;
-
-        if (source.ty == AARCH64_REG_TY_W) {
-          // because offsets are in terms of reg size, we need to double it
-          // for the 8 byte slots
-          variadic_arg_idx *= 2;
-        } else {
-          invariant_assert(var_ty_info(state->ir->unit, var_ty).size >= 8,
-                           "variadic arg with size < 8 has not been promoted");
-        }
-
-        struct instr *store = alloc_instr(state->func);
-
-        store->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-        store->aarch64->str_imm =
-            (struct aarch64_store_imm){.source = source,
-                                       .addr = STACK_PTR_REG,
-                                       .imm = variadic_arg_idx,
-                                       .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-      }
-    }
-  }
-
-  struct move_set gp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(gp_move_from), vector_head(gp_move_to),
-      vector_length(gp_move_from), GP_TMP_REG_IDX);
-
-  struct move_set fp_arg_moves = gen_move_order(
-      state->ir->arena, vector_head(fp_move_from), vector_head(fp_move_to),
-      vector_length(fp_move_from), FP_TMP_REG_IDX);
-
-  codegen_moves(state, gp_arg_moves, AARCH64_REG_CLASS_GP);
-  codegen_moves(state, fp_arg_moves, AARCH64_REG_CLASS_FP);
-
-  // then handle mem copies
-  size_t num_copies = vector_length(mem_copies);
-  for (size_t i = 0; i < num_copies; i++) {
-    struct mem_copy *copy = vector_get(mem_copies, i);
-    struct mem_loc *from = &copy->src;
-    struct mem_loc *to = &copy->dest;
-
-    DEBUG_ASSERT(from->size == to->size, "mem cpy with different sizes");
-
-    codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
-                              to->offset, to->size);
-  }
+  // bool variadics_on_stack;
+  // switch (state->target->target_id) {
+  // case TARGET_ID_AARCH64_MACOS:
+  //   variadics_on_stack = true;
+  //   break;
+  // default:
+  //   variadics_on_stack = false;
+  //   break;
+  // }
 
   // now we generate the actual call
 
@@ -2369,6 +2112,23 @@ static void codegen_params(struct codegen_state *state) {
   // specifically, each aggregate must produce exactly one local
   // and do it in order of params
 
+  struct ir_call_info call_info = state->ir->call_info;
+  for (size_t i = 0; i < call_info.num_params; i++) {
+    struct ir_param_info param_info = call_info.params[i];
+
+    // struct ir_var_ty_info info =
+    //     var_ty_info(state->ir->unit, &param_info.var_ty);
+
+    switch (param_info.ty) {
+    case IR_PARAM_INFO_TY_REGISTER:
+      break;
+    case IR_PARAM_INFO_TY_STACK:
+      break;
+    case IR_PARAM_INFO_TY_POINTER:
+      break;
+    }
+  }
+
   struct ir_var_func_ty func_ty = state->ir->func_ty;
 
   size_t ngrn = 0;
@@ -2382,6 +2142,7 @@ static void codegen_params(struct codegen_state *state) {
   struct vector *fp_move_to = vector_create(sizeof(struct location));
 
   struct vector *mem_copies = vector_create(sizeof(struct mem_copy));
+  return;
 
   struct ir_stmt *param_stmt = state->ir->first->first;
   struct ir_op *param_op = NULL;
@@ -2567,85 +2328,6 @@ static void codegen_params(struct codegen_state *state) {
     codegen_mem_copy_volatile(state, from->base, from->offset, to->base,
                               to->offset, to->size);
   }
-}
-
-static size_t calc_arg_stack_space(struct codegen_state *state,
-                                   struct ir_var_func_ty func_ty,
-                                   struct ir_op *op) {
-  size_t ngrn = 0;
-  size_t nsrn = 0;
-  size_t nsaa = 0;
-
-  for (size_t i = 0; i < func_ty.num_params; i++) {
-    const struct ir_var_ty *var_ty = &func_ty.params[i];
-    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-    size_t num_hfa_members;
-    size_t hfa_member_size;
-
-    if (var_ty_is_fp(var_ty) && nsrn < 8) {
-      nsrn++;
-      continue;
-    } else if (try_get_hfa_info(state, var_ty, &num_hfa_members,
-                                &hfa_member_size)) {
-      if (nsrn + num_hfa_members <= 8) {
-        nsrn += num_hfa_members;
-        continue;
-      }
-
-      nsrn = 8;
-      size_t nsaa_align = MAX(8, info.alignment);
-      size_t size = ROUND_UP(info.size, nsaa_align);
-
-      nsaa += size;
-      continue;
-
-    } else if ((INTEGRAL_OR_PTRLIKE(var_ty)) && info.size <= 8 && ngrn <= 8) {
-      ngrn++;
-      continue;
-    }
-
-    if (info.alignment == 16) {
-      ngrn = (ngrn + 1) & 1;
-    }
-
-    if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-      ngrn += 2;
-      continue;
-    }
-
-    size_t dw_size = info.size / 8;
-    if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-      ngrn += dw_size;
-      continue;
-    }
-
-    ngrn = 8;
-    size_t nsaa_align = MAX(8, info.alignment);
-    nsaa = ROUND_UP(nsaa, nsaa_align);
-
-    if (var_ty_is_aggregate(var_ty)) {
-      nsaa += info.size;
-      continue;
-    }
-
-    size_t size = MAX(8, info.size);
-
-    nsaa += size;
-  }
-
-  if (op) {
-    DEBUG_ASSERT(op->ty == IR_OP_TY_CALL, "needs call");
-    for (size_t i = func_ty.num_params; i < op->call.num_args; i++) {
-      struct ir_var_ty var_ty = op->call.args[i]->var_ty;
-      struct ir_var_ty_info info = var_ty_info(state->ir->unit, &var_ty);
-
-      size_t size = ROUND_UP(info.size, 8);
-      nsaa += size;
-    }
-  }
-
-  return nsaa;
 }
 
 // FIXME: do things more smarter
@@ -3367,10 +3049,8 @@ struct codegen_unit *aarch64_codegen(struct ir_unit *ir) {
 
             while (op) {
               if (op->ty == IR_OP_TY_CALL) {
-                size_t call_args_size =
-                    calc_arg_stack_space(&state, op->call.func_ty.func, op);
-                state.stack_args_size =
-                    MAX(state.stack_args_size, call_args_size);
+                // size_t call_args_size = op->call.args state.stack_args_size =
+                //     MAX(state.stack_args_size, call_args_size);
               }
 
               op = op->succ;
