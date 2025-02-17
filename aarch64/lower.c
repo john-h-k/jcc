@@ -650,8 +650,6 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
     if (!variadic || !variadics_on_stack) {
       if (var_ty_is_fp(var_ty) && nsrn < 8) {
-        nsrn++;
-
         vector_push_back(params, var_ty);
 
         struct ir_param_info param_info = {
@@ -662,6 +660,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
         };
         vector_push_back(param_infos, &param_info);
 
+        nsrn++;
         continue;
       } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
                                   &hfa_member_size)) {

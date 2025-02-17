@@ -1467,24 +1467,6 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
-  // TODO: move this to `lower`
-  if (op->call.func_ty.func.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC) {
-    // macOS x64 requires number of variadic args to be put in `eax`
-
-    size_t count;
-    if (op->call.num_args >= op->call.func_ty.func.num_params) {
-      count = op->call.num_args - op->call.func_ty.func.num_params;
-    } else {
-      count = 0;
-    }
-
-    struct instr *num_variadic = alloc_instr(state->func);
-    num_variadic->x64->ty = X64_INSTR_TY_MOV_IMM;
-    num_variadic->x64->mov_imm = (struct x64_mov_imm){
-        .dest = (struct x64_reg){.ty = X64_REG_TY_E, .idx = REG_IDX_AX},
-        .imm = count};
-  }
-
   // now we generate the actual call
 
   struct instr *instr = alloc_instr(state->func);

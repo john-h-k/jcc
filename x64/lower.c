@@ -2,6 +2,7 @@
 
 #include "../bit_twiddle.h"
 #include "../util.h"
+#include "../vector.h"
 
 #define IR_REG_IDX_AX (6)
 #define IR_REG_IDX_CX (3)
@@ -9,12 +10,294 @@
 #define IR_REG_IDX_SI (1)
 #define IR_REG_IDX_DI (0)
 
-struct ir_func_info x64_lower_func_ty(struct ir_func *func,
-                                         struct ir_var_func_ty func_ty,
-                                         struct ir_op **args, size_t num_args) {
-  TODO(__func__);
+static bool try_get_hfa_info(struct ir_func *func,
+                             const struct ir_var_ty *var_ty,
+                             struct ir_var_ty *member_ty, size_t *num_members,
+                             size_t *member_size) {
+  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
+    return false;
+  }
+
+  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
+    TODO("union hfa handling");
+  }
+
+  if (!var_ty->struct_ty.num_fields) {
+    return false;
+  }
+
+  *member_ty = var_ty->struct_ty.fields[0];
+
+  if (!var_ty_is_fp(member_ty)) {
+    return false;
+  }
+
+  if (var_ty->struct_ty.num_fields > 4) {
+    return false;
+  }
+
+  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
+    if (!var_ty_eq(func, member_ty, &var_ty->struct_ty.fields[i])) {
+      return false;
+    }
+  }
+
+  switch (member_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_F16:
+    *member_size = 2;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    *member_size = 4;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    *member_size = 8;
+    break;
+  default:
+    unreachable();
+  }
+
+  *num_members = var_ty->struct_ty.num_fields;
+  return true;
 }
 
+struct ir_func_info x64_lower_func_ty(struct ir_func *func,
+                                      struct ir_var_func_ty func_ty,
+                                      struct ir_op **args, size_t num_args) {
+
+  size_t ngrn = 0;
+  size_t nsrn = 0;
+  size_t nsaa = 0;
+
+  struct vector *param_infos = vector_create(sizeof(struct ir_param_info));
+  struct vector *params = vector_create(sizeof(struct ir_var_ty));
+
+  struct ir_var_ty ret_ty = *func_ty.ret_ty;
+  struct ir_param_info *ret_info;
+  if (func_ty.ret_ty->ty == IR_VAR_TY_TY_NONE) {
+    ret_ty = IR_VAR_TY_NONE;
+    ret_info = NULL;
+  } else {
+    struct ir_var_ty_info info =
+        var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
+                                    ? &IR_VAR_TY_POINTER
+                                    : func_ty.ret_ty);
+
+    ret_info = arena_alloc(func->arena, sizeof(*ret_info));
+
+    struct ir_var_ty member_ty;
+    size_t num_hfa_members, hfa_member_size;
+    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
+                         &hfa_member_size)) {
+      // nop
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
+                  .size = hfa_member_size},
+      };
+    } else if (info.size > 16) {
+      ret_ty = IR_VAR_TY_NONE;
+
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_POINTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX},
+                  .size = 8},
+      };
+
+      vector_push_front(params, &IR_VAR_TY_POINTER);
+    } else {
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX},
+                  .size = 8},
+      };
+    }
+  }
+
+  // NOTE: on windows, SIMD&FP registers are not used in variadics, ever
+
+  size_t num = MAX(func_ty.num_params, num_args);
+
+  // FIXME: is this correct? does it want the number of _params_ or number of
+  // _registers_ in EAX
+  size_t num_variadics =
+      num > func_ty.num_params ? num - func_ty.num_params : 0;
+
+  for (size_t i = 0; i < num; i++) {
+    const struct ir_var_ty *var_ty;
+
+    if (i < func_ty.num_params) {
+      var_ty = &func_ty.params[i];
+    } else {
+      DEBUG_ASSERT(func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC,
+                   "more args than params but not variadic");
+      var_ty = &args[i]->var_ty;
+    }
+
+    if (var_ty->ty == IR_VAR_TY_TY_ARRAY) {
+      var_ty = &IR_VAR_TY_POINTER;
+    }
+
+    struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
+
+    if (info.size > 16) {
+      // copy to mem
+      var_ty = &IR_VAR_TY_POINTER;
+      info = var_ty_info(func->unit, var_ty);
+    }
+
+    if (var_ty_is_aggregate(var_ty)) {
+      info.size = ROUND_UP(info.size, 8);
+    }
+
+    size_t num_hfa_members;
+    size_t hfa_member_size;
+    struct ir_var_ty member_ty;
+
+    if (var_ty_is_fp(var_ty) && nsrn < 8) {
+      vector_push_back(params, var_ty);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                  .size = info.size},
+      };
+      vector_push_back(param_infos, &param_info);
+
+      nsrn++;
+      continue;
+    } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
+                                &hfa_member_size)) {
+      if (nsrn + num_hfa_members <= 8) {
+        for (size_t j = 0; j < num_hfa_members; j++) {
+          // given this is a composite, we assume `source` contains a
+          // pointer to it
+
+          vector_push_back(params, &member_ty);
+        }
+
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                    .size = hfa_member_size},
+        };
+        vector_push_back(param_infos, &param_info);
+
+        nsrn += num_hfa_members;
+        continue;
+      }
+
+      nsrn = 8;
+      size_t nsaa_align = MAX(8, info.alignment);
+      size_t size = ROUND_UP(info.size, nsaa_align);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
+      vector_push_back(param_infos, &param_info);
+
+      nsaa += size;
+      continue;
+
+    } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
+      vector_push_back(params, var_ty);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .size = info.size}};
+      vector_push_back(param_infos, &param_info);
+
+      ngrn++;
+
+      continue;
+    }
+
+    if (info.alignment == 16) {
+      ngrn = (ngrn + 1) & 1;
+    }
+
+    if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
+      // // lo to ngrn, hi to ngrn+1
+
+      vector_push_back(params, &IR_VAR_TY_I64);
+      vector_push_back(params, &IR_VAR_TY_I64);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .size = 8}};
+      vector_push_back(param_infos, &param_info);
+
+      ngrn += 2;
+      continue;
+    }
+
+    size_t dw_size = (info.size + 7) / 8;
+    if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+      for (size_t j = 0; j < dw_size; j++) {
+        // given this is a composite, we assume `source` contains a
+        // pointer to it
+        vector_push_back(params, &IR_VAR_TY_I64);
+      }
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .size = 8}};
+      vector_push_back(param_infos, &param_info);
+
+      ngrn += dw_size;
+      continue;
+    }
+
+    ngrn = 8;
+    size_t nsaa_align = MAX(8, info.alignment);
+    nsaa = ROUND_UP(nsaa, nsaa_align);
+
+    if (var_ty_is_aggregate(var_ty)) {
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
+      vector_push_back(param_infos, &param_info);
+
+      nsaa += info.size;
+      continue;
+    }
+
+    size_t size = MAX(8, info.size);
+
+    struct ir_param_info param_info = {
+        .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
+    vector_push_back(param_infos, &param_info);
+
+    nsaa += size;
+  }
+
+  struct ir_var_func_ty new_func_ty = {
+      .flags = func_ty.flags,
+      .num_params = vector_length(params),
+      .params = vector_head(params),
+      .ret_ty = arena_alloc(func->arena, sizeof(ret_ty))};
+
+  *new_func_ty.ret_ty = ret_ty;
+
+  struct ir_call_info call_info = {.params = vector_head(param_infos),
+                                   .num_params = vector_length(param_infos),
+                                   .ret = ret_info,
+                                   .stack_size = nsaa,
+                                   .num_variadics = num_variadics,
+                                   .flags = (func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC) ? IR_CALL_INFO_FLAG_NUM_VARIADIC : IR_CALL_INFO_FLAG_NONE,
+                                   .num_variadics_reg = { .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX }
+                                 };
+
+  return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
+}
 
 enum load_bitfield {
   LOAD_BITFIELD_MASK_IN,
@@ -135,30 +418,29 @@ static void lower_fabs(struct ir_func *func, struct ir_op *op) {
   size_t mask_cnst;
   enum ir_var_primitive_ty integral;
   switch (op->unary_op.value->var_ty.primitive) {
-    case IR_VAR_PRIMITIVE_TY_F16:
-      mask_cnst = 0x7FFF;
-      integral = IR_VAR_PRIMITIVE_TY_I16;
-      break;
-    case IR_VAR_PRIMITIVE_TY_F32:
-      mask_cnst = 0x7FFFFFFF;
-      integral = IR_VAR_PRIMITIVE_TY_I32;
-      break;
-    case IR_VAR_PRIMITIVE_TY_F64:
-      mask_cnst = 0x7FFFFFFFFFFFFFFF;
-      integral = IR_VAR_PRIMITIVE_TY_I64;
-      break;
-    default:
-      unreachable();
+  case IR_VAR_PRIMITIVE_TY_F16:
+    mask_cnst = 0x7FFF;
+    integral = IR_VAR_PRIMITIVE_TY_I16;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    mask_cnst = 0x7FFFFFFF;
+    integral = IR_VAR_PRIMITIVE_TY_I32;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    mask_cnst = 0x7FFFFFFFFFFFFFFF;
+    integral = IR_VAR_PRIMITIVE_TY_I64;
+    break;
+  default:
+    unreachable();
   }
 
   struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
   mk_integral_constant(func->unit, mask, integral, mask_cnst);
 
-  struct ir_op *fp_mask = insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+  struct ir_op *fp_mask =
+      insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
   fp_mask->ty = IR_OP_TY_MOV;
-  fp_mask->mov = (struct ir_op_mov){
-    .value = mask
-  };
+  fp_mask->mov = (struct ir_op_mov){.value = mask};
 
   op->ty = IR_OP_TY_BINARY_OP;
   op->flags |= IR_OP_FLAG_READS_DEST;
@@ -175,30 +457,29 @@ static void lower_fneg(struct ir_func *func, struct ir_op *op) {
   size_t mask_cnst;
   enum ir_var_primitive_ty integral;
   switch (op->unary_op.value->var_ty.primitive) {
-    case IR_VAR_PRIMITIVE_TY_F16:
-      mask_cnst = 0x8000;
-      integral = IR_VAR_PRIMITIVE_TY_I16;
-      break;
-    case IR_VAR_PRIMITIVE_TY_F32:
-      mask_cnst = 0x80000000;
-      integral = IR_VAR_PRIMITIVE_TY_I32;
-      break;
-    case IR_VAR_PRIMITIVE_TY_F64:
-      mask_cnst = 0x8000000000000000;
-      integral = IR_VAR_PRIMITIVE_TY_I64;
-      break;
-    default:
-      unreachable();
+  case IR_VAR_PRIMITIVE_TY_F16:
+    mask_cnst = 0x8000;
+    integral = IR_VAR_PRIMITIVE_TY_I16;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F32:
+    mask_cnst = 0x80000000;
+    integral = IR_VAR_PRIMITIVE_TY_I32;
+    break;
+  case IR_VAR_PRIMITIVE_TY_F64:
+    mask_cnst = 0x8000000000000000;
+    integral = IR_VAR_PRIMITIVE_TY_I64;
+    break;
+  default:
+    unreachable();
   }
 
   struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
   mk_integral_constant(func->unit, mask, integral, mask_cnst);
 
-  struct ir_op *fp_mask = insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+  struct ir_op *fp_mask =
+      insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
   fp_mask->ty = IR_OP_TY_MOV;
-  fp_mask->mov = (struct ir_op_mov){
-    .value = mask
-  };
+  fp_mask->mov = (struct ir_op_mov){.value = mask};
 
   op->ty = IR_OP_TY_BINARY_OP;
   op->flags |= IR_OP_FLAG_READS_DEST;
@@ -225,7 +506,8 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // it
   op->reg = REG_FLAGS;
 
-  // FIXME: there are other places where we check `op->succ` but we actually want to go to next stmt if needed
+  // FIXME: there are other places where we check `op->succ` but we actually
+  // want to go to next stmt if needed
   struct ir_op *succ = op->succ ? op->succ : op->stmt->succ->first;
 
   if (succ && succ->ty == IR_OP_TY_BR_COND) {
@@ -747,7 +1029,8 @@ void x64_lower(struct ir_unit *unit) {
               }
               break;
             case IR_OP_TY_ADDR_OFFSET:
-              if (op->addr_offset.index && popcntl(op->addr_offset.scale) != 1) {
+              if (op->addr_offset.index &&
+                  popcntl(op->addr_offset.scale) != 1) {
                 // do mul beforehand and set scale to 1
                 struct ir_op *cnst = insert_before_ir_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
