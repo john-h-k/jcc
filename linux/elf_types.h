@@ -227,6 +227,8 @@ typedef struct elf64_shdr {
 #define R_RISCV_LO12_S 28
 #define R_RISCV_TPREL_HI20 29
 
+#define R_RISCV_RELAX 51
+
 /* x64 relocs */
 
 #define R_X86_64_NONE 0  /* No reloc */
