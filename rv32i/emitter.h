@@ -129,4 +129,9 @@ void rv32i_emit_lhu(struct rv32i_emitter *emitter, const struct rv32i_load lhu);
 void rv32i_emit_lw(struct rv32i_emitter *emitter, const struct rv32i_load lw);
 void rv32i_emit_flw(struct rv32i_emitter *emitter, const struct rv32i_load flw);
 
+void rv32i_emit_fsd(struct rv32i_emitter *emitter,
+                    const struct rv32i_store fsd);
+void rv32i_emit_fld(struct rv32i_emitter *emitter,
+                    const struct rv32i_load fld);
+
 #endif

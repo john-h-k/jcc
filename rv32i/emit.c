@@ -60,6 +60,8 @@ static void emit_instr(const struct emit_state *state,
     EMIT(FMV, fmv);
     EMIT(FSW, fsw);
     EMIT(FLW, flw);
+    EMIT(FSD, fsd);
+    EMIT(FLD, fld);
     EMIT(FADD, fadd);
     EMIT(FSUB, fsub);
     EMIT(FMUL, fmul);

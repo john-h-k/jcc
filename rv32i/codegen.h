@@ -103,6 +103,8 @@ enum rv32i_instr_ty {
   // load/store
   RV32I_INSTR_TY_FLW,
   RV32I_INSTR_TY_FSW,
+  RV32I_INSTR_TY_FLD,
+  RV32I_INSTR_TY_FSD,
 
   // computational
   RV32I_INSTR_TY_FADD,
@@ -284,7 +286,7 @@ struct rv32i_instr {
       struct rv32i_load lb, lbu, lh, lhu, lw;
 
       /* F/D-extension */
-      struct rv32i_load flw;
+      struct rv32i_load flw, fld;
     };
 
     union {
@@ -294,7 +296,7 @@ struct rv32i_instr {
       struct rv32i_store sb, sh, sw;
 
       /* F/D-extension */
-      struct rv32i_store fsw;
+      struct rv32i_store fsw, fsd;
     };
 
     union {

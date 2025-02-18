@@ -100,14 +100,15 @@ void rv32i_emit_jalr(struct rv32i_emitter *emitter,
   signed long long cur_pos = rv32i_emitted_count(emitter);                     \
   signed long long target_pos = instr.target->first_instr->id;                 \
                                                                                \
-  offset = (target_pos - cur_pos) * 4;
+  offset = (target_pos - cur_pos) * 2;
 
 void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal) {
   simm_t offset = 0;
   if (jal.target) {
     OFFSET(jal);
   }
-
+  // `JAL` offsets are not extended by one bit like `B` offsets are
+  offset *= 2;
   rv32i_emit_instr(emitter, JAL(offset, jal.ret_addr.idx));
 }
 
@@ -376,6 +377,16 @@ void rv32i_emit_fsw(struct rv32i_emitter *emitter,
 void rv32i_emit_flw(struct rv32i_emitter *emitter,
                     const struct rv32i_load flw) {
   rv32i_emit_instr(emitter, FLW(flw.imm, flw.dest.idx, flw.addr.idx));
+}
+
+void rv32i_emit_fsd(struct rv32i_emitter *emitter,
+                    const struct rv32i_store fsd) {
+  rv32i_emit_instr(emitter, FSD(fsd.imm, fsd.source.idx, fsd.addr.idx));
+}
+
+void rv32i_emit_fld(struct rv32i_emitter *emitter,
+                    const struct rv32i_load fld) {
+  rv32i_emit_instr(emitter, FLD(fld.imm, fld.addr.idx, fld.dest.idx));
 }
 
 void rv32i_emit_lb(struct rv32i_emitter *emitter, const struct rv32i_load lb) {
