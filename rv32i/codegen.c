@@ -562,21 +562,61 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   enum rv32i_instr_ty instr_ty;
   bool invert_cond, invert_res;
 
+  // floating point has different ops (eq + lt + le) to integral so they need to have different logic
   switch (ty) {
   case IR_OP_BINARY_OP_TY_FEQ:
-  case IR_OP_BINARY_OP_TY_FNEQ:
-  case IR_OP_BINARY_OP_TY_FGT:
-  case IR_OP_BINARY_OP_TY_FGTEQ:
-  case IR_OP_BINARY_OP_TY_FLT:
-  case IR_OP_BINARY_OP_TY_FLTEQ:
-    // instr->rv32i->ty = rv32i_INSTR_TY_FCMP;
-    // instr->rv32i->fcmp = (struct rv32i_fcmp){
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr_ty = RV32I_INSTR_TY_FEQ;
+    invert_cond = false;
+    invert_res = false;
+    goto set_fp_cmp;
 
-    TODO("float comp binops");
+  case IR_OP_BINARY_OP_TY_FNEQ:
+    instr_ty = RV32I_INSTR_TY_FEQ;
+    invert_cond = false;
+    invert_res = true;
+    goto set_fp_cmp;
+
+  case IR_OP_BINARY_OP_TY_FGT:
+    instr_ty = RV32I_INSTR_TY_FLE;
+    invert_cond = true;
+    invert_res = false;
+    goto set_fp_cmp;
+
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    instr_ty = RV32I_INSTR_TY_FLT;
+    invert_cond = true;
+    invert_res = false;
+    goto set_fp_cmp;
+
+  case IR_OP_BINARY_OP_TY_FLT:
+    instr_ty = RV32I_INSTR_TY_FLT;
+    invert_cond = false;
+    invert_res = false;
+    goto set_fp_cmp;
+
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    instr_ty = RV32I_INSTR_TY_FLE;
+    invert_cond = false;
+    invert_res = false;
+    goto set_fp_cmp;
+
+  set_fp_cmp: {
+    instr->rv32i->ty = instr_ty;
+    instr->rv32i->op_fp = (struct rv32i_op_fp){
+                          .dest = dest,
+                          .lhs = invert_cond ? rhs : lhs,
+                          .rhs = invert_cond ? lhs : rhs,
+                      };
+
+    if (invert_res) {
+      struct instr *xori = alloc_instr(state->func);
+      xori->rv32i->ty = RV32I_INSTR_TY_XORI;
+      xori->rv32i->xori =
+          (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
+    }
+    break;
+  }
+
   case IR_OP_BINARY_OP_TY_EQ: {
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
@@ -657,7 +697,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
   set_cmp: {
     instr->rv32i->ty = instr_ty;
-    instr->rv32i->xor = (struct rv32i_op){
+    instr->rv32i->op = (struct rv32i_op){
                           .dest = dest,
                           .lhs = invert_cond ? rhs : lhs,
                           .rhs = invert_cond ? lhs : rhs,
@@ -1637,8 +1677,8 @@ static void debug_print_instr(FILE *file,
     struct rv32i_op *add = &instr->rv32i->add;
 
     if (add->rhs.idx == 0) {
-      codegen_fprintf(file, "mov %reg, %reg", instr->rv32i->add.dest.idx,
-              instr->rv32i->add.lhs.idx);
+      codegen_fprintf(file, "mov %reg, %reg", instr->rv32i->add.dest,
+              instr->rv32i->add.lhs);
     } else {
       fprintf(file, "add");
       debug_print_op(file, add);
@@ -1868,8 +1908,8 @@ static void debug_print_instr(FILE *file,
   }
   case RV32I_INSTR_TY_FSGNJ: {
     if (instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
-      codegen_fprintf(file, "fmv %reg, %reg", instr->rv32i->fsgnj.dest.idx,
-              instr->rv32i->fsgnj.lhs.idx);
+      codegen_fprintf(file, "fmv %reg, %reg", instr->rv32i->fsgnj.dest,
+              instr->rv32i->fsgnj.lhs);
     } else {
       struct rv32i_op_fp *fsgnj = &instr->rv32i->fsgnj;
       fprintf(file, "fsgnj");

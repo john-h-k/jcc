@@ -360,17 +360,21 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
       mk_integral_constant(func->unit, zero, cond->var_ty.primitive, 0);
     }
     
-    struct ir_op *cmp = insert_after_ir_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
-    cmp->binary_op = (struct ir_op_binary_op){
+    cond = insert_after_ir_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+    cond->binary_op = (struct ir_op_binary_op){
       .ty = ty,
-      .lhs = cond,
+      .lhs = op->br_cond.cond,
       .rhs = zero
     };
-    cmp->flags |= IR_OP_FLAG_CONTAINED;  
 
-    op->br_cond.cond = cmp;
+    op->br_cond.cond = cond;
+  }
+
+  if (var_ty_is_fp(&cond->binary_op.lhs->var_ty)) {
+    DEBUG_ASSERT(var_ty_is_fp(&cond->binary_op.rhs->var_ty), "mixed binop");
   } else {
-    cond->flags |= IR_OP_FLAG_CONTAINED;  
+    DEBUG_ASSERT(var_ty_is_integral(&cond->binary_op.rhs->var_ty), "mixed binop");
+    cond->flags |= IR_OP_FLAG_CONTAINED;
   }
 }
 
