@@ -2,7 +2,6 @@
 
 #include "../lower.h"
 #include "../vector.h"
-#include "../ir/build.h"
 #include "../util.h"
 
 static bool try_get_hfa_info(struct ir_func *func,
@@ -299,24 +298,6 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }
 
-static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
-  invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
-                       binary_op_is_comparison(op->binary_op.ty),
-                   "non comparison op");
-
-  if (op->flags & IR_OP_FLAG_CONTAINED) {
-    return;
-  }
-
-  struct ir_op *br_cond = op->succ;
-  if (br_cond && br_cond->ty == IR_OP_TY_BR_COND) {
-    // contain within branch
-    struct ir_op *contained = alloc_contained_ir_op(irb, op, br_cond);
-
-    br_cond->br_cond.cond = contained;
-  }
-}
-
 static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   // transform into creating an integer, and then mov to float reg
 
@@ -362,6 +343,37 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
+static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *cond = op->br_cond.cond;
+  if (cond->ty != IR_OP_TY_BINARY_OP || !binary_op_is_comparison(cond->binary_op.ty)) {
+    // turn it into a `!= 0`
+    struct ir_op *zero;
+
+    enum ir_op_binary_op_ty ty;
+    if (var_ty_is_fp(&cond->var_ty)) {
+      ty = IR_OP_BINARY_OP_TY_FNEQ;
+      zero = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, cond->var_ty);
+      mk_floating_zero_constant(func->unit, zero, cond->var_ty.primitive);
+    } else {
+      ty = IR_OP_BINARY_OP_TY_NEQ;
+      zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
+      mk_integral_constant(func->unit, zero, cond->var_ty.primitive, 0);
+    }
+    
+    struct ir_op *cmp = insert_after_ir_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+    cmp->binary_op = (struct ir_op_binary_op){
+      .ty = ty,
+      .lhs = cond,
+      .rhs = zero
+    };
+    cmp->flags |= IR_OP_FLAG_CONTAINED;  
+
+    op->br_cond.cond = cmp;
+  } else {
+    cond->flags |= IR_OP_FLAG_CONTAINED;  
+  }
+}
+
 void rv32i_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
 
@@ -391,6 +403,7 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
+            case IR_OP_TY_BINARY_OP:
             case IR_OP_TY_RET:
             case IR_OP_TY_STORE:
             case IR_OP_TY_LOAD:
@@ -402,8 +415,10 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_BR_SWITCH:
             case IR_OP_TY_MOV:
             case IR_OP_TY_UNARY_OP:
-            case IR_OP_TY_BR_COND:
             case IR_OP_TY_CAST_OP:
+              break;
+            case IR_OP_TY_BR_COND:
+              lower_br_cond(func, op);
               break;
             case IR_OP_TY_BITFIELD_EXTRACT:
               lower_bitfield_extract(func, op);
@@ -460,11 +475,6 @@ void rv32i_lower(struct ir_unit *unit) {
 
               break;
             }
-            case IR_OP_TY_BINARY_OP:
-              if (binary_op_is_comparison(op->binary_op.ty)) {
-                lower_comparison(func, op);
-              }
-              break;
             default:
               break;
             }

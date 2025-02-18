@@ -1927,22 +1927,6 @@ UNUSED static enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg)
 static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
-  const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
-  const struct ir_var_ty *param_tys;
-
-  // note, it is important we use the func ty as the reference here for
-  // types as aggregates and similar will already have been turned into
-  // pointers. this does mean we need to explicitly handle pointers
-  // in the case of unspecified functions, we use `arg_var_tys` which is
-  // preserved
-  if (func_ty->num_params == op->call.num_args ||
-      (func_ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)) {
-    param_tys = func_ty->params;
-  } else {
-    param_tys = op->call.arg_var_tys;
-  }
-  (void)param_tys;
-
   struct instr *instr = alloc_instr(state->func);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;

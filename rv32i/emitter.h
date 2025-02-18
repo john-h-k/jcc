@@ -3,7 +3,6 @@
 
 #include "codegen.h"
 
-#include <stdlib.h>
 struct rv32i_emitter;
 
 void create_rv32i_emitter(struct rv32i_emitter **emitter);
@@ -25,6 +24,18 @@ void rv32i_emit_xori(struct rv32i_emitter *emitter,
 void rv32i_emit_jalr(struct rv32i_emitter *emitter,
                      const struct rv32i_jalr jalr);
 void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal);
+
+void rv32i_emit_slt(struct rv32i_emitter *emitter,
+                     const struct rv32i_op slt);
+
+void rv32i_emit_sltu(struct rv32i_emitter *emitter,
+                     const struct rv32i_op sltu);
+
+void rv32i_emit_slti(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_imm slti);
+
+void rv32i_emit_sltiu(struct rv32i_emitter *emitter,
+                     const struct rv32i_op_imm sltiu);
 
 void rv32i_emit_beq(struct rv32i_emitter *emitter,
                     const struct rv32i_conditional_branch beq);
@@ -49,6 +60,17 @@ void rv32i_emit_srli(struct rv32i_emitter *emitter, const struct rv32i_op_imm sr
 
 void rv32i_emit_srai(struct rv32i_emitter *emitter, const struct rv32i_op_imm srai);
 
+void rv32i_emit_feq(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_fp feq);
+void rv32i_emit_flt(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_fp flt);
+void rv32i_emit_fle(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_fp fle);
+
+void rv32i_emit_fcvt(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_mov fcvt);
+void rv32i_emit_fcvtu(struct rv32i_emitter *emitter,
+                    const struct rv32i_op_mov fcvtu);
 void rv32i_emit_fmv(struct rv32i_emitter *emitter,
                     const struct rv32i_op_mov fmv);
 void rv32i_emit_fadd(struct rv32i_emitter *emitter,
@@ -78,6 +100,9 @@ void rv32i_emit_fsqrt(struct rv32i_emitter *emitter,
 void rv32i_emit_add(struct rv32i_emitter *emitter, const struct rv32i_op add);
 void rv32i_emit_sub(struct rv32i_emitter *emitter, const struct rv32i_op sub);
 void rv32i_emit_mul(struct rv32i_emitter *emitter, const struct rv32i_op mul);
+void rv32i_emit_mulh(struct rv32i_emitter *emitter, const struct rv32i_op mulh);
+void rv32i_emit_mulhu(struct rv32i_emitter *emitter, const struct rv32i_op mulhu);
+void rv32i_emit_mulhsu(struct rv32i_emitter *emitter, const struct rv32i_op mulhsu);
 void rv32i_emit_div(struct rv32i_emitter *emitter, const struct rv32i_op div);
 void rv32i_emit_rem(struct rv32i_emitter *emitter, const struct rv32i_op rem);
 void rv32i_emit_divu(struct rv32i_emitter *emitter, const struct rv32i_op divu);

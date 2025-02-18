@@ -938,6 +938,9 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
 struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
                                     struct ir_op *producer, struct ir_reg reg);
 
+void mk_floating_zero_constant(struct ir_unit *iru,
+                               struct ir_op *op, enum ir_var_primitive_ty ty);
+
 void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
                             enum ir_var_primitive_ty ty,
                             unsigned long long value);

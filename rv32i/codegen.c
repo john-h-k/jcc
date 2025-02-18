@@ -10,7 +10,7 @@
   (struct rv32i_instr) {                                                       \
     .ty = RV32I_INSTR_TY_ADD, .add = {                                         \
       .lhs = (source_reg),                                                     \
-      .rhs = zero_reg_for_ty(dest_reg.ty),                                     \
+      .rhs = GP_ZERO_REG,                                                      \
       .dest = (dest_reg),                                                      \
     }                                                                          \
   }
@@ -26,10 +26,6 @@
 
 const char *rv32i_mangle(struct arena_allocator *arena, const char *name) {
   return name;
-}
-
-static struct rv32i_reg zero_reg_for_ty(enum rv32i_reg_ty reg_ty) {
-  return (struct rv32i_reg){.ty = reg_ty, .idx = 0};
 }
 
 struct rv32i_prologue_info {
@@ -67,13 +63,13 @@ static enum rv32i_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
-    return RV32I_REG_TY_GP;
+    return RV32I_REG_TY_W;
   case IR_VAR_PRIMITIVE_TY_I64:
     TODO("i64");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
-    return RV32I_REG_TY_FP;
+    return RV32I_REG_TY_F;
   }
 }
 
@@ -114,10 +110,10 @@ static struct rv32i_reg codegen_reg(struct ir_op *op) {
   enum rv32i_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
 
   switch (reg_ty) {
-  case RV32I_REG_TY_GP:
+  case RV32I_REG_TY_W:
     invariant_assert(op->reg.ty == IR_REG_TY_INTEGRAL, "expected integral reg");
     break;
-  case RV32I_REG_TY_FP:
+  case RV32I_REG_TY_F:
     invariant_assert(op->reg.ty == IR_REG_TY_FP, "expected fp reg");
     break;
   default:
@@ -128,7 +124,7 @@ static struct rv32i_reg codegen_reg(struct ir_op *op) {
 }
 
 static bool rv32i_reg_ty_is_gp(enum rv32i_reg_ty ty) {
-  return ty == RV32I_REG_TY_GP;
+  return ty == RV32I_REG_TY_W;
 }
 
 static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
@@ -218,9 +214,7 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
     struct instr *instr = alloc_instr(state->func);
     instr->rv32i->ty = RV32I_INSTR_TY_BNE;
     instr->rv32i->bne = (struct rv32i_conditional_branch){
-        .lhs = cmp_reg,
-        .rhs = zero_reg_for_ty(RV32I_REG_TY_GP),
-        .target = true_target};
+        .lhs = cmp_reg, .rhs = GP_ZERO_REG, .target = true_target};
   }
 
   // rv32i requires turning `br.cond <true> <false>` into 2 instructions
@@ -231,16 +225,15 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
   // now generate the `br`
   struct instr *br = alloc_instr(state->func);
   br->rv32i->ty = RV32I_INSTR_TY_JAL;
-  br->rv32i->jal = (struct rv32i_jal){
-      .ret_addr = zero_reg_for_ty(RV32I_REG_TY_GP), .target = false_target};
+  br->rv32i->jal =
+      (struct rv32i_jal){.ret_addr = GP_ZERO_REG, .target = false_target};
 }
 
 static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
   instr->rv32i->ty = RV32I_INSTR_TY_JAL;
-  instr->rv32i->jal =
-      (struct rv32i_jal){.ret_addr = zero_reg_for_ty(RV32I_REG_TY_GP),
-                         .target = op->stmt->basicblock->merge.target};
+  instr->rv32i->jal = (struct rv32i_jal){
+      .ret_addr = GP_ZERO_REG, .target = op->stmt->basicblock->merge.target};
 }
 
 static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
@@ -271,7 +264,7 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
         hi = cnst >> 12;
       }
 
-      struct rv32i_reg source_reg = zero_reg_for_ty(RV32I_REG_TY_GP);
+      struct rv32i_reg source_reg = GP_ZERO_REG;
 
       if (hi) {
         struct instr *instr = alloc_instr(state->func);
@@ -379,7 +372,7 @@ static void codegen_prologue(struct codegen_state *state) {
     struct instr *save = alloc_instr(state->func);
     save->rv32i->ty = RV32I_INSTR_TY_SW;
     save->rv32i->sw = (struct rv32i_store){
-        .source = (struct rv32i_reg){.ty = RV32I_REG_TY_GP,
+        .source = (struct rv32i_reg){.ty = RV32I_REG_TY_W,
                                      .idx = translate_reg_idx(
                                          idx, IR_REG_TY_INTEGRAL)},
         .addr = STACK_PTR_REG,
@@ -397,7 +390,7 @@ static void codegen_prologue(struct codegen_state *state) {
     struct instr *save = alloc_instr(state->func);
     save->rv32i->ty = RV32I_INSTR_TY_FSW;
     save->rv32i->fsw = (struct rv32i_store){
-        .source = (struct rv32i_reg){.ty = RV32I_REG_TY_FP,
+        .source = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
                                      .idx = translate_reg_idx(
                                          idx, IR_REG_TY_INTEGRAL)},
         .addr = STACK_PTR_REG,
@@ -431,7 +424,7 @@ static void codegen_epilogue(struct codegen_state *state) {
     restore->rv32i->lw = (struct rv32i_load){
         .imm = offset,
         .dest =
-            (struct rv32i_reg){.ty = RV32I_REG_TY_GP,
+            (struct rv32i_reg){.ty = RV32I_REG_TY_W,
                                .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL)},
         .addr = STACK_PTR_REG,
     };
@@ -454,7 +447,7 @@ static void codegen_epilogue(struct codegen_state *state) {
     restore->rv32i->flw = (struct rv32i_load){
         .imm = offset,
         .dest =
-            (struct rv32i_reg){.ty = RV32I_REG_TY_FP,
+            (struct rv32i_reg){.ty = RV32I_REG_TY_F,
                                .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL)},
         .addr = STACK_PTR_REG,
     };
@@ -484,7 +477,7 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
     if (source.idx != return_reg_for_ty(source.ty).idx) {
       struct instr *instr = alloc_instr(state->func);
 
-      if (source.ty == RV32I_REG_TY_GP) {
+      if (source.ty == RV32I_REG_TY_W) {
         *instr->rv32i = MOV_ALIAS(return_reg_for_ty(source.ty), source);
       } else {
         *instr->rv32i = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
@@ -497,10 +490,8 @@ static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
 
   instr->rv32i->ty = RV32I_INSTR_TY_JALR;
-  instr->rv32i->jalr =
-      (struct rv32i_jalr){.ret_addr = zero_reg_for_ty(RV32I_REG_TY_GP),
-                          .target = RET_PTR_REG,
-                          .imm = 0};
+  instr->rv32i->jalr = (struct rv32i_jalr){
+      .ret_addr = GP_ZERO_REG, .target = RET_PTR_REG, .imm = 0};
 }
 
 static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
@@ -535,7 +526,7 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
     instr->rv32i->ty = RV32I_INSTR_TY_SUB;
     instr->rv32i->sub = (struct rv32i_op){
         .dest = dest,
-        .lhs = zero_reg_for_ty(source.ty),
+        .lhs = GP_ZERO_REG,
         .rhs = source,
     };
     return;
@@ -545,7 +536,10 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
         (struct rv32i_op_imm){.dest = dest, .source = source, .imm = -1};
     return;
   case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
-    BUG("logical not should never reach emitter, should be converted in lower");
+    instr->rv32i->ty = RV32I_INSTR_TY_SLTIU;
+    instr->rv32i->sltiu =
+        (struct rv32i_op_imm){.dest = dest, .source = source, .imm = 1};
+    return;
   }
 }
 
@@ -565,6 +559,9 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                    ty == IR_OP_BINARY_OP_TY_FDIV || !is_fp,
                "floating point with invalid binary op");
 
+  enum rv32i_instr_ty instr_ty;
+  bool invert_cond, invert_res;
+
   switch (ty) {
   case IR_OP_BINARY_OP_TY_FEQ:
   case IR_OP_BINARY_OP_TY_FNEQ:
@@ -580,32 +577,100 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     // break;
 
     TODO("float comp binops");
-  case IR_OP_BINARY_OP_TY_EQ:
-    // instr->rv32i->ty = RV32I_INSTR_TY_BEQ;
-    // instr->rv32i->subs = (struct rv32i_addsub_reg){
-    //     .dest = zero_reg_for_ty(lhs.ty),
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    break;
+  case IR_OP_BINARY_OP_TY_EQ: {
+    instr->rv32i->ty = RV32I_INSTR_TY_XOR;
+    instr->rv32i->xor = (struct rv32i_op){
+                          .dest = dest,
+                          .lhs = lhs,
+                          .rhs = rhs,
+                      };
 
-  case IR_OP_BINARY_OP_TY_NEQ:
+    struct instr *sltiu = alloc_instr(state->func);
+    sltiu->rv32i->ty = RV32I_INSTR_TY_SLTIU;
+    sltiu->rv32i->sltiu =
+        (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
+    break;
+  }
+
+  case IR_OP_BINARY_OP_TY_NEQ: {
+    instr->rv32i->ty = RV32I_INSTR_TY_XOR;
+    instr->rv32i->xor = (struct rv32i_op){
+                          .dest = dest,
+                          .lhs = lhs,
+                          .rhs = rhs,
+                      };
+
+    struct instr *sltu = alloc_instr(state->func);
+    sltu->rv32i->ty = RV32I_INSTR_TY_SLTU;
+    sltu->rv32i->sltu =
+        (struct rv32i_op){.dest = dest, .lhs = GP_ZERO_REG, .rhs = dest};
+    break;
+  }
+
   case IR_OP_BINARY_OP_TY_UGT:
+    instr_ty = RV32I_INSTR_TY_SLTU;
+    invert_cond = true;
+    invert_res = false;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_SGT:
+    instr_ty = RV32I_INSTR_TY_SLT;
+    invert_cond = true;
+    invert_res = false;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_UGTEQ:
+    instr_ty = RV32I_INSTR_TY_SLTU;
+    invert_cond = false;
+    invert_res = true;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_SGTEQ:
+    instr_ty = RV32I_INSTR_TY_SLT;
+    invert_cond = false;
+    invert_res = true;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_ULT:
+    instr_ty = RV32I_INSTR_TY_SLTU;
+    invert_cond = false;
+    invert_res = false;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_SLT:
+    instr_ty = RV32I_INSTR_TY_SLT;
+    invert_cond = false;
+    invert_res = false;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_ULTEQ:
+    instr_ty = RV32I_INSTR_TY_SLTU;
+    invert_cond = true;
+    invert_res = true;
+    goto set_cmp;
+
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    TODO("comp binops");
-    // instr->rv32i->ty = RV32I_INSTR_TY_SUBS;
-    // instr->rv32i->subs = (struct rv32i_addsub_reg){
-    //     .dest = zero_reg_for_ty(lhs.ty),
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
+    instr_ty = RV32I_INSTR_TY_SLT;
+    invert_cond = true;
+    invert_res = true;
+    goto set_cmp;
+
+  set_cmp: {
+    instr->rv32i->ty = instr_ty;
+    instr->rv32i->xor = (struct rv32i_op){
+                          .dest = dest,
+                          .lhs = invert_cond ? rhs : lhs,
+                          .rhs = invert_cond ? lhs : rhs,
+                      };
+
+    if (invert_res) {
+      struct instr *xori = alloc_instr(state->func);
+      xori->rv32i->ty = RV32I_INSTR_TY_XORI;
+      xori->rv32i->xori =
+          (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
+    }
+    break;
+  }
   case IR_OP_BINARY_OP_TY_LSHIFT:
     instr->rv32i->ty = RV32I_INSTR_TY_SLL;
     instr->rv32i->sll = (struct rv32i_op){
@@ -1170,8 +1235,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
       // reloc into a `jal`
       struct instr *auipc = alloc_instr(state->func);
       auipc->rv32i->ty = RV32I_INSTR_TY_AUIPC;
-      auipc->rv32i->auipc =
-          (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
+      auipc->rv32i->auipc = (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
 
       auipc->reloc =
           arena_alloc(state->func->unit->arena, sizeof(*auipc->reloc));
@@ -1184,8 +1248,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 
       struct instr *jalr = alloc_instr(state->func);
       jalr->rv32i->ty = RV32I_INSTR_TY_JALR;
-      jalr->rv32i->jalr =
-          (struct rv32i_jalr){.target = RET_PTR_REG, .ret_addr = RET_PTR_REG, .imm = 0};
+      jalr->rv32i->jalr = (struct rv32i_jalr){
+          .target = RET_PTR_REG, .ret_addr = RET_PTR_REG, .imm = 0};
     }
   } else {
     // NOTE: `blr` seems to segfault on linux rv32i
@@ -1412,86 +1476,144 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   return unit;
 }
 
-static void debug_print_reg(FILE *file, const struct rv32i_reg *reg) {
-  switch (reg->ty) {
-  case RV32I_REG_TY_NONE:
-    fprintf(file, "NONE");
-    break;
-  case RV32I_REG_TY_GP:
-    fprintf(file, "x%zu", reg->idx);
-    break;
-  case RV32I_REG_TY_FP:
-    fprintf(file, "f%zu", reg->idx);
-    break;
+static const char *GP_REG_ABI_NAMES[] = {
+    "zero",
+
+    "ra",   "sp", "gp", "tp",
+
+    "t0",   "t1", "t2",
+
+    "fp", // also `s0`
+    "s1",
+
+    "a0",   "a1", "a2", "a3", "a4", "a5", "a6", "a7",
+
+    "s2",   "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
+
+    "t3",   "t4", "t5", "t6",
+};
+
+static const char *FP_REG_ABI_NAMES[] = {
+    "ft0", "ft1", "ft2",  "ft3",  "ft4", "ft5", "ft6", "ft7",
+
+    "fs0", "fs1",
+
+    "fa0", "fa1", "fa2",  "fa3",  "fa4", "fa5", "fa6", "fa7",
+
+    "fs2", "fs3", "fs4",  "fs5",  "fs6", "fs7", "fs8", "fs9", "fs10", "fs11",
+
+    "ft8", "ft9", "ft10", "ft11",
+};
+
+static void codegen_fprintf(FILE *file, const char *format, ...) {
+  va_list list;
+  va_start(list, format);
+  while (format[0] != '\0') {
+    if (format[0] != '%') {
+      fputc(format[0], file);
+      format++;
+      continue;
+    }
+
+    format++;
+
+    if (strncmp(format, "reg", 3) == 0) {
+      struct rv32i_reg reg = va_arg(list, struct rv32i_reg);
+
+      switch (reg.ty) {
+      case RV32I_REG_TY_NONE:
+        BUG("none reg makes no sense");
+        break;
+      case RV32I_REG_TY_W:
+        fprintf(file, "%s", GP_REG_ABI_NAMES[reg.idx]);
+        break;
+      case RV32I_REG_TY_F:
+        fprintf(file, "%s", FP_REG_ABI_NAMES[reg.idx]);
+      }
+
+      format += 3;
+    } else if (strncmp(format, "instr", 5) == 0) {
+      struct ir_basicblock *basicblock = va_arg(list, struct ir_basicblock *);
+      if (basicblock && basicblock->first_instr) {
+        fprintf(file, "%%%zx", basicblock->first_instr->id);
+      } else {
+        fprintf(file, "%%(null)");
+      }
+
+      format += 5;
+    } else if (strncmp(format, "imm", 3) == 0) {
+      simm_t imm = va_arg(list, simm_t);
+      fprintf(file, "%lld", imm);
+
+      format += 3;
+    } else if (format[0] == '%') {
+      fputc('%', file);
+      format++;
+    } else {
+      BUG("unrecognised format starting '%%%s'", format);
+    }
   }
 }
 
 static void debug_print_op_imm(FILE *file, const struct rv32i_op_imm *op_imm) {
-  fprintf(file, " x%zu, x%zu, %lld", op_imm->dest.idx, op_imm->source.idx,
-          op_imm->imm);
+  codegen_fprintf(file, " %reg, %reg, %imm", op_imm->dest, op_imm->source,
+                  op_imm->imm);
 }
 
 static void debug_print_op_fp(FILE *file, const struct rv32i_op_fp *op_fp) {
-  fprintf(file, " f%zu, f%zu, f%zu", op_fp->dest.idx, op_fp->lhs.idx,
-          op_fp->rhs.idx);
+  codegen_fprintf(file, " %reg, %reg, %reg", op_fp->dest, op_fp->lhs,
+                  op_fp->rhs);
 }
 
 static void
 debug_print_op_unary_fp(FILE *file,
                         const struct rv32i_op_unary_fp *op_unary_fp) {
-  fprintf(file, " f%zu, f%zu", op_unary_fp->dest.idx, op_unary_fp->source.idx);
+  codegen_fprintf(file, " %reg, %reg", op_unary_fp->dest, op_unary_fp->source);
 }
 
 static void debug_print_op(FILE *file, const struct rv32i_op *op) {
-  fprintf(file, " x%zu, x%zu, x%zu", op->dest.idx, op->lhs.idx, op->rhs.idx);
+  codegen_fprintf(file, " %reg, %reg, %reg", op->dest, op->lhs, op->rhs);
 }
 
 static void debug_print_op_mov(FILE *file, const struct rv32i_op_mov *op_mov) {
-  fprintf(file, " ");
-  debug_print_reg(file, &op_mov->dest);
-  fprintf(file, ", ");
-  debug_print_reg(file, &op_mov->source);
+  codegen_fprintf(file, " %reg, %reg", op_mov->dest, op_mov->source);
 }
 
 static void debug_print_lui(FILE *file, const struct rv32i_u *lui) {
-  fprintf(file, " x%zu, %lld", lui->dest.idx, lui->imm);
+  codegen_fprintf(file, " %reg, %imm", lui->dest, lui->imm);
 }
 
 static void debug_print_jalr(FILE *file, const struct rv32i_jalr *jalr) {
-  fprintf(file, " x%zu, x%zu, %lld", jalr->ret_addr.idx, jalr->target.idx,
-          jalr->imm);
+  codegen_fprintf(file, " %reg, %reg, %imm", jalr->ret_addr, jalr->target,
+                  jalr->imm);
 }
 
 static void debug_print_jal(FILE *file, const struct rv32i_jal *jal) {
-  if (jal->target) {
-    fprintf(file, " x%zu, %%%zu", jal->ret_addr.idx, jal->target->id);
-  }
+  codegen_fprintf(file, " %reg, %%%instr", jal->ret_addr, jal->target);
 }
 
 static void debug_print_load(FILE *file, const struct rv32i_load *load) {
-  fprintf(file, " ");
-  debug_print_reg(file, &load->dest);
   if (load->imm) {
-    fprintf(file, ", %lld(x%zu)", load->imm, load->addr.idx);
+    codegen_fprintf(file, "%reg, %imm(%reg)", load->dest, load->imm,
+                    load->addr);
   } else {
-    fprintf(file, ", x%zu", load->addr.idx);
+    codegen_fprintf(file, "%reg, %reg", load->dest, load->addr);
   }
 }
 
 static void debug_print_store(FILE *file, const struct rv32i_store *store) {
-  fprintf(file, " ");
-  debug_print_reg(file, &store->source);
   if (store->imm) {
-    fprintf(file, ", %lld(x%zu)", store->imm, store->addr.idx);
+    codegen_fprintf(file, "%reg, %imm(%reg)", store->source, store->imm,
+                    store->addr);
   } else {
-    fprintf(file, ", x%zu", store->addr.idx);
+    codegen_fprintf(file, "%reg, %reg", store->source, store->addr);
   }
 }
 
 static void debug_print_conditional_branch(
     FILE *file, const struct rv32i_conditional_branch *conditional_branch) {
-  fprintf(file, " x%zu, x%zu, %%%zu", conditional_branch->lhs.idx,
-          conditional_branch->rhs.idx, conditional_branch->target->id);
+  codegen_fprintf(file, " %reg, %reg, %%%instr", conditional_branch->lhs,
+                  conditional_branch->rhs, conditional_branch->target);
 }
 
 static void debug_print_instr(FILE *file,
@@ -1499,225 +1621,448 @@ static void debug_print_instr(FILE *file,
                               const struct instr *instr) {
 
   switch (instr->rv32i->ty) {
-  case RV32I_INSTR_TY_ADDI:
+  case RV32I_INSTR_TY_ADDI: {
+    struct rv32i_op_imm *addi = &instr->rv32i->addi;
     fprintf(file, "addi");
-    debug_print_op_imm(file, &instr->rv32i->addi);
+    debug_print_op_imm(file, addi);
     break;
-  case RV32I_INSTR_TY_XORI:
+  }
+  case RV32I_INSTR_TY_XORI: {
+    struct rv32i_op_imm *addi = &instr->rv32i->addi;
     fprintf(file, "xori");
-    debug_print_op_imm(file, &instr->rv32i->addi);
+    debug_print_op_imm(file, addi);
     break;
-  case RV32I_INSTR_TY_ADD:
-    fprintf(file, "add");
-    debug_print_op(file, &instr->rv32i->add);
+  }
+  case RV32I_INSTR_TY_ADD: {
+    struct rv32i_op *add = &instr->rv32i->add;
+
+    if (add->rhs.idx == 0) {
+      codegen_fprintf(file, "mov %reg, %reg", instr->rv32i->add.dest.idx,
+              instr->rv32i->add.lhs.idx);
+    } else {
+      fprintf(file, "add");
+      debug_print_op(file, add);
+    }
     break;
-  case RV32I_INSTR_TY_SUB:
+  }
+  case RV32I_INSTR_TY_SUB: {
+    struct rv32i_op *sub = &instr->rv32i->sub;
     fprintf(file, "sub");
-    debug_print_op(file, &instr->rv32i->sub);
+    debug_print_op(file, sub);
     break;
-  case RV32I_INSTR_TY_MUL:
+  }
+  case RV32I_INSTR_TY_MUL: {
+    struct rv32i_op *mul = &instr->rv32i->mul;
     fprintf(file, "mul");
-    debug_print_op(file, &instr->rv32i->mul);
+    debug_print_op(file, mul);
     break;
-  case RV32I_INSTR_TY_DIV:
+  }
+  case RV32I_INSTR_TY_DIV: {
+    struct rv32i_op *div = &instr->rv32i->div;
     fprintf(file, "div");
-    debug_print_op(file, &instr->rv32i->div);
+    debug_print_op(file, div);
     break;
-  case RV32I_INSTR_TY_DIVU:
+  }
+  case RV32I_INSTR_TY_DIVU: {
+    struct rv32i_op *divu = &instr->rv32i->divu;
     fprintf(file, "divu");
-    debug_print_op(file, &instr->rv32i->divu);
+    debug_print_op(file, divu);
     break;
-  case RV32I_INSTR_TY_REM:
+  }
+  case RV32I_INSTR_TY_REM: {
+    struct rv32i_op *rem = &instr->rv32i->rem;
     fprintf(file, "rem");
-    debug_print_op(file, &instr->rv32i->rem);
+    debug_print_op(file, rem);
     break;
-  case RV32I_INSTR_TY_REMU:
+  }
+  case RV32I_INSTR_TY_REMU: {
+    struct rv32i_op *remu = &instr->rv32i->remu;
     fprintf(file, "remu");
-    debug_print_op(file, &instr->rv32i->remu);
+    debug_print_op(file, remu);
     break;
-  case RV32I_INSTR_TY_LUI:
+  }
+  case RV32I_INSTR_TY_LUI: {
+    struct rv32i_u *lui = &instr->rv32i->lui;
     fprintf(file, "lui");
-    debug_print_lui(file, &instr->rv32i->lui);
+    debug_print_lui(file, lui);
     break;
-  case RV32I_INSTR_TY_AUIPC:
+  }
+  case RV32I_INSTR_TY_AUIPC: {
+    struct rv32i_u *auipc = &instr->rv32i->auipc;
     fprintf(file, "auipc");
-    debug_print_lui(file, &instr->rv32i->lui);
+    debug_print_lui(file, auipc);
     break;
-  case RV32I_INSTR_TY_JALR:
+  }
+  case RV32I_INSTR_TY_JALR: {
+    struct rv32i_jalr *jalr = &instr->rv32i->jalr;
     fprintf(file, "jalr");
-    debug_print_jalr(file, &instr->rv32i->jalr);
+    debug_print_jalr(file, jalr);
     break;
-  case RV32I_INSTR_TY_SB:
+  }
+  case RV32I_INSTR_TY_SB: {
+    struct rv32i_store *sb = &instr->rv32i->sb;
     fprintf(file, "sb");
-    debug_print_store(file, &instr->rv32i->sb);
+    debug_print_store(file, sb);
     break;
-  case RV32I_INSTR_TY_SH:
+  }
+  case RV32I_INSTR_TY_SH: {
+    struct rv32i_store *sh = &instr->rv32i->sh;
     fprintf(file, "sh");
-    debug_print_store(file, &instr->rv32i->sh);
+    debug_print_store(file, sh);
     break;
-  case RV32I_INSTR_TY_SW:
+  }
+  case RV32I_INSTR_TY_SW: {
+    struct rv32i_store *sw = &instr->rv32i->sw;
     fprintf(file, "sw");
-    debug_print_store(file, &instr->rv32i->sw);
+    debug_print_store(file, sw);
     break;
-  case RV32I_INSTR_TY_LB:
+  }
+  case RV32I_INSTR_TY_LB: {
+    struct rv32i_load *lb = &instr->rv32i->lb;
     fprintf(file, "lb");
-    debug_print_load(file, &instr->rv32i->lb);
+    debug_print_load(file, lb);
     break;
-  case RV32I_INSTR_TY_LBU:
+  }
+  case RV32I_INSTR_TY_LBU: {
+    struct rv32i_load *lbu = &instr->rv32i->lbu;
     fprintf(file, "lbu");
-    debug_print_load(file, &instr->rv32i->lbu);
+    debug_print_load(file, lbu);
     break;
-  case RV32I_INSTR_TY_LH:
+  }
+  case RV32I_INSTR_TY_LH: {
+    struct rv32i_load *lh = &instr->rv32i->lh;
     fprintf(file, "lh");
-    debug_print_load(file, &instr->rv32i->lh);
+    debug_print_load(file, lh);
     break;
-  case RV32I_INSTR_TY_LHU:
+  }
+  case RV32I_INSTR_TY_LHU: {
+    struct rv32i_load *lhu = &instr->rv32i->lhu;
     fprintf(file, "lhu");
-    debug_print_load(file, &instr->rv32i->lhu);
+    debug_print_load(file, lhu);
     break;
-  case RV32I_INSTR_TY_LW:
+  }
+  case RV32I_INSTR_TY_LW: {
+    struct rv32i_load *lw = &instr->rv32i->lw;
     fprintf(file, "lw");
-    debug_print_load(file, &instr->rv32i->lw);
+    debug_print_load(file, lw);
     break;
-  case RV32I_INSTR_TY_FSW:
+  }
+  case RV32I_INSTR_TY_FSW: {
+    struct rv32i_store *fsw = &instr->rv32i->fsw;
     fprintf(file, "fsw");
-    debug_print_store(file, &instr->rv32i->fsw);
+    debug_print_store(file, fsw);
     break;
-  case RV32I_INSTR_TY_FLW:
+  }
+  case RV32I_INSTR_TY_FLW: {
+    struct rv32i_load *flw = &instr->rv32i->flw;
     fprintf(file, "flw");
-    debug_print_load(file, &instr->rv32i->flw);
+    debug_print_load(file, flw);
     break;
-  case RV32I_INSTR_TY_JAL:
+  }
+  case RV32I_INSTR_TY_JAL: {
+    struct rv32i_jal *jal = &instr->rv32i->jal;
     fprintf(file, "jal");
-    debug_print_jal(file, &instr->rv32i->jal);
+    debug_print_jal(file, jal);
     break;
-  case RV32I_INSTR_TY_BEQ:
+  }
+  case RV32I_INSTR_TY_BEQ: {
+    struct rv32i_conditional_branch *beq = &instr->rv32i->beq;
     fprintf(file, "beq");
-    debug_print_conditional_branch(file, &instr->rv32i->beq);
+    debug_print_conditional_branch(file, beq);
     break;
-  case RV32I_INSTR_TY_BNE:
+  }
+  case RV32I_INSTR_TY_BNE: {
+    struct rv32i_conditional_branch *bne = &instr->rv32i->bne;
     fprintf(file, "bne");
-    debug_print_conditional_branch(file, &instr->rv32i->bne);
+    debug_print_conditional_branch(file, bne);
     break;
-  case RV32I_INSTR_TY_BLT:
+  }
+  case RV32I_INSTR_TY_BLT: {
+    struct rv32i_conditional_branch *blt = &instr->rv32i->blt;
     fprintf(file, "blt");
-    debug_print_conditional_branch(file, &instr->rv32i->blt);
+    debug_print_conditional_branch(file, blt);
     break;
-  case RV32I_INSTR_TY_BGE:
+  }
+  case RV32I_INSTR_TY_BGE: {
+    struct rv32i_conditional_branch *bge = &instr->rv32i->bge;
     fprintf(file, "bge");
-    debug_print_conditional_branch(file, &instr->rv32i->bge);
+    debug_print_conditional_branch(file, bge);
     break;
-  case RV32I_INSTR_TY_BLTU:
+  }
+  case RV32I_INSTR_TY_BLTU: {
+    struct rv32i_conditional_branch *bltu = &instr->rv32i->bltu;
     fprintf(file, "bltu");
-    debug_print_conditional_branch(file, &instr->rv32i->bltu);
+    debug_print_conditional_branch(file, bltu);
     break;
-  case RV32I_INSTR_TY_BGEU:
+  }
+  case RV32I_INSTR_TY_BGEU: {
+    struct rv32i_conditional_branch *bgeu = &instr->rv32i->bgeu;
     fprintf(file, "bgeu");
-    debug_print_conditional_branch(file, &instr->rv32i->bgeu);
+    debug_print_conditional_branch(file, bgeu);
     break;
-  case RV32I_INSTR_TY_OR:
+  }
+  case RV32I_INSTR_TY_OR: {
+    struct rv32i_op * or = &instr->rv32i->or ;
     fprintf(file, "or");
-    debug_print_op(file, &instr->rv32i->or);
+    debug_print_op(file, or);
     break;
-  case RV32I_INSTR_TY_AND:
+  }
+  case RV32I_INSTR_TY_AND: {
+    struct rv32i_op *and = &instr->rv32i->and;
     fprintf(file, "and");
-    debug_print_op(file, &instr->rv32i->and);
+    debug_print_op(file, and);
     break;
-  case RV32I_INSTR_TY_XOR:
+  }
+  case RV32I_INSTR_TY_XOR: {
+    struct rv32i_op * xor = &instr->rv32i->xor ;
     fprintf(file, "xor");
-    debug_print_op(file, &instr->rv32i->xor);
+    debug_print_op(file, xor);
     break;
-  case RV32I_INSTR_TY_SLL:
+  }
+  case RV32I_INSTR_TY_SLL: {
+    struct rv32i_op *sll = &instr->rv32i->sll;
     fprintf(file, "sll");
-    debug_print_op(file, &instr->rv32i->sll);
+    debug_print_op(file, sll);
     break;
-  case RV32I_INSTR_TY_SRL:
+  }
+  case RV32I_INSTR_TY_SRL: {
+    struct rv32i_op *srl = &instr->rv32i->srl;
     fprintf(file, "srl");
-    debug_print_op(file, &instr->rv32i->srl);
+    debug_print_op(file, srl);
     break;
-  case RV32I_INSTR_TY_SRA:
+  }
+  case RV32I_INSTR_TY_SRA: {
+    struct rv32i_op *sra = &instr->rv32i->sra;
     fprintf(file, "sra");
-    debug_print_op(file, &instr->rv32i->sra);
+    debug_print_op(file, sra);
     break;
-  case RV32I_INSTR_TY_FMV:
-    switch (instr->rv32i->fmv.source.ty) {
+  }
+  case RV32I_INSTR_TY_FMV: {
+    struct rv32i_op_mov *fmv = &instr->rv32i->fmv;
+
+    switch (fmv->source.ty) {
     case RV32I_REG_TY_NONE:
       BUG("none dest");
-    case RV32I_REG_TY_GP:
+    case RV32I_REG_TY_W:
       fprintf(file, "fmv.w.x");
       break;
-    case RV32I_REG_TY_FP:
+    case RV32I_REG_TY_F:
       fprintf(file, "fmv.x.w");
       break;
     }
 
-    debug_print_op_mov(file, &instr->rv32i->fmv);
+    debug_print_op_mov(file, fmv);
     break;
-  case RV32I_INSTR_TY_FADD:
+  }
+  case RV32I_INSTR_TY_FADD: {
+    struct rv32i_op_fp *fadd = &instr->rv32i->fadd;
     fprintf(file, "fadd");
-    debug_print_op_fp(file, &instr->rv32i->fadd);
+    debug_print_op_fp(file, fadd);
     break;
-  case RV32I_INSTR_TY_FSUB:
+  }
+  case RV32I_INSTR_TY_FSUB: {
+    struct rv32i_op_fp *fsub = &instr->rv32i->fsub;
     fprintf(file, "fsub");
-    debug_print_op_fp(file, &instr->rv32i->fsub);
+    debug_print_op_fp(file, fsub);
     break;
-  case RV32I_INSTR_TY_FSGNJ:
+  }
+  case RV32I_INSTR_TY_FSGNJ: {
     if (instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
-      fprintf(file, "fmv f%zu, f%zu", instr->rv32i->fsgnj.dest.idx,
+      codegen_fprintf(file, "fmv %reg, %reg", instr->rv32i->fsgnj.dest.idx,
               instr->rv32i->fsgnj.lhs.idx);
     } else {
+      struct rv32i_op_fp *fsgnj = &instr->rv32i->fsgnj;
       fprintf(file, "fsgnj");
-      debug_print_op_fp(file, &instr->rv32i->fsgnj);
+      debug_print_op_fp(file, fsgnj);
     }
     break;
-  case RV32I_INSTR_TY_FMUL:
+  }
+  case RV32I_INSTR_TY_FMUL: {
+    struct rv32i_op_fp *fmul = &instr->rv32i->fmul;
     fprintf(file, "fmul");
-    debug_print_op_fp(file, &instr->rv32i->fmul);
+    debug_print_op_fp(file, fmul);
     break;
-  case RV32I_INSTR_TY_FDIV:
+  }
+  case RV32I_INSTR_TY_FDIV: {
+    struct rv32i_op_fp *fdiv = &instr->rv32i->fdiv;
     fprintf(file, "fdiv");
-    debug_print_op_fp(file, &instr->rv32i->fdiv);
+    debug_print_op_fp(file, fdiv);
     break;
-  case RV32I_INSTR_TY_FSGNJN:
+  }
+  case RV32I_INSTR_TY_FSGNJN: {
+    struct rv32i_op_fp *fsgnjn = &instr->rv32i->fsgnjn;
     fprintf(file, "fsgnjn");
-    debug_print_op_fp(file, &instr->rv32i->fsgnjn);
+    debug_print_op_fp(file, fsgnjn);
     break;
-  case RV32I_INSTR_TY_FSGNJX:
-    fprintf(file, "fsgnjnx");
-    debug_print_op_fp(file, &instr->rv32i->fsgnjx);
+  }
+  case RV32I_INSTR_TY_FSGNJX: {
+    struct rv32i_op_fp *fsgnjx = &instr->rv32i->fsgnjx;
+    fprintf(file, "fsgnjx");
+    debug_print_op_fp(file, fsgnjx);
     break;
-  case RV32I_INSTR_TY_FMAX:
+  }
+  case RV32I_INSTR_TY_FMAX: {
+    struct rv32i_op_fp *fmax = &instr->rv32i->fmax;
     fprintf(file, "fmax");
-    debug_print_op_fp(file, &instr->rv32i->fmax);
+    debug_print_op_fp(file, fmax);
     break;
-  case RV32I_INSTR_TY_FMIN:
+  }
+  case RV32I_INSTR_TY_FMIN: {
+    struct rv32i_op_fp *fmin = &instr->rv32i->fmin;
     fprintf(file, "fmin");
-    debug_print_op_fp(file, &instr->rv32i->fmin);
+    debug_print_op_fp(file, fmin);
     break;
-  case RV32I_INSTR_TY_FSQRT:
+  }
+  case RV32I_INSTR_TY_FSQRT: {
+    struct rv32i_op_unary_fp *fsqrt = &instr->rv32i->fsqrt;
     fprintf(file, "fsqrt");
-    debug_print_op_unary_fp(file, &instr->rv32i->fsqrt);
+    debug_print_op_unary_fp(file, fsqrt);
     break;
-  case RV32I_INSTR_TY_ORI:
+  }
+  case RV32I_INSTR_TY_ORI: {
+    struct rv32i_op_imm *ori = &instr->rv32i->ori;
     fprintf(file, "ori");
-    debug_print_op_imm(file, &instr->rv32i->ori);
+    debug_print_op_imm(file, ori);
     break;
-  case RV32I_INSTR_TY_ANDI:
+  }
+  case RV32I_INSTR_TY_ANDI: {
+    struct rv32i_op_imm *andi = &instr->rv32i->andi;
     fprintf(file, "andi");
-    debug_print_op_imm(file, &instr->rv32i->andi);
+    debug_print_op_imm(file, andi);
     break;
-  case RV32I_INSTR_TY_SLLI:
+  }
+  case RV32I_INSTR_TY_SLLI: {
+    struct rv32i_op_imm *slli = &instr->rv32i->slli;
     fprintf(file, "slli");
-    debug_print_op_imm(file, &instr->rv32i->addi);
+    debug_print_op_imm(file, slli);
     break;
-  case RV32I_INSTR_TY_SRLI:
+  }
+  case RV32I_INSTR_TY_SRLI: {
+    struct rv32i_op_imm *srli = &instr->rv32i->srli;
     fprintf(file, "srli");
-    debug_print_op_imm(file, &instr->rv32i->srli);
+    debug_print_op_imm(file, srli);
     break;
-  case RV32I_INSTR_TY_SRAI:
+  }
+  case RV32I_INSTR_TY_SRAI: {
+    struct rv32i_op_imm *srai = &instr->rv32i->srai;
     fprintf(file, "srai");
-    debug_print_op_imm(file, &instr->rv32i->srai);
+    debug_print_op_imm(file, srai);
     break;
+  }
+  case RV32I_INSTR_TY_SLT: {
+    struct rv32i_op *slt = &instr->rv32i->slt;
+    fprintf(file, "slt");
+    debug_print_op(file, slt);
+    break;
+  }
+  case RV32I_INSTR_TY_SLTU: {
+    struct rv32i_op *sltu = &instr->rv32i->sltu;
+    fprintf(file, "sltu");
+    debug_print_op(file, sltu);
+    break;
+  }
+
+  case RV32I_INSTR_TY_SLTI: {
+    struct rv32i_op_imm *slti = &instr->rv32i->slti;
+    fprintf(file, "slti");
+    debug_print_op_imm(file, slti);
+    break;
+  }
+  case RV32I_INSTR_TY_SLTIU: {
+    struct rv32i_op_imm *sltiu = &instr->rv32i->sltiu;
+    fprintf(file, "sltiu");
+    debug_print_op_imm(file, sltiu);
+    break;
+  }
+  case RV32I_INSTR_TY_MULH: {
+    struct rv32i_op *mulh = &instr->rv32i->mulh;
+    fprintf(file, "mulh");
+    debug_print_op(file, mulh);
+    break;
+  }
+  case RV32I_INSTR_TY_MULHU: {
+    struct rv32i_op *mulhu = &instr->rv32i->mulhu;
+    fprintf(file, "mulhu");
+    debug_print_op(file, mulhu);
+    break;
+  }
+  case RV32I_INSTR_TY_MULHSU: {
+    struct rv32i_op *mulhsu = &instr->rv32i->mulhsu;
+    fprintf(file, "mulhsu");
+    debug_print_op(file, mulhsu);
+    break;
+  }
+  case RV32I_INSTR_TY_FCVT: {
+    struct rv32i_op_mov *fcvt = &instr->rv32i->fcvt;
+    switch (fcvt->source.ty) {
+    case RV32I_REG_TY_NONE:
+      BUG("makes no sense");
+    case RV32I_REG_TY_W:
+      DEBUG_ASSERT(fcvt->dest.ty == RV32I_REG_TY_F,
+                   "fcvt can only be used for f<->w/x moves");
+      
+      fprintf(file, "fcvt.s.w");
+      break;
+    case RV32I_REG_TY_F:
+      DEBUG_ASSERT(fcvt->dest.ty == RV32I_REG_TY_W,
+                     "fcvt can only be used for f<->w/x moves");
+      fprintf(file, "fcvt.w.s");
+      break;
+    }
+
+    debug_print_op_mov(file, fcvt);
+    break;
+  }
+  case RV32I_INSTR_TY_FCVTU: {
+    struct rv32i_op_mov *fcvtu = &instr->rv32i->fcvtu;
+    switch (fcvtu->source.ty) {
+    case RV32I_REG_TY_NONE:
+      BUG("makes no sense");
+    case RV32I_REG_TY_W:
+      DEBUG_ASSERT(fcvtu->dest.ty == RV32I_REG_TY_F,
+                   "fcvtu can only be used for f<->w/x moves");
+      
+      fprintf(file, "fcvt.s.wu");
+      break;
+    case RV32I_REG_TY_F:
+      DEBUG_ASSERT(fcvtu->dest.ty == RV32I_REG_TY_W,
+                     "fcvtu can only be used for f<->w/x moves");
+      fprintf(file, "fcvt.wu.s");
+      break;
+    }
+    debug_print_op_mov(file, fcvtu);
+    break;
+  }
+  case RV32I_INSTR_TY_FEQ: {
+    struct rv32i_op_fp *feq = &instr->rv32i->feq;
+    fprintf(file, "feq");
+    debug_print_op_fp(file, feq);
+    break;
+  }
+  case RV32I_INSTR_TY_FLT: {
+    struct rv32i_op_fp *flt = &instr->rv32i->flt;
+    fprintf(file, "flt");
+    debug_print_op_fp(file, flt);
+    break;
+  }
+  case RV32I_INSTR_TY_FLE: {
+    struct rv32i_op_fp *fle = &instr->rv32i->fle;
+    fprintf(file, "fle");
+    debug_print_op_fp(file, fle);
+    break;
+  }
+  case RV32I_INSTR_TY_FCLASS: {
+    struct rv32i_op_unary_fp *fclass = &instr->rv32i->fclass;
+    fprintf(file, "fclass");
+    debug_print_op_unary_fp(file, fclass);
+    break;
+  }
+  case RV32I_INSTR_TY_FENCE:
+  case RV32I_INSTR_TY_FENCE_TSO:
+  case RV32I_INSTR_TY_PAUSE:
+  case RV32I_INSTR_TY_ECALL:
+  case RV32I_INSTR_TY_EBREAK:
+    TODO("debug print other instrs");
   }
 }
 

@@ -18,161 +18,86 @@ struct emit_state {
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
+
+#define EMIT(up, lo)                                                           \
+  case RV32I_INSTR_TY_##up:                                                    \
+    rv32i_emit_##lo(state->emitter, instr->rv32i->lo);                         \
+    break;
   switch (instr->rv32i->ty) {
-  case RV32I_INSTR_TY_ADDI:
-    rv32i_emit_addi(state->emitter, instr->rv32i->addi);
-    break;
-  case RV32I_INSTR_TY_XORI:
-    rv32i_emit_xori(state->emitter, instr->rv32i->xori);
-    break;
-  case RV32I_INSTR_TY_ADD:
-    rv32i_emit_add(state->emitter, instr->rv32i->add);
-    break;
-  case RV32I_INSTR_TY_SUB:
-    rv32i_emit_sub(state->emitter, instr->rv32i->sub);
-    break;
-  case RV32I_INSTR_TY_MUL:
-    rv32i_emit_mul(state->emitter, instr->rv32i->mul);
-    break;
-  case RV32I_INSTR_TY_DIV:
-    rv32i_emit_div(state->emitter, instr->rv32i->div);
-    break;
-  case RV32I_INSTR_TY_REM:
-    rv32i_emit_rem(state->emitter, instr->rv32i->rem);
-    break;
-  case RV32I_INSTR_TY_DIVU:
-    rv32i_emit_divu(state->emitter, instr->rv32i->divu);
-    break;
-  case RV32I_INSTR_TY_REMU:
-    rv32i_emit_remu(state->emitter, instr->rv32i->remu);
-    break;
-  case RV32I_INSTR_TY_LUI:
-    rv32i_emit_lui(state->emitter, instr->rv32i->lui);
-    break;
-  case RV32I_INSTR_TY_AUIPC:
-    rv32i_emit_auipc(state->emitter, instr->rv32i->auipc);
-    break;
-  case RV32I_INSTR_TY_JALR:
-    rv32i_emit_jalr(state->emitter, instr->rv32i->jalr);
-    break;
-  case RV32I_INSTR_TY_SB:
-    rv32i_emit_sb(state->emitter, instr->rv32i->sb);
-    break;
-  case RV32I_INSTR_TY_SH:
-    rv32i_emit_sh(state->emitter, instr->rv32i->sh);
-    break;
-  case RV32I_INSTR_TY_SW:
-    rv32i_emit_sw(state->emitter, instr->rv32i->sw);
-    break;
-  case RV32I_INSTR_TY_LB:
-    rv32i_emit_lb(state->emitter, instr->rv32i->lb);
-    break;
-  case RV32I_INSTR_TY_LBU:
-    rv32i_emit_lbu(state->emitter, instr->rv32i->lbu);
-    break;
-  case RV32I_INSTR_TY_LH:
-    rv32i_emit_lh(state->emitter, instr->rv32i->lh);
-    break;
-  case RV32I_INSTR_TY_LHU:
-    rv32i_emit_lhu(state->emitter, instr->rv32i->lhu);
-    break;
-  case RV32I_INSTR_TY_LW:
-    rv32i_emit_lw(state->emitter, instr->rv32i->lw);
-    break;
-  case RV32I_INSTR_TY_JAL:
-    rv32i_emit_jal(state->emitter, instr->rv32i->jal);
-    break;
-  case RV32I_INSTR_TY_BEQ:
-    rv32i_emit_beq(state->emitter, instr->rv32i->beq);
-    break;
-  case RV32I_INSTR_TY_BNE:
-    rv32i_emit_bne(state->emitter, instr->rv32i->bne);
-    break;
-  case RV32I_INSTR_TY_BLT:
-    rv32i_emit_blt(state->emitter, instr->rv32i->blt);
-    break;
-  case RV32I_INSTR_TY_BGE:
-    rv32i_emit_bge(state->emitter, instr->rv32i->bge);
-    break;
-  case RV32I_INSTR_TY_BLTU:
-    rv32i_emit_bltu(state->emitter, instr->rv32i->bltu);
-    break;
-  case RV32I_INSTR_TY_BGEU:
-    rv32i_emit_bgeu(state->emitter, instr->rv32i->bgeu);
-    break;
-  case RV32I_INSTR_TY_OR:
-    rv32i_emit_or(state->emitter, instr->rv32i->or);
-    break;
-  case RV32I_INSTR_TY_AND:
-    rv32i_emit_and(state->emitter, instr->rv32i->and);
-    break;
-  case RV32I_INSTR_TY_XOR:
-    rv32i_emit_xor(state->emitter, instr->rv32i->xor);
-    break;
-  case RV32I_INSTR_TY_SLL:
-    rv32i_emit_sll(state->emitter, instr->rv32i->sll);
-    break;
-  case RV32I_INSTR_TY_SRL:
-    rv32i_emit_srl(state->emitter, instr->rv32i->srl);
-    break;
-  case RV32I_INSTR_TY_SRA:
-    rv32i_emit_sra(state->emitter, instr->rv32i->sra);
-    break;
-  case RV32I_INSTR_TY_FMV:
-    rv32i_emit_fmv(state->emitter, instr->rv32i->fmv);
-    break;
-  case RV32I_INSTR_TY_FSW:
-    rv32i_emit_fsw(state->emitter, instr->rv32i->fsw);
-    break;
-  case RV32I_INSTR_TY_FLW:
-    rv32i_emit_flw(state->emitter, instr->rv32i->flw);
-    break;
-  case RV32I_INSTR_TY_FADD:
-    rv32i_emit_fadd(state->emitter, instr->rv32i->fadd);
-    break;
-  case RV32I_INSTR_TY_FSUB:
-    rv32i_emit_fsub(state->emitter, instr->rv32i->fsub);
-    break;
-  case RV32I_INSTR_TY_FMUL:
-    rv32i_emit_fmul(state->emitter, instr->rv32i->fmul);
-    break;
-  case RV32I_INSTR_TY_FDIV:
-    rv32i_emit_fdiv(state->emitter, instr->rv32i->fdiv);
-    break;
-  case RV32I_INSTR_TY_FSGNJ:
-    rv32i_emit_fsgnj(state->emitter, instr->rv32i->fsgnj);
-    break;
-  case RV32I_INSTR_TY_FSGNJN:
-    rv32i_emit_fsgnjn(state->emitter, instr->rv32i->fsgnjn);
-    break;
-  case RV32I_INSTR_TY_FSGNJX:
-    rv32i_emit_fsgnjx(state->emitter, instr->rv32i->fsgnjx);
-    break;
-  case RV32I_INSTR_TY_FMAX:
-    rv32i_emit_fmax(state->emitter, instr->rv32i->fmax);
-    break;
-  case RV32I_INSTR_TY_FMIN:
-    rv32i_emit_fmin(state->emitter, instr->rv32i->fmin);
-    break;
-  case RV32I_INSTR_TY_FSQRT:
-    rv32i_emit_fsqrt(state->emitter, instr->rv32i->fsqrt);
-    break;
-  case RV32I_INSTR_TY_ORI:
-    rv32i_emit_ori(state->emitter, instr->rv32i->ori);
-    break;
-  case RV32I_INSTR_TY_ANDI:
-    rv32i_emit_andi(state->emitter, instr->rv32i->andi);
-    break;
-  case RV32I_INSTR_TY_SLLI:
-    rv32i_emit_slli(state->emitter, instr->rv32i->slli);
-    break;
-  case RV32I_INSTR_TY_SRLI:
-    rv32i_emit_srli(state->emitter, instr->rv32i->srli);
-    break;
-  case RV32I_INSTR_TY_SRAI:
-    rv32i_emit_srai(state->emitter, instr->rv32i->srai);
-    break;
+    EMIT(ADDI, addi);
+    EMIT(XORI, xori);
+    EMIT(ADD, add);
+    EMIT(SUB, sub);
+    EMIT(MUL, mul);
+    EMIT(DIV, div);
+    EMIT(REM, rem);
+    EMIT(DIVU, divu);
+    EMIT(REMU, remu);
+    EMIT(LUI, lui);
+    EMIT(AUIPC, auipc);
+    EMIT(JALR, jalr);
+    EMIT(SB, sb);
+    EMIT(SH, sh);
+    EMIT(SW, sw);
+    EMIT(LB, lb);
+    EMIT(LBU, lbu);
+    EMIT(LH, lh);
+    EMIT(LHU, lhu);
+    EMIT(LW, lw);
+    EMIT(JAL, jal);
+    EMIT(BEQ, beq);
+    EMIT(BNE, bne);
+    EMIT(BLT, blt);
+    EMIT(BGE, bge);
+    EMIT(BLTU, bltu);
+    EMIT(BGEU, bgeu);
+    EMIT(OR, or);
+    EMIT(AND, and);
+    EMIT(XOR, xor);
+    EMIT(SLL, sll);
+    EMIT(SRL, srl);
+    EMIT(SRA, sra);
+    EMIT(FMV, fmv);
+    EMIT(FSW, fsw);
+    EMIT(FLW, flw);
+    EMIT(FADD, fadd);
+    EMIT(FSUB, fsub);
+    EMIT(FMUL, fmul);
+    EMIT(FDIV, fdiv);
+    EMIT(FSGNJ, fsgnj);
+    EMIT(FSGNJN, fsgnjn);
+    EMIT(FSGNJX, fsgnjx);
+    EMIT(FMAX, fmax);
+    EMIT(FMIN, fmin);
+    EMIT(FSQRT, fsqrt);
+    EMIT(ORI, ori);
+    EMIT(ANDI, andi);
+    EMIT(SLLI, slli);
+    EMIT(SRLI, srli);
+    EMIT(SRAI, srai);
+    EMIT(SLT, slt);
+    EMIT(SLTU, sltu);
+    EMIT(SLTI, slti);
+    EMIT(SLTIU, sltiu);
+    EMIT(MULH, mulh);
+    EMIT(MULHU, mulhu);
+    EMIT(MULHSU, mulhsu);
+    EMIT(FCVT, fcvt);
+    EMIT(FCVTU, fcvtu);
+    EMIT(FEQ, feq);
+    EMIT(FLT, flt);
+    EMIT(FLE, fle);
+    // EMIT(FCLASS, fclass);
+    // EMIT(FENCE, fence);
+    // EMIT(FENCE_TSO, fence_tso);
+    // EMIT(PAUSE, pause);
+    // EMIT(ECALL, ecall);
+    // EMIT(EBREAK, ebreak);
+    default:
+      TODO("impl fclass/misc instrs");
   }
+
+#undef EMIT
 }
 
 struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {

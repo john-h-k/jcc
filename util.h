@@ -135,6 +135,8 @@ typedef unsigned _BitInt(128) uint128_t;
 #define TSAN 0
 #endif
 
+// NOTE: for reasons, there is no _SANITIZE_UNDEFINED__, and so we cannot detect
+// this on GCC
 #if HAS_FEATURE(undefined_behavior_sanitizer) ||                               \
     defined(UNDEFINED_BEHAVIOR_SANITIZER)
 #define UBSAN 1
@@ -144,7 +146,7 @@ typedef unsigned _BitInt(128) uint128_t;
 
 #if ASAN || MSAN || TSAN || UBSAN
 #define SANITIZER_PRINT_STACK_TRACE
-#include "sanitizer/common_interface_defs.h" // __sanitizer_print_stack_trace
+#include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
 
 #if STDC_C23
@@ -162,7 +164,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define TRYFORCEINLINE inline
 #endif
 
-#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
+#define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))
 
 #define ISPOW2(value) (popcntl((value)) == 1)
 #define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
@@ -187,33 +189,64 @@ static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
 }
 
-static inline void debug_print_stack_trace(void) {
 #ifdef SANITIZER_PRINT_STACK_TRACE
+static inline void debug_print_stack_trace(void) {
   __sanitizer_print_stack_trace();
-#endif
+}
+#elif !defined(NDEBUG) && __has_include(<execinfo.h>) && __has_include(<unistd.h>) && __has_include(<errno.h>)
+#include <errno.h>
+#include <execinfo.h>
+#include <unistd.h>
+
+#define TRACE_SZ 32
+
+static inline void debug_print_stack_trace(void) {
+  void *base = NULL;
+
+  FILE *fp = fopen("/proc/self/maps", "r");
+  if (!fp) {
+    fprintf(stderr, "failed to open /proc/self/maps: %s\n", strerror(errno));
+  } else {
+
+    char line[256];
+
+    if (fgets(line, sizeof(line), fp)) {
+      char *endptr;
+      base = (void *)strtoul(line, &endptr, 16);
+    }
+
+    fclose(fp);
+  }
+
+  if (!base) {
+    fprintf(stderr, "failed to determine executable base address\n");
+    return;
+  }
+
+  void *buffer[TRACE_SZ];
+  size_t size = backtrace(buffer, TRACE_SZ);
+
+  fprintf(stderr, "\nSTACK TRACE:\n");
+  for (size_t i = 0; i < size; i++) {
+    void *relative_addr = (void *)((char *)buffer[i] - (char *)base);
+
+    fprintf(stderr, "  [%zu] %p", i, relative_addr);
+
+    char command[256];
+    snprintf(command, sizeof(command),
+             // "addr2line -C -i -f -p -s -a -e /root/repos/jcc/build/jcc +%p",
+             "addr2line -C -i -f -p -s -a -e /proc/%d/exe +%p", getpid(),
+             relative_addr);
+
+    if (system(command) == -1) {
+      fprintf(stderr, "  (failed to run addr2line: %s)\n", strerror(errno));
+    }
+  }
 }
 
-#define FMTPRINT(file, message, format)                                        \
-  do {                                                                         \
-    va_list v;                                                                 \
-    va_start(v, format);                                                       \
-    fprintf(file, message);                                                    \
-    vfprintf(file, format, v);                                                 \
-    fprintf(file, "\n");                                                       \
-    va_end(v);                                                                 \
-  } while (0);
-
-#define MACRO_FMTPRINT(file, message, ...)                                        \
-  do {                                                                         \
-    fprintf(file, message);                                                    \
-    fprintf(file, __VA_ARGS__);                                                 \
-    fprintf(file, "\n");                                                       \
-  } while (0);
-
-#define EXIT_FAIL(code)                                                        \
-  debug_print_stack_trace();                                                   \
-  raise(SIGINT);                                                               \
-  exit(code);
+#else
+static inline void debug_print_stack_trace(void) {}
+#endif
 
 #if __clang__
 #define START_NO_UNUSED_ARGS                                                   \
@@ -240,31 +273,59 @@ static inline void debug_print_stack_trace(void) {
 #define SIZE_T_MAX (static_assert(false, "use SIZE_MAX instead"))
 #endif
 
+#define FMTPRINT(file, message, format)                                        \
+  do {                                                                         \
+    va_list v;                                                                 \
+    va_start(v, format);                                                       \
+    fprintf(file, message);                                                    \
+    vfprintf(file, format, v);                                                 \
+    fprintf(file, "\n");                                                       \
+    va_end(v);                                                                 \
+  } while (0);
+
+#define MACRO_FMTPRINT(file, message, ...)                                     \
+  do {                                                                         \
+    fprintf(file, "%s:%d in %s: ", __FILE__, __LINE__, __func__);              \
+    fprintf(file, message);                                                    \
+    fprintf(file, __VA_ARGS__);                                                \
+    fprintf(file, "\n");                                                       \
+  } while (0);
+
+#define EXIT_FAIL(code)                                                        \
+  debug_print_stack_trace();                                                   \
+  raise(SIGINT);                                                               \
+  exit(code);
+
 #define TODO_FUNC(sig)                                                         \
   START_NO_UNUSED_ARGS                                                         \
   sig { TODO(__func__); }                                                      \
   END_NO_UNUSED_ARGS
 
-#define TODO(...) \
-  do { \
-    MACRO_FMTPRINT(stderr, "`todo` hit, program exiting: ", __VA_ARGS__); \
-    EXIT_FAIL(-2); \
+#define TODO(...)                                                              \
+  do {                                                                         \
+    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting", __VA_ARGS__);        \
+    EXIT_FAIL(-2);                                                             \
   } while (0);
 
-#define BUG(...) \
-  do { \
-    MACRO_FMTPRINT(stderr, "`bug` hit, program exiting: ", __VA_ARGS__); \
-    EXIT_FAIL(-2); \
+#define BUG(...)                                                               \
+  do {                                                                         \
+    MACRO_FMTPRINT(stderr, "`BUG` hit, program exiting: ", __VA_ARGS__);       \
+    EXIT_FAIL(-2);                                                             \
   } while (0);
 
 #if NDEBUG
 #define DEBUG_ASSERT(b, ...) (void)(b)
 #else
-#define DEBUG_ASSERT(b, ...) util_debug_assert(b, # b, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#define DEBUG_ASSERT(b, ...)                                                   \
+  util_debug_assert(b, #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-PRINTF_ARGS(5) static void util_debug_assert(bool b, const char *cond, const char *func, const char *file, int line, const char *msg, ...) {
+PRINTF_ARGS(5)
+static void util_debug_assert(bool b, const char *cond, const char *func,
+                              const char *file, int line, const char *msg,
+                              ...) {
   if (!b) {
-    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`\n", file, line, func, cond);
+    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`\n", file,
+            line, func, cond);
 
     va_list v;
     va_start(v, msg);
@@ -305,23 +366,23 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 static inline unsigned long long rotateright64(unsigned long long value,
                                                unsigned int amount) {
 #if HAS_BUILTIN(__builtin_rotateright64)
-    return __builtin_rotateright64(value, amount);
+  return __builtin_rotateright64(value, amount);
 #else
-    amount %= sizeof(value) * 8; // Ensure amount is within [0, 63]
-    return (value >> amount) | (value << ((sizeof(value) * 8) - amount));
+  amount %= sizeof(value) * 8; // Ensure amount is within [0, 63]
+  return (value >> amount) | (value << ((sizeof(value) * 8) - amount));
 #endif
 }
 
 static inline int popcntl(unsigned long long l) {
 #if HAS_BUILTIN(__builtin_popcountll)
-    return __builtin_popcountll(l);
+  return __builtin_popcountll(l);
 #else
-    int count = 0;
-    while (l) {
-        count += l & 1;
-        l >>= 1;
-    }
-    return count;
+  int count = 0;
+  while (l) {
+    count += l & 1;
+    l >>= 1;
+  }
+  return count;
 #endif
 }
 
@@ -329,36 +390,38 @@ static inline int tzcnt(unsigned long long l) {
   DEBUG_ASSERT(l != 0, "zero is UB");
 
 #if HAS_BUILTIN(__builtin_ctzll)
-    return __builtin_ctzll(l);
+  return __builtin_ctzll(l);
 #else
-    if (l == 0) return sizeof(l) * 8;
+  if (l == 0)
+    return sizeof(l) * 8;
 
-    int count = 0;
-    while ((l & 1) == 0) {
-        count++;
-        l >>= 1;
-    }
-    return count;
+  int count = 0;
+  while ((l & 1) == 0) {
+    count++;
+    l >>= 1;
+  }
+  return count;
 #endif
 }
 
 static inline int lzcnt(unsigned long long l) {
 #if HAS_BUILTIN(__builtin_clzll)
-    if (l == 0) {
-      return sizeof(l) * 8;
-    }
-    return __builtin_clzll(l);
+  if (l == 0) {
+    return sizeof(l) * 8;
+  }
+  return __builtin_clzll(l);
 #else
-    if (l == 0) return sizeof(l) * 8;
+  if (l == 0)
+    return sizeof(l) * 8;
 
-    int count = 0;
-    for (int i = (sizeof(l) * 8) - 1; i >= 0; i--) {
-        if ((l >> i) & 1) {
-            break;
-        }
-        count++;
+  int count = 0;
+  for (int i = (sizeof(l) * 8) - 1; i >= 0; i--) {
+    if ((l >> i) & 1) {
+      break;
     }
-    return count;
+    count++;
+  }
+  return count;
 #endif
 }
 
