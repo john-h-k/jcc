@@ -577,13 +577,11 @@ static void lower_params(struct ir_func *func) {
           insert_before_ir_op(func, param_op, IR_OP_TY_MOV, param_op->var_ty);
       mov->mov = (struct ir_op_mov){.value = NULL};
 
-      // swap the flags and reg
-      mov->flags = param_op->flags;
+      mov->reg = param_op->reg;
+      mov->flags = param_op->flags & ~(IR_OP_FLAG_SPILLED);
       param_op->flags = IR_OP_FLAG_NONE;
 
       param_op->mov = (struct ir_op_mov){.value = mov};
-
-      mov->reg = param_op->reg;
 
       param_op = param_op->succ;
     }
