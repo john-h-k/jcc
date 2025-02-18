@@ -598,13 +598,14 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    instr->rv32i->ty = RV32I_INSTR_TY_SUBS;
-    instr->rv32i->subs = (struct rv32i_addsub_reg){
-        .dest = zero_reg_for_ty(lhs.ty),
-        .lhs = lhs,
-        .rhs = rhs,
-    };
-    break;
+    TODO("comp binops");
+    // instr->rv32i->ty = RV32I_INSTR_TY_SUBS;
+    // instr->rv32i->subs = (struct rv32i_addsub_reg){
+    //     .dest = zero_reg_for_ty(lhs.ty),
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    // break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     instr->rv32i->ty = RV32I_INSTR_TY_SLL;
     instr->rv32i->sll = (struct rv32i_op){
