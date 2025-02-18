@@ -1,8 +1,8 @@
 #include "codegen.h"
 
 #include "../alloc.h"
-#include "../bitset.h"
 #include "../bit_twiddle.h"
+#include "../bitset.h"
 #include "../log.h"
 #include "../rv32i.h"
 
@@ -463,10 +463,8 @@ static void codegen_epilogue(struct codegen_state *state) {
   size_t stack_to_add = prologue_info->stack_size;
   struct instr *add_stack = alloc_instr(state->func);
   add_stack->rv32i->ty = RV32I_INSTR_TY_ADDI;
-  add_stack->rv32i->addi =
-      (struct rv32i_op_imm){.dest = STACK_PTR_REG,
-                                .source = STACK_PTR_REG,
-                                .imm = stack_to_add};
+  add_stack->rv32i->addi = (struct rv32i_op_imm){
+      .dest = STACK_PTR_REG, .source = STACK_PTR_REG, .imm = stack_to_add};
 
   struct instr *restore_ra = alloc_instr(state->func);
   restore_ra->rv32i->ty = RV32I_INSTR_TY_LW;
@@ -583,6 +581,14 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
     TODO("float comp binops");
   case IR_OP_BINARY_OP_TY_EQ:
+    // instr->rv32i->ty = RV32I_INSTR_TY_BEQ;
+    // instr->rv32i->subs = (struct rv32i_addsub_reg){
+    //     .dest = zero_reg_for_ty(lhs.ty),
+    //     .lhs = lhs,
+    //     .rhs = rhs,
+    // };
+    break;
+
   case IR_OP_BINARY_OP_TY_NEQ:
   case IR_OP_BINARY_OP_TY_UGT:
   case IR_OP_BINARY_OP_TY_SGT:
@@ -592,14 +598,13 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
-    // instr->rv32i->ty = rv32i_INSTR_TY_SUBS;
-    // instr->rv32i->subs = (struct rv32i_addsub_reg){
-    //     .dest = zero_reg_for_ty(lhs.ty),
-    //     .lhs = lhs,
-    //     .rhs = rhs,
-    // };
-    // break;
-    TODO("comp binops");
+    instr->rv32i->ty = RV32I_INSTR_TY_SUBS;
+    instr->rv32i->subs = (struct rv32i_addsub_reg){
+        .dest = zero_reg_for_ty(lhs.ty),
+        .lhs = lhs,
+        .rhs = rhs,
+    };
+    break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     instr->rv32i->ty = RV32I_INSTR_TY_SLL;
     instr->rv32i->sll = (struct rv32i_op){
@@ -945,8 +950,8 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     struct ir_glb *glb = op->addr.glb;
 
     struct instr *adrp = alloc_instr(state->func);
-    adrp->rv32i->ty = RV32I_INSTR_TY_AUIPC;
-    adrp->rv32i->auipc = (struct rv32i_u){.dest = dest, .imm = 0};
+    adrp->rv32i->ty = RV32I_INSTR_TY_LUI;
+    adrp->rv32i->lui = (struct rv32i_u){.dest = dest, .imm = 0};
 
     adrp->reloc = arena_alloc(state->func->unit->arena, sizeof(*adrp->reloc));
     *adrp->reloc = (struct relocation){
@@ -1139,23 +1144,51 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   invariant_assert(func_ty->num_params <= 8,
                    "`%s` doesn't support more than 8 args yet", __func__);
 
-  struct instr *instr = alloc_instr(state->func);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
-    DEBUG_ASSERT(op->call.target->ty == IR_OP_TY_ADDR && op->call.target->addr.ty == IR_OP_ADDR_TY_GLB, "expected addr GLB");
+    DEBUG_ASSERT(op->call.target->ty == IR_OP_TY_ADDR &&
+                     op->call.target->addr.ty == IR_OP_ADDR_TY_GLB,
+                 "expected addr GLB");
+    struct ir_glb *glb = op->call.target->addr.glb;
 
-    instr->rv32i->ty = RV32I_INSTR_TY_JAL;
-    instr->rv32i->jal =
-        (struct rv32i_jal){.target = NULL, .ret_addr = RET_PTR_REG};
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+      struct instr *instr = alloc_instr(state->func);
+      instr->rv32i->ty = RV32I_INSTR_TY_JAL;
+      instr->rv32i->jal =
+          (struct rv32i_jal){.target = NULL, .ret_addr = RET_PTR_REG};
 
-    instr->reloc = arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
-    *instr->reloc = (struct relocation){
-        .ty = RELOCATION_TY_CALL,
-        .symbol_index = op->call.target->addr.glb->id,
-        .size = 2,
-        .address = 0,
-    };
+      instr->reloc =
+          arena_alloc(state->func->unit->arena, sizeof(*instr->reloc));
+      *instr->reloc = (struct relocation){
+          .ty = RELOCATION_TY_CALL,
+          .symbol_index = op->call.target->addr.glb->id,
+          .size = 2,
+          .address = 0,
+      };
+    } else {
+      // generate `auipc` + `jalr` with fake reg (`ra`) that the linker will
+      // reloc into a `jal`
+      struct instr *auipc = alloc_instr(state->func);
+      auipc->rv32i->ty = RV32I_INSTR_TY_AUIPC;
+      auipc->rv32i->auipc =
+          (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
+
+      auipc->reloc =
+          arena_alloc(state->func->unit->arena, sizeof(*auipc->reloc));
+      *auipc->reloc = (struct relocation){
+          .ty = RELOCATION_TY_CALL,
+          .symbol_index = op->call.target->addr.glb->id,
+          .size = 2,
+          .address = 0,
+      };
+
+      struct instr *jalr = alloc_instr(state->func);
+      jalr->rv32i->ty = RV32I_INSTR_TY_JALR;
+      jalr->rv32i->jalr =
+          (struct rv32i_jalr){.target = RET_PTR_REG, .ret_addr = RET_PTR_REG, .imm = 0};
+    }
   } else {
     // NOTE: `blr` seems to segfault on linux rv32i
+    struct instr *instr = alloc_instr(state->func);
     instr->rv32i->ty = RV32I_INSTR_TY_JALR;
     instr->rv32i->jalr = (struct rv32i_jalr){
         .target = codegen_reg(op->call.target), .ret_addr = RET_PTR_REG};
