@@ -1,10 +1,10 @@
 #include "lower.h"
 
+#include "bit_twiddle.h"
 #include "ir/ir.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
-#include "bit_twiddle.h"
 
 enum load_bitfield {
   LOAD_BITFIELD_MASK_IN,
@@ -129,24 +129,21 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+  if (cond->ty == IR_OP_TY_BINARY_OP &&
+      binary_op_is_comparison(cond->binary_op.ty)) {
     return;
   }
 
   // turn `if (float)` into `if (float != 0.0)`
 
-  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
-  zero->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_FLT,
-    .flt_value = 0
-  };
+  struct ir_op *zero =
+      insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
+  zero->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_FLT, .flt_value = 0};
 
-  struct ir_op *neq = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  struct ir_op *neq =
+      insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
   neq->binary_op = (struct ir_op_binary_op){
-    .ty = IR_OP_BINARY_OP_TY_FNEQ,
-    .lhs = cond,
-    .rhs = zero
-  };
+      .ty = IR_OP_BINARY_OP_TY_FNEQ, .lhs = cond, .rhs = zero};
 
   op->br_cond.cond = neq;
 }
@@ -157,29 +154,29 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   struct ir_glb *memset =
       add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
 
-  struct ir_op *value_cnst = insert_after_ir_op(func, addr, IR_OP_TY_CNST, IR_VAR_TY_I32);
-  value_cnst->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_INT,
-    .int_value = op->mem_set.value
-  };
+  struct ir_op *value_cnst =
+      insert_after_ir_op(func, addr, IR_OP_TY_CNST, IR_VAR_TY_I32);
+  value_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                         .int_value = op->mem_set.value};
 
   struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
 
-  struct ir_op *length_cnst = insert_after_ir_op(func, addr, IR_OP_TY_CNST, ptr_int);
-  length_cnst->cnst = (struct ir_op_cnst){
-    .ty = IR_OP_CNST_TY_INT,
-    .int_value = op->mem_set.length
-  };
+  struct ir_op *length_cnst =
+      insert_after_ir_op(func, addr, IR_OP_TY_CNST, ptr_int);
+  length_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                          .int_value = op->mem_set.length};
 
-  struct ir_op *memset_addr = insert_after_ir_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
+  struct ir_op *memset_addr =
+      insert_after_ir_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
   memset_addr->flags |= IR_OP_FLAG_CONTAINED;
   memset_addr->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_GLB,
-    .glb = memset,
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = memset,
   };
 
   size_t num_args = 3;
-  struct ir_op **args = arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+  struct ir_op **args =
+      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
 
   args[0] = addr;
   args[1] = value_cnst;
@@ -189,10 +186,10 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   op->ty = IR_OP_TY_CALL;
   op->var_ty = *memset->var_ty.func.ret_ty;
   op->call = (struct ir_op_call){
-    .target = memset_addr,
-    .num_args = num_args,
-    .args = args,
-    .func_ty = memset->var_ty,
+      .target = memset_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = memset->var_ty,
   };
 }
 
@@ -278,19 +275,19 @@ static void lower_store_bitfield(struct ir_func *func, struct ir_op *op) {
 
   struct ir_bitfield bitfield = op->store_bitfield.bitfield;
 
-  struct ir_op *load = insert_before_ir_op(func, op, IR_OP_TY_LOAD, value->var_ty);
+  struct ir_op *load =
+      insert_before_ir_op(func, op, IR_OP_TY_LOAD, value->var_ty);
   load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
   op->ty = IR_OP_TY_BITFIELD_INSERT;
   op->var_ty = value->var_ty;
   op->bitfield_insert = (struct ir_op_bitfield_insert){
-    .value = value,
-    .target = load,
-    .bitfield = bitfield
-  };
+      .value = value, .target = load, .bitfield = bitfield};
 
-  struct ir_op *store = insert_after_ir_op(func, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-  store->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = op};
+  struct ir_op *store =
+      insert_after_ir_op(func, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+  store->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = op};
 }
 
 static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
@@ -303,10 +300,8 @@ static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
 
   op->ty = IR_OP_TY_BITFIELD_EXTRACT;
   op->var_ty = op->var_ty;
-  op->bitfield_extract = (struct ir_op_bitfield_extract){
-    .value = load,
-    .bitfield = bitfield
-  };
+  op->bitfield_extract =
+      (struct ir_op_bitfield_extract){.value = load, .bitfield = bitfield};
 }
 
 static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
@@ -591,17 +586,29 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     switch (param_info.ty) {
     case IR_PARAM_INFO_TY_REGISTER:
-      if (arg->ty == IR_OP_TY_LOAD) {
-        struct ir_var_ty load_ty = get_var_ty_for_size(
+      if (arg->ty != IR_OP_TY_LOAD && param_info.reg.num_reg == 1) {
+        struct ir_var_ty var_ty = get_var_ty_for_size(
             param_info.reg.start_reg.ty, param_info.reg.size);
 
-        size_t num_reg =
-            (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, var_ty);
+        mov->mov = (struct ir_op_mov){.value = arg};
+        mov->reg = param_info.reg.start_reg;
+        mov->flags |= IR_OP_FLAG_FIXED_REG;
+
+        vector_push_back(new_args, &mov);
+
+      } else {
+        if (arg->ty != IR_OP_TY_LOAD) {
+          arg = spill_op(func, arg);
+        }
+
+        struct ir_var_ty load_ty = get_var_ty_for_size(
+            param_info.reg.start_reg.ty, param_info.reg.size);
 
         struct ir_op *addr = build_addr(func, arg);
         struct ir_op *last = op;
 
-        for (size_t j = num_reg; j; j--) {
+        for (size_t j = param_info.reg.num_reg; j; j--) {
           struct ir_op *load =
               insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
 
@@ -623,14 +630,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
           last = load;
         }
-      } else {
-        struct ir_op *mov =
-            insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
-        mov->mov = (struct ir_op_mov){.value = arg};
-        mov->reg = param_info.reg.start_reg;
-        mov->flags |= IR_OP_FLAG_FIXED_REG;
-
-        vector_push_back(new_args, &mov);
       }
       break;
     case IR_PARAM_INFO_TY_STACK: {
@@ -685,9 +684,11 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     case IR_PARAM_INFO_TY_POINTER: {
       DEBUG_ASSERT(arg->ty == IR_OP_TY_LOAD, "expected load");
 
+      struct ir_op *addr = build_addr(func, arg);
+
       struct ir_op *mov =
           insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
-      mov->mov = (struct ir_op_mov){.value = arg};
+      mov->mov = (struct ir_op_mov){.value = addr};
       mov->reg = param_info.reg.start_reg;
       mov->flags |= IR_OP_FLAG_FIXED_REG;
       vector_push_back(new_args, &mov);
@@ -697,11 +698,11 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   if (func_info.call_info.flags & IR_CALL_INFO_FLAG_NUM_VARIADIC) {
-    struct ir_op *cnst = insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
-    cnst->cnst = (struct ir_op_cnst){
-      .ty = IR_OP_CNST_TY_INT,
-      .int_value = func_info.call_info.num_variadics
-    };
+    struct ir_op *cnst =
+        insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    cnst->cnst =
+        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                            .int_value = func_info.call_info.num_variadics};
     cnst->reg = func_info.call_info.num_variadics_reg;
     cnst->flags |= IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG;
   }
@@ -747,7 +748,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
       // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
-      struct ir_op *store = insert_after_ir_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      struct ir_op *store =
+          insert_after_ir_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
       store->store = (struct ir_op_store){
           .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
@@ -785,10 +787,10 @@ void lower(struct ir_unit *unit, const struct target *target) {
       struct ir_func *func = glb->func;
       struct ir_basicblock *basicblock = func->first;
 
-
       // TODO: make this lowering global (and call a target-specific function)
       // and also do it for undef symbols
-      struct ir_func_info info = unit->target->lower_func_ty(func, func->func_ty, NULL, 0);
+      struct ir_func_info info =
+          unit->target->lower_func_ty(func, func->func_ty, NULL, 0);
       func->func_ty = info.func_ty;
       func->call_info = info.call_info;
 

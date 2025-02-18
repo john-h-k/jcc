@@ -90,11 +90,11 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
     }
   case IR_REG_TY_FP:
     if (idx >= 22) {
-      return 18 + idx;
+      return 18 + (idx - 22);
     } else if (idx >= 20) {
-      return 8 + idx;
+      return 8 + (idx - 20);
     } else if (idx >= 8) {
-      return 2 + idx;
+      return 2 + (idx - 8);
     } else {
       return 1 + idx;
     }
@@ -1392,6 +1392,9 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     return;
   }
 
+  #define COPY(ty, fld) \
+    ty tmp##ty = (ty)value->fld; \
+    memcpy(data, &tmp##ty, sizeof(tmp##ty))
   switch (value->var_ty.ty) {
   case IR_VAR_TY_TY_NONE:
   case IR_VAR_TY_TY_VARIADIC:
@@ -1400,32 +1403,35 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     switch (value->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      memcpy(data, &value->int_value, 1);
+      COPY(uint8_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_I16:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
                        value->ty == IR_VAR_VALUE_TY_FLT,
                    "expected int/flt");
-      memcpy(data, &value->int_value, 2);
+      COPY(uint16_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_I32:
-    case IR_VAR_PRIMITIVE_TY_F32:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, 4);
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      COPY(uint32_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_I64:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      COPY(uint64_t, int_value);
+      break;
+    case IR_VAR_PRIMITIVE_TY_F32:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
+      COPY(float, flt_value);
+      break;
     case IR_VAR_PRIMITIVE_TY_F64:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, sizeof(unsigned long));
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
+      COPY(double, flt_value);
       break;
     }
     break;
   }
+  #undef COPY
 
   case IR_VAR_TY_TY_FUNC:
     BUG("func can not have data as a global var");

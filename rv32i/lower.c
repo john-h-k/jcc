@@ -1,8 +1,8 @@
 #include "lower.h"
 
 #include "../lower.h"
-#include "../vector.h"
 #include "../util.h"
+#include "../vector.h"
 
 static bool try_get_hfa_info(struct ir_func *func,
                              const struct ir_var_ty *var_ty,
@@ -26,12 +26,12 @@ static bool try_get_hfa_info(struct ir_func *func,
     return false;
   }
 
-  if (var_ty->struct_ty.num_fields > 4) {
+  if (var_ty->struct_ty.num_fields > 2) {
     return false;
   }
 
   for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-    if (!var_ty_eq(func, member_ty, &var_ty->struct_ty.fields[i])) {
+    if (!var_ty_is_fp(&var_ty->struct_ty.fields[i])) {
       return false;
     }
   }
@@ -55,9 +55,8 @@ static bool try_get_hfa_info(struct ir_func *func,
 }
 
 struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
-                                         struct ir_var_func_ty func_ty,
-                                         struct ir_op **args, size_t num_args) {
-
+                                        struct ir_var_func_ty func_ty,
+                                        struct ir_op **args, size_t num_args) {
 
   size_t ngrn = 0;
   size_t nsrn = 0;
@@ -88,15 +87,19 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
+                  .num_reg = num_hfa_members,
                   .size = hfa_member_size},
       };
-    } else if (info.size > 16) {
+      // FIXME: 16b double tyes returned in reg
+    } else if (info.size > 8) {
       ret_ty = IR_VAR_TY_NONE;
 
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_POINTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
+                  .num_reg = 1,
+           .size = 4},
       };
 
       vector_push_front(params, &IR_VAR_TY_POINTER);
@@ -104,21 +107,11 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
+                  .num_reg = (info.size + 3) / 4,
+           .size = 4},
       };
     }
-  }
-
-  // NOTE: on windows, SIMD&FP registers are not used in variadics, ever
-
-  bool variadics_on_stack;
-  switch (func->unit->target->target_id) {
-  case TARGET_ID_AARCH64_MACOS:
-    variadics_on_stack = true;
-    break;
-  default:
-    variadics_on_stack = false;
-    break;
   }
 
   size_t num = MAX(func_ty.num_params, num_args);
@@ -142,126 +135,68 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
     struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
 
-    if (info.size > 16) {
+    if (info.size > 8) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
       info = var_ty_info(func->unit, var_ty);
     }
 
-    if (var_ty_is_aggregate(var_ty)) {
-      info.size = ROUND_UP(info.size, 8);
+    if (var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
+      vector_push_back(params, var_ty);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                  .num_reg = 1,
+                  .size = info.size},
+      };
+      vector_push_back(param_infos, &param_info);
+
+      nsrn++;
+      continue;
+    } else if (var_ty_is_integral(var_ty) && info.size <= 4 && ngrn <= 8) {
+      vector_push_back(params, var_ty);
+
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .num_reg = 1,
+                  .size = info.size}};
+      vector_push_back(param_infos, &param_info);
+
+      ngrn++;
+
+      continue;
     }
 
-    size_t num_hfa_members;
-    size_t hfa_member_size;
-    struct ir_var_ty member_ty;
+    if (info.alignment == 8) {
+      ngrn = (ngrn + 1) & ~1;
+    }
 
-    if (!variadic || !variadics_on_stack) {
-      if (var_ty_is_fp(var_ty) && nsrn < 8) {
-        vector_push_back(params, var_ty);
-
-        struct ir_param_info param_info = {
-            .ty = IR_PARAM_INFO_TY_REGISTER,
-            .var_ty = var_ty,
-            .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                    .size = info.size},
-        };
-        vector_push_back(param_infos, &param_info);
-
-        nsrn++;
-        continue;
-      } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
-                                  &hfa_member_size)) {
-        if (nsrn + num_hfa_members <= 8) {
-          for (size_t j = 0; j < num_hfa_members; j++) {
-            // given this is a composite, we assume `source` contains a
-            // pointer to it
-
-            vector_push_back(params, &member_ty);
-          }
-
-          struct ir_param_info param_info = {
-              .ty = IR_PARAM_INFO_TY_REGISTER,
-              .var_ty = var_ty,
-              .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                      .size = hfa_member_size},
-          };
-          vector_push_back(param_infos, &param_info);
-
-          nsrn += num_hfa_members;
-          continue;
-        }
-
-        nsrn = 8;
-        size_t nsaa_align = MAX(8, info.alignment);
-        size_t size = ROUND_UP(info.size, nsaa_align);
-
-        struct ir_param_info param_info = {.ty = IR_PARAM_INFO_TY_STACK,
-                                           .var_ty = var_ty,
-                                           .stack_offset = nsaa};
-        vector_push_back(param_infos, &param_info);
-
-        nsaa += size;
-        continue;
-
-      } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
-        vector_push_back(params, var_ty);
-
-        struct ir_param_info param_info = {
-            .ty = IR_PARAM_INFO_TY_REGISTER,
-            .var_ty = var_ty,
-            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                    .size = info.size}};
-        vector_push_back(param_infos, &param_info);
-
-        ngrn++;
-
-        continue;
+    size_t dw_size = (info.size + 3) / 4;
+    if ((var_ty_is_aggregate(var_ty) || (variadic && var_ty_is_fp(var_ty))) && dw_size <= (8 - ngrn)) {
+      for (size_t j = 0; j < dw_size; j++) {
+        // given this is a composite, we assume `source` contains a
+        // pointer to it
+        vector_push_back(params, &IR_VAR_TY_I32);
       }
 
-      if (info.alignment == 16) {
-        ngrn = (ngrn + 1) & 1;
-      }
+      struct ir_param_info param_info = {
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = var_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .num_reg = dw_size,
+                  .size = 4}};
+      vector_push_back(param_infos, &param_info);
 
-      if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
-        // // lo to ngrn, hi to ngrn+1
-
-        vector_push_back(params, &IR_VAR_TY_I64);
-        vector_push_back(params, &IR_VAR_TY_I64);
-
-        struct ir_param_info param_info = {
-            .ty = IR_PARAM_INFO_TY_REGISTER,
-            .var_ty = var_ty,
-            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                    .size = 8}};
-        vector_push_back(param_infos, &param_info);
-
-        ngrn += 2;
-        continue;
-      }
-
-      size_t dw_size = (info.size + 7) / 8;
-      if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
-        for (size_t j = 0; j < dw_size; j++) {
-          // given this is a composite, we assume `source` contains a
-          // pointer to it
-          vector_push_back(params, &IR_VAR_TY_I64);
-        }
-
-        struct ir_param_info param_info = {
-            .ty = IR_PARAM_INFO_TY_REGISTER,
-            .var_ty = var_ty,
-            .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                    .size = 8}};
-        vector_push_back(param_infos, &param_info);
-
-        ngrn += dw_size;
-        continue;
-      }
+      ngrn += dw_size;
+      continue;
     }
 
     ngrn = 8;
-    size_t nsaa_align = MAX(8, info.alignment);
+    size_t nsaa_align = MAX(4, info.alignment);
     nsaa = ROUND_UP(nsaa, nsaa_align);
 
     if (var_ty_is_aggregate(var_ty)) {
@@ -317,7 +252,8 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     v.f = (float)op->cnst.flt_value;
     int_value = v.u;
 
-    struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+    struct ir_op *int_mov =
+        insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
     int_mov->cnst =
         (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
 
@@ -332,12 +268,13 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     glb->var = arena_alloc(func->arena, sizeof(*glb->var));
 
     *glb->var = (struct ir_var){.ty = IR_VAR_TY_CONST_DATA,
-                                          .var_ty = op->var_ty,
+                                .var_ty = op->var_ty,
                                 .value = {.ty = IR_VAR_VALUE_TY_FLT,
                                           .var_ty = op->var_ty,
                                           .flt_value = op->cnst.flt_value}};
 
-    struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    struct ir_op *addr =
+        insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
 
     op->ty = IR_OP_TY_LOAD;
@@ -351,7 +288,8 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
 
 static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   struct ir_op *cond = op->br_cond.cond;
-  if (cond->ty != IR_OP_TY_BINARY_OP || !binary_op_is_comparison(cond->binary_op.ty)) {
+  if (cond->ty != IR_OP_TY_BINARY_OP ||
+      !binary_op_is_comparison(cond->binary_op.ty)) {
     // turn it into a `!= 0`
     struct ir_op *zero;
 
@@ -365,13 +303,10 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
       zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
       mk_integral_constant(func->unit, zero, cond->var_ty.primitive, 0);
     }
-    
+
     cond = insert_after_ir_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
     cond->binary_op = (struct ir_op_binary_op){
-      .ty = ty,
-      .lhs = op->br_cond.cond,
-      .rhs = zero
-    };
+        .ty = ty, .lhs = op->br_cond.cond, .rhs = zero};
 
     op->br_cond.cond = cond;
   }
@@ -379,7 +314,8 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   if (var_ty_is_fp(&cond->binary_op.lhs->var_ty)) {
     DEBUG_ASSERT(var_ty_is_fp(&cond->binary_op.rhs->var_ty), "mixed binop");
   } else {
-    DEBUG_ASSERT(var_ty_is_integral(&cond->binary_op.rhs->var_ty), "mixed binop");
+    DEBUG_ASSERT(var_ty_is_integral(&cond->binary_op.rhs->var_ty),
+                 "mixed binop");
     cond->flags |= IR_OP_FLAG_CONTAINED;
   }
 }
@@ -445,8 +381,8 @@ void rv32i_lower(struct ir_unit *unit) {
                 mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
                                      op->addr_offset.offset);
 
-                struct ir_op *offset = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP,
-                                           IR_VAR_TY_POINTER);
+                struct ir_op *offset = insert_before_ir_op(
+                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 offset->binary_op = (struct ir_op_binary_op){
                     .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base, .rhs = cnst};
 
@@ -475,7 +411,7 @@ void rv32i_lower(struct ir_unit *unit) {
               }
 
               op->ty = IR_OP_TY_MOV;
-              op->mov = (struct ir_op_mov) { .value = base };
+              op->mov = (struct ir_op_mov){.value = base};
             } break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
