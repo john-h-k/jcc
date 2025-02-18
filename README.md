@@ -76,7 +76,7 @@ RISC-V (specifically RV32I) is supported but only to emit raw instructions, not 
 * Code Generation
   * Converts the IR into a list of 1:1 machine code instructions
   * These are all target specific
-  * Currently codegen does too much - in the future I would like to move lots of its responsibilities (e.g ABI) into IR passes
+  * Currently codegen does too much - in the future I would like to move lots of its responsibilities (e.g prologue/epilogue) into IR passes
 * Emitting
   * Actually emits the instructions from code generation into memory
 * Object file building
