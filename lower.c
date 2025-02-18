@@ -4,6 +4,103 @@
 #include "log.h"
 #include "util.h"
 #include "vector.h"
+#include "bit_twiddle.h"
+
+enum load_bitfield {
+  LOAD_BITFIELD_MASK_IN,
+  LOAD_BITFIELD_MASK_OUT,
+};
+
+static struct ir_op *get_unshifted_bitfield(struct ir_func *func,
+                                            struct ir_op *op,
+                                            struct ir_bitfield bitfield,
+                                            enum load_bitfield load_bitfield) {
+  unsigned int mask_val;
+
+  switch (load_bitfield) {
+  case LOAD_BITFIELD_MASK_IN:
+    mask_val =
+        ~MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    break;
+  case LOAD_BITFIELD_MASK_OUT:
+    mask_val =
+        MASK_OUT(unsigned, bitfield.width + bitfield.offset, bitfield.offset);
+    break;
+  }
+
+  // printf("mask lo %zu = %u\n", offset, bitfield.width, MASK_HI(unsigned,
+  // bitfield.width + bitfield.offset, bitfield.offset)); printf("mask hi %zu =
+  // %u\n", bitfield.offset, bitfield.width, MASK_LO(unsigned, bitfield.width +
+  // bitfield.offset, bitfield.offset)); bug("mask (%zu, %zu) = %u",
+  // bitfield.offset, bitfield.width, mask_val);
+
+  struct ir_op *mask_cnst =
+      insert_after_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+  mask_cnst->cnst =
+      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = mask_val};
+
+  struct ir_op *mask =
+      insert_after_ir_op(func, mask_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+  mask->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_AND, .lhs = op, .rhs = mask_cnst};
+
+  return mask;
+}
+
+// TODO: signs and stuff are wrong
+void lower_bitfield_insert(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_bitfield_insert *insert = &op->bitfield_insert;
+  struct ir_bitfield bitfield = op->store_bitfield.bitfield;
+
+  struct ir_op *masked_out = get_unshifted_bitfield(
+      func, insert->target, bitfield, LOAD_BITFIELD_MASK_OUT);
+
+  struct ir_op *shifted_op;
+  if (bitfield.offset) {
+    struct ir_op *shift_cnst =
+        insert_after_ir_op(func, insert->target, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                           .int_value = bitfield.offset};
+    shifted_op =
+        insert_after_ir_op(func, shift_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+    shifted_op->binary_op =
+        (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_LSHIFT,
+                                 .lhs = insert->value,
+                                 .rhs = shift_cnst};
+  } else {
+    shifted_op = insert->value;
+  }
+
+  struct ir_op *mask_in =
+      replace_ir_op(func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+
+  mask_in->binary_op = (struct ir_op_binary_op){
+      .ty = IR_OP_BINARY_OP_TY_OR, .lhs = masked_out, .rhs = shifted_op};
+}
+
+void lower_bitfield_extract(struct ir_func *func, struct ir_op *op) {
+  struct ir_op_bitfield_extract *extract = &op->bitfield_extract;
+  struct ir_bitfield bitfield = op->load_bitfield.bitfield;
+
+  struct ir_op *masked_in = get_unshifted_bitfield(
+      func, extract->value, bitfield, LOAD_BITFIELD_MASK_IN);
+
+  if (bitfield.offset) {
+    struct ir_op *shift_cnst =
+        insert_after_ir_op(func, masked_in, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    shift_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                           .int_value = bitfield.offset};
+    op->ty = IR_OP_TY_BINARY_OP;
+    op->var_ty = IR_VAR_TY_I32;
+    op->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_URSHIFT, .lhs = masked_in, .rhs = shift_cnst};
+  } else {
+    // ugly
+    op->ty = IR_OP_TY_MOV;
+    op->var_ty = IR_VAR_TY_I32;
+    op->mov = (struct ir_op_mov){.value = masked_in};
+  }
+}
 
 static void propogate_switch_phis(UNUSED struct ir_func *func,
                                   struct ir_basicblock *bb_switch,

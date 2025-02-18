@@ -16,9 +16,9 @@
              (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define S_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32_S(imm12, 11, 5) << 25) | (U32(rs2) << 20) |                  \
-             (U32(rs1) << 15) | (U32(funct3) << 12) |                          \
-             (U32_S(imm12, 4, 0) << 8) | U32(opcode))
+  (uint32_t)((U32(((simm_t)(imm12) >> 5) & 0b1111111) << 25) |                 \
+             (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
+             (U32((imm12) & 0b11111) << 7) | U32(opcode))
 
 #define B_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
   (uint32_t)((U32_S(imm12, 12, 12) << 31) | (U32_S(imm12, 10, 5) << 25) |      \

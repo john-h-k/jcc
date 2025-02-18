@@ -61,6 +61,7 @@ enum rv32i_instr_ty {
   RV32I_INSTR_TY_FSQRT,
 
   RV32I_INSTR_TY_LUI,
+  RV32I_INSTR_TY_AUIPC,
 
   RV32I_INSTR_TY_SB,
   RV32I_INSTR_TY_SH,
@@ -153,7 +154,7 @@ struct rv32i_op_mov {
   struct rv32i_reg source;
 };
 
-struct rv32i_lui {
+struct rv32i_u {
   struct rv32i_reg dest;
 
   simm_t imm;
@@ -226,7 +227,7 @@ struct rv32i_instr {
     };
 
     union {
-      struct rv32i_lui lui;
+      struct rv32i_u u, lui, auipc;
     };
 
     union {

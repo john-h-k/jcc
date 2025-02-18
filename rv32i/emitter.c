@@ -80,8 +80,12 @@ void rv32i_emit_srai(struct rv32i_emitter *emitter, const struct rv32i_op_imm sr
   rv32i_emit_instr(emitter, SRAI(srai.imm, srai.source.idx, srai.dest.idx));
 }
 
-void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui) {
+void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_u lui) {
   rv32i_emit_instr(emitter, LUI(lui.imm, lui.dest.idx));
+}
+
+void rv32i_emit_auipc(struct rv32i_emitter *emitter, const struct rv32i_u auipc) {
+  rv32i_emit_instr(emitter, AUIPC(auipc.imm, auipc.dest.idx));
 }
 
 void rv32i_emit_jalr(struct rv32i_emitter *emitter,
@@ -93,16 +97,20 @@ void rv32i_emit_jalr(struct rv32i_emitter *emitter,
   signed long long cur_pos = rv32i_emitted_count(emitter);                     \
   signed long long target_pos = instr.target->first_instr->id;                 \
                                                                                \
-  simm_t offset = (target_pos - cur_pos) * 4;
+  offset = (target_pos - cur_pos) * 4;
 
 void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal) {
-  OFFSET(jal);
+  simm_t offset = 0;
+  if (jal.target) {
+    OFFSET(jal);
+  }
 
   rv32i_emit_instr(emitter, JAL(offset, jal.ret_addr.idx));
 }
 
 void rv32i_emit_beq(struct rv32i_emitter *emitter,
                     const struct rv32i_conditional_branch beq) {
+  simm_t offset;
   OFFSET(beq);
 
   rv32i_emit_instr(emitter, BEQ(offset, beq.rhs.idx, beq.lhs.idx));
@@ -110,6 +118,7 @@ void rv32i_emit_beq(struct rv32i_emitter *emitter,
 
 void rv32i_emit_bne(struct rv32i_emitter *emitter,
                     const struct rv32i_conditional_branch bne) {
+  simm_t offset;
   OFFSET(bne);
 
   rv32i_emit_instr(emitter, BNE(offset, bne.rhs.idx, bne.lhs.idx));
@@ -117,6 +126,7 @@ void rv32i_emit_bne(struct rv32i_emitter *emitter,
 
 void rv32i_emit_blt(struct rv32i_emitter *emitter,
                     const struct rv32i_conditional_branch blt) {
+  simm_t offset;
   OFFSET(blt);
 
   rv32i_emit_instr(emitter, BLT(offset, blt.rhs.idx, blt.lhs.idx));
@@ -124,6 +134,7 @@ void rv32i_emit_blt(struct rv32i_emitter *emitter,
 
 void rv32i_emit_bge(struct rv32i_emitter *emitter,
                     const struct rv32i_conditional_branch bge) {
+  simm_t offset;
   OFFSET(bge);
 
   rv32i_emit_instr(emitter, BGE(offset, bge.rhs.idx, bge.lhs.idx));
@@ -131,6 +142,7 @@ void rv32i_emit_bge(struct rv32i_emitter *emitter,
 
 void rv32i_emit_bltu(struct rv32i_emitter *emitter,
                      const struct rv32i_conditional_branch bltu) {
+  simm_t offset;
   OFFSET(bltu);
 
   rv32i_emit_instr(emitter, BLTU(offset, bltu.rhs.idx, bltu.lhs.idx));
@@ -138,6 +150,7 @@ void rv32i_emit_bltu(struct rv32i_emitter *emitter,
 
 void rv32i_emit_bgeu(struct rv32i_emitter *emitter,
                      const struct rv32i_conditional_branch bgeu) {
+  simm_t offset;
   OFFSET(bgeu);
 
   rv32i_emit_instr(emitter, BGEU(offset, bgeu.rhs.idx, bgeu.lhs.idx));
