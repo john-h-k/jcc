@@ -15,7 +15,9 @@ void rv32i_emit_copy_to(struct rv32i_emitter *emitter, void *dest);
 
 /* Nop */
 
-void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_lui lui);
+void rv32i_emit_lui(struct rv32i_emitter *emitter, const struct rv32i_u lui);
+void rv32i_emit_auipc(struct rv32i_emitter *emitter, const struct rv32i_u auipc);
+
 void rv32i_emit_addi(struct rv32i_emitter *emitter,
                      const struct rv32i_op_imm addi);
 void rv32i_emit_xori(struct rv32i_emitter *emitter,

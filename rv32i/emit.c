@@ -49,6 +49,9 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_LUI:
     rv32i_emit_lui(state->emitter, instr->rv32i->lui);
     break;
+  case RV32I_INSTR_TY_AUIPC:
+    rv32i_emit_auipc(state->emitter, instr->rv32i->auipc);
+    break;
   case RV32I_INSTR_TY_JALR:
     rv32i_emit_jalr(state->emitter, instr->rv32i->jalr);
     break;

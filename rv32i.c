@@ -16,7 +16,7 @@ const struct target RV32I_LINUX_TARGET = {
     {
         .gp_registers = {.num_volatile = 17,
                                               .num_nonvolatile = 10,
-                                              .num_reserved = 0},
+                                              .num_reserved = 4},
         .fp_registers = {.num_volatile = 19,
                                               .num_nonvolatile = 12,
                                               .num_reserved = 0},

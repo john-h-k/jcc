@@ -120,6 +120,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
       case RELOCATION_TY_LOCAL_SINGLE:
         *num_relocs += 1;
         break;
+      case RELOCATION_TY_CALL_PAIR:
       case RELOCATION_TY_LOCAL_PAIR:
       case RELOCATION_TY_UNDEF_PAIR:
         *num_relocs += 2;
@@ -143,8 +144,17 @@ static void write_relocations_elf(FILE *file,
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
       rela.r_addend = r->offset;
-      uint32_t type = (target == COMPILE_TARGET_LINUX_X86_64) ? R_X86_64_64
-                                                              : R_AARCH64_ABS64;
+      uint32_t type;
+      switch (target) {
+      case COMPILE_TARGET_LINUX_X86_64:
+        type = R_X86_64_64;
+        break;
+      case COMPILE_TARGET_LINUX_ARM64:
+        type = R_AARCH64_ABS64;
+        break;
+      default:
+        unreachable();
+      }
       rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
@@ -152,23 +162,40 @@ static void write_relocations_elf(FILE *file,
     case RELOCATION_TY_CALL: {
       const struct symbol *symbol = &args->entries[r->symbol_index].symbol;
 
-      Elf64_Rela rela;
-      memset(&rela, 0, sizeof(rela));
-      rela.r_offset = r->address;
-      // for some reason x64 needs a -4 addend on call relocs
-      rela.r_addend = (target == COMPILE_TARGET_LINUX_X86_64) ? -4 : 0;
+      switch (target) {
+      case COMPILE_TARGET_LINUX_X86_64:
+      case COMPILE_TARGET_LINUX_ARM64: {
+        Elf64_Rela rela;
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address;
+        // for some reason x64 needs a -4 addend on call relocs
+        rela.r_addend = (target == COMPILE_TARGET_LINUX_X86_64) ? -4 : 0;
 
-      uint32_t type;
-      if (symbol->visibility == SYMBOL_VISIBILITY_UNDEF) {
-        type = (target == COMPILE_TARGET_LINUX_X86_64) ? R_X86_64_PLT32
-                                                       : R_AARCH64_CALL26;
-      } else {
-        type = (target == COMPILE_TARGET_LINUX_X86_64) ? R_X86_64_PC32
-                                                       : R_AARCH64_CALL26;
+        uint32_t type;
+        if (symbol->visibility == SYMBOL_VISIBILITY_UNDEF) {
+          type = (target == COMPILE_TARGET_LINUX_X86_64) ? R_X86_64_PLT32
+                                                         : R_AARCH64_CALL26;
+        } else {
+          type = (target == COMPILE_TARGET_LINUX_X86_64) ? R_X86_64_PC32
+                                                         : R_AARCH64_CALL26;
+        }
+        rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
+        fwrite(&rela, sizeof(rela), 1, file);
+        break;
+      }
+      case COMPILE_TARGET_LINUX_RV32I: {
+        Elf32_Rela rela;
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address;
+        rela.r_addend = 0;
+        rela.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index], R_RISCV_JAL);
+        fwrite(&rela, sizeof(rela), 1, file);
+        break;
+      }
+      default:
+        unreachable();
       }
 
-      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
-      fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
     case RELOCATION_TY_LOCAL_SINGLE: {
@@ -178,6 +205,26 @@ static void write_relocations_elf(FILE *file,
       rela.r_addend = r->offset - 4;
       rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_PC32);
       fwrite(&rela, sizeof(rela), 1, file);
+      break;
+    }
+    case RELOCATION_TY_CALL_PAIR: {
+      if (target == COMPILE_TARGET_LINUX_RV32I) {
+        Elf32_Rela rela1, rela2;
+        memset(&rela1, 0, sizeof(rela1));
+        memset(&rela2, 0, sizeof(rela2));
+        rela1.r_offset = r->address;
+        rela1.r_addend = r->offset;
+        rela1.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_RISCV_HI20);
+        rela2.r_offset = r->address + 4;
+        rela2.r_addend = r->offset;
+        rela2.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_RISCV_JAL);
+        fwrite(&rela1, sizeof(rela1), 1, file);
+        fwrite(&rela2, sizeof(rela2), 1, file);
+      } else {
+        BUG("two-part call reloc not supported here");
+      }
       break;
     }
     case RELOCATION_TY_LOCAL_PAIR: {
@@ -193,6 +240,20 @@ static void write_relocations_elf(FILE *file,
         rela2.r_addend = r->offset;
         rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
                                     R_AARCH64_ADD_ABS_LO12_NC);
+        fwrite(&rela1, sizeof(rela1), 1, file);
+        fwrite(&rela2, sizeof(rela2), 1, file);
+      } else if (target == COMPILE_TARGET_LINUX_RV32I) {
+        Elf32_Rela rela1, rela2;
+        memset(&rela1, 0, sizeof(rela1));
+        memset(&rela2, 0, sizeof(rela2));
+        rela1.r_offset = r->address;
+        rela1.r_addend = r->offset;
+        rela1.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_RISCV_PCREL_HI20);
+        rela2.r_offset = r->address + 4;
+        rela2.r_addend = r->offset;
+        rela2.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
+                                    R_RISCV_PCREL_LO12_I);
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
       } else {
@@ -428,9 +489,8 @@ static void write_elf_object(const struct build_object_args *args) {
 
       switch (args->compile_args->target) {
       case COMPILE_TARGET_LINUX_RV32I: {
-        Elf32_Sym sym = {
-          .st_name = st_name,
-          .st_shndx = st_shndx,
+        Elf32_Sym sym = {.st_name = st_name,
+                         .st_shndx = st_shndx,
                          .st_value = st_value,
                          .st_size = st_size,
                          .st_info =
@@ -442,9 +502,8 @@ static void write_elf_object(const struct build_object_args *args) {
       }
       case COMPILE_TARGET_LINUX_ARM64:
       case COMPILE_TARGET_LINUX_X86_64: {
-        Elf64_Sym sym = {
-          .st_name = st_name,
-          .st_shndx = st_shndx,
+        Elf64_Sym sym = {.st_name = st_name,
+                         .st_shndx = st_shndx,
                          .st_value = st_value,
                          .st_size = st_size,
                          .st_info =
@@ -486,7 +545,7 @@ static void write_elf_object(const struct build_object_args *args) {
   fseek(file, shstr_off, SEEK_SET);
   fwrite(shstrtab, 1, shstr_size, file);
 
-#define MK_SHDR(sz)                                                              \
+#define MK_SHDR(sz)                                                            \
   /* entry 0 is null section */                                                \
   shdr[1].sh_name = 1;                                                         \
   shdr[1].sh_type = SHT_PROGBITS;                                              \
@@ -512,38 +571,39 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[4].sh_name = 21;                                                        \
   shdr[4].sh_type = SHT_RELA;                                                  \
   shdr[4].sh_offset = rela_text_off;                                           \
-  shdr[4].sh_size = rinfo.num_text_reloc_instrs * sizeof(Elf ## sz ## _Rela);          \
+  shdr[4].sh_size = rinfo.num_text_reloc_instrs * sizeof(Elf##sz##_Rela);      \
   shdr[4].sh_link = 7;                                                         \
   shdr[4].sh_info = 1;                                                         \
   shdr[4].sh_addralign = 8;                                                    \
-  shdr[4].sh_entsize = sizeof(Elf ## sz ## _Rela);                                     \
+  shdr[4].sh_entsize = sizeof(Elf##sz##_Rela);                                 \
   shdr[4].sh_flags = SHF_INFO_LINK;                                            \
                                                                                \
   shdr[5].sh_name = 32;                                                        \
   shdr[5].sh_type = SHT_RELA;                                                  \
   shdr[5].sh_offset = rela_const_off;                                          \
-  shdr[5].sh_size = rinfo.num_const_data_reloc_instrs * sizeof(Elf ## sz ## _Rela);    \
+  shdr[5].sh_size =                                                            \
+      rinfo.num_const_data_reloc_instrs * sizeof(Elf##sz##_Rela);              \
   shdr[5].sh_link = 7;                                                         \
   shdr[5].sh_info = 2;                                                         \
   shdr[5].sh_addralign = 8;                                                    \
-  shdr[5].sh_entsize = sizeof(Elf ## sz ## _Rela);                                     \
+  shdr[5].sh_entsize = sizeof(Elf##sz##_Rela);                                 \
                                                                                \
   shdr[6].sh_name = 45;                                                        \
   shdr[6].sh_type = SHT_RELA;                                                  \
   shdr[6].sh_offset = rela_data_off;                                           \
-  shdr[6].sh_size = rinfo.num_data_reloc_instrs * sizeof(Elf ## sz ## _Rela);          \
+  shdr[6].sh_size = rinfo.num_data_reloc_instrs * sizeof(Elf##sz##_Rela);      \
   shdr[6].sh_link = 7;                                                         \
   shdr[6].sh_info = 3;                                                         \
   shdr[6].sh_addralign = 8;                                                    \
-  shdr[6].sh_entsize = sizeof(Elf ## sz ## _Rela);                                     \
+  shdr[6].sh_entsize = sizeof(Elf##sz##_Rela);                                 \
                                                                                \
   shdr[7].sh_name = 56;                                                        \
   shdr[7].sh_type = SHT_SYMTAB;                                                \
   shdr[7].sh_offset = symtab_off;                                              \
-  shdr[7].sh_size = (args->num_entries + 1) * sizeof(Elf ## sz ## _Sym);               \
+  shdr[7].sh_size = (args->num_entries + 1) * sizeof(Elf##sz##_Sym);           \
   shdr[7].sh_link = 8;                                                         \
   shdr[7].sh_addralign = 8;                                                    \
-  shdr[7].sh_entsize = sizeof(Elf ## sz ## _Sym);                                      \
+  shdr[7].sh_entsize = sizeof(Elf##sz##_Sym);                                  \
                                                                                \
   size_t local_count = 1; /* initial null symbol */                            \
   for (size_t i = 0; i < args->num_entries; i++) {                             \
