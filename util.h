@@ -156,7 +156,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NORETURN noreturn
 #endif
 
-#if __GNUC__ && STDC_32
+#if __GNUC__ && STDC_23
 #define TRYFORCEINLINE [[gnu::always_inline]] inline
 #elif __GNUC__
 #define TRYFORCEINLINE __attribute__((always_inline)) inline
