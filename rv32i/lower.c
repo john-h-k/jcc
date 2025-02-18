@@ -317,30 +317,36 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     v.f = (float)op->cnst.flt_value;
     int_value = v.u;
 
-    break;
+    struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+    int_mov->cnst =
+        (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
+
+    op->ty = IR_OP_TY_MOV;
+    op->mov = (struct ir_op_mov){.value = int_mov};
+    return;
   }
   case IR_VAR_PRIMITIVE_TY_F64: {
-    int_ty = IR_VAR_TY_I64;
+    struct ir_glb *glb = add_global(func->unit, IR_GLB_TY_DATA, &op->var_ty,
+                                    IR_GLB_DEF_TY_DEFINED, NULL);
 
-    union {
-      double d;
-      unsigned long long ull;
-    } v;
-    v.d = (double)op->cnst.flt_value;
-    int_value = v.ull;
+    glb->var = arena_alloc(func->arena, sizeof(*glb->var));
 
+    *glb->var = (struct ir_var){.ty = IR_VAR_TY_CONST_DATA,
+                                          .var_ty = op->var_ty,
+                                .value = {.ty = IR_VAR_VALUE_TY_FLT,
+                                          .var_ty = op->var_ty,
+                                          .flt_value = op->cnst.flt_value}};
+
+    struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
+
+    op->ty = IR_OP_TY_LOAD;
+    op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
     break;
   }
   default:
     unreachable();
   }
-
-  struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
-  int_mov->cnst =
-      (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
-
-  op->ty = IR_OP_TY_MOV;
-  op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
 static void lower_br_cond(struct ir_func *func, struct ir_op *op) {

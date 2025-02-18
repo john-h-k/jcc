@@ -768,7 +768,10 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     TODO("sizeof/alignof build (will need different node as they take types "
          "not exprs)");
   case TD_UNARY_OP_TY_CAST:
-    if (var_ty_needs_cast_op(irb, &var_ty, &ir_expr->var_ty)) {
+    if (expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
+      // do nothing, just let it be an unused node
+      return ir_expr;
+    } else if (var_ty_needs_cast_op(irb, &var_ty, &ir_expr->var_ty)) {
       return insert_ir_for_cast(
           irb, *stmt, ir_expr, &var_ty,
           cast_ty_for_td_var_ty(irb, &unary_op->expr->var_ty, &expr->var_ty));
@@ -973,6 +976,7 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
                                     IR_GLB_DEF_TY_DEFINED, NULL);
     glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
     *glb->var = (struct ir_var){.ty = IR_VAR_TY_STRING_LITERAL,
+                                          .var_ty = var_ty,
                                 .value = {.ty = IR_VAR_VALUE_TY_STR,
                                           .var_ty = var_ty,
                                           .str_value = cnst->str_value}};

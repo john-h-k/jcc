@@ -5,7 +5,7 @@
 #define RV32I_INSTR_SIZE (2)
 
 #define U32(v) ((uint32_t)(v))
-#define U32_S(v, hi, lo) ((v & ((1ul << (hi + 1)) - 1ul)) >> lo)
+#define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \
   (uint32_t)((U32(funct7) << 25) | (U32(rs2) << 20) | (U32(rs1) << 15) |       \
@@ -21,9 +21,9 @@
              (U32((imm12) & 0b11111) << 7) | U32(opcode))
 
 #define B_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32_S(imm12, 12, 12) << 31) | (U32_S(imm12, 10, 5) << 25) |      \
+  (uint32_t)((U32_S(imm12, 11, 11) << 31) | (U32_S(imm12, 9, 4) << 25) |      \
              (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
-             (U32_S(imm12, 4, 1) << 8) | (U32_S(imm12, 11, 11)) | U32(opcode))
+             (U32_S(imm12, 3, 0) << 8) | (U32_S(imm12, 10, 10) << 7) | U32(opcode))
 
 #define U_TYPE(imm20, rd, opcode)                                              \
   (uint32_t)((U32(imm20) << 12) | (U32(rd) << 7) | U32(opcode))
@@ -107,10 +107,12 @@
 #define FUNCT3_LW U32(0b010)
 #define FUNCT3_LBU U32(0b100)
 #define FUNCT3_LHU U32(0b101)
+#define FUNCT3_LD U32(0b011)
 
 #define FUNCT3_SB U32(0b000)
 #define FUNCT3_SH U32(0b001)
 #define FUNCT3_SW U32(0b010)
+#define FUNCT3_SD U32(0b011)
 
 #define FUNCT3_FMV_WX U32(0b000)
 #define FUNCT3_FMV_XW U32(0b000)
@@ -260,6 +262,7 @@
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)
 #define SW(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SW, OPC_STORE)
 #define FSW(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SW, OPC_STORE_FP)
+#define FSD(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SD, OPC_STORE_FP)
 
 #define LB(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LB, rd, OPC_LOAD)
 #define LBU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LBU, rd, OPC_LOAD)
@@ -267,5 +270,7 @@
 #define LHU(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LHU, rd, OPC_LOAD)
 #define LW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD)
 #define FLW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD_FP)
+#define FLD(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LD, rd, OPC_LOAD_FP)
+
 
 #endif

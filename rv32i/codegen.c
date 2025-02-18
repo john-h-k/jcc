@@ -3,6 +3,7 @@
 #include "../alloc.h"
 #include "../bit_twiddle.h"
 #include "../bitset.h"
+#include "../vector.h"
 #include "../log.h"
 #include "../rv32i.h"
 
@@ -879,6 +880,9 @@ static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
     return RV32I_INSTR_TY_FLW;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64) {
+    return RV32I_INSTR_TY_FLD;
   } else {
     BUG("unknown load ty");
   }
@@ -897,6 +901,9 @@ static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F32) {
     return RV32I_INSTR_TY_FSW;
+  } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+             op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_F64) {
+    return RV32I_INSTR_TY_FSD;
   } else {
     BUG("unknown store ty");
   }
@@ -1377,6 +1384,137 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
+
+static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
+                                    size_t offset, struct ir_var_value *value,
+                                    char *data) {
+  if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
+    return;
+  }
+
+  switch (value->var_ty.ty) {
+  case IR_VAR_TY_TY_NONE:
+  case IR_VAR_TY_TY_VARIADIC:
+    break;
+  case IR_VAR_TY_TY_PRIMITIVE: {
+    switch (value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I8:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      memcpy(data, &value->int_value, 1);
+      break;
+    case IR_VAR_PRIMITIVE_TY_F16:
+    case IR_VAR_PRIMITIVE_TY_I16:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, 2);
+      break;
+    case IR_VAR_PRIMITIVE_TY_I32:
+    case IR_VAR_PRIMITIVE_TY_F32:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, 4);
+      break;
+    case IR_VAR_PRIMITIVE_TY_I64:
+    case IR_VAR_PRIMITIVE_TY_F64:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
+                       value->ty == IR_VAR_VALUE_TY_FLT,
+                   "expected int/flt");
+      memcpy(data, &value->int_value, sizeof(unsigned long));
+      break;
+    }
+    break;
+  }
+
+  case IR_VAR_TY_TY_FUNC:
+    BUG("func can not have data as a global var");
+
+    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
+    // target-ptr-size
+
+  case IR_VAR_TY_TY_POINTER:
+  case IR_VAR_TY_TY_ARRAY:
+    switch (value->ty) {
+    case IR_VAR_VALUE_TY_ZERO:
+    case IR_VAR_VALUE_TY_FLT:
+      BUG("doesn't make sense");
+    case IR_VAR_VALUE_TY_ADDR: {
+      struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
+                                 .size = 3,
+                                 .address = offset,
+                                 .offset = value->addr.offset,
+                                 .symbol_index = value->addr.glb->id};
+
+      vector_push_back(relocs, &reloc);
+
+      memcpy(data, &value->addr.offset, sizeof(void *));
+      break;
+    }
+    case IR_VAR_VALUE_TY_INT:
+      memcpy(data, &value->int_value, sizeof(void *));
+      break;
+    case IR_VAR_VALUE_TY_STR:
+      // FIXME: !!!! doesn't work with string literals containing null char
+      strcpy(data, value->str_value);
+      break;
+    case IR_VAR_VALUE_TY_VALUE_LIST:
+      for (size_t i = 0; i < value->value_list.num_values; i++) {
+        size_t value_offset = value->value_list.offsets[i];
+        codegen_write_var_value(iru, relocs, offset + value_offset,
+                                &value->value_list.values[i],
+                                &data[value_offset]);
+      }
+      break;
+    }
+    break;
+
+  case IR_VAR_TY_TY_STRUCT:
+  case IR_VAR_TY_TY_UNION:
+    DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
+                 "expected value list");
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      size_t field_offset = value->value_list.offsets[i];
+      codegen_write_var_value(iru, relocs, offset + field_offset,
+                              &value->value_list.values[i],
+                              &data[field_offset]);
+    }
+  }
+}
+static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
+                                             const char *name,
+                                             struct ir_var *var) {
+  switch (var->ty) {
+  case IR_VAR_TY_STRING_LITERAL: {
+    BUG("str literal should have been lowered seperately");
+  }
+  case IR_VAR_TY_CONST_DATA:
+  case IR_VAR_TY_DATA: {
+    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
+
+    // TODO: this leak
+    struct vector *relocs = vector_create(sizeof(struct relocation));
+
+    size_t len = info.size;
+
+    char *data = arena_alloc(ir->arena, len);
+    memset(data, 0, len);
+
+    codegen_write_var_value(ir, relocs, 0, &var->value, data);
+
+    // TODO: handle const data
+    return (struct codegen_entry){
+        .ty = CODEGEN_ENTRY_TY_DATA,
+        .glb_id = id,
+        .alignment = info.alignment,
+        .name = name,
+        .data = (struct codegen_data){.data = data,
+                                      .len_data = len,
+                                      .relocs = vector_head(relocs),
+                                      .num_relocs = vector_length(relocs)}};
+  }
+  }
+}
 struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
   *unit = (struct codegen_unit){
@@ -1420,23 +1558,9 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
                                      .str = glb->var->value.str_value};
           break;
         case IR_VAR_TY_CONST_DATA:
-          TODO("rv32i cnst data");
-          // unit->entries[i] =
-          //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_CONST_DATA,
-          //                            .glb_id = glb->id,
-          //                            .name = name,
-          //                            .data = codegen_var_data(ir,
-          //                            glb->var)};
-          // break;
         case IR_VAR_TY_DATA:
-          TODO("rv32i data");
-          // unit->entries[i] =
-          //     (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DATA,
-          //                            .glb_id = glb->id,
-          //                            .name = name,
-          //                            .data = codegen_var_data(ir,
-          //                            glb->var)};
-          // break;
+          unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
+          break;
         }
         break;
       }
@@ -1634,19 +1758,19 @@ static void debug_print_jal(FILE *file, const struct rv32i_jal *jal) {
 
 static void debug_print_load(FILE *file, const struct rv32i_load *load) {
   if (load->imm) {
-    codegen_fprintf(file, "%reg, %imm(%reg)", load->dest, load->imm,
+    codegen_fprintf(file, " %reg, %imm(%reg)", load->dest, load->imm,
                     load->addr);
   } else {
-    codegen_fprintf(file, "%reg, %reg", load->dest, load->addr);
+    codegen_fprintf(file, " %reg, %reg", load->dest, load->addr);
   }
 }
 
 static void debug_print_store(FILE *file, const struct rv32i_store *store) {
   if (store->imm) {
-    codegen_fprintf(file, "%reg, %imm(%reg)", store->source, store->imm,
+    codegen_fprintf(file, " %reg, %imm(%reg)", store->source, store->imm,
                     store->addr);
   } else {
-    codegen_fprintf(file, "%reg, %reg", store->source, store->addr);
+    codegen_fprintf(file, " %reg, %reg", store->source, store->addr);
   }
 }
 
@@ -1797,6 +1921,18 @@ static void debug_print_instr(FILE *file,
     struct rv32i_load *flw = &instr->rv32i->flw;
     fprintf(file, "flw");
     debug_print_load(file, flw);
+    break;
+  }
+  case RV32I_INSTR_TY_FSD: {
+    struct rv32i_store *fsd = &instr->rv32i->fsd;
+    fprintf(file, "fsd");
+    debug_print_store(file, fsd);
+    break;
+  }
+  case RV32I_INSTR_TY_FLD: {
+    struct rv32i_load *fld = &instr->rv32i->fld;
+    fprintf(file, "fld");
+    debug_print_load(file, fld);
     break;
   }
   case RV32I_INSTR_TY_JAL: {

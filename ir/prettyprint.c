@@ -922,6 +922,8 @@ static void debug_print_ir_var(FILE *file, struct ir_unit *iru,
     break;
   }
 
+  DEBUG_ASSERT(var->var_ty.ty != IR_VAR_TY_TY_NONE, "GLB with no type");
+
   debug_print_var_ty_string(file, iru, &var->var_ty);
   fprintf(file, " = ");
   debug_print_ir_var_value(file, &var->value, true);
