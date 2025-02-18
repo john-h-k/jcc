@@ -139,9 +139,11 @@
 #define FUNCT7_FSUB U32(0b0000100)
 #define FUNCT7_FMUL U32(0b0001000)
 #define FUNCT7_FDIV U32(0b0001100)
-#define FUNCT7_FSGNJ U32(0b0010000)
+#define FUNCT7_FSGNJ_S U32(0b0010000)
 #define FUNCT7_FMINMAX U32(0b0010100)
 #define FUNCT7_FSQRT U32(0b0101101)
+
+#define FUNCT7_FSGNJ_D U32(0b0010001)
 
 #define FUNCT7_FCMP U32(0b0000000)
 
@@ -252,11 +254,18 @@
   R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
 
 #define FSGNJ_S(rs2, rs1, rd)                                                  \
-  R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)
 #define FSGNJN_S(rs2, rs1, rd)                                                 \
-  R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJN, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJN, rd, OPC_OP_FP)
 #define FSGNJX_S(rs2, rs1, rd)                                                 \
-  R_TYPE(FUNCT7_FSGNJ, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
+
+#define FSGNJ_D(rs2, rs1, rd)                                                  \
+  R_TYPE(FUNCT7_FSGNJ_D, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)
+#define FSGNJN_D(rs2, rs1, rd)                                                 \
+  R_TYPE(FUNCT7_FSGNJ_D, rs2, rs1, FUNCT3_FSGNJN, rd, OPC_OP_FP)
+#define FSGNJX_D(rs2, rs1, rd)                                                 \
+  R_TYPE(FUNCT7_FSGNJ_D, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
 
 #define SB(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SB, OPC_STORE)
 #define SH(imm, rs2, rs1) S_TYPE(imm, rs2, rs1, FUNCT3_SH, OPC_STORE)

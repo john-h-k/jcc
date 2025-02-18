@@ -777,6 +777,7 @@ struct ir_param_reg {
   // e.g `struct { float[3] }` would have size 4, but `struct { char[16] } would have size 8`
 
   struct ir_reg start_reg;
+  size_t num_reg;
   size_t size;
 };
 

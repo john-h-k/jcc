@@ -583,6 +583,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
+                  .num_reg = num_hfa_members,
                   .size = hfa_member_size},
       };
     } else if (info.size > 16) {
@@ -591,7 +592,9 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_POINTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
+                  .num_reg = 1,
+          .size = 8},
       };
 
       vector_push_front(params, &IR_VAR_TY_POINTER);
@@ -599,7 +602,9 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
+                  .num_reg = (info.size + 7) / 8,
+           .size = 8},
       };
     }
   }
@@ -659,6 +664,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                  .num_reg = 1,
                     .size = info.size},
         };
         vector_push_back(param_infos, &param_info);
@@ -679,6 +685,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
               .ty = IR_PARAM_INFO_TY_REGISTER,
               .var_ty = var_ty,
               .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                  .num_reg = num_hfa_members,
                       .size = hfa_member_size},
           };
           vector_push_back(param_infos, &param_info);
@@ -706,6 +713,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .num_reg = 1,
                     .size = info.size}};
         vector_push_back(param_infos, &param_info);
 
@@ -728,6 +736,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .num_reg = 2,
                     .size = 8}};
         vector_push_back(param_infos, &param_info);
 
@@ -747,6 +756,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
+                  .num_reg = dw_size,
                     .size = 8}};
         vector_push_back(param_infos, &param_info);
 
