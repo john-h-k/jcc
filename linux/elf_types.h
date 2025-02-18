@@ -213,6 +213,8 @@ typedef struct elf64_shdr {
 
 /* riscv relocs */
 
+#define R_RISCV_32 1
+
 #define R_RISCV_BRANCH 16
 #define R_RISCV_JAL 17
 #define R_RISCV_CALL 18

@@ -139,8 +139,8 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .alignment = 0,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol =
               (struct symbol){.ty = SYMBOL_TY_CONST_DATA,
                               .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
@@ -152,8 +152,8 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .alignment = 0,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol =
               (struct symbol){.ty = SYMBOL_TY_DATA,
                               .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
@@ -165,8 +165,8 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .alignment = 0,
           .data = NULL,
           .len_data = 0,
-          .num_relocations = 0,
-          .relocations = NULL,
+          .num_relocations = entry->data.num_relocs,
+          .relocations = entry->data.relocs,
           .symbol = (struct symbol){.ty = SYMBOL_TY_DECL,
                                     .visibility = SYMBOL_VISIBILITY_UNDEF,
                                     .name = entry->name}};

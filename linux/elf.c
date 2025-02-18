@@ -110,7 +110,6 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 
     for (size_t j = 0; j < entry->num_relocations; j++) {
       struct relocation reloc = entry->relocations[j];
-
       reloc.address += entry_offset;
 
       vector_push_back(relocs, &reloc);
@@ -126,10 +125,6 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
         *num_relocs += 2;
       }
     }
-
-    if (target == COMPILE_TARGET_LINUX_RV32I) {
-      *num_relocs *= 2;
-    }
   }
 
   return info;
@@ -144,23 +139,45 @@ static void write_relocations_elf(FILE *file,
     const struct relocation *r = vector_get(relocs, i);
     switch (r->ty) {
     case RELOCATION_TY_POINTER: {
-      Elf64_Rela rela;
-      memset(&rela, 0, sizeof(rela));
-      rela.r_offset = r->address;
-      rela.r_addend = r->offset;
       uint32_t type;
       switch (target) {
       case COMPILE_TARGET_LINUX_X86_64:
         type = R_X86_64_64;
-        break;
+        goto simple_reloc;
       case COMPILE_TARGET_LINUX_ARM64:
         type = R_AARCH64_ABS64;
+        goto simple_reloc;
+
+      simple_reloc: {
+
+        Elf64_Rela rela;
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address;
+        rela.r_addend = r->offset;
+        rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
+        fwrite(&rela, sizeof(rela), 1, file);
         break;
+      }
+      case COMPILE_TARGET_LINUX_RV32I: {
+        // FIXME: allow linker relaxation by doing branches as relocations
+
+        Elf32_Rela rela;
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address;
+        rela.r_addend = r->offset;
+        rela.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index], R_RISCV_32);
+        fwrite(&rela, sizeof(rela), 1, file);
+
+        // memset(&rela, 0, sizeof(rela));
+        // rela.r_offset = r->address;
+        // rela.r_addend = r->offset;
+        // rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
+        // fwrite(&rela, sizeof(rela), 1, file);
+        break;
+      }
       default:
         unreachable();
       }
-      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], type);
-      fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
     case RELOCATION_TY_CALL: {
@@ -192,15 +209,17 @@ static void write_relocations_elf(FILE *file,
         memset(&rela, 0, sizeof(rela));
         rela.r_offset = r->address;
         rela.r_addend = 0;
-        rela.r_info =
-            ELF32_R_INFO(sym_id_to_idx[r->symbol_index], symbol->visibility == SYMBOL_VISIBILITY_UNDEF ? R_RISCV_CALL : R_RISCV_JAL);
+        rela.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
+                                   symbol->visibility == SYMBOL_VISIBILITY_UNDEF
+                                       ? R_RISCV_CALL
+                                       : R_RISCV_JAL);
         fwrite(&rela, sizeof(rela), 1, file);
 
         memset(&rela, 0, sizeof(rela));
         rela.r_offset = r->address;
         rela.r_addend = 0;
         rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
-        fwrite(&rela, sizeof(rela), 1, file);
+        // fwrite(&rela, sizeof(rela), 1, file);
         break;
       }
       default:
@@ -252,14 +271,14 @@ static void write_relocations_elf(FILE *file,
         rela.r_addend = 0;
         rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
         fwrite(&rela1, sizeof(rela1), 1, file);
-        fwrite(&rela, sizeof(rela), 1, file);
+        // fwrite(&rela, sizeof(rela), 1, file);
 
         memset(&rela, 0, sizeof(rela));
         rela.r_offset = r->address + 4;
         rela.r_addend = 0;
         rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
         fwrite(&rela2, sizeof(rela2), 1, file);
-        fwrite(&rela, sizeof(rela), 1, file);
+        // fwrite(&rela, sizeof(rela), 1, file);
       } else {
         BUG("two-part reloc not supported for x86_64 in elf");
       }
@@ -324,8 +343,8 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   /* build relocation info */
-  struct reloc_info rinfo = build_reloc_info(args, entry_offsets,
-                        args->compile_args->target);
+  struct reloc_info rinfo =
+      build_reloc_info(args, entry_offsets, args->compile_args->target);
 
   /* assign file offsets to sections in order:
      elf header | .text | .cstring | .const | .data |
