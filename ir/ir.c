@@ -5,6 +5,7 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
+#include "prettyprint.h"
 
 enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {

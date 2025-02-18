@@ -129,6 +129,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       variadic = true;
     }
 
+    enum ir_param_info_ty ty = IR_PARAM_INFO_TY_REGISTER;
+
     if (var_ty->ty == IR_VAR_TY_TY_ARRAY) {
       var_ty = &IR_VAR_TY_POINTER;
     }
@@ -138,6 +140,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     if (info.size > 8) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
+      ty = IR_PARAM_INFO_TY_POINTER;
       info = var_ty_info(func->unit, var_ty);
     }
 
@@ -145,7 +148,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
-          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .ty = ty,
           .var_ty = var_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
                   .num_reg = 1,
@@ -159,7 +162,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
-          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .ty = ty,
           .var_ty = var_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
                   .num_reg = 1,
@@ -184,7 +187,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       }
 
       struct ir_param_info param_info = {
-          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .ty = ty,
           .var_ty = var_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
                   .num_reg = dw_size,
