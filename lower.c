@@ -6,6 +6,78 @@
 #include "util.h"
 #include "vector.h"
 
+// this is carefully chosen so that all types passed on the stack will generate
+// inline code because else `lower_call` needs to deal with this function
+// potentially generating calls _itself_ biggest thing passed on stack: 4
+// element HVA of 16 byte vectors, so 64 but we do 128 anyway
+// #define MEMMOVE_THRESHOLD 128
+// disabled as we haven't implemented backend
+#define MEMMOVE_THRESHOLD 0
+
+void lower_store(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *source = op->store.value;
+
+  const struct ir_var_ty *var_ty = &source->var_ty;
+
+  if (var_ty_is_integral(var_ty) || var_ty_is_fp(var_ty)) {
+    return;
+  }
+
+  struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
+
+  if (source->ty != IR_OP_TY_LOAD) {
+    BUG("non-primitive store occured out of a non-load op?");
+  }
+
+  struct ir_op *source_addr = build_addr(func, source);
+  struct ir_op *dest_addr = build_addr(func, op);
+
+  if (info.size <= MEMMOVE_THRESHOLD) {
+    op->ty = IR_OP_TY_MEM_COPY;
+    op->mem_copy = (struct ir_op_mem_copy){
+        .dest = dest_addr, .source = source_addr, .length = info.size};
+    return;
+  }
+
+  struct ir_op *size =
+      insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+  mk_pointer_constant(func->unit, size, info.size);
+
+  struct ir_glb *memmove =
+      add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
+
+  struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
+  struct ir_op *memmove_addr =
+      insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
+  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memmove_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = memmove,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args =
+      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = dest_addr;
+  args[1] = source_addr;
+  args[2] = size;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+  op->var_ty = *memmove->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memmove_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = memmove->var_ty,
+  };
+
+  lower_call(func, op);
+}
+
+
+
 enum load_bitfield {
   LOAD_BITFIELD_MASK_IN,
   LOAD_BITFIELD_MASK_OUT,
@@ -460,8 +532,37 @@ static void lower_params(struct ir_func *func) {
         break;
       case IR_PARAM_INFO_TY_STACK:
         break;
-      case IR_PARAM_INFO_TY_POINTER:
+      case IR_PARAM_INFO_TY_POINTER: {
+        DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR && param_op->addr.ty == IR_OP_ADDR_TY_LCL, "expected addr");
+
+        struct ir_op *param = insert_before_ir_op(func, param_op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
+        param->mov = (struct ir_op_mov){.value = NULL};
+        param->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
+        param->reg =
+            (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                            .idx = param_info.reg.start_reg.idx};
+        
+
+        struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+        struct ir_lcl *lcl = param_op->addr.lcl;
+
+        struct ir_op *op;
+        while (ir_func_iter_next(&iter, &op)) {
+          if (op->ty == IR_OP_TY_ADDR && op->addr.ty == IR_OP_ADDR_TY_LCL && op->addr.lcl == lcl) {
+            op = replace_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
+            op->flags &= ~IR_OP_FLAG_PARAM;
+            op->mov = (struct ir_op_mov){.value = param};
+          } else if (op->ty == IR_OP_TY_LOAD && op->load.ty == IR_OP_LOAD_TY_LCL && op->load.lcl == lcl) {
+            op->load.ty = IR_OP_LOAD_TY_ADDR;
+            op->load.addr = param;
+          } else if (op->ty == IR_OP_TY_STORE && op->store.ty == IR_OP_STORE_TY_LCL && op->store.lcl == lcl) {
+            op->store.ty = IR_OP_STORE_TY_ADDR;
+            op->store.addr = param;
+          }
+        }
+
         break;
+      }
       }
 
       // there is exactly one op per param
@@ -687,7 +788,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       struct ir_op *addr = build_addr(func, arg);
 
       struct ir_op *mov =
-          insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
+          insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
       mov->mov = (struct ir_op_mov){.value = addr};
       mov->reg = param_info.reg.start_reg;
       mov->flags |= IR_OP_FLAG_FIXED_REG;
@@ -853,6 +954,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
               if (op->store.ty == IR_OP_STORE_TY_GLB) {
                 lower_store_glb(func, op);
               }
+              lower_store(func, op);
               break;
             case IR_OP_TY_LOAD:
               if (op->load.ty == IR_OP_LOAD_TY_GLB) {

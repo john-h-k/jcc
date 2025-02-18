@@ -150,10 +150,10 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   } else if (!rv32i_reg_ty_is_gp(source.ty) && !rv32i_reg_ty_is_gp(dest.ty)) {
     switch (op->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_F32:
-      *instr->rv32i = FP32_MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      *instr->rv32i = FP32_MOV_ALIAS(dest, source);
       break;
     case IR_VAR_PRIMITIVE_TY_F64:
-      *instr->rv32i = FP64_MOV_ALIAS(return_reg_for_ty(source.ty), source);
+      *instr->rv32i = FP64_MOV_ALIAS(dest, source);
       break;
     default:
       BUG("unsupported");

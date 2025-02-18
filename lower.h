@@ -11,6 +11,6 @@ void lower(struct ir_unit *unit, const struct target *target);
 void lower_call(struct ir_func *func, struct ir_op *op);
 void lower_bitfield_insert(struct ir_func *func, struct ir_op *op);
 void lower_bitfield_extract(struct ir_func *func, struct ir_op *op);
-
+void lower_store(struct ir_func *func, struct ir_op *op);
 
 #endif

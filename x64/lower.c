@@ -441,61 +441,6 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   op->reg = NO_REG;
 }
 
-static void lower_store(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *source = op->store.value;
-
-  const struct ir_var_ty *var_ty = &source->var_ty;
-
-  if (var_ty_is_integral(var_ty) || var_ty_is_fp(var_ty)) {
-    return;
-  }
-
-  struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
-
-  if (source->ty != IR_OP_TY_LOAD) {
-    BUG("non-primitive store occured out of a non-load op?");
-  }
-
-  struct ir_op *source_addr = build_addr(func, source);
-  struct ir_op *dest_addr = build_addr(func, op);
-
-  struct ir_op *size =
-      insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
-  mk_pointer_constant(func->unit, size, info.size);
-
-  struct ir_glb *memmove =
-      add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
-
-  struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
-  struct ir_op *memmove_addr =
-      insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
-  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memmove_addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memmove,
-  };
-
-  size_t num_args = 3;
-  struct ir_op **args =
-      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
-
-  args[0] = dest_addr;
-  args[1] = source_addr;
-  args[2] = size;
-
-  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-  op->ty = IR_OP_TY_CALL;
-  op->var_ty = *memmove->var_ty.func.ret_ty;
-  op->call = (struct ir_op_call){
-      .target = memmove_addr,
-      .num_args = num_args,
-      .args = args,
-      .func_ty = memmove->var_ty,
-  };
-
-  lower_call(func, op);
-}
-
 //   // look for store after, in case this is a copy
 //   // FIXME: not sure if this is perfect logic (could there be ops in
 //   between?) struct ir_op *nxt_store = op->succ;
