@@ -161,6 +161,7 @@ static void emit_instr(const struct emit_state *state,
     x64_emit_ret(state->emitter);
     break;
   }
+
   #undef EMIT
 }
 

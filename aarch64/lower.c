@@ -82,6 +82,9 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
 }
 
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
+  // FIXME: this should instead look at the `br.cond` and its `cond` operand
+  // because looking at `succ` is not reliable
+
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
                        binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");

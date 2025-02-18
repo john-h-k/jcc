@@ -753,7 +753,8 @@ void ir_order_basicblocks(struct ir_func *func) {
                      "expected `br.cond` at end of SPLIT bb");
         struct ir_op *cond = br_cond->br_cond.cond;
 
-        if (cond->ty == IR_OP_TY_BINARY_OP && binary_op_is_comparison(cond->binary_op.ty)) {
+        if (cond->ty == IR_OP_TY_BINARY_OP &&
+            binary_op_is_comparison(cond->binary_op.ty)) {
           cond->binary_op.ty = invert_binary_comparison(cond->binary_op.ty);
 
           struct ir_basicblock *tmp = split->true_target;
@@ -1370,9 +1371,25 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
 
   return mov;
 }
+
+static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
+static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
+
+void mk_floating_zero_constant(UNUSED_ARG(struct ir_unit *iru),
+                               struct ir_op *op, enum ir_var_primitive_ty ty) {
+  DEBUG_ASSERT(primitive_ty_is_fp(ty), "expected fp ty");
+
+  op->ty = IR_OP_TY_CNST;
+  op->var_ty =
+      (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = ty};
+  op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_FLT, .int_value = 0};
+}
+
 void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                           enum ir_var_primitive_ty ty,
                           unsigned long long value) {
+  DEBUG_ASSERT(primitive_ty_is_integral(ty), "expected integral ty");
+
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
       (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE, .primitive = ty};
@@ -1680,7 +1697,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                         .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
 
     struct ir_glb *memcpy = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
-                                        IR_GLB_DEF_TY_UNDEFINED, "memcpy");
+                                       IR_GLB_DEF_TY_UNDEFINED, "memcpy");
 
     iru->well_known_glbs.memcpy = memcpy;
     return memcpy;
@@ -1794,16 +1811,8 @@ bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
   return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE && var_ty->primitive == primitive;
 }
 
-bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
-  if (var_ty->ty == IR_VAR_TY_TY_POINTER) {
-    return true;
-  }
-
-  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
-    return false;
-  }
-
-  switch (var_ty->primitive) {
+static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
+  switch (ty) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -1816,22 +1825,38 @@ bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
   }
 }
 
-bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
-  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
-    return false;
-  }
-
-  switch (var_ty->primitive) {
+static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
+  switch (ty) {
+  case IR_VAR_PRIMITIVE_TY_F16:
+  case IR_VAR_PRIMITIVE_TY_F32:
+  case IR_VAR_PRIMITIVE_TY_F64:
+    return true;
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
   case IR_VAR_PRIMITIVE_TY_I64:
     return false;
-  case IR_VAR_PRIMITIVE_TY_F16:
-  case IR_VAR_PRIMITIVE_TY_F32:
-  case IR_VAR_PRIMITIVE_TY_F64:
+  }
+}
+
+bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
+  if (var_ty->ty == IR_VAR_TY_TY_POINTER) {
     return true;
   }
+
+  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
+    return false;
+  }
+
+  return primitive_ty_is_integral(var_ty->primitive);
+}
+
+bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
+  if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
+    return false;
+  }
+
+  return primitive_ty_is_fp(var_ty->primitive);
 }
 
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
@@ -1979,10 +2004,7 @@ struct use_data {
 static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
   struct build_op_uses_callback_data *data = cb_metadata;
 
-  struct ir_op_use use = {
-    .op = op,
-    .consumer = data->op
-  };
+  struct ir_op_use use = {.op = op, .consumer = data->op};
 
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
