@@ -1943,9 +1943,6 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   }
   (void)param_tys;
 
-  invariant_assert(func_ty->num_params <= 8,
-                   "`%s` doesn't support more than 8 args yet", __func__);
-
   struct instr *instr = alloc_instr(state->func);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;
