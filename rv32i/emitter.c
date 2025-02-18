@@ -179,113 +179,231 @@ void rv32i_emit_sltiu(struct rv32i_emitter *emitter,
   rv32i_emit_instr(emitter, SLTIU(sltiu.imm, sltiu.source.idx, sltiu.dest.idx));
 }
 
-void rv32i_emit_feq(struct rv32i_emitter *emitter,
-                    const struct rv32i_op_fp feq) {
+void rv32i_emit_feq_s(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp feq) {
   rv32i_emit_instr(emitter, FEQ_S(feq.rhs.idx, feq.lhs.idx, feq.dest.idx));
 }
-void rv32i_emit_flt(struct rv32i_emitter *emitter,
-                    const struct rv32i_op_fp flt) {
+void rv32i_emit_flt_s(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp flt) {
   rv32i_emit_instr(emitter, FLT_S(flt.rhs.idx, flt.lhs.idx, flt.dest.idx));
 }
-void rv32i_emit_fle(struct rv32i_emitter *emitter,
-                    const struct rv32i_op_fp fle) {
+void rv32i_emit_fle_s(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fle) {
   rv32i_emit_instr(emitter, FLE_S(fle.rhs.idx, fle.lhs.idx, fle.dest.idx));
 }
 
-void rv32i_emit_fcvt(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_mov fcvt) {
+void rv32i_emit_feq_d(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp feq) {
+  rv32i_emit_instr(emitter, FEQ_D(feq.rhs.idx, feq.lhs.idx, feq.dest.idx));
+}
+void rv32i_emit_flt_d(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp flt) {
+  rv32i_emit_instr(emitter, FLT_D(flt.rhs.idx, flt.lhs.idx, flt.dest.idx));
+}
+void rv32i_emit_fle_d(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_fp fle) {
+  rv32i_emit_instr(emitter, FLE_D(fle.rhs.idx, fle.lhs.idx, fle.dest.idx));
+}
+
+void rv32i_emit_fcvt_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_mov fcvt) {
 
   switch (fcvt.source.ty) {
   case RV32I_REG_TY_NONE:
     BUG("NONE type in fcvtu emit");
   case RV32I_REG_TY_W:
-    rv32i_emit_instr(emitter, FCVT_XW(fcvt.source.idx, fcvt.dest.idx));
+    rv32i_emit_instr(emitter, FCVT_SW(fcvt.source.idx, fcvt.dest.idx));
     break;
   case RV32I_REG_TY_F:
-    rv32i_emit_instr(emitter, FCVT_WX(fcvt.source.idx, fcvt.dest.idx));
+    switch (fcvt.dest.ty) {
+    case RV32I_REG_TY_NONE:
+      BUG("NONE type in fcvtu emit");
+    case RV32I_REG_TY_W:
+      rv32i_emit_instr(emitter, FCVT_WS(fcvt.source.idx, fcvt.dest.idx));
+      break;
+    case RV32I_REG_TY_F:
+      rv32i_emit_instr(emitter, FCVT_D_S(fcvt.source.idx, fcvt.dest.idx));
+      break;
+    }
     break;
   }
 }
 
-void rv32i_emit_fcvtu(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_mov fcvtu) {
+void rv32i_emit_fcvtu_s(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_mov fcvtu) {
   switch (fcvtu.source.ty) {
   case RV32I_REG_TY_NONE:
     BUG("NONE type in fcvtu emit");
   case RV32I_REG_TY_W:
-    rv32i_emit_instr(emitter, FCVTU_XW(fcvtu.source.idx, fcvtu.dest.idx));
+    rv32i_emit_instr(emitter, FCVTU_SW(fcvtu.source.idx, fcvtu.dest.idx));
     break;
   case RV32I_REG_TY_F:
-    rv32i_emit_instr(emitter, FCVTU_WX(fcvtu.source.idx, fcvtu.dest.idx));
+    rv32i_emit_instr(emitter, FCVTU_WS(fcvtu.source.idx, fcvtu.dest.idx));
     break;
   }
 }
 
-void rv32i_emit_fmv(struct rv32i_emitter *emitter,
-                    const struct rv32i_op_mov fmv) {
+void rv32i_emit_fcvt_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_mov fcvt) {
+
+  switch (fcvt.source.ty) {
+  case RV32I_REG_TY_NONE:
+    BUG("NONE type in fcvtu emit");
+  case RV32I_REG_TY_W:
+    rv32i_emit_instr(emitter, FCVT_DW(fcvt.source.idx, fcvt.dest.idx));
+    break;
+  case RV32I_REG_TY_F:
+    switch (fcvt.dest.ty) {
+    case RV32I_REG_TY_NONE:
+      BUG("NONE type in fcvtu emit");
+    case RV32I_REG_TY_W:
+      rv32i_emit_instr(emitter, FCVT_WD(fcvt.source.idx, fcvt.dest.idx));
+      break;
+    case RV32I_REG_TY_F:
+      rv32i_emit_instr(emitter, FCVT_S_D(fcvt.source.idx, fcvt.dest.idx));
+      break;
+    }
+    break;
+  }
+}
+
+void rv32i_emit_fcvtu_d(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_mov fcvtu) {
+  switch (fcvtu.source.ty) {
+  case RV32I_REG_TY_NONE:
+    BUG("NONE type in fcvtu emit");
+  case RV32I_REG_TY_W:
+    rv32i_emit_instr(emitter, FCVTU_DW(fcvtu.source.idx, fcvtu.dest.idx));
+    break;
+  case RV32I_REG_TY_F:
+    rv32i_emit_instr(emitter, FCVTU_WD(fcvtu.source.idx, fcvtu.dest.idx));
+    break;
+  }
+}
+
+void rv32i_emit_fmv_s(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_mov fmv) {
   switch (fmv.source.ty) {
   case RV32I_REG_TY_NONE:
     BUG("NONE type in fmv emit");
   case RV32I_REG_TY_W:
-    rv32i_emit_instr(emitter, FMV_XW(fmv.source.idx, fmv.dest.idx));
+    rv32i_emit_instr(emitter, FMV_SW(fmv.source.idx, fmv.dest.idx));
     break;
   case RV32I_REG_TY_F:
-    rv32i_emit_instr(emitter, FMV_WX(fmv.source.idx, fmv.dest.idx));
+    rv32i_emit_instr(emitter, FMV_WS(fmv.source.idx, fmv.dest.idx));
     break;
   }
 }
 
-void rv32i_emit_fadd(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fadd) {
+void rv32i_emit_fmv_d(struct rv32i_emitter *emitter,
+                      const struct rv32i_op_mov fmv) {
+  BUG("not supported on rv32i");
+}
+
+void rv32i_emit_fadd_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fadd) {
   rv32i_emit_instr(emitter, FADD_S(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
 }
 
-void rv32i_emit_fsub(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fsub) {
+void rv32i_emit_fadd_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fadd) {
+  rv32i_emit_instr(emitter, FADD_D(fadd.rhs.idx, fadd.lhs.idx, fadd.dest.idx));
+}
+
+void rv32i_emit_fsub_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fsub) {
   rv32i_emit_instr(emitter, FSUB_S(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
 }
 
-void rv32i_emit_fmul(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fmul) {
+void rv32i_emit_fsub_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fsub) {
+  rv32i_emit_instr(emitter, FSUB_D(fsub.rhs.idx, fsub.lhs.idx, fsub.dest.idx));
+}
+
+void rv32i_emit_fmul_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmul) {
   rv32i_emit_instr(emitter, FMUL_S(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
 }
 
-void rv32i_emit_fdiv(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fdiv) {
+void rv32i_emit_fmul_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmul) {
+  rv32i_emit_instr(emitter, FMUL_D(fmul.rhs.idx, fmul.lhs.idx, fmul.dest.idx));
+}
+
+void rv32i_emit_fdiv_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fdiv) {
   rv32i_emit_instr(emitter, FDIV_S(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
 }
 
-void rv32i_emit_fsgnj(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_fp fsgnj) {
+void rv32i_emit_fdiv_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fdiv) {
+  rv32i_emit_instr(emitter, FDIV_D(fdiv.rhs.idx, fdiv.lhs.idx, fdiv.dest.idx));
+}
+
+void rv32i_emit_fsgnj_s(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_fp fsgnj) {
   rv32i_emit_instr(emitter,
                    FSGNJ_S(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
 }
 
-void rv32i_emit_fsgnjn(struct rv32i_emitter *emitter,
-                       const struct rv32i_op_fp fsgnjn) {
+void rv32i_emit_fsgnj_d(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_fp fsgnj) {
+  rv32i_emit_instr(emitter,
+                   FSGNJ_D(fsgnj.rhs.idx, fsgnj.lhs.idx, fsgnj.dest.idx));
+}
+
+void rv32i_emit_fsgnjn_s(struct rv32i_emitter *emitter,
+                         const struct rv32i_op_fp fsgnjn) {
   rv32i_emit_instr(emitter,
                    FSGNJN_S(fsgnjn.rhs.idx, fsgnjn.lhs.idx, fsgnjn.dest.idx));
 }
 
-void rv32i_emit_fsgnjx(struct rv32i_emitter *emitter,
-                       const struct rv32i_op_fp fsgnjx) {
+void rv32i_emit_fsgnjn_d(struct rv32i_emitter *emitter,
+                         const struct rv32i_op_fp fsgnjn) {
+  rv32i_emit_instr(emitter,
+                   FSGNJN_D(fsgnjn.rhs.idx, fsgnjn.lhs.idx, fsgnjn.dest.idx));
+}
+
+void rv32i_emit_fsgnjx_s(struct rv32i_emitter *emitter,
+                         const struct rv32i_op_fp fsgnjx) {
   rv32i_emit_instr(emitter,
                    FSGNJX_S(fsgnjx.rhs.idx, fsgnjx.lhs.idx, fsgnjx.dest.idx));
 }
 
-void rv32i_emit_fmax(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fmax) {
+void rv32i_emit_fsgnjx_d(struct rv32i_emitter *emitter,
+                         const struct rv32i_op_fp fsgnjx) {
+  rv32i_emit_instr(emitter,
+                   FSGNJX_D(fsgnjx.rhs.idx, fsgnjx.lhs.idx, fsgnjx.dest.idx));
+}
+
+void rv32i_emit_fmax_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmax) {
   rv32i_emit_instr(emitter, FMAX_S(fmax.rhs.idx, fmax.lhs.idx, fmax.dest.idx));
 }
 
-void rv32i_emit_fmin(struct rv32i_emitter *emitter,
-                     const struct rv32i_op_fp fmin) {
+void rv32i_emit_fmax_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmax) {
+  rv32i_emit_instr(emitter, FMAX_D(fmax.rhs.idx, fmax.lhs.idx, fmax.dest.idx));
+}
+
+void rv32i_emit_fmin_s(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmin) {
   rv32i_emit_instr(emitter, FMIN_S(fmin.rhs.idx, fmin.lhs.idx, fmin.dest.idx));
 }
 
-void rv32i_emit_fsqrt(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_unary_fp fsqrt) {
+void rv32i_emit_fmin_d(struct rv32i_emitter *emitter,
+                       const struct rv32i_op_fp fmin) {
+  rv32i_emit_instr(emitter, FMIN_D(fmin.rhs.idx, fmin.lhs.idx, fmin.dest.idx));
+}
+
+void rv32i_emit_fsqrt_s(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_unary_fp fsqrt) {
   rv32i_emit_instr(emitter, FSQRT_S(fsqrt.source.idx, fsqrt.dest.idx));
+}
+
+void rv32i_emit_fsqrt_d(struct rv32i_emitter *emitter,
+                        const struct rv32i_op_unary_fp fsqrt) {
+  rv32i_emit_instr(emitter, FSQRT_D(fsqrt.source.idx, fsqrt.dest.idx));
 }
 
 void rv32i_emit_addi(struct rv32i_emitter *emitter,
@@ -309,9 +427,8 @@ void rv32i_emit_mul(struct rv32i_emitter *emitter, const struct rv32i_op mul) {
   rv32i_emit_instr(emitter, MUL(mul.rhs.idx, mul.lhs.idx, mul.dest.idx));
 }
 void rv32i_emit_mulh(struct rv32i_emitter *emitter,
-                      const struct rv32i_op mulh) {
-  rv32i_emit_instr(emitter,
-                   MULH(mulh.rhs.idx, mulh.lhs.idx, mulh.dest.idx));
+                     const struct rv32i_op mulh) {
+  rv32i_emit_instr(emitter, MULH(mulh.rhs.idx, mulh.lhs.idx, mulh.dest.idx));
 }
 void rv32i_emit_mulhu(struct rv32i_emitter *emitter,
                       const struct rv32i_op mulhu) {
@@ -320,7 +437,8 @@ void rv32i_emit_mulhu(struct rv32i_emitter *emitter,
 }
 void rv32i_emit_mulhsu(struct rv32i_emitter *emitter,
                        const struct rv32i_op mulhsu) {
-  rv32i_emit_instr(emitter, MULHSU(mulhsu.rhs.idx, mulhsu.lhs.idx, mulhsu.dest.idx));
+  rv32i_emit_instr(emitter,
+                   MULHSU(mulhsu.rhs.idx, mulhsu.lhs.idx, mulhsu.dest.idx));
 }
 void rv32i_emit_div(struct rv32i_emitter *emitter, const struct rv32i_op div) {
   rv32i_emit_instr(emitter, DIV(div.rhs.idx, div.lhs.idx, div.dest.idx));
@@ -374,14 +492,14 @@ void rv32i_emit_fsw(struct rv32i_emitter *emitter,
   rv32i_emit_instr(emitter, FSW(fsw.imm, fsw.source.idx, fsw.addr.idx));
 }
 
-void rv32i_emit_flw(struct rv32i_emitter *emitter,
-                    const struct rv32i_load flw) {
-  rv32i_emit_instr(emitter, FLW(flw.imm, flw.dest.idx, flw.addr.idx));
-}
-
 void rv32i_emit_fsd(struct rv32i_emitter *emitter,
                     const struct rv32i_store fsd) {
   rv32i_emit_instr(emitter, FSD(fsd.imm, fsd.source.idx, fsd.addr.idx));
+}
+
+void rv32i_emit_flw(struct rv32i_emitter *emitter,
+                    const struct rv32i_load flw) {
+  rv32i_emit_instr(emitter, FLW(flw.imm, flw.addr.idx, flw.dest.idx));
 }
 
 void rv32i_emit_fld(struct rv32i_emitter *emitter,

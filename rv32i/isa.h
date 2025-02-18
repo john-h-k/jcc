@@ -5,6 +5,7 @@
 #define RV32I_INSTR_SIZE (2)
 
 #define U32(v) ((uint32_t)(v))
+#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((simm_t)imm >> sz) == -1 || ((simm_t)imm >> sz) == 0, "imm did not fit!"), imm)
 #define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \
@@ -12,24 +13,24 @@
              (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define I_TYPE(imm12, rs1, funct3, rd, opcode)                                 \
-  (uint32_t)((U32_S(imm12, 11, 0) << 20) | (U32(rs1) << 15) |                  \
+  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 11, 0) << 20) | (U32(rs1) << 15) |                  \
              (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define S_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32(((simm_t)(imm12) >> 5) & 0b1111111) << 25) |                 \
+  (uint32_t)((U32(((simm_t)(CHECK_IMM(imm12, 12)) >> 5) & 0b1111111) << 25) |                 \
              (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
              (U32((imm12) & 0b11111) << 7) | U32(opcode))
 
 #define B_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32_S(imm12, 11, 11) << 31) | (U32_S(imm12, 9, 4) << 25) |      \
+  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 11, 11) << 31) | (U32_S(imm12, 9, 4) << 25) |      \
              (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
              (U32_S(imm12, 3, 0) << 8) | (U32_S(imm12, 10, 10) << 7) | U32(opcode))
 
 #define U_TYPE(imm20, rd, opcode)                                              \
-  (uint32_t)((U32(imm20) << 12) | (U32(rd) << 7) | U32(opcode))
+  (uint32_t)((U32(CHECK_IMM(imm20, 20)) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define J_TYPE(imm20, rd, opcode)                                              \
-  (uint32_t)((U32_S(imm20, 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
+  (uint32_t)((U32_S(CHECK_IMM(imm20, 2), 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
              (U32_S(imm20, 11, 11) << 20) | (U32_S(imm20, 19, 12) << 12) |     \
              (U32(rd) << 7) | U32(opcode))
 
@@ -135,17 +136,23 @@
 #define FUNCT7_ADD U32(0b0000000)
 #define FUNCT7_MULDIV U32(0b0000001)
 
-#define FUNCT7_FADD U32(0b0000000)
-#define FUNCT7_FSUB U32(0b0000100)
-#define FUNCT7_FMUL U32(0b0001000)
-#define FUNCT7_FDIV U32(0b0001100)
+#define FUNCT7_FADD_S U32(0b0000000)
+#define FUNCT7_FSUB_S U32(0b0000100)
+#define FUNCT7_FMUL_S U32(0b0001000)
+#define FUNCT7_FDIV_S U32(0b0001100)
 #define FUNCT7_FSGNJ_S U32(0b0010000)
-#define FUNCT7_FMINMAX U32(0b0010100)
-#define FUNCT7_FSQRT U32(0b0101101)
+#define FUNCT7_FMINMAX_S U32(0b0010100)
+#define FUNCT7_FSQRT_S U32(0b0101100)
+#define FUNCT7_FCMP_S U32(0b1010000)
 
+#define FUNCT7_FADD_D U32(0b0000001)
+#define FUNCT7_FSUB_D U32(0b0000101)
+#define FUNCT7_FMUL_D U32(0b0001001)
+#define FUNCT7_FDIV_D U32(0b0001101)
 #define FUNCT7_FSGNJ_D U32(0b0010001)
-
-#define FUNCT7_FCMP U32(0b0000000)
+#define FUNCT7_FMINMAX_D U32(0b0010101)
+#define FUNCT7_FSQRT_D U32(0b0101101)
+#define FUNCT7_FCMP_D U32(0b1010001)
 
 #define FUNCT7_SUB U32(0b0100000)
 #define FUNCT7_SRL U32(0b0000000)
@@ -158,10 +165,20 @@
 #define RM_FLT U32(0b001)
 #define RM_FLE U32(0b000)
 
-#define FUNCT7_FCVT_WX U32(0b1100000)
-#define FUNCT7_FCVT_XW U32(0b1101000)
-#define FUNCT7_FMV_WX U32(0b1110000)
-#define FUNCT7_FMV_XW U32(0b1111000)
+#define FUNCT7_FCVT_S_D U32(0b0100000)
+#define FUNCT7_FCVT_D_S U32(0b0100001)
+
+#define FUNCT7_FCVT_WS U32(0b1100000)
+#define FUNCT7_FCVT_SW U32(0b1101000)
+
+#define FUNCT7_FCVT_WD U32(0b1100001)
+#define FUNCT7_FCVT_DW U32(0b1101001)
+
+#define FUNCT7_FMV_WS U32(0b1110000)
+#define FUNCT7_FMV_SW U32(0b1111000)
+
+#define FUNCT7_FMV_WD U32(0b1110001)
+#define FUNCT7_FMV_DW U32(0b1111001)
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADD, rd, OPC_OP_IMM)
 #define XORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_XOR, rd, OPC_OP_IMM)
@@ -221,37 +238,55 @@
 #define BLTU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BLTU, OPC_BRANCH)
 #define BGEU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGEU, OPC_BRANCH)
 
-#define FCVT_XW(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FCVT_XW, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVT_WX(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FCVT_WX, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVT_S_D(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_S_D, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVT_D_S(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_D_S, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FCVTU_XW(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FCVT_XW, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVTU_WX(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FCVT_WX, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVT_SW(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_SW, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVT_WS(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_WS, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FMV_XW(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FMV_XW, 0b00, rs1, FUNCT3_FMV_XW, rd, OPC_OP_FP)
-#define FMV_WX(rs1, rd)                                                        \
-  R_TYPE(FUNCT7_FMV_WX, 0b00, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVTU_SW(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_SW, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVTU_WS(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_WS, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+
+#define FCVT_DW(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_DW, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVT_WD(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_WD, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+
+#define FCVTU_DW(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_DW, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+#define FCVTU_WD(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FCVT_WD, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
+
+#define FMV_SW(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FMV_SW, 0b00, rs1, FUNCT3_FMV_XW, rd, OPC_OP_FP)
+#define FMV_WS(rs1, rd)                                                        \
+  R_TYPE(FUNCT7_FMV_WS, 0b00, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
 #define FSQRT_S(rs1, rd)                                                       \
-  R_TYPE(FUNCT7_FSQRT, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FSQRT_S, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
 
-#define FEQ_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
-#define FLT_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
-#define FLE_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
+#define FSQRT_D(rs1, rd)                                                       \
+  R_TYPE(FUNCT7_FSQRT_D, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
 
-#define FADD_S(rs2, rs1, rd) R_TYPE(FUNCT7_FADD, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FSUB_S(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FMUL_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FDIV_S(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FEQ_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
+#define FLT_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
+#define FLE_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
+
+#define FADD_S(rs2, rs1, rd) R_TYPE(FUNCT7_FADD_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FSUB_S(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FMUL_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FDIV_S(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
 
 #define FMAX_S(rs2, rs1, rd)                                                   \
-  R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FMINMAX_S, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
 #define FMIN_S(rs2, rs1, rd)                                                   \
-  R_TYPE(FUNCT7_FMINMAX, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
+  R_TYPE(FUNCT7_FMINMAX_S, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
 
 #define FSGNJ_S(rs2, rs1, rd)                                                  \
   R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)
@@ -259,6 +294,20 @@
   R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJN, rd, OPC_OP_FP)
 #define FSGNJX_S(rs2, rs1, rd)                                                 \
   R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
+
+#define FEQ_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
+#define FLT_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
+#define FLE_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
+
+#define FADD_D(rs2, rs1, rd) R_TYPE(FUNCT7_FADD_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FSUB_D(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FMUL_D(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FDIV_D(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+
+#define FMAX_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMINMAX_D, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
+#define FMIN_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMINMAX_D, rs2, rs1, FUNCT3_MAX, rd, OPC_OP_FP)
 
 #define FSGNJ_D(rs2, rs1, rd)                                                  \
   R_TYPE(FUNCT7_FSGNJ_D, rs2, rs1, FUNCT3_FSGNJ, rd, OPC_OP_FP)

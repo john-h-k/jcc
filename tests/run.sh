@@ -35,7 +35,7 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       echo "TEST PASSED: compilation failed as expected"
     fi
   else
-    # target_arch=$(grep -i "arch" $file | head -1 | sed -n 's/^\/\/ arch: //p')
+    target_arch=$(grep -i "arch" $file | head -1 | sed -n 's/^\/\/ arch: //p')
     arch=rv32i
     if [[ -n $target_arch && $target_arch != $arch ]]; then
       echo "Skipping test (arch=$arch, test_arch=$target_arch)"

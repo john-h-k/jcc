@@ -23,6 +23,14 @@ static void emit_instr(const struct emit_state *state,
   case RV32I_INSTR_TY_##up:                                                    \
     rv32i_emit_##lo(state->emitter, instr->rv32i->lo);                         \
     break;
+
+#define EMIT_FP(up, lo)                                                           \
+  case RV32I_INSTR_TY_##up##_S:                                                    \
+    rv32i_emit_##lo##_s(state->emitter, instr->rv32i->lo);                         \
+    break; \
+  case RV32I_INSTR_TY_##up##_D:                                                    \
+    rv32i_emit_##lo##_d(state->emitter, instr->rv32i->lo);                         \
+    break;
   switch (instr->rv32i->ty) {
     EMIT(ADDI, addi);
     EMIT(XORI, xori);
@@ -57,21 +65,20 @@ static void emit_instr(const struct emit_state *state,
     EMIT(SLL, sll);
     EMIT(SRL, srl);
     EMIT(SRA, sra);
-    EMIT(FMV, fmv);
     EMIT(FSW, fsw);
     EMIT(FLW, flw);
     EMIT(FSD, fsd);
     EMIT(FLD, fld);
-    EMIT(FADD, fadd);
-    EMIT(FSUB, fsub);
-    EMIT(FMUL, fmul);
-    EMIT(FDIV, fdiv);
-    EMIT(FSGNJ, fsgnj);
-    EMIT(FSGNJN, fsgnjn);
-    EMIT(FSGNJX, fsgnjx);
-    EMIT(FMAX, fmax);
-    EMIT(FMIN, fmin);
-    EMIT(FSQRT, fsqrt);
+    EMIT_FP(FADD, fadd);
+    EMIT_FP(FSUB, fsub);
+    EMIT_FP(FMUL, fmul);
+    EMIT_FP(FDIV, fdiv);
+    EMIT_FP(FSGNJ, fsgnj);
+    EMIT_FP(FSGNJN, fsgnjn);
+    EMIT_FP(FSGNJX, fsgnjx);
+    EMIT_FP(FMAX, fmax);
+    EMIT_FP(FMIN, fmin);
+    EMIT_FP(FSQRT, fsqrt);
     EMIT(ORI, ori);
     EMIT(ANDI, andi);
     EMIT(SLLI, slli);
@@ -84,11 +91,12 @@ static void emit_instr(const struct emit_state *state,
     EMIT(MULH, mulh);
     EMIT(MULHU, mulhu);
     EMIT(MULHSU, mulhsu);
-    EMIT(FCVT, fcvt);
-    EMIT(FCVTU, fcvtu);
-    EMIT(FEQ, feq);
-    EMIT(FLT, flt);
-    EMIT(FLE, fle);
+    EMIT_FP(FCVT, fcvt);
+    EMIT_FP(FCVTU, fcvtu);
+    EMIT_FP(FEQ, feq);
+    EMIT_FP(FLT, flt);
+    EMIT_FP(FLE, fle);
+    EMIT_FP(FMV, fmv);
     // EMIT(FCLASS, fclass);
     // EMIT(FENCE, fence);
     // EMIT(FENCE_TSO, fence_tso);
