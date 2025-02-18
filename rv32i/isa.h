@@ -30,7 +30,7 @@
   (uint32_t)((U32(CHECK_IMM(imm20, 20)) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define J_TYPE(imm20, rd, opcode)                                              \
-  (uint32_t)((U32_S(CHECK_IMM(imm20, 2), 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
+  (uint32_t)((U32_S(CHECK_IMM(imm20, 20), 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
              (U32_S(imm20, 11, 11) << 20) | (U32_S(imm20, 19, 12) << 12) |     \
              (U32(rd) << 7) | U32(opcode))
 

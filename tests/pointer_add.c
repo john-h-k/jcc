@@ -1,4 +1,7 @@
+// arch: arm64
 // expected value: 21
+
+// disabled on rv32i because `long long`
 
 int main() {
   int a = 0;

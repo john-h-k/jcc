@@ -275,15 +275,8 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     case IR_VAR_PRIMITIVE_TY_I32: {
       unsigned long long cnst = op->cnst.int_value;
 
-      unsigned long lo;
-      unsigned long hi;
-      if ((cnst >> 11) & 1) {
-        lo = -(4096 - (cnst & 0xFFF));
-        hi = (cnst >> 12) + 1;
-      } else {
-        lo = cnst & 0xFFF;
-        hi = cnst >> 12;
-      }
+      int hi = (int)(((unsigned)cnst + 0x800) >> 12);
+      int lo = (int)((unsigned)cnst - ((unsigned)hi << 12));
 
       struct rv32i_reg source_reg = GP_ZERO_REG;
 
@@ -311,6 +304,11 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
     };
   }
 }
+
+
+static void codegen_add_imm(struct codegen_state *state,
+                            struct rv32i_reg dest, struct rv32i_reg source,
+                            long long value);
 
 #define RV32I_STACK_ALIGNMENT (4)
 
@@ -374,10 +372,7 @@ static void codegen_prologue(struct codegen_state *state) {
       .source = STACK_PTR_REG, .addr = STACK_PTR_REG, .imm = -8};
 
   ssize_t stack_to_sub = info.stack_size;
-  struct instr *sub_stack = alloc_instr(state->func);
-  sub_stack->rv32i->ty = RV32I_INSTR_TY_ADDI;
-  sub_stack->rv32i->addi = (struct rv32i_op_imm){
-      .dest = STACK_PTR_REG, .source = STACK_PTR_REG, .imm = -stack_to_sub};
+  codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, -stack_to_sub);
 
   size_t save_idx = 0;
 
@@ -419,6 +414,30 @@ static void codegen_prologue(struct codegen_state *state) {
   }
 
   state->prologue_info = info;
+}
+
+#define IMM_BITS (12)
+
+static void codegen_add_imm(struct codegen_state *state,
+                            struct rv32i_reg dest, struct rv32i_reg source,
+                            long long value) {
+  long long abs_val = value >= 0 ? value : -value;
+
+  do {
+    ssize_t chunk = MIN(0x7FF, abs_val);
+
+    struct instr *instr = alloc_instr(state->func);
+    instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
+    instr->rv32i->addi = (struct rv32i_op_imm){
+        .dest = dest,
+        .source = source,
+        .imm = value >= 0 ? chunk : -chunk,
+    };
+
+    source = dest;
+
+    abs_val -= chunk;
+  } while (abs_val);
 }
 
 static void codegen_epilogue(struct codegen_state *state) {
@@ -475,10 +494,7 @@ static void codegen_epilogue(struct codegen_state *state) {
   }
 
   size_t stack_to_add = prologue_info->stack_size;
-  struct instr *add_stack = alloc_instr(state->func);
-  add_stack->rv32i->ty = RV32I_INSTR_TY_ADDI;
-  add_stack->rv32i->addi = (struct rv32i_op_imm){
-      .dest = STACK_PTR_REG, .source = STACK_PTR_REG, .imm = stack_to_add};
+  codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
 
   struct instr *restore_ra = alloc_instr(state->func);
   restore_ra->rv32i->ty = RV32I_INSTR_TY_LW;
@@ -1046,35 +1062,6 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_STORE_TY_GLB:
     BUG("store.glb should have been lowered");
-  }
-}
-
-static void codegen_add_imm(struct codegen_state *state, struct rv32i_reg dest,
-                            struct rv32i_reg source, unsigned long long value) {
-  struct instr *instr = alloc_instr(state->func);
-  instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
-  instr->rv32i->addi = (struct rv32i_op_imm){
-      .dest = dest,
-      .source = source,
-      .imm = MIN(value, 4095),
-  };
-
-  if (value > 4095) {
-    value -= 4095;
-
-    while (value) {
-      unsigned long long imm = MIN(value, 4095);
-
-      struct instr *add = alloc_instr(state->func);
-      add->rv32i->ty = RV32I_INSTR_TY_ADDI;
-      add->rv32i->addi = (struct rv32i_op_imm){
-          .dest = dest,
-          .source = dest,
-          .imm = imm,
-      };
-
-      value -= imm;
-    }
   }
 }
 
