@@ -1,7 +1,7 @@
 #include "lower.h"
-#include "../lower.h"
 
 #include "../aarch64.h"
+#include "../lower.h"
 #include "../util.h"
 #include "../vector.h"
 
@@ -366,21 +366,22 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     // FIXME: this will lower e.g `(i32) load.addr [addr.offset %0 + #7]` which
     // is not valid because it needs to be a multiple of the size
 
+
+    struct ir_op *base = addr->addr_offset.base;
+    bool lcl_has_offset =
+        base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL &&
+        (base->addr.lcl->offset ||
+         (!(base->addr.lcl->flags & IR_LCL_FLAG_FIXED_OFFSET) &&
+          func->caller_stack_needed));
+
     bool offset_contain = !addr_offset.index;
     bool index_contain =
-        !addr_offset.offset &&
+        !addr_offset.offset && !lcl_has_offset &&
         (addr_offset.scale == 1 ||
          addr_offset.scale == var_ty_info(func->unit, &op->var_ty).size);
 
     if (offset_contain || index_contain) {
       op->load.addr = alloc_contained_ir_op(func, addr, op);
-
-      struct ir_op *base = op->load.addr->addr_offset.base;
-      if (base->ty == IR_OP_TY_ADDR && (base->flags & IR_OP_FLAG_CONTAINED)) {
-        if (base->addr.ty != IR_OP_ADDR_TY_LCL || base->addr.lcl->offset) {
-          base->flags &= ~IR_OP_FLAG_CONTAINED;
-        }
-      }
     }
   }
 }
@@ -405,22 +406,22 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
+    struct ir_op *base = addr->addr_offset.base;
+    bool lcl_has_offset =
+        base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL &&
+        (base->addr.lcl->offset ||
+         (!(base->addr.lcl->flags & IR_LCL_FLAG_FIXED_OFFSET) &&
+          func->caller_stack_needed));
+
     bool offset_contain = !addr_offset.index;
     bool index_contain =
-        !addr_offset.offset &&
+        !addr_offset.offset && !lcl_has_offset &&
         (addr_offset.scale == 1 ||
          addr_offset.scale ==
              var_ty_info(func->unit, &op->store.value->var_ty).size);
 
     if (offset_contain || index_contain) {
       op->store.addr = alloc_contained_ir_op(func, addr, op);
-
-      struct ir_op *base = op->store.addr->addr_offset.base;
-      if (base->ty == IR_OP_TY_ADDR && (base->flags & IR_OP_FLAG_CONTAINED)) {
-        if (base->addr.ty != IR_OP_ADDR_TY_LCL || base->addr.lcl->offset) {
-          base->flags &= ~IR_OP_FLAG_CONTAINED;
-        }
-      }
     }
   }
 }
@@ -551,8 +552,9 @@ static bool try_get_hfa_info(struct ir_func *func,
 }
 
 struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
-                                         struct ir_var_func_ty func_ty,
-                                         struct ir_op **args, size_t num_args) {
+                                          struct ir_var_func_ty func_ty,
+                                          struct ir_op **args,
+                                          size_t num_args) {
 
   size_t ngrn = 0;
   size_t nsrn = 0;
@@ -594,7 +596,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
           .var_ty = func_ty.ret_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
                   .num_reg = 1,
-          .size = 8},
+                  .size = 8},
       };
 
       vector_push_front(params, &IR_VAR_TY_POINTER);
@@ -604,7 +606,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
           .var_ty = func_ty.ret_ty,
           .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
                   .num_reg = (info.size + 7) / 8,
-           .size = 8},
+                  .size = 8},
       };
     }
   }
@@ -664,7 +666,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                  .num_reg = 1,
+                    .num_reg = 1,
                     .size = info.size},
         };
         vector_push_back(param_infos, &param_info);
@@ -685,7 +687,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
               .ty = IR_PARAM_INFO_TY_REGISTER,
               .var_ty = var_ty,
               .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                  .num_reg = num_hfa_members,
+                      .num_reg = num_hfa_members,
                       .size = hfa_member_size},
           };
           vector_push_back(param_infos, &param_info);
@@ -713,7 +715,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                  .num_reg = 1,
+                    .num_reg = 1,
                     .size = info.size}};
         vector_push_back(param_infos, &param_info);
 
@@ -736,7 +738,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                  .num_reg = 2,
+                    .num_reg = 2,
                     .size = 8}};
         vector_push_back(param_infos, &param_info);
 
@@ -756,7 +758,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                  .num_reg = dw_size,
+                    .num_reg = dw_size,
                     .size = 8}};
         vector_push_back(param_infos, &param_info);
 

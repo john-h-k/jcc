@@ -106,7 +106,20 @@ static void get_var_ref(struct ir_func_builder *irb,
     return;
   }
 
+
   *ref = var_refs_get(irb->global_var_refs, key);
+  if (*ref) {
+    return;
+  }
+
+  // HACK: because functions always have global scope, when we look up at global level force scope
+  struct var_key glb = *key;
+  glb.scope = SCOPE_GLOBAL;
+
+  *ref = var_refs_get(irb->global_var_refs, &glb);
+  if (*ref) {
+    *key = glb;
+  }
 }
 
 static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
@@ -440,7 +453,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       op->binary_op.rhs = el_size_op;
 
       return op;
-    } else {
+    } else if (ty == TD_BINARY_OP_TY_ADD) {
       DEBUG_ASSERT(td_var_ty->ty == TD_VAR_TY_TY_POINTER, "non pointer");
 
       // need to multiply rhs by the element size
@@ -453,6 +466,31 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       op->var_ty = var_ty;
       op->addr_offset = (struct ir_op_addr_offset){
           .base = lhs, .index = rhs, .scale = el_info.size};
+
+      return op;
+    } else {
+      // generate binary op for pointer sub. we could try and make `addr_offset` unsigned but involves codegen changes
+
+      struct ir_var_ty el_ty =
+          var_ty_for_td_var_ty(irb->unit, td_var_ty->pointer.underlying);
+      struct ir_var_ty_info el_info = var_ty_info(irb->unit, &el_ty);
+
+      struct ir_op *el_size_op = alloc_ir_op(irb->func, stmt);
+      mk_pointer_constant(irb->unit, el_size_op, el_info.size);
+
+      struct ir_op *rhs_mul = alloc_ir_op(irb->func, stmt);
+      rhs_mul->ty = IR_OP_TY_BINARY_OP;
+      rhs_mul->var_ty = var_ty;
+      rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
+      rhs_mul->binary_op.lhs = el_size_op;
+      rhs_mul->binary_op.rhs = rhs;
+
+      struct ir_op *op = alloc_ir_op(irb->func, stmt);
+      op->ty = IR_OP_TY_BINARY_OP;
+      op->var_ty = var_ty;
+      op->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
+      op->binary_op.lhs = lhs;
+      op->binary_op.rhs = rhs_mul;
 
       return op;
     }
@@ -1217,22 +1255,6 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   op->call.arg_var_tys = arg_var_tys;
 
   return op;
-}
-
-static void var_assg_glb(struct ir_func_builder *irb, struct ir_stmt *stmt,
-                         struct ir_glb *glb, struct td_var *var) {
-
-  DEBUG_ASSERT(glb, "null glb in assignment!");
-
-  struct var_key key;
-  struct var_ref *ref;
-  get_var_ref(irb, stmt->basicblock, var, &key, &ref);
-
-  if (!ref) {
-    ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_GLB);
-  }
-
-  ref->glb = glb;
 }
 
 static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
@@ -2473,9 +2495,6 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
   }
 }
 
-static void var_assg_glb(struct ir_func_builder *irb, struct ir_stmt *stmt,
-                         struct ir_glb *glb, struct td_var *var);
-
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
@@ -2485,7 +2504,6 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
                         enum td_storage_class_specifier storage_class,
                         struct td_var_declaration *decl) {
-
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
 
   const char *name = decl->var.identifier;
@@ -2525,7 +2543,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
     symbol_name = name;
   }
 
-  struct var_key key = {.name = name, .scope = decl->var.scope};
+  struct var_key key = {.name = name, .scope = decl->var_ty.ty == TD_VAR_TY_TY_FUNC ? SCOPE_GLOBAL : decl->var.scope};
 
   enum ir_glb_ty ty;
   if (decl->var_ty.ty == TD_VAR_TY_TY_FUNC) {
@@ -2558,7 +2576,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   }
 
   enum ir_glb_def_ty def_ty;
-  if (decl->init || !is_file_scope) {
+  if (decl->init || !is_file_scope || (ref && ref->glb->def_ty == IR_GLB_DEF_TY_DEFINED)) {
     def_ty = IR_GLB_DEF_TY_DEFINED;
   } else if (is_file_scope && !is_func &&
              (is_unspecified_storage || is_static)) {
@@ -2584,12 +2602,12 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   ref->glb->def_ty = def_ty;
   ref->glb->linkage = linkage;
 
-  if (ref && def_ty == IR_GLB_DEF_TY_TENTATIVE) {
+  if (def_ty == IR_GLB_DEF_TY_TENTATIVE) {
     // already defined, and this is tentative, so do nothing
     return;
   }
 
-  if (def_ty != IR_GLB_DEF_TY_DEFINED) {
+  if (is_func) {
     return;
   }
 
@@ -2684,24 +2702,10 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
     struct td_var_declaration *decl = &declaration->var_declarations[i];
 
-    if (decl->var_ty.ty == TD_VAR_TY_TY_FUNC) {
-      // tentative definition! make global
-      struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
-
-      struct ir_glb *glb =
-          add_global(irb->unit, IR_GLB_TY_FUNC, &var_ty,
-                     IR_GLB_DEF_TY_UNDEFINED, decl->var.identifier);
-
-      glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
-
-      var_assg_glb(irb, *stmt, glb, &decl->var);
-      continue;
-    }
-
-    if (declaration->storage_class_specifier ==
+    if (decl->var_ty.ty != TD_VAR_TY_TY_FUNC && (declaration->storage_class_specifier ==
             TD_STORAGE_CLASS_SPECIFIER_NONE ||
         declaration->storage_class_specifier ==
-            TD_STORAGE_CLASS_SPECIFIER_AUTO) {
+            TD_STORAGE_CLASS_SPECIFIER_AUTO)) {
       build_ir_for_auto_var(irb, stmt, decl);
     } else {
       struct ir_var_builder builder = {
@@ -2827,6 +2831,8 @@ static void gen_var_phis(struct ir_func_builder *irb,
       basicblock_ops_for_var[basicblock->id] = op;
       continue;
     }
+
+    DEBUG_ASSERT(basicblock->pred, "can't insert a phi in first bb");
 
     // var is not in this bb, so gen phi
     struct ir_op *phi = insert_phi(irb->func, basicblock, *var_ty);
