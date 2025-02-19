@@ -445,6 +445,8 @@ static struct ir_var_ty get_var_ty_for_size(enum ir_reg_ty reg_ty,
                                             size_t size) {
   if (reg_ty == IR_REG_TY_INTEGRAL) {
     switch (size) {
+    case 1:
+      return IR_VAR_TY_I8;
     case 2:
       return IR_VAR_TY_I16;
     case 4:
