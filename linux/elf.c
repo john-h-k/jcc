@@ -299,6 +299,33 @@ static void write_relocations_elf(FILE *file,
                                     R_AARCH64_LD64_GOT_LO12_NC);
         fwrite(&rela1, sizeof(rela1), 1, file);
         fwrite(&rela2, sizeof(rela2), 1, file);
+      } else if (target == COMPILE_TARGET_LINUX_RV32I) {
+        Elf32_Rela rela1, rela2;
+        memset(&rela1, 0, sizeof(rela1));
+        memset(&rela2, 0, sizeof(rela2));
+        rela1.r_offset = r->address;
+        rela1.r_addend = r->offset;
+        rela1.r_info =
+            ELF32_R_INFO(sym_id_to_idx[r->symbol_index], R_RISCV_HI20);
+        rela2.r_offset = r->address + 4;
+        rela2.r_addend = r->offset;
+        rela2.r_info =
+            ELF32_R_INFO(sym_id_to_idx[r->symbol_index], R_RISCV_LO12_I);
+
+        Elf32_Rela rela;
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address;
+        rela.r_addend = 0;
+        rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
+        fwrite(&rela1, sizeof(rela1), 1, file);
+        // fwrite(&rela, sizeof(rela), 1, file);
+
+        memset(&rela, 0, sizeof(rela));
+        rela.r_offset = r->address + 4;
+        rela.r_addend = 0;
+        rela.r_info = ELF32_R_INFO(0, R_RISCV_RELAX);
+        fwrite(&rela2, sizeof(rela2), 1, file);
+        // fwrite(&rela, sizeof(rela), 1, file);
       } else {
         BUG("two-part reloc not supported for x86_64 in elf");
       }
