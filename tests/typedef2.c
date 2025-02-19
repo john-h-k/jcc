@@ -13,3 +13,6 @@ int_t g(int_t y)
     return 1+*p;
 }
 
+int main() {
+  return g(1) != 2;
+}
