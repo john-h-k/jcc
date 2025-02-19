@@ -115,6 +115,8 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 static struct rv32i_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
+  DEBUG_ASSERT(idx < 32, "got invalid reg idx");
+
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
     TODO("non primitives (op %zu)", op->id);
   }
@@ -408,7 +410,7 @@ static void codegen_prologue(struct codegen_state *state) {
     save->rv32i->fsw = (struct rv32i_store){
         .source = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
                                      .idx = translate_reg_idx(
-                                         idx, IR_REG_TY_INTEGRAL)},
+                                         idx, IR_REG_TY_FP)},
         .addr = STACK_PTR_REG,
         .imm = offset};
   }
@@ -488,7 +490,7 @@ static void codegen_epilogue(struct codegen_state *state) {
         .imm = offset,
         .dest =
             (struct rv32i_reg){.ty = RV32I_REG_TY_F,
-                               .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL)},
+                               .idx = translate_reg_idx(i, IR_REG_TY_FP)},
         .addr = STACK_PTR_REG,
     };
   }
