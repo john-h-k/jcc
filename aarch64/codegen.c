@@ -2076,7 +2076,7 @@ static void codegen_prologue(struct codegen_state *state) {
           .imm = offset,
           .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
                                          .idx = translate_reg_idx(
-                                             idx, IR_REG_TY_INTEGRAL)},
+                                             idx, IR_REG_TY_FP)},
           .addr = STACK_PTR_REG,
       };
     }
@@ -2135,7 +2135,7 @@ static void codegen_epilogue(struct codegen_state *state) {
         .imm = offset,
         .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
                                      .idx = translate_reg_idx(
-                                         i, IR_REG_TY_INTEGRAL)},
+                                         i, IR_REG_TY_FP)},
         .addr = STACK_PTR_REG,
     };
   }
