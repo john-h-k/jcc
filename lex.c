@@ -187,8 +187,11 @@ static const char *process_raw_string(UNUSED const struct lexer *lexer,
           }
         }
 
+        // because loop increments it
+        i--;
+
         size_t octal_len = MIN(3, i - octal_start + 1);
-        char oct_buff[3] = {0};
+        char oct_buff[4] = {0};
         for (size_t j = 0; j < octal_len; j++) {
           oct_buff[j] = text[octal_start + j];
         }

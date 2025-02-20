@@ -352,7 +352,10 @@ void x64_emit_lea_pcrel(struct x64_emitter *emitter, struct x64_lea_pcrel lea_pc
 
 void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea) {
   if (lea.scale) {
-    x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, (size_t)tzcnt(lea.scale), lea.offset));
+    x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, (size_t)(lea.scale ? tzcnt(lea.scale) : 0), lea.offset));
+  } else if ((lea.base.idx % 8) == 0b100) {
+    struct x64_reg none = { .idx = 0b100 };
+    x64_emit_instr(emitter, LEA_REG64(lea.dest, none, lea.base, (size_t)0, lea.offset));
   } else {
     x64_emit_instr(emitter, LEA_NOIDX_REG64(lea.dest, lea.base, lea.offset));
   }
