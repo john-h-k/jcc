@@ -150,7 +150,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   bool has_free_reg;
   struct ir_reg free_reg;
-  if (next_free <= reg_info.num_volatile) {
+  if (next_free < reg_info.num_volatile) {
     has_free_reg = true;
     free_reg = (struct ir_reg){.ty = reg_ty, .idx = next_free};
   } else {
