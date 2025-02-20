@@ -472,9 +472,6 @@ enum ir_op_flags {
   // reg is assigned and cannot change
   IR_OP_FLAG_FIXED_REG = 32,
 
-  // reg is assigned but can be changed
-  IR_OP_FLAG_PREFERRED_REG = 64,
-
   // op has side effects (e.g is an assignment)
   IR_OP_FLAG_SIDE_EFFECTS = 128,
 

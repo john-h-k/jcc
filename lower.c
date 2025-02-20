@@ -7,6 +7,112 @@
 #include "util.h"
 #include "vector.h"
 
+static void remove_critical_edges(struct ir_func *irb) {
+  // FIXME: i believe this doesn't properly propogate phis through the arms of a
+  // switch expr. see lower.c
+
+  struct ir_basicblock *basicblock = irb->first;
+
+  while (basicblock) {
+    size_t num_preds = basicblock->num_preds;
+
+    struct ir_stmt *phi_stmt = NULL;
+    if (basicblock->first && basicblock->first->first &&
+        basicblock->first->first->ty == IR_OP_TY_PHI) {
+      phi_stmt = basicblock->first;
+    }
+
+    if (num_preds > 1) {
+      for (size_t i = 0; i < num_preds; i++) {
+        struct ir_basicblock *pred = basicblock->preds[i];
+
+        if (pred->ty == IR_BASICBLOCK_TY_MERGE) {
+          // not critical edge
+          continue;
+        }
+
+        // we have a critical edge
+        struct ir_basicblock *intermediate =
+            insert_before_ir_basicblock(irb, basicblock);
+        intermediate->ty = IR_BASICBLOCK_TY_MERGE;
+        intermediate->merge =
+            (struct ir_basicblock_merge){.target = basicblock};
+
+        struct ir_stmt *intermediate_phi_stmt = NULL;
+        if (phi_stmt) {
+          intermediate_phi_stmt = alloc_ir_stmt(irb, intermediate);
+        }
+
+        struct ir_stmt *br_stmt = alloc_ir_stmt(irb, intermediate);
+        struct ir_op *op = alloc_ir_op(irb, br_stmt);
+        op->ty = IR_OP_TY_BR;
+        op->var_ty = IR_VAR_TY_NONE;
+
+        basicblock->preds[i] = intermediate;
+
+        add_pred_to_basicblock(irb, intermediate, pred);
+
+        switch (pred->ty) {
+        case IR_BASICBLOCK_TY_SPLIT:
+          if (pred->split.true_target == basicblock) {
+            pred->split.true_target = intermediate;
+          } else {
+            pred->split.false_target = intermediate;
+          }
+          break;
+        case IR_BASICBLOCK_TY_SWITCH:
+          for (size_t j = 0; j < pred->switch_case.num_cases; j++) {
+            if (pred->switch_case.cases[j].target == basicblock) {
+              pred->switch_case.cases[j].target = intermediate;
+              break;
+            }
+          }
+          break;
+        case IR_BASICBLOCK_TY_MERGE:
+          pred->merge.target = intermediate;
+          break;
+        case IR_BASICBLOCK_TY_RET:
+          unreachable();
+        }
+
+        if (phi_stmt) {
+          struct ir_op *phi = phi_stmt->first;
+          while (phi && phi->ty == IR_OP_TY_PHI) {
+            struct ir_op *int_phi = alloc_ir_op(irb, intermediate_phi_stmt);
+            int_phi->ty = IR_OP_TY_PHI;
+            int_phi->var_ty = phi->var_ty;
+            int_phi->reg = phi->reg;
+            int_phi->phi = (struct ir_op_phi){
+                .num_values = 1,
+                .values =
+                    arena_alloc(irb->arena, sizeof(*int_phi->phi.values))};
+
+            bool found = false;
+            for (size_t j = 0; j < phi->phi.num_values; j++) {
+              struct ir_phi_entry *entry = &phi->phi.values[j];
+
+              if (entry->basicblock == pred) {
+                int_phi->phi.values[0] = (struct ir_phi_entry){
+                    .basicblock = pred, .value = entry->value};
+                *entry = (struct ir_phi_entry){.basicblock = intermediate,
+                                               .value = int_phi};
+                found = true;
+                break;
+              }
+            }
+
+            DEBUG_ASSERT(found, "failed to gen phi");
+
+            phi = phi->succ;
+          }
+        }
+      }
+    }
+
+    basicblock = basicblock->succ;
+  }
+}
+
 // this is carefully chosen so that all types passed on the stack will generate
 // inline code because else `lower_call` needs to deal with this function
 // potentially generating calls _itself_ biggest thing passed on stack: 4
@@ -1022,6 +1128,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
       }
 
       prune_basicblocks(func);
+
+      remove_critical_edges(func);
     }
     }
     glb = glb->succ;

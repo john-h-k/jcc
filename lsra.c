@@ -7,6 +7,7 @@
 #include "log.h"
 #include "util.h"
 #include "vector.h"
+#include "bit_twiddle.h"
 
 struct register_alloc_info {
   struct reg_info integral_reg_info;
@@ -27,9 +28,11 @@ struct register_alloc_state {
   size_t *active;
   size_t num_active;
 
-  // contains the start intervals (in descending order, so we can pop like a
-  // stack) of fixed registers
-  struct vector *fixed_reg_ops;
+  // contains preferred reg (or NONE if no preferred reg) for op
+  // this is the backwards feed part of preferences
+  // so `ret %7` will give `%7` a preferred reg in here
+  // whereas `%5 = %6` will get its preference by looking at `%6`
+  struct ir_reg *preferences;
 
   // TODO: data structure efficiency can be improved a lot in here, every time
   // we expire an interval it is an O(n) vector removal
@@ -39,6 +42,43 @@ struct register_alloc_state {
   struct vector *gp_reg_pool;
   struct vector *fp_reg_pool;
 };
+
+static bool try_get_preferred_reg(struct register_alloc_state *state,
+                                  enum ir_reg_ty reg_ty,
+                                  struct interval *interval,
+                                  struct ir_reg *reg) {
+  struct ir_op *op = interval->op;
+
+  struct ir_reg candidate = state->preferences[op->id];
+  if (candidate.ty == IR_REG_TY_NONE) {
+    switch (op->ty) {
+    case IR_OP_TY_PHI:
+      DEBUG_ASSERT(op->phi.num_values, "empty phi");
+      candidate = op->phi.values[0].value->reg;
+      break;
+    case IR_OP_TY_MOV:
+      if (op->mov.value) {
+        candidate = op->mov.value->reg;
+      }
+      break;
+    case IR_OP_TY_UNARY_OP:
+      candidate = op->unary_op.value->reg;
+      break;
+    case IR_OP_TY_BINARY_OP:
+      candidate = op->binary_op.lhs->reg;
+      break;
+    default:
+      break;
+    }
+  }
+
+  if (candidate.ty == reg_ty) {
+    *reg = candidate;
+    return true;
+  }
+
+  return false;
+}
 
 static void insert_active(struct register_alloc_state *state,
                           size_t cur_interval) {
@@ -145,6 +185,7 @@ static void expire_old_intervals(struct register_alloc_state *state,
   for (size_t i = 0; i < state->num_active; i++) {
     struct interval *interval =
         &state->interval_data.intervals[state->active[i]];
+
     if (interval->end > cur_interval->start) {
       break;
     }
@@ -221,21 +262,19 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
       struct ir_op *addr;
       if (data->consumer->ty == IR_OP_TY_PHI) {
         addr = replace_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
-                                   var_ty_for_pointer_size(data->irb->unit));
+                             var_ty_for_pointer_size(data->irb->unit));
       } else {
         addr = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
                                    var_ty_for_pointer_size(data->irb->unit));
       }
-      addr->addr = (struct ir_op_addr){
-        .ty = IR_OP_ADDR_TY_LCL,
-        .lcl = (*op)->lcl
-      };
-      addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = data->info.ssp_reg };
-      
-      struct ir_op *load = insert_after_ir_op(data->irb, addr, IR_OP_TY_LOAD,
-                                   (*op)->var_ty);
-      load->load =
-          (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
+      addr->addr =
+          (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = (*op)->lcl};
+      addr->reg =
+          (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = data->info.ssp_reg};
+
+      struct ir_op *load =
+          insert_after_ir_op(data->irb, addr, IR_OP_TY_LOAD, (*op)->var_ty);
+      load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
       if (var_ty_is_integral(&load->var_ty)) {
         load->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
@@ -326,6 +365,28 @@ static int sort_interval_by_desc_start_point(const void *a, const void *b) {
                                        *(const struct interval *const *)b);
 }
 
+struct add_to_prefs_callback_data {
+  struct ir_op *consumer;
+  struct register_alloc_state *state;
+};
+
+static void add_to_prefs_callback(struct ir_op **op, void *metadata) {
+  struct add_to_prefs_callback_data *data = metadata;
+
+  if ((*op)->flags & IR_OP_FLAG_FIXED_REG) {
+    return;
+  }
+
+  struct ir_reg *pref = &data->state->preferences[(*op)->id];
+  if (pref->ty != IR_REG_TY_NONE) {
+    // only consider the first preference
+    // there is probably a better way to pick between them
+    return;
+  }
+
+  *pref = data->consumer->reg;
+}
+
 static struct interval_data register_alloc_pass(struct ir_func *irb,
                                                 struct lsra_reg_info *info) {
 
@@ -355,10 +416,27 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       .active = arena_alloc(
           irb->arena, sizeof(size_t) * (info->num_fp_regs + info->num_gp_regs)),
       .num_active = 0,
+      .preferences =
+          arena_alloc(irb->arena, sizeof(struct ir_reg) * irb->op_count),
       .fp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_states = vector_create(sizeof(struct reg_state)),
       .gp_reg_pool = vector_create(sizeof(size_t)),
       .fp_reg_pool = vector_create(sizeof(size_t))};
+
+  memset(state.preferences, 0, sizeof(struct ir_reg) * irb->op_count);
+
+  struct ir_func_iter iter = ir_func_iter(irb, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *iter_op;
+  while (ir_func_iter_next(&iter, &iter_op)) {
+    if (!(iter_op->flags & IR_OP_FLAG_FIXED_REG)) {
+      continue;
+    }
+
+    struct add_to_prefs_callback_data cb_data = {.state = &state,
+                                                 .consumer = iter_op};
+    walk_op_uses(iter_op, add_to_prefs_callback, &cb_data);
+  }
 
   for (size_t i = 0; i < info->num_gp_regs; i++) {
     if (info->has_ssp && info->ssp_reg == i) {
@@ -483,19 +561,19 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     struct bitset *all_used_reg_pool;
     struct vector *reg_pool;
-    struct vector *reg_states;
+    // struct vector *reg_states;
     enum ir_reg_ty reg_ty;
     size_t spill_reg;
     if (var_ty_is_integral(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
-      reg_states = state.gp_reg_states;
+      // reg_states = state.gp_reg_states;
       all_used_reg_pool = irb->reg_usage.gp_registers_used;
       spill_reg = info->gp_spill_reg;
     } else if (var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
-      reg_states = state.fp_reg_states;
+      // reg_states = state.fp_reg_states;
       all_used_reg_pool = irb->reg_usage.fp_registers_used;
       spill_reg = info->fp_spill_reg;
     } else {
@@ -511,18 +589,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       // FIXME: logic here wrt active intervals definitely needs fixing
       // also, this does not respect reg.ty but should
-    } else if (interval->op->ty == IR_OP_TY_BINARY_OP) {
-      // TODO: generalise this so it preferentially does it for other ops that
-      // read dest (e.g aarch64 bitfield insert, x64 `not`/`neg`) probably by
-      // `IR_OP_FLAG_READS_DEST` having an associated field on `ir_op` for which
-      // operand it reads
-      struct ir_op *lhs = interval->op->binary_op.lhs;
-
-      struct reg_state *reg_state = vector_get(reg_states, lhs->reg.idx);
-      if (lhs->reg.ty != IR_REG_TY_NONE && lhs->reg.ty == reg_ty &&
-          !reg_state->live) {
-        pref_reg = lhs->reg.idx;
-      }
     }
 
     for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
@@ -547,7 +613,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         struct interval *fixed =
             *(struct interval **)vector_get(fixed_reg_intervals, j - 1);
 
-        if (fixed->start > interval->end) {
+        if (fixed->start >= interval->end) {
           continue;
         }
 
@@ -565,21 +631,21 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         }
       }
 
-      if (available_regs) {
+      struct ir_reg preferred;
+      if (try_get_preferred_reg(&state, reg_ty, interval, &preferred)) {
+        // struct reg_state *reg_state = vector_get(reg_states, preferred.idx);
+        if (NTH_BIT(available_regs, preferred.idx)) {
+          pref_reg = preferred.idx;
+        }
+      }
+
+      if (pref_reg == SIZE_MAX && available_regs) {
         pref_reg = tzcnt(available_regs);
       }
     }
 
     if (pref_reg != SIZE_MAX) {
-      size_t free_slot;
-
-      if (pref_reg != SIZE_MAX) {
-        free_slot = pref_reg;
-      } else {
-        // we can allocate a register from the pool
-
-        free_slot = *(size_t *)vector_tail(reg_pool);
-      }
+      size_t free_slot = pref_reg;
 
       struct ir_reg reg = {.ty = reg_ty, .idx = free_slot};
       mark_register_live(&state, reg, interval->op);
@@ -594,6 +660,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       // need to spill, no free registers
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = spill_reg};
 
+      DEBUG_ASSERT(state.num_active, "spilled but no active intervals");
       size_t *last_active = &state.active[state.num_active - 1];
       while (true) {
         struct ir_op *op = state.interval_data.intervals[*last_active].op;
@@ -635,8 +702,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t ssp_reg = 0;
   // FIXME: need better logic
   // this is tough because what if we only need ssp (secondary stack pointer)
-  // during lsra? at the start, all locals are within one-instr depth, but then
-  // during spilling we exceed this and need another
+  // during lsra? at the start, all locals are within one-instr depth, but
+  // then during spilling we exceed this and need another
   // FIXME: temp disable SSP because it forces prologue
   // if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
   if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
