@@ -55,10 +55,12 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       exit -1
     fi
 
-    output=$(echo "$stdin" | spike pk a.out)
+    # output=$(echo "$stdin" | spike pk a.out)
+    # result=$?
+    # output=$(echo "$output" | tail -n +2)
+    output=$(echo "$stdin" | ./a.out)
     result=$?
-    output=$(echo "$output" | tail -n +2)
-    # output=$(echo "$stdin" | ./a.out)
+    # output=$(echo "$stdin" | riscy a.out)
     # result=$?
  
     if [ "$result" != "$expected" ]; then

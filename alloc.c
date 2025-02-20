@@ -1,7 +1,10 @@
 #include "alloc.h"
 
+#include "codegen.h"
 #include "log.h"
 #include "util.h"
+#include "vector.h"
+#include <stdlib.h>
 
 // TODO: allow larger allocs
 #define BLOCK_SIZE (4096 * 32)
@@ -11,6 +14,8 @@ struct arena;
 struct arena_allocator {
   struct arena *first;
   struct arena *last;
+
+  struct vector *large_allocs;
 };
 
 // TODO: use this metadata to walk on free
@@ -31,7 +36,7 @@ struct arena {
 };
 
 void arena_allocator_create(struct arena_allocator **allocator) {
-  struct arena_allocator value = {.first = NULL, .last = NULL};
+  struct arena_allocator value = {.first = NULL, .last = NULL, .large_allocs = vector_create(sizeof(void *)) };
 
   struct arena_allocator *p = nonnull_malloc(sizeof(value));
   *p = value;
@@ -39,6 +44,12 @@ void arena_allocator_create(struct arena_allocator **allocator) {
 }
 
 void arena_allocator_free(struct arena_allocator **allocator) {
+  while (vector_length((*allocator)->large_allocs)) {
+    void *alloc = *(void **)vector_pop((*allocator)->large_allocs);
+    DEBUG_ASSERT(alloc, "expected alloc");
+    free(alloc);
+  }
+
   struct arena *arena = (*allocator)->first;
 
   while (arena) {
@@ -62,6 +73,32 @@ void *arena_alloc_strcpy(struct arena_allocator *allocator, const char *str) {
   cp[len] = '\0';
 
   return cp;
+}
+
+PRINTF_ARGS(1) char *arena_alloc_snprintf(struct arena_allocator *allocator,
+                           const char *format, ...) {
+  va_list args, args_copy;
+
+  va_start(args, format);
+  va_copy(args_copy, args);
+
+  int len = vsnprintf(NULL, 0, format, args_copy);
+
+  va_end(args_copy);
+
+  DEBUG_ASSERT(len > 0, "vnsprintf call failed");
+
+  char *buf = arena_alloc(allocator, len + 1);
+
+  if (!buf) {
+    va_end(args);
+    return NULL;
+  }
+
+  vsnprintf(buf, len + 1, format, args);
+  va_end(args);
+
+  return buf;
 }
 
 void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
@@ -97,8 +134,9 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
   size_t next_arena_size;
 
   if (aligned > BLOCK_SIZE) {
-    arena = allocator->last;
-    next_arena_size = aligned;
+    void *alloc = nonnull_malloc(aligned);
+    vector_push_back(allocator->large_allocs, &alloc);
+    return alloc;
   } else {
     arena = allocator->first;
     next_arena_size = BLOCK_SIZE;

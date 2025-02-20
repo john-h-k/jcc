@@ -3,8 +3,8 @@
 
 #include "../target.h"
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 enum ir_op_ty {
@@ -542,7 +542,6 @@ struct ir_op {
   const char *comment;
 };
 
-
 // set of ops with no SEQ_POINTs
 struct ir_stmt {
   size_t id;
@@ -610,7 +609,7 @@ struct ir_basicblock {
   size_t id;
 
   // a NULL irb means a pruned basicblock
-  struct ir_func *irb;
+  struct ir_func *func;
 
   // these are creation order traversal methods, and do not signify edges
   // between BBs
@@ -637,7 +636,11 @@ struct ir_basicblock {
   const char *comment;
 };
 
-enum ir_func_flags { IR_FUNC_FLAG_NONE = 0, IR_FUNC_FLAG_MAKES_CALL = 1, IR_FUNC_FLAG_NEEDS_SSP = 2 };
+enum ir_func_flags {
+  IR_FUNC_FLAG_NONE = 0,
+  IR_FUNC_FLAG_MAKES_CALL = 1,
+  IR_FUNC_FLAG_NEEDS_SSP = 2
+};
 
 enum ir_var_data_ty {
   IR_VAR_TY_STRING_LITERAL,
@@ -679,6 +682,8 @@ struct ir_var_value {
 };
 
 struct ir_var {
+  struct ir_unit *unit;
+
   enum ir_var_data_ty ty;
 
   struct ir_var_ty var_ty;
@@ -732,6 +737,8 @@ enum ir_lcl_flags {
 struct ir_lcl {
   size_t id;
 
+  struct ir_func *func;
+
   struct ir_var_ty var_ty;
 
   struct ir_lcl *pred;
@@ -774,7 +781,8 @@ enum ir_param_info_ty {
 };
 
 struct ir_param_reg {
-  // e.g `struct { float[3] }` would have size 4, but `struct { char[16] } would have size 8`
+  // e.g `struct { float[3] }` would have size 4, but `struct { char[16] } would
+  // have size 8`
 
   struct ir_reg start_reg;
   size_t num_reg;
@@ -878,9 +886,7 @@ enum ir_well_known_glb {
   IR_WELL_KNOWN_GLB_MEMSET,
 };
 
-enum ir_func_iter_flags {
-  IR_FUNC_ITER_FLAG_NONE = 0
-};
+enum ir_func_iter_flags { IR_FUNC_ITER_FLAG_NONE = 0 };
 
 struct ir_func_iter {
   struct ir_func *func;
@@ -890,10 +896,60 @@ struct ir_func_iter {
   enum ir_func_iter_flags flags;
 };
 
-struct ir_func_iter ir_func_iter(struct ir_func *func, enum ir_func_iter_flags flags);
+enum ir_object_ty {
+  IR_OBJECT_TY_GLB,
+  IR_OBJECT_TY_LCL,
+
+  IR_OBJECT_TY_FUNC,
+  IR_OBJECT_TY_VAR,
+
+  IR_OBJECT_TY_BASICBLOCK,
+  IR_OBJECT_TY_STMT,
+  IR_OBJECT_TY_OP,
+};
+
+struct ir_object {
+  enum ir_object_ty ty;
+  union {
+    struct ir_glb *glb;
+    struct ir_lcl *lcl;
+
+    struct ir_func *func;
+    struct ir_var *var;
+
+    struct ir_basicblock *basicblock;
+    struct ir_stmt *stmt;
+    struct ir_op *op;
+  };
+};
+
+// TODO: is this well defined? the casts
+#define IR_MK_OBJECT(obj)                                                      \
+  (_Generic((obj),                                                             \
+      struct ir_glb *: (struct ir_object){.ty = IR_OBJECT_TY_GLB,              \
+                                          .glb = (void *)(obj)},               \
+      struct ir_lcl *: (struct ir_object){.ty = IR_OBJECT_TY_LCL,              \
+                                          .lcl = (void *)(obj)},               \
+                                                                               \
+      struct ir_func *: (struct ir_object){.ty = IR_OBJECT_TY_FUNC,            \
+                                           .func = (void *)(obj)},             \
+      struct ir_var *: (struct ir_object){.ty = IR_OBJECT_TY_VAR,              \
+                                          .var = (void *)(obj)},               \
+      struct ir_basicblock *: (struct ir_object){.ty =                         \
+                                                     IR_OBJECT_TY_BASICBLOCK,  \
+                                                 .basicblock = (void *)(obj)}, \
+                                                                               \
+      struct ir_stmt *: (struct ir_object){.ty = IR_OBJECT_TY_STMT,            \
+                                           .stmt = (void *)(obj)},             \
+      struct ir_op *: (struct ir_object){.ty = IR_OBJECT_TY_OP,                \
+                                         .op = (void *)(obj)}))
+
+struct ir_func_iter ir_func_iter(struct ir_func *func,
+                                 enum ir_func_iter_flags flags);
 bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op);
 
-struct ir_glb *add_well_known_global(struct ir_unit *iru, enum ir_well_known_glb glb);
+struct ir_glb *add_well_known_global(struct ir_unit *iru,
+                                     enum ir_well_known_glb glb);
 
 typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
 
@@ -930,23 +986,26 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
 struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
-// fixing an op is difficult, because fixed ops with overlapping lifetimes won't be able to allocate
-// so to fix an op, you provide the point it must be fixed at (`consumer`) and we insert a mov before then and fix that
-// we take `**op` so that we can then reassign the consumer op to the fixed move
+// fixing an op is difficult, because fixed ops with overlapping lifetimes won't
+// be able to allocate so to fix an op, you provide the point it must be fixed
+// at (`consumer`) and we insert a mov before then and fix that we take `**op`
+// so that we can then reassign the consumer op to the fixed move
 struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
-                                    struct ir_op *consumer, struct ir_reg reg);
+                                         struct ir_op *consumer,
+                                         struct ir_reg reg);
 
 struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
-                                    struct ir_op *producer, struct ir_reg reg);
+                                           struct ir_op *producer,
+                                           struct ir_reg reg);
 
-void mk_floating_zero_constant(struct ir_unit *iru,
-                               struct ir_op *op, enum ir_var_primitive_ty ty);
+void mk_floating_zero_constant(struct ir_unit *iru, struct ir_op *op,
+                               enum ir_var_primitive_ty ty);
 
 void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
-                            enum ir_var_primitive_ty ty,
-                            unsigned long long value);
+                          enum ir_var_primitive_ty ty,
+                          unsigned long long value);
 void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
-                           unsigned long long value);
+                         unsigned long long value);
 
 struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op);
 
@@ -1015,7 +1074,8 @@ void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
 void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
 
 // swaps ops AND their uses
-void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
+void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
+                          struct ir_op *right);
 
 struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty);

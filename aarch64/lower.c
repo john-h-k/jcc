@@ -356,11 +356,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->load.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    struct ir_lcl *lcl = addr->addr.lcl;
-
-    op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
-  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     // FIXME: this will lower e.g `(i32) load.addr [addr.offset %0 + #7]` which
@@ -397,13 +393,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->store.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    struct ir_lcl *lcl = addr->addr.lcl;
-    struct ir_op *value = op->store.value;
-
-    op->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_LCL, .value = value, .lcl = lcl};
-  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     struct ir_op *base = addr->addr_offset.base;
