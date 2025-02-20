@@ -117,17 +117,17 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
 }
 
 static void debug_print_func_ty_string(FILE *file, struct ir_unit *iru,
-                               const struct ir_var_func_ty *func_ty) {
-    fprintf(file, "(");
-    for (size_t i = 0; i < func_ty->num_params; i++) {
-      debug_print_var_ty_string(file, iru, &func_ty->params[i]);
-      if (i + 1 < func_ty->num_params) {
-        fprintf(file, ", ");
-      }
+                                       const struct ir_var_func_ty *func_ty) {
+  fprintf(file, "(");
+  for (size_t i = 0; i < func_ty->num_params; i++) {
+    debug_print_var_ty_string(file, iru, &func_ty->params[i]);
+    if (i + 1 < func_ty->num_params) {
+      fprintf(file, ", ");
     }
-    fprintf(file, ")");
-    fprintf(file, " -> ");
-    debug_print_var_ty_string(file, iru, func_ty->ret_ty);
+  }
+  fprintf(file, ")");
+  fprintf(file, " -> ");
+  debug_print_var_ty_string(file, iru, func_ty->ret_ty);
 }
 
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
@@ -267,8 +267,8 @@ enum print_op_ctx {
   PRINT_OP_CTX_USE,
 };
 
-static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_op *ir,
-                           enum print_op_ctx ctx);
+static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
+                                    struct ir_op *ir, enum print_op_ctx ctx);
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {
@@ -282,8 +282,8 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
   }
 }
 
-static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb, struct ir_op *ir,
-                           enum print_op_ctx ctx) {
+static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
+                                    struct ir_op *ir, enum print_op_ctx ctx) {
   DEBUG_ASSERT(ir->stmt, "op had no stmt");
 
   if (ctx != PRINT_OP_CTX_USE && ir->comment) {
@@ -587,7 +587,6 @@ void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op) {
   fprintf(file, "\n");
 }
 
-
 extern const struct prettyprint_callbacks GRAPH_WRITER_CALLBACKS;
 
 struct prettyprint_file_metadata {
@@ -819,7 +818,7 @@ void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                                                .cb = cb,
                                                .cb_metadata = cb_metadata};
 
-  debug_visit_ir(stmt->basicblock->irb, &FILE_WRITER_CALLBACKS, &metadata);
+  debug_visit_ir(stmt->basicblock->func, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
@@ -845,16 +844,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
     fprintf(file, "LOCALS: {\n");
     struct ir_lcl *lcl = irb->first_local;
     while (lcl) {
-      fprintf(file, "  ");
-
-      fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
-      debug_print_var_ty_string(file, irb->unit, &lcl->var_ty);
-
-      if (lcl->flags & IR_LCL_FLAG_SPILL) {
-        fprintf(file, "    (SPILL),\n");
-      } else {
-        fprintf(file, ",\n");
-      }
+      debug_print_lcl(file, irb, lcl);
 
       lcl = lcl->succ;
     }
@@ -908,8 +898,7 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
   }
 }
 
-static void debug_print_ir_var(FILE *file, struct ir_unit *iru,
-                               struct ir_var *var) {
+void debug_print_ir_var(FILE *file, struct ir_var *var) {
   switch (var->ty) {
   case IR_VAR_TY_STRING_LITERAL:
     fprintf(file, "[STRING LITERAL] ");
@@ -924,7 +913,7 @@ static void debug_print_ir_var(FILE *file, struct ir_unit *iru,
 
   DEBUG_ASSERT(var->var_ty.ty != IR_VAR_TY_TY_NONE, "GLB with no type");
 
-  debug_print_var_ty_string(file, iru, &var->var_ty);
+  debug_print_var_ty_string(file, var->unit, &var->var_ty);
   fprintf(file, " = ");
   debug_print_ir_var_value(file, &var->value, true);
   fprintf(file, "\n\n");
@@ -1007,25 +996,42 @@ void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
   graphwriter_free(&gwr);
 }
 
+void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
+  fprintf(file, "  ");
+
+  fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
+  debug_print_var_ty_string(file, func->unit, &lcl->var_ty);
+
+  if (lcl->flags & IR_LCL_FLAG_SPILL) {
+    fprintf(file, "    (SPILL),\n");
+  } else {
+    fprintf(file, ",\n");
+  }
+}
+
+void debug_print_glb(FILE *file, struct ir_unit *unit, struct ir_glb *glb) {
+  fprintf(file, "GLB(%zu) [", glb->id);
+
+  switch (glb->linkage) {
+  case IR_LINKAGE_NONE:
+    fprintf(file, "NO LINKAGE");
+    break;
+  case IR_LINKAGE_INTERNAL:
+    fprintf(file, "INTERNAL LINKAGE");
+    break;
+  case IR_LINKAGE_EXTERNAL:
+    fprintf(file, "EXTERNAL LINKAGE");
+    break;
+  }
+
+  fprintf(file, "]\n");
+}
+
 void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    fprintf(file, "GLB(%zu) [", glb->id);
-
-    switch (glb->linkage) {
-    case IR_LINKAGE_NONE:
-      fprintf(file, "NO LINKAGE");
-      break;
-    case IR_LINKAGE_INTERNAL:
-      fprintf(file, "INTERNAL LINKAGE");
-      break;
-    case IR_LINKAGE_EXTERNAL:
-      fprintf(file, "EXTERNAL LINKAGE");
-      break;
-    }
-
-    fprintf(file, "]\n");
+    debug_print_glb(file, iru, glb);
 
     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
       switch (glb->ty) {
@@ -1033,7 +1039,7 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
         // TODO: should either have name in `var` or remove it from `func` for
         // consistency
         fprintf(file, "%s ", glb->name);
-        debug_print_ir_var(file, iru, glb->var);
+        debug_print_ir_var(file, glb->var);
         break;
       case IR_GLB_TY_FUNC:
         debug_print_ir_func(file, glb->func, cb, cb_metadata);
@@ -1046,5 +1052,34 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
     }
 
     glb = glb->succ;
+  }
+}
+
+void debug_print_ir_object(FILE *file, struct ir_unit *unit,
+                           const struct ir_object *object) {
+  switch (object->ty) {
+  case IR_OBJECT_TY_GLB:
+    debug_print_glb(file, unit, object->glb);
+    break;
+  case IR_OBJECT_TY_LCL:
+    debug_print_lcl(file, object->lcl->func, object->lcl);
+    break;
+  case IR_OBJECT_TY_FUNC:
+    debug_print_ir_func(file, object->func, NULL, NULL);
+    break;
+  case IR_OBJECT_TY_VAR:
+    debug_print_ir_var(file, object->var);
+    break;
+  case IR_OBJECT_TY_BASICBLOCK:
+    debug_print_basicblock(file, object->stmt->basicblock->func,
+                           object->basicblock, NULL, NULL);
+    break;
+  case IR_OBJECT_TY_STMT:
+    debug_print_stmt(file, object->stmt->basicblock->func, object->stmt, NULL,
+                     NULL);
+    break;
+  case IR_OBJECT_TY_OP:
+    debug_print_op(file, object->op->stmt->basicblock->func, object->op);
+    break;
   }
 }

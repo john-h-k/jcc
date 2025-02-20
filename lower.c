@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
@@ -758,21 +759,29 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = load_addr_offset};
 
+          struct ir_op * store_addr =
+              insert_after_ir_op(func, load, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+            store_addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
+
           struct ir_op *store =
-              insert_after_ir_op(func, load, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+              insert_after_ir_op(func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
           store->store = (struct ir_op_store){
-              .ty = IR_OP_STORE_TY_LCL, .lcl = lcl, .value = load};
+              .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = load};
 
           last = store;
           offset += size;
           copy -= size;
         }
       } else {
+        struct ir_op * store_addr =
+            insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+            store_addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
+
         struct ir_op *store =
-            insert_before_ir_op(func, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+            insert_after_ir_op(func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
         store->store = (struct ir_op_store){
-            .ty = IR_OP_STORE_TY_LCL, .lcl = lcl, .value = arg};
+            .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = arg};
         vector_push_back(new_args, &store);
       }
       break;

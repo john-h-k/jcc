@@ -1013,7 +1013,9 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
     struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty,
                                     IR_GLB_DEF_TY_DEFINED, NULL);
     glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
-    *glb->var = (struct ir_var){.ty = IR_VAR_TY_STRING_LITERAL,
+    *glb->var = (struct ir_var){
+      .unit = irb->unit,
+      .ty = IR_VAR_TY_STRING_LITERAL,
                                 .var_ty = var_ty,
                                 .value = {.ty = IR_VAR_VALUE_TY_STR,
                                           .var_ty = var_ty,
@@ -2623,7 +2625,9 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   }
 
   *ref->glb->var =
-      (struct ir_var){.ty = IR_VAR_TY_DATA, .var_ty = var_ty, .value = value};
+      (struct ir_var){
+      .unit = irb->unit,
+      .ty = IR_VAR_TY_DATA, .var_ty = var_ty, .value = value};
 }
 
 static void
@@ -3725,7 +3729,9 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
       glb->def_ty = IR_GLB_DEF_TY_DEFINED;
       glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
-      *glb->var = (struct ir_var){.ty = IR_VAR_TY_DATA,
+      *glb->var = (struct ir_var){
+      .unit = iru,
+        .ty = IR_VAR_TY_DATA,
                                   .var_ty = glb->var_ty,
                                   .value = {.ty = IR_VAR_VALUE_TY_ZERO}};
     }

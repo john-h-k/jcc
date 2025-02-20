@@ -99,7 +99,13 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
   case IR_REG_TY_FLAGS:
     BUG("does not make sense for none/spilled/flags");
   case IR_REG_TY_INTEGRAL:
-    if (idx >= 11) {
+    if (idx >= 27) {
+      BUG("invalid idx");
+    } else if (idx >= 17) {
+      return 19 + (idx - 17);
+    } else if (idx >= 15) {
+      return 9 + (idx - 15);
+    } else if (idx >= 11) {
       return 28 + (idx - 11);
     } else if (idx >= 8) {
       return 5 + (idx - 8);
@@ -124,7 +130,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 static struct rv32i_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
-  DEBUG_ASSERT(idx < 32, "got invalid reg idx");
+  DEBUG_ASSERT(idx < 32, "got invalid reg idx (ty=%d, idx=%zu)", op->reg.ty, op->reg.idx);
 
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
     TODO("non primitives (op %zu)", op->id);

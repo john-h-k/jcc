@@ -3675,6 +3675,8 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
 
     int op_pad = /* guess */ 50;
 
+    bool supports_pos = ftell(file) != -1;
+
     size_t offset = 0;
     struct instr *instr = func->first;
     while (instr) {
@@ -3683,7 +3685,7 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
       fprintf(file, "%04zu: ", offset++);
       debug_print_instr(file, func, instr);
 
-      if (ftell(file) == pos) {
+    if (supports_pos && ftell(file) == pos) {
         // no line was written
         continue;
       }

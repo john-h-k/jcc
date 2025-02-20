@@ -1,12 +1,39 @@
 #include "validate.h"
 
 #include "../util.h"
+#include "../log.h"
+#include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
 
+struct ir_validate_error {
+  const char *err;
+  struct ir_object object;
+};
+
+struct ir_validate_state {
+  struct ir_unit *unit;
+  struct vector *errors;
+};
+
 struct validate_op_order_metadata {
+  struct ir_validate_state *state;
   struct ir_op *consumer;
 };
+
+#define VALIDATION_CHECKZ(cond, obj, msg)                                      \
+  if (!(cond)) {                                                               \
+    struct ir_validate_error error = { .err = msg, .object = IR_MK_OBJECT((obj)) };                     \
+    vector_push_back((state)->errors, &error);                                 \
+  }
+
+#define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
+  if (!(cond)) {                                                               \
+    const char *msg =                                                          \
+        arena_alloc_snprintf(state->unit->arena, fmt, __VA_ARGS__);            \
+    struct ir_validate_error error = { .err = msg, .object = IR_MK_OBJECT((obj)) };                     \
+    vector_push_back((state)->errors, &error);                                 \
+  }
 
 static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
@@ -19,13 +46,16 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
 
   struct ir_op *op = *ir;
 
-  if (op->id > consumer->id) {
-    BUG("op %zu uses op %zu which is ahead of it", consumer->id, op->id);
-  }
+  struct ir_validate_state *state = data->state;
+  VALIDATION_CHECK(consumer->id > op->id, consumer,
+                   "uses op %zu which is ahead of it", op->id);
 }
 
-static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
-  struct validate_op_order_metadata metadata = {.consumer = op};
+static void ir_validate_op(struct ir_validate_state *state,
+                           struct ir_func *func, struct ir_op *op) {
+  struct validate_op_order_metadata metadata = {
+    .state = state,
+    .consumer = op};
   walk_op_uses(op, validate_op_order, &metadata);
 
   switch (op->ty) {
@@ -36,10 +66,8 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
-    if (op->flags & IR_OP_FLAG_PARAM) {
-      invariant_assert(!op->mov.value, "op %zu: param mov must have null value",
-                       op->id);
-    }
+    VALIDATION_CHECKZ(!(op->flags & IR_OP_FLAG_PARAM) || !op->mov.value, op,
+                      "param mov must have null value");
     break;
   case IR_OP_TY_CNST:
     break;
@@ -52,38 +80,34 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_LOAD:
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
-      invariant_assert(op->load.lcl, "op %zu: load ty lcl must have lcl",
-                       op->id);
+      VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
       break;
     case IR_OP_LOAD_TY_GLB:
-      invariant_assert(op->load.glb, "op %zu: load ty glb must have glb",
-                       op->id);
+      VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
       break;
     case IR_OP_LOAD_TY_ADDR:
-      invariant_assert(op->load.addr, "op %zu: load ty addr must have addr",
-                       op->id);
+      VALIDATION_CHECKZ(op->load.addr, op,
+                        "load ty addr must have addr");
       break;
     }
     break;
   case IR_OP_TY_STORE:
-    invariant_assert(op->var_ty.ty == IR_VAR_TY_TY_NONE,
-                     "op %zu: store ops should not have a var ty", op->id);
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "store ops should not have a var ty");
 
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
-      invariant_assert(op->store.lcl, "op %zu: store ty lcl must have lcl",
-                       op->id);
+      VALIDATION_CHECKZ(op->store.lcl, op, "store ty lcl must have lcl");
       break;
     case IR_OP_STORE_TY_GLB:
-      invariant_assert(op->store.glb, "op %zu: store ty glb must have glb",
-                       op->id);
+      VALIDATION_CHECKZ(op->store.glb, op, "store ty glb must have glb");
       break;
     case IR_OP_STORE_TY_ADDR:
-      invariant_assert(op->store.addr, "op %zu: store ty addr must have addr",
-                       op->id);
+      VALIDATION_CHECKZ(op->store.addr, op,
+                        "tore ty addr must have addr");
       break;
     }
-    invariant_assert(!op->lcl, "op %zu: stores should not have locals", op->id);
+    VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
     break;
   case IR_OP_TY_STORE_BITFIELD:
     break;
@@ -100,7 +124,8 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_RET:
     break;
   case IR_OP_TY_CALL:
-    invariant_assert(func->flags & IR_FUNC_FLAG_MAKES_CALL, "CALL op present but IR_FUNC_FLAG_MAKES_CALL not set");
+    VALIDATION_CHECKZ(func->flags & IR_FUNC_FLAG_MAKES_CALL, op,
+                      "CALL op present but IR_FUNC_FLAG_MAKES_CALL not set");
     break;
   case IR_OP_TY_CUSTOM:
     break;
@@ -117,44 +142,44 @@ static void ir_validate_op(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-static void ir_validate_stmt(struct ir_func *func, struct ir_stmt *stmt) {
+static void ir_validate_stmt(struct ir_validate_state *state,
+                             struct ir_func *func, struct ir_stmt *stmt) {
   struct ir_op *op = stmt->first;
 
   while (op) {
-    ir_validate_op(func, op);
+    ir_validate_op(state, func, op);
 
     op = op->succ;
   }
 }
 
-static void ir_validate_basicblock(struct ir_func *func,
+static void ir_validate_basicblock(struct ir_validate_state *state,
+                                   struct ir_func *func,
                                    struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
   while (stmt) {
-    ir_validate_stmt(func, stmt);
+    ir_validate_stmt(state, func, stmt);
 
     stmt = stmt->succ;
   }
 }
 
-static void ir_validate_data(struct ir_unit *iru, struct ir_glb *glb) {}
+static void ir_validate_data(struct ir_validate_state *state,
+                             struct ir_glb *glb) {}
 
-static void ir_validate_func(struct ir_unit *iru, struct ir_glb *glb) {
+static void ir_validate_func(struct ir_validate_state *state,
+                             struct ir_glb *glb) {
   switch (glb->def_ty) {
-
   case IR_GLB_DEF_TY_DEFINED:
-    if (!glb->func) {
-      BUG("defined global should have func");
-    }
+    VALIDATION_CHECKZ(glb->func, glb, "defined global should have func");
     break;
   case IR_GLB_DEF_TY_UNDEFINED:
-    if (glb->func) {
-      BUG("undefined global should not have func");
-    }
+    VALIDATION_CHECKZ(!glb->func, glb,
+                      "undefined global should not have func");
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
-    BUG("should not have tentative defs by now");
+    VALIDATION_CHECKZ(false, glb, "should not have tentative defs by now");
   }
 
   struct ir_func *func = glb->func;
@@ -163,7 +188,7 @@ static void ir_validate_func(struct ir_unit *iru, struct ir_glb *glb) {
   rebuild_ids(func);
 
   while (basicblock) {
-    ir_validate_basicblock(func, basicblock);
+    ir_validate_basicblock(state, func, basicblock);
 
     basicblock = basicblock->succ;
   }
@@ -172,16 +197,37 @@ static void ir_validate_func(struct ir_unit *iru, struct ir_glb *glb) {
 void ir_validate(struct ir_unit *iru) {
   struct ir_glb *glb = iru->first_global;
 
+  struct ir_validate_state state = {
+      .unit = iru, .errors = vector_create(sizeof(struct ir_validate_error))};
+
   while (glb) {
     switch (glb->ty) {
     case IR_GLB_TY_DATA:
-      ir_validate_data(iru, glb);
+      ir_validate_data(&state, glb);
       break;
     case IR_GLB_TY_FUNC:
-      ir_validate_func(iru, glb);
+      ir_validate_func(&state, glb);
       break;
     }
 
     glb = glb->succ;
   }
+
+  size_t num_errs = vector_length(state.errors);
+  if (!num_errs) {
+    return;
+  }
+
+  fprintf(stderr, "*** IR VALIDATION FAILED ****\n");
+
+  for (size_t i = 0; i < num_errs; i++) {
+    struct ir_validate_error *error = vector_get(state.errors, i);
+
+    fprintf(stderr, "Validation error: %s\n", error->err);
+    debug_print_ir_object(stderr, iru, &error->object);
+
+    fprintf(stderr, "\n\n\n");
+  }
+
+  BUG("VALIDATION FAILED");
 }

@@ -5,7 +5,6 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
-#include "prettyprint.h"
 
 enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
@@ -664,7 +663,7 @@ void detach_ir_basicblock(struct ir_func *irb,
     irb->last = basicblock->pred;
   }
 
-  basicblock->irb = NULL;
+  basicblock->func = NULL;
 }
 
 void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
@@ -1004,7 +1003,7 @@ void move_after_ir_basicblock(struct ir_func *irb,
   invariant_assert(basicblock->id != move_after->id,
                    "trying to move basicblock after itself!");
 
-  if (basicblock->irb) {
+  if (basicblock->func) {
     detach_ir_basicblock(irb, basicblock);
   }
 
@@ -1017,7 +1016,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
   invariant_assert(basicblock->id != move_before->id,
                    "trying to move basicblock before itself!");
 
-  if (basicblock->irb) {
+  if (basicblock->func) {
     detach_ir_basicblock(irb, basicblock);
   }
 
@@ -1050,7 +1049,7 @@ struct ir_op *insert_before_ir_op(struct ir_func *irb,
 
 void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
   basicblock->id = id;
-  basicblock->irb = NULL;
+  basicblock->func = NULL;
   basicblock->pred = NULL;
   basicblock->succ = NULL;
   basicblock->first = NULL;
@@ -1197,7 +1196,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
   irb->basicblock_count++;
 
   basicblock->id = irb->next_basicblock_id++;
-  basicblock->irb = irb;
+  basicblock->func = irb;
   basicblock->pred = irb->last;
   basicblock->succ = NULL;
   basicblock->first = NULL;
@@ -1464,6 +1463,8 @@ struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
       return op->store_bitfield.addr;
     }
   } else {
+    DEBUG_ASSERT(op->ty == IR_OP_TY_STORE, "expected store");
+
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       addr = (struct ir_op_addr){
@@ -1780,6 +1781,7 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
 
   irb->total_locals_size += lcl_pad;
 
+  lcl->func = irb;
   lcl->flags = IR_LCL_FLAG_NONE;
   lcl->var_ty = *var_ty;
   lcl->offset = irb->total_locals_size;
