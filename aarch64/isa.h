@@ -3,7 +3,7 @@
 
 #define FITS_IN_BITS(value, bitc)                                              \
   _Generic((value),                                                            \
-      imm_t: (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0),                \
+      imm_t: (((value) & ~((1ull << (bitc)) - 1ull)) == 0),                \
       simm_t: ((llabs(((simm_t)value)) & ~((1ll << (bitc)) - 1l)) == 0))
 
 // Constants must be casted to uint32_t to be well-defined behaviour

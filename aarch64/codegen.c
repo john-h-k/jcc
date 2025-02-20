@@ -1003,10 +1003,7 @@ static void codegen_addr_offset_op(struct codegen_state *state,
   }
 
   if (offset) {
-    struct instr *add_offset = alloc_instr(state->func);
-    add_offset->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-    add_offset->aarch64->add_imm =
-        (struct aarch64_addsub_imm){.dest = dest, .source = reg, .imm = offset};
+    codegen_add_imm(state, dest, reg, offset);
   }
 
   if (!addr_offset->index && !offset) {
