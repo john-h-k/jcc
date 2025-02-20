@@ -47,14 +47,13 @@ jobs:
           RISCV="/opt/riscv"
           rm -rf riscv-gnu-toolchain.tar.gz
 
-      - name: Install Spike
-        run: |
-          git clone https://github.com/riscv/riscv-isa-sim.git
-          cd riscv-isa-sim
-          mkdir build && cd build
-          ../configure --prefix=/opt/riscv
-          make -j$(nproc)
-          sudo make install
+      - name: Install rust
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install riscy
+        run: cargo install riscy
 
       - name: Checkout repository
         uses: actions/checkout@v4
