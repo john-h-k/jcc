@@ -101,8 +101,12 @@ static void emit_instr(const struct emit_state *state,
     // EMIT(FENCE, fence);
     // EMIT(FENCE_TSO, fence_tso);
     // EMIT(PAUSE, pause);
-    // EMIT(ECALL, ecall);
-    // EMIT(EBREAK, ebreak);
+    case RV32I_INSTR_TY_EBREAK:
+      rv32i_emit_ebreak(state->emitter);
+      break;
+    case RV32I_INSTR_TY_ECALL:
+      rv32i_emit_ecall(state->emitter);
+      break;
     default:
       TODO("impl fclass/misc instrs");
   }
@@ -122,7 +126,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_STRING:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_C_STRING,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->str,
           .len_data = strlen(entry->str) + 1,
           .num_relocations = 0,
@@ -136,7 +140,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
       // TODO: relocations
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_CONST_DATA,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
           .num_relocations = entry->data.num_relocs,
@@ -149,7 +153,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_DATA:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_MUT_DATA,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = entry->data.data,
           .len_data = entry->data.len_data,
           .num_relocations = entry->data.num_relocs,
@@ -162,7 +166,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
     case CODEGEN_ENTRY_TY_DECL:
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_DECL,
-          .alignment = 0,
+          .alignment = entry->alignment,
           .data = NULL,
           .len_data = 0,
           .num_relocations = entry->data.num_relocs,

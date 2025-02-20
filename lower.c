@@ -76,8 +76,6 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
   lower_call(func, op);
 }
 
-
-
 enum load_bitfield {
   LOAD_BITFIELD_MASK_IN,
   LOAD_BITFIELD_MASK_OUT,
@@ -376,26 +374,18 @@ static void lower_load_bitfield(struct ir_func *func, struct ir_op *op) {
       (struct ir_op_bitfield_extract){.value = load, .bitfield = bitfield};
 }
 
-static void lower_store_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr =
-      insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-  addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->store.glb};
+static void lower_store_to_addr(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *addr = build_addr(func, op);
 
-  struct ir_op *value = op->store.value;
-
-  op->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+  op->store.ty = IR_OP_STORE_TY_ADDR;
+  op->store.addr = addr;
 }
 
-static void lower_load_glb(struct ir_func *func, struct ir_op *op) {
-  struct ir_op *addr =
-      insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-  addr->addr =
-      (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = op->load.glb};
+static void lower_load_to_addr(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *addr = build_addr(func, op);
 
-  op->ty = IR_OP_TY_LOAD;
-  op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
+  op->load.ty = IR_OP_LOAD_TY_ADDR;
+  op->load.addr = addr;
 }
 
 static void lower_pointers(struct ir_unit *unit) {
@@ -535,29 +525,34 @@ static void lower_params(struct ir_func *func) {
       case IR_PARAM_INFO_TY_STACK:
         break;
       case IR_PARAM_INFO_TY_POINTER: {
-        DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR && param_op->addr.ty == IR_OP_ADDR_TY_LCL, "expected addr");
+        DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
+                         param_op->addr.ty == IR_OP_ADDR_TY_LCL,
+                     "expected addr");
 
-        struct ir_op *param = insert_before_ir_op(func, param_op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
+        struct ir_op *param = insert_before_ir_op(func, param_op, IR_OP_TY_MOV,
+                                                  IR_VAR_TY_POINTER);
         param->mov = (struct ir_op_mov){.value = NULL};
         param->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-        param->reg =
-            (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                            .idx = param_info.reg.start_reg.idx};
-        
+        param->reg = (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                                     .idx = param_info.reg.start_reg.idx};
 
         struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
         struct ir_lcl *lcl = param_op->addr.lcl;
 
         struct ir_op *op;
         while (ir_func_iter_next(&iter, &op)) {
-          if (op->ty == IR_OP_TY_ADDR && op->addr.ty == IR_OP_ADDR_TY_LCL && op->addr.lcl == lcl) {
+          if (op->ty == IR_OP_TY_ADDR && op->addr.ty == IR_OP_ADDR_TY_LCL &&
+              op->addr.lcl == lcl) {
             op = replace_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
             op->flags &= ~IR_OP_FLAG_PARAM;
             op->mov = (struct ir_op_mov){.value = param};
-          } else if (op->ty == IR_OP_TY_LOAD && op->load.ty == IR_OP_LOAD_TY_LCL && op->load.lcl == lcl) {
+          } else if (op->ty == IR_OP_TY_LOAD &&
+                     op->load.ty == IR_OP_LOAD_TY_LCL && op->load.lcl == lcl) {
             op->load.ty = IR_OP_LOAD_TY_ADDR;
             op->load.addr = param;
-          } else if (op->ty == IR_OP_TY_STORE && op->store.ty == IR_OP_STORE_TY_LCL && op->store.lcl == lcl) {
+          } else if (op->ty == IR_OP_TY_STORE &&
+                     op->store.ty == IR_OP_STORE_TY_LCL &&
+                     op->store.lcl == lcl) {
             op->store.ty = IR_OP_STORE_TY_ADDR;
             op->store.addr = param;
           }
@@ -951,15 +946,11 @@ void lower(struct ir_unit *unit, const struct target *target) {
               lower_br_switch(func, op);
               break;
             case IR_OP_TY_STORE:
-              if (op->store.ty == IR_OP_STORE_TY_GLB) {
-                lower_store_glb(func, op);
-              }
+              lower_store_to_addr(func, op);
               lower_store(func, op);
               break;
             case IR_OP_TY_LOAD:
-              if (op->load.ty == IR_OP_LOAD_TY_GLB) {
-                lower_load_glb(func, op);
-              }
+              lower_load_to_addr(func, op);
               break;
             case IR_OP_TY_STORE_BITFIELD:
               lower_store_bitfield(func, op);

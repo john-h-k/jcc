@@ -211,7 +211,7 @@ static void write_relocations_elf(FILE *file,
         rela.r_addend = 0;
         rela.r_info = ELF32_R_INFO(sym_id_to_idx[r->symbol_index],
                                    symbol->visibility == SYMBOL_VISIBILITY_UNDEF
-                                       ? R_RISCV_CALL
+                                       ? R_RISCV_CALL_PLT
                                        : R_RISCV_JAL);
         fwrite(&rela, sizeof(rela), 1, file);
 
@@ -350,17 +350,32 @@ static void write_elf_object(const struct build_object_args *args) {
     switch (e->ty) {
     case OBJECT_ENTRY_TY_FUNC:
       text_align = MAX(text_align, e->alignment);
+      break;
+    case OBJECT_ENTRY_TY_C_STRING:
+    case OBJECT_ENTRY_TY_CONST_DATA:
+      const_align = MAX(const_align, e->alignment);
+      break;
+    case OBJECT_ENTRY_TY_MUT_DATA:
+      data_align = MAX(data_align, e->alignment);
+      break;
+    case OBJECT_ENTRY_TY_DECL:
+      break;
+    }
+  }
+
+  for (size_t i = 0; i < args->num_entries; i++) {
+    const struct object_entry *e = &args->entries[i];
+    switch (e->ty) {
+    case OBJECT_ENTRY_TY_FUNC:
       entry_offsets[i] = total_text;
       total_text += ROUND_UP(e->len_data, text_align);
       break;
     case OBJECT_ENTRY_TY_C_STRING:
     case OBJECT_ENTRY_TY_CONST_DATA:
-      const_align = MAX(const_align, e->alignment);
       entry_offsets[i] = total_const;
       total_const += ROUND_UP(e->len_data, const_align);
       break;
     case OBJECT_ENTRY_TY_MUT_DATA:
-      data_align = MAX(data_align, e->alignment);
       entry_offsets[i] = total_data;
       total_data += ROUND_UP(e->len_data, data_align);
       break;
@@ -428,8 +443,9 @@ static void write_elf_object(const struct build_object_args *args) {
     const struct object_entry *e = &args->entries[i];
     if (e->ty == OBJECT_ENTRY_TY_FUNC) {
       fwrite(e->data, 1, e->len_data, file);
-      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, text_align); j++)
+      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, text_align); j++) {
         fputc(0, file);
+      }
     }
   }
 
@@ -440,8 +456,10 @@ static void write_elf_object(const struct build_object_args *args) {
     if (e->ty == OBJECT_ENTRY_TY_CONST_DATA ||
         e->ty == OBJECT_ENTRY_TY_C_STRING) {
       fwrite(e->data, 1, e->len_data, file);
-      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, const_align); j++)
+      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, const_align);
+           j++) {
         fputc(0, file);
+      }
     }
   }
 
@@ -451,8 +469,9 @@ static void write_elf_object(const struct build_object_args *args) {
     const struct object_entry *e = &args->entries[i];
     if (e->ty == OBJECT_ENTRY_TY_MUT_DATA && e->data) {
       fwrite(e->data, 1, e->len_data, file);
-      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, data_align); j++)
+      for (size_t j = e->len_data; j < ROUND_UP(e->len_data, data_align); j++) {
         fputc(0, file);
+      }
     }
   }
 

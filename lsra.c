@@ -1,6 +1,5 @@
 #include "lsra.h"
 
-#include "util.h"
 #include "bitset.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
@@ -219,16 +218,24 @@ static void fixup_spills_callback(struct ir_op **op, void *metadata) {
     DEBUG_ASSERT((*op)->lcl, "op %zu should have had local by `%s`", (*op)->id,
                  __func__);
     if (op_needs_reg(data->consumer)) {
-      struct ir_op *load;
+      struct ir_op *addr;
       if (data->consumer->ty == IR_OP_TY_PHI) {
-        load = replace_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD,
-                             (*op)->var_ty);
+        addr = replace_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
+                                   var_ty_for_pointer_size(data->irb->unit));
       } else {
-        load = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_LOAD,
-                                   (*op)->var_ty);
+        addr = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
+                                   var_ty_for_pointer_size(data->irb->unit));
       }
+      addr->addr = (struct ir_op_addr){
+        .ty = IR_OP_ADDR_TY_LCL,
+        .lcl = (*op)->lcl
+      };
+      addr->reg = (struct ir_reg){ .ty = IR_REG_TY_INTEGRAL, .idx = data->info.ssp_reg };
+      
+      struct ir_op *load = insert_after_ir_op(data->irb, addr, IR_OP_TY_LOAD,
+                                   (*op)->var_ty);
       load->load =
-          (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = (*op)->lcl};
+          (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
       if (var_ty_is_integral(&load->var_ty)) {
         load->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
@@ -315,7 +322,8 @@ static void force_spill_register(struct ir_func *irb,
 }
 
 static int sort_interval_by_desc_start_point(const void *a, const void *b) {
-  return -sort_interval_by_start_point(*(const struct interval *const *)a, *(const struct interval *const *)b);
+  return -sort_interval_by_start_point(*(const struct interval *const *)a,
+                                       *(const struct interval *const *)b);
 }
 
 static struct interval_data register_alloc_pass(struct ir_func *irb,
@@ -532,7 +540,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       }
 
       for (size_t j = vector_length(fixed_reg_intervals); j; j--) {
-        struct interval *fixed = *(struct interval **)vector_get(fixed_reg_intervals, j - 1);
+        struct interval *fixed =
+            *(struct interval **)vector_get(fixed_reg_intervals, j - 1);
 
         if (fixed->start > interval->end) {
           continue;
@@ -607,37 +616,34 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
 */
 void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
-  bool has_ssp = false;
-  size_t ssp_reg = 0;
-
-  size_t num_nonvolatile_gp = reg_info.gp_registers.num_nonvolatile;
-  // FIXME: need better logic
-  // this is tough because what if we only need ssp (secondary stack pointer)
-  // during lsra? at the start, all locals are within one-instr depth, but then
-  // during spilling we exceed this and need another
-  // FIXME: temp disable SSP because it forces prologue
-  if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
-    // if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
-    num_nonvolatile_gp--;
-    has_ssp = true;
-    ssp_reg = reg_info.gp_registers.num_volatile + num_nonvolatile_gp;
-  }
-
   irb->reg_usage = (struct ir_reg_usage){
       .fp_registers_used =
           bitset_create(reg_info.fp_registers.num_volatile +
                             reg_info.fp_registers.num_nonvolatile,
                         false),
-      .gp_registers_used = bitset_create(
-          reg_info.gp_registers.num_volatile + num_nonvolatile_gp, false),
+      .gp_registers_used =
+          bitset_create(reg_info.gp_registers.num_volatile +
+                            reg_info.gp_registers.num_nonvolatile,
+                        false),
   };
 
-  if (has_ssp) {
+  bool has_ssp = false;
+  size_t ssp_reg = 0;
+  // FIXME: need better logic
+  // this is tough because what if we only need ssp (secondary stack pointer)
+  // during lsra? at the start, all locals are within one-instr depth, but then
+  // during spilling we exceed this and need another
+  // FIXME: temp disable SSP because it forces prologue
+  // if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+    has_ssp = true;
+    ssp_reg = reg_info.ssp;
     bitset_set(irb->reg_usage.gp_registers_used, ssp_reg, true);
   }
 
-  size_t num_gp_regs =
-      reg_info.gp_registers.num_volatile + num_nonvolatile_gp - 1;
+  // remove 1 for spill reg
+  size_t num_gp_regs = reg_info.gp_registers.num_volatile +
+                       reg_info.gp_registers.num_nonvolatile - 1;
   size_t num_fp_regs = reg_info.fp_registers.num_volatile +
                        reg_info.fp_registers.num_nonvolatile - 1;
 

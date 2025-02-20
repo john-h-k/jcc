@@ -11,8 +11,10 @@ struct State {
 typedef unsigned long size_t;
 
 typedef struct FILE FILE;
-extern FILE *__stderrp;
-#define stderr __stderrp
+
+extern FILE *stderr;
+// extern FILE *__stderrp;
+// #define stderr __stderrp
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -38,7 +40,7 @@ void free(void *);
 void exit(int);
 
 void error(const char *msg) {
-  fprintf(stderr, "%s\n", msg);
+  // fprintf(stderr, "%s\n", msg);
   exit(1);
 }
 

@@ -5,7 +5,7 @@
 #define RV32I_INSTR_SIZE (2)
 
 #define U32(v) ((uint32_t)(v))
-#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((simm_t)imm >> sz) == -1 || ((simm_t)imm >> sz) == 0, "imm did not fit!"), imm)
+#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) || ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0), "imm did not fit!"), imm)
 #define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \
@@ -22,17 +22,19 @@
              (U32((imm12) & 0b11111) << 7) | U32(opcode))
 
 #define B_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 11, 11) << 31) | (U32_S(imm12, 9, 4) << 25) |      \
+  (DEBUG_ASSERT(!(imm12 & 1), "B-type instructions must be multiple of 2"), \
+  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 12, 12) << 31) | (U32_S(imm12, 10, 5) << 25) |      \
              (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
-             (U32_S(imm12, 3, 0) << 8) | (U32_S(imm12, 10, 10) << 7) | U32(opcode))
+             (U32_S(imm12, 4, 1) << 8) | (U32_S(imm12, 11, 11) << 7) | U32(opcode)))
 
 #define U_TYPE(imm20, rd, opcode)                                              \
   (uint32_t)((U32(CHECK_IMM(imm20, 20)) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define J_TYPE(imm20, rd, opcode)                                              \
+  (DEBUG_ASSERT(!(imm20 & 1), "J-type instructions must be multiple of 2"), \
   (uint32_t)((U32_S(CHECK_IMM(imm20, 20), 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
              (U32_S(imm20, 11, 11) << 20) | (U32_S(imm20, 19, 12) << 12) |     \
-             (U32(rd) << 7) | U32(opcode))
+             (U32(rd) << 7) | U32(opcode)))
 
 #define OPC_LOAD U32(0b0000011)
 #define OPC_LOAD_FP U32(0b0000111)
@@ -154,17 +156,6 @@
 #define FUNCT7_FSQRT_D U32(0b0101101)
 #define FUNCT7_FCMP_D U32(0b1010001)
 
-#define FUNCT7_SUB U32(0b0100000)
-#define FUNCT7_SRL U32(0b0000000)
-#define FUNCT7_SRA U32(0b0100000)
-
-#define RS2_FCVT U32(0b00000)
-#define RS2_FCVTU U32(0b00001)
-
-#define RM_FEQ U32(0b010)
-#define RM_FLT U32(0b001)
-#define RM_FLE U32(0b000)
-
 #define FUNCT7_FCVT_S_D U32(0b0100000)
 #define FUNCT7_FCVT_D_S U32(0b0100001)
 
@@ -179,6 +170,17 @@
 
 #define FUNCT7_FMV_WD U32(0b1110001)
 #define FUNCT7_FMV_DW U32(0b1111001)
+
+#define FUNCT7_SUB U32(0b0100000)
+#define FUNCT7_SRL U32(0b0000000)
+#define FUNCT7_SRA U32(0b0100000)
+
+#define RS2_FCVT U32(0b00000)
+#define RS2_FCVTU U32(0b00001)
+
+#define RM_FLE U32(0b000)
+#define RM_FLT U32(0b001)
+#define RM_FEQ U32(0b010)
 
 #define ADDI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_ADD, rd, OPC_OP_IMM)
 #define XORI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_XOR, rd, OPC_OP_IMM)
@@ -330,5 +332,10 @@
 #define FLW(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LW, rd, OPC_LOAD_FP)
 #define FLD(imm, rs1, rd) I_TYPE(imm, rs1, FUNCT3_LD, rd, OPC_LOAD_FP)
 
+#define IMM12_ECALL (0b000000000000)
+#define IMM12_EBREAK (0b000000000001)
+
+#define ECALL I_TYPE(IMM12_ECALL, 0b00000, 0b000, 0b00000, OPC_SYSTEM)
+#define EBREAK I_TYPE(IMM12_EBREAK, 0b00000, 0b000, 0b00000, OPC_SYSTEM)
 
 #endif

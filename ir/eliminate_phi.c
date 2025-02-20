@@ -193,10 +193,19 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
         tmp_mov = mov;
       } else {
+        struct ir_op *addr =
+            insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+        addr->addr = (struct ir_op_addr){
+            .ty = IR_OP_ADDR_TY_LCL,
+            .lcl = spill_lcl,
+        };
+        addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = irb->unit->target->reg_info.ssp};
+
         struct ir_op *store =
-            insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+            insert_after_ir_op(irb, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
         store->store = (struct ir_op_store){
-            .ty = IR_OP_STORE_TY_LCL, .lcl = spill_lcl, .value = value};
+            .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
         store->flags |= IR_OP_FLAG_PHI_MOV;
         // store_var_ty = value->var_ty;
         store_var_ty = lcl_ty;
@@ -214,13 +223,20 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
         phi_op = mov;
       } else {
-        struct ir_op *load =
-            insert_before_ir_op(irb, last, IR_OP_TY_LOAD, store_var_ty);
-        load->reg = to;
-        load->load = (struct ir_op_load){
-            .ty = IR_OP_LOAD_TY_LCL,
+        struct ir_op *addr =
+            insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+        addr->addr = (struct ir_op_addr){
+            .ty = IR_OP_ADDR_TY_LCL,
             .lcl = spill_lcl,
         };
+        addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                    .idx = irb->unit->target->reg_info.ssp};
+
+        struct ir_op *load =
+            insert_after_ir_op(irb, addr, IR_OP_TY_LOAD, store_var_ty);
+        load->reg = to;
+        load->load =
+            (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
         phi_op = load;
       }
@@ -234,22 +250,40 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
     } else if (move.from.idx >= SIZE_MAX / 2) {
       struct ir_lcl *lcl = move.from.metadata[0];
 
+      struct ir_op *addr =
+          insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+      addr->addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = lcl,
+      };
+      addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                  .idx = irb->unit->target->reg_info.ssp};
+
       struct ir_op *load =
-          insert_before_ir_op(irb, last, IR_OP_TY_LOAD, lcl->var_ty);
+          insert_after_ir_op(irb, addr, IR_OP_TY_LOAD, lcl->var_ty);
       load->reg = to;
       load->load = (struct ir_op_load){
-          .ty = IR_OP_LOAD_TY_LCL,
-          .lcl = lcl,
+          .ty = IR_OP_LOAD_TY_ADDR,
+          .addr = addr,
       };
     } else if (move.to.idx >= SIZE_MAX / 2) {
       struct ir_lcl *lcl = move.to.metadata[0];
 
-      struct ir_op *store =
-          insert_before_ir_op(irb, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-      store->store = (struct ir_op_store){
-          .ty = IR_OP_STORE_TY_LCL,
-          .value = value,
+      struct ir_op *addr =
+          insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+      addr->addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
           .lcl = lcl,
+      };
+      addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
+                                  .idx = irb->unit->target->reg_info.ssp};
+
+      struct ir_op *store =
+          insert_after_ir_op(irb, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store->store = (struct ir_op_store){
+          .ty = IR_OP_STORE_TY_ADDR,
+          .value = value,
+          .addr = addr,
       };
     } else {
       struct ir_op *mov =

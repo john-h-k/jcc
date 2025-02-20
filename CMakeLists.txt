@@ -113,6 +113,9 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wstrict-prototypes
     -Wmissing-field-initializers
 
+    # i would _like_ to enable this, but it causes errors everywhere flag enums are used
+    -Wno-sign-conversion
+
     -Wno-missing-noreturn
     -Wno-unused-macros
     -Wno-switch-enum
@@ -121,7 +124,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wno-padded
     -Wno-declaration-after-statement
     -Wno-class-varargs
-    -Wno-sign-conversion
     -Wno-conditional-uninitialized
     -Wno-shorten-64-to-32
     -Wno-assign-enum

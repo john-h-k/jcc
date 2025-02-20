@@ -289,8 +289,6 @@ static void write_segment_command(FILE *file,
   size_t total_size =
       total_func_size + total_str_size + total_const_size + total_data_size;
 
-#define LOG2(x) ((sizeof((x)) * 8 - lzcnt(x)) - 1)
-
   struct segment_command_64 segment;
   memset(&segment, 0, sizeof(segment));
   segment.cmd = LC_SEGMENT_64;
@@ -321,7 +319,7 @@ static void write_segment_command(FILE *file,
   text.addr = 0;
   text.size = total_func_size;
   text.offset = segment.fileoff;
-  text.align = LOG2(func_align);
+  text.align = ILOG2(func_align);
   text.reloff = relocs_offset;
   text.nreloc = info.num_text_reloc_instrs;
   text.flags = S_REGULAR | S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS;
@@ -336,7 +334,7 @@ static void write_segment_command(FILE *file,
   cstrings.addr = text.addr + text.size;
   cstrings.size = total_str_size;
   cstrings.offset = segment.fileoff + text.size;
-  cstrings.align = LOG2(str_align);
+  cstrings.align = ILOG2(str_align);
   cstrings.reloff = 0; // no relocs
   cstrings.nreloc = 0;
   cstrings.flags = S_CSTRING_LITERALS;
@@ -351,7 +349,7 @@ static void write_segment_command(FILE *file,
   const_data.addr = cstrings.addr + cstrings.size;
   const_data.size = total_const_size;
   const_data.offset = segment.fileoff + text.size + cstrings.size;
-  const_data.align = LOG2(const_align);
+  const_data.align = ILOG2(const_align);
   const_data.reloff = text.reloff + (sizeof(struct relocation_info) *
                                      info.num_text_reloc_instrs);
   const_data.nreloc = info.num_const_data_reloc_instrs;
@@ -367,7 +365,7 @@ static void write_segment_command(FILE *file,
   data.addr = const_data.addr + const_data.size;
   data.size = total_data_size;
   data.offset = segment.fileoff + text.size + cstrings.size + const_data.size;
-  data.align = LOG2(data_align);
+  data.align = ILOG2(data_align);
   data.reloff = const_data.reloff + (sizeof(struct relocation_info) *
                                      info.num_const_data_reloc_instrs);
   data.nreloc = info.num_data_reloc_instrs;
