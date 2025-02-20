@@ -1,7 +1,7 @@
 #include "validate.h"
 
-#include "../util.h"
 #include "../log.h"
+#include "../util.h"
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
@@ -23,7 +23,8 @@ struct validate_op_order_metadata {
 
 #define VALIDATION_CHECKZ(cond, obj, msg)                                      \
   if (!(cond)) {                                                               \
-    struct ir_validate_error error = { .err = msg, .object = IR_MK_OBJECT((obj)) };                     \
+    struct ir_validate_error error = {.err = msg,                              \
+                                      .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
   }
 
@@ -31,7 +32,8 @@ struct validate_op_order_metadata {
   if (!(cond)) {                                                               \
     const char *msg =                                                          \
         arena_alloc_snprintf(state->unit->arena, fmt, __VA_ARGS__);            \
-    struct ir_validate_error error = { .err = msg, .object = IR_MK_OBJECT((obj)) };                     \
+    struct ir_validate_error error = {.err = msg,                              \
+                                      .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
   }
 
@@ -53,9 +55,7 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
 
 static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_op *op) {
-  struct validate_op_order_metadata metadata = {
-    .state = state,
-    .consumer = op};
+  struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
   walk_op_uses(op, validate_op_order, &metadata);
 
   switch (op->ty) {
@@ -86,8 +86,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
       break;
     case IR_OP_LOAD_TY_ADDR:
-      VALIDATION_CHECKZ(op->load.addr, op,
-                        "load ty addr must have addr");
+      VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
       break;
     }
     break;
@@ -103,8 +102,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       VALIDATION_CHECKZ(op->store.glb, op, "store ty glb must have glb");
       break;
     case IR_OP_STORE_TY_ADDR:
-      VALIDATION_CHECKZ(op->store.addr, op,
-                        "tore ty addr must have addr");
+      VALIDATION_CHECKZ(op->store.addr, op, "tore ty addr must have addr");
       break;
     }
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
@@ -163,6 +161,25 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
 
     stmt = stmt->succ;
   }
+
+  printf("validating bb %zu\n", basicblock->id);
+
+  struct ir_op *last = basicblock->last->last;
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_RET, basicblock, "IR_BASICBLOCK_TY_RET should end in `ret` op");
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_COND, basicblock, "IR_BASICBLOCK_TY_SPLIT should end in `br.cond` op");
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR, basicblock, "IR_BASICBLOCK_TY_MERGE should end in `br` op");
+    break;
+  case IR_BASICBLOCK_TY_SWITCH:
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_SWITCH, basicblock, "IR_BASICBLOCK_TY_RET should end in `br.switch` op");
+    break;
+  }
 }
 
 static void ir_validate_data(struct ir_validate_state *state,
@@ -175,8 +192,7 @@ static void ir_validate_func(struct ir_validate_state *state,
     VALIDATION_CHECKZ(glb->func, glb, "defined global should have func");
     break;
   case IR_GLB_DEF_TY_UNDEFINED:
-    VALIDATION_CHECKZ(!glb->func, glb,
-                      "undefined global should not have func");
+    VALIDATION_CHECKZ(!glb->func, glb, "undefined global should not have func");
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
     VALIDATION_CHECKZ(false, glb, "should not have tentative defs by now");

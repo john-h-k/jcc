@@ -779,23 +779,26 @@ static void codegen_bitfield_extract(struct codegen_state *state,
 }
 
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
-  DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR, "glb/lcl loads should have been lowered to addr load");
+  DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR,
+               "glb/lcl loads should have been lowered to addr load");
 
   codegen_load_addr_op(state, op);
 }
 
 static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
-  DEBUG_ASSERT(op->store.ty == IR_OP_STORE_TY_ADDR, "glb/lcl stores should have been lowered to addr store");
+  DEBUG_ASSERT(op->store.ty == IR_OP_STORE_TY_ADDR,
+               "glb/lcl stores should have been lowered to addr store");
 
   codegen_store_addr_op(state, op);
 }
 
 // this method assumes it can safely you any non-argument volatile registers
 UNUSED static void codegen_mem_copy_volatile(struct codegen_state *state,
-                                      struct aarch64_reg source,
-                                      size_t source_offset,
-                                      struct aarch64_reg dest,
-                                      size_t dest_offset, size_t num_bytes) {
+                                             struct aarch64_reg source,
+                                             size_t source_offset,
+                                             struct aarch64_reg dest,
+                                             size_t dest_offset,
+                                             size_t num_bytes) {
   DEBUG_ASSERT(num_bytes < 4096,
                "doesn't support >4096 copies due to immediates");
 
@@ -1334,14 +1337,20 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
-      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
-      size_t imms = (size * 8 - 1) - rhs_op->cnst.int_value;
-      instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
-      instr->aarch64->ubfm =
-          (struct aarch64_bitfield){.dest = dest,
-                                    .source = codegen_reg(lhs_op),
-                                    .immr = imms + 1,
-                                    .imms = imms};
+      size_t shift = rhs_op->cnst.int_value;
+
+      if (shift) {
+        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t imms = (size * 8 - 1) - shift;
+        instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
+        instr->aarch64->ubfm =
+            (struct aarch64_bitfield){.dest = dest,
+                                      .source = codegen_reg(lhs_op),
+                                      .immr = imms + 1,
+                                      .imms = imms};
+      } else {
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+      }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_LSLV;
       instr->aarch64->lslv = (struct aarch64_reg_2_source){
@@ -1353,14 +1362,20 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
     if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
-      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
-      size_t immr = rhs_op->cnst.int_value;
-      instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
-      instr->aarch64->sbfm =
-          (struct aarch64_bitfield){.dest = dest,
-                                    .source = codegen_reg(lhs_op),
-                                    .immr = immr,
-                                    .imms = size * 8 - 1};
+      size_t shift = rhs_op->cnst.int_value;
+
+      if (shift) {
+        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t immr = shift;
+        instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
+        instr->aarch64->sbfm =
+            (struct aarch64_bitfield){.dest = dest,
+                                      .source = codegen_reg(lhs_op),
+                                      .immr = immr,
+                                      .imms = size * 8 - 1};
+      } else {
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+      }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_ASRV;
       instr->aarch64->asrv = (struct aarch64_reg_2_source){
@@ -1372,14 +1387,21 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   case IR_OP_BINARY_OP_TY_URSHIFT:
     if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {
-      size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
-      size_t immr = rhs_op->cnst.int_value;
-      instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
-      instr->aarch64->ubfm =
-          (struct aarch64_bitfield){.dest = dest,
-                                    .source = codegen_reg(lhs_op),
-                                    .immr = immr,
-                                    .imms = size * 8 - 1};
+      size_t shift = rhs_op->cnst.int_value;
+
+      if (shift) {
+
+        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t immr = shift;
+        instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
+        instr->aarch64->ubfm =
+            (struct aarch64_bitfield){.dest = dest,
+                                      .source = codegen_reg(lhs_op),
+                                      .immr = immr,
+                                      .imms = size * 8 - 1};
+      } else {
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+      }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_LSRV;
       instr->aarch64->lsrv = (struct aarch64_reg_2_source){
@@ -1703,8 +1725,9 @@ struct mem_copy {
   struct mem_loc src, dest;
 };
 
-UNUSED static void codegen_moves(struct codegen_state *state, struct move_set moves,
-                          enum aarch64_reg_class reg_class) {
+UNUSED static void codegen_moves(struct codegen_state *state,
+                                 struct move_set moves,
+                                 enum aarch64_reg_class reg_class) {
   for (size_t i = 0; i < moves.num_moves; i++) {
     struct move move = moves.moves[i];
 
@@ -1769,7 +1792,8 @@ UNUSED static void codegen_moves(struct codegen_state *state, struct move_set mo
   }
 }
 
-UNUSED static enum aarch64_reg_attr_flags reg_attr_flags(struct aarch64_reg reg) {
+UNUSED static enum aarch64_reg_attr_flags
+reg_attr_flags(struct aarch64_reg reg) {
   switch (reg.ty) {
   case AARCH64_REG_TY_NONE:
     return AARCH64_REG_ATTR_FLAG_NONE;
@@ -1864,8 +1888,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   } else {
     // NOTE: `blr` seems to segfault on linux aarch64
     instr->aarch64->ty = AARCH64_INSTR_TY_BLR;
-    instr->aarch64->blr = (struct aarch64_branch_reg){
-        .target = codegen_reg(op->call.target) };
+    instr->aarch64->blr =
+        (struct aarch64_branch_reg){.target = codegen_reg(op->call.target)};
   }
 }
 
@@ -1877,9 +1901,9 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 static void codegen_prologue(struct codegen_state *state) {
   struct ir_func *ir = state->ir;
 
-  size_t stack_size = state->ir->total_locals_size + state->ir->caller_stack_needed;
-  stack_size =
-      ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
+  size_t stack_size =
+      state->ir->total_locals_size + state->ir->caller_stack_needed;
+  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
 
   unsigned long long saved_gp_registers = 0;
   unsigned long long saved_fp_registers = 0;
@@ -2000,9 +2024,9 @@ static void codegen_prologue(struct codegen_state *state) {
       save->aarch64->str_imm = (struct aarch64_store_imm){
           .mode = AARCH64_ADDRESSING_MODE_OFFSET,
           .imm = offset,
-          .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
-                                         .idx = translate_reg_idx(
-                                             idx, IR_REG_TY_FP)},
+          .source =
+              (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
+                                   .idx = translate_reg_idx(idx, IR_REG_TY_FP)},
           .addr = STACK_PTR_REG,
       };
     }
@@ -2060,8 +2084,7 @@ static void codegen_epilogue(struct codegen_state *state) {
         .mode = AARCH64_ADDRESSING_MODE_OFFSET,
         .imm = offset,
         .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
-                                     .idx = translate_reg_idx(
-                                         i, IR_REG_TY_FP)},
+                                     .idx = translate_reg_idx(i, IR_REG_TY_FP)},
         .addr = STACK_PTR_REG,
     };
   }
@@ -3686,7 +3709,7 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
       fprintf(file, "%04zu: ", offset++);
       debug_print_instr(file, func, instr);
 
-    if (supports_pos && ftell(file) == pos) {
+      if (supports_pos && ftell(file) == pos) {
         // no line was written
         continue;
       }

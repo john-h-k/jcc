@@ -1321,7 +1321,6 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
   mov->reg = reg;
   mov->mov = (struct ir_op_mov){.value = *op};
 
-  (*op)->flags |= IR_OP_FLAG_PREFERRED_REG;
   (*op)->reg = reg;
 
   *op = mov;
@@ -1366,7 +1365,6 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   producer->mov = (struct ir_op_mov){.value = mov};
   producer->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
 
-  producer->flags |= IR_OP_FLAG_PREFERRED_REG;
   producer->reg = reg;
 
   return mov;
