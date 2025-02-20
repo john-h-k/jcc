@@ -53,7 +53,7 @@ jobs:
           toolchain: stable
 
       - name: Install riscy
-        run: cargo install riscy
+        run: cargo install risc-y
 
       - name: Checkout repository
         uses: actions/checkout@v4
