@@ -4,10 +4,10 @@ JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 
 ## CI Status
 
-| OS     | AArch64 (Arm64)                                                                                   | x64                                                                                               |
-|--------|---------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
-| Ubuntu | ![Ubuntu AArch64](https://github.com/john-h-k/jcc/actions/workflows/ubuntu-aarch64.yml/badge.svg) | ![Ubuntu x64](https://github.com/john-h-k/jcc/actions/workflows/ubuntu-x86_64.yml/badge.svg) |
-| macOS  | ![macOS AArch64](https://github.com/john-h-k/jcc/actions/workflows/macos-aarch64.yml/badge.svg)   | ![macOS x64](https://github.com/john-h-k/jcc/actions/workflows/macos-x86_64.yml/badge.svg)   |
+| OS     | AArch64 (Arm64)                                                                                          | x64                                                                                                      | RISC-V (32)                                                                                              |
+|--------|--------------------------------------------------------------------------------------------------------- |---------------------------------------------------------------------------------------------------       | -------------------------------------------------------------------------------------------------------- |
+| Ubuntu | ![Ubuntu AArch64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-aarch64.yml) | ![Ubuntu x64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-x86_64.yml)      |    ![Ubuntu RISC-V](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-riscv.yml) |
+| macOS  | ![macOS AArch64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/macos-aarch64.yml)   | ![macOS x64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/macos-x86_64.yml)        |                                                                                                          |
 
 Aims:
 * To be a complete C11/C18/C23 compiler with full functionality (WIP)
