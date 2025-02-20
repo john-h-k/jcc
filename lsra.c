@@ -361,6 +361,10 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       .fp_reg_pool = vector_create(sizeof(size_t))};
 
   for (size_t i = 0; i < info->num_gp_regs; i++) {
+    if (info->has_ssp && info->ssp_reg == i) {
+      continue;
+    }
+
     struct reg_state reg = {.live = NULL,
                             .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = i},
                             .free = true};
