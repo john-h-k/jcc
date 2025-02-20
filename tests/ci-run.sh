@@ -54,9 +54,15 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
       exit -1
     fi
 
-    output=$(echo "$stdin" | ./a.out)
+    # FIXME: this is hacky
+    if [ -z "$RUNNER" ]; then
+      output=$(echo "$stdin" | ./a.out)
+      result=$?
+    else
+      output=$(echo "$stdin" | $RUNNER a.out)
+      result=$?
+    fi
 
-    result=$?
     if [ "$result" != "$expected" ]; then
       echo "TEST FAILED: '$file' expected return code $expected, got $result"
       echo "BUILD:"
