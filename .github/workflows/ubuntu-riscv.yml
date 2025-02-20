@@ -48,7 +48,7 @@ jobs:
           rm -rf riscv-gnu-toolchain.tar.gz
 
       - name: Install rust
-      - uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
 
