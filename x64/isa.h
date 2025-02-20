@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include "../bit_twiddle.h"
 
+// NOTE: if you get an instruction encoding issue
+// it is likely `rm=100` encoding a SIB but us not generating a SIB
+
 #define FITS_IN_BITS(value, bitc)                                              \
   _Generic((value),                                                            \
       size_t: (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0),               \
@@ -568,7 +571,7 @@ struct x64_raw_instr {
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
                           0x8D, \
                           MODRM(MOD_RM_MEM, ((dest).idx % 8), (size_t)0b100), \
-                          SIB(scale, index.idx, base.idx) \
+                          SIB(scale, ((index).idx % 8), ((base).idx % 8)) \
                           }}) \
 
 #define LEA_REG64_IMM8(dest, index, base, scale, offset)                                                       \
@@ -577,7 +580,7 @@ struct x64_raw_instr {
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
                           0x8D, \
                           MODRM(MOD_RM_IMM8, ((dest).idx % 8), (size_t)0b100), \
-                          SIB(scale, index.idx, base.idx), \
+                          SIB(scale, ((index).idx % 8), ((base).idx % 8)), \
                           IMM_BYTES8(offset) \
                           }}) \
 
@@ -587,7 +590,7 @@ struct x64_raw_instr {
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)((index).idx > 7), (size_t)((base).idx > 7)),  \
                           0x8D, \
                           MODRM(MOD_RM_IMM32, ((dest).idx % 8), (size_t)0b100), \
-                          SIB(scale, index.idx, base.idx), \
+                          SIB(scale, ((index).idx % 8), ((base).idx % 8)), \
                           IMM_BYTES32(offset) \
                           }}) \
 

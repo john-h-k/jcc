@@ -1890,6 +1890,8 @@ static void codegen_prologue(struct codegen_state *state) {
       bitset_iter(ir->reg_usage.gp_registers_used,
                   AARCH64_TARGET.reg_info.gp_registers.num_volatile, true);
 
+  size_t save_start = stack_size;
+
   size_t i;
   while (bitset_iter_next(&gp_iter, &i)) {
     saved_gp_registers |= (1 << i);
@@ -1905,6 +1907,8 @@ static void codegen_prologue(struct codegen_state *state) {
     stack_size += 8;
   }
 
+  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
+
   // TODO: implement red zone. requires _subtracting_ from `sp` instead of
   // adding for all local addressing bool leaf =
   //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
@@ -1913,7 +1917,7 @@ static void codegen_prologue(struct codegen_state *state) {
   struct aarch64_prologue_info info = {.prologue_generated = !leaf,
                                        .saved_gp_registers = saved_gp_registers,
                                        .saved_fp_registers = saved_fp_registers,
-                                       .save_start = stack_size,
+                                       .save_start = save_start,
                                        .lr_offset = LR_OFFSET,
                                        .stack_size = stack_size};
 
