@@ -105,6 +105,7 @@ struct reg_set_info {
 };
 
 struct reg_info {
+  size_t ssp; // a GP register that can be safely used as a scratch register around calls (so not an arg register)
   struct reg_set_info gp_registers;
   struct reg_set_info fp_registers;
 };

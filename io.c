@@ -13,7 +13,7 @@ struct path_components path_components(const char *path) {
     return (struct path_components){.dir = ".", .file = strdup(path)};
   }
 
-  size_t dir_len = last_slash - path;
+  size_t dir_len = (size_t)(last_slash - path);
   const char *file_part = last_slash + 1;
 
   char *dir = nonnull_malloc(dir_len + 1);
@@ -52,7 +52,7 @@ char *path_replace_ext(const char *path, const char *ext) {
 
   const char *dot = strrchr(path, '.');
 
-  size_t prefix_len = dot ? dot - path : strlen(path);
+  size_t prefix_len = dot ? (size_t)(dot - path) : strlen(path);
   size_t ext_len = strlen(ext);
 
   size_t res_sz = prefix_len + 1 + ext_len + 1;
@@ -113,10 +113,10 @@ char *read_file(const char *path) {
   rewind(f);
 
   char *content = nonnull_malloc((unsigned long)fsize + 1);
-  long read = fread(content, 1, (unsigned long)fsize, f);
+  size_t read = fread(content, 1, (unsigned long)fsize, f);
   fclose(f);
 
-  if (read != fsize) {
+  if (read != (size_t)fsize) {
     return NULL;
   }
 

@@ -938,12 +938,12 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 
     if (token.ty != PREPROC_TOKEN_TY_WHITESPACE &&
         token.ty != PREPROC_TOKEN_TY_COMMENT) {
-      last_nontrivial_token = vector_length(buffer);
+      last_nontrivial_token = (ssize_t)vector_length(buffer);
     }
   }
 
   if (last_nontrivial_token != -1) {
-    vector_resize(buffer, last_nontrivial_token);
+    vector_resize(buffer, (size_t)last_nontrivial_token);
   }
 }
 

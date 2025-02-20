@@ -5,7 +5,6 @@
 #include "rv32i/codegen.h"
 #include "rv32i/emit.h"
 #include "rv32i/lower.h"
-#include "rv32i/object.h"
 #include "disasm.h"
 #include "target.h"
 
@@ -14,10 +13,11 @@ const struct target RV32I_LINUX_TARGET = {
     TARGET_ID_RV32I_LINUX,
     TARGET_LP_SZ_LP32,
     {
+        .ssp = 9,
         .gp_registers = {.num_volatile = 17,
                                               .num_nonvolatile = 10,
                                               .num_reserved = 4},
-        .fp_registers = {.num_volatile = 19,
+        .fp_registers = {.num_volatile = 20,
                                               .num_nonvolatile = 12,
                                               .num_reserved = 0},
     },

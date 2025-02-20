@@ -16,6 +16,7 @@ const struct target AARCH64_MACOS_TARGET = {
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
     {
+        .ssp = 9,
         .gp_registers = {.num_volatile = 18,
                                               .num_nonvolatile = 10,
                                               .num_reserved = 2},
@@ -36,6 +37,7 @@ const struct target AARCH64_LINUX_TARGET = {
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
     {
+        .ssp = 9,
         .gp_registers = {.num_volatile = 18,
                                               .num_nonvolatile = 10,
                                               .num_reserved = 2},

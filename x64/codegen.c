@@ -456,35 +456,6 @@ static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
   }
 }
 
-// static void codegen_add_imm(struct codegen_state *state,
-//                             struct x64_reg dest, struct x64_reg source,
-//                             unsigned long long value);
-
-static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
-  struct x64_reg dest = codegen_reg(op);
-  struct ir_lcl *lcl = op->load.lcl;
-
-  simm_t offset = get_lcl_stack_offset(state, op, lcl);
-
-  struct instr *instr = alloc_instr(state->func);
-  instr->x64->ty = load_ty_for_op(op);
-  instr->x64->mov_load_imm = (struct x64_mov_load_imm){
-      .dest = dest, .addr = STACK_PTR_REG, .imm = offset};
-}
-
-static void codegen_store_lcl_op(struct codegen_state *state,
-                                 struct ir_op *op) {
-  struct x64_reg source = codegen_reg(op->store.value);
-  struct ir_lcl *lcl = op->store.lcl;
-
-  size_t offset = get_lcl_stack_offset(state, op->store.value, lcl);
-
-  struct instr *instr = alloc_instr(state->func);
-  instr->x64->ty = store_ty_for_op(op->store.value);
-  instr->x64->mov_store_imm = (struct x64_mov_store_imm){
-      .source = source, .addr = STACK_PTR_REG, .imm = offset};
-}
-
 static void codegen_load_addr_op(struct codegen_state *state,
                                  struct ir_op *op) {
   struct instr *instr = alloc_instr(state->func);
@@ -579,29 +550,15 @@ static void codegen_store_addr_op(struct codegen_state *state,
 // }
 
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_LOAD_TY_LCL:
-    codegen_load_lcl_op(state, op);
-    break;
-  case IR_OP_LOAD_TY_ADDR:
-    codegen_load_addr_op(state, op);
-    break;
-  case IR_OP_LOAD_TY_GLB:
-    BUG("load.glb should have been lowered");
-  }
+  DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR, "glb/lcl loads should have been lowered to addr load");
+
+  codegen_load_addr_op(state, op);
 }
 
 static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_STORE_TY_LCL:
-    codegen_store_lcl_op(state, op);
-    break;
-  case IR_OP_STORE_TY_ADDR:
-    codegen_store_addr_op(state, op);
-    break;
-  case IR_OP_STORE_TY_GLB:
-    BUG("store.glb should have been lowered");
-  }
+  DEBUG_ASSERT(op->store.ty == IR_OP_STORE_TY_ADDR, "glb/lcl stores should have been lowered to addr store");
+
+  codegen_store_addr_op(state, op);
 }
 
 // // this method assumes it can safely you any non-argument volatile registers
@@ -1503,9 +1460,9 @@ static void codegen_prologue(struct codegen_state *state) {
   bool leaf = !(nonvolatile_registers_used || ir->num_locals ||
                 ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
-  size_t stack_size = state->stack_args_size;
+  size_t stack_size = state->ir->total_locals_size + state->ir->caller_stack_needed;
   stack_size =
-      ROUND_UP(stack_size + ir->total_locals_size, X64_STACK_ALIGNMENT);
+      ROUND_UP(stack_size, X64_STACK_ALIGNMENT);
 
   struct x64_prologue_info info = {.prologue_generated = !leaf,
                                    .saved_gp_registers = 0,

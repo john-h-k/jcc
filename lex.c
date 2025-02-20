@@ -201,25 +201,25 @@ static const char *process_raw_string(UNUSED const struct lexer *lexer,
         memcpy(u_buff, &text[i + 1], 4);
         i += 4;
 
-        unsigned codepoint = strtoul(u_buff, NULL, 16);
+        unsigned long codepoint = strtoul(u_buff, NULL, 16);
 
         if (codepoint <= 0x7F) {
           char c = codepoint & 0x7F;
           vector_push_back(buff, &c);
         } else if (codepoint <= 0x7FF) {
-          char c[2] = {0xC0 | ((codepoint >> 6) & 0x1F),
-                       0x80 | (codepoint & 0x3F)};
+          char c[2] = {(char)(0xC0 | ((codepoint >> 6) & 0x1F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
           vector_extend(buff, c, 2);
         } else if (codepoint <= 0xFFFF) {
-          char c[3] = {0xE0 | ((codepoint >> 12) & 0x0F),
-                       0x80 | ((codepoint >> 6) & 0x3F),
-                       0x80 | (codepoint & 0x3F)};
+          char c[3] = {(char)(0xE0 | ((codepoint >> 12) & 0x0F)),
+                       (char)(0x80 | ((codepoint >> 6) & 0x3F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
           vector_extend(buff, c, 3);
         } else if (codepoint <= 0x10FFFF) {
-          char c[4] = {0xF0 | ((codepoint >> 18) & 0x07),
-                       0x80 | ((codepoint >> 12) & 0x3F),
-                       0x80 | ((codepoint >> 6) & 0x3F),
-                       0x80 | (codepoint & 0x3F)};
+          char c[4] = {(char)(0xF0 | ((codepoint >> 18) & 0x07)),
+                       (char)(0x80 | ((codepoint >> 12) & 0x3F)),
+                       (char)(0x80 | ((codepoint >> 6) & 0x3F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
           vector_extend(buff, c, 4);
         }
       } else if (text[i] == 'x') {

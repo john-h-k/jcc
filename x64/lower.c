@@ -4,12 +4,6 @@
 #include "../util.h"
 #include "../vector.h"
 
-#define IR_REG_IDX_AX (6)
-#define IR_REG_IDX_CX (3)
-#define IR_REG_IDX_DX (2)
-#define IR_REG_IDX_SI (1)
-#define IR_REG_IDX_DI (0)
-
 static bool try_get_hfa_info(struct ir_func *func,
                              const struct ir_var_ty *var_ty,
                              struct ir_var_ty *member_ty, size_t *num_members,

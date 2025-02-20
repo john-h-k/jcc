@@ -217,7 +217,9 @@ typedef struct elf64_shdr {
 
 #define R_RISCV_BRANCH 16
 #define R_RISCV_JAL 17
-#define R_RISCV_CALL 18
+// deprecated, use CALL_PLT instead
+// #define R_RISCV_CALL 18
+#define R_RISCV_CALL_PLT 19
 
 
 #define R_RISCV_PCREL_HI20 23

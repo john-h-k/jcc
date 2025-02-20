@@ -110,7 +110,7 @@ static uint32_t read_uint32_unaligned(const void *p) {
     return *(const uint32_t *)p;
   case 2: {
     const uint16_t *c = p;
-    return (uint16_t)c[0] | ((uint16_t)c[1] << 16);
+    return (uint32_t)c[0] | ((uint32_t)c[1] << 16);
   }
   default: {
     const uint8_t *c = p;
@@ -184,7 +184,7 @@ void hasher_hash_bytes(struct hasher *hasher, const void *value,
   uint64_t s0 = hasher->accumulator;
   uint64_t s1 = hasher->expand_seed0;
 
-  const char *data = value;
+  const uint8_t *data = value;
 
   if (length <= 16) {
     if (length >= 8) {

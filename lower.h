@@ -4,6 +4,12 @@
 #include "ir/ir.h"
 #include "target.h"
 
+#define IR_REG_IDX_AX (6)
+#define IR_REG_IDX_CX (3)
+#define IR_REG_IDX_DX (2)
+#define IR_REG_IDX_SI (1)
+#define IR_REG_IDX_DI (0)
+
 // Performs platform agnostic lowering
 void lower(struct ir_unit *unit, const struct target *target);
 

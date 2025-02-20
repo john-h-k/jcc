@@ -948,7 +948,7 @@ void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
 void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                            unsigned long long value);
 
-struct ir_op *build_addr(struct ir_func *irb, struct ir_op *load);
+struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op);
 
 struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock);

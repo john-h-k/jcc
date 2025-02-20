@@ -554,67 +554,6 @@ static enum aarch64_instr_ty store_ty_for_op(struct ir_op *op,
   }
 }
 
-static void codegen_add_imm(struct codegen_state *state,
-                            struct aarch64_reg dest, struct aarch64_reg source,
-                            long long value);
-
-static void codegen_load_lcl_op(struct codegen_state *state, struct ir_op *op) {
-  struct aarch64_reg dest = codegen_reg(op);
-  struct ir_lcl *lcl = op->load.lcl;
-
-  simm_t offset = get_lcl_stack_offset(state, op, lcl);
-
-  if (offset > MAX_IMM_SIZE) {
-    ssize_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-    codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
-
-    struct instr *instr = alloc_instr(state->func);
-    instr->aarch64->ty = load_ty_for_op(op, ADDR_MODE_IMM);
-    instr->aarch64->load_imm =
-        (struct aarch64_load_imm){.dest = dest,
-                                  .addr = state->ssp,
-                                  .imm = 0,
-                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-  } else {
-    struct instr *instr = alloc_instr(state->func);
-    instr->aarch64->ty = load_ty_for_op(op, ADDR_MODE_IMM);
-    instr->aarch64->load_imm =
-        (struct aarch64_load_imm){.dest = dest,
-                                  .addr = STACK_PTR_REG,
-                                  .imm = offset,
-                                  .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-  }
-}
-
-static void codegen_store_lcl_op(struct codegen_state *state,
-                                 struct ir_op *op) {
-  struct aarch64_reg source = codegen_reg(op->store.value);
-  struct ir_lcl *lcl = op->store.lcl;
-
-  ssize_t offset = get_lcl_stack_offset(state, op->store.value, lcl);
-
-  if (offset > MAX_IMM_SIZE) {
-    ssize_t raw_offset = get_lcl_stack_offset(state, NULL, lcl);
-    codegen_add_imm(state, state->ssp, STACK_PTR_REG, raw_offset);
-
-    struct instr *instr = alloc_instr(state->func);
-    instr->aarch64->ty = store_ty_for_op(op, ADDR_MODE_IMM);
-    instr->aarch64->str_imm =
-        (struct aarch64_store_imm){.source = source,
-                                   .addr = state->ssp,
-                                   .imm = 0,
-                                   .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-  } else {
-    struct instr *instr = alloc_instr(state->func);
-    instr->aarch64->ty = store_ty_for_op(op->store.value, ADDR_MODE_IMM);
-    instr->aarch64->str_imm =
-        (struct aarch64_store_imm){.source = source,
-                                   .addr = STACK_PTR_REG,
-                                   .imm = offset,
-                                   .mode = AARCH64_ADDRESSING_MODE_OFFSET};
-  }
-}
-
 enum folded_addr_op_ty {
   FOLDED_ADDR_OP_TY_IMM,
   FOLDED_ADDR_OP_TY_INDEX,
@@ -840,29 +779,15 @@ static void codegen_bitfield_extract(struct codegen_state *state,
 }
 
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_LOAD_TY_LCL:
-    codegen_load_lcl_op(state, op);
-    break;
-  case IR_OP_LOAD_TY_ADDR:
-    codegen_load_addr_op(state, op);
-    break;
-  case IR_OP_LOAD_TY_GLB:
-    BUG("load.glb should have been lowered");
-  }
+  DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR, "glb/lcl loads should have been lowered to addr load");
+
+  codegen_load_addr_op(state, op);
 }
 
 static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_STORE_TY_LCL:
-    codegen_store_lcl_op(state, op);
-    break;
-  case IR_OP_STORE_TY_ADDR:
-    codegen_store_addr_op(state, op);
-    break;
-  case IR_OP_STORE_TY_GLB:
-    BUG("store.glb should have been lowered");
-  }
+  DEBUG_ASSERT(op->store.ty == IR_OP_STORE_TY_ADDR, "glb/lcl stores should have been lowered to addr store");
+
+  codegen_store_addr_op(state, op);
 }
 
 // this method assumes it can safely you any non-argument volatile registers
@@ -1957,7 +1882,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   size_t stack_size = state->ir->total_locals_size + state->ir->caller_stack_needed;
   stack_size =
-      ROUND_UP(stack_size + ir->total_locals_size, AARCH64_STACK_ALIGNMENT);
+      ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
 
   unsigned long long saved_gp_registers = 0;
   unsigned long long saved_fp_registers = 0;

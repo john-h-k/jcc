@@ -22,6 +22,15 @@ enum rv32i_instr_ty {
   /* rv32i base instruction set */
   /* -------------------------- */
 
+  // conditional branches
+  // `invert_cond` relies on `cond ^ 1` being the inverse condition
+  RV32I_INSTR_TY_BEQ,
+  RV32I_INSTR_TY_BNE,
+  RV32I_INSTR_TY_BLT,
+  RV32I_INSTR_TY_BGE,
+  RV32I_INSTR_TY_BLTU,
+  RV32I_INSTR_TY_BGEU,
+
   // U-type
   RV32I_INSTR_TY_LUI,
   RV32I_INSTR_TY_AUIPC,
@@ -29,14 +38,6 @@ enum rv32i_instr_ty {
   // jumps
   RV32I_INSTR_TY_JAL,
   RV32I_INSTR_TY_JALR,
-
-  // conditional branches
-  RV32I_INSTR_TY_BEQ,
-  RV32I_INSTR_TY_BNE,
-  RV32I_INSTR_TY_BLT,
-  RV32I_INSTR_TY_BGE,
-  RV32I_INSTR_TY_BLTU,
-  RV32I_INSTR_TY_BGEU,
 
   // loads
   RV32I_INSTR_TY_LB,
@@ -225,13 +226,6 @@ struct rv32i_u {
   simm_t imm;
 };
 
-struct rv32i_jalr {
-  struct rv32i_reg ret_addr;
-  struct rv32i_reg target;
-
-  simm_t imm;
-};
-
 struct rv32i_load {
   struct rv32i_reg dest;
   struct rv32i_reg addr;
@@ -246,15 +240,42 @@ struct rv32i_store {
   simm_t imm;
 };
 
+struct rv32i_jalr {
+  struct rv32i_reg ret_addr;
+  struct rv32i_reg target;
+
+  simm_t imm;
+};
+
+enum rv32i_target_ty {
+  RV32I_TARGET_TY_OFFSET,
+  RV32I_TARGET_TY_BASICBLOCK,
+  RV32I_TARGET_TY_SYMBOL,
+};
+
+struct rv32i_target {
+  enum rv32i_target_ty ty;
+
+  union {
+    simm_t offset;
+    struct ir_basicblock *basicblock;
+    struct codegen_entry *symbol;
+  };
+};
+
+#define RV32I_BASICBLOCK_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_BASICBLOCK, .basicblock = (value) })
+#define RV32I_OFFSET_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_OFFSET, .offset = (value) })
+#define RV32I_SYMBOL_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_SYMBOL, .symbol = (value) })
+
 struct rv32i_jal {
   struct rv32i_reg ret_addr;
-  struct ir_basicblock *target;
+  struct rv32i_target target;
 };
 
 struct rv32i_conditional_branch {
   struct rv32i_reg lhs;
   struct rv32i_reg rhs;
-  struct ir_basicblock *target;
+  struct rv32i_target target;
 };
 
 struct rv32i_conditional_set {

@@ -426,7 +426,7 @@ static inline int lzcnt(unsigned long long l) {
 }
 
 static inline unsigned long long ilog2(unsigned long long num) {
-  return (sizeof(num) * 8) - lzcnt(num) - 1;
+  return (sizeof(num) * 8) - (unsigned)lzcnt(num) - 1;
 }
 
 static inline void *nonnull_malloc(size_t size) {

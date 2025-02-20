@@ -173,4 +173,7 @@ void rv32i_emit_fsd(struct rv32i_emitter *emitter,
 void rv32i_emit_fld(struct rv32i_emitter *emitter,
                     const struct rv32i_load fld);
 
+void rv32i_emit_ecall(struct rv32i_emitter *emitter);
+void rv32i_emit_ebreak(struct rv32i_emitter *emitter);
+
 #endif
