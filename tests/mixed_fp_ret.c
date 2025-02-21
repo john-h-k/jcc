@@ -2,8 +2,7 @@
 
 struct S { float x; double y; };
 
-struct S f(double d)
-{
+struct S f(double d) {
     struct S s;
     s.x = d;
     s.y = d;
