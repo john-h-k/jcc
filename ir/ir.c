@@ -1837,25 +1837,14 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->lcl_count++;
 
-  struct ir_var_ty_info ty_info = var_ty_info(irb->unit, var_ty);
-
-  size_t lcl_pad =
-      (ty_info.alignment - (irb->total_locals_size % ty_info.alignment)) %
-      ty_info.alignment;
-  size_t lcl_size = ty_info.size;
-
-  irb->total_locals_size += lcl_pad;
-
   lcl->func = irb;
   lcl->flags = IR_LCL_FLAG_NONE;
   lcl->var_ty = *var_ty;
-  lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
   lcl->pred = irb->last_lcl;
   lcl->succ = NULL;
   lcl->metadata = NULL;
-
-  irb->total_locals_size += lcl_size;
+  lcl->alloc_ty = IR_LCL_ALLOC_TY_NONE;
 
   if (!irb->first_lcl) {
     irb->first_lcl = lcl;
@@ -1876,17 +1865,6 @@ void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   }
 
   irb->lcl_count--;
-
-  struct ir_var_ty_info ty_info = var_ty_info(irb->unit, &lcl->var_ty);
-
-  // TODO: does this align correct?
-  size_t lcl_pad =
-      (ty_info.alignment - (irb->total_locals_size % ty_info.alignment)) %
-      ty_info.alignment;
-  size_t lcl_size = ty_info.size;
-
-  irb->total_locals_size -= lcl_pad;
-  irb->total_locals_size -= lcl_size;
 
   lcl->id = DETACHED_LCL;
 
@@ -2599,4 +2577,32 @@ ir_compute_dominance_frontier(struct ir_func *func) {
 
   return (struct ir_dominance_frontier){.idom_children = children,
                                         .domfs = domf};
+}
+
+
+void alloc_locals(struct ir_func *func) {
+  struct ir_lcl *lcl = func->first_lcl;
+  while (lcl) {
+    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE) {
+      lcl = lcl->succ;
+      continue;
+    }
+
+    struct ir_var_ty_info ty_info = var_ty_info(func->unit, &lcl->var_ty);
+
+    size_t lcl_pad =
+        (ty_info.alignment - (func->total_locals_size % ty_info.alignment)) %
+        ty_info.alignment;
+
+    size_t lcl_size = ty_info.size;
+
+    func->total_locals_size += lcl_pad;
+
+    lcl->alloc_ty = IR_LCL_ALLOC_TY_NORMAL;
+    lcl->offset = func->total_locals_size;
+
+    func->total_locals_size += lcl_size;
+
+    lcl = lcl->succ;
+  }
 }

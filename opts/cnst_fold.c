@@ -29,16 +29,29 @@ static unsigned long long round_integral(struct ir_func *func,
   }
 }
 
+static struct ir_op *opts_follow_movs(struct ir_op *op) {
+  while (op->ty == IR_OP_TY_MOV) {
+    if (!op->mov.value) {
+      return NULL;
+    }
+
+    op = op->mov.value;
+  }
+
+  return op;
+}
+
 static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
-  struct ir_op *lhs = op->binary_op.lhs;
-  struct ir_op *rhs = op->binary_op.rhs;
+
+  struct ir_op *lhs = opts_follow_movs(op->binary_op.lhs);
+  struct ir_op *rhs = opts_follow_movs(op->binary_op.rhs);
 
   unsigned long long lhs_cnst, rhs_cnst;
 
-  if (lhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&lhs->var_ty) ||
-      rhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&rhs->var_ty)) {
+  if (!lhs || lhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&lhs->var_ty) ||
+      !rhs || rhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&rhs->var_ty)) {
     return false;
   }
 
@@ -96,11 +109,11 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_unary_op_ty ty = op->unary_op.ty;
-  struct ir_op *value = op->unary_op.value;
+  struct ir_op *value = opts_follow_movs(op->unary_op.value);
 
   unsigned long long cnst;
 
-  if (value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -137,11 +150,11 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_cast_op_ty ty = op->cast_op.ty;
-  struct ir_op *value = op->cast_op.value;
+  struct ir_op *value =  opts_follow_movs(op->cast_op.value);
 
   unsigned long long cnst;
 
-  if (value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -175,6 +188,12 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
 }
 
 static bool opts_cnst_fold_addr_offset(struct ir_func *func, struct ir_op *op) {
+  op = opts_follow_movs(op);
+
+  if (!op) {
+    return false;
+  }
+
   struct ir_op_addr_offset *addr_offset = &op->addr_offset;
 
   // only need to fold `index * scale` as the rest is already constant-ified

@@ -366,7 +366,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     bool lcl_has_offset =
         base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL &&
         (base->addr.lcl->offset ||
-         (!(base->addr.lcl->flags & IR_LCL_FLAG_FIXED_OFFSET) &&
+         (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
           func->caller_stack_needed));
 
     bool offset_contain = !addr_offset.index;
@@ -399,7 +399,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
     bool lcl_has_offset =
         base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL &&
         (base->addr.lcl->offset ||
-         (!(base->addr.lcl->flags & IR_LCL_FLAG_FIXED_OFFSET) &&
+         (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
           func->caller_stack_needed));
 
     bool offset_contain = !addr_offset.index;
@@ -589,6 +589,14 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
       };
 
       vector_push_front(params, &IR_VAR_TY_POINTER);
+    } else if (var_ty_is_fp(func_ty.ret_ty)) {
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
+                  .num_reg = 1,
+                  .size = info.size},
+      };
     } else {
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,

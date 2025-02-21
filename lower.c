@@ -3,6 +3,7 @@
 #include "bit_twiddle.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
+#include "ir/validate.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
@@ -750,11 +751,13 @@ static void lower_params(struct ir_func *func) {
           for (size_t j = gather->gather.num_values; j; j--) {
             struct ir_gather_value value = gather->gather.values[j - 1];
 
-          // because the reg value might be smaller than it is from ABI perspective use the mov ty
-          // e.g `struct { float; double }` thinks of it as being two 8 byte chunks
-          struct ir_var_ty_info value_info = var_ty_info(func->unit, &value.value->var_ty);
-          struct ir_var_ty var_ty = get_var_ty_for_size(
-              param_info.reg.start_reg.ty, value_info.size);
+            // because the reg value might be smaller than it is from ABI
+            // perspective use the mov ty e.g `struct { float; double }` thinks
+            // of it as being two 8 byte chunks
+            struct ir_var_ty_info value_info =
+                var_ty_info(func->unit, &value.value->var_ty);
+            struct ir_var_ty var_ty = get_var_ty_for_size(
+                param_info.reg.start_reg.ty, value_info.size);
 
             struct ir_op *mov =
                 insert_before_ir_op(func, last, IR_OP_TY_MOV, var_ty);
@@ -767,6 +770,8 @@ static void lower_params(struct ir_func *func) {
 
             last = mov;
           }
+
+          detach_ir_op(func, gather);
         }
       } else {
         struct ir_op *mov =
@@ -866,7 +871,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       break;
     case IR_PARAM_INFO_TY_STACK: {
       struct ir_lcl *lcl = add_local(func, &arg->var_ty);
-      lcl->flags |= IR_LCL_FLAG_FIXED_OFFSET;
+
+      lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
       lcl->offset = param_info.stack_offset;
 
       if (arg->ty == IR_OP_TY_LOAD) {
@@ -1124,6 +1130,9 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
         basicblock = basicblock->succ;
       }
+
+      // alloc locals EARLY so that targets can contain their addressing nodes properly
+      alloc_locals(func);
     }
     }
 
@@ -1176,7 +1185,5 @@ void lower(struct ir_unit *unit, const struct target *target) {
     glb = glb->succ;
   }
 
-  // TODO: more IR validation good
-  // e.g no type mismatches (like in build)
-  // but also making sure no ops use ops from in front of them
+  ir_validate(unit);
 }

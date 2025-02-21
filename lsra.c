@@ -762,4 +762,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (log_enabled()) {
     debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
   }
+
+  // we may have introduced new locals, so allocate them
+  alloc_locals(irb);
 }

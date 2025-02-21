@@ -161,9 +161,9 @@ enum compile_result compile(struct compiler *compiler) {
   {
     COMPILER_STAGE(OPTS);
 
+    opts_promote(ir);
     opts_cnst_fold(ir);
     opts_instr_comb(ir);
-    opts_promote(ir);
 
     if (log_enabled()) {
       debug_print_stage(ir, "opts");

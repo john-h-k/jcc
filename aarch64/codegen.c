@@ -342,8 +342,10 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
 static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                     const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
+  DEBUG_ASSERT(lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE, "unallocated lcl");
+
   ssize_t offset = lcl->offset;
-  if (!(lcl->flags & IR_LCL_FLAG_FIXED_OFFSET)) {
+  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
     offset += state->ir->caller_stack_needed;
   }
 
