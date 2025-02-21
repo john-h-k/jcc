@@ -10,6 +10,7 @@
 #include "ir/validate.h"
 #include "opts/instr_comb.h"
 #include "opts/cnst_fold.h"
+#include "opts/promote.h"
 #include "log.h"
 #include "lower.h"
 #include "lsra.h"
@@ -162,6 +163,7 @@ enum compile_result compile(struct compiler *compiler) {
 
     opts_cnst_fold(ir);
     opts_instr_comb(ir);
+    opts_promote(ir);
 
     if (log_enabled()) {
       debug_print_stage(ir, "opts");

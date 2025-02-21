@@ -201,11 +201,15 @@ static void ir_validate_func(struct ir_validate_state *state,
 
   rebuild_ids(func);
 
+  size_t count = 0;
   while (basicblock) {
     ir_validate_basicblock(state, func, basicblock);
 
     basicblock = basicblock->succ;
+    count++;
   }
+
+  VALIDATION_CHECK(func->basicblock_count == count, func, "basicblock_count=%zu but found %zu", func->basicblock_count, count);
 }
 
 void ir_validate(struct ir_unit *iru) {

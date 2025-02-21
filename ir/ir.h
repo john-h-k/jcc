@@ -490,6 +490,11 @@ struct ir_op_write_info {
   struct ir_reg writes[4];
 };
 
+struct ir_promotion_info {
+  struct ir_op *fields;
+  size_t num_fields;
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -528,6 +533,9 @@ struct ir_op {
   };
 
   struct ir_lcl *lcl;
+
+  // if this op uses a promoted value, holds the positions of the fields
+  struct ir_promotion_info promotion_info;
 
   // only meaningful post register-allocation
   struct ir_reg reg;
@@ -729,6 +737,9 @@ enum ir_lcl_flags {
   // offset cannot be changed and has meaning to codegen
   // we use this for direct offsets for manipulating stack args
   IR_LCL_FLAG_FIXED_OFFSET = 2,
+
+  // local is actually a param
+  IR_LCL_FLAG_PARAM = 4,
 };
 
 struct ir_lcl {
@@ -1165,5 +1176,14 @@ struct move_set {
 struct move_set gen_move_order(struct arena_allocator *arena,
                                struct location *from, struct location *to,
                                size_t num, size_t tmp_index);
+
+struct ir_dominance_frontier {
+  // FIXME: exposing vector in API ugly
+  struct vector /* `struct ir_basicblock *` */ **idom_children;
+  struct vector /* `struct ir_basicblock *` */ **domfs;
+};
+
+struct ir_dominance_frontier
+ir_compute_dominance_frontier(struct ir_func *func);
 
 #endif

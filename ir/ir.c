@@ -573,6 +573,7 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
+  op->promotion_info = (struct ir_promotion_info){.num_fields = 0};
   op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
   op->metadata = NULL;
   op->comment = NULL;
@@ -1267,6 +1268,7 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->comment = NULL;
   op->reg = NO_REG;
   op->lcl = NULL;
+  op->promotion_info = (struct ir_promotion_info){.num_fields = 0};
   op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
 
   if (stmt->last) {
@@ -2213,4 +2215,206 @@ bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
   }
 
   return true;
+}
+
+static struct ir_basicblock *intersect(struct ir_basicblock **idoms,
+                                       struct ir_basicblock *left,
+                                       struct ir_basicblock *right,
+                                       size_t *rpo) {
+  while (left != right) {
+    while (rpo[left->id] < rpo[right->id]) {
+      left = idoms[left->id];
+    }
+
+    while (rpo[right->id] < rpo[left->id]) {
+      right = idoms[right->id];
+    }
+  }
+  return left;
+}
+
+static void dfs_postorder(struct ir_basicblock *basicblock, bool *visited,
+                          struct ir_basicblock **rpo_order, size_t *count) {
+  if (visited[basicblock->id]) {
+    return;
+  }
+
+  visited[basicblock->id] = true;
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    dfs_postorder(basicblock->split.true_target, visited, rpo_order, count);
+    dfs_postorder(basicblock->split.false_target, visited, rpo_order, count);
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    dfs_postorder(basicblock->merge.target, visited, rpo_order, count);
+    break;
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      dfs_postorder(basicblock->switch_case.cases[i].target, visited, rpo_order,
+                    count);
+    }
+
+    if (basicblock->switch_case.default_target) {
+      dfs_postorder(basicblock->switch_case.default_target, visited, rpo_order,
+                    count);
+    }
+    break;
+  }
+
+  rpo_order[(*count)++] = basicblock;
+}
+
+static void compute_idoms(struct ir_func *func, struct ir_basicblock **idoms) {
+  size_t *rpo =
+      arena_alloc(func->arena, func->basicblock_count * sizeof(size_t));
+  struct ir_basicblock **rpo_order = arena_alloc(
+      func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
+
+  bool *visited =
+      arena_alloc(func->arena, func->basicblock_count * sizeof(bool));
+  memset(visited, false, func->basicblock_count * sizeof(bool));
+
+  size_t count = 0;
+
+  struct ir_basicblock *entry = func->first;
+
+  dfs_postorder(entry, visited, rpo_order, &count);
+
+  for (size_t i = 0; i < count; i++) {
+    rpo[rpo_order[i]->id] = count - 1 - i;
+  }
+
+  memset(idoms, 0, func->basicblock_count * sizeof(struct ir_basicblock *));
+  idoms[entry->id] = entry;
+
+  size_t changed = 1;
+
+  while (changed) {
+    changed = 0;
+
+    for (size_t i = 0; i < count; i++) {
+      struct ir_basicblock *b = rpo_order[i];
+
+      if (b == entry) {
+        continue;
+      }
+
+      struct ir_basicblock *new_idom = NULL;
+
+      for (size_t j = 0; j < b->num_preds; j++) {
+        struct ir_basicblock *p = b->preds[j];
+
+        if (idoms[p->id]) {
+          new_idom = p;
+          break;
+        }
+      }
+
+      if (!new_idom) {
+        continue;
+      }
+
+      for (size_t j = 0; j < b->num_preds; j++) {
+        struct ir_basicblock *p = b->preds[j];
+        if (!idoms[p->id] || p == new_idom) {
+          continue;
+        }
+
+        new_idom = intersect(idoms, new_idom, p, rpo);
+      }
+
+      if (idoms[b->id] != new_idom) {
+        idoms[b->id] = new_idom;
+        changed = 1;
+      }
+    }
+  }
+}
+
+static void compute_df_recursive(struct ir_basicblock *basicblock,
+                                 struct ir_basicblock **idoms,
+                                 struct vector **domf,
+                                 struct vector **children) {
+  for (size_t i = 0; i < vector_length(children[basicblock->id]); i++) {
+    struct ir_basicblock *child =
+        *(struct ir_basicblock **)vector_get(children[basicblock->id], i);
+
+    compute_df_recursive(child, idoms, domf, children);
+
+    for (size_t j = 0; j < vector_length(domf[child->id]); j++) {
+      struct ir_basicblock *w =
+          *(struct ir_basicblock **)vector_get(domf[child->id], j);
+
+      if (idoms[w->id] != basicblock) {
+        vector_push_back(domf[basicblock->id], &w);
+      }
+    }
+  }
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    if (idoms[basicblock->split.true_target->id] != basicblock) {
+      vector_push_back(domf[basicblock->id], &basicblock->split.true_target);
+    }
+
+    if (idoms[basicblock->split.false_target->id] != basicblock) {
+      vector_push_back(domf[basicblock->id], &basicblock->split.false_target);
+    }
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    if (idoms[basicblock->merge.target->id] != basicblock) {
+      vector_push_back(domf[basicblock->id], &basicblock->merge.target);
+    }
+    break;
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      if (idoms[basicblock->switch_case.cases[i].target->id] != basicblock) {
+        vector_push_back(domf[basicblock->id],
+                         &basicblock->switch_case.cases[i].target);
+      }
+    }
+
+    if (basicblock->switch_case.default_target &&
+        idoms[basicblock->switch_case.default_target->id] != basicblock) {
+      vector_push_back(domf[basicblock->id],
+                       &basicblock->switch_case.default_target);
+    }
+    break;
+  }
+}
+
+struct ir_dominance_frontier
+ir_compute_dominance_frontier(struct ir_func *func) {
+  struct vector **domf = arena_alloc(func->arena, func->basicblock_count *
+                                                      sizeof(struct vector *));
+  struct vector **children = arena_alloc(
+      func->arena, func->basicblock_count * sizeof(struct vector *));
+
+  struct ir_basicblock **idoms = arena_alloc(
+      func->arena, func->basicblock_count * sizeof(struct ir_basicblock *));
+  compute_idoms(func, idoms);
+
+  for (size_t i = 0; i < func->basicblock_count; i++) {
+    domf[i] = vector_create(sizeof(struct ir_basicblock *));
+    children[i] = vector_create(sizeof(struct ir_basicblock *));
+  }
+
+  struct ir_basicblock *entry = func->first;
+
+  struct ir_basicblock *basicblock = entry->succ;
+  while (basicblock) {
+    vector_push_back(children[idoms[basicblock->id]->id], &basicblock);
+
+    basicblock = basicblock->succ;
+  }
+
+  compute_df_recursive(entry, idoms, domf, children);
+
+  return (struct ir_dominance_frontier){.idom_children = children,
+                                        .domfs = domf};
 }

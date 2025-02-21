@@ -710,34 +710,37 @@ static void lower_params(struct ir_func *func) {
     switch (param_info.ty) {
     case IR_PARAM_INFO_TY_REGISTER: {
       if (var_ty_is_aggregate(param_info.var_ty)) {
-        DEBUG_ASSERT(op->ret.value->ty == IR_OP_TY_LOAD, "expected load");
-        struct ir_var_ty load_ty = get_var_ty_for_size(
-            param_info.reg.start_reg.ty, param_info.reg.size);
+        if (op->ret.value->ty == IR_OP_TY_LOAD) {
+          struct ir_var_ty load_ty = get_var_ty_for_size(
+              param_info.reg.start_reg.ty, param_info.reg.size);
 
-        size_t num_reg =
-            (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+          size_t num_reg =
+              (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
 
-        struct ir_op *addr = build_addr(func, op->ret.value);
-        struct ir_op *last = op;
+          struct ir_op *addr = build_addr(func, op->ret.value);
+          struct ir_op *last = op;
 
-        for (size_t j = num_reg; j; j--) {
-          struct ir_op *load =
-              insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
+          for (size_t j = num_reg; j; j--) {
+            struct ir_op *load =
+                insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
 
-          struct ir_op *addr_offset = insert_before_ir_op(
-              func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-          addr_offset->addr_offset = (struct ir_op_addr_offset){
-              .base = addr, .offset = (j - 1) * param_info.reg.size};
+            struct ir_op *addr_offset = insert_before_ir_op(
+                func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+            addr_offset->addr_offset = (struct ir_op_addr_offset){
+                .base = addr, .offset = (j - 1) * param_info.reg.size};
 
-          // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+            // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
-          load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
-                                           .addr = addr_offset};
-          load->reg =
-              (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                              .idx = param_info.reg.start_reg.idx + j - 1};
-          load->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
-          last = load;
+            load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
+                                             .addr = addr_offset};
+            load->reg =
+                (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                                .idx = param_info.reg.start_reg.idx + j - 1};
+            load->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
+            last = load;
+          }
+        } else {
+          // struct has been promoted
         }
       } else {
         struct ir_op *mov =
@@ -865,12 +868,13 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = load_addr_offset};
 
-          struct ir_op * store_addr =
+          struct ir_op *store_addr =
               insert_after_ir_op(func, load, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-            store_addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
+          store_addr->addr =
+              (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
-          struct ir_op *store =
-              insert_after_ir_op(func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+          struct ir_op *store = insert_after_ir_op(
+              func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
           store->store = (struct ir_op_store){
               .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = load};
@@ -880,12 +884,13 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           copy -= size;
         }
       } else {
-        struct ir_op * store_addr =
+        struct ir_op *store_addr =
             insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-            store_addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl };
+        store_addr->addr =
+            (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
-        struct ir_op *store =
-            insert_after_ir_op(func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        struct ir_op *store = insert_after_ir_op(
+            func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
         store->store = (struct ir_op_store){
             .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = arg};
         vector_push_back(new_args, &store);
@@ -1009,7 +1014,18 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
       struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
+      // first lower memset as it can generate calls
       struct ir_op *op;
+      while (ir_func_iter_next(&iter, &op)) {
+        if (op->ty != IR_OP_TY_MEM_SET) {
+          continue;
+        }
+
+        lower_mem_set(func, op);
+      }
+
+      iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
       while (ir_func_iter_next(&iter, &op)) {
         if (op->ty != IR_OP_TY_CALL) {
           continue;
@@ -1049,13 +1065,11 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_BITFIELD_INSERT:
             case IR_OP_TY_CALL:
             case IR_OP_TY_MEM_COPY:
+            case IR_OP_TY_MEM_SET:
             case IR_OP_TY_CAST_OP:
               break;
             case IR_OP_TY_BR_COND:
               lower_br_cond(func, op);
-              break;
-            case IR_OP_TY_MEM_SET:
-              lower_mem_set(func, op);
               break;
             case IR_OP_TY_BR_SWITCH:
               lower_br_switch(func, op);

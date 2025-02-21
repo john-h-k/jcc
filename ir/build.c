@@ -3015,6 +3015,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
 
       // add a local, and let codegen magically fill it with the param
       struct ir_lcl *lcl = add_local(builder->func, &param_var_ty);
+      lcl->flags |= IR_LCL_FLAG_PARAM;
 
       struct ir_op *addr = alloc_ir_op(builder->func, param_stmt);
       addr->ty = IR_OP_TY_ADDR;
