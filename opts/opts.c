@@ -2,6 +2,7 @@
 #include "../log.h"
 #include "../ir/prettyprint.h"
 
+
 static void opts_run_pass_func(struct ir_func *func, const struct opts_pass *pass) {
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 

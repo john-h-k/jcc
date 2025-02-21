@@ -504,8 +504,19 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
       if (ctx == PRINT_OP_CTX_USE) {
         fprintf(file, "LCL(%zu)", ir->addr.lcl->id);
       } else {
-        fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
-                ir->addr.lcl->offset);
+        switch (ir->addr.lcl->alloc_ty) {
+        case IR_LCL_ALLOC_TY_NONE:
+          fprintf(file, "addr LCL(%zu)", ir->addr.lcl->id);
+          break;
+        case IR_LCL_ALLOC_TY_NORMAL:
+          fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
+                  ir->addr.lcl->offset);
+          break;
+        case IR_LCL_ALLOC_TY_FIXED:
+          fprintf(file, "addr LCL(%zu) { FIXED #%zu }", ir->addr.lcl->id,
+                  ir->addr.lcl->offset);
+          break;
+        }
       }
       break;
     case IR_OP_ADDR_TY_GLB:
@@ -1011,7 +1022,18 @@ void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
 void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
   fprintf(file, "  ");
 
-  fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
+  switch (lcl->alloc_ty) {
+  case IR_LCL_ALLOC_TY_NONE:
+    fprintf(file, "[%zu] : ", lcl->id);
+    break;
+  case IR_LCL_ALLOC_TY_NORMAL:
+    fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
+    break;
+  case IR_LCL_ALLOC_TY_FIXED:
+    fprintf(file, "[%zu, FIXED #%zu] : ", lcl->id, lcl->offset);
+    break;
+  }
+
   debug_print_var_ty_string(file, func->unit, &lcl->var_ty);
 
   if (lcl->flags & IR_LCL_FLAG_SPILL) {
@@ -1021,7 +1043,8 @@ void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file, UNUSED struct ir_unit *unit, struct ir_glb *glb) {
+void debug_print_glb(FILE *file, UNUSED struct ir_unit *unit,
+                     struct ir_glb *glb) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {
