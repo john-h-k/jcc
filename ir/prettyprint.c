@@ -748,6 +748,14 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     }
   }
 
+  fprintf(fm->file, "        | ");
+  if (op->flags & IR_OP_FLAG_PROMOTED) {
+    fprintf(fm->file, " PROM ");
+  }
+  if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+    fprintf(fm->file, " SIDEEFFECT ");
+  }
+
   fprintf(fm->file, "\n");
 }
 

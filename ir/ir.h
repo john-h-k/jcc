@@ -485,7 +485,10 @@ enum ir_op_flags {
   IR_OP_FLAG_PHI_MOV = 512,
 
   // this op reads from dest reg, so it cannot be overwritten
-  IR_OP_FLAG_READS_DEST = 1024
+  IR_OP_FLAG_READS_DEST = 1024,
+
+  // is a promoted value
+  IR_OP_FLAG_PROMOTED = 2048,
 };
 
 struct ir_op_write_info {
