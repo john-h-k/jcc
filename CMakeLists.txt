@@ -45,6 +45,7 @@ set(
   opts/opts.c
   opts/cnst_fold.c
   opts/instr_comb.c
+  opts/promote.c
 
   aarch64.c
   aarch64/codegen.c
@@ -107,6 +108,9 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wno-error=unused-parameter
     -Wno-error=covered-switch-default
     -Wno-error=unreachable-code
+
+    -Wzero-as-null-pointer-constant
+    -Wbool-conversion
 
     -Wmissing-prototypes
     -Wsign-conversion
