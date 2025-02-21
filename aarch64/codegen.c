@@ -1672,22 +1672,22 @@ static bool try_get_hfa_info(struct codegen_state *state,
     TODO("union hfa handling");
   }
 
-  if (!var_ty->struct_ty.num_fields) {
+  if (!var_ty->aggregate.num_fields) {
     return false;
   }
 
-  struct ir_var_ty *field_ty = &var_ty->struct_ty.fields[0];
+  struct ir_var_ty *field_ty = &var_ty->aggregate.fields[0];
 
   if (!var_ty_is_fp(field_ty)) {
     return false;
   }
 
-  if (var_ty->struct_ty.num_fields > 4) {
+  if (var_ty->aggregate.num_fields > 4) {
     return false;
   }
 
-  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-    if (!var_ty_eq(state->ir, field_ty, &var_ty->struct_ty.fields[i])) {
+  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
+    if (!var_ty_eq(state->ir, field_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -1706,7 +1706,7 @@ static bool try_get_hfa_info(struct codegen_state *state,
     unreachable();
   }
 
-  *num_members = var_ty->struct_ty.num_fields;
+  *num_members = var_ty->aggregate.num_fields;
   return true;
 }
 

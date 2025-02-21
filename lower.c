@@ -740,7 +740,33 @@ static void lower_params(struct ir_func *func) {
             last = load;
           }
         } else {
+          struct ir_op *gather = op->ret.value;
+
+          DEBUG_ASSERT(gather->ty == IR_OP_TY_GATHER, "expected gather");
           // struct has been promoted
+
+          struct ir_op *last = op;
+
+          for (size_t j = gather->gather.num_values; j; j--) {
+            struct ir_gather_value value = gather->gather.values[j - 1];
+
+          // because the reg value might be smaller than it is from ABI perspective use the mov ty
+          // e.g `struct { float; double }` thinks of it as being two 8 byte chunks
+          struct ir_var_ty_info value_info = var_ty_info(func->unit, &value.value->var_ty);
+          struct ir_var_ty var_ty = get_var_ty_for_size(
+              param_info.reg.start_reg.ty, value_info.size);
+
+            struct ir_op *mov =
+                insert_before_ir_op(func, last, IR_OP_TY_MOV, var_ty);
+
+            mov->mov = (struct ir_op_mov){.value = value.value};
+            mov->reg =
+                (struct ir_reg){.ty = param_info.reg.start_reg.ty,
+                                .idx = param_info.reg.start_reg.idx + j - 1};
+            mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
+
+            last = mov;
+          }
         }
       } else {
         struct ir_op *mov =
@@ -1056,6 +1082,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
             case IR_OP_TY_PHI:
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BINARY_OP:
+            case IR_OP_TY_GATHER:
             case IR_OP_TY_ADDR:
             case IR_OP_TY_ADDR_OFFSET:
             case IR_OP_TY_BR:
@@ -1129,8 +1156,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
       struct ir_op_use_map uses = build_op_uses_map(func);
 
-      for (size_t i = 0; i < uses.num_use_datas; i++) {
-        struct ir_op_usage *use = &uses.use_datas[i];
+      for (size_t i = 0; i < uses.num_op_use_datas; i++) {
+        struct ir_op_usage *use = &uses.op_use_datas[i];
 
         if (!use->num_uses && !op_has_side_effects(use->op)) {
           // DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),

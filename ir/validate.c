@@ -5,6 +5,7 @@
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
+#include "var_refs.h"
 
 struct ir_validate_error {
   const char *err;
@@ -21,25 +22,41 @@ struct validate_op_order_metadata {
   struct ir_op *consumer;
 };
 
-#define VALIDATION_CHECKZ(cond, obj, msg)                                      \
-  if (!(cond)) {                                                               \
+#define VALIDATION_ERRZ(obj, msg)                                              \
+  do {                                                                         \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
-  }
+  } while (0);
 
-#define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
-  if (!(cond)) {                                                               \
+#define VALIDATION_ERR(obj, fmt, ...)                                          \
+  do {                                                                         \
     const char *msg =                                                          \
         arena_alloc_snprintf(state->unit->arena, fmt, __VA_ARGS__);            \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
+  } while (0);
+
+#define VALIDATION_CHECKZ(cond, obj, msg)                                      \
+  if (!(cond)) {                                                               \
+    VALIDATION_ERRZ(obj, msg);                                                 \
+  }
+
+#define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
+  if (!(cond)) {                                                               \
+    VALIDATION_ERR(obj, fmt, __VA_ARGS__);                                     \
   }
 
 static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
+  struct ir_validate_state *state = data->state;
+
   struct ir_op *consumer = data->consumer;
+
+  VALIDATION_CHECKZ((*ir)->id != DETACHED_OP, *ir, "op is detached!");
+
+  VALIDATION_CHECKZ((*ir)->stmt, *ir, "op has no stmt!");
 
   if (consumer->ty == IR_OP_TY_PHI || (consumer->flags & IR_OP_FLAG_PHI_MOV)) {
     // these can work across time
@@ -48,9 +65,15 @@ static void validate_op_order(struct ir_op **ir, void *metadata) {
 
   struct ir_op *op = *ir;
 
-  struct ir_validate_state *state = data->state;
   VALIDATION_CHECK(consumer->id > op->id, consumer,
                    "uses op %zu which is ahead of it", op->id);
+}
+
+static void ir_validate_lcl(struct ir_validate_state *state,
+                            struct ir_lcl *lcl) {
+  VALIDATION_CHECKZ(lcl->id != DETACHED_LCL, lcl, "lcl is detached!");
+
+  VALIDATION_CHECKZ(lcl->func, lcl, "lcl has no func!");
 }
 
 static void ir_validate_op(struct ir_validate_state *state,
@@ -63,6 +86,23 @@ static void ir_validate_op(struct ir_validate_state *state,
     BUG("should not have unknown ops");
   case IR_OP_TY_PHI:
     break;
+  case IR_OP_TY_GATHER: {
+    struct ir_var_ty *var_ty = &op->var_ty;
+
+    switch (var_ty->ty) {
+    case IR_VAR_TY_TY_UNION:
+    case IR_VAR_TY_TY_STRUCT:
+      VALIDATION_CHECK(op->gather.num_values == var_ty->aggregate.num_fields,
+                       op, "gather has %zu fields but type has %zu fields",
+                       op->gather.num_values, var_ty->aggregate.num_fields);
+      break;
+    default:
+      VALIDATION_ERRZ(
+          op, "gather only makes sense when result is an aggregate type");
+      break;
+    }
+    break;
+  }
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
@@ -81,6 +121,7 @@ static void ir_validate_op(struct ir_validate_state *state,
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
       VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
+      ir_validate_lcl(state, op->load.lcl);
       break;
     case IR_OP_LOAD_TY_GLB:
       VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
@@ -97,6 +138,7 @@ static void ir_validate_op(struct ir_validate_state *state,
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       VALIDATION_CHECKZ(op->store.lcl, op, "store ty lcl must have lcl");
+      ir_validate_lcl(state, op->store.lcl);
       break;
     case IR_OP_STORE_TY_GLB:
       VALIDATION_CHECKZ(op->store.glb, op, "store ty glb must have glb");
@@ -108,10 +150,51 @@ static void ir_validate_op(struct ir_validate_state *state,
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
     break;
   case IR_OP_TY_STORE_BITFIELD:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "store ops should not have a var ty");
+
+    switch (op->store_bitfield.ty) {
+    case IR_OP_STORE_TY_LCL:
+      VALIDATION_CHECKZ(op->store_bitfield.lcl, op,
+                        "store ty lcl must have lcl");
+      ir_validate_lcl(state, op->store_bitfield.lcl);
+      break;
+    case IR_OP_STORE_TY_GLB:
+      VALIDATION_CHECKZ(op->store_bitfield.glb, op,
+                        "store ty glb must have glb");
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      VALIDATION_CHECKZ(op->store_bitfield.addr, op,
+                        "tore ty addr must have addr");
+      break;
+    }
+    VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
     break;
   case IR_OP_TY_LOAD_BITFIELD:
+    switch (op->load_bitfield.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      VALIDATION_CHECKZ(op->load_bitfield.lcl, op, "load ty lcl must have lcl");
+      ir_validate_lcl(state, op->load_bitfield.lcl);
+      break;
+    case IR_OP_LOAD_TY_GLB:
+      VALIDATION_CHECKZ(op->load_bitfield.glb, op, "load ty glb must have glb");
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      VALIDATION_CHECKZ(op->load_bitfield.addr, op,
+                        "load ty addr must have addr");
+      break;
+    }
     break;
   case IR_OP_TY_ADDR:
+    switch (op->addr.ty) {
+    case IR_OP_ADDR_TY_LCL:
+      VALIDATION_CHECKZ(op->addr.lcl, op, "addr ty lcl must have lcl");
+      ir_validate_lcl(state, op->addr.lcl);
+      break;
+    case IR_OP_ADDR_TY_GLB:
+      VALIDATION_CHECKZ(op->addr.glb, op, "addr ty glb must have glb");
+      break;
+    }
     break;
   case IR_OP_TY_BR:
     break;
@@ -142,6 +225,10 @@ static void ir_validate_op(struct ir_validate_state *state,
 
 static void ir_validate_stmt(struct ir_validate_state *state,
                              struct ir_func *func, struct ir_stmt *stmt) {
+  VALIDATION_CHECKZ(stmt->id != DETACHED_STMT, stmt, "stmt is detached!");
+
+  VALIDATION_CHECKZ(stmt->basicblock, stmt, "stmt has no basicblock!");
+
   struct ir_op *op = stmt->first;
 
   while (op) {
@@ -154,6 +241,11 @@ static void ir_validate_stmt(struct ir_validate_state *state,
 static void ir_validate_basicblock(struct ir_validate_state *state,
                                    struct ir_func *func,
                                    struct ir_basicblock *basicblock) {
+  VALIDATION_CHECKZ(basicblock->id != DETACHED_BASICBLOCK, basicblock,
+                    "basicblock is detached!");
+
+  VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+
   struct ir_stmt *stmt = basicblock->first;
 
   while (stmt) {
@@ -166,16 +258,20 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_RET:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_RET, basicblock, "IR_BASICBLOCK_TY_RET should end in `ret` op");
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_RET, basicblock,
+                      "IR_BASICBLOCK_TY_RET should end in `ret` op");
     break;
   case IR_BASICBLOCK_TY_SPLIT:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_COND, basicblock, "IR_BASICBLOCK_TY_SPLIT should end in `br.cond` op");
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_COND, basicblock,
+                      "IR_BASICBLOCK_TY_SPLIT should end in `br.cond` op");
     break;
   case IR_BASICBLOCK_TY_MERGE:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR, basicblock, "IR_BASICBLOCK_TY_MERGE should end in `br` op");
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR, basicblock,
+                      "IR_BASICBLOCK_TY_MERGE should end in `br` op");
     break;
   case IR_BASICBLOCK_TY_SWITCH:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_SWITCH, basicblock, "IR_BASICBLOCK_TY_RET should end in `br.switch` op");
+    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_SWITCH, basicblock,
+                      "IR_BASICBLOCK_TY_RET should end in `br.switch` op");
     break;
   }
 }
@@ -193,7 +289,7 @@ static void ir_validate_func(struct ir_validate_state *state,
     VALIDATION_CHECKZ(!glb->func, glb, "undefined global should not have func");
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
-    VALIDATION_CHECKZ(false, glb, "should not have tentative defs by now");
+    VALIDATION_ERRZ(glb, "should not have tentative defs by now");
   }
 
   struct ir_func *func = glb->func;
@@ -201,15 +297,30 @@ static void ir_validate_func(struct ir_validate_state *state,
 
   rebuild_ids(func);
 
-  size_t count = 0;
+  struct ir_lcl *lcl = func->first_local;
+
+  size_t lcl_count = 0;
+  while (lcl) {
+    ir_validate_lcl(state, lcl);
+
+    lcl = lcl->succ;
+    lcl_count++;
+  }
+
+  VALIDATION_CHECK(func->num_locals == lcl_count, func,
+                   "num_locals=%zu but found %zu", func->num_locals, lcl_count);
+
+  size_t bb_count = 0;
   while (basicblock) {
     ir_validate_basicblock(state, func, basicblock);
 
     basicblock = basicblock->succ;
-    count++;
+    bb_count++;
   }
 
-  VALIDATION_CHECK(func->basicblock_count == count, func, "basicblock_count=%zu but found %zu", func->basicblock_count, count);
+  VALIDATION_CHECK(func->basicblock_count == bb_count, func,
+                   "basicblock_count=%zu but found %zu", func->basicblock_count,
+                   bb_count);
 }
 
 void ir_validate(struct ir_unit *iru) {

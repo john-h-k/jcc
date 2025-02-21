@@ -1,6 +1,6 @@
 #include "lower.h"
-#include "../lower.h"
 
+#include "../lower.h"
 #include "../util.h"
 #include "../vector.h"
 
@@ -16,22 +16,22 @@ static bool try_get_hfa_info(struct ir_func *func,
     TODO("union hfa handling");
   }
 
-  if (!var_ty->struct_ty.num_fields) {
+  if (!var_ty->aggregate.num_fields) {
     return false;
   }
 
-  *member_ty = var_ty->struct_ty.fields[0];
+  *member_ty = var_ty->aggregate.fields[0];
 
   if (!var_ty_is_fp(member_ty)) {
     return false;
   }
 
-  if (var_ty->struct_ty.num_fields > 4) {
+  if (var_ty->aggregate.num_fields > 4) {
     return false;
   }
 
-  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-    if (!var_ty_eq(func, member_ty, &var_ty->struct_ty.fields[i])) {
+  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
+    if (!var_ty_eq(func, member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -50,7 +50,7 @@ static bool try_get_hfa_info(struct ir_func *func,
     unreachable();
   }
 
-  *num_members = var_ty->struct_ty.num_fields;
+  *num_members = var_ty->aggregate.num_fields;
   return true;
 }
 
@@ -181,7 +181,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
             .ty = IR_PARAM_INFO_TY_REGISTER,
             .var_ty = var_ty,
             .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                  .num_reg = num_hfa_members,
+                    .num_reg = num_hfa_members,
                     .size = hfa_member_size},
         };
         vector_push_back(param_infos, &param_info);
@@ -289,14 +289,16 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
 
   *new_func_ty.ret_ty = ret_ty;
 
-  struct ir_call_info call_info = {.params = vector_head(param_infos),
-                                   .num_params = vector_length(param_infos),
-                                   .ret = ret_info,
-                                   .stack_size = nsaa,
-                                   .num_variadics = num_variadics,
-                                   .flags = (func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC) ? IR_CALL_INFO_FLAG_NUM_VARIADIC : IR_CALL_INFO_FLAG_NONE,
-                                   .num_variadics_reg = { .ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX }
-                                 };
+  struct ir_call_info call_info = {
+      .params = vector_head(param_infos),
+      .num_params = vector_length(param_infos),
+      .ret = ret_info,
+      .stack_size = nsaa,
+      .num_variadics = num_variadics,
+      .flags = (func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)
+                   ? IR_CALL_INFO_FLAG_NUM_VARIADIC
+                   : IR_CALL_INFO_FLAG_NONE,
+      .num_variadics_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX}};
 
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }
@@ -743,32 +745,11 @@ void x64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_UNKNOWN:
-              BUG("unknown op!");
-            case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_PHI:
-            case IR_OP_TY_CNST:
             case IR_OP_TY_STORE:
               // try_contain_store(func, op);
               break;
             case IR_OP_TY_LOAD:
               // try_contain_load(func, op);
-              break;
-            case IR_OP_TY_STORE_BITFIELD:
-            case IR_OP_TY_LOAD_BITFIELD:
-            case IR_OP_TY_BITFIELD_EXTRACT:
-            case IR_OP_TY_BITFIELD_INSERT:
-            case IR_OP_TY_ADDR:
-            case IR_OP_TY_BR:
-            case IR_OP_TY_BR_COND:
-            case IR_OP_TY_BR_SWITCH:
-            case IR_OP_TY_MOV:
-            case IR_OP_TY_RET:
-            case IR_OP_TY_CALL:
-            case IR_OP_TY_CAST_OP:
-            case IR_OP_TY_MEM_SET:
-            case IR_OP_TY_MEM_COPY:
               break;
             case IR_OP_TY_BINARY_OP:
               switch (op->binary_op.ty) {
@@ -884,6 +865,8 @@ void x64_lower(struct ir_unit *unit) {
                 op->addr_offset.scale = 1;
                 op->addr_offset.index = mul;
               }
+              break;
+            default:
               break;
             }
 

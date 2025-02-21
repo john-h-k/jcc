@@ -114,6 +114,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_ADDR_OFFSET:
+  case IR_OP_TY_GATHER:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
     return false;
@@ -148,6 +149,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_BITFIELD_EXTRACT:
+  case IR_OP_TY_GATHER:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_ADDR_OFFSET:
     return true;
@@ -180,6 +182,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_CALL:
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
+  case IR_OP_TY_GATHER:
   case IR_OP_TY_MOV:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
@@ -238,7 +241,7 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
 
     return true;
   case IR_VAR_TY_TY_STRUCT: {
-    if (l->struct_ty.num_fields != r->struct_ty.num_fields) {
+    if (l->aggregate.num_fields != r->aggregate.num_fields) {
       return false;
     }
 
@@ -250,8 +253,8 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
       return false;
     }
 
-    for (size_t i = 0; i < l->struct_ty.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->struct_ty.fields[i], &r->struct_ty.fields[i])) {
+    for (size_t i = 0; i < l->aggregate.num_fields; i++) {
+      if (!var_ty_eq(irb, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -259,7 +262,7 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
     return true;
   }
   case IR_VAR_TY_TY_UNION: {
-    if (l->union_ty.num_fields != r->union_ty.num_fields) {
+    if (l->aggregate.num_fields != r->aggregate.num_fields) {
       return false;
     }
 
@@ -271,8 +274,8 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
       return false;
     }
 
-    for (size_t i = 0; i < l->union_ty.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->union_ty.fields[i], &r->union_ty.fields[i])) {
+    for (size_t i = 0; i < l->aggregate.num_fields; i++) {
+      if (!var_ty_eq(irb, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -324,6 +327,11 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     BUG("unknown op!");
   case IR_OP_TY_CUSTOM:
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_GATHER:
+    for (size_t i = 0; i < op->gather.num_values; i++) {
+      cb(&op->gather.values[i].value, cb_metadata);
+    }
     break;
   case IR_OP_TY_CALL: {
     cb(&op->call.target, cb_metadata);
@@ -573,13 +581,10 @@ void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
   op->stmt = NULL;
   op->reg = reg;
   op->lcl = lcl;
-  op->promotion_info = (struct ir_promotion_info){.num_fields = 0};
   op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
   op->metadata = NULL;
   op->comment = NULL;
 }
-
-#define DETACHED_BASICBLOCK (SIZE_MAX)
 
 static void remove_pred(struct ir_basicblock *basicblock,
                         struct ir_basicblock *pred) {
@@ -599,6 +604,10 @@ static void remove_pred(struct ir_basicblock *basicblock,
 
 void detach_ir_basicblock(struct ir_func *irb,
                           struct ir_basicblock *basicblock) {
+  if (basicblock->id == DETACHED_BASICBLOCK) {
+    return;
+  }
+
   invariant_assert(irb->basicblock_count,
                    "`detach_ir_basicblock` would underflow basicblock count "
                    "for `ir_builder`");
@@ -668,6 +677,10 @@ void detach_ir_basicblock(struct ir_func *irb,
 }
 
 void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
+  if (stmt->id == DETACHED_STMT) {
+    return;
+  }
+
   invariant_assert(
       irb->stmt_count,
       "`detach_ir_stmt` would underflow stmt count for `ir_builder`");
@@ -681,6 +694,8 @@ void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
     stmt->basicblock->first = stmt->succ;
   }
 
+  stmt->id = DETACHED_STMT;
+
   if (stmt->succ) {
     stmt->succ->pred = stmt->pred;
   } else {
@@ -691,11 +706,17 @@ void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
 }
 
 void detach_ir_op(struct ir_func *irb, struct ir_op *op) {
+  if (op->id == DETACHED_OP) {
+    return;
+  }
+
   invariant_assert(irb->op_count,
                    "`detach_ir_op` would underflow op count for `ir_builder`");
   invariant_assert(op->stmt, "can't detach `op` not attached to stmt");
 
   irb->op_count--;
+
+  op->id = DETACHED_LCL;
 
   // fix links on either side of op
   if (op->pred) {
@@ -780,7 +801,7 @@ void eliminate_redundant_ops(struct ir_func *func) {
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (op->mov.value && ir_reg_eq(op->reg, op->mov.value->reg)) {
-        struct ir_op_usage usage = use_map.use_datas[op->id];
+        struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
         for (size_t i = 0; i < usage.num_uses; i++) {
           *usage.uses[i].op = op->mov.value;
@@ -1268,7 +1289,6 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   op->comment = NULL;
   op->reg = NO_REG;
   op->lcl = NULL;
-  op->promotion_info = (struct ir_promotion_info){.num_fields = 0};
   op->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
 
   if (stmt->last) {
@@ -1805,6 +1825,42 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   return lcl;
 }
 
+void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
+  if (lcl->id == DETACHED_LCL) {
+    return;
+  }
+
+  irb->num_locals--;
+
+  struct ir_var_ty_info ty_info = var_ty_info(irb->unit, &lcl->var_ty);
+
+  // TODO: does this align correct?
+  size_t lcl_pad =
+      (ty_info.alignment - (irb->total_locals_size % ty_info.alignment)) %
+      ty_info.alignment;
+  size_t lcl_size = ty_info.size;
+
+  irb->total_locals_size -= lcl_pad;
+  irb->total_locals_size -= lcl_size;
+
+  lcl->id = DETACHED_LCL;
+
+  // fix links on either side of lcl
+  if (lcl->pred) {
+    lcl->pred->succ = lcl->succ;
+  } else {
+    irb->first_local = lcl->succ;
+  }
+
+  if (lcl->succ) {
+    lcl->succ->pred = lcl->pred;
+  } else {
+    irb->last_local = lcl->pred;
+  }
+
+  lcl->func = NULL;
+}
+
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
   return var_ty->ty == IR_VAR_TY_TY_STRUCT || var_ty->ty == IR_VAR_TY_TY_UNION;
 }
@@ -1903,11 +1959,11 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   case IR_VAR_TY_TY_STRUCT: {
     size_t max_alignment = 0;
     size_t size = 0;
-    size_t num_fields = ty->struct_ty.num_fields;
+    size_t num_fields = ty->aggregate.num_fields;
     size_t *offsets = arena_alloc(iru->arena, sizeof(*offsets) * num_fields);
 
-    for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
-      struct ir_var_ty *field = &ty->struct_ty.fields[i];
+    for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
+      struct ir_var_ty *field = &ty->aggregate.fields[i];
       struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
@@ -1926,10 +1982,10 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   case IR_VAR_TY_TY_UNION: {
     size_t max_alignment = 0;
     size_t size = 0;
-    size_t num_fields = ty->struct_ty.num_fields;
+    size_t num_fields = ty->aggregate.num_fields;
 
-    for (size_t i = 0; i < ty->struct_ty.num_fields; i++) {
-      struct ir_var_ty *field = &ty->struct_ty.fields[i];
+    for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
+      struct ir_var_ty *field = &ty->aggregate.fields[i];
       struct ir_var_ty_info info = var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
@@ -1996,11 +2052,16 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
 
 struct build_op_uses_callback_data {
   struct ir_op *op;
-  struct use_data *use_data;
+  struct op_use_data *use_data;
 };
 
-struct use_data {
+struct op_use_data {
   struct ir_op *op;
+  struct vector *uses;
+};
+
+struct lcl_use_data {
+  struct ir_lcl *lcl;
   struct vector *uses;
 };
 
@@ -2020,10 +2081,19 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
       .use_data =
           arena_alloc(func->arena, sizeof(*data.use_data) * func->op_count)};
 
+  struct lcl_use_data *lcl_usage =
+      arena_alloc(func->arena, sizeof(*lcl_usage) * func->num_locals);
+
   for (size_t i = 0; i < func->op_count; i++) {
     // because walk_op_uses can be out of order we need to create the vectors in
     // advance
-    data.use_data[i].uses = vector_create(sizeof(struct ir_op_use));
+    data.use_data[i] = (struct op_use_data){ .op = NULL, .uses = vector_create(sizeof(struct ir_op_use)) };
+  }
+
+  for (size_t i = 0; i < func->num_locals; i++) {
+    // because walk_op_uses can be out of order we need to create the vectors in
+    // advance
+    lcl_usage[i] = (struct lcl_use_data){ .lcl = NULL, .uses = vector_create(sizeof(struct ir_op *)) };
   }
 
   struct ir_basicblock *basicblock = func->first;
@@ -2034,6 +2104,33 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
       struct ir_op *op = stmt->first;
 
       while (op) {
+        struct ir_lcl *lcl = NULL;
+#define GET_LCL(hi, ty_name, lo)                                               \
+  case IR_OP_TY_##hi:                                                          \
+    if (op->lo.ty == IR_OP_##ty_name##_TY_LCL) {                               \
+      lcl = op->lo.lcl;                                                        \
+    }                                                                          \
+    break;
+
+        switch (op->ty) {
+          GET_LCL(ADDR, ADDR, addr);
+
+          GET_LCL(LOAD, LOAD, load);
+          GET_LCL(STORE, STORE, store);
+
+          GET_LCL(LOAD_BITFIELD, LOAD, load_bitfield);
+          GET_LCL(STORE_BITFIELD, STORE, store_bitfield);
+        default:
+          break;
+        }
+#undef GET_LCL
+
+        if (lcl) {
+          struct lcl_use_data *usage = &lcl_usage[lcl->id];
+          usage->lcl = lcl;
+          vector_push_back(usage->uses, &op);
+        }
+
         data.op = op;
         data.use_data[op->id].op = op;
 
@@ -2049,21 +2146,39 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
   }
 
   struct ir_op_use_map uses = {
-      .num_use_datas = func->op_count,
-      .use_datas =
-          arena_alloc(func->arena, sizeof(*uses.use_datas) * func->op_count)};
+      .num_op_use_datas = func->op_count,
+      .op_use_datas = arena_alloc(func->arena,
+                                  sizeof(*uses.op_use_datas) * func->op_count),
+
+      .num_lcl_use_datas = func->num_locals,
+      .lcl_use_datas = arena_alloc(func->arena,
+                                  sizeof(*uses.lcl_use_datas) * func->num_locals),
+    };
 
   for (size_t i = 0; i < func->op_count; i++) {
-    struct use_data *use_data = &data.use_data[i];
+    struct op_use_data *use_data = &data.use_data[i];
 
     DEBUG_ASSERT(i == use_data->op->id, "ops were not keyed");
 
-    uses.use_datas[i] = (struct ir_op_usage){
+    uses.op_use_datas[i] = (struct ir_op_usage){
         .op = use_data->op,
         .num_uses = vector_length(use_data->uses),
         .uses = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
 
-    vector_copy_to(use_data->uses, uses.use_datas[i].uses);
+    vector_copy_to(use_data->uses, uses.op_use_datas[i].uses);
+  }
+
+  for (size_t i = 0; i < func->num_locals; i++) {
+    struct lcl_use_data *use_data = &lcl_usage[i];
+
+    DEBUG_ASSERT(i == use_data->lcl->id, "ops were not keyed");
+
+    uses.lcl_use_datas[i] = (struct ir_lcl_usage){
+        .lcl = use_data->lcl,
+        .num_consumers = vector_length(use_data->uses),
+        .consumers = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
+
+    vector_copy_to(use_data->uses, uses.lcl_use_datas[i].consumers);
   }
 
   return uses;

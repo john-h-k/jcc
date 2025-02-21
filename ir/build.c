@@ -214,27 +214,27 @@ static struct ir_var_ty var_ty_for_td_var_ty(struct ir_unit *iru,
     switch (aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
       ty.ty = IR_VAR_TY_TY_STRUCT;
-      ty.struct_ty.num_fields = aggregate.num_fields;
-      ty.struct_ty.fields = arena_alloc(
-          iru->arena, sizeof(struct ir_var_ty) * ty.struct_ty.num_fields);
+      ty.aggregate.num_fields = aggregate.num_fields;
+      ty.aggregate.fields = arena_alloc(
+          iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
 
-      for (size_t i = 0; i < ty.struct_ty.num_fields; i++) {
+      for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
         // handle nested types
 
-        ty.struct_ty.fields[i] =
+        ty.aggregate.fields[i] =
             var_ty_for_td_var_ty(iru, &aggregate.fields[i].var_ty);
       }
       break;
     case TD_TY_AGGREGATE_TY_UNION:
       ty.ty = IR_VAR_TY_TY_UNION;
-      ty.union_ty.num_fields = aggregate.num_fields;
-      ty.union_ty.fields = arena_alloc(iru->arena, sizeof(struct ir_var_ty) *
-                                                       ty.union_ty.num_fields);
+      ty.aggregate.num_fields = aggregate.num_fields;
+      ty.aggregate.fields = arena_alloc(iru->arena, sizeof(struct ir_var_ty) *
+                                                       ty.aggregate.num_fields);
 
-      for (size_t i = 0; i < ty.union_ty.num_fields; i++) {
+      for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
         // handle nested types
 
-        ty.struct_ty.fields[i] =
+        ty.aggregate.fields[i] =
             var_ty_for_td_var_ty(iru, &aggregate.fields[i].var_ty);
       }
       break;
@@ -1344,15 +1344,15 @@ static void get_member_info(struct ir_unit *iru,
     }
   }
 
-  struct ir_var_ty ir_struct_ty = var_ty_for_td_var_ty(iru, aggregate);
-  struct ir_var_ty_info info = var_ty_info(iru, &ir_struct_ty);
+  struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, aggregate);
+  struct ir_var_ty_info info = var_ty_info(iru, &ir_aggregate);
 
   // offsets are null for a union
   *member_offset = info.offsets ? info.offsets[*member_idx] : 0;
 }
 
 static size_t get_member_address_offset(struct ir_func_builder *irb,
-                                        const struct td_var_ty *struct_ty,
+                                        const struct td_var_ty *aggregate,
                                         const char *member_name,
                                         struct ir_var_ty *member_ty,
                                         bool *member_is_bitfield,
@@ -1361,7 +1361,7 @@ static size_t get_member_address_offset(struct ir_func_builder *irb,
 
   size_t member_offset;
   size_t idx;
-  get_member_info(irb->unit, struct_ty, member_name, member_ty, &idx,
+  get_member_info(irb->unit, aggregate, member_name, member_ty, &idx,
                   &member_offset, member_is_bitfield, member_bitfield,
                   td_member_ty);
 

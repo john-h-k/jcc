@@ -1,5 +1,6 @@
 #include "lsra.h"
 
+#include "bit_twiddle.h"
 #include "bitset.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
@@ -7,7 +8,6 @@
 #include "log.h"
 #include "util.h"
 #include "vector.h"
-#include "bit_twiddle.h"
 
 struct register_alloc_info {
   struct reg_info integral_reg_info;
@@ -60,6 +60,9 @@ static bool try_get_preferred_reg(struct register_alloc_state *state,
       if (op->mov.value) {
         candidate = op->mov.value->reg;
       }
+      break;
+    case IR_OP_TY_CAST_OP:
+      candidate = op->cast_op.value->reg;
       break;
     case IR_OP_TY_UNARY_OP:
       candidate = op->unary_op.value->reg;
@@ -438,26 +441,25 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     walk_op_uses(iter_op, add_to_prefs_callback, &cb_data);
   }
 
-  for (size_t i = 0; i < info->num_gp_regs; i++) {
-    if (info->has_ssp && info->ssp_reg == i) {
-      continue;
-    }
-
-    struct reg_state reg = {.live = NULL,
-                            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = i},
-                            .free = true};
-
-    vector_push_back(state.gp_reg_states, &reg);
-    vector_push_back(state.gp_reg_pool, &i);
+#define ADD_REGS(start, end, reg_ty, name)                                     \
+  for (size_t i = start; i > end; i--) {                                       \
+    size_t idx = i - 1;\
+    if (info->has_ssp && info->ssp_reg == idx) {                                 \
+      continue;                                                                \
+    }                                                                          \
+                                                                               \
+    struct reg_state reg = {                                                   \
+        .live = NULL, .reg = {.ty = reg_ty, .idx = idx}, .free = true};          \
+                                                                               \
+    vector_push_back(state.name##_reg_states, &reg);                           \
+    vector_push_back(state.name##_reg_pool, &idx);                               \
   }
 
-  for (size_t i = 0; i < info->num_fp_regs; i++) {
-    struct reg_state reg = {
-        .live = NULL, .reg = {.ty = IR_REG_TY_FP, .idx = i}, .free = true};
+  // prioritise volatile
+  // TODO: make each interval select vol/nonvol preference based on live range
+  ADD_REGS(info->num_gp_regs, 0, IR_REG_TY_INTEGRAL, gp);
+  ADD_REGS(info->num_fp_regs, 0, IR_REG_TY_FP, fp);
 
-    vector_push_back(state.fp_reg_states, &reg);
-    vector_push_back(state.fp_reg_pool, &i);
-  }
 
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
@@ -583,6 +585,10 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
+      DEBUG_ASSERT(interval->op->reg.ty == reg_ty,
+                   "fixed reg was not of right type. if you have moved fp to a "
+                   "gp reg (or vice versa) you must also change op type");
+
       force_spill_register(irb, &state, interval->op->reg, interval);
 
       pref_reg = interval->op->reg.idx;
@@ -601,13 +607,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       // put available regs into a bitmask then remove them as we look through
       // the fixed regs with overlapping intervals
 
-      unsigned long long available_regs = 0;
-
-      for (size_t j = vector_length(reg_pool); j; j--) {
-        size_t idx = *(size_t *)vector_get(reg_pool, j - 1);
-
-        available_regs |= (1 << idx);
-      }
+      unsigned long long fixed_regs = 0;
 
       for (size_t j = vector_length(fixed_reg_intervals); j; j--) {
         struct interval *fixed =
@@ -616,12 +616,12 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         if (fixed->start > interval->end || fixed->end <= interval->start) {
           continue;
         }
-          
+
         for (size_t k = 0; k < fixed->op->write_info.num_reg_writes; k++) {
           struct ir_reg write = fixed->op->write_info.writes[k];
 
           if (write.ty == reg_ty) {
-            available_regs &= ~(1 << write.idx);
+            fixed_regs |= (1 << write.idx);
           }
         }
 
@@ -631,20 +631,23 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
         struct ir_op *fixed_op = fixed->op;
         if (fixed_op->reg.ty == reg_ty) {
-          available_regs &= ~(1 << fixed_op->reg.idx);
+          fixed_regs |= (1 << fixed_op->reg.idx);
         }
       }
 
       struct ir_reg preferred;
-      if (try_get_preferred_reg(&state, reg_ty, interval, &preferred)) {
-        // struct reg_state *reg_state = vector_get(reg_states, preferred.idx);
-        if (NTH_BIT(available_regs, preferred.idx)) {
-          pref_reg = preferred.idx;
-        }
-      }
+      if (try_get_preferred_reg(&state, reg_ty, interval, &preferred) &&
+          !NTH_BIT(fixed_regs, preferred.idx)) {
+        pref_reg = preferred.idx;
+      } else {
+        for (size_t j = vector_length(reg_pool); j; j--) {
+          size_t idx = *(size_t *)vector_get(reg_pool, j - 1);
 
-      if (pref_reg == SIZE_MAX && available_regs) {
-        pref_reg = tzcnt(available_regs);
+          if (!NTH_BIT(fixed_regs, idx)) {
+            pref_reg = idx;
+            break;
+          }
+        }
       }
     }
 

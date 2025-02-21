@@ -362,7 +362,6 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     // FIXME: this will lower e.g `(i32) load.addr [addr.offset %0 + #7]` which
     // is not valid because it needs to be a multiple of the size
 
-
     struct ir_op *base = addr->addr_offset.base;
     bool lcl_has_offset =
         base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL &&
@@ -503,22 +502,22 @@ static bool try_get_hfa_info(struct ir_func *func,
     TODO("union hfa handling");
   }
 
-  if (!var_ty->struct_ty.num_fields) {
+  if (!var_ty->aggregate.num_fields) {
     return false;
   }
 
-  *member_ty = var_ty->struct_ty.fields[0];
+  *member_ty = var_ty->aggregate.fields[0];
 
   if (!var_ty_is_fp(member_ty)) {
     return false;
   }
 
-  if (var_ty->struct_ty.num_fields > 4) {
+  if (var_ty->aggregate.num_fields > 4) {
     return false;
   }
 
-  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-    if (!var_ty_eq(func, member_ty, &var_ty->struct_ty.fields[i])) {
+  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
+    if (!var_ty_eq(func, member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -537,7 +536,7 @@ static bool try_get_hfa_info(struct ir_func *func,
     unreachable();
   }
 
-  *num_members = var_ty->struct_ty.num_fields;
+  *num_members = var_ty->aggregate.num_fields;
   return true;
 }
 
@@ -832,12 +831,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_UNKNOWN:
-              BUG("unknown op!");
-            case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_PHI:
-              break;
             case IR_OP_TY_RET:
               lower_ret(func, op);
               break;
@@ -849,18 +842,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
               break;
             }
-            case IR_OP_TY_STORE:
-            case IR_OP_TY_LOAD:
-            case IR_OP_TY_STORE_BITFIELD:
-            case IR_OP_TY_LOAD_BITFIELD:
-            case IR_OP_TY_BITFIELD_EXTRACT:
-            case IR_OP_TY_CALL:
-            case IR_OP_TY_BR_SWITCH:
-            case IR_OP_TY_BR:
-            case IR_OP_TY_BR_COND:
-            case IR_OP_TY_MOV:
-            case IR_OP_TY_CAST_OP:
-              break;
             case IR_OP_TY_BITFIELD_INSERT:
               op->bitfield_insert.value->flags |= IR_OP_FLAG_READS_DEST;
               break;
@@ -908,28 +889,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_UNKNOWN:
-              BUG("unknown op!");
-            case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_PHI:
-            case IR_OP_TY_CNST:
-            case IR_OP_TY_STORE_BITFIELD:
-            case IR_OP_TY_LOAD_BITFIELD:
-            case IR_OP_TY_BITFIELD_EXTRACT:
-            case IR_OP_TY_BITFIELD_INSERT:
-            case IR_OP_TY_ADDR:
-            case IR_OP_TY_BR:
-            case IR_OP_TY_BR_SWITCH:
-            case IR_OP_TY_MOV:
-            case IR_OP_TY_RET:
-            case IR_OP_TY_CALL:
-            case IR_OP_TY_CAST_OP:
-            case IR_OP_TY_MEM_SET:
-            case IR_OP_TY_MEM_COPY:
-            case IR_OP_TY_UNARY_OP:
-            case IR_OP_TY_BR_COND:
-              break;
             case IR_OP_TY_STORE:
               try_contain_store(func, op);
               break;
@@ -964,6 +923,8 @@ void aarch64_lower(struct ir_unit *unit) {
               } else {
                 try_contain_addr_offset(func, op);
               }
+              break;
+            default:
               break;
             }
 

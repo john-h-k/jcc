@@ -43,6 +43,9 @@ enum ir_op_ty {
   IR_OP_TY_RET,
   IR_OP_TY_CALL,
 
+  // gathers a set of SSA values into an aggregate
+  IR_OP_TY_GATHER,
+
   // Low-level operations that only occur after lowering
   // IR_OP_TY_STORE_REG,
   // IR_OP_TY_LOAD_REG,
@@ -52,8 +55,14 @@ enum ir_op_ty {
   IR_OP_TY_CUSTOM,
 };
 
-struct ir_op_store_reg {
-  struct ir_lcl *lcl;
+struct ir_gather_value {
+  struct ir_op *value;
+  size_t field_idx;
+};
+
+struct ir_op_gather {
+  struct ir_gather_value *values;
+  size_t num_values;
 };
 
 struct ir_op_mov {
@@ -228,12 +237,7 @@ struct ir_var_func_ty {
 
 bool is_func_variadic(const struct ir_var_func_ty *ty);
 
-struct ir_var_struct_ty {
-  size_t num_fields;
-  struct ir_var_ty *fields;
-};
-
-struct ir_var_union_ty {
+struct ir_var_aggregate_ty {
   size_t num_fields;
   struct ir_var_ty *fields;
 };
@@ -253,8 +257,7 @@ struct ir_var_ty {
     enum ir_var_primitive_ty primitive;
     struct ir_var_func_ty func;
     struct ir_var_array_ty array;
-    struct ir_var_struct_ty struct_ty;
-    struct ir_var_union_ty union_ty;
+    struct ir_var_aggregate_ty aggregate;
   };
 };
 
@@ -490,11 +493,6 @@ struct ir_op_write_info {
   struct ir_reg writes[4];
 };
 
-struct ir_promotion_info {
-  struct ir_op *fields;
-  size_t num_fields;
-};
-
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -523,6 +521,7 @@ struct ir_op {
     struct ir_op_bitfield_insert bitfield_insert;
     struct ir_op_addr addr;
     struct ir_op_addr_offset addr_offset;
+    struct ir_op_gather gather;
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
@@ -533,9 +532,6 @@ struct ir_op {
   };
 
   struct ir_lcl *lcl;
-
-  // if this op uses a promoted value, holds the positions of the fields
-  struct ir_promotion_info promotion_info;
 
   // only meaningful post register-allocation
   struct ir_reg reg;
@@ -931,6 +927,11 @@ struct ir_object {
   };
 };
 
+#define DETACHED_BASICBLOCK (SIZE_MAX)
+#define DETACHED_OP (SIZE_MAX)
+#define DETACHED_STMT (SIZE_MAX)
+#define DETACHED_LCL (SIZE_MAX)
+
 // TODO: is this well defined? the casts
 #define IR_MK_OBJECT(obj)                                                      \
   (_Generic((obj),                                                             \
@@ -982,6 +983,7 @@ void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);
 
 struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty);
+void detach_local(struct ir_func *irb, struct ir_lcl *lcl);
 
 struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_var_ty *var_ty,
@@ -1148,9 +1150,19 @@ struct ir_op_usage {
   size_t num_uses;
 };
 
+struct ir_lcl_usage {
+  struct ir_lcl *lcl;
+
+  struct ir_op **consumers;
+  size_t num_consumers;
+};
+
 struct ir_op_use_map {
-  struct ir_op_usage *use_datas;
-  size_t num_use_datas;
+  struct ir_op_usage *op_use_datas;
+  size_t num_op_use_datas;
+
+  struct ir_lcl_usage *lcl_use_datas;
+  size_t num_lcl_use_datas;
 };
 
 struct ir_op_use_map build_op_uses_map(struct ir_func *func);

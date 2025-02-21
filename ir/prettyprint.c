@@ -5,8 +5,6 @@
 #include "../util.h"
 #include "ir.h"
 
-#include <math.h>
-
 static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
   case IR_OP_UNARY_OP_TY_FNEG:
@@ -160,10 +158,10 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
   case IR_VAR_TY_TY_STRUCT: {
     struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
-    for (size_t i = 0; i < var_ty->struct_ty.num_fields; i++) {
-      debug_print_var_ty_string(file, iru, &var_ty->struct_ty.fields[i]);
+    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+      debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
 
-      if (i + 1 < var_ty->struct_ty.num_fields) {
+      if (i + 1 < var_ty->aggregate.num_fields) {
         fprintf(file, ", ");
       }
     }
@@ -173,10 +171,10 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
   case IR_VAR_TY_TY_UNION: {
     struct ir_var_ty_info info = var_ty_info(iru, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
-    for (size_t i = 0; i < var_ty->union_ty.num_fields; i++) {
-      debug_print_var_ty_string(file, iru, &var_ty->union_ty.fields[i]);
+    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+      debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
 
-      if (i + 1 < var_ty->union_ty.num_fields) {
+      if (i + 1 < var_ty->aggregate.num_fields) {
         fprintf(file, ", ");
       }
     }
@@ -302,6 +300,20 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   case IR_OP_TY_CUSTOM:
     BUG("custom ops no longer supported");
+  case IR_OP_TY_GATHER:
+    fprintf(file, "gather { ");
+    for (size_t i = 0; i < ir->gather.num_values; i++) {
+      struct ir_gather_value value = ir->gather.values[i];
+
+      fprintf(file, ".%zu = %%%zu", value.field_idx, value.value->id);
+
+      if (i + 1 != ir->gather.num_values) {
+        fprintf(file, ", ");
+      }
+    }
+
+    fprintf(file, " }");
+    break;
   case IR_OP_TY_CALL: {
     fprintf(file, "call ");
 
@@ -1009,7 +1021,7 @@ void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file, struct ir_unit *unit, struct ir_glb *glb) {
+void debug_print_glb(FILE *file, UNUSED struct ir_unit *unit, struct ir_glb *glb) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {

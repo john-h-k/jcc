@@ -22,13 +22,14 @@ struct lcl_use {
   size_t field_idx;
 };
 
-static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses, struct ir_op *op, size_t field_idx,
-                bool *candidate) {
-  // struct ir_op_usage *usage = &use_map->use_datas[op->id];
-  // bool is_ret = usage->num_uses == 1 && usage->uses[0].consumer->ty == IR_OP_TY_RET;
+static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses,
+                       struct ir_op *op, size_t field_idx, bool *candidate) {
+  struct ir_op_usage *usage = &use_map->op_use_datas[op->id];
+  bool is_ret =
+      usage->num_uses == 1 && usage->uses[0].consumer->ty == IR_OP_TY_RET;
 
-  if (/*!is_ret &&*/ (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.ty != IR_VAR_TY_TY_POINTER)) {
+  if (!is_ret && (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
+                  op->var_ty.ty != IR_VAR_TY_TY_POINTER)) {
     *candidate = false;
   } else {
     struct lcl_use lcl_use = {.op = op, .field_idx = field_idx};
@@ -36,19 +37,21 @@ static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses, s
   }
 }
 
-static void check_store(struct ir_op_use_map *use_map, struct vector *lcl_uses, struct ir_op *op, struct ir_op *addr, size_t field_idx,
-                bool *candidate) {
+static void check_store(struct ir_op_use_map *use_map, struct vector *lcl_uses,
+                        struct ir_op *op, struct ir_op *addr, size_t field_idx,
+                        bool *candidate) {
   if (op->store.ty == IR_OP_STORE_TY_ADDR && op->store.addr != addr) {
     // don't consider stores where the address is the value _being stored_
     *candidate = false;
     return;
   }
 
-  // struct ir_op_usage *usage = &use_map->use_datas[op->id];
-  // bool is_ret = usage->num_uses == 1 && usage->uses[0].consumer->ty == IR_OP_TY_RET;
+  struct ir_op_usage *usage = &use_map->op_use_datas[op->id];
+  bool is_ret =
+      usage->num_uses == 1 && usage->uses[0].consumer->ty == IR_OP_TY_RET;
 
-  if (/*!is_ret && */(op->store.value->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
-      op->store.value->var_ty.ty != IR_VAR_TY_TY_POINTER)) {
+  if (!is_ret && (op->store.value->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
+                  op->store.value->var_ty.ty != IR_VAR_TY_TY_POINTER)) {
     *candidate = false;
   } else {
     struct lcl_use lcl_use = {.op = op, .field_idx = field_idx};
@@ -62,7 +65,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
     return;
   }
 
-  struct ir_op_usage uses = data->use_map->use_datas[op->id];
+  struct ir_op_usage uses = data->use_map->op_use_datas[op->id];
 
   for (size_t i = 0; i < uses.num_uses; i++) {
     struct ir_op_use use = uses.uses[i];
@@ -71,10 +74,12 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
     switch (consumer->ty) {
     case IR_OP_TY_LOAD:
-      check_load(data->use_map, data->lcl_uses, consumer, field_idx, data->candidate);
+      check_load(data->use_map, data->lcl_uses, consumer, field_idx,
+                 data->candidate);
       break;
     case IR_OP_TY_STORE:
-      check_store(data->use_map, data->lcl_uses, consumer, op, field_idx, data->candidate);
+      check_store(data->use_map, data->lcl_uses, consumer, op, field_idx,
+                  data->candidate);
       break;
     case IR_OP_TY_ADDR_OFFSET: {
       struct ir_op_addr_offset addr_offset = consumer->addr_offset;
@@ -139,9 +144,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
   }
 }
 
-
 // FIXME: VERY temporary. should replace with proper phi allocation
-
 
 struct ir_build_phi_build {
   struct ir_phi_entry *entry;
@@ -153,8 +156,7 @@ struct lcl_store {
   size_t field_idx;
 };
 
-static void gen_var_phis(struct ir_func *irb,
-                         struct hashtbl *stores,
+static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
                          struct ir_op **basicblock_ops_for_var,
                          struct vector *preds, size_t field_idx,
                          struct ir_var_ty *var_ty) {
@@ -166,10 +168,7 @@ static void gen_var_phis(struct ir_func *irb,
 
     struct ir_op *op;
 
-    struct lcl_store key = {
-      .bb_id = basicblock->id,
-      .field_idx = field_idx
-    };
+    struct lcl_store key = {.bb_id = basicblock->id, .field_idx = field_idx};
     struct ir_op **store = hashtbl_lookup(stores, &key);
     if (store) {
       op = *store;
@@ -212,7 +211,8 @@ static void gen_var_phis(struct ir_func *irb,
   }
 }
 
-static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores, struct ir_op *phi, size_t field_idx) {
+static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
+                           struct ir_op *phi, size_t field_idx) {
   DEBUG_ASSERT(phi->ty == IR_OP_TY_PHI, "non-phi in `find_phi_exprs`");
 
   // walk predecessor basic blocks (splitting into seperate walks each time we
@@ -223,8 +223,8 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores, struct i
 
   struct ir_basicblock *basicblock = phi->stmt->basicblock;
 
-  struct ir_op **basicblock_ops_for_var = arena_alloc(
-      irb->arena, sizeof(struct ir_op *) * irb->basicblock_count);
+  struct ir_op **basicblock_ops_for_var =
+      arena_alloc(irb->arena, sizeof(struct ir_op *) * irb->basicblock_count);
   memset(basicblock_ops_for_var, 0,
          sizeof(struct ir_op *) * irb->basicblock_count);
   basicblock_ops_for_var[basicblock->id] = phi;
@@ -247,7 +247,8 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores, struct i
                &phi->var_ty);
 }
 
-static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
+static void opts_do_promote(struct ir_func *func,
+                            struct vector *lcl_uses,
                             struct ir_lcl *lcl) {
   size_t num_uses = vector_length(lcl_uses);
 
@@ -275,7 +276,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
                             .field_idx = use->field_idx};
 
     struct ir_op **prev = hashtbl_lookup(stores, &key);
-    
+
     // relies on sequential ids
     if (!prev || (*prev)->id < op->id) {
       hashtbl_insert(stores, &key, &op);
@@ -286,32 +287,108 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
     struct lcl_use *use = vector_get(lcl_uses, i);
 
     struct ir_op *op = use->op;
+    struct ir_gather_value *gather_values;
     if (op->ty == IR_OP_TY_LOAD) {
-      struct ir_basicblock *basicblock = op->stmt->basicblock;
-
-      struct lcl_store key = {.bb_id = basicblock->id,
-                              .field_idx = use->field_idx};
-
-      struct ir_op **store = hashtbl_lookup(stores, &key);
-      if (store) {
-        // same bb, no phi needed
-        op = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
-        op->mov = (struct ir_op_mov){.value = *store};
-        continue;
+      size_t first_field, num_fields;
+      struct ir_var_ty *fields;
+      if (var_ty_is_aggregate(&op->var_ty)) {
+        first_field = use->field_idx;
+        num_fields = op->var_ty.aggregate.num_fields;
+        gather_values = arena_alloc(func->arena, num_fields * sizeof(struct ir_gather_value));
+        fields = op->var_ty.aggregate.fields;
+      } else {
+        first_field = use->field_idx;
+        num_fields = 1;
+        gather_values = NULL;
+        fields = &op->var_ty;
       }
 
-      // struct vector *frontier = domf.domfs[basicblock->id];
-      // size_t num_frontier_bbs = vector_length(frontier);
+      size_t head = 0;
+      for (size_t j = first_field; j < first_field + num_fields; j++) {
+        struct ir_basicblock *basicblock = op->stmt->basicblock;
 
+        struct lcl_store key = {.bb_id = basicblock->id,
+                                .field_idx = j};
 
-      op = replace_ir_op(func, op, IR_OP_TY_PHI, op->var_ty);
-      op->phi = (struct ir_op_phi){
-        .num_values = 0
-      };
+        struct ir_var_ty field_ty = fields[head];
 
-      find_phi_exprs(func, stores, op, key.field_idx);
+        struct ir_op **store = hashtbl_lookup(stores, &key);
+        if (store) {
+          // same bb, no phi needed
+          struct ir_op *mov;
+          if (gather_values) {
+            mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
+            gather_values[head++] = (struct ir_gather_value){
+              .value = mov,
+              .field_idx = j
+            };
+          } else {
+            mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
+          }
+
+          mov->mov = (struct ir_op_mov){.value = *store};
+
+          continue;
+        }
+
+        struct ir_op *phi = insert_phi(func, basicblock, field_ty);
+        phi->phi = (struct ir_op_phi){.num_values = 0};
+
+        struct ir_op *mov;
+        if (gather_values) {
+          mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
+          gather_values[head++] = (struct ir_gather_value){
+            .value = mov,
+            .field_idx = j
+          };
+        } else {
+          mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
+        }
+
+        mov->mov = (struct ir_op_mov){.value = phi};
+
+        find_phi_exprs(func, stores, op, j);
+      }
+
+      if (gather_values) {
+        op = replace_ir_op(func, op, IR_OP_TY_GATHER, op->var_ty);
+        op->gather = (struct ir_op_gather){
+          .num_values = num_fields,
+          .values = gather_values
+        };
+      }
     }
   }
+
+  
+  // can't reuse map from parent because we have added ops
+  struct ir_op_use_map use_map = build_op_uses_map(func);
+
+  struct vector *depends = vector_create(sizeof(struct ir_op *));
+  for (size_t i = 0; i < use_map.num_lcl_use_datas; i++) {
+    struct ir_lcl_usage *usage = &use_map.lcl_use_datas[i];
+
+    for (size_t j = 0; j < usage->num_consumers; j++) {
+      struct ir_op *consumer = usage->consumers[j];
+
+      vector_push_back(depends, &consumer);
+
+      while (vector_length(depends)) {
+        struct ir_op *detach = *(struct ir_op **)vector_pop(depends);
+
+        struct ir_op_usage *dep_usage = &use_map.op_use_datas[detach->id];
+
+        for (size_t k = 0; k < dep_usage->num_uses; k++) {
+          struct ir_op *dep_use = dep_usage->uses[k].consumer;
+          vector_push_back(depends, &dep_use);
+        }
+
+        detach_ir_op(func, detach);
+      }
+    }
+  }
+
+  detach_local(func, lcl);
 }
 
 static void opts_promote_func(struct ir_func *func) {
@@ -346,13 +423,15 @@ static void opts_promote_func(struct ir_func *func) {
         case IR_OP_TY_LOAD:
           if (op->load.ty == IR_OP_LOAD_TY_LCL) {
             struct ir_lcl *lcl = op->load.lcl;
-            check_load(&use_map, lcl_uses[lcl->id], op, 0, &candidates[lcl->id]);
+            check_load(&use_map, lcl_uses[lcl->id], op, 0,
+                       &candidates[lcl->id]);
           }
           break;
         case IR_OP_TY_STORE:
           if (op->store.ty == IR_OP_STORE_TY_LCL) {
             struct ir_lcl *lcl = op->store.lcl;
-            check_store(&use_map, lcl_uses[lcl->id], op, NULL, 0, &candidates[lcl->id]);
+            check_store(&use_map, lcl_uses[lcl->id], op, NULL, 0,
+                        &candidates[lcl->id]);
 
             if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
                 op->var_ty.ty != IR_VAR_TY_TY_POINTER) {
@@ -415,7 +494,8 @@ static void opts_promote_func(struct ir_func *func) {
     DEBUG_ASSERT(!lcl->succ || lcl->succ->id == lcl->id + 1,
                  "non sequential locals");
 
-    // don't promote params because they don't have moves (they are in a "magic local") and so promoting will fail
+    // don't promote params because they don't have moves (they are in a "magic
+    // local") and so promoting will fail
     if (candidates[lcl->id] && !(lcl->flags & IR_LCL_FLAG_PARAM)) {
       debug("lcl %zu promotion candidate", lcl->id);
       opts_do_promote(func, lcl_uses[lcl->id], lcl);
