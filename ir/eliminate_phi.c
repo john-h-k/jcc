@@ -347,4 +347,7 @@ void eliminate_phi(struct ir_func *irb) {
                 IR_REG_TY_FP, early);
     }
   }
+
+  // we (+ regalloc) may have introduced new locals, so allocate them
+  alloc_locals(irb);
 }

@@ -418,10 +418,12 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
 
     switch (op->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_F32:
+    case IR_VAR_PRIMITIVE_TY_I32:
       instr->x64->ty = X64_INSTR_TY_MOVD;
       instr->x64->movd = (struct x64_mov_reg){.dest = dest, .source = source};
       break;
     case IR_VAR_PRIMITIVE_TY_F64:
+    case IR_VAR_PRIMITIVE_TY_I64:
       instr->x64->ty = X64_INSTR_TY_MOVQ;
       instr->x64->movq = (struct x64_mov_reg){.dest = dest, .source = source};
       break;

@@ -738,12 +738,11 @@ enum ir_lcl_alloc_ty {
   IR_LCL_ALLOC_TY_NONE,
 
   IR_LCL_ALLOC_TY_NORMAL,
-  
+
   // fixed offset from stack pointer
   // this is used for stack arguments and return values
   IR_LCL_ALLOC_TY_FIXED,
 };
-
 
 struct ir_lcl {
   size_t id;
@@ -798,8 +797,7 @@ struct ir_param_reg {
   // e.g `struct { float[3] }` would have size 4, but `struct { char[16] } would
   // have size 8`
 
-  struct ir_reg start_reg;
-  size_t num_reg;
+  struct ir_reg reg;
   size_t size;
 };
 
@@ -809,7 +807,10 @@ struct ir_param_info {
   const struct ir_var_ty *var_ty;
 
   union {
-    struct ir_param_reg reg; // also used for pointer
+    struct {
+      size_t num_regs;
+      struct ir_param_reg regs[8]; // also used for pointer
+    };
     size_t stack_offset;
   };
 };

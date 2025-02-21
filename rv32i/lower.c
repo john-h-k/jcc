@@ -83,34 +83,44 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
                          &hfa_member_size)) {
       // nop
-      *ret_info = (struct ir_param_info){
-          .ty = IR_PARAM_INFO_TY_REGISTER,
-          .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = 0},
-                  .num_reg = num_hfa_members,
-                  .size = hfa_member_size},
-      };
-      // FIXME: 16b double tyes returned in reg
+      *ret_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_REGISTER,
+                                         .var_ty = func_ty.ret_ty,
+                                         .num_regs = num_hfa_members};
+
+      for (size_t i = 0; i < num_hfa_members; i++) {
+        ret_info->regs[i] = (struct ir_param_reg){
+            .reg = {.ty = IR_REG_TY_FP, .idx = i}, .size = hfa_member_size};
+      }
     } else if (info.size > 8) {
       ret_ty = IR_VAR_TY_NONE;
 
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_POINTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
-                  .num_reg = 1,
-           .size = 4},
+          .num_regs = 1,
+          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 4},
       };
 
       vector_push_front(params, &IR_VAR_TY_POINTER);
-    } else {
+    } else if (var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0},
-                  .num_reg = (info.size + 3) / 4,
-           .size = 4},
+          .num_regs = 1,
+          .regs[0] = {.reg = {.ty = IR_REG_TY_FP, .idx = 0}, .size = info.size},
       };
+    } else {
+      size_t num_regs = (info.size + 7) / 8;
+      *ret_info = (struct ir_param_info){
+          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .var_ty = func_ty.ret_ty,
+          .num_regs = num_regs,
+      };
+
+      for (size_t i = 0; i < num_regs; i++) {
+        ret_info->regs[i] = (struct ir_param_reg){
+            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = i}, .size = 8};
+      }
     }
   }
 
@@ -148,11 +158,11 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
-          .ty = ty,
+          .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = var_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
-                  .num_reg = 1,
-                  .size = info.size},
+          .num_regs = 1,
+          .regs[0] = {.reg = {.ty = IR_REG_TY_FP, .idx = nsrn},
+                      .size = info.size},
       };
       vector_push_back(param_infos, &param_info);
 
@@ -164,13 +174,12 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       struct ir_param_info param_info = {
           .ty = ty,
           .var_ty = var_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                  .num_reg = 1,
+           .num_regs = 1,
+          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
                   .size = info.size}};
       vector_push_back(param_infos, &param_info);
 
       ngrn++;
-
       continue;
     }
 
@@ -179,19 +188,22 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     }
 
     size_t dw_size = (info.size + 3) / 4;
-    if ((var_ty_is_aggregate(var_ty) || (variadic && var_ty_is_fp(var_ty))) && dw_size <= (8 - ngrn)) {
-      for (size_t j = 0; j < dw_size; j++) {
-        // given this is a composite, we assume `source` contains a
-        // pointer to it
-        vector_push_back(params, &IR_VAR_TY_I32);
-      }
-
+    if ((var_ty_is_aggregate(var_ty) || (variadic && var_ty_is_fp(var_ty))) &&
+        dw_size <= (8 - ngrn)) {
       struct ir_param_info param_info = {
           .ty = ty,
           .var_ty = var_ty,
-          .reg = {.start_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
-                  .num_reg = dw_size,
-                  .size = 4}};
+          .num_regs = dw_size};
+
+        for (size_t j = 0; j < dw_size; j++) {
+          // given this is a composite, we assume `source` contains a
+          // pointer to it
+          param_info.regs[j] = (struct ir_param_reg){
+              .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn + j}, .size = 8};
+
+          vector_push_back(params, &IR_VAR_TY_I64);
+        }
+
       vector_push_back(param_infos, &param_info);
 
       ngrn += dw_size;

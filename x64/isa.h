@@ -628,14 +628,14 @@ struct x64_raw_instr {
                           }}) \
 
 
-#define SSE_MOVQ(dest, source) \
+#define SSE_MOVQ(opc, dest, source) \
   (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
   ((struct x64_raw_instr){.len = 5,                                            \
                           .buff = { \
                           0x66,\
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
-                          0x6E, \
+                          (opc), \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
                           : \
   ((struct x64_raw_instr){.len = 5,                                            \
@@ -643,7 +643,7 @@ struct x64_raw_instr {
                           0x66,\
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
-                          0x6E, \
+                          (opc), \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
 
 #define AVX_MOVQ(dest, source) \
@@ -652,24 +652,24 @@ struct x64_raw_instr {
                           0x66,\
                           REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
-                          0x6E, \
+                          (opc), \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }})
 
-#define SSE_MOVD(dest, source) \
+#define SSE_MOVD(opc, dest, source) \
   (NEEDS_REX((dest)) || NEEDS_REX((source)) ?\
   ((struct x64_raw_instr){.len = 4,                                            \
                           .buff = { \
                           0x66,\
                           REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0, (size_t)((source).idx > 7)),  \
                           0x0F, \
-                          0x6E, \
+                          (opc), \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}) \
                           : \
   ((struct x64_raw_instr){.len = 4,                                            \
                           .buff = { \
                           0x66,\
                           0x0F, \
-                          0x6E, \
+                          (opc), \
                           MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8)) }}))
 
 #define AVX_MOVD(dest, source) \
