@@ -16,22 +16,22 @@ static bool try_get_hfa_info(struct ir_func *func,
     TODO("union hfa handling");
   }
 
-  if (!var_ty->struct_ty.num_fields) {
+  if (!var_ty->aggregate.num_fields) {
     return false;
   }
 
-  *member_ty = var_ty->struct_ty.fields[0];
+  *member_ty = var_ty->aggregate.fields[0];
 
   if (!var_ty_is_fp(member_ty)) {
     return false;
   }
 
-  if (var_ty->struct_ty.num_fields > 2) {
+  if (var_ty->aggregate.num_fields > 2) {
     return false;
   }
 
-  for (size_t i = 1; i < var_ty->struct_ty.num_fields; i++) {
-    if (!var_ty_is_fp(&var_ty->struct_ty.fields[i])) {
+  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
+    if (!var_ty_is_fp(&var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -50,7 +50,7 @@ static bool try_get_hfa_info(struct ir_func *func,
     unreachable();
   }
 
-  *num_members = var_ty->struct_ty.num_fields;
+  *num_members = var_ty->aggregate.num_fields;
   return true;
 }
 
@@ -347,25 +347,6 @@ void rv32i_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_UNKNOWN:
-              BUG("unknown op!");
-            case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
-            case IR_OP_TY_PHI:
-            case IR_OP_TY_BINARY_OP:
-            case IR_OP_TY_RET:
-            case IR_OP_TY_STORE:
-            case IR_OP_TY_LOAD:
-            case IR_OP_TY_CALL:
-            case IR_OP_TY_STORE_BITFIELD:
-            case IR_OP_TY_LOAD_BITFIELD:
-            case IR_OP_TY_ADDR:
-            case IR_OP_TY_BR:
-            case IR_OP_TY_BR_SWITCH:
-            case IR_OP_TY_MOV:
-            case IR_OP_TY_UNARY_OP:
-            case IR_OP_TY_CAST_OP:
-              break;
             case IR_OP_TY_BR_COND:
               lower_br_cond(func, op);
               break;

@@ -46,7 +46,7 @@ struct aarch64_emitter {
                              "FTYPE_FOR_REG with non {D, S, H} register"),     \
                 FTYPE_HALF))
 
-static void bad_instr(void) {
+NORETURN static void bad_instr(void) {
   BUG("register types or arguments did not make sense");
 }
 
@@ -224,42 +224,36 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
   struct aarch64_reg dest = fmov.dest;
   struct aarch64_reg source = fmov.source;
 
-  if (dest.ty == AARCH64_REG_TY_H) {
-    if (source.ty == AARCH64_REG_TY_W) {
-      aarch64_emit_instr(emitter, FMOV_32_TO_H(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_X) {
-      aarch64_emit_instr(emitter, FMOV_64_TO_H(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_H) {
-      aarch64_emit_instr(emitter, FMOV_H(source.idx, dest.idx));
-      return;
-    }
-  } else if (dest.ty == AARCH64_REG_TY_S) {
-    if (source.ty == AARCH64_REG_TY_W) {
-      aarch64_emit_instr(emitter, FMOV_32_TO_S(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_X) {
-      aarch64_emit_instr(emitter, FMOV_64_TO_S(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_S) {
-      aarch64_emit_instr(emitter, FMOV_S(source.idx, dest.idx));
-      return;
-    }
-  } else if (dest.ty == AARCH64_REG_TY_D) {
-    if (source.ty == AARCH64_REG_TY_W) {
-      aarch64_emit_instr(emitter, FMOV_32_TO_D(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_X) {
-      aarch64_emit_instr(emitter, FMOV_64_TO_D(source.idx, dest.idx));
-      return;
-    } else if (source.ty == AARCH64_REG_TY_D) {
-      aarch64_emit_instr(emitter, FMOV_D(source.idx, dest.idx));
-      return;
-    }
-  }
+#define ENC(dst, src) (((dst) << 10) | (src))
+#define CASE(dst, src)                                                \
+  case (((AARCH64_REG_TY_ ## dst) << 10) | (AARCH64_REG_TY_ ## src)):                                                \
+    aarch64_emit_instr(emitter, FMOV_ ## src ## _TO_ ## dst (source.idx, dest.idx));    \
+    break;
 
-  bad_instr();
+  switch (ENC(dest.ty, source.ty)) {
+    CASE(H, W)
+    CASE(H, X)
+    CASE(H, H)
+
+    CASE(S, W)
+    CASE(S, X)
+    CASE(S, S)
+
+    CASE(D, W)
+    CASE(D, X)
+    CASE(D, D)
+
+    CASE(W, H)
+    CASE(X, H)
+
+    CASE(W, S)
+    CASE(X, D)
+
+    default:
+      bad_instr();
+  }
+#undef CASE
+#undef ENC
 }
 
 void aarch64_emit_fneg(struct aarch64_emitter *emitter,
@@ -354,8 +348,8 @@ void aarch64_emit_movn(struct aarch64_emitter *emitter,
 
 void aarch64_emit_sbfm(struct aarch64_emitter *emitter,
                        const struct aarch64_bitfield bf) {
-  aarch64_emit_instr(
-      emitter, SBFM_IMM(SF_FOR_REG(bf.dest), bf.immr, bf.imms, bf.source.idx, bf.dest.idx));
+  aarch64_emit_instr(emitter, SBFM_IMM(SF_FOR_REG(bf.dest), bf.immr, bf.imms,
+                                       bf.source.idx, bf.dest.idx));
 }
 
 void aarch64_emit_bfm(struct aarch64_emitter *emitter,
@@ -741,7 +735,7 @@ void aarch64_emit_load_imm(struct aarch64_emitter *emitter,
 void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
                             const struct aarch64_store_imm str) {
   if (str.imm < 0)
-  BREAKPOINT();
+    BREAKPOINT();
   switch (str.mode) {
   case AARCH64_ADDRESSING_MODE_OFFSET:
     if (IS64_REG(str.source)) {
@@ -774,37 +768,47 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
 #define MEM_SIZE_64 (0b11)
 
 void aarch64_emit_load_byte(struct aarch64_emitter *emitter,
-                                const struct aarch64_load ldrb) {
-  aarch64_emit_instr(emitter, LDR_REG(MEM_SIZE_8, ldrb.offset.idx, ldrb.extend, ldrb.amount, ldrb.addr.idx, ldrb.dest.idx));
+                            const struct aarch64_load ldrb) {
+  aarch64_emit_instr(emitter,
+                     LDR_REG(MEM_SIZE_8, ldrb.offset.idx, ldrb.extend,
+                             ldrb.amount, ldrb.addr.idx, ldrb.dest.idx));
 }
 
 void aarch64_emit_store_byte(struct aarch64_emitter *emitter,
-                                 const struct aarch64_store strb) {
-  aarch64_emit_instr(emitter, STR_REG(MEM_SIZE_8, strb.offset.idx, strb.extend, strb.amount, strb.addr.idx, strb.source.idx));
+                             const struct aarch64_store strb) {
+  aarch64_emit_instr(emitter,
+                     STR_REG(MEM_SIZE_8, strb.offset.idx, strb.extend,
+                             strb.amount, strb.addr.idx, strb.source.idx));
 }
 
 void aarch64_emit_load_half(struct aarch64_emitter *emitter,
-                                const struct aarch64_load ldrh) {
-  aarch64_emit_instr(emitter, LDR_REG(MEM_SIZE_16, ldrh.offset.idx, ldrh.extend, ldrh.amount, ldrh.addr.idx, ldrh.dest.idx));
+                            const struct aarch64_load ldrh) {
+  aarch64_emit_instr(emitter,
+                     LDR_REG(MEM_SIZE_16, ldrh.offset.idx, ldrh.extend,
+                             ldrh.amount, ldrh.addr.idx, ldrh.dest.idx));
 }
 
 void aarch64_emit_store_half(struct aarch64_emitter *emitter,
-                                 const struct aarch64_store strh) {
-  aarch64_emit_instr(emitter, STR_REG(MEM_SIZE_16, strh.offset.idx, strh.extend, strh.amount, strh.addr.idx, strh.source.idx));
+                             const struct aarch64_store strh) {
+  aarch64_emit_instr(emitter,
+                     STR_REG(MEM_SIZE_16, strh.offset.idx, strh.extend,
+                             strh.amount, strh.addr.idx, strh.source.idx));
 }
 
 void aarch64_emit_load(struct aarch64_emitter *emitter,
-                           const struct aarch64_load ldr) {
+                       const struct aarch64_load ldr) {
   size_t sz = ldr.dest.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
-  aarch64_emit_instr(emitter, LDR_REG(sz, ldr.offset.idx, ldr.extend, ldr.amount, ldr.addr.idx, ldr.dest.idx));
+  aarch64_emit_instr(emitter, LDR_REG(sz, ldr.offset.idx, ldr.extend,
+                                      ldr.amount, ldr.addr.idx, ldr.dest.idx));
 }
 
 void aarch64_emit_store(struct aarch64_emitter *emitter,
-                            const struct aarch64_store str) {
+                        const struct aarch64_store str) {
   size_t sz = str.source.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
-  aarch64_emit_instr(emitter, STR_REG(sz, str.offset.idx, str.extend, str.amount, str.addr.idx, str.source.idx));
+  aarch64_emit_instr(emitter,
+                     STR_REG(sz, str.offset.idx, str.extend, str.amount,
+                             str.addr.idx, str.source.idx));
 }
-
 
 /* Conditional selects */
 

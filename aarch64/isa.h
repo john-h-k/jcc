@@ -133,19 +133,19 @@
              (U32(0b1) << 21) | (U32(rmode) << 19) | (U32(opcode) << 16) |     \
              (U32(Rn) << 5) | U32(Rd))
 
-#define FMOV_32_TO_S(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b111, Rn, Rd)
-#define FMOV_32_TO_D(Rn, Rd) FMOV(0b0, 0b01, 0b00, 0b111, Rn, Rd)
-#define FMOV_32_TO_H(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b111, Rn, Rd)
+#define FMOV_W_TO_S(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b111, Rn, Rd)
+#define FMOV_W_TO_D(Rn, Rd) FMOV(0b0, 0b01, 0b00, 0b111, Rn, Rd)
+#define FMOV_W_TO_H(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b111, Rn, Rd)
 
-#define FMOV_H_TO_32(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b110, Rn, Rd)
-#define FMOV_H_TO_64(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b110, Rn, Rd)
+#define FMOV_H_TO_W(Rn, Rd) FMOV(0b0, 0b11, 0b00, 0b110, Rn, Rd)
+#define FMOV_H_TO_X(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b110, Rn, Rd)
 
-#define FMOV_S_TO_32(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b110, Rn, Rd)
-#define FMOV_D_TO_64(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b110, Rn, Rd)
+#define FMOV_S_TO_W(Rn, Rd) FMOV(0b0, 0b00, 0b00, 0b110, Rn, Rd)
+#define FMOV_D_TO_X(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b110, Rn, Rd)
 
-#define FMOV_64_TO_S(Rn, Rd) FMOV(0b1, 0b00, 0b00, 0b111, Rn, Rd)
-#define FMOV_64_TO_D(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b111, Rn, Rd)
-#define FMOV_64_TO_H(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b111, Rn, Rd)
+#define FMOV_X_TO_S(Rn, Rd) FMOV(0b1, 0b00, 0b00, 0b111, Rn, Rd)
+#define FMOV_X_TO_D(Rn, Rd) FMOV(0b1, 0b01, 0b00, 0b111, Rn, Rd)
+#define FMOV_X_TO_H(Rn, Rd) FMOV(0b1, 0b11, 0b00, 0b111, Rn, Rd)
 
 #define FMOV_64_TO_TOP_HALF_Q(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b111, Rn, Rd)
 #define FMOV_TOP_HALF_Q_TO_64(Rn, Rd) FMOV(0b1, 0b10, 0b01, 0b110, Rn, Rd)
@@ -157,9 +157,9 @@
              (U32(ftype) << 22) | (U32(0b1) << 21) | (U32(opcode) << 15) |     \
              (U32(0b10000) << 10) | (U32(Rn) << 5) | U32(Rd))
 
-#define FMOV_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000000, Rn, Rd)
-#define FMOV_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)
-#define FMOV_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000000, Rn, Rd)
+#define FMOV_S_TO_S(Rn, Rd) FP_1_REG(0b0, 0b0, 0b00, 0b000000, Rn, Rd)
+#define FMOV_D_TO_D(Rn, Rd) FP_1_REG(0b0, 0b0, 0b01, 0b000000, Rn, Rd)
+#define FMOV_H_TO_H(Rn, Rd) FP_1_REG(0b0, 0b0, 0b11, 0b000000, Rn, Rd)
 
 #define FCVT(ftype_to, ftype_from, Rn, Rd)                                     \
   FP_1_REG(0b0, 0b0, ftype_from, (0b000100 | (ftype_to)), Rn, Rd)
