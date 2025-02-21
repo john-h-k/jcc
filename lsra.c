@@ -613,7 +613,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         struct interval *fixed =
             *(struct interval **)vector_get(fixed_reg_intervals, j - 1);
 
-        if (fixed->start >= interval->end) {
+        if (fixed->start >= interval->end || fixed->end <= interval->start) {
           continue;
         }
 
@@ -633,8 +633,10 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       struct ir_reg preferred;
       if (try_get_preferred_reg(&state, reg_ty, interval, &preferred)) {
+        printf("trying to use reg %zu for op %zu\n", preferred.idx, interval->op->id);
         // struct reg_state *reg_state = vector_get(reg_states, preferred.idx);
         if (NTH_BIT(available_regs, preferred.idx)) {
+          printf("failed\n");
           pref_reg = preferred.idx;
         }
       }

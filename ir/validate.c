@@ -162,8 +162,6 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
     stmt = stmt->succ;
   }
 
-  printf("validating bb %zu\n", basicblock->id);
-
   struct ir_op *last = basicblock->last->last;
 
   switch (basicblock->ty) {
