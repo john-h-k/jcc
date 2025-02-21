@@ -784,6 +784,8 @@ static void lower_params(struct ir_func *func) {
         mov->mov = (struct ir_op_mov){.value = op->ret.value};
         mov->reg = param_info.regs[0].reg;
         mov->flags |= IR_OP_FLAG_FIXED_REG;
+
+        op->ret.value = mov;
       }
       break;
     }
@@ -793,8 +795,6 @@ static void lower_params(struct ir_func *func) {
     case IR_PARAM_INFO_TY_STACK:
       unreachable();
     }
-
-    op->ret.value = NULL;
   }
 }
 
@@ -1019,7 +1019,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     call->reg = func_info.call_info.ret->regs[0].reg;
 
     op->ty = IR_OP_TY_MOV;
-    op->mov = (struct ir_op_mov){.value = call};
+    op->mov = (struct ir_op_mov){.value = call};    
   }
 }
 

@@ -102,12 +102,20 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
         offset_field_idx = 0;
         break;
       case IR_VAR_TY_TY_ARRAY: {
+        // TODO: also flatten arrays
+
+        struct ir_var_ty el_ty = *data->var_ty.array.underlying;
+
+        while (el_ty.ty == IR_VAR_TY_TY_ARRAY) {
+          el_ty = *el_ty.array.underlying;
+        }
+
         struct ir_var_ty_info el_info =
-            var_ty_info(data->func->unit, data->var_ty.array.underlying);
+            var_ty_info(data->func->unit, &el_ty);
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 &&
-                       offset_field_idx < data->var_ty.array.num_elements;
+                       offset_field_idx < el_ty.array.num_elements;
         break;
       }
       case IR_VAR_TY_TY_STRUCT:
@@ -324,7 +332,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
           }
 
           mov->mov = (struct ir_op_mov){.value = *store};
-          mov->flags |= IR_OP_FLAG_SIDE_EFFECTS;
+          mov->flags |= IR_OP_FLAG_PROMOTED;
 
           continue;
         }
@@ -342,14 +350,14 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         }
 
         mov->mov = (struct ir_op_mov){.value = phi};
-        mov->flags |= IR_OP_FLAG_SIDE_EFFECTS;
+        mov->flags |= IR_OP_FLAG_PROMOTED;
 
         find_phi_exprs(func, stores, phi, j);
       }
 
       if (gather_values) {
         op = replace_ir_op(func, op, IR_OP_TY_GATHER, op->var_ty);
-        op->flags |= IR_OP_FLAG_SIDE_EFFECTS;
+        op->flags |= IR_OP_FLAG_PROMOTED;
         op->gather = (struct ir_op_gather){.num_values = num_fields,
                                            .values = gather_values};
       }
@@ -376,8 +384,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         continue;
       }
 
-      if (detach->flags & IR_OP_FLAG_SIDE_EFFECTS) {
-        // this is a bit hacky, not really the write flag. what if it is set for other reason?
+      if (detach->flags & IR_OP_FLAG_PROMOTED) {
         continue;
       }
 

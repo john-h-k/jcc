@@ -602,10 +602,8 @@ static void remove_pred(struct ir_basicblock *basicblock,
   }
 }
 
-void detach_ir_basicblock(struct ir_func *irb,
-                          struct ir_basicblock *basicblock,
-                          enum detach_ir_basicblock_flags flags
-                        ) {
+void detach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+                          enum detach_ir_basicblock_flags flags) {
   if (basicblock->id == DETACHED_BASICBLOCK) {
     return;
   }
@@ -614,7 +612,9 @@ void detach_ir_basicblock(struct ir_func *irb,
                    "`detach_ir_basicblock` would underflow basicblock count "
                    "for `ir_builder`");
 
-  invariant_assert((flags & DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS) || !basicblock->num_preds, "trying to detach BB with preds");
+  invariant_assert((flags & DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS) ||
+                       !basicblock->num_preds,
+                   "trying to detach BB with preds");
 
   size_t stmt_count = 0;
   size_t op_count = 0;
@@ -820,7 +820,19 @@ void eliminate_redundant_ops(struct ir_func *func) {
       }
       break;
     default:
+      if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
+        detach_ir_op(func, op);
+      }
       break;
+    }
+  }
+
+  use_map = build_op_uses_map(func);
+  iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  while (ir_func_iter_next(&iter, &op)) {
+    if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
+      detach_ir_op(func, op);
     }
   }
 }
@@ -874,7 +886,8 @@ void prune_basicblocks(struct ir_func *irb) {
     struct ir_basicblock *succ = basicblock->succ;
 
     if (!seen[basicblock->id]) {
-      detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS);
+      detach_ir_basicblock(irb, basicblock,
+                           DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS);
     } else {
       prune_stmts(irb, basicblock);
     }
@@ -2578,7 +2591,6 @@ ir_compute_dominance_frontier(struct ir_func *func) {
   return (struct ir_dominance_frontier){.idom_children = children,
                                         .domfs = domf};
 }
-
 
 void alloc_locals(struct ir_func *func) {
   struct ir_lcl *lcl = func->first_lcl;
