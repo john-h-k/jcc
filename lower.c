@@ -580,18 +580,13 @@ static void lower_params(struct ir_func *func) {
       DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
 
       struct ir_param_info param_info = call_info.params[i];
-      struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
 
       switch (param_info.ty) {
       case IR_PARAM_INFO_TY_REGISTER:
         if (var_ty_is_aggregate(param_info.var_ty)) {
           DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR, "expected addr");
 
-          struct ir_var_ty store_ty = get_var_ty_for_size(
-              param_info.reg.start_reg.ty, param_info.reg.size);
-
-          size_t num_reg =
-              (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+          size_t num_reg = param_info.num_regs;
 
           struct ir_op *addr = insert_before_ir_op(
               func, after_params, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
@@ -600,13 +595,17 @@ static void lower_params(struct ir_func *func) {
           // addr->flags |= IR_OP_FLAG_CONTAINED;
 
           for (size_t j = num_reg; j; j--) {
+            struct ir_param_reg reg = param_info.regs[j - 1];
+
+            struct ir_var_ty store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+
             struct ir_op *store =
                 insert_after_ir_op(func, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
             struct ir_op *addr_offset = insert_before_ir_op(
                 func, store, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
             addr_offset->addr_offset = (struct ir_op_addr_offset){
-                .base = addr, .offset = (j - 1) * param_info.reg.size};
+                .base = addr, .offset = (j - 1) * reg.size};
 
             struct ir_op *mov;
             if (j - 1 == 0) {
@@ -616,9 +615,7 @@ static void lower_params(struct ir_func *func) {
             }
             mov->mov = (struct ir_op_mov){.value = NULL};
             mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-            mov->reg =
-                (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                                .idx = param_info.reg.start_reg.idx + j - 1};
+            mov->reg = reg.reg;
 
             // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
@@ -626,8 +623,11 @@ static void lower_params(struct ir_func *func) {
                 .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
           }
         } else {
+          DEBUG_ASSERT(param_info.num_regs == 1,
+                       "expected 1 reg for non aggregate");
+
           param_op->flags |= IR_OP_FLAG_FIXED_REG;
-          param_op->reg = param_info.reg.start_reg;
+          param_op->reg = param_info.regs[0].reg;
         }
         break;
       case IR_PARAM_INFO_TY_STACK:
@@ -637,12 +637,15 @@ static void lower_params(struct ir_func *func) {
                          param_op->addr.ty == IR_OP_ADDR_TY_LCL,
                      "expected addr");
 
+        DEBUG_ASSERT(param_info.num_regs == 1,
+                     "expected 1 reg for non aggregate");
+
         struct ir_op *param = insert_before_ir_op(func, param_op, IR_OP_TY_MOV,
                                                   IR_VAR_TY_POINTER);
         param->mov = (struct ir_op_mov){.value = NULL};
         param->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-        param->reg = (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                                     .idx = param_info.reg.start_reg.idx};
+        param->reg = (struct ir_reg){.ty = param_info.regs[0].reg.ty,
+                                     .idx = param_info.regs[0].reg.idx};
 
         struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
         struct ir_lcl *lcl = param_op->addr.lcl;
@@ -706,37 +709,35 @@ static void lower_params(struct ir_func *func) {
     }
 
     struct ir_param_info param_info = *func->call_info.ret;
-    struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
 
     switch (param_info.ty) {
     case IR_PARAM_INFO_TY_REGISTER: {
       if (var_ty_is_aggregate(param_info.var_ty)) {
         if (op->ret.value->ty == IR_OP_TY_LOAD) {
-          struct ir_var_ty load_ty = get_var_ty_for_size(
-              param_info.reg.start_reg.ty, param_info.reg.size);
-
-          size_t num_reg =
-              (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
+          size_t num_reg = param_info.num_regs;
 
           struct ir_op *addr = build_addr(func, op->ret.value);
           struct ir_op *last = op;
 
           for (size_t j = num_reg; j; j--) {
+            struct ir_param_reg reg = param_info.regs[j - 1];
+
+            struct ir_var_ty load_ty =
+                get_var_ty_for_size(reg.reg.ty, reg.size);
+
             struct ir_op *load =
                 insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
 
             struct ir_op *addr_offset = insert_before_ir_op(
                 func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
             addr_offset->addr_offset = (struct ir_op_addr_offset){
-                .base = addr, .offset = (j - 1) * param_info.reg.size};
+                .base = addr, .offset = (j - 1) * reg.size};
 
             // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
             load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                              .addr = addr_offset};
-            load->reg =
-                (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                                .idx = param_info.reg.start_reg.idx + j - 1};
+            load->reg = reg.reg;
             load->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
             last = load;
           }
@@ -744,28 +745,29 @@ static void lower_params(struct ir_func *func) {
           struct ir_op *gather = op->ret.value;
 
           DEBUG_ASSERT(gather->ty == IR_OP_TY_GATHER, "expected gather");
+          DEBUG_ASSERT(param_info.num_regs == gather->gather.num_values,
+                       "expected 1 reg per gather value");
           // struct has been promoted
 
           struct ir_op *last = op;
 
           for (size_t j = gather->gather.num_values; j; j--) {
             struct ir_gather_value value = gather->gather.values[j - 1];
+            struct ir_param_reg reg = param_info.regs[j - 1];
 
             // because the reg value might be smaller than it is from ABI
             // perspective use the mov ty e.g `struct { float; double }` thinks
             // of it as being two 8 byte chunks
             struct ir_var_ty_info value_info =
                 var_ty_info(func->unit, &value.value->var_ty);
-            struct ir_var_ty var_ty = get_var_ty_for_size(
-                param_info.reg.start_reg.ty, value_info.size);
+            struct ir_var_ty var_ty =
+                get_var_ty_for_size(reg.reg.ty, value_info.size);
 
             struct ir_op *mov =
                 insert_before_ir_op(func, last, IR_OP_TY_MOV, var_ty);
 
             mov->mov = (struct ir_op_mov){.value = value.value};
-            mov->reg =
-                (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                                .idx = param_info.reg.start_reg.idx + j - 1};
+            mov->reg = reg.reg;
             mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
 
             last = mov;
@@ -774,10 +776,13 @@ static void lower_params(struct ir_func *func) {
           detach_ir_op(func, gather);
         }
       } else {
+        DEBUG_ASSERT(param_info.num_regs == 1,
+                     "expected 1 reg for non aggregate");
+
         struct ir_op *mov =
             insert_before_ir_op(func, op, IR_OP_TY_MOV, op->ret.value->var_ty);
         mov->mov = (struct ir_op_mov){.value = op->ret.value};
-        mov->reg = param_info.reg.start_reg;
+        mov->reg = param_info.regs[0].reg;
         mov->flags |= IR_OP_FLAG_FIXED_REG;
       }
       break;
@@ -823,13 +828,13 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     switch (param_info.ty) {
     case IR_PARAM_INFO_TY_REGISTER:
-      if (arg->ty != IR_OP_TY_LOAD && param_info.reg.num_reg == 1) {
-        struct ir_var_ty var_ty = get_var_ty_for_size(
-            param_info.reg.start_reg.ty, param_info.reg.size);
+      if (arg->ty != IR_OP_TY_LOAD && param_info.num_regs == 1) {
+        struct ir_var_ty var_ty = get_var_ty_for_size(param_info.regs[0].reg.ty,
+                                                      param_info.regs[0].size);
 
         struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, var_ty);
         mov->mov = (struct ir_op_mov){.value = arg};
-        mov->reg = param_info.reg.start_reg;
+        mov->reg = param_info.regs[0].reg;
         mov->flags |= IR_OP_FLAG_FIXED_REG;
 
         vector_push_back(new_args, &mov);
@@ -839,28 +844,28 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           arg = spill_op(func, arg);
         }
 
-        struct ir_var_ty load_ty = get_var_ty_for_size(
-            param_info.reg.start_reg.ty, param_info.reg.size);
-
         struct ir_op *addr = build_addr(func, arg);
         struct ir_op *last = op;
 
-        for (size_t j = param_info.reg.num_reg; j; j--) {
+        for (size_t j = param_info.num_regs; j; j--) {
+          struct ir_param_reg reg = param_info.regs[j - 1];
+
+          struct ir_var_ty load_ty = get_var_ty_for_size(
+              param_info.regs[j - 1].reg.ty, param_info.regs[j - 1].size);
+
           struct ir_op *load =
               insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
 
           struct ir_op *addr_offset = insert_before_ir_op(
               func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
           addr_offset->addr_offset = (struct ir_op_addr_offset){
-              .base = addr, .offset = (j - 1) * param_info.reg.size};
+              .base = addr, .offset = (j - 1) * reg.size};
 
           // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = addr_offset};
-          load->reg =
-              (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                              .idx = param_info.reg.start_reg.idx + j - 1};
+          load->reg = reg.reg;
           load->flags |= IR_OP_FLAG_FIXED_REG;
 
           vector_push_back(new_args, &load);
@@ -937,7 +942,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       struct ir_op *mov =
           insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
       mov->mov = (struct ir_op_mov){.value = addr};
-      mov->reg = param_info.reg.start_reg;
+      mov->reg = param_info.regs[0].reg;
       mov->flags |= IR_OP_FLAG_FIXED_REG;
       vector_push_back(new_args, &mov);
       break;
@@ -964,16 +969,10 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   struct ir_param_info param_info = *func_info.call_info.ret;
-  struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
 
   if (var_ty_is_aggregate(param_info.var_ty)) {
     op->var_ty = IR_VAR_TY_NONE;
 
-    struct ir_var_ty store_ty =
-        get_var_ty_for_size(param_info.reg.start_reg.ty, param_info.reg.size);
-
-    size_t num_reg =
-        (info.size + (param_info.reg.size - 1)) / param_info.reg.size;
 
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
@@ -981,18 +980,22 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     struct ir_op *addr = build_addr(func, prev_store);
 
     struct ir_op *last = prev_store;
-    for (size_t j = 0; j < num_reg; j++) {
+    for (size_t j = 0; j < param_info.num_regs; j++) {
+        struct ir_param_reg reg = param_info.regs[j];
+
+    struct ir_var_ty store_ty =
+        get_var_ty_for_size(reg.reg.ty, reg.size);
+
       struct ir_op *mov = insert_after_ir_op(func, op, IR_OP_TY_MOV, store_ty);
 
       mov->mov = (struct ir_op_mov){.value = NULL};
       mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-      mov->reg = (struct ir_reg){.ty = param_info.reg.start_reg.ty,
-                                 .idx = param_info.reg.start_reg.idx + j};
+      mov->reg = reg.reg;
 
       struct ir_op *addr_offset = insert_after_ir_op(
           func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
       addr_offset->addr_offset = (struct ir_op_addr_offset){
-          .base = addr, .offset = j * param_info.reg.size};
+          .base = addr, .offset = j * reg.size};
 
       // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
@@ -1013,7 +1016,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     call->call = op->call;
     call->flags = op->flags;
     call->flags |= IR_OP_FLAG_FIXED_REG;
-    call->reg = func_info.call_info.ret->reg.start_reg;
+    call->reg = func_info.call_info.ret->regs[0].reg;
 
     op->ty = IR_OP_TY_MOV;
     op->mov = (struct ir_op_mov){.value = call};
@@ -1131,7 +1134,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
         basicblock = basicblock->succ;
       }
 
-      // alloc locals EARLY so that targets can contain their addressing nodes properly
+      // alloc locals EARLY so that targets can contain their addressing nodes
+      // properly
       alloc_locals(func);
     }
     }

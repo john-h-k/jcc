@@ -307,11 +307,11 @@ void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
 }
 
 void x64_emit_movq(struct x64_emitter *emitter, struct x64_mov_reg movq) {
-  x64_emit_instr(emitter, SSE_MOVQ(movq.dest, movq.source));
+  x64_emit_instr(emitter, movq.dest.ty == X64_REG_TY_XMM ? SSE_MOVQ(0x6E, movq.dest, movq.source) : SSE_MOVQ(0x7E, movq.source, movq.dest));
 }
 
 void x64_emit_movd(struct x64_emitter *emitter, struct x64_mov_reg movd) {
-  x64_emit_instr(emitter, SSE_MOVD(movd.dest, movd.source));
+  x64_emit_instr(emitter, movd.dest.ty == X64_REG_TY_XMM ? SSE_MOVD(0x6E, movd.dest, movd.source) : SSE_MOVD(0x7E, movd.source, movd.dest));
 }
 
 void x64_emit_mov_load_imm(struct x64_emitter *emitter,
