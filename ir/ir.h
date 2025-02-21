@@ -854,9 +854,10 @@ struct ir_func {
   size_t next_stmt_id;
   size_t next_op_id;
 
-  size_t num_locals;
-  struct ir_lcl *first_local;
-  struct ir_lcl *last_local;
+  size_t lcl_count;
+  size_t next_lcl_id;
+  struct ir_lcl *first_lcl;
+  struct ir_lcl *last_lcl;
 
   struct ir_reg_usage reg_usage;
 
@@ -1048,8 +1049,14 @@ void make_basicblock_switch(struct ir_func *irb,
                             struct ir_split_case *cases,
                             struct ir_basicblock *default_target);
 
-void detach_ir_basicblock(struct ir_func *irb,
-                          struct ir_basicblock *basicblock);
+enum detach_ir_basicblock_flags {
+  DETACH_IR_BASICBLOCK_FLAG_NONE = 0,
+  DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS = 1,
+};
+
+void detach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+                          enum detach_ir_basicblock_flags flags);
+
 void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt);
 void detach_ir_op(struct ir_func *irb, struct ir_op *op);
 

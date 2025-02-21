@@ -847,14 +847,14 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   fprintf(file, "FUNCTION: %s", irb->name);
   debug_print_func_ty_string(file, irb->unit, &irb->func_ty);
   fprintf(file, "\n");
-  fprintf(file, "    num_locals: %zu\n", irb->num_locals);
+  fprintf(file, "    num_locals: %zu\n", irb->lcl_count);
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
   fprintf(file, "    caller_stack_needed: %zu", irb->caller_stack_needed);
 
-  if (irb->num_locals) {
+  if (irb->lcl_count) {
     fprintf(file, "\n\n");
     fprintf(file, "LOCALS: {\n");
-    struct ir_lcl *lcl = irb->first_local;
+    struct ir_lcl *lcl = irb->first_lcl;
     while (lcl) {
       debug_print_lcl(file, irb, lcl);
 

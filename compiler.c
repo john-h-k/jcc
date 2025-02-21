@@ -169,6 +169,8 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "opts");
     }
 
+    ir_validate(ir);
+
     COMPILER_STAGE(LOWER);
 
     lower(ir, target);

@@ -603,7 +603,9 @@ static void remove_pred(struct ir_basicblock *basicblock,
 }
 
 void detach_ir_basicblock(struct ir_func *irb,
-                          struct ir_basicblock *basicblock) {
+                          struct ir_basicblock *basicblock,
+                          enum detach_ir_basicblock_flags flags
+                        ) {
   if (basicblock->id == DETACHED_BASICBLOCK) {
     return;
   }
@@ -612,7 +614,7 @@ void detach_ir_basicblock(struct ir_func *irb,
                    "`detach_ir_basicblock` would underflow basicblock count "
                    "for `ir_builder`");
 
-  invariant_assert(!basicblock->num_preds, "trying to detach BB with preds");
+  invariant_assert((flags & DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS) || !basicblock->num_preds, "trying to detach BB with preds");
 
   size_t stmt_count = 0;
   size_t op_count = 0;
@@ -828,23 +830,53 @@ void prune_basicblocks(struct ir_func *irb) {
     return;
   }
 
-  // skip first BB as it has an implicit predecessor
+  bool *seen = arena_alloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
+  memset(seen, 0, sizeof(*seen) * irb->basicblock_count);
+
   prune_stmts(irb, irb->first);
-  struct ir_basicblock *basicblock = irb->first->succ;
 
+  struct vector *stack = vector_create(sizeof(struct ir_basicblock *));
+  vector_push_back(stack, &irb->first);
+  while (vector_length(stack)) {
+    struct ir_basicblock *bb = *(struct ir_basicblock **)vector_pop(stack);
+
+    if (seen[bb->id]) {
+      continue;
+    }
+
+    seen[bb->id] = true;
+
+    switch (bb->ty) {
+    case IR_BASICBLOCK_TY_RET:
+      break;
+    case IR_BASICBLOCK_TY_SPLIT:
+      vector_push_back(stack, &bb->split.true_target);
+      vector_push_back(stack, &bb->split.false_target);
+      break;
+    case IR_BASICBLOCK_TY_MERGE:
+      vector_push_back(stack, &bb->merge.target);
+      break;
+    case IR_BASICBLOCK_TY_SWITCH:
+      for (size_t i = 0; i < bb->switch_case.num_cases; i++) {
+        vector_push_back(stack, &bb->switch_case.cases[i].target);
+      }
+
+      if (bb->switch_case.default_target) {
+        vector_push_back(stack, &bb->switch_case.default_target);
+      }
+      break;
+    }
+  }
+
+  struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
-    prune_stmts(irb, basicblock);
-
     // save succ before we detach
     struct ir_basicblock *succ = basicblock->succ;
 
-    bool has_preds = basicblock->num_preds;
-    bool has_ops = basicblock->first &&
-                   basicblock->first->first != basicblock->first->last;
-
-    // remove if it has no preds (if it has preds, it is needed as a target)
-    if (!has_preds && !has_ops) {
-      detach_ir_basicblock(irb, basicblock);
+    if (!seen[basicblock->id]) {
+      detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS);
+    } else {
+      prune_stmts(irb, basicblock);
     }
 
     basicblock = succ;
@@ -898,6 +930,14 @@ void clear_metadata(struct ir_func *irb) {
 }
 
 void rebuild_ids(struct ir_func *irb) {
+  irb->next_lcl_id = 0;
+  struct ir_lcl *lcl = irb->first_lcl;
+  while (lcl) {
+    lcl->id = irb->next_lcl_id++;
+
+    lcl = lcl->succ;
+  }
+
   irb->next_basicblock_id = 0;
   irb->next_stmt_id = 0;
   irb->next_op_id = 0;
@@ -971,6 +1011,11 @@ void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   irb->basicblock_count++;
 
+  basicblock->func = irb;
+
+  basicblock->preds = NULL;
+  basicblock->num_preds = 0;
+
   if (basicblock != pred) {
     basicblock->pred = pred;
   }
@@ -1026,7 +1071,7 @@ void move_after_ir_basicblock(struct ir_func *irb,
                    "trying to move basicblock after itself!");
 
   if (basicblock->func) {
-    detach_ir_basicblock(irb, basicblock);
+    detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
   }
 
   attach_ir_basicblock(irb, basicblock, move_after, move_after->succ);
@@ -1039,7 +1084,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
                    "trying to move basicblock before itself!");
 
   if (basicblock->func) {
-    detach_ir_basicblock(irb, basicblock);
+    detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
   }
 
   attach_ir_basicblock(irb, basicblock, move_before->pred, move_before);
@@ -1790,7 +1835,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
 
 struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
-  lcl->id = irb->num_locals++;
+  lcl->id = irb->lcl_count++;
 
   struct ir_var_ty_info ty_info = var_ty_info(irb->unit, var_ty);
 
@@ -1806,21 +1851,21 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   lcl->var_ty = *var_ty;
   lcl->offset = irb->total_locals_size;
   lcl->store = NULL;
-  lcl->pred = irb->last_local;
+  lcl->pred = irb->last_lcl;
   lcl->succ = NULL;
   lcl->metadata = NULL;
 
   irb->total_locals_size += lcl_size;
 
-  if (!irb->first_local) {
-    irb->first_local = lcl;
+  if (!irb->first_lcl) {
+    irb->first_lcl = lcl;
   }
 
-  if (irb->last_local) {
-    irb->last_local->succ = lcl;
+  if (irb->last_lcl) {
+    irb->last_lcl->succ = lcl;
   }
 
-  irb->last_local = lcl;
+  irb->last_lcl = lcl;
 
   return lcl;
 }
@@ -1830,7 +1875,7 @@ void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
     return;
   }
 
-  irb->num_locals--;
+  irb->lcl_count--;
 
   struct ir_var_ty_info ty_info = var_ty_info(irb->unit, &lcl->var_ty);
 
@@ -1849,13 +1894,13 @@ void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   if (lcl->pred) {
     lcl->pred->succ = lcl->succ;
   } else {
-    irb->first_local = lcl->succ;
+    irb->first_lcl = lcl->succ;
   }
 
   if (lcl->succ) {
     lcl->succ->pred = lcl->pred;
   } else {
-    irb->last_local = lcl->pred;
+    irb->last_lcl = lcl->pred;
   }
 
   lcl->func = NULL;
@@ -2070,6 +2115,7 @@ static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
 
   struct ir_op_use use = {.op = op, .consumer = data->op};
 
+  DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op");
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
@@ -2082,18 +2128,36 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
           arena_alloc(func->arena, sizeof(*data.use_data) * func->op_count)};
 
   struct lcl_use_data *lcl_usage =
-      arena_alloc(func->arena, sizeof(*lcl_usage) * func->num_locals);
+      arena_alloc(func->arena, sizeof(*lcl_usage) * func->lcl_count);
 
-  for (size_t i = 0; i < func->op_count; i++) {
-    // because walk_op_uses can be out of order we need to create the vectors in
-    // advance
-    data.use_data[i] = (struct op_use_data){ .op = NULL, .uses = vector_create(sizeof(struct ir_op_use)) };
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  {
+    size_t i = 0;
+    struct ir_op *op;
+    while (ir_func_iter_next(&iter, &op)) {
+      DEBUG_ASSERT(op->id == i, "ids unordered");
+
+      // because walk_op_uses can be out of order we need to create the vectors
+      // in advance
+      data.use_data[i++] = (struct op_use_data){
+          .op = op, .uses = vector_create(sizeof(struct ir_op_use))};
+    }
   }
 
-  for (size_t i = 0; i < func->num_locals; i++) {
-    // because walk_op_uses can be out of order we need to create the vectors in
-    // advance
-    lcl_usage[i] = (struct lcl_use_data){ .lcl = NULL, .uses = vector_create(sizeof(struct ir_op *)) };
+  {
+    size_t i = 0;
+    struct ir_lcl *lcl = func->first_lcl;
+    while (lcl) {
+      DEBUG_ASSERT(lcl->id == i, "ids unordered");
+
+      // because walk_op_uses can be out of order we need to create the vectors
+      // in advance
+      lcl_usage[i++] = (struct lcl_use_data){
+          .lcl = lcl, .uses = vector_create(sizeof(struct ir_op *))};
+
+      lcl = lcl->succ;
+    }
   }
 
   struct ir_basicblock *basicblock = func->first;
@@ -2126,6 +2190,8 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
 #undef GET_LCL
 
         if (lcl) {
+          DEBUG_ASSERT(lcl->id != DETACHED_LCL, "lcl detached");
+
           struct lcl_use_data *usage = &lcl_usage[lcl->id];
           usage->lcl = lcl;
           vector_push_back(usage->uses, &op);
@@ -2147,13 +2213,13 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
 
   struct ir_op_use_map uses = {
       .num_op_use_datas = func->op_count,
-      .op_use_datas = arena_alloc(func->arena,
-                                  sizeof(*uses.op_use_datas) * func->op_count),
+      .op_use_datas =
+          arena_alloc(func->arena, sizeof(*uses.op_use_datas) * func->op_count),
 
-      .num_lcl_use_datas = func->num_locals,
-      .lcl_use_datas = arena_alloc(func->arena,
-                                  sizeof(*uses.lcl_use_datas) * func->num_locals),
-    };
+      .num_lcl_use_datas = func->lcl_count,
+      .lcl_use_datas = arena_alloc(func->arena, sizeof(*uses.lcl_use_datas) *
+                                                    func->lcl_count),
+  };
 
   for (size_t i = 0; i < func->op_count; i++) {
     struct op_use_data *use_data = &data.use_data[i];
@@ -2168,7 +2234,7 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
     vector_copy_to(use_data->uses, uses.op_use_datas[i].uses);
   }
 
-  for (size_t i = 0; i < func->num_locals; i++) {
+  for (size_t i = 0; i < func->lcl_count; i++) {
     struct lcl_use_data *use_data = &lcl_usage[i];
 
     DEBUG_ASSERT(i == use_data->lcl->id, "ops were not keyed");
@@ -2176,7 +2242,8 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
     uses.lcl_use_datas[i] = (struct ir_lcl_usage){
         .lcl = use_data->lcl,
         .num_consumers = vector_length(use_data->uses),
-        .consumers = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
+        .consumers =
+            arena_alloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.lcl_use_datas[i].consumers);
   }

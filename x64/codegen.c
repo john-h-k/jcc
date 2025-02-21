@@ -1466,7 +1466,7 @@ static void codegen_prologue(struct codegen_state *state) {
       (bitset_lzcnt(ir->reg_usage.fp_registers_used) <
        target->reg_info.fp_registers.num_nonvolatile);
 
-  bool leaf = !(nonvolatile_registers_used || ir->num_locals ||
+  bool leaf = !(nonvolatile_registers_used || ir->lcl_count ||
                 ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   size_t stack_size = state->ir->total_locals_size + state->ir->caller_stack_needed;
