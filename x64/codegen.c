@@ -384,11 +384,20 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   struct x64_reg dest = codegen_reg(op);
 
   if (op->mov.value->reg.ty == IR_REG_TY_FLAGS) {
-    struct instr *instr = alloc_instr(state->func);
-    instr->x64->ty = X64_INSTR_TY_SETCC;
-    instr->x64->setcc = (struct x64_conditional_select){
+    struct instr *set = alloc_instr(state->func);
+    set->x64->ty = X64_INSTR_TY_SETCC;
+    set->x64->setcc = (struct x64_conditional_select){
         .dest = dest, .cond = get_cond_for_op(op->mov.value)};
 
+    // TODO: instead of this, we should generate a `xor` _before_ the `cmp`/whatever
+    // but we need to make sure no instructions between the `cmp` and this instruction affect flags
+    // also consider `movzx`
+    struct instr *and = alloc_instr(state->func);
+    and->x64->ty = X64_INSTR_TY_AND_IMM;
+    and->x64->and_imm = (struct x64_alu_imm){
+      .dest = dest,
+      .imm = 0xF
+    };
     return;
   }
 
