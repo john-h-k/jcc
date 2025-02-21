@@ -22,9 +22,19 @@ struct validate_op_order_metadata {
   struct ir_op *consumer;
 };
 
+#define IR_OBJECT_NAME(obj, msg)                                               \
+  _Generic((obj),                                                              \
+      struct ir_glb *: "glb" msg,                                               \
+      struct ir_lcl *: "lcl" msg,                                               \
+      struct ir_func *: "func" msg,                                             \
+      struct ir_var *: "var" msg,                                               \
+      struct ir_basicblock *: "basicblock" msg,                                 \
+      struct ir_stmt *: "stmt" msg,                                             \
+      struct ir_op *: "op" msg)
+
 #define VALIDATION_ERRZ(obj, msg)                                              \
   do {                                                                         \
-    struct ir_validate_error error = {.err = msg,                              \
+    struct ir_validate_error error = {.err = (msg),                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
   } while (0);
@@ -32,21 +42,19 @@ struct validate_op_order_metadata {
 #define VALIDATION_ERR(obj, fmt, ...)                                          \
   do {                                                                         \
     const char *msg =                                                          \
-        arena_alloc_snprintf(state->unit->arena, fmt, __VA_ARGS__);            \
+        arena_alloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);            \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
   } while (0);
 
-#define VALIDATION_CHECKZ(cond, obj, msg)                                      \
-  if (!(cond)) {                                                               \
-    VALIDATION_ERRZ(obj, msg);                                                 \
-  }
-
 #define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
   if (!(cond)) {                                                               \
-    VALIDATION_ERR(obj, fmt, __VA_ARGS__);                                     \
+    VALIDATION_ERR((obj), (fmt), __VA_ARGS__);                                     \
   }
+
+#define VALIDATION_CHECKZ(cond, obj, msg)                                      \
+  VALIDATION_CHECK((cond), (obj), IR_OBJECT_NAME((obj), " %zu: %s"), (obj)->id, (msg))
 
 static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
@@ -244,7 +252,8 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
   VALIDATION_CHECKZ(basicblock->id != DETACHED_BASICBLOCK, basicblock,
                     "basicblock is detached!");
 
-  VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+  VALIDATION_CHECKZ(basicblock->func, basicblock,
+                    "basicblock has no func!");
 
   struct ir_stmt *stmt = basicblock->first;
 
@@ -297,7 +306,7 @@ static void ir_validate_func(struct ir_validate_state *state,
 
   rebuild_ids(func);
 
-  struct ir_lcl *lcl = func->first_local;
+  struct ir_lcl *lcl = func->first_lcl;
 
   size_t lcl_count = 0;
   while (lcl) {
@@ -307,8 +316,8 @@ static void ir_validate_func(struct ir_validate_state *state,
     lcl_count++;
   }
 
-  VALIDATION_CHECK(func->num_locals == lcl_count, func,
-                   "num_locals=%zu but found %zu", func->num_locals, lcl_count);
+  VALIDATION_CHECK(func->lcl_count == lcl_count, func,
+                   "lcl_count=%zu but found %zu", func->lcl_count, lcl_count);
 
   size_t bb_count = 0;
   while (basicblock) {

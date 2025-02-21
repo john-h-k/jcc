@@ -247,8 +247,7 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
                &phi->var_ty);
 }
 
-static void opts_do_promote(struct ir_func *func,
-                            struct vector *lcl_uses,
+static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
                             struct ir_lcl *lcl) {
   size_t num_uses = vector_length(lcl_uses);
 
@@ -294,7 +293,8 @@ static void opts_do_promote(struct ir_func *func,
       if (var_ty_is_aggregate(&op->var_ty)) {
         first_field = use->field_idx;
         num_fields = op->var_ty.aggregate.num_fields;
-        gather_values = arena_alloc(func->arena, num_fields * sizeof(struct ir_gather_value));
+        gather_values = arena_alloc(
+            func->arena, num_fields * sizeof(struct ir_gather_value));
         fields = op->var_ty.aggregate.fields;
       } else {
         first_field = use->field_idx;
@@ -307,8 +307,7 @@ static void opts_do_promote(struct ir_func *func,
       for (size_t j = first_field; j < first_field + num_fields; j++) {
         struct ir_basicblock *basicblock = op->stmt->basicblock;
 
-        struct lcl_store key = {.bb_id = basicblock->id,
-                                .field_idx = j};
+        struct lcl_store key = {.bb_id = basicblock->id, .field_idx = j};
 
         struct ir_var_ty field_ty = fields[head];
 
@@ -318,15 +317,14 @@ static void opts_do_promote(struct ir_func *func,
           struct ir_op *mov;
           if (gather_values) {
             mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
-            gather_values[head++] = (struct ir_gather_value){
-              .value = mov,
-              .field_idx = j
-            };
+            gather_values[head++] =
+                (struct ir_gather_value){.value = mov, .field_idx = j};
           } else {
             mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
           }
 
           mov->mov = (struct ir_op_mov){.value = *store};
+          mov->flags |= IR_OP_FLAG_SIDE_EFFECTS;
 
           continue;
         }
@@ -337,58 +335,63 @@ static void opts_do_promote(struct ir_func *func,
         struct ir_op *mov;
         if (gather_values) {
           mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
-          gather_values[head++] = (struct ir_gather_value){
-            .value = mov,
-            .field_idx = j
-          };
+          gather_values[head++] =
+              (struct ir_gather_value){.value = mov, .field_idx = j};
         } else {
           mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
         }
 
         mov->mov = (struct ir_op_mov){.value = phi};
+        mov->flags |= IR_OP_FLAG_SIDE_EFFECTS;
 
-        find_phi_exprs(func, stores, op, j);
+        find_phi_exprs(func, stores, phi, j);
       }
 
       if (gather_values) {
         op = replace_ir_op(func, op, IR_OP_TY_GATHER, op->var_ty);
-        op->gather = (struct ir_op_gather){
-          .num_values = num_fields,
-          .values = gather_values
-        };
+        op->flags |= IR_OP_FLAG_SIDE_EFFECTS;
+        op->gather = (struct ir_op_gather){.num_values = num_fields,
+                                           .values = gather_values};
       }
     }
   }
 
-  
   // can't reuse map from parent because we have added ops
   struct ir_op_use_map use_map = build_op_uses_map(func);
 
+  debug_print_ir_func(stderr, func, NULL, NULL);
+
   struct vector *depends = vector_create(sizeof(struct ir_op *));
-  for (size_t i = 0; i < use_map.num_lcl_use_datas; i++) {
-    struct ir_lcl_usage *usage = &use_map.lcl_use_datas[i];
+  struct ir_lcl_usage *usage = &use_map.lcl_use_datas[lcl->id];
 
-    for (size_t j = 0; j < usage->num_consumers; j++) {
-      struct ir_op *consumer = usage->consumers[j];
+  for (size_t j = 0; j < usage->num_consumers; j++) {
+    struct ir_op *consumer = usage->consumers[j];
 
-      vector_push_back(depends, &consumer);
+    vector_push_back(depends, &consumer);
 
-      while (vector_length(depends)) {
-        struct ir_op *detach = *(struct ir_op **)vector_pop(depends);
+    while (vector_length(depends)) {
+      struct ir_op *detach = *(struct ir_op **)vector_pop(depends);
 
-        struct ir_op_usage *dep_usage = &use_map.op_use_datas[detach->id];
-
-        for (size_t k = 0; k < dep_usage->num_uses; k++) {
-          struct ir_op *dep_use = dep_usage->uses[k].consumer;
-          vector_push_back(depends, &dep_use);
-        }
-
-        detach_ir_op(func, detach);
+      if (detach->id == DETACHED_OP) {
+        continue;
       }
+
+      if (detach->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+        // this is a bit hacky, not really the write flag. what if it is set for other reason?
+        continue;
+      }
+
+      struct ir_op_usage *dep_usage = &use_map.op_use_datas[detach->id];
+
+      for (size_t k = 0; k < dep_usage->num_uses; k++) {
+        struct ir_op *dep_use = dep_usage->uses[k].consumer;
+
+        vector_push_back(depends, &dep_use);
+      }
+
+      detach_ir_op(func, detach);
     }
   }
-
-  detach_local(func, lcl);
 }
 
 static void opts_promote_func(struct ir_func *func) {
@@ -396,14 +399,14 @@ static void opts_promote_func(struct ir_func *func) {
 
   // note: this requires contigous lcl ids
   bool *candidates =
-      arena_alloc(func->arena, sizeof(*candidates) * func->num_locals);
+      arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
 
-  memset(candidates, true, sizeof(*candidates) * func->num_locals);
+  memset(candidates, true, sizeof(*candidates) * func->lcl_count);
 
   struct vector **lcl_uses =
-      arena_alloc(func->arena, sizeof(struct vector *) * func->num_locals);
+      arena_alloc(func->arena, sizeof(struct vector *) * func->lcl_count);
 
-  for (size_t i = 0; i < func->num_locals; i++) {
+  for (size_t i = 0; i < func->lcl_count; i++) {
     lcl_uses[i] = vector_create(sizeof(struct lcl_use));
   }
 
@@ -488,7 +491,10 @@ static void opts_promote_func(struct ir_func *func) {
     basicblock = basicblock->succ;
   }
 
-  struct ir_lcl *lcl = func->first_local;
+  struct ir_lcl *lcl = func->first_lcl;
+
+  // we have to remove locals _after_ to prevent invalidating `lcl_uses`
+  struct vector *lcls_to_remove = vector_create(sizeof(struct ir_lcl *));
 
   while (lcl) {
     DEBUG_ASSERT(!lcl->succ || lcl->succ->id == lcl->id + 1,
@@ -499,10 +505,18 @@ static void opts_promote_func(struct ir_func *func) {
     if (candidates[lcl->id] && !(lcl->flags & IR_LCL_FLAG_PARAM)) {
       debug("lcl %zu promotion candidate", lcl->id);
       opts_do_promote(func, lcl_uses[lcl->id], lcl);
+      vector_push_back(lcls_to_remove, &lcl);
     }
 
     lcl = lcl->succ;
   }
+
+  size_t num = vector_length(lcls_to_remove);
+  for (size_t i = 0; i < num; i++) {
+    detach_local(func, *(struct ir_lcl **)vector_get(lcls_to_remove, i));
+  }
+
+  vector_free(&lcls_to_remove);
 }
 
 void opts_promote(struct ir_unit *unit) {

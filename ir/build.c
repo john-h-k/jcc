@@ -2960,7 +2960,7 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
       .first = NULL,
       .last = NULL,
       .op_count = 0,
-      .num_locals = 0,
+      .lcl_count = 0,
       .total_locals_size = 0};
 
   struct ir_func *f = arena_alloc(arena, sizeof(b));

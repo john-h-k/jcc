@@ -563,19 +563,19 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     struct bitset *all_used_reg_pool;
     struct vector *reg_pool;
-    // struct vector *reg_states;
+    struct vector *reg_states;
     enum ir_reg_ty reg_ty;
     size_t spill_reg;
     if (var_ty_is_integral(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
-      // reg_states = state.gp_reg_states;
+      reg_states = state.gp_reg_states;
       all_used_reg_pool = irb->reg_usage.gp_registers_used;
       spill_reg = info->gp_spill_reg;
     } else if (var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
-      // reg_states = state.fp_reg_states;
+      reg_states = state.fp_reg_states;
       all_used_reg_pool = irb->reg_usage.fp_registers_used;
       spill_reg = info->fp_spill_reg;
     } else {
@@ -637,7 +637,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       struct ir_reg preferred;
       if (try_get_preferred_reg(&state, reg_ty, interval, &preferred) &&
-          !NTH_BIT(fixed_regs, preferred.idx)) {
+          !NTH_BIT(fixed_regs, preferred.idx) && ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
         pref_reg = preferred.idx;
       } else {
         for (size_t j = vector_length(reg_pool); j; j--) {
