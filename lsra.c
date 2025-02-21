@@ -613,21 +613,25 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         struct interval *fixed =
             *(struct interval **)vector_get(fixed_reg_intervals, j - 1);
 
-        if (fixed->start >= interval->end || fixed->end <= interval->start) {
+        if (fixed->start > interval->end || fixed->end <= interval->start) {
           continue;
         }
-
-        struct ir_op *fixed_op = fixed->op;
-        if (fixed_op->reg.ty == reg_ty) {
-          available_regs &= ~(1 << fixed_op->reg.idx);
-        }
-
+          
         for (size_t k = 0; k < fixed->op->write_info.num_reg_writes; k++) {
           struct ir_reg write = fixed->op->write_info.writes[k];
 
           if (write.ty == reg_ty) {
             available_regs &= ~(1 << write.idx);
           }
+        }
+
+        if (fixed->start == interval->end) {
+          continue;
+        }
+
+        struct ir_op *fixed_op = fixed->op;
+        if (fixed_op->reg.ty == reg_ty) {
+          available_regs &= ~(1 << fixed_op->reg.idx);
         }
       }
 
