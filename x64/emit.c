@@ -311,6 +311,9 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
 
       free_x64_emitter(&emitter);
 
+      vector_free(&instr_offsets);
+      vector_free(&local_relocs);
+
       // FIXME: some vector leaks here (and probably other places)
       // should really alloc in arena
       entries[i] = (struct object_entry){
