@@ -52,6 +52,8 @@ for file in $(find $(dirname $0) -name '*.c' -print | sort); do
 
     if ! ./build/jcc "$@" -std=c23 -tm "$tm" $file >/dev/null 2>&1; then
       echo "compilation failed!"
+
+      ./build/jcc "$@" -std=c23 -tm "$tm" $file
       exit -1
     fi
 

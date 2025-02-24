@@ -28,4 +28,6 @@ void objdump_debug_disasm(const char *filename, const char *output) {
   if (system(command)) {
     warn("`debug_disasm` failed");
   }
+
+  free(command);
 }

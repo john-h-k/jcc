@@ -7,7 +7,14 @@
 #include <stdlib.h>
 
 // TODO: allow larger allocs
+
+#define ALWAYS_MALLOC
+
+#ifdef ALWAYS_MALLOC
+#define BLOCK_SIZE (0)
+#else
 #define BLOCK_SIZE (4096 * 32)
+#endif
 
 struct arena;
 
@@ -115,9 +122,10 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
 
   // TODO: make this actually try to not realloc
   struct alloc_metadata *metadata = ((struct alloc_metadata *)ptr) - 1;
+
   void *new = arena_alloc(allocator, size);
 
-  memcpy(new, ptr, metadata->size);
+  memcpy(new, ptr, MIN(size, metadata->size));
   return new;
 }
 
@@ -135,15 +143,23 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
     return 0;
   }
 
-  size_t aligned = ROUND_UP(size, sizeof(void *));
+  size_t aligned = ROUND_UP(size, ALIGNMENT);
 
   struct arena *arena;
   size_t next_arena_size;
 
   if (aligned > BLOCK_SIZE) {
-    void *alloc = nonnull_malloc(aligned);
+    // FIXME: code is old in this file and should be neatened up
+    size_t adj_size = ROUND_UP(size + sizeof(struct alloc_metadata), ALIGNMENT);
+
+    void *alloc = nonnull_malloc(adj_size);
+    struct alloc_metadata *metadata = (struct alloc_metadata *)alloc;
+    metadata->arena = NULL;
+    metadata->size = size;
+
     vector_push_back(allocator->large_allocs, &alloc);
-    return alloc;
+    return metadata + 1;
+
   } else {
     arena = allocator->first;
     next_arena_size = BLOCK_SIZE;

@@ -253,6 +253,8 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
 
   gen_var_phis(irb, stores, basicblock_ops_for_var, phi_builds, field_idx,
                &phi->var_ty);
+
+  vector_free(&phi_builds);
 }
 
 static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
@@ -397,6 +399,9 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       detach_ir_op(func, detach);
     }
   }
+
+  vector_free(&depends);
+  hashtbl_free(&stores);
 }
 
 static void opts_promote_func(struct ir_func *func) {
@@ -516,6 +521,10 @@ static void opts_promote_func(struct ir_func *func) {
     }
 
     lcl = lcl->succ;
+  }
+
+  for (size_t i = 0; i < func->lcl_count; i++) {
+    vector_free(&lcl_uses[i]);
   }
 
   size_t num = vector_length(lcls_to_remove);

@@ -66,7 +66,7 @@ create_compiler(struct program *program, const struct target *target,
   size_t sz = strlen(output) + 1;
   (*compiler)->output = arena_alloc((*compiler)->arena, sz);
   strcpy((*compiler)->output, output);
-  (*compiler)->output[sz] = '\0';
+  (*compiler)->output[sz - 1] = '\0';
 
   return COMPILER_CREATE_RESULT_SUCCESS;
 }

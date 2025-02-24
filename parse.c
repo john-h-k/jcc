@@ -2495,14 +2495,14 @@ static bool parse_paramlist(struct parser *parser,
                             struct ast_paramlist *param_list) {
   struct text_pos pos = get_position(parser->lexer);
 
+  struct vector *params = vector_create(sizeof(struct ast_param));
+
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
-    return false;
+    goto failure;
   }
 
   param_list->params = NULL;
   param_list->num_params = 0;
-
-  struct vector *params = vector_create(sizeof(struct ast_param));
 
   struct ast_param param;
   while (parse_param(parser, &param)) {
@@ -2517,10 +2517,18 @@ static bool parse_paramlist(struct parser *parser,
   parse_token(parser, LEX_TOKEN_TY_COMMA);
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
-    backtrack(parser->lexer, pos);
-    return false;
+    goto failure;
   }
 
+  goto success;
+
+failure:
+  backtrack(parser->lexer, pos);
+  vector_free(&params);
+
+  return false;
+
+success:
   param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
   param_list->num_params = vector_length(params);
 
