@@ -65,15 +65,6 @@ static bool reg_eq(struct x64_reg l, struct x64_reg r) {
   return false;
 }
 
-static struct x64_reg return_reg_for_ty(enum x64_reg_ty reg_ty) {
-  return (struct x64_reg){.ty = reg_ty,
-                          .idx = x64_reg_ty_is_gp(reg_ty) ? REG_IDX_AX : 0};
-}
-
-static bool is_return_reg(struct x64_reg reg) {
-  return reg.idx == return_reg_for_ty(reg.ty).idx;
-}
-
 bool x64_reg_ty_is_gp(enum x64_reg_ty ty) {
   switch (ty) {
   case X64_REG_TY_NONE:
@@ -1314,55 +1305,6 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static bool try_get_hfa_info(struct codegen_state *state,
-                             const struct ir_var_ty *var_ty,
-                             size_t *num_members, size_t *member_size) {
-  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
-    return false;
-  }
-
-  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
-    TODO("union hfa handling");
-  }
-
-  if (!var_ty->aggregate.num_fields) {
-    return false;
-  }
-
-  struct ir_var_ty *field_ty = &var_ty->aggregate.fields[0];
-
-  if (!var_ty_is_fp(field_ty)) {
-    return false;
-  }
-
-  if (var_ty->aggregate.num_fields > 4) {
-    return false;
-  }
-
-  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_eq(state->ir, field_ty, &var_ty->aggregate.fields[i])) {
-      return false;
-    }
-  }
-
-  switch (field_ty->primitive) {
-  case IR_VAR_PRIMITIVE_TY_F16:
-    *member_size = 2;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F32:
-    *member_size = 4;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F64:
-    *member_size = 8;
-    break;
-  default:
-    unreachable();
-  }
-
-  *num_members = var_ty->aggregate.num_fields;
-  return true;
-}
-
 // when generating reg moves, assume memory slots never conflict
 // use incrementing values from 128 onwards
 #define FIRST_MEM_LOC 128
@@ -1671,83 +1613,6 @@ static void codegen_epilogue(struct codegen_state *state) {
    (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
 
 static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
-  if (op->ret.value && op->ret.value->ty != IR_OP_TY_CALL) {
-    struct x64_reg source = codegen_reg(op->ret.value);
-
-    struct ir_var_ty *var_ty = state->ir->func_ty.ret_ty;
-    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-    size_t num_members;
-    size_t member_size;
-    if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-      if (!is_return_reg(source)) {
-        struct instr *mov = alloc_instr(state->func);
-        *mov->x64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
-      }
-    } else if (var_ty_is_fp(var_ty)) {
-      TODO("FP return x64");
-      // if (!is_return_reg(source)) {
-      //   struct instr *mov = alloc_instr(state->func);
-
-      //   *mov->x64 = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
-      // }
-    } else if (try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-               num_members <= 4) {
-
-      size_t total_size = num_members * member_size;
-
-      size_t reg_idx = 0;
-      size_t pos = 0;
-      while (total_size) {
-        size_t sz = MIN(8, total_size);
-
-        struct x64_reg dest = {.ty = X64_REG_TY_XMM, .idx = reg_idx++};
-
-        struct instr *mov = alloc_instr(state->func);
-        switch (sz) {
-        case 8:
-          mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SD_IMM;
-          break;
-        case 4:
-          mov->x64->ty = X64_INSTR_TY_MOV_LOAD_SS_IMM;
-          break;
-        default:
-          BUG("hfa had unsupported remainder %zu (expected 4/8)", sz);
-        }
-
-        mov->x64->mov_load_imm = (struct x64_mov_load_imm){
-            .dest = dest,
-            .addr = STACK_PTR_REG,
-            .imm = pos,
-        };
-
-        total_size -= sz;
-        pos += sz;
-      }
-    } else if (info.size <= 16) {
-      struct x64_reg dest0 = {.ty = X64_REG_TY_R, .idx = REG_IDX_AX};
-      struct x64_reg dest1 = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX};
-
-      struct instr *mov0 = alloc_instr(state->func);
-      mov0->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
-      mov0->x64->mov_load_imm = (struct x64_mov_load_imm){
-          .addr = source,
-          .dest = dest0,
-          .imm = 0,
-      };
-
-      struct instr *mov1 = alloc_instr(state->func);
-      mov1->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
-      mov1->x64->mov_load_imm = (struct x64_mov_load_imm){
-          .addr = source,
-          .dest = dest1,
-          .imm = 8,
-      };
-    } else {
-      TODO("larger than 16 byte types");
-    }
-  }
-
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
