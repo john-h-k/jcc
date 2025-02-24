@@ -399,7 +399,6 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
       };
 
       CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations, entries[i].relocations);
-
       break;
     }
     }

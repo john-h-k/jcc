@@ -1825,16 +1825,19 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
 
     codegen_write_var_value(ir, relocs, 0, &var->value, data);
 
+    struct codegen_data codegen_data = {.data = data, .len_data = len};
+
+    CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
+                          codegen_data.relocs);
+
     // TODO: handle const data
     return (struct codegen_entry){
         .ty = CODEGEN_ENTRY_TY_DATA,
         .glb_id = id,
         .alignment = info.alignment,
         .name = name,
-        .data = (struct codegen_data){.data = data,
-                                      .len_data = len,
-                                      .relocs = vector_head(relocs),
-                                      .num_relocs = vector_length(relocs)}};
+        .data = codegen_data,
+    };
   }
   }
 }
