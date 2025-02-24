@@ -35,6 +35,8 @@ struct arena {
   struct arena_allocator *allocator;
 };
 
+#define ALIGNMENT (16)
+
 void arena_allocator_create(struct arena_allocator **allocator) {
   struct arena_allocator value = {.first = NULL, .last = NULL, .large_allocs = vector_create(sizeof(void *)) };
 
@@ -50,12 +52,17 @@ void arena_allocator_free(struct arena_allocator **allocator) {
     free(alloc);
   }
 
+  vector_free(&(*allocator)->large_allocs);
+
   struct arena *arena = (*allocator)->first;
 
   while (arena) {
+    void *p = arena;
     free(arena->block);
 
     arena = arena->next;
+
+    free(p);
   }
 
   free(*allocator);
@@ -157,11 +164,12 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
   if (allocator->last) {
     next = &allocator->last->next;
   } else {
-    next = &allocator->last;
+    next = &allocator->first;
   }
 
   *next = nonnull_malloc(sizeof(*allocator->last->next));
   **next = new_arena(allocator, next_arena_size);
+
   allocator->last = *next;
 
   void *allocation;
@@ -169,11 +177,12 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
       try_alloc_in_arena(allocator->last, aligned, &allocation),
       "allocating into new arena should be infallible (%zu bytes requested)",
       aligned);
+
   return allocation;
 }
 
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
-  size_t adj_size = size + sizeof(struct alloc_metadata);
+  size_t adj_size = ROUND_UP(size + sizeof(struct alloc_metadata), ALIGNMENT);
 
   if (arena->size - arena->pos < adj_size) {
     return false;

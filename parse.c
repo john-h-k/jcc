@@ -1837,8 +1837,7 @@ static bool parse_compoundexpr(struct parser *parser,
   struct ast_expr sub_expr;
   do {
     if (!parse_expr(parser, &sub_expr)) {
-      backtrack(parser->lexer, pos);
-      return false;
+      goto failure;
     }
 
     vector_push_back(exprs, &sub_expr);
@@ -1848,13 +1847,22 @@ static bool parse_compoundexpr(struct parser *parser,
            /* hacky */ (consume_token(parser->lexer, token), true));
 
   if (vector_empty(exprs)) {
-    backtrack(parser->lexer, pos);
-    return false;
+    goto failure;
   }
 
   compound_expr->exprs = arena_alloc(parser->arena, vector_byte_size(exprs));
   compound_expr->num_exprs = vector_length(exprs);
 
+  goto success;
+
+failure:
+  backtrack(parser->lexer, pos);
+  vector_copy_to(exprs, compound_expr->exprs);
+  vector_free(&exprs);
+
+  return false;
+
+success:
   vector_copy_to(exprs, compound_expr->exprs);
   vector_free(&exprs);
 
@@ -2599,7 +2607,7 @@ struct parse_result parse(struct parser *parser) {
   struct ast_translationunit translation_unit;
 
   translation_unit.external_declarations =
-      nonnull_malloc(vector_byte_size(declarations));
+      arena_alloc(parser->arena, vector_byte_size(declarations));
   translation_unit.num_external_declarations = vector_length(declarations);
   vector_copy_to(declarations, translation_unit.external_declarations);
   vector_free(&declarations);

@@ -362,6 +362,7 @@ void ir_validate(struct ir_unit *iru) {
 
   size_t num_errs = vector_length(state.errors);
   if (!num_errs) {
+    vector_free(&state.errors);
     return;
   }
 
@@ -375,6 +376,8 @@ void ir_validate(struct ir_unit *iru) {
 
     fprintf(stderr, "\n\n\n");
   }
+
+  vector_free(&state.errors);
 
   BUG("VALIDATION FAILED");
 }

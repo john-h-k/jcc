@@ -1892,12 +1892,9 @@ void x64_codegen(struct codegen_unit *unit, struct ir_unit *ir) {
             .func = {
                 .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
-        struct arena_allocator *arena;
-        arena_allocator_create(&arena);
-
         struct codegen_function *func = &unit->entries[i].func;
         struct codegen_state state = {
-            .arena = arena,
+            .arena = unit->arena,
             .target = ir->target,
             .func = func,
             .ir = ir_func,

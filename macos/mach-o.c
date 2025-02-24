@@ -579,6 +579,8 @@ static void write_segment_command(FILE *file,
     fwrite(symbol->name, strlen(symbol->name) + 1, 1, file);
   }
 
+  free(entry_offsets);
+
   vector_free(&info.text_relocs);
   vector_free(&info.const_data_relocs);
   vector_free(&info.data_relocs);

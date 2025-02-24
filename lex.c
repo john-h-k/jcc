@@ -115,6 +115,9 @@ enum lex_create_result lexer_create(struct program *program,
 
 void lexer_free(struct lexer **lexer) {
   arena_allocator_free(&(*lexer)->arena);
+
+  vector_free(&(*lexer)->tokens);
+
   (*lexer)->arena = NULL;
   free(*lexer);
 
@@ -144,7 +147,7 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
-static const char *process_raw_string(UNUSED const struct lexer *lexer,
+static const char *process_raw_string(const struct lexer *lexer,
                                       const struct lex_token *token,
                                       size_t *str_len) {
   // TODO: this i think will wrongly accept multilines
@@ -268,8 +271,7 @@ static const char *process_raw_string(UNUSED const struct lexer *lexer,
   char null = 0;
   vector_push_back(buff, &null);
 
-  char *value = nonnull_malloc(vector_byte_size(buff));
-  vector_copy_to(buff, value);
+  char *value = arena_alloc_strcpy(lexer->arena, vector_head(buff));
   vector_free(&buff);
 
   return value;

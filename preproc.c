@@ -1002,7 +1002,13 @@ static struct preproc_define *get_define(struct preproc *preproc,
 void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   // expands tokens, adds defines, etc
 
+  struct vector *directive_tokens = NULL;
+
   while (true) {
+    if (directive_tokens) {
+      vector_free(&directive_tokens);
+    }
+
     enum preproc_token_mode mode;
 
     if (vector_empty(preproc->buffer_tokens)) {
@@ -1031,9 +1037,9 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       outer_enabled = false;
     }
 
+    directive_tokens = vector_create(sizeof(struct preproc_token));
+
     struct preproc_token directive;
-    struct vector *directive_tokens =
-        vector_create(sizeof(struct preproc_token));
     size_t num_directive_tokens;
 
 #define EXPANDED_DIR_TOKENS()                                                  \
@@ -1275,6 +1281,10 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         try_expand_token(preproc, preproc_text, token, preproc->buffer_tokens,
                          NULL)) {
       continue;
+    }
+
+    if (directive_tokens) {
+      vector_free(&directive_tokens);
     }
 
     return;

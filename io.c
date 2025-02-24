@@ -11,7 +11,7 @@ struct path_components path_components(struct arena_allocator *arena, const char
   const char *last_slash = strrchr(path, '/');
 
   if (last_slash == NULL) {
-    return (struct path_components){.dir = ".", .file = strdup(path)};
+    return (struct path_components){.dir = ".", .file = arena_alloc_strcpy(arena, path)};
   }
 
   size_t dir_len = (size_t)(last_slash - path);
@@ -21,7 +21,7 @@ struct path_components path_components(struct arena_allocator *arena, const char
   strncpy(dir, path, dir_len);
   dir[dir_len] = '\0';
 
-  return (struct path_components){.dir = dir, .file = strdup(file_part)};
+  return (struct path_components){.dir = dir, .file =  arena_alloc_strcpy(arena, file_part)};
 }
 
 char *path_combine(struct arena_allocator *arena, const char *l, const char *r) {
