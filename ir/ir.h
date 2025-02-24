@@ -993,7 +993,14 @@ void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
 void ir_order_basicblocks(struct ir_func *func);
 
-void eliminate_redundant_ops(struct ir_func *func);
+
+enum eliminate_redundant_ops_flags {
+  ELIMINATE_REDUNDANT_OPS_FLAG_NONE = 0,
+  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES = 1,
+  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS = 2,
+};
+
+void eliminate_redundant_ops(struct ir_func *func, enum eliminate_redundant_ops_flags flags);
 
 void clear_metadata(struct ir_func *irb);
 void rebuild_ids(struct ir_func *irb);

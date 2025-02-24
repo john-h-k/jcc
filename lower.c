@@ -1186,7 +1186,7 @@ void lower(struct ir_unit *unit, const struct target *target) {
       prune_basicblocks(func);
 
       remove_critical_edges(func);
-      eliminate_redundant_ops(func);
+      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
     }
     }
     glb = glb->succ;
