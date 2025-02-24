@@ -35,6 +35,7 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
   tbl->element_size = element_size;
   tbl->eq_fn = eq_fn;
   tbl->buckets = vector_create(sizeof(struct bucket));
+  tbl->len = 0;
 
   return tbl;
 }

@@ -210,7 +210,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       continue;
     }
 
-    size_t size = MAX(8, info.size);
+    // 4 or 8?
+    size_t size = MAX(4, info.size);
 
     struct ir_param_info param_info = {
         .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};

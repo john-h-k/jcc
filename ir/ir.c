@@ -793,11 +793,27 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 }
 
-void eliminate_redundant_ops(struct ir_func *func,
-                             enum eliminate_redundant_ops_flags flags) {
+void rebuild_flags(struct ir_func *func) {
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
+  enum ir_func_flags flags = func->flags & ~IR_FUNC_FLAG_MAKES_CALL;
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    if (op->ty == IR_OP_TY_CALL) {
+      flags |= IR_FUNC_FLAG_MAKES_CALL;
+      break;
+    }
+  }
+
+  func->flags = flags;
+}
+
+void eliminate_redundant_ops(struct ir_func *func,
+                             enum eliminate_redundant_ops_flags flags) {
   struct ir_op_use_map use_map = build_op_uses_map(func);
+
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
@@ -1471,6 +1487,23 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
 
 static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
 static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
+
+void mk_zero_constant(struct ir_unit *iru, struct ir_op *op, struct ir_var_ty *var_ty) {
+  switch (var_ty->ty) {
+    case IR_VAR_TY_TY_PRIMITIVE:
+      if (primitive_ty_is_fp(var_ty->primitive)) {
+        mk_floating_zero_constant(iru, op, var_ty->primitive);
+      } else {
+        mk_integral_constant(iru, op, var_ty->primitive, 0);
+      }
+      break;
+    case IR_VAR_TY_TY_POINTER:
+      mk_pointer_constant(iru, op, 0);
+      break;
+    default:
+      BUG("unsupported for func");
+  }
+}
 
 void mk_floating_zero_constant(UNUSED_ARG(struct ir_unit *iru),
                                struct ir_op *op, enum ir_var_primitive_ty ty) {
