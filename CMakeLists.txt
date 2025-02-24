@@ -86,9 +86,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   
   # add_link_options(-fsanitize=address,undefined)
   # add_compile_options(-fsanitize=address,undefined)
+
   add_link_options(-fsanitize=undefined)
   add_compile_options(-fsanitize=undefined)
-  # -fno-sanitize-recover=all -g -fno-omit-frame-pointer)
   add_link_options(-g3 -ldl)
   add_link_options(-rdynamic)
 endif()
@@ -104,9 +104,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wpedantic
     -Weverything
 
-    -Wno-error=unreachable-code-loop-increment
-    -Wno-error=unused-parameter
-    -Wno-error=covered-switch-default
     -Wno-error=unreachable-code
 
     -Wzero-as-null-pointer-constant
@@ -135,6 +132,10 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     # TODO: remove binary literals in source
     -Wno-gnu-binary-literal
   )
+elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+  # nothing for now
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  # nothing for now
 else()
   message(WARNING "Unknown compiler: ${CMAKE_C_COMPILER_ID}")
 endif()

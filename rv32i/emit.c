@@ -1,10 +1,8 @@
 #include "emit.h"
 
-#include "../ir/prettyprint.h"
 #include "../rv32i.h"
 #include "../vector.h"
 #include "emitter.h"
-#include "isa.h"
 
 #include <stdio.h>
 

@@ -1,11 +1,9 @@
 #include "validate.h"
 
-#include "../log.h"
 #include "../util.h"
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
-#include "var_refs.h"
 
 struct ir_validate_error {
   const char *err;
@@ -286,7 +284,18 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
 }
 
 static void ir_validate_data(struct ir_validate_state *state,
-                             struct ir_glb *glb) {}
+                             struct ir_glb *glb) {
+  switch (glb->def_ty) {
+  case IR_GLB_DEF_TY_DEFINED:
+    VALIDATION_CHECKZ(glb->var, glb, "defined global should have var");
+    break;
+  case IR_GLB_DEF_TY_UNDEFINED:
+    VALIDATION_CHECKZ(!glb->var, glb, "undefined global should not have var");
+    return;
+  case IR_GLB_DEF_TY_TENTATIVE:
+    VALIDATION_ERRZ(glb, "should not have tentative defs by now");
+  }
+}
 
 static void ir_validate_func(struct ir_validate_state *state,
                              struct ir_glb *glb) {

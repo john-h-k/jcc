@@ -1,6 +1,5 @@
 #include "emit.h"
 
-#include "../x64.h"
 #include "../vector.h"
 #include "emitter.h"
 
@@ -18,7 +17,7 @@ const char *x64_macos_mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-const char *x64_linux_mangle(struct arena_allocator *arena, const char *name) {
+const char *x64_linux_mangle(UNUSED struct arena_allocator *arena, const char *name) {
   return name;
 }
 
