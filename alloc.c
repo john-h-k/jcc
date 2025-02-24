@@ -8,8 +8,6 @@
 
 // TODO: allow larger allocs
 
-#define ALWAYS_MALLOC
-
 #ifdef ALWAYS_MALLOC
 #define BLOCK_SIZE (0)
 #else
