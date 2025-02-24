@@ -1,0 +1,26 @@
+[32mINFO: [0mparsing command line args
+[32mINFO: [0mbeginning compilation stage...
+[32mINFO: [0mcompiling source file "./tests/64_bit.c"
+[32mINFO: [0mcompiling source file './tests/64_bit.c' into object file './tests/64_bit.o'
+FUNCTION: main() -> i32
+    num_locals: 0
+    total_locals_size: 0
+    caller_stack_needed: 00: %0 (i32) = 1                                       |     (UNASSIGNED)        | 
+1: %1 (i32) = 1                                       |     (UNASSIGNED)        | 
+2: %2 (i32) = 2                                       |     (UNASSIGNED)        | 
+3: %3 (i32) = return %2                                      | 
+[0m
+
+**********  ASM  **********
+
+[0m
+
+**********  DISASSEMBLY  **********
+
+
+./tests/64_bit.o:     file format elf32-little
+
+objdump: can't disassemble for architecture UNKNOWN!
+
+[33mWARN: [0m`debug_disasm` failed
+[32mINFO: [0mCompilation succeeded!
