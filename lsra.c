@@ -531,6 +531,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           struct ir_op *reload = insert_after_ir_op(
               irb, load_addr, IR_OP_TY_LOAD, live->op->var_ty);
           reload->reg = reg;
+          reload->flags |= IR_OP_FLAG_SIDE_EFFECTS;
           reload->load = (struct ir_op_load){
               .ty = IR_OP_LOAD_TY_ADDR,
               .addr = load_addr,

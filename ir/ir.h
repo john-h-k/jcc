@@ -992,6 +992,7 @@ void prune_basicblocks(struct ir_func *irb);
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
 void ir_order_basicblocks(struct ir_func *func);
+
 void eliminate_redundant_ops(struct ir_func *func);
 
 void clear_metadata(struct ir_func *irb);
