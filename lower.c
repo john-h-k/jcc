@@ -686,11 +686,11 @@ static void lower_params(struct ir_func *func) {
       mov->mov = (struct ir_op_mov){.value = NULL};
 
       mov->reg = param_op->reg;
-      mov->flags = param_op->flags & ~(IR_OP_FLAG_SPILLED);
+      mov->flags = (param_op->flags & ~(IR_OP_FLAG_SPILLED)) | IR_OP_FLAG_FIXED_REG;
+
       param_op->flags = IR_OP_FLAG_NONE;
 
       param_op->mov = (struct ir_op_mov){.value = mov};
-
       param_op = param_op->succ;
     }
   }

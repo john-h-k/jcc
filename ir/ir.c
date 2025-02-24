@@ -98,7 +98,7 @@ enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty) {
 }
 
 bool op_has_side_effects(const struct ir_op *op) {
-  if (op->flags & (IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG)) {
+  if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
     return true;
   }
 
@@ -800,12 +800,12 @@ void eliminate_redundant_ops(struct ir_func *func) {
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
-   if (op_has_side_effects(op)) {
-     continue;
-   }
-
     switch (op->ty) {
     case IR_OP_TY_MOV:
+       if (true || op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+         continue;
+       }
+
       if (op->mov.value && op->reg.ty != IR_REG_TY_NONE && ir_reg_eq(op->reg, op->mov.value->reg)) {
         struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
@@ -826,6 +826,10 @@ void eliminate_redundant_ops(struct ir_func *func) {
     //   break;
     // }
     default:
+      if (op_has_side_effects(op)) {
+        continue;
+      }
+
       if (!use_map.op_use_datas[op->id].num_uses) {
         detach_ir_op(func, op);
       }
@@ -1407,8 +1411,6 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
   mov->reg = reg;
   mov->mov = (struct ir_op_mov){.value = *op};
 
-  (*op)->reg = reg;
-
   *op = mov;
 
   return mov;
@@ -1450,8 +1452,6 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   producer->ty = IR_OP_TY_MOV;
   producer->mov = (struct ir_op_mov){.value = mov};
   producer->write_info = (struct ir_op_write_info){.num_reg_writes = 0};
-
-  producer->reg = reg;
 
   return mov;
 }
@@ -2044,7 +2044,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
   DEBUG_ASSERT(!(op->flags & IR_OP_FLAG_FIXED_REG),
-               "spilling fixed reg illegal");
+               "spilling fixed reg illegal (op %zu)", op->id);
 
   debug("spilling %zu\n", op->id);
 
