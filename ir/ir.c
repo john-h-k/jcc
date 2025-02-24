@@ -793,7 +793,8 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 }
 
-void eliminate_redundant_ops(struct ir_func *func) {
+void eliminate_redundant_ops(struct ir_func *func,
+                             enum eliminate_redundant_ops_flags flags) {
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   struct ir_op_use_map use_map = build_op_uses_map(func);
@@ -802,11 +803,16 @@ void eliminate_redundant_ops(struct ir_func *func) {
   while (ir_func_iter_next(&iter, &op)) {
     switch (op->ty) {
     case IR_OP_TY_MOV:
-       if (true || op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
-         continue;
-       }
+      if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
+        continue;
+      }
 
-      if (op->mov.value && op->reg.ty != IR_REG_TY_NONE && ir_reg_eq(op->reg, op->mov.value->reg)) {
+      if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+        continue;
+      }
+
+      if (op->mov.value && op->reg.ty != IR_REG_TY_NONE &&
+          ir_reg_eq(op->reg, op->mov.value->reg)) {
         struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
         for (size_t i = 0; i < usage.num_uses; i++) {
@@ -816,15 +822,19 @@ void eliminate_redundant_ops(struct ir_func *func) {
         detach_ir_op(func, op);
       }
       break;
-    // case IR_OP_TY_BR: {
-    // struct ir_basicblock *basicblock = op->stmt->basicblock;
-    //   DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
-    //                "br op in non MERGE bb");
-    //   if (basicblock->succ == basicblock->merge.target) {
-    //     detach_ir_op(func, op);
-    //   }
-    //   break;
-    // }
+    case IR_OP_TY_BR: {
+      if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES)) {
+        continue;
+      }
+
+      struct ir_basicblock *basicblock = op->stmt->basicblock;
+      DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+                   "br op in non MERGE bb");
+      if (basicblock->succ == basicblock->merge.target) {
+        detach_ir_op(func, op);
+      }
+      break;
+    }
     default:
       if (op_has_side_effects(op)) {
         continue;
@@ -2112,7 +2122,8 @@ static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
 
   struct ir_op_use use = {.op = op, .consumer = data->op};
 
-  DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op consumed by %zu", use.consumer->id);
+  DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op consumed by %zu",
+               use.consumer->id);
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
