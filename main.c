@@ -24,6 +24,8 @@ static enum parse_args_result parse_args(int argc, char **argv,
                                          const char ***sources,
                                          size_t *num_sources);
 
+void free_args(struct compile_args *args, const char **sources);
+
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
@@ -81,8 +83,8 @@ int main(int argc, char **argv) {
   if (args.arch != COMPILE_ARCH_NATIVE) {
     if (args.target != COMPILE_TARGET_NATIVE) {
       err("cannot provide both `-arch` and `-T/--target` flags");
-    exc = -1;
-    goto exit;
+      exc = -1;
+      goto exit;
     }
 
     switch (args.arch) {
@@ -206,9 +208,8 @@ int main(int argc, char **argv) {
   if (target_needs_linking(&args, target)) {
     const char *output = args.output ? args.output : "a.out";
 
-    struct link_args link_args = {
-      .args = &args,
-      .objects = (const char *const *)objects,
+    struct link_args link_args = {.args = &args,
+                                  .objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};
 
@@ -235,7 +236,9 @@ exit:
   if (objects) {
     free(objects);
   }
-  
+
+  free_args(&args, sources);
+
   return exc;
 }
 
@@ -499,4 +502,9 @@ static enum parse_args_result parse_args(int argc, char **argv,
   vector_free(&sources_vec);
 
   return PARSE_ARGS_RESULT_SUCCESS;
+}
+
+void free_args(struct compile_args *args, const char **sources) {
+  free(sources);
+  free(args->include_paths);
 }
