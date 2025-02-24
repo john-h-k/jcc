@@ -720,9 +720,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     has_ssp = true;
     ssp_reg = reg_info.ssp;
-
-    struct ir_reg ssp_reg_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ssp_reg};
-    hashtbl_insert(nonvolatile_registers_used, &ssp_reg_reg, NULL);
   }
 
   // remove 1 for spill reg

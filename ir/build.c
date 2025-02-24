@@ -2316,79 +2316,18 @@ static int sort_ranges_by_offset(const void *l, const void *r) {
 }
 
 static void build_ir_zero_range(struct ir_func_builder *irb,
-                                struct ir_stmt **stmt,
                                 struct ir_op *insert_before,
-                                struct ir_op *address, size_t base_offset,
+                                struct ir_op *address,
                                 size_t byte_size) {
   if (!byte_size) {
     return;
   }
 
-  if (byte_size > 32) {
-    struct ir_op *mem_set = insert_before_ir_op(
-        irb->func, insert_before, IR_OP_TY_MEM_SET, IR_VAR_TY_NONE);
-    mem_set->mem_set = (struct ir_op_mem_set){
-        .addr = address, .length = byte_size, .value = 0};
+  struct ir_op *mem_set = insert_before_ir_op(
+      irb->func, insert_before, IR_OP_TY_MEM_SET, IR_VAR_TY_NONE);
 
-    return;
-  }
-
-  struct ir_var_ty cnst_ty;
-  ssize_t chunk_size;
-  if (byte_size >= 8 && irb->unit->target->lp_sz == TARGET_LP_SZ_LP64) {
-    cnst_ty = IR_VAR_TY_I64;
-    chunk_size = 8;
-  } else if (byte_size >= 4) {
-    cnst_ty = IR_VAR_TY_I32;
-    chunk_size = 4;
-  } else if (byte_size >= 2) {
-    cnst_ty = IR_VAR_TY_I16;
-    chunk_size = 2;
-  } else {
-    cnst_ty = IR_VAR_TY_I8;
-    chunk_size = 1;
-  }
-
-  struct ir_op *zero;
-  if (insert_before) {
-    zero = insert_before_ir_op(irb->func, insert_before, IR_OP_TY_CNST,
-                               var_ty_for_pointer_size(irb->unit));
-  } else {
-    zero = alloc_ir_op(irb->func, *stmt);
-    zero->ty = IR_OP_TY_CNST;
-    zero->var_ty = cnst_ty;
-  }
-
-  zero->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = 0};
-
-  ssize_t remaining = byte_size;
-  size_t head = 0;
-
-  struct ir_op *last = zero;
-
-  while (remaining > 0) {
-    size_t offset = remaining >= chunk_size ? head : byte_size - chunk_size;
-
-    struct ir_op *offset_cnst = insert_after_ir_op(
-        irb->func, last, IR_OP_TY_CNST, var_ty_for_pointer_size(irb->unit));
-    offset_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                            .int_value = base_offset + offset};
-
-    struct ir_op *init_address = insert_after_ir_op(
-        irb->func, offset_cnst, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-    init_address->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = address, .rhs = offset_cnst};
-
-    struct ir_op *store = insert_after_ir_op(irb->func, init_address,
-                                             IR_OP_TY_STORE, IR_VAR_TY_NONE);
-    store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR, .addr = init_address, .value = zero};
-
-    last = store;
-
-    remaining -= chunk_size;
-    head += chunk_size;
-  }
+  mem_set->mem_set = (struct ir_op_mem_set){
+      .addr = address, .length = byte_size, .value = 0};
 }
 
 static void build_ir_for_init_list(struct ir_func_builder *irb,
@@ -2459,9 +2398,10 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   struct init_range end_range = {.offset = info.size, .size = 0};
   vector_push_back(init_ranges, &end_range);
 
-  // TODO: can be more efficient, just does 8 byte blocks
+  // TODO: logic to determine if all fields are set can be improved
   size_t num_offsets = vector_length(init_ranges);
 
+  bool needs_zero = false;
   size_t head = 0;
   size_t end = info.size;
   for (size_t i = 0; i < num_offsets + 1; i++) {
@@ -2481,10 +2421,15 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
       ssize_t gap = (ssize_t)offset - (ssize_t)head;
       DEBUG_ASSERT(gap >= 0, "bad math");
 
-      build_ir_zero_range(irb, stmt, first_init, address, head, gap);
+      needs_zero = true;
+      break;
     }
 
     head = new_head;
+  }
+
+  if (needs_zero) {
+    build_ir_zero_range(irb, first_init, address, info.size);
   }
 
   vector_free(&init_ranges);

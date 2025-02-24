@@ -81,6 +81,29 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
       check_store(data->use_map, data->lcl_uses, consumer, op, field_idx,
                   data->candidate);
       break;
+    case IR_OP_TY_MEM_SET: {
+      struct ir_op_mem_set mem_set = consumer->mem_set;
+
+      // TODO: either here or in a seperate pass simplify addr nodes as this
+      // won't find `&a[0]`
+      struct ir_op *addr = mem_set.addr;
+      if (addr->ty != IR_OP_TY_ADDR || addr->addr.ty != IR_OP_ADDR_TY_LCL) {
+        *data->candidate = false;
+        return;
+      }
+
+      // TODO: support partial zeroinit
+      struct ir_lcl *lcl = addr->addr.lcl;
+      if (field_idx || mem_set.value ||
+          mem_set.length < var_ty_info(data->func->unit, &lcl->var_ty).size) {
+        *data->candidate = false;
+        return;
+      }
+
+      lcl->flags |= IR_LCL_FLAG_ZEROED;
+      break;
+    }
+
     case IR_OP_TY_ADDR_OFFSET: {
       struct ir_op_addr_offset addr_offset = consumer->addr_offset;
       if (addr_offset.index) {
@@ -110,8 +133,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
           el_ty = *el_ty.array.underlying;
         }
 
-        struct ir_var_ty_info el_info =
-            var_ty_info(data->func->unit, &el_ty);
+        struct ir_var_ty_info el_info = var_ty_info(data->func->unit, &el_ty);
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 &&
@@ -147,7 +169,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
     }
     default:
       *data->candidate = false;
-      break;
+      return;
     }
   }
 }
@@ -355,6 +377,12 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         mov->flags |= IR_OP_FLAG_PROMOTED;
 
         find_phi_exprs(func, stores, phi, j);
+
+        if (!phi->phi.num_values) {
+          DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED, "expected zeroed because no stores");
+
+          mk_zero_constant(func->unit, phi, &field_ty);
+        }
       }
 
       if (gather_values) {
@@ -405,13 +433,24 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 }
 
 static void opts_promote_func(struct ir_func *func) {
+  {
+    struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+    struct ir_op *op;
+    while (ir_func_iter_next(&iter, &op)) {
+      if (op->ty != IR_OP_TY_MEM_SET) {
+        continue;
+      }
+    }
+  }
+
   // note: this requires contigous lcl ids
   bool *candidates =
       arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
 
-    if (!candidates) {
-      return;
-    }
+  if (!candidates) {
+    return;
+  }
 
   memset(candidates, true, sizeof(*candidates) * func->lcl_count);
 
