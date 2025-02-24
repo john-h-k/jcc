@@ -139,10 +139,10 @@ static void preproc_create_builtin_macros(struct preproc *preproc) {
 #undef DEF_BUILTIN
 }
 
-static struct preproc_text create_preproc_text(const char *text,
+static struct preproc_text create_preproc_text(struct preproc *preproc, const char *text,
                                                const char *path) {
   struct path_components components =
-      path ? path_components(path) : (struct path_components){NULL, NULL};
+      path ? path_components(preproc->arena, path) : (struct path_components){NULL, NULL};
 
   // FIXME: spans are entirely broken at the moment
   return (struct preproc_text){
@@ -215,7 +215,7 @@ preproc_create(struct program *program, const char *path,
   bool enabled = true;
   vector_push_back(p->enabled, &enabled);
 
-  struct preproc_text text = create_preproc_text(program->text, path);
+  struct preproc_text text = create_preproc_text(p, program->text, path);
   vector_push_back(p->texts, &text);
 
   p->line_has_nontrivial_token = false;
@@ -1155,21 +1155,21 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         if (!is_angle) {
           const char *search_path;
           if (preproc_text->path.dir) {
-            search_path = path_combine(preproc_text->path.dir, filename);
+            search_path = path_combine(preproc->arena, preproc_text->path.dir, filename);
           } else {
             search_path = filename;
           }
 
-          content = read_file(search_path);
+          content = read_file(preproc->arena, search_path);
           path = search_path;
         }
 
         if (!content) {
           for (size_t i = 0; i < preproc->num_include_paths; i++) {
             const char *search_path =
-                path_combine(preproc->include_paths[i], filename);
+                path_combine(preproc->arena, preproc->include_paths[i], filename);
 
-            content = read_file(search_path);
+            content = read_file(preproc->arena, search_path);
             if (content) {
               path = search_path;
               break;
@@ -1181,7 +1181,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           TODO("handle failed include for '%s'", filename);
         }
 
-        struct preproc_text include_text = create_preproc_text(content, path);
+        struct preproc_text include_text = create_preproc_text(preproc, content, path);
         vector_push_back(preproc->texts, &include_text);
 
         preproc->line_has_nontrivial_token = false;

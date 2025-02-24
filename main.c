@@ -1,4 +1,5 @@
 #include "aarch64.h"
+#include "alloc.h"
 #include "compiler.h"
 #include "io.h"
 #include "log.h"
@@ -133,6 +134,9 @@ int main(int argc, char **argv) {
 #endif
   }
 
+  struct arena_allocator *arena;
+  arena_allocator_create(&arena);
+
   const struct target *target = get_target(&args);
   char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
@@ -140,7 +144,7 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     info("compiling source file \"%s\"", sources[i]);
 
-    const char *source = read_file(sources[i]);
+    const char *source = read_file(arena, sources[i]);
 
     if (!source) {
       err("source file \"%s\" could not be read!", sources[i]);
@@ -155,9 +159,9 @@ int main(int argc, char **argv) {
       strcpy(object_file, "stdout");
       object_file[strlen("stdout")] = 0;
     } else if (args.build_asm_file && !args.output) {
-      object_file = path_replace_ext(sources[i], ".s");
+      object_file = path_replace_ext(arena, sources[i], ".s");
     } else if (target_needs_linking(&args, target) || !args.output) {
-      object_file = path_replace_ext(sources[i], "o");
+      object_file = path_replace_ext(arena, sources[i], "o");
     } else {
       object_file = args.output;
     }
@@ -206,10 +210,7 @@ int main(int argc, char **argv) {
 
   info("Compilation succeeded!");
 
-  for (size_t i = 0; i < num_sources; i++) {
-    free(objects[i]);
-  }
-
+  arena_allocator_free(&arena);
   free(objects);
 }
 
