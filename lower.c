@@ -804,6 +804,12 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   struct ir_func_info func_info = func->unit->target->lower_func_ty(
       func, op->call.func_ty.func, op->call.args, op->call.num_args);
 
+  if (log_enabled()) {
+    info("Lowering call op %zu", op->id);
+    debug_print_func_info(stderr, func->unit, &func_info);
+    info("\n\n");
+  }
+
   func->caller_stack_needed =
       MAX(func->caller_stack_needed, func_info.call_info.stack_size);
 
@@ -974,7 +980,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
   if (var_ty_is_aggregate(param_info.var_ty)) {
     op->var_ty = IR_VAR_TY_NONE;
-
 
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");

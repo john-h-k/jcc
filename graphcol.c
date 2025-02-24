@@ -213,7 +213,6 @@ static void build_interf_graph(struct graphcol_state *state,
   }
 
   debug_print_ir_func(stderr, state->irb, print_ir_intervals, data->intervals);
-  // BUG("");
 }
 
 // uses graph-coloring technique to allocate registers - relies on SSA form!

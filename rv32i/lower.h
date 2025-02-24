@@ -1,7 +1,7 @@
 #ifndef RV32I_LOWER_H
 #define RV32I_LOWER_H
 
-#include "../ir/build.h"
+#include "../ir/ir.h"
 
 // performs platform specific lowering transformations to the IR
 void rv32i_lower(struct ir_unit *unit);

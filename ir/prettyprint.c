@@ -128,6 +128,61 @@ static void debug_print_func_ty_string(FILE *file, struct ir_unit *iru,
   debug_print_var_ty_string(file, iru, func_ty->ret_ty);
 }
 
+static void debug_print_param_info(FILE *file, struct ir_unit *iru,
+                                   const struct ir_param_info *info) {
+  switch (info->ty) {
+  case IR_PARAM_INFO_TY_REGISTER:
+    fprintf(file, "    register ");
+    goto print_regs;
+
+  case IR_PARAM_INFO_TY_POINTER:
+    fprintf(file, "    pointer ");
+    goto print_regs;
+
+  print_regs: {
+    fprintf(file, "(%zu registers): \n", info->num_regs);
+
+    for (size_t j = 0; j < info->num_regs; j++) {
+      struct ir_param_reg reg = info->regs[j];
+
+      fprintf(file, "      ");
+      debug_print_ir_reg(stderr, reg.reg);
+      fprintf(file, " (size=%zu)", reg.size);
+
+      fprintf(file, "\n");
+    }
+
+    break;
+  }
+  case IR_PARAM_INFO_TY_STACK:
+    fprintf(file, "    (stack): offset=%zu", info->stack_offset);
+    break;
+  }
+}
+
+void debug_print_func_info(FILE *file, struct ir_unit *iru,
+                           const struct ir_func_info *func_info) {
+  fprintf(file, "FUNC_INFO: ");
+  debug_print_func_ty_string(file, iru, &func_info->func_ty);
+  fprintf(file, "\n");
+
+  if (func_info->call_info.num_params) {
+    fprintf(file, "  PARAMS: \n");
+    for (size_t i = 0; i < func_info->call_info.num_params; i++) {
+      struct ir_param_info *info = &func_info->call_info.params[i];
+
+      debug_print_param_info(file, iru, info);
+
+      fprintf(file, "\n");
+    }
+  }
+
+  if (func_info->call_info.ret) {
+    fprintf(file, "  RET: \n");
+    debug_print_param_info(file, iru, func_info->call_info.ret);
+  }
+}
+
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {

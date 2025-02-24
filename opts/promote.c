@@ -367,8 +367,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // can't reuse map from parent because we have added ops
   struct ir_op_use_map use_map = build_op_uses_map(func);
 
-  debug_print_ir_func(stderr, func, NULL, NULL);
-
   struct vector *depends = vector_create(sizeof(struct ir_op *));
   struct ir_lcl_usage *usage = &use_map.lcl_use_datas[lcl->id];
 
@@ -402,8 +400,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 }
 
 static void opts_promote_func(struct ir_func *func) {
-  debug_print_ir_func(stderr, func, NULL, NULL);
-
   // note: this requires contigous lcl ids
   bool *candidates =
       arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
