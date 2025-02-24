@@ -369,13 +369,11 @@ void x64_emit_pop(struct x64_emitter *emitter, struct x64_pop pop) {
   x64_emit_instr(emitter, POP_REG64(pop.dest));
 }
 
-void x64_emit_call(struct x64_emitter *emitter, struct x64_branch call) {
+void x64_emit_call(struct x64_emitter *emitter, UNUSED struct x64_branch call) {
   x64_emit_instr(emitter, CALL_REL32(0));
 }
 
-void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg) {
-  TODO("x64 emit jmp reg");
-}
+TODO_FUNC(void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg))
 
 void x64_emit_call_reg(struct x64_emitter *emitter, struct x64_branch_reg call_reg) {
   x64_emit_instr(emitter, CALL_REG(call_reg.target));
@@ -441,13 +439,9 @@ void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test) {
   x64_emit_instr(emitter, TEST_REG(test.lhs, test.rhs));
 }
 
-void x64_emit_cmp_imm(struct x64_emitter *emitter, struct x64_cmp_imm cmp_imm) {
-  TODO("cmp imm");
-}
+TODO_FUNC(void x64_emit_cmp_imm(struct x64_emitter *emitter, struct x64_cmp_imm cmp_imm))
 
-void x64_emit_test_imm(struct x64_emitter *emitter,
-                       struct x64_cmp_imm test_imm) {
-  TODO("test imm");
-}
+TODO_FUNC(void x64_emit_test_imm(struct x64_emitter *emitter,
+                       struct x64_cmp_imm test_imm))
 
 void x64_emit_ret(struct x64_emitter *emitter) { x64_emit_instr(emitter, RET); }

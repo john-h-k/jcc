@@ -128,7 +128,7 @@ static void debug_print_func_ty_string(FILE *file, struct ir_unit *iru,
   debug_print_var_ty_string(file, iru, func_ty->ret_ty);
 }
 
-static void debug_print_param_info(FILE *file, struct ir_unit *iru,
+static void debug_print_param_info(FILE *file, UNUSED struct ir_unit *iru,
                                    const struct ir_param_info *info) {
   switch (info->ty) {
   case IR_PARAM_INFO_TY_REGISTER:

@@ -257,7 +257,6 @@ static enum x64_cond get_cond_for_op(struct ir_op *op) {
 }
 
 static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
-                                    const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
   DEBUG_ASSERT(lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE, "unallocated lcl");
 
@@ -334,8 +333,7 @@ static size_t get_ir_reg_idx(struct x64_reg reg) {
 //   }
 // }
 
-static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty,
-                                         size_t idx) {
+static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
@@ -357,7 +355,7 @@ static struct x64_reg codegen_reg(struct ir_op *op) {
     TODO("non primitives (op %zu)", op->id);
   }
 
-  enum x64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty, idx);
+  enum x64_reg_ty reg_ty = reg_ty_for_var_ty(&op->var_ty);
 
   switch (reg_ty) {
   case X64_REG_TY_NONE:
@@ -474,7 +472,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
 
     simm_t imm;
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-      imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
+      imm = get_lcl_stack_offset(state, addr->addr.lcl);
     } else {
       BUG("can't CONTAIN operand in load_addr node");
     }
@@ -501,7 +499,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
 
     simm_t imm;
     if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-      imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
+      imm = get_lcl_stack_offset(state, addr->addr.lcl);
     } else {
       BUG("can't CONTAIN operand in store_addr node");
     }
@@ -704,7 +702,7 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     struct ir_lcl *lcl = op->addr.lcl;
 
     // op is NULL as we want the absolute offset
-    size_t offset = get_lcl_stack_offset(state, NULL, lcl);
+    size_t offset = get_lcl_stack_offset(state, lcl);
 
     codegen_add_imm(state, dest, STACK_PTR_REG, offset);
 
@@ -1300,8 +1298,6 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_CAST_OP_TY_SCONV:
     codegen_sconv_op(state, op, source, dest);
     break;
-  default:
-    TODO("conversions on x64");
   }
 }
 
@@ -1612,7 +1608,7 @@ static void codegen_epilogue(struct codegen_state *state) {
   (var_ty_is_integral((var_ty)) || (var_ty)->ty == IR_VAR_TY_TY_POINTER ||     \
    (var_ty)->ty == IR_VAR_TY_TY_ARRAY)
 
-static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_ret_op(struct codegen_state *state, UNUSED struct ir_op *op) {
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);

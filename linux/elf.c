@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 struct reloc_info {
@@ -71,8 +70,7 @@ static void write_header_32(FILE *file, Elf32_Half e_machine,
 }
 
 static struct reloc_info build_reloc_info(const struct build_object_args *args,
-                                          const size_t *entry_offsets,
-                                          enum compile_target target) {
+                                          const size_t *entry_offsets) {
   struct reloc_info info = {
       .text_relocs = vector_create(sizeof(struct relocation)),
       .data_relocs = vector_create(sizeof(struct relocation)),
@@ -331,8 +329,6 @@ static void write_relocations_elf(FILE *file,
       }
       break;
     }
-    default:
-      BUG("unsupported relocation type for elf");
     }
   }
 }
@@ -386,7 +382,7 @@ static void write_elf_object(const struct build_object_args *args) {
 
   /* build relocation info */
   struct reloc_info rinfo =
-      build_reloc_info(args, entry_offsets, args->compile_args->target);
+      build_reloc_info(args, entry_offsets);
 
   /* assign file offsets to sections in order:
      elf header | .text | .cstring | .const | .data |

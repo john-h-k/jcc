@@ -43,7 +43,7 @@
     }                                                                          \
   }
 
-const char *rv32i_mangle(struct arena_allocator *arena, const char *name) {
+const char *rv32i_mangle(UNUSED struct arena_allocator *arena, const char *name) {
   return name;
 }
 

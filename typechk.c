@@ -7,9 +7,6 @@
 #include "var_table.h"
 #include "vector.h"
 
-#include <math.h>
-#include <stdatomic.h>
-
 struct td_var_ty TD_VAR_TY_UNKNOWN = {.ty = TD_VAR_TY_TY_UNKNOWN};
 struct td_var_ty TD_VAR_TY_VOID = {.ty = TD_VAR_TY_TY_VOID};
 struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER = {
@@ -2636,10 +2633,8 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
   return td_init_list_init;
 }
 
-static struct td_expr type_zero_expr(struct typechk *tchk,
-                                     const struct td_var_ty *var_ty) {
-  TODO("type zero expr");
-}
+TODO_FUNC(static struct td_expr type_zero_expr(struct typechk *tchk,
+                                     const struct td_var_ty *var_ty))
 
 static struct td_expr
 type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,

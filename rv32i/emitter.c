@@ -308,8 +308,8 @@ void rv32i_emit_fmv_s(struct rv32i_emitter *emitter,
   }
 }
 
-void rv32i_emit_fmv_d(struct rv32i_emitter *emitter,
-                      const struct rv32i_op_mov fmv) {
+void rv32i_emit_fmv_d(UNUSED struct rv32i_emitter *emitter,
+                      UNUSED const struct rv32i_op_mov fmv) {
   BUG("not supported on rv32i");
 }
 

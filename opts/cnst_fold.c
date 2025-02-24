@@ -187,7 +187,7 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-static bool opts_cnst_fold_addr_offset(struct ir_func *func, struct ir_op *op) {
+static bool opts_cnst_fold_addr_offset(struct ir_op *op) {
   op = opts_follow_movs(op);
 
   if (!op) {
@@ -216,7 +216,7 @@ static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_TY_CAST_OP:
     return opts_cnst_fold_cast_op(func, op);
   case IR_OP_TY_ADDR_OFFSET:
-    return opts_cnst_fold_addr_offset(func, op);
+    return opts_cnst_fold_addr_offset(op);
   default:
     return false;
   }
