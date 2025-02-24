@@ -20,6 +20,8 @@ typedef bool (*eq_fn)(const void *l, const void *r);
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_gn);
 
+void hashtbl_free(struct hashtbl **hashtbl);
+
 size_t hashtbl_size(struct hashtbl *hashtbl);
 
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl);

@@ -25,7 +25,7 @@ const struct target X64_MACOS_TARGET = {
     },
     X64_FUNCTION_ALIGNMENT, x64_macos_mangle, x64_lower,
     x64_lower_func_ty,
-     x64_codegen,
+    { .ty= CODEGEN_UNIT_TY_X64, .instr_sz = sizeof(struct x64_instr), .codegen = x64_codegen },
     x64_emit, write_macho, macos_link_objects, objdump_debug_disasm,
     x64_debug_print_codegen};
 
@@ -44,6 +44,7 @@ const struct target X64_LINUX_TARGET = {
                 .num_reserved = 0},
     },
     X64_FUNCTION_ALIGNMENT, x64_linux_mangle, x64_lower,
-    x64_lower_func_ty, x64_codegen,
+    x64_lower_func_ty,
+    { .ty= CODEGEN_UNIT_TY_X64, .instr_sz = sizeof(struct x64_instr), .codegen = x64_codegen },
     x64_emit, write_elf, linux_link_objects, objdump_debug_disasm,
     x64_debug_print_codegen};

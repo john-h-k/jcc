@@ -47,6 +47,7 @@ enum parser_create_result parser_create(struct program *program,
 
 void parser_free(struct parser **parser) {
   lexer_free(&(*parser)->lexer);
+  var_table_free(&(*parser)->ty_table);
 
   arena_allocator_free(&(*parser)->arena);
   (*parser)->arena = NULL;

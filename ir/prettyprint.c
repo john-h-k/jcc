@@ -925,6 +925,22 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   fprintf(file, "    total_locals_size: %zu\n", irb->total_locals_size);
   fprintf(file, "    caller_stack_needed: %zu", irb->caller_stack_needed);
 
+  if (irb->reg_usage.num_nonvolatile_used) {
+    fprintf(file, "\n    nonvolatile_used: ");
+
+    fslogsl(file, "(");
+
+    for (size_t i = 0; i < irb->reg_usage.num_nonvolatile_used; i++) {
+      if (i + 1 != irb->reg_usage.num_nonvolatile_used) {
+        fslogsl(file, ", ");
+      }
+
+      debug_print_ir_reg(file, irb->reg_usage.nonvolatile_used[i]);
+    }
+
+    fslogsl(file, ")");
+  }
+
   if (irb->lcl_count) {
     fprintf(file, "\n\n");
     fprintf(file, "LOCALS: {\n");

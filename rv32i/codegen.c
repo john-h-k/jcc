@@ -43,7 +43,8 @@
     }                                                                          \
   }
 
-const char *rv32i_mangle(UNUSED struct arena_allocator *arena, const char *name) {
+const char *rv32i_mangle(UNUSED struct arena_allocator *arena,
+                         const char *name) {
   return name;
 }
 
@@ -51,8 +52,6 @@ struct rv32i_prologue_info {
   bool prologue_generated;
   size_t stack_size;
   size_t save_start;
-  unsigned long long saved_gp_registers;
-  unsigned long long saved_fp_registers;
 };
 
 struct codegen_state {
@@ -135,7 +134,8 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 static struct rv32i_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
-  DEBUG_ASSERT(idx < 32, "got invalid reg idx (ty=%d, idx=%zu)", op->reg.ty, op->reg.idx);
+  DEBUG_ASSERT(idx < 32, "got invalid reg idx (ty=%d, idx=%zu)", op->reg.ty,
+               op->reg.idx);
 
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
     TODO("non primitives (op %zu)", op->id);
@@ -385,27 +385,11 @@ static void codegen_prologue(struct codegen_state *state) {
       state->ir->total_locals_size + state->ir->caller_stack_needed;
   stack_size = ROUND_UP(stack_size, RV32I_STACK_ALIGNMENT);
 
-  unsigned long long saved_gp_registers = 0;
-  unsigned long long saved_fp_registers = 0;
+  size_t num_nonvolatile_used = ir->reg_usage.num_nonvolatile_used;
 
-  struct bitset_iter gp_iter =
-      bitset_iter(ir->reg_usage.gp_registers_used,
-                  RV32I_LINUX_TARGET.reg_info.gp_registers.num_volatile, true);
-
-  size_t i;
-  while (bitset_iter_next(&gp_iter, &i)) {
-    saved_gp_registers |= (1 << i);
-    stack_size += 4;
-  }
-
-  struct bitset_iter fp_iter =
-      bitset_iter(ir->reg_usage.fp_registers_used,
-                  RV32I_LINUX_TARGET.reg_info.fp_registers.num_volatile, true);
-
-  while (bitset_iter_next(&fp_iter, &i)) {
-    saved_fp_registers |= (1 << i);
-    stack_size += 8;
-  }
+  // save nonvol
+  stack_size += num_nonvolatile_used * 8;
+  stack_size = ROUND_UP(stack_size, RV32I_STACK_ALIGNMENT);
 
   // TODO: implement red zone. requires _subtracting_ from `sp` instead of
   // adding for all local addressing bool leaf =
@@ -413,8 +397,6 @@ static void codegen_prologue(struct codegen_state *state) {
   bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   struct rv32i_prologue_info info = {.prologue_generated = !leaf,
-                                     .saved_gp_registers = saved_gp_registers,
-                                     .saved_fp_registers = saved_fp_registers,
                                      .save_start = stack_size,
                                      .stack_size = stack_size};
 
@@ -439,43 +421,39 @@ static void codegen_prologue(struct codegen_state *state) {
   ssize_t stack_to_sub = info.stack_size;
   codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, -stack_to_sub);
 
-  size_t save_idx = 0;
+  for (size_t i = 0; i < num_nonvolatile_used; i++) {
+    struct ir_reg reg = ir->reg_usage.nonvolatile_used[i];
 
-  struct bitset_iter gp_reg_iter =
-      bitset_iter(ir->reg_usage.gp_registers_used,
-                  RV32I_LINUX_TARGET.reg_info.gp_registers.num_volatile, true);
-
-  size_t idx;
-  while (bitset_iter_next(&gp_reg_iter, &idx)) {
     // guaranteed to be mod 8
-    size_t offset = (info.save_start / 8) + save_idx++;
+    size_t offset = (info.save_start / 8) + i;
 
-    struct instr *save = alloc_instr(state->func);
-    save->rv32i->ty = RV32I_INSTR_TY_SW;
-    save->rv32i->sw = (struct rv32i_store){
-        .source = (struct rv32i_reg){.ty = RV32I_REG_TY_W,
-                                     .idx = translate_reg_idx(
-                                         idx, IR_REG_TY_INTEGRAL)},
-        .addr = STACK_PTR_REG,
-        .imm = offset};
-  }
+    switch (reg.ty) {
+    case IR_REG_TY_INTEGRAL: {
 
-  struct bitset_iter fp_reg_iter =
-      bitset_iter(ir->reg_usage.fp_registers_used,
-                  RV32I_LINUX_TARGET.reg_info.fp_registers.num_volatile, true);
-
-  while (bitset_iter_next(&fp_reg_iter, &idx)) {
-    // guaranteed to be mod 8
-    size_t offset = (info.save_start / 8) + save_idx++;
-
-    struct instr *save = alloc_instr(state->func);
-    save->rv32i->ty = RV32I_INSTR_TY_FSW;
-    save->rv32i->fsw = (struct rv32i_store){
-        .source =
-            (struct rv32i_reg){.ty = RV32I_REG_TY_F,
-                               .idx = translate_reg_idx(idx, IR_REG_TY_FP)},
-        .addr = STACK_PTR_REG,
-        .imm = offset};
+      struct instr *save = alloc_instr(state->func);
+      save->rv32i->ty = RV32I_INSTR_TY_SW;
+      save->rv32i->sw = (struct rv32i_store){
+          .source = (struct rv32i_reg){.ty = RV32I_REG_TY_W,
+                                       .idx = translate_reg_idx(
+                                           reg.idx, IR_REG_TY_INTEGRAL)},
+          .addr = STACK_PTR_REG,
+          .imm = offset};
+      break;
+    }
+    case IR_REG_TY_FP: {
+      struct instr *save = alloc_instr(state->func);
+      save->rv32i->ty = RV32I_INSTR_TY_FSD;
+      save->rv32i->fsw = (struct rv32i_store){
+          .source = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
+                                       .idx = translate_reg_idx(reg.idx,
+                                                                IR_REG_TY_FP)},
+          .addr = STACK_PTR_REG,
+          .imm = offset};
+      break;
+    }
+    default:
+      BUG("can't save this reg ty");
+    }
   }
 
   state->prologue_info = info;
@@ -511,49 +489,39 @@ static void codegen_epilogue(struct codegen_state *state) {
     return;
   }
 
-  unsigned long max_gp_saved = sizeof(prologue_info->saved_gp_registers) * 8 -
-                               lzcnt(prologue_info->saved_gp_registers);
+  for (size_t i = 0; i < state->ir->reg_usage.num_nonvolatile_used; i++) {
+    struct ir_reg reg = state->ir->reg_usage.nonvolatile_used[i];
 
-  size_t save_idx = 0;
-  for (size_t i = 0; i < max_gp_saved; i++) {
-    // FIXME: loop should start at i=first non volatile
-    if (!NTH_BIT(prologue_info->saved_gp_registers, i)) {
-      continue;
+    // guaranteed to be mod 8
+    size_t offset = (prologue_info->save_start / 8) + i;
+
+    switch (reg.ty) {
+    case IR_REG_TY_INTEGRAL: {
+      struct instr *restore = alloc_instr(state->func);
+      restore->rv32i->ty = RV32I_INSTR_TY_LW;
+      restore->rv32i->lw = (struct rv32i_load){
+          .imm = offset,
+          .dest = (struct rv32i_reg){.ty = RV32I_REG_TY_W,
+                                     .idx = translate_reg_idx(
+                                         reg.idx, IR_REG_TY_INTEGRAL)},
+          .addr = STACK_PTR_REG,
+      };
+      break;
     }
-
-    size_t offset = (prologue_info->save_start / 8) + save_idx++;
-
-    struct instr *restore = alloc_instr(state->func);
-    restore->rv32i->ty = RV32I_INSTR_TY_LW;
-    restore->rv32i->lw = (struct rv32i_load){
-        .imm = offset,
-        .dest =
-            (struct rv32i_reg){.ty = RV32I_REG_TY_W,
-                               .idx = translate_reg_idx(i, IR_REG_TY_INTEGRAL)},
-        .addr = STACK_PTR_REG,
-    };
-  }
-
-  unsigned long max_fp_saved = sizeof(prologue_info->saved_fp_registers) * 8 -
-                               lzcnt(prologue_info->saved_fp_registers);
-
-  save_idx = 0;
-  for (size_t i = 0; i < max_fp_saved; i++) {
-    // FIXME: loop should start at i=first non volatile
-    if (!NTH_BIT(prologue_info->saved_fp_registers, i)) {
-      continue;
+    case IR_REG_TY_FP: {
+      struct instr *restore = alloc_instr(state->func);
+      restore->rv32i->ty = RV32I_INSTR_TY_FLW;
+      restore->rv32i->flw = (struct rv32i_load){
+          .imm = offset,
+          .dest = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
+                                     .idx = translate_reg_idx(reg.idx, IR_REG_TY_FP)},
+          .addr = STACK_PTR_REG,
+      };
+      break;
     }
-
-    size_t offset = (prologue_info->save_start / 8) + save_idx++;
-
-    struct instr *restore = alloc_instr(state->func);
-    restore->rv32i->ty = RV32I_INSTR_TY_FLW;
-    restore->rv32i->flw = (struct rv32i_load){
-        .imm = offset,
-        .dest = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
-                                   .idx = translate_reg_idx(i, IR_REG_TY_FP)},
-        .addr = STACK_PTR_REG,
-    };
+    default:
+      BUG("can't save this reg ty");
+    }
   }
 
   size_t stack_to_add = prologue_info->stack_size;
@@ -1619,17 +1587,7 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
   }
   }
 }
-struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
-  struct codegen_unit *unit = arena_alloc(ir->arena, sizeof(*unit));
-  *unit = (struct codegen_unit){
-      .ty = CODEGEN_UNIT_TY_RV32I,
-      .instr_size = sizeof(struct rv32i_instr),
-      .num_entries = ir->num_globals,
-      .entries = arena_alloc(ir->arena,
-                             ir->num_globals * sizeof(struct codeen_entry *))};
-
-  arena_allocator_create(&unit->arena);
-
+void rv32i_codegen(struct codegen_unit *unit, struct ir_unit *ir) {
   struct ir_glb *glb = ir->first_global;
 
   {
@@ -1736,8 +1694,6 @@ struct codegen_unit *rv32i_codegen(struct ir_unit *ir) {
   //     walk_regs(&entry->func, check_reg_type_callback, &data);
   //   }
   // }
-
-  return unit;
 }
 
 static const char *GP_REG_ABI_NAMES[] = {

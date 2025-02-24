@@ -2920,6 +2920,9 @@ enum typechk_create_result typechk_create(const struct target *target,
 }
 
 void typechk_free(struct typechk **tchk) {
+  var_table_free(&(*tchk)->ty_table);
+  var_table_free(&(*tchk)->var_table);
+
   arena_allocator_free(&(*tchk)->arena);
   (*tchk)->arena = NULL;
   free(*tchk);

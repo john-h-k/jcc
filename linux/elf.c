@@ -380,8 +380,7 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
-  /* build relocation info */
-  struct reloc_info rinfo =
+  struct reloc_info info =
       build_reloc_info(args, entry_offsets);
 
   /* assign file offsets to sections in order:
@@ -397,11 +396,11 @@ static void write_elf_object(const struct build_object_args *args) {
   size_t data_off = offset;
   offset += total_data;
   size_t rela_text_off = offset;
-  offset += rinfo.num_text_reloc_instrs * sizeof(Elf64_Rela);
+  offset += info.num_text_reloc_instrs * sizeof(Elf64_Rela);
   size_t rela_const_off = offset;
-  offset += rinfo.num_const_data_reloc_instrs * sizeof(Elf64_Rela);
+  offset += info.num_const_data_reloc_instrs * sizeof(Elf64_Rela);
   size_t rela_data_off = offset;
-  offset += rinfo.num_data_reloc_instrs * sizeof(Elf64_Rela);
+  offset += info.num_data_reloc_instrs * sizeof(Elf64_Rela);
   size_t symtab_off = offset;
   offset += (args->num_entries + 1) * sizeof(Elf64_Sym);
   size_t strtab_off = offset;
@@ -589,13 +588,13 @@ static void write_elf_object(const struct build_object_args *args) {
 
   /* relocations */
   fseek(file, rela_text_off, SEEK_SET);
-  write_relocations_elf(file, args, sym_id_to_idx, rinfo.text_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, info.text_relocs,
                         args->compile_args->target);
   fseek(file, rela_const_off, SEEK_SET);
-  write_relocations_elf(file, args, sym_id_to_idx, rinfo.const_data_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, info.const_data_relocs,
                         args->compile_args->target);
   fseek(file, rela_data_off, SEEK_SET);
-  write_relocations_elf(file, args, sym_id_to_idx, rinfo.data_relocs,
+  write_relocations_elf(file, args, sym_id_to_idx, info.data_relocs,
                         args->compile_args->target);
 
   /* string table */
@@ -637,7 +636,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[4].sh_name = 21;                                                        \
   shdr[4].sh_type = SHT_RELA;                                                  \
   shdr[4].sh_offset = rela_text_off;                                           \
-  shdr[4].sh_size = rinfo.num_text_reloc_instrs * sizeof(Elf##sz##_Rela);      \
+  shdr[4].sh_size = info.num_text_reloc_instrs * sizeof(Elf##sz##_Rela);      \
   shdr[4].sh_link = 7;                                                         \
   shdr[4].sh_info = 1;                                                         \
   shdr[4].sh_addralign = 8;                                                    \
@@ -648,7 +647,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[5].sh_type = SHT_RELA;                                                  \
   shdr[5].sh_offset = rela_const_off;                                          \
   shdr[5].sh_size =                                                            \
-      rinfo.num_const_data_reloc_instrs * sizeof(Elf##sz##_Rela);              \
+      info.num_const_data_reloc_instrs * sizeof(Elf##sz##_Rela);              \
   shdr[5].sh_link = 7;                                                         \
   shdr[5].sh_info = 2;                                                         \
   shdr[5].sh_addralign = 8;                                                    \
@@ -657,7 +656,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[6].sh_name = 45;                                                        \
   shdr[6].sh_type = SHT_RELA;                                                  \
   shdr[6].sh_offset = rela_data_off;                                           \
-  shdr[6].sh_size = rinfo.num_data_reloc_instrs * sizeof(Elf##sz##_Rela);      \
+  shdr[6].sh_size = info.num_data_reloc_instrs * sizeof(Elf##sz##_Rela);      \
   shdr[6].sh_link = 7;                                                         \
   shdr[6].sh_info = 3;                                                         \
   shdr[6].sh_addralign = 8;                                                    \
@@ -719,6 +718,10 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   fclose(file);
+
+  vector_free(&info.text_relocs);
+  vector_free(&info.const_data_relocs);
+  vector_free(&info.data_relocs);
 }
 
 void write_elf(const struct build_object_args *args) { write_elf_object(args); }

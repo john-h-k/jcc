@@ -578,6 +578,10 @@ static void write_segment_command(FILE *file,
     const struct symbol *symbol = &args->entries[i].symbol;
     fwrite(symbol->name, strlen(symbol->name) + 1, 1, file);
   }
+
+  vector_free(&info.text_relocs);
+  vector_free(&info.const_data_relocs);
+  vector_free(&info.data_relocs);
 }
 
 void write_macho(const struct build_object_args *args) {

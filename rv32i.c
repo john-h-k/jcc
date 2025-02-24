@@ -25,7 +25,7 @@ const struct target RV32I_LINUX_TARGET = {
     rv32i_mangle,
     rv32i_lower,
     rv32i_lower_func_ty,
-    rv32i_codegen,
+    { .ty= CODEGEN_UNIT_TY_RV32I, .instr_sz = sizeof(struct rv32i_instr), .codegen = rv32i_codegen },
     rv32i_emit,
     // rv32i_write_object,
     write_elf,

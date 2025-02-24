@@ -538,7 +538,7 @@ typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg,
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 
-struct codegen_unit *aarch64_codegen(struct ir_unit *ir);
+void aarch64_codegen(struct codegen_unit *unit, struct ir_unit *ir);
 void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit);
 
 #endif

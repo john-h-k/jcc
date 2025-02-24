@@ -2946,7 +2946,7 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-static struct ir_func_builder *
+static struct ir_func *
 build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
                       struct td_funcdef *def,
                       struct var_refs *global_var_refs) {
@@ -3166,7 +3166,11 @@ build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
     basicblock = basicblock->succ;
   }
 
-  return builder;
+  vector_free(&builder->jumps);
+  vector_free(&builder->switch_cases);
+  var_refs_free(&builder->var_refs);
+
+  return builder->func;
 }
 
 // static struct ir_var_value build_ir_for_zero_var(struct ir_unit *iru,
@@ -3707,7 +3711,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                               def->storage_class_specifier,
                               &def->var_declaration);
 
-      struct ir_func_builder *builder =
+      struct ir_func *func =
           build_ir_for_function(iru, arena, def, global_var_refs);
 
       struct var_key key = {.name = def->var_declaration.var.identifier,
@@ -3715,7 +3719,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
       struct var_ref *ref = var_refs_get(global_var_refs, &key);
       ref->glb->def_ty = IR_GLB_DEF_TY_DEFINED;
-      ref->glb->func = builder->func;
+      ref->glb->func = func;
 
       break;
     }
@@ -3739,6 +3743,8 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
     glb = glb->succ;
   }
+
+  var_refs_free(&global_var_refs);
 
   return iru;
 }

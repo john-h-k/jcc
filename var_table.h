@@ -26,8 +26,8 @@ struct var_table {
 };
 
 struct var_table_scope {
-  struct var_table_scope *prev;
-  struct var_table_scope *next;
+  struct var_table_scope *pred;
+  struct var_table_scope *succ;
 
   // vector of `var_table_entry`
   // change to hash eventually?
@@ -37,6 +37,7 @@ struct var_table_scope {
 };
 
 struct var_table var_table_create(struct arena_allocator *arena);
+void var_table_free(struct var_table *var_table);
 struct var_table_entry *var_table_create_entry(struct var_table *var_table,
                                                const char *name);
 

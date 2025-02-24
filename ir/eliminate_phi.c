@@ -20,17 +20,17 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
   struct ir_op *last =
       early_moves ? basicblock->first->first : basicblock->last->last;
 
-  struct bitset *reg_usage;
+  // size_t next_free;
   struct ir_var_ty lcl_ty;
   struct reg_set_info reg_info;
   switch (reg_ty) {
   case IR_REG_TY_INTEGRAL:
-    reg_usage = irb->reg_usage.gp_registers_used;
+    // next_free = irb->reg_usage.num_volatile_used;
     lcl_ty = var_ty_for_pointer_size(irb->unit);
     reg_info = irb->unit->target->reg_info.gp_registers;
     break;
   case IR_REG_TY_FP:
-    reg_usage = irb->reg_usage.fp_registers_used;
+    // next_free = irb->reg_usage.num_volatile_used;
     lcl_ty = IR_VAR_TY_F64;
     reg_info = irb->unit->target->reg_info.fp_registers;
     break;
@@ -40,7 +40,9 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   struct ir_var_ty store_var_ty;
 
-  size_t next_free = bitset_length(reg_usage) - bitset_lzcnt(reg_usage);
+  // size_t next_free = bitset_length(reg_usage) - bitset_lzcnt(reg_usage);
+  size_t next_free = SIZE_MAX;
+  // FIXME: the "try find free vol reg" logic is disabled 
 
   bool has_free_reg;
   struct ir_reg free_reg;

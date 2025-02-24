@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "bitset.h"
+#include "hashtbl.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "liveness.h"
@@ -230,6 +231,8 @@ struct lsra_reg_info {
   size_t num_fp_regs;
   size_t gp_spill_reg;
   size_t fp_spill_reg;
+
+  struct hashtbl *nonvolatile_registers_used;
 };
 
 struct fixup_spills_data {
@@ -443,23 +446,22 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
 #define ADD_REGS(start, end, reg_ty, name)                                     \
   for (size_t i = start; i > end; i--) {                                       \
-    size_t idx = i - 1;\
-    if (info->has_ssp && info->ssp_reg == idx) {                                 \
+    size_t idx = i - 1;                                                        \
+    if (info->has_ssp && info->ssp_reg == idx) {                               \
       continue;                                                                \
     }                                                                          \
                                                                                \
     struct reg_state reg = {                                                   \
-        .live = NULL, .reg = {.ty = reg_ty, .idx = idx}, .free = true};          \
+        .live = NULL, .reg = {.ty = reg_ty, .idx = idx}, .free = true};        \
                                                                                \
     vector_push_back(state.name##_reg_states, &reg);                           \
-    vector_push_back(state.name##_reg_pool, &idx);                               \
+    vector_push_back(state.name##_reg_pool, &idx);                             \
   }
 
   // prioritise volatile
   // TODO: make each interval select vol/nonvol preference based on live range
   ADD_REGS(info->num_gp_regs, 0, IR_REG_TY_INTEGRAL, gp);
   ADD_REGS(info->num_fp_regs, 0, IR_REG_TY_FP, fp);
-
 
   BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
@@ -494,7 +496,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         }
 
         if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
-            (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_gp)) {
+            (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_fp)) {
 
           struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
           lcl->flags |= IR_LCL_FLAG_SPILL;
@@ -562,7 +564,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       continue;
     }
 
-    struct bitset *all_used_reg_pool;
     struct vector *reg_pool;
     struct vector *reg_states;
     enum ir_reg_ty reg_ty;
@@ -571,13 +572,11 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
       reg_states = state.gp_reg_states;
-      all_used_reg_pool = irb->reg_usage.gp_registers_used;
       spill_reg = info->gp_spill_reg;
     } else if (var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
       reg_states = state.fp_reg_states;
-      all_used_reg_pool = irb->reg_usage.fp_registers_used;
       spill_reg = info->fp_spill_reg;
     } else {
       BUG("don't know what register type to allocate for op %zu",
@@ -638,7 +637,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
       struct ir_reg preferred;
       if (try_get_preferred_reg(&state, reg_ty, interval, &preferred) &&
-          !NTH_BIT(fixed_regs, preferred.idx) && ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
+          !NTH_BIT(fixed_regs, preferred.idx) &&
+          ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
         pref_reg = preferred.idx;
       } else {
         for (size_t j = vector_length(reg_pool); j; j--) {
@@ -658,7 +658,10 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       struct ir_reg reg = {.ty = reg_ty, .idx = free_slot};
       mark_register_live(&state, reg, interval->op);
 
-      bitset_set(all_used_reg_pool, free_slot, true);
+      if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx >= info->num_volatile_gp) ||
+          (reg.ty == IR_REG_TY_FP && reg.idx >= info->num_volatile_fp)) {
+        hashtbl_insert(info->nonvolatile_registers_used, &reg, NULL);
+      }
 
       interval->op->reg = (struct ir_reg){.ty = reg_ty, .idx = free_slot};
 
@@ -695,16 +698,10 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
 */
 void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
-  irb->reg_usage = (struct ir_reg_usage){
-      .fp_registers_used =
-          bitset_create(reg_info.fp_registers.num_volatile +
-                            reg_info.fp_registers.num_nonvolatile,
-                        false),
-      .gp_registers_used =
-          bitset_create(reg_info.gp_registers.num_volatile +
-                            reg_info.gp_registers.num_nonvolatile,
-                        false),
-  };
+  // FIXME: is `NULL` safe here? padding may be problem...
+
+  struct hashtbl *nonvolatile_registers_used =
+      hashtbl_create(sizeof(struct ir_reg), 0, NULL, NULL);
 
   bool has_ssp = false;
   size_t ssp_reg = 0;
@@ -717,7 +714,9 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     has_ssp = true;
     ssp_reg = reg_info.ssp;
-    bitset_set(irb->reg_usage.gp_registers_used, ssp_reg, true);
+
+    struct ir_reg ssp_reg_reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ssp_reg};
+    hashtbl_insert(nonvolatile_registers_used, &ssp_reg_reg, NULL);
   }
 
   // remove 1 for spill reg
@@ -738,6 +737,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
       .num_fp_regs = num_fp_regs,
       .gp_spill_reg = gp_spill_reg,
       .fp_spill_reg = fp_spill_reg,
+
+      .nonvolatile_registers_used = nonvolatile_registers_used,
   };
 
   BEGIN_SUB_STAGE("REGALLOC");
@@ -763,4 +764,24 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (log_enabled()) {
     debug_print_ir_func(stderr, irb, print_ir_intervals, NULL);
   }
+
+  size_t num_nonvolatile_used = hashtbl_size(nonvolatile_registers_used);
+
+  irb->reg_usage = (struct ir_reg_usage){
+    .nonvolatile_used = arena_alloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) * num_nonvolatile_used),
+    .num_nonvolatile_used = num_nonvolatile_used
+  };
+
+  struct hashtbl_iter *iter = hashtbl_iter(nonvolatile_registers_used);
+  struct hashtbl_entry entry;
+  size_t idx = 0;
+  while (hashtbl_iter_next(iter, &entry)) {
+    DEBUG_ASSERT(idx < num_nonvolatile_used, "hashtbl size mismatch");
+
+    const struct ir_reg *reg = entry.key;
+
+    irb->reg_usage.nonvolatile_used[idx++] = *reg;
+  }
+
+  DEBUG_ASSERT(idx == num_nonvolatile_used, "hashtbl size mismatch");
 }

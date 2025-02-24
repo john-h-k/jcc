@@ -126,7 +126,10 @@ typedef struct ir_func_info (*target_lower_func_ty)(struct ir_func *func,
                                              struct ir_var_func_ty func_ty,
                                              struct ir_op **args,
                                              size_t num_args);
-typedef struct codegen_unit *(*target_codegen)(struct ir_unit *unit);
+
+struct codegen_unit;
+
+typedef void (*target_codegen)(struct codegen_unit *unit, struct ir_unit *ir);
 typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
@@ -141,6 +144,19 @@ enum target_id {
   TARGET_ID_RV32I_LINUX,
 };
 
+enum codegen_unit_ty {
+  CODEGEN_UNIT_TY_AARCH64,
+  CODEGEN_UNIT_TY_X64,
+  CODEGEN_UNIT_TY_EEP,
+  CODEGEN_UNIT_TY_RV32I,
+};
+
+struct codegen_info {
+  enum codegen_unit_ty ty;
+  size_t instr_sz;
+  target_codegen codegen;
+};
+
 struct target {
   enum target_id target_id;
   enum target_lp_sz lp_sz;
@@ -149,7 +165,7 @@ struct target {
   mangle mangle;
   target_lower lower;
   target_lower_func_ty lower_func_ty;
-  target_codegen codegen;
+  struct codegen_info codegen;
   emit_function emit_function;
   build_object build_object;
   link_objects link_objects;

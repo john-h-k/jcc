@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "bitset.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "log.h"
 #include "util.h"
 
@@ -116,36 +117,14 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
   fslogsl(file, " - LIVE REGS (");
 
-  struct bitset_iter gp_iter =
-      bitset_iter(reg_usage->gp_registers_used, 0, true);
-  struct bitset_iter fp_iter =
-      bitset_iter(reg_usage->fp_registers_used, 0, true);
-
-  size_t i;
-  bool first = true;
-  while (bitset_iter_next(&gp_iter, &i)) {
-    if (first) {
-      first = false;
+  for (size_t i = 0; i < reg_usage->num_nonvolatile_used; i++) {
+    if (i + 1 != reg_usage->num_nonvolatile_used) {
       fslogsl(file, ", ");
     }
 
-    fslogsl(file, "R%zu", i);
+    debug_print_ir_reg(file, reg_usage->nonvolatile_used[i]);
   }
 
-  if (bitset_any(reg_usage->gp_registers_used, true) &&
-      bitset_any(reg_usage->fp_registers_used, true)) {
-    fslogsl(file, ", ");
-  }
-
-  first = true;
-  while (bitset_iter_next(&fp_iter, &i)) {
-    if (first) {
-      first = false;
-      fslogsl(file, ", ");
-    }
-
-    fslogsl(file, "F%zu", i);
-  }
   fslogsl(file, ")");
 }
 

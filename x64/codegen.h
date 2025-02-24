@@ -422,7 +422,7 @@ typedef void(walk_regs_callback)(struct instr *instr, struct x64_reg reg,
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 
-struct codegen_unit *x64_codegen(struct ir_unit *ir);
+void x64_codegen(struct codegen_unit *unit, struct ir_unit *ir);
 
 void x64_debug_print_instr(FILE *file, const struct codegen_function *func,
                            const struct instr *instr);

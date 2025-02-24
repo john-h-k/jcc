@@ -52,10 +52,11 @@ static void build_interf_graph(struct graphcol_state *state,
 
   struct bitset *all_registers = bitset_create(total_reg, false);
   if (reg_ty == IR_REG_TY_INTEGRAL) {
-    state->irb->reg_usage.gp_registers_used = all_registers;
+    // state->irb->reg_usage.gp_registers_used = all_registers;
   } else {
-    state->irb->reg_usage.fp_registers_used = all_registers;
+    // state->irb->reg_usage.fp_registers_used = all_registers;
   }
+  TODO("registers used in graphcol");
 
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &data->intervals[i];

@@ -89,7 +89,20 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
 }
 
 struct codegen_unit *codegen(struct ir_unit *unit) {
-  struct codegen_unit *codegen_unit = unit->target->codegen(unit);
+  struct codegen_unit *codegen_unit = arena_alloc(unit->arena, sizeof(*unit));
+
+  struct codegen_info info = unit->target->codegen;
+
+  *codegen_unit = (struct codegen_unit){
+      .ty = info.ty,
+      .instr_size = info.instr_sz,
+      .num_entries = unit->num_globals,
+      .entries = arena_alloc(unit->arena,
+                             unit->num_globals * sizeof(struct codegen_entry *))};
+
+  arena_allocator_create(&codegen_unit->arena);
+
+  info.codegen(codegen_unit, unit);
 
   struct ir_glb *glb = unit->first_global;
 
@@ -124,4 +137,10 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
   }
 
   return codegen_unit;
+}
+
+void codegen_free(struct codegen_unit **unit) {
+  arena_allocator_free(&(*unit)->arena);
+
+  *unit = NULL;
 }

@@ -39,6 +39,20 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
   return tbl;
 }
 
+void hashtbl_free(struct hashtbl **hashtbl) {
+  size_t num_buckets = vector_length((*hashtbl)->buckets);
+  for (size_t i = 0; i < num_buckets; i++) {
+    struct bucket *bucket = vector_get((*hashtbl)->buckets, i);
+
+    vector_free(&bucket->elems);
+  }
+
+  vector_free(&(*hashtbl)->buckets);
+
+  free(*hashtbl);
+  *hashtbl = NULL;
+}
+
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl) {
   struct hashtbl_iter *iter = nonnull_malloc(sizeof(*iter));
   *iter =
@@ -53,7 +67,7 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
   size_t num_buckets = vector_length(hashtbl->buckets);
 
   if (hashtbl_iter->bucket_idx >= num_buckets) {
-    return false;
+    goto finished;
   }
 
   struct bucket *bucket =
@@ -66,13 +80,13 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
   }
 
   if (vector_empty(bucket->elems)) {
-    return false;
+    goto finished;
   }
 
   size_t num_elems = vector_length(bucket->elems);
 
   if (hashtbl_iter->elem_idx >= num_elems) {
-    return false;
+    goto finished;
   }
 
   void *triple = vector_get(bucket->elems, hashtbl_iter->elem_idx++);
@@ -88,6 +102,10 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
   };
 
   return true;
+
+finished:
+  free(hashtbl_iter);
+  return false;
 }
 
 size_t hashtbl_size(struct hashtbl *hashtbl) { return hashtbl->len; }
@@ -179,6 +197,8 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
   } else {
     struct bucket *bucket = lookup.bucket;
     triple = vector_push_back(bucket->elems, NULL);
+
+    hashtbl->len++;
   }
 
   *(hash_t *)triple = hash;
@@ -190,8 +210,6 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
   if (data) {
     memcpy(data_entry, data, hashtbl->element_size);
   }
-
-  hashtbl->len++;
 }
 
 void hashtbl_insert(struct hashtbl *hashtbl, const void *key,
