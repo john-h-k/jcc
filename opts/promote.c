@@ -408,6 +408,10 @@ static void opts_promote_func(struct ir_func *func) {
   bool *candidates =
       arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
 
+    if (!candidates) {
+      return;
+    }
+
   memset(candidates, true, sizeof(*candidates) * func->lcl_count);
 
   struct vector **lcl_uses =

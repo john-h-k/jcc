@@ -799,7 +799,6 @@ void eliminate_redundant_ops(struct ir_func *func) {
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
-    struct ir_basicblock *basicblock = op->stmt->basicblock;
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (op->mov.value && ir_reg_eq(op->reg, op->mov.value->reg)) {
@@ -812,13 +811,15 @@ void eliminate_redundant_ops(struct ir_func *func) {
         detach_ir_op(func, op);
       }
       break;
-    case IR_OP_TY_BR:
-      DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
-                   "br op in non MERGE bb");
-      if (basicblock->succ == basicblock->merge.target) {
-        detach_ir_op(func, op);
-      }
-      break;
+    // case IR_OP_TY_BR: {
+    // struct ir_basicblock *basicblock = op->stmt->basicblock;
+    //   DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+    //                "br op in non MERGE bb");
+    //   if (basicblock->succ == basicblock->merge.target) {
+    //     detach_ir_op(func, op);
+    //   }
+    //   break;
+    // }
     default:
       if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
         detach_ir_op(func, op);
