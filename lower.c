@@ -741,6 +741,9 @@ static void lower_params(struct ir_func *func) {
             load->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_SIDE_EFFECTS;
             last = load;
           }
+
+          detach_ir_op(func, op->ret.value);
+          op->ret.value = NULL;
         } else {
           struct ir_op *gather = op->ret.value;
 
