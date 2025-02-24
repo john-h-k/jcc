@@ -98,7 +98,7 @@ enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty) {
 }
 
 bool op_has_side_effects(const struct ir_op *op) {
-  if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+  if (op->flags & (IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG)) {
     return true;
   }
 
@@ -800,6 +800,10 @@ void eliminate_redundant_ops(struct ir_func *func) {
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
+   if (op_has_side_effects(op)) {
+     continue;
+   }
+
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (op->mov.value && op->reg.ty != IR_REG_TY_NONE && ir_reg_eq(op->reg, op->mov.value->reg)) {
@@ -822,7 +826,7 @@ void eliminate_redundant_ops(struct ir_func *func) {
     //   break;
     // }
     default:
-      if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
+      if (!use_map.op_use_datas[op->id].num_uses) {
         detach_ir_op(func, op);
       }
       break;
