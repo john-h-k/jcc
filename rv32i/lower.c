@@ -99,7 +99,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
           .regs[0] = {.reg = {.ty = IR_REG_TY_FP, .idx = 0}, .size = info.size},
       };
     } else {
-      size_t num_regs = (info.size + 7) / 8;
+      size_t num_regs = (info.size + 3) / 4;
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
@@ -108,7 +108,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
       for (size_t i = 0; i < num_regs; i++) {
         ret_info->regs[i] = (struct ir_param_reg){
-            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = i}, .size = 8};
+            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = i}, .size = 4};
       }
     }
   }
