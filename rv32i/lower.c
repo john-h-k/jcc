@@ -6,8 +6,7 @@
 
 static bool try_get_hfa_info(struct ir_func *func,
                              const struct ir_var_ty *var_ty,
-                             struct ir_var_ty *member_ty, size_t *num_members,
-                             size_t *member_size) {
+                             struct ir_var_ty *member_ty, size_t *num_members) {
   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
     return false;
   }
@@ -34,20 +33,6 @@ static bool try_get_hfa_info(struct ir_func *func,
     if (!var_ty_is_fp(&var_ty->aggregate.fields[i])) {
       return false;
     }
-  }
-
-  switch (member_ty->primitive) {
-  case IR_VAR_PRIMITIVE_TY_F16:
-    *member_size = 2;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F32:
-    *member_size = 4;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F64:
-    *member_size = 8;
-    break;
-  default:
-    unreachable();
   }
 
   *num_members = var_ty->aggregate.num_fields;
@@ -79,17 +64,20 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
     struct ir_var_ty member_ty;
-    size_t num_hfa_members, hfa_member_size;
-    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members,
-                         &hfa_member_size)) {
+    size_t num_hfa_members;
+    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members
+                         )) {
       // nop
       *ret_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_REGISTER,
                                          .var_ty = func_ty.ret_ty,
                                          .num_regs = num_hfa_members};
 
+      DEBUG_ASSERT(var_ty_is_aggregate(func_ty.ret_ty) && func_ty.ret_ty->aggregate.num_fields == num_hfa_members, "hfa not expected");
       for (size_t i = 0; i < num_hfa_members; i++) {
+        struct ir_var_ty *member = &func_ty.ret_ty->aggregate.fields[i];
+
         ret_info->regs[i] = (struct ir_param_reg){
-            .reg = {.ty = IR_REG_TY_FP, .idx = i}, .size = hfa_member_size};
+            .reg = {.ty = IR_REG_TY_FP, .idx = i}, .size = var_ty_info(func->unit, member).size};
       }
     } else if (info.size > 8) {
       ret_ty = IR_VAR_TY_NONE;

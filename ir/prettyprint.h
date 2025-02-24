@@ -84,4 +84,7 @@ void debug_print_ir_var(FILE *file,
 
 void debug_print_ir_object(FILE *file, struct ir_unit *unit, const struct ir_object *object);
 
+void debug_print_func_info(FILE *file, struct ir_unit *iru,
+                                  const struct ir_func_info *func_info);
+
 #endif
