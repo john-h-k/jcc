@@ -319,9 +319,9 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
           .data = data,
           .len_data = len,
           .symbol = symbol,
-          .relocations = vector_head(relocs),
-          .num_relocations = vector_length(relocs),
       };
+
+      CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations, entries[i].relocations);
       break;
     }
     }
