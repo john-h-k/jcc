@@ -98,7 +98,7 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
       .instr_size = info.instr_sz,
       .num_entries = unit->num_globals,
       .entries = arena_alloc(unit->arena,
-                             unit->num_globals * sizeof(struct codegen_entry *))};
+                             unit->num_globals * sizeof(struct codegen_entry))};
 
   arena_allocator_create(&codegen_unit->arena);
 

@@ -2043,9 +2043,9 @@ static void codegen_epilogue(struct codegen_state *state) {
       restore->aarch64->ldr_imm = (struct aarch64_load_imm){
           .mode = AARCH64_ADDRESSING_MODE_OFFSET,
           .imm = offset,
-          .dest =
-              (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
-                                   .idx = translate_reg_idx(reg.idx, IR_REG_TY_FP)},
+          .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
+                                       .idx = translate_reg_idx(reg.idx,
+                                                                IR_REG_TY_FP)},
           .addr = STACK_PTR_REG,
       };
       break;
@@ -2482,16 +2482,19 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
 
     codegen_write_var_value(ir, relocs, 0, &var->value, data);
 
+    struct codegen_data codegen_data = {.data = data, .len_data = len};
+
+    CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
+                          codegen_data.relocs);
+
     // TODO: handle const data
     return (struct codegen_entry){
         .ty = CODEGEN_ENTRY_TY_DATA,
         .glb_id = id,
         .alignment = info.alignment,
         .name = name,
-        .data = (struct codegen_data){.data = data,
-                                      .len_data = len,
-                                      .relocs = vector_head(relocs),
-                                      .num_relocs = vector_length(relocs)}};
+        .data = codegen_data,
+    };
   }
   }
 }

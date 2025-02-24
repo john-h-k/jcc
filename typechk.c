@@ -679,6 +679,8 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                                  .bitfield_width = bitfield_width};
   }
 
+  vector_free(&var_decls);
+
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
                        .scope = cur_scope(&tchk->ty_table)};
@@ -2750,6 +2752,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       .inits = arena_alloc(tchk->arena, vector_byte_size(inits))};
 
   vector_copy_to(inits, td_init_list.inits);
+  vector_free(&inits);
 
   return td_init_list;
 }

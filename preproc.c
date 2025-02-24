@@ -1037,8 +1037,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       outer_enabled = false;
     }
 
-    directive_tokens = vector_create(sizeof(struct preproc_token));
-
     struct preproc_token directive;
     size_t num_directive_tokens;
 
@@ -1057,6 +1055,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   } while (0)
 
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
+      directive_tokens = vector_create(sizeof(struct preproc_token));
+
       preproc_next_raw_token(preproc, &directive);
 
       if (directive.ty != PREPROC_TOKEN_TY_IDENTIFIER) {
@@ -1113,8 +1113,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         }
         continue;
       }
-
-      // TODO: elifdef, elifndef
     }
 
     if (!enabled) {
@@ -1151,7 +1149,19 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             .value = {.ty = PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
                       .vec = directive_tokens}};
 
-        hashtbl_insert(preproc->defines, &ident, &define);
+        // don't free them
+        directive_tokens = NULL;
+
+        struct preproc_define *def = hashtbl_lookup(preproc->defines, &ident);
+        if (def) {
+          if (def->value.ty == PREPROC_DEFINE_VALUE_TY_TOKEN_VEC) {
+            vector_free(&def->value.vec);
+          }
+
+          *def = define;
+        } else {
+          hashtbl_insert(preproc->defines, &ident, &define);
+        }
       } else if (token_streq(directive, "undef")) {
         UNEXPANDED_DIR_TOKENS();
 
@@ -1164,6 +1174,12 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         struct sized_str ident = {.str = def_name.text,
                                   .len = text_span_len(&def_name.span)};
+
+        // FIXME: inefficient lookup + remove
+        struct preproc_define *def = hashtbl_lookup(preproc->defines, &ident);
+        if (def->value.ty == PREPROC_DEFINE_VALUE_TY_TOKEN_VEC) {
+          vector_free(&def->value.vec);
+        }
 
         hashtbl_remove(preproc->defines, &ident);
       } else if (token_streq(directive, "include")) {
@@ -1283,11 +1299,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
       continue;
     }
 
-    if (directive_tokens) {
-      vector_free(&directive_tokens);
-    }
+    break;
+  }
 
-    return;
+  if (directive_tokens) {
+    vector_free(&directive_tokens);
   }
 }
 

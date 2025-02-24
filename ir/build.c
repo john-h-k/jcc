@@ -909,7 +909,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     phi->var_ty = var_ty;
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
-        .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry *) * 2)};
+        .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry) * 2)};
 
     phi->phi.values[0] = (struct ir_phi_entry){
         .basicblock = true_op->stmt->basicblock, .value = true_op};
@@ -1083,7 +1083,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   phi->var_ty = var_ty;
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
-      .values = arena_alloc(irb->arena, sizeof(struct ir_op *) * 2),
+      .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
   };
 
   phi->phi.values[0] =
@@ -1204,8 +1204,9 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   struct ir_op **args =
       arena_alloc(irb->arena, sizeof(struct ir_op *) * call->arg_list.num_args);
+
   struct ir_var_ty *arg_var_tys = arena_alloc(
-      irb->arena, sizeof(struct ir_var_ty *) * call->arg_list.num_args);
+      irb->arena, sizeof(struct ir_var_ty) * call->arg_list.num_args);
 
   size_t num_non_variadic_args = call->target->var_ty.func.num_params;
 
@@ -1919,6 +1920,8 @@ build_ir_for_switch(struct ir_func_builder *irb,
     switch (jump->ty) {
     case IR_JUMP_TY_NEW_LOOP:
       // end
+      vector_free(&cases);
+      vector_free(&continues);
       return after_body_bb;
     case IR_JUMP_TY_BREAK: {
       make_basicblock_merge(irb->func, jump->basicblock, after_body_bb);
@@ -1937,6 +1940,9 @@ build_ir_for_switch(struct ir_func_builder *irb,
 
   // propogate the `continue`s to the next level up
   vector_extend(irb->jumps, vector_head(continues), vector_length(continues));
+
+  vector_free(&continues);
+  vector_free(&cases);
 
   return after_body_bb;
 }
@@ -2480,6 +2486,8 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
 
     head = new_head;
   }
+
+  vector_free(&init_ranges);
 }
 
 static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
@@ -2897,6 +2905,8 @@ static void find_phi_exprs(struct ir_func_builder *irb, struct ir_op *phi) {
 
   gen_var_phis(irb, basicblock_ops_for_var, phi_builds, phi->metadata,
                &phi->var_ty);
+
+  vector_free(&phi_builds);
 }
 
 struct validate_metadata {
@@ -3416,6 +3426,7 @@ build_init_list_layout(struct ir_unit *iru,
       .inits = arena_alloc(iru->arena, vector_byte_size(inits))};
 
   vector_copy_to(inits, layout.inits);
+  vector_free(&inits);
 
   return layout;
 }
