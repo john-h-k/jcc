@@ -773,6 +773,8 @@ static void lower_params(struct ir_func *func) {
             last = mov;
           }
 
+          op->ret.value = NULL;
+
           detach_ir_op(func, gather);
         }
       } else {
