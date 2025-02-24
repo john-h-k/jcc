@@ -8,12 +8,12 @@
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "ir/validate.h"
-#include "opts/instr_comb.h"
-#include "opts/cnst_fold.h"
-#include "opts/promote.h"
 #include "log.h"
 #include "lower.h"
 #include "lsra.h"
+#include "opts/cnst_fold.h"
+#include "opts/instr_comb.h"
+#include "opts/promote.h"
 #include "parse.h"
 #include "preproc.h"
 #include "target.h"
@@ -34,7 +34,8 @@ struct compiler {
 };
 
 enum compiler_create_result
-create_compiler(struct program *program, const struct target *target, const char *output, const char *path,
+create_compiler(struct program *program, const struct target *target,
+                const char *output, const char *path,
                 const struct compile_args *args, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
@@ -70,8 +71,7 @@ create_compiler(struct program *program, const struct target *target, const char
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-static void debug_print_stage(struct ir_unit *ir,
-                              const char *name) {
+static void debug_print_stage(struct ir_unit *ir, const char *name) {
   slog("\n\n----------  %s  ----------\n", name);
   debug_print_ir(stderr, ir, NULL, NULL);
 }
@@ -149,7 +149,6 @@ enum compile_result compile(struct compiler *compiler) {
     ir =
         build_ir_for_translationunit(target, compiler->typechk, compiler->arena,
                                      &typechk_result.translation_unit);
-
 
     if (log_enabled()) {
       debug_print_stage(ir, "ir");
@@ -252,7 +251,9 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         ir_order_basicblocks(glb->func);
-        eliminate_redundant_ops(glb->func, ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES | ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
+        eliminate_redundant_ops(glb->func,
+                                ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
+                                    ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
         rebuild_ids(glb->func);
         break;
       }
@@ -287,18 +288,18 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   struct emitted_unit unit;
-  {
-    COMPILER_STAGE(EMIT);
 
-    struct codegen_unit *codegen_unit = codegen(ir);
+  COMPILER_STAGE(EMIT);
 
-    if (log_enabled() && target->debug_print_codegen) {
-      debug_print_stage(ir, "emit");
-      target->debug_print_codegen(stderr, codegen_unit);
-    }
+  struct codegen_unit *codegen_unit = codegen(ir);
 
-    if (compiler->args.build_asm_file) {
-      if (target->debug_print_codegen) {
+  if (log_enabled() && target->debug_print_codegen) {
+    debug_print_stage(ir, "emit");
+    target->debug_print_codegen(stderr, codegen_unit);
+  }
+
+  if (compiler->args.build_asm_file) {
+    if (target->debug_print_codegen) {
       FILE *file = fopen(compiler->output, "w");
 
       if (!file) {
@@ -310,17 +311,13 @@ enum compile_result compile(struct compiler *compiler) {
       fclose(file);
 
       return COMPILE_RESULT_SUCCESS;
-      } else {
-        err("assembly not supported for this architecture");
-        return COMPILE_RESULT_FAILURE;
-      }
+    } else {
+      err("assembly not supported for this architecture");
+      return COMPILE_RESULT_FAILURE;
     }
-
-    unit = target->emit_function(codegen_unit);
-
-    // TODO: we should neaten all the lifetimes to make freeing more clear
-    codegen_free(&codegen_unit);
   }
+
+  unit = target->emit_function(codegen_unit);
 
   struct build_object_args args = {.compile_args = &compiler->args,
                                    .output = compiler->output,
@@ -341,6 +338,9 @@ enum compile_result compile(struct compiler *compiler) {
       }
     }
   }
+
+  // TODO: we should neaten all the lifetimes to make freeing more clear
+  codegen_free(&codegen_unit);
 
   return COMPILE_RESULT_SUCCESS;
 }

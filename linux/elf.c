@@ -341,6 +341,7 @@ static void write_elf_object(const struct build_object_args *args) {
   size_t total_text = 0, total_const = 0, total_data = 0;
   size_t *entry_offsets =
       nonnull_malloc(args->num_entries * sizeof(*entry_offsets));
+
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
     switch (e->ty) {
@@ -718,6 +719,10 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   fclose(file);
+
+  free(entry_offsets);
+  free(sym_id_to_idx);
+  free(sym_order);
 
   vector_free(&info.text_relocs);
   vector_free(&info.const_data_relocs);

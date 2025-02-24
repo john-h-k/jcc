@@ -352,4 +352,13 @@ void eliminate_phi(struct ir_func *irb) {
 
   // we (+ regalloc) may have introduced new locals, so allocate them
   alloc_locals(irb);
+
+  hashtbl_free(&reg_to_val);
+
+  for (size_t i = 0; i < irb->basicblock_count * 2; i++) {
+    vector_free(&bb_moves[i].gp_from);
+    vector_free(&bb_moves[i].gp_to);
+    vector_free(&bb_moves[i].fp_from);
+    vector_free(&bb_moves[i].fp_to);
+  }
 }

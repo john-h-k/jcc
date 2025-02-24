@@ -59,9 +59,14 @@ static const struct target *get_target(const struct compile_args *args) {
 }
 
 int main(int argc, char **argv) {
+  size_t exc = -1;
+
   enable_log();
 
   info("parsing command line args");
+
+  struct arena_allocator *arena = NULL;
+  char **objects = NULL;
 
   struct compile_args args;
   const char **sources;
@@ -69,13 +74,15 @@ int main(int argc, char **argv) {
   if (parse_args(argc, argv, &args, &sources, &num_sources) !=
       PARSE_ARGS_RESULT_SUCCESS) {
     err("failed to parse arguments");
-    return -1;
+    exc = -1;
+    goto exit;
   }
 
   if (args.arch != COMPILE_ARCH_NATIVE) {
     if (args.target != COMPILE_TARGET_NATIVE) {
       err("cannot provide both `-arch` and `-T/--target` flags");
-      return -1;
+    exc = -1;
+    goto exit;
     }
 
     switch (args.arch) {
@@ -90,7 +97,8 @@ int main(int argc, char **argv) {
       break;
 #else
       err("Could not determine native platform");
-      return -1;
+      exc = -1;
+      goto exit;
 #endif
     case COMPILE_ARCH_ARM64:
 #if defined(__APPLE__)
@@ -101,7 +109,8 @@ int main(int argc, char **argv) {
       break;
 #else
       err("Could not determine native platform");
-      return -1;
+      exc = -1;
+      goto exit;
 #endif
     case COMPILE_ARCH_RV32I:
 #if defined(__linux__)
@@ -109,7 +118,8 @@ int main(int argc, char **argv) {
       break;
 #else
       err("Could not determine native platform");
-      return -1;
+      exc = -1;
+      goto exit;
 #endif
     case COMPILE_ARCH_EEP:
       args.target = COMPILE_TARGET_EEP;
@@ -130,15 +140,15 @@ int main(int argc, char **argv) {
     args.target = COMPILE_TARGET_LINUX_X86_64;
 #else
     err("Could not determine native platform");
-    return -1;
+    exc = -1;
+    goto exit;
 #endif
   }
 
-  struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
   const struct target *target = get_target(&args);
-  char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
+  objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
   for (size_t i = 0; i < num_sources; i++) {
@@ -179,12 +189,14 @@ int main(int argc, char **argv) {
     if (create_compiler(&program, target, object_file, sources[i], &args,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
-      return -1;
+      exc = -1;
+      goto exit;
     }
 
     if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
       err("compilation failed!");
-      return -1;
+      exc = -1;
+      goto exit;
     }
     enable_log();
 
@@ -202,7 +214,8 @@ int main(int argc, char **argv) {
 
     if (target->link_objects(&link_args) != LINK_RESULT_SUCCESS) {
       err("link failed");
-      exit(-1);
+      exc = -1;
+      goto exit;
     }
   } else {
     if (num_sources > 1) {
@@ -212,8 +225,18 @@ int main(int argc, char **argv) {
 
   info("Compilation succeeded!");
 
-  arena_allocator_free(&arena);
-  free(objects);
+  exc = 0;
+
+exit:
+  if (arena) {
+    arena_allocator_free(&arena);
+  }
+
+  if (objects) {
+    free(objects);
+  }
+  
+  return exc;
 }
 
 static const char *try_get_arg(const char *arg, const char *prefix) {
