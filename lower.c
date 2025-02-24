@@ -968,8 +968,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     cnst->flags |= IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG;
   }
 
-  op->call.args = vector_head(new_args);
-  op->call.num_args = vector_length(new_args);
+  CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args, op->call.args);
 
   if (!func_info.call_info.ret) {
     op->var_ty = IR_VAR_TY_NONE;

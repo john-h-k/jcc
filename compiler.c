@@ -317,6 +317,9 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     unit = target->emit_function(codegen_unit);
+
+    // TODO: we should neaten all the lifetimes to make freeing more clear
+    codegen_free(&codegen_unit);
   }
 
   struct build_object_args args = {.compile_args = &compiler->args,
@@ -344,7 +347,9 @@ enum compile_result compile(struct compiler *compiler) {
 
 void free_compiler(struct compiler **compiler) {
   arena_allocator_free(&(*compiler)->arena);
+  preproc_free(&(*compiler)->preproc);
   parser_free(&(*compiler)->parser);
+  typechk_free(&(*compiler)->typechk);
 
   free(*compiler);
   *compiler = NULL;

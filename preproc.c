@@ -30,11 +30,16 @@ struct preproc_text {
 struct preproc {
   struct arena_allocator *arena;
 
+  // struct preproc_text
   struct vector *texts;
+
+  // struct preproc_token
   struct vector *buffer_tokens;
 
+  // struct sized_str, struct preproc_define
   struct hashtbl *defines;
 
+  // bool
   struct vector *enabled;
 
   size_t num_include_paths;
@@ -139,10 +144,12 @@ static void preproc_create_builtin_macros(struct preproc *preproc) {
 #undef DEF_BUILTIN
 }
 
-static struct preproc_text create_preproc_text(struct preproc *preproc, const char *text,
+static struct preproc_text create_preproc_text(struct preproc *preproc,
+                                               const char *text,
                                                const char *path) {
   struct path_components components =
-      path ? path_components(preproc->arena, path) : (struct path_components){NULL, NULL};
+      path ? path_components(preproc->arena, path)
+           : (struct path_components){NULL, NULL};
 
   // FIXME: spans are entirely broken at the moment
   return (struct preproc_text){
@@ -235,6 +242,23 @@ preproc_create(struct program *program, const char *path,
 
 void preproc_free(struct preproc **preproc) {
   arena_allocator_free(&(*preproc)->arena);
+
+  struct hashtbl_iter *defines = hashtbl_iter((*preproc)->defines);
+  struct hashtbl_entry entry;
+  while (hashtbl_iter_next(defines, &entry)) {
+    struct preproc_define *define = entry.data;
+
+    if (define->value.ty == PREPROC_DEFINE_VALUE_TY_TOKEN_VEC) {
+      vector_free(&define->value.vec);
+    }
+  }
+
+  hashtbl_free(&(*preproc)->defines);
+
+  vector_free(&(*preproc)->texts);
+  vector_free(&(*preproc)->buffer_tokens);
+  vector_free(&(*preproc)->enabled);
+
   (*preproc)->arena = NULL;
   free(*preproc);
 
@@ -439,7 +463,7 @@ static void preproc_next_raw_token(struct preproc *preproc,
   case '"':
   case '\'':
 
-  string_literal : {
+  string_literal: {
 
     if (c == '<' && !preproc->in_angle_string_context) {
       break;
@@ -746,6 +770,7 @@ static bool token_streq(struct preproc_token token, const char *str) {
 
   return len == token_len && strncmp(token.text, str, len) == 0;
 }
+
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token, struct vector *buffer,
@@ -758,9 +783,12 @@ static bool try_expand_token(struct preproc *preproc,
   struct sized_str ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
+  bool free_parents;
   if (!parents) {
     parents = hashtbl_create_sized_str_keyed(0);
+    free_parents = true;
   } else {
+    free_parents = false;
     void *parent = hashtbl_lookup(parents, &ident);
 
     if (parent) {
@@ -795,6 +823,9 @@ static bool try_expand_token(struct preproc *preproc,
     }
     }
 
+    if (free_parents) {
+      hashtbl_free(&parents);
+    }
     return true;
   }
 
@@ -894,9 +925,15 @@ static bool try_expand_token(struct preproc *preproc,
     }
     }
 
+    if (free_parents) {
+      hashtbl_free(&parents);
+    }
     return true;
   }
 
+  if (free_parents) {
+    hashtbl_free(&parents);
+  }
   return false;
 }
 
@@ -1155,7 +1192,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
         if (!is_angle) {
           const char *search_path;
           if (preproc_text->path.dir) {
-            search_path = path_combine(preproc->arena, preproc_text->path.dir, filename);
+            search_path =
+                path_combine(preproc->arena, preproc_text->path.dir, filename);
           } else {
             search_path = filename;
           }
@@ -1166,8 +1204,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         if (!content) {
           for (size_t i = 0; i < preproc->num_include_paths; i++) {
-            const char *search_path =
-                path_combine(preproc->arena, preproc->include_paths[i], filename);
+            const char *search_path = path_combine(
+                preproc->arena, preproc->include_paths[i], filename);
 
             content = read_file(preproc->arena, search_path);
             if (content) {
@@ -1181,7 +1219,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           TODO("handle failed include for '%s'", filename);
         }
 
-        struct preproc_text include_text = create_preproc_text(preproc, content, path);
+        struct preproc_text include_text =
+            create_preproc_text(preproc, content, path);
         vector_push_back(preproc->texts, &include_text);
 
         preproc->line_has_nontrivial_token = false;

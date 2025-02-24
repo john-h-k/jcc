@@ -799,16 +799,16 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
   struct ir_var_func_ty new_func_ty = {
       .flags = func_ty.flags,
-      .num_params = vector_length(params),
-      .params = vector_head(params),
       .ret_ty = arena_alloc(func->arena, sizeof(ret_ty))};
 
   *new_func_ty.ret_ty = ret_ty;
 
-  struct ir_call_info call_info = {.params = vector_head(param_infos),
-                                   .num_params = vector_length(param_infos),
-                                   .ret = ret_info,
-                                   .stack_size = nsaa};
+  struct ir_call_info call_info = {.ret = ret_info, .stack_size = nsaa};
+
+  CLONE_AND_FREE_VECTOR(func->arena, params, new_func_ty.num_params,
+                        new_func_ty.params);
+  CLONE_AND_FREE_VECTOR(func->arena, param_infos, call_info.num_params,
+                        call_info.params);
 
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }

@@ -4,13 +4,6 @@
 #include "ir/ir.h"
 #include "target.h"
 
-enum codegen_unit_ty {
-  CODEGEN_UNIT_TY_AARCH64,
-  CODEGEN_UNIT_TY_X64,
-  CODEGEN_UNIT_TY_EEP,
-  CODEGEN_UNIT_TY_RV32I,
-};
-
 struct codegen_var {
   int tmp;
 };
@@ -100,5 +93,7 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
 int codegen_sort_entries_by_id(const void *a, const void *b);
 
 struct codegen_unit *codegen(struct ir_unit *unit);
+
+void codegen_free(struct codegen_unit **unit);
 
 #endif

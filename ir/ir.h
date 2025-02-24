@@ -786,8 +786,8 @@ struct ir_reg_state {
 };
 
 struct ir_reg_usage {
-  struct bitset *gp_registers_used;
-  struct bitset *fp_registers_used;
+  size_t num_nonvolatile_used;
+  struct ir_reg *nonvolatile_used;
 };
 
 enum ir_param_info_ty {

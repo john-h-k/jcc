@@ -35,4 +35,6 @@ struct var_ref *var_refs_get(const struct var_refs *var_refs,
 struct var_ref *var_refs_add(struct var_refs *var_refs,
                              const struct var_key *key, enum var_ref_ty ty);
 
+void var_refs_free(struct var_refs **var_refs);
+
 #endif

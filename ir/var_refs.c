@@ -52,3 +52,10 @@ struct var_ref *var_refs_get(const struct var_refs *var_refs,
 
   return NULL;
 }
+
+void var_refs_free(struct var_refs **var_refs) {
+  vector_free(&(*var_refs)->refs);
+
+  free(*var_refs);
+  *var_refs = NULL;
+}

@@ -6,8 +6,8 @@
 static struct var_table_scope
 var_table_scope_create(struct var_table_scope *prev) {
   struct var_table_scope var_table_scope = {
-      .next = NULL,
-      .prev = prev,
+      .succ = NULL,
+      .pred = prev,
       .entries = vector_create(sizeof(struct var_table_entry)),
       .scope = prev ? prev->scope + 1 : SCOPE_GLOBAL};
 
@@ -15,7 +15,6 @@ var_table_scope_create(struct var_table_scope *prev) {
 }
 
 struct var_table var_table_create(struct arena_allocator *arena) {
-  // known memory leak here, no `free` function atm
   struct var_table var_table = {
       .arena = arena,
       .first = arena_alloc(arena, sizeof(*var_table.first)),
@@ -39,6 +38,19 @@ struct var_table_entry *var_table_create_entry(struct var_table *var_table,
   return p;
 }
 
+void var_table_free(struct var_table *var_table) {
+  struct var_table_scope *scope = var_table->first;
+  while (scope) {
+    vector_free(&scope->entries);
+
+    scope = scope->succ;
+  }
+
+  *var_table = (struct var_table){
+    .first = NULL
+  };
+}
+
 // to show all entries
 // size_t num_entries = vector_length(var_table->entries);
 // for (size_t i = 0; i < num_entries; i++) {
@@ -51,10 +63,10 @@ int cur_scope(struct var_table *var_table) { return var_table->last->scope; }
 void push_scope(struct var_table *var_table) {
   struct var_table_scope *last = var_table->last;
 
-  last->next = arena_alloc(var_table->arena, sizeof(*last->next));
-  *last->next = var_table_scope_create(last);
+  last->succ = arena_alloc(var_table->arena, sizeof(*last->succ));
+  *last->succ = var_table_scope_create(last);
 
-  var_table->last = last->next;
+  var_table->last = last->succ;
 }
 
 void pop_scope(struct var_table *var_table) {
@@ -65,13 +77,13 @@ void pop_scope(struct var_table *var_table) {
 
   vector_free(&last->entries);
 
-  DEBUG_ASSERT(!last->next, "popping var_table_scope but it has a `next` "
+  DEBUG_ASSERT(!last->succ, "popping var_table_scope but it has a `next` "
                             "entry? should be impossible");
 
-  var_table->last = last->prev;
+  var_table->last = last->pred;
 
-  last->prev->next = NULL;
-  last->prev = NULL;
+  last->pred->succ = NULL;
+  last->pred = NULL;
 }
 
 struct var_table_entry *
@@ -109,7 +121,7 @@ struct var_table_entry *var_table_get_entry(struct var_table *var_table,
       }
     }
 
-    scope = scope->prev;
+    scope = scope->pred;
   }
 
   trace("did not find entry for %s", name);
@@ -134,6 +146,6 @@ void debug_print_entries(FILE *file, struct var_table *var_table,
       }
     }
 
-    scope = scope->prev;
+    scope = scope->pred;
   }
 }

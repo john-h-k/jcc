@@ -187,6 +187,8 @@ int main(int argc, char **argv) {
       return -1;
     }
     enable_log();
+
+    free_compiler(&compiler);
   }
 
   if (target_needs_linking(&args, target)) {
@@ -460,6 +462,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
   args->num_include_paths = vector_length(include_path_vec);
   args->include_paths = nonnull_malloc(vector_byte_size(include_path_vec));
   vector_copy_to(include_path_vec, args->include_paths);
+  vector_free(&include_path_vec);
 
   *num_sources = vector_length(sources_vec);
 
@@ -470,6 +473,7 @@ static enum parse_args_result parse_args(int argc, char **argv,
 
   *sources = nonnull_malloc(vector_byte_size(sources_vec));
   vector_copy_to(sources_vec, *sources);
+  vector_free(&sources_vec);
 
   return PARSE_ARGS_RESULT_SUCCESS;
 }

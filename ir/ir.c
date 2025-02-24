@@ -869,6 +869,7 @@ void prune_basicblocks(struct ir_func *irb) {
 
   struct vector *stack = vector_create(sizeof(struct ir_basicblock *));
   vector_push_back(stack, &irb->first);
+
   while (vector_length(stack)) {
     struct ir_basicblock *bb = *(struct ir_basicblock **)vector_pop(stack);
 
@@ -917,6 +918,8 @@ void prune_basicblocks(struct ir_func *irb) {
 
   // means bb->id < bb_count for all bbs
   rebuild_ids(irb);
+
+  vector_free(&stack);
 }
 
 void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
@@ -2240,6 +2243,7 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
         .uses = arena_alloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.op_use_datas[i].uses);
+    vector_free(&use_data->uses);
   }
 
   for (size_t i = 0; i < func->lcl_count; i++) {
@@ -2254,6 +2258,7 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
             arena_alloc(func->arena, vector_byte_size(use_data->uses))};
 
     vector_copy_to(use_data->uses, uses.lcl_use_datas[i].consumers);
+    vector_free(&use_data->uses);
   }
 
   return uses;
