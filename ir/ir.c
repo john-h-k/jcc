@@ -5,6 +5,7 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
+#include "prettyprint.h"
 
 enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
@@ -801,7 +802,7 @@ void eliminate_redundant_ops(struct ir_func *func) {
   while (ir_func_iter_next(&iter, &op)) {
     switch (op->ty) {
     case IR_OP_TY_MOV:
-      if (op->mov.value && ir_reg_eq(op->reg, op->mov.value->reg)) {
+      if (op->mov.value && op->reg.ty != IR_REG_TY_NONE && ir_reg_eq(op->reg, op->mov.value->reg)) {
         struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
         for (size_t i = 0; i < usage.num_uses; i++) {
@@ -2107,7 +2108,7 @@ static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
 
   struct ir_op_use use = {.op = op, .consumer = data->op};
 
-  DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op");
+  DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op consumed by %zu", use.consumer->id);
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
