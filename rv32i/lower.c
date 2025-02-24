@@ -199,9 +199,9 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
           // given this is a composite, we assume `source` contains a
           // pointer to it
           param_info.regs[j] = (struct ir_param_reg){
-              .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn + j}, .size = 8};
+              .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn + j}, .size = 4};
 
-          vector_push_back(params, &IR_VAR_TY_I64);
+          vector_push_back(params, &IR_VAR_TY_I32);
         }
 
       vector_push_back(param_infos, &param_info);
