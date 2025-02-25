@@ -58,6 +58,8 @@ done < <(find "$(dirname "$0")" -name '*.c' -print | sort)
 total=0
 for file in "${all_files[@]}"; do
   [[ $file == *"/programs/"* ]] && continue
+  [[ "$file" == *_driver.c ]] && continue
+
   total=$((total+1))
 done
 pad=${#total}
