@@ -167,8 +167,6 @@ run_tests() {
       output_result=$(echo "$stdin" | "$RUNNER" "$output" 2>/dev/null)
       result=$?
     fi
-
-    rm "$output"
   
     if [ "$result" != "$expected" ]; then
       echo "fail File '$file' produced exit code $result, expected $expected" > "$fifo"
@@ -178,6 +176,8 @@ run_tests() {
       echo "pass" > "$fifo"
     fi
   done
+
+  rm "$output"
 }
 
 num_procs=$(nproc)
