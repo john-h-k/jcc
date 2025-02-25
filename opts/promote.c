@@ -128,11 +128,13 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
       case IR_VAR_TY_TY_ARRAY: {
         // TODO: also flatten arrays
 
-        struct ir_var_ty el_ty = *data->var_ty.array.underlying;
+        struct ir_var_ty array_ty = data->var_ty;
 
-        while (el_ty.ty == IR_VAR_TY_TY_ARRAY) {
-          el_ty = *el_ty.array.underlying;
+        while (array_ty.array.underlying->ty == IR_VAR_TY_TY_ARRAY) {
+          array_ty = *array_ty.array.underlying;
         }
+
+        struct ir_var_ty el_ty = *array_ty.array.underlying;
 
         struct ir_var_ty_info el_info = var_ty_info(data->func->unit, &el_ty);
 
