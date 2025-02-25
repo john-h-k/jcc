@@ -89,7 +89,6 @@ const char *mangle_str_cnst_name(struct arena_allocator *arena,
   return buff;
 }
 
-
 static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
                                     size_t offset, struct ir_var_value *value,
                                     char *data) {
@@ -97,6 +96,9 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     return;
   }
 
+#define COPY(ty, fld)                                                          \
+  ty tmp##ty = (ty)value->fld;                                                 \
+  memcpy(data, &tmp##ty, sizeof(tmp##ty))
   switch (value->var_ty.ty) {
   case IR_VAR_TY_TY_NONE:
   case IR_VAR_TY_TY_VARIADIC:
@@ -105,32 +107,35 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     switch (value->var_ty.primitive) {
     case IR_VAR_PRIMITIVE_TY_I8:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      memcpy(data, &value->int_value, 1);
+      COPY(uint8_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_I16:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
                        value->ty == IR_VAR_VALUE_TY_FLT,
                    "expected int/flt");
-      memcpy(data, &value->int_value, 2);
+      COPY(uint16_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_I32:
-    case IR_VAR_PRIMITIVE_TY_F32:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, 4);
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      COPY(uint32_t, int_value);
       break;
     case IR_VAR_PRIMITIVE_TY_I64:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      COPY(uint64_t, int_value);
+      break;
+    case IR_VAR_PRIMITIVE_TY_F32:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
+      COPY(float, flt_value);
+      break;
     case IR_VAR_PRIMITIVE_TY_F64:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, sizeof(unsigned long));
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
+      COPY(double, flt_value);
       break;
     }
     break;
   }
+#undef COPY
 
   case IR_VAR_TY_TY_FUNC:
     BUG("func can not have data as a global var");
@@ -226,7 +231,7 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
 }
 
 static struct codegen_entry codegen_func(struct codegen_unit *unit,
-                                          struct ir_glb *glb) {
+                                         struct ir_glb *glb) {
   struct ir_func *ir_func = glb->func;
 
   clear_metadata(ir_func);
@@ -330,7 +335,8 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
           break;
         case IR_VAR_TY_CONST_DATA:
         case IR_VAR_TY_DATA:
-          codegen_unit->entries[i] = codegen_var_data(unit, glb->id, name, glb->var);
+          codegen_unit->entries[i] =
+              codegen_var_data(unit, glb->id, name, glb->var);
           break;
         }
         break;

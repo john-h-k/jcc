@@ -499,45 +499,6 @@ static void codegen_store_addr_op(struct codegen_state *state,
   }
 }
 
-// static void codegen_bitfield_insert(struct codegen_state *state,
-//                                     struct ir_op *op) {
-//   struct ir_bitfield bitfield = op->bitfield_insert.bitfield;
-
-//   struct x64_reg value_reg = codegen_reg(op->bitfield_insert.value);
-//   struct x64_reg target_reg = codegen_reg(op->bitfield_insert.target);
-//   struct x64_reg dest = codegen_reg(op);
-
-//   if (target_reg.idx != dest.idx) {
-//     struct instr *mov = alloc_instr(state->func);
-//     *mov->x64 = MOV_ALIAS(dest, target_reg);
-//   }
-
-//   struct instr *instr = alloc_instr(state->func);
-//   instr->x64->ty = X64_INSTR_TY_BFM;
-//   instr->x64->bfm = (struct x64_bitfield){
-//       .dest = dest,
-//       .source = value_reg,
-//       .imms = bitfield.width - 1,
-//       .immr = bitfield.offset,
-//   };
-// }
-
-// static void codegen_bitfield_extract(struct codegen_state *state,
-//                                      struct ir_op *op) {
-//   struct ir_bitfield bitfield = op->bitfield_extract.bitfield;
-
-//   struct x64_reg value_reg = codegen_reg(op->bitfield_extract.value);
-//   struct x64_reg dest = codegen_reg(op);
-
-//   struct instr *instr = alloc_instr(state->func);
-//   instr->x64->ty = X64_INSTR_TY_UBFM;
-//   instr->x64->ubfm = (struct x64_bitfield){.dest = dest,
-//                                                    .source = value_reg,
-//                                                    .imms = bitfield.width -
-//                                                    1, .immr =
-//                                                    bitfield.offset};
-// }
-
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
   DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR,
                "glb/lcl loads should have been lowered to addr load");
@@ -551,80 +512,6 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
 
   codegen_store_addr_op(state, op);
 }
-
-// // this method assumes it can safely you any non-argument volatile registers
-// static void codegen_mem_copy_volatile(struct codegen_state *state,
-//                                       struct x64_reg source,
-//                                       size_t source_offset,
-//                                       struct x64_reg dest,
-//                                       size_t dest_offset, size_t num_bytes) {
-//   DEBUG_ASSERT(num_bytes < 4096,
-//                "doesn't support >4096 copies due to immediates");
-
-//   if (source_offset % 32 || dest_offset % 32) {
-//     TODO("handle");
-//   }
-
-//   size_t remaining = num_bytes;
-//   size_t head = 0;
-
-//   // use v10/11 as the intermediates
-
-//   while (remaining >= 32) {
-//     struct instr *load = alloc_instr(state->func);
-//     load->x64->ty = X64_INSTR_TY_LOAD_PAIR_IMM;
-//     load->x64->load_pair_imm =
-//         (struct x64_load_pair_imm){.mode = X64_ADDRESSING_MODE_OFFSET,
-//                                        .imm = (head + source_offset) / 16,
-//                                        .addr = source,
-//                                        .dest = {
-//                                            {.ty = X64_REG_TY_Q, .idx = 10},
-//                                            {.ty = X64_REG_TY_Q, .idx = 11},
-//                                        }};
-
-//     struct instr *store = alloc_instr(state->func);
-//     store->x64->ty = X64_INSTR_TY_STORE_PAIR_IMM;
-//     store->x64->store_pair_imm =
-//         (struct x64_store_pair_imm){.mode = X64_ADDRESSING_MODE_OFFSET,
-//                                         .imm = (head + dest_offset) / 16,
-//                                         .addr = dest,
-//                                         .source = {
-//                                             {.ty = X64_REG_TY_Q, .idx = 10},
-//                                             {.ty = X64_REG_TY_Q, .idx = 11},
-//                                         }};
-
-//     head += 32;
-//     remaining -= 32;
-//   }
-
-//   while (remaining) {
-//     size_t chunk = ilog2(remaining);
-//     enum x64_reg_ty ty = fp_reg_ty_for_size(chunk);
-
-//     struct instr *load = alloc_instr(state->func);
-//     load->x64->ty = X64_INSTR_TY_LOAD_IMM;
-//     load->x64->load_imm = (struct x64_load_imm){
-//         .mode = X64_ADDRESSING_MODE_OFFSET,
-//         .imm = (head + source_offset) / chunk,
-//         .addr = source,
-//         .dest = {.ty = ty, .idx = 10},
-//     };
-
-//     struct instr *store = alloc_instr(state->func);
-//     store->x64->ty = X64_INSTR_TY_STORE_IMM;
-//     store->x64->store_imm = (struct x64_store_imm){
-//         .mode = X64_ADDRESSING_MODE_OFFSET,
-//         .imm = (head + dest_offset) / chunk,
-//         .addr = dest,
-//         .source = {.ty = ty, .idx = 10},
-//     };
-
-//     head += chunk;
-//     remaining -= chunk;
-//   }
-// }
-
-// #define IMM_BITS (12)
 
 static void codegen_add_imm(struct codegen_state *state, struct x64_reg dest,
                             struct x64_reg source, unsigned long long value) {
