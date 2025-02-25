@@ -581,6 +581,8 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
+    // TODO: generate one `mov rax, qword ptr [rip]` instr instead of lea/mov pair
+
     struct ir_glb *glb = op->addr.glb;
 
     struct instr *addr = alloc_instr(state->func);
@@ -590,11 +592,17 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     addr->reloc = arena_alloc(state->func->unit->arena, sizeof(*addr->reloc));
     *addr->reloc = (struct relocation){
         .ty = glb->def_ty == IR_GLB_DEF_TY_DEFINED ? RELOCATION_TY_LOCAL_SINGLE
-                                                   : RELOCATION_TY_UNDEF_PAIR,
+                                                   : RELOCATION_TY_UNDEF_SINGLE,
         .symbol_index = glb->id,
         // offset into current instr
         .address = 3,
         .size = 0};
+
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      struct instr *load = alloc_instr(state->func);
+      load->x64->ty = X64_INSTR_TY_MOV_LOAD_IMM;
+      load->x64->mov_load_imm = (struct x64_mov_load_imm){.dest = dest, .addr = dest};
+    }
   }
   }
 }

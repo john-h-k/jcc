@@ -116,6 +116,7 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
       case RELOCATION_TY_POINTER:
       case RELOCATION_TY_CALL:
       case RELOCATION_TY_LOCAL_SINGLE:
+      case RELOCATION_TY_UNDEF_SINGLE:
         *num_relocs += 1;
         break;
       case RELOCATION_TY_LOCAL_PAIR:
@@ -147,7 +148,6 @@ static void write_relocations_elf(FILE *file,
         goto simple_reloc;
 
       simple_reloc: {
-
         Elf64_Rela rela;
         memset(&rela, 0, sizeof(rela));
         rela.r_offset = r->address;
@@ -280,6 +280,15 @@ static void write_relocations_elf(FILE *file,
       } else {
         BUG("two-part reloc not supported for x86_64 in elf");
       }
+      break;
+    }
+    case RELOCATION_TY_UNDEF_SINGLE: {
+      Elf64_Rela rela;
+      memset(&rela, 0, sizeof(rela));
+      rela.r_offset = r->address;
+      rela.r_addend = r->offset - 4;
+      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_GOT32);
+      fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
     case RELOCATION_TY_UNDEF_PAIR: {
