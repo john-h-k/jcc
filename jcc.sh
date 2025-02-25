@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# `jcc.sh [command]`
+#     * `format` - format the codebase
+#     * `build [mode]` - build the compiler, using debug mode by default
+#     * `run [args]` - build, then run the compiler with [args]
+#     * `debug [args]` - build, then run the compiler under LLDB with [args]
+#     * `test [args]` - build, then run the tests passing [args] to the compiler
+
 build() {
     mode="${1:-Debug}"
     mkdir -p build

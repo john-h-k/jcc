@@ -26,8 +26,8 @@ No, it is text based
 
 ## Support
 
-AArch64 and x64 are both supported, although some of the x64 ABI is not yet fully implemented.
-RISC-V (specifically RV32I) is supported but only to emit raw instructions, not object files.
+AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented.
+Working with RISC-V requires installing a RISC-V linker.
 
 #### Things that don't work yet
 
@@ -35,6 +35,17 @@ RISC-V (specifically RV32I) is supported but only to emit raw instructions, not 
 2. `va_list` and variadic function implementation. Calling them works fine
 3. Compound literals
 4. Complex constant expressions like `int foo[7 * 3 + sizeof(int)] = {};`
+
+#### Development
+
+The `jcc.sh` script can be used for common workflows:
+
+jcc.sh [command]`
+  * `format` - format the codebase
+  * `build [mode]` - build the compiler, using debug mode by default
+  * `run [args]` - build, then run the compiler with [args]
+  * `debug [args]` - build, then run the compiler under LLDB with [args]
+  * `test [args]` - build, then run the tests passing [args] to the compiler
 
 ## Design
 
