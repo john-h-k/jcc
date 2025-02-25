@@ -6,7 +6,12 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(
-  SOURCE_FILES
+  JCC_TEST_SOURCE_FILES
+  tests/main.c
+)
+
+set(
+  JCC_SOURCE_FILES
   main.c
 
   vector.c
@@ -138,6 +143,8 @@ else()
   message(WARNING "Unknown compiler: ${CMAKE_C_COMPILER_ID}")
 endif()
 
-add_executable(jcc ${SOURCE_FILES})
+add_executable(jcc ${JCC_SOURCE_FILES})
+add_executable(jcc-test ${JCC_TEST_SOURCE_FILES})
+
 target_link_libraries(jcc m)
 
