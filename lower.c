@@ -755,9 +755,14 @@ static void lower_params(struct ir_func *func) {
       first_param->var_ty = IR_VAR_TY_POINTER;
     }
 
-    first_param->flags |= IR_OP_FLAG_PARAM;
+    first_param->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
     first_param->mov = (struct ir_op_mov){.value = NULL};
     first_param->reg = param_info.regs[0].reg;
+
+    struct ir_op *mov = insert_after_ir_op(func, first_param, IR_OP_TY_MOV,
+                                           first_param->var_ty);
+    mov->mov = (struct ir_op_mov){.value = first_param};
+    first_param = mov;
   }
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
