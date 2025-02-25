@@ -928,17 +928,17 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   if (irb->reg_usage.num_nonvolatile_used) {
     fprintf(file, "\n    nonvolatile_used: ");
 
-    fslogsl(file, "(");
+    fprintf(file, "(");
 
     for (size_t i = 0; i < irb->reg_usage.num_nonvolatile_used; i++) {
-      if (i + 1 != irb->reg_usage.num_nonvolatile_used) {
-        fslogsl(file, ", ");
-      }
-
       debug_print_ir_reg(file, irb->reg_usage.nonvolatile_used[i]);
+
+      if (i + 1 != irb->reg_usage.num_nonvolatile_used) {
+        fprintf(file, ", ");
+      }
     }
 
-    fslogsl(file, ")");
+    fprintf(file, ")");
   }
 
   if (irb->lcl_count) {

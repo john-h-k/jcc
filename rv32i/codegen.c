@@ -92,9 +92,9 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
     if (idx >= 27) {
       BUG("invalid idx");
     } else if (idx >= 17) {
-      return 19 + (idx - 17);
+      return 18 + (idx - 17);
     } else if (idx >= 15) {
-      return 9 + (idx - 15);
+      return 8 + (idx - 15);
     } else if (idx >= 11) {
       return 28 + (idx - 11);
     } else if (idx >= 8) {
@@ -373,17 +373,16 @@ static void codegen_prologue(struct codegen_state *state) {
 
   size_t num_nonvolatile_used = ir->reg_usage.num_nonvolatile_used;
 
+  size_t save_start = stack_size;
+
   // save nonvol
   stack_size += num_nonvolatile_used * 8;
   stack_size = ROUND_UP(stack_size, RV32I_STACK_ALIGNMENT);
 
-  // TODO: implement red zone. requires _subtracting_ from `sp` instead of
-  // adding for all local addressing bool leaf =
-  //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
   bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
 
   struct rv32i_prologue_info info = {.prologue_generated = !leaf,
-                                     .save_start = stack_size,
+                                     .save_start = save_start,
                                      .stack_size = stack_size};
 
   state->rv32i_prologue_info = arena_alloc(state->arena, sizeof(*state->rv32i_prologue_info));
@@ -413,8 +412,7 @@ static void codegen_prologue(struct codegen_state *state) {
   for (size_t i = 0; i < num_nonvolatile_used; i++) {
     struct ir_reg reg = ir->reg_usage.nonvolatile_used[i];
 
-    // guaranteed to be mod 8
-    size_t offset = (info.save_start / 8) + i;
+    size_t offset = info.save_start + (i * 8);
 
     switch (reg.ty) {
     case IR_REG_TY_INTEGRAL: {
@@ -481,8 +479,7 @@ static void codegen_epilogue(struct codegen_state *state) {
   for (size_t i = 0; i < state->ir->reg_usage.num_nonvolatile_used; i++) {
     struct ir_reg reg = state->ir->reg_usage.nonvolatile_used[i];
 
-    // guaranteed to be mod 8
-    size_t offset = (prologue_info->save_start / 8) + i;
+    size_t offset = prologue_info->save_start + (i * 8);
 
     switch (reg.ty) {
     case IR_REG_TY_INTEGRAL: {
@@ -1577,22 +1574,14 @@ static void debug_print_jal(const struct codegen_debug_state *state,
 
 static void debug_print_load(const struct codegen_debug_state *state,
                              const struct rv32i_load *load) {
-  if (load->imm) {
-    codegen_fprintf(state, " %reg, %imm(%reg)", load->dest, load->imm,
-                    load->addr);
-  } else {
-    codegen_fprintf(state, " %reg, %reg", load->dest, load->addr);
-  }
+  codegen_fprintf(state, " %reg, %imm(%reg)", load->dest, load->imm,
+                  load->addr);
 }
 
 static void debug_print_store(const struct codegen_debug_state *state,
                               const struct rv32i_store *store) {
-  if (store->imm) {
-    codegen_fprintf(state, " %reg, %imm(%reg)", store->source, store->imm,
-                    store->addr);
-  } else {
-    codegen_fprintf(state, " %reg, %reg", store->source, store->addr);
-  }
+  codegen_fprintf(state, " %reg, %imm(%reg)", store->source, store->imm,
+                  store->addr);
 }
 
 static void debug_print_conditional_branch(
