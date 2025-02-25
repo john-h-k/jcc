@@ -2357,10 +2357,6 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, init->expr);
 
-    if (!first_init) {
-      first_init = value;
-    }
-
     struct ir_op *init_address = address;
 
     if (init->offset) {
@@ -2385,6 +2381,10 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
       store->var_ty = IR_VAR_TY_NONE;
       store->store = (struct ir_op_store){
           .ty = IR_OP_STORE_TY_ADDR, .addr = init_address, .value = value};
+    }
+
+    if (!first_init) {
+      first_init = store;
     }
 
     struct ir_var_ty var_ty =
