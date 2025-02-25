@@ -314,7 +314,7 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
 
       switch (glb->ty) {
       case IR_GLB_TY_DATA: {
-        // TODO: non string literals
+        // TODO: give names relative to func
         const char *name =
             glb->name ? unit->target->mangle(unit->arena, glb->name)
                       : mangle_str_cnst_name(unit->arena, "todo", glb->id);
@@ -330,7 +330,7 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
           break;
         case IR_VAR_TY_CONST_DATA:
         case IR_VAR_TY_DATA:
-          codegen_unit->entries[i] = codegen_var_data(unit, glb->id, glb->name, glb->var);
+          codegen_unit->entries[i] = codegen_var_data(unit, glb->id, name, glb->var);
           break;
         }
         break;
