@@ -2316,6 +2316,7 @@ static int sort_ranges_by_offset(const void *l, const void *r) {
 }
 
 static void build_ir_zero_range(struct ir_func_builder *irb,
+                                struct ir_stmt *stmt,
                                 struct ir_op *insert_before,
                                 struct ir_op *address,
                                 size_t byte_size) {
@@ -2323,8 +2324,15 @@ static void build_ir_zero_range(struct ir_func_builder *irb,
     return;
   }
 
-  struct ir_op *mem_set = insert_before_ir_op(
+  struct ir_op *mem_set;
+  if (insert_before) {
+    mem_set = insert_before_ir_op(
       irb->func, insert_before, IR_OP_TY_MEM_SET, IR_VAR_TY_NONE);
+  } else {
+    mem_set = alloc_ir_op(irb->func, stmt);
+    mem_set->ty = IR_OP_TY_MEM_SET;
+    mem_set->var_ty = IR_VAR_TY_NONE;
+  }
 
   mem_set->mem_set = (struct ir_op_mem_set){
       .addr = address, .length = byte_size, .value = 0};
@@ -2429,7 +2437,7 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   }
 
   if (needs_zero) {
-    build_ir_zero_range(irb, first_init, address, info.size);
+    build_ir_zero_range(irb, *stmt, first_init, address, info.size);
   }
 
   vector_free(&init_ranges);

@@ -1,5 +1,6 @@
 #include "promote.h"
 
+#include "../alloc.h"
 #include "../hashtbl.h"
 #include "../ir/prettyprint.h"
 #include "../log.h"
@@ -283,6 +284,10 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
                             struct ir_lcl *lcl) {
   size_t num_uses = vector_length(lcl_uses);
 
+  // used to check if variable has _ever_ been written - else we know it is
+  // zeroed
+  struct hashtbl *any_stores =
+      hashtbl_create(sizeof(size_t), sizeof(struct ir_op *), NULL, NULL);
   // holds the latest `mov` for each (field, basicblock) pair
   struct hashtbl *stores = hashtbl_create(sizeof(struct lcl_store),
                                           sizeof(struct ir_op *), NULL, NULL);
@@ -311,6 +316,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
     // relies on sequential ids
     if (!prev || (*prev)->id < op->id) {
       hashtbl_insert(stores, &key, &op);
+      hashtbl_insert(any_stores, &use->field_idx, &op);
     }
   }
 
@@ -361,6 +367,27 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
           continue;
         }
 
+        struct ir_op **any_store = hashtbl_lookup(any_stores, &key.field_idx);
+        if (!any_store) {
+          DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED,
+                       "expected zeroed because no stores");
+
+          struct ir_op *zero;
+          if (gather_values) {
+            zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
+
+            gather_values[head++] =
+                (struct ir_gather_value){.value = zero, .field_idx = j};
+          } else {
+            zero = op;
+          }
+
+          mk_zero_constant(func->unit, zero, &field_ty);
+          zero->flags |= IR_OP_FLAG_PROMOTED;
+
+          continue;
+        }
+
         struct ir_op *phi = insert_phi(func, basicblock, field_ty);
         phi->phi = (struct ir_op_phi){.num_values = 0};
 
@@ -377,12 +404,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         mov->flags |= IR_OP_FLAG_PROMOTED;
 
         find_phi_exprs(func, stores, phi, j);
-
-        if (!phi->phi.num_values) {
-          DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED, "expected zeroed because no stores");
-
-          mk_zero_constant(func->unit, phi, &field_ty);
-        }
       }
 
       if (gather_values) {
@@ -424,25 +445,19 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         vector_push_back(depends, &dep_use);
       }
 
+      DEBUG_ASSERT(!op_is_branch(detach->ty), "should not be detaching branch");
       detach_ir_op(func, detach);
     }
   }
 
   vector_free(&depends);
+  hashtbl_free(&any_stores);
   hashtbl_free(&stores);
 }
 
 static void opts_promote_func(struct ir_func *func) {
-  {
-    struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
-
-    struct ir_op *op;
-    while (ir_func_iter_next(&iter, &op)) {
-      if (op->ty != IR_OP_TY_MEM_SET) {
-        continue;
-      }
-    }
-  }
+  // rebuilds op ids, important for later
+  struct ir_op_use_map use_map = build_op_uses_map(func);
 
   // note: this requires contigous lcl ids
   bool *candidates =
@@ -460,9 +475,6 @@ static void opts_promote_func(struct ir_func *func) {
   for (size_t i = 0; i < func->lcl_count; i++) {
     lcl_uses[i] = vector_create(sizeof(struct lcl_use));
   }
-
-  // rebuilds op ids, important for later
-  struct ir_op_use_map use_map = build_op_uses_map(func);
 
   struct ir_basicblock *basicblock = func->first;
 

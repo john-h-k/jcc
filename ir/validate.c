@@ -1,6 +1,7 @@
 #include "validate.h"
 
 #include "../util.h"
+#include "../alloc.h"
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
