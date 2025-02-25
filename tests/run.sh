@@ -11,7 +11,7 @@ if command -v gdate &>/dev/null; then
 elif date --version 2>/dev/null | grep -q "GNU coreutils"; then
   date="date"
 else
-  echo "GNU date not available, not timestamping. Install coreutils or use gdate."
+  echo "${BOLDYELLOW}GNU date not available, not timestamping. Install coreutils or use gdate.${RESET}"
 fi
 
 if [ -n "$date" ]; then
