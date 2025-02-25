@@ -55,6 +55,7 @@ struct codegen_unit {
   enum codegen_unit_ty ty;
 
   struct arena_allocator *arena;
+  const struct target *target;
 
   struct codegen_entry *entries;
   size_t num_entries;

@@ -1,13 +1,14 @@
-#include "aarch64.h"
 #include "alloc.h"
 #include "compiler.h"
 #include "io.h"
 #include "log.h"
 #include "program.h"
-#include "rv32i.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
+
+#include "aarch64.h"
+#include "rv32i.h"
 #include "x64.h"
 
 #include <stdio.h>

@@ -379,7 +379,10 @@ typedef void(walk_regs_callback)(struct instr *instr, struct rv32i_reg reg,
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
                void *metadata);
 
-void rv32i_codegen(struct codegen_unit *unit, struct ir_unit *ir);
+void rv32i_codegen_start(struct codegen_state *state);
+void rv32i_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock);
+void rv32i_codegen_end(struct codegen_state *state);
+
 void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit);
 
 #endif
