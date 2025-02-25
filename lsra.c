@@ -7,6 +7,7 @@
 #include "ir/prettyprint.h"
 #include "liveness.h"
 #include "log.h"
+#include "lower.h"
 #include "util.h"
 #include "vector.h"
 
@@ -106,7 +107,45 @@ static void insert_active(struct register_alloc_state *state,
   }
 }
 
-static void spill_at_interval(struct ir_func *irb,
+struct lsra_reg_info {
+  bool has_ssp;
+  size_t ssp_reg;
+
+  size_t num_volatile_gp;
+  size_t num_volatile_fp;
+  size_t num_gp_regs;
+  size_t num_fp_regs;
+  size_t gp_spill_reg;
+  size_t fp_spill_reg;
+
+  struct hashtbl *nonvolatile_registers_used;
+};
+
+static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb, struct ir_op *op) {
+  struct ir_op *store = spill_op(irb, op);
+
+  if (store) {
+    struct ir_op *addr = build_addr(irb, store);
+    addr->var_ty = var_ty_for_pointer_size(irb->unit);
+
+    if (info->has_ssp) {
+      addr->reg =
+          (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg};
+    } else {
+      addr->flags |= IR_OP_FLAG_CONTAINED;
+    }
+
+    store->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_ADDR,
+      .value = store->store.value,
+      .addr = addr
+    };
+  }
+}
+
+static void spill_at_interval(
+                              struct lsra_reg_info *info,
+                              struct ir_func *irb,
                               struct register_alloc_state *state,
                               struct interval *last_active,
                               size_t cur_interval) {
@@ -115,14 +154,14 @@ static void spill_at_interval(struct ir_func *irb,
   if (last_active->end > intervals[cur_interval].end) {
     // spill active
     intervals[cur_interval].op->reg = last_active->op->reg;
-    spill_op(irb, last_active->op);
+    spill_op_and_lower(info, irb, last_active->op);
 
     state->num_active--;
 
     insert_active(state, cur_interval);
   } else {
     // spill current interval
-    spill_op(irb, intervals[cur_interval].op);
+    spill_op_and_lower(info, irb, intervals[cur_interval].op);
   }
 }
 
@@ -220,20 +259,6 @@ static void expire_old_intervals(struct register_alloc_state *state,
   memmove(state->active, &state->active[num_expired_intervals],
           sizeof(*state->active) * (state->num_active));
 }
-
-struct lsra_reg_info {
-  bool has_ssp;
-  size_t ssp_reg;
-
-  size_t num_volatile_gp;
-  size_t num_volatile_fp;
-  size_t num_gp_regs;
-  size_t num_fp_regs;
-  size_t gp_spill_reg;
-  size_t fp_spill_reg;
-
-  struct hashtbl *nonvolatile_registers_used;
-};
 
 struct fixup_spills_data {
   struct ir_func *irb;
@@ -339,7 +364,9 @@ static int compare_interval_id(const void *a, const void *b) {
   return (int)((ssize_t)a_id - (ssize_t)b_id);
 }
 
-static void force_spill_register(struct ir_func *irb,
+static void force_spill_register(
+                              struct lsra_reg_info *info,
+                                 struct ir_func *irb,
                                  struct register_alloc_state *state,
                                  struct ir_reg reg, struct interval *interval) {
   // for some reason this check leads to regs not being spilled
@@ -358,7 +385,7 @@ static void force_spill_register(struct ir_func *irb,
     }
 
     if (consumer->reg.ty == reg.ty && consumer->reg.idx == reg.idx) {
-      spill_op(irb, consumer);
+      spill_op_and_lower(info, irb, consumer);
       consumer->flags |= IR_OP_FLAG_SPILLED;
     }
   }
@@ -447,15 +474,15 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 #define ADD_REGS(start, end, reg_ty, name)                                     \
   for (size_t i = start; i > end; i--) {                                       \
     size_t idx = i - 1;                                                        \
-    if (info->has_ssp && info->ssp_reg == idx) {                               \
-      continue;                                                                \
-    }                                                                          \
                                                                                \
     struct reg_state reg = {                                                   \
         .live = NULL, .reg = {.ty = reg_ty, .idx = idx}, .free = true};        \
                                                                                \
     vector_push_back(state.name##_reg_states, &reg);                           \
-    vector_push_back(state.name##_reg_pool, &idx);                             \
+                                                                               \
+    if (!info->has_ssp || info->ssp_reg != idx) {                              \
+      vector_push_back(state.name##_reg_pool, &idx);                           \
+    }                                                                          \
   }
 
   // prioritise volatile
@@ -560,7 +587,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         }
       }
 
-      spill_op(irb, interval->op);
+      spill_op_and_lower(info, irb, interval->op);
       continue;
     }
 
@@ -589,7 +616,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
                    "fixed reg was not of right type. if you have moved fp to a "
                    "gp reg (or vice versa) you must also change op type");
 
-      force_spill_register(irb, &state, interval->op->reg, interval);
+      force_spill_register(info, irb, &state, interval->op->reg, interval);
 
       pref_reg = interval->op->reg.idx;
 
@@ -598,7 +625,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
-      force_spill_register(irb, &state, interval->op->write_info.writes[j],
+      force_spill_register(info, irb, &state, interval->op->write_info.writes[j],
                            interval);
     }
 
@@ -684,7 +711,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         last_active--;
       }
 
-      spill_at_interval(irb, &state,
+      spill_at_interval(info, irb, &state,
                         &state.interval_data.intervals[*last_active], i);
     }
   }
@@ -771,9 +798,10 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   size_t num_nonvolatile_used = hashtbl_size(nonvolatile_registers_used);
 
   irb->reg_usage = (struct ir_reg_usage){
-    .nonvolatile_used = arena_alloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) * num_nonvolatile_used),
-    .num_nonvolatile_used = num_nonvolatile_used
-  };
+      .nonvolatile_used =
+          arena_alloc(irb->arena, sizeof(*irb->reg_usage.nonvolatile_used) *
+                                      num_nonvolatile_used),
+      .num_nonvolatile_used = num_nonvolatile_used};
 
   struct hashtbl_iter *iter = hashtbl_iter(nonvolatile_registers_used);
   struct hashtbl_entry entry;

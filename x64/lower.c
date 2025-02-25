@@ -628,43 +628,6 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
-static void lower_load_to_addr(struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_LOAD_TY_LCL: {
-    struct ir_lcl *lcl = op->load.lcl;
-
-    op->ty = IR_OP_TY_ADDR;
-    op->var_ty = IR_VAR_TY_I64;
-    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-    break;
-  }
-  case IR_OP_LOAD_TY_ADDR: {
-    struct ir_op *addr = op->load.addr;
-
-    op->ty = IR_OP_TY_MOV;
-    op->var_ty = IR_VAR_TY_I64;
-    op->mov = (struct ir_op_mov){.value = addr};
-    break;
-  }
-  case IR_OP_LOAD_TY_GLB:
-    BUG("load.glb should be gone by now");
-  }
-}
-
-static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
-  if (!op->ret.value) {
-    return;
-  }
-
-  struct ir_op *value = op->ret.value;
-
-  if (value->ty != IR_OP_TY_LOAD || !var_ty_is_aggregate(&value->var_ty)) {
-    return;
-  }
-
-  lower_load_to_addr(value);
-}
-
 void x64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -693,9 +656,7 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
-              break;
             case IR_OP_TY_RET:
-              lower_ret(func, op);
               break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
@@ -814,6 +775,13 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SQUOT:
               case IR_OP_BINARY_OP_TY_UQUOT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
+
+                op->write_info = (struct ir_op_write_info){
+                    .num_reg_writes = 1,
+                    .writes[0] = {.ty = IR_REG_TY_INTEGRAL,
+                                  .idx = IR_REG_IDX_DX},
+                };
+
                 alloc_fixed_reg_dest_ir_op(
                     func, &op->binary_op.lhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,

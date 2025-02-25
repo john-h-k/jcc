@@ -467,29 +467,6 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   op->mov = (struct ir_op_mov){.value = int_mov};
 }
 
-static void lower_load_to_addr(struct ir_op *op) {
-  switch (op->load.ty) {
-  case IR_OP_LOAD_TY_LCL: {
-    struct ir_lcl *lcl = op->load.lcl;
-
-    op->ty = IR_OP_TY_ADDR;
-    op->var_ty = IR_VAR_TY_I64;
-    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-    break;
-  }
-  case IR_OP_LOAD_TY_ADDR: {
-    struct ir_op *addr = op->load.addr;
-
-    op->ty = IR_OP_TY_MOV;
-    op->var_ty = IR_VAR_TY_I64;
-    op->mov = (struct ir_op_mov){.value = addr};
-    break;
-  }
-  case IR_OP_LOAD_TY_GLB:
-    BUG("load.glb should be gone by now");
-  }
-}
-
 static bool try_get_hfa_info(struct ir_func *func,
                              const struct ir_var_ty *var_ty,
                              struct ir_var_ty *member_ty, size_t *num_members,
@@ -813,20 +790,6 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }
 
-static void lower_ret(UNUSED struct ir_func *func, struct ir_op *op) {
-  if (!op->ret.value) {
-    return;
-  }
-
-  struct ir_op *value = op->ret.value;
-
-  if (value->ty != IR_OP_TY_LOAD || !var_ty_is_aggregate(&value->var_ty)) {
-    return;
-  }
-
-  lower_load_to_addr(value);
-}
-
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -850,9 +813,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_RET:
-              lower_ret(func, op);
-              break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
                 lower_fp_cnst(func, op);
