@@ -140,7 +140,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 &&
-                       offset_field_idx < el_ty.array.num_elements;
+                       offset_field_idx < array_ty.array.num_elements;
         break;
       }
       case IR_VAR_TY_TY_STRUCT:
