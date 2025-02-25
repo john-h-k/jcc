@@ -86,7 +86,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
-          .num_regs = hfa_member_size,
+          .num_regs = num_hfa_members,
       };
 
       for (size_t i = 0; i < num_hfa_members; i++) {

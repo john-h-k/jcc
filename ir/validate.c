@@ -113,7 +113,7 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
-    VALIDATION_CHECKZ(!(op->flags & IR_OP_FLAG_PARAM) || !op->mov.value, op,
+    VALIDATION_CHECKZ(op->flags & IR_OP_FLAG_PARAM || op->mov.value, op,
                       "param mov must have null value");
     break;
   case IR_OP_TY_CNST:
