@@ -508,5 +508,12 @@ static enum parse_args_result parse_args(int argc, char **argv,
 
 void free_args(struct compile_args *args, const char **sources) {
   free(sources);
-  free(args->include_paths);
+
+  if (args->include_paths) {
+    free(args->include_paths);
+  }
+
+  if (args->output) {
+    free(args->output);
+  }
 }
