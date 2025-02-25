@@ -667,7 +667,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             // pointer to it
 
             param_info.regs[j] = (struct ir_param_reg){
-                .reg = {.ty = IR_REG_TY_FP, .idx = j}, .size = hfa_member_size};
+                .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j}, .size = hfa_member_size};
 
             vector_push_back(params, &member_ty);
           }

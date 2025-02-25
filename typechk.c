@@ -412,7 +412,8 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
 
   if (lhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN ||
       rhs_ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
-    TODO("`%s` for types other than well known", __func__);
+    return *lhs_ty;
+    // TODO("`%s` for types other than well known", __func__);
   }
 
   DEBUG_ASSERT(lhs_ty->well_known >= WELL_KNOWN_TY_SIGNED_INT &&
@@ -598,6 +599,18 @@ td_var_ty_for_enum(struct typechk *tchk,
   return TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
 }
 
+// FIXME: i don't think ty table scope changes same as var table does
+
+static void tchk_push_scope(struct typechk *tchk) {
+  push_scope(&tchk->var_table);
+  push_scope(&tchk->ty_table);
+}
+
+static void tchk_pop_scope(struct typechk *tchk) {
+  pop_scope(&tchk->var_table);
+  pop_scope(&tchk->ty_table);
+}
+
 static struct td_var_ty td_var_ty_for_struct_or_union(
     struct typechk *tchk,
     const struct ast_struct_or_union_specifier *specifier) {
@@ -647,9 +660,13 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     const struct ast_declaration *declaration =
         &specifier->decl_list->declarations[i];
 
+    push_scope(&tchk->var_table);
+
     struct td_declaration td_decl = type_struct_declaration(tchk, declaration);
     vector_extend(var_decls, td_decl.var_declarations,
                   td_decl.num_var_declarations);
+
+    pop_scope(&tchk->var_table);
   }
 
   size_t num_var_decls = vector_length(var_decls);
@@ -1292,18 +1309,6 @@ type_specifiers(struct typechk *tchk,
   }
 
   return specifiers;
-}
-
-// FIXME: i don't think ty table scope changes same as var table does
-
-static void tchk_push_scope(struct typechk *tchk) {
-  push_scope(&tchk->var_table);
-  push_scope(&tchk->ty_table);
-}
-
-static void tchk_pop_scope(struct typechk *tchk) {
-  pop_scope(&tchk->var_table);
-  pop_scope(&tchk->ty_table);
 }
 
 enum type_expr_flags {
@@ -2687,7 +2692,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
 
   struct vector *inits = vector_create(sizeof(struct td_init_list_init));
 
-  size_t num_inits = top ? init_list->num_inits : td_num_init_fields(var_ty);
+  size_t num_inits = top ? init_list->num_inits : MIN(init_list->num_inits, td_num_init_fields(var_ty));
 
   size_t field_index = 0;
   for (size_t i = start_idx; i < start_idx + num_inits; i++) {

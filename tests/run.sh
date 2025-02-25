@@ -208,7 +208,7 @@ if [ -n "$date" ]; then
   end_time=$($date +%s%3N)
   elapsed=$((end_time - start_time))
 
-  printf "${BOLD}Tests took %d.%03d${RESET}\n" $((elapsed / 1000)) $((elapsed % 1000))
+  printf "${BOLD}Tests took %d.%03d${RESET}s\n" $((elapsed / 1000)) $((elapsed % 1000))
 fi
 
 exit $exc

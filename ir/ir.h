@@ -913,8 +913,6 @@ enum ir_func_iter_flags { IR_FUNC_ITER_FLAG_NONE = 0 };
 
 struct ir_func_iter {
   struct ir_func *func;
-  struct ir_basicblock *basicblock;
-  struct ir_stmt *stmt;
   struct ir_op *op;
   enum ir_func_iter_flags flags;
 };

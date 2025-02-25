@@ -815,8 +815,15 @@ void eliminate_redundant_ops(struct ir_func *func,
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
+  struct ir_op *detach = NULL;
+
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
+    if (detach) {
+      detach_ir_op(func, detach);
+      detach = NULL;
+    }
+
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
@@ -835,7 +842,7 @@ void eliminate_redundant_ops(struct ir_func *func,
           *usage.uses[i].op = op->mov.value;
         }
 
-        detach_ir_op(func, op);
+        detach = op;
       }
       break;
     case IR_OP_TY_BR: {
@@ -847,7 +854,7 @@ void eliminate_redundant_ops(struct ir_func *func,
       DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                    "br op in non MERGE bb");
       if (basicblock->succ == basicblock->merge.target) {
-        detach_ir_op(func, op);
+        detach = op;
       }
       break;
     }
@@ -857,7 +864,7 @@ void eliminate_redundant_ops(struct ir_func *func,
       }
 
       if (!use_map.op_use_datas[op->id].num_uses) {
-        detach_ir_op(func, op);
+        detach = op;
       }
       break;
     }
@@ -1488,20 +1495,21 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
 static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
 static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
 
-void mk_zero_constant(struct ir_unit *iru, struct ir_op *op, struct ir_var_ty *var_ty) {
+void mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
+                      struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
-    case IR_VAR_TY_TY_PRIMITIVE:
-      if (primitive_ty_is_fp(var_ty->primitive)) {
-        mk_floating_zero_constant(iru, op, var_ty->primitive);
-      } else {
-        mk_integral_constant(iru, op, var_ty->primitive, 0);
-      }
-      break;
-    case IR_VAR_TY_TY_POINTER:
-      mk_pointer_constant(iru, op, 0);
-      break;
-    default:
-      BUG("unsupported for func");
+  case IR_VAR_TY_TY_PRIMITIVE:
+    if (primitive_ty_is_fp(var_ty->primitive)) {
+      mk_floating_zero_constant(iru, op, var_ty->primitive);
+    } else {
+      mk_integral_constant(iru, op, var_ty->primitive, 0);
+    }
+    break;
+  case IR_VAR_TY_TY_POINTER:
+    mk_pointer_constant(iru, op, 0);
+    break;
+  default:
+    BUG("unsupported for func");
   }
 }
 
@@ -2390,59 +2398,73 @@ struct move_set gen_move_order(struct arena_allocator *arena,
 
 struct ir_func_iter ir_func_iter(struct ir_func *func,
                                  enum ir_func_iter_flags flags) {
-  struct ir_basicblock *basicblock = func->first;
-
-  while (basicblock && !basicblock->first) {
-    basicblock = basicblock->succ;
-  }
-
-  struct ir_stmt *stmt = basicblock ? basicblock->first : NULL;
-
-  while (stmt && !stmt->first) {
-    stmt = stmt->succ;
-  }
-
-  struct ir_op *op = stmt ? stmt->first : NULL;
-
   return (struct ir_func_iter){
       .func = func,
       .flags = flags,
-      .basicblock = basicblock,
-      .stmt = stmt,
-      .op = op,
+      .op = NULL,
   };
+}
+
+static struct ir_op *get_first(struct ir_func *func) {
+  struct ir_basicblock *basicblock = func->first;
+
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    while (stmt) {
+      struct ir_op *op = stmt->first;
+
+      if (op) {
+        return op;
+      }
+
+      stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  return NULL;
+}
+
+static struct ir_op *get_next(struct ir_op *op) {
+  if (op->succ) {
+    return op->succ;
+  }
+
+  struct ir_stmt *stmt = op->stmt->succ;
+  struct ir_basicblock *basicblock = op->stmt->basicblock;
+
+  while (!stmt || !stmt->first) {
+    if (!stmt) {
+      basicblock = basicblock->succ;
+
+      if (!basicblock) {
+        return NULL;
+      }
+
+      stmt = basicblock->first;
+    } else {
+      stmt = stmt->succ;
+    }
+  }
+
+  return stmt->first;
 }
 
 bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
   if (!iter->op) {
-    return false;
+    iter->op = get_first(iter->func);
+  } else {
+    DEBUG_ASSERT(iter->op->id != DETACHED_OP, "op detached during iter");
+    iter->op = get_next(iter->op);
+  }
+
+  if (iter->op) {
+    DEBUG_ASSERT(iter->op->id != DETACHED_OP, "op detached during iter");
   }
 
   *op = iter->op;
-
-  iter->op = iter->op->succ;
-  if (!iter->op) {
-    do {
-      iter->stmt = iter->stmt->succ;
-
-      if (!iter->stmt) {
-        do {
-          iter->basicblock = iter->basicblock->succ;
-
-          if (!iter->basicblock) {
-            iter->op = NULL;
-            return true;
-          }
-
-          iter->stmt = iter->basicblock->first;
-        } while (!iter->basicblock->first);
-      }
-
-      iter->op = iter->stmt->first;
-    } while (!iter->stmt->first);
-  }
-
-  return true;
+  return *op;
 }
 
 static struct ir_basicblock *intersect(struct ir_basicblock **idoms,

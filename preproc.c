@@ -527,14 +527,14 @@ static void preproc_next_raw_token(struct preproc *preproc,
     while (end.idx < preproc_text->len) {
       char nc = preproc_text->text[end.idx];
 
-      if (is_preproc_number_char(nc)) {
-        next_col(&end);
-      } else if (end.idx + 1 < preproc_text->len &&
+      if (end.idx + 1 < preproc_text->len &&
                  (tolower(nc) == 'e' || tolower(nc) == 'p') &&
                  (preproc_text->text[end.idx + 1] == '+' ||
                   preproc_text->text[end.idx + 1] == '-')) {
         // need to check if it is an exponent
         next_col(&end);
+        next_col(&end);
+      } else if (is_preproc_number_char(nc)) {
         next_col(&end);
       } else {
         token->ty = PREPROC_TOKEN_TY_PREPROC_NUMBER;
