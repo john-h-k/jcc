@@ -683,32 +683,41 @@ static void lower_params(struct ir_func *func) {
         DEBUG_ASSERT(param_info.num_regs == 1,
                      "expected 1 reg for non aggregate");
 
-        struct ir_op *param = insert_before_ir_op(func, param_op, IR_OP_TY_MOV,
+        struct ir_op *param = replace_ir_op(func, param_op, IR_OP_TY_MOV,
                                                   IR_VAR_TY_POINTER);
         param->mov = (struct ir_op_mov){.value = NULL};
         param->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-        param->reg = (struct ir_reg){.ty = param_info.regs[0].reg.ty,
-                                     .idx = param_info.regs[0].reg.idx};
+        param->reg = param_info.regs[0].reg;
 
         struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
         struct ir_lcl *lcl = param_op->addr.lcl;
+
+        // FIXME: we mark the param as being ETERNAL
+        // this is because we are using it potentially across BBs without generating phis
+        // the fix is to use phis properly
+        // (potentially changing IR build so it doesn't do the silly "struct param becomes local" thing)
 
         struct ir_op *op;
         while (ir_func_iter_next(&iter, &op)) {
           if (op->ty == IR_OP_TY_ADDR && op->addr.ty == IR_OP_ADDR_TY_LCL &&
               op->addr.lcl == lcl) {
             op = replace_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
-            op->flags &= ~IR_OP_FLAG_PARAM;
             op->mov = (struct ir_op_mov){.value = param};
+
+            param->flags |= IR_OP_FLAG_ETERNAL;
           } else if (op->ty == IR_OP_TY_LOAD &&
                      op->load.ty == IR_OP_LOAD_TY_LCL && op->load.lcl == lcl) {
             op->load.ty = IR_OP_LOAD_TY_ADDR;
             op->load.addr = param;
+
+            param->flags |= IR_OP_FLAG_ETERNAL;
           } else if (op->ty == IR_OP_TY_STORE &&
                      op->store.ty == IR_OP_STORE_TY_LCL &&
                      op->store.lcl == lcl) {
             op->store.ty = IR_OP_STORE_TY_ADDR;
             op->store.addr = param;
+
+            param->flags |= IR_OP_FLAG_ETERNAL;
           }
         }
 
@@ -723,18 +732,19 @@ static void lower_params(struct ir_func *func) {
     // now go through and add non-fixed movs so regalloc doesn't get broken by
     // long living params
     param_op = func->first->first->first;
-    for (size_t i = 0; i < call_info.num_params; i++) {
+    while (param_op && param_op->flags & IR_OP_FLAG_PARAM) {
       struct ir_op *mov =
           insert_before_ir_op(func, param_op, IR_OP_TY_MOV, param_op->var_ty);
       mov->mov = (struct ir_op_mov){.value = NULL};
 
       mov->reg = param_op->reg;
       mov->flags =
-          (param_op->flags & ~(IR_OP_FLAG_SPILLED)) | IR_OP_FLAG_FIXED_REG;
+          (param_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) | IR_OP_FLAG_FIXED_REG;
 
-      param_op->flags = IR_OP_FLAG_NONE;
+      param_op->flags &= ~(IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM);
 
       param_op->mov = (struct ir_op_mov){.value = mov};
+      param_op->reg = NO_REG;
 
       param_op = param_op->succ;
     }
