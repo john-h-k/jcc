@@ -180,7 +180,10 @@ run_tests() {
   rm "$output"
 }
 
-num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2>/dev/null || 4) # just assume 4 if needed
+num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2>/dev/null || echo 4) # just assume 4 if needed
+
+printf "${BOLD}Using %d processes...${RESET}\n" $num_procs
+
 pids=()
 for ((p=0; p<num_procs; p++)); do
   run_tests "$p" "$@" &
