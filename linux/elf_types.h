@@ -235,11 +235,11 @@ typedef struct elf64_shdr {
 
 /* x64 relocs */
 
-#define R_X86_64_NONE 0  /* No reloc */
-#define R_X86_64_64 1    /* Direct 64 bit  */
-#define R_X86_64_PC32 2  /* PC relative 32 bit signed */
-#define R_X86_64_GOT32 3 /* 32 bit GOT entry */
-#define R_X86_64_PLT32 4 /* 32 bit PLT address */
+#define R_X86_64_NONE 0
+#define R_X86_64_64 1
+#define R_X86_64_PC32 2
+#define R_X86_64_GOT32 3
+#define R_X86_64_PLT32 4
 
 /* aarch64 relocs */
 
