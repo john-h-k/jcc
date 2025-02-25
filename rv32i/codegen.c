@@ -54,16 +54,6 @@ struct rv32i_prologue_info {
   size_t save_start;
 };
 
-struct codegen_state {
-  struct arena_allocator *arena;
-
-  struct codegen_function *func;
-  struct ir_func *ir;
-  struct rv32i_prologue_info prologue_info;
-
-  size_t stack_args_size;
-};
-
 static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                     UNUSED const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
@@ -75,10 +65,6 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
   }
 
   return offset;
-}
-
-static struct rv32i_reg return_reg_for_ty(enum rv32i_reg_ty reg_ty) {
-  return (struct rv32i_reg){.ty = reg_ty, .idx = 10};
 }
 
 static enum rv32i_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
@@ -400,7 +386,10 @@ static void codegen_prologue(struct codegen_state *state) {
                                      .save_start = stack_size,
                                      .stack_size = stack_size};
 
+  state->rv32i_prologue_info = arena_alloc(state->arena, sizeof(*state->rv32i_prologue_info));
+
   if (!info.prologue_generated) {
+    *state->rv32i_prologue_info = info;
     return;
   }
 
@@ -456,7 +445,7 @@ static void codegen_prologue(struct codegen_state *state) {
     }
   }
 
-  state->prologue_info = info;
+  *state->rv32i_prologue_info = info;
 }
 
 #define IMM_BITS (12)
@@ -483,7 +472,7 @@ static void codegen_add_imm(struct codegen_state *state, struct rv32i_reg dest,
 }
 
 static void codegen_epilogue(struct codegen_state *state) {
-  const struct rv32i_prologue_info *prologue_info = &state->prologue_info;
+  const struct rv32i_prologue_info *prologue_info = state->rv32i_prologue_info;
 
   if (!prologue_info->prologue_generated) {
     return;
@@ -538,32 +527,7 @@ static void codegen_epilogue(struct codegen_state *state) {
       .dest = STACK_PTR_REG, .addr = STACK_PTR_REG, .imm = -8};
 }
 
-static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
-  if (op->ret.value && op->ret.value->ty != IR_OP_TY_CALL) {
-    struct rv32i_reg source = codegen_reg(op->ret.value);
-
-    if (source.idx != return_reg_for_ty(source.ty).idx) {
-      struct instr *instr = alloc_instr(state->func);
-
-      if (source.ty == RV32I_REG_TY_W) {
-        *instr->rv32i = MOV_ALIAS(return_reg_for_ty(source.ty), source);
-      } else {
-        DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "expected fp");
-
-        switch (op->var_ty.primitive) {
-        case IR_VAR_PRIMITIVE_TY_F32:
-          *instr->rv32i = FP32_MOV_ALIAS(return_reg_for_ty(source.ty), source);
-          break;
-        case IR_VAR_PRIMITIVE_TY_F64:
-          *instr->rv32i = FP64_MOV_ALIAS(return_reg_for_ty(source.ty), source);
-          break;
-        default:
-          BUG("unsupported");
-        }
-      }
-    }
-  }
-
+static void codegen_ret_op(struct codegen_state *state, UNUSED struct ir_op *op) {
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
@@ -1451,250 +1415,21 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
-static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
-                                    size_t offset, struct ir_var_value *value,
-                                    char *data) {
-  if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
-    return;
-  }
+void rv32i_codegen_start(struct codegen_state *state) {
+  codegen_prologue(state);
+}
 
-#define COPY(ty, fld)                                                          \
-  ty tmp##ty = (ty)value->fld;                                                 \
-  memcpy(data, &tmp##ty, sizeof(tmp##ty))
-  switch (value->var_ty.ty) {
-  case IR_VAR_TY_TY_NONE:
-  case IR_VAR_TY_TY_VARIADIC:
-    break;
-  case IR_VAR_TY_TY_PRIMITIVE: {
-    switch (value->var_ty.primitive) {
-    case IR_VAR_PRIMITIVE_TY_I8:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      COPY(uint8_t, int_value);
-      break;
-    case IR_VAR_PRIMITIVE_TY_F16:
-    case IR_VAR_PRIMITIVE_TY_I16:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      COPY(uint16_t, int_value);
-      break;
-    case IR_VAR_PRIMITIVE_TY_I32:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      COPY(uint32_t, int_value);
-      break;
-    case IR_VAR_PRIMITIVE_TY_I64:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      COPY(uint64_t, int_value);
-      break;
-    case IR_VAR_PRIMITIVE_TY_F32:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
-      COPY(float, flt_value);
-      break;
-    case IR_VAR_PRIMITIVE_TY_F64:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
-      COPY(double, flt_value);
-      break;
-    }
-    break;
-  }
-#undef COPY
+void rv32i_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = basicblock->first;
 
-  case IR_VAR_TY_TY_FUNC:
-    BUG("func can not have data as a global var");
+  while (stmt) {
+    codegen_stmt(state, stmt);
 
-    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
-    // target-ptr-size
-
-  case IR_VAR_TY_TY_POINTER:
-  case IR_VAR_TY_TY_ARRAY:
-    switch (value->ty) {
-    case IR_VAR_VALUE_TY_ZERO:
-    case IR_VAR_VALUE_TY_FLT:
-      BUG("doesn't make sense");
-    case IR_VAR_VALUE_TY_ADDR: {
-      struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
-                                 .size = 3,
-                                 .address = offset,
-                                 .offset = value->addr.offset,
-                                 .symbol_index = value->addr.glb->id};
-
-      vector_push_back(relocs, &reloc);
-
-      memcpy(data, &value->addr.offset, sizeof(void *));
-      break;
-    }
-    case IR_VAR_VALUE_TY_INT:
-      memcpy(data, &value->int_value, sizeof(void *));
-      break;
-    case IR_VAR_VALUE_TY_STR:
-      // FIXME: !!!! doesn't work with string literals containing null char
-      strcpy(data, value->str_value);
-      break;
-    case IR_VAR_VALUE_TY_VALUE_LIST:
-      for (size_t i = 0; i < value->value_list.num_values; i++) {
-        size_t value_offset = value->value_list.offsets[i];
-        codegen_write_var_value(iru, relocs, offset + value_offset,
-                                &value->value_list.values[i],
-                                &data[value_offset]);
-      }
-      break;
-    }
-    break;
-
-  case IR_VAR_TY_TY_STRUCT:
-  case IR_VAR_TY_TY_UNION:
-    DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
-                 "expected value list");
-    for (size_t i = 0; i < value->value_list.num_values; i++) {
-      size_t field_offset = value->value_list.offsets[i];
-      codegen_write_var_value(iru, relocs, offset + field_offset,
-                              &value->value_list.values[i],
-                              &data[field_offset]);
-    }
+    stmt = stmt->succ;
   }
 }
-static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
-                                             const char *name,
-                                             struct ir_var *var) {
-  switch (var->ty) {
-  case IR_VAR_TY_STRING_LITERAL: {
-    BUG("str literal should have been lowered seperately");
-  }
-  case IR_VAR_TY_CONST_DATA:
-  case IR_VAR_TY_DATA: {
-    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
 
-    // TODO: this leak
-    struct vector *relocs = vector_create(sizeof(struct relocation));
-
-    size_t len = info.size;
-
-    char *data = arena_alloc(ir->arena, len);
-    memset(data, 0, len);
-
-    codegen_write_var_value(ir, relocs, 0, &var->value, data);
-
-    // TODO: handle const data
-    struct codegen_data codegen_data = {.data = data, .len_data = len};
-
-    CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
-                          codegen_data.relocs);
-
-    // TODO: handle const data
-    return (struct codegen_entry){
-        .ty = CODEGEN_ENTRY_TY_DATA,
-        .glb_id = id,
-        .alignment = info.alignment,
-        .name = name,
-        .data = codegen_data,
-    };
-  }
-  }
-}
-void rv32i_codegen(struct codegen_unit *unit, struct ir_unit *ir) {
-  struct ir_glb *glb = ir->first_global;
-
-  {
-    size_t i = 0;
-    while (glb) {
-      if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-        unit->entries[i] =
-            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DECL,
-                                   .glb_id = glb->id,
-                                   .name = rv32i_mangle(ir->arena, glb->name)};
-
-        i++;
-        glb = glb->succ;
-        continue;
-      }
-
-      switch (glb->ty) {
-      case IR_GLB_TY_DATA: {
-        // TODO: non string literals
-
-        const char *name =
-            glb->name ? rv32i_mangle(ir->arena, glb->name)
-                      : mangle_str_cnst_name(ir->arena, "todo", glb->id);
-        switch (glb->var->ty) {
-        case IR_VAR_TY_STRING_LITERAL:
-          unit->entries[i] =
-              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
-                                     .glb_id = glb->id,
-                                     .name = name,
-                                     .str = glb->var->value.str_value};
-          break;
-        case IR_VAR_TY_CONST_DATA:
-        case IR_VAR_TY_DATA:
-          unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
-          break;
-        }
-        break;
-      }
-      case IR_GLB_TY_FUNC: {
-        struct ir_func *ir_func = glb->func;
-
-        clear_metadata(ir_func);
-
-        unit->entries[i] = (struct codegen_entry){
-            .ty = CODEGEN_ENTRY_TY_FUNC,
-            .glb_id = glb->id,
-            .name = rv32i_mangle(ir->arena, ir_func->name),
-            .func = {
-                .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
-
-        struct codegen_function *func = &unit->entries[i].func;
-        struct codegen_state state = {
-            .arena = unit->arena, .func = func, .ir = ir_func};
-
-        state.stack_args_size = 0;
-
-        codegen_prologue(&state);
-
-        func->prologue = state.prologue_info.prologue_generated;
-        func->stack_size = state.prologue_info.stack_size;
-
-        struct ir_basicblock *basicblock = ir_func->first;
-        while (basicblock) {
-          struct instr *first_pred = func->last;
-
-          struct ir_stmt *stmt = basicblock->first;
-
-          while (stmt) {
-            codegen_stmt(&state, stmt);
-
-            stmt = stmt->succ;
-          }
-
-          basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-          basicblock->last_instr = func->last;
-
-          basicblock = basicblock->succ;
-        }
-
-        break;
-      }
-      }
-
-      i++;
-      glb = glb->succ;
-    }
-  }
-
-  qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
-        codegen_sort_entries_by_id);
-
-  // now do sanity checks
-  // for (size_t i = 0; i < unit->num_entries; i++) {
-  //   const struct codegen_entry *entry = &unit->entries[i];
-
-  //   if (entry->ty == CODEGEN_ENTRY_TY_FUNC) {
-  //     // codegen is now done
-  //     // do some basic sanity checks
-  //     struct check_reg_type_data data = {
-  //         .entry = entry, .last = NULL, .reg_ty = 0};
-  //     walk_regs(&entry->func, check_reg_type_callback, &data);
-  //   }
-  // }
+void rv32i_codegen_end(UNUSED struct codegen_state *state) {
 }
 
 static const char *GP_REG_ABI_NAMES[] = {

@@ -129,7 +129,6 @@ typedef struct ir_func_info (*target_lower_func_ty)(struct ir_func *func,
 
 struct codegen_unit;
 
-typedef void (*target_codegen)(struct codegen_unit *unit, struct ir_unit *ir);
 typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
@@ -151,10 +150,37 @@ enum codegen_unit_ty {
   CODEGEN_UNIT_TY_RV32I,
 };
 
+
+struct codegen_state {
+  struct arena_allocator *arena;
+
+  const struct target *target;
+  struct codegen_function *func;
+  struct ir_func *ir;
+
+  union {
+    struct aarch64_prologue_info *aarch64_prologue_info;
+    struct x64_prologue_info *x64_prologue_info;
+    struct rv32i_prologue_info *rv32i_prologue_info;
+  };
+};
+
+struct ir_glb;
+struct ir_basicblock;
+
+typedef void (*target_codegen)(struct codegen_state *state);
+typedef void (*target_codegen_basicblock)(struct codegen_state *state, struct ir_basicblock *basicblock);
+typedef void (*target_codegen)(struct codegen_state *state);
+
+typedef struct codegen_entry (*target_codegen_var)(struct codegen_unit *unit, struct ir_glb *glb);
+
 struct codegen_info {
   enum codegen_unit_ty ty;
   size_t instr_sz;
-  target_codegen codegen;
+  size_t function_align;
+  target_codegen codegen_start;
+  target_codegen_basicblock codegen_basicblock;
+  target_codegen codegen_end;
 };
 
 struct target {

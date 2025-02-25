@@ -2,10 +2,8 @@
 
 #include "../aarch64.h"
 #include "../bit_twiddle.h"
-#include "../bitset.h"
 #include "../log.h"
 #include "../util.h"
-#include "../vector.h"
 
 #include <stdio.h>
 
@@ -286,16 +284,6 @@ struct aarch64_prologue_info {
   size_t save_start;
 };
 
-struct codegen_state {
-  struct arena_allocator *arena;
-
-  const struct target *target;
-  struct codegen_function *func;
-  struct ir_func *ir;
-  struct aarch64_prologue_info prologue_info;
-
-  struct aarch64_reg ssp;
-};
 
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
@@ -347,9 +335,9 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
     offset += state->ir->caller_stack_needed;
   }
 
-  if (!state->prologue_info.prologue_generated) {
+  if (!state->aarch64_prologue_info->prologue_generated) {
     // using red zone
-    offset = (ssize_t)state->prologue_info.stack_size - offset;
+    offset = (ssize_t)state->aarch64_prologue_info->stack_size - offset;
   }
 
   if (!op) {
@@ -1893,125 +1881,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-// FIXME: do things more smarter
-#define AARCH64_TARGET (AARCH64_MACOS_TARGET)
-
-#define LEAF_STACK_SIZE (128)
-
-static void codegen_prologue(struct codegen_state *state) {
-  struct ir_func *ir = state->ir;
-
-  size_t stack_size =
-      state->ir->total_locals_size + state->ir->caller_stack_needed;
-  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
-
-  const size_t LR_OFFSET = 2;
-
-  size_t save_start = stack_size;
-
-  size_t num_nonvolatile_used = ir->reg_usage.num_nonvolatile_used;
-
-  // save nonvol
-  stack_size += num_nonvolatile_used * 8;
-  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
-
-  // TODO: implement red zone. requires _subtracting_ from `sp` instead of
-  // adding for all local addressing bool leaf =
-  //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
-  bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
-
-  struct aarch64_prologue_info info = {.prologue_generated = !leaf,
-                                       .save_start = save_start,
-                                       .lr_offset = LR_OFFSET,
-                                       .stack_size = stack_size};
-
-  if (!info.prologue_generated) {
-    return;
-  }
-
-  // need to save x29 and x30
-  info.stack_size += 16;
-
-  struct instr *save_lr_x30 = alloc_instr(state->func);
-  save_lr_x30->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
-  save_lr_x30->aarch64->stp_imm = (struct aarch64_store_pair_imm){
-      .mode = AARCH64_ADDRESSING_MODE_PREINDEX,
-      .imm = -info.lr_offset,
-      .source = {FRAME_PTR_REG, RET_PTR_REG},
-      .addr = STACK_PTR_REG,
-  };
-
-  info.stack_size = ROUND_UP(info.stack_size, AARCH64_STACK_ALIGNMENT);
-
-  // also save stack pointer into frame pointer as required by ABI
-  // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
-  // so `add x29, sp, #x` is used instead
-  struct instr *save_x29 = alloc_instr(state->func);
-  save_x29->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
-  save_x29->aarch64->add_imm = (struct aarch64_addsub_imm){
-      .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 29},
-      .source = STACK_PTR_REG,
-      .imm = info.lr_offset * 8,
-      .shift = 0};
-
-  size_t stack_to_sub = info.stack_size - 16; // from the pre-index lr
-  if (stack_to_sub) {
-    if (stack_to_sub > MAX_IMM_SIZE) {
-      codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
-    } else {
-      struct instr *sub_stack = alloc_instr(state->func);
-      sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
-      sub_stack->aarch64->sub_imm =
-          (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
-                                      .source = STACK_PTR_REG,
-                                      .imm = stack_to_sub,
-                                      .shift = 0};
-    }
-
-    for (size_t i = 0; i < num_nonvolatile_used; i++) {
-      struct ir_reg reg = ir->reg_usage.nonvolatile_used[i];
-
-      // guaranteed to be mod 8
-      size_t offset = (info.save_start / 8) + i;
-
-      switch (reg.ty) {
-      case IR_REG_TY_INTEGRAL: {
-        struct instr *save = alloc_instr(state->func);
-        save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-        save->aarch64->str_imm = (struct aarch64_store_imm){
-            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-            .imm = offset,
-            .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
-                                           .idx = translate_reg_idx(
-                                               reg.idx, IR_REG_TY_INTEGRAL)},
-            .addr = STACK_PTR_REG,
-        };
-        break;
-      }
-      case IR_REG_TY_FP: {
-        struct instr *save = alloc_instr(state->func);
-        save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
-        save->aarch64->str_imm = (struct aarch64_store_imm){
-            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-            .imm = offset,
-            .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
-                                           .idx = translate_reg_idx(
-                                               reg.idx, IR_REG_TY_FP)},
-            .addr = STACK_PTR_REG,
-        };
-        break;
-      }
-      default:
-        BUG("can't save this reg ty");
-      }
-    }
-  }
-
-  state->prologue_info = info;
-}
-
 static void codegen_epilogue(struct codegen_state *state) {
-  const struct aarch64_prologue_info *prologue_info = &state->prologue_info;
+  const struct aarch64_prologue_info *prologue_info = state->aarch64_prologue_info;
 
   if (!prologue_info->prologue_generated) {
     return;
@@ -2302,9 +2173,142 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
+
+#define LEAF_STACK_SIZE (128)
+
+static void codegen_prologue(struct codegen_state *state) {
+  struct ir_func *ir = state->ir;
+
+  size_t stack_size =
+      state->ir->total_locals_size + state->ir->caller_stack_needed;
+  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
+
+  const size_t LR_OFFSET = 2;
+
+  size_t save_start = stack_size;
+
+  size_t num_nonvolatile_used = ir->reg_usage.num_nonvolatile_used;
+
+  // save nonvol
+  stack_size += num_nonvolatile_used * 8;
+  stack_size = ROUND_UP(stack_size, AARCH64_STACK_ALIGNMENT);
+
+  // TODO: implement red zone. requires _subtracting_ from `sp` instead of
+  // adding for all local addressing bool leaf =
+  //     !(stack_size > LEAF_STACK_SIZE || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
+  bool leaf = !(stack_size || ir->flags & IR_FUNC_FLAG_MAKES_CALL);
+
+  struct aarch64_prologue_info info = {.prologue_generated = !leaf,
+                                       .save_start = save_start,
+                                       .lr_offset = LR_OFFSET,
+                                       .stack_size = stack_size};
+
+  state->aarch64_prologue_info = arena_alloc(state->arena, sizeof(*state->aarch64_prologue_info));
+
+  if (!info.prologue_generated) {
+    *state->aarch64_prologue_info = info;
+    return;
+  }
+
+  // need to save x29 and x30
+  info.stack_size += 16;
+
+  struct instr *save_lr_x30 = alloc_instr(state->func);
+  save_lr_x30->aarch64->ty = AARCH64_INSTR_TY_STORE_PAIR_IMM;
+  save_lr_x30->aarch64->stp_imm = (struct aarch64_store_pair_imm){
+      .mode = AARCH64_ADDRESSING_MODE_PREINDEX,
+      .imm = -info.lr_offset,
+      .source = {FRAME_PTR_REG, RET_PTR_REG},
+      .addr = STACK_PTR_REG,
+  };
+
+  info.stack_size = ROUND_UP(info.stack_size, AARCH64_STACK_ALIGNMENT);
+
+  // also save stack pointer into frame pointer as required by ABI
+  // `mov x29, sp` is illegal (encodes as `mov x29, xzr`)
+  // so `add x29, sp, #x` is used instead
+  struct instr *save_x29 = alloc_instr(state->func);
+  save_x29->aarch64->ty = AARCH64_INSTR_TY_ADD_IMM;
+  save_x29->aarch64->add_imm = (struct aarch64_addsub_imm){
+      .dest = (struct aarch64_reg){.ty = AARCH64_REG_TY_X, .idx = 29},
+      .source = STACK_PTR_REG,
+      .imm = info.lr_offset * 8,
+      .shift = 0};
+
+  size_t stack_to_sub = info.stack_size - 16; // from the pre-index lr
+  if (stack_to_sub) {
+    if (stack_to_sub > MAX_IMM_SIZE) {
+      codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
+    } else {
+      struct instr *sub_stack = alloc_instr(state->func);
+      sub_stack->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
+      sub_stack->aarch64->sub_imm =
+          (struct aarch64_addsub_imm){.dest = STACK_PTR_REG,
+                                      .source = STACK_PTR_REG,
+                                      .imm = stack_to_sub,
+                                      .shift = 0};
+    }
+
+    for (size_t i = 0; i < num_nonvolatile_used; i++) {
+      struct ir_reg reg = ir->reg_usage.nonvolatile_used[i];
+
+      // guaranteed to be mod 8
+      size_t offset = (info.save_start / 8) + i;
+
+      switch (reg.ty) {
+      case IR_REG_TY_INTEGRAL: {
+        struct instr *save = alloc_instr(state->func);
+        save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+        save->aarch64->str_imm = (struct aarch64_store_imm){
+            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+            .imm = offset,
+            .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_X,
+                                           .idx = translate_reg_idx(
+                                               reg.idx, IR_REG_TY_INTEGRAL)},
+            .addr = STACK_PTR_REG,
+        };
+        break;
+      }
+      case IR_REG_TY_FP: {
+        struct instr *save = alloc_instr(state->func);
+        save->aarch64->ty = AARCH64_INSTR_TY_STORE_IMM;
+        save->aarch64->str_imm = (struct aarch64_store_imm){
+            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
+            .imm = offset,
+            .source = (struct aarch64_reg){.ty = AARCH64_REG_TY_D,
+                                           .idx = translate_reg_idx(
+                                               reg.idx, IR_REG_TY_FP)},
+            .addr = STACK_PTR_REG,
+        };
+        break;
+      }
+      default:
+        BUG("can't save this reg ty");
+      }
+    }
+  }
+
+  *state->aarch64_prologue_info = info;
+}
+
+
+void aarch64_codegen_start(struct codegen_state *state) {
+  codegen_prologue(state);
+}
+
+void aarch64_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock) {
+  struct ir_stmt *stmt = basicblock->first;
+
+  while (stmt) {
+    codegen_stmt(state, stmt);
+
+    stmt = stmt->succ;
+  }
+}
+
 struct check_reg_type_data {
   // used so we know when the instruction changes
-  const struct codegen_entry *entry;
+  const struct codegen_state *state;
   struct instr *last;
 
   enum aarch64_reg_ty reg_ty;
@@ -2320,8 +2324,8 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     // to other registers so back out early
     invariant_assert(
         reg.ty == AARCH64_REG_TY_X,
-        "entry %zu: usage DEREF only makes sense with REG_TY_X in %zu",
-        data->entry->glb_id, instr->id);
+        "usage DEREF only makes sense with REG_TY_X in %zu",
+        instr->id);
     return;
   }
 
@@ -2337,302 +2341,31 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
       size_t last_size = aarch64_reg_size(data->reg_ty);
       invariant_assert(
           cur_size == last_size || (cur_size < 4 && last_size == 4),
-          "entry %zu: expected `fmov` %zu to have same size registers "
+          "expected `fmov` %zu to have same size registers "
           "(expected %zu found %zu)",
-          data->entry->glb_id, instr->id, cur_size, last_size);
+          instr->id, cur_size, last_size);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
       invariant_assert(aarch64_reg_ty_is_fp(reg.ty) &&
                            aarch64_reg_ty_is_fp(data->reg_ty),
-                       "entry %zu: expected `fcvt` %zu to have all registers "
+                       "expected `fcvt` %zu to have all registers "
                        "floating-point",
-                       data->entry->glb_id, instr->id);
+                       instr->id);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_UCVTF ||
                instr->aarch64->ty == AARCH64_INSTR_TY_SCVTF) {
       invariant_assert(
           aarch64_reg_ty_is_fp(reg.ty) != aarch64_reg_ty_is_fp(data->reg_ty),
-          "entry %zu: expected `ucvtf`/`scvtf` %zu to have one fp register "
+          "expected `ucvtf`/`scvtf` %zu to have one fp register "
           "and one gp register",
-          data->entry->glb_id, instr->id);
+          instr->id);
     } else {
       invariant_assert(
           reg.ty == data->reg_ty,
-          "entry %zu: reg ty mismatch in %zu (expected %d found %d)",
-          data->entry->glb_id, instr->id, data->reg_ty, reg.ty);
+          "reg ty mismatch in %zu (expected %d found %d)",
+          instr->id, data->reg_ty, reg.ty);
     }
   }
 
   data->last = instr;
-}
-
-static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
-                                    size_t offset, struct ir_var_value *value,
-                                    char *data) {
-  if (!value || value->ty == IR_VAR_VALUE_TY_ZERO) {
-    return;
-  }
-
-  switch (value->var_ty.ty) {
-  case IR_VAR_TY_TY_NONE:
-  case IR_VAR_TY_TY_VARIADIC:
-    break;
-  case IR_VAR_TY_TY_PRIMITIVE: {
-    switch (value->var_ty.primitive) {
-    case IR_VAR_PRIMITIVE_TY_I8:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
-      memcpy(data, &value->int_value, 1);
-      break;
-    case IR_VAR_PRIMITIVE_TY_F16:
-    case IR_VAR_PRIMITIVE_TY_I16:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, 2);
-      break;
-    case IR_VAR_PRIMITIVE_TY_I32:
-    case IR_VAR_PRIMITIVE_TY_F32:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, 4);
-      break;
-    case IR_VAR_PRIMITIVE_TY_I64:
-    case IR_VAR_PRIMITIVE_TY_F64:
-      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT ||
-                       value->ty == IR_VAR_VALUE_TY_FLT,
-                   "expected int/flt");
-      memcpy(data, &value->int_value, sizeof(unsigned long));
-      break;
-    }
-    break;
-  }
-
-  case IR_VAR_TY_TY_FUNC:
-    BUG("func can not have data as a global var");
-
-    // FIXME: some bugs here around using compiler-ptr-size when we mean to use
-    // target-ptr-size
-
-  case IR_VAR_TY_TY_POINTER:
-  case IR_VAR_TY_TY_ARRAY:
-    switch (value->ty) {
-    case IR_VAR_VALUE_TY_ZERO:
-    case IR_VAR_VALUE_TY_FLT:
-      BUG("doesn't make sense");
-    case IR_VAR_VALUE_TY_ADDR: {
-      struct relocation reloc = {.ty = RELOCATION_TY_POINTER,
-                                 .size = 3,
-                                 .address = offset,
-                                 .offset = value->addr.offset,
-                                 .symbol_index = value->addr.glb->id};
-
-      vector_push_back(relocs, &reloc);
-
-      memcpy(data, &value->addr.offset, sizeof(void *));
-      break;
-    }
-    case IR_VAR_VALUE_TY_INT:
-      memcpy(data, &value->int_value, sizeof(void *));
-      break;
-    case IR_VAR_VALUE_TY_STR:
-      // FIXME: !!!! doesn't work with string literals containing null char
-      strcpy(data, value->str_value);
-      break;
-    case IR_VAR_VALUE_TY_VALUE_LIST:
-      for (size_t i = 0; i < value->value_list.num_values; i++) {
-        size_t value_offset = value->value_list.offsets[i];
-        codegen_write_var_value(iru, relocs, offset + value_offset,
-                                &value->value_list.values[i],
-                                &data[value_offset]);
-      }
-      break;
-    }
-    break;
-
-  case IR_VAR_TY_TY_STRUCT:
-  case IR_VAR_TY_TY_UNION:
-    DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_VALUE_LIST,
-                 "expected value list");
-    for (size_t i = 0; i < value->value_list.num_values; i++) {
-      size_t field_offset = value->value_list.offsets[i];
-      codegen_write_var_value(iru, relocs, offset + field_offset,
-                              &value->value_list.values[i],
-                              &data[field_offset]);
-    }
-  }
-}
-
-static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
-                                             const char *name,
-                                             struct ir_var *var) {
-  switch (var->ty) {
-  case IR_VAR_TY_STRING_LITERAL: {
-    BUG("str literal should have been lowered seperately");
-  }
-  case IR_VAR_TY_CONST_DATA:
-  case IR_VAR_TY_DATA: {
-    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
-
-    // TODO: this leak
-    struct vector *relocs = vector_create(sizeof(struct relocation));
-
-    size_t len = info.size;
-
-    char *data = arena_alloc(ir->arena, len);
-    memset(data, 0, len);
-
-    codegen_write_var_value(ir, relocs, 0, &var->value, data);
-
-    struct codegen_data codegen_data = {.data = data, .len_data = len};
-
-    CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
-                          codegen_data.relocs);
-
-    // TODO: handle const data
-    return (struct codegen_entry){
-        .ty = CODEGEN_ENTRY_TY_DATA,
-        .glb_id = id,
-        .alignment = info.alignment,
-        .name = name,
-        .data = codegen_data,
-    };
-  }
-  }
-}
-
-void aarch64_codegen(struct codegen_unit *unit, struct ir_unit *ir) {
-  struct ir_glb *glb = ir->first_global;
-
-  {
-    size_t i = 0;
-    while (glb) {
-      if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-        unit->entries[i] = (struct codegen_entry){
-            .ty = CODEGEN_ENTRY_TY_DECL,
-            .alignment = 0,
-            .glb_id = glb->id,
-            .name = ir->target->mangle(ir->arena, glb->name)};
-
-        i++;
-        glb = glb->succ;
-        continue;
-      }
-
-      switch (glb->ty) {
-      case IR_GLB_TY_DATA: {
-        // TODO: non string literals
-        const char *name =
-            glb->name ? ir->target->mangle(ir->arena, glb->name)
-                      : mangle_str_cnst_name(ir->arena, "todo", glb->id);
-        switch (glb->var->ty) {
-        case IR_VAR_TY_STRING_LITERAL:
-          unit->entries[i] =
-              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
-                                     .alignment = 1,
-                                     .glb_id = glb->id,
-                                     .name = name,
-                                     .str = glb->var->value.str_value};
-          break;
-        case IR_VAR_TY_CONST_DATA:
-        case IR_VAR_TY_DATA:
-          unit->entries[i] = codegen_var_data(ir, glb->id, name, glb->var);
-          break;
-        }
-        break;
-      }
-      case IR_GLB_TY_FUNC: {
-        struct ir_func *ir_func = glb->func;
-
-        clear_metadata(ir_func);
-
-        unit->entries[i] = (struct codegen_entry){
-            .ty = CODEGEN_ENTRY_TY_FUNC,
-            .alignment = AARCH64_FUNCTION_ALIGNMENT,
-            .glb_id = glb->id,
-            .name = ir->target->mangle(ir->arena, ir_func->name),
-            .func = {
-                .unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
-
-        struct codegen_function *func = &unit->entries[i].func;
-        struct codegen_state state = {
-            .arena = unit->arena,
-            .target = ir->target,
-            .func = func,
-            .ir = ir_func,
-            .ssp = {.ty = AARCH64_REG_TY_X, .idx = 28}};
-
-        struct ir_basicblock *basicblock = ir_func->first;
-        while (basicblock) {
-          struct ir_stmt *stmt = basicblock->first;
-
-          while (stmt) {
-            struct ir_op *op = stmt->first;
-
-            while (op) {
-              if (op->ty == IR_OP_TY_CALL) {
-                // size_t call_args_size = op->call.args state.stack_args_size =
-                //     MAX(state.stack_args_size, call_args_size);
-              }
-
-              op = op->succ;
-            }
-
-            stmt = stmt->succ;
-          }
-
-          basicblock = basicblock->succ;
-        }
-
-        codegen_prologue(&state);
-
-        func->prologue = state.prologue_info.prologue_generated;
-        func->stack_size = state.prologue_info.stack_size;
-
-        basicblock = ir_func->first;
-        while (basicblock) {
-          struct instr *first_pred = func->last;
-
-          struct ir_stmt *stmt = basicblock->first;
-
-          while (stmt) {
-            codegen_stmt(&state, stmt);
-
-            stmt = stmt->succ;
-          }
-
-          basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-          basicblock->last_instr = func->last;
-
-          basicblock = basicblock->succ;
-        }
-
-        break;
-      }
-      }
-
-      i++;
-      glb = glb->succ;
-    }
-  }
-
-  qsort(unit->entries, unit->num_entries, sizeof(struct codegen_entry),
-        codegen_sort_entries_by_id);
-
-  if (log_enabled()) {
-    aarch64_debug_print_codegen(stderr, unit);
-  }
-
-  // now do sanity checks
-  for (size_t i = 0; i < unit->num_entries; i++) {
-    const struct codegen_entry *entry = &unit->entries[i];
-
-    if (entry->ty == CODEGEN_ENTRY_TY_FUNC) {
-      // codegen is now done
-      // do some basic sanity checks
-      struct check_reg_type_data data = {
-          .entry = entry, .last = NULL, .reg_ty = 0};
-      walk_regs(&entry->func, check_reg_type_callback, &data);
-    }
-  }
 }
 
 static char reg_prefix(struct aarch64_reg reg) {
@@ -2656,6 +2389,15 @@ static char reg_prefix(struct aarch64_reg reg) {
   case AARCH64_REG_TY_B:
     return 'b';
   }
+}
+
+void aarch64_codegen_end(struct codegen_state *state) {
+  // codegen is now done
+  // do some basic sanity checks
+
+  struct check_reg_type_data data = {
+      .state = state, .last = NULL, .reg_ty = 0};
+  walk_regs(state->func, check_reg_type_callback, &data);
 }
 
 void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,

@@ -1,8 +1,6 @@
 #ifndef IR_IR_H
 #define IR_IR_H
 
-#include "../target.h"
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
