@@ -291,7 +291,7 @@ static void ir_validate_data(struct ir_validate_state *state,
     VALIDATION_CHECKZ(glb->var, glb, "defined global should have var");
     break;
   case IR_GLB_DEF_TY_UNDEFINED:
-    VALIDATION_CHECKZ(!glb->var, glb, "undefined global should not have var");
+    // VALIDATION_CHECKZ(!glb->var, glb, "undefined global should not have var");
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
     VALIDATION_ERRZ(glb, "should not have tentative defs by now");

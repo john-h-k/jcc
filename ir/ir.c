@@ -815,14 +815,10 @@ void eliminate_redundant_ops(struct ir_func *func,
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
-  struct ir_op *detach = NULL;
+  struct vector *detach = vector_create(sizeof(struct ir_op *));
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
-    if (detach) {
-      detach_ir_op(func, detach);
-      detach = NULL;
-    }
 
     switch (op->ty) {
     case IR_OP_TY_MOV:
@@ -842,7 +838,7 @@ void eliminate_redundant_ops(struct ir_func *func,
           *usage.uses[i].op = op->mov.value;
         }
 
-        detach = op;
+        vector_push_back(detach, &op);
       }
       break;
     case IR_OP_TY_BR: {
@@ -854,7 +850,7 @@ void eliminate_redundant_ops(struct ir_func *func,
       DEBUG_ASSERT(basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                    "br op in non MERGE bb");
       if (basicblock->succ == basicblock->merge.target) {
-        detach = op;
+        vector_push_back(detach, &op);
       }
       break;
     }
@@ -864,10 +860,14 @@ void eliminate_redundant_ops(struct ir_func *func,
       }
 
       if (!use_map.op_use_datas[op->id].num_uses) {
-        detach = op;
+        vector_push_back(detach, &op);
       }
       break;
     }
+  }
+
+  while (vector_length(detach)) {
+    detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
   }
 
   use_map = build_op_uses_map(func);
@@ -875,9 +875,15 @@ void eliminate_redundant_ops(struct ir_func *func,
 
   while (ir_func_iter_next(&iter, &op)) {
     if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
-      detach_ir_op(func, op);
+      vector_push_back(detach, &op);
     }
   }
+
+  while (vector_length(detach)) {
+    detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
+  }
+
+  vector_free(&detach);
 }
 
 void prune_basicblocks(struct ir_func *irb) {

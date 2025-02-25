@@ -99,7 +99,9 @@ aggregator() {
 
     echo -e "${BOLDRED}\nFailed tests:${RESET}"
     for reason in "${fails[@]}"; do
-      echo -e "${BOLDRED}- $reason${RESET}"
+      echo -e "${BOLDRED}- "
+      echo "$reason"
+      echo -e "${RESET}"
     done
 
     echo -e ""
@@ -110,7 +112,9 @@ aggregator() {
 
     echo -e "${BOLDYELLOW}Skipped tests:${RESET}"
     for reason in "${skips[@]}"; do
-      echo -e "${BOLDYELLOW}- $reason${RESET}"
+      echo -e "${BOLDYELLOW}- "
+      echo "$reason"
+      echo -e "${RESET}"
     done
 
     echo -e ""
@@ -128,15 +132,27 @@ run_tests() {
   for ((i=proc_id; i<${#all_files[@]}; i+=num_procs)); do
     file="${all_files[i]}"
 
-    if [[ $file == *"/programs/"* ]]; then
+    if [[ "$file" == *"/programs/"* ]]; then
       continue
+    fi
+
+    local langproc
+    if [[ "$file" == *"/langproc/"*  ]]; then
+      if [[ "$file" == *_driver.c ]]; then
+        continue
+      fi
+
+      langproc="1"
+      files=("$file" "${file%.c}_driver.c")
+    else
+      files=("$file")
     fi
 
     output="$proc_id.out"
 
     first_line=$(head -n 1 "$file")
     if [[ "$first_line" == "// no-compile" ]]; then
-      if ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
+      if ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1; then
         echo "fail File '$file' compiled successfully despite // no-compile" > "$fifo"
       else
         echo "pass" > "$fifo"
@@ -155,13 +171,13 @@ run_tests() {
     stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
     [ -z "$expected" ] && expected="0"
 
-    if ! ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "$file" >/dev/null 2>&1; then
+    if ! ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1; then
       echo "fail File '$file' failed to compile" > "$fifo"
       continue
     fi
 
     if [ -z "$RUNNER" ]; then
-      output_result=$(echo "$stdin" | ./"$output")
+      output_result=$(echo "$stdin" | ./"$output" 2>/dev/null)
       result=$?
     else
       output_result=$(echo "$stdin" | "$RUNNER" "$output" 2>/dev/null)
@@ -171,6 +187,8 @@ run_tests() {
     if [ "$result" != "$expected" ]; then
       echo "fail File '$file' produced exit code $result, expected $expected" > "$fifo"
     elif [ "$output_result" != "$stdout" ]; then
+      output_result=${output_result//$'\n'/\\n}
+      stdout=${stdout//$'\n'/\\n}
       echo "fail File '$file' output mismatch. Got: '$output_result', expected: '$stdout'" > "$fifo"
     else
       echo "pass" > "$fifo"
