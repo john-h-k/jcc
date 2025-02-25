@@ -94,8 +94,6 @@ size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty) {
   }
 }
 
-static bool is_return_reg(struct aarch64_reg reg) { return reg.idx == 0; }
-
 static bool is_zero_reg(struct aarch64_reg reg) {
   // this is a bit dodgy as it can also be SP in this context
   return aarch64_reg_ty_is_gp(reg.ty) && reg.idx == 31;
@@ -116,10 +114,6 @@ static bool reg_eq(struct aarch64_reg l, struct aarch64_reg r) {
   }
 
   return false;
-}
-
-static struct aarch64_reg return_reg_for_ty(enum aarch64_reg_ty reg_ty) {
-  return (struct aarch64_reg){.ty = reg_ty, .idx = 0};
 }
 
 static struct aarch64_reg zero_reg_for_ty(enum aarch64_reg_ty reg_ty) {
@@ -1649,55 +1643,6 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static bool try_get_hfa_info(struct codegen_state *state,
-                             const struct ir_var_ty *var_ty,
-                             size_t *num_members, size_t *member_size) {
-  if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
-    return false;
-  }
-
-  if (var_ty->ty == IR_VAR_TY_TY_UNION) {
-    TODO("union hfa handling");
-  }
-
-  if (!var_ty->aggregate.num_fields) {
-    return false;
-  }
-
-  struct ir_var_ty *field_ty = &var_ty->aggregate.fields[0];
-
-  if (!var_ty_is_fp(field_ty)) {
-    return false;
-  }
-
-  if (var_ty->aggregate.num_fields > 4) {
-    return false;
-  }
-
-  for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_eq(state->ir, field_ty, &var_ty->aggregate.fields[i])) {
-      return false;
-    }
-  }
-
-  switch (field_ty->primitive) {
-  case IR_VAR_PRIMITIVE_TY_F16:
-    *member_size = 2;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F32:
-    *member_size = 4;
-    break;
-  case IR_VAR_PRIMITIVE_TY_F64:
-    *member_size = 8;
-    break;
-  default:
-    unreachable();
-  }
-
-  *num_members = var_ty->aggregate.num_fields;
-  return true;
-}
-
 // when generating reg moves, assume memory slots never conflict
 // use incrementing values from 128 onwards
 #define FIRST_MEM_LOC 128
@@ -1951,118 +1896,7 @@ static void codegen_epilogue(struct codegen_state *state) {
   };
 }
 
-static void codegen_ret_op(struct codegen_state *state, struct ir_op *op) {
-  if (op->ret.value && op->ret.value->ty != IR_OP_TY_CALL) {
-    struct aarch64_reg source = codegen_reg(op->ret.value);
-
-    struct ir_var_ty *var_ty = state->ir->func_ty.ret_ty;
-    struct ir_var_ty_info info = var_ty_info(state->ir->unit, var_ty);
-
-    if (INTEGRAL_OR_PTRLIKE(var_ty)) {
-      if (!is_return_reg(source)) {
-        struct instr *mov = alloc_instr(state->func);
-
-        *mov->aarch64 = MOV_ALIAS(return_reg_for_ty(source.ty), source);
-      }
-    } else if (var_ty_is_fp(var_ty)) {
-      if (!is_return_reg(source)) {
-        struct instr *mov = alloc_instr(state->func);
-
-        *mov->aarch64 = FP_MOV_ALIAS(return_reg_for_ty(source.ty), source);
-      }
-    } else {
-      // aggregate ty
-      size_t num_members;
-      size_t member_size;
-      if (try_get_hfa_info(state, var_ty, &num_members, &member_size) &&
-          num_members <= 4) {
-        enum aarch64_reg_ty reg_ty;
-        switch (member_size) {
-        case 8:
-          reg_ty = AARCH64_REG_TY_D;
-          break;
-        case 4:
-          reg_ty = AARCH64_REG_TY_S;
-          break;
-        case 2:
-          reg_ty = AARCH64_REG_TY_H;
-          break;
-        }
-
-        for (size_t i = 0; i < num_members; i++) {
-          struct aarch64_reg dest = {.ty = reg_ty, .idx = i};
-
-          struct instr *mov = alloc_instr(state->func);
-
-          mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-          mov->aarch64->load_imm =
-              (struct aarch64_load_imm){.addr = source,
-                                        .imm = i,
-                                        .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                        .dest = dest};
-        }
-      } else if (info.size == 1) {
-        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_BYTE_IMM;
-        mov->aarch64->ldrb_imm =
-            (struct aarch64_load_imm){.addr = source,
-                                      .imm = 0,
-                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                      .dest = dest};
-      } else if (info.size == 2) {
-        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_HALF_IMM;
-        mov->aarch64->ldrb_imm =
-            (struct aarch64_load_imm){.addr = source,
-                                      .imm = 0,
-                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                      .dest = dest};
-      } else if (info.size <= 4) {
-        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_W, .idx = 0};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-        mov->aarch64->ldrb_imm =
-            (struct aarch64_load_imm){.addr = source,
-                                      .imm = 0,
-                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                      .dest = dest};
-      } else if (info.size <= 8) {
-        struct aarch64_reg dest = {.ty = AARCH64_REG_TY_X, .idx = 0};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_IMM;
-        mov->aarch64->ldrb_imm =
-            (struct aarch64_load_imm){.addr = source,
-                                      .imm = 0,
-                                      .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-                                      .dest = dest};
-      } else if (info.size <= 16) {
-        struct aarch64_reg dest0 = {.ty = AARCH64_REG_TY_X, .idx = 0};
-        struct aarch64_reg dest1 = {.ty = AARCH64_REG_TY_X, .idx = 1};
-
-        struct instr *mov = alloc_instr(state->func);
-
-        mov->aarch64->ty = AARCH64_INSTR_TY_LOAD_PAIR_IMM;
-        mov->aarch64->load_pair_imm = (struct aarch64_load_pair_imm){
-            .addr = source,
-            .imm = 0,
-            .mode = AARCH64_ADDRESSING_MODE_OFFSET,
-            .dest = {dest0, dest1}};
-      } else {
-        TODO("larger than 16 byte types");
-      }
-    }
-  }
-
+static void codegen_ret_op(struct codegen_state *state, UNUSED struct ir_op *op) {
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
