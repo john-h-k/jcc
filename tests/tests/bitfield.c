@@ -15,6 +15,11 @@ int main() {
     .c = 0
   };
 
+  unsigned *c = &f;
+  c[0] |= 0xFFFFFFFE;
+  c[1] |= 0x7FFFFFE0;
+  c[2] |= 0x7FFFFFFE;
+
   if (f.a != 1) {
     return 1;
   }
