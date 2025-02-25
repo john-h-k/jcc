@@ -161,7 +161,8 @@ int main(int argc, char **argv) {
 
     if (!source) {
       err("source file \"%s\" could not be read!", sources[i]);
-      return COMPILE_RESULT_BAD_FILE;
+      exc = COMPILE_RESULT_BAD_FILE;
+      goto exit;
     }
 
     char *object_file;

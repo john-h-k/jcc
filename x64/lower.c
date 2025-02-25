@@ -100,7 +100,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
           .ty = IR_PARAM_INFO_TY_POINTER,
           .var_ty = func_ty.ret_ty,
           .num_regs = 1,
-          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_AX},
+          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = IR_REG_IDX_DI},
                       .size = 8},
       };
 
