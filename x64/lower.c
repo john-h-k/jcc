@@ -148,6 +148,8 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       var_ty = &args[i]->var_ty;
     }
 
+    enum ir_param_info_ty ty = IR_PARAM_INFO_TY_REGISTER;
+
     if (var_ty->ty == IR_VAR_TY_TY_ARRAY) {
       var_ty = &IR_VAR_TY_POINTER;
     }
@@ -157,6 +159,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     if (info.size > 16) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
+      ty = IR_PARAM_INFO_TY_POINTER;
       info = var_ty_info(func->unit, var_ty);
     }
 
@@ -222,7 +225,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
-          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .ty = ty,
           .var_ty = var_ty,
           .num_regs = 1,
           .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn},
@@ -258,7 +261,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     size_t dw_size = (info.size + 7) / 8;
     if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
       struct ir_param_info param_info = {
-          .ty = IR_PARAM_INFO_TY_REGISTER,
+          .ty = ty,
           .var_ty = var_ty,
           .num_regs = dw_size,
       };
