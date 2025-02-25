@@ -22,15 +22,15 @@ struct small mk_small(long a, long b) {
   return s;
 }
 
-// struct big mk_big() {
-//   struct big b;
+struct big mk_big() {
+  struct big b;
 
-//   for (int i = 0; i < 16; i++) {
-//     b.buff[i] = i;
-//   }
+  for (int i = 0; i < 16; i++) {
+    b.buff[i] = i;
+  }
 
-//   return b;
-// }
+  return b;
+}
 
 int main() {
   struct vec3 v = mk_vec3(1, 2, 3);
@@ -45,12 +45,12 @@ int main() {
     return 2;
   }
 
-  // struct big b = mk_big();
+  struct big b = mk_big();
 
-  // for (int i = 0; i < 16; i++) {
-  //   if (b.buff[i] != i) {
-  //     return 3;
-  //   }
-  // }
+  for (int i = 0; i < 16; i++) {
+    if (b.buff[i] != i) {
+      return 3;
+    }
+  }
 }
 

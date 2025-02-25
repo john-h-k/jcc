@@ -333,14 +333,14 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
       add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
 
   struct ir_op *value_cnst =
-      insert_after_ir_op(func, addr, IR_OP_TY_CNST, IR_VAR_TY_I32);
+      insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
   value_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
                                          .int_value = op->mem_set.value};
 
   struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
 
   struct ir_op *length_cnst =
-      insert_after_ir_op(func, addr, IR_OP_TY_CNST, ptr_int);
+      insert_after_ir_op(func, value_cnst, IR_OP_TY_CNST, ptr_int);
   length_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
                                           .int_value = op->mem_set.length};
 
@@ -368,6 +368,48 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
       .num_args = num_args,
       .args = args,
       .func_ty = memset->var_ty,
+  };
+}
+
+static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
+  struct ir_op *dest = op->mem_copy.dest;
+  struct ir_op *source = op->mem_copy.source;
+
+  struct ir_glb *memcopy =
+      add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCPY);
+
+  struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
+
+  struct ir_op *length_cnst =
+      insert_before_ir_op(func, op, IR_OP_TY_CNST, ptr_int);
+  length_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                          .int_value = op->mem_copy.length};
+
+  struct ir_op *memcopy_addr =
+      insert_after_ir_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
+
+  memcopy_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memcopy_addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = memcopy,
+  };
+
+  size_t num_args = 3;
+  struct ir_op **args =
+      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
+
+  args[0] = dest;
+  args[1] = source;
+  args[2] = length_cnst;
+
+  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
+  op->ty = IR_OP_TY_CALL;
+  op->var_ty = *memcopy->var_ty.func.ret_ty;
+  op->call = (struct ir_op_call){
+      .target = memcopy_addr,
+      .num_args = num_args,
+      .args = args,
+      .func_ty = memcopy->var_ty,
   };
 }
 
@@ -597,7 +639,8 @@ static void lower_params(struct ir_func *func) {
           for (size_t j = num_reg; j; j--) {
             struct ir_param_reg reg = param_info.regs[j - 1];
 
-            struct ir_var_ty store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+            struct ir_var_ty store_ty =
+                get_var_ty_for_size(reg.reg.ty, reg.size);
 
             struct ir_op *store =
                 insert_after_ir_op(func, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
@@ -686,13 +729,35 @@ static void lower_params(struct ir_func *func) {
       mov->mov = (struct ir_op_mov){.value = NULL};
 
       mov->reg = param_op->reg;
-      mov->flags = (param_op->flags & ~(IR_OP_FLAG_SPILLED)) | IR_OP_FLAG_FIXED_REG;
+      mov->flags =
+          (param_op->flags & ~(IR_OP_FLAG_SPILLED)) | IR_OP_FLAG_FIXED_REG;
 
       param_op->flags = IR_OP_FLAG_NONE;
 
       param_op->mov = (struct ir_op_mov){.value = mov};
+
       param_op = param_op->succ;
     }
+  }
+
+  struct ir_op *first_param = NULL;
+
+  if (func->call_info.ret &&
+      func->call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
+    struct ir_param_info param_info = *func->call_info.ret;
+
+    if (func->first && func->first->first && func->first->first->first) {
+      first_param = insert_before_ir_op(func, func->first->first->first,
+                                        IR_OP_TY_MOV, IR_VAR_TY_POINTER);
+    } else {
+      first_param = alloc_ir_op(func, func->first->first);
+      first_param->ty = IR_OP_TY_MOV;
+      first_param->var_ty = IR_VAR_TY_POINTER;
+    }
+
+    first_param->flags |= IR_OP_FLAG_PARAM;
+    first_param->mov = (struct ir_op_mov){.value = NULL};
+    first_param->reg = param_info.regs[0].reg;
   }
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
@@ -794,9 +859,22 @@ static void lower_params(struct ir_func *func) {
       }
       break;
     }
-    case IR_PARAM_INFO_TY_POINTER:
-      // nop, as we write to the pointer
+    case IR_PARAM_INFO_TY_POINTER: {
+      struct ir_op *mem_copy = insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY,
+                                                   op->ret.value->var_ty);
+
+      // FIXME: could also be gather
+      DEBUG_ASSERT(op->ret.value->ty == IR_OP_TY_LOAD, "expected load");
+      struct ir_op *addr = build_addr(func, op->ret.value);
+
+      mem_copy->mem_copy = (struct ir_op_mem_copy){
+          .dest = first_param,
+          .source = addr,
+          .length = var_ty_info(func->unit, &op->ret.value->var_ty).size};
+
+      op->ret.value = NULL;
       break;
+    }
     case IR_PARAM_INFO_TY_STACK:
       unreachable();
     }
@@ -828,6 +906,27 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     mov->mov = (struct ir_op_mov){.value = op->call.target};
 
     op->call.target = mov;
+  }
+
+  if (func_info.call_info.ret &&
+      func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
+    struct ir_param_info param_info = *func_info.call_info.ret;
+
+    // FIXME: don't use succ find usage
+    struct ir_op *store = op->succ;
+    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store");
+
+    struct ir_op *addr = build_addr(func, store);
+    detach_ir_op(func, addr);
+    attach_ir_op(func, addr, op->stmt, op->pred, op);
+
+    addr->reg = param_info.regs[0].reg;
+    addr->flags |= IR_OP_FLAG_FIXED_REG;
+
+    vector_push_back(new_args, &addr);
+    detach_ir_op(func, store);
+
+    op->var_ty = IR_VAR_TY_NONE;
   }
 
   for (size_t i = 0; i < op->call.num_args; i++) {
@@ -971,7 +1070,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     cnst->flags |= IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG;
   }
 
-  CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args, op->call.args);
+  CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args,
+                        op->call.args);
 
   if (!func_info.call_info.ret) {
     op->var_ty = IR_VAR_TY_NONE;
@@ -979,6 +1079,11 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 
   struct ir_param_info param_info = *func_info.call_info.ret;
+
+  if (param_info.ty == IR_PARAM_INFO_TY_POINTER) {
+    // already handled
+    return;
+  }
 
   if (var_ty_is_aggregate(param_info.var_ty)) {
     op->var_ty = IR_VAR_TY_NONE;
@@ -990,10 +1095,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     struct ir_op *last = prev_store;
     for (size_t j = 0; j < param_info.num_regs; j++) {
-        struct ir_param_reg reg = param_info.regs[j];
+      struct ir_param_reg reg = param_info.regs[j];
 
-    struct ir_var_ty store_ty =
-        get_var_ty_for_size(reg.reg.ty, reg.size);
+      struct ir_var_ty store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
 
       struct ir_op *mov = insert_after_ir_op(func, op, IR_OP_TY_MOV, store_ty);
 
@@ -1003,8 +1107,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
       struct ir_op *addr_offset = insert_after_ir_op(
           func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-      addr_offset->addr_offset = (struct ir_op_addr_offset){
-          .base = addr, .offset = j * reg.size};
+      addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = addr, .offset = j * reg.size};
 
       // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
@@ -1028,7 +1132,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     call->reg = func_info.call_info.ret->regs[0].reg;
 
     op->ty = IR_OP_TY_MOV;
-    op->mov = (struct ir_op_mov){.value = call};    
+    op->mov = (struct ir_op_mov){.value = call};
   }
 }
 
@@ -1061,11 +1165,16 @@ void lower(struct ir_unit *unit, const struct target *target) {
       // first lower memset as it can generate calls
       struct ir_op *op;
       while (ir_func_iter_next(&iter, &op)) {
-        if (op->ty != IR_OP_TY_MEM_SET) {
+        switch (op->ty) {
+        case IR_OP_TY_MEM_SET:
+          lower_mem_set(func, op);
+          break;
+        case IR_OP_TY_MEM_COPY:
+          lower_mem_copy(func, op);
+          break;
+        default:
           continue;
         }
-
-        lower_mem_set(func, op);
       }
 
       iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
