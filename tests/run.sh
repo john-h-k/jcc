@@ -11,7 +11,7 @@ if command -v gdate &>/dev/null; then
 elif date --version 2>/dev/null | grep -q "GNU coreutils"; then
   date="date"
 else
-  echo "${BOLDYELLOW}GNU date not available, not timestamping. Install coreutils or use gdate.${RESET}"
+  echo -e "${BOLDYELLOW}GNU date not available, not timestamping. Install coreutils or use gdate.${RESET}"
 fi
 
 if [ -n "$date" ]; then
@@ -180,7 +180,7 @@ run_tests() {
   rm "$output"
 }
 
-num_procs=$(nproc || sysctl -n hw.physicalcpu || 4) # just assume 4 if needed
+num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2>/dev/null || 4) # just assume 4 if needed
 pids=()
 for ((p=0; p<num_procs; p++)); do
   run_tests "$p" "$@" &
