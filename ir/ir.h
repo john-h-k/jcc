@@ -487,6 +487,9 @@ enum ir_op_flags {
 
   // is a promoted value
   IR_OP_FLAG_PROMOTED = 2048,
+
+  // HACK: makes op live forever
+  IR_OP_FLAG_ETERNAL = 4096,
 };
 
 struct ir_op_write_info {
