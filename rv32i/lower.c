@@ -122,10 +122,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       var_ty = &func_ty.params[i];
       variadic = false;
     } else {
-      DEBUG_ASSERT(func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC,
-                   "more args than params but not variadic");
       var_ty = &args[i]->var_ty;
-      variadic = true;
+      variadic = func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC;
     }
 
     enum ir_param_info_ty ty = IR_PARAM_INFO_TY_REGISTER;

@@ -143,8 +143,6 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     if (i < func_ty.num_params) {
       var_ty = &func_ty.params[i];
     } else {
-      DEBUG_ASSERT(func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC,
-                   "more args than params but not variadic");
       var_ty = &args[i]->var_ty;
     }
 

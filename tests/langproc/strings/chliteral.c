@@ -1,0 +1,4 @@
+int g()
+{
+    return 'h';
+}
