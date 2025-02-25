@@ -180,7 +180,7 @@ run_tests() {
   rm "$output"
 }
 
-num_procs=$(nproc)
+num_procs=$(nproc || sysctl -n hw.physicalcpu || 4) # just assume 4 if needed
 pids=()
 for ((p=0; p<num_procs; p++)); do
   run_tests "$p" "$@" &
