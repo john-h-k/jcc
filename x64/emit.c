@@ -17,7 +17,8 @@ const char *x64_macos_mangle(struct arena_allocator *arena, const char *name) {
   return dest;
 }
 
-const char *x64_linux_mangle(UNUSED struct arena_allocator *arena, const char *name) {
+const char *x64_linux_mangle(UNUSED struct arena_allocator *arena,
+                             const char *name) {
   return name;
 }
 
@@ -35,9 +36,9 @@ struct local_reloc_info {
 
 static void emit_instr(const struct emit_state *state,
                        const struct instr *instr) {
-  #define EMIT(up, lo) \
-  case X64_INSTR_TY_ ## up: \
-    x64_emit_ ## lo (state->emitter, instr->x64->lo); \
+#define EMIT(up, lo)                                                           \
+  case X64_INSTR_TY_##up:                                                      \
+    x64_emit_##lo(state->emitter, instr->x64->lo);                             \
     break;
   switch (instr->x64->ty) {
     EMIT(OR, or);
@@ -64,7 +65,7 @@ static void emit_instr(const struct emit_state *state,
     EMIT(SHL, shl);
     EMIT(SAR, sar);
 
-    EMIT(NOT, not);
+    EMIT(NOT, not );
     EMIT(NEG, neg);
 
     EMIT(TEST, test);
@@ -139,20 +140,18 @@ static void emit_instr(const struct emit_state *state,
     EMIT(CVTSS2SD, cvtss2sd);
     EMIT(CVTSD2SS, cvtsd2ss);
   case X64_INSTR_TY_JMP: {
-    struct x64_target_reloc reloc = x64_emit_jmp(state->emitter, instr->x64->jmp);
+    struct x64_target_reloc reloc =
+        x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {
-      .target = instr->x64->jmp.target->first_instr,
-      .reloc = reloc
-    };
+        .target = instr->x64->jmp.target->first_instr, .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
   case X64_INSTR_TY_JCC: {
-    struct x64_target_reloc reloc = x64_emit_jcc(state->emitter, instr->x64->jcc);
+    struct x64_target_reloc reloc =
+        x64_emit_jcc(state->emitter, instr->x64->jcc);
     struct local_reloc_info info = {
-      .target = instr->x64->jcc.target->first_instr,
-      .reloc = reloc
-    };
+        .target = instr->x64->jcc.target->first_instr, .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
@@ -161,7 +160,7 @@ static void emit_instr(const struct emit_state *state,
     break;
   }
 
-  #undef EMIT
+#undef EMIT
 }
 
 struct emitted_unit x64_emit(const struct codegen_unit *unit) {
@@ -234,17 +233,21 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
       struct x64_emitter *emitter;
       create_x64_emitter(&emitter);
 
-      struct vector *local_relocs = vector_create(sizeof(struct local_reloc_info));
+      struct vector *local_relocs =
+          vector_create(sizeof(struct local_reloc_info));
 
-      struct emit_state state = {
-          .func = func, .arena = unit->arena, .emitter = emitter, .local_relocs = local_relocs };
+      struct emit_state state = {.func = func,
+                                 .arena = unit->arena,
+                                 .emitter = emitter,
+                                 .local_relocs = local_relocs};
 
       struct vector *relocs = vector_create(sizeof(struct relocation));
       struct vector *instr_offsets = vector_create(sizeof(size_t));
 
       struct instr *instr = func->first;
       while (instr) {
-        DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id, "expected emitted count to be same as instr id");
+        DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id,
+                     "expected emitted count to be same as instr id");
 
         size_t pos = x64_emit_bytesize(state.emitter);
 
@@ -261,18 +264,20 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
         char buff[16];
         x64_get_bytes(state.emitter, pos, len, buff);
 
-        fprintf(stderr, "Emitted instruction: ");
-        x64_debug_print_instr(stderr, func, instr);
-        fprintf(stderr, "\nValue: ");
+        if (log_enabled()) {
+          fprintf(stderr, "Emitted instruction: ");
+          x64_debug_print_instr(stderr, func, instr);
+          fprintf(stderr, "\nValue: ");
 
-        fprintf(stderr, "{ ");
-        for (size_t j = 0; j < len; j++) {
-          fprintf(stderr, "%02hhX", buff[j]);
-          if (j + 1 != len) {
-            fprintf(stderr, ", ");
+          fprintf(stderr, "{ ");
+          for (size_t j = 0; j < len; j++) {
+            fprintf(stderr, "%02hhX", buff[j]);
+            if (j + 1 != len) {
+              fprintf(stderr, ", ");
+            }
           }
+          fprintf(stderr, " }\n");
         }
-        fprintf(stderr, " }\n");
 
         DEBUG_ASSERT(
             generated_instrs == 1,
@@ -293,7 +298,8 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
       for (size_t j = 0; j < num_local_relocs; j++) {
         struct local_reloc_info *info = vector_get(state.local_relocs, j);
 
-        size_t instr_pos = *(size_t *)vector_get(instr_offsets, info->target->id);
+        size_t instr_pos =
+            *(size_t *)vector_get(instr_offsets, info->target->id);
 
         x64_reloc(state.emitter, info->reloc, instr_pos);
       }
@@ -324,7 +330,8 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
           .symbol = symbol,
       };
 
-      CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations, entries[i].relocations);
+      CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations,
+                            entries[i].relocations);
       break;
     }
     }
