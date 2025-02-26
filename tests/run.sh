@@ -137,9 +137,8 @@ aggregator() {
 
 run_tests() {
   proc_id=$1
-  shift
-
-  trap 'rm -- "$output" 2>/dev/null' EXIT
+  output=$2
+  shift 2
 
   for ((i=proc_id; i<${#all_files[@]}; i+=num_procs)); do
     file="${all_files[i]}"
@@ -159,8 +158,6 @@ run_tests() {
     else
       files=("$file")
     fi
-
-    output="$proc_id.out"
 
     first_line=$(head -n 1 "$file")
     if [[ "$first_line" == "// no-compile" ]]; then
@@ -206,19 +203,30 @@ run_tests() {
       echo "pass" > "$fifo"
     fi
   done
-
-  exit
 }
+
+printf "${BOLD}Running tests with '%s' ${RESET}\n" "$@"
 
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
 
 printf "${BOLD}Using %d processes...${RESET}\n" $num_procs
 
 pids=()
+tmps=()
 for ((p=0; p<num_procs; p++)); do
-  run_tests "$p" "$@" &
+  output="$p.out"
+  tmps+=($output)
+
+  run_tests "$p" "$output" "$@" &
   pids+=($!)
 done
+
+clean() {
+  echo "${tmps[@]}"
+  rm "${tmps[@]}"
+}
+
+trap clean EXIT
 
 aggregator &
 agg_pid=$!
