@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(
   SOURCE_FILES
   main.c
+  args.c
 
   vector.c
   hashtbl.c

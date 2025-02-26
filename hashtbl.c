@@ -112,10 +112,12 @@ finished:
 size_t hashtbl_size(struct hashtbl *hashtbl) { return hashtbl->len; }
 
 void hashtbl_hash_str(struct hasher *hasher, const void *obj) {
-  hasher_hash_str(hasher, obj);
+  hasher_hash_str(hasher, *(const char *const *)obj);
 }
 
-bool hashtbl_eq_str(const void *l, const void *r) { return strcmp(l, r) == 0; }
+bool hashtbl_eq_str(const void *l, const void *r) {
+  return strcmp(*(const char *const *)l, *(const char *const *)r) == 0;
+}
 
 struct hashtbl *hashtbl_create_str_keyed(size_t element_size) {
   return hashtbl_create(sizeof(char *), element_size, hashtbl_hash_str,

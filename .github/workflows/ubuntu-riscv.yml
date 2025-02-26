@@ -61,7 +61,7 @@ jobs:
           PATH="/opt/riscv/bin:${PATH}" \
           RISCV="/opt/riscv" \
           RUNNER=riscy \
-            ./jcc.sh ci-test -T rv32i-unknown-elf
+            ./jcc.sh ci-test -target rv32i-unknown-elf
 
 
 

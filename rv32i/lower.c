@@ -90,6 +90,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
           .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 4},
       };
 
+      ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
     } else if (var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
