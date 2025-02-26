@@ -20,10 +20,10 @@ enum parse_args_result {
   PARSE_ARGS_RESULT_ERROR = 2,
 };
 
-static enum parse_args_result parse_args_old(int argc, char **argv,
+TODO_FUNC(static enum parse_args_result parse_args_old(int argc, char **argv,
                                              struct compile_args *args,
                                              const char ***sources,
-                                             size_t *num_sources);
+                                             size_t *num_sources))
 
 void free_args_old(struct compile_args *args, const char **sources);
 
@@ -56,7 +56,7 @@ static const struct target *get_target(const struct compile_args *args) {
   BUG("unexpected target in `get_target`");
 }
 
-static bool get_target_for_args(enum compile_arch arch,
+UNUSED static bool get_target_for_args(enum compile_arch arch,
                                 enum compile_target *target) {
   switch (arch) {
   case COMPILE_ARCH_NATIVE:
@@ -240,7 +240,7 @@ exit:
   return exc;
 }
 
-static const char *try_get_arg(const char *arg, const char *prefix) {
+UNUSED static const char *try_get_arg(const char *arg, const char *prefix) {
   if (strncmp(arg, prefix, strlen(prefix)) == 0) {
     return &arg[strlen(prefix)];
   }
@@ -256,7 +256,7 @@ PRINTF_ARGS(0) static void parse_arg_error(const char *fmt, ...) {
   va_end(v);
 }
 
-static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
+UNUSED static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
 #define LOG_FLAG(name, str)                                                    \
   if (strcmp(flag, str) == 0) {                                                \
     *flags |= name;                                                            \
@@ -278,81 +278,7 @@ static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
   return false;
 }
 
-static bool parse_target_flag(const char *flag, enum compile_target *arch) {
-  if (strcmp(flag, "aarch64-apple-darwin") == 0) {
-    *arch = COMPILE_TARGET_MACOS_ARM64;
-    return true;
-  } else if (strcmp(flag, "x86_64-apple-darwin") == 0) {
-    *arch = COMPILE_TARGET_MACOS_X86_64;
-    return true;
-  } else if (strcmp(flag, "aarch64-unknown-linux-gnu") == 0) {
-    *arch = COMPILE_TARGET_LINUX_ARM64;
-    return true;
-  } else if (strcmp(flag, "x86_64-unknown-linux-gnu") == 0) {
-    *arch = COMPILE_TARGET_LINUX_X86_64;
-    return true;
-  } else if (strcmp(flag, "eep-unknown-unknown") == 0) {
-    *arch = COMPILE_TARGET_EEP;
-    return true;
-  } else if (strcmp(flag, "rv32i-unknown-elf") == 0) {
-    *arch = COMPILE_TARGET_LINUX_RV32I;
-    return true;
-  }
-
-  return false;
-}
-
-static bool parse_arch_flag(const char *flag, enum compile_arch *arch) {
-  if (strcmp(flag, "x86_64") == 0) {
-    *arch = COMPILE_ARCH_X86_64;
-    return true;
-  } else if (strcmp(flag, "arm64") == 0) {
-    *arch = COMPILE_ARCH_ARM64;
-    return true;
-  } else if (strcmp(flag, "rv32i") == 0) {
-    *arch = COMPILE_ARCH_RV32I;
-    return true;
-  } else if (strcmp(flag, "eep") == 0) {
-    *arch = COMPILE_ARCH_EEP;
-    return true;
-  }
-
-  return false;
-}
-
-static bool parse_c_standard(const char *flag,
-                             enum compile_c_standard *c_standard) {
-  if (strcmp(flag, "c11") == 0) {
-    *c_standard = COMPILE_C_STANDARD_C11;
-    return true;
-  } else if (strcmp(flag, "c17") == 0) {
-    *c_standard = COMPILE_C_STANDARD_C17;
-    return true;
-  } else if (strcmp(flag, "c23") == 0) {
-    *c_standard = COMPILE_C_STANDARD_C23;
-    return true;
-  }
-
-  warn("JCC only supports c11/c17/c23");
-  return false;
-}
-
-static bool parse_output(const char *str, char **output) {
-  size_t output_len = strlen(str);
-
-  if (output_len) {
-    char *name = nonnull_malloc(output_len + 1);
-    memcpy(name, str, output_len);
-    name[output_len] = '\0';
-
-    *output = name;
-    return true;
-  }
-
-  return false;
-}
-
-static bool parse_fixed_timestamp(const char *str,
+UNUSED static bool parse_fixed_timestamp(const char *str,
                                   const char **fixed_timestamp) {
   size_t len = strlen(str);
 
