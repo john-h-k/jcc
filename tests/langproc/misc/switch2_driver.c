@@ -1,8 +1,12 @@
 
 typedef struct FILE FILE;
 
+#ifdef __APPLE__
 extern FILE *__stderrp;
 #define stderr __stderrp
+#else
+extern FILE *stderr;
+#endif
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

@@ -299,7 +299,7 @@ static void write_relocations_elf(FILE *file,
         rela1.r_offset = r->address;
         rela1.r_addend = r->offset;
         rela1.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
-                                    R_AARCH64_LD64_GOT_LO12_NC);
+                                    R_AARCH64_ADR_GOT_PAGE);
         rela2.r_offset = r->address + 4;
         rela2.r_addend = r->offset;
         rela2.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index],
