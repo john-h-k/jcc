@@ -146,10 +146,13 @@ run_tests() {
   for ((i=proc_id; i<${#all_files[@]}; i+=num_procs)); do
     file="${all_files[i]}"
 
+    # program tests aren't run because output can't be checked for correctness
     if [[ "$file" == *"/programs/"* ]]; then
       continue
     fi
 
+    # langproc tests have a different structure, where there are two files
+    # (`foo.c` and `foo_driver.c`) and you compile them together
     local langproc
     if [[ "$file" == *"/langproc/"*  ]]; then
       if [[ "$file" == *_driver.c ]]; then
