@@ -248,25 +248,32 @@ static inline void debug_print_stack_trace(void) {
 static inline void debug_print_stack_trace(void) {}
 #endif
 
-#if __clang__
-#define START_NO_UNUSED_ARGS                                                   \
+
+#if __clang__ || 1
+
+#define DO_PRAGMA(x) _Pragma (#x)
+#define PUSH_NO_WARN(warn)  \
   _Pragma("clang diagnostic push")                                             \
-      _Pragma("clang diagnostic ignored \"-Wunused-parameter\"")
-#elif __GNUC__ && 0
-#define START_NO_UNUSED_ARGS                                                   \
+      DO_PRAGMA(clang diagnostic ignored warn)
+#define POP_NO_WARN _Pragma("clang diagnostic pop")
+
+#elif __GNUC__
+
+#define DO_PRAGMA(x) _Pragma (#x)
+#define PUSH_NO_WARN(warn) \
   _Pragma("GCC diagnostic push")                                               \
-      _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")
+      DO_PRAGMA("GCC diagnostic ignored warn)
+#define POP_NO_WARN _Pragma("GCC diagnostic pop")
+
 #else
-#define START_NO_UNUSED_ARGS
+
+#define PUSH_NO_WARN(warn)
+#define POP_NO_WARN
+
 #endif
 
-#if __clang__
-#define END_NO_UNUSED_ARGS _Pragma("clang diagnostic pop")
-#elif __GNUC__ && 0
-#define END_NO_UNUSED_ARGS _Pragma("GCC diagnostic pop")
-#else
-#define END_NO_UNUSED_ARGS
-#endif
+#define START_NO_UNUSED_ARGS PUSH_NO_WARN("-Wunused-parameter")
+#define END_NO_UNUSED_ARGS POP_NO_WARN
 
 #ifdef SIZE_T_MAX
 #undef SIZE_T_MAX
