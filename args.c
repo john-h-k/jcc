@@ -165,10 +165,10 @@ struct parsed_args parse_args(int argc, char **argv) {
   struct parsed_args parsed = {.values = NULL};
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, parse_fn, string_fn)      \
-  static_assert(sh[0] || lo[0], "must have short or long option");             \
-  static_assert(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),       \
+  assert(sh[0] || lo[0], "must have short or long option");             \
+  assert(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),       \
                 "short option must begin '-' and be exactly two chars");       \
-  static_assert(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),        \
+  assert(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),        \
                 "long option must begin '-' and be at least three chars");     \
   do {                                                                         \
     struct arg arg = {.ty = ARG_TY_##arg_ty,                                   \
