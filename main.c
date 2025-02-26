@@ -143,6 +143,7 @@ static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args
 
       .c_standard = args->c_standard,
       .log_flags = args->log_level,
+      .opts_level = args->opts,
 
       .fixed_timestamp = args->timestamp,
       .include_paths = args->include_paths.values,
@@ -154,7 +155,9 @@ static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args
   *num_sources = args->num_values;
   *sources = args->values;
 
-  // debug_print_parsed_args(stderr, &args);
+  if (args->log_level & COMPILE_LOG_FLAGS_ARGS) {
+    debug_print_parsed_args(stderr, args);
+  }
   
   if (!args->target) {
     if (!get_target_for_args(args->arch, &compile_args->target)) {
@@ -170,6 +173,11 @@ static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args
   }
 
   if (compile_args->fixed_timestamp && !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
+    return false;
+  }
+
+  if (!args->num_values) {
+    err("No sources provided");
     return false;
   }
 

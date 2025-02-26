@@ -158,19 +158,36 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   {
-    COMPILER_STAGE(OPTS);
+    if (compiler->args.opts_level != COMPILE_OPTS_LEVEL_0) {
+      COMPILER_STAGE(OPTS);
 
-    // opts_cnst_fold(ir);
-    // opts_promote(ir);
-    // opts_cnst_fold(ir);
-    // opts_instr_comb(ir);
+      switch (compiler->args.opts_level) {
+      case COMPILE_OPTS_LEVEL_0:
+        unreachable();
+      case COMPILE_OPTS_LEVEL_1:
+        opts_cnst_fold(ir);
+        break;
+      case COMPILE_OPTS_LEVEL_2:
+        opts_cnst_fold(ir);
+        opts_instr_comb(ir);
+        break;
+      case COMPILE_OPTS_LEVEL_3:
+        opts_cnst_fold(ir);
+        opts_promote(ir);
+        opts_cnst_fold(ir);
+        opts_instr_comb(ir);
+        break;
+      }
 
-    if (log_enabled()) {
-      debug_print_stage(ir, "opts");
+      if (log_enabled()) {
+        debug_print_stage(ir, "opts");
+      }
+
+      ir_validate(ir, IR_VALIDATE_FLAG_NONE);
     }
+  }
 
-    ir_validate(ir, IR_VALIDATE_FLAG_NONE);
-
+  {
     COMPILER_STAGE(LOWER);
 
     lower(ir, target);
