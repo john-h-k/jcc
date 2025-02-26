@@ -25,22 +25,6 @@ enum arg_ty {
   ARG_TY_STRING_LIST,
 };
 
-struct arg_bool {
-  bool enabled;
-};
-
-struct arg_option {
-  int value;
-};
-
-struct arg_flags {
-  int value;
-};
-
-struct arg_string {
-  const char *value;
-};
-
 struct arg_string_list {
   size_t num_values;
   const char **values;
@@ -61,10 +45,10 @@ struct arg {
   string_arg string;
 
   union {
-    struct arg_bool *arg_bool;
-    struct arg_option *arg_option;
-    struct arg_flags *arg_flags;
-    struct arg_string *arg_string;
+    bool *arg_bool;
+    int *arg_option;
+    int *arg_flags;
+    const char **arg_string;
     struct arg_string_list *arg_string_list;
   };
 };
@@ -136,7 +120,7 @@ inline static bool parse_c_standard(const char *str, int *value) {
 
 inline static const char *string_log_level(int value) {
   LOG_ENUM_LIST;
-  return false;
+  return "all";
 }
 
 inline static const char *string_arch(int value) {
@@ -161,21 +145,21 @@ inline static const char *string_c_standard(int value) {
   ARG_OPT(BOOL, bool, assembly, "-S", "--assemble", NULL, NULL)                \
   ARG_OPT(BOOL, bool, object, "-c", "--compile", NULL, NULL)                   \
                                                                                \
-  ARG_OPT(OPTION, option, arch, "", "-arch", parse_arch, string_arch)          \
-  ARG_OPT(OPTION, option, target, "", "-target", parse_target, string_target)  \
-  ARG_OPT(STRING, string, output, "-o", "", NULL, NULL)                        \
+  ARG_OPT(OPTION, enum compile_arch, arch, "", "-arch", parse_arch, string_arch)          \
+  ARG_OPT(OPTION, enum compile_target, target, "", "-target", parse_target, string_target)  \
+  ARG_OPT(STRING, const char *, output, "-o", "", NULL, NULL)                        \
 \
-  ARG_OPT(FLAGS, flags, log_level, "-L", "--log", parse_log_level, string_log_level)                        \
+  ARG_OPT(FLAGS, enum compile_log_flags, log_level, "-L", "--log", parse_log_level, string_log_level)                        \
                                                                                \
-  ARG_OPT(OPTION, option, c_standard, "", "-std", parse_c_standard,            \
+  ARG_OPT(OPTION, enum compile_c_standard, c_standard, "", "-std", parse_c_standard,            \
           string_c_standard)                                                   \
                                                                                \
-  ARG_OPT(STRING, string, timestamp, "", "-tm", NULL, NULL)                    \
+  ARG_OPT(STRING, const char *, timestamp, "", "-tm", NULL, NULL)                    \
                                                                                \
-  ARG_OPT(STRING_LIST, string_list, include_paths, "-I", "", NULL, NULL)
+  ARG_OPT(STRING_LIST, struct arg_string_list, include_paths, "-I", "", NULL, NULL)
 
 struct parsed_args {
-#define ARG_OPT(_0, struct_ty, name, ...) struct arg_##struct_ty name;
+#define ARG_OPT(_0, field_ty, name, ...) field_ty name;
 
   ARG_OPT_LIST
 

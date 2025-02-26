@@ -20,13 +20,6 @@ enum parse_args_result {
   PARSE_ARGS_RESULT_ERROR = 2,
 };
 
-TODO_FUNC(static enum parse_args_result parse_args_old(int argc, char **argv,
-                                             struct compile_args *args,
-                                             const char ***sources,
-                                             size_t *num_sources))
-
-void free_args_old(struct compile_args *args, const char **sources);
-
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
@@ -36,8 +29,8 @@ static bool target_needs_linking(const struct compile_args *args,
   return target->link_objects != NULL;
 }
 
-static const struct target *get_target(const struct compile_args *args) {
-  switch (args->target) {
+static const struct target *get_target(enum compile_target target) {
+  switch (target) {
   case COMPILE_TARGET_MACOS_X86_64:
     return &X64_MACOS_TARGET;
   case COMPILE_TARGET_LINUX_X86_64:
@@ -56,7 +49,21 @@ static const struct target *get_target(const struct compile_args *args) {
   BUG("unexpected target in `get_target`");
 }
 
-UNUSED static bool get_target_for_args(enum compile_arch arch,
+
+static bool validate_fixed_timestamp(const char *str) {
+  size_t len = strlen(str);
+
+  if (len >= 19) {
+    return true;
+  }
+
+  err("'-tm fixed_timestamp' must be at least 19 chars (for symmetry "
+      "with "
+      "`asctime`)");
+  return false;
+}
+
+static bool get_target_for_args(enum compile_arch arch,
                                 enum compile_target *target) {
   switch (arch) {
   case COMPILE_ARCH_NATIVE:
@@ -84,9 +91,11 @@ UNUSED static bool get_target_for_args(enum compile_arch arch,
   case COMPILE_ARCH_X86_64:
 #if defined(__APPLE__)
     *target = COMPILE_TARGET_MACOS_X86_64;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #elif defined(__linux__)
     *target = COMPILE_TARGET_LINUX_X86_64;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #else
     err("Could not determine native platform for x86_64");
@@ -95,9 +104,11 @@ UNUSED static bool get_target_for_args(enum compile_arch arch,
   case COMPILE_ARCH_ARM64:
 #if defined(__APPLE__)
     *target = COMPILE_TARGET_MACOS_ARM64;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #elif defined(__linux__)
     *target = COMPILE_TARGET_LINUX_ARM64;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
     break;
 #else
@@ -108,6 +119,7 @@ UNUSED static bool get_target_for_args(enum compile_arch arch,
   case COMPILE_ARCH_RV32I:
 #if defined(__linux__)
     *target = COMPILE_TARGET_LINUX_RV32I;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #else
     err("Could not determine native platform for rv32i");
@@ -115,8 +127,53 @@ UNUSED static bool get_target_for_args(enum compile_arch arch,
 #endif
   case COMPILE_ARCH_EEP:
     *target = COMPILE_TARGET_EEP;
+    info("Compiling for '%s'...\n", string_target(*target));
     return true;
   }
+}
+
+
+static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct compile_args *compile_args, size_t *num_sources, const char ***sources) {
+  *args = parse_args(argc, argv);
+
+  *compile_args = (struct compile_args){
+      .preproc_only = args->preprocess,
+      .build_asm_file = args->assembly,
+      .build_object_file = args->object,
+
+      .c_standard = args->c_standard,
+      .log_flags = args->log_level,
+
+      .fixed_timestamp = args->timestamp,
+      .include_paths = args->include_paths.values,
+      .num_include_paths = args->include_paths.num_values,
+
+      .output = args->output,
+  };
+
+  *num_sources = args->num_values;
+  *sources = args->values;
+
+  // debug_print_parsed_args(stderr, &args);
+  
+  if (!args->target) {
+    if (!get_target_for_args(args->arch, &compile_args->target)) {
+      return false;
+    }
+  } else {
+    if (args->arch) {
+      err("Cannot provide '-arch' and '-target'");
+      return false;
+    }
+
+    compile_args->target = args->target;
+  }
+
+  if (compile_args->fixed_timestamp && !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
+    return false;
+  }
+
+  return true;
 }
 
 int main(int argc, char **argv) {
@@ -126,57 +183,54 @@ int main(int argc, char **argv) {
 
   info("parsing command line args");
 
-  struct parsed_args parsed = parse_args(argc, argv);
-  debug_print_parsed_args(stderr, &parsed);
-
-  BUG("");
 
   struct arena_allocator *arena = NULL;
   char **objects = NULL;
 
-  struct compile_args args;
-  const char **sources;
+  arena_allocator_create(&arena);
+
+  struct parsed_args args;
+  struct compile_args compile_args;
   size_t num_sources;
-  if (parse_args_old(argc, argv, &args, &sources, &num_sources) !=
-      PARSE_ARGS_RESULT_SUCCESS) {
-    err("failed to parse arguments");
+  const char **sources;
+  if (!try_get_compile_args(argc, argv, &args, &compile_args, &num_sources, &sources)) {
     exc = -1;
     goto exit;
   }
 
-  arena_allocator_create(&arena);
-
-  const struct target *target = get_target(&args);
+  const struct target *target = get_target(compile_args.target);
   objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
   for (size_t i = 0; i < num_sources; i++) {
-    info("compiling source file \"%s\"", sources[i]);
+    const char *source_path = sources[i];
 
-    const char *source = read_file(arena, sources[i]);
+    info("compiling source file \"%s\"", source_path);
+
+    const char *source = read_file(arena, source_path);
 
     if (!source) {
-      err("source file \"%s\" could not be read!", sources[i]);
+      err("source file \"%s\" could not be read!", source_path);
       exc = COMPILE_RESULT_BAD_FILE;
       goto exit;
     }
 
     char *object_file;
 
-    if (args.preproc_only && !args.output) {
+    if (compile_args.preproc_only && !compile_args.output) {
       // FIXME: hacky
       object_file = nonnull_malloc(strlen("stdout") + 1);
       strcpy(object_file, "stdout");
       object_file[strlen("stdout")] = 0;
-    } else if (args.build_asm_file && !args.output) {
-      object_file = path_replace_ext(arena, sources[i], ".s");
-    } else if (target_needs_linking(&args, target) || !args.output) {
-      object_file = path_replace_ext(arena, sources[i], "o");
+    } else if (compile_args.build_asm_file && !compile_args.output) {
+      object_file = path_replace_ext(arena, source_path, ".s");
+    } else if (target_needs_linking(&compile_args, target) || !compile_args.output) {
+      object_file = path_replace_ext(arena, source_path, "o");
     } else {
-      object_file = args.output;
+      object_file = strdup(compile_args.output);
     }
 
-    info("compiling source file '%s' into object file '%s'", sources[i],
+    info("compiling source file '%s' into object file '%s'", source_path,
          object_file);
 
     objects[i] = object_file;
@@ -186,7 +240,8 @@ int main(int argc, char **argv) {
     disable_log();
     struct compiler *compiler;
 
-    if (create_compiler(&program, target, object_file, sources[i], &args,
+    if (create_compiler(&program, target, object_file, source_path,
+                        &compile_args,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
@@ -203,10 +258,10 @@ int main(int argc, char **argv) {
     free_compiler(&compiler);
   }
 
-  if (target_needs_linking(&args, target)) {
-    const char *output = args.output ? args.output : "a.out";
+  if (target_needs_linking(&compile_args, target)) {
+    const char *output = compile_args.output ? compile_args.output : "a.out";
 
-    struct link_args link_args = {.args = &args,
+    struct link_args link_args = {.args = &compile_args,
                                   .objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};
@@ -235,60 +290,7 @@ exit:
     free(objects);
   }
 
-  free_args_old(&args, sources);
+  free_args(&args);
 
   return exc;
-}
-
-UNUSED static const char *try_get_arg(const char *arg, const char *prefix) {
-  if (strncmp(arg, prefix, strlen(prefix)) == 0) {
-    return &arg[strlen(prefix)];
-  }
-
-  return NULL;
-}
-
-PRINTF_ARGS(0) static void parse_arg_error(const char *fmt, ...) {
-  va_list v;
-  va_start(v, fmt);
-  vfprintf(stderr, fmt, v);
-  fprintf(stderr, "\n");
-  va_end(v);
-}
-
-UNUSED static bool parse_log_flag(const char *flag, enum compile_log_flags *flags) {
-#define LOG_FLAG(name, str)                                                    \
-  if (strcmp(flag, str) == 0) {                                                \
-    *flags |= name;                                                            \
-    return true;                                                               \
-  }
-
-  LOG_FLAG(COMPILE_LOG_FLAGS_PREPROC, "preproc");
-  LOG_FLAG(COMPILE_LOG_FLAGS_PARSE, "parse");
-  LOG_FLAG(COMPILE_LOG_FLAGS_TYPECHK, "typechk");
-  LOG_FLAG(COMPILE_LOG_FLAGS_IR, "ir");
-  LOG_FLAG(COMPILE_LOG_FLAGS_LOWER, "lower");
-  LOG_FLAG(COMPILE_LOG_FLAGS_OPTS, "opts");
-  LOG_FLAG(COMPILE_LOG_FLAGS_REGALLOC, "regalloc");
-  LOG_FLAG(COMPILE_LOG_FLAGS_EMIT, "emit");
-  LOG_FLAG(COMPILE_LOG_FLAGS_ASM, "asm");
-  LOG_FLAG(COMPILE_LOG_FLAGS_ALL, "all");
-
-  parse_arg_error("Unrecognised log flag '-L%s'", flag);
-  return false;
-}
-
-UNUSED static bool parse_fixed_timestamp(const char *str,
-                                  const char **fixed_timestamp) {
-  size_t len = strlen(str);
-
-  if (len >= 19) {
-    *fixed_timestamp = str;
-    return true;
-  }
-
-  err("`fixed_timestamp` must be exactly at least 19 chars (for symmetry "
-      "with "
-      "`asctime`)");
-  return false;
 }
