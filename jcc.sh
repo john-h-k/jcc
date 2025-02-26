@@ -45,10 +45,10 @@ test() {
 ci-test() {
     build
 
-    ./tests/run.sh "$@" -O0 || exit $?
-    ./tests/run.sh "$@" -O1 || exit $?
-    ./tests/run.sh "$@" -O2 || exit $?
-    ./tests/run.sh "$@" -O3 || exit $?
+    JCC_QUIET="1" ./tests/run.sh "$@" -O0 || exit $?
+    JCC_QUIET="1" ./tests/run.sh "$@" -O1 || exit $?
+    JCC_QUIET="1" ./tests/run.sh "$@" -O2 || exit $?
+    JCC_QUIET="1" ./tests/run.sh "$@" -O3 || exit $?
 }
 
 cfg() {
