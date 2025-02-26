@@ -326,5 +326,7 @@ struct parsed_args parse_args(int argc, char **argv) {
   vector_copy_to(values, parsed.values);
   vector_free(&values);
 
+  hashtbl_free(&opts);
+
   return parsed;
 }
