@@ -90,8 +90,11 @@ aggregator() {
         skips+=("${msg#skip }")
         ;;
     esac
-    printf "${BOLD}\rCompleted %${pad}d/%d    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
-      "$completed" "$total" "$passed" "$failed" "$skipped"
+
+    if [ -z $JCC_QUIET ]; then
+      printf "${BOLD}\rCompleted %${pad}d/%d    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
+        "$completed" "$total" "$passed" "$failed" "$skipped"
+    fi
   done < "$fifo"
 
   echo ""
@@ -205,7 +208,7 @@ run_tests() {
   done
 }
 
-printf "${BOLD}Running tests with '%s' ${RESET}\n" "$@"
+(IFS=" " printf "${BOLD}Running tests with '$*'${RESET}\n" )
 
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
 
@@ -221,17 +224,25 @@ for ((p=0; p<num_procs; p++)); do
   pids+=($!)
 done
 
-clean() {
-  echo "${tmps[@]}"
-  rm "${tmps[@]}"
-}
-
-trap clean EXIT
-
 aggregator &
 agg_pid=$!
 
 exec 3>$fifo
+
+clean() {
+  for pid in "${pids[@]}"; do
+    kill "$pid" &>/dev/null
+    wait "$pid" &>/dev/null
+  done
+
+  # for some reason this causes cleanup to work
+  sleep 0.1
+
+  rm -f "${tmps[@]}"
+}
+
+trap clean EXIT
+trap 'clean; exit -1' SIGINT
 
 for pid in "${pids[@]}"; do
   wait "$pid"
