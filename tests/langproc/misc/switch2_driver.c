@@ -4,13 +4,12 @@ typedef struct FILE FILE;
 #ifdef __APPLE__
 extern FILE *__stderrp;
 #define stderr __stderrp
+#elifdef __riscv__
+extern void **_impure_ptr;
+#define stderr ((FILE *)_impure_ptr[3])
 #else
 extern FILE *stderr;
 #endif
-
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
 
 int fprintf(FILE *, const char *, ...);
 
