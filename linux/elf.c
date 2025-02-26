@@ -287,7 +287,7 @@ static void write_relocations_elf(FILE *file,
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
       rela.r_addend = r->offset - 4;
-      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_GOT32);
+      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_GOTPCREL);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }

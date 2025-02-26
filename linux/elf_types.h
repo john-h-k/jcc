@@ -240,6 +240,7 @@ typedef struct elf64_shdr {
 #define R_X86_64_PC32 2
 #define R_X86_64_GOT32 3
 #define R_X86_64_PLT32 4
+#define R_X86_64_GOTPCREL 9
 
 /* aarch64 relocs */
 
