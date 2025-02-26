@@ -1,12 +1,10 @@
 #include "args.h"
 
-#include "bit_twiddle.h"
 #include "hashtbl.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -165,10 +163,10 @@ struct parsed_args parse_args(int argc, char **argv) {
   struct parsed_args parsed = {.values = NULL};
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, parse_fn, string_fn)      \
-  assert(sh[0] || lo[0], "must have short or long option");             \
-  assert(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),       \
+  DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");             \
+  DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),       \
                 "short option must begin '-' and be exactly two chars");       \
-  assert(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),        \
+  DEBUG_ASSERT(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),        \
                 "long option must begin '-' and be at least three chars");     \
   do {                                                                         \
     struct arg arg = {.ty = ARG_TY_##arg_ty,                                   \
