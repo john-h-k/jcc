@@ -139,6 +139,8 @@ run_tests() {
   proc_id=$1
   shift
 
+  trap 'rm -- "$output" 2>/dev/null' EXIT
+
   for ((i=proc_id; i<${#all_files[@]}; i+=num_procs)); do
     file="${all_files[i]}"
 
@@ -205,7 +207,7 @@ run_tests() {
     fi
   done
 
-  rm "$output"
+  exit
 }
 
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed

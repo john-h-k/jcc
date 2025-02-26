@@ -7,7 +7,7 @@
 struct compiler;
 
 enum compile_arch {
-  COMPILE_ARCH_NATIVE,
+  COMPILE_ARCH_NATIVE, /* default */
   COMPILE_ARCH_X86_64,
   COMPILE_ARCH_ARM64,
   COMPILE_ARCH_RV32I,
@@ -60,7 +60,7 @@ struct compile_args {
 
   const char *fixed_timestamp;
 
-  char *output;
+  const char *output;
 };
 
 enum compiler_create_result {
