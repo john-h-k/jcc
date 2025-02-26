@@ -188,11 +188,12 @@ run_tests() {
       continue
     fi
 
+    # supress echo stderr because otherwise we get spurious broken pipe errors
     if [ -z "$RUNNER" ]; then
-      output_result=$(echo "$stdin" | ./"$output" 2>/dev/null)
+      output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
       result=$?
     else
-      output_result=$(echo "$stdin" | "$RUNNER" "$output" 2>/dev/null)
+      output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
       result=$?
     fi
   
