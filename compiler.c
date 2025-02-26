@@ -42,7 +42,7 @@ create_compiler(struct program *program, const struct target *target,
   (*compiler)->args = *args;
   (*compiler)->target = *target;
 
-  if (preproc_create(program, path, args->num_include_paths,
+  if (preproc_create(program, args->target, path, args->num_include_paths,
                      args->include_paths, args->fixed_timestamp,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");

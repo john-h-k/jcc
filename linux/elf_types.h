@@ -260,6 +260,7 @@ typedef struct elf64_shdr {
 #define R_AARCH64_JUMP26 282
 #define R_AARCH64_CALL26 283
 
+#define R_AARCH64_ADR_GOT_PAGE 311
 #define R_AARCH64_LD64_GOT_LO12_NC 312
 
 #endif

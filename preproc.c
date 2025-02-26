@@ -1,6 +1,7 @@
 #include "preproc.h"
 
 #include "alloc.h"
+#include "compiler.h"
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
@@ -95,7 +96,8 @@ struct preproc_define {
   struct preproc_define_value value;
 };
 
-static void preproc_create_builtin_macros(struct preproc *preproc) {
+static void preproc_create_builtin_macros(struct preproc *preproc,
+                                          enum compile_target target) {
   // FIXME: vectors leak, vector should probably be arena-based
 
 #define DEF_BUILTIN(n, v)                                                      \
@@ -139,6 +141,35 @@ static void preproc_create_builtin_macros(struct preproc *preproc) {
   DEF_BUILTIN("__STDC_NO_THREADS__", "1");
   DEF_BUILTIN("__STDC_NO_VLA__", "1");
 
+  switch (target) {
+  case COMPILE_TARGET_MACOS_ARM64:
+    DEF_BUILTIN("__APPLE__", "1");
+    DEF_BUILTIN("__aarch64__", "1");
+    break;
+  case COMPILE_TARGET_MACOS_X86_64:
+    DEF_BUILTIN("__APPLE__", "1");
+    DEF_BUILTIN("__x86_64__", "1");
+    break;
+  case COMPILE_TARGET_LINUX_ARM64:
+    DEF_BUILTIN("__linux__", "1");
+    DEF_BUILTIN("__aarch64__", "1");
+    break;
+  case COMPILE_TARGET_LINUX_X86_64:
+    DEF_BUILTIN("__linux__", "1");
+    DEF_BUILTIN("__x86_64__", "1");
+    break;
+  case COMPILE_TARGET_LINUX_RV32I:
+    DEF_BUILTIN("__linux__", "1");
+    DEF_BUILTIN("__riscv", "1");
+    DEF_BUILTIN("__riscv32", "1");
+    DEF_BUILTIN("__riscv__", "1");
+    break;
+  case COMPILE_TARGET_EEP:
+    break;
+  case COMPILE_TARGET_NATIVE:
+    unreachable();
+  }
+
   // magic macros such as __TIME__ are handled in the processor
 
 #undef DEF_BUILTIN
@@ -172,9 +203,10 @@ enum preproc_special_macro {
 static struct hashtbl *SPECIAL_MACROS = NULL;
 
 enum preproc_create_result
-preproc_create(struct program *program, const char *path,
-               size_t num_include_paths, const char **include_paths,
-               const char *fixed_timestamp, struct preproc **preproc) {
+preproc_create(struct program *program, enum compile_target target,
+               const char *path, size_t num_include_paths,
+               const char **include_paths, const char *fixed_timestamp,
+               struct preproc **preproc) {
   if (fixed_timestamp) {
     DEBUG_ASSERT(strlen(fixed_timestamp) >= 19,
                  "`fixed_timestamp` must be at least 19");
@@ -235,7 +267,7 @@ preproc_create(struct program *program, const char *path,
 
   *preproc = p;
 
-  preproc_create_builtin_macros(p);
+  preproc_create_builtin_macros(p, target);
 
   return PREPROC_CREATE_RESULT_SUCCESS;
 }
@@ -528,9 +560,9 @@ static void preproc_next_raw_token(struct preproc *preproc,
       char nc = preproc_text->text[end.idx];
 
       if (end.idx + 1 < preproc_text->len &&
-                 (tolower(nc) == 'e' || tolower(nc) == 'p') &&
-                 (preproc_text->text[end.idx + 1] == '+' ||
-                  preproc_text->text[end.idx + 1] == '-')) {
+          (tolower(nc) == 'e' || tolower(nc) == 'p') &&
+          (preproc_text->text[end.idx + 1] == '+' ||
+           preproc_text->text[end.idx + 1] == '-')) {
         // need to check if it is an exponent
         next_col(&end);
         next_col(&end);
