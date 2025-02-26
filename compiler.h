@@ -15,7 +15,7 @@ enum compile_arch {
 };
 
 enum compile_target {
-  COMPILE_TARGET_MACOS_ARM64,
+  COMPILE_TARGET_MACOS_ARM64 = 1 /* so that there is no default */,
   COMPILE_TARGET_MACOS_X86_64,
   COMPILE_TARGET_LINUX_ARM64,
   COMPILE_TARGET_LINUX_X86_64,
