@@ -25,13 +25,14 @@ enum compile_target {
 
 enum compile_log_flags {
   COMPILE_LOG_FLAGS_NONE = 0,
-  COMPILE_LOG_FLAGS_PREPROC = 1,
-  COMPILE_LOG_FLAGS_PARSE = 2,
-  COMPILE_LOG_FLAGS_TYPECHK = 4,
-  COMPILE_LOG_FLAGS_IR = 8,
-  COMPILE_LOG_FLAGS_OPTS = 16,
-  COMPILE_LOG_FLAGS_LOWER = 32,
-  COMPILE_LOG_FLAGS_REGALLOC = 64,
+  COMPILE_LOG_FLAGS_ARGS = 1,
+  COMPILE_LOG_FLAGS_PREPROC = 2,
+  COMPILE_LOG_FLAGS_PARSE = 4,
+  COMPILE_LOG_FLAGS_TYPECHK = 8,
+  COMPILE_LOG_FLAGS_IR = 16,
+  COMPILE_LOG_FLAGS_OPTS = 32,
+  COMPILE_LOG_FLAGS_LOWER = 64,
+  COMPILE_LOG_FLAGS_REGALLOC = 128,
   COMPILE_LOG_FLAGS_EMIT = 256,
   COMPILE_LOG_FLAGS_ASM = 512,
 
@@ -44,12 +45,20 @@ enum compile_c_standard {
   COMPILE_C_STANDARD_C23,
 };
 
+enum compile_opts_level {
+  COMPILE_OPTS_LEVEL_0,
+  COMPILE_OPTS_LEVEL_1,
+  COMPILE_OPTS_LEVEL_2,
+  COMPILE_OPTS_LEVEL_3,
+};
+
 #define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags &flag
 
 struct compile_args {
   enum compile_c_standard c_standard;
   enum compile_target target;
   enum compile_log_flags log_flags;
+  enum compile_opts_level opts_level;
 
   bool preproc_only;
   bool build_asm_file;

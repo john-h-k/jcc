@@ -44,8 +44,11 @@ test() {
 
 ci-test() {
     build
-    ./tests/run.sh "$@"
-    exit $?
+
+    ./tests/run.sh "$@" -O0 || exit $?
+    ./tests/run.sh "$@" -O1 || exit $?
+    ./tests/run.sh "$@" -O2 || exit $?
+    ./tests/run.sh "$@" -O3 || exit $?
 }
 
 cfg() {
