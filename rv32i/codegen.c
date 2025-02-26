@@ -1047,23 +1047,13 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
         .address = 0,
         .size = 0};
 
-    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-      struct instr *add = alloc_instr(state->func);
-      add->rv32i->ty = RV32I_INSTR_TY_ADDI;
-      add->rv32i->addi = (struct rv32i_op_imm){
-          .dest = dest,
-          .source = dest,
-          .imm = 0,
-      };
-    } else {
-      struct instr *lw = alloc_instr(state->func);
-      lw->rv32i->ty = RV32I_INSTR_TY_LW;
-      lw->rv32i->lw = (struct rv32i_load){
-          .dest = dest,
-          .addr = dest,
-          .imm = 0,
-      };
-    }
+    struct instr *add = alloc_instr(state->func);
+    add->rv32i->ty = RV32I_INSTR_TY_ADDI;
+    add->rv32i->addi = (struct rv32i_op_imm){
+        .dest = dest,
+        .source = dest,
+        .imm = 0,
+    };
   }
   }
 }
