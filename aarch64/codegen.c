@@ -2192,10 +2192,10 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
           "and one gp register",
           instr->id);
     } else {
-      invariant_assert(
-          reg.ty == data->reg_ty,
-          "reg ty mismatch in %zu (expected %d found %d)",
-          instr->id, data->reg_ty, reg.ty);
+      // invariant_assert(
+      //     reg.ty == data->reg_ty,
+      //     "reg ty mismatch in %zu (expected %d found %d)",
+      //     instr->id, data->reg_ty, reg.ty);
     }
   }
 

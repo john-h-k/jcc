@@ -104,6 +104,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
                       .size = 8},
       };
 
+      ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
     } else if (var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){

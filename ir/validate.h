@@ -3,6 +3,11 @@
 
 #include "ir.h"
 
-void ir_validate(struct ir_unit *iru);
+enum ir_validate_flags {
+  IR_VALIDATE_FLAG_NONE = 0,
+  IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS = 1,
+};
+
+void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags);
 
 #endif

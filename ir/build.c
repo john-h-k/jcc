@@ -106,13 +106,13 @@ static void get_var_ref(struct ir_func_builder *irb,
     return;
   }
 
-
   *ref = var_refs_get(irb->global_var_refs, key);
   if (*ref) {
     return;
   }
 
-  // HACK: because functions always have global scope, when we look up at global level force scope
+  // HACK: because functions always have global scope, when we look up at global
+  // level force scope
   struct var_key glb = *key;
   glb.scope = SCOPE_GLOBAL;
 
@@ -228,8 +228,8 @@ static struct ir_var_ty var_ty_for_td_var_ty(struct ir_unit *iru,
     case TD_TY_AGGREGATE_TY_UNION:
       ty.ty = IR_VAR_TY_TY_UNION;
       ty.aggregate.num_fields = aggregate.num_fields;
-      ty.aggregate.fields = arena_alloc(iru->arena, sizeof(struct ir_var_ty) *
-                                                       ty.aggregate.num_fields);
+      ty.aggregate.fields = arena_alloc(
+          iru->arena, sizeof(struct ir_var_ty) * ty.aggregate.num_fields);
 
       for (size_t i = 0; i < ty.aggregate.num_fields; i++) {
         // handle nested types
@@ -469,7 +469,8 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
 
       return op;
     } else {
-      // generate binary op for pointer sub. we could try and make `addr_offset` unsigned but involves codegen changes
+      // generate binary op for pointer sub. we could try and make `addr_offset`
+      // unsigned but involves codegen changes
 
       struct ir_var_ty el_ty =
           var_ty_for_td_var_ty(irb->unit, td_var_ty->pointer.underlying);
@@ -1013,9 +1014,8 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
     struct ir_glb *glb = add_global(irb->unit, IR_GLB_TY_DATA, &var_ty,
                                     IR_GLB_DEF_TY_DEFINED, NULL);
     glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
-    *glb->var = (struct ir_var){
-      .unit = irb->unit,
-      .ty = IR_VAR_TY_STRING_LITERAL,
+    *glb->var = (struct ir_var){.unit = irb->unit,
+                                .ty = IR_VAR_TY_STRING_LITERAL,
                                 .var_ty = var_ty,
                                 .value = {.ty = IR_VAR_VALUE_TY_STR,
                                           .var_ty = var_ty,
@@ -1196,6 +1196,32 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
   return phi;
 }
 
+static struct ir_op *store_load_if_needed(struct ir_func_builder *irb,
+                                          struct ir_stmt **stmt,
+                                          struct ir_op *op) {
+
+  if (!var_ty_is_aggregate(&op->var_ty) || op->ty == IR_OP_TY_LOAD) {
+    return op;
+  }
+
+  struct ir_lcl *lcl = add_local(irb->func, &op->var_ty);
+
+  struct ir_op *store = alloc_ir_op(irb->func, *stmt);
+  store->ty = IR_OP_TY_STORE;
+  store->var_ty = IR_VAR_TY_NONE;
+
+  store->store =
+      (struct ir_op_store){.ty = IR_OP_STORE_TY_LCL, .value = op, .lcl = lcl};
+
+  struct ir_op *load = alloc_ir_op(irb->func, *stmt);
+  load->ty = IR_OP_TY_LOAD;
+  load->var_ty = op->var_ty;
+
+  load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
+
+  return load;
+}
+
 static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct td_expr *expr) {
@@ -1229,7 +1255,10 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
   for (size_t i = 0; i < call->arg_list.num_args; i++) {
     args[i] = build_ir_for_expr(irb, stmt, &call->arg_list.args[i]);
+    args[i] = store_load_if_needed(irb, stmt, args[i]);
+
     arg_var_tys[i] = args[i]->var_ty;
+
 
     if (i >= num_non_variadic_args) {
       args[i]->flags |= IR_OP_FLAG_VARIADIC_PARAM;
@@ -2229,6 +2258,7 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
   struct ir_op *expr_op;
   if (return_stmt && return_stmt->expr) {
     expr_op = build_ir_for_expr(irb, stmt, return_stmt->expr);
+    expr_op = store_load_if_needed(irb, stmt, expr_op);
   } else {
     expr_op = NULL;
   }
@@ -2318,24 +2348,23 @@ static int sort_ranges_by_offset(const void *l, const void *r) {
 static void build_ir_zero_range(struct ir_func_builder *irb,
                                 struct ir_stmt *stmt,
                                 struct ir_op *insert_before,
-                                struct ir_op *address,
-                                size_t byte_size) {
+                                struct ir_op *address, size_t byte_size) {
   if (!byte_size) {
     return;
   }
 
   struct ir_op *mem_set;
   if (insert_before) {
-    mem_set = insert_before_ir_op(
-      irb->func, insert_before, IR_OP_TY_MEM_SET, IR_VAR_TY_NONE);
+    mem_set = insert_before_ir_op(irb->func, insert_before, IR_OP_TY_MEM_SET,
+                                  IR_VAR_TY_NONE);
   } else {
     mem_set = alloc_ir_op(irb->func, stmt);
     mem_set->ty = IR_OP_TY_MEM_SET;
     mem_set->var_ty = IR_VAR_TY_NONE;
   }
 
-  mem_set->mem_set = (struct ir_op_mem_set){
-      .addr = address, .length = byte_size, .value = 0};
+  mem_set->mem_set =
+      (struct ir_op_mem_set){.addr = address, .length = byte_size, .value = 0};
 }
 
 static void build_ir_for_init_list(struct ir_func_builder *irb,
@@ -2506,7 +2535,10 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
     symbol_name = name;
   }
 
-  struct var_key key = {.name = name, .scope = decl->var_ty.ty == TD_VAR_TY_TY_FUNC ? SCOPE_GLOBAL : decl->var.scope};
+  struct var_key key = {.name = name,
+                        .scope = decl->var_ty.ty == TD_VAR_TY_TY_FUNC
+                                     ? SCOPE_GLOBAL
+                                     : decl->var.scope};
 
   enum ir_glb_ty ty;
   if (decl->var_ty.ty == TD_VAR_TY_TY_FUNC) {
@@ -2539,7 +2571,8 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   }
 
   enum ir_glb_def_ty def_ty;
-  if (decl->init || !is_file_scope || (ref && ref->glb->def_ty == IR_GLB_DEF_TY_DEFINED)) {
+  if (decl->init || !is_file_scope ||
+      (ref && ref->glb->def_ty == IR_GLB_DEF_TY_DEFINED)) {
     def_ty = IR_GLB_DEF_TY_DEFINED;
   } else if (is_file_scope && !is_func &&
              (is_unspecified_storage || is_static)) {
@@ -2585,10 +2618,10 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
     ref->glb->var = arena_alloc(irb->arena, sizeof(*ref->glb->var));
   }
 
-  *ref->glb->var =
-      (struct ir_var){
-      .unit = irb->unit,
-      .ty = IR_VAR_TY_DATA, .var_ty = var_ty, .value = value};
+  *ref->glb->var = (struct ir_var){.unit = irb->unit,
+                                   .ty = IR_VAR_TY_DATA,
+                                   .var_ty = var_ty,
+                                   .value = value};
 }
 
 static void
@@ -2667,10 +2700,11 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
   for (size_t i = 0; i < declaration->num_var_declarations; i++) {
     struct td_var_declaration *decl = &declaration->var_declarations[i];
 
-    if (decl->var_ty.ty != TD_VAR_TY_TY_FUNC && (declaration->storage_class_specifier ==
-            TD_STORAGE_CLASS_SPECIFIER_NONE ||
-        declaration->storage_class_specifier ==
-            TD_STORAGE_CLASS_SPECIFIER_AUTO)) {
+    if (decl->var_ty.ty != TD_VAR_TY_TY_FUNC &&
+        (declaration->storage_class_specifier ==
+             TD_STORAGE_CLASS_SPECIFIER_NONE ||
+         declaration->storage_class_specifier ==
+             TD_STORAGE_CLASS_SPECIFIER_AUTO)) {
       build_ir_for_auto_var(irb, stmt, decl);
     } else {
       struct ir_var_builder builder = {
@@ -2909,10 +2943,10 @@ static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
   }
 }
 
-static struct ir_func *
-build_ir_for_function(struct ir_unit *unit, struct arena_allocator *arena,
-                      struct td_funcdef *def,
-                      struct var_refs *global_var_refs) {
+static struct ir_func *build_ir_for_function(struct ir_unit *unit,
+                                             struct arena_allocator *arena,
+                                             struct td_funcdef *def,
+                                             struct var_refs *global_var_refs) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
@@ -3698,9 +3732,8 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
       glb->def_ty = IR_GLB_DEF_TY_DEFINED;
       glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
-      *glb->var = (struct ir_var){
-      .unit = iru,
-        .ty = IR_VAR_TY_DATA,
+      *glb->var = (struct ir_var){.unit = iru,
+                                  .ty = IR_VAR_TY_DATA,
                                   .var_ty = glb->var_ty,
                                   .value = {.ty = IR_VAR_VALUE_TY_ZERO}};
     }

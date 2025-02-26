@@ -166,8 +166,6 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     break;
   case COMPILE_TARGET_EEP:
     break;
-  case COMPILE_TARGET_NATIVE:
-    unreachable();
   }
 
   // magic macros such as __TIME__ are handled in the processor

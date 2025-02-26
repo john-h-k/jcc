@@ -618,6 +618,7 @@ static void lower_params(struct ir_func *func) {
   if (call_info.num_params) {
     struct ir_op *param_op = func->first->first->first;
     struct ir_op *after_params = param_op->stmt->succ->first;
+
     for (size_t i = 0; i < call_info.num_params; i++) {
       DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
 
@@ -636,8 +637,8 @@ static void lower_params(struct ir_func *func) {
                                            .lcl = param_op->addr.lcl};
           // addr->flags |= IR_OP_FLAG_CONTAINED;
 
-          for (size_t j = num_reg; j; j--) {
-            struct ir_param_reg reg = param_info.regs[j - 1];
+          for (size_t j = 0; j < num_reg; j++) {
+            struct ir_param_reg reg = param_info.regs[j];
 
             struct ir_var_ty store_ty =
                 get_var_ty_for_size(reg.reg.ty, reg.size);
@@ -648,10 +649,10 @@ static void lower_params(struct ir_func *func) {
             struct ir_op *addr_offset = insert_before_ir_op(
                 func, store, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
             addr_offset->addr_offset = (struct ir_op_addr_offset){
-                .base = addr, .offset = (j - 1) * reg.size};
+                .base = addr, .offset = j * reg.size};
 
             struct ir_op *mov;
-            if (j - 1 == 0) {
+            if (j == 0) {
               mov = replace_ir_op(func, param_op, IR_OP_TY_MOV, store_ty);
             } else {
               mov = insert_after_ir_op(func, param_op, IR_OP_TY_MOV, store_ty);
@@ -664,6 +665,8 @@ static void lower_params(struct ir_func *func) {
 
             store->store = (struct ir_op_store){
                 .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
+
+            param_op = mov;
           }
         } else {
           DEBUG_ASSERT(param_info.num_regs == 1,
@@ -1087,7 +1090,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
   CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args,
                         op->call.args);
-
+  
   if (!func_info.call_info.ret) {
     op->var_ty = IR_VAR_TY_NONE;
     return;
@@ -1103,7 +1106,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   if (var_ty_is_aggregate(param_info.var_ty)) {
     op->var_ty = IR_VAR_TY_NONE;
 
+    // HACK: should use op uses
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
+    while (prev_store->ty != IR_OP_TY_STORE) prev_store = prev_store->succ;
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
 
     struct ir_op *addr = build_addr(func, prev_store);
@@ -1316,12 +1321,11 @@ void lower(struct ir_unit *unit, const struct target *target) {
 
       prune_basicblocks(func);
 
+      // FIXME: phis are not propogated properly
       remove_critical_edges(func);
       eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
     }
     }
     glb = glb->succ;
   }
-
-  ir_validate(unit);
 }

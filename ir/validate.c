@@ -1,7 +1,7 @@
 #include "validate.h"
 
-#include "../util.h"
 #include "../alloc.h"
+#include "../util.h"
 #include "../vector.h"
 #include "ir.h"
 #include "prettyprint.h"
@@ -13,6 +13,7 @@ struct ir_validate_error {
 
 struct ir_validate_state {
   struct ir_unit *unit;
+  enum ir_validate_flags flags;
   struct vector *errors;
 };
 
@@ -23,17 +24,17 @@ struct validate_op_order_metadata {
 
 #define IR_OBJECT_NAME(obj, msg)                                               \
   _Generic((obj),                                                              \
-      struct ir_glb *: "glb" msg,                                               \
-      struct ir_lcl *: "lcl" msg,                                               \
-      struct ir_func *: "func" msg,                                             \
-      struct ir_var *: "var" msg,                                               \
-      struct ir_basicblock *: "basicblock" msg,                                 \
-      struct ir_stmt *: "stmt" msg,                                             \
+      struct ir_glb *: "glb" msg,                                              \
+      struct ir_lcl *: "lcl" msg,                                              \
+      struct ir_func *: "func" msg,                                            \
+      struct ir_var *: "var" msg,                                              \
+      struct ir_basicblock *: "basicblock" msg,                                \
+      struct ir_stmt *: "stmt" msg,                                            \
       struct ir_op *: "op" msg)
 
 #define VALIDATION_ERRZ(obj, msg)                                              \
   do {                                                                         \
-    struct ir_validate_error error = {.err = (msg),                              \
+    struct ir_validate_error error = {.err = (msg),                            \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
   } while (0);
@@ -41,7 +42,7 @@ struct validate_op_order_metadata {
 #define VALIDATION_ERR(obj, fmt, ...)                                          \
   do {                                                                         \
     const char *msg =                                                          \
-        arena_alloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);            \
+        arena_alloc_snprintf(state->unit->arena, (fmt), __VA_ARGS__);          \
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
@@ -49,11 +50,12 @@ struct validate_op_order_metadata {
 
 #define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
   if (!(cond)) {                                                               \
-    VALIDATION_ERR((obj), (fmt), __VA_ARGS__);                                     \
+    VALIDATION_ERR((obj), (fmt), __VA_ARGS__);                                 \
   }
 
 #define VALIDATION_CHECKZ(cond, obj, msg)                                      \
-  VALIDATION_CHECK((cond), (obj), IR_OBJECT_NAME((obj), " %zu: %s"), (obj)->id, (msg))
+  VALIDATION_CHECK((cond), (obj), IR_OBJECT_NAME((obj), " %zu: %s"),           \
+                   (obj)->id, (msg))
 
 static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
@@ -92,6 +94,21 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNKNOWN:
     BUG("should not have unknown ops");
   case IR_OP_TY_PHI:
+    for (size_t i = 0; i < op->phi.num_values; i++) {
+      struct ir_phi_entry *entry = &op->phi.values[i];
+
+      // FIXME: inefficient
+      bool found = false;
+      for (size_t j = 0; j < op->stmt->basicblock->num_preds; j++) {
+        if (op->stmt->basicblock->preds[j] == entry->basicblock) {
+          found = true;
+          break;
+        }
+      }
+
+      VALIDATION_CHECK(found, op, "op entry had bb %zu which was not a pred",
+                       entry->basicblock->id);
+    }
     break;
   case IR_OP_TY_GATHER: {
     struct ir_var_ty *var_ty = &op->var_ty;
@@ -113,8 +130,9 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
-    VALIDATION_CHECKZ(!(op->flags & IR_OP_FLAG_PARAM) != !(op->mov.value), op,
-                      "param mov must have null value, and param mov cannot have value");
+    VALIDATION_CHECKZ(
+        !(op->flags & IR_OP_FLAG_PARAM) != !(op->mov.value), op,
+        "param mov must have null value, and param mov cannot have value");
     break;
   case IR_OP_TY_CNST:
     break;
@@ -239,6 +257,12 @@ static void ir_validate_stmt(struct ir_validate_state *state,
   struct ir_op *op = stmt->first;
 
   while (op) {
+    if (op->ty == IR_OP_TY_PHI &&
+        !(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS)) {
+      VALIDATION_ERRZ(op,
+                      "should not have phi except in phi stmt at start of bb");
+    }
+
     ir_validate_op(state, func, op);
 
     op = op->succ;
@@ -251,10 +275,21 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
   VALIDATION_CHECKZ(basicblock->id != DETACHED_BASICBLOCK, basicblock,
                     "basicblock is detached!");
 
-  VALIDATION_CHECKZ(basicblock->func, basicblock,
-                    "basicblock has no func!");
+  VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
 
   struct ir_stmt *stmt = basicblock->first;
+
+  if (!(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS) && stmt && stmt->first && stmt->first->ty == IR_OP_TY_PHI) {
+    struct ir_op *phi = stmt->first;
+    while (phi) {
+      VALIDATION_CHECKZ(phi->ty == IR_OP_TY_PHI, phi,
+                        "expected all phis in stmt to be phis");
+
+      phi = phi->succ;
+    }
+
+    stmt = stmt->succ;
+  }
 
   while (stmt) {
     ir_validate_stmt(state, func, stmt);
@@ -291,10 +326,12 @@ static void ir_validate_data(struct ir_validate_state *state,
     VALIDATION_CHECKZ(glb->var, glb, "defined global should have var");
     break;
   case IR_GLB_DEF_TY_UNDEFINED:
-    // VALIDATION_CHECKZ(!glb->var, glb, "undefined global should not have var");
+    // VALIDATION_CHECKZ(!glb->var, glb, "undefined global should not have
+    // var");
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
     VALIDATION_ERRZ(glb, "should not have tentative defs by now");
+    return;
   }
 }
 
@@ -309,6 +346,7 @@ static void ir_validate_func(struct ir_validate_state *state,
     return;
   case IR_GLB_DEF_TY_TENTATIVE:
     VALIDATION_ERRZ(glb, "should not have tentative defs by now");
+    return;
   }
 
   struct ir_func *func = glb->func;
@@ -342,11 +380,13 @@ static void ir_validate_func(struct ir_validate_state *state,
                    bb_count);
 }
 
-void ir_validate(struct ir_unit *iru) {
+void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
   struct ir_glb *glb = iru->first_global;
 
   struct ir_validate_state state = {
-      .unit = iru, .errors = vector_create(sizeof(struct ir_validate_error))};
+      .unit = iru,
+      .flags = flags,
+      .errors = vector_create(sizeof(struct ir_validate_error))};
 
   while (glb) {
     switch (glb->ty) {

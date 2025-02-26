@@ -154,7 +154,7 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "ir");
     }
 
-    ir_validate(ir);
+    ir_validate(ir, IR_VALIDATE_FLAG_NONE);
   }
 
   {
@@ -169,7 +169,7 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "opts");
     }
 
-    ir_validate(ir);
+    ir_validate(ir, IR_VALIDATE_FLAG_NONE);
 
     COMPILER_STAGE(LOWER);
 
@@ -179,7 +179,7 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "lower");
     }
 
-    ir_validate(ir);
+    ir_validate(ir, IR_VALIDATE_FLAG_NONE);
   }
 
   {
@@ -209,7 +209,7 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "regalloc");
     }
 
-    ir_validate(ir);
+    ir_validate(ir, IR_VALIDATE_FLAG_NONE);
 
     BEGIN_STAGE("ELIM PHI");
     glb = ir->first_global;
@@ -236,7 +236,7 @@ enum compile_result compile(struct compiler *compiler) {
       debug_print_stage(ir, "elim_phi");
     }
 
-    ir_validate(ir);
+    ir_validate(ir, IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
 
     glb = ir->first_global;
 
@@ -251,9 +251,9 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         ir_order_basicblocks(glb->func);
-        eliminate_redundant_ops(glb->func,
-                                ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
-                                    ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
+        // eliminate_redundant_ops(glb->func,
+        //                         ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
+        //                             ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
         rebuild_flags(glb->func);
         rebuild_ids(glb->func);
         break;
