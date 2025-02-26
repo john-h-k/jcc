@@ -109,8 +109,8 @@ aggregator() {
 
     echo -e "${BOLDRED}\nFailed tests:${RESET}"
     for reason in "${fails[@]}"; do
-      echo -e "${BOLDRED}- "
-      echo "$reason"
+      echo -ne "${BOLDRED}- "
+      echo -n "$reason"
       echo -e "${RESET}"
     done
 
@@ -122,8 +122,8 @@ aggregator() {
 
     echo -e "${BOLDYELLOW}Skipped tests:${RESET}"
     for reason in "${skips[@]}"; do
-      echo -e "${BOLDYELLOW}- "
-      echo "$reason"
+      echo -ne "${BOLDYELLOW}- "
+      echo -n "$reason"
       echo -e "${RESET}"
     done
 
