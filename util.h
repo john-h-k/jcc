@@ -262,7 +262,7 @@ static inline void debug_print_stack_trace(void) {}
 #define DO_PRAGMA(x) _Pragma (#x)
 #define PUSH_NO_WARN(warn) \
   _Pragma("GCC diagnostic push")                                               \
-      DO_PRAGMA("GCC diagnostic ignored warn)
+      DO_PRAGMA(GCC diagnostic ignored warn)
 #define POP_NO_WARN _Pragma("GCC diagnostic pop")
 
 #else
