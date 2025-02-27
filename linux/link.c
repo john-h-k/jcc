@@ -96,10 +96,10 @@ enum link_result linux_link_objects(const struct link_args *args) {
   size_t total_size = template_size;
   total_size++; // for space/null
   for (size_t i = 0; i < args->num_objects; i++) {
-    total_size++; // separator space
+    total_size += 5; // separator space + quotes
     total_size += strlen(args->objects[i]);
   }
-  total_size += 3 + strlen(args->output); // for "-o " and output filename
+  total_size += 3 + 2 + strlen(args->output); // for "-o " and output filename surrounded by quotes
 
   total_size += strlen(template_suffix);
 
@@ -113,15 +113,20 @@ enum link_result linux_link_objects(const struct link_args *args) {
   buff[head++] = ' ';
 
   for (size_t i = 0; i < args->num_objects; i++) {
+    buff[head++] = '.';
+    buff[head++] = '/';
+    buff[head++] = '\'';
     strcpy(&buff[head], args->objects[i]);
     head += strlen(args->objects[i]);
+    buff[head++] = '\'';
     buff[head++] = ' ';
   }
 
-  strcpy(&buff[head], "-o ");
-  head += 3;
+  strcpy(&buff[head], "-o '");
+  head += 4;
   strcpy(&buff[head], args->output);
   head += strlen(args->output);
+  buff[head++] = '\'';
 
   strcpy(&buff[head], template_suffix);
   head += strlen(template_suffix);

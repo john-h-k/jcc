@@ -221,7 +221,12 @@ int main(int argc, char **argv) {
 
     info("compiling source file \"%s\"", source_path);
 
-    const char *source = read_file(arena, source_path);
+    const char * source;
+    if (!strcmp(source_path, "-")) {
+      source = read_file(arena, stdin);
+    } else {
+      source = read_path(arena, source_path);
+    }
 
     if (!source) {
       err("source file \"%s\" could not be read!", source_path);
@@ -230,6 +235,8 @@ int main(int argc, char **argv) {
     }
 
     char *object_file;
+
+    // this will output `-.o` or `-.s` if read from stdin, which is weird, but matches clang?
 
     if (compile_args.preproc_only && !compile_args.output) {
       // FIXME: hacky

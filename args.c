@@ -275,6 +275,12 @@ enum parse_args_result parse_args(int argc, char **argv,
     char *s = argv[i];
     size_t len = strlen(s);
 
+    if (!strcmp(s, "-")) {
+      // means read from stdin. handle it seperately to avoid it getting confused for a flag
+      vector_push_back(values, &s);
+      continue;
+    }
+
     if (!strcmp(s, "--")) {
       values_only = true;
       continue;
