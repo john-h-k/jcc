@@ -369,7 +369,9 @@ enum parse_args_result parse_args(int argc, char **argv,
             free(buf);
           }
 
-          if (*arg->arg_flags & flag) {
+          // allow `-1` as a duplicate flag as it just means "all"
+          // will allow duplicate flags if _all_ have been given, but this is okay
+          if (((flag != -1) == (*arg->arg_flags != -1)) && *arg->arg_flags & flag) {
             err("Duplicate options '%.*s'\n", (int)lookup_str.len,
                 lookup_str.str);
             goto fail;
