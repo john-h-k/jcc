@@ -675,31 +675,38 @@ struct prettyprint_file_metadata {
   void *cb_metadata;
 };
 
+static void prettyprint_begin_visit_stmt_file(UNUSED_ARG(struct ir_func *irb),
+                                              struct ir_stmt *stmt,
+                                              void *metadata) {
+  struct prettyprint_file_metadata *fm = metadata;
+  fprintf(fm->file, "STMT $ %03zu\n", stmt->id);
+}
+
 static void
 prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
                                         struct ir_basicblock *basicblock,
                                         void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
-  fslog(fm->file, "\n");
+  fprintf(fm->file, "\n\n");
   if (basicblock->comment) {
-    fslog(fm->file, "// %s\n", basicblock->comment);
+    fprintf(fm->file, "// %s\n\n", basicblock->comment);
   }
-  fslogsl(fm->file, "BB @ %03zu", basicblock->id);
+  fprintf(fm->file, "BB @ %03zu", basicblock->id);
 
   if (basicblock->num_preds) {
-    fslogsl(fm->file, " PREDS = [ ");
+    fprintf(fm->file, " PREDS = [ ");
     for (size_t i = 0; i < basicblock->num_preds; i++) {
-      fslogsl(fm->file, "@%zu", basicblock->preds[i]->id);
+      fprintf(fm->file, "@%zu", basicblock->preds[i]->id);
 
       if (i + 1 != basicblock->num_preds) {
-        fslogsl(fm->file, ", ");
+        fprintf(fm->file, ", ");
       }
     }
-    fslogsl(fm->file, " ]");
+    fprintf(fm->file, " ]");
   }
 
-  fslogsl(fm->file, "\n");
+  fprintf(fm->file, "\n");
 }
 
 static void prettyprint_end_visit_basicblock_file(
@@ -707,7 +714,7 @@ static void prettyprint_end_visit_basicblock_file(
     UNUSED_ARG(struct ir_basicblock *basicblock), void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
 
-  fslogsl(fm->file, "\n");
+  fprintf(fm->file, "\n");
 }
 
 static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
@@ -716,7 +723,8 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     return;
   }
 
-  int op_pad = /* guess */ 50;
+  int op_pad = /* guess */ 70;
+  int flag_pad = 40;
 
   struct prettyprint_file_metadata *fm = metadata;
 
@@ -741,6 +749,46 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     fprintf(fm->file, "%*s", 50, "");
   }
 
+  pos = ftell(fm->file);
+
+  if (op->flags) {
+    fprintf(fm->file, "[ ");
+
+   
+    bool first = true;
+#define PRINT_FLAG(name, str) \
+    if (op->flags & IR_OP_FLAG_ ## name) { \
+      fprintf(fm->file, first ? "." str : ", ." str); \
+      first = false; \
+    } \
+
+    PRINT_FLAG(MUST_SPILL, "must_spill");
+    PRINT_FLAG(PARAM, "param");
+    PRINT_FLAG(VARIADIC_PARAM, "variadic_param");
+    PRINT_FLAG(SPILL, "spill");
+    PRINT_FLAG(CONTAINED, "contained");
+    PRINT_FLAG(FIXED_REG, "fixed_reg");
+    PRINT_FLAG(SIDE_EFFECTS, "side_effects");
+    PRINT_FLAG(SPILLED, "spilled");
+    PRINT_FLAG(PHI_MOV, "phi_mov");
+    PRINT_FLAG(READS_DEST, "reads_dest");
+    PRINT_FLAG(PROMOTED, "promoted");
+    PRINT_FLAG(ETERNAL, "eternal");
+
+#undef PRINT_FLAG
+
+    fprintf(fm->file, " ]");
+  }
+
+  width = ftell(fm->file) - pos;
+  pad = flag_pad - width;
+
+  if (supports_pos && pad > 0) {
+    fprintf(fm->file, "%*s", (int)pad, "");
+  } else {
+    fprintf(fm->file, "%*s", 20, "");
+  }
+
   if (fm->cb) {
     fprintf(fm->file, " | ");
     fm->cb(fm->file, op, fm->cb_metadata);
@@ -751,14 +799,6 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   if (!op_produces_value(op)) {
     fprintf(fm->file, "                ");
   } else {
-    if (op->flags & IR_OP_FLAG_FIXED_REG) {
-      fprintf(fm->file, "    (FIXED) ");
-    }
-
-    if (op->flags & IR_OP_FLAG_SPILLED) {
-      fprintf(fm->file, "    (SPILLED) ");
-    }
-
     switch (op->reg.ty) {
     case IR_REG_TY_NONE:
       fprintf(fm->file, "    (UNASSIGNED)");
@@ -805,14 +845,6 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     }
   }
 
-  fprintf(fm->file, "        | ");
-  if (op->flags & IR_OP_FLAG_PROMOTED) {
-    fprintf(fm->file, " PROM ");
-  }
-  if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
-    fprintf(fm->file, " SIDEEFFECT ");
-  }
-
   fprintf(fm->file, "\n");
 }
 
@@ -820,7 +852,7 @@ const struct prettyprint_callbacks FILE_WRITER_CALLBACKS = {
     .begin_visit_basicblock = prettyprint_begin_visit_basicblock_file,
     .end_visit_basicblock = prettyprint_end_visit_basicblock_file,
 
-    .begin_visit_stmt = NULL,
+    .begin_visit_stmt = prettyprint_begin_visit_stmt_file,
     .end_visit_stmt = NULL,
 
     .visit_op = prettyprint_visit_op_file,
@@ -952,7 +984,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 
       lcl = lcl->succ;
     }
-    fprintf(file, "}\n\n");
+    fprintf(file, "}");
   }
 
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
@@ -1124,8 +1156,7 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file,
-                     struct ir_glb *glb) {
+void debug_print_glb(FILE *file, struct ir_glb *glb) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {
@@ -1171,8 +1202,7 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_print_ir_object(FILE *file,
-                           const struct ir_object *object) {
+void debug_print_ir_object(FILE *file, const struct ir_object *object) {
   switch (object->ty) {
   case IR_OBJECT_TY_GLB:
     debug_print_glb(file, object->glb);

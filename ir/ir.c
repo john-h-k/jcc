@@ -829,7 +829,6 @@ void eliminate_redundant_ops(struct ir_func *func,
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
-
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
@@ -866,7 +865,7 @@ void eliminate_redundant_ops(struct ir_func *func,
     }
     default:
     side_effects:
-      if (op_has_side_effects(op)) {
+      if ((op->flags & IR_OP_FLAG_PARAM) || op_has_side_effects(op)) {
         continue;
       }
 
@@ -885,7 +884,7 @@ void eliminate_redundant_ops(struct ir_func *func,
   iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   while (ir_func_iter_next(&iter, &op)) {
-    if (!use_map.op_use_datas[op->id].num_uses && !op_has_side_effects(op)) {
+    if (!use_map.op_use_datas[op->id].num_uses && !(op->flags & IR_OP_FLAG_PARAM) && !op_has_side_effects(op)) {
       vector_push_back(detach, &op);
     }
   }
