@@ -179,7 +179,11 @@ static void print_help(void) {
   printf("JCC\n");
   printf("John Kelly <johnharrykelly@gmail.com>\n");
   printf("\n");
-  printf("jcc [OPTIONS] [--] [sources]\n\n");
+  printf("jcc [OPTIONS] [--] [SOURCES]\n\n");
+
+  printf("SOURCES:\n");
+  printf("    - Use '-' to read from stdin, else provide files");
+  printf("\n\n");
 
   printf("OPTIONS:\n");
 

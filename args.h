@@ -169,7 +169,7 @@ VALUES_FN(log_level, LOG)
           NULL)
 
 #define ARG_OPT_LIST                                                           \
-  ARG_BOOL(preprocess, "-E", "--preprocess", "Only run the preprocessor")      \
+  ARG_BOOL(preprocess, "-E", "--preprocess", "Only run the preprocessor. If '-o' is not provided, this will output to stdout")      \
   ARG_BOOL(                                                                    \
       assembly, "-S", "--assemble",                                            \
       "Only run preprocessor and compiler; output assembly without linking")   \
