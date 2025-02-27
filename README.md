@@ -1,6 +1,6 @@
 # jcc
 
-JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler. 
+JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 
 ## CI Status
 
@@ -38,6 +38,14 @@ Working with RISC-V requires installing a RISC-V linker.
 
 #### Development
 
+All of JCC is either C11 or Bash.
+
+Prequisites:
+* CMake
+* Bash
+* A C11 compiler
+* A system linker (this is almost certainly already installed)
+
 The `jcc.sh` script can be used for common workflows:
 
 ```
@@ -56,6 +64,9 @@ For the test script, run `jcc.sh test help`.
 
 ## Design
 
+* Arg parsing
+  * Declarative style arguments for simplicit. Very macro-heavy
+  * Code is [`arg.h`](arg.h) and [`arg.c`](arg.c)
 * Preprocessor
   * Has two modes
     * Self-contained - when invoked with the `-E` flag, will run the preprocessor and output the result
