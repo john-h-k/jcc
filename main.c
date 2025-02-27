@@ -14,12 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-enum parse_args_result {
-  PARSE_ARGS_RESULT_SUCCESS = 0,
-  PARSE_ARGS_RESULT_NO_SOURCES = 1,
-  PARSE_ARGS_RESULT_ERROR = 2,
-};
-
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
@@ -48,7 +42,6 @@ static const struct target *get_target(enum compile_target target) {
 
   BUG("unexpected target in `get_target`");
 }
-
 
 static bool validate_fixed_timestamp(const char *str) {
   size_t len = strlen(str);
@@ -132,9 +125,15 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
+static enum parse_args_result
+try_get_compile_args(int argc, char **argv, struct parsed_args *args,
+                     struct compile_args *compile_args, size_t *num_sources,
+                     const char ***sources) {
+  enum parse_args_result result = parse_args(argc, argv, args);
 
-static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct compile_args *compile_args, size_t *num_sources, const char ***sources) {
-  *args = parse_args(argc, argv);
+  if (result != PARSE_ARGS_RESULT_SUCCESS) {
+    return result;
+  }
 
   *compile_args = (struct compile_args){
       .preproc_only = args->preprocess,
@@ -158,7 +157,7 @@ static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args
   if (args->log_level & COMPILE_LOG_FLAGS_ARGS) {
     debug_print_parsed_args(stderr, args);
   }
-  
+
   if (!args->target) {
     if (!get_target_for_args(args->arch, &compile_args->target)) {
       return false;
@@ -172,7 +171,8 @@ static bool try_get_compile_args(int argc, char **argv, struct parsed_args *args
     compile_args->target = args->target;
   }
 
-  if (compile_args->fixed_timestamp && !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
+  if (compile_args->fixed_timestamp &&
+      !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
     return false;
   }
 
@@ -189,9 +189,6 @@ int main(int argc, char **argv) {
 
   enable_log();
 
-  info("parsing command line args");
-
-
   struct arena_allocator *arena = NULL;
   char **objects = NULL;
 
@@ -201,7 +198,16 @@ int main(int argc, char **argv) {
   struct compile_args compile_args;
   size_t num_sources;
   const char **sources;
-  if (!try_get_compile_args(argc, argv, &args, &compile_args, &num_sources, &sources)) {
+  enum parse_args_result parse_result = try_get_compile_args(
+      argc, argv, &args, &compile_args, &num_sources, &sources);
+
+  switch (parse_result) {
+  case PARSE_ARGS_RESULT_SUCCESS:
+    break;
+  case PARSE_ARGS_RESULT_HELP:
+    exc = 0;
+    goto exit;
+  case PARSE_ARGS_RESULT_FAIL:
     exc = -1;
     goto exit;
   }
@@ -232,7 +238,8 @@ int main(int argc, char **argv) {
       object_file[strlen("stdout")] = 0;
     } else if (compile_args.build_asm_file && !compile_args.output) {
       object_file = path_replace_ext(arena, source_path, ".s");
-    } else if (target_needs_linking(&compile_args, target) || !compile_args.output) {
+    } else if (target_needs_linking(&compile_args, target) ||
+               !compile_args.output) {
       object_file = path_replace_ext(arena, source_path, "o");
     } else {
       object_file = strdup(compile_args.output);

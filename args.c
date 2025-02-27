@@ -88,7 +88,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
 
   unsigned long longest_name = 0;
 
-#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, string_fn)                    \
+#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn)                \
   longest_name = MAX(longest_name, strlen(#name));
 
   ARG_OPT_LIST;
@@ -97,7 +97,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
 
   fprintf(file, "OPTS: \n");
 
-#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, string_fn)                    \
+#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn)                \
   fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name)), " "); \
   switch (ARG_TY_##ty) {                                                       \
   /* more invalid pointer casting here, but again, only valid casts are        \
@@ -157,17 +157,53 @@ void free_args(struct parsed_args *args) {
   }
 }
 
-struct parsed_args parse_args(int argc, char **argv) {
+static void print_opt(const char *sh, const char *lo, const char *desc) {
+  #ifdef NDEBUG
+  if (!strncmp(desc, "[DEBUG]", strlen("[DEBUG]"))) {
+    return;
+  }
+  #endif
+
+  if (sh[0] && lo[0]) {
+    printf("    %s, %s:\n", sh, lo);
+  } else if (sh[0]) {
+    printf("    %s:\n", sh);
+  } else {
+    printf("    %s:\n", lo);
+  }
+
+  printf("        %s\n\n", desc);
+}
+
+static void print_help(void) {
+  printf("JCC\n");
+  printf("John Kelly <johnharrykelly@gmail.com>\n");
+  printf("\n");
+  printf("jcc [OPTIONS] [--] [sources]\n\n");
+
+  printf("OPTIONS:\n");
+
+#define ARG_OPT(_0, _1, name, sh, lo, desc, _2, _3) \
+  print_opt(sh, lo, desc);
+
+  ARG_OPT_LIST;
+
+#undef ARG_OPT
+}
+
+enum parse_args_result parse_args(int argc, char **argv,
+                                  struct parsed_args *parsed) {
   struct hashtbl *opts = hashtbl_create_sized_str_keyed(sizeof(struct arg));
 
-  struct parsed_args parsed = {.values = NULL};
+  *parsed = (struct parsed_args){.values = NULL};
 
-#define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, parse_fn, string_fn)      \
-  DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");             \
-  DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),       \
-                "short option must begin '-' and be exactly two chars");       \
-  DEBUG_ASSERT(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),        \
-                "long option must begin '-' and be at least three chars");     \
+#define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, desc, parse_fn,           \
+                string_fn)                                                     \
+  DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");              \
+  DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),        \
+               "short option must begin '-' and be exactly two chars");        \
+  DEBUG_ASSERT(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),         \
+               "long option must begin '-' and be at least three chars");      \
   do {                                                                         \
     struct arg arg = {.ty = ARG_TY_##arg_ty,                                   \
                       .name = #arg_name,                                       \
@@ -177,25 +213,26 @@ struct parsed_args parse_args(int argc, char **argv) {
                       .long_name = lo};                                        \
                                                                                \
     switch (ARG_TY_##arg_ty) {                                                 \
-    /* more invalid pointer casting here, but again, only valid casts are      \
-     * possible paths */                                                       \
+      /* more invalid pointer casting here, but again, only valid casts are    \
+       * possible paths */                                                     \
+      PUSH_NO_WARN("-Wcast-align");                                            \
     case ARG_TY_BOOL:                                                          \
-      arg.arg_bool = (bool *)&parsed.arg_name;                                         \
+      arg.arg_bool = (bool *)&parsed->arg_name;                                \
       break;                                                                   \
     case ARG_TY_OPTION:                                                        \
-      arg.arg_option = (int *)&parsed.arg_name;                                       \
+      arg.arg_option = (int *)&parsed->arg_name;                               \
       break;                                                                   \
     case ARG_TY_FLAGS:                                                         \
-      arg.arg_flags = (int *)&parsed.arg_name;                                        \
+      arg.arg_flags = (int *)&parsed->arg_name;                                \
       break;                                                                   \
     case ARG_TY_STRING:                                                        \
-      arg.arg_string = (const char **)&parsed.arg_name;                                       \
+      arg.arg_string = (const char **)&parsed->arg_name;                       \
       break;                                                                   \
     case ARG_TY_STRING_LIST:                                                   \
-      arg.arg_string_list = (struct arg_string_list *)&parsed.arg_name;                                  \
+      arg.arg_string_list = (struct arg_string_list *)&parsed->arg_name;       \
       break;                                                                   \
     }                                                                          \
-    if (sh[0]) {                                                             \
+    if (sh[0]) {                                                               \
       struct sized_str full_sh = {.str = sh, .len = strlen(sh)};               \
       hashtbl_insert(opts, &full_sh, &arg);                                    \
     }                                                                          \
@@ -203,6 +240,7 @@ struct parsed_args parse_args(int argc, char **argv) {
       struct sized_str full_lo = {.str = lo, .len = strlen(lo)};               \
       hashtbl_insert(opts, &full_lo, &arg);                                    \
     }                                                                          \
+    POP_NO_WARN;                                                               \
   } while (0);
 
   ARG_OPT_LIST;
@@ -220,6 +258,11 @@ struct parsed_args parse_args(int argc, char **argv) {
     if (!strcmp(s, "--")) {
       values_only = true;
       continue;
+    }
+
+    if (!strcmp(s, "-h") || !strcmp(s, "--help") || !strcmp(s, "help")) {
+      print_help();
+      goto help;
     }
 
     if (!values_only && len && s[0] == '-') {
@@ -242,7 +285,7 @@ struct parsed_args parse_args(int argc, char **argv) {
       if (!arg) {
         err("Unrecognised option '%.*s'\n", (int)lookup_str.len,
             lookup_str.str);
-        exit(-1);
+        goto fail;
       }
 
 #define GET_ARGUMENT(v)                                                        \
@@ -253,7 +296,7 @@ struct parsed_args parse_args(int argc, char **argv) {
       case ARG_TY_BOOL:
         if (*arg->arg_bool) {
           err("Duplicate option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
-          exit(-1);
+          goto fail;
         }
 
         *arg->arg_bool = true;
@@ -262,13 +305,13 @@ struct parsed_args parse_args(int argc, char **argv) {
         GET_ARGUMENT(value);
         if (*arg->arg_option) {
           err("Duplicate option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
-          exit(-1);
+          goto fail;
         }
 
         if (!arg->try_parse(value, arg->arg_option)) {
           err("Invalid value '%s' for option '%.*s'\n", value,
               (int)lookup_str.len, lookup_str.str);
-          exit(-1);
+          goto fail;
         }
         break;
       case ARG_TY_FLAGS:
@@ -278,13 +321,13 @@ struct parsed_args parse_args(int argc, char **argv) {
         if (!arg->try_parse(value, &flag)) {
           err("Invalid value '%s' for option '%.*s'\n", value,
               (int)lookup_str.len, lookup_str.str);
-          exit(-1);
+          goto fail;
         }
 
         if (*arg->arg_flags & flag) {
           err("Duplicate options '%.*s'\n", (int)lookup_str.len,
               lookup_str.str);
-          exit(-1);
+          goto fail;
         }
 
         *arg->arg_flags |= flag;
@@ -293,7 +336,7 @@ struct parsed_args parse_args(int argc, char **argv) {
         GET_ARGUMENT(value);
         if (*arg->arg_string) {
           err("Duplicate option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
-          exit(-1);
+          goto fail;
         }
 
         *arg->arg_string = value;
@@ -320,13 +363,28 @@ struct parsed_args parse_args(int argc, char **argv) {
 
   size_t num_values = vector_length(values);
 
-  parsed.values = nonnull_malloc(sizeof(*parsed.values) * num_values);
-  parsed.num_values = num_values;
+  parsed->values = nonnull_malloc(sizeof(*parsed->values) * num_values);
+  parsed->num_values = num_values;
 
-  vector_copy_to(values, parsed.values);
+  vector_copy_to(values, parsed->values);
+
   vector_free(&values);
 
   hashtbl_free(&opts);
 
-  return parsed;
+  return PARSE_ARGS_RESULT_SUCCESS;
+
+help:
+  vector_free(&values);
+
+  hashtbl_free(&opts);
+
+  return PARSE_ARGS_RESULT_HELP;
+
+fail:
+  vector_free(&values);
+
+  hashtbl_free(&opts);
+
+  return PARSE_ARGS_RESULT_FAIL;
 }

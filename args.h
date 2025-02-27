@@ -37,6 +37,7 @@ struct arg {
   enum arg_ty ty;
 
   const char *name;
+  const char *description;
 
   const char *short_name;
   const char *long_name;
@@ -157,42 +158,42 @@ inline static const char *string_c_standard(int value) {
 
 #undef ENUM_FN
 
-#define ARG_BOOL(name, sh, lo) ARG_OPT(BOOL, bool, name, sh, lo, NULL, NULL)
+#define ARG_BOOL(name, sh, lo, desc) ARG_OPT(BOOL, bool, name, sh, lo, desc, NULL, NULL)
 
-#define ARG_OPTION(ty, name, sh, lo, parse_fn, string_fn)                      \
-  ARG_OPT(OPTION, ty, name, sh, lo, parse_fn, string_fn)
+#define ARG_OPTION(ty, name, sh, lo, parse_fn, string_fn, desc)                      \
+  ARG_OPT(OPTION, ty, name, sh, lo, desc, parse_fn, string_fn)
 
-#define ARG_FLAGS(ty, name, sh, lo, parse_fn, string_fn)                       \
-  ARG_OPT(FLAGS, ty, name, sh, lo, parse_fn, string_fn)
+#define ARG_FLAGS(ty, name, sh, lo, parse_fn, string_fn, desc)                       \
+  ARG_OPT(FLAGS, ty, name, sh, lo, desc, parse_fn, string_fn)
 
-#define ARG_STRING(name, sh, lo)                                               \
-  ARG_OPT(STRING, const char *, name, sh, lo, NULL, NULL)
+#define ARG_STRING(name, sh, lo, desc)                                               \
+  ARG_OPT(STRING, const char *, name, sh, lo, desc, NULL, NULL)
 
-#define ARG_STRING_LIST(name, sh, lo)                                          \
-  ARG_OPT(STRING_LIST, struct arg_string_list, name, sh, lo, NULL, NULL)
+#define ARG_STRING_LIST(name, sh, lo, desc)                                          \
+  ARG_OPT(STRING_LIST, struct arg_string_list, name, sh, lo, desc, NULL, NULL)
 
 #define ARG_OPT_LIST                                                           \
-  ARG_BOOL(preprocess, "-E", "--preprocess")                                   \
-  ARG_BOOL(assembly, "-S", "--assemble")                                       \
-  ARG_BOOL(object, "-c", "--compile")                                          \
+  ARG_BOOL(preprocess, "-E", "--preprocess", "Only run the preprocessor")                                   \
+  ARG_BOOL(assembly, "-S", "--assemble", "Only run preprocessor and compiler; output assembly, linking")                                       \
+  ARG_BOOL(object, "-c", "--compile", "Only run preprocessor and compiler; output object file without linking")                                          \
                                                                                \
   ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", parse_opts_level,  \
-             string_opts_level)                                                \
+             string_opts_level, "Optimisation level 0..3")                                                \
                                                                                \
-  ARG_OPTION(enum compile_arch, arch, "", "-arch", parse_arch, string_arch)    \
+  ARG_OPTION(enum compile_arch, arch, "", "-arch", parse_arch, string_arch, "Architecture to build for")    \
   ARG_OPTION(enum compile_target, target, "", "-target", parse_target,         \
-             string_target)                                                    \
-  ARG_STRING(output, "-o", "")                                                 \
+             string_target, "Target triple (arch-vendor-os)")                                                    \
+  ARG_STRING(output, "-o", "", "Output file")                                                 \
                                                                                \
   ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", parse_log_level, \
-            string_log_level)                                                  \
+            string_log_level, "[DEBUG] Log level flags")                                                  \
                                                                                \
   ARG_OPTION(enum compile_c_standard, c_standard, "", "-std",                  \
-             parse_c_standard, string_c_standard)                              \
+             parse_c_standard, string_c_standard, "C standard to use")                              \
                                                                                \
-  ARG_STRING(timestamp, "", "-tm")                                             \
+  ARG_STRING(timestamp, "", "-tm", "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")                                             \
                                                                                \
-  ARG_STRING_LIST(include_paths, "-I", "")
+  ARG_STRING_LIST(include_paths, "-I", "", "Directories to search for `#include` directives")
 
 struct parsed_args {
 #define ARG_OPT(_0, field_ty, name, ...) field_ty name;
@@ -207,7 +208,13 @@ struct parsed_args {
 
 void debug_print_parsed_args(FILE *file, const struct parsed_args *args);
 
-struct parsed_args parse_args(int argc, char **argv);
+enum parse_args_result {
+  PARSE_ARGS_RESULT_SUCCESS,
+  PARSE_ARGS_RESULT_HELP,
+  PARSE_ARGS_RESULT_FAIL,
+};
+
+enum parse_args_result parse_args(int argc, char **argv, struct parsed_args *args);
 void free_args(struct parsed_args *args);
 
 #endif
