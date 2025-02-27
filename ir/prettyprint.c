@@ -948,11 +948,11 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
     fprintf(file, "LOCALS: {\n");
     struct ir_lcl *lcl = irb->first_lcl;
     while (lcl) {
-      debug_print_lcl(file, irb, lcl);
+      debug_print_lcl(file, lcl);
 
       lcl = lcl->succ;
     }
-    fprintf(file, "}");
+    fprintf(file, "}\n\n");
   }
 
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
@@ -1100,7 +1100,7 @@ void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
   graphwriter_free(&gwr);
 }
 
-void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
+void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
   fprintf(file, "  ");
 
   switch (lcl->alloc_ty) {
@@ -1115,7 +1115,7 @@ void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
     break;
   }
 
-  debug_print_var_ty_string(file, func->unit, &lcl->var_ty);
+  debug_print_var_ty_string(file, lcl->func->unit, &lcl->var_ty);
 
   if (lcl->flags & IR_LCL_FLAG_SPILL) {
     fprintf(file, "    (SPILL),\n");
@@ -1124,7 +1124,7 @@ void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file, UNUSED struct ir_unit *unit,
+void debug_print_glb(FILE *file,
                      struct ir_glb *glb) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
@@ -1147,7 +1147,7 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    debug_print_glb(file, iru, glb);
+    debug_print_glb(file, glb);
 
     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
       switch (glb->ty) {
@@ -1171,14 +1171,14 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
   }
 }
 
-void debug_print_ir_object(FILE *file, struct ir_unit *unit,
+void debug_print_ir_object(FILE *file,
                            const struct ir_object *object) {
   switch (object->ty) {
   case IR_OBJECT_TY_GLB:
-    debug_print_glb(file, unit, object->glb);
+    debug_print_glb(file, object->glb);
     break;
   case IR_OBJECT_TY_LCL:
-    debug_print_lcl(file, object->lcl->func, object->lcl);
+    debug_print_lcl(file, object->lcl);
     break;
   case IR_OBJECT_TY_FUNC:
     debug_print_ir_func(file, object->func, NULL, NULL);

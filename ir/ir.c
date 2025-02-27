@@ -120,6 +120,7 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_UNARY_OP:
     return false;
   case IR_OP_TY_MOV:
+    return op->reg.ty != IR_REG_TY_NONE || !op->mov.value || !ir_reg_eq(op->reg, op->mov.value->reg);
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE:
   case IR_OP_TY_MEM_SET:
@@ -569,6 +570,15 @@ bool is_func_variadic(const struct ir_var_func_ty *ty) {
   return ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC;
 }
 
+void initialise_ir_stmt(struct ir_stmt *stmt, size_t id) {
+  stmt->id = id;
+  stmt->first = NULL;
+  stmt->last = NULL;
+  stmt->basicblock = NULL;
+  stmt->pred = NULL;
+  stmt->succ = NULL;
+}
+
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_var_ty var_ty, struct ir_reg reg,
                       struct ir_lcl *lcl) {
@@ -823,7 +833,7 @@ void eliminate_redundant_ops(struct ir_func *func,
     switch (op->ty) {
     case IR_OP_TY_MOV:
       if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
-        continue;
+        goto side_effects;
       }
 
       if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
@@ -855,6 +865,7 @@ void eliminate_redundant_ops(struct ir_func *func,
       break;
     }
     default:
+    side_effects:
       if (op_has_side_effects(op)) {
         continue;
       }
@@ -1065,6 +1076,40 @@ void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
   }
 }
 
+
+void attach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt, struct ir_basicblock *basicblock,
+                  struct ir_stmt *pred, struct ir_stmt *succ) {
+  invariant_assert(!stmt->basicblock && !stmt->pred && !stmt->succ,
+                   "non-detached stmt trying to be attached");
+  invariant_assert((!pred || pred->succ == succ) &&
+                       (!succ || succ->pred == pred),
+                   "`pred` and `succ` are not next to each other");
+  invariant_assert(stmt, "cannot attach stmt without stmt");
+
+  irb->stmt_count++;
+
+  stmt->basicblock = basicblock;
+
+  if (stmt != pred) {
+    stmt->pred = pred;
+  }
+
+  if (stmt != succ) {
+    stmt->succ = succ;
+  }
+
+  if (stmt->pred) {
+    stmt->pred->succ = stmt;
+  } else {
+    stmt->basicblock->first = stmt;
+  }
+
+  if (stmt->succ) {
+    stmt->succ->pred = stmt;
+  } else {
+    stmt->basicblock->last = stmt;
+  }
+}
 void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *pred,
                           struct ir_basicblock *succ) {
@@ -1129,6 +1174,34 @@ void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
   attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
 
+void move_after_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+                      struct ir_stmt *move_after) {
+  invariant_assert(stmt->id != move_after->id, "trying to move stmt after itself!");
+  invariant_assert(stmt->basicblock == NULL || stmt->basicblock == move_after->basicblock,
+                   "moving between ir_stmts not supported");
+
+  if (stmt->basicblock) {
+    detach_ir_stmt(irb, stmt);
+  }
+
+  attach_ir_stmt(irb, stmt, move_after->basicblock, move_after, move_after->succ);
+}
+
+void move_before_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+                       struct ir_stmt *move_before) {
+  invariant_assert(stmt->id != move_before->id,
+                   "trying to move stmt before itself!");
+  invariant_assert(stmt->basicblock == NULL || stmt->basicblock == move_before->basicblock,
+                   "moving between ir_stmts not supported");
+
+  if (stmt->basicblock) {
+    detach_ir_stmt(irb, stmt);
+  }
+
+  attach_ir_stmt(irb, stmt, move_before->basicblock, move_before->pred, move_before);
+}
+
+
 void move_after_ir_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *move_after) {
@@ -1165,6 +1238,21 @@ struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
   return op;
 }
 
+
+struct ir_op *insert_after_ir_op(struct ir_func *irb,
+                                 struct ir_op *insert_after, enum ir_op_ty ty,
+                                 struct ir_var_ty var_ty) {
+  DEBUG_ASSERT(insert_after, "invalid insertion point!");
+
+  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
+
+  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
+
+  move_after_ir_op(irb, op, insert_after);
+
+  return op;
+}
+
 struct ir_op *insert_before_ir_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty) {
@@ -1177,6 +1265,44 @@ struct ir_op *insert_before_ir_op(struct ir_func *irb,
   move_before_ir_op(irb, op, insert_before);
 
   return op;
+}
+
+
+struct ir_op *append_ir_op(struct ir_func *irb,
+                                 struct ir_stmt *stmt, enum ir_op_ty ty,
+                                 struct ir_var_ty var_ty) {
+  struct ir_op *op = alloc_ir_op(irb, stmt);
+
+  op->ty = ty;
+  op->var_ty = var_ty;
+
+  return op;
+}
+
+struct ir_stmt *insert_after_ir_stmt(struct ir_func *irb,
+                                 struct ir_stmt *insert_after) {
+  DEBUG_ASSERT(insert_after, "invalid insertion point!");
+
+  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+
+  initialise_ir_stmt(stmt, irb->next_stmt_id++);
+
+  move_after_ir_stmt(irb, stmt, insert_after);
+
+  return stmt;
+}
+
+struct ir_stmt *insert_before_ir_stmt(struct ir_func *irb,
+                                  struct ir_stmt *insert_before) {
+  DEBUG_ASSERT(insert_before, "invalid insertion point!");
+
+  struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
+
+  initialise_ir_stmt(stmt, irb->next_stmt_id++);
+
+  move_before_ir_stmt(irb, stmt, insert_before);
+
+  return stmt;
 }
 
 void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
@@ -1193,20 +1319,6 @@ void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
 
   basicblock->preds = NULL;
   basicblock->num_preds = 0;
-}
-
-struct ir_op *insert_after_ir_op(struct ir_func *irb,
-                                 struct ir_op *insert_after, enum ir_op_ty ty,
-                                 struct ir_var_ty var_ty) {
-  DEBUG_ASSERT(insert_after, "invalid insertion point!");
-
-  struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
-
-  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
-
-  move_after_ir_op(irb, op, insert_after);
-
-  return op;
 }
 
 struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,

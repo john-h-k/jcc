@@ -413,7 +413,7 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
     struct ir_validate_error *error = vector_get(state.errors, i);
 
     fprintf(stderr, "Validation error: %s\n", error->err);
-    debug_print_ir_object(stderr, iru, &error->object);
+    debug_print_ir_object(stderr, &error->object);
 
     fprintf(stderr, "\n\n\n");
   }

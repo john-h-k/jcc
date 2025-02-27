@@ -63,9 +63,9 @@ void debug_print_ir_graph(FILE *file, struct ir_func *irb);
 void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_lcl(FILE *file, struct ir_func *func, struct ir_lcl *lcl);
+void debug_print_lcl(FILE *file, struct ir_lcl *lcl);
 
-void debug_print_glb(FILE *file, struct ir_unit *unit, struct ir_glb *glb);
+void debug_print_glb(FILE *file, struct ir_glb *glb);
 
 void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op);
 
@@ -79,12 +79,17 @@ void debug_print_basicblock(FILE *file, struct ir_func *irb,
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
                          debug_print_op_callback *cb, void *cb_metadata);
 
-void debug_print_ir_var(FILE *file,
-                               struct ir_var *var);
+void debug_print_ir_var(FILE *file, struct ir_var *var);
 
-void debug_print_ir_object(FILE *file, struct ir_unit *unit, const struct ir_object *object);
+void debug_print_ir_object(FILE *file, const struct ir_object *object);
 
 void debug_print_func_info(FILE *file, struct ir_unit *iru,
-                                  const struct ir_func_info *func_info);
+                           const struct ir_func_info *func_info);
+
+#define DEBUG_PRINT_IR(file, obj)                                              \
+  do {                                                                         \
+    struct ir_object ir_obj = IR_MK_OBJECT((obj));                             \
+    debug_print_ir_object((file), &ir_obj);                                    \
+  } while (0);
 
 #endif
