@@ -816,7 +816,11 @@ static void lower_params(struct ir_func *func) {
             struct ir_op *addr_offset = insert_before_ir_op(
                 func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
             addr_offset->addr_offset = (struct ir_op_addr_offset){
-                .base = addr, .offset = (j - 1) * reg.size};
+                // FIXME: here and in other places, is this the right logic for
+                // offset? or could reg size be an incorrect metric based on
+                // lower
+                .base = addr,
+                .offset = (j - 1) * reg.size};
 
             // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
@@ -880,19 +884,57 @@ static void lower_params(struct ir_func *func) {
       break;
     }
     case IR_PARAM_INFO_TY_POINTER: {
-      struct ir_op *mem_copy = insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY,
-                                                   op->ret.value->var_ty);
+      if (op->ret.value->ty == IR_OP_TY_LOAD) {
+        struct ir_op *addr = build_addr(func, op->ret.value);
 
-      // FIXME: could also be gather
-      DEBUG_ASSERT(op->ret.value->ty == IR_OP_TY_LOAD, "expected load");
-      struct ir_op *addr = build_addr(func, op->ret.value);
+        struct ir_op *mem_copy = insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY,
+                                                     op->ret.value->var_ty);
 
-      mem_copy->mem_copy = (struct ir_op_mem_copy){
-          .dest = first_param,
-          .source = addr,
-          .length = var_ty_info(func->unit, &op->ret.value->var_ty).size};
+        mem_copy->mem_copy = (struct ir_op_mem_copy){
+            .dest = first_param,
+            .source = addr,
+            .length = var_ty_info(func->unit, &op->ret.value->var_ty).size};
 
-      op->ret.value = NULL;
+        op->ret.value = NULL;
+      } else if (op->ret.value->ty == IR_OP_TY_GATHER) {
+        struct ir_op *gather = op->ret.value;
+
+        DEBUG_ASSERT(gather->ty == IR_OP_TY_GATHER, "expected gather");
+
+        // struct has been promoted
+
+        struct ir_var_ty_info info = var_ty_info(func->unit, &gather->var_ty);
+
+        struct ir_op *last = op;
+
+        for (size_t j = gather->gather.num_values; j; j--) {
+          struct ir_gather_value value = gather->gather.values[j - 1];
+
+          size_t offset = info.offsets[j - 1];
+
+          struct ir_op *addr =
+              insert_before_ir_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+          addr->addr_offset = (struct ir_op_addr_offset){
+              .base = first_param, .offset = offset};
+
+          struct ir_op *store =
+              insert_before_ir_op(func, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+          store->store = (struct ir_op_store){
+              .ty = IR_OP_STORE_TY_ADDR,
+              .addr = addr,
+              .value = value.value,
+          };
+
+          last = store;
+        }
+
+        op->ret.value = NULL;
+
+        detach_ir_op(func, gather);
+      } else {
+        BUG("unexpected op type");
+      }
       break;
     }
     case IR_PARAM_INFO_TY_STACK:
