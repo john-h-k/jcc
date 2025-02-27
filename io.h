@@ -4,7 +4,8 @@
 #include "alloc.h"
 
 struct path_components {
-  const char *dir, *file;
+  // `foo/bar.c` -> `dir=foo, file=bar.c, ext=c`
+  const char *dir, *file, *ext;
 };
 
 struct path_components path_components(struct arena_allocator *arena, const char *path);

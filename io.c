@@ -8,18 +8,26 @@
 struct path_components path_components(struct arena_allocator *arena, const char *path) {
   const char *last_slash = strrchr(path, '/');
 
+  const char *dir;
+  const char *file;
   if (last_slash == NULL) {
-    return (struct path_components){.dir = ".", .file = arena_alloc_strcpy(arena, path)};
+    dir = ".";
+    file = path;
+  } else {
+    size_t dir_len = (size_t)(last_slash - path);
+    file = last_slash + 1;
+
+    dir = arena_alloc_strndup(arena, path, dir_len);
   }
 
-  size_t dir_len = (size_t)(last_slash - path);
-  const char *file_part = last_slash + 1;
+  char *ext = strrchr(file, '.');
+  if (ext) {
+    ext++;
+  } else {
+    ext = "";
+  }
 
-  char *dir = arena_alloc(arena, dir_len + 1);
-  strncpy(dir, path, dir_len);
-  dir[dir_len] = '\0';
-
-  return (struct path_components){.dir = dir, .file =  arena_alloc_strcpy(arena, file_part)};
+  return (struct path_components){.dir = dir, .file = file, .ext = ext };
 }
 
 char *path_combine(struct arena_allocator *arena, const char *l, const char *r) {

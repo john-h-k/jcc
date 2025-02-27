@@ -77,7 +77,17 @@ void arena_allocator_free(struct arena_allocator **allocator) {
 bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation);
 struct arena new_arena(struct arena_allocator *allocator, size_t size);
 
-void *arena_alloc_strcpy(struct arena_allocator *allocator, const char *str) {
+void *arena_alloc_strndup(struct arena_allocator *allocator, const char *str, size_t len) {
+  len = MIN(len, strlen(str));
+
+  char *cp = arena_alloc(allocator, len + 1);
+  memcpy(cp, str, len * sizeof(*str));
+  cp[len] = '\0';
+
+  return cp;
+}
+
+void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
   size_t len = strlen(str);
 
   char *cp = arena_alloc(allocator, len + 1);

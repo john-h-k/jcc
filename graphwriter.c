@@ -104,7 +104,7 @@ static struct graph_vertex *create_vertex(struct graphwriter *gwr,
 
 struct graph_vertex *vertex_from_str(struct graphwriter *gwr, const char *id) {
   // don't tie vertex lifetime to caller string, copy into arena
-  char *copy = arena_alloc_strcpy(gwr->arena, id);
+  char *copy = arena_alloc_strdup(gwr->arena, id);
   struct graph_vertex *vertex = create_vertex(gwr, copy);
   write_vertex(vertex);
   write_end(gwr);
