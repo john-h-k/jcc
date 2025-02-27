@@ -813,6 +813,9 @@ struct ir_param_info {
 
   const struct ir_var_ty *var_ty;
 
+  // offset within the param
+  size_t offset;
+
   union {
     struct {
       size_t num_regs;

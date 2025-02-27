@@ -350,16 +350,23 @@ enum parse_args_result parse_args(int argc, char **argv,
         do {
           const char *next = strchr(value, ',');
 
+          char *buf = NULL;
           if (next) {
             size_t val_len = next - value;
             // FIXME: strdup could return null via malloc?
-            value = strndup(value, val_len);
+            buf = strndup(value, val_len);
+
+            value = buf;
           }
           
           int flag = 0;
           if (!arg->try_parse(value, &flag)) {
             bad_value(arg, lookup_str, value);
             goto fail;
+          }
+
+          if (buf) {
+            free(buf);
           }
 
           if (*arg->arg_flags & flag) {

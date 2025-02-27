@@ -13,6 +13,7 @@ help() {
   echo "COMMANDS:"
   echo "    help        Show help"
   echo "    run         Build, then run JCC with provided arguments"
+  echo "    diff        Build, then run JCC with two different sets of args, and diff them"
   echo "    debug       Build, then run JCC under LLDB/GDB with provided arguments"
   echo "    test        Run tests"
   echo "    test-all    Run tests with all optimisation levels"
@@ -41,6 +42,28 @@ build() {
 }
 
 # `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
+
+diff() {
+    l="$1"
+    r="$2"
+    shift 2
+
+    ltmp=$(mktemp)
+    rtmp=$(mktemp)
+
+    trap "rm -f $ltmp $rtmp" EXIT
+
+    echo -e "${BOLD}Running '$@' with args '$l' ${RESET}"
+    run $l "$@" &> $ltmp
+
+    echo -e "${BOLD}Running '$@' with args '$r' ${RESET}"
+    run $r "$@" &> $rtmp
+
+    # not easy to get columns from within a script :(
+    # command diff --width=175 --side-by-side --color=always $ltmp $rtmp
+    command sdiff -w 175 $ltmp $rtmp
+    rm -f $ltmp $rtmp
+}
 
 debug() {
     build
