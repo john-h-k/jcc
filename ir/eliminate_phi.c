@@ -17,8 +17,13 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
                       size_t tmp_index, struct ir_lcl *spill_lcl,
                       enum ir_reg_ty reg_ty, bool early_moves) {
-  struct ir_op *last =
-      early_moves ? basicblock->first->first : basicblock->last->last;
+  struct ir_stmt *stmt;
+  if (early_moves) {
+    stmt = basicblock->first;
+    // DEBUG_ASSERT(stmt->flags & IR_STMT_FLAG_PHI, "expected phis");
+  } else {
+    stmt = insert_before_ir_stmt(irb, basicblock->last);
+  }
 
   // size_t next_free;
   struct ir_var_ty lcl_ty;
@@ -42,7 +47,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   // size_t next_free = bitset_length(reg_usage) - bitset_lzcnt(reg_usage);
   size_t next_free = SIZE_MAX;
-  // FIXME: the "try find free vol reg" logic is disabled 
+  // FIXME: the "try find free vol reg" logic is disabled
 
   bool has_free_reg;
   struct ir_reg free_reg;
@@ -64,6 +69,7 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
     if (move.from.idx != tmp_index) {
       struct bb_reg key = {.reg = move.from.idx, .bb = basicblock};
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
+
     } else {
       struct bb_reg key = {.reg = move.to.idx, .bb = basicblock};
       value = *(struct ir_op **)hashtbl_lookup(reg_to_val, &key);
@@ -79,18 +85,17 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       DEBUG_ASSERT(move.from.idx < SIZE_MAX / 2, "can't do stack<->stack move");
 
       if (has_free_reg) {
-        struct ir_op *mov =
-            insert_before_ir_op(irb, last, IR_OP_TY_MOV, lcl_ty);
+        struct ir_op *mov = append_ir_op(irb, stmt, IR_OP_TY_MOV, lcl_ty);
         mov->mov = (struct ir_op_mov){.value = value};
         mov->reg = free_reg;
-        mov->flags |= IR_OP_FLAG_PHI_MOV;
+        mov->flags |= IR_OP_FLAG_PHI_MOV | IR_OP_FLAG_SIDE_EFFECTS;
         // store_var_ty = value->var_ty;
         store_var_ty = lcl_ty;
 
         tmp_mov = mov;
       } else {
-        struct ir_op *addr =
-            insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+        struct ir_op *addr = append_ir_op(irb, stmt, IR_OP_TY_ADDR,
+                                          var_ty_for_pointer_size(irb->unit));
         addr->addr = (struct ir_op_addr){
             .ty = IR_OP_ADDR_TY_LCL,
             .lcl = spill_lcl,
@@ -99,10 +104,10 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                                     .idx = irb->unit->target->reg_info.ssp};
 
         struct ir_op *store =
-            insert_after_ir_op(irb, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+            append_ir_op(irb, stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
         store->store = (struct ir_op_store){
             .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
-        store->flags |= IR_OP_FLAG_PHI_MOV;
+        store->flags |= IR_OP_FLAG_PHI_MOV | IR_OP_FLAG_SIDE_EFFECTS;
         // store_var_ty = value->var_ty;
         store_var_ty = lcl_ty;
       }
@@ -110,17 +115,16 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       struct ir_op *phi_op;
 
       if (has_free_reg) {
-        struct ir_op *mov =
-            insert_before_ir_op(irb, last, IR_OP_TY_MOV, lcl_ty);
+        struct ir_op *mov = append_ir_op(irb, stmt, IR_OP_TY_MOV, lcl_ty);
         mov->mov = (struct ir_op_mov){.value = tmp_mov};
         mov->reg = to;
-        mov->flags |= IR_OP_FLAG_PHI_MOV;
+        mov->flags |= IR_OP_FLAG_PHI_MOV | IR_OP_FLAG_SIDE_EFFECTS;
         store_var_ty = value->var_ty;
 
         phi_op = mov;
       } else {
-        struct ir_op *addr =
-            insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+        struct ir_op *addr = append_ir_op(irb, stmt, IR_OP_TY_ADDR,
+                                          var_ty_for_pointer_size(irb->unit));
         addr->addr = (struct ir_op_addr){
             .ty = IR_OP_ADDR_TY_LCL,
             .lcl = spill_lcl,
@@ -129,10 +133,11 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                                     .idx = irb->unit->target->reg_info.ssp};
 
         struct ir_op *load =
-            insert_after_ir_op(irb, addr, IR_OP_TY_LOAD, store_var_ty);
+            append_ir_op(irb, stmt, IR_OP_TY_LOAD, store_var_ty);
         load->reg = to;
         load->load =
             (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
+        load->flags |= IR_OP_FLAG_SIDE_EFFECTS;
 
         phi_op = load;
       }
@@ -146,8 +151,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
     } else if (move.from.idx >= SIZE_MAX / 2) {
       struct ir_lcl *lcl = move.from.metadata[0];
 
-      struct ir_op *addr =
-          insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+      struct ir_op *addr = append_ir_op(irb, stmt, IR_OP_TY_ADDR,
+                                        var_ty_for_pointer_size(irb->unit));
       addr->addr = (struct ir_op_addr){
           .ty = IR_OP_ADDR_TY_LCL,
           .lcl = lcl,
@@ -155,18 +160,18 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
       addr->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                   .idx = irb->unit->target->reg_info.ssp};
 
-      struct ir_op *load =
-          insert_after_ir_op(irb, addr, IR_OP_TY_LOAD, lcl->var_ty);
+      struct ir_op *load = append_ir_op(irb, stmt, IR_OP_TY_LOAD, lcl->var_ty);
       load->reg = to;
       load->load = (struct ir_op_load){
           .ty = IR_OP_LOAD_TY_ADDR,
           .addr = addr,
       };
+      load->flags |= IR_OP_FLAG_SIDE_EFFECTS;
     } else if (move.to.idx >= SIZE_MAX / 2) {
       struct ir_lcl *lcl = move.to.metadata[0];
 
-      struct ir_op *addr =
-          insert_before_ir_op(irb, last, IR_OP_TY_ADDR, var_ty_for_pointer_size(irb->unit));
+      struct ir_op *addr = append_ir_op(irb, stmt, IR_OP_TY_ADDR,
+                                        var_ty_for_pointer_size(irb->unit));
       addr->addr = (struct ir_op_addr){
           .ty = IR_OP_ADDR_TY_LCL,
           .lcl = lcl,
@@ -181,10 +186,10 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
           .value = value,
           .addr = addr,
       };
+      store->flags |= IR_OP_FLAG_SIDE_EFFECTS;
     } else {
-      struct ir_op *mov =
-          insert_before_ir_op(irb, last, IR_OP_TY_MOV, value->var_ty);
-      mov->flags |= IR_OP_FLAG_PHI_MOV;
+      struct ir_op *mov = append_ir_op(irb, stmt, IR_OP_TY_MOV, value->var_ty);
+      mov->flags |= IR_OP_FLAG_PHI_MOV | IR_OP_FLAG_SIDE_EFFECTS;
       mov->reg = to;
       mov->mov.value = value;
 
@@ -224,6 +229,117 @@ void eliminate_phi(struct ir_func *irb) {
 
     if (basicblock->num_preds == 1) {
       moves_in_preds = false;
+    } else if (basicblock->num_preds > 1) {
+      moves_in_preds = true;
+      basicblock = basicblock->succ;
+      continue;
+    } else {
+      basicblock = basicblock->succ;
+      continue;
+    }
+
+    if (stmt) {
+      // phis always at start of bb
+      struct ir_op *op = stmt->first;
+
+
+      while (op && op->ty == IR_OP_TY_PHI) {
+        for (size_t i = 0; i < op->phi.num_values; i++) {
+          struct ir_op *value = op->phi.values[i].value;
+
+          struct ir_basicblock *mov_bb;
+          size_t bb_move_id;
+          if (moves_in_preds) {
+            mov_bb = value->stmt->basicblock;
+            bb_move_id = mov_bb->id * 2;
+          } else {
+            mov_bb = basicblock;
+            bb_move_id = mov_bb->id * 2 + 1;
+          }
+
+          struct vector *gp_move_from = bb_moves[bb_move_id].gp_from;
+          struct vector *gp_move_to = bb_moves[bb_move_id].gp_to;
+          struct vector *fp_move_from = bb_moves[bb_move_id].fp_from;
+          struct vector *fp_move_to = bb_moves[bb_move_id].fp_to;
+
+          DEBUG_ASSERT(op->reg.ty != IR_REG_TY_NONE,
+                       "expected op %zu to have reg by now", op->id);
+
+          // FIXME: logic here is iffy at best
+          // we should move to a model where all ops have registers, but may or
+          // may not be in them (and so need reloads)
+
+          // TODO: disabled for new phi logic. keeping in case it is needed to
+          // undo if (op->lcl) {
+          //   struct ir_op *load =
+          //       insert_before_ir_op(irb, last, IR_OP_TY_LOAD, op->var_ty);
+          //   load->load = (struct ir_op_load){
+          //     .ty = IR_OP_LOAD_TY_LCL,
+          //     .lcl = op->lcl};
+          //   load->reg = op->reg;
+          //   op->phi.values[i].value = load;
+          if (op->reg.ty == IR_REG_TY_FP || op->reg.ty == IR_REG_TY_INTEGRAL) {
+            size_t from_pos;
+            size_t to_pos;
+            void *from_metadata = NULL;
+            void *to_metadata = NULL;
+
+            // this should really be done by regalloc, but we need crit edges to
+            // be split first and we get better regalloc if we don't split crit
+            // edges beforehand
+
+            if (value->lcl) {
+              from_pos = LCL_POS(value->lcl->id);
+              from_metadata = value->lcl;
+            } else {
+              from_pos = REG_POS(unique_idx_for_ir_reg(value->reg));
+            }
+
+            if (op->lcl) {
+              to_pos = LCL_POS(op->lcl->id);
+              to_metadata = op->lcl;
+            } else {
+              to_pos = REG_POS(unique_idx_for_ir_reg(op->reg));
+            }
+
+            if (from_pos != to_pos) {
+              struct location from = {.idx = from_pos,
+                                      .metadata[0] = from_metadata};
+              struct location to = {.idx = to_pos, .metadata[0] = to_metadata};
+
+              struct bb_reg key = {.reg = from_pos, .bb = mov_bb};
+              hashtbl_insert(reg_to_val, &key, &value);
+
+              if (var_ty_is_integral(&value->var_ty)) {
+                vector_push_back(gp_move_from, &from);
+                vector_push_back(gp_move_to, &to);
+              } else {
+                vector_push_back(fp_move_from, &from);
+                vector_push_back(fp_move_to, &to);
+              }
+            }
+          }
+        }
+
+        op = op->succ;
+      }
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  
+
+  basicblock = irb->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    bool moves_in_preds;
+
+    if (basicblock->num_preds == 1) {
+      moves_in_preds = false;
+      basicblock = basicblock->succ;
+      continue;
     } else if (basicblock->num_preds > 1) {
       moves_in_preds = true;
     } else {

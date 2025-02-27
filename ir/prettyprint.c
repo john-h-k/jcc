@@ -938,7 +938,7 @@ void debug_print_stmt(FILE *file, struct ir_func *irb, struct ir_stmt *stmt,
                                                .cb = cb,
                                                .cb_metadata = cb_metadata};
 
-  debug_visit_ir(stmt->basicblock->func, &FILE_WRITER_CALLBACKS, &metadata);
+  debug_visit_stmt(irb, stmt, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
 void debug_print_ir_func(FILE *file, struct ir_func *irb,
@@ -1208,6 +1208,7 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
     debug_print_glb(file, object->glb);
     break;
   case IR_OBJECT_TY_LCL:
+    fprintf(file, "In func %s: \n", object->lcl->func->name);
     debug_print_lcl(file, object->lcl);
     break;
   case IR_OBJECT_TY_FUNC:
@@ -1217,14 +1218,17 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
     debug_print_ir_var(file, object->var);
     break;
   case IR_OBJECT_TY_BASICBLOCK:
+    fprintf(file, "In func %s: \n", object->basicblock->func->name);
     debug_print_basicblock(file, object->stmt->basicblock->func,
                            object->basicblock, NULL, NULL);
     break;
   case IR_OBJECT_TY_STMT:
+    fprintf(file, "In func %s, basicblock @ %zu: \n", object->stmt->basicblock->func->name, object->stmt->basicblock->id);
     debug_print_stmt(file, object->stmt->basicblock->func, object->stmt, NULL,
                      NULL);
     break;
   case IR_OBJECT_TY_OP:
+    fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n", object->op->stmt->basicblock->func->name, object->op->stmt->basicblock->id, object->op->stmt->id);
     debug_print_op(file, object->op->stmt->basicblock->func, object->op);
     break;
   }
