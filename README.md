@@ -24,6 +24,11 @@ Aims:
 ## Is it sound?
 No, it is text based
 
+## Why?
+
+I just wanted to write a C compiler. It happens to be an easily buildable, easily runnable compiler that is still an accessible size, and so is good for people trying to understand compilers
+without having to enter the shoggoth of Clang/GCC.
+
 ## Support
 
 AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented.
