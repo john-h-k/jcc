@@ -40,12 +40,19 @@ Working with RISC-V requires installing a RISC-V linker.
 
 The `jcc.sh` script can be used for common workflows:
 
-`jcc.sh [command]`
-  * `format` - format the codebase
-  * `build [mode]` - build the compiler, using debug mode by default
-  * `run [args]` - build, then run the compiler with [args]
-  * `debug [args]` - build, then run the compiler under LLDB with [args]
-  * `test [args]` - build, then run the tests passing [args] to the compiler
+```
+jcc.sh COMMAND
+
+COMMANDS:
+    help        Show help
+    run         Build, then run JCC with provided arguments
+    debug       Build, then run JCC under LLDB/GDB with provided arguments
+    test        Run tests
+    test-all    Run tests with all optimisation levels
+    format      Format codebase
+```
+
+For the test script, run `jcc.sh test help`.
 
 ## Design
 
