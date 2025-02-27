@@ -17,7 +17,8 @@ void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
 
 /* Alloc space necessary for `str` (including null-terminator), then copy it
    into that space. Returns the start of the new allocation */
-void *arena_alloc_strcpy(struct arena_allocator *allocator, const char *str);
+void *arena_alloc_strndup(struct arena_allocator *allocator, const char *str, size_t len);
+void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str);
 
 PRINTF_ARGS(1) char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...);

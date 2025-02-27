@@ -221,6 +221,19 @@ int main(int argc, char **argv) {
 
     info("compiling source file \"%s\"", source_path);
 
+    struct path_components components = path_components(arena, source_path);
+
+    if (!strcmp(components.ext, "o")) {
+      // is object file
+
+      objects[i] = strdup(source_path);
+      continue;
+    } else if (strcmp(components.ext, "c")) {
+      err("unrecognised file extension '.%s'", components.ext);
+      exc = -1;
+      goto exit;
+    }
+
     const char * source;
     if (!strcmp(source_path, "-")) {
       source = read_file(arena, stdin);

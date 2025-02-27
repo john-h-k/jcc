@@ -178,7 +178,7 @@ static struct preproc_text create_preproc_text(struct preproc *preproc,
                                                const char *path) {
   struct path_components components =
       path ? path_components(preproc->arena, path)
-           : (struct path_components){NULL, NULL};
+           : (struct path_components){NULL, NULL, NULL};
 
   // FIXME: spans are entirely broken at the moment
   return (struct preproc_text){
