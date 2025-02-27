@@ -41,8 +41,6 @@ build() {
     cd - > /dev/null
 }
 
-# `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
-
 diff() {
     l="$1"
     r="$2"
@@ -64,6 +62,8 @@ diff() {
     command sdiff -w 175 $ltmp $rtmp
     rm -f $ltmp $rtmp
 }
+
+# In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
 
 debug() {
     build
