@@ -88,7 +88,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
 
   unsigned long longest_name = 0;
 
-#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn)                \
+#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn, ...)           \
   longest_name = MAX(longest_name, strlen(#name));
 
   ARG_OPT_LIST;
@@ -97,7 +97,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
 
   fprintf(file, "OPTS: \n");
 
-#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn)                \
+#define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn, ...)           \
   fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name)), " "); \
   switch (ARG_TY_##ty) {                                                       \
   /* more invalid pointer casting here, but again, only valid casts are        \
@@ -158,11 +158,11 @@ void free_args(struct parsed_args *args) {
 }
 
 static void print_opt(const char *sh, const char *lo, const char *desc) {
-  #ifdef NDEBUG
+#ifdef NDEBUG
   if (!strncmp(desc, "[DEBUG]", strlen("[DEBUG]"))) {
     return;
   }
-  #endif
+#endif
 
   if (sh[0] && lo[0]) {
     printf("    %s, %s:\n", sh, lo);
@@ -183,12 +183,31 @@ static void print_help(void) {
 
   printf("OPTIONS:\n");
 
-#define ARG_OPT(_0, _1, name, sh, lo, desc, _2, _3) \
+#define ARG_OPT(_0, _1, name, sh, lo, desc, _2, _3, ...)                       \
   print_opt(sh, lo, desc);
 
   ARG_OPT_LIST;
 
 #undef ARG_OPT
+}
+
+static void bad_value(struct arg *arg, struct sized_str lookup_str,
+                      const char *value) {
+  errsl("Invalid value '%s' for option '%.*s'. Valid values: ", value,
+        (int)lookup_str.len, lookup_str.str);
+
+  const char **values;
+  size_t num_values;
+  arg->values(&values, &num_values);
+
+  for (size_t i = 0; i < num_values; i++) {
+    printf("%s", values[i]);
+    if (i + 1 != num_values) {
+      printf(", ");
+    }
+  }
+
+  printf("\n");
 }
 
 enum parse_args_result parse_args(int argc, char **argv,
@@ -198,7 +217,7 @@ enum parse_args_result parse_args(int argc, char **argv,
   *parsed = (struct parsed_args){.values = NULL};
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, desc, parse_fn,           \
-                string_fn)                                                     \
+                string_fn, values_fn)                                           \
   DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");              \
   DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),        \
                "short option must begin '-' and be exactly two chars");        \
@@ -209,6 +228,7 @@ enum parse_args_result parse_args(int argc, char **argv,
                       .name = #arg_name,                                       \
                       .try_parse = parse_fn,                                   \
                       .string = string_fn,                                     \
+                      .values = values_fn,                                       \
                       .short_name = sh,                                        \
                       .long_name = lo};                                        \
                                                                                \
@@ -309,8 +329,7 @@ enum parse_args_result parse_args(int argc, char **argv,
         }
 
         if (!arg->try_parse(value, arg->arg_option)) {
-          err("Invalid value '%s' for option '%.*s'\n", value,
-              (int)lookup_str.len, lookup_str.str);
+          bad_value(arg, lookup_str, value);
           goto fail;
         }
         break;
@@ -319,8 +338,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
         int flag = 0;
         if (!arg->try_parse(value, &flag)) {
-          err("Invalid value '%s' for option '%.*s'\n", value,
-              (int)lookup_str.len, lookup_str.str);
+          bad_value(arg, lookup_str, value);
           goto fail;
         }
 
