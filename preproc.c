@@ -1250,7 +1250,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             search_path = filename;
           }
 
-          content = read_file(preproc->arena, search_path);
+          content = read_path(preproc->arena, search_path);
           path = search_path;
         }
 
@@ -1259,7 +1259,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             const char *search_path = path_combine(
                 preproc->arena, preproc->include_paths[i], filename);
 
-            content = read_file(preproc->arena, search_path);
+            content = read_path(preproc->arena, search_path);
             if (content) {
               path = search_path;
               break;

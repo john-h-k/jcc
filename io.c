@@ -99,23 +99,49 @@ char *path_add_ext(struct arena_allocator *arena, const char *path, const char *
   return buff;
 }
 
-char *read_file(struct arena_allocator *arena, const char *path) {
-  FILE *f = fopen(path, "r");
+char *read_path(struct arena_allocator *arena, const char *path) {
+  FILE *file = fopen(path, "r");
 
-  if (!f) {
+  if (!file) {
     return NULL;
   }
 
-  fseek(f, 0, SEEK_END);
-  long fsize = ftell(f);
+  return read_file(arena, file);
+}
 
-  invariant_assert(fsize != -1L, "ftell failed");
+char *read_file(struct arena_allocator *arena, FILE *file) {
+  fseek(file, 0, SEEK_END);
+  long fsize = ftell(file);
 
-  rewind(f);
+  if (fsize == -1L) {
+    // can't tell size of file (e.g stdin), just iteratively read instead
+    #define READ_BUF_SZ (4096)
+
+    size_t read = 0;
+    size_t len = 0;
+
+    char *content = NULL;
+    char *head;
+
+    do {
+      content = arena_realloc(arena, content, len + READ_BUF_SZ);
+      head = &content[len];
+
+      len += read;
+
+    } while ((read = fread(head, 1, READ_BUF_SZ, file)) > 0);
+
+    fclose(file);
+
+    content[len] = '\0';
+    return content;
+  }
+
+  rewind(file);
 
   char *content = arena_alloc(arena, (unsigned long)fsize + 1);
-  size_t read = fread(content, 1, (unsigned long)fsize, f);
-  fclose(f);
+  size_t read = fread(content, 1, (unsigned long)fsize, file);
+  fclose(file);
 
   if (read != (size_t)fsize) {
     return NULL;

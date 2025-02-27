@@ -22,12 +22,12 @@ enum link_result macos_link_objects(const struct link_args *args) {
   size_t total_size = template_size;
   total_size++;
   for (size_t i = 0; i < args->num_objects; i++) {
-    // seperator
-    total_size++;
+    // seperator plus quotes
+    total_size += 5;
     total_size += strlen(args->objects[i]);
   }
 
-  total_size += /* "-o " */ 3 + strlen(args->output);
+  total_size += /* " -o " */ 4 + 2 + strlen(args->output);
   total_size++; // null terminator
 
   char *buff = arena_alloc(arena, total_size);
@@ -36,22 +36,29 @@ enum link_result macos_link_objects(const struct link_args *args) {
   strcpy(&buff[head], template);
   head += template_size;
 
+  strcpy(&buff[head], " -o '");
+  head += 5;
+  strcpy(&buff[head], args->output);
+  head += strlen(args->output);
+  buff[head++] = '\'';
+
   buff[head++] = ' ';
 
   for (size_t i = 0; i < args->num_objects; i++) {
+    buff[head++] = '.';
+    buff[head++] = '/';
+    buff[head++] = '\'';
     strcpy(&buff[head], args->objects[i]);
     head += strlen(args->objects[i]);
+    buff[head++] = '\'';
     buff[head++] = ' ';
   }
 
-  strcpy(&buff[head], "-o ");
-  head += 3;
-  strcpy(&buff[head], args->output);
-  head += strlen(args->output);
   buff[head++] = '\0';
 
   DEBUG_ASSERT(head == total_size, "string buffer calculations went wrong!");
 
+  printf("%s\n", buff);
   int ret_code = system(buff);
 
   arena_allocator_free(&arena);
