@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 
-# `jcc.sh [command]`
-#     * `format` - format the codebase
-#     * `build [mode]` - build the compiler, using debug mode by default
-#     * `run [args]` - build, then run the compiler with [args]
-#     * `debug [args]` - build, then run the compiler under LLDB with [args]
-#     * `test [args]` - build, then run the tests passing [args] to the compiler
+help() {
+  echo "JCC script helper"
+  echo "John Kelly <johnharrykelly@gmail.com>"
+  echo ""
+  echo "jcc.sh COMMAND"
+  echo ""
+  echo "COMMANDS:"
+  echo "    help        Show help"
+  echo "    run         Build, then run JCC with provided arguments"
+  echo "    debug       Build, then run JCC under LLDB/GDB with provided arguments"
+  echo "    test        Run tests"
+  echo "    test-all    Run tests with all optimisation levels"
+  echo "    format      Format codebase"
+  echo ""
+
+  exit
+}
 
 build() {
     mode="${1:-Debug}"
@@ -22,6 +33,7 @@ build() {
 
 debug() {
     build >/dev/null
+
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
     lldb -o run -- "$jcc" "$@"
@@ -30,6 +42,7 @@ debug() {
 
 run() {
     build >/dev/null
+
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
     "$jcc" "$@"
@@ -38,17 +51,20 @@ run() {
 
 test() {
     build >/dev/null
-    ./tests/run.sh "$@"
-    exit $?
+
+    ./tests/run.sh "$@" || exit $?
+}
+
+test-all() {
+    build >/dev/null
+
+    ./tests/run.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 -- "$@" || exit $?
 }
 
 ci-test() {
     build
 
-    JCC_QUIET="1" ./tests/run.sh "$@" -O0 || exit $?
-    JCC_QUIET="1" ./tests/run.sh "$@" -O1 || exit $?
-    JCC_QUIET="1" ./tests/run.sh "$@" -O2 || exit $?
-    JCC_QUIET="1" ./tests/run.sh "$@" -O3 || exit $?
+    ./tests/run.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 -- "$@" || exit $?
 }
 
 cfg() {
@@ -72,6 +88,10 @@ _invoke-subcommand() {
     local base name func
 
     base=$0
+
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        help
+    fi
 
     unset name
     if [ -z "${1}" ]; then
