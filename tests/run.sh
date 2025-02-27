@@ -108,21 +108,24 @@ if [ ! -x build/jcc ]; then
   exit -1
 fi
 
-arch=""
-for ((i=1; i<$#; i++)); do
-  if [[ ${!i} == "-arch" ]]; then
-    next_index=$((i+1))
-    arch=${!next_index}
-    break
-  elif [[ ${!i} == "-T" ]]; then
-    next_index=$((i+1))
-    arch=${!next_index}
-    arch=${arch%%-*}
-    break
-  fi
-done
+arch="$JCC_ARCH"
+if [ -z "$arch"]; then
+  for ((i=1; i<$#; i++)); do
+    if [[ ${!i} == "-arch" ]]; then
+      next_index=$((i+1))
+      arch=${!next_index}
+      break
+    elif [[ ${!i} == "-target" ]]; then
+      next_index=$((i+1))
+      arch=${!next_index}
+      arch=${arch%%-*}
+      break
+    fi
+  done
 
-arch=${arch:-$(arch)}
+  arch=${arch:-$(arch)}
+fi
+
 arch=${arch/arm64/aarch64}
 
 tm="Tue Dec 10 10:04:33 2024"
@@ -288,6 +291,8 @@ run_tests() {
       fi
 
       target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
+      target_arch=${target_arch/arm64/atarget_arch64}
+
       if [[ -n $target_arch && $target_arch != "$arch" ]]; then
         send_status skip "$prefix'$file' skipped due to architecture (test: $target_arch, runner: $arch)"
         continue
