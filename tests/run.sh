@@ -9,7 +9,7 @@ RESET="\033[0m"
 VERBOSE_LEVEL="1"
 arg_groups=()
 args=()
-num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
+num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
 help() {
   echo "JCC test runner"
