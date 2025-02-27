@@ -58,6 +58,18 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       ;;
+    -arch)
+      args+=("$1")
+      shift
+      args+=("$1")
+      arch=$1
+      ;;
+    -target)
+      args+=("$1")
+      shift
+      args+=("$1")
+      arch=${1%%-*}
+      ;;
     --)
       shift
       args+=("$@")
@@ -112,24 +124,7 @@ if [ ! -x build/jcc ]; then
   exit -1
 fi
 
-arch="$JCC_ARCH"
-if [ -z "$arch"]; then
-  for ((i=1; i<$#; i++)); do
-    if [[ ${!i} == "-arch" ]]; then
-      next_index=$((i+1))
-      arch=${!next_index}
-      break
-    elif [[ ${!i} == "-target" ]]; then
-      next_index=$((i+1))
-      arch=${!next_index}
-      arch=${arch%%-*}
-      break
-    fi
-  done
-
-  arch=${arch:-$(arch)}
-fi
-
+arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
 tm="Tue Dec 10 10:04:33 2024"
