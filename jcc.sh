@@ -104,13 +104,13 @@ test() {
 test-all() {
     build
 
-    ./tests/run.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 -- "$@" || exit $?
+    ./tests/run.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
 }
 
 ci-test() {
     build
 
-    ./tests/run.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 -- "$@" || exit $?
+    ./tests/run.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
 }
 
 cfg() {
