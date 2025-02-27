@@ -73,7 +73,7 @@ For the test script, run `jcc.sh test help`.
 
 * Arg parsing
   * Declarative style arguments for simplicit. Very macro-heavy
-  * Code is [`arg.h`](arg.h) and [`arg.c`](arg.c)
+  * Code is [`args.h`](args.h) and [`args.c`](args.c)
 * Preprocessor
   * Has two modes
     * Self-contained - when invoked with the `-E` flag, will run the preprocessor and output the result
