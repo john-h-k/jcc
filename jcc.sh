@@ -31,12 +31,14 @@ build() {
     cd - > /dev/null
 }
 
+# `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
+
 debug() {
     build >/dev/null
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
-    lldb -o run -- "$jcc" "$@"
+    MallocNanoZone=0 lldb -o run -- "$jcc" "$@"
     cd - > /dev/null
 }
 
@@ -45,7 +47,7 @@ run() {
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
-    "$jcc" "$@"
+    MallocNanoZone=0 "$jcc" "$@"
     cd - > /dev/null
 }
 
