@@ -6,6 +6,79 @@ BOLDRED="\033[1;31m"
 BOLDYELLOW="\033[1;33m"
 RESET="\033[0m"
 
+VERBOSE_LEVEL="1"
+arg_groups=()
+args=()
+
+help() {
+  echo "JCC test runner"
+  echo "John Kelly <johnharrykelly@gmail.com>"
+  echo ""
+  echo "jcc.sh test [-h|--help] [--quiet] [--verbose] [--arg-group <group>] [ARGS]"
+  echo ""
+  echo "OPTIONS:"
+  echo "    --quiet "
+  echo "        Run in quiet mode, not printing live progress "
+  echo ""
+  echo "    --verbose "
+  echo "        Run in verbose mode"
+  echo ""
+  echo "    --arg-group <group> "
+  echo "        Run every test with <group>. For example, \"--arg-group '-O1 -arch x86_64' --arg-group '-O2'\""
+  echo "        will run every test with '-O1 -arch x86_64' and then '-O2'"
+  echo ""
+  echo "ARGS:"
+  echo "    The args to be passed to JCC"
+  echo ""
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h|help)
+      help
+      exit 0
+      ;;
+    --quiet)
+      VERBOSE_LEVEL="0"
+      ;;
+    --verbose)
+      VERBOSE_LEVEL="2"
+      ;;
+    --arg-group)
+      shift
+      if [[ $# -gt 0 ]]; then
+        arg_groups+=("$1")
+      else
+        echo "Error: --arg-group requires an argument" >&2
+        exit 1
+      fi
+      ;;
+    --)
+      shift
+      args+=("$@")
+      break
+      ;;
+    *)
+      args+=("$1")
+      ;;
+  esac
+  shift
+done
+
+if [ "${#args[@]}" -ne 0 ]; then
+  (IFS=" " printf "${BOLD}Running tests with '$args'${RESET}\n" )
+fi
+
+if [[ ${#arg_groups[@]} -eq 0 ]]; then
+  arg_groups=("")
+else
+  delim=$"', '"
+  rest=("${arg_groups[@]:1}")
+  printf "${BOLD}Running arg groups '"
+  printf "%s" "${arg_groups[0]}" "${rest[@]/#/$delim}"
+  printf "'${RESET}\n"
+fi
+
 if command -v gdate &>/dev/null; then
   date="gdate"
 elif date --version 2>/dev/null | grep -q "GNU coreutils"; then
@@ -64,6 +137,10 @@ for file in "${all_files[@]}"; do
 done
 pad=${#total}
 
+tests=$total
+num_groups=${#arg_groups[@]}
+total=$((total * num_groups))
+
 completed=0
 passed=0
 failed=0
@@ -71,6 +148,9 @@ skipped=0
 
 fails=()
 skips=()
+
+printf "${BOLD}Running $total tests with $num_groups arg groups${RESET}\n"
+
 
 aggregator() {
   echo ""
@@ -91,8 +171,8 @@ aggregator() {
         ;;
     esac
 
-    if [ -z $JCC_QUIET ]; then
-      printf "${BOLD}\rCompleted %${pad}d/%d    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
+    if [ $VERBOSE_LEVEL -ge "1" ]; then
+      printf "${BOLD}\rCompleted %${pad}d/%d ($tests tests, $num_groups arg groups)    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
         "$completed" "$total" "$passed" "$failed" "$skipped"
     fi
   done < "$fifo"
@@ -137,7 +217,6 @@ aggregator() {
   exit $?
 }
 
-
 run_tests() {
   proc_id=$1
   output=$2
@@ -165,54 +244,61 @@ run_tests() {
       files=("$file")
     fi
 
-    first_line=$(head -n 1 "$file")
-    if [[ "$first_line" == "// no-compile" ]]; then
-      if ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1; then
-        echo "fail File '$file' compiled successfully despite // no-compile" > "$fifo"
+    for arg_group in "${arg_groups[@]}"; do
+      read -a group_args <<< "$arg_group"
+
+      build() {
+        $(./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1)
+        return $?
+      }
+
+      first_line=$(head -n 1 "$file")
+      if [[ "$first_line" == "// no-compile" ]]; then
+        if build; then
+          echo "fail File '$file' compiled successfully despite // no-compile" > "$fifo"
+        else
+          echo "pass" > "$fifo"
+        fi
+        continue
+      fi
+
+      target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
+      if [[ -n $target_arch && $target_arch != "$arch" ]]; then
+        echo "skip File '$file' skipped due to architecture (test: $target_arch, runner: $arch)" > "$fifo"
+        continue
+      fi
+
+      expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
+      stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
+      stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
+      [ -z "$expected" ] && expected="0"
+
+      if ! build; then
+        echo "fail File '$file' failed to compile" > "$fifo"
+        continue
+      fi
+
+      # supress echo stderr because otherwise we get spurious broken pipe errors
+      if [ -z "$RUNNER" ]; then
+        output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
+        result=$?
+      else
+        output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
+        result=$?
+      fi
+  
+      if [ "$result" != "$expected" ]; then
+        echo "fail File '$file' produced exit code $result, expected $expected" > "$fifo"
+      elif [ "$output_result" != "$stdout" ]; then
+        output_result=${output_result//$'\n'/\\n}
+        stdout=${stdout//$'\n'/\\n}
+        echo "fail File '$file' output mismatch. Got: '$output_result', expected: '$stdout'" > "$fifo"
       else
         echo "pass" > "$fifo"
       fi
-      continue
-    fi
-
-    target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
-    if [[ -n $target_arch && $target_arch != "$arch" ]]; then
-      echo "skip File '$file' skipped due to architecture (test: $target_arch, runner: $arch)" > "$fifo"
-      continue
-    fi
-
-    expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
-    stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
-    stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
-    [ -z "$expected" ] && expected="0"
-
-    if ! ./build/jcc "$@" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1; then
-      echo "fail File '$file' failed to compile" > "$fifo"
-      continue
-    fi
-
-    # supress echo stderr because otherwise we get spurious broken pipe errors
-    if [ -z "$RUNNER" ]; then
-      output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
-      result=$?
-    else
-      output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
-      result=$?
-    fi
-  
-    if [ "$result" != "$expected" ]; then
-      echo "fail File '$file' produced exit code $result, expected $expected" > "$fifo"
-    elif [ "$output_result" != "$stdout" ]; then
-      output_result=${output_result//$'\n'/\\n}
-      stdout=${stdout//$'\n'/\\n}
-      echo "fail File '$file' output mismatch. Got: '$output_result', expected: '$stdout'" > "$fifo"
-    else
-      echo "pass" > "$fifo"
-    fi
+    done
   done
 }
-
-(IFS=" " printf "${BOLD}Running tests with '$*'${RESET}\n" )
 
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
 
