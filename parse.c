@@ -357,7 +357,7 @@ static bool parse_enumerator(struct parser *parser,
 static void parse_enumerator_list(struct parser *parser,
                                   struct ast_enumerator_list *enumerator_list) {
 
-  struct vector *list = vector_create(sizeof(*enumerator_list->enumerators));
+  struct vector *list = vector_create_in_arena(sizeof(*enumerator_list->enumerators), parser->arena);
 
   struct ast_enumerator enumerator;
   while (parse_enumerator(parser, &enumerator)) {
@@ -369,11 +369,8 @@ static void parse_enumerator_list(struct parser *parser,
   parse_token(parser, LEX_TOKEN_TY_COMMA);
 
   enumerator_list->enumerators =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   enumerator_list->num_enumerators = vector_length(list);
-
-  vector_copy_to(list, enumerator_list->enumerators);
-  vector_free(&list);
 }
 
 static bool parse_enum_specifier(struct parser *parser,
@@ -552,7 +549,7 @@ static bool parse_decl_specifier(struct parser *parser,
 static void parse_declaration_specifier_list(
     struct parser *parser,
     struct ast_declaration_specifier_list *specifier_list) {
-  struct vector *list = vector_create(sizeof(*specifier_list->decl_specifiers));
+  struct vector *list = vector_create_in_arena(sizeof(*specifier_list->decl_specifiers), parser->arena);
 
   // code like this will parse wrong
   // ```
@@ -577,12 +574,8 @@ static void parse_declaration_specifier_list(
     vector_push_back(list, &specifier);
   }
 
-  specifier_list->decl_specifiers =
-      arena_alloc(parser->arena, vector_byte_size(list));
+  specifier_list->decl_specifiers = vector_head(list);
   specifier_list->num_decl_specifiers = vector_length(list);
-
-  vector_copy_to(list, specifier_list->decl_specifiers);
-  vector_free(&list);
 }
 
 static bool parse_designator(struct parser *parser,
@@ -618,7 +611,7 @@ static bool parse_designator(struct parser *parser,
 static bool parse_designator_list(struct parser *parser,
                                   struct ast_designator_list *designator_list) {
 
-  struct vector *list = vector_create(sizeof(*designator_list->designators));
+  struct vector *list = vector_create_in_arena(sizeof(*designator_list->designators), parser->arena);
 
   struct ast_designator designator;
   while (parse_designator(parser, &designator)) {
@@ -626,16 +619,12 @@ static bool parse_designator_list(struct parser *parser,
   }
 
   if (vector_empty(list)) {
-    vector_free(&list);
     return false;
   }
 
   designator_list->designators =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   designator_list->num_designators = vector_length(list);
-
-  vector_copy_to(list, designator_list->designators);
-  vector_free(&list);
 
   return true;
 }
@@ -694,7 +683,7 @@ static bool parse_init_list(struct parser *parser,
     return false;
   }
 
-  struct vector *inits = vector_create(sizeof(struct ast_init_list_init));
+  struct vector *inits = vector_create_in_arena(sizeof(struct ast_init_list_init), parser->arena);
 
   struct ast_init_list_init init;
   while (parse_init_list_init(parser, &init)) {
@@ -706,11 +695,8 @@ static bool parse_init_list(struct parser *parser,
   EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
             "expected } at end of init list");
 
-  init_list->inits = arena_alloc(parser->arena, vector_byte_size(inits));
+  init_list->inits = vector_head(inits);
   init_list->num_inits = vector_length(inits);
-
-  vector_copy_to(inits, init_list->inits);
-  vector_free(&inits);
 
   return true;
 }
@@ -726,18 +712,15 @@ static bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
 
 static void parse_pointer_list(struct parser *parser,
                                struct ast_pointer_list *pointer_list) {
-  struct vector *list = vector_create(sizeof(*pointer_list->pointers));
+  struct vector *list = vector_create_in_arena(sizeof(*pointer_list->pointers), parser->arena);
 
   struct ast_pointer pointer;
   while (parse_pointer(parser, &pointer)) {
     vector_push_back(list, &pointer);
   }
 
-  pointer_list->pointers = arena_alloc(parser->arena, vector_byte_size(list));
+  pointer_list->pointers = vector_head(list);
   pointer_list->num_pointers = vector_length(list);
-
-  vector_copy_to(list, pointer_list->pointers);
-  vector_free(&list);
 }
 
 static bool
@@ -851,8 +834,8 @@ static void
 parse_direct_abstract_declarator_list(struct parser *parser,
                                       struct ast_direct_abstract_declarator_list
                                           *direct_abstract_declarator_list) {
-  struct vector *list = vector_create(
-      sizeof(*direct_abstract_declarator_list->direct_abstract_declarators));
+  struct vector *list = vector_create_in_arena(
+      sizeof(*direct_abstract_declarator_list->direct_abstract_declarators), parser->arena);
 
   struct ast_direct_abstract_declarator direct_abstract_declarator;
   while (
@@ -861,13 +844,9 @@ parse_direct_abstract_declarator_list(struct parser *parser,
   }
 
   direct_abstract_declarator_list->direct_abstract_declarators =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   direct_abstract_declarator_list->num_direct_abstract_declarators =
       vector_length(list);
-
-  vector_copy_to(list,
-                 direct_abstract_declarator_list->direct_abstract_declarators);
-  vector_free(&list);
 }
 
 static bool
@@ -941,7 +920,7 @@ static void parse_direct_declarator_list(
     struct parser *parser,
     struct ast_direct_declarator_list *direct_declarator_list) {
   struct vector *list =
-      vector_create(sizeof(*direct_declarator_list->direct_declarators));
+      vector_create_in_arena(sizeof(*direct_declarator_list->direct_declarators), parser->arena);
 
   struct ast_direct_declarator direct_declarator;
 
@@ -958,11 +937,8 @@ static void parse_direct_declarator_list(
   }
 
   direct_declarator_list->direct_declarators =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   direct_declarator_list->num_direct_declarators = vector_length(list);
-
-  vector_copy_to(list, direct_declarator_list->direct_declarators);
-  vector_free(&list);
 }
 
 static bool parse_declarator(struct parser *parser,
@@ -1020,7 +996,7 @@ static void parse_init_declarator_list(
     struct parser *parser,
     struct ast_init_declarator_list *init_declarator_list) {
   struct vector *list =
-      vector_create(sizeof(*init_declarator_list->init_declarators));
+      vector_create_in_arena(sizeof(*init_declarator_list->init_declarators), parser->arena);
 
   struct ast_init_declarator init_declarator;
   while (parse_init_declarator(parser, &init_declarator)) {
@@ -1030,11 +1006,8 @@ static void parse_init_declarator_list(
   }
 
   init_declarator_list->init_declarators =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   init_declarator_list->num_init_declarators = vector_length(list);
-
-  vector_copy_to(list, init_declarator_list->init_declarators);
-  vector_free(&list);
 }
 
 static bool parse_type_name(struct parser *parser,
@@ -1217,7 +1190,7 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   struct lex_token token;
 
-  struct vector *strings = vector_create(sizeof(char));
+  struct vector *strings = vector_create_in_arena(sizeof(char), parser->arena);
 
   peek_token(parser->lexer, &token);
 
@@ -1243,7 +1216,6 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 
   if (!is_string) {
-    vector_free(&strings);
 
     backtrack(parser->lexer, pos);
     return false;
@@ -1251,10 +1223,7 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   char null = 0;
   vector_push_back(strings, &null);
-  cnst->str_value = arena_alloc(parser->arena, vector_byte_size(strings));
-  vector_copy_to(strings, cnst->str_value);
-
-  vector_free(&strings);
+  cnst->str_value = vector_head(strings);
 
   return true;
 }
@@ -1831,13 +1800,14 @@ static bool parse_compoundexpr(struct parser *parser,
 
   // this could be made recursive instead
 
-  struct vector *exprs = vector_create(sizeof(struct ast_expr));
+  struct vector *exprs = vector_create_in_arena(sizeof(struct ast_expr), parser->arena);
 
   struct lex_token token;
   struct ast_expr sub_expr;
   do {
     if (!parse_expr(parser, &sub_expr)) {
-      goto failure;
+      backtrack(parser->lexer, pos);
+      break;
     }
 
     vector_push_back(exprs, &sub_expr);
@@ -1847,24 +1817,11 @@ static bool parse_compoundexpr(struct parser *parser,
            /* hacky */ (consume_token(parser->lexer, token), true));
 
   if (vector_empty(exprs)) {
-    goto failure;
+    return false;
   }
 
-  compound_expr->exprs = arena_alloc(parser->arena, vector_byte_size(exprs));
+  compound_expr->exprs = vector_head(exprs);
   compound_expr->num_exprs = vector_length(exprs);
-
-  goto success;
-
-failure:
-  backtrack(parser->lexer, pos);
-  vector_copy_to(exprs, compound_expr->exprs);
-  vector_free(&exprs);
-
-  return false;
-
-success:
-  vector_copy_to(exprs, compound_expr->exprs);
-  vector_free(&exprs);
 
   return true;
 }
@@ -1944,7 +1901,7 @@ static bool parse_declaration(struct parser *parser,
 static void
 parse_declaration_list(struct parser *parser,
                        struct ast_declaration_list *declaration_list) {
-  struct vector *list = vector_create(sizeof(*declaration_list->declarations));
+  struct vector *list = vector_create_in_arena(sizeof(*declaration_list->declarations), parser->arena);
 
   struct ast_declaration declaration;
   while (parse_declaration(parser, &declaration)) {
@@ -1952,11 +1909,8 @@ parse_declaration_list(struct parser *parser,
   }
 
   declaration_list->declarations =
-      arena_alloc(parser->arena, vector_byte_size(list));
+      vector_head(list);
   declaration_list->num_declarations = vector_length(list);
-
-  vector_copy_to(list, declaration_list->declarations);
-  vector_free(&list);
 }
 
 static bool parse_jumpstmt(struct parser *parser,
@@ -2430,7 +2384,7 @@ static bool parse_compoundstmt(struct parser *parser,
     return false;
   }
 
-  struct vector *stmts = vector_create(sizeof(struct ast_stmt));
+  struct vector *stmts = vector_create_in_arena(sizeof(struct ast_stmt), parser->arena);
   {
     struct ast_stmt stmt;
     while (parse_stmt(parser, &stmt)) {
@@ -2438,10 +2392,8 @@ static bool parse_compoundstmt(struct parser *parser,
     }
   }
 
-  compound_stmt->stmts = arena_alloc(parser->arena, vector_byte_size(stmts));
+  compound_stmt->stmts = vector_head(stmts);
   compound_stmt->num_stmts = vector_length(stmts);
-  vector_copy_to(stmts, compound_stmt->stmts);
-  vector_free(&stmts);
 
   EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACE),
             "expected } at end of compound stmt");
@@ -2495,10 +2447,11 @@ static bool parse_paramlist(struct parser *parser,
                             struct ast_paramlist *param_list) {
   struct text_pos pos = get_position(parser->lexer);
 
-  struct vector *params = vector_create(sizeof(struct ast_param));
+  struct vector *params = vector_create_in_arena(sizeof(struct ast_param), parser->arena);
 
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
-    goto failure;
+    backtrack(parser->lexer, pos);
+    return false;
   }
 
   param_list->params = NULL;
@@ -2517,23 +2470,12 @@ static bool parse_paramlist(struct parser *parser,
   parse_token(parser, LEX_TOKEN_TY_COMMA);
 
   if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET)) {
-    goto failure;
+    backtrack(parser->lexer, pos);
+    return false;
   }
 
-  goto success;
-
-failure:
-  backtrack(parser->lexer, pos);
-  vector_free(&params);
-
-  return false;
-
-success:
-  param_list->params = arena_alloc(parser->arena, vector_byte_size(params));
+  param_list->params = vector_head(params);
   param_list->num_params = vector_length(params);
-
-  vector_copy_to(params, param_list->params);
-  vector_free(&params);
 
   return true;
 }
@@ -2587,7 +2529,7 @@ struct parse_result parse(struct parser *parser) {
   struct lexer *lexer = parser->lexer;
 
   struct vector *declarations =
-      vector_create(sizeof(struct ast_external_declaration));
+      vector_create_in_arena(sizeof(struct ast_external_declaration), parser->arena);
 
   while (true) {
     if (lexer_at_eof(lexer)) {
@@ -2615,10 +2557,8 @@ struct parse_result parse(struct parser *parser) {
   struct ast_translationunit translation_unit;
 
   translation_unit.external_declarations =
-      arena_alloc(parser->arena, vector_byte_size(declarations));
+      vector_head(declarations);
   translation_unit.num_external_declarations = vector_length(declarations);
-  vector_copy_to(declarations, translation_unit.external_declarations);
-  vector_free(&declarations);
 
   struct parse_result result = {.translation_unit = translation_unit};
 

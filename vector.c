@@ -1,10 +1,11 @@
 #include "vector.h"
 
+#include "alloc.h"
 #include "util.h"
 
-#include <math.h>
-
 struct vector {
+  struct arena_allocator *arena;
+
   char *data;
   size_t element_size;
   size_t len;
@@ -12,10 +13,21 @@ struct vector {
 };
 
 struct vector *vector_create(size_t element_size) {
+  return vector_create_in_arena(element_size, NULL);
+}
+
+struct vector *vector_create_in_arena(size_t element_size,
+                                      struct arena_allocator *arena) {
   invariant_assert(element_size > 0, "`element_size` of 0 impossible for vec");
 
-  struct vector *v = nonnull_malloc(sizeof(*v));
+  struct vector *v;
+  if (arena) {
+    v = arena_alloc(arena, sizeof(*v));
+  } else {
+    v = nonnull_malloc(sizeof(*v));
+  }
 
+  v->arena = arena;
   v->data = NULL;
   v->element_size = element_size;
   v->len = 0;
@@ -30,11 +42,12 @@ void vector_ensure_capacity(struct vector *v, size_t capacity) {
   }
 
   size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : 1);
-  char *new_data = nonnull_malloc(new_capacity * v->element_size);
 
-  if (v->data) {
-    memcpy(new_data, v->data, v->len * v->element_size);
-    free(v->data);
+  char *new_data;
+  if (v->arena) {
+    new_data = arena_realloc(v->arena, v->data, new_capacity * v->element_size);
+  } else {
+    new_data = realloc(v->data, new_capacity * v->element_size);
   }
 
   v->data = new_data;
@@ -141,6 +154,10 @@ void vector_copy_to(struct vector *v, void *dest) {
 }
 
 void vector_free(struct vector **v) {
+  if ((*v)->arena) {
+    return;
+  }
+
   free((*v)->data);
 
   free(*v);
