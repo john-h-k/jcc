@@ -130,8 +130,10 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
         struct ir_var_ty array_ty = data->var_ty;
 
+        size_t num_els = array_ty.array.num_elements;
         while (array_ty.array.underlying->ty == IR_VAR_TY_TY_ARRAY) {
           array_ty = *array_ty.array.underlying;
+          num_els *= array_ty.array.num_elements;
         }
 
         struct ir_var_ty el_ty = *array_ty.array.underlying;
@@ -140,7 +142,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 &&
-                       offset_field_idx < array_ty.array.num_elements;
+                       offset_field_idx < num_els;
         break;
       }
       case IR_VAR_TY_TY_STRUCT:
