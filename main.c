@@ -160,12 +160,12 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
   if (!args->target) {
     if (!get_target_for_args(args->arch, &compile_args->target)) {
-      return false;
+      return PARSE_ARGS_RESULT_FAIL;
     }
   } else {
     if (args->arch) {
       err("Cannot provide '-arch' and '-target'");
-      return false;
+      return PARSE_ARGS_RESULT_FAIL;
     }
 
     compile_args->target = args->target;
@@ -173,15 +173,15 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
   if (compile_args->fixed_timestamp &&
       !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
-    return false;
+    return PARSE_ARGS_RESULT_FAIL;
   }
 
   if (!args->num_values) {
     err("No sources provided");
-    return false;
+    return PARSE_ARGS_RESULT_FAIL;
   }
 
-  return true;
+  return PARSE_ARGS_RESULT_SUCCESS;
 }
 
 int main(int argc, char **argv) {
