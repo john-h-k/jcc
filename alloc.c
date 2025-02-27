@@ -36,7 +36,8 @@ struct arena {
   size_t size;
   size_t pos;
 
-  struct arena *next;
+  struct arena *succ;
+  struct arena *pred;
   struct arena_allocator *allocator;
 };
 
@@ -65,7 +66,7 @@ void arena_allocator_free(struct arena_allocator **allocator) {
     void *p = arena;
     free(arena->block);
 
-    arena = arena->next;
+    arena = arena->succ;
 
     free(p);
   }
@@ -169,8 +170,10 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
     return metadata + 1;
 
   } else {
-    arena = allocator->first;
+    arena = allocator->last;
     next_arena_size = BLOCK_SIZE;
+
+    // first try last arena
 
     // FIXME: not _that_ efficient as walks all the allocations
     while (arena) {
@@ -179,20 +182,24 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
         return allocation;
       }
 
-      arena = arena->next;
+      arena = arena->pred;
     }
   }
 
   // need to create a new arena
   struct arena **next;
   if (allocator->last) {
-    next = &allocator->last->next;
+    next = &allocator->last->succ;
   } else {
     next = &allocator->first;
   }
 
-  *next = nonnull_malloc(sizeof(*allocator->last->next));
+  *next = nonnull_malloc(sizeof(*allocator->last->succ));
   **next = new_arena(allocator, next_arena_size);
+
+  if (allocator->last) {
+    allocator->last->succ = *next;
+  }
 
   allocator->last = *next;
 
@@ -226,7 +233,8 @@ bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
 
 struct arena new_arena(struct arena_allocator *allocator, size_t size) {
   struct arena arena = {.allocator = allocator,
-                        .next = NULL,
+                        .pred = allocator->last,
+                        .succ = NULL,
                         .block = nonnull_malloc(size),
                         .pos = 0,
                         .size = size};

@@ -1,6 +1,7 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
+#include "alloc.h"
 #include "util.h"
 
 #include <stdlib.h>
@@ -18,6 +19,7 @@
 struct vector;
 
 struct vector *vector_create(size_t element_size);
+struct vector *vector_create_in_arena(size_t element_size, struct arena_allocator *arena);
 
 void vector_extend(struct vector *v, const void *data, size_t num_elems);
 

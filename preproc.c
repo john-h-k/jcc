@@ -813,25 +813,25 @@ static bool try_expand_token(struct preproc *preproc,
   struct sized_str ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
-  bool free_parents;
-  if (!parents) {
-    parents = hashtbl_create_sized_str_keyed(0);
-    free_parents = true;
-  } else {
-    free_parents = false;
-    void *parent = hashtbl_lookup(parents, &ident);
-
-    if (parent) {
-      // already seen this macro, do not expand it again
-      return false;
-    }
-  }
-
-  hashtbl_insert(parents, &ident, NULL);
-
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
 
   if (macro) {
+    bool free_parents;
+    if (!parents) {
+      parents = hashtbl_create_sized_str_keyed(0);
+      free_parents = true;
+    } else {
+      free_parents = false;
+      void *parent = hashtbl_lookup(parents, &ident);
+
+      if (parent) {
+        // already seen this macro, do not expand it again
+        return false;
+      }
+    }
+
+    hashtbl_insert(parents, &ident, NULL);
+
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
@@ -955,15 +955,9 @@ static bool try_expand_token(struct preproc *preproc,
     }
     }
 
-    if (free_parents) {
-      hashtbl_free(&parents);
-    }
     return true;
   }
 
-  if (free_parents) {
-    hashtbl_free(&parents);
-  }
   return false;
 }
 
