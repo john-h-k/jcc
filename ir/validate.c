@@ -57,6 +57,7 @@ struct validate_op_order_metadata {
   VALIDATION_CHECK((cond), (obj), IR_OBJECT_NAME((obj), " %zu: %s"),           \
                    (obj)->id, (msg))
 
+#ifndef NDEBUG
 static void validate_op_order(struct ir_op **ir, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
   struct ir_validate_state *state = data->state;
@@ -398,8 +399,15 @@ static void ir_validate_func(struct ir_validate_state *state,
                    "basicblock_count=%zu but found %zu", func->basicblock_count,
                    bb_count);
 }
+#endif
 
+#ifdef NDEBUG
+void ir_validate(UNUSED struct ir_unit *iru, UNUSED enum ir_validate_flags flags) {}
+
+#else
 void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
+  return;
+
   struct ir_glb *glb = iru->first_global;
 
   struct ir_validate_state state = {
@@ -441,3 +449,4 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
 
   BUG("VALIDATION FAILED");
 }
+#endif
