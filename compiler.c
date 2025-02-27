@@ -268,9 +268,9 @@ enum compile_result compile(struct compiler *compiler) {
         break;
       case IR_GLB_TY_FUNC:
         ir_order_basicblocks(glb->func);
-        // eliminate_redundant_ops(glb->func,
-        //                         ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
-        //                             ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
+        eliminate_redundant_ops(glb->func,
+                                ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
+                                    ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
         rebuild_flags(glb->func);
         rebuild_ids(glb->func);
         break;
