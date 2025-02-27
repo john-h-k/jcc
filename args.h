@@ -53,26 +53,25 @@ struct arg {
   };
 };
 
-
 #define OPTS_ENUM_LIST                                                         \
-  ENUM_FN(COMPILE_OPTS_LEVEL_0, "0")                                       \
-  ENUM_FN(COMPILE_OPTS_LEVEL_1, "1")                                         \
-  ENUM_FN(COMPILE_OPTS_LEVEL_2, "2")                                         \
+  ENUM_FN(COMPILE_OPTS_LEVEL_0, "0")                                           \
+  ENUM_FN(COMPILE_OPTS_LEVEL_1, "1")                                           \
+  ENUM_FN(COMPILE_OPTS_LEVEL_2, "2")                                           \
   ENUM_FN(COMPILE_OPTS_LEVEL_3, "3")
 
-#define LOG_ENUM_LIST \
-  ENUM_FN(COMPILE_LOG_FLAGS_NONE, "none") \
-  ENUM_FN(COMPILE_LOG_FLAGS_ARGS, "args") \
-  ENUM_FN(COMPILE_LOG_FLAGS_PREPROC, "preproc") \
-  ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse") \
-  ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk") \
-  ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir") \
-  ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts") \
-  ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower") \
-  ENUM_FN(COMPILE_LOG_FLAGS_REGALLOC, "regalloc") \
-  ENUM_FN(COMPILE_LOG_FLAGS_EMIT, "emit") \
-  ENUM_FN(COMPILE_LOG_FLAGS_ASM, "asm") \
-  ENUM_FN(COMPILE_LOG_FLAGS_ALL, "all") \
+#define LOG_ENUM_LIST                                                          \
+  ENUM_FN(COMPILE_LOG_FLAGS_NONE, "none")                                      \
+  ENUM_FN(COMPILE_LOG_FLAGS_ARGS, "args")                                      \
+  ENUM_FN(COMPILE_LOG_FLAGS_PREPROC, "preproc")                                \
+  ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse")                                    \
+  ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk")                                \
+  ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir")                                          \
+  ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
+  ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
+  ENUM_FN(COMPILE_LOG_FLAGS_REGALLOC, "regalloc")                              \
+  ENUM_FN(COMPILE_LOG_FLAGS_EMIT, "emit")                                      \
+  ENUM_FN(COMPILE_LOG_FLAGS_ASM, "asm")                                        \
+  ENUM_FN(COMPILE_LOG_FLAGS_ALL, "all")
 
 #define ARCH_ENUM_LIST                                                         \
   ENUM_FN(COMPILE_ARCH_X86_64, "x86_64")                                       \
@@ -158,38 +157,40 @@ inline static const char *string_c_standard(int value) {
 
 #undef ENUM_FN
 
-#define ARG_BOOL(name, sh, lo) \
-  ARG_OPT(BOOL, bool, name, sh, lo, NULL, NULL)            \
+#define ARG_BOOL(name, sh, lo) ARG_OPT(BOOL, bool, name, sh, lo, NULL, NULL)
 
-#define ARG_OPTION(ty, name, sh, lo, parse_fn, string_fn) \
-  ARG_OPT(OPTION, ty, name, sh, lo, parse_fn, string_fn)            \
+#define ARG_OPTION(ty, name, sh, lo, parse_fn, string_fn)                      \
+  ARG_OPT(OPTION, ty, name, sh, lo, parse_fn, string_fn)
 
-#define ARG_FLAGS(ty, name, sh, lo, parse_fn, string_fn) \
-  ARG_OPT(FLAGS, ty, name, sh, lo, parse_fn, string_fn)            \
+#define ARG_FLAGS(ty, name, sh, lo, parse_fn, string_fn)                       \
+  ARG_OPT(FLAGS, ty, name, sh, lo, parse_fn, string_fn)
 
-#define ARG_STRING(name, sh, lo) \
-  ARG_OPT(STRING, const char *, name, sh, lo, NULL, NULL)            \
+#define ARG_STRING(name, sh, lo)                                               \
+  ARG_OPT(STRING, const char *, name, sh, lo, NULL, NULL)
 
-#define ARG_STRING_LIST(name, sh, lo) \
-  ARG_OPT(STRING_LIST, struct arg_string_list, name, sh, lo, NULL, NULL)            \
+#define ARG_STRING_LIST(name, sh, lo)                                          \
+  ARG_OPT(STRING_LIST, struct arg_string_list, name, sh, lo, NULL, NULL)
 
 #define ARG_OPT_LIST                                                           \
-  ARG_BOOL(preprocess, "-E", "--preprocess")            \
-  ARG_BOOL(assembly, "-S", "--assemble")                \
-  ARG_BOOL(object, "-c", "--compile")                   \
-\
-  ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", parse_opts_level, string_opts_level)                   \
+  ARG_BOOL(preprocess, "-E", "--preprocess")                                   \
+  ARG_BOOL(assembly, "-S", "--assemble")                                       \
+  ARG_BOOL(object, "-c", "--compile")                                          \
                                                                                \
-  ARG_OPTION(enum compile_arch, arch, "", "-arch", parse_arch, string_arch)          \
-  ARG_OPTION(enum compile_target, target, "", "-target", parse_target, string_target)  \
-  ARG_STRING(output, "-o", "")                        \
-\
-  ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", parse_log_level, string_log_level)                        \
+  ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", parse_opts_level,  \
+             string_opts_level)                                                \
                                                                                \
-  ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", parse_c_standard,            \
-          string_c_standard)                                                   \
+  ARG_OPTION(enum compile_arch, arch, "", "-arch", parse_arch, string_arch)    \
+  ARG_OPTION(enum compile_target, target, "", "-target", parse_target,         \
+             string_target)                                                    \
+  ARG_STRING(output, "-o", "")                                                 \
                                                                                \
-  ARG_STRING(timestamp, "", "-tm")                    \
+  ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", parse_log_level, \
+            string_log_level)                                                  \
+                                                                               \
+  ARG_OPTION(enum compile_c_standard, c_standard, "", "-std",                  \
+             parse_c_standard, string_c_standard)                              \
+                                                                               \
+  ARG_STRING(timestamp, "", "-tm")                                             \
                                                                                \
   ARG_STRING_LIST(include_paths, "-I", "")
 

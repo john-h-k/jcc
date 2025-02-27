@@ -746,9 +746,11 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
     fm->cb(fm->file, op, fm->cb_metadata);
   }
 
-  if (op_produces_value(op)) {
-    fprintf(fm->file, " | ");
+  fprintf(fm->file, " | ");
 
+  if (!op_produces_value(op)) {
+    fprintf(fm->file, "                ");
+  } else {
     if (op->flags & IR_OP_FLAG_FIXED_REG) {
       fprintf(fm->file, "    (FIXED) ");
     }
