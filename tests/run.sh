@@ -71,7 +71,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "${#args[@]}" -ne 0 ]; then
-  (IFS=" " printf "${BOLD}Running tests with '${args[@]}'${RESET}\n" )
+  delim=$" "
+  rest=("${args[@]:1}")
+  printf "${BOLD}Running tests with '"
+  printf "%s" "${args[0]}" "${rest[@]/#/$delim}"
+  printf "'${RESET}\n"
 fi
 
 no_groups=""
