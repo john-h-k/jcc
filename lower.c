@@ -136,6 +136,10 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *source_addr = build_addr(func, source);
   struct ir_op *dest_addr = build_addr(func, op);
 
+  if (op->store.value->ty == IR_OP_TY_LOAD) {
+    detach_ir_op(func, op->store.value);
+  }
+
   if (info.size <= MEMMOVE_THRESHOLD) {
     op->ty = IR_OP_TY_MEM_COPY;
     op->mem_copy = (struct ir_op_mem_copy){
@@ -144,7 +148,7 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
   }
 
   struct ir_op *size =
-      insert_after_ir_op(func, dest_addr, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+      insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
   mk_pointer_constant(func->unit, size, info.size);
 
   struct ir_glb *memmove =
@@ -152,7 +156,7 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
 
   struct ir_var_ty ptr_int = var_ty_for_pointer_size(func->unit);
   struct ir_op *memmove_addr =
-      insert_after_ir_op(func, size, IR_OP_TY_ADDR, ptr_int);
+      insert_before_ir_op(func, op, IR_OP_TY_ADDR, ptr_int);
   memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
   memmove_addr->addr = (struct ir_op_addr){
       .ty = IR_OP_ADDR_TY_GLB,
@@ -370,6 +374,8 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
 static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
   struct ir_op *dest = op->mem_copy.dest;
   struct ir_op *source = op->mem_copy.source;
+
+  DEBUG_ASSERT(dest && source, "dest and source should be non null");
 
   struct ir_glb *memcopy =
       add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCPY);
@@ -883,14 +889,15 @@ static void lower_params(struct ir_func *func) {
       if (op->ret.value->ty == IR_OP_TY_LOAD) {
         struct ir_op *addr = build_addr(func, op->ret.value);
 
-        struct ir_op *mem_copy = insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY,
-                                                     op->ret.value->var_ty);
+        struct ir_op *mem_copy = insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
 
+        DEBUG_ASSERT(first_param && addr, "unexpected null");
         mem_copy->mem_copy = (struct ir_op_mem_copy){
             .dest = first_param,
             .source = addr,
             .length = var_ty_info(func->unit, &op->ret.value->var_ty).size};
 
+        detach_ir_op(func, op->ret.value);
         op->ret.value = NULL;
       } else if (op->ret.value->ty == IR_OP_TY_GATHER) {
         struct ir_op *gather = op->ret.value;
@@ -908,10 +915,10 @@ static void lower_params(struct ir_func *func) {
 
           size_t offset = info.offsets[j - 1];
 
-          struct ir_op *addr =
-              insert_before_ir_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-          addr->addr_offset = (struct ir_op_addr_offset){
-              .base = first_param, .offset = offset};
+          struct ir_op *addr = insert_before_ir_op(
+              func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+          addr->addr_offset =
+              (struct ir_op_addr_offset){.base = first_param, .offset = offset};
 
           struct ir_op *store =
               insert_before_ir_op(func, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
@@ -942,12 +949,6 @@ static void lower_params(struct ir_func *func) {
 void lower_call(struct ir_func *func, struct ir_op *op) {
   struct ir_func_info func_info = func->unit->target->lower_func_ty(
       func, op->call.func_ty.func, op->call.args, op->call.num_args);
-
-  if (log_enabled()) {
-    info("Lowering call op %zu", op->id);
-    debug_print_func_info(stderr, func->unit, &func_info);
-    info("\n\n");
-  }
 
   func->caller_stack_needed =
       MAX(func->caller_stack_needed, func_info.call_info.stack_size);
@@ -1040,6 +1041,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
           last = load;
         }
+
+        detach_ir_op(func, arg);
       }
       break;
     case IR_PARAM_INFO_TY_STACK: {
@@ -1088,6 +1091,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           offset += size;
           copy -= size;
         }
+
+        detach_ir_op(func, arg);
       } else {
         struct ir_op *store_addr =
             insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
@@ -1113,6 +1118,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       mov->reg = param_info.regs[0].reg;
       mov->flags |= IR_OP_FLAG_FIXED_REG;
       vector_push_back(new_args, &mov);
+
+      detach_ir_op(func, arg);
       break;
     }
     }
@@ -1346,25 +1353,10 @@ void lower(struct ir_unit *unit, const struct target *target) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      struct ir_op_use_map uses = build_op_uses_map(func);
-
-      for (size_t i = 0; i < uses.num_op_use_datas; i++) {
-        struct ir_op_usage *use = &uses.op_use_datas[i];
-
-        if (!use->num_uses && !op_has_side_effects(use->op)) {
-          // DEBUG_ASSERT(!(use->op->flags & IR_OP_FLAG_CONTAINED),
-          //              "contained op %zu must have uses", use->op->id);
-
-          debug("detaching op %zu", use->op->id);
-          detach_ir_op(func, use->op);
-        }
-      }
-
       prune_basicblocks(func);
 
       // FIXME: phis are not propogated properly
       remove_critical_edges(func);
-      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
     }
     }
     glb = glb->succ;
