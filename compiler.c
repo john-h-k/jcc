@@ -16,6 +16,7 @@
 #include "opts/promote.h"
 #include "parse.h"
 #include "preproc.h"
+#include "profile.h"
 #include "target.h"
 #include "util.h"
 
@@ -118,6 +119,8 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   {
+    PROFILE_BEGIN(parse);
+
     COMPILER_STAGE(PARSE);
 
     parse_result = parse(compiler->parser);
@@ -127,10 +130,14 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_ast(compiler->parser, &parse_result.translation_unit);
     }
+
+    PROFILE_END(parse);
   }
 
   struct typechk_result typechk_result;
   {
+    PROFILE_BEGIN(typechk);
+
     COMPILER_STAGE(TYPECHK);
 
     typechk_result =
@@ -139,11 +146,15 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_td(compiler->typechk, &typechk_result.translation_unit);
     }
+
+    PROFILE_END(typechk);
   }
 
   const struct target *target = &compiler->target;
   struct ir_unit *ir;
   {
+    PROFILE_BEGIN(ir);
+
     COMPILER_STAGE(IR);
 
     ir =
@@ -155,9 +166,13 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+
+    PROFILE_END(ir);
   }
 
   {
+    PROFILE_BEGIN(opts);
+
     if (compiler->args.opts_level != COMPILE_OPTS_LEVEL_0) {
       COMPILER_STAGE(OPTS);
 
@@ -185,9 +200,13 @@ enum compile_result compile(struct compiler *compiler) {
 
       ir_validate(ir, IR_VALIDATE_FLAG_NONE);
     }
+
+    PROFILE_END(opts);
   }
 
   {
+    PROFILE_BEGIN(lower);
+
     COMPILER_STAGE(LOWER);
 
     lower(ir, target);
@@ -197,9 +216,13 @@ enum compile_result compile(struct compiler *compiler) {
     }
 
     ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+
+    PROFILE_END(lower);
   }
 
   {
+    PROFILE_BEGIN(regalloc);
+
     COMPILER_STAGE(REGALLOC);
 
     struct ir_glb *glb = ir->first_global;
@@ -225,6 +248,9 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_stage(ir, "regalloc");
     }
+
+    PROFILE_END(regalloc);
+    PROFILE_BEGIN(elim_phi);
 
     ir_validate(ir, IR_VALIDATE_FLAG_NONE);
 
@@ -255,7 +281,11 @@ enum compile_result compile(struct compiler *compiler) {
 
     ir_validate(ir, IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
 
+    PROFILE_END(elim_phi);
+
     glb = ir->first_global;
+
+    PROFILE_BEGIN(elim_redundant);
 
     while (glb) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
@@ -282,6 +312,8 @@ enum compile_result compile(struct compiler *compiler) {
     if (log_enabled()) {
       debug_print_stage(ir, "elim_redundant");
     }
+
+    PROFILE_END(elim_redundant);
   }
 
   {
@@ -308,6 +340,8 @@ enum compile_result compile(struct compiler *compiler) {
   struct emitted_unit unit;
 
   COMPILER_STAGE(EMIT);
+
+  PROFILE_BEGIN(emit);
 
   struct codegen_unit *codegen_unit = codegen(ir);
 
@@ -336,6 +370,8 @@ enum compile_result compile(struct compiler *compiler) {
   }
 
   unit = target->emit_function(codegen_unit);
+
+  PROFILE_END(emit);
 
   struct build_object_args args = {.compile_args = &compiler->args,
                                    .output = compiler->output,

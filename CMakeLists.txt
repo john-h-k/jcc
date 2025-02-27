@@ -16,6 +16,8 @@ set(
   hash.c
   bitset.c
 
+  profile.c
+
   alloc.c
   log.c
   graphwriter.c

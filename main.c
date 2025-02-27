@@ -4,11 +4,11 @@
 #include "compiler.h"
 #include "io.h"
 #include "log.h"
+#include "profile.h"
 #include "program.h"
 #include "rv32i.h"
 #include "target.h"
 #include "util.h"
-#include "vector.h"
 #include "x64.h"
 
 #include <stdio.h>
@@ -219,6 +219,10 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     const char *source_path = sources[i];
 
+    char *region = arena_alloc(arena, strlen("compile ") + strlen(source_path) + 1);
+    strcpy(region, "compile ");
+    strcat(region, source_path);
+
     info("compiling source file \"%s\"", source_path);
 
     struct path_components components = path_components(arena, source_path);
@@ -234,7 +238,9 @@ int main(int argc, char **argv) {
       goto exit;
     }
 
-    const char * source;
+    struct profiler_region compile_region = profiler_begin_region(region);
+
+    const char *source;
     if (!strcmp(source_path, "-")) {
       source = read_file(arena, stdin);
     } else {
@@ -288,6 +294,9 @@ int main(int argc, char **argv) {
       exc = -1;
       goto exit;
     }
+
+    profiler_end_region(compile_region);
+
     enable_log();
 
     free_compiler(&compiler);
@@ -301,11 +310,15 @@ int main(int argc, char **argv) {
                                   .num_objects = num_sources,
                                   .output = output};
 
+    struct profiler_region link_region = profiler_begin_region("link");
+
     if (target->link_objects(&link_args) != LINK_RESULT_SUCCESS) {
       err("link failed");
       exc = -1;
       goto exit;
     }
+
+    profiler_end_region(link_region);
   } else {
     if (num_sources > 1) {
       TODO("multiple objects, but target does not support linking");
@@ -317,6 +330,10 @@ int main(int argc, char **argv) {
   exc = 0;
 
 exit:
+  if (args.profile) {
+    profiler_print(stderr);
+  }
+
   if (arena) {
     arena_allocator_free(&arena);
   }

@@ -198,7 +198,10 @@ VALUES_FN(log_level, LOG)
             "[DEBUG] Log level flags")                                         \
                                                                                \
   ARG_STRING(timestamp, "", "-tm",                                             \
-             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")
+             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__") \
+             \
+  ARG_BOOL(profile, "", "--profile",                                             \
+             "Run profiler")
 
 
 struct parsed_args {
