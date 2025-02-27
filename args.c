@@ -221,7 +221,7 @@ enum parse_args_result parse_args(int argc, char **argv,
   *parsed = (struct parsed_args){.values = NULL};
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, desc, parse_fn,           \
-                string_fn, values_fn)                                           \
+                string_fn, values_fn)                                          \
   DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");              \
   DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),        \
                "short option must begin '-' and be exactly two chars");        \
@@ -232,7 +232,7 @@ enum parse_args_result parse_args(int argc, char **argv,
                       .name = #arg_name,                                       \
                       .try_parse = parse_fn,                                   \
                       .string = string_fn,                                     \
-                      .values = values_fn,                                       \
+                      .values = values_fn,                                     \
                       .short_name = sh,                                        \
                       .long_name = lo};                                        \
                                                                                \
@@ -280,7 +280,8 @@ enum parse_args_result parse_args(int argc, char **argv,
     size_t len = strlen(s);
 
     if (!strcmp(s, "-")) {
-      // means read from stdin. handle it seperately to avoid it getting confused for a flag
+      // means read from stdin. handle it seperately to avoid it getting
+      // confused for a flag
       vector_push_back(values, &s);
       continue;
     }
@@ -346,19 +347,31 @@ enum parse_args_result parse_args(int argc, char **argv,
       case ARG_TY_FLAGS:
         GET_ARGUMENT(value);
 
-        int flag = 0;
-        if (!arg->try_parse(value, &flag)) {
-          bad_value(arg, lookup_str, value);
-          goto fail;
-        }
+        do {
+          const char *next = strchr(value, ',');
 
-        if (*arg->arg_flags & flag) {
-          err("Duplicate options '%.*s'\n", (int)lookup_str.len,
-              lookup_str.str);
-          goto fail;
-        }
+          if (next) {
+            size_t val_len = next - value;
+            // FIXME: strdup could return null via malloc?
+            value = strndup(value, val_len);
+          }
+          
+          int flag = 0;
+          if (!arg->try_parse(value, &flag)) {
+            bad_value(arg, lookup_str, value);
+            goto fail;
+          }
 
-        *arg->arg_flags |= flag;
+          if (*arg->arg_flags & flag) {
+            err("Duplicate options '%.*s'\n", (int)lookup_str.len,
+                lookup_str.str);
+            goto fail;
+          }
+
+          *arg->arg_flags |= flag;
+
+          value = next;
+        } while (value++);
         break;
       case ARG_TY_STRING:
         GET_ARGUMENT(value);
