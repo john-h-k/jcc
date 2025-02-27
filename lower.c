@@ -18,8 +18,7 @@ static void remove_critical_edges(struct ir_func *irb) {
     size_t num_preds = basicblock->num_preds;
 
     struct ir_stmt *phi_stmt = NULL;
-    if (basicblock->first && basicblock->first->first &&
-        basicblock->first->first->ty == IR_OP_TY_PHI) {
+    if (basicblock->first && (basicblock->first->flags & IR_STMT_FLAG_PHI)) {
       phi_stmt = basicblock->first;
     }
 
@@ -38,11 +37,6 @@ static void remove_critical_edges(struct ir_func *irb) {
         intermediate->ty = IR_BASICBLOCK_TY_MERGE;
         intermediate->merge =
             (struct ir_basicblock_merge){.target = basicblock};
-
-        struct ir_stmt *intermediate_phi_stmt = NULL;
-        if (phi_stmt) {
-          intermediate_phi_stmt = alloc_ir_stmt(irb, intermediate);
-        }
 
         struct ir_stmt *br_stmt = alloc_ir_stmt(irb, intermediate);
         struct ir_op *op = alloc_ir_op(irb, br_stmt);
@@ -76,12 +70,14 @@ static void remove_critical_edges(struct ir_func *irb) {
           unreachable();
         }
 
+        DEBUG_ASSERT(intermediate->num_preds == 1, "intermediate has >1 pred");
+
         if (phi_stmt) {
           struct ir_op *phi = phi_stmt->first;
-          while (phi && phi->ty == IR_OP_TY_PHI) {
-            struct ir_op *int_phi = alloc_ir_op(irb, intermediate_phi_stmt);
-            int_phi->ty = IR_OP_TY_PHI;
-            int_phi->var_ty = phi->var_ty;
+          while (phi) {
+            DEBUG_ASSERT(phi->ty == IR_OP_TY_PHI, "expected phi");
+
+            struct ir_op *int_phi = insert_phi(irb, intermediate, phi->var_ty);
             int_phi->reg = phi->reg;
             int_phi->phi = (struct ir_op_phi){
                 .num_values = 1,

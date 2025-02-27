@@ -253,14 +253,20 @@ static void ir_validate_stmt(struct ir_validate_state *state,
   VALIDATION_CHECKZ(stmt->id != DETACHED_STMT, stmt, "stmt is detached!");
 
   VALIDATION_CHECKZ(stmt->basicblock, stmt, "stmt has no basicblock!");
+  VALIDATION_CHECKZ(!(stmt->flags & IR_STMT_FLAG_PHI), stmt,
+                    "only phi stmt should be at start of bb");
 
   struct ir_op *op = stmt->first;
+
+  if (op && op_is_branch(op->ty)) {
+    VALIDATION_CHECKZ(!op->succ, op, "branch should be only op in stmt");
+  }
 
   while (op) {
     if (op->ty == IR_OP_TY_PHI &&
         !(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS)) {
-      VALIDATION_ERRZ(op,
-                      "should not have phi except in phi stmt at start of bb");
+      VALIDATION_ERRZ(
+          op, "should not have phi except in phi-flagged at start of bb");
     }
 
     ir_validate_op(state, func, op);
@@ -279,16 +285,29 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
 
   struct ir_stmt *stmt = basicblock->first;
 
-  if (!(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS) && stmt && stmt->first && stmt->first->ty == IR_OP_TY_PHI) {
-    struct ir_op *phi = stmt->first;
-    while (phi) {
-      VALIDATION_CHECKZ(phi->ty == IR_OP_TY_PHI, phi,
-                        "expected all phis in stmt to be phis");
+  if (stmt) {
+    if (stmt->flags & IR_STMT_FLAG_PHI) {
+      if (!(state->flags & IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS)) {
+        struct ir_op *phi = stmt->first;
+        while (phi) {
+          VALIDATION_CHECKZ(phi->ty == IR_OP_TY_PHI, phi,
+                            "expected all phis in stmt to be phis");
 
-      phi = phi->succ;
+          phi = phi->succ;
+        }
+      }
+
+      stmt = stmt->succ;
+    } else if (stmt->flags & IR_STMT_FLAG_PARAM) {
+      // TODO: validate
+      // struct ir_op *param = stmt->first;
+      // while (param) {
+      //   VALIDATION_CHECKZ(param->ty == IR_OP_TY_param, param,
+      //                     "expected all params in stmt to be params");
+
+      //   param = param->succ;
+      // }
     }
-
-    stmt = stmt->succ;
   }
 
   while (stmt) {

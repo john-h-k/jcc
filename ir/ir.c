@@ -577,6 +577,7 @@ void initialise_ir_stmt(struct ir_stmt *stmt, size_t id) {
   stmt->basicblock = NULL;
   stmt->pred = NULL;
   stmt->succ = NULL;
+  stmt->flags = IR_STMT_FLAG_NONE;
 }
 
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -1325,7 +1326,11 @@ struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
   struct ir_stmt *stmt = basicblock->first;
   if (!stmt) {
     stmt = alloc_ir_stmt(irb, basicblock);
+  } else if (!(stmt->flags & IR_STMT_FLAG_PHI)) {
+    stmt = insert_before_ir_stmt(irb, stmt);
   }
+
+  stmt->flags |= IR_STMT_FLAG_PHI;
 
   struct ir_op *op = stmt->first;
 
@@ -1458,9 +1463,6 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
 
   irb->last = basicblock;
 
-  // this is the statement used by phis
-  alloc_ir_stmt(irb, basicblock);
-
   return basicblock;
 }
 
@@ -1477,6 +1479,7 @@ struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
   stmt->id = irb->next_stmt_id++;
   stmt->basicblock = basicblock;
   stmt->pred = basicblock->last;
+  stmt->flags = IR_STMT_FLAG_NONE;
   stmt->succ = NULL;
   stmt->first = NULL;
   stmt->last = NULL;

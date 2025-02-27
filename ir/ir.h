@@ -547,6 +547,16 @@ struct ir_op {
   const char *comment;
 };
 
+enum ir_stmt_flags {
+  IR_STMT_FLAG_NONE = 0,
+
+  // contains phi and only phi nodes
+  IR_STMT_FLAG_PHI = 1,
+
+  // contains param and only param nodes
+  IR_STMT_FLAG_PARAM = 2,
+};
+
 // set of ops with no SEQ_POINTs
 struct ir_stmt {
   size_t id;
@@ -556,6 +566,8 @@ struct ir_stmt {
 
   struct ir_stmt *pred;
   struct ir_stmt *succ;
+
+  enum ir_stmt_flags flags;
 
   // the links between ops (`pred` & `succ`) have no significance to the
   // compilation and are just for traversal. meaningful links between operations

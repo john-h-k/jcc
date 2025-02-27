@@ -882,7 +882,8 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_op *rhs = build_ir_for_expr(irb, &rhs_stmt, binary_op->rhs);
 
     struct ir_basicblock *rhs_stmt_bb = rhs_stmt->basicblock;
-    struct ir_op *rhs_br = alloc_ir_op(irb->func, rhs_stmt);
+    struct ir_stmt *rhs_br_stmt = alloc_ir_stmt(irb->func, rhs_stmt_bb);
+    struct ir_op *rhs_br = alloc_ir_op(irb->func, rhs_br_stmt);
     rhs_br->ty = IR_OP_TY_BR_COND;
     rhs_br->var_ty = IR_VAR_TY_NONE;
     rhs_br->br_cond = (struct ir_op_br_cond){.cond = rhs};
@@ -892,22 +893,24 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_stmt *true_stmt = alloc_ir_stmt(irb->func, true_bb);
     struct ir_op *true_op = alloc_ir_op(irb->func, true_stmt);
     mk_integral_constant(irb->unit, true_op, IR_VAR_PRIMITIVE_TY_I32, 1);
-    struct ir_op *true_br = alloc_ir_op(irb->func, true_stmt);
+
+    struct ir_stmt *true_br_stmt = alloc_ir_stmt(irb->func, true_bb);
+    struct ir_op *true_br = alloc_ir_op(irb->func, true_br_stmt);
     true_br->ty = IR_OP_TY_BR;
     true_br->var_ty = IR_VAR_TY_NONE;
 
     struct ir_stmt *false_stmt = alloc_ir_stmt(irb->func, false_bb);
     struct ir_op *false_op = alloc_ir_op(irb->func, false_stmt);
     mk_integral_constant(irb->unit, false_op, IR_VAR_PRIMITIVE_TY_I32, 0);
-    struct ir_op *false_br = alloc_ir_op(irb->func, false_stmt);
+
+    struct ir_stmt *false_br_stmt = alloc_ir_stmt(irb->func, false_bb);
+    struct ir_op *false_br = alloc_ir_op(irb->func, false_br_stmt);
     false_br->ty = IR_OP_TY_BR;
     false_br->var_ty = IR_VAR_TY_NONE;
 
-    struct ir_op *phi = alloc_ir_op(irb->func, end_bb->first);
+    struct ir_op *phi = insert_phi(irb->func, end_bb, var_ty);
     struct ir_stmt *end_stmt = alloc_ir_stmt(irb->func, end_bb);
 
-    phi->ty = IR_OP_TY_PHI;
-    phi->var_ty = var_ty;
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
         .values = arena_alloc(irb->arena, sizeof(struct ir_phi_entry) * 2)};
@@ -1049,7 +1052,8 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                                           struct ir_var_ty var_ty,
                                           struct td_ternary *ternary) {
   struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);
-  struct ir_op *br_cond = alloc_ir_op(irb->func, *stmt);
+  struct ir_stmt *br_cond_stmt = alloc_ir_stmt(irb->func, (*stmt)->basicblock);
+  struct ir_op *br_cond = alloc_ir_op(irb->func, br_cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_VAR_TY_NONE;
   br_cond->br_cond = (struct ir_op_br_cond){.cond = cond};
@@ -1067,20 +1071,21 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   struct ir_op *true_op =
       build_ir_for_expr(irb, &true_stmt, ternary->true_expr);
 
-  struct ir_op *true_br = alloc_ir_op(irb->func, true_stmt);
+  struct ir_stmt *true_br_stmt = alloc_ir_stmt(irb->func, true_stmt->basicblock);
+  struct ir_op *true_br = alloc_ir_op(irb->func, true_br_stmt);
   true_br->ty = IR_OP_TY_BR;
   true_br->var_ty = IR_VAR_TY_NONE;
 
   struct ir_stmt *false_stmt = alloc_ir_stmt(irb->func, false_bb);
   struct ir_op *false_op =
       build_ir_for_expr(irb, &false_stmt, ternary->false_expr);
-  struct ir_op *false_br = alloc_ir_op(irb->func, false_stmt);
+
+  struct ir_stmt *false_br_stmt = alloc_ir_stmt(irb->func, false_stmt->basicblock);
+  struct ir_op *false_br = alloc_ir_op(irb->func, false_br_stmt);
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_op *phi = alloc_ir_op(irb->func, end_bb->first);
-  phi->ty = IR_OP_TY_PHI;
-  phi->var_ty = var_ty;
+  struct ir_op *phi = insert_phi(irb->func, end_bb, var_ty);
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
       .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
@@ -1817,7 +1822,8 @@ static struct ir_basicblock *build_ir_for_if(struct ir_func_builder *irb,
   // basic block for if body
   struct ir_basicblock *if_start_basicblock = alloc_ir_basicblock(irb->func);
 
-  struct ir_op *br_cond = alloc_ir_op(irb->func, cond_stmt);
+  struct ir_stmt *br_cond_stmt = alloc_ir_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *br_cond = alloc_ir_op(irb->func, br_cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_VAR_TY_NONE;
   br_cond->br_cond.cond = cond;
@@ -1900,7 +1906,8 @@ build_ir_for_switch(struct ir_func_builder *irb,
   struct ir_op *ctrl_op =
       build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr);
 
-  struct ir_op *switch_op = alloc_ir_op(irb->func, ctrl_stmt);
+  struct ir_stmt *switch_op_stmt = alloc_ir_stmt(irb->func, ctrl_stmt->basicblock);
+  struct ir_op *switch_op = alloc_ir_op(irb->func, switch_op_stmt);
   switch_op->ty = IR_OP_TY_BR_SWITCH;
   switch_op->var_ty = IR_VAR_TY_NONE;
   switch_op->br_switch = (struct ir_op_br_switch){.value = ctrl_op};
@@ -2031,7 +2038,8 @@ static struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
 
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &while_stmt->cond);
-  struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
+  struct ir_stmt *cond_br_stmt = alloc_ir_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *cond_br = alloc_ir_op(irb->func, cond_br_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
@@ -2077,7 +2085,9 @@ build_ir_for_dowhilestmt(struct ir_func_builder *irb,
   struct ir_basicblock *cond_basicblock = alloc_ir_basicblock(irb->func);
   struct ir_stmt *cond_stmt = alloc_ir_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &do_while_stmt->cond);
-  struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
+
+  struct ir_stmt *cond_br_stmt = alloc_ir_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *cond_br = alloc_ir_op(irb->func, cond_br_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
@@ -2127,7 +2137,8 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     struct ir_stmt *cond_stmt = alloc_ir_stmt(irb->func, cond_basicblock);
     struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, for_stmt->cond);
 
-    struct ir_op *cond_br = alloc_ir_op(irb->func, cond_stmt);
+    struct ir_stmt *cond_br_stmt = alloc_ir_stmt(irb->func, cond_stmt->basicblock);
+    struct ir_op *cond_br = alloc_ir_op(irb->func, cond_br_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_VAR_TY_NONE;
     cond_br->br_cond.cond = cond;
@@ -2980,7 +2991,8 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
   // params live in the first stmt normally reserved for phis (as they have
   // similar function)
-  struct ir_stmt *param_stmt = basicblock->first;
+  struct ir_stmt *param_stmt = basicblock->first ? insert_before_ir_stmt(f, basicblock->first) : alloc_ir_stmt(f, basicblock);
+  param_stmt->flags |= IR_STMT_FLAG_PARAM;
 
   // first statement is a bunch of magic MOV commands that explain to the rest
   // of the IR that these are params this is encoded as MOV NULL with the
