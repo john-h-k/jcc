@@ -222,6 +222,8 @@ void eliminate_phi(struct ir_func *irb) {
   struct hashtbl *reg_to_val =
       hashtbl_create(sizeof(struct bb_reg), sizeof(struct ir_op *), NULL, NULL);
 
+  // TODO: lots of code cleaning up here especially the double loop
+
   while (basicblock) {
     struct ir_stmt *stmt = basicblock->first;
 
