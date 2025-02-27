@@ -31,7 +31,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, PREFIX PR_RESET PR_BOLD);                                    \
+    fprintf(stderr, PREFIX PR_BOLD PR_RESET);                                    \
     vfprintf(stderr, format, v);                                               \
     fprintf(stderr, "\n");                                                     \
     va_end(v);                                                                 \
@@ -42,7 +42,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, PREFIX PR_RESET PR_BOLD);                                    \
+    fprintf(stderr, PREFIX PR_BOLD PR_RESET);                                    \
     vfprintf(stderr, format, v);                                               \
     va_end(v);                                                                 \
   }                                                                            \
@@ -52,7 +52,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, PREFIX PR_RESET PR_BOLD);                                    \
+    fprintf(stderr, PREFIX PR_BOLD PR_RESET);                                    \
     vfprintf(file, format, v);                                                 \
     fprintf(file, "\n");                                                       \
     va_end(v);                                                                 \
@@ -63,7 +63,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     }                                                                          \
     va_list v;                                                                 \
     va_start(v, format);                                                       \
-    fprintf(stderr, PREFIX PR_RESET PR_BOLD);                                    \
+    fprintf(stderr, PREFIX PR_BOLD PR_RESET);                                    \
     vfprintf(file, format, v);                                                 \
     va_end(v);                                                                 \
   }

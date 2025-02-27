@@ -160,7 +160,7 @@ printf "${BOLD}Running $total tests with $num_groups arg groups${RESET}\n"
 aggregator() {
   echo ""
 
-  while read -r msg; do
+  while IFS= read -d '' -r msg; do
     completed=$((completed + 1))
     case "$msg" in
       pass)
@@ -198,7 +198,7 @@ aggregator() {
     echo -e "${BOLDRED}\nFailed tests:${RESET}"
     for reason in "${fails[@]}"; do
       echo -ne "${BOLDRED}- "
-      echo -n "$reason"
+      echo -ne "$reason"
       echo -e "${RESET}"
     done
 
@@ -252,28 +252,32 @@ run_tests() {
     for arg_group in "${arg_groups[@]}"; do
       read -a group_args <<< "$arg_group"
 
+      send_status() {
+        echo -ne "$@" '\0' > "$fifo"
+      }
+
       build() {
         if [ $VERBOSE_LEVEL -ge "2" ]; then
           echo -e "\n${BOLD} Running 'jcc " "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" "'${RESET}\n"
         fi
 
-        $(./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" &>/dev/null)
+        ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
         return $?
       }
 
       first_line=$(head -n 1 "$file")
       if [[ "$first_line" == "// no-compile" ]]; then
-        if build; then
-          echo "fail File '$file' compiled successfully despite // no-compile" > "$fifo"
+        if $(build &>/dev/null); then
+          send_status fail "File '$file' compiled successfully despite // no-compile"
         else
-          echo "pass" > "$fifo"
+          send_status pass
         fi
         continue
       fi
 
       target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
       if [[ -n $target_arch && $target_arch != "$arch" ]]; then
-        echo "skip File '$file' skipped due to architecture (test: $target_arch, runner: $arch)" > "$fifo"
+        send_status skip "File '$file' skipped due to architecture (test: $target_arch, runner: $arch)"
         continue
       fi
 
@@ -282,8 +286,8 @@ run_tests() {
       stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
       [ -z "$expected" ] && expected="0"
 
-      if ! build; then
-        echo "fail File '$file' failed to compile" > "$fifo"
+      if ! build_msg=$(build 2>&1); then
+        send_status fail "File '$file' failed to compile. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
         continue
       fi
 
@@ -301,9 +305,9 @@ run_tests() {
       elif [ "$output_result" != "$stdout" ]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
-        echo "fail File '$file' output mismatch. Got: '$output_result', expected: '$stdout'" > "$fifo"
+        send_status fail "File '$file' output mismatch. Got: '$output_result', expected: '$stdout'" '\0' > "$fifo"
       else
-        echo "pass" > "$fifo"
+        send_status pass
       fi
     done
   done
