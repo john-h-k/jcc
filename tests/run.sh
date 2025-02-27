@@ -9,6 +9,7 @@ RESET="\033[0m"
 VERBOSE_LEVEL="1"
 arg_groups=()
 args=()
+num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
 
 help() {
   echo "JCC test runner"
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
       help
       exit 0
       ;;
+    -j|--jobs)
+      shift
+      num_procs="$1"
+      ;;
     --quiet)
       VERBOSE_LEVEL="0"
       ;;
@@ -66,7 +71,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "${#args[@]}" -ne 0 ]; then
-  (IFS=" " printf "${BOLD}Running tests with '$args'${RESET}\n" )
+  (IFS=" " printf "${BOLD}Running tests with '${args[@]}'${RESET}\n" )
 fi
 
 if [[ ${#arg_groups[@]} -eq 0 ]]; then
@@ -248,7 +253,11 @@ run_tests() {
       read -a group_args <<< "$arg_group"
 
       build() {
-        $(./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" >/dev/null 2>&1)
+        if [ $VERBOSE_LEVEL -ge "2" ]; then
+          echo -e "\n${BOLD} Running 'jcc " "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" "'${RESET}\n"
+        fi
+
+        $(./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" &>/dev/null)
         return $?
       }
 
@@ -299,8 +308,6 @@ run_tests() {
     done
   done
 }
-
-num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || echo 4) # just assume 4 if needed
 
 printf "${BOLD}Using %d processes...${RESET}\n" $num_procs
 
