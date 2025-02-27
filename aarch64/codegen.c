@@ -278,7 +278,6 @@ struct aarch64_prologue_info {
   size_t save_start;
 };
 
-
 static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP,
                    "`get_cond_for_op` expects a binary op");
@@ -1108,29 +1107,41 @@ union b64 {
 
 static void codegen_64_bit_int(struct codegen_state *state,
                                struct aarch64_reg dest, union b64 value) {
-  struct instr *lo = alloc_instr(state->func);
-  lo->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
-  lo->aarch64->movz = (struct aarch64_mov_imm){.dest = dest, .imm = value.b[0]};
+  bool first = true;
+  if (value.b[0] || !value.ull) {
+    struct instr *lo = alloc_instr(state->func);
+    lo->aarch64->ty = AARCH64_INSTR_TY_MOVZ;
+    lo->aarch64->movz =
+        (struct aarch64_mov_imm){.dest = dest, .imm = value.b[0]};
+
+    first = false;
+  }
 
   if (value.b[1]) {
     struct instr *mid_lo = alloc_instr(state->func);
-    mid_lo->aarch64->ty = AARCH64_INSTR_TY_MOVK;
+    mid_lo->aarch64->ty = first ? AARCH64_INSTR_TY_MOVZ : AARCH64_INSTR_TY_MOVK;
     mid_lo->aarch64->movz =
         (struct aarch64_mov_imm){.dest = dest, .imm = value.b[1], .shift = 1};
+
+    first = false;
   }
 
   if (value.b[2]) {
     struct instr *mid_hi = alloc_instr(state->func);
-    mid_hi->aarch64->ty = AARCH64_INSTR_TY_MOVK;
+    mid_hi->aarch64->ty = first ? AARCH64_INSTR_TY_MOVZ : AARCH64_INSTR_TY_MOVK;
     mid_hi->aarch64->movz =
         (struct aarch64_mov_imm){.dest = dest, .imm = value.b[2], .shift = 2};
+
+    first = false;
   }
 
   if (value.b[3]) {
     struct instr *hi = alloc_instr(state->func);
-    hi->aarch64->ty = AARCH64_INSTR_TY_MOVK;
+    hi->aarch64->ty = first ? AARCH64_INSTR_TY_MOVZ : AARCH64_INSTR_TY_MOVK;
     hi->aarch64->movz =
         (struct aarch64_mov_imm){.dest = dest, .imm = value.b[3], .shift = 3};
+
+    first = false;
   }
 }
 
@@ -1827,7 +1838,8 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
 }
 
 static void codegen_epilogue(struct codegen_state *state) {
-  const struct aarch64_prologue_info *prologue_info = state->aarch64_prologue_info;
+  const struct aarch64_prologue_info *prologue_info =
+      state->aarch64_prologue_info;
 
   if (!prologue_info->prologue_generated) {
     return;
@@ -1896,7 +1908,8 @@ static void codegen_epilogue(struct codegen_state *state) {
   };
 }
 
-static void codegen_ret_op(struct codegen_state *state, UNUSED struct ir_op *op) {
+static void codegen_ret_op(struct codegen_state *state,
+                           UNUSED struct ir_op *op) {
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
@@ -2007,7 +2020,6 @@ static void codegen_stmt(struct codegen_state *state,
   }
 }
 
-
 #define LEAF_STACK_SIZE (128)
 
 static void codegen_prologue(struct codegen_state *state) {
@@ -2037,7 +2049,8 @@ static void codegen_prologue(struct codegen_state *state) {
                                        .lr_offset = LR_OFFSET,
                                        .stack_size = stack_size};
 
-  state->aarch64_prologue_info = arena_alloc(state->arena, sizeof(*state->aarch64_prologue_info));
+  state->aarch64_prologue_info =
+      arena_alloc(state->arena, sizeof(*state->aarch64_prologue_info));
 
   if (!info.prologue_generated) {
     *state->aarch64_prologue_info = info;
@@ -2125,12 +2138,12 @@ static void codegen_prologue(struct codegen_state *state) {
   *state->aarch64_prologue_info = info;
 }
 
-
 void aarch64_codegen_start(struct codegen_state *state) {
   codegen_prologue(state);
 }
 
-void aarch64_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock) {
+void aarch64_codegen_basicblock(struct codegen_state *state,
+                                struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
   while (stmt) {
@@ -2156,10 +2169,9 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   if (usage_ty == AARCH64_REG_USAGE_TY_DEREF) {
     // deref only makes sense on an X register, and is ignored for comparisons
     // to other registers so back out early
-    invariant_assert(
-        reg.ty == AARCH64_REG_TY_X,
-        "usage DEREF only makes sense with REG_TY_X in %zu",
-        instr->id);
+    invariant_assert(reg.ty == AARCH64_REG_TY_X,
+                     "usage DEREF only makes sense with REG_TY_X in %zu",
+                     instr->id);
     return;
   }
 
@@ -2173,11 +2185,11 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
     if (instr->aarch64->ty == AARCH64_INSTR_TY_FMOV) {
       size_t cur_size = aarch64_reg_size(reg.ty);
       size_t last_size = aarch64_reg_size(data->reg_ty);
-      invariant_assert(
-          cur_size == last_size || (cur_size < 4 && last_size == 4),
-          "expected `fmov` %zu to have same size registers "
-          "(expected %zu found %zu)",
-          instr->id, cur_size, last_size);
+      invariant_assert(cur_size == last_size ||
+                           (cur_size < 4 && last_size == 4),
+                       "expected `fmov` %zu to have same size registers "
+                       "(expected %zu found %zu)",
+                       instr->id, cur_size, last_size);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_FCVT) {
       invariant_assert(aarch64_reg_ty_is_fp(reg.ty) &&
                            aarch64_reg_ty_is_fp(data->reg_ty),
@@ -2186,11 +2198,11 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
                        instr->id);
     } else if (instr->aarch64->ty == AARCH64_INSTR_TY_UCVTF ||
                instr->aarch64->ty == AARCH64_INSTR_TY_SCVTF) {
-      invariant_assert(
-          aarch64_reg_ty_is_fp(reg.ty) != aarch64_reg_ty_is_fp(data->reg_ty),
-          "expected `ucvtf`/`scvtf` %zu to have one fp register "
-          "and one gp register",
-          instr->id);
+      invariant_assert(aarch64_reg_ty_is_fp(reg.ty) !=
+                           aarch64_reg_ty_is_fp(data->reg_ty),
+                       "expected `ucvtf`/`scvtf` %zu to have one fp register "
+                       "and one gp register",
+                       instr->id);
     } else {
       // invariant_assert(
       //     reg.ty == data->reg_ty,
@@ -2229,8 +2241,7 @@ void aarch64_codegen_end(struct codegen_state *state) {
   // codegen is now done
   // do some basic sanity checks
 
-  struct check_reg_type_data data = {
-      .state = state, .last = NULL, .reg_ty = 0};
+  struct check_reg_type_data data = {.state = state, .last = NULL, .reg_ty = 0};
   walk_regs(state->func, check_reg_type_callback, &data);
 }
 
