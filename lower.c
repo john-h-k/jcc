@@ -616,8 +616,10 @@ static void lower_params(struct ir_func *func) {
   struct ir_call_info call_info = func->call_info;
 
   if (call_info.num_params) {
+    DEBUG_PRINT_IR(stderr, func);
+
     struct ir_op *param_op = func->first->first->first;
-    struct ir_op *after_params = param_op->stmt->succ->first;
+    struct ir_stmt *stmt = insert_after_ir_stmt(func, param_op->stmt);
 
     for (size_t i = 0; i < call_info.num_params; i++) {
       DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
@@ -631,8 +633,8 @@ static void lower_params(struct ir_func *func) {
 
           size_t num_reg = param_info.num_regs;
 
-          struct ir_op *addr = insert_before_ir_op(
-              func, after_params, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+          struct ir_op *addr =
+              append_ir_op(func, stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
           addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL,
                                            .lcl = param_op->addr.lcl};
           // addr->flags |= IR_OP_FLAG_CONTAINED;
@@ -686,8 +688,8 @@ static void lower_params(struct ir_func *func) {
         DEBUG_ASSERT(param_info.num_regs == 1,
                      "expected 1 reg for non aggregate");
 
-        struct ir_op *param = replace_ir_op(func, param_op, IR_OP_TY_MOV,
-                                                  IR_VAR_TY_POINTER);
+        struct ir_op *param =
+            replace_ir_op(func, param_op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
         param->mov = (struct ir_op_mov){.value = NULL};
         param->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
         param->reg = param_info.regs[0].reg;
@@ -696,9 +698,10 @@ static void lower_params(struct ir_func *func) {
         struct ir_lcl *lcl = param_op->addr.lcl;
 
         // FIXME: we mark the param as being ETERNAL
-        // this is because we are using it potentially across BBs without generating phis
-        // the fix is to use phis properly
-        // (potentially changing IR build so it doesn't do the silly "struct param becomes local" thing)
+        // this is because we are using it potentially across BBs without
+        // generating phis the fix is to use phis properly (potentially changing
+        // IR build so it doesn't do the silly "struct param becomes local"
+        // thing)
 
         struct ir_op *op;
         while (ir_func_iter_next(&iter, &op)) {
@@ -742,7 +745,8 @@ static void lower_params(struct ir_func *func) {
 
       mov->reg = param_op->reg;
       mov->flags =
-          (param_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) | IR_OP_FLAG_FIXED_REG;
+          (param_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
+          IR_OP_FLAG_FIXED_REG;
 
       param_op->flags &= ~(IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM);
 
@@ -1090,7 +1094,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
   CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args,
                         op->call.args);
-  
+
   if (!func_info.call_info.ret) {
     op->var_ty = IR_VAR_TY_NONE;
     return;
@@ -1108,7 +1112,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     // HACK: should use op uses
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
-    while (prev_store->ty != IR_OP_TY_STORE) prev_store = prev_store->succ;
+    while (prev_store->ty != IR_OP_TY_STORE)
+      prev_store = prev_store->succ;
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
 
     struct ir_op *addr = build_addr(func, prev_store);

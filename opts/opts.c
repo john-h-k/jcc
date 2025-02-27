@@ -1,9 +1,10 @@
 #include "opts.h"
-#include "../log.h"
+
 #include "../ir/prettyprint.h"
+#include "../log.h"
 
-
-static void opts_run_pass_func(struct ir_func *func, const struct opts_pass *pass) {
+static void opts_run_pass_func(struct ir_func *func,
+                               const struct opts_pass *pass) {
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   struct ir_op *op;
@@ -37,6 +38,7 @@ void opts_run_pass(struct ir_unit *unit, const struct opts_pass *pass) {
       break;
     case IR_GLB_TY_FUNC:
       opts_run_pass_func(glb->func, pass);
+      eliminate_redundant_ops(glb->func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
       break;
     }
 

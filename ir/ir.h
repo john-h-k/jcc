@@ -1092,17 +1092,11 @@ void detach_ir_op(struct ir_func *irb, struct ir_op *op);
 void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id);
 
 // Helper method that ensures the essential fields in IR op are initialised
+void initialise_ir_stmt(struct ir_stmt *stmt, size_t id);
+
 void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_var_ty var_ty, struct ir_reg,
                       struct ir_lcl *lcl);
-
-void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
-                      struct ir_op *move_after);
-void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
-                       struct ir_op *move_before);
-
-void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
-                  struct ir_op *pred, struct ir_op *succ);
 
 void move_after_ir_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
@@ -1111,9 +1105,30 @@ void move_before_ir_basicblock(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                struct ir_basicblock *move_before);
 
+
+void move_after_ir_stmt(struct ir_func *irb,
+                              struct ir_stmt *stmt,
+                              struct ir_stmt *move_after);
+void move_before_ir_stmt(struct ir_func *irb,
+                               struct ir_stmt *stmt,
+                               struct ir_stmt *move_before);
+
+void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
+                      struct ir_op *move_after);
+void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
+                       struct ir_op *move_before);
+
 void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *pred,
                           struct ir_basicblock *succ);
+
+void attach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt, struct ir_basicblock *basicblock,
+                  struct ir_stmt *pred, struct ir_stmt *succ);
+
+void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
+                  struct ir_op *pred, struct ir_op *succ);
+
+
 
 // swaps ops but does NOT swap their uses - expressions pointing to `left` will
 // now point to `right`
@@ -1126,16 +1141,13 @@ void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
 struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty);
 
-struct ir_op *insert_before_ir_op(struct ir_func *irb,
-                                  struct ir_op *insert_before, enum ir_op_ty ty,
-                                  struct ir_var_ty var_ty);
+struct ir_stmt *
+insert_before_ir_stmt(struct ir_func *irb,
+                            struct ir_stmt *insert_before);
 
-struct ir_op *insert_after_ir_op(struct ir_func *irb,
-                                 struct ir_op *insert_after, enum ir_op_ty ty,
-                                 struct ir_var_ty var_ty);
-
-struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
-                         struct ir_var_ty var_ty);
+struct ir_stmt *
+insert_after_ir_stmt(struct ir_func *irb,
+                           struct ir_stmt *insert_after);
 
 struct ir_basicblock *
 insert_before_ir_basicblock(struct ir_func *irb,
@@ -1144,6 +1156,22 @@ insert_before_ir_basicblock(struct ir_func *irb,
 struct ir_basicblock *
 insert_after_ir_basicblock(struct ir_func *irb,
                            struct ir_basicblock *insert_after);
+
+struct ir_op *insert_before_ir_op(struct ir_func *irb,
+                                  struct ir_op *insert_before, enum ir_op_ty ty,
+                                  struct ir_var_ty var_ty);
+
+struct ir_op *insert_after_ir_op(struct ir_func *irb,
+                                 struct ir_op *insert_after, enum ir_op_ty ty,
+                                 struct ir_var_ty var_ty);
+
+struct ir_op *append_ir_op(struct ir_func *irb,
+                                 struct ir_stmt *stmt, enum ir_op_ty ty,
+                                 struct ir_var_ty var_ty);
+
+struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
+                         struct ir_var_ty var_ty);
+
 
 struct ir_var_ty_info {
   size_t size;
