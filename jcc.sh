@@ -47,7 +47,19 @@ debug() {
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
-    MallocNanoZone=0 lldb -o run -- "$jcc" "$@"
+
+    if command -v lldb &>/dev/null; then
+        echo -e "${BOLD}Using \`lldb\`"
+        debugger="lldb -o run --"
+    elif command -v gdb &>/dev/null; then
+        echo -e "${BOLD}Using \`gdb\`"
+        debugger="gdb -ex run --args"
+    else
+        echo "${BOLDRED}No debugger found! (tried lldb & gdb)${RESET}"
+        exit -1
+    fi
+
+    MallocNanoZone=0 $debugger "$jcc" "$@"
     cd - > /dev/null
 }
 
