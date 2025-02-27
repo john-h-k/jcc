@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+BOLD="\033[1m"
+BOLDRED="\033[1;31m"
+RESET="\033[0m"
+
 help() {
   echo "JCC script helper"
   echo "John Kelly <johnharrykelly@gmail.com>"
@@ -20,13 +24,18 @@ help() {
 
 build() {
     mode="${1:-Debug}"
+
+    echo -e "${BOLD}Building (mode='$mode')...${RESET}"
+
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .)
+    if ! (cmake -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null
     then
-        echo "Build failed"
+        echo "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
+
+    echo -e "${BOLD}Build complete${RESET}"
 
     cd - > /dev/null
 }
@@ -34,7 +43,7 @@ build() {
 # `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
 
 debug() {
-    build >/dev/null
+    build
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
@@ -43,7 +52,7 @@ debug() {
 }
 
 run() {
-    build >/dev/null
+    build
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
@@ -52,13 +61,13 @@ run() {
 }
 
 test() {
-    build >/dev/null
+    build
 
     ./tests/run.sh "$@" || exit $?
 }
 
 test-all() {
-    build >/dev/null
+    build
 
     ./tests/run.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 -- "$@" || exit $?
 }
