@@ -1042,7 +1042,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           last = load;
         }
 
-        // detach_ir_op(func, arg);
+        detach_ir_op(func, arg);
       }
       break;
     case IR_PARAM_INFO_TY_STACK: {
