@@ -5,8 +5,6 @@
 
 #include <stdio.h>
 
-// FIXME: these all leak. make them use `arena`s
-
 struct path_components path_components(struct arena_allocator *arena, const char *path) {
   const char *last_slash = strrchr(path, '/');
 
