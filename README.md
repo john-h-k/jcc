@@ -9,6 +9,8 @@ JCC is designed to be a pure C11 (no dependencies) C11/C18/C23 compiler.
 | Ubuntu | ![Ubuntu AArch64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-aarch64.yml) | ![Ubuntu x64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-x86_64.yml)      |    ![Ubuntu RISC-V](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/ubuntu-riscv.yml) |
 | macOS  | ![macOS AArch64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/macos-aarch64.yml)   | ![macOS x64](https://img.shields.io/github/actions/workflow/status/john-h-k/jcc/macos-x86_64.yml)        |                                                                                                          |
 
+<sup><sub>If tests are failing, ignore it! Development is very active (and pushes sometimes break things)</sub></sup>
+
 Aims:
 * To be a complete C11/C18/C23 compiler with full functionality (WIP)
 * To use zero third-party dependencies or helper tools (no parser generators, assemblers, lexers, etc) other than system linker
