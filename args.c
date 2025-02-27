@@ -371,7 +371,7 @@ enum parse_args_result parse_args(int argc, char **argv,
           *arg->arg_flags |= flag;
 
           value = next;
-        } while (value++);
+        } while (value ? value++ : 0);
         break;
       case ARG_TY_STRING:
         GET_ARGUMENT(value);

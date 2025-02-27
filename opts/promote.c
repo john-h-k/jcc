@@ -532,6 +532,13 @@ static void opts_promote_func(struct ir_func *func) {
           if (op->addr.ty == IR_OP_ADDR_TY_LCL) {
             struct ir_lcl *lcl = op->addr.lcl;
 
+            if (op->flags & IR_OP_FLAG_PARAM) {
+              // can't promote addr which are actually params
+              candidates[lcl->id] = false;
+              break;
+
+            }
+
             struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
 
             struct addr_uses_data data = {.func = func,

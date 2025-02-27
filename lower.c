@@ -616,10 +616,8 @@ static void lower_params(struct ir_func *func) {
   struct ir_call_info call_info = func->call_info;
 
   if (call_info.num_params) {
-    DEBUG_PRINT_IR(stderr, func);
-
     struct ir_op *param_op = func->first->first->first;
-    struct ir_stmt *stmt = insert_after_ir_stmt(func, param_op->stmt);
+    struct ir_stmt *stmt = insert_after_ir_stmt(func, func->first->first);
 
     for (size_t i = 0; i < call_info.num_params; i++) {
       DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
