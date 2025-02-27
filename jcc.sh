@@ -21,7 +21,7 @@ build() {
 }
 
 debug() {
-    build
+    build >/dev/null
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
     lldb -o run -- "$jcc" "$@"
@@ -29,7 +29,7 @@ debug() {
 }
 
 run() {
-    build
+    build >/dev/null
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
     "$jcc" "$@"
@@ -37,7 +37,7 @@ run() {
 }
 
 test() {
-    build
+    build >/dev/null
     ./tests/run.sh "$@"
     exit $?
 }

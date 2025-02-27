@@ -65,7 +65,7 @@ struct x64_raw_instr {
 #define SIB(scale, index, base)                                                \
   U8((IMM((scale), 2) << 6) | (IMM((index), 3) << 3) | IMM((base), 3))
 
-#define NEEDS_SIB(reg) ((reg).ty == X64_REG_TY_R && (reg).idx == REG_IDX_SP)
+#define NEEDS_SIB(reg) ((reg).ty == X64_REG_TY_R && ((reg).idx % 8) == REG_IDX_SP)
 
 #define NBYTE(imm, n) ((uint8_t)(((imm) >> ((n) * 8)) & 0xFF))
 
