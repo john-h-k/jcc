@@ -169,20 +169,23 @@ aggregator() {
   echo ""
 
   while IFS= read -d '' -r msg; do
-    completed=$((completed + 1))
-    case "$msg" in
+    status=${msg%% *}
+
+    case "$status" in
       pass)
         passed=$((passed + 1))
         ;;
-      fail\ *)
+      fail)
         failed=$((failed + 1))
         fails+=("${msg#fail }")
         ;;
-      skip\ *)
+      skip)
         skipped=$((skipped + 1))
         skips+=("${msg#skip }")
         ;;
     esac
+
+    completed=$((completed + 1))
 
     if [ $VERBOSE_LEVEL -ge "1" ]; then
       printf "${BOLD}\rCompleted %${pad}d/%d ($tests tests, $num_groups arg groups)    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
@@ -261,7 +264,9 @@ run_tests() {
       read -a group_args <<< "$arg_group"
 
       send_status() {
-        echo -ne "$@" '\0' > "$fifo"
+        status="$1"
+        shift
+        echo -ne "$status" "$@" '\0' > "$fifo"
       }
 
       build() {
