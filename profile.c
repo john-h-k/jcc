@@ -120,6 +120,7 @@ static void profiler_print_subregions(FILE *file,
   double sub_region_sum = 0;
   double sub_region_gap_sum = 0;
 
+  unsigned long long parent_len = parent->end - parent->start;
   unsigned long long last_end = parent->start;
 
   bool subregion = false;
@@ -138,7 +139,8 @@ static void profiler_print_subregions(FILE *file,
     unsigned long long gap = region->start - last_end;
 
     // only show gaps <10us
-    if (gap > 10000) {
+    double gap_proportion = (double)gap / parent_len;
+    if (gap_proportion > 0.15) {
       fprintf(file, "%*s", (int)((depth + 2) * 4), "");
       fprintf(file, "(profiling gap ");
       print_time(file, gap);
@@ -157,17 +159,15 @@ static void profiler_print_subregions(FILE *file,
   if (subregion) {
     unsigned long long gap = parent->end - last_end;
     sub_region_gap_sum += gap;
-    if (gap > 10000) {
+
+    double gap_proportion = (double)gap / parent_len;
+    if (gap_proportion > 0.15) {
+      // only mention gaps if they are more than 15%
+
       fprintf(file, "%*s", (int)((depth + 2) * 4), "");
       fprintf(file, "(profiling gap ");
       print_time(file, gap);
       fprintf(file, ")\n");
-    }
-
-    double gap_proportion = sub_region_gap_sum / (parent->end - parent->start);
-
-    if (gap_proportion > 0.15) {
-      // only mention gaps if they are more than 15%
 
       fprintf(file, "%*s", (int)((depth + 1) * 4), "");
       fprintf(file, "(subregions of %s took ", parent->name);
