@@ -2,9 +2,9 @@
 
 #include "../alloc.h"
 #include "../hashtbl.h"
+#include "../ir/prettyprint.h"
 #include "../log.h"
 #include "../vector.h"
-#include "../ir/prettyprint.h"
 
 struct addr_uses_data {
   struct ir_func *func;
@@ -294,45 +294,114 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   struct hashtbl *any_stores =
       hashtbl_create(sizeof(size_t), sizeof(struct ir_op *), NULL, NULL);
   // holds the latest `mov` for each (field, basicblock) pair
-  struct hashtbl *stores = hashtbl_create(sizeof(struct lcl_store),
-                                          sizeof(struct ir_op *), NULL, NULL);
+  struct hashtbl *last_bb_store = hashtbl_create(
+      sizeof(struct lcl_store), sizeof(struct ir_op *), NULL, NULL);
+  struct hashtbl *cur_bb_store = hashtbl_create(
+      sizeof(struct lcl_store), sizeof(struct ir_op *), NULL, NULL);
 
   // TODO: use this here (and in build) to pick better phi locations
   // struct ir_dominance_frontier domf = ir_compute_dominance_frontier(func);
 
+  struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
+
+  if (lcl->flags & IR_LCL_FLAG_PARAM) {
+    printf("lcl is param\n");
+    for (size_t i = 0; i < info.num_fields; i++) {
+      struct ir_op **any = hashtbl_lookup(any_stores, &i);
+
+      if (any) {
+        continue;
+      }
+
+      // hasn't been used at all, and is a param, so insert a dummy load to
+      // first bb so phi gen works
+
+      // sort of hacky, but so lower doesn't need to determine the field, turn
+      // this load into load.addr [addr.off LCL, # field_offset]
+
+      // we need to insert a read into the _first_ bb
+      // because the values may move around and stuff after
+
+      struct ir_basicblock *first = func->first;
+      struct ir_stmt *stmt =
+          first->first ? first->first : alloc_ir_stmt(func, first);
+
+      struct ir_op *addr =
+          append_ir_op(func, stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+      addr->flags |= IR_OP_FLAG_PROMOTED;
+
+      struct ir_op *addr_offset =
+          append_ir_op(func, stmt, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = addr, .offset = info.offsets[i]};
+
+      addr_offset->flags |= IR_OP_FLAG_PROMOTED;
+
+      struct ir_op *load = append_ir_op(func, stmt, IR_OP_TY_LOAD,
+                                        lcl->var_ty.aggregate.fields[i]);
+      load->load =
+          (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr_offset};
+
+      lcl->flags |= IR_LCL_FLAG_PROMOTED;
+
+      struct lcl_store field_read_key = {.bb_id = first->id, .field_idx = i};
+
+      printf("adding dummy bb %zu field %zu\n", first->id, i);
+      hashtbl_insert(cur_bb_store, &field_read_key, &load);
+      hashtbl_insert(last_bb_store, &field_read_key, &load);
+      hashtbl_insert(any_stores, &i, &load);
+    }
+  }
+
+  rebuild_ids(func);
+
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);
 
     struct ir_op *op = use->op;
+
     if (op->ty != IR_OP_TY_STORE) {
       continue;
     }
 
-    struct ir_op *value = op->store.value;
-
     struct lcl_store key = {.bb_id = op->stmt->basicblock->id,
                             .field_idx = use->field_idx};
 
+    struct ir_op *value = op->store.value;
     op = replace_ir_op(func, op, IR_OP_TY_MOV, value->var_ty);
     op->mov = (struct ir_op_mov){.value = value};
+    op->flags |= IR_OP_FLAG_PROMOTED;
 
-    struct ir_op **prev = hashtbl_lookup(stores, &key);
+    struct ir_op **prev = hashtbl_lookup(last_bb_store, &key);
 
     // relies on sequential ids
     if (!prev || (*prev)->id < op->id) {
-      hashtbl_insert(stores, &key, &op);
+      hashtbl_insert(last_bb_store, &key, &op);
       hashtbl_insert(any_stores, &use->field_idx, &op);
     }
   }
 
-  struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
+  // FIXME: when generating phis, we want last store, but when generating movs,
+  // we want last store _before_ that in bb
 
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);
 
     struct ir_op *op = use->op;
-    struct ir_gather_value *gather_values;
-    if (op->ty == IR_OP_TY_LOAD) {
+    struct lcl_store key = {.bb_id = op->stmt->basicblock->id,
+                            .field_idx = use->field_idx};
+
+    if (op->ty == IR_OP_TY_MOV && (op->flags & IR_OP_FLAG_PROMOTED)) {
+      struct ir_op **prev = hashtbl_lookup(cur_bb_store, &key);
+      // relies on sequential ids
+      if (!prev || (*prev)->id < op->id) {
+        printf("last store in bb %zu is oop %zu\n", key.bb_id, op->id);
+        hashtbl_insert(cur_bb_store, &key, &op);
+      }
+    } else if (op->ty == IR_OP_TY_LOAD) {
+      struct ir_gather_value *gather_values;
+
       size_t first_field, num_fields;
       struct ir_var_ty *fields;
       if (var_ty_is_aggregate(&op->var_ty)) {
@@ -352,12 +421,20 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       for (size_t j = first_field; j < first_field + num_fields; j++) {
         struct ir_basicblock *basicblock = op->stmt->basicblock;
 
-        struct lcl_store key = {.bb_id = basicblock->id, .field_idx = j};
+        key = (struct lcl_store){.bb_id = basicblock->id, .field_idx = j};
 
         struct ir_var_ty field_ty = fields[head];
 
-        struct ir_op **store = hashtbl_lookup(stores, &key);
+        printf("looking for store bb %zu, field %zu, us=%zu\n", basicblock->id,
+               j, op->id);
+        struct ir_op **store = hashtbl_lookup(cur_bb_store, &key);
+
         if (store) {
+          printf("found store bb %zu, field %zu op=%zu, us=%zu\n",
+                 basicblock->id, j, (*store)->id, op->id);
+        }
+
+        if (store && (*store)->id < op->id) {
           // same bb, no phi needed
           struct ir_op *mov;
           if (gather_values) {
@@ -374,52 +451,27 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
           continue;
         }
 
+        printf("FAILED could not find bb %zu, field %zu us=%zu\n",
+               basicblock->id, j, op->id);
         struct ir_op **any_store = hashtbl_lookup(any_stores, &key.field_idx);
         if (!any_store) {
-          DEBUG_ASSERT(lcl->flags & (IR_LCL_FLAG_ZEROED | IR_LCL_FLAG_PARAM),
-                       "expected zeroed/param because no stores");
+          DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED,
+                       "expected zeroed/param because no stores (lcl=%zu, "
+                       "field_idx=%zu)",
+                       lcl->id, key.field_idx);
 
-          if (lcl->flags & IR_LCL_FLAG_PARAM) {
-            // sort of hacky, but so lower doesn't need to determine the field, turn this load into
-            // load.addr [addr.off LCL, # field_offset]
+          struct ir_op *zero;
+          if (gather_values) {
+            zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
 
-            struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-            addr->addr = (struct ir_op_addr){
-              .ty = IR_OP_ADDR_TY_LCL,
-              .lcl = lcl
-            };
-
-            addr->flags |= IR_OP_FLAG_PROMOTED;
-
-            struct ir_op *addr_offset = insert_before_ir_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-            addr_offset ->addr_offset = (struct ir_op_addr_offset){
-              .base = addr,
-              .offset = info.offsets[use->field_idx]
-            };
-
-            addr_offset->flags |= IR_OP_FLAG_PROMOTED;
-
-            op->load = (struct ir_op_load){
-              .ty = IR_OP_LOAD_TY_ADDR,
-              .addr = addr_offset
-            };
-
-            lcl->flags |= IR_LCL_FLAG_PROMOTED;
-            op->flags |= IR_OP_FLAG_PROMOTED;
+            gather_values[head++] =
+                (struct ir_gather_value){.value = zero, .field_idx = j};
           } else {
-            struct ir_op *zero;
-            if (gather_values) {
-              zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
-
-              gather_values[head++] =
-                  (struct ir_gather_value){.value = zero, .field_idx = j};
-            } else {
-              zero = op;
-            }
-
-            mk_zero_constant(func->unit, zero, &field_ty);
-            zero->flags |= IR_OP_FLAG_PROMOTED;
+            zero = op;
           }
+
+          mk_zero_constant(func->unit, zero, &field_ty);
+          zero->flags |= IR_OP_FLAG_PROMOTED;
 
           continue;
         }
@@ -439,7 +491,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         mov->mov = (struct ir_op_mov){.value = phi};
         mov->flags |= IR_OP_FLAG_PROMOTED;
 
-        find_phi_exprs(func, stores, phi, j);
+        find_phi_exprs(func, last_bb_store, phi, j);
       }
 
       if (gather_values) {
@@ -472,13 +524,14 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       if (detach->flags & (IR_OP_FLAG_PROMOTED | IR_OP_FLAG_PARAM)) {
         continue;
       }
-      
+
       struct ir_op_usage *dep_usage = &use_map.op_use_datas[detach->id];
 
       for (size_t k = 0; k < dep_usage->num_uses; k++) {
         struct ir_op_use *dep_use = &dep_usage->uses[k];
 
-        if (dep_use->consumer->ty == IR_OP_TY_STORE && dep_use->ty == IR_OP_USE_TY_DEREF) {
+        if (dep_use->consumer->ty == IR_OP_TY_STORE &&
+            dep_use->ty == IR_OP_USE_TY_DEREF) {
           continue;
         }
 
@@ -492,7 +545,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
   vector_free(&depends);
   hashtbl_free(&any_stores);
-  hashtbl_free(&stores);
+  hashtbl_free(&last_bb_store);
 }
 
 static void opts_promote_func(struct ir_func *func) {
@@ -610,8 +663,8 @@ static void opts_promote_func(struct ir_func *func) {
     DEBUG_ASSERT(!lcl->succ || lcl->succ->id == lcl->id + 1,
                  "non sequential locals");
 
-    // don't promote params because they don't have moves (they are in a "magic
-    // local") and so promoting will fail
+    // don't promote params because they don't have moves (they are in a
+    // "magic local") and so promoting will fail
     if (candidates[lcl->id]) {
       debug("func %s: lcl %zu promotion candidate", func->name, lcl->id);
 
