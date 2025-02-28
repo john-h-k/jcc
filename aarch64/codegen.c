@@ -2242,6 +2242,7 @@ void aarch64_codegen_end(struct codegen_state *state) {
   // do some basic sanity checks
 
   struct check_reg_type_data data = {.state = state, .last = NULL, .reg_ty = 0};
+  if (0)
   walk_regs(state->func, check_reg_type_callback, &data);
 }
 

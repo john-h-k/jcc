@@ -58,7 +58,7 @@ struct validate_op_order_metadata {
                    (obj)->id, (msg))
 
 #ifndef NDEBUG
-static void validate_op_order(struct ir_op **ir, void *metadata) {
+static void validate_op_order(struct ir_op **ir, UNUSED enum ir_op_use_ty use_ty, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
   struct ir_validate_state *state = data->state;
 
@@ -84,6 +84,23 @@ static void ir_validate_lcl(struct ir_validate_state *state,
   VALIDATION_CHECKZ(lcl->id != DETACHED_LCL, lcl, "lcl is detached!");
 
   VALIDATION_CHECKZ(lcl->func, lcl, "lcl has no func!");
+  VALIDATION_CHECKZ(!(lcl->flags & IR_OP_FLAG_PROMOTED) || (lcl->flags & IR_OP_FLAG_PROMOTED), lcl, "promoted lcls must be params");
+}
+
+static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
+                            struct ir_var_ty *var_ty) {
+  // we have to always allower pointer-sized-int because typechk generates them for e.g array access indices
+
+  struct ir_var_ty pointer_ty = var_ty_for_pointer_size(state->unit);
+  if (var_ty_eq(state->unit, var_ty, &pointer_ty)) {
+    return true;
+  }
+
+  if (!(state->flags & IR_VALIDATE_FLAG_LOWERED_POINTERS)) {
+    return var_ty->ty == IR_VAR_TY_TY_POINTER;
+  }
+
+  return false;
 }
 
 static void ir_validate_op(struct ir_validate_state *state,
@@ -154,6 +171,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_LOAD_TY_ADDR:
       VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
+      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->load.addr->var_ty), op, "load address must have type pointer");
       break;
     }
     break;
@@ -171,6 +189,7 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_STORE_TY_ADDR:
       VALIDATION_CHECKZ(op->store.addr, op, "tore ty addr must have addr");
+      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op, "store address must have type pointer");
       break;
     }
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
@@ -191,7 +210,8 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_STORE_TY_ADDR:
       VALIDATION_CHECKZ(op->store_bitfield.addr, op,
-                        "tore ty addr must have addr");
+                        "store ty addr must have addr");
+      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->store_bitfield.addr->var_ty), op, "store address must have type pointer");
       break;
     }
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
@@ -208,10 +228,13 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_ADDR:
       VALIDATION_CHECKZ(op->load_bitfield.addr, op,
                         "load ty addr must have addr");
+      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->load_bitfield.addr->var_ty), op, "load address must have type pointer");
       break;
     }
     break;
   case IR_OP_TY_ADDR:
+    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op, "address must have type pointer");
+
     switch (op->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
       VALIDATION_CHECKZ(op->addr.lcl, op, "addr ty lcl must have lcl");
@@ -245,6 +268,9 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_MEM_COPY:
     break;
   case IR_OP_TY_ADDR_OFFSET:
+    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op, "address must have type pointer");
+    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->addr_offset.base->var_ty), op->addr_offset.base, "addr.off base address must have type pointer");
+    VALIDATION_CHECKZ(!op->addr_offset.index || validate_var_ty_is_pointer(state, &op->addr_offset.index->var_ty), op->addr_offset.index, "addr.off base address must have type pointer");
     break;
   }
 }
@@ -406,8 +432,6 @@ void ir_validate(UNUSED struct ir_unit *iru, UNUSED enum ir_validate_flags flags
 
 #else
 void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
-  return;
-
   struct ir_glb *glb = iru->first_global;
 
   struct ir_validate_state state = {

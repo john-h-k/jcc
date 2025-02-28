@@ -329,10 +329,13 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
 
 static void debug_print_op_use(FILE *file, struct ir_func *irb,
                                struct ir_op *ir) {
-  DEBUG_ASSERT(ir->stmt,
-               "op used by other op but had no stmt (likely detached)");
+  // DEBUG_ASSERT(ir->stmt,
+  //              "op used by other op but had no stmt (likely detached)");
 
-  if (ir->flags & IR_OP_FLAG_CONTAINED) {
+  if (ir->id == DETACHED_OP) {
+    fprintf(file, "DETACHED ");
+    debug_print_op_with_ctx(file, irb, ir, PRINT_OP_CTX_USE);
+  } else if (ir->flags & IR_OP_FLAG_CONTAINED) {
     debug_print_op_with_ctx(file, irb, ir, PRINT_OP_CTX_USE);
   } else {
     fprintf(file, "%%%zu", ir->id);
@@ -341,8 +344,6 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
 
 static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
                                     struct ir_op *op, enum print_op_ctx ctx) {
-  DEBUG_ASSERT(op->stmt, "op had no stmt");
-
   if (ctx != PRINT_OP_CTX_USE && op->comment) {
     fprintf(file, "// %s\n", op->comment);
   }

@@ -138,7 +138,7 @@ static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  if (var_ty_eq(irb->func, l, r)) {
+  if (var_ty_eq(irb->unit, l, r)) {
     return false;
   }
 
@@ -1415,6 +1415,10 @@ build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
       get_member_address_offset(irb, &lhs_expr->var_ty, member_name, &member_ty,
                                 member_is_bitfield, member_bitfield, NULL);
 
+  if (!offset) {
+    return lhs;
+  }
+
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_ADDR_OFFSET;
   op->var_ty = IR_VAR_TY_POINTER;
@@ -1438,6 +1442,10 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
   size_t offset = get_member_address_offset(
       irb, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
       member_is_bitfield, member_bitfield, NULL);
+
+  if (!offset) {
+    return lhs;
+  }
 
   struct ir_op *op = alloc_ir_op(irb->func, *stmt);
   op->ty = IR_OP_TY_ADDR_OFFSET;
@@ -2912,7 +2920,7 @@ struct validate_metadata {
   struct ir_op *consumer;
 };
 
-static void validate_op_tys_callback(struct ir_op **op, void *cb_metadata) {
+static void validate_op_tys_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty, void *cb_metadata) {
   struct validate_metadata *metadata = cb_metadata;
   struct ir_op *consumer = metadata->consumer;
 

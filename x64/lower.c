@@ -31,7 +31,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_eq(func, member_ty, &var_ty->aggregate.fields[i])) {
+    if (!var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
