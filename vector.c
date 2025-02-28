@@ -36,12 +36,14 @@ struct vector *vector_create_in_arena(size_t element_size,
   return v;
 }
 
+#define VEC_DEFAULT_SIZE 16
+
 void vector_ensure_capacity(struct vector *v, size_t capacity) {
   if (capacity <= v->capacity) {
     return;
   }
 
-  size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : 1);
+  size_t new_capacity = MAX(capacity, v->capacity ? v->capacity * 2 : VEC_DEFAULT_SIZE);
 
   char *new_data;
   if (v->arena) {
