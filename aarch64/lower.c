@@ -365,7 +365,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     struct ir_op *base = addr->addr_offset.base;
     bool lcl_has_offset = base->ty == IR_OP_TY_ADDR &&
                           base->addr.ty == IR_OP_ADDR_TY_LCL &&
-                          (base->addr.lcl->offset ||
+                          (base->addr.lcl->alloc.offset ||
                            (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
                             func->caller_stack_needed));
 
@@ -398,7 +398,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
     struct ir_op *base = addr->addr_offset.base;
     bool lcl_has_offset = base->ty == IR_OP_TY_ADDR &&
                           base->addr.ty == IR_OP_ADDR_TY_LCL &&
-                          (base->addr.lcl->offset ||
+                          (base->addr.lcl->alloc.offset ||
                            (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
                             func->caller_stack_needed));
 

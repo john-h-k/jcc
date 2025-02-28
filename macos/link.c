@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum link_result macos_link_objects(const struct link_args *args) {
+static enum link_result macos_link_objects_with_ld(const struct link_args *args) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
@@ -68,4 +68,9 @@ enum link_result macos_link_objects(const struct link_args *args) {
   } else {
     return LINK_RESULT_FAILURE;
   }
+}
+
+
+enum link_result macos_link_objects(const struct link_args *args) {
+  return macos_link_objects_with_ld(args);
 }

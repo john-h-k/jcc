@@ -59,7 +59,7 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
                                     const struct ir_lcl *lcl) {
   DEBUG_ASSERT(lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE, "unallocated lcl");
 
-  ssize_t offset = lcl->offset;
+  ssize_t offset = lcl->alloc.offset;
   if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
     offset += state->ir->caller_stack_needed;
   }
