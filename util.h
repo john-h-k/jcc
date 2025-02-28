@@ -183,7 +183,9 @@ typedef unsigned _BitInt(128) uint128_t;
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-#define ARR_LENGTH(a) (sizeof((a)) / sizeof((a)[0]))
+// fails on one-length arrays, but that is okay because who uses one-length arrays
+// ensures it is not a pointer type
+#define ARR_LENGTH(a) ((void)sizeof(struct { int _your_array_is_a_pointer_or_one_length[(sizeof((a)) / sizeof((a)[0])) > 1 ? 1 : -1]; }), sizeof((a)) / sizeof((a)[0]))
 
 static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
