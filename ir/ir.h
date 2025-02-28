@@ -763,6 +763,12 @@ enum ir_lcl_alloc_ty {
   IR_LCL_ALLOC_TY_FIXED,
 };
 
+struct ir_lcl_alloc {
+  size_t offset;
+  size_t size;
+  size_t padding; // padding used before `offset`. this means removing the alloc is removing `size` and `padding`
+};
+
 struct ir_lcl {
   size_t id;
 
@@ -784,7 +790,7 @@ struct ir_lcl {
   // cannot be compacted
   enum ir_lcl_alloc_ty alloc_ty;
   union {
-    size_t offset;
+    struct ir_lcl_alloc alloc;
   };
 };
 

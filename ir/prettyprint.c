@@ -315,6 +315,10 @@ static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   fprintf(file, ") = ");
 }
 
+static void debug_print_lcl_alloc(FILE *file, struct ir_lcl_alloc *lcl_alloc) {
+   fprintf(file, "#%zu (size=%zu, padding=%zu)", lcl_alloc->offset, lcl_alloc->size, lcl_alloc->padding);
+}
+
 enum print_op_ctx {
   PRINT_OP_CTX_TOP_LEVEL,
   PRINT_OP_CTX_USE,
@@ -336,18 +340,18 @@ static void debug_print_op_use(FILE *file, struct ir_func *irb,
 }
 
 static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
-                                    struct ir_op *ir, enum print_op_ctx ctx) {
-  DEBUG_ASSERT(ir->stmt, "op had no stmt");
+                                    struct ir_op *op, enum print_op_ctx ctx) {
+  DEBUG_ASSERT(op->stmt, "op had no stmt");
 
-  if (ctx != PRINT_OP_CTX_USE && ir->comment) {
-    fprintf(file, "// %s\n", ir->comment);
+  if (ctx != PRINT_OP_CTX_USE && op->comment) {
+    fprintf(file, "// %s\n", op->comment);
   }
 
   if (ctx != PRINT_OP_CTX_USE) {
-    debug_lhs(file, irb, ir);
+    debug_lhs(file, irb, op);
   }
 
-  switch (ir->ty) {
+  switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
@@ -357,12 +361,12 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     BUG("custom ops no longer supported");
   case IR_OP_TY_GATHER:
     fprintf(file, "gather { ");
-    for (size_t i = 0; i < ir->gather.num_values; i++) {
-      struct ir_gather_value value = ir->gather.values[i];
+    for (size_t i = 0; i < op->gather.num_values; i++) {
+      struct ir_gather_value value = op->gather.values[i];
 
       fprintf(file, ".%zu = %%%zu", value.field_idx, value.value->id);
 
-      if (i + 1 != ir->gather.num_values) {
+      if (i + 1 != op->gather.num_values) {
         fprintf(file, ", ");
       }
     }
@@ -372,98 +376,98 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   case IR_OP_TY_CALL: {
     fprintf(file, "call ");
 
-    debug_print_op_use(file, irb, ir->call.target);
+    debug_print_op_use(file, irb, op->call.target);
     fprintf(file, " ( ");
-    debug_call_arg_string(file, &ir->call);
+    debug_call_arg_string(file, &op->call);
     fprintf(file, " )");
     break;
   }
   case IR_OP_TY_PHI:
     fprintf(file, "phi [ ");
-    debug_phi_string(file, &ir->phi);
+    debug_phi_string(file, &op->phi);
     fprintf(file, " ]");
     break;
   case IR_OP_TY_MOV:
-    if (ir->mov.value) {
-      fprintf(file, "%%%zu", ir->mov.value->id);
+    if (op->mov.value) {
+      fprintf(file, "%%%zu", op->mov.value->id);
       fprintf(file, " : (");
-      debug_print_ir_reg(file, ir->mov.value->reg);
+      debug_print_ir_reg(file, op->mov.value->reg);
       fprintf(file, " -> ");
-      debug_print_ir_reg(file, ir->reg);
+      debug_print_ir_reg(file, op->reg);
       fprintf(file, ")");
     } else {
       fprintf(file, "<PARAM>");
     }
     break;
   case IR_OP_TY_CNST:
-    switch (ir->cnst.ty) {
+    switch (op->cnst.ty) {
     case IR_OP_CNST_TY_FLT:
-      fprintf(file, "%Lf", ir->cnst.flt_value);
+      fprintf(file, "%Lf", op->cnst.flt_value);
       break;
     case IR_OP_CNST_TY_INT:
-      fprintf(file, "%llu", ir->cnst.int_value);
+      fprintf(file, "%llu", op->cnst.int_value);
       break;
     }
     break;
   case IR_OP_TY_BINARY_OP:
-    debug_print_op_use(file, irb, ir->binary_op.lhs);
-    fprintf(file, " %s ", binary_op_string(ir->binary_op.ty));
-    debug_print_op_use(file, irb, ir->binary_op.rhs);
+    debug_print_op_use(file, irb, op->binary_op.lhs);
+    fprintf(file, " %s ", binary_op_string(op->binary_op.ty));
+    debug_print_op_use(file, irb, op->binary_op.rhs);
     break;
   case IR_OP_TY_UNARY_OP:
-    fprintf(file, "%s ", unary_op_string(ir->unary_op.ty));
-    debug_print_op_use(file, irb, ir->unary_op.value);
+    fprintf(file, "%s ", unary_op_string(op->unary_op.ty));
+    debug_print_op_use(file, irb, op->unary_op.value);
     break;
   case IR_OP_TY_CAST_OP:
-    fprintf(file, "%s ", cast_op_string(ir->cast_op.ty));
-    debug_print_op_use(file, irb, ir->cast_op.value);
+    fprintf(file, "%s ", cast_op_string(op->cast_op.ty));
+    debug_print_op_use(file, irb, op->cast_op.value);
     break;
   case IR_OP_TY_STORE:
-    switch (ir->store.ty) {
+    switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
-      if (ir->store.lcl) {
-        fprintf(file, "store.lcl LCL(%zu), %%%zu", ir->store.lcl->id,
-                ir->store.value->id);
+      if (op->store.lcl) {
+        fprintf(file, "store.lcl LCL(%zu), %%%zu", op->store.lcl->id,
+                op->store.value->id);
       } else {
-        fprintf(file, "store.lcl LCL(UNASSIGNED), %%%zu", ir->store.value->id);
+        fprintf(file, "store.lcl LCL(UNASSIGNED), %%%zu", op->store.value->id);
       }
       break;
     case IR_OP_STORE_TY_GLB:
-      if (ir->load.glb) {
-        fprintf(file, "store.glb GLB(%zu), %%%zu", ir->store.glb->id,
-                ir->store.value->id);
+      if (op->load.glb) {
+        fprintf(file, "store.glb GLB(%zu), %%%zu", op->store.glb->id,
+                op->store.value->id);
       } else {
-        fprintf(file, "store.glb GLB(UNASSIGNED), %%%zu", ir->store.value->id);
+        fprintf(file, "store.glb GLB(UNASSIGNED), %%%zu", op->store.value->id);
       }
       break;
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.addr [");
-      debug_print_op_use(file, irb, ir->store.addr);
+      debug_print_op_use(file, irb, op->store.addr);
       fprintf(file, "], ");
-      debug_print_op_use(file, irb, ir->store.value);
+      debug_print_op_use(file, irb, op->store.value);
       break;
     }
 
     break;
   case IR_OP_TY_LOAD:
-    switch (ir->load.ty) {
+    switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
-      if (ir->load.lcl) {
-        fprintf(file, "load.lcl LCL(%zu)", ir->load.lcl->id);
+      if (op->load.lcl) {
+        fprintf(file, "load.lcl LCL(%zu)", op->load.lcl->id);
       } else {
         fprintf(file, "load.lcl LCL(UNASSIGNED)");
       }
       break;
     case IR_OP_LOAD_TY_GLB:
-      if (ir->load.glb) {
-        fprintf(file, "load.glb GLB(%zu)", ir->load.glb->id);
+      if (op->load.glb) {
+        fprintf(file, "load.glb GLB(%zu)", op->load.glb->id);
       } else {
         fprintf(file, "load.glb GLB(UNASSIGNED)");
       }
       break;
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.addr [");
-      debug_print_op_use(file, irb, ir->load.addr);
+      debug_print_op_use(file, irb, op->load.addr);
       fprintf(file, "]");
       break;
     }
@@ -471,57 +475,57 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
 
   case IR_OP_TY_STORE_BITFIELD: {
-    struct ir_bitfield bitfield = ir->store_bitfield.bitfield;
+    struct ir_bitfield bitfield = op->store_bitfield.bitfield;
 
-    switch (ir->store_bitfield.ty) {
+    switch (op->store_bitfield.ty) {
     case IR_OP_STORE_TY_LCL:
-      if (ir->store_bitfield.lcl) {
+      if (op->store_bitfield.lcl) {
         fprintf(file, "store.bitfield.lcl (#%zu, #%zu) LCL(%zu), %%%zu",
-                bitfield.offset, bitfield.width, ir->store_bitfield.lcl->id,
-                ir->store_bitfield.value->id);
+                bitfield.offset, bitfield.width, op->store_bitfield.lcl->id,
+                op->store_bitfield.value->id);
       } else {
         fprintf(file, "store.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED), %%%zu",
-                bitfield.offset, bitfield.width, ir->store_bitfield.value->id);
+                bitfield.offset, bitfield.width, op->store_bitfield.value->id);
       }
       break;
     case IR_OP_STORE_TY_GLB:
-      if (ir->store_bitfield.glb) {
+      if (op->store_bitfield.glb) {
         fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(%zu), %%%zu",
-                bitfield.offset, bitfield.width, ir->store_bitfield.glb->id,
-                ir->store_bitfield.value->id);
+                bitfield.offset, bitfield.width, op->store_bitfield.glb->id,
+                op->store_bitfield.value->id);
       } else {
         fprintf(file, "store.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED), %%%zu",
-                bitfield.offset, bitfield.width, ir->store_bitfield.value->id);
+                bitfield.offset, bitfield.width, op->store_bitfield.value->id);
       }
       break;
     case IR_OP_STORE_TY_ADDR:
       fprintf(file, "store.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, irb, ir->store_bitfield.addr);
+      debug_print_op_use(file, irb, op->store_bitfield.addr);
       fprintf(file, "], ");
-      debug_print_op_use(file, irb, ir->store_bitfield.value);
+      debug_print_op_use(file, irb, op->store_bitfield.value);
       break;
     }
 
     break;
   }
   case IR_OP_TY_LOAD_BITFIELD: {
-    struct ir_bitfield bitfield = ir->load_bitfield.bitfield;
+    struct ir_bitfield bitfield = op->load_bitfield.bitfield;
 
-    switch (ir->load_bitfield.ty) {
+    switch (op->load_bitfield.ty) {
     case IR_OP_LOAD_TY_LCL:
-      if (ir->load_bitfield.glb) {
+      if (op->load_bitfield.glb) {
         fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(%zu)",
-                bitfield.offset, bitfield.width, ir->load_bitfield.lcl->id);
+                bitfield.offset, bitfield.width, op->load_bitfield.lcl->id);
       } else {
         fprintf(file, "load.bitfield.lcl (#%zu, #%zu) LCL(UNASSIGNED)",
                 bitfield.offset, bitfield.width);
       }
       break;
     case IR_OP_LOAD_TY_GLB:
-      if (ir->load_bitfield.glb) {
+      if (op->load_bitfield.glb) {
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(%zu)",
-                bitfield.offset, bitfield.width, ir->load_bitfield.glb->id);
+                bitfield.offset, bitfield.width, op->load_bitfield.glb->id);
       } else {
         fprintf(file, "load.bitfield.glb (#%zu, #%zu) GLB(UNASSIGNED)",
                 bitfield.offset, bitfield.width);
@@ -530,7 +534,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     case IR_OP_LOAD_TY_ADDR:
       fprintf(file, "load.bitfield.addr (#%zu, #%zu) [", bitfield.offset,
               bitfield.width);
-      debug_print_op_use(file, irb, ir->load_bitfield.addr);
+      debug_print_op_use(file, irb, op->load_bitfield.addr);
       fprintf(file, "]");
       break;
     }
@@ -539,58 +543,60 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   }
   case IR_OP_TY_ADDR_OFFSET:
     fprintf(file, "addr.off ");
-    debug_print_op_use(file, irb, ir->addr_offset.base);
-    if (ir->addr_offset.index) {
+    debug_print_op_use(file, irb, op->addr_offset.base);
+    if (op->addr_offset.index) {
       fprintf(file, " + ");
-      debug_print_op_use(file, irb, ir->addr_offset.index);
+      debug_print_op_use(file, irb, op->addr_offset.index);
 
-      if (ir->addr_offset.scale != 1) {
-        fprintf(file, " * #%zu", ir->addr_offset.scale);
+      if (op->addr_offset.scale != 1) {
+        fprintf(file, " * #%zu", op->addr_offset.scale);
       }
     }
 
-    if (ir->addr_offset.offset) {
-      fprintf(file, " + #%zu", ir->addr_offset.offset);
+    if (op->addr_offset.offset) {
+      fprintf(file, " + #%zu", op->addr_offset.offset);
     }
     break;
   case IR_OP_TY_ADDR:
-    switch (ir->addr.ty) {
+    switch (op->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
       if (ctx == PRINT_OP_CTX_USE) {
-        fprintf(file, "LCL(%zu)", ir->addr.lcl->id);
+        fprintf(file, "LCL(%zu)", op->addr.lcl->id);
       } else {
-        switch (ir->addr.lcl->alloc_ty) {
+        switch (op->addr.lcl->alloc_ty) {
         case IR_LCL_ALLOC_TY_NONE:
-          fprintf(file, "addr LCL(%zu)", ir->addr.lcl->id);
+          fprintf(file, "addr LCL(%zu)", op->addr.lcl->id);
           break;
         case IR_LCL_ALLOC_TY_NORMAL:
-          fprintf(file, "addr LCL(%zu) { #%zu }", ir->addr.lcl->id,
-                  ir->addr.lcl->offset);
+          fprintf(file, "addr LCL(%zu) { ", op->addr.lcl->id);
+          debug_print_lcl_alloc(file, &op->addr.lcl->alloc);
+          fprintf(file, " }");
           break;
         case IR_LCL_ALLOC_TY_FIXED:
-          fprintf(file, "addr LCL(%zu) { FIXED #%zu }", ir->addr.lcl->id,
-                  ir->addr.lcl->offset);
+          fprintf(file, "addr LCL(%zu) { FIXED ", op->addr.lcl->id);
+          debug_print_lcl_alloc(file, &op->addr.lcl->alloc);
+          fprintf(file, " }");
           break;
         }
       }
       break;
     case IR_OP_ADDR_TY_GLB:
       if (ctx == PRINT_OP_CTX_USE) {
-        fprintf(file, "%s", ir->addr.glb->name);
+        fprintf(file, "%s", op->addr.glb->name);
       } else {
-        fprintf(file, "addr GLB(%zu)", ir->addr.glb->id);
+        fprintf(file, "addr GLB(%zu)", op->addr.glb->id);
 
-        if (ir->addr.glb->name) {
-          fprintf(file, " { \"%s\" }", ir->addr.glb->name);
+        if (op->addr.glb->name) {
+          fprintf(file, " { \"%s\" }", op->addr.glb->name);
         }
       }
       break;
     }
     break;
   case IR_OP_TY_BR: {
-    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
+    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
                      "found `br` but bb wasn't MERGE");
-    struct ir_basicblock *bb = ir->stmt->basicblock;
+    struct ir_basicblock *bb = op->stmt->basicblock;
     struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE
                                        ? bb->merge.target
                                        : bb->split.false_target;
@@ -598,21 +604,21 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   }
   case IR_OP_TY_BR_COND:
-    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
+    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
                      "found `br.cond` but bb wasn't SPLIT");
     fprintf(file, "br.cond ");
-    debug_print_op_use(file, irb, ir->br_cond.cond);
+    debug_print_op_use(file, irb, op->br_cond.cond);
     fprintf(file, ", TRUE(@%zu), FALSE(@%zu)",
-            ir->stmt->basicblock->split.true_target->id,
-            ir->stmt->basicblock->split.false_target->id);
+            op->stmt->basicblock->split.true_target->id,
+            op->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_BR_SWITCH:
-    invariant_assert(ir->stmt->basicblock->ty == IR_BASICBLOCK_TY_SWITCH,
+    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_SWITCH,
                      "found `br.switch` but bb wasn't SWITCH");
-    fprintf(file, "br.switch %%%zu, [\n", ir->br_switch.value->id);
+    fprintf(file, "br.switch %%%zu, [\n", op->br_switch.value->id);
 
-    size_t num_cases = ir->stmt->basicblock->switch_case.num_cases;
-    struct ir_split_case *cases = ir->stmt->basicblock->switch_case.cases;
+    size_t num_cases = op->stmt->basicblock->switch_case.num_cases;
+    struct ir_split_case *cases = op->stmt->basicblock->switch_case.cases;
     for (size_t i = 0; i < num_cases; i++) {
       struct ir_split_case *split_case = &cases[i];
 
@@ -621,41 +627,41 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     }
 
     fprintf(file, "    DEFAULT -> @%zu\n",
-            ir->stmt->basicblock->switch_case.default_target->id);
+            op->stmt->basicblock->switch_case.default_target->id);
     fprintf(file, "  ]");
     break;
   case IR_OP_TY_RET:
-    if (ir->ret.value) {
-      fprintf(file, "return %%%zu", ir->ret.value->id);
+    if (op->ret.value) {
+      fprintf(file, "return %%%zu", op->ret.value->id);
     } else {
       fprintf(file, "return");
     }
     break;
   case IR_OP_TY_BITFIELD_EXTRACT:
     fprintf(file, "bitfield.extract #(%zu, %zu), ",
-            ir->bitfield_extract.bitfield.offset,
-            ir->bitfield_extract.bitfield.width);
-    debug_print_op_use(file, irb, ir->bitfield_extract.value);
+            op->bitfield_extract.bitfield.offset,
+            op->bitfield_extract.bitfield.width);
+    debug_print_op_use(file, irb, op->bitfield_extract.value);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
     fprintf(file, "bitfield.insert #(%zu, %zu), ",
-            ir->bitfield_insert.bitfield.offset,
-            ir->bitfield_insert.bitfield.width);
-    debug_print_op_use(file, irb, ir->bitfield_insert.target);
+            op->bitfield_insert.bitfield.offset,
+            op->bitfield_insert.bitfield.width);
+    debug_print_op_use(file, irb, op->bitfield_insert.target);
     fprintf(file, ", ");
-    debug_print_op_use(file, irb, ir->bitfield_insert.value);
+    debug_print_op_use(file, irb, op->bitfield_insert.value);
     break;
   case IR_OP_TY_MEM_SET:
     fprintf(file, "mem.set ");
-    debug_print_op_use(file, irb, ir->mem_set.addr);
-    fprintf(file, ", #%zu, #%d", ir->mem_set.length, ir->mem_set.value);
+    debug_print_op_use(file, irb, op->mem_set.addr);
+    fprintf(file, ", #%zu, #%d", op->mem_set.length, op->mem_set.value);
     break;
   case IR_OP_TY_MEM_COPY:
     fprintf(file, "mem.copy ");
-    debug_print_op_use(file, irb, ir->mem_copy.dest);
+    debug_print_op_use(file, irb, op->mem_copy.dest);
     fprintf(file, ", ");
-    debug_print_op_use(file, irb, ir->mem_copy.source);
-    fprintf(file, ", #%zu", ir->mem_set.length);
+    debug_print_op_use(file, irb, op->mem_copy.source);
+    fprintf(file, ", #%zu", op->mem_set.length);
     break;
   }
 }
@@ -1140,10 +1146,14 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
     fprintf(file, "[%zu] : ", lcl->id);
     break;
   case IR_LCL_ALLOC_TY_NORMAL:
-    fprintf(file, "[%zu, #%zu] : ", lcl->id, lcl->offset);
+    fprintf(file, "[%zu, ", lcl->id);
+    debug_print_lcl_alloc(file, &lcl->alloc);
+    fprintf(file, "] : ");
     break;
   case IR_LCL_ALLOC_TY_FIXED:
-    fprintf(file, "[%zu, FIXED #%zu] : ", lcl->id, lcl->offset);
+    fprintf(file, "[%zu, FIXED ", lcl->id);
+    debug_print_lcl_alloc(file, &lcl->alloc);
+    fprintf(file, "] : ");
     break;
   }
 

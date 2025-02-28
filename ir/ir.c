@@ -896,6 +896,16 @@ void eliminate_redundant_ops(struct ir_func *func,
     detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
   }
 
+  use_map = build_op_uses_map(func);
+  struct ir_lcl *lcl = func->first_lcl;
+  while (lcl) {
+    if (!use_map.lcl_use_datas[lcl->id].num_consumers) {
+      detach_local(func, lcl);
+    }
+
+    lcl = lcl->succ;
+  }
+
   vector_free(&detach);
 }
 
@@ -1310,7 +1320,7 @@ struct ir_stmt *insert_before_ir_stmt(struct ir_func *irb,
 
 void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
   *basicblock = (struct ir_basicblock){
-    .id = id,
+      .id = id,
   };
 }
 
@@ -2050,6 +2060,17 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
 void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   if (lcl->id == DETACHED_LCL) {
     return;
+  }
+
+  switch (lcl->alloc_ty) {
+  case IR_LCL_ALLOC_TY_NONE:
+    break;
+  case IR_LCL_ALLOC_TY_NORMAL:
+    // TODO: this should propogate offset changes
+    irb->total_locals_size -= lcl->alloc.size + lcl->alloc.padding;
+    break;
+  case IR_LCL_ALLOC_TY_FIXED:
+    BUG("can't detach fixed alloc lcl");
   }
 
   irb->lcl_count--;
@@ -2803,7 +2824,10 @@ void alloc_locals(struct ir_func *func) {
     func->total_locals_size += lcl_pad;
 
     lcl->alloc_ty = IR_LCL_ALLOC_TY_NORMAL;
-    lcl->offset = func->total_locals_size;
+    lcl->alloc = (struct ir_lcl_alloc){
+        .offset = func->total_locals_size,
+        .padding = lcl_pad,
+        .size = lcl_size};
 
     func->total_locals_size += lcl_size;
 

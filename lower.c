@@ -1049,7 +1049,11 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       struct ir_lcl *lcl = add_local(func, &arg->var_ty);
 
       lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
-      lcl->offset = param_info.stack_offset;
+      lcl->alloc = (struct ir_lcl_alloc) {
+        .padding = 0,
+        .size = info.size,
+        .offset = param_info.stack_offset
+      };
 
       if (arg->ty == IR_OP_TY_LOAD) {
         struct ir_op *addr = build_addr(func, arg);
