@@ -8,8 +8,6 @@
 #include "util.h"
 #include "vector.h"
 
-#include <ctype.h>
-
 struct lexer {
   struct arena_allocator *arena;
 
