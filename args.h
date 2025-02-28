@@ -72,8 +72,11 @@ struct arg {
   ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_REGALLOC, "regalloc")                              \
+  ENUM_FN(COMPILE_LOG_FLAGS_ELIM_PHI, "elim_phi")                              \
+  ENUM_FN(COMPILE_LOG_FLAGS_CODEGEN_PREPARE, "codegen_prepare")                \
+  ENUM_FN(COMPILE_LOG_FLAGS_CODEGEN, "codegen")                                \
   ENUM_FN(COMPILE_LOG_FLAGS_EMIT, "emit")                                      \
-  ENUM_FN(COMPILE_LOG_FLAGS_ASM, "asm")                                        \
+  ENUM_FN(COMPILE_LOG_FLAGS_BUILD_OBJECT, "build_object")                      \
   ENUM_FN(COMPILE_LOG_FLAGS_ALL, "all")
 
 #define ARCH_ENUM_LIST                                                         \
@@ -169,7 +172,9 @@ VALUES_FN(log_level, LOG)
           NULL)
 
 #define ARG_OPT_LIST                                                           \
-  ARG_BOOL(preprocess, "-E", "--preprocess", "Only run the preprocessor. If '-o' is not provided, this will output to stdout")      \
+  ARG_BOOL(preprocess, "-E", "--preprocess",                                   \
+           "Only run the preprocessor. If '-o' is not provided, this will "    \
+           "output to stdout")                                                 \
   ARG_BOOL(                                                                    \
       assembly, "-S", "--assemble",                                            \
       "Only run preprocessor and compiler; output assembly without linking")   \
@@ -192,17 +197,18 @@ VALUES_FN(log_level, LOG)
   ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
              "C standard to use")                                              \
                                                                                \
+  ARG_BOOL(use_graphcol_regalloc, "", "--use-graphcol",                        \
+           "[EXPERIMENTAL] Use graph-colouring based regalloc")                \
+                                                                               \
+  ARG_BOOL(profile, "", "--profile", "Run profiler")                           \
+                                                                               \
   /* ------------------------- Debug-only options ------------------------- */ \
                                                                                \
   ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
             "[DEBUG] Log level flags")                                         \
                                                                                \
   ARG_STRING(timestamp, "", "-tm",                                             \
-             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__") \
-             \
-  ARG_BOOL(profile, "", "--profile",                                             \
-             "Run profiler")
-
+             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")
 
 struct parsed_args {
 #define ARG_OPT(_0, field_ty, name, ...) field_ty name;

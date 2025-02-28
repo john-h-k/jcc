@@ -33,8 +33,11 @@ enum compile_log_flags {
   COMPILE_LOG_FLAGS_OPTS = 32,
   COMPILE_LOG_FLAGS_LOWER = 64,
   COMPILE_LOG_FLAGS_REGALLOC = 128,
-  COMPILE_LOG_FLAGS_EMIT = 256,
-  COMPILE_LOG_FLAGS_ASM = 512,
+  COMPILE_LOG_FLAGS_ELIM_PHI = 256,
+  COMPILE_LOG_FLAGS_CODEGEN_PREPARE = 512,
+  COMPILE_LOG_FLAGS_CODEGEN = 1024,
+  COMPILE_LOG_FLAGS_EMIT = 2048,
+  COMPILE_LOG_FLAGS_BUILD_OBJECT = 4096,
 
   COMPILE_LOG_FLAGS_ALL = -1,
 };
@@ -63,6 +66,8 @@ struct compile_args {
   bool preproc_only;
   bool build_asm_file;
   bool build_object_file;
+
+  bool use_graphcol_regalloc;
 
   size_t num_include_paths;
   const char **include_paths;

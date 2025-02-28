@@ -11,7 +11,7 @@
 #define IR_REG_IDX_DI (0)
 
 // Performs platform agnostic lowering
-void lower(struct ir_unit *unit, const struct target *target);
+void lower(struct ir_unit *unit);
 
 // needed so that target lowering which generates instructions can lower them
 void lower_call(struct ir_func *func, struct ir_op *op);

@@ -148,6 +148,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .include_paths = args->include_paths.values,
       .num_include_paths = args->include_paths.num_values,
 
+      .use_graphcol_regalloc = args->use_graphcol_regalloc,
+
       .output = args->output,
   };
 

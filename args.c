@@ -25,7 +25,8 @@ debug_print_arg_string_list(FILE *file,
                             const struct arg_string_list *arg_string_list,
                             const char *(*string_fn)(int value)) {
   DEBUG_ASSERT(!string_fn, "string fn does not make sense for string list");
-  fprintf(file, "     ");
+  fprintf(file, "      ");
+
   if (!arg_string_list->num_values) {
     fprintf(file, "(none)\n");
     return;
@@ -45,7 +46,7 @@ debug_print_arg_string_list(FILE *file,
 static void debug_print_arg_option(FILE *file, const int *arg_option,
                                    const char *(*string_fn)(int value)) {
   DEBUG_ASSERT(string_fn, "string fn required for option");
-  fprintf(file, "      %s\n", string_fn(*arg_option));
+  fprintf(file, "      %s\n", *arg_option == 0 ? "(none)" : string_fn(*arg_option));
 }
 
 static void debug_print_arg_flags(FILE *file, const int *arg_flags,
@@ -98,7 +99,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
   fprintf(file, "OPTS: \n");
 
 #define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn, ...)           \
-  fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name)), " "); \
+  fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name) + 1), " "); \
   switch (ARG_TY_##ty) {                                                       \
   /* more invalid pointer casting here, but again, only valid casts are        \
    * possible paths */                                                         \

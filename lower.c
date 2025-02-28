@@ -2,9 +2,6 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
-#include "ir/prettyprint.h"
-#include "ir/validate.h"
-#include "log.h"
 #include "util.h"
 #include "vector.h"
 
@@ -1208,7 +1205,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-void lower(struct ir_unit *unit, const struct target *target) {
+void lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
@@ -1336,8 +1333,8 @@ void lower(struct ir_unit *unit, const struct target *target) {
   lower_pointers(unit);
 
   // now target-specific lowering
-  if (target->lower) {
-    target->lower(unit);
+  if (unit->target->lower) {
+    unit->target->lower(unit);
   }
 
   // lower again, in case target lowering introduced any
