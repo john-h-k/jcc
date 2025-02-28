@@ -158,10 +158,13 @@ typedef unsigned _BitInt(128) uint128_t;
 
 #if __GNUC__ && STDC_23
 #define TRYFORCEINLINE [[gnu::always_inline]] inline
+#define NOINLINE [[gnu::noinline]]
 #elif __GNUC__
 #define TRYFORCEINLINE __attribute__((always_inline)) inline
+#define NOINLINE __attribute__((noinline))
 #else
 #define TRYFORCEINLINE inline
+#define NOINLINE
 #endif
 
 #define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))

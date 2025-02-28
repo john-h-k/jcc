@@ -242,12 +242,16 @@ int main(int argc, char **argv) {
 
     struct profiler_region compile_region = profiler_begin_region(region);
 
+    PROFILE_BEGIN(source_read);
+
     const char *source;
     if (!strcmp(source_path, "-")) {
       source = read_file(arena, stdin);
     } else {
       source = read_path(arena, source_path);
     }
+
+    PROFILE_END(source_read);
 
     if (!source) {
       err("source file \"%s\" could not be read!", source_path);
@@ -283,6 +287,8 @@ int main(int argc, char **argv) {
     disable_log();
     struct compiler *compiler;
 
+    PROFILE_BEGIN(create_compiler);
+
     if (create_compiler(&program, target, object_file, source_path,
                         &compile_args,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
@@ -291,11 +297,14 @@ int main(int argc, char **argv) {
       goto exit;
     }
 
+    PROFILE_END(create_compiler);
+
     if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
       err("compilation failed!");
       exc = -1;
       goto exit;
     }
+
 
     profiler_end_region(compile_region);
 

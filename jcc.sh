@@ -24,7 +24,8 @@ help() {
 }
 
 build() {
-    mode="${1:-Debug}"
+    mode=$(get_mode "$1")
+    mode="${mode:-Debug}"
 
     echo -e "${BOLD}Building (mode='$mode')...${RESET}"
 
@@ -63,10 +64,37 @@ diff() {
     rm -f $ltmp $rtmp
 }
 
+get_mode() {
+    case "$1" in
+        d|D|debug|Debug)
+            echo "Debug"
+            ;;
+        r|R|release|Release)
+            echo "Release"
+            ;;
+        rd|RD|reldeb|RelWithDebInfo)
+            echo "RelWithDebInfo"
+            ;;
+    esac
+}
+
 # In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
 
+run() {
+    mode=$(get_mode "$1")
+    [ -z "$mode" ] || shift  
+    build "$mode"
+
+    jcc=$(readlink -f ./build/jcc)
+    cd "$CALLER_DIR"
+    MallocNanoZone=0 "$jcc" "$@"
+    cd - > /dev/null
+}
+
 debug() {
-    build
+    mode=$(get_mode "$1")
+    [ -z "$mode" ] || shift  
+    build "$mode"
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
@@ -83,15 +111,6 @@ debug() {
     fi
 
     MallocNanoZone=0 $debugger "$jcc" "$@"
-    cd - > /dev/null
-}
-
-run() {
-    build
-
-    jcc=$(readlink -f ./build/jcc)
-    cd "$CALLER_DIR"
-    MallocNanoZone=0 "$jcc" "$@"
     cd - > /dev/null
 }
 
