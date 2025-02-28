@@ -2,10 +2,9 @@
 
 #include "../alloc.h"
 #include "../hashtbl.h"
-#include "../ir/prettyprint.h"
 #include "../log.h"
 #include "../vector.h"
-#include "opts.h"
+#include "../ir/prettyprint.h"
 
 struct addr_uses_data {
   struct ir_func *func;
@@ -105,6 +104,9 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
       break;
     }
 
+    case IR_OP_TY_MOV:
+      break;
+
     case IR_OP_TY_ADDR_OFFSET: {
       struct ir_op_addr_offset addr_offset = consumer->addr_offset;
       if (addr_offset.index) {
@@ -141,8 +143,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
         struct ir_var_ty_info el_info = var_ty_info(data->func->unit, &el_ty);
 
         offset_field_idx = offset / el_info.size;
-        offset_found = offset % el_info.size == 0 &&
-                       offset_field_idx < num_els;
+        offset_found = offset % el_info.size == 0 && offset_field_idx < num_els;
         break;
       }
       case IR_VAR_TY_TY_STRUCT:
@@ -309,11 +310,11 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
     struct ir_op *value = op->store.value;
 
-    op = replace_ir_op(func, op, IR_OP_TY_MOV, value->var_ty);
-    op->mov = (struct ir_op_mov){.value = value};
-
     struct lcl_store key = {.bb_id = op->stmt->basicblock->id,
                             .field_idx = use->field_idx};
+
+    op = replace_ir_op(func, op, IR_OP_TY_MOV, value->var_ty);
+    op->mov = (struct ir_op_mov){.value = value};
 
     struct ir_op **prev = hashtbl_lookup(stores, &key);
 
@@ -323,6 +324,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       hashtbl_insert(any_stores, &use->field_idx, &op);
     }
   }
+
+  struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
 
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);
@@ -373,21 +376,50 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
         struct ir_op **any_store = hashtbl_lookup(any_stores, &key.field_idx);
         if (!any_store) {
-          DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED,
-                       "expected zeroed because no stores");
+          DEBUG_ASSERT(lcl->flags & (IR_LCL_FLAG_ZEROED | IR_LCL_FLAG_PARAM),
+                       "expected zeroed/param because no stores");
 
-          struct ir_op *zero;
-          if (gather_values) {
-            zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
+          if (lcl->flags & IR_LCL_FLAG_PARAM) {
+            // sort of hacky, but so lower doesn't need to determine the field, turn this load into
+            // load.addr [addr.off LCL, # field_offset]
 
-            gather_values[head++] =
-                (struct ir_gather_value){.value = zero, .field_idx = j};
+            struct ir_op *addr = insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+            addr->addr = (struct ir_op_addr){
+              .ty = IR_OP_ADDR_TY_LCL,
+              .lcl = lcl
+            };
+
+            addr->flags |= IR_OP_FLAG_PROMOTED;
+
+            struct ir_op *addr_offset = insert_before_ir_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+            addr_offset ->addr_offset = (struct ir_op_addr_offset){
+              .base = addr,
+              .offset = info.offsets[use->field_idx]
+            };
+
+            addr_offset->flags |= IR_OP_FLAG_PROMOTED;
+
+            op->load = (struct ir_op_load){
+              .ty = IR_OP_LOAD_TY_ADDR,
+              .addr = addr_offset
+            };
+
+            lcl->flags |= IR_LCL_FLAG_PROMOTED;
+            op->flags |= IR_OP_FLAG_PROMOTED;
           } else {
-            zero = op;
-          }
+            struct ir_op *zero;
+            if (gather_values) {
+              zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
 
-          mk_zero_constant(func->unit, zero, &field_ty);
-          zero->flags |= IR_OP_FLAG_PROMOTED;
+              gather_values[head++] =
+                  (struct ir_gather_value){.value = zero, .field_idx = j};
+            } else {
+              zero = op;
+            }
+
+            mk_zero_constant(func->unit, zero, &field_ty);
+            zero->flags |= IR_OP_FLAG_PROMOTED;
+          }
 
           continue;
         }
@@ -437,16 +469,20 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         continue;
       }
 
-      if (detach->flags & IR_OP_FLAG_PROMOTED) {
+      if (detach->flags & (IR_OP_FLAG_PROMOTED | IR_OP_FLAG_PARAM)) {
         continue;
       }
-
+      
       struct ir_op_usage *dep_usage = &use_map.op_use_datas[detach->id];
 
       for (size_t k = 0; k < dep_usage->num_uses; k++) {
-        struct ir_op *dep_use = dep_usage->uses[k].consumer;
+        struct ir_op_use *dep_use = &dep_usage->uses[k];
 
-        vector_push_back(depends, &dep_use);
+        if (dep_use->consumer->ty == IR_OP_TY_STORE && dep_use->ty == IR_OP_USE_TY_DEREF) {
+          continue;
+        }
+
+        vector_push_back(depends, &dep_use->consumer);
       }
 
       DEBUG_ASSERT(!op_is_branch(detach->ty), "should not be detaching branch");
@@ -532,12 +568,12 @@ static void opts_promote_func(struct ir_func *func) {
           if (op->addr.ty == IR_OP_ADDR_TY_LCL) {
             struct ir_lcl *lcl = op->addr.lcl;
 
-            if (op->flags & IR_OP_FLAG_PARAM) {
-              // can't promote addr which are actually params
-              candidates[lcl->id] = false;
-              break;
+            // if (op->flags & IR_OP_FLAG_PARAM) {
+            //   // can't promote addr which are actually params
+            //   candidates[lcl->id] = false;
+            //   break;
 
-            }
+            // }
 
             struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
 
@@ -576,10 +612,17 @@ static void opts_promote_func(struct ir_func *func) {
 
     // don't promote params because they don't have moves (they are in a "magic
     // local") and so promoting will fail
-    if (candidates[lcl->id] && !(lcl->flags & IR_LCL_FLAG_PARAM)) {
-      debug("lcl %zu promotion candidate", lcl->id);
+    if (candidates[lcl->id]) {
+      debug("func %s: lcl %zu promotion candidate", func->name, lcl->id);
+
+      DEBUG_PRINT_IR(stderr, func);
       opts_do_promote(func, lcl_uses[lcl->id], lcl);
-      vector_push_back(lcls_to_remove, &lcl);
+
+      DEBUG_PRINT_IR(stderr, func);
+
+      if (!(lcl->flags & IR_LCL_FLAG_PARAM)) {
+        vector_push_back(lcls_to_remove, &lcl);
+      }
     }
 
     lcl = lcl->succ;

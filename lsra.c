@@ -121,7 +121,8 @@ struct lsra_reg_info {
   struct hashtbl *nonvolatile_registers_used;
 };
 
-static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb, struct ir_op *op) {
+static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb,
+                               struct ir_op *op) {
   struct ir_op *store = spill_op(irb, op);
 
   if (store) {
@@ -136,16 +137,11 @@ static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb, 
     }
 
     store->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_ADDR,
-      .value = store->store.value,
-      .addr = addr
-    };
+        .ty = IR_OP_STORE_TY_ADDR, .value = store->store.value, .addr = addr};
   }
 }
 
-static void spill_at_interval(
-                              struct lsra_reg_info *info,
-                              struct ir_func *irb,
+static void spill_at_interval(struct lsra_reg_info *info, struct ir_func *irb,
                               struct register_alloc_state *state,
                               struct interval *last_active,
                               size_t cur_interval) {
@@ -275,7 +271,9 @@ static bool op_needs_reg(struct ir_op *op) {
   return op->ty != IR_OP_TY_ADDR;
 }
 
-static void fixup_spills_callback(struct ir_op **op, void *metadata) {
+static void fixup_spills_callback(struct ir_op **op,
+                                  UNUSED enum ir_op_use_ty use_ty,
+                                  void *metadata) {
   struct fixup_spills_data *data = metadata;
 
   if (data->consumer->ty != IR_OP_TY_PHI &&
@@ -364,8 +362,7 @@ static int compare_interval_id(const void *a, const void *b) {
   return (int)((ssize_t)a_id - (ssize_t)b_id);
 }
 
-static void force_spill_register(
-                              struct lsra_reg_info *info,
+static void force_spill_register(struct lsra_reg_info *info,
                                  struct ir_func *irb,
                                  struct register_alloc_state *state,
                                  struct ir_reg reg, struct interval *interval) {
@@ -403,7 +400,9 @@ struct add_to_prefs_callback_data {
   struct register_alloc_state *state;
 };
 
-static void add_to_prefs_callback(struct ir_op **op, void *metadata) {
+static void add_to_prefs_callback(struct ir_op **op,
+                                  UNUSED enum ir_op_use_ty use_ty,
+                                  void *metadata) {
   struct add_to_prefs_callback_data *data = metadata;
 
   if ((*op)->flags & IR_OP_FLAG_FIXED_REG) {
@@ -625,8 +624,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     }
 
     for (size_t j = 0; j < interval->op->write_info.num_reg_writes; j++) {
-      force_spill_register(info, irb, &state, interval->op->write_info.writes[j],
-                           interval);
+      force_spill_register(info, irb, &state,
+                           interval->op->write_info.writes[j], interval);
     }
 
     if (pref_reg == SIZE_MAX) {

@@ -207,7 +207,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   }
 }
 
-bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
+bool var_ty_eq(struct ir_unit*iru, const struct ir_var_ty *l,
                const struct ir_var_ty *r) {
   if (l == r) {
     return true;
@@ -228,16 +228,16 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
     return true;
   case IR_VAR_TY_TY_ARRAY:
     return l->array.num_elements == r->array.num_elements &&
-           var_ty_eq(irb, l->array.underlying, r->array.underlying);
+           var_ty_eq(iru, l->array.underlying, r->array.underlying);
   case IR_VAR_TY_TY_FUNC:
-    if (!var_ty_eq(irb, l->func.ret_ty, r->func.ret_ty)) {
+    if (!var_ty_eq(iru, l->func.ret_ty, r->func.ret_ty)) {
       return false;
     }
     if (l->func.num_params != r->func.num_params) {
       return false;
     }
     for (size_t i = 0; i < l->func.num_params; i++) {
-      if (!var_ty_eq(irb, &l->func.params[i], &r->func.params[i])) {
+      if (!var_ty_eq(iru, &l->func.params[i], &r->func.params[i])) {
         return false;
       }
     }
@@ -248,8 +248,8 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
+    struct ir_var_ty_info l_info = var_ty_info(iru, l);
+    struct ir_var_ty_info r_info = var_ty_info(iru, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -257,7 +257,7 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
     }
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
+      if (!var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -269,8 +269,8 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(irb->unit, l);
-    struct ir_var_ty_info r_info = var_ty_info(irb->unit, r);
+    struct ir_var_ty_info l_info = var_ty_info(iru, l);
+    struct ir_var_ty_info r_info = var_ty_info(iru, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -278,7 +278,7 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
     }
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!var_ty_eq(irb, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
+      if (!var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -290,41 +290,7 @@ bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
   unreachable();
 }
 
-static void walk_br_cond(struct ir_op_br_cond *br_cond, walk_op_callback *cb,
-                         void *cb_metadata) {
-  cb(&br_cond->cond, cb_metadata);
-}
-
-static void walk_cnst(UNUSED_ARG(struct ir_op_cnst *cnst),
-                      UNUSED_ARG(walk_op_callback *cb),
-                      UNUSED_ARG(void *cb_metadata)) {
-  // nada
-}
-
-static void walk_binary_op(struct ir_op_binary_op *binary_op,
-                           walk_op_callback *cb, void *cb_metadata) {
-  walk_op(binary_op->lhs, cb, cb_metadata);
-  walk_op(binary_op->rhs, cb, cb_metadata);
-}
-
-static void walk_unary_op(struct ir_op_unary_op *unary_op, walk_op_callback *cb,
-                          void *cb_metadata) {
-  walk_op(unary_op->value, cb, cb_metadata);
-}
-
-static void walk_cast_op(struct ir_op_cast_op *cast_op, walk_op_callback *cb,
-                         void *cb_metadata) {
-  walk_op(cast_op->value, cb, cb_metadata);
-}
-
-static void walk_ret(struct ir_op_ret *ret, walk_op_callback *cb,
-                     void *cb_metadata) {
-  if (ret->value) {
-    walk_op(ret->value, cb, cb_metadata);
-  }
-}
-
-void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb, void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
@@ -333,53 +299,53 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     break;
   case IR_OP_TY_GATHER:
     for (size_t i = 0; i < op->gather.num_values; i++) {
-      cb(&op->gather.values[i].value, cb_metadata);
+      cb(&op->gather.values[i].value, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   case IR_OP_TY_CALL: {
-    cb(&op->call.target, cb_metadata);
+    cb(&op->call.target, IR_OP_USE_TY_READ, cb_metadata);
     for (size_t i = 0; i < op->call.num_args; i++) {
-      cb(&op->call.args[i], cb_metadata);
+      cb(&op->call.args[i], IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   }
   case IR_OP_TY_PHI: {
     for (size_t i = 0; i < op->phi.num_values; i++) {
-      cb(&op->phi.values[i].value, cb_metadata);
+      cb(&op->phi.values[i].value, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   }
   case IR_OP_TY_CNST:
     break;
   case IR_OP_TY_BINARY_OP:
-    cb(&op->binary_op.lhs, cb_metadata);
-    cb(&op->binary_op.rhs, cb_metadata);
+    cb(&op->binary_op.lhs, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->binary_op.rhs, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_UNARY_OP:
-    cb(&op->unary_op.value, cb_metadata);
+    cb(&op->unary_op.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_CAST_OP:
-    cb(&op->cast_op.value, cb_metadata);
+    cb(&op->cast_op.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_STORE:
-    cb(&op->store.value, cb_metadata);
+    cb(&op->store.value, IR_OP_USE_TY_READ, cb_metadata);
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
     case IR_OP_STORE_TY_GLB:
       break;
     case IR_OP_STORE_TY_ADDR:
-      cb(&op->store.addr, cb_metadata);
+      cb(&op->store.addr, IR_OP_USE_TY_DEREF, cb_metadata);
       break;
     }
     break;
   case IR_OP_TY_STORE_BITFIELD:
-    cb(&op->store_bitfield.value, cb_metadata);
+    cb(&op->store_bitfield.value, IR_OP_USE_TY_READ, cb_metadata);
     switch (op->store_bitfield.ty) {
     case IR_OP_STORE_TY_LCL:
     case IR_OP_STORE_TY_GLB:
       break;
     case IR_OP_STORE_TY_ADDR:
-      cb(&op->store_bitfield.addr, cb_metadata);
+      cb(&op->store_bitfield.addr, IR_OP_USE_TY_DEREF, cb_metadata);
       break;
     }
     break;
@@ -389,7 +355,7 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     case IR_OP_LOAD_TY_GLB:
       break;
     case IR_OP_LOAD_TY_ADDR:
-      cb(&op->load.addr, cb_metadata);
+      cb(&op->load.addr, IR_OP_USE_TY_DEREF, cb_metadata);
       break;
     }
     break;
@@ -399,104 +365,174 @@ void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     case IR_OP_LOAD_TY_GLB:
       break;
     case IR_OP_LOAD_TY_ADDR:
-      cb(&op->load_bitfield.addr, cb_metadata);
+      cb(&op->load_bitfield.addr, IR_OP_USE_TY_DEREF, cb_metadata);
       break;
     }
     break;
   case IR_OP_TY_ADDR:
     break;
   case IR_OP_TY_ADDR_OFFSET:
-    cb(&op->addr_offset.base, cb_metadata);
+    cb(&op->addr_offset.base, IR_OP_USE_TY_READ, cb_metadata);
     if (op->addr_offset.index) {
-      cb(&op->addr_offset.index, cb_metadata);
+      cb(&op->addr_offset.index, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   case IR_OP_TY_BR:
     break;
   case IR_OP_TY_BR_SWITCH:
-    cb(&op->br_switch.value, cb_metadata);
+    cb(&op->br_switch.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_BR_COND:
-    cb(&op->br_cond.cond, cb_metadata);
+    cb(&op->br_cond.cond, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value && !(op->flags & IR_OP_FLAG_PARAM)) {
-      cb(&op->mov.value, cb_metadata);
+      cb(&op->mov.value, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
-      cb(&op->ret.value, cb_metadata);
+      cb(&op->ret.value, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
   case IR_OP_TY_BITFIELD_EXTRACT:
-    cb(&op->bitfield_extract.value, cb_metadata);
+    cb(&op->bitfield_extract.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
-    cb(&op->bitfield_insert.target, cb_metadata);
-    cb(&op->bitfield_insert.value, cb_metadata);
+    cb(&op->bitfield_insert.target, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->bitfield_insert.value, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_MEM_SET:
-    cb(&op->mem_set.addr, cb_metadata);
+    cb(&op->mem_set.addr, IR_OP_USE_TY_READ, cb_metadata);
     break;
   case IR_OP_TY_MEM_COPY:
-    cb(&op->mem_copy.source, cb_metadata);
-    cb(&op->mem_copy.dest, cb_metadata);
+    cb(&op->mem_copy.source, IR_OP_USE_TY_READ, cb_metadata);
+    cb(&op->mem_copy.dest, IR_OP_USE_TY_READ, cb_metadata);
     break;
   }
 }
 
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
-  cb(&op, cb_metadata);
+  cb(op, cb_metadata);
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_CUSTOM:
-    TODO("walk custom");
-  case IR_OP_TY_CALL:
-    TODO("walk call");
-  case IR_OP_TY_PHI:
-    TODO("walk phi");
-  case IR_OP_TY_MOV:
-    TODO("walk mov");
-  case IR_OP_TY_LOAD:
-    TODO("walk load");
-  case IR_OP_TY_STORE:
-    TODO("walk store");
-  case IR_OP_TY_LOAD_BITFIELD:
-    TODO("walk load bitfield");
-  case IR_OP_TY_STORE_BITFIELD:
-    TODO("walk store bitfield");
-  case IR_OP_TY_ADDR:
-    TODO("walk addr");
-  case IR_OP_TY_BR_SWITCH:
-    TODO("walk br.switch");
   case IR_OP_TY_UNDF:
     break;
+  case IR_OP_TY_GATHER:
+    for (size_t i = 0; i < op->gather.num_values; i++) {
+      walk_op(op->gather.values[i].value, cb, cb_metadata);
+    }
+    break;
+  case IR_OP_TY_CALL: {
+    walk_op(op->call.target, cb, cb_metadata);
+    for (size_t i = 0; i < op->call.num_args; i++) {
+      walk_op(op->call.args[i], cb, cb_metadata);
+    }
+    break;
+  }
+  case IR_OP_TY_PHI: {
+    for (size_t i = 0; i < op->phi.num_values; i++) {
+      walk_op(op->phi.values[i].value, cb, cb_metadata);
+    }
+    break;
+  }
   case IR_OP_TY_CNST:
-    walk_cnst(&op->cnst, cb, cb_metadata);
     break;
   case IR_OP_TY_BINARY_OP:
-    walk_binary_op(&op->binary_op, cb, cb_metadata);
+    walk_op(op->binary_op.lhs, cb, cb_metadata);
+    walk_op(op->binary_op.rhs, cb, cb_metadata);
     break;
   case IR_OP_TY_UNARY_OP:
-    walk_unary_op(&op->unary_op, cb, cb_metadata);
+    walk_op(op->unary_op.value, cb, cb_metadata);
     break;
   case IR_OP_TY_CAST_OP:
-    walk_cast_op(&op->cast_op, cb, cb_metadata);
+    walk_op(op->cast_op.value, cb, cb_metadata);
+    break;
+  case IR_OP_TY_STORE:
+    walk_op(op->store.value, cb, cb_metadata);
+    switch (op->store.ty) {
+    case IR_OP_STORE_TY_LCL:
+    case IR_OP_STORE_TY_GLB:
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      walk_op(op->store.addr, cb, cb_metadata);
+      break;
+    }
+    break;
+  case IR_OP_TY_STORE_BITFIELD:
+    walk_op(op->store_bitfield.value, cb, cb_metadata);
+    switch (op->store_bitfield.ty) {
+    case IR_OP_STORE_TY_LCL:
+    case IR_OP_STORE_TY_GLB:
+      break;
+    case IR_OP_STORE_TY_ADDR:
+      walk_op(op->store_bitfield.addr, cb, cb_metadata);
+      break;
+    }
+    break;
+  case IR_OP_TY_LOAD:
+    switch (op->load.ty) {
+    case IR_OP_LOAD_TY_LCL:
+    case IR_OP_LOAD_TY_GLB:
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      walk_op(op->load.addr, cb, cb_metadata);
+      break;
+    }
+    break;
+  case IR_OP_TY_LOAD_BITFIELD:
+    switch (op->load_bitfield.ty) {
+    case IR_OP_LOAD_TY_LCL:
+    case IR_OP_LOAD_TY_GLB:
+      break;
+    case IR_OP_LOAD_TY_ADDR:
+      walk_op(op->load_bitfield.addr, cb, cb_metadata);
+      break;
+    }
+    break;
+  case IR_OP_TY_ADDR:
+    break;
+  case IR_OP_TY_ADDR_OFFSET:
+    walk_op(op->addr_offset.base, cb, cb_metadata);
+    if (op->addr_offset.index) {
+      walk_op(op->addr_offset.index, cb, cb_metadata);
+    }
     break;
   case IR_OP_TY_BR:
-    // nada
+    break;
+  case IR_OP_TY_BR_SWITCH:
+    walk_op(op->br_switch.value, cb, cb_metadata);
     break;
   case IR_OP_TY_BR_COND:
-    walk_br_cond(&op->br_cond, cb, cb_metadata);
+    walk_op(op->br_cond.cond, cb, cb_metadata);
+    break;
+  case IR_OP_TY_MOV:
+    if (op->mov.value && !(op->flags & IR_OP_FLAG_PARAM)) {
+      walk_op(op->mov.value, cb, cb_metadata);
+    }
     break;
   case IR_OP_TY_RET:
-    walk_ret(&op->ret, cb, cb_metadata);
+    if (op->ret.value) {
+      walk_op(op->ret.value, cb, cb_metadata);
+    }
     break;
-  default:
-    TODO("other ops in walk op");
+  case IR_OP_TY_BITFIELD_EXTRACT:
+    walk_op(op->bitfield_extract.value, cb, cb_metadata);
+    break;
+  case IR_OP_TY_BITFIELD_INSERT:
+    walk_op(op->bitfield_insert.target, cb, cb_metadata);
+    walk_op(op->bitfield_insert.value, cb, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_SET:
+    walk_op(op->mem_set.addr, cb, cb_metadata);
+    break;
+  case IR_OP_TY_MEM_COPY:
+    walk_op(op->mem_copy.source, cb, cb_metadata);
+    walk_op(op->mem_copy.dest, cb, cb_metadata);
+    break;
   }
 }
 
@@ -837,16 +873,16 @@ void eliminate_redundant_ops(struct ir_func *func,
         goto side_effects;
       }
 
-      if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
-        continue;
-      }
-
       if (op->mov.value && op->reg.ty != IR_REG_TY_NONE &&
           ir_reg_eq(op->reg, op->mov.value->reg)) {
         struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
         for (size_t i = 0; i < usage.num_uses; i++) {
           *usage.uses[i].op = op->mov.value;
+        }
+
+        if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
+          op->mov.value->flags |= IR_OP_FLAG_SIDE_EFFECTS;
         }
 
         vector_push_back(detach, &op);
@@ -1247,6 +1283,7 @@ void move_before_ir_basicblock(struct ir_func *irb,
 struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty) {
   DEBUG_ASSERT(op, "invalid replacement point!");
+  DEBUG_ASSERT(op->id != DETACHED_OP, "op is detached");
 
   op->ty = ty;
   op->var_ty = var_ty;
@@ -2297,10 +2334,10 @@ struct lcl_use_data {
   struct vector *uses;
 };
 
-static void build_op_uses_callback(struct ir_op **op, void *cb_metadata) {
+static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty, void *cb_metadata) {
   struct build_op_uses_callback_data *data = cb_metadata;
 
-  struct ir_op_use use = {.op = op, .consumer = data->op};
+  struct ir_op_use use = {.ty = use_ty, .op = op, .consumer = data->op};
 
   DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op consumed by %zu",
                use.consumer->id);

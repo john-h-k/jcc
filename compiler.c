@@ -180,7 +180,7 @@ static enum compile_result compile_stage_lower(UNUSED struct compiler *compiler,
     debug_print_stage(ir, "lower");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -215,7 +215,7 @@ static enum compile_result compile_stage_regalloc(struct compiler *compiler,
     debug_print_stage(ir, "regalloc");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -247,7 +247,7 @@ compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
     debug_print_stage(ir, "elim_phi");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS | IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
 
   return COMPILE_RESULT_SUCCESS;
 }

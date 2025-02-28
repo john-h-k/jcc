@@ -751,6 +751,10 @@ enum ir_lcl_flags {
 
   // local is actually a param
   IR_LCL_FLAG_PARAM = 4,
+
+  // local has been promoted, but still exists as it is a param, and so `lower` is free to remove it
+  // if the ABI keeps the param in registers
+  IR_LCL_FLAG_PROMOTED = 8,
 };
 
 enum ir_lcl_alloc_ty {
@@ -998,7 +1002,14 @@ bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op);
 struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                      enum ir_well_known_glb glb);
 
-typedef void(walk_op_callback)(struct ir_op **op, void *metadata);
+
+enum ir_op_use_ty {
+  IR_OP_USE_TY_READ,
+  IR_OP_USE_TY_DEREF, // e.g `store.addr [%1], ...`
+};
+
+typedef void(walk_op_uses_callback)(struct ir_op **op, enum ir_op_use_ty use_ty, void *metadata);
+typedef void(walk_op_callback)(struct ir_op *op, void *metadata);
 
 bool op_has_side_effects(const struct ir_op *ty);
 bool op_produces_value(const struct ir_op *ty);
@@ -1006,7 +1017,7 @@ bool op_is_branch(enum ir_op_ty ty);
 
 void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
 void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
-void walk_op_uses(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
+void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb, void *cb_metadata);
 
 bool stmt_is_empty(struct ir_stmt *stmt);
 bool basicblock_is_empty(struct ir_basicblock *basicblock);
@@ -1218,12 +1229,14 @@ bool var_ty_is_integral(const struct ir_var_ty *var_ty);
 bool var_ty_is_fp(const struct ir_var_ty *var_ty);
 bool var_ty_is_aggregate(const struct ir_var_ty *var_ty);
 
-bool var_ty_eq(struct ir_func *irb, const struct ir_var_ty *l,
+bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
                const struct ir_var_ty *r);
 
 struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
 
 struct ir_op_use {
+  enum ir_op_use_ty ty;
+
   struct ir_op *consumer;
   struct ir_op **op;
 };

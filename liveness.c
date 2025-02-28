@@ -7,7 +7,7 @@
 #include "log.h"
 #include "util.h"
 
-static void op_used_callback(struct ir_op **op, void *cb_metadata) {
+static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
 
   if (cb->op->ty == IR_OP_TY_PHI) {
