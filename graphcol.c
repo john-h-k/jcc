@@ -218,6 +218,8 @@ static void build_interf_graph(struct graphcol_state *state,
 
 // uses graph-coloring technique to allocate registers - relies on SSA form!
 void graphcol_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
+  TODO("does not currently work!");
+
   clear_metadata(irb);
   struct interval_data data = construct_intervals(irb);
 
