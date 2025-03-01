@@ -398,9 +398,11 @@ enum compile_result compile(struct compiler *compiler) {
 
   struct codegen_unit *codegen_unit;
   COMPILER_STAGE(CODEGEN, codegen, ir, &codegen_unit);
-
+  
   if (compiler->args.build_asm_file) {
     // finished, only needed object file
+    codegen_free(&codegen_unit);
+
     return COMPILE_RESULT_SUCCESS;
   }
 

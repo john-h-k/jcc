@@ -545,6 +545,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
   vector_free(&depends);
   hashtbl_free(&any_stores);
+  hashtbl_free(&cur_bb_store);
   hashtbl_free(&last_bb_store);
 }
 

@@ -265,16 +265,14 @@ int main(int argc, char **argv) {
 
     if (compile_args.preproc_only && !compile_args.output) {
       // FIXME: hacky
-      object_file = nonnull_malloc(strlen("stdout") + 1);
-      strcpy(object_file, "stdout");
-      object_file[strlen("stdout")] = 0;
+      object_file = arena_alloc_strdup(arena, "stdout");
     } else if (compile_args.build_asm_file && !compile_args.output) {
       object_file = path_replace_ext(arena, source_path, ".s");
     } else if (target_needs_linking(&compile_args, target) ||
                !compile_args.output) {
       object_file = path_replace_ext(arena, source_path, "o");
     } else {
-      object_file = strdup(compile_args.output);
+      object_file = arena_alloc_strdup(arena, compile_args.output);
     }
 
     info("compiling source file '%s' into object file '%s'", source_path,
