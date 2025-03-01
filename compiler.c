@@ -19,6 +19,7 @@
 #include "profile.h"
 #include "target.h"
 #include "util.h"
+#include "vector.h"
 
 #include <stdio.h>
 
@@ -143,6 +144,19 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
   return COMPILE_RESULT_SUCCESS;
 }
 
+static enum compile_result
+compile_stage_lower_abi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
+  lower_abi(ir);
+
+  if (log_enabled()) {
+    debug_print_stage(ir, "lower_abi");
+  }
+
+  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
+
+  return COMPILE_RESULT_SUCCESS;
+}
+
 static enum compile_result compile_stage_opts(struct compiler *compiler,
                                               struct ir_unit *ir) {
   switch (compiler->args.opts_level) {
@@ -247,7 +261,8 @@ compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
     debug_print_stage(ir, "elim_phi");
   }
 
-  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS | IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
+  ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS |
+                      IR_VALIDATE_FLAG_ALLOW_MIXED_PHIS);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -271,6 +286,30 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
       eliminate_redundant_ops(glb->func,
                               ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
                                   ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
+
+      // now we remove all gathers as they are pointless
+      // important we do this last as otherwise other instructions may get
+      // wrongly remopved
+
+      struct ir_func_iter iter =
+          ir_func_iter(glb->func, IR_FUNC_ITER_FLAG_NONE);
+
+      struct vector *gathers = vector_create(sizeof(struct ir_op *));
+
+      struct ir_op *op;
+      size_t num_gathers = 0;
+      while (ir_func_iter_next(&iter, &op)) {
+        if (op->ty == IR_OP_TY_GATHER) {
+          num_gathers++;
+          vector_push_back(gathers, &op);
+        }
+      }
+
+      for (size_t i = 0; i < num_gathers; i++) {
+        detach_ir_op(glb->func, *(struct ir_op **)vector_get(gathers, i));
+      }
+      vector_free(&gathers);
+
       rebuild_flags(glb->func);
       rebuild_ids(glb->func);
       break;
@@ -387,6 +426,11 @@ enum compile_result compile(struct compiler *compiler) {
 
   COMPILER_STAGE(IR, ir, target, &typechk_result, &ir);
 
+  // lower ABI happens before opts, and handles transforming calls into their
+  // actual types (e.g large structs to pointers) we do this early because it
+  // helps with opts
+  COMPILER_STAGE(LOWER_ABI, lower_abi, ir);
+
   if (compiler->args.opts_level != COMPILE_OPTS_LEVEL_0) {
     COMPILER_STAGE(OPTS, opts, ir);
   }
@@ -398,7 +442,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   struct codegen_unit *codegen_unit;
   COMPILER_STAGE(CODEGEN, codegen, ir, &codegen_unit);
-  
+
   if (compiler->args.build_asm_file) {
     // finished, only needed object file
     codegen_free(&codegen_unit);

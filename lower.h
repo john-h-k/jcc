@@ -10,6 +10,9 @@
 #define IR_REG_IDX_SI (1)
 #define IR_REG_IDX_DI (0)
 
+// Exposes platform calling convention
+void lower_abi(struct ir_unit *unit);
+
 // Performs platform agnostic lowering
 void lower(struct ir_unit *unit);
 

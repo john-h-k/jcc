@@ -152,7 +152,6 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_LOAD_BITFIELD:
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_BITFIELD_EXTRACT:
-  case IR_OP_TY_GATHER:
   case IR_OP_TY_ADDR:
   case IR_OP_TY_ADDR_OFFSET:
     return true;
@@ -166,6 +165,7 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BR:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
+  case IR_OP_TY_GATHER:
     return false;
   case IR_OP_TY_CUSTOM:
     BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");

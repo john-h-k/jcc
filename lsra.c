@@ -611,6 +611,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
+      DEBUG_ASSERT(interval->op->reg.ty != IR_REG_TY_NONE, "op had .fixed_reg but no reg was given");
       DEBUG_ASSERT(interval->op->reg.ty == reg_ty,
                    "fixed reg was not of right type. if you have moved fp to a "
                    "gp reg (or vice versa) you must also change op type");
