@@ -316,7 +316,7 @@ static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
 }
 
 static void debug_print_lcl_alloc(FILE *file, struct ir_lcl_alloc *lcl_alloc) {
-   fprintf(file, "#%zu (size=%zu, padding=%zu)", lcl_alloc->offset, lcl_alloc->size, lcl_alloc->padding);
+   fprintf(file, "#%zd (size=%zu, padding=%zu)", lcl_alloc->offset, lcl_alloc->size, lcl_alloc->padding);
 }
 
 enum print_op_ctx {
@@ -633,7 +633,8 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
-      fprintf(file, "return %%%zu", op->ret.value->id);
+      fprintf(file, "return ");
+      debug_print_op_use(file, irb, op->ret.value);
     } else {
       fprintf(file, "return");
     }

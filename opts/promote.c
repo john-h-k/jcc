@@ -601,12 +601,9 @@ static void opts_promote_func(struct ir_func *func) {
     if (candidates[lcl->id]) {
       debug("func %s: lcl %zu promotion candidate", func->name, lcl->id);
 
-      DEBUG_PRINT_IR(stderr, func);
       opts_do_promote(func, lcl_uses[lcl->id], lcl);
 
-      DEBUG_PRINT_IR(stderr, func);
-
-      if (!(lcl->flags & IR_LCL_FLAG_PARAM)) {
+      if (!(lcl->flags & IR_LCL_FLAG_PARAM) && lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED) {
         vector_push_back(lcls_to_remove, &lcl);
       }
     }

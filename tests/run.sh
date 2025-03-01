@@ -183,6 +183,9 @@ aggregator() {
         skipped=$((skipped + 1))
         skips+=("${msg#skip }")
         ;;
+      *)
+        continue
+        ;;
     esac
 
     completed=$((completed + 1))

@@ -207,7 +207,7 @@ bool op_is_branch(enum ir_op_ty ty) {
   }
 }
 
-bool var_ty_eq(struct ir_unit*iru, const struct ir_var_ty *l,
+bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
                const struct ir_var_ty *r) {
   if (l == r) {
     return true;
@@ -290,7 +290,8 @@ bool var_ty_eq(struct ir_unit*iru, const struct ir_var_ty *l,
   unreachable();
 }
 
-void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb, void *cb_metadata) {
+void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb,
+                  void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
@@ -935,7 +936,8 @@ void eliminate_redundant_ops(struct ir_func *func,
   use_map = build_op_uses_map(func);
   struct ir_lcl *lcl = func->first_lcl;
   while (lcl) {
-    if (!use_map.lcl_use_datas[lcl->id].num_consumers) {
+    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
+        !use_map.lcl_use_datas[lcl->id].num_consumers) {
       detach_local(func, lcl);
     }
 
@@ -1100,6 +1102,8 @@ void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
   invariant_assert(stmt, "cannot attach op without stmt");
 
   irb->op_count++;
+
+  op->id = irb->next_op_id++;
 
   op->stmt = stmt;
 
@@ -2187,6 +2191,62 @@ bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
   return primitive_ty_is_fp(var_ty->primitive);
 }
 
+static void flatten_add_fields(struct ir_unit *iru, const struct ir_var_ty *ty,
+                               struct vector *fields, size_t *offset) {
+  switch (ty->ty) {
+  case IR_VAR_TY_TY_ARRAY: {
+    for (size_t i = 0; i < ty->array.num_elements; i++) {
+      flatten_add_fields(iru, ty->array.underlying, fields, offset);
+    }
+    break;
+  }
+
+  case IR_VAR_TY_TY_STRUCT: {
+    struct ir_var_ty_info info = var_ty_info(iru, ty);
+
+    for (size_t i = 0; i < info.num_fields; i++) {
+      size_t field_offset = *offset + info.offsets[i];
+      flatten_add_fields(iru, &ty->aggregate.fields[i], fields, &field_offset);
+    }
+
+    *offset += info.size;
+    break;
+  }
+
+  case IR_VAR_TY_TY_UNION: {
+    struct ir_var_ty_info info = var_ty_info(iru, ty);
+
+    for (size_t i = 0; i < info.num_fields; i++) {
+      size_t field_offset = *offset;
+      flatten_add_fields(iru, &ty->aggregate.fields[i], fields, &field_offset);
+    }
+
+    *offset += info.size;
+    break;
+  }
+  default: {
+    struct ir_field_info info = {.offset = *offset, .var_ty = *ty};
+    *offset += var_ty_info(iru, ty).size;
+    vector_push_back(fields, &info);
+  }
+  }
+}
+
+struct ir_var_ty_flattened var_ty_info_flat(struct ir_unit *iru,
+                                            const struct ir_var_ty *ty) {
+  // TODO: this isn't efficient because it generates a huge array of offsets
+  // for arrays
+
+  struct vector *fields = vector_create_in_arena(sizeof(struct ir_field_info), iru->arena);
+  size_t offset = 0;
+  flatten_add_fields(iru, ty, fields, &offset);
+
+  return (struct ir_var_ty_flattened){
+    .fields = vector_head(fields),
+    .num_fields = vector_length(fields)
+  };
+}
+
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty) {
   switch (ty->ty) {
@@ -2334,7 +2394,8 @@ struct lcl_use_data {
   struct vector *uses;
 };
 
-static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty, void *cb_metadata) {
+static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
+                                   void *cb_metadata) {
   struct build_op_uses_callback_data *data = cb_metadata;
 
   struct ir_op_use use = {.ty = use_ty, .op = op, .consumer = data->op};
@@ -2363,8 +2424,8 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
     while (ir_func_iter_next(&iter, &op)) {
       DEBUG_ASSERT(op->id == i, "ids unordered");
 
-      // because walk_op_uses can be out of order we need to create the vectors
-      // in advance
+      // because walk_op_uses can be out of order we need to create the
+      // vectors in advance
       data.use_data[i++] = (struct op_use_data){
           .op = op, .uses = vector_create(sizeof(struct ir_op_use))};
     }
@@ -2376,8 +2437,8 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
     while (lcl) {
       DEBUG_ASSERT(lcl->id == i, "ids unordered");
 
-      // because walk_op_uses can be out of order we need to create the vectors
-      // in advance
+      // because walk_op_uses can be out of order we need to create the
+      // vectors in advance
       lcl_usage[i++] = (struct lcl_use_data){
           .lcl = lcl, .uses = vector_create(sizeof(struct ir_op *))};
 
@@ -2861,10 +2922,9 @@ void alloc_locals(struct ir_func *func) {
     func->total_locals_size += lcl_pad;
 
     lcl->alloc_ty = IR_LCL_ALLOC_TY_NORMAL;
-    lcl->alloc = (struct ir_lcl_alloc){
-        .offset = func->total_locals_size,
-        .padding = lcl_pad,
-        .size = lcl_size};
+    lcl->alloc = (struct ir_lcl_alloc){.offset = func->total_locals_size,
+                                       .padding = lcl_pad,
+                                       .size = lcl_size};
 
     func->total_locals_size += lcl_size;
 
