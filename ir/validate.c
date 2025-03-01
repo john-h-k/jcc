@@ -134,9 +134,10 @@ static void ir_validate_op(struct ir_validate_state *state,
     switch (var_ty->ty) {
     case IR_VAR_TY_TY_UNION:
     case IR_VAR_TY_TY_STRUCT:
-      VALIDATION_CHECK(op->gather.num_values == var_ty->aggregate.num_fields,
-                       op, "gather has %zu fields but type has %zu fields",
-                       op->gather.num_values, var_ty->aggregate.num_fields);
+      // TODO: needs to validate flattened type instead
+      // VALIDATION_CHECK(op->gather.num_values == var_ty->aggregate.num_fields,
+      //                  op, "gather has %zu fields but type has %zu fields",
+      //                  op->gather.num_values, var_ty->aggregate.num_fields);
       break;
     default:
       VALIDATION_ERRZ(

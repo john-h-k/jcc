@@ -324,13 +324,18 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
   DEBUG_ASSERT(lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE, "unallocated lcl");
 
   ssize_t offset = lcl->alloc.offset;
-  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
-    offset += state->ir->caller_stack_needed;
+
+  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED && offset <= 0 && lcl->flags & IR_LCL_FLAG_PARAM) {
+    offset = state->aarch64_prologue_info->stack_size + -offset;
   }
 
-  if (!state->aarch64_prologue_info->prologue_generated) {
-    // using red zone
-    offset = (ssize_t)state->aarch64_prologue_info->stack_size - offset;
+  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
+    offset += state->ir->caller_stack_needed;
+
+    if (!state->aarch64_prologue_info->prologue_generated) {
+      // using red zone
+      offset = (ssize_t)state->aarch64_prologue_info->stack_size - offset;
+    }
   }
 
   if (!op) {
@@ -907,7 +912,7 @@ static void codegen_sub_imm(struct codegen_state *state,
   instr->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
   instr->aarch64->add_imm = (struct aarch64_addsub_imm){
       .dest = dest,
-      .source = dest,
+      .source = source,
       .imm = lo,
       .shift = 0,
   };
@@ -917,7 +922,7 @@ static void codegen_sub_imm(struct codegen_state *state,
     instr->aarch64->ty = AARCH64_INSTR_TY_SUB_IMM;
     instr->aarch64->add_imm = (struct aarch64_addsub_imm){
         .dest = dest,
-        .source = source,
+        .source = dest,
         .imm = hi,
         .shift = 1,
     };

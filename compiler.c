@@ -303,6 +303,10 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
           num_gathers++;
           vector_push_back(gathers, &op);
         }
+
+        if (op->ty == IR_OP_TY_RET && op->ret.value && op->ret.value->ty == IR_OP_TY_GATHER) {
+          op->ret.value = NULL;
+        }
       }
 
       for (size_t i = 0; i < num_gathers; i++) {

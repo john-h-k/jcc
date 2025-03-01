@@ -689,7 +689,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
         nsaa += size;
         continue;
 
-      } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn <= 8) {
+      } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn < 8) {
         vector_push_back(params, var_ty);
 
         struct ir_param_info param_info = {

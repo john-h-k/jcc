@@ -108,6 +108,8 @@ static void remove_critical_edges(struct ir_func *irb) {
   }
 }
 
+static void lower_call_registers(struct ir_func *func, struct ir_op *op);
+
 // this is carefully chosen so that all types passed on the stack will generate
 // inline code because else `lower_call` needs to deal with this function
 // potentially generating calls _itself_ biggest thing passed on stack: 4
@@ -180,6 +182,7 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
   };
 
   lower_call(func, op);
+  lower_call_registers(func, op);
 }
 
 enum load_bitfield {
@@ -367,6 +370,8 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
       .args = args,
       .func_ty = memset->var_ty,
   };
+
+  lower_call(func, op);
 }
 
 static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
@@ -411,6 +416,8 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
       .args = args,
       .func_ty = memcopy->var_ty,
   };
+
+  lower_call(func, op);
 }
 
 static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
@@ -668,13 +675,37 @@ static void lower_params(struct ir_func *func) {
         } else {
           DEBUG_ASSERT(param_info.num_regs == 1,
                        "expected 1 reg for non aggregate");
-
-          param_op->flags |= IR_OP_FLAG_FIXED_REG;
-          param_op->reg = param_info.regs[0].reg;
         }
         break;
-      case IR_PARAM_INFO_TY_STACK:
+      case IR_PARAM_INFO_TY_STACK: {
+        struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
+
+        struct ir_lcl *lcl;
+        if (param_op->ty == IR_OP_TY_MOV) {
+          lcl = add_local(func, &param_op->var_ty);
+
+          param_op =
+              replace_ir_op(func, param_op, IR_OP_TY_LOAD, param_op->var_ty);
+          param_op->load =
+              (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
+        } else {
+          DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
+                           param_op->addr.ty == IR_OP_ADDR_TY_LCL,
+                       "expected addr.lcl");
+
+          // FIXME: this won't dealloc allocated locals
+          lcl = param_op->addr.lcl;
+        }
+
+        ssize_t offset = -param_info.stack_offset;
+
+        lcl->flags |= IR_LCL_FLAG_PARAM;
+        lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+        lcl->alloc = (struct ir_lcl_alloc){
+            .padding = 0, .size = info.size, .offset = -offset};
+
         break;
+      }
       case IR_PARAM_INFO_TY_POINTER: {
         DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
                          param_op->addr.ty == IR_OP_ADDR_TY_LCL,
@@ -767,6 +798,9 @@ static void lower_params(struct ir_func *func) {
 
     struct ir_param_info param_info = *func->call_info.ret;
 
+    struct ir_var_ty_flattened info =
+        var_ty_info_flat(func->unit, param_info.var_ty);
+
     switch (param_info.ty) {
     case IR_PARAM_INFO_TY_REGISTER: {
       if (var_ty_is_aggregate(param_info.var_ty)) {
@@ -785,10 +819,22 @@ static void lower_params(struct ir_func *func) {
 
         struct ir_op *last = gather;
 
-        for (size_t j = num_reg; j; j--) {
-          struct ir_param_reg reg = param_info.regs[j - 1];
+        size_t field_idx = 0;
+        size_t offset = 0;
 
-          struct ir_var_ty load_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+        for (size_t j = 0; j < num_reg; j++) {
+          struct ir_param_reg reg = param_info.regs[j];
+
+          struct ir_var_ty load_ty;
+          if (field_idx + 1 >= info.num_fields ||
+              info.fields[field_idx + 1].offset - offset >= reg.size) {
+            // only loading one field, so load the field ty
+            size_t field_size =
+                var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
+            load_ty = get_var_ty_for_size(reg.reg.ty, field_size);
+          } else {
+            load_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+          }
 
           struct ir_op *load =
               insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
@@ -800,7 +846,14 @@ static void lower_params(struct ir_func *func) {
               // offset? or could reg size be an incorrect metric based on
               // lower
               .base = addr,
-              .offset = (j - 1) * reg.size};
+              .offset = offset};
+
+          offset += reg.size;
+
+          while (field_idx < info.num_fields &&
+                 info.fields[field_idx].offset < offset) {
+            field_idx++;
+          }
 
           load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
                                            .addr = addr_offset};
@@ -808,7 +861,7 @@ static void lower_params(struct ir_func *func) {
 
           // FIXME: `j != field_idx` because reg can contain multiple
 
-          gather->gather.values[j - 1] =
+          gather->gather.values[j] =
               (struct ir_gather_value){.value = load, .field_idx = j};
         }
 
@@ -850,6 +903,213 @@ static void lower_params(struct ir_func *func) {
   }
 }
 
+void lower_call(struct ir_func *func, struct ir_op *op) {
+  struct ir_func_info func_info = func->unit->target->lower_func_ty(
+      func, op->call.func_ty.func, op->call.args, op->call.num_args);
+
+  struct vector *new_args = vector_create(sizeof(struct ir_op *));
+
+  op->call.func_ty.func = func_info.func_ty;
+  op->call.func_info = func_info;
+
+  if (func_info.call_info.ret &&
+      func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
+    // FIXME: don't use succ find usage
+    struct ir_op *store = op->succ;
+    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store");
+
+    struct ir_op *addr = build_addr(func, store);
+    detach_ir_op(func, addr);
+    attach_ir_op(func, addr, op->stmt, op->pred, op);
+
+    vector_push_back(new_args, &addr);
+    detach_ir_op(func, store);
+
+    op->var_ty = IR_VAR_TY_NONE;
+  }
+
+  for (size_t i = 0; i < op->call.num_args; i++) {
+    struct ir_op *arg = op->call.args[i];
+    DEBUG_ASSERT(i < func_info.call_info.num_params, "out of range");
+    struct ir_param_info param_info = func_info.call_info.params[i];
+
+    struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
+
+    switch (param_info.ty) {
+    case IR_PARAM_INFO_TY_REGISTER:
+      if (arg->ty != IR_OP_TY_LOAD && param_info.num_regs == 1) {
+        // no change needed
+        vector_push_back(new_args, &arg);
+
+      } else {
+        if (arg->ty != IR_OP_TY_LOAD) {
+          arg = spill_op(func, arg);
+        }
+
+        struct ir_op *addr = build_addr(func, arg);
+        struct ir_op *last = op;
+
+        for (size_t j = 0; j < param_info.num_regs; j++) {
+          struct ir_param_reg reg = param_info.regs[j];
+
+          struct ir_var_ty load_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+
+          struct ir_op *load =
+              insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
+
+          struct ir_op *addr_offset = insert_before_ir_op(
+              func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+          addr_offset->addr_offset =
+              (struct ir_op_addr_offset){.base = addr, .offset = j * reg.size};
+
+          load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
+                                           .addr = addr_offset};
+
+          vector_push_back(new_args, &load);
+
+          last = load;
+        }
+
+        detach_ir_op(func, arg);
+      }
+      break;
+    case IR_PARAM_INFO_TY_STACK: {
+      struct ir_lcl *lcl = add_local(func, &arg->var_ty);
+
+      lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+      lcl->alloc = (struct ir_lcl_alloc){
+          .padding = 0, .size = info.size, .offset = param_info.stack_offset};
+
+      struct ir_op *dest_addr =
+          insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      dest_addr->addr = (struct ir_op_addr){
+          .ty = IR_OP_ADDR_TY_LCL,
+          .lcl = lcl,
+      };
+
+      if (arg->ty == IR_OP_TY_LOAD) {
+        struct ir_op *addr = build_addr(func, arg);
+
+        struct ir_op *mem_copy =
+            insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
+        mem_copy->mem_copy = (struct ir_op_mem_copy){
+            .dest = dest_addr, .source = addr, .length = info.size};
+
+        detach_ir_op(func, arg);
+
+      } else {
+        struct ir_op *store =
+            insert_after_ir_op(func, dest_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        store->store = (struct ir_op_store){
+            .ty = IR_OP_STORE_TY_ADDR, .addr = dest_addr, .value = arg};
+      }
+
+      // stack args don't add to the call args
+      break;
+    }
+    case IR_PARAM_INFO_TY_POINTER: {
+      DEBUG_ASSERT(arg->ty == IR_OP_TY_LOAD, "expected load");
+
+      // FIXME: this needs to copy, but it does not
+
+      struct ir_op *addr = build_addr(func, arg);
+
+      struct ir_op *mov =
+          replace_ir_op(func, arg, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
+      mov->mov = (struct ir_op_mov){.value = addr};
+
+      vector_push_back(new_args, &mov);
+      break;
+    }
+    }
+  }
+
+  CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args,
+                        op->call.args);
+
+  if (!func_info.call_info.ret) {
+    op->var_ty = IR_VAR_TY_NONE;
+    return;
+  }
+
+  struct ir_param_info param_info = *func_info.call_info.ret;
+
+  if (param_info.ty == IR_PARAM_INFO_TY_POINTER) {
+    // already handled
+    return;
+  }
+
+  struct ir_var_ty_flattened info = var_ty_info_flat(func->unit, param_info.var_ty);
+
+  if (var_ty_is_aggregate(param_info.var_ty)) {
+    // return is in reg
+    // we need to generate ops to retrieve it from the registers
+
+    op->var_ty = IR_VAR_TY_NONE;
+
+    // HACK: should use op uses
+    struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
+    while (prev_store->ty != IR_OP_TY_STORE)
+      prev_store = prev_store->succ;
+    DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
+
+    struct ir_op *addr = build_addr(func, prev_store);
+
+    size_t field_idx = 0;
+    size_t offset = 0;
+
+    // HACK: order of stores must be order of fields for `lower_call_registers`
+    struct ir_op *last_mov = op;
+    struct ir_op *last = prev_store;
+    for (size_t j = 0; j < param_info.num_regs; j++) {
+      struct ir_param_reg reg = param_info.regs[j];
+
+      struct ir_var_ty store_ty;
+      if (field_idx + 1 >= info.num_fields ||
+          info.fields[field_idx + 1].offset - offset >= reg.size) {
+        // only storeing one field, so store the field ty
+            size_t field_size =
+                var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
+        store_ty = get_var_ty_for_size(reg.reg.ty, field_size);
+      } else {
+        store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+      }
+
+      struct ir_op *mov =
+          insert_after_ir_op(func, last_mov, IR_OP_TY_MOV, store_ty);
+      last_mov = mov;
+
+      mov->mov = (struct ir_op_mov){.value = NULL};
+      // we should probs have a different flag for this
+      mov->flags |= IR_OP_FLAG_PARAM;
+
+      struct ir_op *addr_offset = insert_after_ir_op(
+          func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = addr, .offset = offset};
+
+      offset += reg.size;
+
+      while (field_idx < info.num_fields &&
+             info.fields[field_idx].offset < offset) {
+        field_idx++;
+      }
+
+      struct ir_op *store =
+          insert_after_ir_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+      store->store = (struct ir_op_store){
+          .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
+
+      last = store;
+    }
+
+    detach_ir_op(func, prev_store);
+  } else {
+    // single reg. don't need to do anything, call value can be used directly
+  }
+}
+
 static void lower_params_registers(struct ir_func *func) {
   // assign registers to the params for regalloc
 
@@ -857,7 +1117,6 @@ static void lower_params_registers(struct ir_func *func) {
 
   if (call_info.num_params) {
     struct ir_op *param_op = func->first->first->first;
-    // struct ir_stmt *stmt = insert_after_ir_stmt(func, func->first->first);
 
     size_t param_idx = 0;
     size_t reg_idx = 0;
@@ -865,24 +1124,32 @@ static void lower_params_registers(struct ir_func *func) {
     while (param_idx < call_info.num_params) {
       struct ir_param_info *param_info = &call_info.params[param_idx];
 
-      DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
+      if (param_info->ty != IR_PARAM_INFO_TY_STACK) {
+        DEBUG_ASSERT(param_op->flags & IR_OP_FLAG_PARAM, "expected param op");
 
-      struct ir_op *mov =
-          insert_before_ir_op(func, param_op, IR_OP_TY_MOV, param_op->var_ty);
-      mov->mov = (struct ir_op_mov){.value = NULL};
+        struct ir_op *mov =
+            insert_before_ir_op(func, param_op, IR_OP_TY_MOV, param_op->var_ty);
+        mov->mov = (struct ir_op_mov){.value = NULL};
 
-      mov->reg = param_info->regs[reg_idx++].reg;
-      mov->flags =
-          (param_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
-          IR_OP_FLAG_FIXED_REG;
+        mov->reg = param_info->regs[reg_idx].reg;
+        mov->flags =
+            (param_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
+            IR_OP_FLAG_FIXED_REG;
 
-      param_op->flags &= ~(IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM);
+        DEBUG_ASSERT(mov->reg.ty != IR_REG_TY_NONE, "fixed reg had TY_NONE");
 
-      param_op->mov = (struct ir_op_mov){.value = mov};
-      param_op->reg = NO_REG;
+        param_op->flags &= ~IR_OP_FLAG_PARAM;
 
-      if (reg_idx >= param_info->num_regs) {
-        reg_idx = 0;
+        param_op->mov = (struct ir_op_mov){.value = mov};
+        param_op->reg = NO_REG;
+
+        reg_idx++;
+
+        if (reg_idx >= param_info->num_regs) {
+          reg_idx = 0;
+          param_idx++;
+        }
+      } else {
         param_idx++;
       }
 
@@ -903,40 +1170,38 @@ static void lower_params_registers(struct ir_func *func) {
       continue;
     }
 
-    // keep the gather, as it makes sure the moves are used and don't get eliminated
-    // gather is marked as not producing a value so it won't get a register allocation
-    
-    struct ir_op *value = op->ret.value;
-    if (value->ty == IR_OP_TY_GATHER) {
-      for (size_t i = 0; i < value->gather.num_values; i++) {
-        struct ir_gather_value *gather_val = &value->gather.values[i];
+    // keep the gather, as it makes sure the moves are used and don't get
+    // eliminated gather is marked as not producing a value so it won't get a
+    // register allocation
 
-        // FIXME: again will fail on registers which return multiple fields in one reg e.g bool[2]
-        gather_val->value->reg = call_info.ret->regs[i].reg;
-        gather_val->value->flags |= IR_OP_FLAG_FIXED_REG;
+    struct ir_op *ret_value = op->ret.value;
+    if (ret_value->ty == IR_OP_TY_GATHER) {
+      for (size_t i = 0; i < ret_value->gather.num_values; i++) {
+        struct ir_gather_value *gather_val = &ret_value->gather.values[i];
+
+        struct ir_op *value = gather_val->value;
+
+        // FIXME: again will fail on registers which return multiple fields in
+        // one reg e.g bool[2]
+        value->reg = call_info.ret->regs[i].reg;
+        value->flags |= IR_OP_FLAG_FIXED_REG;
       }
-      value->flags |= IR_OP_FLAG_FIXED_REG;
-      
-    } else if (value->ty == IR_OP_TY_MOV) {
-      DEBUG_ASSERT(func->call_info.ret->num_regs == 1, "mov but multi reg return? expected gather");
-      value->reg = func->call_info.ret->regs[0].reg;
-      value->flags |= IR_OP_FLAG_FIXED_REG;
+      ret_value->flags |= IR_OP_FLAG_FIXED_REG;
+
+    } else if (ret_value->ty == IR_OP_TY_MOV) {
+      DEBUG_ASSERT(func->call_info.ret->num_regs == 1,
+                   "mov but multi reg return? expected gather");
+      ret_value->reg = func->call_info.ret->regs[0].reg;
+      ret_value->flags |= IR_OP_FLAG_FIXED_REG;
     } else {
       BUG("expected gather/mov for reg return");
     }
   }
 }
+static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
+  struct ir_func_info func_info = op->call.func_info;
 
-void lower_call(struct ir_func *func, struct ir_op *op) {
-  struct ir_func_info func_info = func->unit->target->lower_func_ty(
-      func, op->call.func_ty.func, op->call.args, op->call.num_args);
-
-  func->caller_stack_needed =
-      MAX(func->caller_stack_needed, func_info.call_info.stack_size);
-
-  struct vector *new_args = vector_create(sizeof(struct ir_op *));
-
-  op->call.func_ty.func = func_info.func_ty;
+  struct ir_call_info call_info = func_info.call_info;
 
   // if this is an indirect call, put a move of the target to split the live
   // range but ensure it isn't allocated into a reg used for args
@@ -948,162 +1213,39 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     op->call.target = mov;
   }
 
-  if (func_info.call_info.ret &&
-      func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
-    struct ir_param_info param_info = *func_info.call_info.ret;
+  func->caller_stack_needed =
+      MAX(func->caller_stack_needed, func_info.call_info.stack_size);
 
-    // FIXME: don't use succ find usage
-    struct ir_op *store = op->succ;
-    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store");
-
-    struct ir_op *addr = build_addr(func, store);
-    detach_ir_op(func, addr);
-    attach_ir_op(func, addr, op->stmt, op->pred, op);
-
-    addr->reg = param_info.regs[0].reg;
-    addr->flags |= IR_OP_FLAG_FIXED_REG;
-
-    vector_push_back(new_args, &addr);
-    detach_ir_op(func, store);
-
-    op->var_ty = IR_VAR_TY_NONE;
-  }
+  size_t param_idx = 0;
+  size_t reg_idx = 0;
 
   for (size_t i = 0; i < op->call.num_args; i++) {
+    struct ir_param_info *param_info;
+
+    if (param_idx == 0 && call_info.ret &&
+        call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
+      param_info = call_info.ret;
+    } else {
+      param_info = &call_info.params[param_idx];
+    }
+
     struct ir_op *arg = op->call.args[i];
-    DEBUG_ASSERT(i < func_info.call_info.num_params, "out of range");
-    struct ir_param_info param_info = func_info.call_info.params[i];
 
-    struct ir_var_ty_info info = var_ty_info(func->unit, param_info.var_ty);
+    struct ir_op *mov =
+        insert_before_ir_op(func, op, IR_OP_TY_MOV, arg->var_ty);
+    mov->mov = (struct ir_op_mov){.value = arg};
 
-    switch (param_info.ty) {
-    case IR_PARAM_INFO_TY_REGISTER:
-      if (arg->ty != IR_OP_TY_LOAD && param_info.num_regs == 1) {
-        struct ir_var_ty var_ty = get_var_ty_for_size(param_info.regs[0].reg.ty,
-                                                      param_info.regs[0].size);
+    mov->reg = param_info->regs[reg_idx++].reg;
+    mov->flags = (arg->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
+                 IR_OP_FLAG_FIXED_REG;
 
-        struct ir_op *mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, var_ty);
-        mov->mov = (struct ir_op_mov){.value = arg};
-        mov->reg = param_info.regs[0].reg;
-        mov->flags |= IR_OP_FLAG_FIXED_REG;
+    DEBUG_ASSERT(mov->reg.ty != IR_REG_TY_NONE, "fixed reg had TY_NONE");
 
-        vector_push_back(new_args, &mov);
+    op->call.args[i] = mov;
 
-      } else {
-        if (arg->ty != IR_OP_TY_LOAD) {
-          arg = spill_op(func, arg);
-        }
-
-        struct ir_op *addr = build_addr(func, arg);
-        struct ir_op *last = op;
-
-        for (size_t j = param_info.num_regs; j; j--) {
-          struct ir_param_reg reg = param_info.regs[j - 1];
-
-          struct ir_var_ty load_ty = get_var_ty_for_size(
-              param_info.regs[j - 1].reg.ty, param_info.regs[j - 1].size);
-
-          struct ir_op *load =
-              insert_before_ir_op(func, last, IR_OP_TY_LOAD, load_ty);
-
-          struct ir_op *addr_offset = insert_before_ir_op(
-              func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-          addr_offset->addr_offset = (struct ir_op_addr_offset){
-              .base = addr, .offset = (j - 1) * reg.size};
-
-          // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
-
-          load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
-                                           .addr = addr_offset};
-          load->reg = reg.reg;
-          load->flags |= IR_OP_FLAG_FIXED_REG;
-
-          vector_push_back(new_args, &load);
-
-          last = load;
-        }
-
-        detach_ir_op(func, arg);
-      }
-      break;
-    case IR_PARAM_INFO_TY_STACK: {
-      struct ir_lcl *lcl = add_local(func, &arg->var_ty);
-
-      lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
-      lcl->alloc = (struct ir_lcl_alloc){
-          .padding = 0, .size = info.size, .offset = param_info.stack_offset};
-
-      if (arg->ty == IR_OP_TY_LOAD) {
-        struct ir_op *addr = build_addr(func, arg);
-
-        size_t copy = info.size;
-        size_t offset = 0;
-        struct ir_op *last = arg;
-        while (copy) {
-          // FIXME: this overcopies, e.g 8 bytes on a 7 byte struct
-          size_t size = MIN(copy, 8);
-          size = ROUND_UP(size, ILOG2(size) + 1);
-          struct ir_var_ty store_ty =
-              get_var_ty_for_size(IR_REG_TY_INTEGRAL, size);
-
-          struct ir_op *load_addr_offset = insert_after_ir_op(
-              func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-          load_addr_offset->addr_offset =
-              (struct ir_op_addr_offset){.base = addr, .offset = offset};
-          // load_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
-
-          struct ir_op *load = insert_after_ir_op(func, load_addr_offset,
-                                                  IR_OP_TY_LOAD, store_ty);
-
-          load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR,
-                                           .addr = load_addr_offset};
-
-          struct ir_op *store_addr =
-              insert_after_ir_op(func, load, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-          store_addr->addr =
-              (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-
-          struct ir_op *store = insert_after_ir_op(
-              func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-
-          store->store = (struct ir_op_store){
-              .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = load};
-
-          last = store;
-          offset += size;
-          copy -= size;
-        }
-
-        detach_ir_op(func, arg);
-      } else {
-        struct ir_op *store_addr =
-            insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-        store_addr->addr =
-            (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-
-        struct ir_op *store = insert_after_ir_op(
-            func, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-        store->store = (struct ir_op_store){
-            .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = arg};
-        vector_push_back(new_args, &store);
-      }
-      break;
-    }
-    case IR_PARAM_INFO_TY_POINTER: {
-      DEBUG_ASSERT(arg->ty == IR_OP_TY_LOAD, "expected load");
-
-      struct ir_op *addr = build_addr(func, arg);
-
-      struct ir_op *mov =
-          insert_before_ir_op(func, op, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
-      mov->mov = (struct ir_op_mov){.value = addr};
-      mov->reg = param_info.regs[0].reg;
-      mov->flags |= IR_OP_FLAG_FIXED_REG;
-      vector_push_back(new_args, &mov);
-
-      detach_ir_op(func, arg);
-      break;
-    }
+    if (reg_idx >= param_info->num_regs) {
+      reg_idx = 0;
+      param_idx++;
     }
   }
 
@@ -1117,72 +1259,50 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     cnst->flags |= IR_OP_FLAG_SIDE_EFFECTS | IR_OP_FLAG_FIXED_REG;
   }
 
-  CLONE_AND_FREE_VECTOR(func->arena, new_args, op->call.num_args,
-                        op->call.args);
-
-  if (!func_info.call_info.ret) {
-    op->var_ty = IR_VAR_TY_NONE;
+  if (!call_info.ret) {
     return;
   }
 
-  struct ir_param_info param_info = *func_info.call_info.ret;
+  struct ir_param_info ret_info = *call_info.ret;
 
-  if (param_info.ty == IR_PARAM_INFO_TY_POINTER) {
-    // already handled
-    return;
-  }
+  switch (ret_info.ty) {
+  case IR_PARAM_INFO_TY_REGISTER: {
+    if (ret_info.num_regs == 1) {
+      struct ir_op *new_call =
+          insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
+      new_call->call = op->call;
+      new_call->flags |= IR_OP_FLAG_FIXED_REG;
+      new_call->reg = ret_info.regs[0].reg;
 
-  if (var_ty_is_aggregate(param_info.var_ty)) {
-    op->var_ty = IR_VAR_TY_NONE;
+      op->ty = IR_OP_TY_MOV;
+      op->mov = (struct ir_op_mov){.value = new_call};
+    } else {
+      struct ir_op *mov_op = op->succ;
 
-    // HACK: should use op uses
-    struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
-    while (prev_store->ty != IR_OP_TY_STORE)
-      prev_store = prev_store->succ;
-    DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
+      for (size_t i = 0; i < ret_info.num_regs; i++) {
+        DEBUG_ASSERT(mov_op->flags & IR_OP_FLAG_PARAM, "expected param ret op");
 
-    struct ir_op *addr = build_addr(func, prev_store);
+        struct ir_op *mov =
+            insert_before_ir_op(func, mov_op, IR_OP_TY_MOV, mov_op->var_ty);
+        mov->mov = (struct ir_op_mov){.value = NULL};
 
-    struct ir_op *last = prev_store;
-    for (size_t j = 0; j < param_info.num_regs; j++) {
-      struct ir_param_reg reg = param_info.regs[j];
+        mov->reg = ret_info.regs[i].reg;
+        mov->flags =
+            (mov_op->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
+            IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
 
-      struct ir_var_ty store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+        mov_op->mov = (struct ir_op_mov){.value = mov};
+        mov_op->flags &= ~IR_OP_FLAG_PARAM;
 
-      struct ir_op *mov = insert_after_ir_op(func, op, IR_OP_TY_MOV, store_ty);
-
-      mov->mov = (struct ir_op_mov){.value = NULL};
-      mov->flags |= IR_OP_FLAG_FIXED_REG | IR_OP_FLAG_PARAM;
-      mov->reg = reg.reg;
-
-      struct ir_op *addr_offset = insert_after_ir_op(
-          func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-      addr_offset->addr_offset =
-          (struct ir_op_addr_offset){.base = addr, .offset = j * reg.size};
-
-      // addr_offset->flags |= IR_OP_FLAG_CONTAINED;
-
-      struct ir_op *store =
-          insert_after_ir_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-
-      store->store = (struct ir_op_store){
-          .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
-
-      last = store;
+        mov_op = mov_op->succ;
+      }
     }
-
-    detach_ir_op(func, prev_store);
-  } else {
-    // now fix the ret and add a mov to detach it
-    struct ir_op *call =
-        insert_before_ir_op(func, op, IR_OP_TY_CALL, op->var_ty);
-    call->call = op->call;
-    call->flags = op->flags;
-    call->flags |= IR_OP_FLAG_FIXED_REG;
-    call->reg = func_info.call_info.ret->regs[0].reg;
-
-    op->ty = IR_OP_TY_MOV;
-    op->mov = (struct ir_op_mov){.value = call};
+    break;
+  }
+  case IR_PARAM_INFO_TY_STACK:
+    break;
+  case IR_PARAM_INFO_TY_POINTER:
+    break;
   }
 }
 
@@ -1215,12 +1335,6 @@ void lower_abi(struct ir_unit *unit) {
       while (ir_func_iter_next(&iter, &op)) {
         if (op->ty != IR_OP_TY_CALL) {
           continue;
-        }
-
-        if (op->call.target->ty == IR_OP_TY_ADDR &&
-            op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
-            !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-          op->call.target = alloc_contained_ir_op(func, op->call.target, op);
         }
 
         lower_call(func, op);
@@ -1264,6 +1378,21 @@ void lower(struct ir_unit *unit) {
         default:
           continue;
         }
+      }
+
+      iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+      while (ir_func_iter_next(&iter, &op)) {
+        if (op->ty != IR_OP_TY_CALL) {
+          continue;
+        }
+
+        if (op->call.target->ty == IR_OP_TY_ADDR &&
+            op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
+            !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
+          op->call.target = alloc_contained_ir_op(func, op->call.target, op);
+        }
+
+        lower_call_registers(func, op);
       }
 
       while (basicblock) {
@@ -1362,6 +1491,8 @@ void lower(struct ir_unit *unit) {
 
       // FIXME: phis are not propogated properly
       remove_critical_edges(func);
+
+      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
     }
     }
     glb = glb->succ;
