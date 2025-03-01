@@ -302,58 +302,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // TODO: use this here (and in build) to pick better phi locations
   // struct ir_dominance_frontier domf = ir_compute_dominance_frontier(func);
 
-  struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
-
-  if (lcl->flags & IR_LCL_FLAG_PARAM) {
-    printf("lcl is param\n");
-    for (size_t i = 0; i < info.num_fields; i++) {
-      struct ir_op **any = hashtbl_lookup(any_stores, &i);
-
-      if (any) {
-        continue;
-      }
-
-      // hasn't been used at all, and is a param, so insert a dummy load to
-      // first bb so phi gen works
-
-      // sort of hacky, but so lower doesn't need to determine the field, turn
-      // this load into load.addr [addr.off LCL, # field_offset]
-
-      // we need to insert a read into the _first_ bb
-      // because the values may move around and stuff after
-
-      struct ir_basicblock *first = func->first;
-      struct ir_stmt *stmt =
-          first->first ? first->first : alloc_ir_stmt(func, first);
-
-      struct ir_op *addr =
-          append_ir_op(func, stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-      addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-      addr->flags |= IR_OP_FLAG_PROMOTED;
-
-      struct ir_op *addr_offset =
-          append_ir_op(func, stmt, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-      addr_offset->addr_offset =
-          (struct ir_op_addr_offset){.base = addr, .offset = info.offsets[i]};
-
-      addr_offset->flags |= IR_OP_FLAG_PROMOTED;
-
-      struct ir_op *load = append_ir_op(func, stmt, IR_OP_TY_LOAD,
-                                        lcl->var_ty.aggregate.fields[i]);
-      load->load =
-          (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr_offset};
-
-      lcl->flags |= IR_LCL_FLAG_PROMOTED;
-
-      struct lcl_store field_read_key = {.bb_id = first->id, .field_idx = i};
-
-      printf("adding dummy bb %zu field %zu\n", first->id, i);
-      hashtbl_insert(cur_bb_store, &field_read_key, &load);
-      hashtbl_insert(last_bb_store, &field_read_key, &load);
-      hashtbl_insert(any_stores, &i, &load);
-    }
-  }
-
   rebuild_ids(func);
 
   for (size_t i = 0; i < num_uses; i++) {
@@ -425,14 +373,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
         struct ir_var_ty field_ty = fields[head];
 
-        printf("looking for store bb %zu, field %zu, us=%zu\n", basicblock->id,
-               j, op->id);
         struct ir_op **store = hashtbl_lookup(cur_bb_store, &key);
-
-        if (store) {
-          printf("found store bb %zu, field %zu op=%zu, us=%zu\n",
-                 basicblock->id, j, (*store)->id, op->id);
-        }
 
         if (store && (*store)->id < op->id) {
           // same bb, no phi needed
@@ -451,8 +392,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
           continue;
         }
 
-        printf("FAILED could not find bb %zu, field %zu us=%zu\n",
-               basicblock->id, j, op->id);
         struct ir_op **any_store = hashtbl_lookup(any_stores, &key.field_idx);
         if (!any_store) {
           DEBUG_ASSERT(lcl->flags & IR_LCL_FLAG_ZEROED,
@@ -621,13 +560,6 @@ static void opts_promote_func(struct ir_func *func) {
 
           if (op->addr.ty == IR_OP_ADDR_TY_LCL) {
             struct ir_lcl *lcl = op->addr.lcl;
-
-            // if (op->flags & IR_OP_FLAG_PARAM) {
-            //   // can't promote addr which are actually params
-            //   candidates[lcl->id] = false;
-            //   break;
-
-            // }
 
             struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
 

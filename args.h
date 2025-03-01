@@ -69,6 +69,7 @@ struct arg {
   ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk")                                \
   ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir")                                          \
+  ENUM_FN(COMPILE_LOG_FLAGS_LOWER_ABI, "lower_abi")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_REGALLOC, "regalloc")                              \
