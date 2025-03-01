@@ -185,6 +185,8 @@ VALUES_FN(log_level, LOG)
   ARG_STRING_LIST(include_paths, "-I", "",                                     \
                   "Directories to search for `#include` directives")           \
                                                                                \
+  ARG_BOOL(debug, "-g", "", "Debug info (currently does nothing)")             \
+                                                                               \
   ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", opts_level,        \
              "Optimisation level 0..3")                                        \
                                                                                \
