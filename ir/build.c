@@ -3101,8 +3101,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   }
 
   // we may generate empty basicblocks or statements, prune them here
-  DEBUG_PRINT_IR(stderr, builder->func);
-  // ir_prune_basicblocks(builder->func);
+  ir_prune_basicblocks(builder->func);
 
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
