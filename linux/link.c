@@ -135,6 +135,9 @@ enum link_result linux_link_objects(const struct link_args *args) {
 
   DEBUG_ASSERT(head == total_size, "string buffer calculations went wrong!");
 
+  if (args->args->verbose) {
+    fprintf(stderr, "Linux link:\n%s\n", buff);
+  }
   int ret_code = system(buff);
 
   arena_allocator_free(&arena);

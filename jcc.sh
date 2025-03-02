@@ -33,7 +33,7 @@ build() {
     cd build
     if ! (cmake -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null
     then
-        echo "${BOLDRED}Build failed!${RESET}"
+        echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
 

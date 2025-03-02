@@ -22,41 +22,7 @@ typedef ptrdiff_t ssize_t;
 #error "do not compile jcc as C++"
 #endif
 
-#if __STDC_VERSION__ >= 202311L
-#define STDC_C23 1
-#elif __STDC_VERSION__ >= 201710L
-#define STDC_C18 1
-#elif __STDC_VERSION__ == 201112L
-#define STDC_C11 1
-#else
-#error "jcc only supports C11 or later"
-#endif
-
-#ifdef UTIL_MACRO_DEBUG
-
-#ifdef __clang__
-#pragma message "Compiler is clang"
-#elif __GNUC__
-#warn "Compiler is GCC"
-#else
-#pragma message "unrecognised compiler"
-#endif
-
-#if STDC_C23
-#pragma message "C version is C23"
-#elif STDC_C18
-#pragma message "C version is C28"
-#elif STDC_C11
-#pragma message "C version is C11"
-#else
-#define EXPAND_INNER(x) "unrecognised C version '" #x "'"
-#define EXPAND(x) EXPAND_INNER(x)
-#pragma message(EXPAND(__STDC_VERSION__))
-#undef EXPAND
-#undef EXPAND_INNER
-#endif
-
-#endif
+#include "compinfo.h"
 
 #ifdef INT128_C
 #define HAS_INT128 1
@@ -78,73 +44,12 @@ typedef unsigned _BitInt(128) uint128_t;
 #define PRINTF_ARGS(idx)
 #endif
 
-#ifdef __has_feature
-#define HAS_FEATURE(name) __has_feature(name)
-#else
-#define HAS_FEATURE(name) 0
-#endif
-
-#ifdef __has_builtin
-#define HAS_BUILTIN(name) __has_builtin(name)
-#else
-#define HAS_BUILTIN(name) 0
-#endif
-
-#ifdef __has_attribute
-#define HAS_ATTRIBUTE(name) __has_attribute(name)
-#else
-#define HAS_ATTRIBUTE(name) 0
-#endif
-
-#ifdef __has_c_attribute
-#define HAS_C_ATTRIBUTE(name) __has_c_attribute(name)
-#else
-#define HAS_C_ATTRIBUTE(name) 0
-#endif
-
 #if STDC_C23 && HAS_C_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM [gnu::flag_enum]
 #elif HAS_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM __attribute__((flag_enum))
 #else
 #define FLAG_ENUM
-#endif
-
-#if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
-    defined(__SANITIZE_MEMORY__)
-#define MSAN 1
-#else
-#define MSAN 0
-#endif
-
-#if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) ||            \
-    defined(__SANITIZE_ADDRESS__)
-#define ASAN 1
-#else
-#define ASAN 0
-#endif
-
-#if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
-    defined(__SANITIZE_HWADDRESS__)
-#define HWASAN 1
-#else
-#define HWASAN 0
-#endif
-
-#if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) ||              \
-    defined(__SANITIZE_THREAD__)
-#define TSAN 1
-#else
-#define TSAN 0
-#endif
-
-// NOTE: for reasons, there is no _SANITIZE_UNDEFINED__, and so we cannot detect
-// this on GCC
-#if HAS_FEATURE(undefined_behavior_sanitizer) ||                               \
-    defined(UNDEFINED_BEHAVIOR_SANITIZER)
-#define UBSAN 1
-#else
-#define UBSAN 0
 #endif
 
 #if ASAN || MSAN || TSAN || UBSAN
@@ -257,31 +162,34 @@ static inline void debug_print_stack_trace(void) {}
 #endif
 
 
-#if __clang__ || 1
+#if __clang__
 
 #define DO_PRAGMA(x) _Pragma (#x)
 #define PUSH_NO_WARN(warn)  \
   _Pragma("clang diagnostic push")                                             \
       DO_PRAGMA(clang diagnostic ignored warn)
-#define POP_NO_WARN _Pragma("clang diagnostic pop")
+#define POP_NO_WARN() _Pragma("clang diagnostic pop")
 
-#elif __GNUC__
+#elif __GNUC__ && 0
+// this does not work for some reason? errors about "expected declaration specifiers before '#pragma'"
+// so disabled
 
 #define DO_PRAGMA(x) _Pragma (#x)
 #define PUSH_NO_WARN(warn) \
-  _Pragma("GCC diagnostic push")                                               \
+  DO_PRAGMA(GCC diagnostic push)                                              \
       DO_PRAGMA(GCC diagnostic ignored warn)
-#define POP_NO_WARN _Pragma("GCC diagnostic pop")
+
+#define POP_NO_WARN() DO_PRAGMA(GCC diagnostic pop)
 
 #else
 
 #define PUSH_NO_WARN(warn)
-#define POP_NO_WARN
+#define POP_NO_WARN()
 
 #endif
 
 #define START_NO_UNUSED_ARGS PUSH_NO_WARN("-Wunused-parameter")
-#define END_NO_UNUSED_ARGS POP_NO_WARN
+#define END_NO_UNUSED_ARGS POP_NO_WARN()
 
 #ifdef SIZE_T_MAX
 #undef SIZE_T_MAX

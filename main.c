@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define JCC_VERSION "0.0.1"
+
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
   if (args->preproc_only || args->build_asm_file || args->build_object_file) {
@@ -60,62 +62,63 @@ static bool get_target_for_args(enum compile_arch arch,
                                 enum compile_target *target) {
   switch (arch) {
   case COMPILE_ARCH_NATIVE:
-#if defined(__APPLE__) && defined(__aarch64__)
+#if OS_APPLE && ARCH_AARCH64
     info("Compiling for native platform - assuming macOS ARM64...\n");
     *target = COMPILE_TARGET_MACOS_ARM64;
     return true;
-#elif defined(__APPLE__) && defined(__x86_64__)
+#elif OS_APPLE && ARCH_X86_64
     info("Compiling for native platform - assuming macOS x64...\n");
     *target = COMPILE_TARGET_MACOS_X86_64;
     return true;
-#elif defined(__linux__) && defined(__aarch64__)
+#elif OS_LINUX && ARCH_AARCH64
     info("Compiling for native platform - assuming Linux ARM64...\n");
     *target = COMPILE_TARGET_LINUX_ARM64;
     return true;
-#elif defined(__linux__) && defined(__x86_64__)
+#elif OS_LINUX && ARCH_X86_64
     info("Compiling for native platform - assuming Linux x64...\n");
     *target = COMPILE_TARGET_LINUX_X86_64;
     return true;
 #else
-    err("Could not determine native platform");
+    err("Could not determine native platform (OS_NAME=" OS_NAME
+        ", ARCH_NAME=" ARCH_NAME ")");
     return false;
 #endif
 
   case COMPILE_ARCH_X86_64:
-#if defined(__APPLE__)
+#if OS_APPLE
     *target = COMPILE_TARGET_MACOS_X86_64;
     info("Compiling for '%s'...\n", string_target(*target));
     return true;
-#elif defined(__linux__)
+#elif OS_LINUX
     *target = COMPILE_TARGET_LINUX_X86_64;
     info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #else
-    err("Could not determine native platform for x86_64");
+    err("Could not determine native platform for x86_64 (OS_NAME=" OS_NAME ")");
     return false;
 #endif
   case COMPILE_ARCH_ARM64:
-#if defined(__APPLE__)
+#if OS_APPLE
     *target = COMPILE_TARGET_MACOS_ARM64;
     info("Compiling for '%s'...\n", string_target(*target));
     return true;
-#elif defined(__linux__)
+#elif OS_LINUX
     *target = COMPILE_TARGET_LINUX_ARM64;
     info("Compiling for '%s'...\n", string_target(*target));
     return true;
     break;
 #else
-    err("Could not determine native platform for arm64");
+    err("Could not determine native platform for arm64 (OS_NAME=" OS_NAME ")");
     exc = -1;
     goto exit;
 #endif
   case COMPILE_ARCH_RV32I:
-#if defined(__linux__)
+#if OS_LINUX
     *target = COMPILE_TARGET_LINUX_RV32I;
     info("Compiling for '%s'...\n", string_target(*target));
     return true;
 #else
-    err("Could not determine native platform for rv32i");
+    err("Could not determine native platform for rv32i (OS_NAME=" OS_NAME ")");
     return false;
 #endif
   case COMPILE_ARCH_EEP:
@@ -135,10 +138,28 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     return result;
   }
 
+  if (args->version || args->verbose) {
+    printf("jcc version %s\n"
+           "John Kelly <johnharrykelly@gmail.com>\n"
+           "location:  %s\n"
+           "OS_NAME:   %s\n"
+           "ARCH_NAME: %s\n",
+           JCC_VERSION, argv[0], OS_NAME, ARCH_NAME);
+
+    if (args->version) {
+      return PARSE_ARGS_RESULT_HELP;
+    }
+  }
+
+  // is having two seperate structs for args really sensible?
+  // the original reason is that e.g `parsed_args` has an `arch` and a `target`
+  // whereas `compile_args` only has `target`, but it is a hassle
   *compile_args = (struct compile_args){
       .preproc_only = args->preprocess,
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
+
+      .verbose = args->verbose,
 
       .c_standard = args->c_standard,
       .log_flags = args->log_level,
@@ -221,7 +242,8 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < num_sources; i++) {
     const char *source_path = sources[i];
 
-    char *region = arena_alloc(arena, strlen("compile ") + strlen(source_path) + 1);
+    char *region =
+        arena_alloc(arena, strlen("compile ") + strlen(source_path) + 1);
     strcpy(region, "compile ");
     strcat(region, source_path);
 
@@ -261,7 +283,8 @@ int main(int argc, char **argv) {
 
     char *object_file;
 
-    // this will output `-.o` or `-.s` if read from stdin, which is weird, but matches clang?
+    // this will output `-.o` or `-.s` if read from stdin, which is weird, but
+    // matches clang?
 
     if (compile_args.preproc_only && !compile_args.output) {
       // FIXME: hacky
@@ -302,7 +325,6 @@ int main(int argc, char **argv) {
       exc = -1;
       goto exit;
     }
-
 
     profiler_end_region(compile_region);
 

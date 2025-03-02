@@ -68,6 +68,8 @@ struct compile_args {
   bool build_asm_file;
   bool build_object_file;
 
+  bool verbose;
+
   bool use_graphcol_regalloc;
 
   size_t num_include_paths;

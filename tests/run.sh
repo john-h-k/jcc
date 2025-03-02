@@ -297,6 +297,8 @@ run_tests() {
         prefix=""
       fi
 
+      rm -- "$output"
+
       first_line=$(head -n 1 "$file")
       if [[ "$first_line" == "// no-compile" ]]; then
         if $(build &>/dev/null); then
@@ -326,6 +328,11 @@ run_tests() {
 
       if ! build_msg=$(build 2>&1); then
         send_status fail "$prefix'$file' failed to compile. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
+        continue
+      fi
+
+      if ! [ -f "$output" ]; then
+        send_status fail "$prefix'$file' compiled, but no output file was found. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
         continue
       fi
 

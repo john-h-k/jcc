@@ -186,6 +186,10 @@ VALUES_FN(log_level, LOG)
   ARG_STRING_LIST(include_paths, "-I", "",                                     \
                   "Directories to search for `#include` directives")           \
                                                                                \
+  ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")             \
+  \
+  ARG_BOOL(version, "-V", "--version", "Print version")             \
+  \
   ARG_BOOL(debug, "-g", "", "Debug info (currently does nothing)")             \
                                                                                \
   ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", opts_level,        \
