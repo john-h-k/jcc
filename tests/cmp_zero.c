@@ -7,9 +7,9 @@ int main() {
   int a;
   scanf("%d", &a);
 
-  if (a == 0) {
-    return 1;
-  } else {
-    return 0;
-  }
+  // if (a == 0) {
+  //   return 1;
+  // } else {
+  //   return 0;
+  // }
 }
