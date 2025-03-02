@@ -18,10 +18,92 @@ help() {
   echo "    test        Run tests"
   echo "    test-all    Run tests with all optimisation levels"
   echo "    format      Format codebase"
+  echo "    layout      Show code distribution"
   echo ""
 
   exit
 }
+
+layout() {
+    count_lines() {
+        total=0
+        for path in "$@"; do
+            if [ -d "$path" ]; then
+                dir_count=$(fd -e c -e h . "$path" --exclude .git --exclude build --exec wc -l | awk '{sum += $1} END {print sum}')
+                total=$((total + dir_count))
+            elif [ -f "$path" ]; then
+                file_count=$(wc -l < "$path")
+                total=$((total + file_count))
+            fi
+        done
+        echo "$total"
+    }
+
+    categories=("preproc" "lex" "parse" "ir" "opts" "lower" "targets" "objects" "tests")
+    paths=("preproc.h preproc.c"
+           "lex.h lex.c"
+           "parse.h parse.c typechk.h typechk.c"
+           "ir"
+           "opts"
+           "lower.c lower.h graphcol.h graphcol.c lsra.h lsra.c"
+           "x64.h x64.c x64 rv32i.h rv32i.c rv32i aarch64.h aarch64.c aarch64 eep.h eep.c eep"
+           "macOS linux"
+           "tests"
+           )
+
+    col_width=9
+
+    total_lines=$(count_lines .)
+
+    echo -e "${BOLD}"
+
+    sep="---------"
+
+    printf "| %-*s |" $col_width "total"
+    for category in "${categories[@]}"; do
+        printf " %-*s |" $col_width "$category"
+    done
+    printf " %-*s |" $col_width "other"
+    printf "\n"
+
+    printf "|-%-*s-" $col_width "$sep"
+    for category in "${categories[@]}"; do
+        printf "|-%-*s-" $col_width "$sep"
+    done
+    printf "|-%-*s-" $col_width "$sep"
+    printf "|\n"
+
+    printf "| %-*s |" $col_width "$total_lines"
+    category_total=0
+    for i in "${!categories[@]}"; do
+        category_lines=$(count_lines ${paths[$i]})
+        category_total=$((category_total + category_lines))
+        printf " %-*s |" $col_width "$category_lines"
+    done
+    other_lines=$((total_lines - category_total))
+    printf " %-*s |" $col_width "$other_lines"
+    printf "\n"
+
+    printf "|-%-*s-" $col_width "$sep"
+    for category in "${categories[@]}"; do
+        printf "|-%-*s-" $col_width "$sep"
+    done
+    printf "|-%-*s-" $col_width "$sep"
+    printf "|\n"
+
+    printf "| %-*s |" $col_width "%"
+    for i in "${!categories[@]}"; do
+        category_lines=$(count_lines ${paths[$i]})
+        percentage=$(awk "BEGIN {printf \"%.2f\", ($category_lines/$total_lines)*100}")
+        printf " %-*s |" $col_width "$percentage%"
+    done
+    other_percentage=$(awk "BEGIN {printf \"%.2f\", ($other_lines/$total_lines)*100}")
+    printf " %-*s |" $col_width "$other_percentage%"
+    printf "\n"
+
+    echo -e "${RESET}"
+}
+
 
 build() {
     mode=$(get_mode "$1")

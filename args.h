@@ -69,6 +69,7 @@ struct arg {
   ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk")                                \
   ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir")                                          \
+  ENUM_FN(COMPILE_LOG_FLAGS_INLINE, "inline")                            \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER_ABI, "lower_abi")                            \
   ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
@@ -129,7 +130,7 @@ inline static bool parse_log_level(const char *str, int *value) {
   LOG_ENUM_LIST;
 
   if (strcmp(str, "ir.all") == 0) {
-    *value = COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_LOWER_ABI |
+    *value = COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_INLINE | COMPILE_LOG_FLAGS_LOWER_ABI |
              COMPILE_LOG_FLAGS_OPTS | COMPILE_LOG_FLAGS_LOWER /* temp disable regalloc bc it doesn't respect --log-sym | COMPILE_LOG_FLAGS_REGALLOC */ |
              COMPILE_LOG_FLAGS_ELIM_PHI | COMPILE_LOG_FLAGS_CODEGEN_PREPARE;
     return true;
