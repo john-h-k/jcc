@@ -344,7 +344,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       struct ir_op **prev = hashtbl_lookup(cur_bb_store, &key);
       // relies on sequential ids
       if (!prev || (*prev)->id < op->id) {
-        printf("last store in bb %zu is oop %zu\n", key.bb_id, op->id);
         hashtbl_insert(cur_bb_store, &key, &op);
       }
     } else if (op->ty == IR_OP_TY_LOAD) {

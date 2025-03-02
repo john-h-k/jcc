@@ -127,6 +127,11 @@ fi
 arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
+if [[ "$arch" == "rv32i" && -z "$RUNNER" ]]; then
+  echo -e "${BOLD}Defaulting to 'riscy' runner for $arch..."
+  RUNNER=riscy
+fi
+
 tm="Tue Dec 10 10:04:33 2024"
 
 fifo=$(mktemp -u)
