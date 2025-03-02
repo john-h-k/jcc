@@ -244,14 +244,6 @@ aggregator() {
 
   echo ""
 
-  echo -e "${BOLD}====================${RESET}"
-  echo -e "${BOLD}Total tests: $completed ${RESET}"
-  echo -e "${BOLDGREEN}Passed: $passed ${RESET}"
-  echo -e "${BOLDRED}Failed: $failed ${RESET}"
-  echo -e "${BOLDYELLOW}Skipped: $skipped ${RESET}"
-  
-  echo ""
-
   if [ ${#fails[@]} -ne 0 ]; then
     echo -e ""
 
@@ -277,6 +269,14 @@ aggregator() {
 
     echo -e ""
   fi
+
+  echo -e "${BOLD}====================${RESET}"
+  echo -e "${BOLD}Total tests: $completed ${RESET}"
+  echo -e "${BOLDGREEN}Passed: $passed ${RESET}"
+  echo -e "${BOLDRED}Failed: $failed ${RESET}"
+  echo -e "${BOLDYELLOW}Skipped: $skipped ${RESET}"
+  
+  echo ""
 
   [ "$failed" -eq "0" ]
   exit $?
