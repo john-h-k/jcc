@@ -1319,7 +1319,7 @@ static void codegen_prologue(struct codegen_state *state) {
   save_rbp->x64->push = (struct x64_push){.source = FRAME_PTR_REG};
 
   // for alignment, we also need to consider the call address pushed, but we don't need to actually sub for this
-  info.stack_size = ROUND_UP(info.stack_size + 8, X64_STACK_ALIGNMENT);
+  info.stack_size = ROUND_UP(info.stack_size + 8, X64_STACK_ALIGNMENT) - 8;
 
   size_t stack_to_sub = info.stack_size - 8 /* push rbp does 8 bytes for us */;
   if (stack_to_sub) {
