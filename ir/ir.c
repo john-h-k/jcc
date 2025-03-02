@@ -5,9 +5,8 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
-#include "prettyprint.h"
 
-enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
+enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
   case TARGET_LP_SZ_LP32:
     return IR_VAR_PRIMITIVE_TY_I32;
@@ -16,7 +15,7 @@ enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   }
 }
 
-bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
+bool ir_binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_EQ:
   case IR_OP_BINARY_OP_TY_NEQ:
@@ -58,7 +57,7 @@ bool binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   }
 }
 
-enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty) {
+enum ir_op_binary_op_ty ir_invert_binary_comparison(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_EQ:
     return IR_OP_BINARY_OP_TY_NEQ;
@@ -97,7 +96,7 @@ enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty) {
   }
 }
 
-bool op_has_side_effects(const struct ir_op *op) {
+bool ir_op_has_side_effects(const struct ir_op *op) {
   if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
     return true;
   }
@@ -132,12 +131,10 @@ bool op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_RET:
   case IR_OP_TY_BR:
     return true;
-  case IR_OP_TY_CUSTOM:
-    BUG("not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
-bool op_produces_value(const struct ir_op *op) {
+bool ir_op_produces_value(const struct ir_op *op) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op ty");
@@ -167,12 +164,10 @@ bool op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_MEM_COPY:
   case IR_OP_TY_GATHER:
     return false;
-  case IR_OP_TY_CUSTOM:
-    BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
-bool op_is_branch(enum ir_op_ty ty) {
+bool ir_op_is_branch(enum ir_op_ty ty) {
   switch (ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op ty");
@@ -202,12 +197,10 @@ bool op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_ADDR:
   case IR_OP_TY_ADDR_OFFSET:
     return false;
-  case IR_OP_TY_CUSTOM:
-    BUG("`op_produces_value` not well defined for IR_OP_TY_CUSTOM");
   }
 }
 
-bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
+bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
                const struct ir_var_ty *r) {
   if (l == r) {
     return true;
@@ -228,16 +221,16 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
     return true;
   case IR_VAR_TY_TY_ARRAY:
     return l->array.num_elements == r->array.num_elements &&
-           var_ty_eq(iru, l->array.underlying, r->array.underlying);
+           ir_var_ty_eq(iru, l->array.underlying, r->array.underlying);
   case IR_VAR_TY_TY_FUNC:
-    if (!var_ty_eq(iru, l->func.ret_ty, r->func.ret_ty)) {
+    if (!ir_var_ty_eq(iru, l->func.ret_ty, r->func.ret_ty)) {
       return false;
     }
     if (l->func.num_params != r->func.num_params) {
       return false;
     }
     for (size_t i = 0; i < l->func.num_params; i++) {
-      if (!var_ty_eq(iru, &l->func.params[i], &r->func.params[i])) {
+      if (!ir_var_ty_eq(iru, &l->func.params[i], &r->func.params[i])) {
         return false;
       }
     }
@@ -248,8 +241,8 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(iru, l);
-    struct ir_var_ty_info r_info = var_ty_info(iru, r);
+    struct ir_var_ty_info l_info = ir_var_ty_info(iru, l);
+    struct ir_var_ty_info r_info = ir_var_ty_info(iru, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -257,7 +250,7 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
     }
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
+      if (!ir_var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -269,8 +262,8 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
       return false;
     }
 
-    struct ir_var_ty_info l_info = var_ty_info(iru, l);
-    struct ir_var_ty_info r_info = var_ty_info(iru, r);
+    struct ir_var_ty_info l_info = ir_var_ty_info(iru, l);
+    struct ir_var_ty_info r_info = ir_var_ty_info(iru, r);
 
     // currently we do not have custom alignment/size but it is possible
     if (l_info.size != r_info.size || l_info.alignment != r_info.alignment) {
@@ -278,7 +271,7 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
     }
 
     for (size_t i = 0; i < l->aggregate.num_fields; i++) {
-      if (!var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
+      if (!ir_var_ty_eq(iru, &l->aggregate.fields[i], &r->aggregate.fields[i])) {
         return false;
       }
     }
@@ -290,12 +283,11 @@ bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
   unreachable();
 }
 
-void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb,
+void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
                   void *cb_metadata) {
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
-  case IR_OP_TY_CUSTOM:
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_GATHER:
@@ -413,64 +405,63 @@ void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb,
   }
 }
 
-void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
+void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata) {
   cb(op, cb_metadata);
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
-  case IR_OP_TY_CUSTOM:
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_GATHER:
     for (size_t i = 0; i < op->gather.num_values; i++) {
-      walk_op(op->gather.values[i].value, cb, cb_metadata);
+      ir_walk_op(op->gather.values[i].value, cb, cb_metadata);
     }
     break;
   case IR_OP_TY_CALL: {
-    walk_op(op->call.target, cb, cb_metadata);
+    ir_walk_op(op->call.target, cb, cb_metadata);
     for (size_t i = 0; i < op->call.num_args; i++) {
-      walk_op(op->call.args[i], cb, cb_metadata);
+      ir_walk_op(op->call.args[i], cb, cb_metadata);
     }
     break;
   }
   case IR_OP_TY_PHI: {
     for (size_t i = 0; i < op->phi.num_values; i++) {
-      walk_op(op->phi.values[i].value, cb, cb_metadata);
+      ir_walk_op(op->phi.values[i].value, cb, cb_metadata);
     }
     break;
   }
   case IR_OP_TY_CNST:
     break;
   case IR_OP_TY_BINARY_OP:
-    walk_op(op->binary_op.lhs, cb, cb_metadata);
-    walk_op(op->binary_op.rhs, cb, cb_metadata);
+    ir_walk_op(op->binary_op.lhs, cb, cb_metadata);
+    ir_walk_op(op->binary_op.rhs, cb, cb_metadata);
     break;
   case IR_OP_TY_UNARY_OP:
-    walk_op(op->unary_op.value, cb, cb_metadata);
+    ir_walk_op(op->unary_op.value, cb, cb_metadata);
     break;
   case IR_OP_TY_CAST_OP:
-    walk_op(op->cast_op.value, cb, cb_metadata);
+    ir_walk_op(op->cast_op.value, cb, cb_metadata);
     break;
   case IR_OP_TY_STORE:
-    walk_op(op->store.value, cb, cb_metadata);
+    ir_walk_op(op->store.value, cb, cb_metadata);
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
     case IR_OP_STORE_TY_GLB:
       break;
     case IR_OP_STORE_TY_ADDR:
-      walk_op(op->store.addr, cb, cb_metadata);
+      ir_walk_op(op->store.addr, cb, cb_metadata);
       break;
     }
     break;
   case IR_OP_TY_STORE_BITFIELD:
-    walk_op(op->store_bitfield.value, cb, cb_metadata);
+    ir_walk_op(op->store_bitfield.value, cb, cb_metadata);
     switch (op->store_bitfield.ty) {
     case IR_OP_STORE_TY_LCL:
     case IR_OP_STORE_TY_GLB:
       break;
     case IR_OP_STORE_TY_ADDR:
-      walk_op(op->store_bitfield.addr, cb, cb_metadata);
+      ir_walk_op(op->store_bitfield.addr, cb, cb_metadata);
       break;
     }
     break;
@@ -480,7 +471,7 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     case IR_OP_LOAD_TY_GLB:
       break;
     case IR_OP_LOAD_TY_ADDR:
-      walk_op(op->load.addr, cb, cb_metadata);
+      ir_walk_op(op->load.addr, cb, cb_metadata);
       break;
     }
     break;
@@ -490,60 +481,60 @@ void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata) {
     case IR_OP_LOAD_TY_GLB:
       break;
     case IR_OP_LOAD_TY_ADDR:
-      walk_op(op->load_bitfield.addr, cb, cb_metadata);
+      ir_walk_op(op->load_bitfield.addr, cb, cb_metadata);
       break;
     }
     break;
   case IR_OP_TY_ADDR:
     break;
   case IR_OP_TY_ADDR_OFFSET:
-    walk_op(op->addr_offset.base, cb, cb_metadata);
+    ir_walk_op(op->addr_offset.base, cb, cb_metadata);
     if (op->addr_offset.index) {
-      walk_op(op->addr_offset.index, cb, cb_metadata);
+      ir_walk_op(op->addr_offset.index, cb, cb_metadata);
     }
     break;
   case IR_OP_TY_BR:
     break;
   case IR_OP_TY_BR_SWITCH:
-    walk_op(op->br_switch.value, cb, cb_metadata);
+    ir_walk_op(op->br_switch.value, cb, cb_metadata);
     break;
   case IR_OP_TY_BR_COND:
-    walk_op(op->br_cond.cond, cb, cb_metadata);
+    ir_walk_op(op->br_cond.cond, cb, cb_metadata);
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value && !(op->flags & IR_OP_FLAG_PARAM)) {
-      walk_op(op->mov.value, cb, cb_metadata);
+      ir_walk_op(op->mov.value, cb, cb_metadata);
     }
     break;
   case IR_OP_TY_RET:
     if (op->ret.value) {
-      walk_op(op->ret.value, cb, cb_metadata);
+      ir_walk_op(op->ret.value, cb, cb_metadata);
     }
     break;
   case IR_OP_TY_BITFIELD_EXTRACT:
-    walk_op(op->bitfield_extract.value, cb, cb_metadata);
+    ir_walk_op(op->bitfield_extract.value, cb, cb_metadata);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
-    walk_op(op->bitfield_insert.target, cb, cb_metadata);
-    walk_op(op->bitfield_insert.value, cb, cb_metadata);
+    ir_walk_op(op->bitfield_insert.target, cb, cb_metadata);
+    ir_walk_op(op->bitfield_insert.value, cb, cb_metadata);
     break;
   case IR_OP_TY_MEM_SET:
-    walk_op(op->mem_set.addr, cb, cb_metadata);
+    ir_walk_op(op->mem_set.addr, cb, cb_metadata);
     break;
   case IR_OP_TY_MEM_COPY:
-    walk_op(op->mem_copy.source, cb, cb_metadata);
-    walk_op(op->mem_copy.dest, cb, cb_metadata);
+    ir_walk_op(op->mem_copy.source, cb, cb_metadata);
+    ir_walk_op(op->mem_copy.dest, cb, cb_metadata);
     break;
   }
 }
 
-void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata) {
+void ir_walk_stmt(struct ir_stmt *stmt, ir_walk_op_callback *cb, void *cb_metadata) {
   struct ir_op *op = stmt->last;
 
-  walk_op(op, cb, cb_metadata);
+  ir_walk_op(op, cb, cb_metadata);
 }
 
-enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty ty) {
+enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty ty) {
   switch (ty) {
   case IR_OP_BINARY_OP_TY_OR:
   case IR_OP_BINARY_OP_TY_XOR:
@@ -604,11 +595,11 @@ const struct ir_var_ty IR_VAR_TY_F64 = {.ty = IR_VAR_TY_TY_PRIMITIVE,
                                         .primitive = IR_VAR_PRIMITIVE_TY_F64};
 const struct ir_var_ty IR_VAR_TY_VARIADIC = {.ty = IR_VAR_TY_TY_VARIADIC};
 
-bool is_func_variadic(const struct ir_var_func_ty *ty) {
+bool ir_is_func_variadic(const struct ir_var_func_ty *ty) {
   return ty->flags & IR_VAR_FUNC_TY_FLAG_VARIADIC;
 }
 
-void initialise_ir_stmt(struct ir_stmt *stmt, size_t id) {
+void ir_initialise_stmt(struct ir_stmt *stmt, size_t id) {
   stmt->id = id;
   stmt->first = NULL;
   stmt->last = NULL;
@@ -618,7 +609,7 @@ void initialise_ir_stmt(struct ir_stmt *stmt, size_t id) {
   stmt->flags = IR_STMT_FLAG_NONE;
 }
 
-void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
+void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_var_ty var_ty, struct ir_reg reg,
                       struct ir_lcl *lcl) {
 
@@ -652,8 +643,8 @@ static void remove_pred(struct ir_basicblock *basicblock,
   }
 }
 
-void detach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
-                          enum detach_ir_basicblock_flags flags) {
+void ir_detach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+                          enum ir_detach_ir_basicblock_flags flags) {
   if (basicblock->id == DETACHED_BASICBLOCK) {
     return;
   }
@@ -728,7 +719,7 @@ void detach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
   basicblock->func = NULL;
 }
 
-void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
+void ir_detach_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
   if (stmt->id == DETACHED_STMT) {
     return;
   }
@@ -757,7 +748,7 @@ void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt) {
   stmt->basicblock = NULL;
 }
 
-void detach_ir_op(struct ir_func *irb, struct ir_op *op) {
+void ir_detach_op(struct ir_func *irb, struct ir_op *op) {
   if (op->id == DETACHED_OP) {
     return;
   }
@@ -788,7 +779,7 @@ void detach_ir_op(struct ir_func *irb, struct ir_op *op) {
   op->succ = NULL;
 }
 
-bool stmt_is_empty(struct ir_stmt *stmt) {
+bool ir_stmt_is_empty(struct ir_stmt *stmt) {
   invariant_assert(
       (stmt->first && stmt->last) || (!stmt->first && !stmt->last),
       "stmt had `first` or `last` NULL but not both; this is badly formed");
@@ -797,7 +788,7 @@ bool stmt_is_empty(struct ir_stmt *stmt) {
   return !stmt->first;
 }
 
-bool basicblock_is_empty(struct ir_basicblock *basicblock) {
+bool ir_basicblock_is_empty(struct ir_basicblock *basicblock) {
   invariant_assert((basicblock->first && basicblock->last) ||
                        (!basicblock->first && !basicblock->last),
                    "basicblock had `first` or `last` NULL but not both; this "
@@ -811,7 +802,7 @@ bool ir_reg_eq(struct ir_reg left, struct ir_reg right) {
   return left.ty == right.ty && left.idx == right.idx;
 }
 
-bool var_ty_has_reg(const struct ir_var_ty var_ty) {
+bool ir_var_ty_has_reg(const struct ir_var_ty var_ty) {
   return var_ty.ty == IR_VAR_TY_TY_POINTER ||
          var_ty.ty == IR_VAR_TY_TY_PRIMITIVE;
 }
@@ -821,7 +812,7 @@ enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty) {
   case IR_VAR_TY_TY_POINTER:
     return IR_REG_TY_INTEGRAL;
   case IR_VAR_TY_TY_PRIMITIVE:
-    return primitive_ty_is_fp(var_ty.primitive) ? IR_REG_TY_FP
+    return ir_primitive_ty_is_fp(var_ty.primitive) ? IR_REG_TY_FP
                                                 : IR_REG_TY_INTEGRAL;
   default:
     BUG("doesn't make sense");
@@ -845,8 +836,8 @@ void ir_order_basicblocks(struct ir_func *func) {
         struct ir_op *cond = br_cond->br_cond.cond;
 
         if (cond->ty == IR_OP_TY_BINARY_OP &&
-            binary_op_is_comparison(cond->binary_op.ty)) {
-          cond->binary_op.ty = invert_binary_comparison(cond->binary_op.ty);
+            ir_binary_op_is_comparison(cond->binary_op.ty)) {
+          cond->binary_op.ty = ir_invert_binary_comparison(cond->binary_op.ty);
 
           struct ir_basicblock *tmp = split->true_target;
           split->true_target = split->false_target;
@@ -859,7 +850,7 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 }
 
-void rebuild_flags(struct ir_func *func) {
+void ir_rebuild_flags(struct ir_func *func) {
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   enum ir_func_flags flags = func->flags & ~IR_FUNC_FLAG_MAKES_CALL;
@@ -875,9 +866,9 @@ void rebuild_flags(struct ir_func *func) {
   func->flags = flags;
 }
 
-void eliminate_redundant_ops(struct ir_func *func,
-                             enum eliminate_redundant_ops_flags flags) {
-  struct ir_op_use_map use_map = build_op_uses_map(func);
+void ir_eliminate_redundant_ops(struct ir_func *func,
+                             enum ir_eliminate_redundant_ops_flags flags) {
+  struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
@@ -887,7 +878,7 @@ void eliminate_redundant_ops(struct ir_func *func,
   while (ir_func_iter_next(&iter, &op)) {
     switch (op->ty) {
     case IR_OP_TY_MOV:
-      if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
+      if (!(flags & IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS)) {
         goto side_effects;
       }
 
@@ -899,8 +890,8 @@ void eliminate_redundant_ops(struct ir_func *func,
       bool redundant_mov = op->mov.value->reg.ty != IR_REG_TY_NONE &&
                            ir_reg_eq(op->reg, op->mov.value->reg);
 
-      bool cross_reg_mov = var_ty_has_reg(op->var_ty) &&
-                           var_ty_has_reg(op->mov.value->var_ty) &&
+      bool cross_reg_mov = ir_var_ty_has_reg(op->var_ty) &&
+                           ir_var_ty_has_reg(op->mov.value->var_ty) &&
                            ir_reg_ty_for_var_ty(op->var_ty) !=
                                ir_reg_ty_for_var_ty(op->mov.value->var_ty);
 
@@ -927,7 +918,7 @@ void eliminate_redundant_ops(struct ir_func *func,
       }
       break;
     case IR_OP_TY_BR: {
-      if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES)) {
+      if (!(flags & IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES)) {
         continue;
       }
 
@@ -941,7 +932,7 @@ void eliminate_redundant_ops(struct ir_func *func,
     }
     default:
     side_effects:
-      if ((op->flags & IR_OP_FLAG_PARAM) || op_has_side_effects(op)) {
+      if ((op->flags & IR_OP_FLAG_PARAM) || ir_op_has_side_effects(op)) {
         continue;
       }
 
@@ -953,30 +944,30 @@ void eliminate_redundant_ops(struct ir_func *func,
   }
 
   while (vector_length(detach)) {
-    detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
+    ir_detach_op(func, *(struct ir_op **)vector_pop(detach));
   }
 
-  use_map = build_op_uses_map(func);
+  use_map = ir_build_op_uses_map(func);
   iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
   while (ir_func_iter_next(&iter, &op)) {
     if (!use_map.op_use_datas[op->id].num_uses &&
-        !(op->flags & IR_OP_FLAG_PARAM) && !op_has_side_effects(op)) {
+        !(op->flags & IR_OP_FLAG_PARAM) && !ir_op_has_side_effects(op)) {
       vector_push_back(detach, &op);
     }
   }
 
   while (vector_length(detach)) {
-    detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
+    ir_detach_op(func, *(struct ir_op **)vector_pop(detach));
   }
 
-  if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS)) {
-    use_map = build_op_uses_map(func);
+  if (!(flags & IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS)) {
+    use_map = ir_build_op_uses_map(func);
     struct ir_lcl *lcl = func->first_lcl;
     while (lcl) {
       if (lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
           !use_map.lcl_use_datas[lcl->id].num_consumers) {
-        detach_local(func, lcl);
+        ir_detach_local(func, lcl);
       }
 
       lcl = lcl->succ;
@@ -986,7 +977,7 @@ void eliminate_redundant_ops(struct ir_func *func,
   vector_free(&detach);
 }
 
-void prune_basicblocks(struct ir_func *irb) {
+void ir_prune_basicblocks(struct ir_func *irb) {
   if (!irb->first) {
     return;
   }
@@ -994,7 +985,7 @@ void prune_basicblocks(struct ir_func *irb) {
   bool *seen = arena_alloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
   memset(seen, 0, sizeof(*seen) * irb->basicblock_count);
 
-  prune_stmts(irb, irb->first);
+  ir_prune_stmts(irb, irb->first);
 
   struct vector *stack = vector_create(sizeof(struct ir_basicblock *));
   vector_push_back(stack, &irb->first);
@@ -1036,22 +1027,22 @@ void prune_basicblocks(struct ir_func *irb) {
     struct ir_basicblock *succ = basicblock->succ;
 
     if (!seen[basicblock->id]) {
-      detach_ir_basicblock(irb, basicblock,
+      ir_detach_basicblock(irb, basicblock,
                            DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS);
     } else {
-      prune_stmts(irb, basicblock);
+      ir_prune_stmts(irb, basicblock);
     }
 
     basicblock = succ;
   }
 
   // means bb->id < bb_count for all bbs
-  rebuild_ids(irb);
+  ir_rebuild_ids(irb);
 
   vector_free(&stack);
 }
 
-void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
+void ir_prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
   // skip phi stmt
@@ -1063,15 +1054,15 @@ void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
     // save succ before we detach
     struct ir_stmt *succ = stmt->succ;
 
-    if (stmt_is_empty(stmt)) {
-      detach_ir_stmt(irb, stmt);
+    if (ir_stmt_is_empty(stmt)) {
+      ir_detach_stmt(irb, stmt);
     }
 
     stmt = succ;
   }
 }
 
-void clear_metadata(struct ir_func *irb) {
+void ir_clear_metadata(struct ir_func *irb) {
   struct ir_basicblock *basicblock = irb->first;
   while (basicblock) {
     basicblock->metadata = NULL;
@@ -1094,7 +1085,7 @@ void clear_metadata(struct ir_func *irb) {
   }
 }
 
-void rebuild_ids(struct ir_func *irb) {
+void ir_rebuild_ids(struct ir_func *irb) {
   irb->next_lcl_id = 0;
   struct ir_lcl *lcl = irb->first_lcl;
   while (lcl) {
@@ -1131,7 +1122,7 @@ void rebuild_ids(struct ir_func *irb) {
   }
 }
 
-void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
+void ir_attach_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
                   struct ir_op *pred, struct ir_op *succ) {
   invariant_assert(!op->stmt && !op->pred && !op->succ,
                    "non-detached op trying to be attached");
@@ -1167,7 +1158,7 @@ void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
   }
 }
 
-void attach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+void ir_attach_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                     struct ir_basicblock *basicblock, struct ir_stmt *pred,
                     struct ir_stmt *succ) {
   invariant_assert(!stmt->basicblock && !stmt->pred && !stmt->succ,
@@ -1201,7 +1192,7 @@ void attach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
     stmt->basicblock->last = stmt;
   }
 }
-void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+void ir_attach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *pred,
                           struct ir_basicblock *succ) {
   invariant_assert(!basicblock->pred && !basicblock->succ,
@@ -1238,20 +1229,20 @@ void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
   }
 }
 
-void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
+void ir_move_after_op(struct ir_func *irb, struct ir_op *op,
                       struct ir_op *move_after) {
   invariant_assert(op->id != move_after->id, "trying to move op after itself!");
   invariant_assert(op->stmt == NULL || op->stmt == move_after->stmt,
                    "moving between ir_stmts not supported");
 
   if (op->stmt) {
-    detach_ir_op(irb, op);
+    ir_detach_op(irb, op);
   }
 
-  attach_ir_op(irb, op, move_after->stmt, move_after, move_after->succ);
+  ir_attach_op(irb, op, move_after->stmt, move_after, move_after->succ);
 }
 
-void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
+void ir_move_before_op(struct ir_func *irb, struct ir_op *op,
                        struct ir_op *move_before) {
   invariant_assert(op->id != move_before->id,
                    "trying to move op before itself!");
@@ -1259,13 +1250,13 @@ void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
                    "moving between ir_stmts not supported");
 
   if (op->stmt) {
-    detach_ir_op(irb, op);
+    ir_detach_op(irb, op);
   }
 
-  attach_ir_op(irb, op, move_before->stmt, move_before->pred, move_before);
+  ir_attach_op(irb, op, move_before->stmt, move_before->pred, move_before);
 }
 
-void move_after_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+void ir_move_after_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                         struct ir_stmt *move_after) {
   invariant_assert(stmt->id != move_after->id,
                    "trying to move stmt after itself!");
@@ -1274,14 +1265,14 @@ void move_after_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                    "moving between ir_stmts not supported");
 
   if (stmt->basicblock) {
-    detach_ir_stmt(irb, stmt);
+    ir_detach_stmt(irb, stmt);
   }
 
-  attach_ir_stmt(irb, stmt, move_after->basicblock, move_after,
+  ir_attach_stmt(irb, stmt, move_after->basicblock, move_after,
                  move_after->succ);
 }
 
-void move_before_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
+void ir_move_before_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                          struct ir_stmt *move_before) {
   invariant_assert(stmt->id != move_before->id,
                    "trying to move stmt before itself!");
@@ -1290,40 +1281,40 @@ void move_before_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt,
                    "moving between ir_stmts not supported");
 
   if (stmt->basicblock) {
-    detach_ir_stmt(irb, stmt);
+    ir_detach_stmt(irb, stmt);
   }
 
-  attach_ir_stmt(irb, stmt, move_before->basicblock, move_before->pred,
+  ir_attach_stmt(irb, stmt, move_before->basicblock, move_before->pred,
                  move_before);
 }
 
-void move_after_ir_basicblock(struct ir_func *irb,
+void ir_move_after_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *move_after) {
   invariant_assert(basicblock->id != move_after->id,
                    "trying to move basicblock after itself!");
 
   if (basicblock->func) {
-    detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
+    ir_detach_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
   }
 
-  attach_ir_basicblock(irb, basicblock, move_after, move_after->succ);
+  ir_attach_basicblock(irb, basicblock, move_after, move_after->succ);
 }
 
-void move_before_ir_basicblock(struct ir_func *irb,
+void ir_move_before_basicblock(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                struct ir_basicblock *move_before) {
   invariant_assert(basicblock->id != move_before->id,
                    "trying to move basicblock before itself!");
 
   if (basicblock->func) {
-    detach_ir_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
+    ir_detach_basicblock(irb, basicblock, DETACH_IR_BASICBLOCK_FLAG_NONE);
   }
 
-  attach_ir_basicblock(irb, basicblock, move_before->pred, move_before);
+  ir_attach_basicblock(irb, basicblock, move_before->pred, move_before);
 }
 
-struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_replace_op(UNUSED struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty) {
   DEBUG_ASSERT(op, "invalid replacement point!");
   DEBUG_ASSERT(op->id != DETACHED_OP, "op is detached");
@@ -1334,37 +1325,37 @@ struct ir_op *replace_ir_op(UNUSED struct ir_func *irb, struct ir_op *op,
   return op;
 }
 
-struct ir_op *insert_after_ir_op(struct ir_func *irb,
+struct ir_op *ir_insert_after_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
+  ir_initialise_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
-  move_after_ir_op(irb, op, insert_after);
+  ir_move_after_op(irb, op, insert_after);
 
   return op;
 }
 
-struct ir_op *insert_before_ir_op(struct ir_func *irb,
+struct ir_op *ir_insert_before_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
-  initialise_ir_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
+  ir_initialise_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
 
-  move_before_ir_op(irb, op, insert_before);
+  ir_move_before_op(irb, op, insert_before);
 
   return op;
 }
 
-struct ir_op *append_ir_op(struct ir_func *irb, struct ir_stmt *stmt,
+struct ir_op *ir_append_op(struct ir_func *irb, struct ir_stmt *stmt,
                            enum ir_op_ty ty, struct ir_var_ty var_ty) {
-  struct ir_op *op = alloc_ir_op(irb, stmt);
+  struct ir_op *op = ir_alloc_ir_op(irb, stmt);
 
   op->ty = ty;
   op->var_ty = var_ty;
@@ -1372,45 +1363,45 @@ struct ir_op *append_ir_op(struct ir_func *irb, struct ir_stmt *stmt,
   return op;
 }
 
-struct ir_stmt *insert_after_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_insert_after_stmt(struct ir_func *irb,
                                      struct ir_stmt *insert_after) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
 
-  initialise_ir_stmt(stmt, irb->next_stmt_id++);
+  ir_initialise_stmt(stmt, irb->next_stmt_id++);
 
-  move_after_ir_stmt(irb, stmt, insert_after);
+  ir_move_after_stmt(irb, stmt, insert_after);
 
   return stmt;
 }
 
-struct ir_stmt *insert_before_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_insert_before_stmt(struct ir_func *irb,
                                       struct ir_stmt *insert_before) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
 
-  initialise_ir_stmt(stmt, irb->next_stmt_id++);
+  ir_initialise_stmt(stmt, irb->next_stmt_id++);
 
-  move_before_ir_stmt(irb, stmt, insert_before);
+  ir_move_before_stmt(irb, stmt, insert_before);
 
   return stmt;
 }
 
-void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id) {
+void ir_initialise_basicblock(struct ir_basicblock *basicblock, size_t id) {
   *basicblock = (struct ir_basicblock){
       .id = id,
   };
 }
 
-struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
+struct ir_op *ir_insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
                          struct ir_var_ty var_ty) {
   struct ir_stmt *stmt = basicblock->first;
   if (!stmt) {
-    stmt = alloc_ir_stmt(irb, basicblock);
+    stmt = ir_alloc_ir_stmt(irb, basicblock);
   } else if (!(stmt->flags & IR_STMT_FLAG_PHI)) {
-    stmt = insert_before_ir_stmt(irb, stmt);
+    stmt = ir_insert_before_stmt(irb, stmt);
   }
 
   stmt->flags |= IR_STMT_FLAG_PHI;
@@ -1419,9 +1410,9 @@ struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   struct ir_op *phi;
   if (op) {
-    phi = insert_before_ir_op(irb, op, IR_OP_TY_PHI, var_ty);
+    phi = ir_insert_before_op(irb, op, IR_OP_TY_PHI, var_ty);
   } else {
-    phi = alloc_ir_op(irb, stmt);
+    phi = ir_alloc_ir_op(irb, stmt);
     phi->ty = IR_OP_TY_PHI;
     phi->var_ty = var_ty;
   }
@@ -1432,36 +1423,36 @@ struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
 }
 
 struct ir_basicblock *
-insert_before_ir_basicblock(struct ir_func *irb,
+ir_insert_before_basicblock(struct ir_func *irb,
                             struct ir_basicblock *insert_before) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
 
-  initialise_ir_basicblock(basicblock, irb->next_basicblock_id++);
+  ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
-  move_before_ir_basicblock(irb, basicblock, insert_before);
+  ir_move_before_basicblock(irb, basicblock, insert_before);
 
   return basicblock;
 }
 
 struct ir_basicblock *
-insert_after_ir_basicblock(struct ir_func *irb,
+ir_insert_after_basicblock(struct ir_func *irb,
                            struct ir_basicblock *insert_after) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
 
-  initialise_ir_basicblock(basicblock, irb->next_basicblock_id++);
+  ir_initialise_basicblock(basicblock, irb->next_basicblock_id++);
 
-  move_after_ir_basicblock(irb, basicblock, insert_after);
+  ir_move_after_basicblock(irb, basicblock, insert_after);
 
   return basicblock;
 }
 
-void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
+void ir_swap_ops_in_place(struct ir_func *irb, struct ir_op *left,
                           struct ir_op *right) {
   // WARN: known buggy!
 
@@ -1474,7 +1465,7 @@ void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
   *right = *tmp;
 }
 
-void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
+void ir_swap_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
   if (left == right) {
     return;
   }
@@ -1489,8 +1480,8 @@ void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
   // if they are next to each other, the normal logic won't work
   // instead, remove left and insert it after right
   if (left->succ == right) {
-    detach_ir_op(irb, left);
-    move_after_ir_op(irb, left, right);
+    ir_detach_op(irb, left);
+    ir_move_after_op(irb, left, right);
     return;
   }
 
@@ -1509,14 +1500,14 @@ void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
       left_pred->succ == left && left_pred->succ->succ == left_succ, "wtf");
   struct ir_stmt *right_stmt = right->stmt;
 
-  detach_ir_op(irb, left);
-  detach_ir_op(irb, right);
+  ir_detach_op(irb, left);
+  ir_detach_op(irb, right);
 
-  attach_ir_op(irb, left, right_stmt, right_pred, right_succ);
-  attach_ir_op(irb, right, left_stmt, left_pred, left_succ);
+  ir_attach_op(irb, left, right_stmt, right_pred, right_succ);
+  ir_attach_op(irb, right, left_stmt, left_pred, left_succ);
 }
 
-struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
+struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb) {
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
 
@@ -1551,7 +1542,7 @@ struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb) {
   return basicblock;
 }
 
-struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_alloc_ir_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
 
@@ -1579,7 +1570,7 @@ struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
 }
 
 // TODO: this should call `initialise_ir_op`
-struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
+struct ir_op *ir_alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
   if (!stmt->first) {
@@ -1609,10 +1600,10 @@ struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   return op;
 }
 
-struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer) {
   struct ir_op *contained =
-      insert_before_ir_op(irb, consumer, op->ty, op->var_ty);
+      ir_insert_before_op(irb, consumer, op->ty, op->var_ty);
 
   contained->flags |= IR_OP_FLAG_CONTAINED;
 
@@ -1642,11 +1633,11 @@ struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   return contained;
 }
 
-struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
+struct ir_op *ir_alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
                                          struct ir_op *consumer,
                                          struct ir_reg reg) {
   struct ir_op *mov =
-      insert_before_ir_op(irb, consumer, IR_OP_TY_MOV, (*op)->var_ty);
+      ir_insert_before_op(irb, consumer, IR_OP_TY_MOV, (*op)->var_ty);
 
   mov->flags |= IR_OP_FLAG_FIXED_REG;
   mov->reg = reg;
@@ -1657,11 +1648,11 @@ struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
   return mov;
 }
 
-struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
+struct ir_op *ir_alloc_fixed_reg_source_ir_op(struct ir_func *irb,
                                            struct ir_op *producer,
                                            struct ir_reg reg) {
   struct ir_op *mov =
-      insert_before_ir_op(irb, producer, producer->ty, producer->var_ty);
+      ir_insert_before_op(irb, producer, producer->ty, producer->var_ty);
 
   switch (producer->ty) {
   case IR_OP_TY_CNST:
@@ -1697,27 +1688,27 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   return mov;
 }
 
-void mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
+void ir_mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
                       struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_VAR_TY_TY_PRIMITIVE:
-    if (primitive_ty_is_fp(var_ty->primitive)) {
-      mk_floating_zero_constant(iru, op, var_ty->primitive);
+    if (ir_primitive_ty_is_fp(var_ty->primitive)) {
+      ir_mk_floating_zero_constant(iru, op, var_ty->primitive);
     } else {
-      mk_integral_constant(iru, op, var_ty->primitive, 0);
+      ir_mk_integral_constant(iru, op, var_ty->primitive, 0);
     }
     break;
   case IR_VAR_TY_TY_POINTER:
-    mk_pointer_constant(iru, op, 0);
+    ir_mk_pointer_constant(iru, op, 0);
     break;
   default:
     BUG("unsupported for func");
   }
 }
 
-void mk_floating_zero_constant(UNUSED_ARG(struct ir_unit *iru),
+void ir_mk_floating_zero_constant(UNUSED_ARG(struct ir_unit *iru),
                                struct ir_op *op, enum ir_var_primitive_ty ty) {
-  DEBUG_ASSERT(primitive_ty_is_fp(ty), "expected fp ty");
+  DEBUG_ASSERT(ir_primitive_ty_is_fp(ty), "expected fp ty");
 
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
@@ -1725,10 +1716,10 @@ void mk_floating_zero_constant(UNUSED_ARG(struct ir_unit *iru),
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_FLT, .int_value = 0};
 }
 
-void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
+void ir_mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
                           enum ir_var_primitive_ty ty,
                           unsigned long long value) {
-  DEBUG_ASSERT(primitive_ty_is_integral(ty), "expected integral ty");
+  DEBUG_ASSERT(ir_primitive_ty_is_integral(ty), "expected integral ty");
 
   op->ty = IR_OP_TY_CNST;
   op->var_ty =
@@ -1736,14 +1727,14 @@ void mk_integral_constant(UNUSED_ARG(struct ir_unit *iru), struct ir_op *op,
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
+void ir_mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                          unsigned long long value) {
   op->ty = IR_OP_TY_CNST;
-  op->var_ty = var_ty_for_pointer_size(iru);
+  op->var_ty = ir_var_ty_for_pointer_size(iru);
   op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = value};
 }
 
-struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
+struct ir_op *ir_build_addr(struct ir_func *irb, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_LOAD || op->ty == IR_OP_TY_STORE ||
                    op->ty == IR_OP_TY_LOAD_BITFIELD ||
                    op->ty == IR_OP_TY_STORE_BITFIELD,
@@ -1825,13 +1816,13 @@ struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op) {
 
 mk_op: {
   struct ir_op *res =
-      insert_before_ir_op(irb, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      ir_insert_before_op(irb, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   res->addr = addr;
   return res;
 }
 }
 
-struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
+struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
                                    const struct ir_var_ty *underlying,
                                    size_t num_elements) {
   struct ir_var_ty *copied = arena_alloc(iru->arena, sizeof(*copied));
@@ -1846,24 +1837,24 @@ struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
   return var_ty;
 }
 
-struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru) {
+struct ir_var_ty ir_var_ty_for_pointer_size(struct ir_unit *iru) {
   // TODO: again, similar to parser:
   // either we need a pointer-sized int type or for `ir_func` to know the
   // native integer size
   return (struct ir_var_ty){.ty = IR_VAR_TY_TY_PRIMITIVE,
-                            .primitive = var_ty_pointer_primitive_ty(iru)};
+                            .primitive = ir_var_ty_pointer_primitive_ty(iru)};
 }
 
 struct ir_op *alloc_integral_constant(struct ir_func *irb, struct ir_stmt *stmt,
                                       enum ir_var_primitive_ty primitive,
                                       unsigned long long value);
 
-bool valid_basicblock(struct ir_basicblock *basicblock) {
+bool ir_valid_basicblock(struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
   while (stmt) {
     struct ir_op *op = stmt->first;
     while (op) {
-      if (op_is_branch(op->ty)) {
+      if (ir_op_is_branch(op->ty)) {
         // it must be the *last* op
         return op->succ == NULL && stmt->succ == NULL;
       }
@@ -1878,7 +1869,7 @@ bool valid_basicblock(struct ir_basicblock *basicblock) {
   return false;
 }
 
-void add_pred_to_basicblock(struct ir_func *irb,
+void ir_add_pred_to_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_basicblock *pred) {
   for (size_t i = 0; i < basicblock->num_preds; i++) {
@@ -1896,7 +1887,7 @@ void add_pred_to_basicblock(struct ir_func *irb,
   basicblock->preds[basicblock->num_preds - 1] = pred;
 }
 
-void make_basicblock_split(struct ir_func *irb,
+void ir_make_basicblock_split(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *true_target,
                            struct ir_basicblock *false_target) {
@@ -1904,20 +1895,20 @@ void make_basicblock_split(struct ir_func *irb,
   basicblock->split = (struct ir_basicblock_split){
       .true_target = true_target, .false_target = false_target};
 
-  add_pred_to_basicblock(irb, true_target, basicblock);
-  add_pred_to_basicblock(irb, false_target, basicblock);
+  ir_add_pred_to_basicblock(irb, true_target, basicblock);
+  ir_add_pred_to_basicblock(irb, false_target, basicblock);
 }
 
-void make_basicblock_merge(struct ir_func *irb,
+void ir_make_basicblock_merge(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *target) {
   basicblock->ty = IR_BASICBLOCK_TY_MERGE;
   basicblock->merge = (struct ir_basicblock_merge){.target = target};
 
-  add_pred_to_basicblock(irb, target, basicblock);
+  ir_add_pred_to_basicblock(irb, target, basicblock);
 }
 
-void make_basicblock_switch(struct ir_func *irb,
+void ir_make_basicblock_switch(struct ir_func *irb,
                             struct ir_basicblock *basicblock, size_t num_cases,
                             struct ir_split_case *cases,
                             struct ir_basicblock *default_target) {
@@ -1932,19 +1923,19 @@ void make_basicblock_switch(struct ir_func *irb,
          sizeof(*basicblock->switch_case.cases) * num_cases);
 
   for (size_t i = 0; i < num_cases; i++) {
-    add_pred_to_basicblock(irb, cases[i].target, basicblock);
+    ir_add_pred_to_basicblock(irb, cases[i].target, basicblock);
   }
 
-  add_pred_to_basicblock(irb, default_target, basicblock);
+  ir_add_pred_to_basicblock(irb, default_target, basicblock);
 }
 
-struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
+struct ir_basicblock *ir_insert_basicblocks_after_op(struct ir_func *irb,
                                                   struct ir_op *insert_after,
                                                   struct ir_basicblock *first) {
   struct ir_basicblock *orig_bb = insert_after->stmt->basicblock;
 
-  struct ir_basicblock *end_bb = alloc_ir_basicblock(irb);
-  struct ir_stmt *end_stmt = alloc_ir_stmt(irb, end_bb);
+  struct ir_basicblock *end_bb = ir_alloc_ir_basicblock(irb);
+  struct ir_stmt *end_stmt = ir_alloc_ir_stmt(irb, end_bb);
 
   // now move all later instructions to the end bb
   // first break up the stmt we are in
@@ -1984,7 +1975,7 @@ struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
   return end_bb;
 }
 
-struct ir_glb *add_well_known_global(struct ir_unit *iru,
+struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                      enum ir_well_known_glb glb) {
   switch (glb) {
   case IR_WELL_KNOWN_GLB_MEMMOVE: {
@@ -2001,7 +1992,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
-    params[2] = var_ty_for_pointer_size(iru);
+    params[2] = ir_var_ty_for_pointer_size(iru);
 
     struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
                                .func = {.ret_ty = ptr,
@@ -2009,7 +2000,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                         .params = params,
                                         .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
 
-    struct ir_glb *memmove = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+    struct ir_glb *memmove = ir_add_global(iru, IR_GLB_TY_FUNC, &var_ty,
                                         IR_GLB_DEF_TY_UNDEFINED, "memmove");
 
     iru->well_known_glbs.memmove = memmove;
@@ -2030,7 +2021,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_POINTER; // TODO: const-qualified
-    params[2] = var_ty_for_pointer_size(iru);
+    params[2] = ir_var_ty_for_pointer_size(iru);
 
     struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
                                .func = {.ret_ty = ptr,
@@ -2038,7 +2029,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                         .params = params,
                                         .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
 
-    struct ir_glb *memcpy = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+    struct ir_glb *memcpy = ir_add_global(iru, IR_GLB_TY_FUNC, &var_ty,
                                        IR_GLB_DEF_TY_UNDEFINED, "memcpy");
 
     iru->well_known_glbs.memcpy = memcpy;
@@ -2058,7 +2049,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
 
     params[0] = IR_VAR_TY_POINTER;
     params[1] = IR_VAR_TY_I32;
-    params[2] = var_ty_for_pointer_size(iru);
+    params[2] = ir_var_ty_for_pointer_size(iru);
 
     struct ir_var_ty var_ty = {.ty = IR_VAR_TY_TY_FUNC,
                                .func = {.ret_ty = ptr,
@@ -2066,7 +2057,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
                                         .params = params,
                                         .flags = IR_VAR_FUNC_TY_FLAG_NONE}};
 
-    struct ir_glb *memset = add_global(iru, IR_GLB_TY_FUNC, &var_ty,
+    struct ir_glb *memset = ir_add_global(iru, IR_GLB_TY_FUNC, &var_ty,
                                        IR_GLB_DEF_TY_UNDEFINED, "memset");
 
     iru->well_known_glbs.memset = memset;
@@ -2075,7 +2066,7 @@ struct ir_glb *add_well_known_global(struct ir_unit *iru,
   }
 }
 
-struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
+struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_var_ty *var_ty,
                           enum ir_glb_def_ty def_ty, const char *name) {
   struct ir_glb *glb = arena_alloc(iru->arena, sizeof(*glb));
@@ -2108,7 +2099,7 @@ struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
   return glb;
 }
 
-struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
+struct ir_lcl *ir_add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl = arena_alloc(irb->arena, sizeof(*lcl));
   lcl->id = irb->lcl_count++;
 
@@ -2134,7 +2125,7 @@ struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty) {
   return lcl;
 }
 
-void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
+void ir_detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   if (lcl->id == DETACHED_LCL) {
     return;
   }
@@ -2169,16 +2160,16 @@ void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   lcl->func = NULL;
 }
 
-bool var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
+bool ir_var_ty_is_aggregate(const struct ir_var_ty *var_ty) {
   return var_ty->ty == IR_VAR_TY_TY_STRUCT || var_ty->ty == IR_VAR_TY_TY_UNION;
 }
 
-bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
+bool ir_var_ty_is_primitive(const struct ir_var_ty *var_ty,
                          enum ir_var_primitive_ty primitive) {
   return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE && var_ty->primitive == primitive;
 }
 
-bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
+bool ir_primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   switch (ty) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
@@ -2192,7 +2183,7 @@ bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   }
 }
 
-bool primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
+bool ir_primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
   switch (ty) {
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
@@ -2206,7 +2197,7 @@ bool primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
   }
 }
 
-bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
+bool ir_var_ty_is_integral(const struct ir_var_ty *var_ty) {
   if (var_ty->ty == IR_VAR_TY_TY_POINTER) {
     return true;
   }
@@ -2215,15 +2206,15 @@ bool var_ty_is_integral(const struct ir_var_ty *var_ty) {
     return false;
   }
 
-  return primitive_ty_is_integral(var_ty->primitive);
+  return ir_primitive_ty_is_integral(var_ty->primitive);
 }
 
-bool var_ty_is_fp(const struct ir_var_ty *var_ty) {
+bool ir_var_ty_is_fp(const struct ir_var_ty *var_ty) {
   if (var_ty->ty != IR_VAR_TY_TY_PRIMITIVE) {
     return false;
   }
 
-  return primitive_ty_is_fp(var_ty->primitive);
+  return ir_primitive_ty_is_fp(var_ty->primitive);
 }
 
 static void flatten_add_fields(struct ir_unit *iru, const struct ir_var_ty *ty,
@@ -2237,7 +2228,7 @@ static void flatten_add_fields(struct ir_unit *iru, const struct ir_var_ty *ty,
   }
 
   case IR_VAR_TY_TY_STRUCT: {
-    struct ir_var_ty_info info = var_ty_info(iru, ty);
+    struct ir_var_ty_info info = ir_var_ty_info(iru, ty);
 
     for (size_t i = 0; i < info.num_fields; i++) {
       size_t field_offset = *offset + info.offsets[i];
@@ -2249,7 +2240,7 @@ static void flatten_add_fields(struct ir_unit *iru, const struct ir_var_ty *ty,
   }
 
   case IR_VAR_TY_TY_UNION: {
-    struct ir_var_ty_info info = var_ty_info(iru, ty);
+    struct ir_var_ty_info info = ir_var_ty_info(iru, ty);
 
     for (size_t i = 0; i < info.num_fields; i++) {
       size_t field_offset = *offset;
@@ -2261,13 +2252,13 @@ static void flatten_add_fields(struct ir_unit *iru, const struct ir_var_ty *ty,
   }
   default: {
     struct ir_field_info info = {.offset = *offset, .var_ty = *ty};
-    *offset += var_ty_info(iru, ty).size;
+    *offset += ir_var_ty_info(iru, ty).size;
     vector_push_back(fields, &info);
   }
   }
 }
 
-struct ir_var_ty_flattened var_ty_info_flat(struct ir_unit *iru,
+struct ir_var_ty_flattened ir_var_ty_info_flat(struct ir_unit *iru,
                                             const struct ir_var_ty *ty) {
   // TODO: this isn't efficient because it generates a huge array of offsets
   // for arrays
@@ -2281,7 +2272,7 @@ struct ir_var_ty_flattened var_ty_info_flat(struct ir_unit *iru,
                                       .num_fields = vector_length(fields)};
 }
 
-struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
+struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty) {
   switch (ty->ty) {
   case IR_VAR_TY_TY_NONE:
@@ -2314,7 +2305,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
     }
   case IR_VAR_TY_TY_ARRAY: {
-    struct ir_var_ty_info element_info = var_ty_info(iru, ty->array.underlying);
+    struct ir_var_ty_info element_info = ir_var_ty_info(iru, ty->array.underlying);
     size_t size = ty->array.num_elements * element_info.size;
     return (struct ir_var_ty_info){.size = size,
                                    .alignment = element_info.alignment};
@@ -2327,7 +2318,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 
     for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
       struct ir_var_ty *field = &ty->aggregate.fields[i];
-      struct ir_var_ty_info info = var_ty_info(iru, field);
+      struct ir_var_ty_info info = ir_var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
       size = ROUND_UP(size, info.alignment);
@@ -2349,7 +2340,7 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
 
     for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
       struct ir_var_ty *field = &ty->aggregate.fields[i];
-      struct ir_var_ty_info info = var_ty_info(iru, field);
+      struct ir_var_ty_info info = ir_var_ty_info(iru, field);
       max_alignment = MAX(max_alignment, info.alignment);
 
       size = MAX(size, info.size);
@@ -2363,14 +2354,14 @@ struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
   }
 }
 
-struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
+struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op) {
   DEBUG_ASSERT(!(op->flags & IR_OP_FLAG_FIXED_REG),
                "spilling fixed reg illegal (op %zu)", op->id);
 
   debug("spilling %zu\n", op->id);
 
   if (!op->lcl) {
-    op->lcl = add_local(irb, &op->var_ty);
+    op->lcl = ir_add_local(irb, &op->var_ty);
   }
 
   if (op->flags & IR_OP_FLAG_SPILLED) {
@@ -2389,15 +2380,15 @@ struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op) {
                    "expected all phi to be in same stmt");
 
       if (succ->first) {
-        store = insert_before_ir_op(irb, succ->first, IR_OP_TY_STORE,
+        store = ir_insert_before_op(irb, succ->first, IR_OP_TY_STORE,
                                     IR_VAR_TY_NONE);
       } else {
-        store = alloc_ir_op(irb, succ);
+        store = ir_alloc_ir_op(irb, succ);
         store->ty = IR_OP_TY_STORE;
         store->var_ty = IR_VAR_TY_NONE;
       }
     } else {
-      store = insert_after_ir_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store = ir_insert_after_op(irb, op, IR_OP_TY_STORE, IR_VAR_TY_NONE);
     }
 
     store->store = (struct ir_op_store){
@@ -2439,8 +2430,8 @@ static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
-struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
-  rebuild_ids(func);
+struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
+  ir_rebuild_ids(func);
 
   struct build_op_uses_callback_data data = {
       .op = NULL,
@@ -2520,7 +2511,7 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
         data.op = op;
         data.use_data[op->id].op = op;
 
-        walk_op_uses(op, build_op_uses_callback, &data);
+        ir_walk_op_uses(op, build_op_uses_callback, &data);
 
         op = op->succ;
       }
@@ -2573,7 +2564,7 @@ struct ir_op_use_map build_op_uses_map(struct ir_func *func) {
   return uses;
 }
 
-size_t unique_idx_for_ir_reg(struct ir_reg reg) {
+size_t ir_unique_idx_for_ir_reg(struct ir_reg reg) {
   return reg.idx * /* num tys */ 5 + reg.ty;
 }
 
@@ -2937,7 +2928,7 @@ ir_compute_dominance_frontier(struct ir_func *func) {
                                         .domfs = domf};
 }
 
-void alloc_locals(struct ir_func *func) {
+void ir_alloc_locals(struct ir_func *func) {
   struct ir_lcl *lcl = func->first_lcl;
   while (lcl) {
     if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE) {
@@ -2945,7 +2936,7 @@ void alloc_locals(struct ir_func *func) {
       continue;
     }
 
-    struct ir_var_ty_info ty_info = var_ty_info(func->unit, &lcl->var_ty);
+    struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
 
     size_t lcl_pad =
         (ty_info.alignment - (func->total_locals_size % ty_info.alignment)) %

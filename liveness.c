@@ -27,7 +27,7 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 */
 struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
-  rebuild_ids(irb);
+  ir_rebuild_ids(irb);
 
   struct interval_data data;
   data.intervals =
@@ -71,7 +71,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
         struct interval_callback_data cb_data = {.op = op, .data = &data};
 
-        walk_op_uses(op, op_used_callback, &cb_data);
+        ir_walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
 
         op = op->succ;

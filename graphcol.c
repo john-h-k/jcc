@@ -63,14 +63,14 @@ static void build_interf_graph(struct graphcol_state *state,
 
     interf[i] = NULL;
 
-    if (!op_produces_value(interval->op)) {
+    if (!ir_op_produces_value(interval->op)) {
       continue;
     }
 
     if (reg_ty == IR_REG_TY_INTEGRAL &&
-        var_ty_is_integral(&interval->op->var_ty)) {
+        ir_var_ty_is_integral(&interval->op->var_ty)) {
       interf[i] = vector_create(sizeof(size_t));
-    } else if (reg_ty == IR_REG_TY_FP && var_ty_is_fp(&interval->op->var_ty)) {
+    } else if (reg_ty == IR_REG_TY_FP && ir_var_ty_is_fp(&interval->op->var_ty)) {
       interf[i] = vector_create(sizeof(size_t));
     }
   }
@@ -81,7 +81,7 @@ static void build_interf_graph(struct graphcol_state *state,
   for (size_t i = 0; i < num_intervals; i++) {
     struct interval *interval = &data->intervals[i];
 
-    if (!interf[i] || !op_produces_value(interval->op)) {
+    if (!interf[i] || !ir_op_produces_value(interval->op)) {
       continue;
     }
 
@@ -210,7 +210,7 @@ static void build_interf_graph(struct graphcol_state *state,
   for (size_t i = 0; i < vector_length(spills); i++) {
     size_t spilled_var = *(size_t *)vector_get(spills, i);
 
-    spill_op(state->irb, data->intervals[spilled_var].op);
+    ir_spill_op(state->irb, data->intervals[spilled_var].op);
   }
 
   debug_print_ir_func(stderr, state->irb, print_ir_intervals, data->intervals);
@@ -220,7 +220,7 @@ static void build_interf_graph(struct graphcol_state *state,
 void graphcol_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   TODO("does not currently work!");
 
-  clear_metadata(irb);
+  ir_clear_metadata(irb);
   struct interval_data data = construct_intervals(irb);
 
   DEBUG_ASSERT(data.num_intervals == irb->op_count,

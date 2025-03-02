@@ -95,7 +95,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
       // TODO: support partial zeroinit
       struct ir_lcl *lcl = addr->addr.lcl;
       if (field_idx || mem_set.value ||
-          mem_set.length < var_ty_info(data->func->unit, &lcl->var_ty).size) {
+          mem_set.length < ir_var_ty_info(data->func->unit, &lcl->var_ty).size) {
         *data->candidate = false;
         return;
       }
@@ -140,7 +140,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
         struct ir_var_ty el_ty = *array_ty.array.underlying;
 
-        struct ir_var_ty_info el_info = var_ty_info(data->func->unit, &el_ty);
+        struct ir_var_ty_info el_info = ir_var_ty_info(data->func->unit, &el_ty);
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 && offset_field_idx < num_els;
@@ -223,7 +223,7 @@ static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
     DEBUG_ASSERT(basicblock->pred, "can't insert a phi in first bb");
 
     // var is not in this bb, so gen phi
-    struct ir_op *phi = insert_phi(irb, basicblock, *var_ty);
+    struct ir_op *phi = ir_insert_phi(irb, basicblock, *var_ty);
 
     phi->phi = (struct ir_op_phi){
         .num_values = basicblock->num_preds,
@@ -302,7 +302,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // TODO: use this here (and in build) to pick better phi locations
   // struct ir_dominance_frontier domf = ir_compute_dominance_frontier(func);
 
-  rebuild_ids(func);
+  ir_rebuild_ids(func);
 
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);
@@ -317,7 +317,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
                             .field_idx = use->field_idx};
 
     struct ir_op *value = op->store.value;
-    op = replace_ir_op(func, op, IR_OP_TY_MOV, value->var_ty);
+    op = ir_replace_op(func, op, IR_OP_TY_MOV, value->var_ty);
     op->mov = (struct ir_op_mov){.value = value};
     op->flags |= IR_OP_FLAG_PROMOTED;
 
@@ -351,7 +351,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
       size_t first_field, num_fields;
       struct ir_var_ty *fields;
-      if (var_ty_is_aggregate(&op->var_ty)) {
+      if (ir_var_ty_is_aggregate(&op->var_ty)) {
         first_field = use->field_idx;
         num_fields = op->var_ty.aggregate.num_fields;
         gather_values = arena_alloc(
@@ -378,11 +378,11 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
           // same bb, no phi needed
           struct ir_op *mov;
           if (gather_values) {
-            mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
+            mov = ir_insert_before_op(func, op, IR_OP_TY_MOV, field_ty);
             gather_values[head++] =
                 (struct ir_gather_value){.value = mov, .field_idx = j};
           } else {
-            mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
+            mov = ir_replace_op(func, op, IR_OP_TY_MOV, op->var_ty);
           }
 
           mov->mov = (struct ir_op_mov){.value = *store};
@@ -400,7 +400,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
           struct ir_op *zero;
           if (gather_values) {
-            zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, field_ty);
+            zero = ir_insert_before_op(func, op, IR_OP_TY_CNST, field_ty);
 
             gather_values[head++] =
                 (struct ir_gather_value){.value = zero, .field_idx = j};
@@ -408,22 +408,22 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
             zero = op;
           }
 
-          mk_zero_constant(func->unit, zero, &field_ty);
+          ir_mk_zero_constant(func->unit, zero, &field_ty);
           zero->flags |= IR_OP_FLAG_PROMOTED;
 
           continue;
         }
 
-        struct ir_op *phi = insert_phi(func, basicblock, field_ty);
+        struct ir_op *phi = ir_insert_phi(func, basicblock, field_ty);
         phi->phi = (struct ir_op_phi){.num_values = 0};
 
         struct ir_op *mov;
         if (gather_values) {
-          mov = insert_before_ir_op(func, op, IR_OP_TY_MOV, field_ty);
+          mov = ir_insert_before_op(func, op, IR_OP_TY_MOV, field_ty);
           gather_values[head++] =
               (struct ir_gather_value){.value = mov, .field_idx = j};
         } else {
-          mov = replace_ir_op(func, op, IR_OP_TY_MOV, op->var_ty);
+          mov = ir_replace_op(func, op, IR_OP_TY_MOV, op->var_ty);
         }
 
         mov->mov = (struct ir_op_mov){.value = phi};
@@ -433,7 +433,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       }
 
       if (gather_values) {
-        op = replace_ir_op(func, op, IR_OP_TY_GATHER, op->var_ty);
+        op = ir_replace_op(func, op, IR_OP_TY_GATHER, op->var_ty);
         op->flags |= IR_OP_FLAG_PROMOTED;
         op->gather = (struct ir_op_gather){.num_values = num_fields,
                                            .values = gather_values};
@@ -442,7 +442,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   }
 
   // can't reuse map from parent because we have added ops
-  struct ir_op_use_map use_map = build_op_uses_map(func);
+  struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
   struct vector *depends = vector_create(sizeof(struct ir_op *));
   struct ir_lcl_usage *usage = &use_map.lcl_use_datas[lcl->id];
@@ -476,8 +476,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         vector_push_back(depends, &dep_use->consumer);
       }
 
-      DEBUG_ASSERT(!op_is_branch(detach->ty), "should not be detaching branch");
-      detach_ir_op(func, detach);
+      DEBUG_ASSERT(!ir_op_is_branch(detach->ty), "should not be detaching branch");
+      ir_detach_op(func, detach);
     }
   }
 
@@ -489,7 +489,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
 static void opts_promote_func(struct ir_func *func) {
   // rebuilds op ids, important for later
-  struct ir_op_use_map use_map = build_op_uses_map(func);
+  struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
   // note: this requires contigous lcl ids
   bool *candidates =
@@ -560,7 +560,7 @@ static void opts_promote_func(struct ir_func *func) {
           if (op->addr.ty == IR_OP_ADDR_TY_LCL) {
             struct ir_lcl *lcl = op->addr.lcl;
 
-            struct ir_var_ty_info info = var_ty_info(func->unit, &lcl->var_ty);
+            struct ir_var_ty_info info = ir_var_ty_info(func->unit, &lcl->var_ty);
 
             struct addr_uses_data data = {.func = func,
                                           .lcl_uses = lcl_uses[lcl->id],
@@ -616,7 +616,7 @@ static void opts_promote_func(struct ir_func *func) {
 
   size_t num = vector_length(lcls_to_remove);
   for (size_t i = 0; i < num; i++) {
-    detach_local(func, *(struct ir_lcl **)vector_get(lcls_to_remove, i));
+    ir_detach_local(func, *(struct ir_lcl **)vector_get(lcls_to_remove, i));
   }
 
   vector_free(&lcls_to_remove);

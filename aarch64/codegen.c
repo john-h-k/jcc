@@ -342,7 +342,7 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
     return offset;
   }
 
-  struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
+  struct ir_var_ty_info info = ir_var_ty_info(state->ir->unit, &op->var_ty);
   DEBUG_ASSERT(offset % info.size == 0,
                "stack offset not divisible by type size");
 
@@ -602,7 +602,7 @@ static struct folded_addr_op fold_addr_op(struct codegen_state *state,
       DEBUG_ASSERT(
           ISPOW2(addr_offset.scale) &&
               (addr_offset.scale == 1 ||
-               addr_offset.scale == var_ty_info(state->ir->unit, var_ty).size),
+               addr_offset.scale == ir_var_ty_info(state->ir->unit, var_ty).size),
           "must have scale of 1 or same size as store type");
 
       index = codegen_reg(addr_offset.index);
@@ -645,7 +645,7 @@ static void codegen_load_addr_op(struct codegen_state *state,
     switch (fold.ty) {
     case FOLDED_ADDR_OP_TY_IMM: {
       size_t imm = fold.imm;
-      struct ir_var_ty_info info = var_ty_info(state->ir->unit, &op->var_ty);
+      struct ir_var_ty_info info = ir_var_ty_info(state->ir->unit, &op->var_ty);
       DEBUG_ASSERT(imm % info.size == 0, "expected imm to be multiple of size");
       imm /= info.size;
 
@@ -692,7 +692,7 @@ static void codegen_store_addr_op(struct codegen_state *state,
     case FOLDED_ADDR_OP_TY_IMM: {
       size_t imm = fold.imm;
       struct ir_var_ty_info info =
-          var_ty_info(state->ir->unit, &op->store.value->var_ty);
+          ir_var_ty_info(state->ir->unit, &op->store.value->var_ty);
       DEBUG_ASSERT(imm % info.size == 0, "expected imm to be multiple of size");
       imm /= info.size;
 
@@ -1256,7 +1256,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
   struct aarch64_reg dest = {0};
 
-  if (binary_op_is_comparison(op->binary_op.ty)) {
+  if (ir_binary_op_is_comparison(op->binary_op.ty)) {
     dest = zero_reg_for_ty(reg_ty_for_var_ty(&op->binary_op.lhs->var_ty));
   } else {
     dest = codegen_reg(op);
@@ -1265,7 +1265,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   struct ir_op *lhs_op = op->binary_op.lhs;
   struct ir_op *rhs_op = op->binary_op.rhs;
 
-  bool is_fp = var_ty_is_fp(&op->var_ty);
+  bool is_fp = ir_var_ty_is_fp(&op->var_ty);
 
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
   DEBUG_ASSERT(ty == IR_OP_BINARY_OP_TY_FADD || ty == IR_OP_BINARY_OP_TY_FSUB ||
@@ -1338,7 +1338,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
       size_t shift = rhs_op->cnst.int_value;
 
       if (shift) {
-        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t size = ir_var_ty_info(state->ir->unit, &op->var_ty).size;
         size_t imms = (size * 8 - 1) - shift;
         instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
         instr->aarch64->ubfm =
@@ -1363,7 +1363,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
       size_t shift = rhs_op->cnst.int_value;
 
       if (shift) {
-        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t size = ir_var_ty_info(state->ir->unit, &op->var_ty).size;
         size_t immr = shift;
         instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
         instr->aarch64->sbfm =
@@ -1389,7 +1389,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
 
       if (shift) {
 
-        size_t size = var_ty_info(state->ir->unit, &op->var_ty).size;
+        size_t size = ir_var_ty_info(state->ir->unit, &op->var_ty).size;
         size_t immr = shift;
         instr->aarch64->ty = AARCH64_INSTR_TY_UBFM;
         instr->aarch64->ubfm =
@@ -1929,9 +1929,6 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
     break;
-  case IR_OP_TY_CUSTOM: {
-    BUG("custom");
-  }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
       // don't need to do anything

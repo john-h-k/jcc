@@ -3,9 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
-// FIXME: for ssize_t 
-#include <stdio.h>
+#include "../util.h"
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
@@ -50,9 +48,6 @@ enum ir_op_ty {
   // IR_OP_TY_STORE_REG,
   // IR_OP_TY_LOAD_REG,
   // IR_OP_TY_MOV_REG,
-
-  // represents a custom instruction understood by a particular backend
-  IR_OP_TY_CUSTOM,
 };
 
 struct ir_gather_value {
@@ -176,12 +171,12 @@ enum ir_op_binary_op_ty {
   IR_OP_BINARY_OP_TY_FDIV,
 };
 
-bool binary_op_is_comparison(enum ir_op_binary_op_ty ty);
-enum ir_op_binary_op_ty invert_binary_comparison(enum ir_op_binary_op_ty ty);
+bool ir_binary_op_is_comparison(enum ir_op_binary_op_ty ty);
+enum ir_op_binary_op_ty ir_invert_binary_comparison(enum ir_op_binary_op_ty ty);
 
 enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 
-enum ir_op_sign binary_op_sign(enum ir_op_binary_op_ty);
+enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty);
 
 struct ir_op_binary_op {
   enum ir_op_binary_op_ty ty;
@@ -235,7 +230,7 @@ struct ir_var_func_ty {
   enum ir_var_func_ty_flags flags;
 };
 
-bool is_func_variadic(const struct ir_var_func_ty *ty);
+bool ir_is_func_variadic(const struct ir_var_func_ty *ty);
 
 struct ir_var_aggregate_ty {
   size_t num_fields;
@@ -496,22 +491,12 @@ struct ir_op_mem_copy {
   // enum ir_mem_copy_flags flags;
 };
 
-struct aarch64_op;
-struct eep_op;
-
-struct ir_op_custom {
-  union {
-    struct aarch64_op *aarch64;
-    struct eep_op *eep;
-  };
-};
-
 bool ir_reg_eq(struct ir_reg left, struct ir_reg right);
-bool var_ty_has_reg(const struct ir_var_ty var_ty);
+bool ir_var_ty_has_reg(const struct ir_var_ty var_ty);
 enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty);
 
-bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
-bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
+bool ir_primitive_ty_is_integral(enum ir_var_primitive_ty ty);
+bool ir_primitive_ty_is_fp(enum ir_var_primitive_ty ty);
 
 #define NO_REG                                                                 \
   (struct ir_reg) { .ty = IR_REG_TY_NONE }
@@ -601,7 +586,6 @@ struct ir_op {
      * condition */
     struct ir_op_phi phi;
     struct ir_op_mov mov;
-    struct ir_op_custom custom;
   };
 
   struct ir_lcl *lcl;
@@ -651,7 +635,7 @@ struct ir_stmt {
 
 // ensures the basic block ends with an appropriate branch and does not contain
 // any within it
-bool valid_basicblock(struct ir_basicblock *basicblock);
+bool ir_valid_basicblock(struct ir_basicblock *basicblock);
 
 enum ir_basicblock_ty {
   // a return has no explicit successors
@@ -837,7 +821,6 @@ enum ir_lcl_alloc_ty {
 };
 
 struct ir_lcl_alloc {
-  // TODO: remove all uses of `ssize_t` and replace with C standard type
   ssize_t offset;
 
   size_t size;
@@ -1011,7 +994,7 @@ struct ir_func_iter ir_func_iter(struct ir_func *func,
                                  enum ir_func_iter_flags flags);
 bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op);
 
-struct ir_glb *add_well_known_global(struct ir_unit *iru,
+struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                      enum ir_well_known_glb glb);
 
 
@@ -1020,209 +1003,209 @@ enum ir_op_use_ty {
   IR_OP_USE_TY_DEREF, // e.g `store.addr [%1], ...`
 };
 
-typedef void(walk_op_uses_callback)(struct ir_op **op, enum ir_op_use_ty use_ty, void *metadata);
-typedef void(walk_op_callback)(struct ir_op *op, void *metadata);
+typedef void(ir_walk_op_uses_callback)(struct ir_op **op, enum ir_op_use_ty use_ty, void *metadata);
+typedef void(ir_walk_op_callback)(struct ir_op *op, void *metadata);
 
-bool op_has_side_effects(const struct ir_op *ty);
-bool op_produces_value(const struct ir_op *ty);
-bool op_is_branch(enum ir_op_ty ty);
+bool ir_op_has_side_effects(const struct ir_op *ty);
+bool ir_op_produces_value(const struct ir_op *ty);
+bool ir_op_is_branch(enum ir_op_ty ty);
 
-void walk_stmt(struct ir_stmt *stmt, walk_op_callback *cb, void *cb_metadata);
-void walk_op(struct ir_op *op, walk_op_callback *cb, void *cb_metadata);
-void walk_op_uses(struct ir_op *op, walk_op_uses_callback *cb, void *cb_metadata);
+void ir_walk_stmt(struct ir_stmt *stmt, ir_walk_op_callback *cb, void *cb_metadata);
+void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata);
+void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb, void *cb_metadata);
 
-bool stmt_is_empty(struct ir_stmt *stmt);
-bool basicblock_is_empty(struct ir_basicblock *basicblock);
+bool ir_stmt_is_empty(struct ir_stmt *stmt);
+bool ir_basicblock_is_empty(struct ir_basicblock *basicblock);
 
-void prune_basicblocks(struct ir_func *irb);
-void prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
+void ir_prune_basicblocks(struct ir_func *irb);
+void ir_prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
 void ir_order_basicblocks(struct ir_func *func);
 
 
-void rebuild_flags(struct ir_func *func);
+void ir_rebuild_flags(struct ir_func *func);
 
-enum eliminate_redundant_ops_flags {
-  ELIMINATE_REDUNDANT_OPS_FLAG_NONE = 0,
+enum ir_eliminate_redundant_ops_flags {
+  IR_ELIMINATE_REDUNDANT_OPS_FLAG_NONE = 0,
 
   // removes branches to the next basicblock
   // TODO: we should remove this and instead have codegen simply not generate a branch if not needed
-  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES = 1 << 0,
+  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES = 1 << 0,
 
   // allows more aggressive elimination of moves
-  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS = 1 << 1,
+  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS = 1 << 1,
 
   // this is a negative flag because most passes _do_ want to eliminate locals
   // it is only late-stage passes which can't do this, because they have been allocated or have target specific meanings
-  ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS = 1 << 2,
+  IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS = 1 << 2,
 };
 
-void eliminate_redundant_ops(struct ir_func *func, enum eliminate_redundant_ops_flags flags);
+void ir_eliminate_redundant_ops(struct ir_func *func, enum ir_eliminate_redundant_ops_flags flags);
 
-void clear_metadata(struct ir_func *irb);
-void rebuild_ids(struct ir_func *irb);
+void ir_clear_metadata(struct ir_func *irb);
+void ir_rebuild_ids(struct ir_func *irb);
 
-struct ir_lcl *add_local(struct ir_func *irb, const struct ir_var_ty *var_ty);
-void detach_local(struct ir_func *irb, struct ir_lcl *lcl);
-void alloc_locals(struct ir_func *func);
+struct ir_lcl *ir_add_local(struct ir_func *irb, const struct ir_var_ty *var_ty);
+void ir_detach_local(struct ir_func *irb, struct ir_lcl *lcl);
+void ir_alloc_locals(struct ir_func *func);
 
-struct ir_glb *add_global(struct ir_unit *iru, enum ir_glb_ty ty,
+struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_var_ty *var_ty,
                           enum ir_glb_def_ty def_ty, const char *name);
 
-struct ir_op *alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
+struct ir_op *ir_alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
 
 // clones an op so it can be marked contained
 // else we would need to ensure all consumers can contain it
-struct ir_op *alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
 // fixing an op is difficult, because fixed ops with overlapping lifetimes won't
 // be able to allocate so to fix an op, you provide the point it must be fixed
 // at (`consumer`) and we insert a mov before then and fix that we take `**op`
 // so that we can then reassign the consumer op to the fixed move
-struct ir_op *alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
+struct ir_op *ir_alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
                                          struct ir_op *consumer,
                                          struct ir_reg reg);
 
-struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
+struct ir_op *ir_alloc_fixed_reg_source_ir_op(struct ir_func *irb,
                                            struct ir_op *producer,
                                            struct ir_reg reg);
 
-void mk_zero_constant(struct ir_unit *iru, struct ir_op *op, struct ir_var_ty *var_ty);
+void ir_mk_zero_constant(struct ir_unit *iru, struct ir_op *op, struct ir_var_ty *var_ty);
 
-void mk_floating_zero_constant(struct ir_unit *iru, struct ir_op *op,
+void ir_mk_floating_zero_constant(struct ir_unit *iru, struct ir_op *op,
                                enum ir_var_primitive_ty ty);
 
-void mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
+void ir_mk_integral_constant(struct ir_unit *iru, struct ir_op *op,
                           enum ir_var_primitive_ty ty,
                           unsigned long long value);
-void mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
+void ir_mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
                          unsigned long long value);
 
-struct ir_op *build_addr(struct ir_func *irb, struct ir_op *op);
+struct ir_op *ir_build_addr(struct ir_func *irb, struct ir_op *op);
 
-struct ir_stmt *alloc_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_alloc_ir_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock);
 
-struct ir_basicblock *alloc_ir_basicblock(struct ir_func *irb);
+struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb);
 
-void add_pred_to_basicblock(struct ir_func *irb,
+void ir_add_pred_to_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_basicblock *pred);
 
 // NOTE: does NOT connect the blocks to the end (return) block, must be done
 // manually
-struct ir_basicblock *insert_basicblocks_after_op(struct ir_func *irb,
+struct ir_basicblock *ir_insert_basicblocks_after_op(struct ir_func *irb,
                                                   struct ir_op *insert_after,
                                                   struct ir_basicblock *first);
 
-void make_basicblock_split(struct ir_func *irb,
+void ir_make_basicblock_split(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *true_target,
                            struct ir_basicblock *false_target);
 
-void make_basicblock_merge(struct ir_func *irb,
+void ir_make_basicblock_merge(struct ir_func *irb,
                            struct ir_basicblock *basicblock,
                            struct ir_basicblock *target);
 
-void make_basicblock_switch(struct ir_func *irb,
+void ir_make_basicblock_switch(struct ir_func *irb,
                             struct ir_basicblock *basicblock, size_t num_cases,
                             struct ir_split_case *cases,
                             struct ir_basicblock *default_target);
 
-enum detach_ir_basicblock_flags {
+enum ir_detach_ir_basicblock_flags {
   DETACH_IR_BASICBLOCK_FLAG_NONE = 0,
   DETACH_IR_BASICBLOCK_FLAG_ALLOW_PREDS = 1,
 };
 
-void detach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
-                          enum detach_ir_basicblock_flags flags);
+void ir_detach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+                          enum ir_detach_ir_basicblock_flags flags);
 
-void detach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt);
-void detach_ir_op(struct ir_func *irb, struct ir_op *op);
+void ir_detach_stmt(struct ir_func *irb, struct ir_stmt *stmt);
+void ir_detach_op(struct ir_func *irb, struct ir_op *op);
 
-void initialise_ir_basicblock(struct ir_basicblock *basicblock, size_t id);
+void ir_initialise_basicblock(struct ir_basicblock *basicblock, size_t id);
 
 // Helper method that ensures the essential fields in IR op are initialised
-void initialise_ir_stmt(struct ir_stmt *stmt, size_t id);
+void ir_initialise_stmt(struct ir_stmt *stmt, size_t id);
 
-void initialise_ir_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
+void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_var_ty var_ty, struct ir_reg,
                       struct ir_lcl *lcl);
 
-void move_after_ir_basicblock(struct ir_func *irb,
+void ir_move_after_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *move_after);
-void move_before_ir_basicblock(struct ir_func *irb,
+void ir_move_before_basicblock(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                struct ir_basicblock *move_before);
 
 
-void move_after_ir_stmt(struct ir_func *irb,
+void ir_move_after_stmt(struct ir_func *irb,
                               struct ir_stmt *stmt,
                               struct ir_stmt *move_after);
-void move_before_ir_stmt(struct ir_func *irb,
+void ir_move_before_stmt(struct ir_func *irb,
                                struct ir_stmt *stmt,
                                struct ir_stmt *move_before);
 
-void move_after_ir_op(struct ir_func *irb, struct ir_op *op,
+void ir_move_after_op(struct ir_func *irb, struct ir_op *op,
                       struct ir_op *move_after);
-void move_before_ir_op(struct ir_func *irb, struct ir_op *op,
+void ir_move_before_op(struct ir_func *irb, struct ir_op *op,
                        struct ir_op *move_before);
 
-void attach_ir_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
+void ir_attach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *pred,
                           struct ir_basicblock *succ);
 
-void attach_ir_stmt(struct ir_func *irb, struct ir_stmt *stmt, struct ir_basicblock *basicblock,
+void ir_attach_stmt(struct ir_func *irb, struct ir_stmt *stmt, struct ir_basicblock *basicblock,
                   struct ir_stmt *pred, struct ir_stmt *succ);
 
-void attach_ir_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
+void ir_attach_op(struct ir_func *irb, struct ir_op *op, struct ir_stmt *stmt,
                   struct ir_op *pred, struct ir_op *succ);
 
 
 
 // swaps ops but does NOT swap their uses - expressions pointing to `left` will
 // now point to `right`
-void swap_ir_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
+void ir_swap_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right);
 
 // swaps ops AND their uses
-void swap_ir_ops_in_place(struct ir_func *irb, struct ir_op *left,
+void ir_swap_ops_in_place(struct ir_func *irb, struct ir_op *left,
                           struct ir_op *right);
 
-struct ir_op *replace_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_replace_op(struct ir_func *irb, struct ir_op *op,
                             enum ir_op_ty ty, struct ir_var_ty var_ty);
 
 struct ir_stmt *
-insert_before_ir_stmt(struct ir_func *irb,
+ir_insert_before_stmt(struct ir_func *irb,
                             struct ir_stmt *insert_before);
 
 struct ir_stmt *
-insert_after_ir_stmt(struct ir_func *irb,
+ir_insert_after_stmt(struct ir_func *irb,
                            struct ir_stmt *insert_after);
 
 struct ir_basicblock *
-insert_before_ir_basicblock(struct ir_func *irb,
+ir_insert_before_basicblock(struct ir_func *irb,
                             struct ir_basicblock *insert_before);
 
 struct ir_basicblock *
-insert_after_ir_basicblock(struct ir_func *irb,
+ir_insert_after_basicblock(struct ir_func *irb,
                            struct ir_basicblock *insert_after);
 
-struct ir_op *insert_before_ir_op(struct ir_func *irb,
+struct ir_op *ir_insert_before_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty);
 
-struct ir_op *insert_after_ir_op(struct ir_func *irb,
+struct ir_op *ir_insert_after_op(struct ir_func *irb,
                                  struct ir_op *insert_after, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty);
 
-struct ir_op *append_ir_op(struct ir_func *irb,
+struct ir_op *ir_append_op(struct ir_func *irb,
                                  struct ir_stmt *stmt, enum ir_op_ty ty,
                                  struct ir_var_ty var_ty);
 
-struct ir_op *insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
+struct ir_op *ir_insert_phi(struct ir_func *irb, struct ir_basicblock *basicblock,
                          struct ir_var_ty var_ty);
 
 
@@ -1237,7 +1220,7 @@ struct ir_var_ty_flattened {
   size_t num_fields;
 };
 
-struct ir_var_ty_flattened var_ty_info_flat(struct ir_unit *iru,
+struct ir_var_ty_flattened ir_var_ty_info_flat(struct ir_unit *iru,
                                             const struct ir_var_ty *ty);
 
 struct ir_var_ty_info {
@@ -1248,26 +1231,26 @@ struct ir_var_ty_info {
   size_t *offsets;
 };
 
-struct ir_var_ty_info var_ty_info(struct ir_unit *iru,
+struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
                                   const struct ir_var_ty *ty);
 
-enum ir_var_primitive_ty var_ty_pointer_primitive_ty(struct ir_unit *iru);
+enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru);
 
-struct ir_var_ty var_ty_for_pointer_size(struct ir_unit *iru);
-struct ir_var_ty var_ty_make_array(struct ir_unit *iru,
+struct ir_var_ty ir_var_ty_for_pointer_size(struct ir_unit *iru);
+struct ir_var_ty ir_var_ty_make_array(struct ir_unit *iru,
                                    const struct ir_var_ty *underlying,
                                    size_t num_elements);
 
-bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
+bool ir_var_ty_is_primitive(const struct ir_var_ty *var_ty,
                          enum ir_var_primitive_ty primitive);
-bool var_ty_is_integral(const struct ir_var_ty *var_ty);
-bool var_ty_is_fp(const struct ir_var_ty *var_ty);
-bool var_ty_is_aggregate(const struct ir_var_ty *var_ty);
+bool ir_var_ty_is_integral(const struct ir_var_ty *var_ty);
+bool ir_var_ty_is_fp(const struct ir_var_ty *var_ty);
+bool ir_var_ty_is_aggregate(const struct ir_var_ty *var_ty);
 
-bool var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
+bool ir_var_ty_eq(struct ir_unit *iru, const struct ir_var_ty *l,
                const struct ir_var_ty *r);
 
-struct ir_op *spill_op(struct ir_func *irb, struct ir_op *op);
+struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op);
 
 struct ir_op_use {
   enum ir_op_use_ty ty;
@@ -1298,10 +1281,21 @@ struct ir_op_use_map {
   size_t num_lcl_use_datas;
 };
 
-struct ir_op_use_map build_op_uses_map(struct ir_func *func);
+struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func);
 
-size_t unique_idx_for_ir_reg(struct ir_reg reg);
+size_t ir_unique_idx_for_ir_reg(struct ir_reg reg);
 struct ir_reg ir_reg_for_unique_idx(size_t idx);
+
+struct ir_dominance_frontier {
+  // FIXME: exposing vector in API ugly
+  struct vector /* `struct ir_basicblock *` */ **idom_children;
+  struct vector /* `struct ir_basicblock *` */ **domfs;
+};
+
+struct ir_dominance_frontier
+ir_compute_dominance_frontier(struct ir_func *func);
+
+// TODO: this should really be somewhere else
 
 struct location {
   size_t idx;
@@ -1321,14 +1315,5 @@ struct move_set {
 struct move_set gen_move_order(struct arena_allocator *arena,
                                struct location *from, struct location *to,
                                size_t num, size_t tmp_index);
-
-struct ir_dominance_frontier {
-  // FIXME: exposing vector in API ugly
-  struct vector /* `struct ir_basicblock *` */ **idom_children;
-  struct vector /* `struct ir_basicblock *` */ **domfs;
-};
-
-struct ir_dominance_frontier
-ir_compute_dominance_frontier(struct ir_func *func);
 
 #endif

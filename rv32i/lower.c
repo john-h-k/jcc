@@ -20,7 +20,7 @@ static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
 
   *member_ty = var_ty->aggregate.fields[0];
 
-  if (!var_ty_is_fp(member_ty)) {
+  if (!ir_var_ty_is_fp(member_ty)) {
     return false;
   }
 
@@ -29,7 +29,7 @@ static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_is_fp(&var_ty->aggregate.fields[i])) {
+    if (!ir_var_ty_is_fp(&var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -56,7 +56,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     ret_info = NULL;
   } else {
     struct ir_var_ty_info info =
-        var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
+        ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
                                     ? &IR_VAR_TY_POINTER
                                     : func_ty.ret_ty);
 
@@ -70,7 +70,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
                                          .var_ty = func_ty.ret_ty,
                                          .num_regs = num_hfa_members};
 
-      DEBUG_ASSERT(var_ty_is_aggregate(func_ty.ret_ty) &&
+      DEBUG_ASSERT(ir_var_ty_is_aggregate(func_ty.ret_ty) &&
                        func_ty.ret_ty->aggregate.num_fields == num_hfa_members,
                    "hfa not expected");
       for (size_t i = 0; i < num_hfa_members; i++) {
@@ -78,7 +78,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
         ret_info->regs[i] =
             (struct ir_param_reg){.reg = {.ty = IR_REG_TY_FP, .idx = i},
-                                  .size = var_ty_info(func->unit, member).size};
+                                  .size = ir_var_ty_info(func->unit, member).size};
       }
     } else if (info.size > 8) {
       ret_ty = IR_VAR_TY_NONE;
@@ -92,7 +92,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
       ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
-    } else if (var_ty_is_fp(func_ty.ret_ty)) {
+    } else if (ir_var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
@@ -133,16 +133,16 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       var_ty = &IR_VAR_TY_POINTER;
     }
 
-    struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
     if (info.size > 8) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
       ty = IR_PARAM_INFO_TY_POINTER;
-      info = var_ty_info(func->unit, var_ty);
+      info = ir_var_ty_info(func->unit, var_ty);
     }
 
-    if (var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
+    if (ir_var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
@@ -156,7 +156,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
       nsrn++;
       continue;
-    } else if (var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {
+    } else if (ir_var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
@@ -176,7 +176,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     }
 
     size_t dw_size = (info.size + 3) / 4;
-    if ((var_ty_is_aggregate(var_ty) || (variadic && var_ty_is_fp(var_ty))) &&
+    if ((ir_var_ty_is_aggregate(var_ty) || (variadic && ir_var_ty_is_fp(var_ty))) &&
         dw_size <= (8 - ngrn)) {
       struct ir_param_info param_info = {
           .ty = ty, .var_ty = var_ty, .num_regs = dw_size};
@@ -200,7 +200,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     size_t nsaa_align = MAX(4, info.alignment);
     nsaa = ROUND_UP(nsaa, nsaa_align);
 
-    if (var_ty_is_aggregate(var_ty)) {
+    if (ir_var_ty_is_aggregate(var_ty)) {
       struct ir_param_info param_info = {
           .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
       vector_push_back(param_infos, &param_info);
@@ -241,7 +241,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty int_ty;
   unsigned long long int_value;
 
-  DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+  DEBUG_ASSERT(ir_var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F32: {
@@ -255,7 +255,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     int_value = v.u;
 
     struct ir_op *int_mov =
-        insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+        ir_insert_before_op(func, op, IR_OP_TY_CNST, int_ty);
     int_mov->cnst =
         (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
 
@@ -264,7 +264,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     return;
   }
   case IR_VAR_PRIMITIVE_TY_F64: {
-    struct ir_glb *glb = add_global(func->unit, IR_GLB_TY_DATA, &op->var_ty,
+    struct ir_glb *glb = ir_add_global(func->unit, IR_GLB_TY_DATA, &op->var_ty,
                                     IR_GLB_DEF_TY_DEFINED, NULL);
 
     glb->var = arena_alloc(func->arena, sizeof(*glb->var));
@@ -276,7 +276,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
                                           .flt_value = op->cnst.flt_value}};
 
     struct ir_op *addr =
-        insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+        ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
 
     op->ty = IR_OP_TY_LOAD;
@@ -291,32 +291,32 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
 static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   struct ir_op *cond = op->br_cond.cond;
   if (cond->ty != IR_OP_TY_BINARY_OP ||
-      !binary_op_is_comparison(cond->binary_op.ty)) {
+      !ir_binary_op_is_comparison(cond->binary_op.ty)) {
     // turn it into a `!= 0`
     struct ir_op *zero;
 
     enum ir_op_binary_op_ty ty;
-    if (var_ty_is_fp(&cond->var_ty)) {
+    if (ir_var_ty_is_fp(&cond->var_ty)) {
       ty = IR_OP_BINARY_OP_TY_FNEQ;
-      zero = insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, cond->var_ty);
-      mk_floating_zero_constant(func->unit, zero, cond->var_ty.primitive);
+      zero = ir_insert_before_op(func, op, IR_OP_TY_BINARY_OP, cond->var_ty);
+      ir_mk_floating_zero_constant(func->unit, zero, cond->var_ty.primitive);
     } else {
       ty = IR_OP_BINARY_OP_TY_NEQ;
-      zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, cond->var_ty);
-      mk_integral_constant(func->unit, zero, cond->var_ty.primitive, 0);
+      zero = ir_insert_before_op(func, op, IR_OP_TY_CNST, cond->var_ty);
+      ir_mk_integral_constant(func->unit, zero, cond->var_ty.primitive, 0);
     }
 
-    cond = insert_after_ir_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
+    cond = ir_insert_after_op(func, zero, IR_OP_TY_BINARY_OP, IR_VAR_TY_I32);
     cond->binary_op = (struct ir_op_binary_op){
         .ty = ty, .lhs = op->br_cond.cond, .rhs = zero};
 
     op->br_cond.cond = cond;
   }
 
-  if (var_ty_is_fp(&cond->binary_op.lhs->var_ty)) {
-    DEBUG_ASSERT(var_ty_is_fp(&cond->binary_op.rhs->var_ty), "mixed binop");
+  if (ir_var_ty_is_fp(&cond->binary_op.lhs->var_ty)) {
+    DEBUG_ASSERT(ir_var_ty_is_fp(&cond->binary_op.rhs->var_ty), "mixed binop");
   } else {
-    DEBUG_ASSERT(var_ty_is_integral(&cond->binary_op.rhs->var_ty),
+    DEBUG_ASSERT(ir_var_ty_is_integral(&cond->binary_op.rhs->var_ty),
                  "mixed binop");
     cond->flags |= IR_OP_FLAG_CONTAINED;
   }
@@ -334,7 +334,7 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  op->addr_offset.base = alloc_contained_ir_op(func, base, op);
+  op->addr_offset.base = ir_alloc_contained_ir_op(func, base, op);
 }
 
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
@@ -349,12 +349,12 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->load.addr = alloc_contained_ir_op(func, addr, op);
+    op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index) {
-      op->load.addr = alloc_contained_ir_op(func, addr, op);
+      op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
     }
   }
 }
@@ -371,12 +371,12 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->store.addr = alloc_contained_ir_op(func, addr, op);
+    op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index) {
-      op->store.addr = alloc_contained_ir_op(func, addr, op);
+      op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
     }
   }
 }
@@ -423,12 +423,12 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_ADDR_OFFSET: {
               if (op->addr_offset.index) {
                 // do mul beforehand and set scale to 1
-                struct ir_op *cnst = insert_before_ir_op(
+                struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
+                ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
                                      op->addr_offset.scale);
 
-                struct ir_op *mul = insert_before_ir_op(
+                struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 mul->binary_op =
                     (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
@@ -440,7 +440,7 @@ void rv32i_lower(struct ir_unit *unit) {
 
                 struct ir_op *lhs = op->addr_offset.base;
 
-                struct ir_op *add = replace_ir_op(
+                struct ir_op *add = ir_replace_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 add->binary_op = (struct ir_op_binary_op){
                     .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = mul};

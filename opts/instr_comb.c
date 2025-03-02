@@ -13,7 +13,7 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_URSHIFT:
   case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_LSHIFT: {
-    if (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty) && rhs->cnst.int_value == 0) {
+    if (rhs->ty == IR_OP_TY_CNST && ir_var_ty_is_integral(&rhs->var_ty) && rhs->cnst.int_value == 0) {
       op->ty = IR_OP_TY_MOV;
       op->mov = (struct ir_op_mov){
         .value = lhs
@@ -24,10 +24,10 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_MUL: {
     struct ir_op *cnst;
     bool is_lhs;
-    if (lhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&lhs->var_ty)) {
+    if (lhs->ty == IR_OP_TY_CNST && ir_var_ty_is_integral(&lhs->var_ty)) {
       cnst = lhs;
       is_lhs = true;
-    } else if (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty)) {
+    } else if (rhs->ty == IR_OP_TY_CNST && ir_var_ty_is_integral(&rhs->var_ty)) {
       cnst = rhs;
       is_lhs = false;
     } else {
@@ -36,7 +36,7 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
 
     unsigned long long value = cnst->cnst.int_value;
     if (value == 0) {
-      mk_integral_constant(func->unit, op, op->var_ty.primitive, 0);
+      ir_mk_integral_constant(func->unit, op, op->var_ty.primitive, 0);
       return true;
     } else if (value == 1) {
       op->ty = IR_OP_TY_MOV;
@@ -45,8 +45,8 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
       };
       return true;
     } else if (ISPOW2(value)) {
-      struct ir_op *shift_cnst = insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
-      mk_integral_constant(func->unit, shift_cnst, IR_VAR_PRIMITIVE_TY_I32, ILOG2(value));
+      struct ir_op *shift_cnst = ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+      ir_mk_integral_constant(func->unit, shift_cnst, IR_VAR_PRIMITIVE_TY_I32, ILOG2(value));
 
       op->binary_op.ty = IR_OP_BINARY_OP_TY_LSHIFT;
       op->binary_op.lhs = is_lhs ? rhs : lhs;
@@ -60,10 +60,10 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_UDIV: {
     struct ir_op *cnst;
     bool is_lhs;
-    if (lhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&lhs->var_ty)) {
+    if (lhs->ty == IR_OP_TY_CNST && ir_var_ty_is_integral(&lhs->var_ty)) {
       cnst = lhs;
       is_lhs = true;
-    } else if (rhs->ty == IR_OP_TY_CNST && var_ty_is_integral(&rhs->var_ty)) {
+    } else if (rhs->ty == IR_OP_TY_CNST && ir_var_ty_is_integral(&rhs->var_ty)) {
       cnst = rhs;
       is_lhs = false;
     } else {
@@ -78,8 +78,8 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
       };
       return true;
     } else if (ISPOW2(value)) {
-      struct ir_op *shift_cnst = insert_before_ir_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
-      mk_integral_constant(func->unit, shift_cnst, IR_VAR_PRIMITIVE_TY_I32, ILOG2(value));
+      struct ir_op *shift_cnst = ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_I32);
+      ir_mk_integral_constant(func->unit, shift_cnst, IR_VAR_PRIMITIVE_TY_I32, ILOG2(value));
 
       op->binary_op.ty = IR_OP_BINARY_OP_TY_URSHIFT;
       op->binary_op.lhs = is_lhs ? rhs : lhs;
