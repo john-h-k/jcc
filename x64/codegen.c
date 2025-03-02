@@ -1320,7 +1320,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   info.stack_size = ROUND_UP(info.stack_size, X64_STACK_ALIGNMENT);
 
-  size_t stack_to_sub = info.stack_size - 8 /* push rbp does 8 bytes for us */;
+  size_t stack_to_sub = info.stack_size - 0 /* push rbp does 8 bytes for us */;
   if (stack_to_sub) {
     if (stack_to_sub > MAX_IMM_SIZE) {
       codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
@@ -1416,7 +1416,7 @@ static void codegen_epilogue(struct codegen_state *state) {
     }
   }
 
-  size_t stack_to_add = prologue_info->stack_size - 8 /* pop does 8 bytes for us */;
+  size_t stack_to_add = prologue_info->stack_size - 0 /* pop does 8 bytes for us */;
   if (stack_to_add) {
     codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
   }
