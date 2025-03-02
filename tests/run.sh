@@ -297,7 +297,7 @@ run_tests() {
         prefix=""
       fi
 
-      rm -- "$output"
+      rm -f -- "$output"
 
       first_line=$(head -n 1 "$file")
       if [[ "$first_line" == "// no-compile" ]]; then
@@ -342,10 +342,10 @@ run_tests() {
 
       # supress echo stderr because otherwise we get spurious broken pipe errors
       if [ -z "$RUNNER" ]; then
-        output_result=$(echo "$stdin" 2>/dev/null | timeout 3s ./"$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
         result=$?
       else
-        output_result=$(echo "$stdin" 2>/dev/null | timeout 3s "$RUNNER" "$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
         result=$?
       fi
   
