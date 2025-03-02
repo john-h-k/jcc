@@ -325,7 +325,7 @@ run_tests() {
       fi
   
       if [ "$result" != "$expected" ]; then
-        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(objdumo -d "$output" | awk '{print "  " $0}')${RESET}\n"
+        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(objdump -d "$output" | awk '{print "  " $0}')${RESET}\n"
       elif [ "$output_result" != "$stdout" ]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
