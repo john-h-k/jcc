@@ -3,8 +3,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <sys/_types/_ssize_t.h>
+
+// FIXME: for ssize_t 
+#include <stdio.h>
 
 enum ir_op_ty {
   IR_OP_TY_UNKNOWN,
