@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
     elif [[ -d "$path" ]]; then
       while IFS= read -r file; do
         all_files+=("$file")
-      done < <(find "$path" -maxdepth 1 -type f -name "*.c")
+      done < <(find "$path" -type f -name "*.c")
     fi
 
     shift

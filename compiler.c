@@ -13,6 +13,7 @@
 #include "lower.h"
 #include "lsra.h"
 #include "opts/cnst_fold.h"
+#include "opts/inline.h"
 #include "opts/instr_comb.h"
 #include "opts/promote.h"
 #include "parse.h"
@@ -157,6 +158,23 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
   }
 
   ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
+
+  return COMPILE_RESULT_SUCCESS;
+}
+
+static enum compile_result compile_stage_inline(struct compiler *compiler,
+                                                struct ir_unit *ir) {
+  if (compiler->args.opts_level < COMPILE_OPTS_LEVEL_2) {
+    return COMPILE_RESULT_SUCCESS;
+  }
+
+  opts_inline(ir);
+
+  if (log_enabled()) {
+    debug_print_stage(compiler, ir, "inline");
+  }
+
+  ir_validate(ir, IR_VALIDATE_FLAG_NONE);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -460,6 +478,8 @@ enum compile_result compile(struct compiler *compiler) {
   struct ir_unit *ir;
 
   COMPILER_STAGE(IR, ir, target, &typechk_result, &ir);
+
+  COMPILER_STAGE(INLINE, inline, inline);
 
   // lower ABI happens before opts, and handles transforming calls into their
   // actual types (e.g large structs to pointers) we do this early because it
