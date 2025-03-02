@@ -96,6 +96,44 @@ enum ir_op_binary_op_ty ir_invert_binary_comparison(enum ir_op_binary_op_ty ty) 
   }
 }
 
+enum ir_op_binary_op_ty ir_flip_binary_comparison(enum ir_op_binary_op_ty ty) {
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_EQ:
+    return IR_OP_BINARY_OP_TY_EQ;
+  case IR_OP_BINARY_OP_TY_NEQ:
+    return IR_OP_BINARY_OP_TY_NEQ;
+  case IR_OP_BINARY_OP_TY_UGT:
+    return IR_OP_BINARY_OP_TY_ULT;
+  case IR_OP_BINARY_OP_TY_SGT:
+    return IR_OP_BINARY_OP_TY_SLT;
+  case IR_OP_BINARY_OP_TY_UGTEQ:
+    return IR_OP_BINARY_OP_TY_ULTEQ;
+  case IR_OP_BINARY_OP_TY_SGTEQ:
+    return IR_OP_BINARY_OP_TY_SLTEQ;
+  case IR_OP_BINARY_OP_TY_ULT:
+    return IR_OP_BINARY_OP_TY_UGT;
+  case IR_OP_BINARY_OP_TY_SLT:
+    return IR_OP_BINARY_OP_TY_SGT;
+  case IR_OP_BINARY_OP_TY_ULTEQ:
+    return IR_OP_BINARY_OP_TY_UGTEQ;
+  case IR_OP_BINARY_OP_TY_SLTEQ:
+    return IR_OP_BINARY_OP_TY_SGTEQ;
+  case IR_OP_BINARY_OP_TY_FEQ:
+    return IR_OP_BINARY_OP_TY_FEQ;
+  case IR_OP_BINARY_OP_TY_FNEQ:
+    return IR_OP_BINARY_OP_TY_FNEQ;
+  case IR_OP_BINARY_OP_TY_FGT:
+    return IR_OP_BINARY_OP_TY_FLT;
+  case IR_OP_BINARY_OP_TY_FGTEQ:
+    return IR_OP_BINARY_OP_TY_FLTEQ;
+  case IR_OP_BINARY_OP_TY_FLT:
+    return IR_OP_BINARY_OP_TY_FGT;
+  case IR_OP_BINARY_OP_TY_FLTEQ:
+    return IR_OP_BINARY_OP_TY_FGTEQ;
+  default:
+    BUG("binary op was not comparison");
+  }
+}
 bool ir_op_has_side_effects(const struct ir_op *op) {
   if (op->flags & IR_OP_FLAG_SIDE_EFFECTS) {
     return true;

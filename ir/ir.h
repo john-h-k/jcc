@@ -173,6 +173,7 @@ enum ir_op_binary_op_ty {
 
 bool ir_binary_op_is_comparison(enum ir_op_binary_op_ty ty);
 enum ir_op_binary_op_ty ir_invert_binary_comparison(enum ir_op_binary_op_ty ty);
+enum ir_op_binary_op_ty ir_flip_binary_comparison(enum ir_op_binary_op_ty ty);
 
 enum ir_op_sign { IR_OP_SIGN_NA, IR_OP_SIGN_SIGNED, IR_OP_SIGN_UNSIGNED };
 

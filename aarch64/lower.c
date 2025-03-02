@@ -322,7 +322,15 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
        (ir_var_ty_is_integral(&lhs->var_ty) ||
         (ir_var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
        fits_in_alu_imm(lhs->cnst.int_value))) {
-    op->binary_op.lhs = ir_alloc_contained_ir_op(func, lhs, op);
+    if (ir_binary_op_is_comparison(op->binary_op.ty)) {
+      // flip operands and operation
+
+      op->binary_op.ty = ir_flip_binary_comparison(op->binary_op.ty);
+      op->binary_op.lhs = op->binary_op.rhs;
+      op->binary_op.rhs = ir_alloc_contained_ir_op(func, lhs, op);
+    } else {
+      op->binary_op.lhs = ir_alloc_contained_ir_op(func, lhs, op);
+    }
   } else if (supports_rhs_contained &&
              (rhs->ty == IR_OP_TY_CNST &&
               (ir_var_ty_is_integral(&rhs->var_ty) ||
@@ -541,8 +549,8 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
   } else {
     struct ir_var_ty_info info =
         ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
-                                    ? &IR_VAR_TY_POINTER
-                                    : func_ty.ret_ty);
+                                       ? &IR_VAR_TY_POINTER
+                                       : func_ty.ret_ty);
 
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
@@ -896,7 +904,7 @@ void aarch64_lower(struct ir_unit *unit) {
                 struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
-                                     op->addr_offset.scale);
+                                        op->addr_offset.scale);
 
                 struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
