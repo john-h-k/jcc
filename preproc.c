@@ -145,24 +145,34 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   case COMPILE_TARGET_MACOS_ARM64:
     DEF_BUILTIN("__APPLE__", "1");
     DEF_BUILTIN("__aarch64__", "1");
+    DEF_BUILTIN("__LP64__", "1");
+    DEF_BUILTIN("_LP64", "1");
     break;
   case COMPILE_TARGET_MACOS_X86_64:
     DEF_BUILTIN("__APPLE__", "1");
     DEF_BUILTIN("__x86_64__", "1");
+    DEF_BUILTIN("__LP64__", "1");
+    DEF_BUILTIN("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_ARM64:
     DEF_BUILTIN("__linux__", "1");
     DEF_BUILTIN("__aarch64__", "1");
+    DEF_BUILTIN("__LP64__", "1");
+    DEF_BUILTIN("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_X86_64:
     DEF_BUILTIN("__linux__", "1");
     DEF_BUILTIN("__x86_64__", "1");
+    DEF_BUILTIN("__LP64__", "1");
+    DEF_BUILTIN("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_RV32I:
     DEF_BUILTIN("__linux__", "1");
     DEF_BUILTIN("__riscv", "1");
     DEF_BUILTIN("__riscv32", "1");
     DEF_BUILTIN("__riscv__", "1");
+    DEF_BUILTIN("__LP32__", "1");
+    DEF_BUILTIN("_LP32", "1");
     break;
   case COMPILE_TARGET_EEP:
     break;

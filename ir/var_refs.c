@@ -25,6 +25,13 @@ struct var_ref *var_refs_add(struct var_refs *var_refs,
   DEBUG_ASSERT(ty == VAR_REF_TY_GLB || key->basicblock,
                "must provide basicblock for non globals!");
 
+  // might be same name and scope as a now-out-of-scope var
+  struct var_ref *prev = var_refs_get(var_refs, key);
+  if (prev) {
+    *prev = (struct var_ref){.key = *key, .ty = ty, .op = NULL};
+    return prev;
+  }
+
   struct var_ref ref = {.key = *key, .ty = ty, .op = NULL};
   return (struct var_ref *)vector_push_back(var_refs->refs, &ref);
 }

@@ -64,6 +64,8 @@ struct compile_args {
   enum compile_log_flags log_flags;
   enum compile_opts_level opts_level;
 
+  struct hashtbl *log_symbols;
+
   bool preproc_only;
   bool build_asm_file;
   bool build_object_file;

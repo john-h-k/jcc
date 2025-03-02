@@ -315,7 +315,8 @@ static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
 }
 
 static void debug_print_lcl_alloc(FILE *file, struct ir_lcl_alloc *lcl_alloc) {
-   fprintf(file, "#%zd (size=%zu, padding=%zu)", lcl_alloc->offset, lcl_alloc->size, lcl_alloc->padding);
+  fprintf(file, "#%zd (size=%zu, padding=%zu)", lcl_alloc->offset,
+          lcl_alloc->size, lcl_alloc->padding);
 }
 
 enum print_op_ctx {
@@ -759,13 +760,12 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
   if (op->flags) {
     fprintf(fm->file, "[ ");
 
-   
     bool first = true;
-#define PRINT_FLAG(name, str) \
-    if (op->flags & IR_OP_FLAG_ ## name) { \
-      fprintf(fm->file, first ? "." str : ", ." str); \
-      first = false; \
-    } \
+#define PRINT_FLAG(name, str)                                                  \
+  if (op->flags & IR_OP_FLAG_##name) {                                         \
+    fprintf(fm->file, first ? "." str : ", ." str);                            \
+    first = false;                                                             \
+  }
 
     PRINT_FLAG(MUST_SPILL, "must_spill");
     PRINT_FLAG(PARAM, "param");
@@ -1165,7 +1165,7 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file, struct ir_glb *glb) {
+void debug_print_glb(FILE *file, struct ir_glb *glb,  debug_print_op_callback *cb, void *cb_metadata) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {
@@ -1181,31 +1181,31 @@ void debug_print_glb(FILE *file, struct ir_glb *glb) {
   }
 
   fprintf(file, "]\n");
+
+  if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA:
+      // TODO: should either have name in `var` or remove it from `func` for
+      // consistency
+      fprintf(file, "%s ", glb->name);
+      debug_print_ir_var(file, glb->var);
+      break;
+    case IR_GLB_TY_FUNC:
+      debug_print_ir_func(file, glb->func, cb, cb_metadata);
+      break;
+    }
+  } else {
+    if (glb->name) {
+      fprintf(file, "%s\n", glb->name);
+    }
+  }
 }
 
 void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata) {
   struct ir_glb *glb = iru->first_global;
   while (glb) {
-    debug_print_glb(file, glb);
-
-    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-      switch (glb->ty) {
-      case IR_GLB_TY_DATA:
-        // TODO: should either have name in `var` or remove it from `func` for
-        // consistency
-        fprintf(file, "%s ", glb->name);
-        debug_print_ir_var(file, glb->var);
-        break;
-      case IR_GLB_TY_FUNC:
-        debug_print_ir_func(file, glb->func, cb, cb_metadata);
-        break;
-      }
-    } else {
-      if (glb->name) {
-        fprintf(file, "%s\n", glb->name);
-      }
-    }
+    debug_print_glb(file, glb, cb, cb_metadata);
 
     glb = glb->succ;
   }
@@ -1214,7 +1214,7 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
 void debug_print_ir_object(FILE *file, const struct ir_object *object) {
   switch (object->ty) {
   case IR_OBJECT_TY_GLB:
-    debug_print_glb(file, object->glb);
+    debug_print_glb(file, object->glb, NULL, NULL);
     break;
   case IR_OBJECT_TY_LCL:
     fprintf(file, "In func %s: \n", object->lcl->func->name);
@@ -1232,12 +1232,15 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
                            object->basicblock, NULL, NULL);
     break;
   case IR_OBJECT_TY_STMT:
-    fprintf(file, "In func %s, basicblock @ %zu: \n", object->stmt->basicblock->func->name, object->stmt->basicblock->id);
+    fprintf(file, "In func %s, basicblock @ %zu: \n",
+            object->stmt->basicblock->func->name, object->stmt->basicblock->id);
     debug_print_stmt(file, object->stmt->basicblock->func, object->stmt, NULL,
                      NULL);
     break;
   case IR_OBJECT_TY_OP:
-    fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n", object->op->stmt->basicblock->func->name, object->op->stmt->basicblock->id, object->op->stmt->id);
+    fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n",
+            object->op->stmt->basicblock->func->name,
+            object->op->stmt->basicblock->id, object->op->stmt->id);
     debug_print_op(file, object->op->stmt->basicblock->func, object->op);
     break;
   }

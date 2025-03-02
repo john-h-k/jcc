@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "args.h"
 #include "compiler.h"
+#include "hashtbl.h"
 #include "io.h"
 #include "log.h"
 #include "profile.h"
@@ -151,6 +152,17 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     }
   }
 
+  struct hashtbl *log_symbols = NULL;
+
+  if (args->log_symbols.num_values) {
+    log_symbols = hashtbl_create_str_keyed(0);
+    for (size_t i = 0; i < args->log_symbols.num_values; i++) {
+      const char *sym = args->log_symbols.values[i];
+
+      hashtbl_insert(log_symbols, &sym, NULL);
+    }
+  }
+
   // is having two seperate structs for args really sensible?
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`
   // whereas `compile_args` only has `target`, but it is a hassle
@@ -158,6 +170,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .preproc_only = args->preprocess,
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
+
+      .log_symbols = log_symbols,
 
       .verbose = args->verbose,
 
@@ -371,6 +385,10 @@ exit:
 
   if (objects) {
     free(objects);
+  }
+
+  if (compile_args.log_symbols) {
+    hashtbl_free(&compile_args.log_symbols);
   }
 
   free_args(&args);
