@@ -22,7 +22,7 @@ enum link_result linux_link_objects(const struct link_args *args) {
         "-L/lib/aarch64-linux-gnu -L/usr/lib/aarch64-linux-gnu -L/lib "
         "-L/usr/lib --no-as-needed /lib/aarch64-linux-gnu/crt1.o "
         "--no-as-needed /lib/aarch64-linux-gnu/crtn.o";
-    template_suffix = " -lc";
+    template_suffix = " -lc -lm";
     break;
   case COMPILE_TARGET_LINUX_X86_64:
     template_prefix =
@@ -31,7 +31,7 @@ enum link_result linux_link_objects(const struct link_args *args) {
         "-L/lib64/x86-64-linux-gnu -L/usr/lib/x86_64-linux-gnu -L/lib "
         "-L/usr/lib --no-as-needed /usr/lib/x86_64-linux-gnu/crt1.o "
         "--no-as-needed /usr/lib/x86_64-linux-gnu/crtn.o";
-    template_suffix = " -lc";
+    template_suffix = " -lc -lm";
     break;
   case COMPILE_TARGET_LINUX_RV32I:
     // FIXME: this will only work on mac
