@@ -143,8 +143,8 @@ void free_args(struct parsed_args *args) {
     PUSH_NO_WARN("-Wcast-qual");                                               \
     struct arg_string_list *string_list =                                      \
         (struct arg_string_list *)&args->name;                                 \
-    POP_NO_WARN;                                                               \
-    POP_NO_WARN;                                                               \
+    POP_NO_WARN();                                                               \
+    POP_NO_WARN();                                                               \
                                                                                \
     free(string_list->values);                                                 \
   }
@@ -265,7 +265,7 @@ enum parse_args_result parse_args(int argc, char **argv,
       struct sized_str full_lo = {.str = lo, .len = strlen(lo)};               \
       hashtbl_insert(opts, &full_lo, &arg);                                    \
     }                                                                          \
-    POP_NO_WARN;                                                               \
+    POP_NO_WARN();                                                               \
   } while (0);
 
   ARG_OPT_LIST;

@@ -2,6 +2,7 @@
 
 #include "../alloc.h"
 #include "../util.h"
+#include "../compiler.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -58,7 +59,9 @@ static enum link_result macos_link_objects_with_ld(const struct link_args *args)
 
   DEBUG_ASSERT(head == total_size, "string buffer calculations went wrong!");
 
-  printf("%s\n", buff);
+  if (args->args->verbose) {
+    fprintf(stderr, "Linux link:\n%s\n", buff);
+  }
   int ret_code = system(buff);
 
   arena_allocator_free(&arena);
