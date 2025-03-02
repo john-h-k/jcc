@@ -325,7 +325,7 @@ run_tests() {
       fi
   
       if [ "$result" != "$expected" ]; then
-        echo "fail File '$file' produced exit code $result, expected $expected" > "$fifo"
+        send_status fail "$prefix'$file' produced exit code $result, expected $expected" > "$fifo"
       elif [ "$output_result" != "$stdout" ]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
