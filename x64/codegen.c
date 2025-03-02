@@ -215,24 +215,24 @@ static enum x64_cond get_cond_for_op(struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_FNEQ:
   case IR_OP_BINARY_OP_TY_NEQ:
     return X64_COND_NOT_ZERO;
+  case IR_OP_BINARY_OP_TY_FGT:
   case IR_OP_BINARY_OP_TY_UGT:
     return X64_COND_NOT_BELOW_OR_EQUAL;
-  case IR_OP_BINARY_OP_TY_FGT:
   case IR_OP_BINARY_OP_TY_SGT:
     return X64_COND_NOT_LESS_OR_EQUAL;
+  case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_UGTEQ:
     return X64_COND_NOT_BELOW;
-  case IR_OP_BINARY_OP_TY_FGTEQ:
   case IR_OP_BINARY_OP_TY_SGTEQ:
     return X64_COND_NOT_LESS;
+  case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_ULT:
     return X64_COND_BELOW;
-  case IR_OP_BINARY_OP_TY_FLT:
   case IR_OP_BINARY_OP_TY_SLT:
     return X64_COND_LESS;
+  case IR_OP_BINARY_OP_TY_FLTEQ:
   case IR_OP_BINARY_OP_TY_ULTEQ:
     return X64_COND_BELOW_OR_EQUAL;
-  case IR_OP_BINARY_OP_TY_FLTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     return X64_COND_LESS_OR_EQUAL;
   default:
