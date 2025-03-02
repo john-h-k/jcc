@@ -888,11 +888,13 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
     // FIXME: don't use succ find usage
     struct ir_op *store = op->succ;
-    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store");
+    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s", func->name);
+
+    // move store before op so the generated address is before the call
+    detach_ir_op(func, store);
+    attach_ir_op(func, store, op->stmt, op->pred, op);
 
     struct ir_op *addr = build_addr(func, store);
-    detach_ir_op(func, addr);
-    attach_ir_op(func, addr, op->stmt, op->pred, op);
 
     vector_push_back(new_args, &addr);
     detach_ir_op(func, store);
