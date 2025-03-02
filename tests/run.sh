@@ -169,8 +169,9 @@ else
   printf "${BOLD}Running $total tests\n"
 fi
 
-
 aggregator() {
+  pids="$@"
+
   echo ""
 
   while IFS= read -d '' -r msg; do
@@ -379,11 +380,6 @@ for ((p=0; p<num_procs; p++)); do
   pids+=($!)
 done
 
-aggregator &
-agg_pid=$!
-
-exec 3>$fifo
-
 clean() {
   for pid in "${pids[@]}"; do
     kill "$pid" &>/dev/null
@@ -396,8 +392,12 @@ clean() {
   rm -f "${tmps[@]}"
 }
 
-trap clean EXIT
-trap 'clean; exit -1' SIGINT
+trap 'clean' EXIT SIGINT INT
+
+aggregator "${pids[@]}" &
+agg_pid=$!
+
+exec 3>$fifo
 
 for pid in "${pids[@]}"; do
   wait "$pid"
