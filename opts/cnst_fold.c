@@ -8,7 +8,7 @@ static unsigned long long round_integral(struct ir_func *func,
                                          struct ir_var_ty var_ty) {
   enum ir_var_primitive_ty primitive;
   if (var_ty.ty == IR_VAR_TY_TY_POINTER) {
-    primitive = var_ty_pointer_primitive_ty(func->unit);
+    primitive = ir_var_ty_pointer_primitive_ty(func->unit);
   } else if (var_ty.ty == IR_VAR_TY_TY_PRIMITIVE) {
     primitive = var_ty.primitive;
   } else {
@@ -50,8 +50,8 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 
   unsigned long long lhs_cnst, rhs_cnst;
 
-  if (!lhs || lhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&lhs->var_ty) ||
-      !rhs || rhs->ty != IR_OP_TY_CNST || !var_ty_is_integral(&rhs->var_ty)) {
+  if (!lhs || lhs->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&lhs->var_ty) ||
+      !rhs || rhs->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&rhs->var_ty)) {
     return false;
   }
 
@@ -100,7 +100,7 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 #undef CNST_FLD_SBINOP
 
   value = round_integral(func, value, op->var_ty);
-  mk_integral_constant(func->unit, op, op->var_ty.primitive, value);
+  ir_mk_integral_constant(func->unit, op, op->var_ty.primitive, value);
   op->var_ty = var_ty;
 
   return true;
@@ -113,7 +113,7 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 
   unsigned long long cnst;
 
-  if (!value || value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -141,7 +141,7 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 #undef CNST_FLD_SUNNOP
 
   new_cnst = round_integral(func, new_cnst, op->var_ty);
-  mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+  ir_mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
   op->var_ty = var_ty;
 
   return true;
@@ -154,7 +154,7 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
 
   unsigned long long cnst;
 
-  if (!value || value->ty != IR_OP_TY_CNST || !var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -166,7 +166,7 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_CAST_OP_TY_ZEXT:
   case IR_OP_CAST_OP_TY_TRUNC:
     new_cnst = round_integral(func, cnst, op->var_ty);
-    mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
+    ir_mk_integral_constant(func->unit, op, op->var_ty.primitive, new_cnst);
     op->var_ty = var_ty;
 
     return true;

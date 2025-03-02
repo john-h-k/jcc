@@ -1,7 +1,6 @@
 #include "prettyprint.h"
 
 #include "../graphwriter.h"
-#include "../log.h"
 #include "../util.h"
 #include "ir.h"
 
@@ -211,7 +210,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     return;
   }
   case IR_VAR_TY_TY_STRUCT: {
-    struct ir_var_ty_info info = var_ty_info(iru, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(iru, var_ty);
     fprintf(file, "STRUCT (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
       debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
@@ -224,7 +223,7 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     break;
   }
   case IR_VAR_TY_TY_UNION: {
-    struct ir_var_ty_info info = var_ty_info(iru, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(iru, var_ty);
     fprintf(file, "UNION (sz=%zu, align=%zu) [ ", info.size, info.alignment);
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
       debug_print_var_ty_string(file, iru, &var_ty->aggregate.fields[i]);
@@ -358,8 +357,6 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
     break;
-  case IR_OP_TY_CUSTOM:
-    BUG("custom ops no longer supported");
   case IR_OP_TY_GATHER:
     fprintf(file, "gather { ");
     for (size_t i = 0; i < op->gather.num_values; i++) {
@@ -804,7 +801,7 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
 
   fprintf(fm->file, " | ");
 
-  if (!op_produces_value(op)) {
+  if (!ir_op_produces_value(op)) {
     fprintf(fm->file, "                ");
   } else {
     switch (op->reg.ty) {
@@ -1117,7 +1114,7 @@ get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
 }
 
 void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
-  clear_metadata(irb);
+  ir_clear_metadata(irb);
 
   struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,
                                                GRAPH_STRICTNESS_STRICT, file);

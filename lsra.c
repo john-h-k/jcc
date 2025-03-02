@@ -123,11 +123,11 @@ struct lsra_reg_info {
 
 static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb,
                                struct ir_op *op) {
-  struct ir_op *store = spill_op(irb, op);
+  struct ir_op *store = ir_spill_op(irb, op);
 
   if (store) {
-    struct ir_op *addr = build_addr(irb, store);
-    addr->var_ty = var_ty_for_pointer_size(irb->unit);
+    struct ir_op *addr = ir_build_addr(irb, store);
+    addr->var_ty = ir_var_ty_for_pointer_size(irb->unit);
 
     if (info->has_ssp) {
       addr->reg =
@@ -290,11 +290,11 @@ static void fixup_spills_callback(struct ir_op **op,
     if (op_needs_reg(data->consumer)) {
       struct ir_op *addr;
       if (data->consumer->ty == IR_OP_TY_PHI) {
-        addr = replace_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
-                             var_ty_for_pointer_size(data->irb->unit));
+        addr = ir_replace_op(data->irb, data->consumer, IR_OP_TY_ADDR,
+                             ir_var_ty_for_pointer_size(data->irb->unit));
       } else {
-        addr = insert_before_ir_op(data->irb, data->consumer, IR_OP_TY_ADDR,
-                                   var_ty_for_pointer_size(data->irb->unit));
+        addr = ir_insert_before_op(data->irb, data->consumer, IR_OP_TY_ADDR,
+                                   ir_var_ty_for_pointer_size(data->irb->unit));
       }
       addr->addr =
           (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = (*op)->lcl};
@@ -302,13 +302,13 @@ static void fixup_spills_callback(struct ir_op **op,
           (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = data->info.ssp_reg};
 
       struct ir_op *load =
-          insert_after_ir_op(data->irb, addr, IR_OP_TY_LOAD, (*op)->var_ty);
+          ir_insert_after_op(data->irb, addr, IR_OP_TY_LOAD, (*op)->var_ty);
       load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
-      if (var_ty_is_integral(&load->var_ty)) {
+      if (ir_var_ty_is_integral(&load->var_ty)) {
         load->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = data->info.gp_spill_reg};
-      } else if (var_ty_is_fp(&load->var_ty)) {
+      } else if (ir_var_ty_is_fp(&load->var_ty)) {
         load->reg =
             (struct ir_reg){.ty = IR_REG_TY_FP, .idx = data->info.fp_spill_reg};
       } else {
@@ -343,7 +343,7 @@ static void fixup_spills(struct ir_func *irb, struct lsra_reg_info *info) {
         struct fixup_spills_data metadata = {
             .irb = irb, .info = *info, .consumer = op};
 
-        walk_op_uses(op, fixup_spills_callback, &metadata);
+        ir_walk_op_uses(op, fixup_spills_callback, &metadata);
 
         op = op->succ;
       }
@@ -467,7 +467,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     struct add_to_prefs_callback_data cb_data = {.state = &state,
                                                  .consumer = iter_op};
-    walk_op_uses(iter_op, add_to_prefs_callback, &cb_data);
+    ir_walk_op_uses(iter_op, add_to_prefs_callback, &cb_data);
   }
 
 #define ADD_REGS(start, end, reg_ty, name)                                     \
@@ -524,15 +524,15 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
         if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
             (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_fp)) {
 
-          struct ir_lcl *lcl = add_local(irb, &live->op->var_ty);
+          struct ir_lcl *lcl = ir_add_local(irb, &live->op->var_ty);
           lcl->flags |= IR_LCL_FLAG_SPILL;
 
-          struct ir_var_ty ptr_int = var_ty_for_pointer_size(irb->unit);
+          struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(irb->unit);
           struct ir_op *store_addr =
-              insert_before_ir_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
+              ir_insert_before_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
 
           struct ir_op *load_addr =
-              insert_after_ir_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
+              ir_insert_after_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
 
           if (info->has_ssp) {
             store_addr->reg =
@@ -550,13 +550,13 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           load_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
-          struct ir_op *save = insert_after_ir_op(
+          struct ir_op *save = ir_insert_after_op(
               irb, store_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
           save->reg = reg;
           save->store = (struct ir_op_store){
               .ty = IR_OP_STORE_TY_ADDR, .addr = store_addr, .value = live->op};
 
-          struct ir_op *reload = insert_after_ir_op(
+          struct ir_op *reload = ir_insert_after_op(
               irb, load_addr, IR_OP_TY_LOAD, live->op->var_ty);
           reload->reg = reg;
           reload->flags |= IR_OP_FLAG_SIDE_EFFECTS;
@@ -570,7 +570,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
         (interval->op->flags & IR_OP_FLAG_CONTAINED) ||
-        !op_produces_value(interval->op)) {
+        !ir_op_produces_value(interval->op)) {
       continue;
     }
 
@@ -594,12 +594,12 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     struct vector *reg_states;
     enum ir_reg_ty reg_ty;
     size_t spill_reg;
-    if (var_ty_is_integral(&interval->op->var_ty)) {
+    if (ir_var_ty_is_integral(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_INTEGRAL;
       reg_pool = state.gp_reg_pool;
       reg_states = state.gp_reg_states;
       spill_reg = info->gp_spill_reg;
-    } else if (var_ty_is_fp(&interval->op->var_ty)) {
+    } else if (ir_var_ty_is_fp(&interval->op->var_ty)) {
       reg_ty = IR_REG_TY_FP;
       reg_pool = state.fp_reg_pool;
       reg_states = state.fp_reg_states;
@@ -702,9 +702,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       size_t *last_active = &state.active[state.num_active - 1];
       while (true) {
         struct ir_op *op = state.interval_data.intervals[*last_active].op;
-        if (reg_ty == IR_REG_TY_INTEGRAL && var_ty_is_integral(&op->var_ty)) {
+        if (reg_ty == IR_REG_TY_INTEGRAL && ir_var_ty_is_integral(&op->var_ty)) {
           break;
-        } else if (reg_ty == IR_REG_TY_FP && var_ty_is_fp(&op->var_ty)) {
+        } else if (reg_ty == IR_REG_TY_FP && ir_var_ty_is_fp(&op->var_ty)) {
           break;
         }
 
@@ -773,7 +773,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
 
   BEGIN_SUB_STAGE("REGALLOC");
 
-  clear_metadata(irb);
+  ir_clear_metadata(irb);
   struct interval_data data = register_alloc_pass(irb, &lsra_reg_info);
 
   qsort(data.intervals, data.num_intervals, sizeof(*data.intervals),

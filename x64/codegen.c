@@ -1,9 +1,6 @@
 #include "codegen.h"
 
-#include "../bit_twiddle.h"
-#include "../bitset.h"
 #include "../util.h"
-#include "../vector.h"
 #include "../x64.h"
 
 #include <stdio.h>
@@ -760,14 +757,14 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
   struct x64_reg dest = {0};
 
-  if (!binary_op_is_comparison(op->binary_op.ty)) {
+  if (!ir_binary_op_is_comparison(op->binary_op.ty)) {
     dest = codegen_reg(op);
   }
 
   struct x64_reg lhs = codegen_reg(op->binary_op.lhs);
   struct x64_reg rhs = codegen_reg(op->binary_op.rhs);
 
-  bool is_fp = var_ty_is_fp(&op->var_ty);
+  bool is_fp = ir_var_ty_is_fp(&op->var_ty);
 
   enum ir_op_binary_op_ty ty = op->binary_op.ty;
   DEBUG_ASSERT(
@@ -870,7 +867,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     break;
   }
 
-  if (!binary_op_is_comparison(ty) && !reg_eq(lhs, dest)) {
+  if (!ir_binary_op_is_comparison(ty) && !reg_eq(lhs, dest)) {
     struct instr *mov = alloc_instr(state->func);
 
     if (x64_reg_ty_is_gp(dest.ty)) {
@@ -1448,9 +1445,6 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
     break;
-  case IR_OP_TY_CUSTOM: {
-    BUG("custom");
-  }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
       // don't need to do anything

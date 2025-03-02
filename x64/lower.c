@@ -22,7 +22,7 @@ static bool try_get_hfa_info(struct ir_func *func,
 
   *member_ty = var_ty->aggregate.fields[0];
 
-  if (!var_ty_is_fp(member_ty)) {
+  if (!ir_var_ty_is_fp(member_ty)) {
     return false;
   }
 
@@ -31,7 +31,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
+    if (!ir_var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -72,7 +72,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     ret_info = NULL;
   } else {
     struct ir_var_ty_info info =
-        var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
+        ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
                                     ? &IR_VAR_TY_POINTER
                                     : func_ty.ret_ty);
 
@@ -106,7 +106,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
 
       ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
-    } else if (var_ty_is_fp(func_ty.ret_ty)) {
+    } else if (ir_var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
@@ -151,16 +151,16 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       var_ty = &IR_VAR_TY_POINTER;
     }
 
-    struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
     if (info.size > 16) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
       ty = IR_PARAM_INFO_TY_POINTER;
-      info = var_ty_info(func->unit, var_ty);
+      info = ir_var_ty_info(func->unit, var_ty);
     }
 
-    if (var_ty_is_aggregate(var_ty)) {
+    if (ir_var_ty_is_aggregate(var_ty)) {
       info.size = ROUND_UP(info.size, 8);
     }
 
@@ -168,7 +168,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     size_t hfa_member_size;
     struct ir_var_ty member_ty;
 
-    if (var_ty_is_fp(var_ty) && nsrn < 8) {
+    if (ir_var_ty_is_fp(var_ty) && nsrn < 8) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
@@ -218,7 +218,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       nsaa += size;
       continue;
 
-    } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn < 6) {
+    } else if (ir_var_ty_is_integral(var_ty) && info.size <= 8 && ngrn < 6) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
@@ -256,7 +256,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     // }
 
     size_t dw_size = (info.size + 7) / 8;
-    if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+    if (ir_var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
       struct ir_param_info param_info = {
           .ty = ty,
           .var_ty = var_ty,
@@ -282,7 +282,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
     size_t nsaa_align = MAX(8, info.alignment);
     nsaa = ROUND_UP(nsaa, nsaa_align);
 
-    if (var_ty_is_aggregate(var_ty)) {
+    if (ir_var_ty_is_aggregate(var_ty)) {
       struct ir_param_info param_info = {
           .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
       vector_push_back(param_infos, &param_info);
@@ -328,7 +328,7 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
                    op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
 
-  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  struct ir_op *zero = ir_insert_before_op(func, op, IR_OP_TY_CNST, op->var_ty);
   zero->cnst.ty = IR_OP_CNST_TY_INT;
   zero->cnst.int_value = 0;
 
@@ -362,11 +362,11 @@ static void lower_fabs(struct ir_func *func, struct ir_op *op) {
     unreachable();
   }
 
-  struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
-  mk_integral_constant(func->unit, mask, integral, mask_cnst);
+  struct ir_op *mask = ir_insert_before_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  ir_mk_integral_constant(func->unit, mask, integral, mask_cnst);
 
   struct ir_op *fp_mask =
-      insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+      ir_insert_after_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
   fp_mask->ty = IR_OP_TY_MOV;
   fp_mask->mov = (struct ir_op_mov){.value = mask};
 
@@ -401,11 +401,11 @@ static void lower_fneg(struct ir_func *func, struct ir_op *op) {
     unreachable();
   }
 
-  struct ir_op *mask = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
-  mk_integral_constant(func->unit, mask, integral, mask_cnst);
+  struct ir_op *mask = ir_insert_before_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  ir_mk_integral_constant(func->unit, mask, integral, mask_cnst);
 
   struct ir_op *fp_mask =
-      insert_after_ir_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
+      ir_insert_after_op(func, mask, IR_OP_TY_CNST, op->unary_op.value->var_ty);
   fp_mask->ty = IR_OP_TY_MOV;
   fp_mask->mov = (struct ir_op_mov){.value = mask};
 
@@ -427,7 +427,7 @@ static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
 
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
-                       binary_op_is_comparison(op->binary_op.ty),
+                       ir_binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");
 
   // mark it as writing to flag reg so register allocator doesn't intefere with
@@ -448,7 +448,7 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // insert a new op after the current one, move this op into it, then make that
   // op a `mov` this turns all the ops pointing to the branch into pointing to
   // the mov, as we want
-  struct ir_op *new_br = insert_before_ir_op(irb, op, op->ty, op->var_ty);
+  struct ir_op *new_br = ir_insert_before_op(irb, op, op->ty, op->var_ty);
   new_br->binary_op = op->binary_op;
   new_br->reg = REG_FLAGS;
 
@@ -589,7 +589,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty int_ty;
   unsigned long long int_value;
 
-  DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+  DEBUG_ASSERT(ir_var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F32: {
@@ -620,7 +620,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     unreachable();
   }
 
-  struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+  struct ir_op *int_mov = ir_insert_before_op(func, op, IR_OP_TY_CNST, int_ty);
   int_mov->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
 
@@ -654,7 +654,6 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNKNOWN:
               BUG("unknown op!");
             case IR_OP_TY_UNDF:
-            case IR_OP_TY_CUSTOM:
             case IR_OP_TY_PHI:
             case IR_OP_TY_RET:
               break;
@@ -738,7 +737,7 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_ir_op(
                     func, &op->binary_op.rhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_CX});
@@ -762,11 +761,11 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_ir_op(
                     func, &op->binary_op.lhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_ir_op(
                     func, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
@@ -782,18 +781,18 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_ir_op(
                     func, &op->binary_op.lhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_ir_op(
                     func, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_DX});
 
                 break;
               default:
-                if (binary_op_is_comparison(op->binary_op.ty)) {
+                if (ir_binary_op_is_comparison(op->binary_op.ty)) {
                   lower_comparison(func, op);
                 }
                 break;
@@ -821,12 +820,12 @@ void x64_lower(struct ir_unit *unit) {
               if (op->addr_offset.index &&
                   popcntl(op->addr_offset.scale) != 1) {
                 // do mul beforehand and set scale to 1
-                struct ir_op *cnst = insert_before_ir_op(
+                struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
+                ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
                                      op->addr_offset.scale);
 
-                struct ir_op *mul = insert_before_ir_op(
+                struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 mul->binary_op =
                     (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
@@ -841,11 +840,11 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_ir_op(
                     func, &mul->binary_op.lhs, mul,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_ir_op(
                     func, mul,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});

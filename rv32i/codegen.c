@@ -1240,7 +1240,7 @@ static void codegen_uconv_op(struct codegen_state *state, struct ir_op *op,
   struct instr *instr = alloc_instr(state->func);
 
   enum ir_var_primitive_ty ty;
-  if (var_ty_is_fp(&op->var_ty)) {
+  if (ir_var_ty_is_fp(&op->var_ty)) {
     ty = op->var_ty.primitive;
   } else {
     ty = op->unary_op.value->var_ty.primitive;
@@ -1264,7 +1264,7 @@ static void codegen_sconv_op(struct codegen_state *state, struct ir_op *op,
   struct instr *instr = alloc_instr(state->func);
 
   enum ir_var_primitive_ty ty;
-  if (var_ty_is_fp(&op->var_ty)) {
+  if (ir_var_ty_is_fp(&op->var_ty)) {
     ty = op->var_ty.primitive;
   } else {
     ty = op->unary_op.value->var_ty.primitive;
@@ -1382,9 +1382,6 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
     break;
-  case IR_OP_TY_CUSTOM: {
-    BUG("custom");
-  }
   case IR_OP_TY_MOV: {
     if (op->flags & IR_OP_FLAG_PARAM) {
       // don't need to do anything

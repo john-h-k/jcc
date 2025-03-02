@@ -250,7 +250,7 @@ compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
       break;
     case IR_GLB_TY_FUNC:
       eliminate_phi(glb->func);
-      rebuild_ids(glb->func);
+      ir_rebuild_ids(glb->func);
       break;
     }
 
@@ -283,9 +283,9 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
       break;
     case IR_GLB_TY_FUNC:
       ir_order_basicblocks(glb->func);
-      eliminate_redundant_ops(glb->func,
-                              ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
-                                  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
+      ir_eliminate_redundant_ops(glb->func,
+                              IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
+                                  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
 
       // now we remove all gathers as they are pointless
       // important we do this last as otherwise other instructions may get
@@ -310,12 +310,12 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
       }
 
       for (size_t i = 0; i < num_gathers; i++) {
-        detach_ir_op(glb->func, *(struct ir_op **)vector_get(gathers, i));
+        ir_detach_op(glb->func, *(struct ir_op **)vector_get(gathers, i));
       }
       vector_free(&gathers);
 
-      rebuild_flags(glb->func);
-      rebuild_ids(glb->func);
+      ir_rebuild_flags(glb->func);
+      ir_rebuild_ids(glb->func);
       break;
     }
 

@@ -201,7 +201,7 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
   }
   case IR_VAR_TY_CONST_DATA:
   case IR_VAR_TY_DATA: {
-    struct ir_var_ty_info info = var_ty_info(ir, &var->var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(ir, &var->var_ty);
 
     // TODO: this leak
     struct vector *relocs = vector_create(sizeof(struct relocation));
@@ -234,7 +234,7 @@ static struct codegen_entry codegen_func(struct codegen_unit *unit,
                                          struct ir_glb *glb) {
   struct ir_func *ir_func = glb->func;
 
-  clear_metadata(ir_func);
+  ir_clear_metadata(ir_func);
 
   struct codegen_entry entry = {
       .ty = CODEGEN_ENTRY_TY_FUNC,

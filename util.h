@@ -11,9 +11,12 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef ptrdiff_t ssize_t;
 
 #ifdef __cplusplus
 #error "do not compile jcc as C++"

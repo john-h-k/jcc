@@ -38,7 +38,7 @@ void opts_run_pass(struct ir_unit *unit, const struct opts_pass *pass) {
       break;
     case IR_GLB_TY_FUNC:
       opts_run_pass_func(glb->func, pass);
-      eliminate_redundant_ops(glb->func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
+      ir_eliminate_redundant_ops(glb->func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
       break;
     }
 

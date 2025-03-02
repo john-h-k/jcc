@@ -91,8 +91,8 @@ static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
                             struct ir_var_ty *var_ty) {
   // we have to always allower pointer-sized-int because typechk generates them for e.g array access indices
 
-  struct ir_var_ty pointer_ty = var_ty_for_pointer_size(state->unit);
-  if (var_ty_eq(state->unit, var_ty, &pointer_ty)) {
+  struct ir_var_ty pointer_ty = ir_var_ty_for_pointer_size(state->unit);
+  if (ir_var_ty_eq(state->unit, var_ty, &pointer_ty)) {
     return true;
   }
 
@@ -106,7 +106,7 @@ static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
 static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
-  walk_op_uses(op, validate_op_order, &metadata);
+  ir_walk_op_uses(op, validate_op_order, &metadata);
 
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
@@ -258,8 +258,6 @@ static void ir_validate_op(struct ir_validate_state *state,
     VALIDATION_CHECKZ(func->flags & IR_FUNC_FLAG_MAKES_CALL, op,
                       "CALL op present but IR_FUNC_FLAG_MAKES_CALL not set");
     break;
-  case IR_OP_TY_CUSTOM:
-    break;
   case IR_OP_TY_BITFIELD_EXTRACT:
     break;
   case IR_OP_TY_BITFIELD_INSERT:
@@ -286,7 +284,7 @@ static void ir_validate_stmt(struct ir_validate_state *state,
 
   struct ir_op *op = stmt->first;
 
-  if (op && op_is_branch(op->ty)) {
+  if (op && ir_op_is_branch(op->ty)) {
     VALIDATION_CHECKZ(!op->succ, op, "branch should be only op in stmt");
   }
 
@@ -399,7 +397,7 @@ static void ir_validate_func(struct ir_validate_state *state,
   struct ir_func *func = glb->func;
   struct ir_basicblock *basicblock = func->first;
 
-  rebuild_ids(func);
+  ir_rebuild_ids(func);
 
   struct ir_lcl *lcl = func->first_lcl;
 

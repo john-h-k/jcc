@@ -10,7 +10,7 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
                    op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT,
                "called on invalid op");
 
-  struct ir_op *zero = insert_before_ir_op(func, op, IR_OP_TY_CNST, op->var_ty);
+  struct ir_op *zero = ir_insert_before_op(func, op, IR_OP_TY_CNST, op->var_ty);
   zero->cnst.ty = IR_OP_CNST_TY_INT;
   zero->cnst.int_value = 0;
 
@@ -39,7 +39,7 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
                "lower_quot called on invalid op");
 
   enum ir_op_binary_op_ty div_ty;
-  enum ir_op_sign sign = binary_op_sign(op->binary_op.ty);
+  enum ir_op_sign sign = ir_binary_op_sign(op->binary_op.ty);
   switch (sign) {
   case IR_OP_SIGN_NA:
     BUG("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
@@ -56,7 +56,7 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
   // c = a / b
 
   struct ir_op *div =
-      insert_before_ir_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
+      ir_insert_before_op(func, op, IR_OP_TY_BINARY_OP, op->var_ty);
   div->binary_op.ty = div_ty;
   div->binary_op.lhs = op->binary_op.lhs;
   div->binary_op.rhs = op->binary_op.rhs;
@@ -64,7 +64,7 @@ static void lower_quot(struct ir_func *func, struct ir_op *op) {
   // y = c * b
 
   struct ir_op *mul =
-      insert_after_ir_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
+      ir_insert_after_op(func, div, IR_OP_TY_BINARY_OP, op->var_ty);
   mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
   mul->binary_op.lhs = div;
   mul->binary_op.rhs = op->binary_op.rhs;
@@ -86,7 +86,7 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // because looking at `succ` is not reliable
 
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
-                       binary_op_is_comparison(op->binary_op.ty),
+                       ir_binary_op_is_comparison(op->binary_op.ty),
                    "non comparison op");
 
   // mark it as writing to flag reg so register allocator doesn't intefere with
@@ -107,7 +107,7 @@ static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   // insert a new op after the current one, move this op into it, then make that
   // op a `mov` this turns all the ops pointing to the branch into pointing to
   // the mov, as we want
-  struct ir_op *new_br = insert_before_ir_op(irb, op, op->ty, op->var_ty);
+  struct ir_op *new_br = ir_insert_before_op(irb, op, op->ty, op->var_ty);
   new_br->binary_op = op->binary_op;
   new_br->reg = REG_FLAGS;
 
@@ -319,16 +319,16 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
 
   if (supports_lhs_contained &&
       (lhs->ty == IR_OP_TY_CNST &&
-       (var_ty_is_integral(&lhs->var_ty) ||
-        (var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
+       (ir_var_ty_is_integral(&lhs->var_ty) ||
+        (ir_var_ty_is_fp(&lhs->var_ty) && lhs->cnst.flt_value == 0.0)) &&
        fits_in_alu_imm(lhs->cnst.int_value))) {
-    op->binary_op.lhs = alloc_contained_ir_op(func, lhs, op);
+    op->binary_op.lhs = ir_alloc_contained_ir_op(func, lhs, op);
   } else if (supports_rhs_contained &&
              (rhs->ty == IR_OP_TY_CNST &&
-              (var_ty_is_integral(&rhs->var_ty) ||
-               (var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
+              (ir_var_ty_is_integral(&rhs->var_ty) ||
+               (ir_var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
               fits_in_alu_imm(rhs->cnst.int_value))) {
-    op->binary_op.rhs = alloc_contained_ir_op(func, rhs, op);
+    op->binary_op.rhs = ir_alloc_contained_ir_op(func, rhs, op);
   }
 }
 
@@ -342,7 +342,7 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  op->addr_offset.base = alloc_contained_ir_op(func, base, op);
+  op->addr_offset.base = ir_alloc_contained_ir_op(func, base, op);
 }
 
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
@@ -357,7 +357,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->load.addr = alloc_contained_ir_op(func, addr, op);
+    op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
@@ -375,10 +375,10 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     bool index_contain =
         !addr_offset.offset && !lcl_has_offset &&
         (addr_offset.scale == 1 ||
-         addr_offset.scale == var_ty_info(func->unit, &op->var_ty).size);
+         addr_offset.scale == ir_var_ty_info(func->unit, &op->var_ty).size);
 
     if (offset_contain || index_contain) {
-      op->load.addr = alloc_contained_ir_op(func, addr, op);
+      op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
     }
   }
 }
@@ -395,7 +395,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->store.addr = alloc_contained_ir_op(func, addr, op);
+    op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
@@ -411,10 +411,10 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
         !addr_offset.offset && !lcl_has_offset &&
         (addr_offset.scale == 1 ||
          addr_offset.scale ==
-             var_ty_info(func->unit, &op->store.value->var_ty).size);
+             ir_var_ty_info(func->unit, &op->store.value->var_ty).size);
 
     if (offset_contain || index_contain) {
-      op->store.addr = alloc_contained_ir_op(func, addr, op);
+      op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
     }
   }
 }
@@ -425,7 +425,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty int_ty;
   unsigned long long int_value;
 
-  DEBUG_ASSERT(var_ty_is_fp(&op->var_ty), "float constant not fp type?");
+  DEBUG_ASSERT(ir_var_ty_is_fp(&op->var_ty), "float constant not fp type?");
 
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F16: {
@@ -463,7 +463,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
     unreachable();
   }
 
-  struct ir_op *int_mov = insert_before_ir_op(func, op, IR_OP_TY_CNST, int_ty);
+  struct ir_op *int_mov = ir_insert_before_op(func, op, IR_OP_TY_CNST, int_ty);
   int_mov->cnst =
       (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT, .int_value = int_value};
 
@@ -489,7 +489,7 @@ static bool try_get_hfa_info(struct ir_func *func,
 
   *member_ty = var_ty->aggregate.fields[0];
 
-  if (!var_ty_is_fp(member_ty)) {
+  if (!ir_var_ty_is_fp(member_ty)) {
     return false;
   }
 
@@ -498,7 +498,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
-    if (!var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
+    if (!ir_var_ty_eq(func->unit, member_ty, &var_ty->aggregate.fields[i])) {
       return false;
     }
   }
@@ -540,7 +540,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     ret_info = NULL;
   } else {
     struct ir_var_ty_info info =
-        var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
+        ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
                                     ? &IR_VAR_TY_POINTER
                                     : func_ty.ret_ty);
 
@@ -571,7 +571,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
       ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
-    } else if (var_ty_is_fp(func_ty.ret_ty)) {
+    } else if (ir_var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
           .ty = IR_PARAM_INFO_TY_REGISTER,
           .var_ty = func_ty.ret_ty,
@@ -624,16 +624,16 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
       var_ty = &IR_VAR_TY_POINTER;
     }
 
-    struct ir_var_ty_info info = var_ty_info(func->unit, var_ty);
+    struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
     if (info.size > 16) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
       ty = IR_PARAM_INFO_TY_POINTER;
-      info = var_ty_info(func->unit, var_ty);
+      info = ir_var_ty_info(func->unit, var_ty);
     }
 
-    if (var_ty_is_aggregate(var_ty)) {
+    if (ir_var_ty_is_aggregate(var_ty)) {
       info.size = ROUND_UP(info.size, 8);
     }
 
@@ -642,7 +642,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     struct ir_var_ty member_ty;
 
     if (!variadic || !variadics_on_stack) {
-      if (var_ty_is_fp(var_ty) && nsrn < 8) {
+      if (ir_var_ty_is_fp(var_ty) && nsrn < 8) {
         vector_push_back(params, var_ty);
 
         struct ir_param_info param_info = {
@@ -694,7 +694,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
         nsaa += size;
         continue;
 
-      } else if (var_ty_is_integral(var_ty) && info.size <= 8 && ngrn < 8) {
+      } else if (ir_var_ty_is_integral(var_ty) && info.size <= 8 && ngrn < 8) {
         vector_push_back(params, var_ty);
 
         struct ir_param_info param_info = {
@@ -714,7 +714,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
         ngrn = (ngrn + 1) & 1;
       }
 
-      if (var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
+      if (ir_var_ty_is_integral(var_ty) && info.size == 16 && ngrn < 7) {
         // // lo to ngrn, hi to ngrn+1
 
         vector_push_back(params, &IR_VAR_TY_I64);
@@ -736,7 +736,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
       }
 
       size_t dw_size = (info.size + 7) / 8;
-      if (var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
+      if (ir_var_ty_is_aggregate(var_ty) && dw_size <= (8 - ngrn)) {
         struct ir_param_info param_info = {
             .ty = ty,
             .var_ty = var_ty,
@@ -763,7 +763,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     size_t nsaa_align = MAX(8, info.alignment);
     nsaa = ROUND_UP(nsaa, nsaa_align);
 
-    if (var_ty_is_aggregate(var_ty)) {
+    if (ir_var_ty_is_aggregate(var_ty)) {
       struct ir_param_info param_info = {
           .ty = IR_PARAM_INFO_TY_STACK, .var_ty = var_ty, .stack_offset = nsaa};
       vector_push_back(param_infos, &param_info);
@@ -884,7 +884,7 @@ void aarch64_lower(struct ir_unit *unit) {
             case IR_OP_TY_BINARY_OP:
               try_contain_binary_op(func, op);
 
-              if (binary_op_is_comparison(op->binary_op.ty)) {
+              if (ir_binary_op_is_comparison(op->binary_op.ty)) {
                 lower_comparison(func, op);
               }
               break;
@@ -893,12 +893,12 @@ void aarch64_lower(struct ir_unit *unit) {
                   (popcntl(op->addr_offset.scale) != 1 ||
                    op->addr_offset.scale > 8)) {
                 // do mul beforehand and set scale to 1
-                struct ir_op *cnst = insert_before_ir_op(
+                struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
+                ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
                                      op->addr_offset.scale);
 
-                struct ir_op *mul = insert_before_ir_op(
+                struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 mul->binary_op =
                     (struct ir_op_binary_op){.ty = IR_OP_BINARY_OP_TY_MUL,
