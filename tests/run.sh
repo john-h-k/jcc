@@ -277,7 +277,7 @@ run_tests() {
           echo -e "\n${BOLD} Running 'jcc " "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" "'${RESET}\n"
         fi
 
-        ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
+        ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
         return $?
       }
 
@@ -325,11 +325,11 @@ run_tests() {
       fi
   
       if [ "$result" != "$expected" ]; then
-        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(objdump -d "$output" | awk '{print "  " $0}')${RESET}\n"
+        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
       elif [ "$output_result" != "$stdout" ]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
-        send_status fail "$prefix'$file' output mismatch. Got: '$output_result', expected: '$stdout'. Build output: \n${RESET}$(objdump -d "$output" | awk '{print "  " $0}')${RESET}\n"
+        send_status fail "$prefix'$file' output mismatch. Got: '$output_result', expected: '$stdout'. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
       else
         send_status pass
       fi
