@@ -250,7 +250,9 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
   ssize_t offset = lcl->alloc.offset;
 
   if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED && offset <= 0 && lcl->flags & IR_LCL_FLAG_PARAM) {
-    offset = state->x64_prologue_info->stack_size + -offset;
+    // add sizeof(void *) for the call address, which is implicitly pushed by `call`
+    // and one more for stack pointer
+    offset = 8 + state->x64_prologue_info->stack_size + -offset;
   }
 
   if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
@@ -1318,7 +1320,7 @@ static void codegen_prologue(struct codegen_state *state) {
 
   info.stack_size = ROUND_UP(info.stack_size, X64_STACK_ALIGNMENT);
 
-  size_t stack_to_sub = info.stack_size;
+  size_t stack_to_sub = info.stack_size - 8 /* push rbp does 8 bytes for us */;
   if (stack_to_sub) {
     if (stack_to_sub > MAX_IMM_SIZE) {
       codegen_sub_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_sub);
@@ -1414,7 +1416,7 @@ static void codegen_epilogue(struct codegen_state *state) {
     }
   }
 
-  size_t stack_to_add = prologue_info->stack_size;
+  size_t stack_to_add = prologue_info->stack_size - 8 /* pop does 8 bytes for us */;
   if (stack_to_add) {
     codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
   }

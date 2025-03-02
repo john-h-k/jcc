@@ -1120,7 +1120,7 @@ static void lower_params_registers(struct ir_func *func) {
         lcl->flags |= IR_LCL_FLAG_PARAM;
         lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
         lcl->alloc = (struct ir_lcl_alloc){
-            .padding = 0, .size = info.size, .offset = -offset};
+            .padding = 0, .size = info.size, .offset = offset};
 
         param_idx++;
         break;
