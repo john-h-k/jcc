@@ -20,6 +20,10 @@ typedef bool (*eq_fn)(const void *l, const void *r);
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_gn);
 
+struct hashtbl *hashtbl_create_str_keyed(size_t element_size);
+
+struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size);
+
 void hashtbl_free(struct hashtbl **hashtbl);
 
 size_t hashtbl_size(struct hashtbl *hashtbl);
@@ -43,11 +47,8 @@ struct sized_str {
 void hashtbl_hash_str(struct hasher *hasher, const void *obj);
 bool hashtbl_eq_str(const void *l, const void *r);
 
-struct hashtbl *hashtbl_create_str_keyed(size_t element_size);
 
 void hashtbl_hash_sized_str(struct hasher *hasher, const void *value);
 bool hashtbl_eq_sized_str(const void *l, const void *r);
-
-struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size);
 
 #endif

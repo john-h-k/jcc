@@ -3140,10 +3140,6 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   // prune again, as inserting the ret can introduce an extraneous empty bb
   ir_prune_basicblocks(builder->func);
 
-  if (log_enabled()) {
-    debug_print_ir_func(stderr, builder->func, NULL, NULL);
-  }
-
   // now we fix up phis
   basicblock = builder->func->first;
   while (basicblock) {

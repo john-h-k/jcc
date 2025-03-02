@@ -69,7 +69,7 @@ struct arg {
   ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk")                                \
   ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir")                                          \
-  ENUM_FN(COMPILE_LOG_FLAGS_LOWER_ABI, "lower_abi")                                    \
+  ENUM_FN(COMPILE_LOG_FLAGS_LOWER_ABI, "lower_abi")                            \
   ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_REGALLOC, "regalloc")                              \
@@ -186,10 +186,10 @@ VALUES_FN(log_level, LOG)
   ARG_STRING_LIST(include_paths, "-I", "",                                     \
                   "Directories to search for `#include` directives")           \
                                                                                \
-  ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")             \
-  \
-  ARG_BOOL(version, "-V", "--version", "Print version")             \
-  \
+  ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")           \
+                                                                               \
+  ARG_BOOL(version, "-V", "--version", "Print version")                        \
+                                                                               \
   ARG_BOOL(debug, "-g", "", "Debug info (currently does nothing)")             \
                                                                                \
   ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", opts_level,        \
@@ -213,6 +213,9 @@ VALUES_FN(log_level, LOG)
                                                                                \
   ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
             "[DEBUG] Log level flags")                                         \
+                                                                               \
+  ARG_STRING_LIST(log_symbols, "", "--log-sym",                                \
+                  "[DEBUG] Symbols to log (default: all)")                     \
                                                                                \
   ARG_STRING(timestamp, "", "-tm",                                             \
              "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")

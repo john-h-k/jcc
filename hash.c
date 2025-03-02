@@ -74,6 +74,8 @@ void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
 }
 
 void hasher_hash_str(struct hasher *hasher, const char *value) {
+  DEBUG_ASSERT(value, "can't hash null str");
+
   // TODO: implement a method that doesn't first precompute length
   size_t len = strlen(value);
 
@@ -181,6 +183,8 @@ static hash_t hasher_hash_long(const char *data, size_t length, uint64_t s0,
 
 void hasher_hash_bytes(struct hasher *hasher, const void *value,
                        size_t length) {
+  DEBUG_ASSERT(value, "can't hash null bytes");
+
   uint64_t s0 = hasher->accumulator;
   uint64_t s1 = hasher->expand_seed0;
 

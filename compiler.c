@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "codegen.h"
 #include "graphcol.h"
+#include "hashtbl.h"
 #include "ir/build.h"
 #include "ir/eliminate_phi.h"
 #include "ir/ir.h"
@@ -73,17 +74,33 @@ create_compiler(struct program *program, const struct target *target,
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
 
-static void debug_print_stage(struct ir_unit *ir, const char *name) {
+static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
+                              const char *name) {
   slog("\n\n----------  %s  ----------\n", name);
-  debug_print_ir(stderr, ir, NULL, NULL);
+
+  // TODO: we should also respect log symbols in parse/typechk, but less
+  // pressing at the moment
+  if (compiler->args.log_symbols) {
+    struct ir_glb *glb = ir->first_global;
+
+    while (glb) {
+      if (glb->name && hashtbl_lookup(compiler->args.log_symbols, &glb->name)) {
+        debug_print_glb(stderr, glb, NULL, NULL);
+      }
+
+      glb = glb->succ;
+    }
+  } else {
+    debug_print_ir(stderr, ir, NULL, NULL);
+  }
 }
 
 static enum compile_result compile_stage_preproc(struct compiler *compiler,
                                                  ...) {
   // variadic dummy because takes no args but macro needs args
 
-  // this is only run in preproc only mode (`-E/--preprocess`), else it is part
-  // of parsing
+  // this is only run in preproc only mode (`-E/--preprocess`), else it is
+  // part of parsing
 
   FILE *file;
   // FIXME: hacky (and in main.c)
@@ -136,7 +153,7 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
                                      &typechk_result->translation_unit);
 
   if (log_enabled()) {
-    debug_print_stage(*ir, "ir");
+    debug_print_stage(compiler, *ir, "ir");
   }
 
   ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
@@ -145,11 +162,11 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
 }
 
 static enum compile_result
-compile_stage_lower_abi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
+compile_stage_lower_abi(struct compiler *compiler, struct ir_unit *ir) {
   lower_abi(ir);
 
   if (log_enabled()) {
-    debug_print_stage(ir, "lower_abi");
+    debug_print_stage(compiler, ir, "lower_abi");
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_NONE);
@@ -178,7 +195,7 @@ static enum compile_result compile_stage_opts(struct compiler *compiler,
   }
 
   if (log_enabled()) {
-    debug_print_stage(ir, "opts");
+    debug_print_stage(compiler, ir, "opts");
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_NONE);
@@ -186,12 +203,12 @@ static enum compile_result compile_stage_opts(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
-static enum compile_result compile_stage_lower(UNUSED struct compiler *compiler,
+static enum compile_result compile_stage_lower(struct compiler *compiler,
                                                struct ir_unit *ir) {
   lower(ir);
 
   if (log_enabled()) {
-    debug_print_stage(ir, "lower");
+    debug_print_stage(compiler, ir, "lower");
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
@@ -226,7 +243,7 @@ static enum compile_result compile_stage_regalloc(struct compiler *compiler,
   }
 
   if (log_enabled()) {
-    debug_print_stage(ir, "regalloc");
+    debug_print_stage(compiler, ir, "regalloc");
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS);
@@ -235,7 +252,7 @@ static enum compile_result compile_stage_regalloc(struct compiler *compiler,
 }
 
 static enum compile_result
-compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
+compile_stage_elim_phi(struct compiler *compiler, struct ir_unit *ir) {
 
   struct ir_glb *glb = ir->first_global;
 
@@ -258,7 +275,7 @@ compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
   }
 
   if (log_enabled()) {
-    debug_print_stage(ir, "elim_phi");
+    debug_print_stage(compiler, ir, "elim_phi");
   }
 
   ir_validate(ir, IR_VALIDATE_FLAG_LOWERED_POINTERS |
@@ -268,7 +285,7 @@ compile_stage_elim_phi(UNUSED struct compiler *compiler, struct ir_unit *ir) {
 }
 
 static enum compile_result
-compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
+compile_stage_codegen_prepare(struct compiler *compiler,
                               struct ir_unit *ir) {
   struct ir_glb *glb = ir->first_global;
 
@@ -283,9 +300,10 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
       break;
     case IR_GLB_TY_FUNC:
       ir_order_basicblocks(glb->func);
-      ir_eliminate_redundant_ops(glb->func,
-                              IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
-                                  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
+      ir_eliminate_redundant_ops(
+          glb->func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
+                         IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS |
+                         IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
 
       // now we remove all gathers as they are pointless
       // important we do this last as otherwise other instructions may get
@@ -304,7 +322,8 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
           vector_push_back(gathers, &op);
         }
 
-        if (op->ty == IR_OP_TY_RET && op->ret.value && op->ret.value->ty == IR_OP_TY_GATHER) {
+        if (op->ty == IR_OP_TY_RET && op->ret.value &&
+            op->ret.value->ty == IR_OP_TY_GATHER) {
           op->ret.value = NULL;
         }
       }
@@ -323,7 +342,7 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
   }
 
   if (log_enabled()) {
-    debug_print_stage(ir, "codegen_prepare");
+    debug_print_stage(compiler, ir, "codegen_prepare");
   }
 
   return COMPILE_RESULT_SUCCESS;
@@ -337,7 +356,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
   *codegen_unit = codegen(ir);
 
   if (log_enabled() && target->debug_print_codegen) {
-    debug_print_stage(ir, "emit");
+    debug_print_stage(compiler, ir, "emit");
     target->debug_print_codegen(stderr, *codegen_unit);
   }
 

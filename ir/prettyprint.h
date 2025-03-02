@@ -65,7 +65,7 @@ void debug_print_ir(FILE *file, struct ir_unit *iru,
 
 void debug_print_lcl(FILE *file, struct ir_lcl *lcl);
 
-void debug_print_glb(FILE *file, struct ir_glb *glb);
+void debug_print_glb(FILE *file, struct ir_glb *glb, debug_print_op_callback *cb, void *cb_metadata);
 
 void debug_print_op(FILE *file, struct ir_func *irb, struct ir_op *op);
 
