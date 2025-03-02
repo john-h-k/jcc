@@ -14,8 +14,8 @@ const struct target RV32I_LINUX_TARGET = {
     TARGET_LP_SZ_LP32,
     {
         .ssp = 9,
-        .gp_registers = {.num_volatile = 17,
-                                              .num_nonvolatile = 10,
+        .gp_registers = {.num_volatile = 15,
+                                              .num_nonvolatile = 12,
                                               .num_reserved = 4},
         .fp_registers = {.num_volatile = 20,
                                               .num_nonvolatile = 12,

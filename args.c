@@ -335,6 +335,12 @@ enum parse_args_result parse_args(int argc, char **argv,
         break;
       case ARG_TY_OPTION:
         GET_ARGUMENT(value);
+
+        if (!value) {
+          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          goto fail;
+        }
+
         if (*arg->arg_option) {
           err("Duplicate option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
           goto fail;
@@ -347,6 +353,11 @@ enum parse_args_result parse_args(int argc, char **argv,
         break;
       case ARG_TY_FLAGS:
         GET_ARGUMENT(value);
+
+        if (!value) {
+          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          goto fail;
+        }
 
         do {
           const char *next = strchr(value, ',');
@@ -385,6 +396,12 @@ enum parse_args_result parse_args(int argc, char **argv,
         break;
       case ARG_TY_STRING:
         GET_ARGUMENT(value);
+
+        if (!value) {
+          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          goto fail;
+        }
+
         if (*arg->arg_string) {
           err("Duplicate option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
           goto fail;
@@ -394,6 +411,12 @@ enum parse_args_result parse_args(int argc, char **argv,
         break;
       case ARG_TY_STRING_LIST:
         GET_ARGUMENT(value);
+
+        if (!value) {
+          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          goto fail;
+        }
+
         arg->arg_string_list->values =
             realloc(arg->arg_string_list->values,
                     sizeof(*arg->arg_string_list->values) *

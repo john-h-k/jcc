@@ -885,7 +885,7 @@ void aarch64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_ADDR_OFFSET:
               if (op->addr_offset.index &&
-                  popcntl(op->addr_offset.scale) != 1) {
+                  (popcntl(op->addr_offset.scale) != 1 || op->addr_offset.scale > 8)) {
                 // do mul beforehand and set scale to 1
                 struct ir_op *cnst = insert_before_ir_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
