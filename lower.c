@@ -917,8 +917,10 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
         vector_push_back(new_args, &arg);
 
       } else {
+        bool detach = true;
         if (arg->ty != IR_OP_TY_LOAD) {
           arg = spill_op(func, arg);
+          detach = false;
         }
 
         struct ir_op *addr = build_addr(func, arg);
@@ -945,7 +947,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           last = load;
         }
 
-        detach_ir_op(func, arg);
+        if (detach) {
+          detach_ir_op(func, arg);
+        }
       }
       break;
     case IR_PARAM_INFO_TY_POINTER: {
