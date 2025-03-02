@@ -507,6 +507,11 @@ struct ir_op_custom {
 };
 
 bool ir_reg_eq(struct ir_reg left, struct ir_reg right);
+bool var_ty_has_reg(const struct ir_var_ty var_ty);
+enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty);
+
+bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
+bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
 
 #define NO_REG                                                                 \
   (struct ir_reg) { .ty = IR_REG_TY_NONE }
@@ -1039,8 +1044,17 @@ void rebuild_flags(struct ir_func *func);
 
 enum eliminate_redundant_ops_flags {
   ELIMINATE_REDUNDANT_OPS_FLAG_NONE = 0,
-  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES = 1,
-  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS = 2,
+
+  // removes branches to the next basicblock
+  // TODO: we should remove this and instead have codegen simply not generate a branch if not needed
+  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES = 1 << 0,
+
+  // allows more aggressive elimination of moves
+  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS = 1 << 1,
+
+  // this is a negative flag because most passes _do_ want to eliminate locals
+  // it is only late-stage passes which can't do this, because they have been allocated or have target specific meanings
+  ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS = 1 << 2,
 };
 
 void eliminate_redundant_ops(struct ir_func *func, enum eliminate_redundant_ops_flags flags);

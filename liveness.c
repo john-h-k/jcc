@@ -57,9 +57,12 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           interval->end = interval->start;
         }
 
-        if (op->flags & IR_OP_FLAG_ETERNAL) {
-          interval->end = irb->op_count;
-        }
+        // i originally had this, but i don't think its needed? the range is still long enough
+        // its just that it will unnecessarily fill up a reg spot?
+
+        // if (op->flags & IR_OP_FLAG_ETERNAL) {
+        //   interval->end = irb->op_count;
+        // }
 
         DEBUG_ASSERT(op->metadata == NULL,
                      "metadata left over in op during liveness analysis, will "

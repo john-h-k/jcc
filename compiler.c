@@ -285,7 +285,7 @@ compile_stage_codegen_prepare(UNUSED struct compiler *compiler,
       ir_order_basicblocks(glb->func);
       eliminate_redundant_ops(glb->func,
                               ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_BRANCHES |
-                                  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
+                                  ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
 
       // now we remove all gathers as they are pointless
       // important we do this last as otherwise other instructions may get

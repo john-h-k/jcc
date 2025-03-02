@@ -811,6 +811,23 @@ bool ir_reg_eq(struct ir_reg left, struct ir_reg right) {
   return left.ty == right.ty && left.idx == right.idx;
 }
 
+bool var_ty_has_reg(const struct ir_var_ty var_ty) {
+  return var_ty.ty == IR_VAR_TY_TY_POINTER ||
+         var_ty.ty == IR_VAR_TY_TY_PRIMITIVE;
+}
+
+enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty) {
+  switch (var_ty.ty) {
+  case IR_VAR_TY_TY_POINTER:
+    return IR_REG_TY_INTEGRAL;
+  case IR_VAR_TY_TY_PRIMITIVE:
+    return primitive_ty_is_fp(var_ty.primitive) ? IR_REG_TY_FP
+                                                : IR_REG_TY_INTEGRAL;
+  default:
+    BUG("doesn't make sense");
+  }
+}
+
 void ir_order_basicblocks(struct ir_func *func) {
   // TODO: topological sort basicblocks
 
@@ -874,8 +891,28 @@ void eliminate_redundant_ops(struct ir_func *func,
         goto side_effects;
       }
 
-      if (op->mov.value && op->reg.ty != IR_REG_TY_NONE &&
-          ir_reg_eq(op->reg, op->mov.value->reg)) {
+      if (!op->mov.value) {
+        break;
+      }
+
+      // mov is between registeres, but not needed
+      bool redundant_mov = op->mov.value->reg.ty != IR_REG_TY_NONE &&
+                           ir_reg_eq(op->reg, op->mov.value->reg);
+
+      bool cross_reg_mov = var_ty_has_reg(op->var_ty) &&
+                           var_ty_has_reg(op->mov.value->var_ty) &&
+                           ir_reg_ty_for_var_ty(op->var_ty) !=
+                               ir_reg_ty_for_var_ty(op->mov.value->var_ty);
+
+      // mov is useless, and is just an IR artifact
+      // so it doesn't move from or to a param/fixed reg op
+      bool pointless_mov = !cross_reg_mov &&
+                           op->mov.value->reg.ty == IR_REG_TY_NONE &&
+                           op->reg.ty == IR_REG_TY_NONE &&
+                           !((op->flags | op->mov.value->flags) &
+                             (IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG));
+
+      if (redundant_mov || pointless_mov) {
         struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
         for (size_t i = 0; i < usage.num_uses; i++) {
@@ -933,15 +970,17 @@ void eliminate_redundant_ops(struct ir_func *func,
     detach_ir_op(func, *(struct ir_op **)vector_pop(detach));
   }
 
-  use_map = build_op_uses_map(func);
-  struct ir_lcl *lcl = func->first_lcl;
-  while (lcl) {
-    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
-        !use_map.lcl_use_datas[lcl->id].num_consumers) {
-      detach_local(func, lcl);
-    }
+  if (!(flags & ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS)) {
+    use_map = build_op_uses_map(func);
+    struct ir_lcl *lcl = func->first_lcl;
+    while (lcl) {
+      if (lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
+          !use_map.lcl_use_datas[lcl->id].num_consumers) {
+        detach_local(func, lcl);
+      }
 
-    lcl = lcl->succ;
+      lcl = lcl->succ;
+    }
   }
 
   vector_free(&detach);
@@ -1658,9 +1697,6 @@ struct ir_op *alloc_fixed_reg_source_ir_op(struct ir_func *irb,
   return mov;
 }
 
-static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty);
-static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty);
-
 void mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
                       struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
@@ -2107,11 +2143,10 @@ void detach_local(struct ir_func *irb, struct ir_lcl *lcl) {
   case IR_LCL_ALLOC_TY_NONE:
     break;
   case IR_LCL_ALLOC_TY_NORMAL:
-    // TODO: this should propogate offset changes
-    irb->total_locals_size -= lcl->alloc.size + lcl->alloc.padding;
-    break;
   case IR_LCL_ALLOC_TY_FIXED:
-    BUG("can't detach fixed alloc lcl");
+    // possible to detach normal alloc but painful as it involves removing a
+    // "hole" possibly in the middle of the local block
+    BUG("can't detach allocated lcl");
   }
 
   irb->lcl_count--;
@@ -2143,7 +2178,7 @@ bool var_ty_is_primitive(const struct ir_var_ty *var_ty,
   return var_ty->ty == IR_VAR_TY_TY_PRIMITIVE && var_ty->primitive == primitive;
 }
 
-static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
+bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   switch (ty) {
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
@@ -2157,7 +2192,7 @@ static bool primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   }
 }
 
-static bool primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
+bool primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
   switch (ty) {
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
@@ -2237,14 +2272,13 @@ struct ir_var_ty_flattened var_ty_info_flat(struct ir_unit *iru,
   // TODO: this isn't efficient because it generates a huge array of offsets
   // for arrays
 
-  struct vector *fields = vector_create_in_arena(sizeof(struct ir_field_info), iru->arena);
+  struct vector *fields =
+      vector_create_in_arena(sizeof(struct ir_field_info), iru->arena);
   size_t offset = 0;
   flatten_add_fields(iru, ty, fields, &offset);
 
-  return (struct ir_var_ty_flattened){
-    .fields = vector_head(fields),
-    .num_fields = vector_length(fields)
-  };
+  return (struct ir_var_ty_flattened){.fields = vector_head(fields),
+                                      .num_fields = vector_length(fields)};
 }
 
 struct ir_var_ty_info var_ty_info(struct ir_unit *iru,

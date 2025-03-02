@@ -1199,8 +1199,11 @@ static void lower_params_registers(struct ir_func *func) {
                    "mov but multi reg return? expected gather");
       ret_value->reg = func->call_info.ret->regs[0].reg;
       ret_value->flags |= IR_OP_FLAG_FIXED_REG;
+    } else if (ret_value->ty == IR_OP_TY_LOAD) {
+      ret_value->reg = func->call_info.ret->regs[0].reg;
+      ret_value->flags |= IR_OP_FLAG_FIXED_REG;
     } else {
-      BUG("expected gather/mov for reg return");
+      BUG("expected gather/mov/load for reg return");
     }
   }
 }
@@ -1515,6 +1518,9 @@ void lower(struct ir_unit *unit) {
         basicblock = basicblock->succ;
       }
 
+      // run an early elimination pass before we alloc locals, as it is hard to do after
+      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
+
       // alloc locals EARLY so that targets can contain their addressing nodes
       // properly
       alloc_locals(func);
@@ -1553,7 +1559,7 @@ void lower(struct ir_unit *unit) {
       // FIXME: phis are not propogated properly
       remove_critical_edges(func);
 
-      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
+      eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
     }
     }
     glb = glb->succ;
