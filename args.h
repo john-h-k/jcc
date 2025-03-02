@@ -125,8 +125,20 @@ struct arg {
     *num_values = ARR_LENGTH(enum_values);                                     \
   }
 
+inline static bool parse_log_level(const char *str, int *value) {
+  LOG_ENUM_LIST;
+
+  if (strcmp(str, "ir.all") == 0) {
+    *value = COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_LOWER_ABI |
+             COMPILE_LOG_FLAGS_OPTS | COMPILE_LOG_FLAGS_REGALLOC |
+             COMPILE_LOG_FLAGS_ELIM_PHI | COMPILE_LOG_FLAGS_CODEGEN_PREPARE;
+    return true;
+  }
+
+  return false;
+}
+
 PARSE_FN(opts_level, OPTS)
-PARSE_FN(log_level, LOG)
 PARSE_FN(arch, ARCH)
 PARSE_FN(target, TARGET)
 PARSE_FN(c_standard, C_STANDARD)
@@ -148,11 +160,17 @@ STRING_FN(log_level, LOG, "all")
 
 #define ENUM_FN(enum_value, str_value) str_value,
 
+inline static void values_log_level(const char ***values, size_t *num_values) {
+  static const char *enum_values[] = {LOG_ENUM_LIST "ir.all"};
+
+  *values = enum_values;
+  *num_values = ARR_LENGTH(enum_values);
+}
+
 VALUES_FN(opts_level, OPTS)
 VALUES_FN(arch, ARCH)
 VALUES_FN(target, TARGET)
 VALUES_FN(c_standard, C_STANDARD)
-VALUES_FN(log_level, LOG)
 
 #undef ENUM_FN
 

@@ -742,6 +742,11 @@ void x64_lower(struct ir_unit *unit) {
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_CX});
                 break;
+
+              case IR_OP_BINARY_OP_TY_FADD:
+              case IR_OP_BINARY_OP_TY_FSUB:
+              case IR_OP_BINARY_OP_TY_FMUL:
+              case IR_OP_BINARY_OP_TY_FDIV:
               case IR_OP_BINARY_OP_TY_AND:
               case IR_OP_BINARY_OP_TY_OR:
               case IR_OP_BINARY_OP_TY_XOR:
