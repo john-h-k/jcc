@@ -322,6 +322,65 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   }
 }
 
+#define MAX_IMM_SIZE (2047)
+
+static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
+  if (op->flags & IR_OP_FLAG_CONTAINED) {
+    return;
+  }
+
+  struct ir_op *base = op->addr_offset.base;
+  if (base->ty != IR_OP_TY_ADDR || base->addr.ty != IR_OP_ADDR_TY_LCL) {
+    return;
+  }
+
+  op->addr_offset.base = alloc_contained_ir_op(func, base, op);
+}
+
+static void try_contain_load(struct ir_func *func, struct ir_op *op) {
+  switch (op->load.ty) {
+  case IR_OP_LOAD_TY_LCL:
+  case IR_OP_LOAD_TY_GLB:
+    return;
+  case IR_OP_LOAD_TY_ADDR:
+    break;
+  }
+
+  struct ir_op *addr = op->load.addr;
+
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    op->load.addr = alloc_contained_ir_op(func, addr, op);
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+    struct ir_op_addr_offset addr_offset = addr->addr_offset;
+
+    if (!addr_offset.index) {
+      op->load.addr = alloc_contained_ir_op(func, addr, op);
+    }
+  }
+}
+
+static void try_contain_store(struct ir_func *func, struct ir_op *op) {
+  switch (op->store.ty) {
+  case IR_OP_STORE_TY_LCL:
+  case IR_OP_STORE_TY_GLB:
+    return;
+  case IR_OP_STORE_TY_ADDR:
+    break;
+  }
+
+  struct ir_op *addr = op->store.addr;
+
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    op->store.addr = alloc_contained_ir_op(func, addr, op);
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+    struct ir_op_addr_offset addr_offset = addr->addr_offset;
+
+    if (!addr_offset.index) {
+      op->store.addr = alloc_contained_ir_op(func, addr, op);
+    }
+  }
+}
+
 void rv32i_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
 
@@ -355,24 +414,15 @@ void rv32i_lower(struct ir_unit *unit) {
             case IR_OP_TY_BITFIELD_INSERT:
               lower_bitfield_insert(func, op);
               break;
+            case IR_OP_TY_STORE:
+              try_contain_store(func, op);
+              break;
+            case IR_OP_TY_LOAD:
+              try_contain_load(func, op);
+              break;
             case IR_OP_TY_ADDR_OFFSET: {
-              struct ir_op *base = op->addr_offset.base;
-
-              if (op->addr_offset.offset) {
-                struct ir_op *cnst = insert_before_ir_op(
-                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
-                                     op->addr_offset.offset);
-
-                struct ir_op *offset = insert_before_ir_op(
-                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                offset->binary_op = (struct ir_op_binary_op){
-                    .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base, .rhs = cnst};
-
-                base = offset;
-              }
-
               if (op->addr_offset.index) {
+                // do mul beforehand and set scale to 1
                 struct ir_op *cnst = insert_before_ir_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
@@ -385,17 +435,20 @@ void rv32i_lower(struct ir_unit *unit) {
                                              .lhs = op->addr_offset.index,
                                              .rhs = cnst};
 
-                struct ir_op *offset = insert_before_ir_op(
+                op->addr_offset.scale = 1;
+                op->addr_offset.index = mul;
+
+                struct ir_op *lhs = op->addr_offset.base;
+
+                struct ir_op *add = replace_ir_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
-                offset->binary_op = (struct ir_op_binary_op){
-                    .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = base, .rhs = mul};
-
-                base = offset;
+                add->binary_op = (struct ir_op_binary_op){
+                    .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = mul};
+              } else {
+                try_contain_addr_offset(func, op);
               }
-
-              op->ty = IR_OP_TY_MOV;
-              op->mov = (struct ir_op_mov){.value = base};
-            } break;
+              break;
+            }
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
                 lower_fp_cnst(func, op);

@@ -61,7 +61,8 @@ static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
 
   ssize_t offset = lcl->alloc.offset;
 
-  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED && offset <= 0 && lcl->flags & IR_LCL_FLAG_PARAM) {
+  if (lcl->alloc_ty == IR_LCL_ALLOC_TY_FIXED && offset <= 0 &&
+      lcl->flags & IR_LCL_FLAG_PARAM) {
     offset = state->rv32i_prologue_info->stack_size + -offset;
   }
 
@@ -390,7 +391,8 @@ static void codegen_prologue(struct codegen_state *state) {
                                      .save_start = save_start,
                                      .stack_size = stack_size};
 
-  state->rv32i_prologue_info = arena_alloc(state->arena, sizeof(*state->rv32i_prologue_info));
+  state->rv32i_prologue_info =
+      arena_alloc(state->arena, sizeof(*state->rv32i_prologue_info));
 
   if (!info.prologue_generated) {
     *state->rv32i_prologue_info = info;
@@ -505,7 +507,8 @@ static void codegen_epilogue(struct codegen_state *state) {
       restore->rv32i->flw = (struct rv32i_load){
           .imm = offset,
           .dest = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
-                                     .idx = translate_reg_idx(reg.idx, IR_REG_TY_FP)},
+                                     .idx = translate_reg_idx(reg.idx,
+                                                              IR_REG_TY_FP)},
           .addr = STACK_PTR_REG,
       };
       break;
@@ -529,7 +532,8 @@ static void codegen_epilogue(struct codegen_state *state) {
       .dest = STACK_PTR_REG, .addr = STACK_PTR_REG, .imm = -8};
 }
 
-static void codegen_ret_op(struct codegen_state *state, UNUSED struct ir_op *op) {
+static void codegen_ret_op(struct codegen_state *state,
+                           UNUSED struct ir_op *op) {
   codegen_epilogue(state);
 
   struct instr *instr = alloc_instr(state->func);
@@ -961,25 +965,37 @@ static void codegen_load_addr_op(struct codegen_state *state,
 
   struct rv32i_reg dest = codegen_reg(op);
 
-  if (op->load.addr->flags & IR_OP_FLAG_CONTAINED) {
-    struct ir_op *addr = op->load.addr;
+  struct rv32i_reg addr;
+  size_t offset;
 
-    simm_t imm;
-    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-      imm = get_lcl_stack_offset(state, op, addr->addr.lcl);
+  if (op->load.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr_op = op->load.addr;
+
+    if (addr_op->ty == IR_OP_TY_ADDR && addr_op->addr.ty == IR_OP_ADDR_TY_LCL) {
+      addr = STACK_PTR_REG;
+      offset = get_lcl_stack_offset(state, op, addr_op->addr.lcl);
+    } else if (addr_op->ty == IR_OP_TY_ADDR_OFFSET) {
+      struct ir_op *base = addr_op->addr_offset.base;
+
+      offset = addr_op->addr_offset.offset;
+
+      if (base->flags & IR_OP_FLAG_CONTAINED) {
+        addr = STACK_PTR_REG;
+        offset = get_lcl_stack_offset(state, op, base->addr.lcl) + addr_op->addr_offset.offset;
+      } else {
+        addr = codegen_reg(base);
+      }
     } else {
       BUG("can't CONTAIN operand in load_addr node");
     }
-
-    instr->rv32i->ty = load_ty_for_op(op);
-    instr->rv32i->load =
-        (struct rv32i_load){.dest = dest, .addr = STACK_PTR_REG, .imm = imm};
   } else {
-    struct rv32i_reg addr = codegen_reg(op->load.addr);
-    instr->rv32i->ty = load_ty_for_op(op);
-    instr->rv32i->load =
-        (struct rv32i_load){.dest = dest, .addr = addr, .imm = 0};
+    addr = codegen_reg(op->load.addr);
+    offset = 0;
   }
+
+  instr->rv32i->ty = load_ty_for_op(op);
+  instr->rv32i->load =
+      (struct rv32i_load){.dest = dest, .addr = addr, .imm = offset};
 }
 
 static void codegen_store_addr_op(struct codegen_state *state,
@@ -988,25 +1004,37 @@ static void codegen_store_addr_op(struct codegen_state *state,
 
   struct rv32i_reg source = codegen_reg(op->store.value);
 
-  if (op->store.addr->flags & IR_OP_FLAG_CONTAINED) {
-    struct ir_op *addr = op->store.addr;
+  struct rv32i_reg addr;
+  size_t offset;
 
-    simm_t imm;
-    if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-      imm = get_lcl_stack_offset(state, op->store.value, addr->addr.lcl);
+  if (op->store.addr->flags & IR_OP_FLAG_CONTAINED) {
+    struct ir_op *addr_op = op->store.addr;
+
+    if (addr_op->ty == IR_OP_TY_ADDR && addr_op->addr.ty == IR_OP_ADDR_TY_LCL) {
+      addr = STACK_PTR_REG;
+      offset = get_lcl_stack_offset(state, op, addr_op->addr.lcl);
+    } else if (addr_op->ty == IR_OP_TY_ADDR_OFFSET) {
+      struct ir_op *base = addr_op->addr_offset.base;
+
+      offset = addr_op->addr_offset.offset;
+
+      if (base->flags & IR_OP_FLAG_CONTAINED) {
+        addr = STACK_PTR_REG;
+        offset = get_lcl_stack_offset(state, op, base->addr.lcl) + addr_op->addr_offset.offset;
+      } else {
+        addr = codegen_reg(base);
+      }
     } else {
       BUG("can't CONTAIN operand in store_addr node");
     }
-
-    instr->rv32i->ty = store_ty_for_op(op->store.value);
-    instr->rv32i->store = (struct rv32i_store){
-        .source = source, .addr = STACK_PTR_REG, .imm = imm};
   } else {
-    struct rv32i_reg addr = codegen_reg(op->store.addr);
-    instr->rv32i->ty = store_ty_for_op(op->store.value);
-    instr->rv32i->store =
-        (struct rv32i_store){.source = source, .addr = addr, .imm = 0};
+    addr = codegen_reg(op->store.addr);
+    offset = 0;
   }
+
+  instr->rv32i->ty = store_ty_for_op(op->store.value);
+  instr->rv32i->store =
+      (struct rv32i_store){.source = source, .addr = addr, .imm = offset};
 }
 
 static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
@@ -1021,6 +1049,33 @@ static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
                "glb/lcl stores should have been lowered to addr store");
 
   codegen_store_addr_op(state, op);
+}
+
+static void codegen_addr_offset_op(struct codegen_state *state,
+                                   struct ir_op *op) {
+  struct rv32i_reg dest = codegen_reg(op);
+
+  // we could just lower this to add. it is a rather pointless op on rv32i
+
+  DEBUG_ASSERT(!op->addr_offset.index, "rv32i doesn't support index");
+
+  struct ir_op_addr_offset *addr_offset = &op->addr_offset;
+  ssize_t offset = addr_offset->offset;
+
+  struct rv32i_reg base;
+
+  if (addr_offset->base->flags & IR_OP_FLAG_CONTAINED) {
+    DEBUG_ASSERT(addr_offset->base->ty == IR_OP_TY_ADDR &&
+                     addr_offset->base->addr.ty == IR_OP_ADDR_TY_LCL,
+                 "can only contain `addr LCL`");
+
+    base = STACK_PTR_REG;
+    offset += get_lcl_stack_offset(state, NULL, addr_offset->base->addr.lcl);
+  } else {
+    base = codegen_reg(addr_offset->base);
+  }
+
+  codegen_add_imm(state, dest, base, offset);
 }
 
 static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
@@ -1348,6 +1403,10 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     codegen_addr_op(state, op);
     break;
   }
+  case IR_OP_TY_ADDR_OFFSET: {
+    codegen_addr_offset_op(state, op);
+    break;
+  }
   case IR_OP_TY_BR_COND: {
     codegen_br_cond_op(state, op);
     break;
@@ -1411,7 +1470,8 @@ void rv32i_codegen_start(struct codegen_state *state) {
   codegen_prologue(state);
 }
 
-void rv32i_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock) {
+void rv32i_codegen_basicblock(struct codegen_state *state,
+                              struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
   while (stmt) {
@@ -1421,8 +1481,7 @@ void rv32i_codegen_basicblock(struct codegen_state *state, struct ir_basicblock 
   }
 }
 
-void rv32i_codegen_end(UNUSED struct codegen_state *state) {
-}
+void rv32i_codegen_end(UNUSED struct codegen_state *state) {}
 
 static const char *GP_REG_ABI_NAMES[] = {
     "zero",

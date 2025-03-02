@@ -356,7 +356,9 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->load.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    op->load.addr = alloc_contained_ir_op(func, addr, op);
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     // FIXME: this will lower e.g `(i32) load.addr [addr.offset %0 + #7]` which
@@ -392,7 +394,9 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->store.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    op->store.addr = alloc_contained_ir_op(func, addr, op);
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     struct ir_op *base = addr->addr_offset.base;
@@ -666,7 +670,8 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
             // pointer to it
 
             param_info.regs[j] = (struct ir_param_reg){
-                .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j}, .size = hfa_member_size};
+                .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j},
+                .size = hfa_member_size};
 
             vector_push_back(params, &member_ty);
           }
@@ -885,7 +890,8 @@ void aarch64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_ADDR_OFFSET:
               if (op->addr_offset.index &&
-                  (popcntl(op->addr_offset.scale) != 1 || op->addr_offset.scale > 8)) {
+                  (popcntl(op->addr_offset.scale) != 1 ||
+                   op->addr_offset.scale > 8)) {
                 // do mul beforehand and set scale to 1
                 struct ir_op *cnst = insert_before_ir_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
