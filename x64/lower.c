@@ -135,8 +135,6 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
 
   // FIXME: is this correct? does it want the number of _params_ or number of
   // _registers_ in EAX
-  size_t num_variadics =
-      num > func_ty.num_params ? num - func_ty.num_params : 0;
 
   for (size_t i = 0; i < num; i++) {
     const struct ir_var_ty *var_ty;
@@ -311,7 +309,7 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
   struct ir_call_info call_info = {
       .ret = ret_info,
       .stack_size = nsaa,
-      .num_variadics = num_variadics,
+      .num_variadics = nsrn,
       .flags = (func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)
                    ? IR_CALL_INFO_FLAG_NUM_VARIADIC
                    : IR_CALL_INFO_FLAG_NONE,
