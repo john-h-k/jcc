@@ -325,11 +325,11 @@ run_tests() {
       fi
   
       if [ "$result" != "$expected" ]; then
-        send_status fail "$prefix'$file' produced exit code $result, expected $expected" > "$fifo"
+        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(objdumo -d "$output" | awk '{print "  " $0}')${RESET}\n"
       elif [ "$output_result" != "$stdout" ]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
-        send_status fail "$prefix'$file' output mismatch. Got: '$output_result', expected: '$stdout'" '\0' > "$fifo"
+        send_status fail "$prefix'$file' output mismatch. Got: '$output_result', expected: '$stdout'. Build output: \n${RESET}$(objdump -d "$output" | awk '{print "  " $0}')${RESET}\n"
       else
         send_status pass
       fi
