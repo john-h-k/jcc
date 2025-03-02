@@ -792,15 +792,20 @@ static void lower_params(struct ir_func *func) {
         for (size_t j = 0; j < num_reg; j++) {
           struct ir_param_reg reg = param_info.regs[j];
 
+          size_t offset_add;
+
           struct ir_var_ty load_ty;
-          if (field_idx + 1 >= info.num_fields ||
-              info.fields[field_idx + 1].offset - offset >= reg.size) {
+          size_t field_offset = info.fields[field_idx + 1].offset - offset;
+          if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
             // only loading one field, so load the field ty
             size_t field_size =
                 var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
             load_ty = get_var_ty_for_size(reg.reg.ty, field_size);
+
+            offset_add = field_offset;
           } else {
             load_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+            offset_add = reg.size;
           }
 
           struct ir_op *load =
@@ -815,7 +820,7 @@ static void lower_params(struct ir_func *func) {
               .base = addr,
               .offset = offset};
 
-          offset += reg.size;
+          offset += offset_add;
 
           while (field_idx < info.num_fields &&
                  info.fields[field_idx].offset < offset) {
@@ -1013,15 +1018,20 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     for (size_t j = 0; j < param_info.num_regs; j++) {
       struct ir_param_reg reg = param_info.regs[j];
 
+      size_t offset_add;
       struct ir_var_ty store_ty;
-      if (field_idx + 1 >= info.num_fields ||
-          info.fields[field_idx + 1].offset - offset >= reg.size) {
+      size_t field_offset = info.fields[field_idx + 1].offset - offset;
+      if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
         // only storeing one field, so store the field ty
         size_t field_size =
             var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
         store_ty = get_var_ty_for_size(reg.reg.ty, field_size);
+
+        offset_add = field_offset;
       } else {
         store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+
+        offset_add = reg.size;
       }
 
       struct ir_op *mov =
@@ -1037,7 +1047,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       addr_offset->addr_offset =
           (struct ir_op_addr_offset){.base = addr, .offset = offset};
 
-      offset += reg.size;
+      offset += offset_add;
 
       while (field_idx < info.num_fields &&
              info.fields[field_idx].offset < offset) {
@@ -1280,7 +1290,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
       }
 
       mov->reg = param_info->regs[reg_idx++].reg;
-      mov->flags = (arg->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL)) |
+      mov->flags = (arg->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL |
+                                   IR_OP_FLAG_PARAM)) |
                    IR_OP_FLAG_FIXED_REG;
 
       DEBUG_ASSERT(mov->reg.ty != IR_REG_TY_NONE, "fixed reg had TY_NONE");
