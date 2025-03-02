@@ -834,6 +834,8 @@ void aarch64_lower(struct ir_unit *unit) {
                 break;
               }
 
+              DEBUG_ASSERT(!ir_var_ty_is_fp(&op->var_ty), "int-ty cnst but fp var ty");
+
               break;
             }
             case IR_OP_TY_BITFIELD_INSERT:

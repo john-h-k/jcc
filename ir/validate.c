@@ -346,19 +346,19 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
 
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_RET:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_RET, basicblock,
+    VALIDATION_CHECKZ(last && last->ty == IR_OP_TY_RET, basicblock,
                       "IR_BASICBLOCK_TY_RET should end in `ret` op");
     break;
   case IR_BASICBLOCK_TY_SPLIT:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_COND, basicblock,
+    VALIDATION_CHECKZ(last && last->ty == IR_OP_TY_BR_COND, basicblock,
                       "IR_BASICBLOCK_TY_SPLIT should end in `br.cond` op");
     break;
   case IR_BASICBLOCK_TY_MERGE:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR, basicblock,
+    VALIDATION_CHECKZ(last && last->ty == IR_OP_TY_BR, basicblock,
                       "IR_BASICBLOCK_TY_MERGE should end in `br` op");
     break;
   case IR_BASICBLOCK_TY_SWITCH:
-    VALIDATION_CHECKZ(last->ty == IR_OP_TY_BR_SWITCH, basicblock,
+    VALIDATION_CHECKZ(last && last->ty == IR_OP_TY_BR_SWITCH, basicblock,
                       "IR_BASICBLOCK_TY_RET should end in `br.switch` op");
     break;
   }

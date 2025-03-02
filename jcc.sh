@@ -203,7 +203,7 @@ _invoke-subcommand() {
     fi
 }
 
-CALLER_DIR=$(pwd)
+export CALLER_DIR=$(pwd)
 cd "$(dirname "$0")"
 _invoke-subcommand "$@"
 

@@ -215,6 +215,7 @@ static bool is_cnst_ty_integral(enum td_cnst_ty ty) {
   case TD_CNST_TY_SIGNED_LONG_LONG:
   case TD_CNST_TY_UNSIGNED_LONG_LONG:
     return true;
+  case TD_CNST_TY_HALF:
   case TD_CNST_TY_FLOAT:
   case TD_CNST_TY_DOUBLE:
   case TD_CNST_TY_LONG_DOUBLE:
@@ -226,6 +227,7 @@ static bool is_cnst_ty_integral(enum td_cnst_ty ty) {
 
 static bool is_cnst_ty_fp(enum td_cnst_ty ty) {
   switch (ty) {
+  case TD_CNST_TY_HALF:
   case TD_CNST_TY_FLOAT:
   case TD_CNST_TY_DOUBLE:
   case TD_CNST_TY_LONG_DOUBLE:
@@ -2824,6 +2826,10 @@ type_init_declarator(struct typechk *tchk,
   } else {
     entry =
         var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
+
+    if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+      td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty);
+    }
   }
 
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
