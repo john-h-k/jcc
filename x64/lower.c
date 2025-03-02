@@ -133,8 +133,8 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
 
   size_t num = MAX(func_ty.num_params, num_args);
 
-  // FIXME: is this correct? does it want the number of _params_ or number of
-  // _registers_ in EAX
+  // number of xmm _registers_ in EAX
+  // size_t num_ = 0;
 
   for (size_t i = 0; i < num; i++) {
     const struct ir_var_ty *var_ty;
