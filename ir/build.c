@@ -26,7 +26,7 @@ struct ir_jump {
   struct ir_basicblock *basicblock;
 };
 
-enum ir_case_ty { IR_CASE_TY_CASE, IR_CASE_TY_DEFAULT };
+enum ir_case_ty { IR_CASE_TY_NEW_SWITCH,  IR_CASE_TY_CASE, IR_CASE_TY_DEFAULT};
 
 struct ir_case {
   enum ir_case_ty ty;
@@ -1910,6 +1910,9 @@ build_ir_for_switch(struct ir_func_builder *irb,
   struct ir_jump new_loop = {.ty = IR_JUMP_TY_NEW_LOOP};
   vector_push_back(irb->jumps, &new_loop);
 
+  struct ir_case new_switch = {.ty = IR_CASE_TY_NEW_SWITCH};
+  vector_push_back(irb->switch_cases, &new_switch);
+
   struct ir_stmt *ctrl_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
   struct ir_op *ctrl_op =
       build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr);
@@ -1939,6 +1942,8 @@ build_ir_for_switch(struct ir_func_builder *irb,
     struct ir_case *switch_case = vector_pop(irb->switch_cases);
 
     switch (switch_case->ty) {
+    case IR_CASE_TY_NEW_SWITCH:
+      goto jumps;
     case IR_CASE_TY_CASE: {
       vector_push_back(cases, &switch_case->split_case);
       break;
@@ -1948,6 +1953,8 @@ build_ir_for_switch(struct ir_func_builder *irb,
       break;
     }
   }
+
+  jumps:
 
   if (!default_block) {
     default_block = after_body_bb;
@@ -3094,7 +3101,8 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   }
 
   // we may generate empty basicblocks or statements, prune them here
-  ir_prune_basicblocks(builder->func);
+  DEBUG_PRINT_IR(stderr, builder->func);
+  // ir_prune_basicblocks(builder->func);
 
   // may not end in a return, but needs to to be well-formed IR
   struct ir_basicblock *last_bb = builder->func->last;
