@@ -156,7 +156,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
       nsrn++;
       continue;
-    } else if (var_ty_is_integral(var_ty) && info.size <= 4 && ngrn <= 8) {
+    } else if (var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {

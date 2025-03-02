@@ -2,6 +2,8 @@
 
 struct S { float x; double y; };
 
+int printf(const char *, ...);
+
 struct S f(double d) {
     struct S s;
     s.x = d;
