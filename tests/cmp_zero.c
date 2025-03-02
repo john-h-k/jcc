@@ -2,7 +2,7 @@
 // stdin: 10
 
 int scanf(const char *format, ...);
-int pritnf(const char *format, ...);
+int printf(const char *format, ...);
 
 int main() {
   int a;
