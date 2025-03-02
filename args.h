@@ -130,7 +130,7 @@ inline static bool parse_log_level(const char *str, int *value) {
 
   if (strcmp(str, "ir.all") == 0) {
     *value = COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_LOWER_ABI |
-             COMPILE_LOG_FLAGS_OPTS | COMPILE_LOG_FLAGS_REGALLOC |
+             COMPILE_LOG_FLAGS_OPTS | COMPILE_LOG_FLAGS_LOWER /* temp disable regalloc bc it doesn't respect --log-sym | COMPILE_LOG_FLAGS_REGALLOC */ |
              COMPILE_LOG_FLAGS_ELIM_PHI | COMPILE_LOG_FLAGS_CODEGEN_PREPARE;
     return true;
   }

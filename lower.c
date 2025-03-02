@@ -1075,7 +1075,7 @@ static void lower_params_registers(struct ir_func *func) {
 
   struct ir_call_info call_info = func->call_info;
 
-  if (call_info.num_params) {
+  if (call_info.num_params || call_info.ret) {
     struct ir_op *param_op = func->first->first->first;
 
     size_t param_idx = 0;

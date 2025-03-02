@@ -295,6 +295,19 @@ int main(void) {
 
   {
     for (int i = 0; i < 10; i++) {
+      scalar x = randomscalar();
+      if (x < 0.0 || x > 1.0) {
+        fprintf(stderr,
+                "Error: randomscalar failed. Got %f, should be "
+                "in [0,1].\n",
+                x);
+        return 11;
+      }
+    }
+  }
+
+  {
+    for (int i = 0; i < 10; i++) {
       vec3 r = v3random();
       if (v3x(r) < 0.0 || v3x(r) > 1.0 || v3y(r) < 0.0 || v3y(r) > 1.0 ||
           v3z(r) < 0.0 || v3z(r) > 1.0) {
