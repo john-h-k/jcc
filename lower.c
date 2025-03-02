@@ -748,11 +748,6 @@ static void lower_params(struct ir_func *func) {
 
     first_param->flags |= IR_OP_FLAG_PARAM;
     first_param->mov = (struct ir_op_mov){.value = NULL};
-
-    struct ir_op *mov = insert_after_ir_op(func, first_param, IR_OP_TY_MOV,
-                                           first_param->var_ty);
-    mov->mov = (struct ir_op_mov){.value = first_param};
-    first_param = mov;
   }
 
   struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
@@ -955,15 +950,23 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     case IR_PARAM_INFO_TY_POINTER: {
       DEBUG_ASSERT(arg->ty == IR_OP_TY_LOAD, "expected load");
 
-      // FIXME: this needs to copy, but it does not
-
       struct ir_op *addr = build_addr(func, arg);
 
-      struct ir_op *mov =
-          replace_ir_op(func, arg, IR_OP_TY_MOV, IR_VAR_TY_POINTER);
-      mov->mov = (struct ir_op_mov){.value = addr};
+      struct ir_lcl *copy = add_local(func, &arg->var_ty);
 
-      vector_push_back(new_args, &mov);
+      struct ir_op *dest_addr =
+          insert_before_ir_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      dest_addr->addr =
+          (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = copy};
+
+      struct ir_op *mem_copy =
+          insert_before_ir_op(func, op, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
+      mem_copy->mem_copy = (struct ir_op_mem_copy){
+          .dest = dest_addr,
+          .source = addr,
+          .length = var_ty_info(func->unit, &copy->var_ty).size};
+
+      vector_push_back(new_args, &dest_addr);
       break;
     }
     }
@@ -1067,8 +1070,21 @@ static void lower_params_registers(struct ir_func *func) {
     size_t param_idx = 0;
     size_t reg_idx = 0;
 
-    while (param_idx < call_info.num_params) {
-      struct ir_param_info *param_info = &call_info.params[param_idx];
+    bool has_implicit_first =
+        call_info.ret && call_info.ret->ty == IR_PARAM_INFO_TY_POINTER;
+
+    size_t num_params =
+        has_implicit_first ? call_info.num_params + 1 : call_info.num_params;
+
+    while (param_idx < num_params) {
+      struct ir_param_info *param_info;
+
+      if (param_idx == 0 && has_implicit_first) {
+        param_info = call_info.ret;
+      } else {
+        param_info =
+            &call_info.params[has_implicit_first ? param_idx - 1 : param_idx];
+      }
 
       switch (param_info->ty) {
       case IR_PARAM_INFO_TY_REGISTER:
@@ -1199,15 +1215,18 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
   size_t param_idx = 0;
   size_t reg_idx = 0;
 
+  bool has_implicit_first =
+      call_info.ret && call_info.ret->ty == IR_PARAM_INFO_TY_POINTER;
+
   struct ir_op *first = op;
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_param_info *param_info;
 
-    if (param_idx == 0 && call_info.ret &&
-        call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
+    if (param_idx == 0 && has_implicit_first) {
       param_info = call_info.ret;
     } else {
-      param_info = &call_info.params[param_idx];
+      param_info =
+          &call_info.params[has_implicit_first ? param_idx - 1 : param_idx];
     }
 
     struct ir_op *arg = op->call.args[i];
@@ -1237,7 +1256,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
             .dest = dest_addr, .source = addr, .length = info.size};
 
         lower_mem_copy(func, mem_copy);
-        // HACK: relies on `lower_mem_copy` transforming the op into a call (not inserting it later/earlier)
+        // HACK: relies on `lower_mem_copy` transforming the op into a call (not
+        // inserting it later/earlier)
         lower_call_registers(func, mem_copy);
 
         detach_ir_op(func, arg);
@@ -1520,7 +1540,6 @@ void lower(struct ir_unit *unit) {
       // FIXME: phis are not propogated properly
       remove_critical_edges(func);
 
-      DEBUG_PRINT_IR(stderr, func);
       eliminate_redundant_ops(func, ELIMINATE_REDUNDANT_OPS_FLAG_NONE);
     }
     }
