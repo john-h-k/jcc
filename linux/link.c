@@ -113,8 +113,13 @@ enum link_result linux_link_objects(const struct link_args *args) {
   buff[head++] = ' ';
 
   for (size_t i = 0; i < args->num_objects; i++) {
-    buff[head++] = '.';
-    buff[head++] = '/';
+    if (args->objects[i][0] != '/' && args->objects[i][0] != '.') {
+      buff[head++] = '.';
+      buff[head++] = '/';
+    } else {
+      buff[head++] = ' ';
+      buff[head++] = ' ';
+    }
     buff[head++] = '\'';
     strcpy(&buff[head], args->objects[i]);
     head += strlen(args->objects[i]);

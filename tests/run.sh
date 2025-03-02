@@ -33,7 +33,27 @@ help() {
   echo ""
 }
 
+exp_file=""
+all_files=()
 while [[ $# -gt 0 ]]; do
+  path=$( [[ -e "$1" ]] && echo "$1" || echo "$CALLER_DIR/$1" )
+  if [[ -f "$path" || -d "$path" ]]; then
+    exp_file="1"
+
+    echo -e "${BOLD}Adding '$path' to test list"
+
+    if [[ -f "$path" ]]; then
+      all_files+=("$path")
+    elif [[ -d "$path" ]]; then
+      while IFS= read -r file; do
+        all_files+=("$file")
+      done < <(find "$path" -maxdepth 1 -type f -name "*.c")
+    fi
+
+    shift
+    continue
+  fi
+
   case "$1" in
     --help|-h|help)
       help
@@ -42,6 +62,10 @@ while [[ $# -gt 0 ]]; do
     -j|--jobs)
       shift
       num_procs="$1"
+      ;;
+    -n|--number)
+      shift
+      num="$1"
       ;;
     -q|--quiet)
       VERBOSE_LEVEL="0"
@@ -137,10 +161,17 @@ tm="Tue Dec 10 10:04:33 2024"
 fifo=$(mktemp -u)
 mkfifo "$fifo"
 
-all_files=()
-while IFS= read -r file; do
-    all_files+=("$file")
-done < <(find "$(dirname "$0")" -name '*.c' -print | sort)
+if [ -z $exp_file ]; then
+  while IFS= read -r file; do
+      all_files+=("$file")
+  done < <(find "$(dirname "$0")" -name '*.c' -print | sort)
+fi
+
+if ! [ -z $num ]; then
+  # sort alphabetically for reproducability
+  all_files=($(printf "%s\n" "${all_files[@]}" | sort))
+  all_files=("${all_files[@]:0:num}")
+fi
 
 total=0
 for file in "${all_files[@]}"; do
@@ -397,7 +428,7 @@ trap 'clean' EXIT SIGINT INT
 aggregator "${pids[@]}" &
 agg_pid=$!
 
-exec 3>$fifo
+exec 3>$fifo &>/dev/null
 
 for pid in "${pids[@]}"; do
   wait "$pid"

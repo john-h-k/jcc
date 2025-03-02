@@ -593,8 +593,6 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     }
     break;
   case IR_OP_TY_BR: {
-    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_MERGE,
-                     "found `br` but bb wasn't MERGE");
     struct ir_basicblock *bb = op->stmt->basicblock;
     struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE
                                        ? bb->merge.target
@@ -603,8 +601,6 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   }
   case IR_OP_TY_BR_COND:
-    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_SPLIT,
-                     "found `br.cond` but bb wasn't SPLIT");
     fprintf(file, "br.cond ");
     debug_print_op_use(file, irb, op->br_cond.cond);
     fprintf(file, ", TRUE(@%zu), FALSE(@%zu)",
@@ -612,8 +608,6 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
             op->stmt->basicblock->split.false_target->id);
     break;
   case IR_OP_TY_BR_SWITCH:
-    invariant_assert(op->stmt->basicblock->ty == IR_BASICBLOCK_TY_SWITCH,
-                     "found `br.switch` but bb wasn't SWITCH");
     fprintf(file, "br.switch %%%zu, [\n", op->br_switch.value->id);
 
     size_t num_cases = op->stmt->basicblock->switch_case.num_cases;
@@ -710,6 +704,21 @@ prettyprint_begin_visit_basicblock_file(UNUSED_ARG(struct ir_func *irb),
       }
     }
     fprintf(fm->file, " ]");
+  }
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    fprintf(fm->file, " RET");
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    fprintf(fm->file, " SPLIT");
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    fprintf(fm->file, " MERGE");
+    break;
+  case IR_BASICBLOCK_TY_SWITCH:
+    fprintf(fm->file, " SWITCH");
+    break;
   }
 
   fprintf(fm->file, "\n");
@@ -1165,7 +1174,8 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
   }
 }
 
-void debug_print_glb(FILE *file, struct ir_glb *glb,  debug_print_op_callback *cb, void *cb_metadata) {
+void debug_print_glb(FILE *file, struct ir_glb *glb,
+                     debug_print_op_callback *cb, void *cb_metadata) {
   fprintf(file, "GLB(%zu) [", glb->id);
 
   switch (glb->linkage) {

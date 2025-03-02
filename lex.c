@@ -66,6 +66,9 @@ enum lex_create_result lexer_create(struct program *program,
     KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE);
     KEYWORD("restrict", LEX_TOKEN_TY_KW_RESTRICT);
 
+    // TODO: indicate non standard to user
+    KEYWORD("__restrict", LEX_TOKEN_TY_KW_RESTRICT);
+
     KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
     KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
     KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
