@@ -6,11 +6,22 @@
 #include <stdio.h>
 
 enum relocation_ty {
+  // raw pointer, e.g a field, or an x64 movq
   RELOCATION_TY_POINTER,
+
+  // a call
   RELOCATION_TY_CALL,
+
+  // a relocation to a defined symbol which applies to one instruction
   RELOCATION_TY_LOCAL_SINGLE,
+
+  // a relocation to a defined symbol which applies to two instructions
   RELOCATION_TY_LOCAL_PAIR,
+
+  // a relocation to an undefined symbol which applies to one instruction
   RELOCATION_TY_UNDEF_SINGLE,
+
+  // a relocation to an undefined symbol which applies to two instructions
   RELOCATION_TY_UNDEF_PAIR,
 };
 
@@ -173,6 +184,8 @@ typedef void (*target_codegen)(struct codegen_state *state);
 typedef void (*target_codegen_basicblock)(struct codegen_state *state, struct ir_basicblock *basicblock);
 typedef void (*target_codegen)(struct codegen_state *state);
 
+typedef void (*emit_asm)(FILE *file, struct codegen_unit *unit);
+
 typedef struct codegen_entry (*target_codegen_var)(struct codegen_unit *unit, struct ir_glb *glb);
 
 struct codegen_info {
@@ -198,6 +211,7 @@ struct target {
   link_objects link_objects;
   debug_disasm debug_disasm;
   debug_print_codegen debug_print_codegen;
+  emit_asm emit_asm;
 };
 
 #endif

@@ -135,6 +135,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
 
+  // zero init to make freeing easier later
+  *compile_args = (struct compile_args){0};
+
   if (result != PARSE_ARGS_RESULT_SUCCESS) {
     return result;
   }
@@ -146,6 +149,12 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
            "OS_NAME:   %s\n"
            "ARCH_NAME: %s\n",
            JCC_VERSION, argv[0], OS_NAME, ARCH_NAME);
+
+#ifdef JCC_DEFAULT_TARGET
+#define MKSTR_INNER(x) #x
+#define MKSTR(x) MKSTR_INNER(x)
+    printf("JCC_DEFAULT_TARGET: %s\n", MKSTR(JCC_DEFAULT_TARGET));
+#endif
 
     if (args->version) {
       return PARSE_ARGS_RESULT_HELP;
@@ -304,7 +313,7 @@ int main(int argc, char **argv) {
       // FIXME: hacky
       object_file = arena_alloc_strdup(arena, "stdout");
     } else if (compile_args.build_asm_file && !compile_args.output) {
-      object_file = path_replace_ext(arena, source_path, ".s");
+      object_file = path_replace_ext(arena, source_path, "s");
     } else if (target_needs_linking(&compile_args, target) ||
                !compile_args.output) {
       object_file = path_replace_ext(arena, source_path, "o");

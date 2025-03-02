@@ -385,4 +385,6 @@ void rv32i_codegen_end(struct codegen_state *state);
 
 void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit);
 
+void rv32i_emit_asm(FILE *file, struct codegen_unit *unit);
+
 #endif

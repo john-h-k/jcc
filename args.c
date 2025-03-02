@@ -435,6 +435,15 @@ enum parse_args_result parse_args(int argc, char **argv,
 
 #undef ARG_OPT
 
+#ifdef JCC_DEFAULT_TARGET
+#define MKSTR_INNER(x) #x
+#define MKSTR(x) MKSTR_INNER(x)
+  if (parsed->target == 0) {
+    invariant_assert(parse_target(MKSTR(JCC_DEFAULT_TARGET), (int *)&parsed->target), "JCC_DEFAULT_TARGET '%s' was invalid", MKSTR(JCC_DEFAULT_TARGET));
+  }
+#undef MKSTR
+#endif
+
   size_t num_values = vector_length(values);
 
   parsed->values = nonnull_malloc(sizeof(*parsed->values) * num_values);

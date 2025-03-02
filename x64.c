@@ -33,7 +33,8 @@ const struct target X64_MACOS_TARGET = {
      .codegen_end = x64_codegen_end,
    },
     x64_emit, write_macho, macos_link_objects, objdump_debug_disasm,
-    x64_debug_print_codegen};
+    x64_debug_print_codegen,
+NULL};
 
 const struct target X64_LINUX_TARGET = {
     TARGET_ID_X64_LINUX,
@@ -59,4 +60,4 @@ const struct target X64_LINUX_TARGET = {
      .codegen_end = x64_codegen_end,
    },
     x64_emit, write_elf, linux_link_objects, objdump_debug_disasm,
-    x64_debug_print_codegen};
+    x64_debug_print_codegen, NULL};
