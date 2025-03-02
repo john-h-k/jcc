@@ -43,10 +43,10 @@ while [[ $# -gt 0 ]]; do
       shift
       num_procs="$1"
       ;;
-    --quiet)
+    -q|--quiet)
       VERBOSE_LEVEL="0"
       ;;
-    --verbose)
+    -v|--verbose)
       VERBOSE_LEVEL="2"
       ;;
     --arg-group)
@@ -195,10 +195,19 @@ aggregator() {
 
     completed=$((completed + 1))
 
+    if [ $VERBOSE_LEVEL -eq "1" ]; then
+      printf "\r"
+    fi
+  
     if [ $VERBOSE_LEVEL -ge "1" ]; then
-      printf "${BOLD}\rCompleted %${pad}d/%d ($tests tests, $num_groups arg groups)    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
+      printf "${BOLD}Completed %${pad}d/%d ($tests tests, $num_groups arg groups)    ${BOLDGREEN}Pass: %${pad}d  ${BOLDRED}Fail: %${pad}d  ${BOLDYELLOW}Skip: %${pad}d${RESET}" \
         "$completed" "$total" "$passed" "$failed" "$skipped"
     fi
+
+    if [ $VERBOSE_LEVEL -gt "1" ]; then
+      printf "\n"
+    fi
+  
   done < "$fifo"
 
   echo ""
@@ -278,10 +287,6 @@ run_tests() {
       }
 
       build() {
-        if [ $VERBOSE_LEVEL -ge "2" ]; then
-          echo -e "\n${BOLD} Running 'jcc " "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" "'${RESET}\n"
-        fi
-
         ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
         return $?
       }
@@ -315,17 +320,25 @@ run_tests() {
       stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
       [ -z "$expected" ] && expected="0"
 
+      if [ "$VERBOSE_LEVEL" -ge "2" ]; then
+        echo -e "Compiling files '${files[@]}' with 'jcc " "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}" "'${RESET}\n"
+      fi
+
       if ! build_msg=$(build 2>&1); then
         send_status fail "$prefix'$file' failed to compile. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
         continue
       fi
 
+      if [ $VERBOSE_LEVEL -ge "2" ]; then
+        echo -e "${BOLD}Running output...${RESET}"
+      fi
+
       # supress echo stderr because otherwise we get spurious broken pipe errors
       if [ -z "$RUNNER" ]; then
-        output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout 3s ./"$output" 2>/dev/null)
         result=$?
       else
-        output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout 3s "$RUNNER" "$output" 2>/dev/null)
         result=$?
       fi
   
@@ -342,7 +355,12 @@ run_tests() {
   done
 }
 
-printf "${BOLD}Using %d processes...${RESET}\n" $num_procs
+if [ $VERBOSE_LEVEL -ge "2" ]; then
+  num_procs=1
+  printf "${BOLD}Using 1 process due to '-v|--verbose'...${RESET}\n"
+else
+  printf "${BOLD}Using %d processes...${RESET}\n" $num_procs
+fi
 
 pids=()
 tmps=()
