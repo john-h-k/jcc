@@ -23,17 +23,6 @@ help() {
   exit
 }
 
-config() {
-    mkdir -p build
-    cd build
-
-    cmake -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_BUILD_TYPE=$mode ..
-
-    echo -e "${BOLD}Config complete${RESET}"
-
-    cd - > /dev/null
-}
-
 build() {
     mode=$(get_mode "$1")
     mode="${mode:-Debug}"
@@ -42,8 +31,7 @@ build() {
 
     mkdir -p build
     cd build
-    if ! cmake --build . >/dev/null
-    then
+    if ! (cmake -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
