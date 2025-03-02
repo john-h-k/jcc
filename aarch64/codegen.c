@@ -2864,7 +2864,7 @@ static void debug_print_fma(FILE *file, const struct aarch64_fma *fma) {
                   fma->rhs, fma->addsub);
 }
 
-static void debug_print_instr(FILE *file,
+static void print_instr(FILE *file,
                               UNUSED_ARG(const struct codegen_function *func),
                               const struct instr *instr) {
 
@@ -3250,7 +3250,7 @@ void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
       long pos = ftell(file);
 
       fprintf(file, "%04zu: ", offset++);
-      debug_print_instr(file, func, instr);
+      print_instr(file, func, instr);
 
       if (supports_pos && ftell(file) == pos) {
         // no line was written

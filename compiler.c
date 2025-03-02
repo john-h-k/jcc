@@ -161,8 +161,8 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
   return COMPILE_RESULT_SUCCESS;
 }
 
-static enum compile_result
-compile_stage_lower_abi(struct compiler *compiler, struct ir_unit *ir) {
+static enum compile_result compile_stage_lower_abi(struct compiler *compiler,
+                                                   struct ir_unit *ir) {
   lower_abi(ir);
 
   if (log_enabled()) {
@@ -251,8 +251,8 @@ static enum compile_result compile_stage_regalloc(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
-static enum compile_result
-compile_stage_elim_phi(struct compiler *compiler, struct ir_unit *ir) {
+static enum compile_result compile_stage_elim_phi(struct compiler *compiler,
+                                                  struct ir_unit *ir) {
 
   struct ir_glb *glb = ir->first_global;
 
@@ -285,8 +285,7 @@ compile_stage_elim_phi(struct compiler *compiler, struct ir_unit *ir) {
 }
 
 static enum compile_result
-compile_stage_codegen_prepare(struct compiler *compiler,
-                              struct ir_unit *ir) {
+compile_stage_codegen_prepare(struct compiler *compiler, struct ir_unit *ir) {
   struct ir_glb *glb = ir->first_global;
 
   while (glb) {
@@ -361,7 +360,20 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
   }
 
   if (compiler->args.build_asm_file) {
-    if (target->debug_print_codegen) {
+    if (target->emit_asm) {
+      FILE *file = fopen(compiler->output, "w");
+
+      if (!file) {
+        return COMPILE_RESULT_BAD_FILE;
+      }
+
+      target->emit_asm(file, *codegen_unit);
+
+      fclose(file);
+
+      return COMPILE_RESULT_SUCCESS;
+    } else if (target->debug_print_codegen) {
+      warn("using debug codegen output; not valid assembler input");
       FILE *file = fopen(compiler->output, "w");
 
       if (!file) {

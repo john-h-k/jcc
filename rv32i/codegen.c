@@ -981,7 +981,8 @@ static void codegen_load_addr_op(struct codegen_state *state,
 
       if (base->flags & IR_OP_FLAG_CONTAINED) {
         addr = STACK_PTR_REG;
-        offset = get_lcl_stack_offset(state, op, base->addr.lcl) + addr_op->addr_offset.offset;
+        offset = get_lcl_stack_offset(state, op, base->addr.lcl) +
+                 addr_op->addr_offset.offset;
       } else {
         addr = codegen_reg(base);
       }
@@ -1020,7 +1021,8 @@ static void codegen_store_addr_op(struct codegen_state *state,
 
       if (base->flags & IR_OP_FLAG_CONTAINED) {
         addr = STACK_PTR_REG;
-        offset = get_lcl_stack_offset(state, op, base->addr.lcl) + addr_op->addr_offset.offset;
+        offset = get_lcl_stack_offset(state, op, base->addr.lcl) +
+                 addr_op->addr_offset.offset;
       } else {
         addr = codegen_reg(base);
       }
@@ -1546,15 +1548,20 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
 
       format += 3;
     } else if (strncmp(format, "target", 6) == 0) {
+      struct instr *instr = va_arg(list, struct instr *);
       struct rv32i_target target = va_arg(list, struct rv32i_target);
+
       switch (target.ty) {
       case RV32I_TARGET_TY_OFFSET:
-        fprintf(file, "%lld", target.offset);
+        fprintf(file, ".%s%lld", target.offset > 0 ? "+" : "", target.offset);
         break;
-      case RV32I_TARGET_TY_BASICBLOCK:
-        fprintf(file, "%zu ; (BB=@%zu)", target.basicblock->first_instr->id * 4,
+      case RV32I_TARGET_TY_BASICBLOCK: {
+        ssize_t offset = 4 * ((ssize_t)target.basicblock->first_instr->id -
+                              (ssize_t)instr->id);
+        fprintf(file, ".%s%zd  /* (BB=@%zu) */", offset > 0 ? "+" : "", offset,
                 target.basicblock->id);
         break;
+      }
       case RV32I_TARGET_TY_SYMBOL:
         fprintf(file, "<%s>", target.symbol->name);
         break;
@@ -1619,8 +1626,9 @@ static void debug_print_jalr(const struct codegen_debug_state *state,
 }
 
 static void debug_print_jal(const struct codegen_debug_state *state,
+                            const struct instr *instr,
                             const struct rv32i_jal *jal) {
-  codegen_fprintf(state, " %reg, %target", jal->ret_addr, jal->target);
+  codegen_fprintf(state, " %reg, %target", jal->ret_addr, instr, jal->target);
 }
 
 static void debug_print_load(const struct codegen_debug_state *state,
@@ -1636,27 +1644,117 @@ static void debug_print_store(const struct codegen_debug_state *state,
 }
 
 static void debug_print_conditional_branch(
-    const struct codegen_debug_state *state,
+    const struct codegen_debug_state *state, const struct instr *instr,
     const struct rv32i_conditional_branch *conditional_branch) {
   codegen_fprintf(state, " %reg, %reg, %target", conditional_branch->lhs,
-                  conditional_branch->rhs, conditional_branch->target);
+                  conditional_branch->rhs, instr, conditional_branch->target);
 }
 
-static void debug_print_instr(const struct codegen_debug_state *state,
-                              const struct instr *instr) {
+static struct relocation *get_instr_reloc(const struct instr *instr) {
+  if (instr->reloc) {
+    return instr->reloc;
+  }
+
+  if (!instr->pred || !instr->pred->reloc) {
+    return NULL;
+  }
+
+  struct relocation *reloc = instr->pred->reloc;
+
+  switch (reloc->ty) {
+  case RELOCATION_TY_POINTER:
+  case RELOCATION_TY_LOCAL_SINGLE:
+  case RELOCATION_TY_UNDEF_SINGLE:
+    return NULL;
+  case RELOCATION_TY_CALL:
+    return instr->rv32i->ty == RV32I_INSTR_TY_JALR && instr->pred->rv32i->ty == RV32I_INSTR_TY_AUIPC ? reloc : NULL;
+  case RELOCATION_TY_LOCAL_PAIR:
+  case RELOCATION_TY_UNDEF_PAIR:
+    return reloc;
+  }
+}
+
+static const char *get_reloc_symbol(const struct codegen_debug_state *state,
+                                    const struct relocation *reloc) {
+  return state->func->unit->entries[reloc->symbol_index].name;
+}
+
+static void print_instr(const struct codegen_debug_state *state,
+                        const struct instr *instr) {
 
   FILE *file = state->file;
 
   switch (instr->rv32i->ty) {
+  case RV32I_INSTR_TY_LUI: {
+    struct relocation *reloc = instr->reloc;
+
+    struct rv32i_u *lui = &instr->rv32i->lui;
+    if (reloc) {
+      codegen_fprintf(state, "lui %reg, %%hi(%s+%imm)", lui->dest,
+                      get_reloc_symbol(state, reloc), lui->imm);
+
+    } else {
+      fprintf(file, "lui");
+      debug_print_lui(state, lui);
+    }
+    break;
+  }
+  case RV32I_INSTR_TY_AUIPC: {
+    struct relocation *reloc = instr->reloc;
+
+    struct rv32i_u *auipc = &instr->rv32i->auipc;
+    if (reloc) {
+      codegen_fprintf(state, "%imm: auipc %reg, %%pcrel_hi(%s+%imm)", instr->id,
+                      auipc->dest, get_reloc_symbol(state, reloc), auipc->imm);
+    } else {
+      fprintf(file, "auipc");
+      debug_print_lui(state, auipc);
+    }
+    break;
+  }
   case RV32I_INSTR_TY_ADDI: {
+    struct relocation *reloc = get_instr_reloc(instr);
+
     struct rv32i_op_imm *addi = &instr->rv32i->addi;
-    if (addi->imm == 0) {
+    if (reloc) {
+      codegen_fprintf(state, "addi %reg, %reg, %%lo(%s+%imm)", addi->dest,
+                      addi->source, get_reloc_symbol(state, reloc), addi->imm);
+
+    } else if (addi->imm == 0) {
       codegen_fprintf(state, "mv %reg, %reg", addi->dest, addi->source);
     } else {
       fprintf(file, "addi");
       debug_print_op_imm(state, addi);
     }
 
+    break;
+  }
+  case RV32I_INSTR_TY_JAL: {
+    struct relocation *reloc = get_instr_reloc(instr);
+
+    struct rv32i_jal *jal = &instr->rv32i->jal;
+
+    if (reloc) {
+      codegen_fprintf(state, "jal %reg, %s", jal->ret_addr,
+                      get_reloc_symbol(state, reloc));
+    } else {
+      fprintf(file, "jal");
+      debug_print_jal(state, instr, jal);
+    }
+    break;
+  }
+  case RV32I_INSTR_TY_JALR: {
+    struct relocation *reloc = get_instr_reloc(instr);
+
+    struct rv32i_jalr *jalr = &instr->rv32i->jalr;
+
+    if (reloc) {
+      codegen_fprintf(state, "jalr %reg, %reg, %%pcrel_lo(%immb)",
+                      jalr->ret_addr, jalr->target, instr->pred->id);
+    } else {
+      fprintf(file, "jalr");
+      debug_print_jalr(state, jalr);
+    }
     break;
   }
   case RV32I_INSTR_TY_XORI: {
@@ -1705,18 +1803,6 @@ static void debug_print_instr(const struct codegen_debug_state *state,
     struct rv32i_op *remu = &instr->rv32i->remu;
     fprintf(file, "remu");
     debug_print_op(state, remu);
-    break;
-  }
-  case RV32I_INSTR_TY_LUI: {
-    struct rv32i_u *lui = &instr->rv32i->lui;
-    fprintf(file, "lui");
-    debug_print_lui(state, lui);
-    break;
-  }
-  case RV32I_INSTR_TY_AUIPC: {
-    struct rv32i_u *auipc = &instr->rv32i->auipc;
-    fprintf(file, "auipc");
-    debug_print_lui(state, auipc);
     break;
   }
   case RV32I_INSTR_TY_SB: {
@@ -1791,52 +1877,40 @@ static void debug_print_instr(const struct codegen_debug_state *state,
     debug_print_load(state, fld);
     break;
   }
-  case RV32I_INSTR_TY_JAL: {
-    struct rv32i_jal *jal = &instr->rv32i->jal;
-    fprintf(file, "jal");
-    debug_print_jal(state, jal);
-    break;
-  }
-  case RV32I_INSTR_TY_JALR: {
-    struct rv32i_jalr *jalr = &instr->rv32i->jalr;
-    fprintf(file, "jalr");
-    debug_print_jalr(state, jalr);
-    break;
-  }
   case RV32I_INSTR_TY_BEQ: {
     struct rv32i_conditional_branch *beq = &instr->rv32i->beq;
     fprintf(file, "beq");
-    debug_print_conditional_branch(state, beq);
+    debug_print_conditional_branch(state, instr, beq);
     break;
   }
   case RV32I_INSTR_TY_BNE: {
     struct rv32i_conditional_branch *bne = &instr->rv32i->bne;
     fprintf(file, "bne");
-    debug_print_conditional_branch(state, bne);
+    debug_print_conditional_branch(state, instr, bne);
     break;
   }
   case RV32I_INSTR_TY_BLT: {
     struct rv32i_conditional_branch *blt = &instr->rv32i->blt;
     fprintf(file, "blt");
-    debug_print_conditional_branch(state, blt);
+    debug_print_conditional_branch(state, instr, blt);
     break;
   }
   case RV32I_INSTR_TY_BGE: {
     struct rv32i_conditional_branch *bge = &instr->rv32i->bge;
     fprintf(file, "bge");
-    debug_print_conditional_branch(state, bge);
+    debug_print_conditional_branch(state, instr, bge);
     break;
   }
   case RV32I_INSTR_TY_BLTU: {
     struct rv32i_conditional_branch *bltu = &instr->rv32i->bltu;
     fprintf(file, "bltu");
-    debug_print_conditional_branch(state, bltu);
+    debug_print_conditional_branch(state, instr, bltu);
     break;
   }
   case RV32I_INSTR_TY_BGEU: {
     struct rv32i_conditional_branch *bgeu = &instr->rv32i->bgeu;
     fprintf(file, "bgeu");
-    debug_print_conditional_branch(state, bgeu);
+    debug_print_conditional_branch(state, instr, bgeu);
     break;
   }
   case RV32I_INSTR_TY_OR: {
@@ -1878,14 +1952,15 @@ static void debug_print_instr(const struct codegen_debug_state *state,
   case RV32I_INSTR_TY_FMV_S: {
     struct rv32i_op_mov *fmv = &instr->rv32i->fmv;
 
+    // old names but seems the langproc assembler wants them
     switch (fmv->source.ty) {
     case RV32I_REG_TY_NONE:
       BUG("none dest");
     case RV32I_REG_TY_W:
-      fprintf(file, "fmv.w.s");
+      fprintf(file, "fmv.s.x");
       break;
     case RV32I_REG_TY_F:
-      fprintf(file, "fmv.s.w");
+      fprintf(file, "fmv.x.s");
       break;
     }
 
@@ -2288,10 +2363,71 @@ void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
           .file = file, .func = func, .instr = instr};
 
       fprintf(file, "%04zu: ", offset++ * 4);
-      debug_print_instr(&state, instr);
+      print_instr(&state, instr);
       fprintf(file, "\n");
 
       instr = instr->succ;
+    }
+
+    fprintf(file, "\n");
+  }
+}
+
+void rv32i_emit_asm(FILE *file, struct codegen_unit *unit) {
+  DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
+
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    struct codegen_entry *entry = &unit->entries[i];
+
+    switch (entry->ty) {
+    case CODEGEN_ENTRY_TY_FUNC: {
+      struct codegen_function *func = &entry->func;
+
+      fprintf(file,
+              ".text\n"
+              ".globl %s\n" // FIXME: don't emit for private syms
+              ".align 2\n"
+              ".type	%s, @function\n",
+              entry->name, entry->name);
+      fprintf(file, "\n%s:\n", entry->name);
+
+      struct instr *instr = func->first;
+      while (instr) {
+        struct codegen_debug_state state = {
+            .file = file, .func = func, .instr = instr};
+
+        fprintf(file, "        ");
+        print_instr(&state, instr);
+        fprintf(file, "\n");
+
+        instr = instr->succ;
+      }
+
+      break;
+    }
+    case CODEGEN_ENTRY_TY_STRING: {
+      // FIXME: escape
+      fprintf(file, "\n%s:\n", entry->name);
+      fprintf(file, "        .string ");
+      fprint_str(file, entry->str);
+      break;
+    }
+    case CODEGEN_ENTRY_TY_CONST_DATA:
+    case CODEGEN_ENTRY_TY_DATA:
+      // FIXME: escape
+      fprintf(file, "\n%s:\n", entry->name);
+      fprintf(file, "        .byte ");
+      for (size_t j = 0; j < entry->data.len_data; j++) {
+        fprintf(file, "%d", ((char *)entry->data.data)[j]);
+
+        if (j + 1 != entry->data.len_data) {
+          fprintf(file, ", ");
+        }
+      }
+      break;
+    case CODEGEN_ENTRY_TY_DECL: {
+      continue;
+    }
     }
 
     fprintf(file, "\n");

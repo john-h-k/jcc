@@ -41,7 +41,7 @@ const struct target AARCH64_MACOS_TARGET = {
     write_macho,
     macos_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen};
+    aarch64_debug_print_codegen, NULL};
 
 const struct target AARCH64_LINUX_TARGET = {
     TARGET_ID_AARCH64_LINUX,
@@ -74,4 +74,4 @@ const struct target AARCH64_LINUX_TARGET = {
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen};
+    aarch64_debug_print_codegen, NULL};

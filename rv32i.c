@@ -37,4 +37,5 @@ const struct target RV32I_LINUX_TARGET = {
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    rv32i_debug_print_codegen};
+    rv32i_debug_print_codegen,
+  rv32i_emit_asm};
