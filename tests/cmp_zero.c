@@ -2,16 +2,14 @@
 // stdin: 10
 
 int scanf(const char *format, ...);
-int printf(const char *format, ...);
 
 int main() {
   int a;
-  // scanf("%d", &a);
-  printf("%p", &a);
+  scanf("%d", &a);
 
-  // if (a == 0) {
-  //   return 1;
-  // } else {
-  //   return 0;
-  // }
+  if (a == 0) {
+    return 1;
+  } else {
+    return 0;
+  }
 }
