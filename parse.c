@@ -1864,10 +1864,17 @@ static bool parse_declaration(struct parser *parser,
   struct text_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &declaration->specifier_list);
+
+  if (!declaration->specifier_list.num_decl_specifiers) {
+    // need to back out early else parser will try and parse things like function calls as types
+
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
   parse_init_declarator_list(parser, &declaration->declarator_list);
 
-  if (!declaration->specifier_list.num_decl_specifiers ||
-      !parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
+  if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2317,6 +2324,13 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
+  struct ast_declaration declaration;
+  if (parse_declaration(parser, &declaration)) {
+    stmt->ty = AST_STMT_TY_DECLARATION;
+    stmt->declaration = declaration;
+    return true;
+  }
+
   struct ast_labeledstmt labeled_stmt;
   if (parse_labeledstmt(parser, &labeled_stmt)) {
     stmt->ty = AST_STMT_TY_LABELED;
@@ -2358,13 +2372,6 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     stmt->expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
     stmt->expr.compound_expr = compound_expr;
 
-    return true;
-  }
-
-  struct ast_declaration declaration;
-  if (parse_declaration(parser, &declaration)) {
-    stmt->ty = AST_STMT_TY_DECLARATION;
-    stmt->declaration = declaration;
     return true;
   }
 

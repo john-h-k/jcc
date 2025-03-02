@@ -2410,9 +2410,7 @@ struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op) {
     op->flags |= IR_OP_FLAG_SPILLED;
 
     struct ir_op *store;
-    if (op->ty == IR_OP_TY_PHI) {
-      // FIXME: phis should be in their own statement!
-
+    if (op->ty == IR_OP_TY_PHI || (op->ty == IR_OP_TY_MOV && (op->flags & IR_OP_FLAG_PARAM))) {
       struct ir_stmt *succ = op->stmt->succ;
       DEBUG_ASSERT(!succ || !succ->first || succ->first->ty != IR_OP_TY_PHI,
                    "expected all phi to be in same stmt");
