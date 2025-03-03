@@ -49,6 +49,7 @@ set(
   opts/cnst_fold.c
   opts/instr_comb.c
   opts/promote.c
+  opts/inline.c
 
   aarch64.c
   aarch64/codegen.c
