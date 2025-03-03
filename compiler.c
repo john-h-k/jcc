@@ -479,7 +479,7 @@ enum compile_result compile(struct compiler *compiler) {
 
   COMPILER_STAGE(IR, ir, target, &typechk_result, &ir);
 
-  COMPILER_STAGE(INLINE, inline, inline);
+  COMPILER_STAGE(INLINE, inline, ir);
 
   // lower ABI happens before opts, and handles transforming calls into their
   // actual types (e.g large structs to pointers) we do this early because it
