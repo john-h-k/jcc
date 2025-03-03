@@ -432,7 +432,10 @@ static inline void fprint_str(FILE *file, const char *input, size_t len) {
   PRINT_STR(char ch = input[i++],,);
 }
 
+// this takes BYTE length of string because thats the info we have easiest access to throughout most of frontend
 static inline void fprint_wstr(FILE *file, const char *input, size_t len) {
+  DEBUG_ASSERT(len % 4 == 0, "expected len to be mod 4 for wstr");
+
   PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i += sizeof(ch),w,L);
 }
 

@@ -20,9 +20,50 @@ help() {
   echo "    test-all    Run tests with all optimisation levels"
   echo "    format      Format codebase"
   echo "    layout      Show code distribution"
+  echo "    find-unused Finds symbols that can be made static"
   echo ""
 
   exit
+}
+
+find-unused() {
+    OBJ_DIR=build/CMakeFiles/jcc.dir
+
+    globals=""
+    used=""
+
+    # we look for unused symbols _not in header_
+    # which probably should be marked `static`
+
+    for obj_file in "$OBJ_DIR"/**/*.o; do
+        [ -e "$obj_file" ] || continue
+
+        source_file="${obj_file#"$OBJ_DIR/"}"
+        source_file="${source_file%.o}"
+        source_file="${source_file%.c}.h"
+
+        if ! [ -f "$source_file" ]; then
+            continue
+        fi
+
+        # remove symbols in headers, which are intentionally non-static
+        while read -r symbol; do
+            unmangled="${symbol#_}"
+
+            if ! grep -qw "$unmangled" "$source_file"; then
+                globals+="$symbol"$'\n'
+            fi
+        done < <(nm -g "$obj_file" 2>/dev/null | awk '{print $3}')
+
+        used+="$(nm -u "$obj_file" 2>/dev/null)"$'\n'
+    done
+
+    globals=$(echo "$globals" | sort -u)
+    used=$(echo "$used" | sort -u)
+
+    echo -e "${BOLDYELLOW}Unused symbols:${RESET}"
+    comm -23 <(echo "$globals") <(echo "$used")
+    echo ""
 }
 
 layout() {
