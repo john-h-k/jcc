@@ -157,7 +157,8 @@ static const char *process_raw_string(const struct lexer *lexer,
   const char *text = token->text;
   size_t len = text_span_len(&token->span);
 
-  struct vector *buff = vector_create(sizeof(char));
+  bool is_wide = token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL || token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
+  struct vector *buff = vector_create(is_wide ? sizeof(int32_t) : sizeof(char));
 
   char end_char = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                    token->ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
@@ -173,10 +174,17 @@ static const char *process_raw_string(const struct lexer *lexer,
   for (size_t i = str_start; i < len && !(!char_escaped && text[i] == end_char);
        i++) {
     if (char_escaped) {
+  #define PUSH_CHAR(ch) \
+  if (is_wide) { \
+    int32_t pc = ch;                                                              \
+    vector_push_back(buff, &pc);                                                \
+  } else { \
+    char pc = (char)ch;                                                              \
+    vector_push_back(buff, &pc);                                                \
+  }
 #define ADD_ESCAPED(ch, esc)                                                   \
   case ch: {                                                                   \
-    char c = esc;                                                              \
-    vector_push_back(buff, &c);                                                \
+    PUSH_CHAR(esc); \
     break;                                                                     \
   }
 
@@ -201,7 +209,7 @@ static const char *process_raw_string(const struct lexer *lexer,
         }
 
         unsigned char value = (unsigned char)strtoul(oct_buff, NULL, 8);
-        vector_push_back(buff, &value);
+        PUSH_CHAR(value);
       } else if (text[i] == 'u') {
         // FIXME: C23 allows arbitrary num digits, not just 4
         char u_buff[5] = {0};
@@ -210,9 +218,11 @@ static const char *process_raw_string(const struct lexer *lexer,
 
         unsigned long codepoint = strtoul(u_buff, NULL, 16);
 
-        if (codepoint <= 0x7F) {
+        if (is_wide) {
+          PUSH_CHAR(codepoint);
+        } else if (codepoint <= 0x7F) {
           char c = codepoint & 0x7F;
-          vector_push_back(buff, &c);
+          PUSH_CHAR(c);
         } else if (codepoint <= 0x7FF) {
           char c[2] = {(char)(0xC0 | ((codepoint >> 6) & 0x1F)),
                        (char)(0x80 | (codepoint & 0x3F))};
@@ -235,7 +245,7 @@ static const char *process_raw_string(const struct lexer *lexer,
         i += 2;
 
         unsigned char value = (unsigned char)strtoul(x_buff, NULL, 16);
-        vector_push_back(buff, &value);
+        PUSH_CHAR(value);
       } else {
         switch (text[i]) {
           ADD_ESCAPED('0', '\0')
@@ -260,20 +270,19 @@ static const char *process_raw_string(const struct lexer *lexer,
 
 #undef ADD_ESCAPED
     } else if (text[i] != '\\') {
-      vector_push_back(buff, &text[i]);
+      PUSH_CHAR(text[i]);
     }
 
     // next char is escaped if this char is a non-escaped backslash
     char_escaped = !char_escaped && text[i] == '\\';
   }
 
-  *str_len = vector_length(buff);
+  *str_len = vector_byte_size(buff);
 
-  char null = 0;
-  vector_push_back(buff, &null);
+  PUSH_CHAR(0);
 
   // can't strdup because potential null chars
-  char *value = arena_alloc(lexer->arena, vector_length(buff));
+  char *value = arena_alloc(lexer->arena, vector_byte_size(buff));
   vector_copy_to(buff, value);
   vector_free(&buff);
 

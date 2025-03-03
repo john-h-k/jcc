@@ -167,9 +167,18 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     case IR_VAR_VALUE_TY_INT:
       memcpy(data, &value->int_value, sizeof(void *));
       break;
-    case IR_VAR_VALUE_TY_STR:
-      memcpy(data, value->str_value.value, value->str_value.len + 1);
+    case IR_VAR_VALUE_TY_STR: {
+      struct ir_var_ty var_ty = value->var_ty;
+      DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY, "expected IR_VAR_VALUE_TY_STR to be an array");
+
+      struct ir_var_ty ch_ty = *var_ty.array.underlying;
+
+      // can't copy whole array as the string may be shorter and part of it
+      // so copy sizeof(ch) * num_chr
+      size_t len = value->str_value.len * ir_var_ty_info(iru, &ch_ty).size;
+      memcpy(data, value->str_value.value, len);
       break;
+    }
     case IR_VAR_VALUE_TY_VALUE_LIST:
       for (size_t i = 0; i < value->value_list.num_values; i++) {
         size_t value_offset = value->value_list.offsets[i];
@@ -358,7 +367,7 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
 
         switch (glb->var->ty) {
         case IR_VAR_TY_STRING_LITERAL: {
-          size_t len = glb->var->value.str_value.len + 1;
+          size_t len = ir_var_ty_info(unit, &glb->var->value.var_ty).size;
           char *data = arena_alloc(unit->arena, len);
           memcpy(data, glb->var->value.str_value.value, len);
 

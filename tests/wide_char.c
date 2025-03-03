@@ -3,5 +3,7 @@
 int main() {
   int c = L'a';
 
-  return c;
+  const int *w = L"_a";
+
+  return (c + w[1]) / 2;
 }

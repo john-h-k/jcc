@@ -1990,13 +1990,22 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     // FIXME: lifetimes
     td_cnst.ty = TD_CNST_TY_STR_LITERAL;
     td_cnst.str_value = (struct td_cnst_str){
-      .value = cnst->str_value.value,
-      .len = cnst->str_value.len,
+        .value = cnst->str_value.value,
+        .len = cnst->str_value.len,
     };
     var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    TODO("wide str");
+    td_cnst.ty = TD_CNST_TY_WIDE_STR_LITERAL;
+    td_cnst.str_value = (struct td_cnst_str){
+        .value = cnst->str_value.value,
+        .len = cnst->str_value.len,
+    };
+    var_ty = (struct td_var_ty){
+        .ty = TD_VAR_TY_TY_POINTER,
+        .type_qualifiers = TD_TYPE_QUALIFIER_FLAG_CONST,
+        .pointer = {.underlying = &TD_VAR_TY_WELL_KNOWN_SIGNED_INT}};
+    break;
   }
 
 #undef CNST_TY_ENTRY
@@ -2646,7 +2655,7 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
 }
 
 TODO_FUNC(static struct td_expr type_zero_expr(struct typechk *tchk,
-                                     const struct td_var_ty *var_ty))
+                                               const struct td_var_ty *var_ty))
 
 static struct td_expr
 type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
@@ -2697,7 +2706,9 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
 
   struct vector *inits = vector_create(sizeof(struct td_init_list_init));
 
-  size_t num_inits = top ? init_list->num_inits : MIN(init_list->num_inits, td_num_init_fields(var_ty));
+  size_t num_inits =
+      top ? init_list->num_inits
+          : MIN(init_list->num_inits, td_num_init_fields(var_ty));
 
   size_t field_index = 0;
   for (size_t i = start_idx; i < start_idx + num_inits; i++) {
@@ -3198,10 +3209,14 @@ DEBUG_FUNC(cnst, cnst) {
     TD_PRINT("CONSTANT '%llu'", cnst->int_value);
   } else if (is_cnst_ty_fp(cnst->ty)) {
     TD_PRINT("CONSTANT '%Lf'", cnst->flt_value);
-  } else {
-    // must be string literal for now
+  } else if (cnst->ty == TD_CNST_TY_STR_LITERAL) {
     TD_PRINT_SAMELINE_Z("CONSTANT ");
     fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
+  } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+    TD_PRINT_SAMELINE_Z("CONSTANT ");
+    fprint_wstr(stderr, cnst->str_value.value, cnst->str_value.len);
+  } else {
+    BUG("dont know how to print cnst");
   }
 }
 

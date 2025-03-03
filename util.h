@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wctype.h>
 
 typedef ptrdiff_t ssize_t;
 
@@ -372,58 +373,69 @@ static inline void *nonnull_realloc(void *p, size_t size) {
   return ptr;
 }
 
+#define PRINT_STR(get_ch, fn_prefix, literal_prefix) \
+  DEBUG_ASSERT(file, "null arg"); \
+   \
+  if (!input) { \
+    fprintf(file, "(null)"); \
+    return; \
+  } \
+   \
+  fprintf(file, # literal_prefix "\""); \
+   \
+  for (size_t i = 0; i < len;) { \
+    get_ch; \
+    switch (ch) { \
+    case literal_prefix ## '\0': \
+      fprintf(file, "\\0"); \
+      break; \
+    case literal_prefix ## '\\': \
+      fprintf(file, "\\\\"); \
+      break; \
+    case literal_prefix ## '\"': \
+      fprintf(file, "\\\""); \
+      break; \
+    case literal_prefix ## '\n': \
+      fprintf(file, "\\n"); \
+      break; \
+    case literal_prefix ## '\t': \
+      fprintf(file, "\\t"); \
+      break; \
+    case literal_prefix ## '\r': \
+      fprintf(file, "\\r"); \
+      break; \
+    case literal_prefix ## '\b': \
+      fprintf(file, "\\b"); \
+      break; \
+    case literal_prefix ## '\f': \
+      fprintf(file, "\\f"); \
+      break; \
+    case literal_prefix ## '\v': \
+      fprintf(file, "\\v"); \
+      break; \
+    default: \
+      if (is ## fn_prefix ## print(ch)) { \
+        fputc(((int32_t)ch < 128) ? (char)ch : '?', file); \
+      } else if ((int32_t)ch <= 0xFFFF) { \
+        fprintf(file, "\\u%04x", (unsigned)ch); \
+      } else { \
+        fprintf(file, "\\U%08x", (unsigned)ch); \
+      } \
+      break; \
+    } \
+  } \
+   \
+  fprintf(file, "\""); // Close wide string literal
+
 // explicit len because may contain null chars
 static inline void fprint_str(FILE *file, const char *input, size_t len) {
-  DEBUG_ASSERT(file, "null arg");
-
-  if (!input) {
-    fprintf(file, "(null)");
-    return;
-  }
-
-  fputc('"', file);
-
-  for (size_t i = 0; i < len; i++) {
-    switch (*input) {
-    case '\0':
-      fputs("\\0", file);
-      break;
-    case '\\':
-      fputs("\\\\", file);
-      break;
-    case '\"':
-      fputs("\\\"", file);
-      break;
-    case '\n':
-      fputs("\\n", file);
-      break;
-    case '\t':
-      fputs("\\t", file);
-      break;
-    case '\r':
-      fputs("\\r", file);
-      break;
-    case '\b':
-      fputs("\\b", file);
-      break;
-    case '\f':
-      fputs("\\f", file);
-      break;
-    case '\v':
-      fputs("\\v", file);
-      break;
-    default:
-      if (isprint((unsigned char)*input)) {
-        fputc(*input, file);
-      } else {
-        fprintf(file, "\\x%02x", (unsigned char)*input);
-      }
-      break;
-    }
-    input++;
-  }
-
-  fputc('"', file);
+  PRINT_STR(char ch = input[i++],,);
 }
+
+static inline void fprint_wstr(FILE *file, const char *input, size_t len) {
+  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i += sizeof(ch),w,L);
+}
+
+#undef PRINT_STR
 
 #endif

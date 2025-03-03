@@ -3,6 +3,7 @@
 #include "../graphwriter.h"
 #include "../util.h"
 #include "ir.h"
+#include <wchar.h>
 
 static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
   switch (ty) {
@@ -1007,10 +1008,25 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
 static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
                                      bool top) {
   switch (var_value->ty) {
-  case IR_VAR_VALUE_TY_STR:
-    fprintf(file, "(LEN=%zu) ", var_value->str_value.len);
-    fprint_str(file, var_value->str_value.value, var_value->str_value.len);
+  case IR_VAR_VALUE_TY_STR: {
+    struct ir_var_ty var_ty = var_value->var_ty;
+    DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY, "expected IR_VAR_VALUE_TY_STR to be an array");
+
+    struct ir_var_ty ch_ty = *var_ty.array.underlying;
+
+    if (ch_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+        ch_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+      fprint_str(file, var_value->str_value.value, var_value->str_value.len);
+    } else if (ch_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+               ch_ty.primitive == IR_VAR_PRIMITIVE_TY_I32) {
+      // it has now been given its real size (in chars), so pass byte length to wstr
+      // FIXME: we should have `wstr` take # of chars and parse/typechk should hold the right number of chars, not byte length
+      fprint_wstr(file, var_value->str_value.value, var_value->str_value.len * 4);
+    } else {
+      BUG("don't know how to print str (expected I8 or I32 array)");
+    }
     break;
+  }
   case IR_VAR_VALUE_TY_ZERO:
     fprintf(file, "{ ZERO }");
     break;
