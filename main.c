@@ -230,10 +230,26 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   return PARSE_ARGS_RESULT_SUCCESS;
 }
 
-int main(int argc, char **argv) {
-  size_t exc = -1;
+static int jcc_main(int argc, char **argv);
 
+int main(int argc, char **argv) {
   enable_log();
+
+#if SAN && OS_APPLE
+  // sanitizer running causes spurious 'malloc: nano zone abandoned due to inability to reserve vm space.' messages
+  // unless `MallocNanoZone=0`
+  // can be resolved by https://github.com/google/sanitizers/issues/1666
+  const char *val = getenv("MallocNanoZone");
+  if (!val || strcmp(val, "0")) {
+    warn("With sanitisers enabled on macOS, buggy warning messages can appear. Set `MallocNanoZone=0` to fix (or run via `jcc.sh` which does this automatically)");
+  }
+#endif
+
+  jcc_main(argc, argv);
+}
+
+static int jcc_main(int argc, char **argv) {
+  size_t exc = -1;
 
   struct arena_allocator *arena = NULL;
   char **objects = NULL;
@@ -279,6 +295,8 @@ int main(int argc, char **argv) {
 
       objects[i] = strdup(source_path);
       continue;
+    } else if (!strcmp(components.ext, "h")) {
+      warn("compiling header file '%s', is this intentional?", source_path);
     } else if (strcmp(components.ext, "c")) {
       err("unrecognised file extension '.%s'", components.ext);
       exc = -1;

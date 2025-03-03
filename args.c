@@ -46,7 +46,8 @@ debug_print_arg_string_list(FILE *file,
 static void debug_print_arg_option(FILE *file, const int *arg_option,
                                    const char *(*string_fn)(int value)) {
   DEBUG_ASSERT(string_fn, "string fn required for option");
-  fprintf(file, "      %s\n", *arg_option == 0 ? "(none)" : string_fn(*arg_option));
+  fprintf(file, "      %s\n",
+          *arg_option == 0 ? "(none)" : string_fn(*arg_option));
 }
 
 static void debug_print_arg_flags(FILE *file, const int *arg_flags,
@@ -85,7 +86,12 @@ static void debug_print_arg_flags(FILE *file, const int *arg_flags,
       const struct arg_flags *: debug_print_arg_flags)(file, (arg), string_fn)
 
 void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
-  fprintf(file, "PARSED ARGS:\n");
+  fprintf(file, "RAW ARGS:\n");
+  for (size_t i = 0; i < (size_t)args->argc; i++) {
+    fprintf(file, "    '%s'\n", args->argv[i]);
+  }
+
+  fprintf(file, "\nPARSED ARGS:\n");
 
   unsigned long longest_name = 0;
 
@@ -99,7 +105,8 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
   fprintf(file, "OPTS: \n");
 
 #define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn, ...)           \
-  fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name) + 1), " "); \
+  fprintf(file, "  " #name ": %*s", (int)(longest_name - strlen(#name) + 1),   \
+          " ");                                                                \
   switch (ARG_TY_##ty) {                                                       \
   /* more invalid pointer casting here, but again, only valid casts are        \
    * possible paths */                                                         \
@@ -143,8 +150,8 @@ void free_args(struct parsed_args *args) {
     PUSH_NO_WARN("-Wcast-qual");                                               \
     struct arg_string_list *string_list =                                      \
         (struct arg_string_list *)&args->name;                                 \
-    POP_NO_WARN();                                                               \
-    POP_NO_WARN();                                                               \
+    POP_NO_WARN();                                                             \
+    POP_NO_WARN();                                                             \
                                                                                \
     free(string_list->values);                                                 \
   }
@@ -219,7 +226,7 @@ enum parse_args_result parse_args(int argc, char **argv,
                                   struct parsed_args *parsed) {
   struct hashtbl *opts = hashtbl_create_sized_str_keyed(sizeof(struct arg));
 
-  *parsed = (struct parsed_args){.values = NULL};
+  *parsed = (struct parsed_args){.argc = argc, .argv = argv, .values = NULL};
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, desc, parse_fn,           \
                 string_fn, values_fn)                                          \
@@ -265,7 +272,7 @@ enum parse_args_result parse_args(int argc, char **argv,
       struct sized_str full_lo = {.str = lo, .len = strlen(lo)};               \
       hashtbl_insert(opts, &full_lo, &arg);                                    \
     }                                                                          \
-    POP_NO_WARN();                                                               \
+    POP_NO_WARN();                                                             \
   } while (0);
 
   ARG_OPT_LIST;
@@ -337,7 +344,8 @@ enum parse_args_result parse_args(int argc, char **argv,
         GET_ARGUMENT(value);
 
         if (!value) {
-          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          err("Value required for option '%.*s'\n", (int)lookup_str.len,
+              lookup_str.str);
           goto fail;
         }
 
@@ -355,7 +363,8 @@ enum parse_args_result parse_args(int argc, char **argv,
         GET_ARGUMENT(value);
 
         if (!value) {
-          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          err("Value required for option '%.*s'\n", (int)lookup_str.len,
+              lookup_str.str);
           goto fail;
         }
 
@@ -370,7 +379,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
             value = buf;
           }
-          
+
           int flag = 0;
           if (!arg->try_parse(value, &flag)) {
             bad_value(arg, lookup_str, value);
@@ -382,8 +391,10 @@ enum parse_args_result parse_args(int argc, char **argv,
           }
 
           // allow `-1` as a duplicate flag as it just means "all"
-          // will allow duplicate flags if _all_ have been given, but this is okay
-          if (((flag != -1) == (*arg->arg_flags != -1)) && *arg->arg_flags & flag) {
+          // will allow duplicate flags if _all_ have been given, but this is
+          // okay
+          if (((flag != -1) == (*arg->arg_flags != -1)) &&
+              *arg->arg_flags & flag) {
             err("Duplicate options '%.*s'\n", (int)lookup_str.len,
                 lookup_str.str);
             goto fail;
@@ -398,7 +409,8 @@ enum parse_args_result parse_args(int argc, char **argv,
         GET_ARGUMENT(value);
 
         if (!value) {
-          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          err("Value required for option '%.*s'\n", (int)lookup_str.len,
+              lookup_str.str);
           goto fail;
         }
 
@@ -413,7 +425,8 @@ enum parse_args_result parse_args(int argc, char **argv,
         GET_ARGUMENT(value);
 
         if (!value) {
-          err("Value required for option '%.*s'\n", (int)lookup_str.len, lookup_str.str);
+          err("Value required for option '%.*s'\n", (int)lookup_str.len,
+              lookup_str.str);
           goto fail;
         }
 
@@ -439,7 +452,9 @@ enum parse_args_result parse_args(int argc, char **argv,
 #define MKSTR_INNER(x) #x
 #define MKSTR(x) MKSTR_INNER(x)
   if (parsed->target == 0) {
-    invariant_assert(parse_target(MKSTR(JCC_DEFAULT_TARGET), (int *)&parsed->target), "JCC_DEFAULT_TARGET '%s' was invalid", MKSTR(JCC_DEFAULT_TARGET));
+    invariant_assert(
+        parse_target(MKSTR(JCC_DEFAULT_TARGET), (int *)&parsed->target),
+        "JCC_DEFAULT_TARGET '%s' was invalid", MKSTR(JCC_DEFAULT_TARGET));
   }
 #undef MKSTR
 #endif

@@ -1,6 +1,7 @@
 #include "codegen.h"
 
 #include "alloc.h"
+#include "ir/ir.h"
 #include "util.h"
 #include "vector.h"
 
@@ -240,7 +241,7 @@ static struct codegen_entry codegen_func(struct codegen_unit *unit,
       .ty = CODEGEN_ENTRY_TY_FUNC,
       .alignment = unit->target->function_alignment,
       .glb_id = glb->id,
-      .name = unit->target->mangle(unit->arena, ir_func->name),
+      .name = unit->target->mangle(unit->arena, glb->name),
       .func = {.unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
 
   struct codegen_function *func = &entry.func;

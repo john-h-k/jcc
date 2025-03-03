@@ -36,7 +36,7 @@ help() {
 exp_file=""
 all_files=()
 while [[ $# -gt 0 ]]; do
-  path=$( [[ -e "$1" ]] && echo "$1" || echo "$CALLER_DIR/$1" )
+  path=$( [[ -e "$1" ]] && echo "$1" || echo "$CALLER_DIR$1" )
   if [[ -f "$path" || -d "$path" ]]; then
     exp_file="1"
 
@@ -319,7 +319,11 @@ run_tests() {
       }
 
       build() {
-        ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
+        if [[ $(uname) == "Darwin" ]]; then
+          MallocNanoZone="0"
+        fi
+
+        MallocNanoZone=$MallocNanoZone ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
         return $?
       }
 
