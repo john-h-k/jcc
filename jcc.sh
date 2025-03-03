@@ -198,7 +198,7 @@ debug() {
     fi
 
     if [[ $(uname) == "Darwin" ]]; then
-        MallocNanoZone=0 "$debugger" "$jcc" "$@"
+        MallocNanoZone=0 $debugger "$jcc" "$@"
     else
         $debugger "$jcc" "$@"
     fi

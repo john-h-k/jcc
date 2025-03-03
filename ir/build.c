@@ -1014,23 +1014,46 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
 static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                         const struct td_cnst *cnst) {
   struct ir_var_ty *chr = arena_alloc(iru->arena, sizeof(*chr));
-  *chr = IR_VAR_TY_I8;
+  // FIXME: in several places we assume wide char is int - not sure when this is
+  // true
+  *chr = cnst->ty == TD_CNST_TY_STR_LITERAL ? IR_VAR_TY_I8 : IR_VAR_TY_I32;
+  size_t num_chrs = cnst->str_value.len / ir_var_ty_info(iru, chr).size;
   struct ir_var_ty var_ty = {
-    .ty = IR_VAR_TY_TY_ARRAY,
-    .array = {
-      .underlying = chr,
-      .num_elements = cnst->str_value.len + 1
-    }
-  };
+      .ty = IR_VAR_TY_TY_ARRAY,
+      .array = {.underlying = chr, .num_elements = num_chrs + 1 /* null */}};
 
-  struct ir_glb *glb = ir_add_global(iru, IR_GLB_TY_DATA, &var_ty,
-                                     IR_GLB_DEF_TY_DEFINED, NULL);
+  struct ir_glb *glb =
+      ir_add_global(iru, IR_GLB_TY_DATA, &var_ty, IR_GLB_DEF_TY_DEFINED, NULL);
 
   glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
 
-  // if string literal contains null chars, it will mess up counting and so
-  // put it in data
-  if (strlen(cnst->str_value.value) < cnst->str_value.len) {
+  // if string literal contains null chars (or is wide char), it will mess up
+  // counting and so put it in data
+  if (strlen(cnst->str_value.value) < cnst->str_value.len ||
+      cnst->ty != TD_CNST_TY_STR_LITERAL) {
+    struct ir_var_str str_value;
+    switch (cnst->ty) {
+    case TD_CNST_TY_STR_LITERAL:
+      str_value = (struct ir_var_str){.value = cnst->str_value.value,
+                                      .len = num_chrs};
+      break;
+    case TD_CNST_TY_WIDE_STR_LITERAL:
+      // kinda hacky, but in parse/typechk we generate a string with 4x the length of the actual str
+      str_value = (struct ir_var_str){.value = cnst->str_value.value,
+                                      .len = num_chrs};
+      break;
+    default:
+      unreachable();
+    }
+
+    *glb->var = (struct ir_var){.unit = iru,
+                                .ty = IR_VAR_TY_CONST_DATA,
+                                .var_ty = var_ty,
+                                .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                          .var_ty = var_ty,
+                                          .str_value = str_value}};
+
+  } else {
     *glb->var =
         (struct ir_var){.unit = iru,
                         .ty = IR_VAR_TY_STRING_LITERAL,
@@ -1038,17 +1061,7 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
                         .value = {.ty = IR_VAR_VALUE_TY_STR,
                                   .var_ty = var_ty,
                                   .str_value = {.value = cnst->str_value.value,
-                                                .len = cnst->str_value.len}}};
-
-  } else {
-    *glb->var =
-        (struct ir_var){.unit = iru,
-                        .ty = IR_VAR_TY_CONST_DATA,
-                        .var_ty = var_ty,
-                        .value = {.ty = IR_VAR_VALUE_TY_STR,
-                                  .var_ty = var_ty,
-                                  .str_value = {.value = cnst->str_value.value,
-                                                .len = cnst->str_value.len}}};
+                                                .len = num_chrs}}};
   }
 
   return glb;
@@ -3713,7 +3726,7 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
       return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
                                    .var_ty =
                                        var_ty_for_td_var_ty(irb->unit, var_ty),
-                                       .addr =  { .glb = glb, .offset = 0 } };
+                                   .addr = {.glb = glb, .offset = 0}};
     } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
       TODO("wide str globals");
     } else if (td_var_ty_is_integral_ty(&expr->var_ty)) {

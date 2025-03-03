@@ -4,6 +4,7 @@
 #include "lex.h"
 #include "log.h"
 #include "program.h"
+#include "typechk.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
@@ -1203,13 +1204,14 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   while (token.ty == LEX_TOKEN_TY_ASCII_STR_LITERAL ||
          token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
 
-    if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
-      TODO("wide str literals (must be stored as cnst data)");
-    }
-
     is_string = true;
 
-    cnst->ty = AST_CNST_TY_STR_LITERAL;
+
+    if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
+      cnst->ty = AST_CNST_TY_WIDE_STR_LITERAL;
+    } else {
+      cnst->ty = AST_CNST_TY_STR_LITERAL;
+    }
 
     size_t str_len;
     const char *str = strlike_associated_text(parser->lexer, &token, &str_len);
@@ -1224,11 +1226,20 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return false;
   }
 
+  size_t len = vector_length(strings);
+
   char null = 0;
   vector_push_back(strings, &null);
+  if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+    // so its a full `int` 0
+    vector_push_back(strings, &null);
+    vector_push_back(strings, &null);
+    vector_push_back(strings, &null);
+  }
+
   cnst->str_value = (struct ast_cnst_str){
     .value = vector_head(strings),
-    .len = vector_length(strings) - 1 /* null char */
+    .len = len
   };
 
   return true;
@@ -2829,9 +2840,13 @@ DEBUG_FUNC(cnst, cnst) {
   case AST_CNST_TY_STR_LITERAL:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
     fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprintf(stderr, "\n");
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    TODO("wide strs");
+    AST_PRINT_SAMELINE_Z("CONSTANT ");
+    fprint_wstr(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprintf(stderr, "\n");
+    break;
   }
 }
 
