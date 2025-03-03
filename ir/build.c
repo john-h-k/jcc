@@ -1154,12 +1154,12 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   true_br->var_ty = IR_VAR_TY_NONE;
 
   struct ir_stmt *false_stmt = ir_alloc_ir_stmt(irb->func, false_bb);
-  ir_make_basicblock_merge(irb->func, false_stmt->basicblock, end_bb);
   struct ir_op *false_op =
       build_ir_for_expr(irb, &false_stmt, ternary->false_expr);
 
   struct ir_stmt *false_br_stmt =
       ir_alloc_ir_stmt(irb->func, false_stmt->basicblock);
+  ir_make_basicblock_merge(irb->func, false_stmt->basicblock, end_bb);
   struct ir_op *false_br = ir_alloc_ir_op(irb->func, false_br_stmt);
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
