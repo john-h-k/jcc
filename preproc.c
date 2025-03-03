@@ -77,6 +77,14 @@ UNUSED static const char *preproc_token_name(enum preproc_token_ty ty) {
 enum preproc_define_value_ty {
   PREPROC_DEFINE_VALUE_TY_TOKEN,
   PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
+  PREPROC_DEFINE_VALUE_TY_MACRO_FN
+};
+
+struct preproc_macro_fn {
+  size_t num_params;
+  struct preproc_token *params;
+
+  struct vector *tokens;
 };
 
 struct preproc_define_value {
@@ -85,6 +93,7 @@ struct preproc_define_value {
   union {
     struct preproc_token token;
     struct vector *vec;
+    struct preproc_macro_fn macro_fn;
   };
 };
 
@@ -120,6 +129,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   DEF_BUILTIN("__jcc__", "1");
 
   DEF_BUILTIN("__STDC__", "1");
+
   // TODO: support different version targets. This is C11
   DEF_BUILTIN("__STDC_VERSION__", "201112L");
   DEF_BUILTIN("__STDC_HOSTED__", "1");
@@ -207,9 +217,9 @@ enum preproc_special_macro {
 
 static struct hashtbl *SPECIAL_MACROS = NULL;
 
-enum preproc_create_result
-preproc_create(struct program *program, 
-               struct preproc_create_args args, struct preproc **preproc) {
+enum preproc_create_result preproc_create(struct program *program,
+                                          struct preproc_create_args args,
+                                          struct preproc **preproc) {
   if (args.fixed_timestamp) {
     DEBUG_ASSERT(strlen(args.fixed_timestamp) >= 19,
                  "`fixed_timestamp` must be at least 19");
@@ -353,6 +363,7 @@ static bool try_consume(struct preproc_text *preproc_text, struct text_pos *pos,
   return false;
 }
 
+// tries to consume two tokens (you can infer this from the function name)
 static bool try_consume2(struct preproc_text *preproc_text,
                          struct text_pos *pos, char c0, char c1) {
   DEBUG_ASSERT(
@@ -804,6 +815,56 @@ static bool token_streq(struct preproc_token token, const char *str) {
   return len == token_len && strncmp(token.text, str, len) == 0;
 }
 
+static void preproc_next_nontrivial_raw_token(struct preproc *preproc,
+                                              struct preproc_token *token) {
+  while (true) {
+    preproc_next_raw_token(preproc, token);
+
+    if (token->ty == PREPROC_TOKEN_TY_EOF) {
+      BUG("hit eof scanning for nontrivial token; code was probably invalid "
+          "but we should handle it better");
+    }
+
+    if (token->ty == PREPROC_TOKEN_TY_WHITESPACE ||
+        token->ty == PREPROC_TOKEN_TY_COMMENT ||
+        token->ty == PREPROC_TOKEN_TY_NEWLINE) {
+      // skip leading whitespace
+      continue;
+    }
+
+    return;
+  }
+}
+
+static bool try_expand_token(struct preproc *preproc,
+                             struct preproc_text *preproc_text,
+                             struct preproc_token *token, struct vector *buffer,
+                             struct hashtbl *parents);
+
+static void expand_token(struct preproc *preproc,
+                         struct preproc_text *preproc_text,
+                         struct preproc_token *token, struct vector *buffer,
+                         struct hashtbl *parents) {
+  if (!try_expand_token(preproc, preproc_text, token, buffer, parents)) {
+    vector_push_back(buffer, token);
+  }
+}
+
+static void preproc_append_tokens(struct preproc *preproc,
+                                  struct preproc_text *preproc_text,
+                                  struct vector *tokens, struct vector *buffer,
+                                  struct hashtbl *parents) {
+  size_t num_tokens = vector_length(tokens);
+  for (size_t i = num_tokens; i; i--) {
+    struct preproc_token *def_tok = vector_get(tokens, i - 1);
+    expand_token(preproc, preproc_text, def_tok, buffer, parents);
+  }
+}
+
+static bool token_is_trivial(const struct preproc_token *token) {
+  return token->ty == PREPROC_TOKEN_TY_WHITESPACE || token->ty == PREPROC_TOKEN_TY_NEWLINE || token->ty == PREPROC_TOKEN_TY_NEWLINE;
+}
+
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token, struct vector *buffer,
@@ -838,18 +899,109 @@ static bool try_expand_token(struct preproc *preproc,
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
-      if (!try_expand_token(preproc, preproc_text, &value->token, buffer,
-                            parents)) {
-        vector_push_back(buffer, &value->token);
-      }
+      expand_token(preproc, preproc_text, &value->token, buffer,
+                            parents);
       break;
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
-      size_t num_tokens = vector_length(value->vec);
+      preproc_append_tokens(preproc, preproc_text, value->vec, buffer, parents);
+      break;
+    }
+    case PREPROC_DEFINE_VALUE_TY_MACRO_FN: {
+      struct preproc_macro_fn macro_fn = value->macro_fn;
+
+      struct vector *args = vector_create(sizeof(struct vector *));
+      struct vector *arg = vector_create(sizeof(struct preproc_token));
+      vector_push_back(args, &arg);
+
+      // first need to take the arguments
+      struct preproc_token open;
+      preproc_next_nontrivial_raw_token(preproc, &open);
+
+      if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
+          open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+        BUG("expected `(`");
+      }
+
+      // TODO: handle zero arg fn macros
+
+      int depth = 1;
+      bool skip_trivial = false;
+      while (true) {
+        struct preproc_token next;
+        preproc_next_token(preproc, &next);
+
+        if (next.ty == PREPROC_TOKEN_TY_EOF) {
+          BUG("eof unexepctedly");
+        }
+
+        if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+          depth++;
+
+          vector_push_back(arg, &next);
+        } else if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+                   next.punctuator.ty ==
+                       PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
+          if (!depth) {
+            BUG("more close brackets than valid");
+          }
+
+          depth--;
+
+          if (!depth) {
+            break;
+          }
+
+          vector_push_back(arg, &next);
+        } else if (depth == 1 && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+                   next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
+          arg = vector_create(sizeof(struct preproc_token));
+          vector_push_back(args, &arg);
+
+          // strip leading whitespace
+          skip_trivial = true;
+        } else {
+          if (!skip_trivial || !token_is_trivial(&next)) {
+            vector_push_back(arg, &next);
+          }
+        }
+      }
+
+      if (vector_length(args) != macro_fn.num_params) {
+        BUG("wrong number of args (%zu) for fn-like macro with %zu params",
+            vector_length(args), macro_fn.num_params);
+      }
+
+      // FIXME: super inefficient O(nm), macro fn should have hashtbl in it
+      size_t num_tokens = vector_length(macro_fn.tokens);
       for (size_t i = num_tokens; i; i--) {
-        struct preproc_token *def_tok = vector_get(value->vec, i - 1);
-        if (!try_expand_token(preproc, preproc_text, def_tok, buffer,
-                              parents)) {
-          vector_push_back(buffer, def_tok);
+        struct preproc_token *def_tok = vector_get(macro_fn.tokens, i - 1);
+
+        bool expanded = false;
+        if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
+          for (size_t j = 0; j < macro_fn.num_params; j++) {
+            struct preproc_token param_tok = macro_fn.params[j];
+
+            DEBUG_ASSERT(param_tok.ty == PREPROC_TOKEN_TY_IDENTIFIER,
+                         "macro param must be identifier");
+
+            struct sized_str def_ident = {.str = def_tok->text,
+                                          .len = text_span_len(&def_tok->span)};
+            struct sized_str param_ident = {
+                .str = param_tok.text, .len = text_span_len(&param_tok.span)};
+
+            if (hashtbl_eq_sized_str(&def_ident, &param_ident)) {
+              preproc_append_tokens(preproc, preproc_text,
+                                    *(struct vector **)vector_get(args, j),
+                                    buffer, parents);
+              expanded = true;
+              break;
+            }
+          }
+        }
+
+        if (!expanded) {
+          expand_token(preproc, preproc_text, def_tok, buffer, parents);
         }
       }
       break;
@@ -974,8 +1126,10 @@ struct include_info {
   const char *content;
 };
 
-static struct include_info try_find_include(struct preproc *preproc, struct preproc_text *preproc_text, const char *filename,
-                                    bool is_angle) {
+static struct include_info try_find_include(struct preproc *preproc,
+                                            struct preproc_text *preproc_text,
+                                            const char *filename,
+                                            bool is_angle) {
   struct include_info info = {0};
 
   if (!is_angle) {
@@ -988,7 +1142,9 @@ static struct include_info try_find_include(struct preproc *preproc, struct prep
     }
 
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: trying path '%s' for include '%s' in file '%s'\n", search_path, filename, preproc_text->file);
+      fprintf(stderr,
+              "preproc: trying path '%s' for include '%s' in file '%s'\n",
+              search_path, filename, preproc_text->file);
     }
 
     info.content = read_path(preproc->arena, search_path);
@@ -1004,11 +1160,13 @@ static struct include_info try_find_include(struct preproc *preproc, struct prep
 
   if (!info.content) {
     for (size_t i = 0; i < preproc->args.num_include_paths; i++) {
-      const char *search_path =
-          path_combine(preproc->arena, preproc->args.include_paths[i], filename);
+      const char *search_path = path_combine(
+          preproc->arena, preproc->args.include_paths[i], filename);
 
       if (preproc->args.verbose) {
-        fprintf(stderr, "preproc: trying path '%s' for include '%s' in file '%s'\n", search_path, filename, preproc_text->file);
+        fprintf(stderr,
+                "preproc: trying path '%s' for include '%s' in file '%s'\n",
+                search_path, filename, preproc_text->file);
       }
 
       info.content = read_path(preproc->arena, search_path);
@@ -1139,7 +1297,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   } while (0)
 
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
-      directive_tokens = vector_create(sizeof(struct preproc_token));
+      directive_tokens =
+          vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
 
       preproc_next_raw_token(preproc, &directive);
 
@@ -1214,9 +1373,57 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
             *(struct preproc_token *)vector_head(directive_tokens);
 
         size_t first_def_tok = 1;
+
+        struct preproc_define define = {
+            .name = def_name,
+        };
+
+        struct preproc_token *tok = NULL;
+        if (first_def_tok < num_directive_tokens) {
+          tok = vector_get(directive_tokens, first_def_tok);
+        }
+
+        if (tok && tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            tok->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+          first_def_tok++;
+          // fn-like macro
+
+          struct vector *params = vector_create_in_arena(
+              sizeof(struct preproc_token), preproc->arena);
+
+          while (true) {
+            if (first_def_tok >= num_directive_tokens) {
+              BUG("invalid macro fn, expected `)`");
+            }
+
+            tok = vector_get(directive_tokens, first_def_tok++);
+
+            if (tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
+              vector_push_back(params, tok);
+            } else if (tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR) {
+              if (tok->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
+                continue;
+              } else if (tok->punctuator.ty ==
+                         PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
+                break;
+              }
+
+              BUG("bad token in macro fn def");
+            }
+          }
+
+          define.value = (struct preproc_define_value){
+              .ty = PREPROC_DEFINE_VALUE_TY_MACRO_FN,
+              .macro_fn = {.num_params = vector_length(params),
+                           .params = vector_head(params),
+                           .tokens = directive_tokens}};
+        } else {
+          define.value = (struct preproc_define_value){
+              .ty = PREPROC_DEFINE_VALUE_TY_TOKEN_VEC, .vec = directive_tokens};
+        }
+
         for (; first_def_tok < num_directive_tokens; first_def_tok++) {
-          struct preproc_token *tok =
-              vector_get(directive_tokens, first_def_tok);
+          tok = vector_get(directive_tokens, first_def_tok);
           if (tok->ty != PREPROC_TOKEN_TY_NEWLINE &&
               tok->ty != PREPROC_TOKEN_TY_WHITESPACE) {
             break;
@@ -1227,11 +1434,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         struct sized_str ident = {.str = def_name.text,
                                   .len = text_span_len(&def_name.span)};
-
-        struct preproc_define define = {
-            .name = def_name,
-            .value = {.ty = PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
-                      .vec = directive_tokens}};
 
         // don't free them
         directive_tokens = NULL;
@@ -1293,7 +1495,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         bool is_angle = filename_token.text[0] == '<';
 
-        struct include_info include_info = try_find_include(preproc, preproc_text, filename, is_angle);
+        struct include_info include_info =
+            try_find_include(preproc, preproc_text, filename, is_angle);
 
         if (!include_info.path) {
           TODO("handle failed include search for '%s'", filename);
@@ -1301,8 +1504,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
           TODO("handle failed include read for '%s'", filename);
         }
 
-        struct preproc_text include_text =
-            create_preproc_text(preproc, include_info.content, include_info.path);
+        struct preproc_text include_text = create_preproc_text(
+            preproc, include_info.content, include_info.path);
         vector_push_back(preproc->texts, &include_text);
 
         preproc->line_has_nontrivial_token = false;
