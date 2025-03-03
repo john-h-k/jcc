@@ -240,6 +240,9 @@ VALUES_FN(c_standard, C_STANDARD)
              "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")
 
 struct parsed_args {
+  int argc;
+  char **argv;
+
 #define ARG_OPT(_0, field_ty, name, ...) field_ty name;
 
   ARG_OPT_LIST

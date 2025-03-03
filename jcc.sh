@@ -11,6 +11,7 @@ help() {
   echo "jcc.sh COMMAND"
   echo ""
   echo "COMMANDS:"
+  ech  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
   echo "    help        Show help"
   echo "    run         Build, then run JCC with provided arguments"
   echo "    diff        Build, then run JCC with two different sets of args, and diff them"
@@ -113,7 +114,7 @@ build() {
 
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
+    if ! (cmake -DCMAKE_C_FLAGS= -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
@@ -159,7 +160,7 @@ get_mode() {
     esac
 }
 
-# In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on
+# In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on on macOS
 
 run() {
     mode=$(get_mode "$1")
@@ -168,7 +169,12 @@ run() {
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
-    MallocNanoZone=0 "$jcc" "$@"
+    if [[ $(uname) == "Darwin" ]]; then
+        MallocNanoZone=0 "$jcc" "$@"
+    else
+        "$jcc" "$@"
+    fi
+
     cd - > /dev/null
 }
 
@@ -191,7 +197,12 @@ debug() {
         exit -1
     fi
 
-    MallocNanoZone=0 $debugger "$jcc" "$@"
+    if [[ $(uname) == "Darwin" ]]; then
+        MallocNanoZone=0 "$debugger" "$jcc" "$@"
+    else
+        $debugger "$jcc" "$@"
+    fi
+
     cd - > /dev/null
 }
 
@@ -251,10 +262,7 @@ _invoke-subcommand() {
         shift 1 >/dev/null 2>&1
 
         "${func}" "${@}"
-
-        if [ $? != 0 ]; then
-            return $?
-        fi
+        return $?
     elif [[ $name == "help" ]]; then
         func_names=( $(compgen -A function ) )
         func_names=("${func_names[@]/_*}")
@@ -267,6 +275,15 @@ _invoke-subcommand() {
             fi
         done
     else
+        # sort of hacky feature
+        # we want `jcc.sh <args>` to default to `run`
+        # we should probably setup a scripts or bin folder to keep them and have a sep script there
+        # but for now, do this "auto-run" if the first argument is a flag OR a file
+        if [[ -f "$CALLER_DIR$func" || "$func" == -* ]]; then
+            run "${@}"
+            return $?
+        fi
+
         matches=( $(compgen -A function | grep "^$name" ) )
 
         if [ "${#matches[@]}" -eq "1" ]; then
@@ -276,15 +293,18 @@ _invoke-subcommand() {
             for match in "${matches[@]}"; do
                 echo "    - $base ${match#${base}-}" >&2
             done
-            return 1
         else
             echo "'${name}' - not valid subcommand for '${base}'" >&2
-            return 1
         fi
+
+        echo "Note: auto-run feature only works if the first argument to $(basename "$0") is a file or option (begins with '-')"
+
+        return 1
     fi
 }
 
-export CALLER_DIR=$(pwd)
+export CALLER_DIR="$(pwd)/"
+export CALLER_DIR="${CALLER_DIR%/}/"
 cd "$(dirname "$0")"
 _invoke-subcommand "$@"
 

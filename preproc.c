@@ -43,10 +43,7 @@ struct preproc {
   // bool
   struct vector *enabled;
 
-  size_t num_include_paths;
-  const char **include_paths;
-
-  const char *fixed_timestamp;
+  struct preproc_create_args args;
 
   // if the current line has seen a token that is not whitespace
   bool line_has_nontrivial_token;
@@ -211,12 +208,10 @@ enum preproc_special_macro {
 static struct hashtbl *SPECIAL_MACROS = NULL;
 
 enum preproc_create_result
-preproc_create(struct program *program, enum compile_target target,
-               const char *path, size_t num_include_paths,
-               const char **include_paths, const char *fixed_timestamp,
-               struct preproc **preproc) {
-  if (fixed_timestamp) {
-    DEBUG_ASSERT(strlen(fixed_timestamp) >= 19,
+preproc_create(struct program *program, 
+               struct preproc_create_args args, struct preproc **preproc) {
+  if (args.fixed_timestamp) {
+    DEBUG_ASSERT(strlen(args.fixed_timestamp) >= 19,
                  "`fixed_timestamp` must be at least 19");
   }
 
@@ -252,17 +247,15 @@ preproc_create(struct program *program, enum compile_target target,
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
-  p->num_include_paths = num_include_paths;
-  p->include_paths = include_paths;
+  p->args = args;
 
   p->texts = vector_create(sizeof(struct preproc_text));
   p->enabled = vector_create(sizeof(bool));
-  p->fixed_timestamp = fixed_timestamp;
 
   bool enabled = true;
   vector_push_back(p->enabled, &enabled);
 
-  struct preproc_text text = create_preproc_text(p, program->text, path);
+  struct preproc_text text = create_preproc_text(p, program->text, args.path);
   vector_push_back(p->texts, &text);
 
   p->line_has_nontrivial_token = false;
@@ -275,7 +268,7 @@ preproc_create(struct program *program, enum compile_target target,
 
   *preproc = p;
 
-  preproc_create_builtin_macros(p, target);
+  preproc_create_builtin_macros(p, args.target);
 
   return PREPROC_CREATE_RESULT_SUCCESS;
 }
@@ -917,8 +910,8 @@ static bool try_expand_token(struct preproc *preproc,
     }
     case PREPROC_SPECIAL_MACRO_TIME: {
       const char *asc;
-      if (preproc->fixed_timestamp) {
-        asc = preproc->fixed_timestamp;
+      if (preproc->args.fixed_timestamp) {
+        asc = preproc->args.fixed_timestamp;
       } else {
         time_t epoch = time(NULL);
         struct tm *tm = localtime(&epoch);
@@ -942,8 +935,8 @@ static bool try_expand_token(struct preproc *preproc,
     }
     case PREPROC_SPECIAL_MACRO_DATE: {
       const char *asc;
-      if (preproc->fixed_timestamp) {
-        asc = preproc->fixed_timestamp;
+      if (preproc->args.fixed_timestamp) {
+        asc = preproc->args.fixed_timestamp;
       } else {
         time_t epoch = time(NULL);
         struct tm *tm = localtime(&epoch);
@@ -975,6 +968,63 @@ enum preproc_token_mode {
   PREPROC_TOKEN_MODE_NO_EXPAND,
   PREPROC_TOKEN_MODE_EXPAND,
 };
+
+struct include_info {
+  const char *path;
+  const char *content;
+};
+
+static struct include_info try_find_include(struct preproc *preproc, struct preproc_text *preproc_text, const char *filename,
+                                    bool is_angle) {
+  struct include_info info = {0};
+
+  if (!is_angle) {
+    const char *search_path;
+    if (preproc_text->path.dir) {
+      search_path =
+          path_combine(preproc->arena, preproc_text->path.dir, filename);
+    } else {
+      search_path = filename;
+    }
+
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: trying path '%s' for include '%s' in file '%s'\n", search_path, filename, preproc_text->file);
+    }
+
+    info.content = read_path(preproc->arena, search_path);
+
+    if (info.content) {
+      fprintf(stderr, "preproc: found\n");
+    } else {
+      fprintf(stderr, "did not find\n");
+    }
+
+    info.path = search_path;
+  }
+
+  if (!info.content) {
+    for (size_t i = 0; i < preproc->args.num_include_paths; i++) {
+      const char *search_path =
+          path_combine(preproc->arena, preproc->args.include_paths[i], filename);
+
+      if (preproc->args.verbose) {
+        fprintf(stderr, "preproc: trying path '%s' for include '%s' in file '%s'\n", search_path, filename, preproc_text->file);
+      }
+
+      info.content = read_path(preproc->arena, search_path);
+      if (info.content) {
+        fprintf(stderr, "preproc: found\n");
+
+        info.path = search_path;
+        break;
+      }
+
+      fprintf(stderr, "did not find\n");
+    }
+  }
+
+  return info;
+}
 
 static void preproc_tokens_til_eol(struct preproc *preproc,
                                    struct preproc_text *preproc_text,
@@ -1243,40 +1293,16 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
 
         bool is_angle = filename_token.text[0] == '<';
 
-        const char *path = NULL;
-        const char *content = NULL;
-        if (!is_angle) {
-          const char *search_path;
-          if (preproc_text->path.dir) {
-            search_path =
-                path_combine(preproc->arena, preproc_text->path.dir, filename);
-          } else {
-            search_path = filename;
-          }
+        struct include_info include_info = try_find_include(preproc, preproc_text, filename, is_angle);
 
-          content = read_path(preproc->arena, search_path);
-          path = search_path;
-        }
-
-        if (!content) {
-          for (size_t i = 0; i < preproc->num_include_paths; i++) {
-            const char *search_path = path_combine(
-                preproc->arena, preproc->include_paths[i], filename);
-
-            content = read_path(preproc->arena, search_path);
-            if (content) {
-              path = search_path;
-              break;
-            }
-          }
-        }
-
-        if (!content) {
-          TODO("handle failed include for '%s'", filename);
+        if (!include_info.path) {
+          TODO("handle failed include search for '%s'", filename);
+        } else if (!include_info.content) {
+          TODO("handle failed include read for '%s'", filename);
         }
 
         struct preproc_text include_text =
-            create_preproc_text(preproc, content, path);
+            create_preproc_text(preproc, include_info.content, include_info.path);
         vector_push_back(preproc->texts, &include_text);
 
         preproc->line_has_nontrivial_token = false;

@@ -76,29 +76,21 @@
 #if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
     defined(__SANITIZE_MEMORY__)
 #define MSAN 1
-#else
-#define MSAN 0
 #endif
 
 #if HAS_FEATURE(address_sanitizer) || defined(ADDRESS_SANITIZER) ||            \
     defined(__SANITIZE_ADDRESS__)
 #define ASAN 1
-#else
-#define ASAN 0
 #endif
 
 #if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
     defined(__SANITIZE_HWADDRESS__)
 #define HWASAN 1
-#else
-#define HWASAN 0
 #endif
 
 #if HAS_FEATURE(thread_sanitizer) || defined(THREAD_SANITIZER) ||              \
     defined(__SANITIZE_THREAD__)
 #define TSAN 1
-#else
-#define TSAN 0
 #endif
 
 // NOTE: for reasons, there is no _SANITIZE_UNDEFINED__, and so we cannot detect
@@ -108,6 +100,10 @@
 #define UBSAN 1
 #else
 #define UBSAN 0
+#endif
+
+#if MSAN || ASAN || HWASAN || TSAN
+#define SAN 1
 #endif
 
 /************************************ OS ************************************/

@@ -2563,6 +2563,40 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
 
+static const char *mangle_static_name(struct ir_var_builder *irb,
+                                      struct ir_func *func, const char *name) {
+  // need to mangle the name as statics cannot interfere with others
+  size_t base_len = strlen(name);
+
+  size_t len = base_len + 2; // null char and leading "."
+
+  size_t func_name_len = 0;
+  if (func) {
+    func_name_len = strlen(func->name);
+    len += func_name_len;
+    len++; // for "."
+  }
+
+  char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
+  size_t head = 0;
+
+  buff[head++] = '.';
+
+  if (func) {
+    memcpy(&buff[head], func->name, func_name_len);
+    head += func_name_len;
+    buff[head++] = '.';
+  }
+
+  memcpy(&buff[head], name, base_len);
+  head += base_len;
+  buff[head++] = '\0';
+
+  DEBUG_ASSERT(head == len, "string/buff length mismatch");
+
+  return buff;
+}
+
 static void
 build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
@@ -2573,36 +2607,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   const char *name = decl->var.identifier;
   const char *symbol_name;
   if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC) {
-    // need to mangle the name as statics cannot interfere with others
-    size_t base_len = strlen(name);
-
-    size_t len = base_len + 2; // null char and leading "."
-
-    size_t func_name_len = 0;
-    if (func) {
-      func_name_len = strlen(func->name);
-      len += func_name_len;
-      len++; // for "."
-    }
-
-    char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
-    size_t head = 0;
-
-    buff[head++] = '.';
-
-    if (func) {
-      memcpy(&buff[head], func->name, func_name_len);
-      head += func_name_len;
-      buff[head++] = '.';
-    }
-
-    memcpy(&buff[head], name, base_len);
-    head += base_len;
-    buff[head++] = '\0';
-
-    DEBUG_ASSERT(head == len, "string/buff length mismatch");
-
-    symbol_name = buff;
+    symbol_name = mangle_static_name(irb, func, name);
   } else {
     symbol_name = name;
   }
