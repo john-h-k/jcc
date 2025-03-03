@@ -372,7 +372,8 @@ static inline void *nonnull_realloc(void *p, size_t size) {
   return ptr;
 }
 
-static inline void fprint_str(FILE *file, const char *input) {
+// explicit len because may contain null chars
+static inline void fprint_str(FILE *file, const char *input, size_t len) {
   DEBUG_ASSERT(file, "null arg");
 
   if (!input) {
@@ -382,8 +383,11 @@ static inline void fprint_str(FILE *file, const char *input) {
 
   fputc('"', file);
 
-  while (*input) {
+  for (size_t i = 0; i < len; i++) {
     switch (*input) {
+    case '\0':
+      fputs("\\0", file);
+      break;
     case '\\':
       fputs("\\\\", file);
       break;

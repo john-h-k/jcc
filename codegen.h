@@ -44,10 +44,11 @@ struct codegen_entry {
 
   size_t alignment;
 
+  struct symbol symbol;
+
   union {
     struct codegen_function func;
     struct codegen_data data;
-    const char *str;
   };
 };
 

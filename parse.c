@@ -1220,14 +1220,16 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
 
   if (!is_string) {
-
     backtrack(parser->lexer, pos);
     return false;
   }
 
   char null = 0;
   vector_push_back(strings, &null);
-  cnst->str_value = vector_head(strings);
+  cnst->str_value = (struct ast_cnst_str){
+    .value = vector_head(strings),
+    .len = vector_length(strings) - 1 /* null char */
+  };
 
   return true;
 }
@@ -2826,7 +2828,7 @@ DEBUG_FUNC(cnst, cnst) {
     break;
   case AST_CNST_TY_STR_LITERAL:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_str(stderr, cnst->str_value);
+    fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
     TODO("wide strs");

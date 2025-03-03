@@ -2,6 +2,8 @@
 
 #include "alloc.h"
 #include "ir/ir.h"
+#include "program.h"
+#include "target.h"
 #include "util.h"
 #include "vector.h"
 
@@ -166,8 +168,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
       memcpy(data, &value->int_value, sizeof(void *));
       break;
     case IR_VAR_VALUE_TY_STR:
-      // FIXME: !!!! doesn't work with string literals containing null char
-      strcpy(data, value->str_value);
+      memcpy(data, value->str_value.value, value->str_value.len + 1);
       break;
     case IR_VAR_VALUE_TY_VALUE_LIST:
       for (size_t i = 0; i < value->value_list.num_values; i++) {
@@ -195,14 +196,25 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
 
 static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
                                              const char *name,
-                                             struct ir_var *var) {
-  switch (var->ty) {
+                                             struct ir_glb *glb) {
+  enum symbol_ty symbol_ty;
+  enum codegen_entry_ty entry_ty;
+
+  switch (glb->var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
     BUG("str literal should have been lowered seperately");
   }
   case IR_VAR_TY_CONST_DATA:
-  case IR_VAR_TY_DATA: {
-    struct ir_var_ty_info info = ir_var_ty_info(ir, &var->var_ty);
+    symbol_ty = SYMBOL_TY_CONST_DATA;
+    entry_ty = CODEGEN_ENTRY_TY_CONST_DATA;
+    goto mk_symbol;
+  case IR_VAR_TY_DATA:
+    symbol_ty = SYMBOL_TY_DATA;
+    entry_ty = CODEGEN_ENTRY_TY_DATA;
+    goto mk_symbol;
+
+  mk_symbol: {
+    struct ir_var_ty_info info = ir_var_ty_info(ir, &glb->var->var_ty);
 
     // TODO: this leak
     struct vector *relocs = vector_create(sizeof(struct relocation));
@@ -212,21 +224,25 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
     char *data = arena_alloc(ir->arena, len);
     memset(data, 0, len);
 
-    codegen_write_var_value(ir, relocs, 0, &var->value, data);
+    codegen_write_var_value(ir, relocs, 0, &glb->var->value, data);
 
     struct codegen_data codegen_data = {.data = data, .len_data = len};
 
     CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
                           codegen_data.relocs);
 
-    // TODO: handle const data
-    return (struct codegen_entry){
-        .ty = CODEGEN_ENTRY_TY_DATA,
-        .glb_id = id,
-        .alignment = info.alignment,
-        .name = name,
-        .data = codegen_data,
-    };
+    struct symbol symbol = {.ty = symbol_ty,
+                            .name = name,
+                            .visibility = glb->linkage == IR_LINKAGE_EXTERNAL
+                                              ? SYMBOL_VISIBILITY_GLOBAL
+                                              : SYMBOL_VISIBILITY_PRIVATE};
+
+    return (struct codegen_entry){.ty = entry_ty,
+                                  .glb_id = id,
+                                  .alignment = info.alignment,
+                                  .name = name,
+                                  .data = codegen_data,
+                                  .symbol = symbol};
   }
   }
 }
@@ -237,12 +253,21 @@ static struct codegen_entry codegen_func(struct codegen_unit *unit,
 
   ir_clear_metadata(ir_func);
 
+  const char *name = unit->target->mangle(unit->arena, glb->name);
+
+  struct symbol symbol = {.ty = SYMBOL_TY_FUNC,
+                          .name = name,
+                          .visibility = glb->linkage == IR_LINKAGE_EXTERNAL
+                                            ? SYMBOL_VISIBILITY_GLOBAL
+                                            : SYMBOL_VISIBILITY_PRIVATE};
+
   struct codegen_entry entry = {
       .ty = CODEGEN_ENTRY_TY_FUNC,
       .alignment = unit->target->function_alignment,
+      .name = name,
       .glb_id = glb->id,
-      .name = unit->target->mangle(unit->arena, glb->name),
-      .func = {.unit = unit, .first = NULL, .last = NULL, .instr_count = 0}};
+      .func = {.unit = unit, .first = NULL, .last = NULL, .instr_count = 0},
+      .symbol = symbol};
 
   struct codegen_function *func = &entry.func;
   struct codegen_state state = {.arena = unit->arena,
@@ -307,11 +332,17 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
     size_t i = 0;
     while (glb) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-        codegen_unit->entries[i] = (struct codegen_entry){
-            .ty = CODEGEN_ENTRY_TY_DECL,
-            .alignment = 0,
-            .glb_id = glb->id,
-            .name = unit->target->mangle(unit->arena, glb->name)};
+        const char *name = unit->target->mangle(unit->arena, glb->name);
+        struct symbol symbol = {.ty = SYMBOL_TY_DECL,
+                                .name = name,
+                                .visibility = SYMBOL_VISIBILITY_UNDEF};
+
+        codegen_unit->entries[i] =
+            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DECL,
+                                   .alignment = 0,
+                                   .glb_id = glb->id,
+                                   .name = name,
+                                   .symbol = symbol};
 
         i++;
         glb = glb->succ;
@@ -326,18 +357,30 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
                       : mangle_str_cnst_name(unit->arena, "todo", glb->id);
 
         switch (glb->var->ty) {
-        case IR_VAR_TY_STRING_LITERAL:
+        case IR_VAR_TY_STRING_LITERAL: {
+          size_t len = glb->var->value.str_value.len + 1;
+          char *data = arena_alloc(unit->arena, len);
+          memcpy(data, glb->var->value.str_value.value, len);
+
+          struct symbol symbol = {.ty = SYMBOL_TY_STRING,
+                                  .name = name,
+                                  .visibility =
+                                      glb->linkage == IR_LINKAGE_EXTERNAL
+                                          ? SYMBOL_VISIBILITY_GLOBAL
+                                          : SYMBOL_VISIBILITY_PRIVATE};
+
           codegen_unit->entries[i] =
               (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
                                      .alignment = 1,
                                      .glb_id = glb->id,
                                      .name = name,
-                                     .str = glb->var->value.str_value};
+                                     .data = { .data = data, .len_data = len },
+                                     .symbol = symbol};
           break;
+        }
         case IR_VAR_TY_CONST_DATA:
         case IR_VAR_TY_DATA:
-          codegen_unit->entries[i] =
-              codegen_var_data(unit, glb->id, name, glb->var);
+          codegen_unit->entries[i] = codegen_var_data(unit, glb->id, name, glb);
           break;
         }
         break;

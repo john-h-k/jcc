@@ -272,7 +272,9 @@ static const char *process_raw_string(const struct lexer *lexer,
   char null = 0;
   vector_push_back(buff, &null);
 
-  char *value = arena_alloc_strdup(lexer->arena, vector_head(buff));
+  // can't strdup because potential null chars
+  char *value = arena_alloc(lexer->arena, vector_length(buff));
+  vector_copy_to(buff, value);
   vector_free(&buff);
 
   return value;

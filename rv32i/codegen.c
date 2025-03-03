@@ -2409,7 +2409,7 @@ void rv32i_emit_asm(FILE *file, struct codegen_unit *unit) {
       // FIXME: escape
       fprintf(file, "\n%s:\n", entry->name);
       fprintf(file, "        .string ");
-      fprint_str(file, entry->str);
+      fprint_str(file, entry->data.data, entry->data.len_data);
       break;
     }
     case CODEGEN_ENTRY_TY_CONST_DATA:

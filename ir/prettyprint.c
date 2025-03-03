@@ -1008,7 +1008,8 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
                                      bool top) {
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR:
-    fprint_str(file, var_value->str_value);
+    fprintf(file, "(LEN=%zu) ", var_value->str_value.len);
+    fprint_str(file, var_value->str_value.value, var_value->str_value.len);
     break;
   case IR_VAR_VALUE_TY_ZERO:
     fprintf(file, "{ ZERO }");

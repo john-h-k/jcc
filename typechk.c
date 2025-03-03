@@ -780,7 +780,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
       // FIXME: won't work for literals with null in them
       // the cnst node needs to also hold string length
-      array_ty.array.size = strlen(cnst->str_value) + 1;
+      array_ty.array.size = cnst->str_value.len + 1;
       break;
     }
     case AST_INIT_TY_INIT_LIST: {
@@ -1989,7 +1989,10 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
   case AST_CNST_TY_STR_LITERAL:
     // FIXME: lifetimes
     td_cnst.ty = TD_CNST_TY_STR_LITERAL;
-    td_cnst.str_value = cnst->str_value;
+    td_cnst.str_value = (struct td_cnst_str){
+      .value = cnst->str_value.value,
+      .len = cnst->str_value.len,
+    };
     var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
@@ -3198,7 +3201,7 @@ DEBUG_FUNC(cnst, cnst) {
   } else {
     // must be string literal for now
     TD_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_str(stderr, cnst->str_value);
+    fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
   }
 }
 
