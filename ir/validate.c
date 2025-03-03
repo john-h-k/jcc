@@ -179,7 +179,6 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_STORE:
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
                       "store ops should not have a var ty");
-
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       VALIDATION_CHECKZ(op->store.lcl, op, "store ty lcl must have lcl");
