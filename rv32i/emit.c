@@ -125,14 +125,11 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
       entries[i] = (struct object_entry){
           .ty = OBJECT_ENTRY_TY_C_STRING,
           .alignment = entry->alignment,
-          .data = entry->str,
-          .len_data = strlen(entry->str) + 1,
+          .data = entry->data.data,
+          .len_data = entry->data.len_data,
           .num_relocations = 0,
           .relocations = NULL,
-          .symbol =
-              (struct symbol){.ty = SYMBOL_TY_STRING,
-                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-                              .name = entry->name}};
+          .symbol = entry->symbol};
       break;
     case CODEGEN_ENTRY_TY_CONST_DATA:
       // TODO: relocations
@@ -143,10 +140,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .len_data = entry->data.len_data,
           .num_relocations = entry->data.num_relocs,
           .relocations = entry->data.relocs,
-          .symbol =
-              (struct symbol){.ty = SYMBOL_TY_CONST_DATA,
-                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-                              .name = entry->name}};
+          .symbol = entry->symbol};
       break;
     case CODEGEN_ENTRY_TY_DATA:
       entries[i] = (struct object_entry){
@@ -156,10 +150,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .len_data = entry->data.len_data,
           .num_relocations = entry->data.num_relocs,
           .relocations = entry->data.relocs,
-          .symbol =
-              (struct symbol){.ty = SYMBOL_TY_DATA,
-                              .visibility = SYMBOL_VISIBILITY_GLOBAL, // FIXME:
-                              .name = entry->name}};
+          .symbol = entry->symbol};
       break;
     case CODEGEN_ENTRY_TY_DECL:
       entries[i] = (struct object_entry){
@@ -169,9 +160,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .len_data = 0,
           .num_relocations = entry->data.num_relocs,
           .relocations = entry->data.relocs,
-          .symbol = (struct symbol){.ty = SYMBOL_TY_DECL,
-                                    .visibility = SYMBOL_VISIBILITY_UNDEF,
-                                    .name = entry->name}};
+          .symbol = entry->symbol};
       break;
     case CODEGEN_ENTRY_TY_FUNC: {
       struct codegen_function *func = &entry->func;
@@ -208,12 +197,6 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
         instr = instr->succ;
       }
 
-      struct symbol symbol = {
-          .ty = SYMBOL_TY_FUNC,
-          .name = entry->name,
-          .visibility = SYMBOL_VISIBILITY_GLOBAL // FIXME: symbol vis
-      };
-
       size_t len = rv32i_emit_bytesize(emitter);
       void *data = arena_alloc(unit->arena, len);
       rv32i_emit_copy_to(emitter, data);
@@ -226,7 +209,7 @@ struct emitted_unit rv32i_emit(const struct codegen_unit *unit) {
           .ty = OBJECT_ENTRY_TY_FUNC,
           .data = data,
           .len_data = len,
-          .symbol = symbol,
+          .symbol = entry->symbol,
           .alignment = RV32I_FUNCTION_ALIGNMENT,
       };
 

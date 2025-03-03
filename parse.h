@@ -290,12 +290,17 @@ enum ast_cnst_ty {
   AST_CNST_TY_WIDE_STR_LITERAL,
 };
 
+struct ast_cnst_str {
+  const char *value;
+  size_t len;
+};
+
 struct ast_cnst {
   enum ast_cnst_ty ty;
 
   union {
     unsigned long long int_value;
-    char *str_value;
+    struct ast_cnst_str str_value;
     long double flt_value;
   };
 };

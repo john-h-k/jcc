@@ -739,12 +739,17 @@ enum ir_var_value_ty {
   IR_VAR_VALUE_TY_VALUE_LIST,
 };
 
+struct ir_var_str {
+  const char *value;
+  size_t len;
+};
+
 struct ir_var_value {
   enum ir_var_value_ty ty;
   struct ir_var_ty var_ty;
 
   union {
-    const char *str_value;
+    struct ir_var_str str_value;
     unsigned long long int_value;
     long double flt_value;
     struct ir_var_addr addr;

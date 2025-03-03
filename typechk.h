@@ -247,12 +247,17 @@ enum td_cnst_ty {
   TD_CNST_TY_WIDE_STR_LITERAL,
 };
 
+struct td_cnst_str {
+  const char *value;
+  size_t len;
+};
+
 struct td_cnst {
   enum td_cnst_ty ty;
 
   union {
     unsigned long long int_value;
-    char *str_value;
+    struct td_cnst_str str_value;
     long double flt_value;
   };
 };

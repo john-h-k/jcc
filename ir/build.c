@@ -1011,6 +1011,49 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
   return op;
 }
 
+static struct ir_glb *build_str_literal(struct ir_unit *iru,
+                                        const struct td_cnst *cnst) {
+  struct ir_var_ty *chr = arena_alloc(iru->arena, sizeof(*chr));
+  *chr = IR_VAR_TY_I8;
+  struct ir_var_ty var_ty = {
+    .ty = IR_VAR_TY_TY_ARRAY,
+    .array = {
+      .underlying = chr,
+      .num_elements = cnst->str_value.len + 1
+    }
+  };
+
+  struct ir_glb *glb = ir_add_global(iru, IR_GLB_TY_DATA, &var_ty,
+                                     IR_GLB_DEF_TY_DEFINED, NULL);
+
+  glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
+
+  // if string literal contains null chars, it will mess up counting and so
+  // put it in data
+  if (strlen(cnst->str_value.value) < cnst->str_value.len) {
+    *glb->var =
+        (struct ir_var){.unit = iru,
+                        .ty = IR_VAR_TY_STRING_LITERAL,
+                        .var_ty = var_ty,
+                        .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                  .var_ty = var_ty,
+                                  .str_value = {.value = cnst->str_value.value,
+                                                .len = cnst->str_value.len}}};
+
+  } else {
+    *glb->var =
+        (struct ir_var){.unit = iru,
+                        .ty = IR_VAR_TY_CONST_DATA,
+                        .var_ty = var_ty,
+                        .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                  .var_ty = var_ty,
+                                  .str_value = {.value = cnst->str_value.value,
+                                                .len = cnst->str_value.len}}};
+  }
+
+  return glb;
+}
+
 static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct ir_var_ty var_ty,
@@ -1042,15 +1085,7 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
     break;
   case TD_CNST_TY_STR_LITERAL:
   case TD_CNST_TY_WIDE_STR_LITERAL: {
-    struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &var_ty,
-                                       IR_GLB_DEF_TY_DEFINED, NULL);
-    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
-    *glb->var = (struct ir_var){.unit = irb->unit,
-                                .ty = IR_VAR_TY_STRING_LITERAL,
-                                .var_ty = var_ty,
-                                .value = {.ty = IR_VAR_VALUE_TY_STR,
-                                          .var_ty = var_ty,
-                                          .str_value = cnst->str_value}};
+    struct ir_glb *glb = build_str_literal(irb->unit, cnst);
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = var_ty;
@@ -3655,6 +3690,9 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
   }
 }
 
+static struct ir_glb *build_str_literal(struct ir_unit *iru,
+                                        const struct td_cnst *cnst);
+
 static struct ir_var_value
 build_ir_for_var_value_expr(struct ir_var_builder *irb,
                             const struct td_expr *expr,
@@ -3670,12 +3708,12 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
     return build_ir_for_var_value_binary_op(irb, expr, var_ty);
   case TD_EXPR_TY_CNST: {
     const struct td_cnst *cnst = &expr->cnst;
-    if (cnst->ty == TD_CNST_TY_STR_LITERAL ||
-        cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_STR,
+    if (cnst->ty == TD_CNST_TY_STR_LITERAL) {
+      struct ir_glb *glb = build_str_literal(irb->unit, cnst);
+      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
                                    .var_ty =
                                        var_ty_for_td_var_ty(irb->unit, var_ty),
-                                   .str_value = cnst->str_value};
+                                       .addr =  { .glb = glb, .offset = 0 } };
     } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
       TODO("wide str globals");
     } else if (td_var_ty_is_integral_ty(&expr->var_ty)) {
