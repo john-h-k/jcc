@@ -103,6 +103,9 @@ struct cg_unit {
   size_t instr_size;
 };
 
+// returns the next instr that can be jumped to (ie skips empty blocks)
+struct instr *cg_get_next_instr(struct cg_basicblock *target);
+
 struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func, struct ir_basicblock *ir_basicblock);
 struct instr *cg_alloc_instr(struct cg_func *func, struct cg_basicblock *basicblock);
 

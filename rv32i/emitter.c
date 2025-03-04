@@ -104,7 +104,7 @@ void rv32i_emit_jalr(struct rv32i_emitter *emitter,
   case RV32I_TARGET_TY_BASICBLOCK: {                                           \
     signed long long cur_pos = rv32i_emitted_count(emitter);                   \
     signed long long target_pos =                                              \
-        instr.target.basicblock->cg_basicblock->first->id;                     \
+       cg_get_next_instr(instr.target.basicblock->cg_basicblock)->id;                     \
                                                                                \
     offset = (target_pos - cur_pos) * 4;                                       \
     break;                                                                     \

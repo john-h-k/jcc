@@ -143,7 +143,7 @@ static void emit_instr(const struct emit_state *state,
     struct x64_target_reloc reloc =
         x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {
-        .target = instr->x64->jmp.target->cg_basicblock->first, .reloc = reloc};
+        .target = cg_get_next_instr(instr->x64->jmp.target->cg_basicblock), .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
@@ -151,7 +151,7 @@ static void emit_instr(const struct emit_state *state,
     struct x64_target_reloc reloc =
         x64_emit_jcc(state->emitter, instr->x64->jcc);
     struct local_reloc_info info = {
-        .target = instr->x64->jcc.target->cg_basicblock->first, .reloc = reloc};
+        .target = cg_get_next_instr(instr->x64->jcc.target->cg_basicblock), .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
