@@ -53,6 +53,9 @@ struct preproc {
 
   // if a ## was just seen, we concat the next token
   bool concat_next_token;
+
+  // if a defined/__has_feature etc was just seen, we don't expand until end
+  bool keep_next_token;
 };
 
 static const char *preproc_token_name(enum preproc_token_ty ty) {
@@ -274,6 +277,7 @@ enum preproc_create_result preproc_create(struct program *program,
   p->line_has_nontrivial_token = false;
   p->in_angle_string_context = false;
   p->concat_next_token = false;
+  p->keep_next_token = false;
 
   p->defines = hashtbl_create_sized_str_keyed(sizeof(struct preproc_define));
 
@@ -876,6 +880,29 @@ static bool token_is_trivial(const struct preproc_token *token) {
          token->ty == PREPROC_TOKEN_TY_NEWLINE;
 }
 
+// tokens that shouldn't be stripped from an `#if` expression or similar
+static bool well_known_token(struct sized_str token) {
+  static const char *well_known[] = {
+    "defined",
+    "has_include",
+    "__has_include",
+    "has_embed",
+    "__has_embed",
+    "__has_feature",
+    "__has_builtin",
+    "__has_attribute",
+    "__has_c_attribute",
+  };
+
+  for (size_t i = 0; i < ARR_LENGTH(well_known); i++) {
+    if (!strncmp(token.str, well_known[i], strlen(well_known[i]))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static struct preproc_token preproc_stringify(struct preproc *preproc,
                                               struct vector *tokens);
 
@@ -884,6 +911,19 @@ static bool try_expand_token(struct preproc *preproc,
                              struct preproc_token *token, struct vector *buffer,
                              struct hashtbl *parents,
                              enum preproc_expand_token_flags flags) {
+  if (preproc->keep_next_token) {
+    if (token_is_trivial(token) || (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR && token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET)) {
+      // do we need to keep the whitespace/parens? we implicitly strip them here
+      return true;
+    } else if (token->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
+      vector_push_back(buffer, token);
+      preproc->keep_next_token = false;
+      return true;
+    } else {
+      BUG("bad token type in `defined` or similar construct");
+    }
+  }
+
   if (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
       token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
     if (preproc->concat_next_token) {
@@ -1237,6 +1277,13 @@ static bool try_expand_token(struct preproc *preproc,
     return true;
   }
 
+  if (well_known_token(ident)) {
+    // mark to not expand symbols until we end this check
+    preproc->keep_next_token = true;
+    vector_push_back(buffer, token);
+    return true;
+  }
+
   if (flags & PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO) {
     struct preproc_token zero_tok = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
                                      .span = MK_INVALID_TEXT_SPAN(0, 1),
@@ -1360,14 +1407,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 }
 
 static struct preproc_define *get_define(struct preproc *preproc,
-                                         struct vector *directive_tokens) {
-  if (vector_length(directive_tokens) != 1) {
-    TODO("handle bad define, had multiple tokens");
-  }
-
-  struct preproc_token def_name =
-      *(struct preproc_token *)vector_head(directive_tokens);
-
+                                         struct preproc_token def_name) {
   struct sized_str ident = {.str = def_name.text,
                             .len = text_span_len(&def_name.span)};
 
@@ -1449,6 +1489,56 @@ static unsigned long long eval_atom(struct preproc *preproc,
         BUG("did not expect this token type in directive expr");
         break;
       }
+    case PREPROC_TOKEN_TY_IDENTIFIER: {
+      if (!strncmp(token->text, "defined", strlen("defined"))) {
+        (*i)++;
+
+        while (
+            *i < num_tokens &&
+            token_is_trivial((struct preproc_token *)vector_get(tokens, *i))) {
+          (*i)++;
+        }
+
+        struct preproc_token *next = vector_get(tokens, *i);
+        (*i)++;
+
+        if (next->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            next->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+
+          while (*i < num_tokens &&
+                 token_is_trivial(
+                     (struct preproc_token *)vector_get(tokens, *i))) {
+            (*i)++;
+          }
+
+          next = vector_get(tokens, *i);
+          (*i)++;
+
+          while (*i < num_tokens &&
+                 token_is_trivial(
+                     (struct preproc_token *)vector_get(tokens, *i))) {
+            (*i)++;
+          }
+
+          struct preproc_token *close = vector_get(tokens, *i);
+          (*i)++;
+
+          if (close->ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
+              close->punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+            BUG("expected `)` after `defined(`");
+          }
+        }
+
+        if (next->ty != PREPROC_TOKEN_TY_IDENTIFIER) {
+          BUG("expected identifier after `defined(`");
+        }
+
+        return get_define(preproc, *next) ? 1 : 0;
+      } else {
+        BUG("bad identifier in preproc");
+      }
+      break;
+    }
     case PREPROC_TOKEN_TY_WHITESPACE:
     case PREPROC_TOKEN_TY_COMMENT:
       (*i)++;
@@ -1490,7 +1580,7 @@ static unsigned long long eval_expr(struct preproc *preproc,
       if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_QMARK) {
         long long ternary_lhs = eval_expr(preproc, tokens, i, num_tokens, 0);
         token = vector_get(tokens, *i);
-      
+
         long long ternary_rhs = eval_expr(preproc, tokens, i, num_tokens, 0);
 
         return value ? ternary_lhs : ternary_rhs;
@@ -1652,13 +1742,18 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
       if (token_streq(directive, "ifdef")) {
         UNEXPANDED_DIR_TOKENS();
 
-        bool now_enabled = enabled && get_define(preproc, directive_tokens);
+        bool now_enabled =
+            enabled && get_define(preproc, *(struct preproc_token *)vector_head(
+                                               directive_tokens));
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
       } else if (token_streq(directive, "ifndef")) {
         UNEXPANDED_DIR_TOKENS();
 
-        bool now_enabled = enabled && !get_define(preproc, directive_tokens);
+        bool now_enabled =
+            enabled &&
+            !get_define(preproc,
+                        *(struct preproc_token *)vector_head(directive_tokens));
         vector_push_back(preproc->enabled, &now_enabled);
         continue;
       } else if (token_streq(directive, "if")) {
@@ -1697,7 +1792,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           *(bool *)vector_tail(preproc->enabled) = false;
         } else {
-          bool now_enabled = get_define(preproc, directive_tokens);
+          bool now_enabled = get_define(
+              preproc, *(struct preproc_token *)vector_head(directive_tokens));
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
         }
         continue;
@@ -1707,7 +1803,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           *(bool *)vector_tail(preproc->enabled) = false;
         } else {
-          bool now_enabled = !get_define(preproc, directive_tokens);
+          bool now_enabled = !get_define(
+              preproc, *(struct preproc_token *)vector_head(directive_tokens));
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
         }
         continue;
