@@ -357,11 +357,11 @@ static int jcc_main(int argc, char **argv) {
         file = (struct compile_file){
             .ty = COMPILE_FILE_TY_PATH,
             .path = path_replace_ext(arena, source_path, "s")};
+        info("compiling source file '%s' into assembly file '%s'", source_path,
+             file.path);
       } else {
         file = compile_args.output;
       }
-      info("compiling source file '%s' into assembly file '%s'", source_path,
-           file.path);
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
       file = (struct compile_file){

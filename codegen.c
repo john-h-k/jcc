@@ -41,6 +41,14 @@ void cg_rebuild_ids(struct cg_func *func) {
   }
 }
 
+struct instr *cg_get_next_instr(struct cg_basicblock *target) {
+  while (!target->first) {
+    target = target->succ;
+  }
+
+  return target->first;
+}
+
 struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
                                           struct ir_basicblock *ir_basicblock) {
   struct cg_basicblock *basicblock =
@@ -407,22 +415,6 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
     basicblock = basicblock->succ;
   }
 #endif
-
-  // emitters expect all bbs to have a first instr so they can target it
-  // fixup here by adding first instrs to empty bbs
-  struct cg_basicblock *cg_basicblock = func->first;
-  while (cg_basicblock) {
-    if (!cg_basicblock->first) {
-      struct cg_basicblock *succ = cg_basicblock->succ;
-      while (!succ->first) {
-        succ = succ->succ;
-      }
-
-      cg_basicblock->first = succ->first;
-    }
-
-    cg_basicblock = cg_basicblock->succ;
-  }
 
   cg_rebuild_ids(func);
   unit->target->codegen.codegen_end(&state);
