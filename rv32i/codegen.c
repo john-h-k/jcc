@@ -1524,7 +1524,7 @@ static unsigned long long pessimistic_bb_distance(struct instr *from,
   // falsely generate large jumps, but this can also just be fixed by using
   // linker relaxation
 
-  return llabs((long long)to->first->id - (long long)from->id) * 4 *
+  return llabs((long long)cg_get_next_instr(to)->id - (long long)from->id) * 4 *
          /* instr size */ 4;
 }
 
