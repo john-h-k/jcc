@@ -68,6 +68,7 @@ struct codegen_unit {
 struct aarch64_instr;
 struct eep_instr;
 struct rv32i_instr;
+struct x64_instr;
 
 struct instr {
   size_t id;

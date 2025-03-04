@@ -345,6 +345,13 @@ run_tests() {
         continue
       fi
 
+      skip=$(grep -i "skip" "$file" | head -1 | sed -n 's/^\/\/ skip: //p')
+
+      if [[ -n "$skip" ]]; then
+        send_status skip "$prefix'$file' skipped: '$skip'"
+        continue
+      fi
+
       target_arch=$(grep -i "arch" "$file" | head -1 | sed -n 's/^\/\/ arch: //p')
       target_arch=${target_arch/arm64/atarget_arch64}
 
