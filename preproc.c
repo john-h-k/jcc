@@ -1107,7 +1107,7 @@ static bool try_expand_token(struct preproc *preproc,
           vector_push_back(arg, &next);
         } else if (depth == 1 && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                    next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
-          arg = vector_create(sizeof(struct preproc_token));
+          arg = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
           vector_push_back(args, &arg);
 
           seen_first_arg = true;
