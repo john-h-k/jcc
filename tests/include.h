@@ -20,7 +20,7 @@ extern FILE *__stderrp;
 
 extern FILE *__stdoutp;
 #define stdout __stdoutp
-#elifdef __riscv__
+#elif defined(__riscv__) || defined(__riscv)
 extern void **_impure_ptr;
 #define stderr ((FILE *)_impure_ptr[3])
 extern void **_impure_ptr;
