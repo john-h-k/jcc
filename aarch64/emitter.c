@@ -225,9 +225,9 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
   struct aarch64_reg source = fmov.source;
 
 #define ENC(dst, src) (((dst) << 10) | (src))
-#define CASE(dst, src)                                                \
-  case (((AARCH64_REG_TY_ ## dst) << 10) | (AARCH64_REG_TY_ ## src)):                                                \
-    aarch64_emit_instr(emitter, FMOV_ ## src ## _TO_ ## dst (source.idx, dest.idx));    \
+#define CASE(dst, src)                                                         \
+  case (((AARCH64_REG_TY_##dst) << 10) | (AARCH64_REG_TY_##src)):              \
+    aarch64_emit_instr(emitter, FMOV_##src##_TO_##dst(source.idx, dest.idx));  \
     break;
 
   switch (ENC(dest.ty, source.ty)) {
@@ -249,8 +249,8 @@ void aarch64_emit_fmov(struct aarch64_emitter *emitter,
     CASE(W, S)
     CASE(X, D)
 
-    default:
-      bad_instr();
+  default:
+    bad_instr();
   }
 #undef CASE
 #undef ENC
@@ -770,44 +770,80 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
 void aarch64_emit_load_byte(struct aarch64_emitter *emitter,
                             const struct aarch64_load ldrb) {
   aarch64_emit_instr(emitter,
-                     LDR_REG(MEM_SIZE_8, ldrb.offset.idx, ldrb.extend,
+                     LDR_REG(MEM_SIZE_8, 0, ldrb.offset.idx, ldrb.extend,
                              ldrb.amount, ldrb.addr.idx, ldrb.dest.idx));
 }
 
 void aarch64_emit_store_byte(struct aarch64_emitter *emitter,
                              const struct aarch64_store strb) {
   aarch64_emit_instr(emitter,
-                     STR_REG(MEM_SIZE_8, strb.offset.idx, strb.extend,
+                     STR_REG(MEM_SIZE_8, 0, strb.offset.idx, strb.extend,
                              strb.amount, strb.addr.idx, strb.source.idx));
 }
 
 void aarch64_emit_load_half(struct aarch64_emitter *emitter,
                             const struct aarch64_load ldrh) {
   aarch64_emit_instr(emitter,
-                     LDR_REG(MEM_SIZE_16, ldrh.offset.idx, ldrh.extend,
+                     LDR_REG(MEM_SIZE_16, 0, ldrh.offset.idx, ldrh.extend,
                              ldrh.amount, ldrh.addr.idx, ldrh.dest.idx));
 }
 
 void aarch64_emit_store_half(struct aarch64_emitter *emitter,
                              const struct aarch64_store strh) {
   aarch64_emit_instr(emitter,
-                     STR_REG(MEM_SIZE_16, strh.offset.idx, strh.extend,
+                     STR_REG(MEM_SIZE_16, 0, strh.offset.idx, strh.extend,
                              strh.amount, strh.addr.idx, strh.source.idx));
 }
 
 void aarch64_emit_load(struct aarch64_emitter *emitter,
                        const struct aarch64_load ldr) {
-  size_t sz = ldr.dest.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
-  aarch64_emit_instr(emitter, LDR_REG(sz, ldr.offset.idx, ldr.extend,
-                                      ldr.amount, ldr.addr.idx, ldr.dest.idx));
+
+  if (IS64(ldr)) {
+    aarch64_emit_instr(emitter,
+                       LDR_REG(MEM_SIZE_64, 0, ldr.offset.idx, ldr.extend,
+                               ldr.amount, ldr.addr.idx, ldr.dest.idx));
+  } else if (ISDBL(ldr)) {
+    aarch64_emit_instr(emitter,
+                       LDR_REG(0b11, 1, ldr.offset.idx, ldr.extend, ldr.amount,
+                               ldr.addr.idx, ldr.dest.idx));
+  } else if (ISFLT(ldr)) {
+    aarch64_emit_instr(emitter,
+                       LDR_REG(0b10, 1, ldr.offset.idx, ldr.extend, ldr.amount,
+                               ldr.addr.idx, ldr.dest.idx));
+  } else if (ISHLF(ldr)) {
+    aarch64_emit_instr(emitter,
+                       LDR_REG(0b01, 1, ldr.offset.idx, ldr.extend, ldr.amount,
+                               ldr.addr.idx, ldr.dest.idx));
+  } else {
+    aarch64_emit_instr(emitter,
+                       LDR_REG(MEM_SIZE_32, 0, ldr.offset.idx, ldr.extend,
+                               ldr.amount, ldr.addr.idx, ldr.dest.idx));
+  }
 }
 
 void aarch64_emit_store(struct aarch64_emitter *emitter,
                         const struct aarch64_store str) {
-  size_t sz = str.source.ty == AARCH64_REG_TY_X ? MEM_SIZE_64 : MEM_SIZE_32;
-  aarch64_emit_instr(emitter,
-                     STR_REG(sz, str.offset.idx, str.extend, str.amount,
-                             str.addr.idx, str.source.idx));
+  if (IS64_REG(str.source)) {
+    aarch64_emit_instr(emitter,
+                       STR_REG(MEM_SIZE_64, 0, str.offset.idx, str.extend,
+                               str.amount, str.addr.idx, str.source.idx));
+  } else if (ISDBL_REG(str.source)) {
+    aarch64_emit_instr(emitter,
+                       STR_REG(0b11, 1, str.offset.idx, str.extend, str.amount,
+                               str.addr.idx, str.source.idx));
+  } else if (ISFLT_REG(str.source)) {
+    aarch64_emit_instr(emitter,
+                       STR_REG(0b10, 1, str.offset.idx, str.extend, str.amount,
+                               str.addr.idx, str.source.idx));
+  } else if (ISHLF_REG(str.source)) {
+    aarch64_emit_instr(emitter,
+                       STR_REG(0b01, 1, str.offset.idx, str.extend, str.amount,
+                               str.addr.idx, str.source.idx));
+  } else {
+    aarch64_emit_instr(emitter,
+                       STR_REG(MEM_SIZE_32, 0, str.offset.idx, str.extend,
+                               str.amount, str.addr.idx, str.source.idx));
+  }
 }
 
 /* Conditional selects */

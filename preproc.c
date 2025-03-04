@@ -998,7 +998,13 @@ static bool try_expand_token(struct preproc *preproc,
           .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
           .text = new,
       };
-      vector_push_back(buffer, &new_tok);
+
+      preproc->concat_next_token = false;
+
+      // post-concat, self reference is not considered
+      parents = hashtbl_create_sized_str_keyed(0);
+      expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
+      hashtbl_free(&parents);
       break;
     }
     default:
@@ -1006,7 +1012,6 @@ static bool try_expand_token(struct preproc *preproc,
           preproc_token_name(token->ty), preproc_token_name(last->ty));
     }
 
-    preproc->concat_next_token = false;
     return true;
   }
 

@@ -783,7 +783,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     case AST_INIT_TY_EXPR: {
       // TODO: maybe this should be a helper func
       if (init->expr.ty != AST_EXPR_TY_CNST ||
-          init->expr.cnst.ty != AST_CNST_TY_STR_LITERAL) {
+          (init->expr.cnst.ty != AST_CNST_TY_STR_LITERAL && init->expr.cnst.ty != AST_CNST_TY_WIDE_STR_LITERAL)) {
         WARN("cannot initialise unsized array except with normal string "
              "literal");
       }
