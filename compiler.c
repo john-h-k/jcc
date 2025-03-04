@@ -34,28 +34,30 @@ struct compiler {
   struct typechk *typechk;
   const struct target *target;
 
-  char *output;
+  struct compile_file output;
 };
 
 enum compiler_create_result
 create_compiler(struct program *program, const struct target *target,
-                const char *output, const char *path,
+                struct compile_file output, const char *path,
                 const struct compile_args *args, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->args = *args;
   (*compiler)->target = target;
+  (*compiler)->output = output;
 
   struct preproc_create_args preproc_args = {
-    .target = args->target,
-    .path = path,
-    .num_include_paths = args->num_include_paths,
-    .include_paths = args->include_paths,
-    .verbose = args->verbose,
-    .fixed_timestamp = args->fixed_timestamp
+      .target = args->target,
+      .path = path,
+      .num_include_paths = args->num_include_paths,
+      .include_paths = args->include_paths,
+      .verbose = args->verbose,
+      .fixed_timestamp = args->fixed_timestamp,
   };
 
-  if (preproc_create(program, preproc_args, &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
+  if (preproc_create(program, preproc_args, &(*compiler)->preproc) !=
+      PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
@@ -73,11 +75,6 @@ create_compiler(struct program *program, const struct target *target,
   }
 
   arena_allocator_create(&(*compiler)->arena);
-
-  size_t sz = strlen(output) + 1;
-  (*compiler)->output = arena_alloc((*compiler)->arena, sz);
-  strcpy((*compiler)->output, output);
-  (*compiler)->output[sz - 1] = '\0';
 
   return COMPILER_CREATE_RESULT_SUCCESS;
 }
@@ -103,6 +100,19 @@ static void debug_print_stage(struct compiler *compiler, struct ir_unit *ir,
   }
 }
 
+FILE *compiler_open_file(struct compile_file file) {
+  switch (file.ty) {
+  case COMPILE_FILE_TY_NONE:
+    BUG("can't open file ty NONE");
+  case COMPILE_FILE_TY_PATH:
+    return fopen(file.path, "w");
+  case COMPILE_FILE_TY_STDOUT:
+    return stdout;
+  case COMPILE_FILE_TY_STDERR:
+    return stderr;
+  }
+}
+
 static enum compile_result compile_stage_preproc(struct compiler *compiler,
                                                  ...) {
   // variadic dummy because takes no args but macro needs args
@@ -110,14 +120,7 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   // this is only run in preproc only mode (`-E/--preprocess`), else it is
   // part of parsing
 
-  FILE *file;
-  // FIXME: hacky (and in main.c)
-  if (strcmp(compiler->output, "stdout") == 0) {
-    file = stdout;
-  } else {
-    file = fopen(compiler->output, "w");
-  }
-
+  FILE *file = compiler_open_file(compiler->output);
   if (!file) {
     return COMPILE_RESULT_BAD_FILE;
   }
@@ -386,7 +389,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
 
   if (compiler->args.build_asm_file) {
     if (target->emit_asm) {
-      FILE *file = fopen(compiler->output, "w");
+      FILE *file = compiler_open_file(compiler->output);
 
       if (!file) {
         return COMPILE_RESULT_BAD_FILE;
@@ -399,7 +402,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
       return COMPILE_RESULT_SUCCESS;
     } else if (target->debug_print_codegen) {
       warn("using debug codegen output; not valid assembler input");
-      FILE *file = fopen(compiler->output, "w");
+      FILE *file = compiler_open_file(compiler->output);
 
       if (!file) {
         return COMPILE_RESULT_BAD_FILE;
@@ -431,8 +434,10 @@ static enum compile_result
 compile_stage_build_object(struct compiler *compiler,
                            struct emitted_unit *emitted_unit) {
 
+  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH, "can't build object to stdout/stderr");
+
   struct build_object_args args = {.compile_args = &compiler->args,
-                                   .output = compiler->output,
+                                   .output = compiler->output.path,
                                    .entries = emitted_unit->entries,
                                    .num_entries = emitted_unit->num_entries};
 

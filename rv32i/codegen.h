@@ -368,9 +368,6 @@ size_t reg_size(enum rv32i_reg_ty reg_ty);
 
 struct rv32i_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
-bool is_return_reg(struct rv32i_reg reg);
-bool is_zero_reg(struct rv32i_reg reg);
-
 enum rv32i_instr_class instr_class(enum rv32i_instr_ty ty);
 
 typedef void(walk_regs_callback)(struct instr *instr, struct rv32i_reg reg,
