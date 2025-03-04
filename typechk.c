@@ -363,6 +363,12 @@ static bool is_cast_needed(struct typechk *tchk, const struct td_var_ty *var_ty,
 static struct td_expr add_cast_if_needed(struct typechk *tchk,
                                          struct td_expr expr,
                                          struct td_var_ty target_ty) {
+  if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER && target_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // HACK: change the string literal type to array so ir build knows to have it inline
+    expr.var_ty = target_ty;
+    return expr;
+  }
+
   if (is_cast_needed(tchk, &expr.var_ty, &target_ty)) {
     return add_cast_expr(tchk, expr, target_ty);
   }
@@ -776,6 +782,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
              "literal");
       }
 
+      // change the constant type to an array, as it is currently a pointer
       const struct ast_cnst *cnst = &init->expr.cnst;
 
       // FIXME: won't work for literals with null in them
@@ -3212,9 +3219,11 @@ DEBUG_FUNC(cnst, cnst) {
   } else if (cnst->ty == TD_CNST_TY_STR_LITERAL) {
     TD_PRINT_SAMELINE_Z("CONSTANT ");
     fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprintf(stderr, "\n");
   } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
     TD_PRINT_SAMELINE_Z("CONSTANT ");
     fprint_wstr(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprintf(stderr, "\n");
   } else {
     BUG("dont know how to print cnst");
   }

@@ -14,6 +14,8 @@
 
 int printf(const char *, ...);
 
+#define STR()
+
 #define PRINT(fmt, ...) printf(fmt, __VA_ARGS__)
 
 int main() {
