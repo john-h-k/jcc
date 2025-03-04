@@ -1053,6 +1053,7 @@ static bool try_expand_token(struct preproc *preproc,
 
       int depth = 1;
       bool skip_trivial = false;
+      bool seen_first_arg = false;
       while (true) {
         struct preproc_token next;
         preproc_next_token(preproc, &next, flags);
@@ -1076,6 +1077,9 @@ static bool try_expand_token(struct preproc *preproc,
           depth--;
 
           if (!depth) {
+            if (!seen_first_arg && !macro_fn.num_params) {
+              vector_pop(args);
+            }
             break;
           }
 
@@ -1084,6 +1088,8 @@ static bool try_expand_token(struct preproc *preproc,
                    next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
           arg = vector_create(sizeof(struct preproc_token));
           vector_push_back(args, &arg);
+
+          seen_first_arg = true;
 
           // strip leading whitespace
           skip_trivial = true;
