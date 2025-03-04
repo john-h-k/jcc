@@ -1056,8 +1056,8 @@ static bool try_expand_token(struct preproc *preproc,
     case PREPROC_DEFINE_VALUE_TY_MACRO_FN: {
       struct preproc_macro_fn macro_fn = value->macro_fn;
 
-      struct vector *args = vector_create(sizeof(struct vector *));
-      struct vector *arg = vector_create(sizeof(struct preproc_token));
+      struct vector *args = vector_create_in_arena(sizeof(struct vector *), preproc->arena);
+      struct vector *arg = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
       vector_push_back(args, &arg);
 
       // first need to take the arguments
