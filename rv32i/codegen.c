@@ -1583,10 +1583,10 @@ void rv32i_codegen_end(struct cg_state *state) {
         long long offset =
             pessimistic_bb_distance(last, target.basicblock->cg_basicblock);
 
-        // if (offset >= MIN_B_TYPE_BR && offset <= MAX_B_TYPE_BR) {
-        //   // valid offset, nothing needed
-        //   goto done;
-        // }
+        if (offset >= MIN_B_TYPE_BR && offset <= MAX_B_TYPE_BR) {
+          // valid offset, nothing needed
+          goto done;
+        }
 
         if (offset < MIN_J_TYPE_BR || offset > MAX_J_TYPE_BR) {
           BUG("cond br > 2.5mb");
