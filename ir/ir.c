@@ -1393,7 +1393,7 @@ struct ir_op *ir_insert_before_op(struct ir_func *irb,
 
 struct ir_op *ir_append_op(struct ir_func *irb, struct ir_stmt *stmt,
                            enum ir_op_ty ty, struct ir_var_ty var_ty) {
-  struct ir_op *op = ir_alloc_ir_op(irb, stmt);
+  struct ir_op *op = ir_alloc_op(irb, stmt);
 
   op->ty = ty;
   op->var_ty = var_ty;
@@ -1437,7 +1437,7 @@ struct ir_op *ir_insert_phi(struct ir_func *irb, struct ir_basicblock *basicbloc
                          struct ir_var_ty var_ty) {
   struct ir_stmt *stmt = basicblock->first;
   if (!stmt) {
-    stmt = ir_alloc_ir_stmt(irb, basicblock);
+    stmt = ir_alloc_stmt(irb, basicblock);
   } else if (!(stmt->flags & IR_STMT_FLAG_PHI)) {
     stmt = ir_insert_before_stmt(irb, stmt);
   }
@@ -1450,7 +1450,7 @@ struct ir_op *ir_insert_phi(struct ir_func *irb, struct ir_basicblock *basicbloc
   if (op) {
     phi = ir_insert_before_op(irb, op, IR_OP_TY_PHI, var_ty);
   } else {
-    phi = ir_alloc_ir_op(irb, stmt);
+    phi = ir_alloc_op(irb, stmt);
     phi->ty = IR_OP_TY_PHI;
     phi->var_ty = var_ty;
   }
@@ -1545,7 +1545,7 @@ void ir_swap_ops(struct ir_func *irb, struct ir_op *left, struct ir_op *right) {
   ir_attach_op(irb, right, left_stmt, left_pred, left_succ);
 }
 
-struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb) {
+struct ir_basicblock *ir_alloc_basicblock(struct ir_func *irb) {
   struct ir_basicblock *basicblock =
       arena_alloc(irb->arena, sizeof(*basicblock));
 
@@ -1564,9 +1564,8 @@ struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb) {
       .last = NULL,
       .metadata = NULL,
       .comment = NULL,
-      .first_instr = NULL,
-      .last_instr = NULL,
 
+      .cg_basicblock = NULL,
       .preds = NULL,
       .num_preds = 0,
   };
@@ -1580,7 +1579,7 @@ struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb) {
   return basicblock;
 }
 
-struct ir_stmt *ir_alloc_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_alloc_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = arena_alloc(irb->arena, sizeof(*stmt));
 
@@ -1608,7 +1607,7 @@ struct ir_stmt *ir_alloc_ir_stmt(struct ir_func *irb,
 }
 
 // TODO: this should call `initialise_ir_op`
-struct ir_op *ir_alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
+struct ir_op *ir_alloc_op(struct ir_func *irb, struct ir_stmt *stmt) {
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
   if (!stmt->first) {
@@ -1638,7 +1637,7 @@ struct ir_op *ir_alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt) {
   return op;
 }
 
-struct ir_op *ir_alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_alloc_contained_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer) {
   struct ir_op *contained =
       ir_insert_before_op(irb, consumer, op->ty, op->var_ty);
@@ -1671,7 +1670,7 @@ struct ir_op *ir_alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
   return contained;
 }
 
-struct ir_op *ir_alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
+struct ir_op *ir_alloc_fixed_reg_dest_op(struct ir_func *irb, struct ir_op **op,
                                          struct ir_op *consumer,
                                          struct ir_reg reg) {
   struct ir_op *mov =
@@ -1686,7 +1685,7 @@ struct ir_op *ir_alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **
   return mov;
 }
 
-struct ir_op *ir_alloc_fixed_reg_source_ir_op(struct ir_func *irb,
+struct ir_op *ir_alloc_fixed_reg_source_op(struct ir_func *irb,
                                            struct ir_op *producer,
                                            struct ir_reg reg) {
   struct ir_op *mov =
@@ -1972,8 +1971,8 @@ struct ir_basicblock *ir_insert_basicblocks_after_op(struct ir_func *irb,
                                                   struct ir_basicblock *first) {
   struct ir_basicblock *orig_bb = insert_after->stmt->basicblock;
 
-  struct ir_basicblock *end_bb = ir_alloc_ir_basicblock(irb);
-  struct ir_stmt *end_stmt = ir_alloc_ir_stmt(irb, end_bb);
+  struct ir_basicblock *end_bb = ir_alloc_basicblock(irb);
+  struct ir_stmt *end_stmt = ir_alloc_stmt(irb, end_bb);
 
   // now move all later instructions to the end bb
   // first break up the stmt we are in
@@ -2419,7 +2418,7 @@ struct ir_op *ir_spill_op(struct ir_func *irb, struct ir_op *op) {
         store = ir_insert_before_op(irb, succ->first, IR_OP_TY_STORE,
                                     IR_VAR_TY_NONE);
       } else {
-        store = ir_alloc_ir_op(irb, succ);
+        store = ir_alloc_op(irb, succ);
         store->ty = IR_OP_TY_STORE;
         store->var_ty = IR_VAR_TY_NONE;
       }
@@ -2600,7 +2599,7 @@ struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
   return uses;
 }
 
-size_t ir_unique_idx_for_ir_reg(struct ir_reg reg) {
+size_t ir_unique_idx_for_reg(struct ir_reg reg) {
   return reg.idx * /* num tys */ 5 + reg.ty;
 }
 

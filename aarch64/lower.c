@@ -327,16 +327,16 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
 
       op->binary_op.ty = ir_flip_binary_comparison(op->binary_op.ty);
       op->binary_op.lhs = op->binary_op.rhs;
-      op->binary_op.rhs = ir_alloc_contained_ir_op(func, lhs, op);
+      op->binary_op.rhs = ir_alloc_contained_op(func, lhs, op);
     } else {
-      op->binary_op.lhs = ir_alloc_contained_ir_op(func, lhs, op);
+      op->binary_op.lhs = ir_alloc_contained_op(func, lhs, op);
     }
   } else if (supports_rhs_contained &&
              (rhs->ty == IR_OP_TY_CNST &&
               (ir_var_ty_is_integral(&rhs->var_ty) ||
                (ir_var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0)) &&
               fits_in_alu_imm(rhs->cnst.int_value))) {
-    op->binary_op.rhs = ir_alloc_contained_ir_op(func, rhs, op);
+    op->binary_op.rhs = ir_alloc_contained_op(func, rhs, op);
   }
 }
 
@@ -350,7 +350,7 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  op->addr_offset.base = ir_alloc_contained_ir_op(func, base, op);
+  op->addr_offset.base = ir_alloc_contained_op(func, base, op);
 }
 
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
@@ -365,7 +365,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
+    op->load.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
@@ -386,7 +386,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
          addr_offset.scale == ir_var_ty_info(func->unit, &op->var_ty).size);
 
     if (offset_contain || index_contain) {
-      op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
+      op->load.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
 }
@@ -403,7 +403,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
+    op->store.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
@@ -422,7 +422,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
              ir_var_ty_info(func->unit, &op->store.value->var_ty).size);
 
     if (offset_contain || index_contain) {
-      op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
+      op->store.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
 }

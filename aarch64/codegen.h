@@ -535,13 +535,13 @@ enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty);
 typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg,
                                  enum aarch64_reg_usage_ty usage_ty,
                                  void *metadata);
-void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
+void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
                void *metadata);
 
-void aarch64_codegen_start(struct codegen_state *state);
-void aarch64_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock);
-void aarch64_codegen_end(struct codegen_state *state);
+void aarch64_codegen_start(struct cg_state *state);
+void aarch64_codegen_basicblock(struct cg_state *state, struct ir_basicblock *basicblock);
+void aarch64_codegen_end(struct cg_state *state);
 
-void aarch64_debug_print_codegen(FILE *file, struct codegen_unit *unit);
+void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit);
 
 #endif

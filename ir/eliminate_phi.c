@@ -294,14 +294,14 @@ void eliminate_phi(struct ir_func *irb) {
               from_pos = LCL_POS(value->lcl->id);
               from_metadata = value->lcl;
             } else {
-              from_pos = REG_POS(ir_unique_idx_for_ir_reg(value->reg));
+              from_pos = REG_POS(ir_unique_idx_for_reg(value->reg));
             }
 
             if (op->lcl) {
               to_pos = LCL_POS(op->lcl->id);
               to_metadata = op->lcl;
             } else {
-              to_pos = REG_POS(ir_unique_idx_for_ir_reg(op->reg));
+              to_pos = REG_POS(ir_unique_idx_for_reg(op->reg));
             }
 
             if (from_pos != to_pos) {
@@ -402,14 +402,14 @@ void eliminate_phi(struct ir_func *irb) {
               from_pos = LCL_POS(value->lcl->id);
               from_metadata = value->lcl;
             } else {
-              from_pos = REG_POS(ir_unique_idx_for_ir_reg(value->reg));
+              from_pos = REG_POS(ir_unique_idx_for_reg(value->reg));
             }
 
             if (op->lcl) {
               to_pos = LCL_POS(op->lcl->id);
               to_metadata = op->lcl;
             } else {
-              to_pos = REG_POS(ir_unique_idx_for_ir_reg(op->reg));
+              to_pos = REG_POS(ir_unique_idx_for_reg(op->reg));
             }
 
             if (from_pos != to_pos) {

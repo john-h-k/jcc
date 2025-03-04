@@ -1,5 +1,6 @@
 #include "codegen.h"
 
+#include "aarch64/isa.h"
 #include "alloc.h"
 #include "ir/ir.h"
 #include "program.h"
@@ -7,9 +8,9 @@
 #include "util.h"
 #include "vector.h"
 
-int codegen_sort_entries_by_id(const void *a, const void *b) {
-  const struct codegen_entry *l = a;
-  const struct codegen_entry *r = b;
+int cg_sort_entries_by_id(const void *a, const void *b) {
+  const struct cg_entry *l = a;
+  const struct cg_entry *r = b;
 
   if (l->glb_id > r->glb_id) {
     return 1;
@@ -20,31 +21,84 @@ int codegen_sort_entries_by_id(const void *a, const void *b) {
   }
 }
 
-struct instr *alloc_instr(struct codegen_function *func) {
-  struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
+void cg_rebuild_ids(struct cg_func *func) {
+  size_t next_basicblock_id = 0;
+  size_t next_instr_id = 0;
+
+  struct cg_basicblock *basicblock = func->first;
+  while (basicblock) {
+    basicblock->id = next_basicblock_id++;
+
+    struct instr *instr = basicblock->first;
+
+    while (instr) {
+      instr->id = next_instr_id++;
+
+      instr = instr->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+}
+
+struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
+                                          struct ir_basicblock *ir_basicblock) {
+  struct cg_basicblock *basicblock =
+      arena_alloc(func->unit->arena, sizeof(*basicblock));
 
   if (!func->first) {
-    func->first = instr;
+    func->first = basicblock;
+  }
+
+  *basicblock = (struct cg_basicblock){
+      .id = func->basicblock_count++,
+      .ir_basicblock = ir_basicblock,
+      .func = func,
+      .pred = func->last,
+      .succ = NULL,
+      .first = NULL,
+      .last = NULL,
+  };
+
+  if (ir_basicblock) {
+    ir_basicblock->cg_basicblock = basicblock;
+  }
+
+  if (func->last) {
+    func->last->succ = basicblock;
+  }
+
+  func->last = basicblock;
+
+  return basicblock;
+}
+
+struct instr *cg_alloc_instr(struct cg_func *func,
+                             struct cg_basicblock *basicblock) {
+  struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
+
+  if (!basicblock->first) {
+    basicblock->first = instr;
   }
 
   instr->id = func->instr_count++;
-  instr->pred = func->last;
+  instr->pred = basicblock->last;
   instr->succ = NULL;
   instr->reloc = NULL;
   instr->op = NULL;
   instr->p = arena_alloc(func->unit->arena, func->unit->instr_size);
 
-  if (func->last) {
-    func->last->succ = instr;
+  if (basicblock->last) {
+    basicblock->last->succ = instr;
   }
 
-  func->last = instr;
+  basicblock->last = instr;
 
   return instr;
 }
 
-const char *mangle_str_cnst_name(struct arena_allocator *arena,
-                                 const char *func_name, size_t id) {
+const char *cg_mangle_str_cnst_name(struct arena_allocator *arena,
+                                    const char *func_name, size_t id) {
   // TODO: this should all really be handled by the mach-o file
   func_name = "str";
   size_t func_name_len = strlen(func_name);
@@ -169,7 +223,8 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
       break;
     case IR_VAR_VALUE_TY_STR: {
       struct ir_var_ty var_ty = value->var_ty;
-      DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY, "expected IR_VAR_VALUE_TY_STR to be an array");
+      DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY,
+                   "expected IR_VAR_VALUE_TY_STR to be an array");
 
       struct ir_var_ty ch_ty = *var_ty.array.underlying;
 
@@ -203,11 +258,10 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
   }
 }
 
-static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
-                                             const char *name,
-                                             struct ir_glb *glb) {
+static struct cg_entry codegen_var_data(struct ir_unit *ir, size_t id,
+                                        const char *name, struct ir_glb *glb) {
   enum symbol_ty symbol_ty;
-  enum codegen_entry_ty entry_ty;
+  enum cg_entry_ty entry_ty;
 
   switch (glb->var->ty) {
   case IR_VAR_TY_STRING_LITERAL: {
@@ -215,11 +269,11 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
   }
   case IR_VAR_TY_CONST_DATA:
     symbol_ty = SYMBOL_TY_CONST_DATA;
-    entry_ty = CODEGEN_ENTRY_TY_CONST_DATA;
+    entry_ty = CG_ENTRY_TY_CONST_DATA;
     goto mk_symbol;
   case IR_VAR_TY_DATA:
     symbol_ty = SYMBOL_TY_DATA;
-    entry_ty = CODEGEN_ENTRY_TY_DATA;
+    entry_ty = CG_ENTRY_TY_DATA;
     goto mk_symbol;
 
   mk_symbol: {
@@ -235,7 +289,7 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
 
     codegen_write_var_value(ir, relocs, 0, &glb->var->value, data);
 
-    struct codegen_data codegen_data = {.data = data, .len_data = len};
+    struct cg_data codegen_data = {.data = data, .len_data = len};
 
     CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
                           codegen_data.relocs);
@@ -246,18 +300,56 @@ static struct codegen_entry codegen_var_data(struct ir_unit *ir, size_t id,
                                               ? SYMBOL_VISIBILITY_GLOBAL
                                               : SYMBOL_VISIBILITY_PRIVATE};
 
-    return (struct codegen_entry){.ty = entry_ty,
-                                  .glb_id = id,
-                                  .alignment = info.alignment,
-                                  .name = name,
-                                  .data = codegen_data,
-                                  .symbol = symbol};
+    return (struct cg_entry){.ty = entry_ty,
+                             .glb_id = id,
+                             .alignment = info.alignment,
+                             .name = name,
+                             .data = codegen_data,
+                             .symbol = symbol};
   }
   }
 }
 
-static struct codegen_entry codegen_func(struct codegen_unit *unit,
-                                         struct ir_glb *glb) {
+void cg_detach_basicblock(struct cg_func *func,
+                          struct cg_basicblock *basicblock) {
+  if (basicblock->id == DETACHED_BASICBLOCK) {
+    return;
+  }
+
+  invariant_assert(func->basicblock_count,
+                   "`detach_cg_basicblock` would underflow basicblock count "
+                   "for `cg_builder`");
+
+  size_t instr_count = 0;
+  struct instr *instr = basicblock->first;
+  while (instr) {
+    instr_count++;
+
+    instr = instr->succ;
+  }
+
+  func->basicblock_count--;
+  func->instr_count -= instr_count;
+
+  basicblock->id = DETACHED_BASICBLOCK;
+
+  // fix links on either side of basicblock
+  if (basicblock->pred) {
+    basicblock->pred->succ = basicblock->succ;
+  } else {
+    func->first = basicblock->succ;
+  }
+
+  if (basicblock->succ) {
+    basicblock->succ->pred = basicblock->pred;
+  } else {
+    func->last = basicblock->pred;
+  }
+
+  basicblock->func = NULL;
+}
+
+static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
   struct ir_func *ir_func = glb->func;
 
   ir_clear_metadata(ir_func);
@@ -270,68 +362,86 @@ static struct codegen_entry codegen_func(struct codegen_unit *unit,
                                             ? SYMBOL_VISIBILITY_GLOBAL
                                             : SYMBOL_VISIBILITY_PRIVATE};
 
-  struct codegen_entry entry = {
-      .ty = CODEGEN_ENTRY_TY_FUNC,
-      .alignment = unit->target->function_alignment,
-      .name = name,
-      .glb_id = glb->id,
-      .func = {.unit = unit, .first = NULL, .last = NULL, .instr_count = 0},
-      .symbol = symbol};
+  struct cg_entry entry = {.ty = CG_ENTRY_TY_FUNC,
+                           .alignment = unit->target->function_alignment,
+                           .name = name,
+                           .glb_id = glb->id,
+                           .func = {.unit = unit,
+                                    .first = NULL,
+                                    .last = NULL,
+                                    .instr_count = 0,
+                                    .basicblock_count = 0},
+                           .symbol = symbol};
 
-  struct codegen_function *func = &entry.func;
-  struct codegen_state state = {.arena = unit->arena,
-                                .target = unit->target,
-                                .func = func,
-                                .ir = ir_func};
+  struct cg_func *func = &entry.func;
+  struct cg_state state = {.arena = unit->arena,
+                           .target = unit->target,
+                           .func = func,
+                           .ir = ir_func};
 
   unit->target->codegen.codegen_start(&state);
 
   // func->prologue = state.prologue_info.prologue_generated;
   // func->stack_size = state.prologue_info.stack_size;
 
+  // currently, after phi elim, ops using the phis still point to the phis
+  // rather than the moves so we can't strip them before codegen but they don't
+  // generate instructions and so can lead to empty basicblocks we fix this by
+  // stripping empty basicblocks before `codegen_end`
+
   struct ir_basicblock *basicblock = ir_func->first;
   while (basicblock) {
-    struct instr *first_pred = func->last;
-
     unit->target->codegen.codegen_basicblock(&state, basicblock);
-
-    basicblock->first_instr = first_pred ? first_pred->succ : func->first;
-    basicblock->last_instr = func->last;
 
     basicblock = basicblock->succ;
   }
 
-  unit->target->codegen.codegen_end(&state);
-
-  basicblock = glb->func->first;
+#ifndef NDEBUG
+  basicblock = ir_func->first ? ir_func->first->succ : ir_func->first;
   while (basicblock) {
-    if (!basicblock->first_instr) {
-      struct ir_basicblock *succ = basicblock->succ;
-      while (!succ->first_instr) {
-        succ = succ->succ;
-      }
-
-      basicblock->first_instr = succ->first_instr;
+    if (!basicblock->cg_basicblock) {
+      BUG("BB @ %zu did not have a corresponding `cg_basicblock`",
+          basicblock->id);
     }
 
     basicblock = basicblock->succ;
   }
+#endif
+
+  // emitters expect all bbs to have a first instr so they can target it
+  // fixup here by adding first instrs to empty bbs
+  struct cg_basicblock *cg_basicblock = func->first;
+  while (cg_basicblock) {
+    if (!cg_basicblock->first) {
+      struct cg_basicblock *succ = cg_basicblock->succ;
+      while (!succ->first) {
+        succ = succ->succ;
+      }
+
+      cg_basicblock->first = succ->first;
+    }
+
+    cg_basicblock = cg_basicblock->succ;
+  }
+
+  cg_rebuild_ids(func);
+  unit->target->codegen.codegen_end(&state);
 
   return entry;
 }
 
-struct codegen_unit *codegen(struct ir_unit *unit) {
-  struct codegen_unit *codegen_unit = arena_alloc(unit->arena, sizeof(*unit));
+struct cg_unit *codegen(struct ir_unit *unit) {
+  struct cg_unit *codegen_unit = arena_alloc(unit->arena, sizeof(*unit));
 
   struct codegen_info info = unit->target->codegen;
 
-  *codegen_unit = (struct codegen_unit){
+  *codegen_unit = (struct cg_unit){
       .ty = info.ty,
       .target = unit->target,
       .instr_size = info.instr_sz,
       .num_entries = unit->num_globals,
       .entries = arena_alloc(unit->arena,
-                             unit->num_globals * sizeof(struct codegen_entry))};
+                             unit->num_globals * sizeof(struct cg_entry))};
 
   arena_allocator_create(&codegen_unit->arena);
 
@@ -346,12 +456,11 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
                                 .name = name,
                                 .visibility = SYMBOL_VISIBILITY_UNDEF};
 
-        codegen_unit->entries[i] =
-            (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_DECL,
-                                   .alignment = 0,
-                                   .glb_id = glb->id,
-                                   .name = name,
-                                   .symbol = symbol};
+        codegen_unit->entries[i] = (struct cg_entry){.ty = CG_ENTRY_TY_DECL,
+                                                     .alignment = 0,
+                                                     .glb_id = glb->id,
+                                                     .name = name,
+                                                     .symbol = symbol};
 
         i++;
         glb = glb->succ;
@@ -363,7 +472,7 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
         // TODO: give names relative to func
         const char *name =
             glb->name ? unit->target->mangle(unit->arena, glb->name)
-                      : mangle_str_cnst_name(unit->arena, "todo", glb->id);
+                      : cg_mangle_str_cnst_name(unit->arena, "todo", glb->id);
 
         switch (glb->var->ty) {
         case IR_VAR_TY_STRING_LITERAL: {
@@ -379,12 +488,12 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
                                           : SYMBOL_VISIBILITY_PRIVATE};
 
           codegen_unit->entries[i] =
-              (struct codegen_entry){.ty = CODEGEN_ENTRY_TY_STRING,
-                                     .alignment = 1,
-                                     .glb_id = glb->id,
-                                     .name = name,
-                                     .data = { .data = data, .len_data = len },
-                                     .symbol = symbol};
+              (struct cg_entry){.ty = CG_ENTRY_TY_STRING,
+                                .alignment = 1,
+                                .glb_id = glb->id,
+                                .name = name,
+                                .data = {.data = data, .len_data = len},
+                                .symbol = symbol};
           break;
         }
         case IR_VAR_TY_CONST_DATA:
@@ -405,12 +514,12 @@ struct codegen_unit *codegen(struct ir_unit *unit) {
   }
 
   qsort(codegen_unit->entries, codegen_unit->num_entries,
-        sizeof(struct codegen_entry), codegen_sort_entries_by_id);
+        sizeof(struct cg_entry), cg_sort_entries_by_id);
 
   return codegen_unit;
 }
 
-void codegen_free(struct codegen_unit **unit) {
+void codegen_free(struct cg_unit **unit) {
   arena_allocator_free(&(*unit)->arena);
 
   *unit = NULL;

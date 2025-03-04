@@ -35,8 +35,8 @@ static void remove_critical_edges(struct ir_func *irb) {
         intermediate->merge =
             (struct ir_basicblock_merge){.target = basicblock};
 
-        struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb, intermediate);
-        struct ir_op *op = ir_alloc_ir_op(irb, br_stmt);
+        struct ir_stmt *br_stmt = ir_alloc_stmt(irb, intermediate);
+        struct ir_op *op = ir_alloc_op(irb, br_stmt);
         op->ty = IR_OP_TY_BR;
         op->var_ty = IR_VAR_TY_NONE;
 
@@ -447,20 +447,20 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       }
     }
 
-    struct ir_stmt *cmp_stmt = ir_alloc_ir_stmt(func, prev_bb);
-    struct ir_op *cnst = ir_alloc_ir_op(func, cmp_stmt);
+    struct ir_stmt *cmp_stmt = ir_alloc_stmt(func, prev_bb);
+    struct ir_op *cnst = ir_alloc_op(func, cmp_stmt);
     cnst->ty = IR_OP_TY_CNST;
     cnst->var_ty = var_ty;
     cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
                                      .int_value = split_case->value};
 
-    struct ir_op *cmp_op = ir_alloc_ir_op(func, cmp_stmt);
+    struct ir_op *cmp_op = ir_alloc_op(func, cmp_stmt);
     cmp_op->ty = IR_OP_TY_BINARY_OP;
     cmp_op->var_ty = IR_VAR_TY_I32;
     cmp_op->binary_op = (struct ir_op_binary_op){
         .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = op->br_switch.value, .rhs = cnst};
 
-    struct ir_op *br_op = ir_alloc_ir_op(func, cmp_stmt);
+    struct ir_op *br_op = ir_alloc_op(func, cmp_stmt);
     br_op->ty = IR_OP_TY_BR_COND;
     br_op->var_ty = IR_VAR_TY_NONE;
     br_op->br_cond = (struct ir_op_br_cond){.cond = cmp_op};
@@ -740,7 +740,7 @@ static void lower_params(struct ir_func *func) {
       first_param = ir_insert_before_op(func, func->first->first->first,
                                         IR_OP_TY_MOV, IR_VAR_TY_POINTER);
     } else {
-      first_param = ir_alloc_ir_op(func, func->first->first);
+      first_param = ir_alloc_op(func, func->first->first);
       first_param->ty = IR_OP_TY_MOV;
       first_param->var_ty = IR_VAR_TY_POINTER;
     }
@@ -1452,7 +1452,7 @@ void lower(struct ir_unit *unit) {
         if (op->call.target->ty == IR_OP_TY_ADDR &&
             op->call.target->addr.ty == IR_OP_ADDR_TY_GLB &&
             !(op->call.target->flags & IR_OP_FLAG_CONTAINED)) {
-          op->call.target = ir_alloc_contained_ir_op(func, op->call.target, op);
+          op->call.target = ir_alloc_contained_op(func, op->call.target, op);
         }
 
         lower_call_registers(func, op);

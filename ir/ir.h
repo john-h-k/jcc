@@ -700,8 +700,7 @@ struct ir_basicblock {
     struct ir_basicblock_switch switch_case;
   };
 
-  struct instr *first_instr;
-  struct instr *last_instr;
+  struct cg_basicblock *cg_basicblock;
 
   void *metadata;
   const char *comment;
@@ -1059,22 +1058,22 @@ struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                           const struct ir_var_ty *var_ty,
                           enum ir_glb_def_ty def_ty, const char *name);
 
-struct ir_op *ir_alloc_ir_op(struct ir_func *irb, struct ir_stmt *stmt);
+struct ir_op *ir_alloc_op(struct ir_func *irb, struct ir_stmt *stmt);
 
 // clones an op so it can be marked contained
 // else we would need to ensure all consumers can contain it
-struct ir_op *ir_alloc_contained_ir_op(struct ir_func *irb, struct ir_op *op,
+struct ir_op *ir_alloc_contained_op(struct ir_func *irb, struct ir_op *op,
                                     struct ir_op *consumer);
 
 // fixing an op is difficult, because fixed ops with overlapping lifetimes won't
 // be able to allocate so to fix an op, you provide the point it must be fixed
 // at (`consumer`) and we insert a mov before then and fix that we take `**op`
 // so that we can then reassign the consumer op to the fixed move
-struct ir_op *ir_alloc_fixed_reg_dest_ir_op(struct ir_func *irb, struct ir_op **op,
+struct ir_op *ir_alloc_fixed_reg_dest_op(struct ir_func *irb, struct ir_op **op,
                                          struct ir_op *consumer,
                                          struct ir_reg reg);
 
-struct ir_op *ir_alloc_fixed_reg_source_ir_op(struct ir_func *irb,
+struct ir_op *ir_alloc_fixed_reg_source_op(struct ir_func *irb,
                                            struct ir_op *producer,
                                            struct ir_reg reg);
 
@@ -1091,10 +1090,10 @@ void ir_mk_pointer_constant(struct ir_unit *iru, struct ir_op *op,
 
 struct ir_op *ir_build_addr(struct ir_func *irb, struct ir_op *op);
 
-struct ir_stmt *ir_alloc_ir_stmt(struct ir_func *irb,
+struct ir_stmt *ir_alloc_stmt(struct ir_func *irb,
                               struct ir_basicblock *basicblock);
 
-struct ir_basicblock *ir_alloc_ir_basicblock(struct ir_func *irb);
+struct ir_basicblock *ir_alloc_basicblock(struct ir_func *irb);
 
 void ir_add_pred_to_basicblock(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
@@ -1289,7 +1288,7 @@ struct ir_op_use_map {
 
 struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func);
 
-size_t ir_unique_idx_for_ir_reg(struct ir_reg reg);
+size_t ir_unique_idx_for_reg(struct ir_reg reg);
 struct ir_reg ir_reg_for_unique_idx(size_t idx);
 
 struct ir_dominance_frontier {
