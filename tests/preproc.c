@@ -1,4 +1,5 @@
 // expected value: 8
+// stdout: Hello, World! 10
 
 #define FOO \
 \
@@ -9,8 +10,18 @@
 
 #define BAT
 
+#define EMPTY(a, b, c)
+
+int printf(const char *, ...);
+
+#define PRINT(fmt, ...) printf(fmt, __VA_ARGS__)
+
 int main() {
+  EMPTY(hi, how are, you);
+
   int a = FOO;
+
+  PRINT("%s %s %d\n", "Hello,", "World!", 10);
 
 #if !(FIZZ && FIZZ + 7 == 8)
   return 1;
@@ -40,5 +51,4 @@ int main() {
 #else
   return 5;
 #endif
-
 }
