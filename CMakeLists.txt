@@ -24,6 +24,7 @@ set(
 
   compiler.c
   diagnostics.c
+  builtins.c
   lex.c
   io.c
   parse.c
