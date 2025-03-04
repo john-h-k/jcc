@@ -318,7 +318,6 @@ static int jcc_main(int argc, char **argv) {
     } else if (!strcmp(components.ext, "h")) {
       warn("compiling header file '%s', is this intentional?", source_path);
     } else if (strcmp(components.ext, "c")) {
-      err("unrecognised file extension '.%s' for source '%s'", components.ext, source_path);
       exc = -1;
       goto exit;
     }
@@ -352,22 +351,29 @@ static int jcc_main(int argc, char **argv) {
       file = (struct compile_file){
           .ty = COMPILE_FILE_TY_STDOUT,
       };
-    } else if (compile_args.build_asm_file &&
-               compile_args.output.ty == COMPILE_FILE_TY_NONE) {
-      file = (struct compile_file){
-          .ty = COMPILE_FILE_TY_PATH,
-          .path = path_replace_ext(arena, source_path, "s")};
+      info("preprocessing source file '%s' into stdout", source_path);
+    } else if (compile_args.build_asm_file) {
+      if (compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+        file = (struct compile_file){
+            .ty = COMPILE_FILE_TY_PATH,
+            .path = path_replace_ext(arena, source_path, "s")};
+      } else {
+        file = compile_args.output;
+      }
+      info("compiling source file '%s' into assembly file '%s'", source_path,
+           file.path);
     } else if (target_needs_linking(&compile_args, target) ||
                compile_args.output.ty == COMPILE_FILE_TY_NONE) {
       file = (struct compile_file){
           .ty = COMPILE_FILE_TY_PATH,
           .path = path_replace_ext(arena, source_path, "o")};
+      info("compiling source file '%s' into object file '%s'", source_path,
+           file.path);
     } else {
       file = compile_args.output;
+      info("compiling source file '%s' into object file '%s'", source_path,
+           file.path);
     }
-
-    // info("compiling source file '%s' into object file '%s'", source_path,
-    //      object_file);
 
     if (file.ty == COMPILE_FILE_TY_PATH) {
       objects[i] = file.path;
@@ -390,6 +396,7 @@ static int jcc_main(int argc, char **argv) {
     PROFILE_END(create_compiler);
 
     if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
+      // FIXME: `err`/`warn` should ignore log levels
       err("compilation failed!");
       exc = -1;
       goto exit;

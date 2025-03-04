@@ -1485,7 +1485,6 @@ void rv32i_codegen_basicblock(struct cg_state *state,
   }
 }
 
-
 static bool rv32i_instr_is_branch(const struct rv32i_instr *instr) {
   switch (instr->ty) {
   case RV32I_INSTR_TY_BEQ:
@@ -1498,7 +1497,8 @@ static bool rv32i_instr_is_branch(const struct rv32i_instr *instr) {
     return true;
   case RV32I_INSTR_TY_JAL:
     // note: JAL is not always a branch (also can be call)
-    return instr->jal.ret_addr.ty == RV32I_REG_TY_W && instr->jal.ret_addr.idx == 0;
+    return instr->jal.ret_addr.ty == RV32I_REG_TY_W &&
+           instr->jal.ret_addr.idx == 0;
   default:
     return false;
   }
@@ -1624,7 +1624,8 @@ void rv32i_codegen_end(struct cg_state *state) {
     }
 
   done:
-    DEBUG_ASSERT(!last || !last->pred || !rv32i_instr_is_branch(last->pred->rv32i),
+    DEBUG_ASSERT(!last || !last->pred ||
+                     !rv32i_instr_is_branch(last->pred->rv32i),
                  "more branches than expected in bb");
 
     basicblock = basicblock->succ;
@@ -1670,7 +1671,7 @@ struct codegen_debug_state {
 };
 
 static void print_bb_symbol(FILE *file, struct ir_basicblock *basicblock) {
-  fprintf(file, ".BB_%zu", basicblock->id);
+  fprintf(file, ".L_%s_BB_%zu", basicblock->func->name, basicblock->id);
 }
 
 static void codegen_fprintf(const struct codegen_debug_state *state,
@@ -1720,6 +1721,13 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
       }
 
       format += 6;
+    } else if (strncmp(format, "immu", 4) == 0) {
+      simm_t imm = va_arg(list, simm_t);
+      fprintf(file, "%llu",
+              imm >= 0 ? imm
+                       : (unsigned long long)(1048574ll + (long long)imm));
+
+      format += 4;
     } else if (strncmp(format, "imm", 3) == 0) {
       simm_t imm = va_arg(list, simm_t);
       fprintf(file, "%lld", imm);
@@ -1768,7 +1776,7 @@ static void debug_print_op_mov(const struct codegen_debug_state *state,
 
 static void debug_print_lui(const struct codegen_debug_state *state,
                             const struct rv32i_u *lui) {
-  codegen_fprintf(state, " %reg, %imm", lui->dest, lui->imm);
+  codegen_fprintf(state, " %reg, %immu", lui->dest, lui->imm);
 }
 
 static void debug_print_jalr(const struct codegen_debug_state *state,
@@ -2534,6 +2542,59 @@ void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit) {
 void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
   DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
 
+  fprintf(file,
+          ".data\n");
+
+  for (size_t i = 0; i < unit->num_entries; i++) {
+    struct cg_entry *entry = &unit->entries[i];
+
+    switch (entry->ty) {
+    case CG_ENTRY_TY_FUNC:
+      // done later
+      break;
+    case CG_ENTRY_TY_STRING: {
+      // FIXME: escape
+      fprintf(file, "\n%s:\n", entry->name);
+      fprintf(file, "        .string ");
+      fprint_str(file, entry->data.data, entry->data.len_data);
+      break;
+    }
+    case CG_ENTRY_TY_CONST_DATA:
+    case CG_ENTRY_TY_DATA:
+      // FIXME: escape
+      fprintf(file, "\n%s:\n", entry->name);
+      fprintf(file, "        .byte ");
+      for (size_t j = 0; j < entry->data.len_data; j++) {
+        fprintf(file, "%d", ((char *)entry->data.data)[j]);
+
+        if (j + 1 != entry->data.len_data) {
+          fprintf(file, ", ");
+        }
+      }
+      fprintf(file, "\n");
+
+      for (size_t j = 0; j < entry->data.num_relocs; j++) {
+        struct relocation *reloc = &entry->data.relocs[j];
+
+        DEBUG_ASSERT(reloc->ty == RELOCATION_TY_POINTER, "non pointer reloc in .data");
+
+        
+        struct cg_entry *target = &unit->entries[reloc->symbol_index];
+        fprintf(file, "        .reloc %s + %zu, R_RISCV_32, %s + %zu", entry->name, reloc->address, target->name, reloc->offset);
+      }
+      fprintf(file, "\n");
+      break;
+    case CG_ENTRY_TY_DECL: {
+      continue;
+    }
+    }
+
+    fprintf(file, "\n");
+  }
+
+  fprintf(file,
+          ".text\n");
+
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct cg_entry *entry = &unit->entries[i];
 
@@ -2541,12 +2602,13 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
     case CG_ENTRY_TY_FUNC: {
       struct cg_func *func = &entry->func;
 
-      fprintf(file,
-              ".text\n"
-              ".globl %s\n" // FIXME: don't emit for private syms
-              ".align 2\n"
+      if (entry->symbol.visibility == SYMBOL_VISIBILITY_GLOBAL) {
+        fprintf(file, ".globl %s\n", entry->name);
+      }
+
+      fprintf(file, ".align 2\n"
               ".type	%s, @function\n",
-              entry->name, entry->name);
+              entry->name);
       fprintf(file, "\n%s:\n", entry->name);
 
       struct cg_basicblock *basicblock = func->first;
@@ -2573,29 +2635,12 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
 
       break;
     }
-    case CG_ENTRY_TY_STRING: {
-      // FIXME: escape
-      fprintf(file, "\n%s:\n", entry->name);
-      fprintf(file, "        .string ");
-      fprint_str(file, entry->data.data, entry->data.len_data);
-      break;
-    }
+    case CG_ENTRY_TY_STRING:
     case CG_ENTRY_TY_CONST_DATA:
     case CG_ENTRY_TY_DATA:
-      // FIXME: escape
-      fprintf(file, "\n%s:\n", entry->name);
-      fprintf(file, "        .byte ");
-      for (size_t j = 0; j < entry->data.len_data; j++) {
-        fprintf(file, "%d", ((char *)entry->data.data)[j]);
-
-        if (j + 1 != entry->data.len_data) {
-          fprintf(file, ", ");
-        }
-      }
       break;
-    case CG_ENTRY_TY_DECL: {
+    case CG_ENTRY_TY_DECL:
       continue;
-    }
     }
 
     fprintf(file, "\n");

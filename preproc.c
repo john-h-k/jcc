@@ -57,7 +57,8 @@ struct preproc {
   // if a defined/__has_feature etc was just seen, we don't expand until end
   bool keep_next_token;
 
-  // after a `defined(SYM` symbol, we need to know to look to strip the close bracket
+  // after a `defined(SYM` symbol, we need to know to look to strip the close
+  // bracket
   bool waiting_for_close;
 };
 
@@ -836,10 +837,10 @@ static bool token_streq(struct preproc_token token, const char *str) {
   return len == token_len && strncmp(token.text, str, len) == 0;
 }
 
-static void preproc_next_nontrivial_token(struct preproc *preproc,
-                                              struct preproc_token *token,
-                                              enum preproc_expand_token_flags flags
-                                            ) {
+static void
+preproc_next_nontrivial_token(struct preproc *preproc,
+                              struct preproc_token *token,
+                              enum preproc_expand_token_flags flags) {
   while (true) {
     preproc_next_token(preproc, token, flags);
 
@@ -924,7 +925,8 @@ static bool try_expand_token(struct preproc *preproc,
     if (token_is_trivial(token)) {
       return true;
     } else if (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-         token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+               token->punctuator.ty ==
+                   PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
       // do we need to keep the whitespace/parens? we implicitly strip them here
       preproc->waiting_for_close = true;
       return true;
@@ -934,9 +936,10 @@ static bool try_expand_token(struct preproc *preproc,
         preproc->keep_next_token = false;
       }
       return true;
-    } else if 
-        (preproc->waiting_for_close && token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-         token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
+    } else if (preproc->waiting_for_close &&
+               token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+               token->punctuator.ty ==
+                   PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
       preproc->waiting_for_close = false;
       preproc->keep_next_token = false;
       return true;
@@ -1056,8 +1059,10 @@ static bool try_expand_token(struct preproc *preproc,
     case PREPROC_DEFINE_VALUE_TY_MACRO_FN: {
       struct preproc_macro_fn macro_fn = value->macro_fn;
 
-      struct vector *args = vector_create_in_arena(sizeof(struct vector *), preproc->arena);
-      struct vector *arg = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
+      struct vector *args =
+          vector_create_in_arena(sizeof(struct vector *), preproc->arena);
+      struct vector *arg =
+          vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
       vector_push_back(args, &arg);
 
       // first need to take the arguments
@@ -1098,7 +1103,8 @@ static bool try_expand_token(struct preproc *preproc,
           depth--;
 
           if (!depth) {
-            if (!seen_first_arg && !macro_fn.num_params && !(macro_fn.flags & PREPROC_MACRO_FN_FLAG_VARIADIC)) {
+            if (!seen_first_arg && !macro_fn.num_params &&
+                !(macro_fn.flags & PREPROC_MACRO_FN_FLAG_VARIADIC)) {
               vector_pop(args);
             }
             break;
@@ -1107,7 +1113,8 @@ static bool try_expand_token(struct preproc *preproc,
           vector_push_back(arg, &next);
         } else if (depth == 1 && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                    next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
-          arg = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
+          arg = vector_create_in_arena(sizeof(struct preproc_token),
+                                       preproc->arena);
           vector_push_back(args, &arg);
 
           seen_first_arg = true;
@@ -1406,10 +1413,12 @@ static struct include_info try_find_include(struct preproc *preproc,
 
     info.content = read_path(preproc->arena, search_path);
 
-    if (info.content) {
-      fprintf(stderr, "preproc: found\n");
-    } else {
-      fprintf(stderr, "did not find\n");
+    if (preproc->args.verbose) {
+      if (info.content) {
+        fprintf(stderr, "preproc: found\n");
+      } else {
+        fprintf(stderr, "did not find\n");
+      }
     }
 
     info.path = search_path;
@@ -1428,13 +1437,17 @@ static struct include_info try_find_include(struct preproc *preproc,
 
       info.content = read_path(preproc->arena, search_path);
       if (info.content) {
-        fprintf(stderr, "preproc: found\n");
+        if (preproc->args.verbose) {
+          fprintf(stderr, "preproc: found\n");
+        }
 
         info.path = search_path;
         break;
       }
 
-      fprintf(stderr, "did not find\n");
+      if (preproc->args.verbose) {
+        fprintf(stderr, "did not find\n");
+      }
     }
   }
 
@@ -1782,14 +1795,13 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
     bool enabled = *(bool *)vector_tail(preproc->enabled);
 
     // outer enabled is whether this block runs at all
-    // cond done is whether an `if` or `elif` branch has run, and so the rest should not run
+    // cond done is whether an `if` or `elif` branch has run, and so the rest
+    // should not run
     bool outer_enabled;
     bool cond_done;
     if (vector_length(preproc->enabled) >= 3) {
-      outer_enabled =
-          *(bool *)vector_get(preproc->enabled, num_enabled - 3);
-      cond_done =
-          *(bool *)vector_get(preproc->enabled, num_enabled - 2);
+      outer_enabled = *(bool *)vector_get(preproc->enabled, num_enabled - 3);
+      cond_done = *(bool *)vector_get(preproc->enabled, num_enabled - 2);
     } else {
       outer_enabled = false;
       cond_done = false;
@@ -1880,7 +1892,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           bool now_enabled = eval_expr(preproc, directive_tokens, &i,
                                        vector_length(directive_tokens), 0);
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
-          *(bool *)vector_get(preproc->enabled, num_enabled - 2) = outer_enabled && now_enabled;
+          *(bool *)vector_get(preproc->enabled, num_enabled - 2) =
+              outer_enabled && now_enabled;
         }
         continue;
       } else if (token_streq(directive, "elifdef")) {
@@ -1892,7 +1905,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           bool now_enabled = get_define(
               preproc, *(struct preproc_token *)vector_head(directive_tokens));
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
-          *(bool *)vector_get(preproc->enabled, num_enabled - 2) = outer_enabled && now_enabled;
+          *(bool *)vector_get(preproc->enabled, num_enabled - 2) =
+              outer_enabled && now_enabled;
         }
         continue;
       } else if (token_streq(directive, "elifndef")) {
@@ -1904,7 +1918,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           bool now_enabled = !get_define(
               preproc, *(struct preproc_token *)vector_head(directive_tokens));
           *(bool *)vector_tail(preproc->enabled) = outer_enabled && now_enabled;
-          *(bool *)vector_get(preproc->enabled, num_enabled - 2) = outer_enabled && now_enabled;
+          *(bool *)vector_get(preproc->enabled, num_enabled - 2) =
+              outer_enabled && now_enabled;
         }
         continue;
       }

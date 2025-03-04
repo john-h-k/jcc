@@ -7,6 +7,10 @@ BOLDYELLOW="\033[1;33m"
 RESET="\033[0m"
 
 VERBOSE_LEVEL="1"
+PROFILE=""
+ASSEMBLER=""
+LINKER=""
+
 arg_groups=()
 args=()
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
@@ -23,6 +27,21 @@ help() {
   echo ""
   echo "    --verbose "
   echo "        Run in verbose mode"
+  echo ""
+  echo "    -n, --number "
+  echo "        Run at most n tests"
+  echo ""
+  echo "    -j, --jobs "
+  echo "        Use j processes"
+  echo ""
+  echo "    -p, --profile "
+  echo "        Profile tests"
+  echo ""
+  echo "    --assembler <assembler> "
+  echo "        Assemble instead of compiling, and use <assembler> to create object files. Requires '--linker'"
+  echo ""
+  echo "    --linker <linker> "
+  echo "        Build object files (or assembly with '--assembler') and use <linker> to create executables"
   echo ""
   echo "    --arg-group <group> "
   echo "        Run every test with <group>. For example, \"--arg-group '-O1 -arch x86_64' --arg-group '-O2'\""
@@ -67,6 +86,17 @@ while [[ $# -gt 0 ]]; do
       shift
       num="$1"
       ;;
+    --assembler)
+      shift
+      ASSEMBLER="$1"
+      ;;
+    --linker)
+      shift
+      LINKER="$1"
+      ;;
+    -p|--profile)
+      PROFILE="1"
+      ;;
     -q|--quiet)
       VERBOSE_LEVEL="0"
       ;;
@@ -106,6 +136,26 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+ensure_exists() {
+  if ! command -v $1 &>/dev/null; then
+    echo -e "${BOLDRED}$2${RESET}"
+    exit -1
+  fi
+}
+
+if [[ -n "$ASSEMBLER" ]]; then
+  ensure_exists "$ASSEMBLER" "Assembler '$ASSEMBLER' could not be found"
+fi
+
+if [[ -n "$LINKER" ]]; then
+  ensure_exists "$LINKER" "Linker '$LINKER' could not be found"
+fi
+
+if [[ -n "$ASSEMBLER" && -z "$LINKER" ]]; then
+  echo -e "${BOLDRED}'--linker' must be set to use '--assembler'${RESET}"
+  exit -1
+fi
+
 if [ "${#args[@]}" -ne 0 ]; then
   delim=$" "
   rest=("${args[@]:1}")
@@ -131,6 +181,11 @@ if command -v gdate &>/dev/null; then
 elif date --version 2>/dev/null | grep -q "GNU coreutils"; then
   date="date"
 else
+  if [ -n "$PROFILE" ]; then
+    echo -e "${BOLDRED}GNU date not available, cannot profile. Install coreutils or use gdate.${RESET}"
+    exit -1
+  fi
+
   echo -e "${BOLDYELLOW}GNU date not available, not timestamping. Install coreutils or use gdate.${RESET}"
 fi
 
@@ -152,10 +207,7 @@ arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
 if [[ "$arch" == "rv32i" && -z "$RUNNER" ]]; then
-  if ! command -v riscy &>/dev/null; then
-    echo -e "${BOLDRED}RUNNER not provided for arch $arch, but could not find default runner 'riscy'${RESET}"
-    exit -1
-  fi
+  ensure_exists riscy "RUNNER not provided for arch $arch, but could not find default runner 'riscy'"
 
   echo -e "${BOLD}Defaulting to 'riscy' runner for $arch...${RESET}"
   RUNNER=riscy
@@ -287,6 +339,13 @@ aggregator() {
   exit $?
 }
 
+TMP_DIR="tmp"
+tmpname() {
+  file=./$TMP_DIR/"$1"
+  mkdir -p "$(dirname "$file")"
+  echo "$file"
+}
+
 run_tests() {
   proc_id=$1
   output=$2
@@ -323,12 +382,61 @@ run_tests() {
         echo -ne "$status" "$@" '\0' > "$fifo"
       }
 
+      if [ -n "$ASSEMBLER" ]; then
+        build_command() {
+          obj_files=()
+
+          for file in "${files[@]}"; do
+            asm=$(tmpname "$pid.$(basename "$file").s")
+            ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" --log build_object "$file" \
+              || return $?
+
+            obj=$(tmpname "$pid.$(basename "$file").o")
+            if [ $VERBOSE_LEVEL -ge "2" ]; then
+              echo -e "$Running assembler '$ASSEMBLER "$asm" -o "$obj"'..."
+            fi
+
+            $ASSEMBLER "$asm" -o "$obj" || return $?
+            obj_files+=("$obj")
+          done
+
+          if [ $VERBOSE_LEVEL -ge "2" ]; then
+            echo -e "Running linker '$LINKER "${obj_files[@]}" -o "$output"'..."
+          fi
+
+          $LINKER "${obj_files[@]}" -o "$output" || return $?
+        }
+      elif [ -n "$LINKER" ]; then
+        build_command() {
+          obj_files=()
+
+          for file in "${files[@]}"; do
+            obj=$(tmpname "$pid.$(basename "$file").o")
+            ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" --log build_object "$file" \
+              || return $?
+
+            obj_files+=("$obj")
+          done
+
+          if [ $VERBOSE_LEVEL -ge "2" ]; then
+            echo -e "Running linker '$LINKER "${obj_files[@]}" -o "$output"'..."
+          fi
+
+          $LINKER "${obj_files[@]}" -o "$output" || return $?
+        }
+      else
+        build_command() {
+          ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
+          return $?
+        }
+      fi
+
       build() {
         if [[ $(uname) == "Darwin" ]]; then
           MallocNanoZone="0"
         fi
 
-        MallocNanoZone=$MallocNanoZone ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
+        MallocNanoZone=$MallocNanoZone build_command
         return $?
       }
 
@@ -436,6 +544,7 @@ clean() {
   # for some reason this causes cleanup to work
   sleep 0.1
 
+  rm -f "$TMP_DIR"
   rm -f "${tmps[@]}"
 }
 
