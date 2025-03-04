@@ -33,7 +33,7 @@ int main() {
 
   CONCAT0(v, al += 1);
 
-  if (val != 2) {
+  if (val != 1) {
     return 2;
   }
 
