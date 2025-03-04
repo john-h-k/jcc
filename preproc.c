@@ -862,8 +862,13 @@ static void preproc_append_tokens(struct preproc *preproc,
 }
 
 static bool token_is_trivial(const struct preproc_token *token) {
-  return token->ty == PREPROC_TOKEN_TY_WHITESPACE || token->ty == PREPROC_TOKEN_TY_NEWLINE || token->ty == PREPROC_TOKEN_TY_NEWLINE;
+  return token->ty == PREPROC_TOKEN_TY_WHITESPACE ||
+         token->ty == PREPROC_TOKEN_TY_NEWLINE ||
+         token->ty == PREPROC_TOKEN_TY_NEWLINE;
 }
+
+static struct preproc_token preproc_stringify(struct preproc *preproc,
+                                              struct vector *tokens);
 
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
@@ -899,8 +904,7 @@ static bool try_expand_token(struct preproc *preproc,
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
-      expand_token(preproc, preproc_text, &value->token, buffer,
-                            parents);
+      expand_token(preproc, preproc_text, &value->token, buffer, parents);
       break;
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
       preproc_append_tokens(preproc, preproc_text, value->vec, buffer, parents);
@@ -974,8 +978,36 @@ static bool try_expand_token(struct preproc *preproc,
 
       // FIXME: super inefficient O(nm), macro fn should have hashtbl in it
       size_t num_tokens = vector_length(macro_fn.tokens);
+      bool stringify = false;
       for (size_t i = num_tokens; i; i--) {
         struct preproc_token *def_tok = vector_get(macro_fn.tokens, i - 1);
+
+        if (stringify && !token_is_trivial(def_tok)) {
+          DEBUG_ASSERT(def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+                           def_tok->punctuator.ty ==
+                               PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY,
+                       "expected # token because last token was stringified");
+          // last was a stringify, so this is the '#'
+          stringify = false;
+          continue;
+        }
+
+        size_t next = i;
+        for (; next > 1; next--) {
+          struct preproc_token *next_tok =
+              vector_get(macro_fn.tokens, next - 2);
+
+          if (token_is_trivial(next_tok)) {
+            continue;
+          }
+
+          if (next_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+              next_tok->punctuator.ty ==
+                  PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY) {
+            stringify = true;
+            break;
+          }
+        }
 
         bool expanded = false;
         if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
@@ -990,10 +1022,20 @@ static bool try_expand_token(struct preproc *preproc,
             struct sized_str param_ident = {
                 .str = param_tok.text, .len = text_span_len(&param_tok.span)};
 
+            // printf("checking %.*s\n", (int)param_ident.len, param_ident.str);
+            // printf("against %.*s\n", (int)def_ident.len, def_ident.str);
             if (hashtbl_eq_sized_str(&def_ident, &param_ident)) {
-              preproc_append_tokens(preproc, preproc_text,
-                                    *(struct vector **)vector_get(args, j),
-                                    buffer, parents);
+              struct vector *arg_tokens =
+                  *(struct vector **)vector_get(args, j);
+
+              if (stringify) {
+                struct preproc_token str_tok =
+                    preproc_stringify(preproc, arg_tokens);
+                expand_token(preproc, preproc_text, &str_tok, buffer, parents);
+              } else {
+                preproc_append_tokens(preproc, preproc_text, arg_tokens, buffer,
+                                      parents);
+              }
               expanded = true;
               break;
             }
@@ -1003,6 +1045,11 @@ static bool try_expand_token(struct preproc *preproc,
         if (!expanded) {
           expand_token(preproc, preproc_text, def_tok, buffer, parents);
         }
+      }
+
+      if (stringify) {
+        // no arg found after stringify token
+        BUG("expected macro parameter token after stringify operator '#'");
       }
       break;
     }
@@ -1196,8 +1243,8 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
   while (true) {
     preproc_next_raw_token(preproc, &token);
 
-    // TODO: do we handle EOF properly everywhere? or do we assume files end in
-    // newline
+    // TODO: do we handle EOF properly everywhere? or do we assume files end
+    // in newline
     if (token.ty == PREPROC_TOKEN_TY_NEWLINE ||
         token.ty == PREPROC_TOKEN_TY_EOF) {
       break;
@@ -1568,6 +1615,107 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token) {
   if (directive_tokens) {
     vector_free(&directive_tokens);
   }
+}
+
+static void add_escaped_str(struct vector *buf, const char *str, size_t len) {
+  vector_ensure_capacity(buf, vector_length(buf) + len);
+
+  char slash = '\\';
+  for (size_t i = 0; i < len; i++) {
+    char ch = str[i];
+
+#define ADD_ESCAPED(esc)                                                       \
+  case esc: {                                                                  \
+    char c = esc;                                                              \
+    vector_push_back(buf, &slash);                                             \
+    vector_push_back(buf, &c);                                                 \
+    break;                                                                     \
+  }
+
+    switch (ch) {
+      ADD_ESCAPED('\0')
+      ADD_ESCAPED('\a')
+      ADD_ESCAPED('\b')
+      ADD_ESCAPED('\f')
+      ADD_ESCAPED('\n')
+      ADD_ESCAPED('\r')
+      ADD_ESCAPED('\t')
+      ADD_ESCAPED('\v')
+      ADD_ESCAPED('\\')
+      ADD_ESCAPED('\'')
+      ADD_ESCAPED('"')
+    default:
+      vector_push_back(buf, &ch);
+      break;
+    }
+
+#undef ADD_ESCAPED
+  }
+}
+
+static struct preproc_token preproc_stringify(struct preproc *preproc,
+                                              struct vector *tokens) {
+  // _very_ similar to `preproc_process` maybe we can merge them
+
+  bool last_was_newline = false;
+  bool last_was_whitespace = false;
+
+  struct vector *buf = vector_create_in_arena(sizeof(char), preproc->arena);
+
+  char quote = '"';
+  vector_push_back(buf, &quote);
+
+  size_t num_tokens = vector_length(tokens);
+  for (size_t i = 0; i < num_tokens; i++) {
+    struct preproc_token token = *(struct preproc_token *)vector_get(tokens, i);
+
+#define ADD_STR(str, len) add_escaped_str(buf, str, len);
+
+    switch (token.ty) {
+    case PREPROC_TOKEN_TY_UNKNOWN:
+      ADD_STR("?UNKNOWN?", strlen("?UNKNOWN?"));
+      break;
+    case PREPROC_TOKEN_TY_EOF:
+      break;
+    case PREPROC_TOKEN_TY_DIRECTIVE:
+      BUG("directive in process");
+    case PREPROC_TOKEN_TY_IDENTIFIER:
+    case PREPROC_TOKEN_TY_PREPROC_NUMBER:
+    case PREPROC_TOKEN_TY_STRING_LITERAL:
+    case PREPROC_TOKEN_TY_PUNCTUATOR:
+    case PREPROC_TOKEN_TY_OTHER:
+      ADD_STR(token.text, text_span_len(&token.span));
+      break;
+    case PREPROC_TOKEN_TY_WHITESPACE:
+      if (last_was_newline) {
+        ADD_STR(token.text, text_span_len(&token.span));
+      } else if (!last_was_whitespace) {
+        ADD_STR(" ", 1);
+      }
+      break;
+    case PREPROC_TOKEN_TY_NEWLINE:
+      if (!last_was_newline) {
+        ADD_STR("\n", 1);
+      }
+      break;
+    case PREPROC_TOKEN_TY_COMMENT:
+      if (!last_was_whitespace) {
+        ADD_STR(" ", 1);
+      }
+      break;
+    }
+
+    last_was_newline = token.ty == PREPROC_TOKEN_TY_NEWLINE;
+    last_was_whitespace = token.ty == PREPROC_TOKEN_TY_WHITESPACE ||
+                          token.ty == PREPROC_TOKEN_TY_COMMENT;
+  }
+
+  vector_push_back(buf, &quote);
+
+  return (struct preproc_token){
+      .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
+      .span = MK_INVALID_TEXT_SPAN(/* garbage */ 0, vector_length(buf)),
+      .text = vector_head(buf)};
 }
 
 void preproc_process(struct preproc *preproc, FILE *file) {
