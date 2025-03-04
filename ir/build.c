@@ -1037,14 +1037,14 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
     struct ir_var_str str_value;
     switch (cnst->ty) {
     case TD_CNST_TY_STR_LITERAL:
-      str_value =
-          (struct ir_var_str){.value = cnst->str_value.value, .len = num_chrs};
+      str_value = (struct ir_var_str){.value = cnst->str_value.value,
+                                      .len = num_chrs + 1};
       break;
     case TD_CNST_TY_WIDE_STR_LITERAL:
       // kinda hacky, but in parse/typechk we generate a string with 4x the
       // length of the actual str
-      str_value =
-          (struct ir_var_str){.value = cnst->str_value.value, .len = num_chrs};
+      str_value = (struct ir_var_str){.value = cnst->str_value.value,
+                                      .len = num_chrs + 1};
       break;
     default:
       unreachable();
@@ -1106,8 +1106,11 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
         build_str_literal(irb->unit, &expr->var_ty, &expr->cnst);
 
     op->ty = IR_OP_TY_ADDR;
-    op->var_ty = var_ty;
+    op->var_ty = IR_VAR_TY_POINTER;
     op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
+
+    // FIXME: the user needs to load from the address if they want to get the value
+    // principally in `const char[] = "foo"`
 
     break;
   }
@@ -2807,6 +2810,18 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
   }
 
   if (lcl && assignment) {
+    if (lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY && assignment->ty == IR_OP_TY_ADDR && assignment->addr.ty == IR_OP_LOAD_TY_GLB) {
+      // `const char[] foo = "string literal"`
+      // so need to load
+      struct ir_glb *glb = assignment->addr.glb;
+      assignment->ty = IR_OP_TY_LOAD;
+      assignment->var_ty = lcl->var_ty;
+      assignment->load = (struct ir_op_load){
+        .ty = IR_OP_LOAD_TY_GLB,
+        .glb = glb
+      };
+    }
+
     struct ir_op *str = ir_alloc_ir_op(irb->func, *stmt);
     str->ty = IR_OP_TY_STORE;
     str->var_ty = IR_VAR_TY_NONE;
@@ -3736,7 +3751,8 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
             .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
             .addr = {.glb = glb, .offset = 0}};
       } else {
-        // FIXME: this leads to duplicates in the IR (as a glb was constructed in build_str_literal)
+        // FIXME: this leads to duplicates in the IR (as a glb was constructed
+        // in build_str_literal)
         return glb->var->value;
       }
     } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {

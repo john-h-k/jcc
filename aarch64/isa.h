@@ -51,8 +51,8 @@
              (U32(opc) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |                            \
              (U32(option) << 13) | (U32(S) << 12) | (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rt))
 
-#define LDR_REG(size, Rm, option, S, Rn, Rt) LDR_STR_REG(size, 0b0, 0b01, Rm, option, S, Rn, Rt)
-#define STR_REG(size, Rm, option, S, Rn, Rt) LDR_STR_REG(size, 0b0, 0b00, Rm, option, S, Rn, Rt)
+#define LDR_REG(size, VR, Rm, option, S, Rn, Rt) LDR_STR_REG(size, VR, 0b01, Rm, option, S, Rn, Rt)
+#define STR_REG(size, VR, Rm, option, S, Rn, Rt) LDR_STR_REG(size, VR, 0b00, Rm, option, S, Rn, Rt)
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \
