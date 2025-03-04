@@ -374,7 +374,7 @@ compile_stage_codegen_prepare(struct compiler *compiler, struct ir_unit *ir) {
 
 static enum compile_result
 compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
-                      struct codegen_unit **codegen_unit) {
+                      struct cg_unit **codegen_unit) {
   const struct target *target = ir->target;
 
   *codegen_unit = codegen(ir);
@@ -420,7 +420,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
 }
 
 static enum compile_result
-compile_stage_emit(UNUSED struct compiler *compiler, struct codegen_unit *unit,
+compile_stage_emit(UNUSED struct compiler *compiler, struct cg_unit *unit,
                    struct emitted_unit *emitted_unit) {
   *emitted_unit = unit->target->emit_function(unit);
 
@@ -502,7 +502,7 @@ enum compile_result compile(struct compiler *compiler) {
   COMPILER_STAGE(ELIM_PHI, elim_phi, ir);
   COMPILER_STAGE(CODEGEN_PREPARE, codegen_prepare, ir);
 
-  struct codegen_unit *codegen_unit;
+  struct cg_unit *codegen_unit;
   COMPILER_STAGE(CODEGEN, codegen, ir, &codegen_unit);
 
   if (compiler->args.build_asm_file) {

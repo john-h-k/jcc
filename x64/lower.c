@@ -737,7 +737,7 @@ void x64_lower(struct ir_unit *unit) {
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_URSHIFT:
                 op->flags |= IR_OP_FLAG_READS_DEST;
-                ir_alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_op(
                     func, &op->binary_op.rhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_CX});
@@ -766,11 +766,11 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                ir_alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_op(
                     func, &op->binary_op.lhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                ir_alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_op(
                     func, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
@@ -786,11 +786,11 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                ir_alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_op(
                     func, &op->binary_op.lhs, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                ir_alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_op(
                     func, op,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_DX});
@@ -845,11 +845,11 @@ void x64_lower(struct ir_unit *unit) {
                                   .idx = IR_REG_IDX_DX},
                 };
 
-                ir_alloc_fixed_reg_dest_ir_op(
+                ir_alloc_fixed_reg_dest_op(
                     func, &mul->binary_op.lhs, mul,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});
-                ir_alloc_fixed_reg_source_ir_op(
+                ir_alloc_fixed_reg_source_op(
                     func, mul,
                     (struct ir_reg){.ty = IR_REG_TY_INTEGRAL,
                                     .idx = IR_REG_IDX_AX});

@@ -7,7 +7,8 @@
 
 #define WORD_SIZE (8)
 
-const char *aarch64_macos_mangle(struct arena_allocator *arena, const char *name) {
+const char *aarch64_macos_mangle(struct arena_allocator *arena,
+                                 const char *name) {
   char *dest =
       arena_alloc(arena, strlen(name) + /* null terminator + '_' char */ 2);
 
@@ -17,12 +18,13 @@ const char *aarch64_macos_mangle(struct arena_allocator *arena, const char *name
   return dest;
 }
 
-const char *aarch64_linux_mangle(UNUSED struct arena_allocator *arena, const char *name) {
+const char *aarch64_linux_mangle(UNUSED struct arena_allocator *arena,
+                                 const char *name) {
   return name;
 }
 
 struct emit_state {
-  const struct codegen_function *func;
+  const struct cg_func *func;
   struct arena_allocator *arena;
   struct aarch64_emitter *emitter;
 };
@@ -276,61 +278,60 @@ static void emit_instr(const struct emit_state *state,
   }
 }
 
-struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
+struct emitted_unit aarch64_emit(const struct cg_unit *unit) {
   size_t num_entries = unit->num_entries;
   struct object_entry *entries =
       arena_alloc(unit->arena, num_entries * sizeof(*entries));
 
   for (size_t i = 0; i < unit->num_entries; i++) {
-    struct codegen_entry *entry = &unit->entries[i];
+    struct cg_entry *entry = &unit->entries[i];
 
     switch (entry->ty) {
-    case CODEGEN_ENTRY_TY_STRING:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_C_STRING,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_STRING:
+      entries[i] = (struct object_entry){.ty = OBJECT_ENTRY_TY_C_STRING,
+                                         .alignment = entry->alignment,
+                                         .data = entry->data.data,
+                                         .len_data = entry->data.len_data,
+                                         .num_relocations = 0,
+                                         .relocations = NULL,
+                                         .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_CONST_DATA:
+    case CG_ENTRY_TY_CONST_DATA:
       // TODO: relocations
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_CONST_DATA,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_CONST_DATA,
+                                .alignment = entry->alignment,
+                                .data = entry->data.data,
+                                .len_data = entry->data.len_data,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_DATA:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_MUT_DATA,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_DATA:
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_MUT_DATA,
+                                .alignment = entry->alignment,
+                                .data = entry->data.data,
+                                .len_data = entry->data.len_data,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_DECL:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_DECL,
-          .alignment = entry->alignment,
-          .data = NULL,
-          .len_data = 0,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_DECL:
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_DECL,
+                                .alignment = entry->alignment,
+                                .data = NULL,
+                                .len_data = 0,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_FUNC: {
-      struct codegen_function *func = &entry->func;
+    case CG_ENTRY_TY_FUNC: {
+      struct cg_func *func = &entry->func;
 
       struct aarch64_emitter *emitter;
       create_aarch64_emitter(&emitter);
@@ -340,29 +341,34 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
 
       struct vector *relocs = vector_create(sizeof(struct relocation));
 
-      struct instr *instr = func->first;
-      while (instr) {
-        size_t pos = aarch64_emit_bytesize(state.emitter);
+      struct cg_basicblock *basicblock = func->first;
+      while (basicblock) {
+        struct instr *instr = basicblock->first;
+        while (instr) {
+          size_t pos = aarch64_emit_bytesize(state.emitter);
 
-        size_t emitted = aarch64_emitted_count(state.emitter);
-        emit_instr(&state, instr);
+          size_t emitted = aarch64_emitted_count(state.emitter);
+          emit_instr(&state, instr);
 
-        size_t generated_instrs =
-            aarch64_emitted_count(state.emitter) - emitted;
+          size_t generated_instrs =
+              aarch64_emitted_count(state.emitter) - emitted;
 
-        DEBUG_ASSERT(
-            generated_instrs == 1,
-            "expected instr %zu to generate exactly 1 instruction but it "
-            "generated %zu",
-            instr->id, generated_instrs);
+          DEBUG_ASSERT(
+              generated_instrs == 1,
+              "expected instr %zu to generate exactly 1 instruction but it "
+              "generated %zu",
+              instr->id, generated_instrs);
 
-        if (instr->reloc) {
-          instr->reloc->address = pos;
-          instr->reloc->size = 2;
-          vector_push_back(relocs, instr->reloc);
+          if (instr->reloc) {
+            instr->reloc->address = pos;
+            instr->reloc->size = 2;
+            vector_push_back(relocs, instr->reloc);
+          }
+
+          instr = instr->succ;
         }
 
-        instr = instr->succ;
+        basicblock = basicblock->succ;
       }
 
       size_t len = aarch64_emit_bytesize(emitter);
@@ -373,15 +379,14 @@ struct emitted_unit aarch64_emit(const struct codegen_unit *unit) {
 
       // FIXME: some vector leaks here (and probably other places)
       // should really alloc in arena
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_FUNC,
-          .alignment = entry->alignment,
-          .data = data,
-          .len_data = len,
-          .symbol = entry->symbol
-      };
+      entries[i] = (struct object_entry){.ty = OBJECT_ENTRY_TY_FUNC,
+                                         .alignment = entry->alignment,
+                                         .data = data,
+                                         .len_data = len,
+                                         .symbol = entry->symbol};
 
-      CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations, entries[i].relocations);
+      CLONE_AND_FREE_VECTOR(unit->arena, relocs, entries[i].num_relocations,
+                            entries[i].relocations);
       break;
     }
     }

@@ -97,29 +97,29 @@ void rv32i_emit_jalr(struct rv32i_emitter *emitter,
 }
 
 #define OFFSET(instr)                                                          \
-  switch (instr.target.ty) { \
-  case RV32I_TARGET_TY_OFFSET: \
-    offset = instr.target.offset; \
-    break; \
-  case RV32I_TARGET_TY_BASICBLOCK: {\
-    signed long long cur_pos = rv32i_emitted_count(emitter);                     \
-    signed long long target_pos = instr.target.basicblock->first_instr->id;                 \
-                                                                                 \
-    offset = (target_pos - cur_pos) * 4; \
-    break; \
-  } \
-  case RV32I_TARGET_TY_SYMBOL: \
-    /* will be relocated */ \
-    offset = 0; \
-    break; \
-  } \
-
+  switch (instr.target.ty) {                                                   \
+  case RV32I_TARGET_TY_OFFSET:                                                 \
+    offset = instr.target.offset;                                              \
+    break;                                                                     \
+  case RV32I_TARGET_TY_BASICBLOCK: {                                           \
+    signed long long cur_pos = rv32i_emitted_count(emitter);                   \
+    signed long long target_pos =                                              \
+        instr.target.basicblock->cg_basicblock->first->id;                     \
+                                                                               \
+    offset = (target_pos - cur_pos) * 4;                                       \
+    break;                                                                     \
+  }                                                                            \
+  case RV32I_TARGET_TY_SYMBOL:                                                 \
+    /* will be relocated */                                                    \
+    offset = 0;                                                                \
+    break;                                                                     \
+  }
 
 void rv32i_emit_jal(struct rv32i_emitter *emitter, const struct rv32i_jal jal) {
   simm_t offset = 0;
   OFFSET(jal);
 
-  // // FIXME: won't work 
+  // // FIXME: won't work
   // offset -= 4;
 
   rv32i_emit_instr(emitter, JAL(offset, jal.ret_addr.idx));

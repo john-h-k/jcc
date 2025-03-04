@@ -23,7 +23,7 @@ const char *x64_linux_mangle(UNUSED struct arena_allocator *arena,
 }
 
 struct emit_state {
-  const struct codegen_function *func;
+  const struct cg_func *func;
   struct arena_allocator *arena;
   struct x64_emitter *emitter;
   struct vector *local_relocs;
@@ -143,7 +143,7 @@ static void emit_instr(const struct emit_state *state,
     struct x64_target_reloc reloc =
         x64_emit_jmp(state->emitter, instr->x64->jmp);
     struct local_reloc_info info = {
-        .target = instr->x64->jmp.target->first_instr, .reloc = reloc};
+        .target = instr->x64->jmp.target->cg_basicblock->first, .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
@@ -151,7 +151,7 @@ static void emit_instr(const struct emit_state *state,
     struct x64_target_reloc reloc =
         x64_emit_jcc(state->emitter, instr->x64->jcc);
     struct local_reloc_info info = {
-        .target = instr->x64->jcc.target->first_instr, .reloc = reloc};
+        .target = instr->x64->jcc.target->cg_basicblock->first, .reloc = reloc};
     vector_push_back(state->local_relocs, &info);
     break;
   }
@@ -163,61 +163,60 @@ static void emit_instr(const struct emit_state *state,
 #undef EMIT
 }
 
-struct emitted_unit x64_emit(const struct codegen_unit *unit) {
+struct emitted_unit x64_emit(const struct cg_unit *unit) {
   size_t num_entries = unit->num_entries;
   struct object_entry *entries =
       arena_alloc(unit->arena, num_entries * sizeof(*entries));
 
   for (size_t i = 0; i < unit->num_entries; i++) {
-    struct codegen_entry *entry = &unit->entries[i];
+    struct cg_entry *entry = &unit->entries[i];
 
     switch (entry->ty) {
-    case CODEGEN_ENTRY_TY_STRING:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_C_STRING,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          .num_relocations = 0,
-          .relocations = NULL,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_STRING:
+      entries[i] = (struct object_entry){.ty = OBJECT_ENTRY_TY_C_STRING,
+                                         .alignment = entry->alignment,
+                                         .data = entry->data.data,
+                                         .len_data = entry->data.len_data,
+                                         .num_relocations = 0,
+                                         .relocations = NULL,
+                                         .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_CONST_DATA:
+    case CG_ENTRY_TY_CONST_DATA:
       // TODO: relocations
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_CONST_DATA,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_CONST_DATA,
+                                .alignment = entry->alignment,
+                                .data = entry->data.data,
+                                .len_data = entry->data.len_data,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_DATA:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_MUT_DATA,
-          .alignment = entry->alignment,
-          .data = entry->data.data,
-          .len_data = entry->data.len_data,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_DATA:
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_MUT_DATA,
+                                .alignment = entry->alignment,
+                                .data = entry->data.data,
+                                .len_data = entry->data.len_data,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_DECL:
-      entries[i] = (struct object_entry){
-          .ty = OBJECT_ENTRY_TY_DECL,
-          .alignment = entry->alignment,
-          .data = NULL,
-          .len_data = 0,
-          // TODO: reloc lifetimes
-          .num_relocations = entry->data.num_relocs,
-          .relocations = entry->data.relocs,
-          .symbol = entry->symbol};
+    case CG_ENTRY_TY_DECL:
+      entries[i] =
+          (struct object_entry){.ty = OBJECT_ENTRY_TY_DECL,
+                                .alignment = entry->alignment,
+                                .data = NULL,
+                                .len_data = 0,
+                                // TODO: reloc lifetimes
+                                .num_relocations = entry->data.num_relocs,
+                                .relocations = entry->data.relocs,
+                                .symbol = entry->symbol};
       break;
-    case CODEGEN_ENTRY_TY_FUNC: {
-      struct codegen_function *func = &entry->func;
+    case CG_ENTRY_TY_FUNC: {
+      struct cg_func *func = &entry->func;
 
       struct x64_emitter *emitter;
       create_x64_emitter(&emitter);
@@ -233,54 +232,59 @@ struct emitted_unit x64_emit(const struct codegen_unit *unit) {
       struct vector *relocs = vector_create(sizeof(struct relocation));
       struct vector *instr_offsets = vector_create(sizeof(size_t));
 
-      struct instr *instr = func->first;
-      while (instr) {
-        DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id,
-                     "expected emitted count to be same as instr id");
+      struct cg_basicblock *basicblock = func->first;
+      while (basicblock) {
+        struct instr *instr = basicblock->first;
+        while (instr) {
+          DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id,
+                       "expected emitted count to be same as instr id");
 
-        size_t pos = x64_emit_bytesize(state.emitter);
+          size_t pos = x64_emit_bytesize(state.emitter);
 
-        vector_push_back(instr_offsets, &pos);
+          vector_push_back(instr_offsets, &pos);
 
-        size_t emitted = x64_emitted_count(state.emitter);
-        emit_instr(&state, instr);
+          size_t emitted = x64_emitted_count(state.emitter);
+          emit_instr(&state, instr);
 
-        size_t generated_instrs = x64_emitted_count(state.emitter) - emitted;
+          size_t generated_instrs = x64_emitted_count(state.emitter) - emitted;
 
-        size_t new_pos = x64_emit_bytesize(state.emitter);
-        size_t len = new_pos - pos;
-        invariant_assert(len <= 16, "instr too big");
-        char buff[16];
-        x64_get_bytes(state.emitter, pos, len, buff);
+          size_t new_pos = x64_emit_bytesize(state.emitter);
+          size_t len = new_pos - pos;
+          invariant_assert(len <= 16, "instr too big");
+          char buff[16];
+          x64_get_bytes(state.emitter, pos, len, buff);
 
-        if (log_enabled()) {
-          fprintf(stderr, "Emitted instruction: ");
-          x64_debug_print_instr(stderr, func, instr);
-          fprintf(stderr, "\nValue: ");
+          if (log_enabled()) {
+            fprintf(stderr, "Emitted instruction: ");
+            x64_debug_print_instr(stderr, func, instr);
+            fprintf(stderr, "\nValue: ");
 
-          fprintf(stderr, "{ ");
-          for (size_t j = 0; j < len; j++) {
-            fprintf(stderr, "%02hhX", buff[j]);
-            if (j + 1 != len) {
-              fprintf(stderr, ", ");
+            fprintf(stderr, "{ ");
+            for (size_t j = 0; j < len; j++) {
+              fprintf(stderr, "%02hhX", buff[j]);
+              if (j + 1 != len) {
+                fprintf(stderr, ", ");
+              }
             }
+            fprintf(stderr, " }\n");
           }
-          fprintf(stderr, " }\n");
+
+          DEBUG_ASSERT(
+              generated_instrs == 1,
+              "expected instr %zu to generate exactly 1 instruction but it "
+              "generated %zu",
+              instr->id, generated_instrs);
+
+          if (instr->reloc) {
+            instr->reloc->address += pos;
+            instr->reloc->size = 2;
+            vector_push_back(relocs, instr->reloc);
+          }
+
+          instr = instr->succ;
         }
 
-        DEBUG_ASSERT(
-            generated_instrs == 1,
-            "expected instr %zu to generate exactly 1 instruction but it "
-            "generated %zu",
-            instr->id, generated_instrs);
-
-        if (instr->reloc) {
-          instr->reloc->address += pos;
-          instr->reloc->size = 2;
-          vector_push_back(relocs, instr->reloc);
-        }
-
-        instr = instr->succ;
+        basicblock = basicblock->succ;
       }
 
       size_t num_local_relocs = vector_length(state.local_relocs);

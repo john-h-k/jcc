@@ -375,7 +375,7 @@ static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
                                         struct ir_stmt *stmt, struct ir_op *op,
                                         const struct ir_var_ty *to,
                                         enum ir_op_cast_op_ty ty) {
-  struct ir_op *cast = ir_alloc_ir_op(irb->func, stmt);
+  struct ir_op *cast = ir_alloc_op(irb->func, stmt);
 
   cast->ty = IR_OP_TY_CAST_OP;
   cast->var_ty = *to;
@@ -435,17 +435,17 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
           var_ty_for_td_var_ty(irb->unit, pointer_ty->pointer.underlying);
       struct ir_var_ty_info el_info = ir_var_ty_info(irb->unit, &el_ty);
 
-      struct ir_op *el_size_op = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *el_size_op = ir_alloc_op(irb->func, stmt);
       ir_mk_pointer_constant(irb->unit, el_size_op, el_info.size);
 
-      struct ir_op *diff = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *diff = ir_alloc_op(irb->func, stmt);
       diff->ty = IR_OP_TY_BINARY_OP;
       diff->var_ty = var_ty;
       diff->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
       diff->binary_op.lhs = lhs;
       diff->binary_op.rhs = rhs;
 
-      struct ir_op *op = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *op = ir_alloc_op(irb->func, stmt);
       op->ty = IR_OP_TY_BINARY_OP;
       op->var_ty = var_ty;
       op->binary_op.ty = IR_OP_BINARY_OP_TY_SDIV;
@@ -461,7 +461,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
           var_ty_for_td_var_ty(irb->unit, td_var_ty->pointer.underlying);
       struct ir_var_ty_info el_info = ir_var_ty_info(irb->unit, &el_ty);
 
-      struct ir_op *op = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *op = ir_alloc_op(irb->func, stmt);
       op->ty = IR_OP_TY_ADDR_OFFSET;
       op->var_ty = var_ty;
       op->addr_offset = (struct ir_op_addr_offset){
@@ -476,17 +476,17 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
           var_ty_for_td_var_ty(irb->unit, td_var_ty->pointer.underlying);
       struct ir_var_ty_info el_info = ir_var_ty_info(irb->unit, &el_ty);
 
-      struct ir_op *el_size_op = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *el_size_op = ir_alloc_op(irb->func, stmt);
       ir_mk_pointer_constant(irb->unit, el_size_op, el_info.size);
 
-      struct ir_op *rhs_mul = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *rhs_mul = ir_alloc_op(irb->func, stmt);
       rhs_mul->ty = IR_OP_TY_BINARY_OP;
       rhs_mul->var_ty = var_ty;
       rhs_mul->binary_op.ty = IR_OP_BINARY_OP_TY_MUL;
       rhs_mul->binary_op.lhs = el_size_op;
       rhs_mul->binary_op.rhs = rhs;
 
-      struct ir_op *op = ir_alloc_ir_op(irb->func, stmt);
+      struct ir_op *op = ir_alloc_op(irb->func, stmt);
       op->ty = IR_OP_TY_BINARY_OP;
       op->var_ty = var_ty;
       op->binary_op.ty = IR_OP_BINARY_OP_TY_SUB;
@@ -497,7 +497,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
     }
   }
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, stmt);
   op->ty = IR_OP_TY_BINARY_OP;
   op->var_ty = var_ty;
 
@@ -638,7 +638,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
 
   struct ir_var_ty var_ty = IR_VAR_TY_POINTER;
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_ADDR;
 
   switch (ref->ty) {
@@ -734,7 +734,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
 
   if (unary_op->ty == TD_UNARY_OP_TY_INDIRECTION) {
     // does not generate a unary op instead generates a LOAD_ADDR
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD;
     op->var_ty = var_ty;
     op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = ir_expr};
@@ -865,7 +865,7 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
     BUG("unexpected unary_op_ty in `%s`", __func__);
   }
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_UNARY_OP;
   op->var_ty = var_ty;
   op->unary_op.ty = unary_op_ty;
@@ -885,10 +885,10 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
   if (binary_op->ty == TD_BINARY_OP_TY_LOGICAL_AND ||
       binary_op->ty == TD_BINARY_OP_TY_LOGICAL_OR) {
     struct ir_basicblock *entry_bb = (*stmt)->basicblock;
-    struct ir_basicblock *rhs_bb = ir_alloc_ir_basicblock(irb->func);
-    struct ir_basicblock *true_bb = ir_alloc_ir_basicblock(irb->func);
-    struct ir_basicblock *false_bb = ir_alloc_ir_basicblock(irb->func);
-    struct ir_basicblock *end_bb = ir_alloc_ir_basicblock(irb->func);
+    struct ir_basicblock *rhs_bb = ir_alloc_basicblock(irb->func);
+    struct ir_basicblock *true_bb = ir_alloc_basicblock(irb->func);
+    struct ir_basicblock *false_bb = ir_alloc_basicblock(irb->func);
+    struct ir_basicblock *end_bb = ir_alloc_basicblock(irb->func);
 
     ir_make_basicblock_merge(irb->func, true_bb, end_bb);
     ir_make_basicblock_merge(irb->func, false_bb, end_bb);
@@ -899,44 +899,44 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
       ir_make_basicblock_split(irb->func, entry_bb, true_bb, rhs_bb);
     }
 
-    struct ir_stmt *entry_stmt = ir_alloc_ir_stmt(irb->func, entry_bb);
-    struct ir_op *lhs_br = ir_alloc_ir_op(irb->func, entry_stmt);
+    struct ir_stmt *entry_stmt = ir_alloc_stmt(irb->func, entry_bb);
+    struct ir_op *lhs_br = ir_alloc_op(irb->func, entry_stmt);
     lhs_br->ty = IR_OP_TY_BR_COND;
     lhs_br->var_ty = IR_VAR_TY_NONE;
     lhs_br->br_cond = (struct ir_op_br_cond){.cond = lhs};
 
-    struct ir_stmt *rhs_stmt = ir_alloc_ir_stmt(irb->func, rhs_bb);
+    struct ir_stmt *rhs_stmt = ir_alloc_stmt(irb->func, rhs_bb);
     struct ir_op *rhs = build_ir_for_expr(irb, &rhs_stmt, binary_op->rhs);
 
     struct ir_basicblock *rhs_stmt_bb = rhs_stmt->basicblock;
-    struct ir_stmt *rhs_br_stmt = ir_alloc_ir_stmt(irb->func, rhs_stmt_bb);
-    struct ir_op *rhs_br = ir_alloc_ir_op(irb->func, rhs_br_stmt);
+    struct ir_stmt *rhs_br_stmt = ir_alloc_stmt(irb->func, rhs_stmt_bb);
+    struct ir_op *rhs_br = ir_alloc_op(irb->func, rhs_br_stmt);
     rhs_br->ty = IR_OP_TY_BR_COND;
     rhs_br->var_ty = IR_VAR_TY_NONE;
     rhs_br->br_cond = (struct ir_op_br_cond){.cond = rhs};
 
     ir_make_basicblock_split(irb->func, rhs_stmt_bb, true_bb, false_bb);
 
-    struct ir_stmt *true_stmt = ir_alloc_ir_stmt(irb->func, true_bb);
-    struct ir_op *true_op = ir_alloc_ir_op(irb->func, true_stmt);
+    struct ir_stmt *true_stmt = ir_alloc_stmt(irb->func, true_bb);
+    struct ir_op *true_op = ir_alloc_op(irb->func, true_stmt);
     ir_mk_integral_constant(irb->unit, true_op, IR_VAR_PRIMITIVE_TY_I32, 1);
 
-    struct ir_stmt *true_br_stmt = ir_alloc_ir_stmt(irb->func, true_bb);
-    struct ir_op *true_br = ir_alloc_ir_op(irb->func, true_br_stmt);
+    struct ir_stmt *true_br_stmt = ir_alloc_stmt(irb->func, true_bb);
+    struct ir_op *true_br = ir_alloc_op(irb->func, true_br_stmt);
     true_br->ty = IR_OP_TY_BR;
     true_br->var_ty = IR_VAR_TY_NONE;
 
-    struct ir_stmt *false_stmt = ir_alloc_ir_stmt(irb->func, false_bb);
-    struct ir_op *false_op = ir_alloc_ir_op(irb->func, false_stmt);
+    struct ir_stmt *false_stmt = ir_alloc_stmt(irb->func, false_bb);
+    struct ir_op *false_op = ir_alloc_op(irb->func, false_stmt);
     ir_mk_integral_constant(irb->unit, false_op, IR_VAR_PRIMITIVE_TY_I32, 0);
 
-    struct ir_stmt *false_br_stmt = ir_alloc_ir_stmt(irb->func, false_bb);
-    struct ir_op *false_br = ir_alloc_ir_op(irb->func, false_br_stmt);
+    struct ir_stmt *false_br_stmt = ir_alloc_stmt(irb->func, false_bb);
+    struct ir_op *false_br = ir_alloc_op(irb->func, false_br_stmt);
     false_br->ty = IR_OP_TY_BR;
     false_br->var_ty = IR_VAR_TY_NONE;
 
     struct ir_op *phi = ir_insert_phi(irb->func, end_bb, var_ty);
-    struct ir_stmt *end_stmt = ir_alloc_ir_stmt(irb->func, end_bb);
+    struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
 
     phi->phi = (struct ir_op_phi){
         .num_values = 2,
@@ -983,7 +983,7 @@ static struct ir_op *build_ir_for_sizeof(struct ir_func_builder *irb,
 
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &size_var_ty);
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty;
   op->cnst =
@@ -1002,7 +1002,7 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
       var_ty_for_td_var_ty(irb->unit, &align_of->var_ty);
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &align_var_ty);
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_CNST;
   op->var_ty = var_ty;
   op->cnst =
@@ -1075,7 +1075,7 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct ir_var_ty var_ty,
                                        struct td_expr *expr) {
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
 
   switch (expr->cnst.ty) {
   case TD_CNST_TY_CHAR:
@@ -1137,38 +1137,38 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
                                           struct td_ternary *ternary) {
   struct ir_op *cond = build_ir_for_expr(irb, stmt, ternary->cond);
   struct ir_stmt *br_cond_stmt =
-      ir_alloc_ir_stmt(irb->func, (*stmt)->basicblock);
-  struct ir_op *br_cond = ir_alloc_ir_op(irb->func, br_cond_stmt);
+      ir_alloc_stmt(irb->func, (*stmt)->basicblock);
+  struct ir_op *br_cond = ir_alloc_op(irb->func, br_cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_VAR_TY_NONE;
   br_cond->br_cond = (struct ir_op_br_cond){.cond = cond};
 
   struct ir_basicblock *pre_cond_bb = (*stmt)->basicblock;
-  struct ir_basicblock *true_bb = ir_alloc_ir_basicblock(irb->func);
-  struct ir_basicblock *false_bb = ir_alloc_ir_basicblock(irb->func);
-  struct ir_basicblock *end_bb = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *true_bb = ir_alloc_basicblock(irb->func);
+  struct ir_basicblock *false_bb = ir_alloc_basicblock(irb->func);
+  struct ir_basicblock *end_bb = ir_alloc_basicblock(irb->func);
 
   ir_make_basicblock_split(irb->func, pre_cond_bb, true_bb, false_bb);
 
-  struct ir_stmt *true_stmt = ir_alloc_ir_stmt(irb->func, true_bb);
+  struct ir_stmt *true_stmt = ir_alloc_stmt(irb->func, true_bb);
   struct ir_op *true_op =
       build_ir_for_expr(irb, &true_stmt, ternary->true_expr);
 
   struct ir_stmt *true_br_stmt =
-      ir_alloc_ir_stmt(irb->func, true_stmt->basicblock);
+      ir_alloc_stmt(irb->func, true_stmt->basicblock);
   ir_make_basicblock_merge(irb->func, true_br_stmt->basicblock, end_bb);
-  struct ir_op *true_br = ir_alloc_ir_op(irb->func, true_br_stmt);
+  struct ir_op *true_br = ir_alloc_op(irb->func, true_br_stmt);
   true_br->ty = IR_OP_TY_BR;
   true_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_stmt *false_stmt = ir_alloc_ir_stmt(irb->func, false_bb);
+  struct ir_stmt *false_stmt = ir_alloc_stmt(irb->func, false_bb);
   struct ir_op *false_op =
       build_ir_for_expr(irb, &false_stmt, ternary->false_expr);
 
   struct ir_stmt *false_br_stmt =
-      ir_alloc_ir_stmt(irb->func, false_stmt->basicblock);
+      ir_alloc_stmt(irb->func, false_stmt->basicblock);
   ir_make_basicblock_merge(irb->func, false_stmt->basicblock, end_bb);
-  struct ir_op *false_br = ir_alloc_ir_op(irb->func, false_br_stmt);
+  struct ir_op *false_br = ir_alloc_op(irb->func, false_br_stmt);
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
 
@@ -1183,7 +1183,7 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   phi->phi.values[1] =
       (struct ir_phi_entry){.basicblock = true_bb, .value = true_op};
 
-  struct ir_stmt *end_stmt = ir_alloc_ir_stmt(irb->func, end_bb);
+  struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
 
   *stmt = end_stmt;
   return phi;
@@ -1200,7 +1200,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
   }
 
   if (var->ty == TD_VAR_VAR_TY_ENUMERATOR) {
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_CNST;
     op->var_ty = var_ty;
     op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
@@ -1235,7 +1235,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
           return build_ir_for_addressof_var(irb, stmt, var);
         }
 
-        struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+        struct ir_op *op = ir_alloc_op(irb->func, *stmt);
         op->ty = IR_OP_TY_LOAD;
 
         if (var_ty.ty == IR_VAR_TY_TY_ARRAY) {
@@ -1256,7 +1256,7 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
           return build_ir_for_addressof_var(irb, stmt, var);
         }
 
-        struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+        struct ir_op *op = ir_alloc_op(irb->func, *stmt);
         op->ty = IR_OP_TY_LOAD;
         op->var_ty = var_ty;
         op->load =
@@ -1298,14 +1298,14 @@ static struct ir_op *store_load_if_needed(struct ir_func_builder *irb,
 
   struct ir_lcl *lcl = ir_add_local(irb->func, &op->var_ty);
 
-  struct ir_op *store = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *store = ir_alloc_op(irb->func, *stmt);
   store->ty = IR_OP_TY_STORE;
   store->var_ty = IR_VAR_TY_NONE;
 
   store->store =
       (struct ir_op_store){.ty = IR_OP_STORE_TY_LCL, .value = op, .lcl = lcl};
 
-  struct ir_op *load = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *load = ir_alloc_op(irb->func, *stmt);
   load->ty = IR_OP_TY_LOAD;
   load->var_ty = op->var_ty;
 
@@ -1366,7 +1366,7 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   }
 
   irb->func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
 
   op->ty = IR_OP_TY_CALL;
   op->var_ty = *func_ty.func.ret_ty;
@@ -1396,7 +1396,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
     return op;
   case VAR_REF_TY_LCL: {
     // FIXME: is this right
-    struct ir_op *store = ir_alloc_ir_op(irb->func, stmt);
+    struct ir_op *store = ir_alloc_op(irb->func, stmt);
     store->ty = IR_OP_TY_STORE;
     store->var_ty = IR_VAR_TY_NONE;
     store->store = (struct ir_op_store){
@@ -1408,7 +1408,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   }
   case VAR_REF_TY_GLB: {
     // FIXME: is this right
-    struct ir_op *store = ir_alloc_ir_op(irb->func, stmt);
+    struct ir_op *store = ir_alloc_op(irb->func, stmt);
     store->ty = IR_OP_TY_STORE;
     store->var_ty = IR_VAR_TY_NONE;
     store->store = (struct ir_op_store){
@@ -1505,7 +1505,7 @@ build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
     return lhs;
   }
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_ADDR_OFFSET;
   op->var_ty = IR_VAR_TY_POINTER;
   op->addr_offset =
@@ -1533,7 +1533,7 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
     return lhs;
   }
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_ADDR_OFFSET;
   op->var_ty = IR_VAR_TY_POINTER;
   op->addr_offset =
@@ -1602,7 +1602,7 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
   struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &el_ty);
 
-  struct ir_op *addr = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *addr = ir_alloc_op(irb->func, *stmt);
   addr->ty = IR_OP_TY_ADDR_OFFSET;
   addr->var_ty = IR_VAR_TY_POINTER;
   addr->addr_offset =
@@ -1729,7 +1729,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   }
 
   if (is_bitfield) {
-    struct ir_op *store = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *store = ir_alloc_op(irb->func, *stmt);
     store->ty = IR_OP_TY_STORE_BITFIELD;
     store->var_ty = IR_VAR_TY_NONE;
     store->store_bitfield =
@@ -1738,7 +1738,7 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
                                       .value = value,
                                       .bitfield = bitfield};
   } else {
-    struct ir_op *store = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *store = ir_alloc_op(irb->func, *stmt);
     store->ty = IR_OP_TY_STORE;
     store->var_ty = IR_VAR_TY_NONE;
     store->store = (struct ir_op_store){
@@ -1763,7 +1763,7 @@ build_ir_for_arrayaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
     return address;
   }
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_LOAD;
   op->var_ty = var_ty;
   op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = address};
@@ -1785,7 +1785,7 @@ build_ir_for_memberaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
       &bitfield);
 
   if (is_bitfield) {
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD_BITFIELD;
     op->var_ty = var_ty;
     op->load_bitfield = (struct ir_op_load_bitfield){
@@ -1793,7 +1793,7 @@ build_ir_for_memberaccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
     return op;
   } else {
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD;
     op->var_ty = var_ty;
     op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = address};
@@ -1816,7 +1816,7 @@ build_ir_for_pointeraccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
       &bitfield);
 
   if (is_bitfield) {
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD_BITFIELD;
     op->var_ty = var_ty;
     op->load_bitfield = (struct ir_op_load_bitfield){
@@ -1824,7 +1824,7 @@ build_ir_for_pointeraccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
     return op;
   } else {
-    struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_LOAD;
     op->var_ty = var_ty;
     op->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = address};
@@ -1908,17 +1908,17 @@ static struct ir_basicblock *build_ir_for_if(struct ir_func_builder *irb,
                                              struct ir_basicblock *basicblock,
                                              struct td_ifstmt *if_stmt) {
 
-  struct ir_stmt *cond_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+  struct ir_stmt *cond_stmt = ir_alloc_stmt(irb->func, basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &if_stmt->cond);
 
   struct ir_basicblock *pre_if_basicblock = cond->stmt->basicblock;
 
   // basic block for if body
-  struct ir_basicblock *if_start_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *if_start_basicblock = ir_alloc_basicblock(irb->func);
 
   struct ir_stmt *br_cond_stmt =
-      ir_alloc_ir_stmt(irb->func, cond_stmt->basicblock);
-  struct ir_op *br_cond = ir_alloc_ir_op(irb->func, br_cond_stmt);
+      ir_alloc_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *br_cond = ir_alloc_op(irb->func, br_cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_VAR_TY_NONE;
   br_cond->br_cond.cond = cond;
@@ -1928,13 +1928,13 @@ static struct ir_basicblock *build_ir_for_if(struct ir_func_builder *irb,
 
   // we add a redundant branch to keep the nice property that all BBs end in a
   // branch
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, if_end_basicblock);
-  struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, if_end_basicblock);
+  struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
 
   // basic block for *after* if body
-  struct ir_basicblock *after_if_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *after_if_basicblock = ir_alloc_basicblock(irb->func);
 
   ir_make_basicblock_split(irb->func, pre_if_basicblock, if_start_basicblock,
                            after_if_basicblock);
@@ -1948,42 +1948,42 @@ static struct ir_basicblock *
 build_ir_for_ifelse(struct ir_func_builder *irb,
                     struct ir_basicblock *basicblock,
                     struct td_ifelsestmt *if_else_stmt) {
-  struct ir_stmt *cond_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+  struct ir_stmt *cond_stmt = ir_alloc_stmt(irb->func, basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &if_else_stmt->cond);
 
   // basic block for if body
-  struct ir_basicblock *if_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *if_basicblock = ir_alloc_basicblock(irb->func);
   struct ir_basicblock *after_if_bb =
       build_ir_for_stmt(irb, if_basicblock, if_else_stmt->body);
 
   // basic block for else body
-  struct ir_basicblock *else_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *else_basicblock = ir_alloc_basicblock(irb->func);
   struct ir_basicblock *after_else_bb =
       build_ir_for_stmt(irb, else_basicblock, if_else_stmt->else_body);
 
   struct ir_basicblock *after_if_else_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
 
   struct ir_basicblock *pre_if_basicblock = cond->stmt->basicblock;
 
   ir_make_basicblock_split(irb->func, pre_if_basicblock, if_basicblock,
                            else_basicblock);
 
-  struct ir_stmt *br_cond_stmt = ir_alloc_ir_stmt(irb->func, pre_if_basicblock);
-  struct ir_op *br_cond = ir_alloc_ir_op(irb->func, br_cond_stmt);
+  struct ir_stmt *br_cond_stmt = ir_alloc_stmt(irb->func, pre_if_basicblock);
+  struct ir_op *br_cond = ir_alloc_op(irb->func, br_cond_stmt);
   br_cond->ty = IR_OP_TY_BR_COND;
   br_cond->var_ty = IR_VAR_TY_NONE;
   br_cond->br_cond.cond = cond;
 
-  struct ir_stmt *br_after_if_stmt = ir_alloc_ir_stmt(irb->func, after_if_bb);
-  struct ir_op *br_after_if = ir_alloc_ir_op(irb->func, br_after_if_stmt);
+  struct ir_stmt *br_after_if_stmt = ir_alloc_stmt(irb->func, after_if_bb);
+  struct ir_op *br_after_if = ir_alloc_op(irb->func, br_after_if_stmt);
   br_after_if->ty = IR_OP_TY_BR;
   br_after_if->var_ty = IR_VAR_TY_NONE;
   ir_make_basicblock_merge(irb->func, after_if_bb, after_if_else_basicblock);
 
   struct ir_stmt *br_after_else_stmt =
-      ir_alloc_ir_stmt(irb->func, after_else_bb);
-  struct ir_op *br_after_else = ir_alloc_ir_op(irb->func, br_after_else_stmt);
+      ir_alloc_stmt(irb->func, after_else_bb);
+  struct ir_op *br_after_else = ir_alloc_op(irb->func, br_after_else_stmt);
   br_after_else->ty = IR_OP_TY_BR;
   br_after_else->var_ty = IR_VAR_TY_NONE;
   ir_make_basicblock_merge(irb->func, after_else_bb, after_if_else_basicblock);
@@ -2001,25 +2001,25 @@ build_ir_for_switch(struct ir_func_builder *irb,
   struct ir_case new_switch = {.ty = IR_CASE_TY_NEW_SWITCH};
   vector_push_back(irb->switch_cases, &new_switch);
 
-  struct ir_stmt *ctrl_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+  struct ir_stmt *ctrl_stmt = ir_alloc_stmt(irb->func, basicblock);
   struct ir_op *ctrl_op =
       build_ir_for_expr(irb, &ctrl_stmt, &switch_stmt->ctrl_expr);
 
   struct ir_stmt *switch_op_stmt =
-      ir_alloc_ir_stmt(irb->func, ctrl_stmt->basicblock);
-  struct ir_op *switch_op = ir_alloc_ir_op(irb->func, switch_op_stmt);
+      ir_alloc_stmt(irb->func, ctrl_stmt->basicblock);
+  struct ir_op *switch_op = ir_alloc_op(irb->func, switch_op_stmt);
   switch_op->ty = IR_OP_TY_BR_SWITCH;
   switch_op->var_ty = IR_VAR_TY_NONE;
   switch_op->br_switch = (struct ir_op_br_switch){.value = ctrl_op};
 
-  struct ir_basicblock *body_bb = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *body_bb = ir_alloc_basicblock(irb->func);
   struct ir_basicblock *end_bb =
       build_ir_for_stmt(irb, body_bb, switch_stmt->body);
 
-  struct ir_basicblock *after_body_bb = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *after_body_bb = ir_alloc_basicblock(irb->func);
   ir_make_basicblock_merge(irb->func, end_bb, after_body_bb);
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, end_bb);
-  struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, end_bb);
+  struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
 
@@ -2066,8 +2066,8 @@ jumps:
     case IR_JUMP_TY_BREAK: {
       ir_make_basicblock_merge(irb->func, jump->basicblock, after_body_bb);
       struct ir_stmt *break_br_stmt =
-          ir_alloc_ir_stmt(irb->func, jump->basicblock);
-      struct ir_op *break_br = ir_alloc_ir_op(irb->func, break_br_stmt);
+          ir_alloc_stmt(irb->func, jump->basicblock);
+      struct ir_op *break_br = ir_alloc_op(irb->func, break_br_stmt);
       break_br->ty = IR_OP_TY_BR;
       break_br->var_ty = IR_VAR_TY_NONE;
       break;
@@ -2131,38 +2131,38 @@ static struct ir_loop build_ir_for_whilestmt(struct ir_func_builder *irb,
                                              struct td_whilestmt *while_stmt) {
 
   struct ir_basicblock *before_cond_basicblock = basicblock;
-  struct ir_basicblock *cond_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *cond_basicblock = ir_alloc_basicblock(irb->func);
 
   ir_make_basicblock_merge(irb->func, before_cond_basicblock, cond_basicblock);
   struct ir_stmt *pre_cond_stmt =
-      ir_alloc_ir_stmt(irb->func, before_cond_basicblock);
-  struct ir_op *pre_cond_br = ir_alloc_ir_op(irb->func, pre_cond_stmt);
+      ir_alloc_stmt(irb->func, before_cond_basicblock);
+  struct ir_op *pre_cond_br = ir_alloc_op(irb->func, pre_cond_stmt);
   pre_cond_br->ty = IR_OP_TY_BR;
   pre_cond_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_stmt *cond_stmt = ir_alloc_ir_stmt(irb->func, cond_basicblock);
+  struct ir_stmt *cond_stmt = ir_alloc_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &while_stmt->cond);
   struct ir_stmt *cond_br_stmt =
-      ir_alloc_ir_stmt(irb->func, cond_stmt->basicblock);
-  struct ir_op *cond_br = ir_alloc_ir_op(irb->func, cond_br_stmt);
+      ir_alloc_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *cond_br = ir_alloc_op(irb->func, cond_br_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
 
   struct ir_basicblock *cond_stmt_basicblock = cond_stmt->basicblock;
 
-  struct ir_basicblock *body_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *body_basicblock = ir_alloc_basicblock(irb->func);
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, while_stmt->body);
   struct ir_basicblock *after_body_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
 
   ir_make_basicblock_split(irb->func, cond_stmt_basicblock, body_basicblock,
                            after_body_basicblock);
 
   ir_make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, body_stmt_basicblock);
-  struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, body_stmt_basicblock);
+  struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
 
@@ -2176,39 +2176,39 @@ build_ir_for_dowhilestmt(struct ir_func_builder *irb,
                          struct td_dowhilestmt *do_while_stmt) {
   struct ir_basicblock *before_body_basicblock = basicblock;
   struct ir_stmt *pre_cond_stmt =
-      ir_alloc_ir_stmt(irb->func, before_body_basicblock);
-  struct ir_op *pre_body_br = ir_alloc_ir_op(irb->func, pre_cond_stmt);
+      ir_alloc_stmt(irb->func, before_body_basicblock);
+  struct ir_op *pre_body_br = ir_alloc_op(irb->func, pre_cond_stmt);
   pre_body_br->ty = IR_OP_TY_BR;
   pre_body_br->var_ty = IR_VAR_TY_NONE;
 
-  struct ir_basicblock *body_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *body_basicblock = ir_alloc_basicblock(irb->func);
 
   ir_make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
 
   struct ir_basicblock *body_stmt_basicblock =
       build_ir_for_stmt(irb, body_basicblock, do_while_stmt->body);
 
-  struct ir_basicblock *cond_basicblock = ir_alloc_ir_basicblock(irb->func);
-  struct ir_stmt *cond_stmt = ir_alloc_ir_stmt(irb->func, cond_basicblock);
+  struct ir_basicblock *cond_basicblock = ir_alloc_basicblock(irb->func);
+  struct ir_stmt *cond_stmt = ir_alloc_stmt(irb->func, cond_basicblock);
   struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, &do_while_stmt->cond);
 
   struct ir_stmt *cond_br_stmt =
-      ir_alloc_ir_stmt(irb->func, cond_stmt->basicblock);
-  struct ir_op *cond_br = ir_alloc_ir_op(irb->func, cond_br_stmt);
+      ir_alloc_stmt(irb->func, cond_stmt->basicblock);
+  struct ir_op *cond_br = ir_alloc_op(irb->func, cond_br_stmt);
   cond_br->ty = IR_OP_TY_BR_COND;
   cond_br->var_ty = IR_VAR_TY_NONE;
   cond_br->br_cond.cond = cond;
 
   ir_make_basicblock_merge(irb->func, body_stmt_basicblock, cond_basicblock);
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, body_stmt_basicblock);
-  struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, body_stmt_basicblock);
+  struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
 
   struct ir_basicblock *cond_stmt_basicblock = cond_stmt->basicblock;
 
   struct ir_basicblock *after_cond_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
   ir_make_basicblock_split(irb->func, cond_stmt_basicblock, body_basicblock,
                            after_cond_basicblock);
 
@@ -2225,7 +2225,7 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
 
   if (for_stmt->init) {
     struct ir_stmt *init_stmt =
-        ir_alloc_ir_stmt(irb->func, before_cond_basicblock);
+        ir_alloc_stmt(irb->func, before_cond_basicblock);
     build_ir_for_declorexpr(irb, &init_stmt, for_stmt->init);
 
     before_cond_basicblock = init_stmt->basicblock;
@@ -2233,22 +2233,22 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   }
 
   if (for_stmt->cond) {
-    struct ir_basicblock *cond_basicblock = ir_alloc_ir_basicblock(irb->func);
+    struct ir_basicblock *cond_basicblock = ir_alloc_basicblock(irb->func);
     ir_make_basicblock_merge(irb->func, before_cond_basicblock,
                              cond_basicblock);
 
     struct ir_stmt *to_cond_stmt =
-        ir_alloc_ir_stmt(irb->func, before_cond_basicblock);
-    struct ir_op *to_cond_br = ir_alloc_ir_op(irb->func, to_cond_stmt);
+        ir_alloc_stmt(irb->func, before_cond_basicblock);
+    struct ir_op *to_cond_br = ir_alloc_op(irb->func, to_cond_stmt);
     to_cond_br->ty = IR_OP_TY_BR;
     to_cond_br->var_ty = IR_VAR_TY_NONE;
 
-    struct ir_stmt *cond_stmt = ir_alloc_ir_stmt(irb->func, cond_basicblock);
+    struct ir_stmt *cond_stmt = ir_alloc_stmt(irb->func, cond_basicblock);
     struct ir_op *cond = build_ir_for_expr(irb, &cond_stmt, for_stmt->cond);
 
     struct ir_stmt *cond_br_stmt =
-        ir_alloc_ir_stmt(irb->func, cond_stmt->basicblock);
-    struct ir_op *cond_br = ir_alloc_ir_op(irb->func, cond_br_stmt);
+        ir_alloc_stmt(irb->func, cond_stmt->basicblock);
+    struct ir_op *cond_br = ir_alloc_op(irb->func, cond_br_stmt);
     cond_br->ty = IR_OP_TY_BR_COND;
     cond_br->var_ty = IR_VAR_TY_NONE;
     cond_br->br_cond.cond = cond;
@@ -2256,13 +2256,13 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     before_body_basicblock = cond_stmt->basicblock;
   } else {
     struct ir_stmt *to_body_stmt =
-        ir_alloc_ir_stmt(irb->func, before_body_basicblock);
-    struct ir_op *to_body_br = ir_alloc_ir_op(irb->func, to_body_stmt);
+        ir_alloc_stmt(irb->func, before_body_basicblock);
+    struct ir_op *to_body_br = ir_alloc_op(irb->func, to_body_stmt);
     to_body_br->ty = IR_OP_TY_BR;
     to_body_br->var_ty = IR_VAR_TY_NONE;
   }
 
-  struct ir_basicblock *body_basicblock = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *body_basicblock = ir_alloc_basicblock(irb->func);
   ir_make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
 
   if (!for_stmt->cond) {
@@ -2275,30 +2275,30 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   struct ir_basicblock *end_body_basicblock = body_stmt_basicblock;
 
   if (for_stmt->iter) {
-    struct ir_basicblock *iter_basicblock = ir_alloc_ir_basicblock(irb->func);
+    struct ir_basicblock *iter_basicblock = ir_alloc_basicblock(irb->func);
     ir_make_basicblock_merge(irb->func, body_stmt_basicblock, iter_basicblock);
 
     struct ir_stmt *to_iter_stmt =
-        ir_alloc_ir_stmt(irb->func, body_stmt_basicblock);
-    struct ir_op *to_iter_br = ir_alloc_ir_op(irb->func, to_iter_stmt);
+        ir_alloc_stmt(irb->func, body_stmt_basicblock);
+    struct ir_op *to_iter_br = ir_alloc_op(irb->func, to_iter_stmt);
     to_iter_br->ty = IR_OP_TY_BR;
     to_iter_br->var_ty = IR_VAR_TY_NONE;
 
-    struct ir_stmt *iter_stmt = ir_alloc_ir_stmt(irb->func, iter_basicblock);
+    struct ir_stmt *iter_stmt = ir_alloc_stmt(irb->func, iter_basicblock);
     build_ir_for_expr(irb, &iter_stmt, for_stmt->iter);
 
     end_body_basicblock = iter_stmt->basicblock;
   }
 
-  struct ir_stmt *end_stmt = ir_alloc_ir_stmt(irb->func, end_body_basicblock);
-  struct ir_op *end_br = ir_alloc_ir_op(irb->func, end_stmt);
+  struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_body_basicblock);
+  struct ir_op *end_br = ir_alloc_op(irb->func, end_stmt);
   end_br->ty = IR_OP_TY_BR;
   end_br->var_ty = IR_VAR_TY_NONE;
   ir_make_basicblock_merge(irb->func, end_body_basicblock,
                            before_body_basicblock);
 
   struct ir_basicblock *after_body_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
 
   if (for_stmt->cond) {
     ir_make_basicblock_split(irb->func, before_body_basicblock, body_basicblock,
@@ -2343,8 +2343,8 @@ build_ir_for_iterstmt(struct ir_func_builder *irb,
       break;
     }
 
-    struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, jump->basicblock);
-    struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+    struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, jump->basicblock);
+    struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
     br->ty = IR_OP_TY_BR;
     br->var_ty = IR_VAR_TY_NONE;
   }
@@ -2357,8 +2357,8 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
                                                struct td_gotostmt *goto_stmt) {
   struct ir_basicblock *before_goto_basicblock = (*stmt)->basicblock;
 
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, before_goto_basicblock);
-  struct ir_op *br = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, before_goto_basicblock);
+  struct ir_op *br = ir_alloc_op(irb->func, br_stmt);
 
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
@@ -2370,7 +2370,7 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
   memcpy(br->metadata, goto_stmt->label, label_len + 1);
 
   struct ir_basicblock *after_goto_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
   return after_goto_basicblock;
 }
 
@@ -2387,9 +2387,9 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
     expr_op = NULL;
   }
 
-  *stmt = ir_alloc_ir_stmt(irb->func, (*stmt)->basicblock);
+  *stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
 
-  struct ir_op *op = ir_alloc_ir_op(irb->func, *stmt);
+  struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_RET;
   op->var_ty = return_stmt && return_stmt->expr
                    ? var_ty_for_td_var_ty(irb->unit, &return_stmt->expr->var_ty)
@@ -2399,7 +2399,7 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
   op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
 
   struct ir_basicblock *after_ret_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
 
   return after_ret_basicblock;
 }
@@ -2411,7 +2411,7 @@ static struct ir_basicblock *build_ir_for_break(struct ir_func_builder *irb,
   vector_push_back(irb->jumps, &jump);
 
   struct ir_basicblock *after_break_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
   return after_break_basicblock;
 }
 
@@ -2422,7 +2422,7 @@ static struct ir_basicblock *build_ir_for_continue(struct ir_func_builder *irb,
   vector_push_back(irb->jumps, &jump);
 
   struct ir_basicblock *after_continue_basicblock =
-      ir_alloc_ir_basicblock(irb->func);
+      ir_alloc_basicblock(irb->func);
   return after_continue_basicblock;
 }
 
@@ -2430,7 +2430,7 @@ static struct ir_basicblock *
 build_ir_for_jumpstmt(struct ir_func_builder *irb,
                       struct ir_basicblock *basicblock,
                       struct td_jumpstmt *jump_stmt) {
-  struct ir_stmt *stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+  struct ir_stmt *stmt = ir_alloc_stmt(irb->func, basicblock);
 
   switch (jump_stmt->ty) {
   case TD_JUMPSTMT_TY_RETURN:
@@ -2486,7 +2486,7 @@ static void build_ir_zero_range(struct ir_func_builder *irb,
     mem_set = ir_insert_before_op(irb->func, insert_before, IR_OP_TY_MEM_SET,
                                   IR_VAR_TY_NONE);
   } else {
-    mem_set = ir_alloc_ir_op(irb->func, stmt);
+    mem_set = ir_alloc_op(irb->func, stmt);
     mem_set->ty = IR_OP_TY_MEM_SET;
     mem_set->var_ty = IR_VAR_TY_NONE;
   }
@@ -2517,14 +2517,14 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     struct ir_op *init_address = address;
 
     if (init->offset) {
-      init_address = ir_alloc_ir_op(irb->func, *stmt);
+      init_address = ir_alloc_op(irb->func, *stmt);
       init_address->ty = IR_OP_TY_ADDR_OFFSET;
       init_address->var_ty = IR_VAR_TY_POINTER;
       init_address->addr_offset =
           (struct ir_op_addr_offset){.base = address, .offset = init->offset};
     }
 
-    struct ir_op *store = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *store = ir_alloc_op(irb->func, *stmt);
     if (init->is_bitfield) {
       store->ty = IR_OP_TY_STORE_BITFIELD;
       store->var_ty = IR_VAR_TY_NONE;
@@ -2796,7 +2796,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
     struct ir_op *address = NULL;
 
     if (lcl) {
-      address = ir_alloc_ir_op(irb->func, *stmt);
+      address = ir_alloc_op(irb->func, *stmt);
       address->ty = IR_OP_TY_ADDR;
       address->var_ty = IR_VAR_TY_POINTER;
       address->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
@@ -2804,7 +2804,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
 
     assignment = build_ir_for_init(irb, stmt, address, decl->init);
   } else if (!lcl) {
-    assignment = ir_alloc_ir_op(irb->func, *stmt);
+    assignment = ir_alloc_op(irb->func, *stmt);
     assignment->ty = IR_OP_TY_UNDF;
     assignment->var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
   }
@@ -2822,7 +2822,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
       };
     }
 
-    struct ir_op *str = ir_alloc_ir_op(irb->func, *stmt);
+    struct ir_op *str = ir_alloc_op(irb->func, *stmt);
     str->ty = IR_OP_TY_STORE;
     str->var_ty = IR_VAR_TY_NONE;
     str->store = (struct ir_op_store){
@@ -2871,11 +2871,11 @@ static struct ir_basicblock *
 build_ir_for_labeledstmt(struct ir_func_builder *irb,
                          struct ir_basicblock *basicblock,
                          struct td_labeledstmt *labeled_stmt) {
-  struct ir_basicblock *next_bb = ir_alloc_ir_basicblock(irb->func);
+  struct ir_basicblock *next_bb = ir_alloc_basicblock(irb->func);
   ir_make_basicblock_merge(irb->func, basicblock, next_bb);
 
-  struct ir_stmt *br_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
-  struct ir_op *br_op = ir_alloc_ir_op(irb->func, br_stmt);
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb->func, basicblock);
+  struct ir_op *br_op = ir_alloc_op(irb->func, br_stmt);
   br_op->ty = IR_OP_TY_BR;
   br_op->var_ty = IR_VAR_TY_NONE;
 
@@ -2910,13 +2910,13 @@ static struct ir_basicblock *build_ir_for_stmt(struct ir_func_builder *irb,
 
   switch (stmt->ty) {
   case TD_STMT_TY_DECLARATION: {
-    struct ir_stmt *ir_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+    struct ir_stmt *ir_stmt = ir_alloc_stmt(irb->func, basicblock);
     build_ir_for_declaration(irb, &ir_stmt, &stmt->declaration);
     return ir_stmt->basicblock;
   }
   case TD_STMT_TY_EXPR: {
     // TODO: ternaries
-    struct ir_stmt *ir_stmt = ir_alloc_ir_stmt(irb->func, basicblock);
+    struct ir_stmt *ir_stmt = ir_alloc_stmt(irb->func, basicblock);
     build_ir_for_expr(irb, &ir_stmt, &stmt->expr);
     return ir_stmt->basicblock;
   }
@@ -3125,14 +3125,14 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .global_var_refs = global_var_refs};
 
   // needs at letd one initial basic block
-  ir_alloc_ir_basicblock(builder->func);
+  ir_alloc_basicblock(builder->func);
   struct ir_basicblock *basicblock = builder->func->first;
 
   // params live in the first stmt normally reserved for phis (as they have
   // similar function)
   struct ir_stmt *param_stmt = basicblock->first
                                    ? ir_insert_before_stmt(f, basicblock->first)
-                                   : ir_alloc_ir_stmt(f, basicblock);
+                                   : ir_alloc_stmt(f, basicblock);
   param_stmt->flags |= IR_STMT_FLAG_PARAM;
 
   // first statement is a bunch of magic MOV commands that explain to the rest
@@ -3167,7 +3167,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       struct ir_lcl *lcl = ir_add_local(builder->func, &param_var_ty);
       lcl->flags |= IR_LCL_FLAG_PARAM;
 
-      struct ir_op *addr = ir_alloc_ir_op(builder->func, param_stmt);
+      struct ir_op *addr = ir_alloc_op(builder->func, param_stmt);
       addr->ty = IR_OP_TY_ADDR;
       addr->var_ty = IR_VAR_TY_POINTER;
       addr->flags |= IR_OP_FLAG_PARAM;
@@ -3183,7 +3183,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
         param_var_ty = IR_VAR_TY_POINTER;
       }
 
-      struct ir_op *mov = ir_alloc_ir_op(builder->func, param_stmt);
+      struct ir_op *mov = ir_alloc_op(builder->func, param_stmt);
       mov->ty = IR_OP_TY_MOV;
       mov->var_ty = param_var_ty;
       mov->flags |= IR_OP_FLAG_PARAM;
@@ -3236,13 +3236,13 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                    last_bb->last->last->ty != IR_OP_TY_RET)) {
     // add extra bb if there is no last bb, or if there is one
     debug("adding bb to create ret");
-    last_bb = ir_alloc_ir_basicblock(builder->func);
+    last_bb = ir_alloc_basicblock(builder->func);
   }
 
   struct ir_stmt *last_stmt = last_bb->last;
   if (!last_stmt) {
     debug("adding bb to create stmt");
-    last_stmt = ir_alloc_ir_stmt(builder->func, last_bb);
+    last_stmt = ir_alloc_stmt(builder->func, last_bb);
   }
 
   struct ir_op *last_op = last_stmt->last;
@@ -3253,7 +3253,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
     if (strcmp(builder->func->name, "main") == 0) {
       debug("adding implicit return 0 to bb %zu", last_bb->id);
 
-      struct ir_op *cnst = ir_alloc_ir_op(builder->func, last_stmt);
+      struct ir_op *cnst = ir_alloc_op(builder->func, last_stmt);
       cnst->ty = IR_OP_TY_CNST;
       cnst->var_ty = (struct ir_var_ty){
           .ty = IR_VAR_TY_TY_PRIMITIVE,

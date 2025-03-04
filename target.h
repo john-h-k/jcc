@@ -139,13 +139,13 @@ typedef struct ir_func_info (*target_lower_func_ty)(struct ir_func *func,
                                              struct ir_op **args,
                                              size_t num_args);
 
-struct codegen_unit;
+struct cg_unit;
 
-typedef struct emitted_unit (*emit_function)(const struct codegen_unit *unit);
+typedef struct emitted_unit (*emit_function)(const struct cg_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
 typedef void (*debug_disasm)(const char *filename, const char *output);
-typedef void (*debug_print_codegen)(FILE *file, struct codegen_unit *unit);
+typedef void (*debug_print_codegen)(FILE *file, struct cg_unit *unit);
 
 enum target_id {
   TARGET_ID_X64_MACOS,
@@ -155,7 +155,7 @@ enum target_id {
   TARGET_ID_RV32I_LINUX,
 };
 
-enum codegen_unit_ty {
+enum cg_unit_ty {
   CODEGEN_UNIT_TY_AARCH64,
   CODEGEN_UNIT_TY_X64,
   CODEGEN_UNIT_TY_EEP,
@@ -163,11 +163,11 @@ enum codegen_unit_ty {
 };
 
 
-struct codegen_state {
+struct cg_state {
   struct arena_allocator *arena;
 
   const struct target *target;
-  struct codegen_function *func;
+  struct cg_func *func;
   struct ir_func *ir;
 
   union {
@@ -180,16 +180,16 @@ struct codegen_state {
 struct ir_glb;
 struct ir_basicblock;
 
-typedef void (*target_codegen)(struct codegen_state *state);
-typedef void (*target_codegen_basicblock)(struct codegen_state *state, struct ir_basicblock *basicblock);
-typedef void (*target_codegen)(struct codegen_state *state);
+typedef void (*target_codegen)(struct cg_state *state);
+typedef void (*target_codegen_basicblock)(struct cg_state *state, struct ir_basicblock *basicblock);
+typedef void (*target_codegen)(struct cg_state *state);
 
-typedef void (*emit_asm)(FILE *file, struct codegen_unit *unit);
+typedef void (*emit_asm)(FILE *file, struct cg_unit *unit);
 
-typedef struct codegen_entry (*target_codegen_var)(struct codegen_unit *unit, struct ir_glb *glb);
+typedef struct cg_entry (*target_codegen_var)(struct cg_unit *unit, struct ir_glb *glb);
 
 struct codegen_info {
-  enum codegen_unit_ty ty;
+  enum cg_unit_ty ty;
   size_t instr_sz;
   size_t function_align;
   target_codegen codegen_start;

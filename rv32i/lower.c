@@ -334,7 +334,7 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
-  op->addr_offset.base = ir_alloc_contained_ir_op(func, base, op);
+  op->addr_offset.base = ir_alloc_contained_op(func, base, op);
 }
 
 static void try_contain_load(struct ir_func *func, struct ir_op *op) {
@@ -349,12 +349,12 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
+    op->load.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index) {
-      op->load.addr = ir_alloc_contained_ir_op(func, addr, op);
+      op->load.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
 }
@@ -371,12 +371,12 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
-    op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
+    op->store.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index) {
-      op->store.addr = ir_alloc_contained_ir_op(func, addr, op);
+      op->store.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
 }

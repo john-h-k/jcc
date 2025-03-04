@@ -54,7 +54,7 @@ struct rv32i_prologue_info {
   size_t save_start;
 };
 
-static ssize_t get_lcl_stack_offset(const struct codegen_state *state,
+static ssize_t get_lcl_stack_offset(const struct cg_state *state,
                                     UNUSED const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
   DEBUG_ASSERT(lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE, "unallocated lcl");
@@ -153,12 +153,13 @@ static bool rv32i_reg_ty_is_gp(enum rv32i_reg_ty ty) {
   return ty == RV32I_REG_TY_W;
 }
 
-static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_mov_op(struct cg_state *state,
+                           struct cg_basicblock *basicblock, struct ir_op *op) {
   struct rv32i_reg dest = codegen_reg(op);
 
   struct rv32i_reg source = codegen_reg(op->mov.value);
 
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
   if (rv32i_reg_ty_is_gp(source.ty) && rv32i_reg_ty_is_gp(dest.ty)) {
     *instr->rv32i = MOV_ALIAS(dest, source);
   } else if (!rv32i_reg_ty_is_gp(source.ty) && !rv32i_reg_ty_is_gp(dest.ty)) {
@@ -180,7 +181,7 @@ static void codegen_mov_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
+UNUSED static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
   DEBUG_ASSERT(ty <= RV32I_INSTR_TY_BGEU, "not a condition instruction!");
 
   return ty ^ 1;
@@ -190,7 +191,9 @@ static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
   (((imm) < 0 && ((simm_t)(imm) >> ((sz)-1)) == -1) ||                         \
    ((imm) >= 0 && ((simm_t)(imm) >> ((sz)-1)) == 0))
 
-static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_br_cond_op(struct cg_state *state,
+                               struct cg_basicblock *basicblock,
+                               struct ir_op *op) {
   struct ir_basicblock *true_target = op->stmt->basicblock->split.true_target;
   struct ir_basicblock *false_target = op->stmt->basicblock->split.false_target;
 
@@ -256,41 +259,12 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
     rhs = GP_ZERO_REG;
   }
 
-  struct instr *instr = alloc_instr(state->func);
-
-  // TODO: this always generates large branches for basicblocks that haven't yet
-  // generated which is suboptimal
-  ssize_t offset = true_target->first_instr
-                       ? true_target->first_instr->id - instr->id
-                       : SSIZE_MAX;
-
-  if (!SIGNED_IMM_FITS(offset, 12)) {
-    // generate:
-    //          b<inverted cond> l, r, false:
-    //          jal ...
-    //   false:
-    //          ...
-
-    br_ty = invert_cond(br_ty);
-
-    instr->rv32i->ty = br_ty;
-    instr->rv32i->conditional_branch =
-        (struct rv32i_conditional_branch){.lhs = invert_ops ? rhs : lhs,
-                                          .rhs = invert_ops ? lhs : rhs,
-                                          .target = RV32I_OFFSET_TARGET(8)};
-
-    struct instr *jal = alloc_instr(state->func);
-    jal->rv32i->ty = RV32I_INSTR_TY_JAL;
-    jal->rv32i->jal =
-        (struct rv32i_jal){.ret_addr = GP_ZERO_REG,
-                           .target = RV32I_BASICBLOCK_TARGET(true_target)};
-  } else {
-    instr->rv32i->ty = br_ty;
-    instr->rv32i->conditional_branch = (struct rv32i_conditional_branch){
-        .lhs = invert_ops ? rhs : lhs,
-        .rhs = invert_ops ? lhs : rhs,
-        .target = RV32I_BASICBLOCK_TARGET(true_target)};
-  }
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
+  instr->rv32i->ty = br_ty;
+  instr->rv32i->conditional_branch = (struct rv32i_conditional_branch){
+      .lhs = invert_ops ? rhs : lhs,
+      .rhs = invert_ops ? lhs : rhs,
+      .target = RV32I_BASICBLOCK_TARGET(true_target)};
 
   // rv32i requires turning `br.cond <true> <false>` into 2 instructions
   // we represent this as just the `true` part of the `br.cond`, and then a
@@ -298,21 +272,24 @@ static void codegen_br_cond_op(struct codegen_state *state, struct ir_op *op) {
   // after branching to the false target
 
   // now generate the `br`
-  struct instr *br = alloc_instr(state->func);
+  struct instr *br = cg_alloc_instr(state->func, basicblock);
   br->rv32i->ty = RV32I_INSTR_TY_JAL;
   br->rv32i->jal = (struct rv32i_jal){
       .ret_addr = GP_ZERO_REG, .target = RV32I_BASICBLOCK_TARGET(false_target)};
 }
 
-static void codegen_br_op(struct codegen_state *state, struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
+static void codegen_br_op(struct cg_state *state,
+                          struct cg_basicblock *basicblock, struct ir_op *op) {
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
   instr->rv32i->ty = RV32I_INSTR_TY_JAL;
   instr->rv32i->jal = (struct rv32i_jal){
       .ret_addr = GP_ZERO_REG,
       .target = RV32I_BASICBLOCK_TARGET(op->stmt->basicblock->merge.target)};
 }
 
-static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_cnst_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct ir_op *op) {
   DEBUG_ASSERT(op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                "expects primitive type");
 
@@ -341,14 +318,14 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
       struct rv32i_reg source_reg = GP_ZERO_REG;
 
       if (hi) {
-        struct instr *instr = alloc_instr(state->func);
+        struct instr *instr = cg_alloc_instr(state->func, basicblock);
         instr->rv32i->ty = RV32I_INSTR_TY_LUI;
         instr->rv32i->lui = (struct rv32i_u){.dest = dest, .imm = hi};
 
         source_reg = dest;
       }
 
-      struct instr *instr = alloc_instr(state->func);
+      struct instr *instr = cg_alloc_instr(state->func, basicblock);
       instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
       instr->rv32i->addi =
           (struct rv32i_op_imm){.dest = dest, .source = source_reg, .imm = lo};
@@ -365,12 +342,14 @@ static void codegen_cnst_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static void codegen_add_imm(struct codegen_state *state, struct rv32i_reg dest,
-                            struct rv32i_reg source, long long value);
+static void codegen_add_imm(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct rv32i_reg dest, struct rv32i_reg source,
+                            long long value);
 
 #define RV32I_STACK_ALIGNMENT (16)
 
-static void codegen_prologue(struct codegen_state *state) {
+static void codegen_prologue(struct cg_state *state) {
   struct ir_func *ir = state->ir;
 
   size_t stack_size =
@@ -403,18 +382,21 @@ static void codegen_prologue(struct codegen_state *state) {
 
   info.stack_size = ROUND_UP(info.stack_size, RV32I_STACK_ALIGNMENT);
 
-  struct instr *save_ra = alloc_instr(state->func);
+  struct cg_basicblock *basicblock = cg_alloc_basicblock(state->func, NULL);
+
+  struct instr *save_ra = cg_alloc_instr(state->func, basicblock);
   save_ra->rv32i->ty = RV32I_INSTR_TY_SW;
   save_ra->rv32i->sw = (struct rv32i_store){
       .source = RET_PTR_REG, .addr = STACK_PTR_REG, .imm = -4};
 
-  struct instr *save_sp = alloc_instr(state->func);
+  struct instr *save_sp = cg_alloc_instr(state->func, basicblock);
   save_sp->rv32i->ty = RV32I_INSTR_TY_SW;
   save_sp->rv32i->sw = (struct rv32i_store){
       .source = STACK_PTR_REG, .addr = STACK_PTR_REG, .imm = -8};
 
   ssize_t stack_to_sub = info.stack_size;
-  codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, -stack_to_sub);
+  codegen_add_imm(state, basicblock, STACK_PTR_REG, STACK_PTR_REG,
+                  -stack_to_sub);
 
   for (size_t i = 0; i < num_nonvolatile_used; i++) {
     struct ir_reg reg = ir->reg_usage.nonvolatile_used[i];
@@ -424,7 +406,7 @@ static void codegen_prologue(struct codegen_state *state) {
     switch (reg.ty) {
     case IR_REG_TY_INTEGRAL: {
 
-      struct instr *save = alloc_instr(state->func);
+      struct instr *save = cg_alloc_instr(state->func, basicblock);
       save->rv32i->ty = RV32I_INSTR_TY_SW;
       save->rv32i->sw = (struct rv32i_store){
           .source = (struct rv32i_reg){.ty = RV32I_REG_TY_W,
@@ -435,7 +417,7 @@ static void codegen_prologue(struct codegen_state *state) {
       break;
     }
     case IR_REG_TY_FP: {
-      struct instr *save = alloc_instr(state->func);
+      struct instr *save = cg_alloc_instr(state->func, basicblock);
       save->rv32i->ty = RV32I_INSTR_TY_FSD;
       save->rv32i->fsw = (struct rv32i_store){
           .source = (struct rv32i_reg){.ty = RV32I_REG_TY_F,
@@ -455,14 +437,16 @@ static void codegen_prologue(struct codegen_state *state) {
 
 #define IMM_BITS (12)
 
-static void codegen_add_imm(struct codegen_state *state, struct rv32i_reg dest,
-                            struct rv32i_reg source, long long value) {
+static void codegen_add_imm(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct rv32i_reg dest, struct rv32i_reg source,
+                            long long value) {
   long long abs_val = value >= 0 ? value : -value;
 
   do {
     ssize_t chunk = MIN(0x7FF, abs_val);
 
-    struct instr *instr = alloc_instr(state->func);
+    struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->rv32i->ty = RV32I_INSTR_TY_ADDI;
     instr->rv32i->addi = (struct rv32i_op_imm){
         .dest = dest,
@@ -476,7 +460,8 @@ static void codegen_add_imm(struct codegen_state *state, struct rv32i_reg dest,
   } while (abs_val);
 }
 
-static void codegen_epilogue(struct codegen_state *state) {
+static void codegen_epilogue(struct cg_state *state,
+                             struct cg_basicblock *basicblock) {
   const struct rv32i_prologue_info *prologue_info = state->rv32i_prologue_info;
 
   if (!prologue_info->prologue_generated) {
@@ -490,7 +475,7 @@ static void codegen_epilogue(struct codegen_state *state) {
 
     switch (reg.ty) {
     case IR_REG_TY_INTEGRAL: {
-      struct instr *restore = alloc_instr(state->func);
+      struct instr *restore = cg_alloc_instr(state->func, basicblock);
       restore->rv32i->ty = RV32I_INSTR_TY_LW;
       restore->rv32i->lw = (struct rv32i_load){
           .imm = offset,
@@ -502,7 +487,7 @@ static void codegen_epilogue(struct codegen_state *state) {
       break;
     }
     case IR_REG_TY_FP: {
-      struct instr *restore = alloc_instr(state->func);
+      struct instr *restore = cg_alloc_instr(state->func, basicblock);
       restore->rv32i->ty = RV32I_INSTR_TY_FLW;
       restore->rv32i->flw = (struct rv32i_load){
           .imm = offset,
@@ -519,32 +504,36 @@ static void codegen_epilogue(struct codegen_state *state) {
   }
 
   size_t stack_to_add = prologue_info->stack_size;
-  codegen_add_imm(state, STACK_PTR_REG, STACK_PTR_REG, stack_to_add);
+  codegen_add_imm(state, basicblock, STACK_PTR_REG, STACK_PTR_REG,
+                  stack_to_add);
 
-  struct instr *restore_ra = alloc_instr(state->func);
+  struct instr *restore_ra = cg_alloc_instr(state->func, basicblock);
   restore_ra->rv32i->ty = RV32I_INSTR_TY_LW;
   restore_ra->rv32i->lw = (struct rv32i_load){
       .dest = RET_PTR_REG, .addr = STACK_PTR_REG, .imm = -4};
 
-  struct instr *restore_sp = alloc_instr(state->func);
+  struct instr *restore_sp = cg_alloc_instr(state->func, basicblock);
   restore_sp->rv32i->ty = RV32I_INSTR_TY_LW;
   restore_sp->rv32i->lw = (struct rv32i_load){
       .dest = STACK_PTR_REG, .addr = STACK_PTR_REG, .imm = -8};
 }
 
-static void codegen_ret_op(struct codegen_state *state,
+static void codegen_ret_op(struct cg_state *state,
+                           struct cg_basicblock *basicblock,
                            UNUSED struct ir_op *op) {
-  codegen_epilogue(state);
+  codegen_epilogue(state, basicblock);
 
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   instr->rv32i->ty = RV32I_INSTR_TY_JALR;
   instr->rv32i->jalr = (struct rv32i_jalr){
       .ret_addr = GP_ZERO_REG, .target = RET_PTR_REG, .imm = 0};
 }
 
-static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
+static void codegen_unary_op(struct cg_state *state,
+                             struct cg_basicblock *basicblock,
+                             struct ir_op *op) {
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   struct rv32i_reg dest = codegen_reg(op);
   struct rv32i_reg source = codegen_reg(op->unary_op.value);
@@ -595,8 +584,10 @@ static void codegen_unary_op(struct codegen_state *state, struct ir_op *op) {
 #undef SEL_FP_INSTR
 }
 
-static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
+static void codegen_binary_op(struct cg_state *state,
+                              struct cg_basicblock *basicblock,
+                              struct ir_op *op) {
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   struct rv32i_reg dest = codegen_reg(op);
 
@@ -659,7 +650,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     };
 
     if (invert_res) {
-      struct instr *xori = alloc_instr(state->func);
+      struct instr *xori = cg_alloc_instr(state->func, basicblock);
       xori->rv32i->ty = RV32I_INSTR_TY_XORI;
       xori->rv32i->xori =
           (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
@@ -675,7 +666,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                           .rhs = rhs,
                       };
 
-    struct instr *sltiu = alloc_instr(state->func);
+    struct instr *sltiu = cg_alloc_instr(state->func, basicblock);
     sltiu->rv32i->ty = RV32I_INSTR_TY_SLTIU;
     sltiu->rv32i->sltiu =
         (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
@@ -690,7 +681,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
                           .rhs = rhs,
                       };
 
-    struct instr *sltu = alloc_instr(state->func);
+    struct instr *sltu = cg_alloc_instr(state->func, basicblock);
     sltu->rv32i->ty = RV32I_INSTR_TY_SLTU;
     sltu->rv32i->sltu =
         (struct rv32i_op){.dest = dest, .lhs = GP_ZERO_REG, .rhs = dest};
@@ -754,7 +745,7 @@ static void codegen_binary_op(struct codegen_state *state, struct ir_op *op) {
     };
 
     if (invert_res) {
-      struct instr *xori = alloc_instr(state->func);
+      struct instr *xori = cg_alloc_instr(state->func, basicblock);
       xori->rv32i->ty = RV32I_INSTR_TY_XORI;
       xori->rv32i->xori =
           (struct rv32i_op_imm){.dest = dest, .source = dest, .imm = 1};
@@ -959,9 +950,10 @@ static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
   }
 }
 
-static void codegen_load_addr_op(struct codegen_state *state,
+static void codegen_load_addr_op(struct cg_state *state,
+                                 struct cg_basicblock *basicblock,
                                  struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   struct rv32i_reg dest = codegen_reg(op);
 
@@ -999,9 +991,10 @@ static void codegen_load_addr_op(struct codegen_state *state,
       (struct rv32i_load){.dest = dest, .addr = addr, .imm = offset};
 }
 
-static void codegen_store_addr_op(struct codegen_state *state,
+static void codegen_store_addr_op(struct cg_state *state,
+                                  struct cg_basicblock *basicblock,
                                   struct ir_op *op) {
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   struct rv32i_reg source = codegen_reg(op->store.value);
 
@@ -1039,21 +1032,26 @@ static void codegen_store_addr_op(struct codegen_state *state,
       (struct rv32i_store){.source = source, .addr = addr, .imm = offset};
 }
 
-static void codegen_load_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_load_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct ir_op *op) {
   DEBUG_ASSERT(op->load.ty == IR_OP_LOAD_TY_ADDR,
                "glb/lcl loads should have been lowered to addr load");
 
-  codegen_load_addr_op(state, op);
+  codegen_load_addr_op(state, basicblock, op);
 }
 
-static void codegen_store_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_store_op(struct cg_state *state,
+                             struct cg_basicblock *basicblock,
+                             struct ir_op *op) {
   DEBUG_ASSERT(op->store.ty == IR_OP_STORE_TY_ADDR,
                "glb/lcl stores should have been lowered to addr store");
 
-  codegen_store_addr_op(state, op);
+  codegen_store_addr_op(state, basicblock, op);
 }
 
-static void codegen_addr_offset_op(struct codegen_state *state,
+static void codegen_addr_offset_op(struct cg_state *state,
+                                   struct cg_basicblock *basicblock,
                                    struct ir_op *op) {
   struct rv32i_reg dest = codegen_reg(op);
 
@@ -1077,10 +1075,12 @@ static void codegen_addr_offset_op(struct codegen_state *state,
     base = codegen_reg(addr_offset->base);
   }
 
-  codegen_add_imm(state, dest, base, offset);
+  codegen_add_imm(state, basicblock, dest, base, offset);
 }
 
-static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_addr_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct ir_op *op) {
   struct rv32i_reg dest = codegen_reg(op);
 
   switch (op->addr.ty) {
@@ -1090,14 +1090,14 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
     // op is NULL as we want the absolute offset
     size_t offset = get_lcl_stack_offset(state, NULL, lcl);
 
-    codegen_add_imm(state, dest, STACK_PTR_REG, offset);
+    codegen_add_imm(state, basicblock, dest, STACK_PTR_REG, offset);
 
     break;
   }
   case IR_OP_ADDR_TY_GLB: {
     struct ir_glb *glb = op->addr.glb;
 
-    struct instr *adrp = alloc_instr(state->func);
+    struct instr *adrp = cg_alloc_instr(state->func, basicblock);
     adrp->rv32i->ty = RV32I_INSTR_TY_LUI;
     adrp->rv32i->lui = (struct rv32i_u){.dest = dest, .imm = 0};
 
@@ -1109,7 +1109,7 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
         .address = 0,
         .size = 0};
 
-    struct instr *add = alloc_instr(state->func);
+    struct instr *add = cg_alloc_instr(state->func, basicblock);
     add->rv32i->ty = RV32I_INSTR_TY_ADDI;
     add->rv32i->addi = (struct rv32i_op_imm){
         .dest = dest,
@@ -1120,7 +1120,8 @@ static void codegen_addr_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_sext_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock, struct ir_op *op,
                             struct rv32i_reg source, struct rv32i_reg dest) {
   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
                    "can't sext from non-primitive");
@@ -1135,11 +1136,11 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
     goto sext;
 
   sext: {
-    struct instr *sl = alloc_instr(state->func);
+    struct instr *sl = cg_alloc_instr(state->func, basicblock);
     sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
     sl->rv32i->slli =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = sh_sz};
-    struct instr *sr = alloc_instr(state->func);
+    struct instr *sr = cg_alloc_instr(state->func, basicblock);
     sr->rv32i->ty = RV32I_INSTR_TY_SRAI;
     sr->rv32i->srai =
         (struct rv32i_op_imm){.source = dest, .dest = dest, .imm = sh_sz};
@@ -1157,7 +1158,8 @@ static void codegen_sext_op(struct codegen_state *state, struct ir_op *op,
   }
 }
 
-static void codegen_zext_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_zext_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock, struct ir_op *op,
                             struct rv32i_reg source, struct rv32i_reg dest) {
 
   invariant_assert(op->cast_op.value->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE,
@@ -1165,18 +1167,18 @@ static void codegen_zext_op(struct codegen_state *state, struct ir_op *op,
 
   switch (op->cast_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I8: {
-    struct instr *and = alloc_instr(state->func);
+    struct instr *and = cg_alloc_instr(state->func, basicblock);
     and->rv32i->ty = RV32I_INSTR_TY_ANDI;
     and->rv32i->andi =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 0xFF};
     break;
   }
   case IR_VAR_PRIMITIVE_TY_I16: {
-    struct instr *sl = alloc_instr(state->func);
+    struct instr *sl = cg_alloc_instr(state->func, basicblock);
     sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
     sl->rv32i->slli =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
-    struct instr *sr = alloc_instr(state->func);
+    struct instr *sr = cg_alloc_instr(state->func, basicblock);
     sr->rv32i->ty = RV32I_INSTR_TY_SRLI;
     sr->rv32i->srli =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
@@ -1193,22 +1195,23 @@ static void codegen_zext_op(struct codegen_state *state, struct ir_op *op,
   }
 }
 
-static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_trunc_op(struct cg_state *state,
+                             struct cg_basicblock *basicblock, struct ir_op *op,
                              struct rv32i_reg source, struct rv32i_reg dest) {
   switch (op->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_I8: {
-    struct instr *and = alloc_instr(state->func);
+    struct instr *and = cg_alloc_instr(state->func, basicblock);
     and->rv32i->ty = RV32I_INSTR_TY_ANDI;
     and->rv32i->andi =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 0xFF};
     break;
   }
   case IR_VAR_PRIMITIVE_TY_I16: {
-    struct instr *sl = alloc_instr(state->func);
+    struct instr *sl = cg_alloc_instr(state->func, basicblock);
     sl->rv32i->ty = RV32I_INSTR_TY_SLLI;
     sl->rv32i->slli =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
-    struct instr *sr = alloc_instr(state->func);
+    struct instr *sr = cg_alloc_instr(state->func, basicblock);
     sr->rv32i->ty = RV32I_INSTR_TY_SRLI;
     sr->rv32i->srli =
         (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 16};
@@ -1221,9 +1224,10 @@ static void codegen_trunc_op(struct codegen_state *state, struct ir_op *op,
   }
 }
 
-static void codegen_conv_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_conv_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock, struct ir_op *op,
                             struct rv32i_reg source, struct rv32i_reg dest) {
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
   switch (op->unary_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F32:
     instr->rv32i->ty = RV32I_INSTR_TY_FCVT_S;
@@ -1237,9 +1241,10 @@ static void codegen_conv_op(struct codegen_state *state, struct ir_op *op,
   instr->rv32i->fmv = (struct rv32i_op_mov){.dest = dest, .source = source};
 }
 
-static void codegen_uconv_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_uconv_op(struct cg_state *state,
+                             struct cg_basicblock *basicblock, struct ir_op *op,
                              struct rv32i_reg source, struct rv32i_reg dest) {
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   enum ir_var_primitive_ty ty;
   if (ir_var_ty_is_fp(&op->var_ty)) {
@@ -1261,9 +1266,10 @@ static void codegen_uconv_op(struct codegen_state *state, struct ir_op *op,
   instr->rv32i->fmv = (struct rv32i_op_mov){.dest = dest, .source = source};
 }
 
-static void codegen_sconv_op(struct codegen_state *state, struct ir_op *op,
+static void codegen_sconv_op(struct cg_state *state,
+                             struct cg_basicblock *basicblock, struct ir_op *op,
                              struct rv32i_reg source, struct rv32i_reg dest) {
-  struct instr *instr = alloc_instr(state->func);
+  struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   enum ir_var_primitive_ty ty;
   if (ir_var_ty_is_fp(&op->var_ty)) {
@@ -1285,7 +1291,9 @@ static void codegen_sconv_op(struct codegen_state *state, struct ir_op *op,
   instr->rv32i->fmv = (struct rv32i_op_mov){.dest = dest, .source = source};
 }
 
-static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_cast_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct ir_op *op) {
   struct rv32i_reg dest = codegen_reg(op);
   struct rv32i_reg source = codegen_reg(op->cast_op.value);
 
@@ -1296,29 +1304,31 @@ static void codegen_cast_op(struct codegen_state *state, struct ir_op *op) {
   switch (op->cast_op.ty) {
   case IR_OP_CAST_OP_TY_SEXT:
     source.ty = dest.ty;
-    codegen_sext_op(state, op, source, dest);
+    codegen_sext_op(state, basicblock, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_ZEXT:
     source.ty = dest.ty;
-    codegen_zext_op(state, op, source, dest);
+    codegen_zext_op(state, basicblock, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_TRUNC:
     source.ty = dest.ty;
-    codegen_trunc_op(state, op, source, dest);
+    codegen_trunc_op(state, basicblock, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_CONV:
-    codegen_conv_op(state, op, source, dest);
+    codegen_conv_op(state, basicblock, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_UCONV:
-    codegen_uconv_op(state, op, source, dest);
+    codegen_uconv_op(state, basicblock, op, source, dest);
     break;
   case IR_OP_CAST_OP_TY_SCONV:
-    codegen_sconv_op(state, op, source, dest);
+    codegen_sconv_op(state, basicblock, op, source, dest);
     break;
   }
 }
 
-static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_call_op(struct cg_state *state,
+                            struct cg_basicblock *basicblock,
+                            struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
   const struct ir_var_func_ty *func_ty = &op->call.func_ty.func;
@@ -1332,10 +1342,10 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
                  "expected addr GLB");
     struct ir_glb *glb = op->call.target->addr.glb;
 
-    struct codegen_entry *entry = &state->func->unit->entries[glb->id];
+    struct cg_entry *entry = &state->func->unit->entries[glb->id];
 
     if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
-      struct instr *instr = alloc_instr(state->func);
+      struct instr *instr = cg_alloc_instr(state->func, basicblock);
       instr->rv32i->ty = RV32I_INSTR_TY_JAL;
       instr->rv32i->jal = (struct rv32i_jal){
           .target = RV32I_SYMBOL_TARGET(entry), .ret_addr = RET_PTR_REG};
@@ -1351,7 +1361,7 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
     } else {
       // generate `auipc` + `jalr` with fake reg (`ra`) that the linker will
       // reloc into a `jal`
-      struct instr *auipc = alloc_instr(state->func);
+      struct instr *auipc = cg_alloc_instr(state->func, basicblock);
       auipc->rv32i->ty = RV32I_INSTR_TY_AUIPC;
       auipc->rv32i->auipc = (struct rv32i_u){.dest = RET_PTR_REG, .imm = 0};
 
@@ -1364,21 +1374,22 @@ static void codegen_call_op(struct codegen_state *state, struct ir_op *op) {
           .address = 0,
       };
 
-      struct instr *jalr = alloc_instr(state->func);
+      struct instr *jalr = cg_alloc_instr(state->func, basicblock);
       jalr->rv32i->ty = RV32I_INSTR_TY_JALR;
       jalr->rv32i->jalr = (struct rv32i_jalr){
           .target = RET_PTR_REG, .ret_addr = RET_PTR_REG, .imm = 0};
     }
   } else {
     // NOTE: `blr` seems to segfault on linux rv32i
-    struct instr *instr = alloc_instr(state->func);
+    struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->rv32i->ty = RV32I_INSTR_TY_JALR;
     instr->rv32i->jalr = (struct rv32i_jalr){
         .target = codegen_reg(op->call.target), .ret_addr = RET_PTR_REG};
   }
 }
 
-static void codegen_op(struct codegen_state *state, struct ir_op *op) {
+static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
+                       struct ir_op *op) {
   trace("lowering op with id %zu, type %d", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
@@ -1388,54 +1399,54 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
     if (op->flags & IR_OP_FLAG_PARAM) {
       // don't need to do anything
     } else {
-      codegen_mov_op(state, op);
+      codegen_mov_op(state, basicblock, op);
     }
     break;
   }
   case IR_OP_TY_LOAD:
-    codegen_load_op(state, op);
+    codegen_load_op(state, basicblock, op);
     break;
   case IR_OP_TY_STORE:
-    codegen_store_op(state, op);
+    codegen_store_op(state, basicblock, op);
     break;
   case IR_OP_TY_ADDR: {
-    codegen_addr_op(state, op);
+    codegen_addr_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_ADDR_OFFSET: {
-    codegen_addr_offset_op(state, op);
+    codegen_addr_offset_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_BR_COND: {
-    codegen_br_cond_op(state, op);
+    codegen_br_cond_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_BR: {
-    codegen_br_op(state, op);
+    codegen_br_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_CNST: {
-    codegen_cnst_op(state, op);
+    codegen_cnst_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_UNARY_OP: {
-    codegen_unary_op(state, op);
+    codegen_unary_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_BINARY_OP: {
-    codegen_binary_op(state, op);
+    codegen_binary_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_CAST_OP: {
-    codegen_cast_op(state, op);
+    codegen_cast_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_CALL: {
-    codegen_call_op(state, op);
+    codegen_call_op(state, basicblock, op);
     break;
   }
   case IR_OP_TY_RET: {
-    codegen_ret_op(state, op);
+    codegen_ret_op(state, basicblock, op);
     break;
   }
   default: {
@@ -1444,43 +1455,175 @@ static void codegen_op(struct codegen_state *state, struct ir_op *op) {
   }
 }
 
-static void codegen_stmt(struct codegen_state *state,
+static void codegen_stmt(struct cg_state *state,
+                         struct cg_basicblock *basicblock,
                          const struct ir_stmt *stmt) {
   struct ir_op *op = stmt->first;
+
   while (op) {
-    struct instr *prev = state->func->last;
-
     if (!(op->flags & IR_OP_FLAG_CONTAINED)) {
-      codegen_op(state, op);
-
-      struct instr *start = prev ? prev->succ : NULL;
-
-      while (start) {
-        start->op = op;
-        start = start->succ;
-      }
+      codegen_op(state, basicblock, op);
     }
 
     op = op->succ;
   }
 }
 
-void rv32i_codegen_start(struct codegen_state *state) {
-  codegen_prologue(state);
-}
+void rv32i_codegen_start(struct cg_state *state) { codegen_prologue(state); }
 
-void rv32i_codegen_basicblock(struct codegen_state *state,
+void rv32i_codegen_basicblock(struct cg_state *state,
                               struct ir_basicblock *basicblock) {
   struct ir_stmt *stmt = basicblock->first;
 
+  struct cg_basicblock *cg_basicblock =
+      cg_alloc_basicblock(state->func, basicblock);
+
   while (stmt) {
-    codegen_stmt(state, stmt);
+    codegen_stmt(state, cg_basicblock, stmt);
 
     stmt = stmt->succ;
   }
 }
 
-void rv32i_codegen_end(UNUSED struct codegen_state *state) {}
+static bool rv32i_instr_is_branch(enum rv32i_instr_ty ty) {
+  switch (ty) {
+  case RV32I_INSTR_TY_BEQ:
+  case RV32I_INSTR_TY_BNE:
+  case RV32I_INSTR_TY_BLT:
+  case RV32I_INSTR_TY_BGE:
+  case RV32I_INSTR_TY_BLTU:
+  case RV32I_INSTR_TY_BGEU:
+  case RV32I_INSTR_TY_JAL:
+    // note: JAL is not always a branch (also can be call)
+  case RV32I_INSTR_TY_JALR:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static unsigned long long pessimistic_bb_distance(struct instr *from,
+                                                  struct cg_basicblock *to) {
+  // we never insert more 4 instructions for a jump
+  // the 4 instr case is:
+  //     b<cond> true, false
+  //
+  // into:
+  //     b<cond> true_jmp, false_jmp
+  //   true_jmp:
+  //     auipc
+  //     jalr
+  //   false_jmp:
+  //     auipc
+  //     jalr
+  //
+  // as such, we know the distance between two instructions is bounded by 4 *
+  // num_bbs_between we should try and calculate this more accurately to not
+  // falsely generate large jumps, but this can also just be fixed by using
+  // linker relaxation
+
+  return llabs((long long)to->first->id - (long long)from->id) * 4 *
+         /* instr size */ 4;
+}
+
+#define MAX_B_TYPE_BR (4094)
+#define MIN_B_TYPE_BR (-4096)
+
+#define MAX_J_TYPE_BR (524286)
+#define MIN_J_TYPE_BR (-524288)
+
+void rv32i_codegen_end(struct cg_state *state) {
+  struct cg_basicblock *basicblock = state->func->first;
+
+  while (basicblock) {
+    struct instr *last = basicblock->last;
+
+    if (!rv32i_instr_is_branch(last->rv32i->ty)) {
+      BUG("expected cg_basicblock to end in branch");
+    }
+
+    while (last) {
+      switch (last->rv32i->ty) {
+      case RV32I_INSTR_TY_JALR:
+        // return, no offset concern
+        goto done;
+      case RV32I_INSTR_TY_JAL: {
+        // may be preceded by a branch conditional instr, so keep going
+
+        struct rv32i_target target = last->rv32i->jal.target;
+
+        if (target.ty != RV32I_TARGET_TY_BASICBLOCK) {
+          break;
+        }
+
+        long long offset =
+            pessimistic_bb_distance(last, target.basicblock->cg_basicblock);
+
+        if (offset >= MIN_J_TYPE_BR && offset <= MAX_J_TYPE_BR) {
+          // valid offset, nothing needed
+          break;
+        }
+
+        BUG("jal > 2.5mb");
+        break;
+      }
+      default: {
+        // conditional branch
+        struct rv32i_target target = last->rv32i->conditional_branch.target;
+
+        if (target.ty != RV32I_TARGET_TY_BASICBLOCK) {
+          goto done;
+        }
+
+        long long offset =
+            pessimistic_bb_distance(last, target.basicblock->cg_basicblock);
+
+        if (offset >= MIN_B_TYPE_BR && offset <= MAX_B_TYPE_BR) {
+          // valid offset, nothing needed
+          goto done;
+        }
+
+        if (offset < MIN_J_TYPE_BR || offset > MAX_J_TYPE_BR) {
+          BUG("cond br > 2.5mb");
+        }
+
+        // generate jalr instead
+        struct instr *jal;
+        if (last->succ) {
+          DEBUG_ASSERT(last->succ->rv32i->ty == RV32I_INSTR_TY_JAL,
+                       "expected jal after cond branch");
+          DEBUG_ASSERT(last->succ->rv32i->jal.target.ty |=
+                       RV32I_TARGET_TY_OFFSET == RV32I_INSTR_TY_JAL,
+                       "branch rewriting will break offset");
+          jal = last;
+
+          struct instr *new_jal = cg_alloc_instr(state->func, basicblock);
+          *new_jal->rv32i = *last->rv32i;
+        } else {
+          jal = cg_alloc_instr(state->func, basicblock);
+        }
+
+        jal->rv32i->ty = RV32I_INSTR_TY_JAL;
+        jal->rv32i->jal =
+            (struct rv32i_jal){.ret_addr = GP_ZERO_REG, .target = target};
+
+        goto done;
+      }
+      }
+
+      last = last->pred;
+    }
+
+  done:
+    DEBUG_ASSERT(!last || !rv32i_instr_is_branch(last->pred->rv32i->ty),
+                 "more branches than expected in bb");
+
+    basicblock = basicblock->succ;
+  }
+
+  // now rebuild ids so offsets are correct for emitting
+  cg_rebuild_ids(state->func);
+}
 
 static const char *GP_REG_ABI_NAMES[] = {
     "zero",
@@ -1513,7 +1656,7 @@ static const char *FP_REG_ABI_NAMES[] = {
 
 struct codegen_debug_state {
   FILE *file;
-  struct codegen_function *func;
+  struct cg_func *func;
   struct instr *instr;
 };
 
@@ -1556,8 +1699,9 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
         fprintf(file, ".%s%lld", target.offset > 0 ? "+" : "", target.offset);
         break;
       case RV32I_TARGET_TY_BASICBLOCK: {
-        ssize_t offset = 4 * ((ssize_t)target.basicblock->first_instr->id -
-                              (ssize_t)instr->id);
+        ssize_t offset =
+            4 * ((ssize_t)target.basicblock->cg_basicblock->first->id -
+                 (ssize_t)instr->id);
         fprintf(file, ".%s%zd  /* (BB=@%zu) */", offset > 0 ? "+" : "", offset,
                 target.basicblock->id);
         break;
@@ -1667,7 +1811,10 @@ static struct relocation *get_instr_reloc(const struct instr *instr) {
   case RELOCATION_TY_UNDEF_SINGLE:
     return NULL;
   case RELOCATION_TY_CALL:
-    return instr->rv32i->ty == RV32I_INSTR_TY_JALR && instr->pred->rv32i->ty == RV32I_INSTR_TY_AUIPC ? reloc : NULL;
+    return instr->rv32i->ty == RV32I_INSTR_TY_JALR &&
+                   instr->pred->rv32i->ty == RV32I_INSTR_TY_AUIPC
+               ? reloc
+               : NULL;
   case RELOCATION_TY_LOCAL_PAIR:
   case RELOCATION_TY_UNDEF_PAIR:
     return reloc;
@@ -2339,17 +2486,17 @@ static void print_instr(const struct codegen_debug_state *state,
   }
 }
 
-void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
+void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit) {
   DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
-    struct codegen_entry *entry = &unit->entries[i];
+    struct cg_entry *entry = &unit->entries[i];
 
-    if (entry->ty != CODEGEN_ENTRY_TY_FUNC) {
+    if (entry->ty != CG_ENTRY_TY_FUNC) {
       continue;
     }
 
-    struct codegen_function *func = &entry->func;
+    struct cg_func *func = &entry->func;
 
     fprintf(file, "\nFUNCTION: %s\n", entry->name);
     fprintf(file, "  prologue: %s\n", entry->func.prologue ? "true" : "false");
@@ -2357,31 +2504,35 @@ void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit) {
     fprintf(file, "\n");
 
     size_t offset = 0;
-    struct instr *instr = func->first;
-    while (instr) {
-      struct codegen_debug_state state = {
-          .file = file, .func = func, .instr = instr};
+    struct cg_basicblock *basicblock = func->first;
+    while (basicblock) {
+      struct instr *instr = basicblock->first;
+      while (instr) {
+        struct codegen_debug_state state = {
+            .file = file, .func = func, .instr = instr};
 
-      fprintf(file, "%04zu: ", offset++ * 4);
-      print_instr(&state, instr);
-      fprintf(file, "\n");
+        fprintf(file, "%04zu: ", offset++ * 4);
+        print_instr(&state, instr);
+        fprintf(file, "\n");
 
-      instr = instr->succ;
+        instr = instr->succ;
+      }
+      basicblock = basicblock->succ;
     }
 
     fprintf(file, "\n");
   }
 }
 
-void rv32i_emit_asm(FILE *file, struct codegen_unit *unit) {
+void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
   DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
-    struct codegen_entry *entry = &unit->entries[i];
+    struct cg_entry *entry = &unit->entries[i];
 
     switch (entry->ty) {
-    case CODEGEN_ENTRY_TY_FUNC: {
-      struct codegen_function *func = &entry->func;
+    case CG_ENTRY_TY_FUNC: {
+      struct cg_func *func = &entry->func;
 
       fprintf(file,
               ".text\n"
@@ -2391,29 +2542,34 @@ void rv32i_emit_asm(FILE *file, struct codegen_unit *unit) {
               entry->name, entry->name);
       fprintf(file, "\n%s:\n", entry->name);
 
-      struct instr *instr = func->first;
-      while (instr) {
-        struct codegen_debug_state state = {
-            .file = file, .func = func, .instr = instr};
+      struct cg_basicblock *basicblock = func->first;
+      while (basicblock) {
+        struct instr *instr = basicblock->first;
+        while (instr) {
+          struct codegen_debug_state state = {
+              .file = file, .func = func, .instr = instr};
 
-        fprintf(file, "        ");
-        print_instr(&state, instr);
-        fprintf(file, "\n");
+          fprintf(file, "        ");
+          print_instr(&state, instr);
+          fprintf(file, "\n");
 
-        instr = instr->succ;
+          instr = instr->succ;
+        }
+
+        basicblock = basicblock->succ;
       }
 
       break;
     }
-    case CODEGEN_ENTRY_TY_STRING: {
+    case CG_ENTRY_TY_STRING: {
       // FIXME: escape
       fprintf(file, "\n%s:\n", entry->name);
       fprintf(file, "        .string ");
       fprint_str(file, entry->data.data, entry->data.len_data);
       break;
     }
-    case CODEGEN_ENTRY_TY_CONST_DATA:
-    case CODEGEN_ENTRY_TY_DATA:
+    case CG_ENTRY_TY_CONST_DATA:
+    case CG_ENTRY_TY_DATA:
       // FIXME: escape
       fprintf(file, "\n%s:\n", entry->name);
       fprintf(file, "        .byte ");
@@ -2425,7 +2581,7 @@ void rv32i_emit_asm(FILE *file, struct codegen_unit *unit) {
         }
       }
       break;
-    case CODEGEN_ENTRY_TY_DECL: {
+    case CG_ENTRY_TY_DECL: {
       continue;
     }
     }

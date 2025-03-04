@@ -259,7 +259,7 @@ struct rv32i_target {
   union {
     simm_t offset;
     struct ir_basicblock *basicblock;
-    struct codegen_entry *symbol;
+    struct cg_entry *symbol;
   };
 };
 
@@ -376,15 +376,15 @@ enum rv32i_instr_class instr_class(enum rv32i_instr_ty ty);
 typedef void(walk_regs_callback)(struct instr *instr, struct rv32i_reg reg,
                                  enum rv32i_reg_usage_ty usage_ty,
                                  void *metadata);
-void walk_regs(const struct codegen_function *func, walk_regs_callback *cb,
+void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
                void *metadata);
 
-void rv32i_codegen_start(struct codegen_state *state);
-void rv32i_codegen_basicblock(struct codegen_state *state, struct ir_basicblock *basicblock);
-void rv32i_codegen_end(struct codegen_state *state);
+void rv32i_codegen_start(struct cg_state *state);
+void rv32i_codegen_basicblock(struct cg_state *state, struct ir_basicblock *basicblock);
+void rv32i_codegen_end(struct cg_state *state);
 
-void rv32i_debug_print_codegen(FILE *file, struct codegen_unit *unit);
+void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit);
 
-void rv32i_emit_asm(FILE *file, struct codegen_unit *unit);
+void rv32i_emit_asm(FILE *file, struct cg_unit *unit);
 
 #endif
