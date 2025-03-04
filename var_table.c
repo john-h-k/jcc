@@ -26,6 +26,17 @@ struct var_table var_table_create(struct arena_allocator *arena) {
   return var_table;
 }
 
+struct var_table_entry *
+var_table_create_top_level_entry(struct var_table *var_table, const char *name) {
+  struct var_table_scope *first = var_table->first;
+  struct var_table_entry entry = {
+      .name = name, .scope = first->scope, .var = NULL, .var_ty = NULL};
+
+  struct var_table_entry *p = vector_push_back(first->entries, &entry);
+
+  return p;
+}
+
 struct var_table_entry *var_table_create_entry(struct var_table *var_table,
                                                const char *name) {
   struct var_table_scope *last = var_table->last;
@@ -46,9 +57,7 @@ void var_table_free(struct var_table *var_table) {
     scope = scope->succ;
   }
 
-  *var_table = (struct var_table){
-    .first = NULL
-  };
+  *var_table = (struct var_table){.first = NULL};
 }
 
 // to show all entries
