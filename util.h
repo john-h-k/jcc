@@ -439,6 +439,84 @@ static inline void fprint_wstr(FILE *file, const char *input, size_t len) {
   PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i += sizeof(ch),w,L);
 }
 
+static inline bool try_parse_str(const char *str, size_t len, unsigned long long *value) {
+  if (!*str) {
+    return false;
+  }
+
+  size_t i = 0;
+
+  bool neg = false;
+  switch (*str) {
+    case '+':
+      i++;
+      break;
+    case '-':
+      neg = true;
+      i++;
+      break;
+    default:
+      break;
+  }
+
+  if (i == len) {
+    return false;
+  }
+
+  size_t rem = len - i - 1;
+  int base = 10;
+  if (rem >= 2 && str[i] == '0' && str[i + 1] == 'x') {
+    i += 2;
+    base = 16;
+  } else if (rem >= 1 && str[i] == '0') {
+    i++;
+    base = 8;
+  }
+
+  unsigned long long cur = 0;
+  for (; i < len; i++) {
+    char digit;
+
+    char ch = str[i];
+    if (ch >= '0' && ch <= '7') {
+      digit = ch - '0';
+    } else if (base > 8 && ch >= '8' && ch <= '9') {
+      digit = ch - '0';
+    } else if (base > 10) {
+      switch (tolower(ch)) {
+        case 'a':
+          digit = 10;
+          break;
+        case 'b':
+          digit = 11;
+          break;
+        case 'c':
+          digit = 12;
+          break;
+        case 'd':
+          digit = 13;
+          break;
+        case 'e':
+          digit = 14;
+          break;
+        case 'f':
+          digit = 15;
+          break;
+        default:
+          return false;
+      }
+    } else {
+      return false;
+    }
+
+    cur *= base;
+    cur += digit;
+  }
+
+  *value = neg && cur ? ULLONG_MAX - (cur  - 1) : cur;
+  return true;
+}
+
 #undef PRINT_STR
 
 #endif

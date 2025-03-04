@@ -565,7 +565,7 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
     // need to loop as lexer discards certain tokens (whitespace, comments, etc)
 
     struct preproc_token preproc_token;
-    preproc_next_token(lexer->preproc, &preproc_token);
+    preproc_next_token(lexer->preproc, &preproc_token, PREPROC_EXPAND_TOKEN_FLAG_NONE);
 
     switch (preproc_token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
