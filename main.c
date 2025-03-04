@@ -172,6 +172,24 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     }
   }
 
+  struct compile_file output;
+  if (!args->output) {
+    output = (struct compile_file){
+        .ty = COMPILE_FILE_TY_NONE,
+    };
+  } else if (!strcmp(args->output, "stdout")) {
+    output = (struct compile_file){
+        .ty = COMPILE_FILE_TY_STDOUT,
+    };
+  } else if (!strcmp(args->output, "stderr")) {
+    output = (struct compile_file){
+        .ty = COMPILE_FILE_TY_STDERR,
+    };
+  } else {
+    output =
+        (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = args->output};
+  }
+
   // is having two seperate structs for args really sensible?
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`
   // whereas `compile_args` only has `target`, but it is a hassle
@@ -194,7 +212,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
       .use_graphcol_regalloc = args->use_graphcol_regalloc,
 
-      .output = args->output,
+      .output = output,
   };
 
   *num_sources = args->num_values;
@@ -236,12 +254,14 @@ int main(int argc, char **argv) {
   enable_log();
 
 #if SAN && OS_APPLE
-  // sanitizer running causes spurious 'malloc: nano zone abandoned due to inability to reserve vm space.' messages
-  // unless `MallocNanoZone=0`
-  // can be resolved by https://github.com/google/sanitizers/issues/1666
+  // sanitizer running causes spurious 'malloc: nano zone abandoned due to
+  // inability to reserve vm space.' messages unless `MallocNanoZone=0` can be
+  // resolved by https://github.com/google/sanitizers/issues/1666
   const char *val = getenv("MallocNanoZone");
   if (!val || strcmp(val, "0")) {
-    warn("With sanitisers enabled on macOS, buggy warning messages can appear. Set `MallocNanoZone=0` to fix (or run via `jcc.sh` which does this automatically)");
+    warn("With sanitisers enabled on macOS, buggy warning messages can appear. "
+         "Set `MallocNanoZone=0` to fix (or run via `jcc.sh` which does this "
+         "automatically)");
   }
 #endif
 
@@ -252,7 +272,7 @@ static int jcc_main(int argc, char **argv) {
   size_t exc = -1;
 
   struct arena_allocator *arena = NULL;
-  char **objects = NULL;
+  char const **objects = NULL;
 
   arena_allocator_create(&arena);
 
@@ -322,27 +342,36 @@ static int jcc_main(int argc, char **argv) {
       goto exit;
     }
 
-    char *object_file;
+    struct compile_file file;
 
     // this will output `-.o` or `-.s` if read from stdin, which is weird, but
     // matches clang?
 
-    if (compile_args.preproc_only && !compile_args.output) {
-      // FIXME: hacky
-      object_file = arena_alloc_strdup(arena, "stdout");
-    } else if (compile_args.build_asm_file && !compile_args.output) {
-      object_file = path_replace_ext(arena, source_path, "s");
+    if (compile_args.preproc_only &&
+        compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+      file = (struct compile_file){
+          .ty = COMPILE_FILE_TY_STDOUT,
+      };
+    } else if (compile_args.build_asm_file &&
+               compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+      file = (struct compile_file){
+          .ty = COMPILE_FILE_TY_PATH,
+          .path = path_replace_ext(arena, source_path, "s")};
     } else if (target_needs_linking(&compile_args, target) ||
-               !compile_args.output) {
-      object_file = path_replace_ext(arena, source_path, "o");
+               compile_args.output.ty == COMPILE_FILE_TY_NONE) {
+      file = (struct compile_file){
+          .ty = COMPILE_FILE_TY_PATH,
+          .path = path_replace_ext(arena, source_path, "o")};
     } else {
-      object_file = arena_alloc_strdup(arena, compile_args.output);
+      file = compile_args.output;
     }
 
-    info("compiling source file '%s' into object file '%s'", source_path,
-         object_file);
+    // info("compiling source file '%s' into object file '%s'", source_path,
+    //      object_file);
 
-    objects[i] = object_file;
+    if (file.ty == COMPILE_FILE_TY_PATH) {
+      objects[i] = file.path;
+    }
 
     struct program program = {.text = source};
 
@@ -351,8 +380,7 @@ static int jcc_main(int argc, char **argv) {
 
     PROFILE_BEGIN(create_compiler);
 
-    if (create_compiler(&program, target, object_file, source_path,
-                        &compile_args,
+    if (create_compiler(&program, target, file, source_path, &compile_args,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
@@ -375,7 +403,18 @@ static int jcc_main(int argc, char **argv) {
   }
 
   if (target_needs_linking(&compile_args, target)) {
-    const char *output = compile_args.output ? compile_args.output : "a.out";
+    const char *output;
+    switch (compile_args.output.ty) {
+    case COMPILE_FILE_TY_NONE:
+      output = "a.out";
+      break;
+    case COMPILE_FILE_TY_PATH:
+      output = compile_args.output.path;
+      break;
+    case COMPILE_FILE_TY_STDOUT:
+    case COMPILE_FILE_TY_STDERR:
+      BUG("linking to stdout/stderr not supported");
+    }
 
     struct link_args link_args = {.args = &compile_args,
                                   .objects = (const char *const *)objects,

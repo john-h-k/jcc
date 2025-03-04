@@ -59,6 +59,23 @@ enum compile_opts_level {
 
 #define COMPILER_LOG_ENABLED(compiler, flag) compiler->args.log_flags &flag
 
+enum compile_file_ty {
+  COMPILE_FILE_TY_NONE,
+  COMPILE_FILE_TY_PATH,
+  COMPILE_FILE_TY_STDOUT,
+  COMPILE_FILE_TY_STDERR,
+};
+
+struct compile_file {
+  enum compile_file_ty ty;
+
+  union {
+    const char *path;
+  };
+};
+
+FILE *compiler_open_file(struct compile_file file);
+
 struct compile_args {
   enum compile_c_standard c_standard;
   enum compile_target target;
@@ -80,7 +97,7 @@ struct compile_args {
 
   const char *fixed_timestamp;
 
-  const char *output;
+  struct compile_file output;
 };
 
 enum compiler_create_result {
@@ -96,7 +113,7 @@ enum compile_result {
 
 enum compiler_create_result create_compiler(struct program *program,
                                             const struct target *target,
-                                            const char *output,
+                                            struct compile_file output,
                                             const char *working_dir,
                                             const struct compile_args *args,
                                             struct compiler **compiler);

@@ -1485,18 +1485,20 @@ void rv32i_codegen_basicblock(struct cg_state *state,
   }
 }
 
-static bool rv32i_instr_is_branch(enum rv32i_instr_ty ty) {
-  switch (ty) {
+
+static bool rv32i_instr_is_branch(const struct rv32i_instr *instr) {
+  switch (instr->ty) {
   case RV32I_INSTR_TY_BEQ:
   case RV32I_INSTR_TY_BNE:
   case RV32I_INSTR_TY_BLT:
   case RV32I_INSTR_TY_BGE:
   case RV32I_INSTR_TY_BLTU:
   case RV32I_INSTR_TY_BGEU:
-  case RV32I_INSTR_TY_JAL:
-    // note: JAL is not always a branch (also can be call)
   case RV32I_INSTR_TY_JALR:
     return true;
+  case RV32I_INSTR_TY_JAL:
+    // note: JAL is not always a branch (also can be call)
+    return instr->jal.ret_addr.ty == RV32I_REG_TY_W && instr->jal.ret_addr.idx == 0;
   default:
     return false;
   }
@@ -1538,11 +1540,14 @@ void rv32i_codegen_end(struct cg_state *state) {
   while (basicblock) {
     struct instr *last = basicblock->last;
 
-    if (!rv32i_instr_is_branch(last->rv32i->ty)) {
-      BUG("expected cg_basicblock to end in branch");
-    }
-
     while (last) {
+      if (!rv32i_instr_is_branch(last->rv32i)) {
+        basicblock = basicblock->succ;
+        goto done;
+        // can be eliminated because consective BBs
+        // BUG("expected cg_basicblock to end in branch");
+      }
+
       switch (last->rv32i->ty) {
       case RV32I_INSTR_TY_JALR:
         // return, no offset concern
@@ -1615,7 +1620,7 @@ void rv32i_codegen_end(struct cg_state *state) {
     }
 
   done:
-    DEBUG_ASSERT(!last || !rv32i_instr_is_branch(last->pred->rv32i->ty),
+    DEBUG_ASSERT(!last || !last->pred || !rv32i_instr_is_branch(last->pred->rv32i),
                  "more branches than expected in bb");
 
     basicblock = basicblock->succ;
@@ -1660,6 +1665,10 @@ struct codegen_debug_state {
   struct instr *instr;
 };
 
+static void print_bb_symbol(FILE *file, struct ir_basicblock *basicblock) {
+  fprintf(file, ".BB_%zu", basicblock->id);
+}
+
 static void codegen_fprintf(const struct codegen_debug_state *state,
                             const char *format, ...) {
   FILE *file = state->file;
@@ -1691,7 +1700,6 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
 
       format += 3;
     } else if (strncmp(format, "target", 6) == 0) {
-      struct instr *instr = va_arg(list, struct instr *);
       struct rv32i_target target = va_arg(list, struct rv32i_target);
 
       switch (target.ty) {
@@ -1699,11 +1707,7 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
         fprintf(file, ".%s%lld", target.offset > 0 ? "+" : "", target.offset);
         break;
       case RV32I_TARGET_TY_BASICBLOCK: {
-        ssize_t offset =
-            4 * ((ssize_t)target.basicblock->cg_basicblock->first->id -
-                 (ssize_t)instr->id);
-        fprintf(file, ".%s%zd  /* (BB=@%zu) */", offset > 0 ? "+" : "", offset,
-                target.basicblock->id);
+        print_bb_symbol(file, target.basicblock);
         break;
       }
       case RV32I_TARGET_TY_SYMBOL:
@@ -1770,9 +1774,8 @@ static void debug_print_jalr(const struct codegen_debug_state *state,
 }
 
 static void debug_print_jal(const struct codegen_debug_state *state,
-                            const struct instr *instr,
                             const struct rv32i_jal *jal) {
-  codegen_fprintf(state, " %reg, %target", jal->ret_addr, instr, jal->target);
+  codegen_fprintf(state, " %reg, %target", jal->ret_addr, jal->target);
 }
 
 static void debug_print_load(const struct codegen_debug_state *state,
@@ -1788,10 +1791,10 @@ static void debug_print_store(const struct codegen_debug_state *state,
 }
 
 static void debug_print_conditional_branch(
-    const struct codegen_debug_state *state, const struct instr *instr,
+    const struct codegen_debug_state *state,
     const struct rv32i_conditional_branch *conditional_branch) {
   codegen_fprintf(state, " %reg, %reg, %target", conditional_branch->lhs,
-                  conditional_branch->rhs, instr, conditional_branch->target);
+                  conditional_branch->rhs, conditional_branch->target);
 }
 
 static struct relocation *get_instr_reloc(const struct instr *instr) {
@@ -1886,7 +1889,7 @@ static void print_instr(const struct codegen_debug_state *state,
                       get_reloc_symbol(state, reloc));
     } else {
       fprintf(file, "jal");
-      debug_print_jal(state, instr, jal);
+      debug_print_jal(state, jal);
     }
     break;
   }
@@ -2027,37 +2030,37 @@ static void print_instr(const struct codegen_debug_state *state,
   case RV32I_INSTR_TY_BEQ: {
     struct rv32i_conditional_branch *beq = &instr->rv32i->beq;
     fprintf(file, "beq");
-    debug_print_conditional_branch(state, instr, beq);
+    debug_print_conditional_branch(state, beq);
     break;
   }
   case RV32I_INSTR_TY_BNE: {
     struct rv32i_conditional_branch *bne = &instr->rv32i->bne;
     fprintf(file, "bne");
-    debug_print_conditional_branch(state, instr, bne);
+    debug_print_conditional_branch(state, bne);
     break;
   }
   case RV32I_INSTR_TY_BLT: {
     struct rv32i_conditional_branch *blt = &instr->rv32i->blt;
     fprintf(file, "blt");
-    debug_print_conditional_branch(state, instr, blt);
+    debug_print_conditional_branch(state, blt);
     break;
   }
   case RV32I_INSTR_TY_BGE: {
     struct rv32i_conditional_branch *bge = &instr->rv32i->bge;
     fprintf(file, "bge");
-    debug_print_conditional_branch(state, instr, bge);
+    debug_print_conditional_branch(state, bge);
     break;
   }
   case RV32I_INSTR_TY_BLTU: {
     struct rv32i_conditional_branch *bltu = &instr->rv32i->bltu;
     fprintf(file, "bltu");
-    debug_print_conditional_branch(state, instr, bltu);
+    debug_print_conditional_branch(state, bltu);
     break;
   }
   case RV32I_INSTR_TY_BGEU: {
     struct rv32i_conditional_branch *bgeu = &instr->rv32i->bgeu;
     fprintf(file, "bgeu");
-    debug_print_conditional_branch(state, instr, bgeu);
+    debug_print_conditional_branch(state, bgeu);
     break;
   }
   case RV32I_INSTR_TY_OR: {
@@ -2544,6 +2547,11 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
 
       struct cg_basicblock *basicblock = func->first;
       while (basicblock) {
+        if (basicblock->ir_basicblock) {
+          print_bb_symbol(file, basicblock->ir_basicblock);
+          fprintf(file, ":\n");
+        }
+
         struct instr *instr = basicblock->first;
         while (instr) {
           struct codegen_debug_state state = {
