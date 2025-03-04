@@ -593,8 +593,14 @@ td_var_ty_for_enum(struct typechk *tchk,
                            .scope = cur_scope(&tchk->var_table),
                            .enumerator = value};
 
-      struct var_table_entry *entry =
-          var_table_create_entry(&tchk->var_table, enum_name);
+      struct var_table_entry *entry;
+      // enums have same behaviour as types, but are in the var table
+      // so if type table is at global level, insert enum there too
+      if (tchk->ty_table.first->scope == SCOPE_GLOBAL) {
+        entry = var_table_create_top_level_entry(&tchk->var_table, enum_name);
+      } else {
+        entry = var_table_create_entry(&tchk->var_table, enum_name);
+      }
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
       entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
