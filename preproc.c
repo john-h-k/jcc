@@ -1040,7 +1040,8 @@ static bool try_expand_token(struct preproc *preproc,
 
       if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
           open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
-        BUG("expected `(`");
+        vector_push_back(buffer, &open);
+        return false;
       }
 
       // TODO: handle zero arg fn macros
@@ -1474,6 +1475,11 @@ static unsigned long long eval_atom(struct preproc *preproc,
       case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET: {
         (*i)++;
         return eval_expr(preproc, tokens, i, num_tokens, 0);
+      }
+      case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB: {
+        (*i)++;
+        unsigned long long val = eval_atom(preproc, tokens, i, num_tokens);
+        return -val;
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT: {
         (*i)++;
@@ -1998,6 +2004,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           preproc_text->file = file;
           debug("set file to '%s'", file);
         }
+      } else if (token_streq(directive, "error")) {
+        // these directives DO expand
+        EXPANDED_DIR_TOKENS();
+
+        BUG("#error: todo show the message lol");
       } else {
         TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
              directive.text);
