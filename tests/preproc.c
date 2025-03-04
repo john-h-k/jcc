@@ -7,6 +7,8 @@
 
 #define FIZZ 1
 
+#define BAT
+
 int main() {
   int a = FOO;
 
@@ -22,7 +24,6 @@ int main() {
   return 3;
 #endif
 
-
 #if BAR
  invalid c code;
 #endif
@@ -32,5 +33,12 @@ int main() {
   float f = 8.3E9;
   int k = 8777; // hello
 
+#if !defined(BAT) || !defined BAT
+  return 4;
+#elif defined(BAT) && defined BAT
   return a;
+#else
+  return 5;
+#endif
+
 }
