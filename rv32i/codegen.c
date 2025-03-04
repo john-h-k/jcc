@@ -181,7 +181,7 @@ static void codegen_mov_op(struct cg_state *state,
   }
 }
 
-UNUSED static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
+static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
   DEBUG_ASSERT(ty <= RV32I_INSTR_TY_BGEU, "not a condition instruction!");
 
   return ty ^ 1;
@@ -1583,10 +1583,10 @@ void rv32i_codegen_end(struct cg_state *state) {
         long long offset =
             pessimistic_bb_distance(last, target.basicblock->cg_basicblock);
 
-        if (offset >= MIN_B_TYPE_BR && offset <= MAX_B_TYPE_BR) {
-          // valid offset, nothing needed
-          goto done;
-        }
+        // if (offset >= MIN_B_TYPE_BR && offset <= MAX_B_TYPE_BR) {
+        //   // valid offset, nothing needed
+        //   goto done;
+        // }
 
         if (offset < MIN_J_TYPE_BR || offset > MAX_J_TYPE_BR) {
           BUG("cond br > 2.5mb");
@@ -1600,13 +1600,17 @@ void rv32i_codegen_end(struct cg_state *state) {
           DEBUG_ASSERT(last->succ->rv32i->jal.target.ty |=
                        RV32I_TARGET_TY_OFFSET == RV32I_INSTR_TY_JAL,
                        "branch rewriting will break offset");
-          jal = last;
+          jal = last->succ;
 
           struct instr *new_jal = cg_alloc_instr(state->func, basicblock);
-          *new_jal->rv32i = *last->rv32i;
+          *new_jal->rv32i = *jal->rv32i;
         } else {
           jal = cg_alloc_instr(state->func, basicblock);
         }
+
+        // jump over jalr if true
+        last->rv32i->ty = invert_cond(last->rv32i->ty);
+        last->rv32i->conditional_branch.target = RV32I_OFFSET_TARGET(8);
 
         jal->rv32i->ty = RV32I_INSTR_TY_JAL;
         jal->rv32i->jal =

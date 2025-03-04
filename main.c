@@ -318,7 +318,7 @@ static int jcc_main(int argc, char **argv) {
     } else if (!strcmp(components.ext, "h")) {
       warn("compiling header file '%s', is this intentional?", source_path);
     } else if (strcmp(components.ext, "c")) {
-      err("unrecognised file extension '.%s'", components.ext);
+      err("unrecognised file extension '.%s' for source '%s'", components.ext, source_path);
       exc = -1;
       goto exit;
     }
