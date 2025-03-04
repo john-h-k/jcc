@@ -544,7 +544,7 @@ clean() {
   # for some reason this causes cleanup to work
   sleep 0.1
 
-  rm -f "$TMP_DIR"
+  rm -r "$TMP_DIR" &>/dev/null
   rm -f "${tmps[@]}"
 }
 
