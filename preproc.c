@@ -50,9 +50,12 @@ struct preproc {
 
   // whether we are in an include/embed that accepts <foo> style strings
   bool in_angle_string_context;
+
+  // if a ## was just seen, we concat the next token
+  bool concat_next_token;
 };
 
-UNUSED static const char *preproc_token_name(enum preproc_token_ty ty) {
+static const char *preproc_token_name(enum preproc_token_ty ty) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;
@@ -270,6 +273,7 @@ enum preproc_create_result preproc_create(struct program *program,
 
   p->line_has_nontrivial_token = false;
   p->in_angle_string_context = false;
+  p->concat_next_token = false;
 
   p->defines = hashtbl_create_sized_str_keyed(sizeof(struct preproc_define));
 
@@ -284,8 +288,6 @@ enum preproc_create_result preproc_create(struct program *program,
 }
 
 void preproc_free(struct preproc **preproc) {
-  arena_allocator_free(&(*preproc)->arena);
-
   struct hashtbl_iter *defines = hashtbl_iter((*preproc)->defines);
   struct hashtbl_entry entry;
   while (hashtbl_iter_next(defines, &entry)) {
@@ -293,6 +295,8 @@ void preproc_free(struct preproc **preproc) {
 
     if (define->value.ty == PREPROC_DEFINE_VALUE_TY_TOKEN_VEC) {
       vector_free(&define->value.vec);
+    } else if (define->value.ty == PREPROC_DEFINE_VALUE_TY_MACRO_FN) {
+      vector_free(&define->value.macro_fn.tokens);
     }
   }
 
@@ -301,6 +305,8 @@ void preproc_free(struct preproc **preproc) {
   vector_free(&(*preproc)->texts);
   vector_free(&(*preproc)->buffer_tokens);
   vector_free(&(*preproc)->enabled);
+
+  arena_allocator_free(&(*preproc)->arena);
 
   (*preproc)->arena = NULL;
   free(*preproc);
@@ -874,6 +880,67 @@ static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token, struct vector *buffer,
                              struct hashtbl *parents) {
+  if (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR && token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+    if (preproc->concat_next_token) {
+      BUG("saw two ## concat operators in a row; illegal");
+    }
+
+    preproc->concat_next_token = true;
+    return true;
+  }
+
+  if (preproc->concat_next_token) {
+    // this should only be called by fn macros, so it is fine to rely on the tokens we care about being in buffer
+    // (else the prev token could already have been processed and passsed out)
+
+    if (token_is_trivial(token)) {
+      return true;
+    }
+
+    struct preproc_token *last = NULL;
+    while (true) {
+      last = vector_pop(buffer);
+
+      if (!token_is_trivial(last)) {
+        break;
+      }
+    }
+
+    #define TYPE_VAL(l, r) ((long long)PREPROC_TOKEN_TY_ ## l << 32) | (PREPROC_TOKEN_TY_ ## r)
+    switch (((long long)token->ty << 32) | last->ty) {
+      case TYPE_VAL(IDENTIFIER, IDENTIFIER):
+      case TYPE_VAL(IDENTIFIER, PREPROC_NUMBER):
+      // because we process backwards, we have to accept `0 ## _bar`, because it could be part of `foo_ ## 0 ## _bar`
+      case TYPE_VAL(PREPROC_NUMBER, IDENTIFIER):
+      case TYPE_VAL(PREPROC_NUMBER, PREPROC_NUMBER): {
+          // for preproc number ## preproc number we just assume the output is valid
+          // this isn't the best idea, we should probably re-parse it
+
+          // because we use buffer as a stack, this is in REVERSE order
+          size_t llen = text_span_len(&token->span);
+          size_t rlen = text_span_len(&last->span);
+
+          char *new = arena_alloc(preproc->arena, llen + rlen);
+          memcpy(new, token->text, llen);
+          memcpy(new + llen, last->text, rlen);
+
+          struct preproc_token new_tok = {
+            .ty = token->ty,
+            .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
+            .text = new,
+          };
+          vector_push_back(buffer, &new_tok);
+          break;
+        }
+      default:
+        BUG("unsupported pair for concatenating tokens (%s ## %s)", preproc_token_name(token->ty), preproc_token_name(last->ty));
+
+    }
+
+    preproc->concat_next_token = false;
+    return true;
+  }
+
   if (token->ty != PREPROC_TOKEN_TY_IDENTIFIER) {
     return false;
   }
@@ -967,6 +1034,7 @@ static bool try_expand_token(struct preproc *preproc,
         } else {
           if (!skip_trivial || !token_is_trivial(&next)) {
             vector_push_back(arg, &next);
+            skip_trivial = false;
           }
         }
       }
@@ -986,7 +1054,7 @@ static bool try_expand_token(struct preproc *preproc,
           DEBUG_ASSERT(def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                            def_tok->punctuator.ty ==
                                PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY,
-                       "expected # token because last token was stringified");
+                       "expected # token because last token was stringify");
           // last was a stringify, so this is the '#'
           stringify = false;
           continue;
@@ -1022,8 +1090,6 @@ static bool try_expand_token(struct preproc *preproc,
             struct sized_str param_ident = {
                 .str = param_tok.text, .len = text_span_len(&param_tok.span)};
 
-            // printf("checking %.*s\n", (int)param_ident.len, param_ident.str);
-            // printf("against %.*s\n", (int)def_ident.len, def_ident.str);
             if (hashtbl_eq_sized_str(&def_ident, &param_ident)) {
               struct vector *arg_tokens =
                   *(struct vector **)vector_get(args, j);
