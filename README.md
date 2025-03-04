@@ -38,10 +38,9 @@ Working with RISC-V requires installing a RISC-V linker.
 
 #### Things that don't work yet
 
-1. Macro-like functions (soon!)
-2. `va_list` and variadic function implementation. Calling them works fine
-3. Compound literals
-4. Complex constant expressions like `int foo[7 * 3 + sizeof(int)] = {};`
+1. `va_list` and variadic function implementation. Calling them works fine
+2. Compound literals
+3. Complex constant expressions like `int foo[7 * 3 + sizeof(int)] = {};`
 
 #### Development
 
