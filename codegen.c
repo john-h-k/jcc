@@ -426,6 +426,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
 
   cg_rebuild_ids(func);
   unit->target->codegen.codegen_end(&state);
+  cg_rebuild_ids(func);
 
   return entry;
 }
