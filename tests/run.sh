@@ -152,7 +152,12 @@ arch=${arch:-$(arch)}
 arch=${arch/arm64/aarch64}
 
 if [[ "$arch" == "rv32i" && -z "$RUNNER" ]]; then
-  echo -e "${BOLD}Defaulting to 'riscy' runner for $arch..."
+  if ! command -v riscy &>/dev/null; then
+    echo -e "${BOLDRED}RUNNER not provided for arch $arch, but could not find default runner 'riscy'${RESET}"
+    exit -1
+  fi
+
+  echo -e "${BOLD}Defaulting to 'riscy' runner for $arch...${RESET}"
   RUNNER=riscy
 fi
 
