@@ -13,6 +13,7 @@ help() {
   echo "COMMANDS:"
   ech  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
   echo "    help        Show help"
+  echo "    build       Build JCC"
   echo "    run         Build, then run JCC with provided arguments"
   echo "    diff        Build, then run JCC with two different sets of args, and diff them"
   echo "    debug       Build, then run JCC under LLDB/GDB with provided arguments"
@@ -308,11 +309,33 @@ build() {
     mode=$(get_mode "$1")
     mode="${mode:-Debug}"
 
+    args=()
+
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "--default-target" ]]; then
+            shift
+            default_target="$1"
+        else
+            args+=("$1")
+        fi
+
+        shift
+    done
+
     echo -e "${BOLD}Building (mode='$mode')...${RESET}" 1>&2
+
+    flags=""
+    if [ -n "$default_target" ]; then
+        # ideally we would statically validate this is a valid target but not sure if there is a way to do that
+        # without just hard coding the values here
+        echo -e "${BOLD}Building with JCC_DEFAULT_TARGET=$default_target${RESET}" 1>&2
+
+        flags="-DJCC_DEFAULT_TARGET=\"$default_target\""
+    fi
 
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS= -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
+    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
