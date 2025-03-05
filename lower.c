@@ -296,6 +296,7 @@ static void propogate_switch_phis(UNUSED struct ir_func *func,
         // HACK: we need to rework phis to not be every-basicblock
         // but in mean time this works
         phi->flags |= IR_OP_FLAG_ETERNAL;
+        phi->phi.values[i].value->flags |= IR_OP_FLAG_ETERNAL;
         phi->phi.values[i].basicblock = pred_cond;
       }
     }
