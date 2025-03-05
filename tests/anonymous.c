@@ -1,3 +1,4 @@
+// skip: not yet implemented
 // expected value: 13
 
 struct foo {
@@ -9,15 +10,13 @@ struct foo {
 };
 
 int main() {
-  // struct foo f = {
-  //   .a = 1,
-  //   .b = 2
-  // };
+  struct foo f = {
+    .a = 1,
+    .b = 2
+  };
 
-  // int d = f.b;
-  // f.c = 10;
+  int d = f.b;
+  f.c = 10;
 
-  // return f.a + d + f.b;
-  // FIXME: anonymous
-  return 13;
+  return f.a + d + f.b;
 }
