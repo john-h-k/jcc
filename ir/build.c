@@ -1177,9 +1177,9 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   };
 
   phi->phi.values[0] =
-      (struct ir_phi_entry){.basicblock = false_bb, .value = false_op};
+      (struct ir_phi_entry){.basicblock = false_op->stmt->basicblock, .value = false_op};
   phi->phi.values[1] =
-      (struct ir_phi_entry){.basicblock = true_bb, .value = true_op};
+      (struct ir_phi_entry){.basicblock = true_op->stmt->basicblock, .value = true_op};
 
   struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
 
@@ -3332,6 +3332,35 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       }
 
       stmt = stmt->succ;
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  struct ir_op_use_map use_map = ir_build_op_uses_map(builder->func);
+
+  // FIXME: phi gen is shit, we should do it better
+  basicblock = builder->func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    if (stmt->flags & IR_STMT_FLAG_PHI) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        if (op->phi.num_values == 1) {
+          struct ir_op_usage usage = use_map.op_use_datas[op->id];
+
+          for (size_t i = 0; i < usage.num_uses; i++) {
+            *usage.uses[i].op = op->phi.values[0].value;
+          }
+
+          struct ir_op *succ = op->succ;
+          ir_detach_op(builder->func, op);
+          op = succ;
+          continue;
+        }
+
+        op = op->succ;
+      }
     }
 
     basicblock = basicblock->succ;

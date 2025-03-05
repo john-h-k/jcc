@@ -11,7 +11,7 @@ help() {
   echo "jcc.sh COMMAND"
   echo ""
   echo "COMMANDS:"
-  ech  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
+  echo  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
   echo "    help        Show help"
   echo "    build       Build JCC"
   echo "    run         Build, then run JCC with provided arguments"
@@ -161,7 +161,7 @@ as() {
             shift
             continue
           elif [[ -n "$file" ]]; then
-            echo -e "${BOLDRED}Cannot pass multiple files${RESET}"
+            echo -e "${BOLDRED}Cannot pass multiple files (pass JCC options after '--')${RESET}"
             exit -1
           fi
 
@@ -335,7 +335,7 @@ build() {
 
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .); then
+    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
