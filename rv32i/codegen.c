@@ -1622,11 +1622,11 @@ void rv32i_codegen_end(struct cg_state *state) {
       last = last->pred;
     }
 
-  done:
     DEBUG_ASSERT(!last || !last->pred ||
                      !rv32i_instr_is_branch(last->pred->rv32i),
                  "more branches than expected in bb");
 
+  done:
     basicblock = basicblock->succ;
   }
 
