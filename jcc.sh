@@ -21,9 +21,89 @@ help() {
   echo "    format      Format codebase"
   echo "    layout      Show code distribution"
   echo "    find-unused Finds symbols that can be made static"
+  echo "    langproc    (Temporary) Show output for langproc test"
   echo ""
 
   exit
+}
+
+langproc() {
+    help() {
+        echo "JCC langproc"
+        echo "John Kelly <johnharrykelly@gmail.com>"
+        echo ""
+        echo "jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE"
+        echo ""
+        echo "OPTIONS:"
+        echo "    -n|--no-mnemonics "
+        echo "        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')"
+        echo ""
+        echo "FILE:"
+        echo "    The langproc test to run, e.g 'integer/add' or 'integer/add.c'"
+        echo ""
+
+        if ! command -v bat &>/dev/null; then
+            echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
+        fi
+
+        echo ""
+    }
+
+    if [[ $# -eq 0 ]]; then
+      help
+      exit 0
+    fi
+
+    flags="-C mnemonics"
+
+    file=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --help|-h|help)
+          help
+          exit 0
+          ;;
+        -n|--no-mnenomics)
+          flags=""
+          shift
+          ;;
+        *)
+          if [ -n "$file" ]; then
+            echo -e "${BOLDRED}Cannot pass multiple files${RESET}"
+            exit -1
+          fi
+
+          file="$1"
+          shift
+          ;;
+        esac
+    done
+
+    [[ $file != *.c ]] && file="$file.c"
+
+    dir=./tests/langproc
+
+    matches=($(find "$dir" -type f | grep -E "/$file(\.[^.]+)?$"))
+
+    if [[ ${#matches[@]} -eq 1 ]]; then
+        file="${matches[0]}"
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        echo -e "${BOLDRED}Multiple possible tests for '$file:'"
+        printf '%s\n' "${matches[@]}"
+        echo -e "${RESET}"
+        exit 1
+    else
+        echo -e "${BOLDRED}Could not find '$file' at '$path'${RESET}"
+        exit 1
+    fi
+
+    if ! command -v bat &>/dev/null; then
+        bat() {
+            cat
+        }
+    fi
+
+    run "../$file" -target rv32i-unknown-elf $flags -S -o stdout | bat --language S
 }
 
 find-unused() {
@@ -151,7 +231,7 @@ build() {
     mode=$(get_mode "$1")
     mode="${mode:-Debug}"
 
-    echo -e "${BOLD}Building (mode='$mode')...${RESET}"
+    echo -e "${BOLD}Building (mode='$mode')...${RESET}" 1>&2
 
     mkdir -p build
     cd build
@@ -160,7 +240,7 @@ build() {
         exit -1
     fi
 
-    echo -e "${BOLD}Build complete${RESET}"
+    echo -e "${BOLD}Build complete${RESET}"  1>&2
 
     cd - > /dev/null
 }

@@ -118,7 +118,7 @@ int cg_sort_entries_by_id(const void *a, const void *b);
 
 void cg_rebuild_ids(struct cg_func *func);
 
-struct cg_unit *codegen(struct ir_unit *unit);
+struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags);
 
 void codegen_free(struct cg_unit **unit);
 

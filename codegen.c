@@ -357,7 +357,7 @@ void cg_detach_basicblock(struct cg_func *func,
   basicblock->func = NULL;
 }
 
-static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
+static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb, enum codegen_flags flags) {
   struct ir_func *ir_func = glb->func;
 
   ir_clear_metadata(ir_func);
@@ -383,6 +383,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
 
   struct cg_func *func = &entry.func;
   struct cg_state state = {.arena = unit->arena,
+    .flags = flags,
                            .target = unit->target,
                            .func = func,
                            .ir = ir_func};
@@ -423,7 +424,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb) {
   return entry;
 }
 
-struct cg_unit *codegen(struct ir_unit *unit) {
+struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
   struct cg_unit *codegen_unit = arena_alloc(unit->arena, sizeof(*unit));
 
   struct codegen_info info = unit->target->codegen;
@@ -497,7 +498,7 @@ struct cg_unit *codegen(struct ir_unit *unit) {
         break;
       }
       case IR_GLB_TY_FUNC:
-        codegen_unit->entries[i] = codegen_func(codegen_unit, glb);
+        codegen_unit->entries[i] = codegen_func(codegen_unit, glb, flags);
         break;
       }
 

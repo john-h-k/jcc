@@ -382,6 +382,6 @@ void rv32i_codegen_end(struct cg_state *state);
 
 void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit);
 
-void rv32i_emit_asm(FILE *file, struct cg_unit *unit);
+void rv32i_emit_asm(FILE *file, struct cg_unit *unit, enum codegen_flags flags);
 
 #endif

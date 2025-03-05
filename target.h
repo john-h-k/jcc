@@ -2,6 +2,7 @@
 #define TARGET_H
 
 #include "alloc.h"
+#include "compiler.h"
 
 #include <stdio.h>
 
@@ -166,6 +167,8 @@ enum cg_unit_ty {
 struct cg_state {
   struct arena_allocator *arena;
 
+  enum codegen_flags flags;
+
   const struct target *target;
   struct cg_func *func;
   struct ir_func *ir;
@@ -184,7 +187,7 @@ typedef void (*target_codegen)(struct cg_state *state);
 typedef void (*target_codegen_basicblock)(struct cg_state *state, struct ir_basicblock *basicblock);
 typedef void (*target_codegen)(struct cg_state *state);
 
-typedef void (*emit_asm)(FILE *file, struct cg_unit *unit);
+typedef void (*emit_asm)(FILE *file, struct cg_unit *unit, enum codegen_flags flags);
 
 typedef struct cg_entry (*target_codegen_var)(struct cg_unit *unit, struct ir_glb *glb);
 

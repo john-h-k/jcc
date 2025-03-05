@@ -2,9 +2,16 @@
 #define COMPILER_H
 
 #include "program.h"
-#include "target.h"
+#include <stdio.h>
 
 struct compiler;
+
+enum codegen_flags {
+  CODEGEN_FLAG_NONE = 0,
+
+  // use mnemonics in assembly output
+  CODEGEN_FLAG_MNEMONICS = 1 << 0,
+};
 
 enum compile_arch {
   COMPILE_ARCH_NATIVE, /* default */
@@ -81,6 +88,7 @@ struct compile_args {
   enum compile_target target;
   enum compile_log_flags log_flags;
   enum compile_opts_level opts_level;
+  enum codegen_flags codegen_flags;
 
   struct hashtbl *log_symbols;
 
@@ -111,6 +119,7 @@ enum compile_result {
   COMPILE_RESULT_FAILURE
 };
 
+struct target;
 enum compiler_create_result create_compiler(struct program *program,
                                             const struct target *target,
                                             struct compile_file output,
