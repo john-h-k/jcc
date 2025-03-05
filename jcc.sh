@@ -363,7 +363,7 @@ diff() {
 
     # not easy to get columns from within a script :(
     # command diff --width=175 --side-by-side --color=always $ltmp $rtmp
-    command sdiff -w 175 $ltmp $rtmp
+    delta --diff-args='--histogram' -s $ltmp $rtmp
     rm -f $ltmp $rtmp
 }
 
