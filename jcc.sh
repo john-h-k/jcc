@@ -21,6 +21,7 @@ help() {
   echo "    format      Format codebase"
   echo "    layout      Show code distribution"
   echo "    find-unused Finds symbols that can be made static"
+  echo "    as          Assemble and show output for file"
   echo "    langproc    (Temporary) Show output for langproc test"
   echo ""
 
@@ -54,17 +55,16 @@ langproc() {
       exit 0
     fi
 
-    flags="-C mnemonics"
-
     file=""
+    args=()
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --help|-h|help)
           help
           exit 0
           ;;
-        -n|--no-mnenomics)
-          flags=""
+        -*)
+          args+=("$1")
           shift
           ;;
         *)
@@ -81,21 +81,98 @@ langproc() {
 
     [[ $file != *.c ]] && file="$file.c"
 
-    dir=./tests/langproc
+    dir="$CALLER_DIR"
 
-    matches=($(find "$dir" -type f | grep -E "/$file(\.[^.]+)?$"))
+    if ! [ -f "$CALLER_DIR$file" ]; then
+        dir=./tests/langproc
 
-    if [[ ${#matches[@]} -eq 1 ]]; then
-        file="${matches[0]}"
-    elif [[ ${#matches[@]} -gt 1 ]]; then
-        echo -e "${BOLDRED}Multiple possible tests for '$file:'"
-        printf '%s\n' "${matches[@]}"
-        echo -e "${RESET}"
-        exit 1
-    else
-        echo -e "${BOLDRED}Could not find '$file' at '$path'${RESET}"
-        exit 1
+        matches=($(find "$dir" -type f | grep -E "/$file(\.[^.]+)?$"))
+
+        if [[ ${#matches[@]} -eq 1 ]]; then
+            file="${matches[0]}"
+            dir=""
+        elif [[ ${#matches[@]} -gt 1 ]]; then
+            echo -e "${BOLDRED}Multiple possible tests for '$file:'"
+            printf '%s\n' "${matches[@]}"
+            echo -e "${RESET}"
+            exit 1
+        else
+            echo -e "${BOLDRED}Could not find '$file' at '$path'${RESET}"
+            exit 1
+        fi
     fi
+
+    CALLER_DIR="$dir" as "$file" "${args[@]}" -- -target rv32i-unknown-elf
+}
+
+as() {
+ help() {
+        echo "JCC as"
+        echo "John Kelly <johnharrykelly@gmail.com>"
+        echo ""
+        echo "jcc.sh as [-h|--help] [-n|--no-mnemonics] FILE -- [ARGS]"
+        echo ""
+        echo "OPTIONS:"
+        echo "    -n|--no-mnemonics "
+        echo "        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')"
+        echo ""
+        echo "FILE:"
+        echo "    The file to assemble"
+        echo ""
+        echo "ARGS:"
+        echo "    Arguments to pass to JCC"
+        echo ""
+
+        if ! command -v bat &>/dev/null; then
+            echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
+        fi
+
+        echo ""
+    }
+
+    if [[ $# -eq 0 ]]; then
+      help
+      exit 0
+    fi
+
+    flags="-C mnemonics"
+    args=()
+
+    values=""
+    file=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --help|-h|help)
+          help
+          exit 0
+          ;;
+        -n|--no-mnenomics)
+          flags=""
+          shift
+          ;;
+        --)
+          values="1"
+          shift
+          ;;
+        *)
+          if [[ -n "$values" ]]; then
+            args+=("$1")
+            shift
+            continue
+          elif [[ -n "$file" ]]; then
+            echo -e "${BOLDRED}Cannot pass multiple files${RESET}"
+            exit -1
+          fi
+
+          file="$1"
+          if ! [[ -f "$CALLER_DIR$file" ]]; then
+            echo -e "${BOLDRED}Could not find file '$file'${RESET}"
+            exit -1
+          fi
+          shift
+          ;;
+        esac
+    done
 
     if ! command -v bat &>/dev/null; then
         bat() {
@@ -103,7 +180,7 @@ langproc() {
         }
     fi
 
-    run "../$file" -target rv32i-unknown-elf $flags -S -o stdout | bat --language S
+    run "$CALLER_DIR$file" "${args[@]}" $flags -S -o stdout | bat -P --language S
 }
 
 find-unused() {
