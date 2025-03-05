@@ -12,10 +12,7 @@ jobs:
 
     steps:
       - name: Install prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --fix-missing \
-              timeout
+        run: brew install coreutils
 
       - name: Checkout repository
         uses: actions/checkout@v4
