@@ -58,7 +58,8 @@ struct validate_op_order_metadata {
                    (obj)->id, (msg))
 
 #ifndef NDEBUG
-static void validate_op_order(struct ir_op **ir, UNUSED enum ir_op_use_ty use_ty, void *metadata) {
+static void validate_op_order(struct ir_op **ir,
+                              UNUSED enum ir_op_use_ty use_ty, void *metadata) {
   struct validate_op_order_metadata *data = metadata;
   struct ir_validate_state *state = data->state;
 
@@ -84,12 +85,15 @@ static void ir_validate_lcl(struct ir_validate_state *state,
   VALIDATION_CHECKZ(lcl->id != DETACHED_LCL, lcl, "lcl is detached!");
 
   VALIDATION_CHECKZ(lcl->func, lcl, "lcl has no func!");
-  VALIDATION_CHECKZ(!(lcl->flags & IR_OP_FLAG_PROMOTED) || (lcl->flags & IR_OP_FLAG_PROMOTED), lcl, "promoted lcls must be params");
+  VALIDATION_CHECKZ(!(lcl->flags & IR_OP_FLAG_PROMOTED) ||
+                        (lcl->flags & IR_OP_FLAG_PROMOTED),
+                    lcl, "promoted lcls must be params");
 }
 
 static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
-                            struct ir_var_ty *var_ty) {
-  // we have to always allower pointer-sized-int because typechk generates them for e.g array access indices
+                                       struct ir_var_ty *var_ty) {
+  // we have to always allower pointer-sized-int because typechk generates them
+  // for e.g array access indices
 
   struct ir_var_ty pointer_ty = ir_var_ty_for_pointer_size(state->unit);
   if (ir_var_ty_eq(state->unit, var_ty, &pointer_ty)) {
@@ -172,7 +176,9 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_LOAD_TY_ADDR:
       VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
-      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->load.addr->var_ty), op, "load address must have type pointer");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->load.addr->var_ty), op,
+          "load address must have type pointer");
       break;
     }
     break;
@@ -189,7 +195,9 @@ static void ir_validate_op(struct ir_validate_state *state,
       break;
     case IR_OP_STORE_TY_ADDR:
       VALIDATION_CHECKZ(op->store.addr, op, "tore ty addr must have addr");
-      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op, "store address must have type pointer");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
+          "store address must have type pointer");
       break;
     }
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
@@ -211,7 +219,9 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_STORE_TY_ADDR:
       VALIDATION_CHECKZ(op->store_bitfield.addr, op,
                         "store ty addr must have addr");
-      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->store_bitfield.addr->var_ty), op, "store address must have type pointer");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->store_bitfield.addr->var_ty),
+          op, "store address must have type pointer");
       break;
     }
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
@@ -228,12 +238,15 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_LOAD_TY_ADDR:
       VALIDATION_CHECKZ(op->load_bitfield.addr, op,
                         "load ty addr must have addr");
-      VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->load_bitfield.addr->var_ty), op, "load address must have type pointer");
+      VALIDATION_CHECKZ(
+          validate_var_ty_is_pointer(state, &op->load_bitfield.addr->var_ty),
+          op, "load address must have type pointer");
       break;
     }
     break;
   case IR_OP_TY_ADDR:
-    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op, "address must have type pointer");
+    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op,
+                      "address must have type pointer");
 
     switch (op->addr.ty) {
     case IR_OP_ADDR_TY_LCL:
@@ -266,9 +279,15 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_MEM_COPY:
     break;
   case IR_OP_TY_ADDR_OFFSET:
-    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op, "address must have type pointer");
-    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->addr_offset.base->var_ty), op->addr_offset.base, "addr.off base address must have type pointer");
-    VALIDATION_CHECKZ(!op->addr_offset.index || validate_var_ty_is_pointer(state, &op->addr_offset.index->var_ty), op->addr_offset.index, "addr.off base address must have type pointer");
+    VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op,
+                      "address must have type pointer");
+    VALIDATION_CHECKZ(
+        validate_var_ty_is_pointer(state, &op->addr_offset.base->var_ty),
+        op->addr_offset.base, "addr.off base address must have type pointer");
+    VALIDATION_CHECKZ(
+        !op->addr_offset.index ||
+            validate_var_ty_is_pointer(state, &op->addr_offset.index->var_ty),
+        op->addr_offset.index, "addr.off base address must have type pointer");
     break;
   }
 }
@@ -300,6 +319,40 @@ static void ir_validate_stmt(struct ir_validate_state *state,
   }
 }
 
+static bool is_pred(struct ir_basicblock *basicblock,
+                    struct ir_basicblock *pred) {
+  switch (pred->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    return false;
+  case IR_BASICBLOCK_TY_SPLIT:
+    return pred->split.true_target == basicblock ||
+           pred->split.false_target == basicblock;
+  case IR_BASICBLOCK_TY_MERGE:
+    return pred->merge.target == basicblock;
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < pred->switch_case.num_cases; i++) {
+      if (pred->switch_case.cases[i].target == basicblock) {
+        return true;
+      }
+    }
+
+    return pred->switch_case.default_target == basicblock;
+  }
+
+  BUG("bad bb ty");
+}
+
+static bool has_pred(struct ir_basicblock *pred,
+                     struct ir_basicblock *basicblock) {
+  for (size_t i = 0; i < basicblock->num_preds; i++) {
+    if (basicblock->preds[i] == pred) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static void ir_validate_basicblock(struct ir_validate_state *state,
                                    struct ir_func *func,
                                    struct ir_basicblock *basicblock) {
@@ -307,6 +360,53 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
                     "basicblock is detached!");
 
   VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+
+  for (size_t i = 0; i < basicblock->num_preds; i++) {
+    struct ir_basicblock *pred = basicblock->preds[i];
+
+    VALIDATION_CHECK(is_pred(basicblock, pred), basicblock,
+                     "basicblock has incorrect pred %zu", pred->id);
+  }
+
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    break;
+  case IR_BASICBLOCK_TY_SPLIT:
+    VALIDATION_CHECK(has_pred(basicblock, basicblock->split.true_target),
+                     basicblock,
+                     "basicblock has true_target %zu but it is not in preds "
+                     "for that basicblock",
+                     basicblock->split.true_target->id);
+    VALIDATION_CHECK(has_pred(basicblock, basicblock->split.false_target),
+                     basicblock,
+                     "basicblock has false_target %zu but it is not in preds "
+                     "for that basicblock",
+                     basicblock->split.false_target->id);
+    break;
+  case IR_BASICBLOCK_TY_MERGE:
+    VALIDATION_CHECK(
+        has_pred(basicblock, basicblock->merge.target), basicblock,
+        "basicblock has target %zu but it is not in preds for that basicblock",
+        basicblock->split.false_target->id);
+    break;
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      VALIDATION_CHECK(
+          has_pred(basicblock, basicblock->switch_case.cases[i].target),
+          basicblock,
+          "basicblock has switch target %zu but it is not in preds for that "
+          "basicblock",
+          basicblock->split.false_target->id);
+    }
+
+    VALIDATION_CHECK(
+        has_pred(basicblock, basicblock->switch_case.default_target),
+        basicblock,
+        "basicblock has default_target %zu but it is not in preds for that "
+        "basicblock",
+        basicblock->split.false_target->id);
+    break;
+  }
 
   struct ir_stmt *stmt = basicblock->first;
 
@@ -426,7 +526,8 @@ static void ir_validate_func(struct ir_validate_state *state,
 #endif
 
 #ifdef NDEBUG
-void ir_validate(UNUSED struct ir_unit *iru, UNUSED enum ir_validate_flags flags) {}
+void ir_validate(UNUSED struct ir_unit *iru,
+                 UNUSED enum ir_validate_flags flags) {}
 
 #else
 void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {

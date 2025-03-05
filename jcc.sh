@@ -335,7 +335,7 @@ build() {
 
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
+    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .); then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi

@@ -890,9 +890,6 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_basicblock *false_bb = ir_alloc_basicblock(irb->func);
     struct ir_basicblock *end_bb = ir_alloc_basicblock(irb->func);
 
-    ir_make_basicblock_merge(irb->func, true_bb, end_bb);
-    ir_make_basicblock_merge(irb->func, false_bb, end_bb);
-
     if (binary_op->ty == TD_BINARY_OP_TY_LOGICAL_AND) {
       ir_make_basicblock_split(irb->func, entry_bb, rhs_bb, false_bb);
     } else {
@@ -920,6 +917,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_stmt *true_stmt = ir_alloc_stmt(irb->func, true_bb);
     struct ir_op *true_op = ir_alloc_op(irb->func, true_stmt);
     ir_mk_integral_constant(irb->unit, true_op, IR_VAR_PRIMITIVE_TY_I32, 1);
+    ir_make_basicblock_merge(irb->func, true_bb, end_bb);
 
     struct ir_stmt *true_br_stmt = ir_alloc_stmt(irb->func, true_bb);
     struct ir_op *true_br = ir_alloc_op(irb->func, true_br_stmt);
@@ -929,6 +927,7 @@ static struct ir_op *build_ir_for_binaryop(struct ir_func_builder *irb,
     struct ir_stmt *false_stmt = ir_alloc_stmt(irb->func, false_bb);
     struct ir_op *false_op = ir_alloc_op(irb->func, false_stmt);
     ir_mk_integral_constant(irb->unit, false_op, IR_VAR_PRIMITIVE_TY_I32, 0);
+    ir_make_basicblock_merge(irb->func, false_bb, end_bb);
 
     struct ir_stmt *false_br_stmt = ir_alloc_stmt(irb->func, false_bb);
     struct ir_op *false_br = ir_alloc_op(irb->func, false_br_stmt);
