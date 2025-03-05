@@ -1886,6 +1886,8 @@ static void print_instr(const struct codegen_debug_state *state,
     } else if ((flags & CODEGEN_FLAG_MNEMONICS) && addi->source.idx == 0 &&
                addi->dest.idx == 0 && addi->imm == 0) {
       codegen_fprintf(state, "nop");
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && addi->source.idx == 0) {
+      codegen_fprintf(state, "li %reg, %imm", addi->dest, addi->imm);
     } else if ((flags & CODEGEN_FLAG_MNEMONICS) && addi->imm == 0) {
       codegen_fprintf(state, "mv %reg, %reg", addi->dest, addi->source);
     } else {
@@ -2650,9 +2652,7 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit, enum codegen_flags flags) 
       }
 
       fprintf(file,
-              ".align 2\n"
-              ".type	%s, @function\n",
-              entry->name);
+              ".align 4\n");
       fprintf(file, "\n%s:\n", entry->name);
 
       struct cg_basicblock *basicblock = func->first;
