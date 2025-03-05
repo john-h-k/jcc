@@ -1,5 +1,6 @@
 #include "hashtbl.h"
 
+#include "alloc.h"
 #include "hash.h"
 #include "util.h"
 #include "vector.h"
@@ -11,6 +12,8 @@ struct bucket {
 };
 
 struct hashtbl {
+  struct arena_allocator *arena;
+
   hash_fn hash_fn;
   eq_fn eq_fn;
   size_t key_size;
@@ -29,18 +32,55 @@ struct hashtbl_iter {
 
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_fn) {
-  struct hashtbl *tbl = nonnull_malloc(sizeof(*tbl));
+  return hashtbl_create_in_arena(NULL, key_size, element_size, hash_fn, eq_fn);
+}
+
+struct hashtbl *hashtbl_create_str_keyed(size_t element_size) {
+  return hashtbl_create_str_keyed_in_arena(NULL, element_size);
+}
+
+struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size) {
+  return hashtbl_create_sized_str_keyed_in_arena(NULL, element_size);
+}
+
+struct hashtbl *hashtbl_create_in_arena(struct arena_allocator *arena, size_t key_size, size_t element_size,
+                               hash_fn hash_fn, eq_fn eq_fn) {
+  
+  struct hashtbl *tbl;
+  if (arena) {
+    tbl = arena_alloc(arena, sizeof(*tbl));
+  } else {
+    tbl = nonnull_malloc(sizeof(*tbl));
+  }
+
+  tbl->arena = arena;
   tbl->hash_fn = hash_fn;
   tbl->key_size = key_size;
   tbl->element_size = element_size;
   tbl->eq_fn = eq_fn;
-  tbl->buckets = vector_create(sizeof(struct bucket));
+  tbl->buckets = vector_create_in_arena(sizeof(struct bucket), arena);
   tbl->len = 0;
 
   return tbl;
 }
 
+struct hashtbl *hashtbl_create_str_keyed_in_arena(struct arena_allocator *arena, size_t element_size) {
+  return hashtbl_create_in_arena(arena, sizeof(char *), element_size, hashtbl_hash_str,
+                        hashtbl_eq_str);
+}
+
+struct hashtbl *hashtbl_create_sized_str_keyed_in_arena(struct arena_allocator *arena, size_t element_size) {
+  return hashtbl_create_in_arena(arena, sizeof(struct sized_str), element_size,
+                        hashtbl_hash_sized_str, hashtbl_eq_sized_str);
+  
+}
+
 void hashtbl_free(struct hashtbl **hashtbl) {
+  if ((*hashtbl)->arena) {
+    *hashtbl = NULL;
+    return;
+  }
+
   size_t num_buckets = vector_length((*hashtbl)->buckets);
   for (size_t i = 0; i < num_buckets; i++) {
     struct bucket *bucket = vector_get((*hashtbl)->buckets, i);
@@ -55,7 +95,10 @@ void hashtbl_free(struct hashtbl **hashtbl) {
 }
 
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl) {
-  struct hashtbl_iter *iter = nonnull_malloc(sizeof(*iter));
+  struct hashtbl_iter *iter;
+  if (hashtbl->arena) {
+    iter = arena_alloc(hashtbl->arena, sizeof(*iter));
+  } else { iter = nonnull_malloc(sizeof(*iter)); }
   *iter =
       (struct hashtbl_iter){.hashtbl = hashtbl, .bucket_idx = 0, .elem_idx = 0};
 
@@ -105,7 +148,10 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
   return true;
 
 finished:
-  free(hashtbl_iter);
+  if (!hashtbl->arena) {
+    free(hashtbl_iter);
+  }
+
   return false;
 }
 
@@ -117,16 +163,6 @@ void hashtbl_hash_str(struct hasher *hasher, const void *obj) {
 
 bool hashtbl_eq_str(const void *l, const void *r) {
   return strcmp(*(const char *const *)l, *(const char *const *)r) == 0;
-}
-
-struct hashtbl *hashtbl_create_str_keyed(size_t element_size) {
-  return hashtbl_create(sizeof(char *), element_size, hashtbl_hash_str,
-                        hashtbl_eq_str);
-}
-
-struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size) {
-  return hashtbl_create(sizeof(struct sized_str), element_size,
-                        hashtbl_hash_sized_str, hashtbl_eq_sized_str);
 }
 
 void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
@@ -142,7 +178,7 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   size_t new_num_buckets = num_buckets < 8 ? 8 : num_buckets * 2;
 
   hashtbl->len = 0;
-  hashtbl->buckets = vector_create(sizeof(struct bucket));
+  hashtbl->buckets = vector_create_in_arena(sizeof(struct bucket), hashtbl->arena);
   vector_ensure_capacity(hashtbl->buckets, new_num_buckets);
 
   size_t triple_size =
@@ -150,7 +186,7 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   triple_size = ROUND_UP(triple_size, 8);
 
   for (size_t i = 0; i < new_num_buckets; i++) {
-    struct bucket bucket = {.elems = vector_create(triple_size)};
+    struct bucket bucket = {.elems = vector_create_in_arena(triple_size, hashtbl->arena)};
 
     vector_push_back(hashtbl->buckets, &bucket);
   }

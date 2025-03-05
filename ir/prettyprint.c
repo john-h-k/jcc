@@ -680,7 +680,25 @@ static void prettyprint_begin_visit_stmt_file(UNUSED_ARG(struct ir_func *irb),
                                               struct ir_stmt *stmt,
                                               void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
-  fprintf(fm->file, "STMT $ %03zu\n", stmt->id);
+  fprintf(fm->file, "STMT ");
+  if (stmt->flags) {
+ fprintf(fm->file, "[ ");
+
+    bool first = true;
+#define PRINT_FLAG(name, str)                                                  \
+  if (stmt->flags & IR_STMT_FLAG_##name) {                                         \
+    fprintf(fm->file, first ? "." str : ", ." str);                            \
+    first = false;                                                             \
+  }
+
+    PRINT_FLAG(PHI, "phi");
+    PRINT_FLAG(PARAM, "param");
+
+#undef PRINT_FLAG
+
+    fprintf(fm->file, " ] ");
+  }
+  fprintf(fm->file, "$ %03zu\n", stmt->id);
 }
 
 static void

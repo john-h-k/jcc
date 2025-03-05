@@ -157,6 +157,7 @@ void vector_copy_to(struct vector *v, void *dest) {
 
 void vector_free(struct vector **v) {
   if ((*v)->arena) {
+    *v = NULL;
     return;
   }
 
