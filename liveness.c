@@ -60,6 +60,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
         // i originally had this, but i don't think its needed? the range is still long enough
         // its just that it will unnecessarily fill up a reg spot?
 
+        // removing causes `./tests/struct_arg.c` to fail
         if (op->flags & IR_OP_FLAG_ETERNAL) {
           interval->end = irb->op_count;
         }
@@ -103,9 +104,9 @@ struct interval_data construct_intervals(struct ir_func *irb) {
             // FIXME: awkward scenario. Some tests pass using the first line only, some only with the second line
             // it also varies across arm64 vs x64...
 
-            // dependent_interval->end =
-            //     op->phi.values[i].basicblock->last->last->id;
-            dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
+            dependent_interval->end =
+                op->phi.values[i].basicblock->last->last->id;
+            // dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
           }
         }
 
