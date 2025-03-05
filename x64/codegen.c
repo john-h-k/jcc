@@ -2224,6 +2224,8 @@ void x64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
 
     int op_pad = /* guess */ 50;
 
+    bool supports_pos = ftell(file) != -1;
+
     size_t offset = 0;
 
     struct cg_basicblock *basicblock = func->first;
@@ -2235,7 +2237,7 @@ void x64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
         fprintf(file, "%04zu: ", offset++);
         x64_debug_print_instr(file, func, instr);
 
-        if (ftell(file) == pos) {
+        if (supports_pos && ftell(file) == pos) {
           // no line was written
           continue;
         }
