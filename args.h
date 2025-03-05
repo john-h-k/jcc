@@ -2,6 +2,7 @@
 #define ARGS_H
 
 #include "compiler.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -56,6 +57,10 @@ struct arg {
   };
 };
 
+#define CODEGEN_FLAG_ENUM_LIST                                                      \
+  ENUM_FN(CODEGEN_FLAG_NONE, "none")                                           \
+  ENUM_FN(CODEGEN_FLAG_MNEMONICS, "mnemonics")
+
 #define OPTS_ENUM_LIST                                                         \
   ENUM_FN(COMPILE_OPTS_LEVEL_0, "0")                                           \
   ENUM_FN(COMPILE_OPTS_LEVEL_1, "1")                                           \
@@ -69,7 +74,7 @@ struct arg {
   ENUM_FN(COMPILE_LOG_FLAGS_PARSE, "parse")                                    \
   ENUM_FN(COMPILE_LOG_FLAGS_TYPECHK, "typechk")                                \
   ENUM_FN(COMPILE_LOG_FLAGS_IR, "ir")                                          \
-  ENUM_FN(COMPILE_LOG_FLAGS_INLINE, "inline")                            \
+  ENUM_FN(COMPILE_LOG_FLAGS_INLINE, "inline")                                  \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER_ABI, "lower_abi")                            \
   ENUM_FN(COMPILE_LOG_FLAGS_OPTS, "opts")                                      \
   ENUM_FN(COMPILE_LOG_FLAGS_LOWER, "lower")                                    \
@@ -130,15 +135,19 @@ inline static bool parse_log_level(const char *str, int *value) {
   LOG_ENUM_LIST;
 
   if (strcmp(str, "ir.all") == 0) {
-    *value = COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_INLINE | COMPILE_LOG_FLAGS_LOWER_ABI |
-             COMPILE_LOG_FLAGS_OPTS | COMPILE_LOG_FLAGS_LOWER /* temp disable regalloc bc it doesn't respect --log-sym | COMPILE_LOG_FLAGS_REGALLOC */ |
-             COMPILE_LOG_FLAGS_ELIM_PHI | COMPILE_LOG_FLAGS_CODEGEN_PREPARE;
+    *value =
+        COMPILE_LOG_FLAGS_IR | COMPILE_LOG_FLAGS_INLINE |
+        COMPILE_LOG_FLAGS_LOWER_ABI | COMPILE_LOG_FLAGS_OPTS |
+        COMPILE_LOG_FLAGS_LOWER /* temp disable regalloc bc it doesn't respect
+                                   --log-sym | COMPILE_LOG_FLAGS_REGALLOC */
+        | COMPILE_LOG_FLAGS_ELIM_PHI | COMPILE_LOG_FLAGS_CODEGEN_PREPARE;
     return true;
   }
 
   return false;
 }
 
+PARSE_FN(codegen_flags, CODEGEN_FLAG)
 PARSE_FN(opts_level, OPTS)
 PARSE_FN(arch, ARCH)
 PARSE_FN(target, TARGET)
@@ -151,6 +160,7 @@ PARSE_FN(c_standard, C_STANDARD)
     return str_value;                                                          \
   }
 
+STRING_FN(codegen_flags, CODEGEN_FLAG, "all")
 STRING_FN(opts_level, OPTS, "(invalid)")
 STRING_FN(arch, ARCH, "(invalid)")
 STRING_FN(target, TARGET, "(invalid)")
@@ -168,6 +178,7 @@ inline static void values_log_level(const char ***values, size_t *num_values) {
   *num_values = ARR_LENGTH(enum_values);
 }
 
+VALUES_FN(codegen_flags, CODEGEN_FLAG)
 VALUES_FN(opts_level, OPTS)
 VALUES_FN(arch, ARCH)
 VALUES_FN(target, TARGET)
@@ -222,6 +233,8 @@ VALUES_FN(c_standard, C_STANDARD)
                                                                                \
   ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
              "C standard to use")                                              \
+                                                                               \
+  ARG_FLAGS(enum codegen_flags, codegen_flags, "-C", "--codegen", codegen_flags, "Codegen flags")             \
                                                                                \
   ARG_BOOL(use_graphcol_regalloc, "", "--use-graphcol",                        \
            "[EXPERIMENTAL] Use graph-colouring based regalloc")                \

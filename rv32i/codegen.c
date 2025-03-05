@@ -1842,6 +1842,7 @@ static const char *get_reloc_symbol(const struct codegen_debug_state *state,
 }
 
 static void print_instr(const struct codegen_debug_state *state,
+                                    enum codegen_flags flags,
                         const struct instr *instr) {
 
   FILE *file = state->file;
@@ -1882,7 +1883,10 @@ static void print_instr(const struct codegen_debug_state *state,
       codegen_fprintf(state, "addi %reg, %reg, %%lo(%s+%imm)", addi->dest,
                       addi->source, get_reloc_symbol(state, reloc), addi->imm);
 
-    } else if (addi->imm == 0) {
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && addi->source.idx == 0 &&
+               addi->dest.idx == 0 && addi->imm == 0) {
+      codegen_fprintf(state, "nop");
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && addi->imm == 0) {
       codegen_fprintf(state, "mv %reg, %reg", addi->dest, addi->source);
     } else {
       fprintf(file, "addi");
@@ -1899,6 +1903,10 @@ static void print_instr(const struct codegen_debug_state *state,
     if (reloc) {
       codegen_fprintf(state, "jal %reg, %s", jal->ret_addr,
                       get_reloc_symbol(state, reloc));
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && jal->ret_addr.idx == 0) {
+      codegen_fprintf(state, "j %target", jal->target);
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && jal->ret_addr.idx == 1) {
+      codegen_fprintf(state, "jal %target", jal->target);
     } else {
       fprintf(file, "jal");
       debug_print_jal(state, jal);
@@ -1913,6 +1921,12 @@ static void print_instr(const struct codegen_debug_state *state,
     if (reloc) {
       codegen_fprintf(state, "jalr %reg, %reg, %%pcrel_lo(%immb)",
                       jalr->ret_addr, jalr->target, instr->pred->id);
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && jalr->ret_addr.idx == 0 && jalr->target.idx == 1 && jalr->imm == 0) {
+      codegen_fprintf(state, "ret");
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && jalr->ret_addr.idx == 0 && jalr->imm == 0) {
+      codegen_fprintf(state, "jr %reg", jalr->target);
+    } else if ((flags & CODEGEN_FLAG_MNEMONICS) && jalr->ret_addr.idx == 1 && jalr->imm == 0) {
+      codegen_fprintf(state, "jalr %reg", jalr->target);
     } else {
       fprintf(file, "jalr");
       debug_print_jalr(state, jalr);
@@ -1920,9 +1934,13 @@ static void print_instr(const struct codegen_debug_state *state,
     break;
   }
   case RV32I_INSTR_TY_XORI: {
-    struct rv32i_op_imm *addi = &instr->rv32i->addi;
-    fprintf(file, "xori");
-    debug_print_op_imm(state, addi);
+    struct rv32i_op_imm *xori = &instr->rv32i->xori;
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && xori->imm == -1) {
+      codegen_fprintf(state, "not %reg, %reg", xori->dest, xori->source);
+    } else {
+      fprintf(file, "xori");
+      debug_print_op_imm(state, xori);
+    }
     break;
   }
   case RV32I_INSTR_TY_ADD: {
@@ -1933,8 +1951,12 @@ static void print_instr(const struct codegen_debug_state *state,
   }
   case RV32I_INSTR_TY_SUB: {
     struct rv32i_op *sub = &instr->rv32i->sub;
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && sub->lhs.idx == 0) {
+      codegen_fprintf(state, "neg %reg, %reg", sub->dest, sub->rhs);
+    } else {
     fprintf(file, "sub");
     debug_print_op(state, sub);
+    }
     break;
   }
   case RV32I_INSTR_TY_MUL: {
@@ -2041,26 +2063,46 @@ static void print_instr(const struct codegen_debug_state *state,
   }
   case RV32I_INSTR_TY_BEQ: {
     struct rv32i_conditional_branch *beq = &instr->rv32i->beq;
-    fprintf(file, "beq");
-    debug_print_conditional_branch(state, beq);
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && beq->rhs.idx == 0) {
+    codegen_fprintf(state, "beqz %reg, %target", beq->lhs,
+                    beq->target);
+    } else {
+      fprintf(file, "beq");
+      debug_print_conditional_branch(state, beq);
+    }
     break;
   }
   case RV32I_INSTR_TY_BNE: {
     struct rv32i_conditional_branch *bne = &instr->rv32i->bne;
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && bne->rhs.idx == 0) {
+    codegen_fprintf(state, "bnez %reg, %target", bne->lhs,
+                    bne->target);
+    } else {
     fprintf(file, "bne");
     debug_print_conditional_branch(state, bne);
+    }
     break;
   }
   case RV32I_INSTR_TY_BLT: {
     struct rv32i_conditional_branch *blt = &instr->rv32i->blt;
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && blt->rhs.idx == 0) {
+    codegen_fprintf(state, "bltz %reg, %target", blt->lhs,
+                    blt->target);
+    } else {
     fprintf(file, "blt");
     debug_print_conditional_branch(state, blt);
+    }
     break;
   }
   case RV32I_INSTR_TY_BGE: {
     struct rv32i_conditional_branch *bge = &instr->rv32i->bge;
+    if ((flags & CODEGEN_FLAG_MNEMONICS) && bge->rhs.idx == 0) {
+    codegen_fprintf(state, "bgez %reg, %target", bge->lhs,
+                    bge->target);
+    } else {
     fprintf(file, "bge");
     debug_print_conditional_branch(state, bge);
+    }
     break;
   }
   case RV32I_INSTR_TY_BLTU: {
@@ -2171,7 +2213,8 @@ static void print_instr(const struct codegen_debug_state *state,
     break;
   }
   case RV32I_INSTR_TY_FSGNJ_S: {
-    if (instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
+    if ((flags & CODEGEN_FLAG_MNEMONICS) &&
+        instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
       codegen_fprintf(state, "fmv.s %reg, %reg", instr->rv32i->fsgnj.dest,
                       instr->rv32i->fsgnj.lhs);
     } else {
@@ -2182,7 +2225,8 @@ static void print_instr(const struct codegen_debug_state *state,
     break;
   }
   case RV32I_INSTR_TY_FSGNJ_D: {
-    if (instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
+    if ((flags & CODEGEN_FLAG_MNEMONICS) &&
+        instr->rv32i->fsgnj.lhs.idx == instr->rv32i->fsgnj.rhs.idx) {
       codegen_fprintf(state, "fmv.d %reg, %reg", instr->rv32i->fsgnj.dest,
                       instr->rv32i->fsgnj.lhs);
     } else {
@@ -2527,7 +2571,7 @@ void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit) {
             .file = file, .func = func, .instr = instr};
 
         fprintf(file, "%04zu: ", offset++ * 4);
-        print_instr(&state, instr);
+        print_instr(&state, CODEGEN_FLAG_NONE, instr);
         fprintf(file, "\n");
 
         instr = instr->succ;
@@ -2539,11 +2583,10 @@ void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit) {
   }
 }
 
-void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
+void rv32i_emit_asm(FILE *file, struct cg_unit *unit, enum codegen_flags flags) {
   DEBUG_ASSERT(unit->ty == CODEGEN_UNIT_TY_RV32I, "expected rv32i");
 
-  fprintf(file,
-          ".data\n");
+  fprintf(file, ".data\n");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct cg_entry *entry = &unit->entries[i];
@@ -2576,11 +2619,12 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
       for (size_t j = 0; j < entry->data.num_relocs; j++) {
         struct relocation *reloc = &entry->data.relocs[j];
 
-        DEBUG_ASSERT(reloc->ty == RELOCATION_TY_POINTER, "non pointer reloc in .data");
+        DEBUG_ASSERT(reloc->ty == RELOCATION_TY_POINTER,
+                     "non pointer reloc in .data");
 
-        
         struct cg_entry *target = &unit->entries[reloc->symbol_index];
-        fprintf(file, "        .reloc %s + %zu, R_RISCV_32, %s + %zu", entry->name, reloc->address, target->name, reloc->offset);
+        fprintf(file, "        .reloc %s + %zu, R_RISCV_32, %s + %zu",
+                entry->name, reloc->address, target->name, reloc->offset);
       }
       fprintf(file, "\n");
       break;
@@ -2592,8 +2636,7 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
     fprintf(file, "\n");
   }
 
-  fprintf(file,
-          ".text\n");
+  fprintf(file, ".text\n");
 
   for (size_t i = 0; i < unit->num_entries; i++) {
     struct cg_entry *entry = &unit->entries[i];
@@ -2606,7 +2649,8 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
         fprintf(file, ".globl %s\n", entry->name);
       }
 
-      fprintf(file, ".align 2\n"
+      fprintf(file,
+              ".align 2\n"
               ".type	%s, @function\n",
               entry->name);
       fprintf(file, "\n%s:\n", entry->name);
@@ -2624,7 +2668,7 @@ void rv32i_emit_asm(FILE *file, struct cg_unit *unit) {
               .file = file, .func = func, .instr = instr};
 
           fprintf(file, "        ");
-          print_instr(&state, instr);
+          print_instr(&state, flags, instr);
           fprintf(file, "\n");
 
           instr = instr->succ;

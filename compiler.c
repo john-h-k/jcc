@@ -380,7 +380,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
                       struct cg_unit **codegen_unit) {
   const struct target *target = ir->target;
 
-  *codegen_unit = codegen(ir);
+  *codegen_unit = codegen(ir, compiler->args.codegen_flags);
 
   if (log_enabled() && target->debug_print_codegen) {
     debug_print_stage(compiler, ir, "emit");
@@ -395,7 +395,7 @@ compile_stage_codegen(struct compiler *compiler, struct ir_unit *ir,
         return COMPILE_RESULT_BAD_FILE;
       }
 
-      target->emit_asm(file, *codegen_unit);
+      target->emit_asm(file, *codegen_unit, compiler->args.codegen_flags);
 
       fclose(file);
 

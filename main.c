@@ -197,6 +197,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .preproc_only = args->preprocess,
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
+      .codegen_flags = args->codegen_flags,
 
       .log_symbols = log_symbols,
 
