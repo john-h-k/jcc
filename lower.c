@@ -293,7 +293,8 @@ static void propogate_switch_phis(UNUSED struct ir_func *func,
   while (phi && phi->ty == IR_OP_TY_PHI) {
     for (size_t i = 0; i < phi->phi.num_values; i++) {
       if (phi->phi.values[i].basicblock == bb_switch) {
-        // HACK:
+        // HACK: we need to rework phis to not be every-basicblock
+        // but in mean time this works
         phi->flags |= IR_OP_FLAG_ETERNAL;
         phi->phi.values[i].basicblock = pred_cond;
       }
