@@ -10,9 +10,9 @@
 static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty, void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
 
-  if (cb->op->ty == IR_OP_TY_PHI) {
-    return;
-  }
+  // if (cb->op->ty == IR_OP_TY_PHI) {
+  //   return;
+  // }
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
@@ -103,9 +103,9 @@ struct interval_data construct_intervals(struct ir_func *irb) {
             // FIXME: awkward scenario. Some tests pass using the first line only, some only with the second line
             // it also varies across arm64 vs x64...
 
-            dependent_interval->end =
-                op->phi.values[i].basicblock->last->last->id;
-            // dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
+            // dependent_interval->end =
+            //     op->phi.values[i].basicblock->last->last->id;
+            dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
           }
         }
 
