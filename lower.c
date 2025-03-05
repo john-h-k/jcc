@@ -293,11 +293,88 @@ static void propogate_switch_phis(UNUSED struct ir_func *func,
   while (phi && phi->ty == IR_OP_TY_PHI) {
     for (size_t i = 0; i < phi->phi.num_values; i++) {
       if (phi->phi.values[i].basicblock == bb_switch) {
+        // HACK:
+        phi->flags |= IR_OP_FLAG_ETERNAL;
         phi->phi.values[i].basicblock = pred_cond;
       }
     }
 
     phi = phi->succ;
+  }
+}
+
+static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
+  // lowers a `br.switch` into a series of if-else statements
+
+  struct ir_basicblock *bb = op->stmt->basicblock;
+  struct ir_basicblock_switch *bb_switch = &bb->switch_case;
+
+  struct ir_basicblock *prev_bb = op->stmt->basicblock;
+
+  ir_detach_op(func, op);
+
+  struct ir_var_ty var_ty = op->br_switch.value->var_ty;
+
+  size_t num_cases = bb_switch->num_cases;
+  struct ir_split_case *split_cases = bb_switch->cases;
+  for (size_t i = 0; i < num_cases; i++) {
+    struct ir_split_case *split_case = &split_cases[i];
+
+    for (size_t j = 0; j < split_case->target->num_preds; j++) {
+      if (split_case->target->preds[j] == bb) {
+        // remove pred
+        memmove(&split_case->target->preds[j],
+                &split_case->target->preds[j + 1],
+                (split_case->target->num_preds - j - 1) *
+                    sizeof(struct ir_basicblock *));
+        split_case->target->num_preds--;
+      }
+    }
+
+    struct ir_stmt *cmp_stmt = ir_alloc_stmt(func, prev_bb);
+    struct ir_op *cnst = ir_alloc_op(func, cmp_stmt);
+    cnst->ty = IR_OP_TY_CNST;
+    cnst->var_ty = var_ty;
+    cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
+                                     .int_value = split_case->value};
+
+    struct ir_op *cmp_op = ir_alloc_op(func, cmp_stmt);
+    cmp_op->ty = IR_OP_TY_BINARY_OP;
+    cmp_op->var_ty = IR_VAR_TY_I32;
+    cmp_op->binary_op = (struct ir_op_binary_op){
+        .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = op->br_switch.value, .rhs = cnst};
+
+    struct ir_op *br_op = ir_alloc_op(func, cmp_stmt);
+    br_op->ty = IR_OP_TY_BR_COND;
+    br_op->var_ty = IR_VAR_TY_NONE;
+    br_op->br_cond = (struct ir_op_br_cond){.cond = cmp_op};
+
+    if (i + 1 < num_cases) {
+      struct ir_basicblock *next_cond =
+          ir_insert_after_basicblock(func, prev_bb);
+
+      propogate_switch_phis(func, bb, prev_bb, split_case->target);
+      ir_make_basicblock_split(func, prev_bb, split_case->target, next_cond);
+
+      prev_bb = next_cond;
+    } else {
+      struct ir_basicblock *default_target = bb_switch->default_target;
+
+      for (size_t j = 0; j < default_target->num_preds; j++) {
+        if (bb_switch->default_target->preds[j] == bb) {
+          // remove pred
+          memmove(&default_target->preds[j], &default_target->preds[j + 1],
+                  (default_target->num_preds - j - 1) *
+                      sizeof(struct ir_basicblock *));
+          default_target->num_preds--;
+        }
+      }
+
+      propogate_switch_phis(func, bb, prev_bb, split_case->target);
+      propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
+      ir_make_basicblock_split(func, prev_bb, split_case->target,
+                            bb_switch->default_target);
+    }
   }
 }
 
@@ -417,81 +494,6 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
   };
 
   lower_call(func, op);
-}
-
-static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
-  // lowers a `br.switch` into a series of if-else statements
-
-  struct ir_basicblock *bb = op->stmt->basicblock;
-  struct ir_basicblock_switch *bb_switch = &bb->switch_case;
-
-  struct ir_basicblock *prev_bb = op->stmt->basicblock;
-
-  ir_detach_op(func, op);
-
-  struct ir_var_ty var_ty = op->br_switch.value->var_ty;
-
-  size_t num_cases = bb_switch->num_cases;
-  struct ir_split_case *split_cases = bb_switch->cases;
-  for (size_t i = 0; i < num_cases; i++) {
-    struct ir_split_case *split_case = &split_cases[i];
-
-    for (size_t j = 0; j < split_case->target->num_preds; j++) {
-      if (split_case->target->preds[j] == bb) {
-        // remove pred
-        memmove(&split_case->target->preds[j],
-                &split_case->target->preds[j + 1],
-                (split_case->target->num_preds - j - 1) *
-                    sizeof(struct ir_basicblock *));
-        split_case->target->num_preds--;
-      }
-    }
-
-    struct ir_stmt *cmp_stmt = ir_alloc_stmt(func, prev_bb);
-    struct ir_op *cnst = ir_alloc_op(func, cmp_stmt);
-    cnst->ty = IR_OP_TY_CNST;
-    cnst->var_ty = var_ty;
-    cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                     .int_value = split_case->value};
-
-    struct ir_op *cmp_op = ir_alloc_op(func, cmp_stmt);
-    cmp_op->ty = IR_OP_TY_BINARY_OP;
-    cmp_op->var_ty = IR_VAR_TY_I32;
-    cmp_op->binary_op = (struct ir_op_binary_op){
-        .ty = IR_OP_BINARY_OP_TY_EQ, .lhs = op->br_switch.value, .rhs = cnst};
-
-    struct ir_op *br_op = ir_alloc_op(func, cmp_stmt);
-    br_op->ty = IR_OP_TY_BR_COND;
-    br_op->var_ty = IR_VAR_TY_NONE;
-    br_op->br_cond = (struct ir_op_br_cond){.cond = cmp_op};
-
-    if (i + 1 < num_cases) {
-      struct ir_basicblock *next_cond =
-          ir_insert_after_basicblock(func, prev_bb);
-
-      propogate_switch_phis(func, bb, prev_bb, split_case->target);
-      ir_make_basicblock_split(func, prev_bb, split_case->target, next_cond);
-
-      prev_bb = next_cond;
-    } else {
-      struct ir_basicblock *default_target = bb_switch->default_target;
-
-      for (size_t j = 0; j < default_target->num_preds; j++) {
-        if (bb_switch->default_target->preds[j] == bb) {
-          // remove pred
-          memmove(&default_target->preds[j], &default_target->preds[j + 1],
-                  (default_target->num_preds - j - 1) *
-                      sizeof(struct ir_basicblock *));
-          default_target->num_preds--;
-        }
-      }
-
-      propogate_switch_phis(func, bb, prev_bb, split_case->target);
-      propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
-      ir_make_basicblock_split(func, prev_bb, split_case->target,
-                            bb_switch->default_target);
-    }
-  }
 }
 
 // TODO: signs and stuff are wrong
