@@ -11,6 +11,12 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --fix-missing \
+              timeout
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
