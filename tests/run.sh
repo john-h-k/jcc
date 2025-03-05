@@ -498,10 +498,10 @@ run_tests() {
 
       # supress echo stderr because otherwise we get spurious broken pipe errors
       if [ -z "$RUNNER" ]; then
-        output_result=$(echo "$stdin" 2>/dev/null | ./"$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout -k 5s 5s ./"$output" 2>/dev/null)
         result=$?
       else
-        output_result=$(echo "$stdin" 2>/dev/null | "$RUNNER" "$output" 2>/dev/null)
+        output_result=$(echo "$stdin" 2>/dev/null | timeout -k 5s 5s "$RUNNER" "$output" 2>/dev/null)
         result=$?
       fi
   
