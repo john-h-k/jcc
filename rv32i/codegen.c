@@ -1542,7 +1542,6 @@ void rv32i_codegen_end(struct cg_state *state) {
 
     while (last) {
       if (!rv32i_instr_is_branch(last->rv32i)) {
-        basicblock = basicblock->succ;
         goto done;
         // can be eliminated because consective BBs
         // BUG("expected cg_basicblock to end in branch");
