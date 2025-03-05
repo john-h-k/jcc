@@ -107,6 +107,179 @@ static bool validate_var_ty_is_pointer(struct ir_validate_state *state,
   return false;
 }
 
+struct walk_op_metadata {
+  struct ir_validate_state *state;
+  struct ir_op *consumer;
+};
+
+static void walk_op_ty_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
+                                void *metadata) {
+  struct walk_op_metadata *walk_state = metadata;
+  struct ir_validate_state *state = walk_state->state;
+
+  switch (use_ty) {
+  case IR_OP_USE_TY_DEREF:
+    VALIDATION_CHECK(
+        validate_var_ty_is_pointer(state, &(*op)->var_ty), walk_state->consumer,
+        "operand %zu with use type IR_OP_USE_TY_DEREF must have type pointer",
+        (*op)->id);
+    break;
+  case IR_OP_USE_TY_READ: {
+    if ((*op)->var_ty.ty == IR_VAR_TY_TY_POINTER &&
+        validate_var_ty_is_pointer(state, &walk_state->consumer->var_ty)) {
+      break;
+    }
+    if (walk_state->consumer->var_ty.ty == IR_VAR_TY_TY_POINTER &&
+        validate_var_ty_is_pointer(state, &(*op)->var_ty)) {
+      break;
+    }
+    VALIDATION_CHECK(
+        ir_var_ty_eq(state->unit, &(*op)->var_ty,
+                     &walk_state->consumer->var_ty),
+        walk_state->consumer,
+        "operand %zu with use type IR_OP_USE_TY_READ must have same type",
+        (*op)->id);
+    break;
+  }
+  }
+}
+
+static void ir_validate_operands_same_ty(struct ir_validate_state *state,
+                                         struct ir_op *op) {
+
+  struct walk_op_metadata metadata = {.state = state, .consumer = op};
+
+  ir_walk_op_uses(op, walk_op_ty_callback, &metadata);
+}
+
+static void ir_validate_mov_op(struct ir_validate_state *state,
+                               struct ir_op *op) {
+  struct ir_var_ty l = op->var_ty;
+
+  VALIDATION_CHECKZ(l.ty != IR_VAR_TY_TY_NONE, op,
+                    "mov op with none type makes no sense");
+
+  if (!op->mov.value) {
+    VALIDATION_CHECKZ(op->flags & IR_OP_FLAG_PARAM, op,
+                      "mov op with no value should have flag .param");
+    return;
+  }
+
+  struct ir_op *value = op->mov.value;
+  VALIDATION_CHECKZ(value, op, "mov op without flag .param should have value");
+
+  struct ir_var_ty r = value->var_ty;
+
+  struct ir_var_ty_info l_info = ir_var_ty_info(state->unit, &l);
+  struct ir_var_ty_info r_info = ir_var_ty_info(state->unit, &r);
+
+  VALIDATION_CHECKZ(l_info.size == r_info.size, op,
+                    "mov op should have same-sized operands");
+}
+
+static void ir_validate_cast_op(struct ir_validate_state *state,
+                                struct ir_op *op) {
+
+  struct ir_var_ty from = op->cast_op.value->var_ty;
+  struct ir_var_ty to = op->var_ty;
+
+  struct ir_var_ty_info from_info =
+      ir_var_ty_info(state->unit, &op->cast_op.value->var_ty);
+  struct ir_var_ty_info to_info = ir_var_ty_info(state->unit, &op->var_ty);
+
+  switch (op->cast_op.ty) {
+  case IR_OP_CAST_OP_TY_SEXT:
+    VALIDATION_CHECKZ(
+        ir_var_ty_is_integral(&from) && ir_var_ty_is_integral(&to), op,
+        "both sides of sext operator should be integral types");
+
+    VALIDATION_CHECKZ(
+        from_info.size < to_info.size, op,
+        "source operand of sext should be smaller than result type");
+    break;
+  case IR_OP_CAST_OP_TY_ZEXT:
+    VALIDATION_CHECKZ(
+        ir_var_ty_is_integral(&from) && ir_var_ty_is_integral(&to), op,
+        "both sides of zext operator should be integral types");
+
+    VALIDATION_CHECKZ(
+        from_info.size < to_info.size, op,
+        "source operand of zext should be smaller than result type");
+    break;
+  case IR_OP_CAST_OP_TY_TRUNC:
+    VALIDATION_CHECKZ(
+        ir_var_ty_is_integral(&from) && ir_var_ty_is_integral(&to), op,
+        "both sides of trunc operator should be integral types");
+
+    VALIDATION_CHECKZ(
+        from_info.size > to_info.size, op,
+        "source operand of trunc should be bigger than result type");
+    break;
+  case IR_OP_CAST_OP_TY_CONV:
+    VALIDATION_CHECKZ(ir_var_ty_is_fp(&from) && ir_var_ty_is_fp(&to), op,
+                      "both sides of conv operator should be fp types");
+    break;
+  case IR_OP_CAST_OP_TY_UCONV:
+    VALIDATION_CHECKZ(
+        (ir_var_ty_is_fp(&from) && ir_var_ty_is_integral(&to)) ||
+            (ir_var_ty_is_integral(&from) && ir_var_ty_is_fp(&to)),
+        op, "both sides of uconv operator should be fp types");
+    break;
+  case IR_OP_CAST_OP_TY_SCONV:
+    VALIDATION_CHECKZ(
+        (ir_var_ty_is_fp(&from) && ir_var_ty_is_integral(&to)) ||
+            (ir_var_ty_is_integral(&from) && ir_var_ty_is_fp(&to)),
+        op, "both sides of sconv operator should be fp types");
+    break;
+  }
+}
+
+static void ir_validate_unary_op(struct ir_validate_state *state,
+                                 struct ir_op *op) {
+
+  enum ir_op_unary_op_ty ty = op->unary_op.ty;
+
+  switch (ty) {
+  case IR_OP_UNARY_OP_TY_LOGICAL_NOT:
+    VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
+                      "logical not (!) should have integral type");
+    return;
+  default:
+    break;
+  }
+
+  ir_validate_operands_same_ty(state, op);
+}
+
+static void ir_validate_binary_op(struct ir_validate_state *state,
+                                  struct ir_op *op) {
+  enum ir_op_binary_op_ty ty = op->binary_op.ty;
+
+  if (ir_binary_op_is_comparison(ty)) {
+    VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->var_ty), op,
+                      "comparison binops should have integral type");
+    return;
+  }
+
+  switch (ty) {
+  case IR_OP_BINARY_OP_TY_SRSHIFT:
+  case IR_OP_BINARY_OP_TY_URSHIFT:
+  case IR_OP_BINARY_OP_TY_LSHIFT:
+    // we could support floating point shifts in future but codegen will be
+    // wrong for them so may as well catch it here
+    VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->binary_op.lhs->var_ty), op,
+                      "shift binops should have integral lhs type");
+
+    VALIDATION_CHECKZ(ir_var_ty_is_integral(&op->binary_op.rhs->var_ty), op,
+                      "shift binops should have integral rhs type");
+    return;
+  default:
+    break;
+  }
+
+  ir_validate_operands_same_ty(state, op);
+}
+
 static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
@@ -116,8 +289,14 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNKNOWN:
     BUG("should not have unknown ops");
   case IR_OP_TY_PHI:
+    ir_validate_operands_same_ty(state, op);
+
     for (size_t i = 0; i < op->phi.num_values; i++) {
       struct ir_phi_entry *entry = &op->phi.values[i];
+
+      VALIDATION_CHECKZ(
+          ir_var_ty_eq(state->unit, &op->var_ty, &entry->value->var_ty), op,
+          "op entry had different type to op!");
 
       // FIXME: inefficient
       bool found = false;
@@ -133,6 +312,8 @@ static void ir_validate_op(struct ir_validate_state *state,
     }
     break;
   case IR_OP_TY_GATHER: {
+    // TODO: validate each entry is field ty
+
     struct ir_var_ty *var_ty = &op->var_ty;
 
     switch (var_ty->ty) {
@@ -153,34 +334,18 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNDF:
     break;
   case IR_OP_TY_MOV:
-    VALIDATION_CHECKZ(
-        !(op->flags & IR_OP_FLAG_PARAM) != !(op->mov.value), op,
-        "param mov must have null value, and param mov cannot have value");
+    ir_validate_mov_op(state, op);
     break;
   case IR_OP_TY_CNST:
     break;
   case IR_OP_TY_BINARY_OP:
+    ir_validate_binary_op(state, op);
     break;
   case IR_OP_TY_UNARY_OP:
+    ir_validate_unary_op(state, op);
     break;
   case IR_OP_TY_CAST_OP:
-    break;
-  case IR_OP_TY_LOAD:
-    switch (op->load.ty) {
-    case IR_OP_LOAD_TY_LCL:
-      VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
-      ir_validate_lcl(state, op->load.lcl);
-      break;
-    case IR_OP_LOAD_TY_GLB:
-      VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
-      break;
-    case IR_OP_LOAD_TY_ADDR:
-      VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
-      VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->load.addr->var_ty), op,
-          "load address must have type pointer");
-      break;
-    }
+    ir_validate_cast_op(state, op);
     break;
   case IR_OP_TY_STORE:
     VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
@@ -188,18 +353,45 @@ static void ir_validate_op(struct ir_validate_state *state,
     switch (op->store.ty) {
     case IR_OP_STORE_TY_LCL:
       VALIDATION_CHECKZ(op->store.lcl, op, "store ty lcl must have lcl");
-      ir_validate_lcl(state, op->store.lcl);
+
+      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->store.value->var_ty,
+                                    &op->store.lcl->var_ty),
+                       op, "lcl %zu must have same type", op->store.lcl->id);
       break;
     case IR_OP_STORE_TY_GLB:
       VALIDATION_CHECKZ(op->store.glb, op, "store ty glb must have glb");
+
+      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->store.value->var_ty,
+                                    &op->store.glb->var_ty),
+                       op, "glb %zu must have same type", op->store.glb->id);
       break;
-    case IR_OP_STORE_TY_ADDR:
-      VALIDATION_CHECKZ(op->store.addr, op, "tore ty addr must have addr");
-      VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->store.addr->var_ty), op,
-          "store address must have type pointer");
+    case IR_OP_STORE_TY_ADDR: {
+      VALIDATION_CHECKZ(op->store.addr, op, "store ty addr must have addr");
+      // struct ir_op *addr = op->store.addr;
+      // if (addr->ty == IR_OP_TY_ADDR) {
+      //   switch (addr->addr.ty) {
+      //   case IR_OP_ADDR_TY_LCL:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.lcl->var_ty) ||
+      //          addr->addr.lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->store.value->var_ty,
+      //                          &addr->addr.lcl->var_ty),
+      //         op, "lcl %zu must have same type", addr->addr.lcl->id);
+      //     break;
+      //   case IR_OP_ADDR_TY_GLB:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.glb->var_ty) ||
+      //          addr->addr.glb->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->store.value->var_ty,
+      //                          &addr->addr.glb->var_ty),
+      //         op, "glb %zu must have same type", addr->addr.glb->id);
+      //     break;
+      //   }
+      // }
       break;
     }
+    }
+
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
     break;
   case IR_OP_TY_STORE_BITFIELD:
@@ -210,38 +402,143 @@ static void ir_validate_op(struct ir_validate_state *state,
     case IR_OP_STORE_TY_LCL:
       VALIDATION_CHECKZ(op->store_bitfield.lcl, op,
                         "store ty lcl must have lcl");
-      ir_validate_lcl(state, op->store_bitfield.lcl);
+
+      VALIDATION_CHECK(
+          ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+                       &op->store_bitfield.lcl->var_ty),
+          op, "lcl %zu must have same type", op->store_bitfield.lcl->id);
       break;
     case IR_OP_STORE_TY_GLB:
       VALIDATION_CHECKZ(op->store_bitfield.glb, op,
                         "store ty glb must have glb");
+      VALIDATION_CHECK(
+          ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+                       &op->store_bitfield.glb->var_ty),
+          op, "glb %zu must have same type", op->store_bitfield.glb->id);
       break;
-    case IR_OP_STORE_TY_ADDR:
+    case IR_OP_STORE_TY_ADDR: {
       VALIDATION_CHECKZ(op->store_bitfield.addr, op,
                         "store ty addr must have addr");
-      VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->store_bitfield.addr->var_ty),
-          op, "store address must have type pointer");
+
+      // struct ir_op *addr = op->store_bitfield.addr;
+      // if (addr->ty == IR_OP_TY_ADDR) {
+      //   switch (addr->addr.ty) {
+      //   case IR_OP_ADDR_TY_LCL:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.lcl->var_ty) ||
+      //          addr->addr.lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+      //                          &addr->addr.lcl->var_ty),
+      //         op, "lcl %zu must have same type", addr->addr.lcl->id);
+      //     break;
+      //   case IR_OP_ADDR_TY_GLB:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.glb->var_ty) ||
+      //          addr->addr.glb->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+      //                          &addr->addr.glb->var_ty),
+      //         op, "glb %zu must have same type", addr->addr.glb->id);
+      //     break;
+      //   }
+      // }
       break;
     }
+    }
+
     VALIDATION_CHECKZ(!op->lcl, op, "stores should not have locals");
+    break;
+
+  case IR_OP_TY_LOAD:
+    ir_validate_operands_same_ty(state, op);
+
+    switch (op->load.ty) {
+    case IR_OP_LOAD_TY_LCL:
+      VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
+
+      VALIDATION_CHECK(
+          ir_var_ty_eq(state->unit, &op->var_ty, &op->load.lcl->var_ty), op,
+          "lcl %zu must have same type", op->load.lcl->id);
+      break;
+    case IR_OP_LOAD_TY_GLB:
+      VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
+
+      VALIDATION_CHECK(
+          ir_var_ty_eq(state->unit, &op->var_ty, &op->load.glb->var_ty), op,
+          "glb %zu must have same type", op->load.glb->id);
+      break;
+    case IR_OP_LOAD_TY_ADDR: {
+      VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");
+
+      // struct ir_op *addr = op->load.addr;
+      // if (addr->ty == IR_OP_TY_ADDR) {
+      //   switch (addr->addr.ty) {
+      //   case IR_OP_ADDR_TY_LCL:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.lcl->var_ty) ||
+      //          addr->addr.lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->var_ty,
+      //                          &addr->addr.lcl->var_ty),
+      //         op, "lcl %zu must have same type", addr->addr.lcl->id);
+      //     break;
+      //   case IR_OP_ADDR_TY_GLB:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.glb->var_ty) ||
+      //          addr->addr.glb->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->var_ty,
+      //                          &addr->addr.glb->var_ty),
+      //         op, "glb %zu must have same type", addr->addr.glb->id);
+      //     break;
+      //   }
+      // }
+      break;
+    }
+    }
     break;
   case IR_OP_TY_LOAD_BITFIELD:
     switch (op->load_bitfield.ty) {
     case IR_OP_LOAD_TY_LCL:
       VALIDATION_CHECKZ(op->load_bitfield.lcl, op, "load ty lcl must have lcl");
-      ir_validate_lcl(state, op->load_bitfield.lcl);
+
+      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->var_ty,
+                                    &op->load_bitfield.lcl->var_ty),
+                       op, "lcl %zu must have same type",
+                       op->load_bitfield.lcl->id);
       break;
     case IR_OP_LOAD_TY_GLB:
       VALIDATION_CHECKZ(op->load_bitfield.glb, op, "load ty glb must have glb");
+
+      VALIDATION_CHECK(ir_var_ty_eq(state->unit, &op->var_ty,
+                                    &op->load_bitfield.glb->var_ty),
+                       op, "glb %zu must have same type",
+                       op->load_bitfield.glb->id);
       break;
-    case IR_OP_LOAD_TY_ADDR:
+    case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load_bitfield.addr, op,
                         "load ty addr must have addr");
-      VALIDATION_CHECKZ(
-          validate_var_ty_is_pointer(state, &op->load_bitfield.addr->var_ty),
-          op, "load address must have type pointer");
+
+      // struct ir_op *addr = op->load_bitfield.addr;
+      // if (addr->ty == IR_OP_TY_ADDR) {
+      //   switch (addr->addr.ty) {
+      //   case IR_OP_ADDR_TY_LCL:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.lcl->var_ty) ||
+      //          addr->addr.lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->var_ty,
+      //                          &addr->addr.lcl->var_ty),
+      //         op, "lcl %zu must have same type", addr->addr.lcl->id);
+      //     break;
+      //   case IR_OP_ADDR_TY_GLB:
+      //     VALIDATION_CHECK(
+      //         (ir_var_ty_is_aggregate(&addr->addr.glb->var_ty) ||
+      //          addr->addr.glb->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
+      //             ir_var_ty_eq(state->unit, &op->var_ty,
+      //                          &addr->addr.glb->var_ty),
+      //         op, "glb %zu must have same type", addr->addr.glb->id);
+      //     break;
+      //   }
+      // }
       break;
+    }
     }
     break;
   case IR_OP_TY_ADDR:
@@ -259,24 +556,38 @@ static void ir_validate_op(struct ir_validate_state *state,
     }
     break;
   case IR_OP_TY_BR:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "br ops should not have a var ty");
     break;
   case IR_OP_TY_BR_COND:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "br.cond ops should not have a var ty");
     break;
   case IR_OP_TY_BR_SWITCH:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "br.switch ops should not have a var ty");
     break;
   case IR_OP_TY_RET:
+    // currently ret always returns none (do we want this?)
+    // ir_validate_operands_same_ty(state, op);
     break;
   case IR_OP_TY_CALL:
     VALIDATION_CHECKZ(func->flags & IR_FUNC_FLAG_MAKES_CALL, op,
                       "CALL op present but IR_FUNC_FLAG_MAKES_CALL not set");
     break;
   case IR_OP_TY_BITFIELD_EXTRACT:
+    ir_validate_operands_same_ty(state, op);
     break;
   case IR_OP_TY_BITFIELD_INSERT:
+    ir_validate_operands_same_ty(state, op);
     break;
   case IR_OP_TY_MEM_SET:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "mem.set ops should not have a var ty");
     break;
   case IR_OP_TY_MEM_COPY:
+    VALIDATION_CHECKZ(op->var_ty.ty == IR_VAR_TY_TY_NONE, op,
+                      "mem.copy ops should not have a var ty");
     break;
   case IR_OP_TY_ADDR_OFFSET:
     VALIDATION_CHECKZ(validate_var_ty_is_pointer(state, &op->var_ty), op,
@@ -384,10 +695,10 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
                      basicblock->split.false_target->id);
     break;
   case IR_BASICBLOCK_TY_MERGE:
-    VALIDATION_CHECK(
-        has_pred(basicblock, basicblock->merge.target), basicblock,
-        "basicblock has target %zu but it is not in preds for that basicblock",
-        basicblock->split.false_target->id);
+    VALIDATION_CHECK(has_pred(basicblock, basicblock->merge.target), basicblock,
+                     "basicblock has target %zu but it is not in preds for "
+                     "that basicblock",
+                     basicblock->split.false_target->id);
     break;
   case IR_BASICBLOCK_TY_SWITCH:
     for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
@@ -417,6 +728,8 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
         while (phi) {
           VALIDATION_CHECKZ(phi->ty == IR_OP_TY_PHI, phi,
                             "expected all phis in stmt to be phis");
+
+          ir_validate_op(state, func, phi);
 
           phi = phi->succ;
         }

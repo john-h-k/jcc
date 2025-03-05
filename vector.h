@@ -2,9 +2,6 @@
 #define VECTOR_H
 
 #include "alloc.h"
-#include "util.h"
-
-#include <stdlib.h>
 
 #define CLONE_AND_FREE_VECTOR(arena, vec, num, p) \
   do { \
@@ -19,14 +16,30 @@
 struct vector;
 
 struct vector *vector_create(size_t element_size);
+
+// TODO: make arena first param for consistency
 struct vector *vector_create_in_arena(size_t element_size, struct arena_allocator *arena);
 
 void vector_extend(struct vector *v, const void *data, size_t num_elems);
 
 void vector_ensure_capacity(struct vector *v, size_t capacity);
 
-void *vector_push_front(struct vector *v, const void *data);
+// TODO: consider macro like this, to enforce address taking and
+// prevent passing a `T*` to a vec of `T*` (because you want to pass a `T**`)
+// (C23)
+//   #define VECTOR_PUSH_BACK(v, data) \
+//     do {\
+//       typeof(data) d = data; \
+//       vector_push_back(v, &d); \
+//     } while (0);
+//
+// (C11)
+//   #define VECTOR_PUSH_BACK(v, data) \
+//       vector_push_back(v, &data);
+
 void *vector_push_back(struct vector *v, const void *data);
+
+void *vector_push_front(struct vector *v, const void *data);
 bool vector_empty(struct vector *v);
 size_t vector_length(struct vector *v);
 size_t vector_byte_size(struct vector *v);

@@ -1293,8 +1293,10 @@ struct ir_reg ir_reg_for_unique_idx(size_t idx);
 
 struct ir_dominance_frontier {
   // FIXME: exposing vector in API ugly
+  struct ir_basicblock **idoms;
   struct vector /* `struct ir_basicblock *` */ **idom_children;
   struct vector /* `struct ir_basicblock *` */ **domfs;
+  struct vector /* `struct ir_basicblock *` */ **dom_trees;
 };
 
 struct ir_dominance_frontier
