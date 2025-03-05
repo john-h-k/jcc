@@ -77,7 +77,7 @@ static bool try_get_preferred_reg(struct register_alloc_state *state,
     }
   }
 
-  if (candidate.ty == reg_ty) {
+  if (candidate.ty != IR_REG_TY_NONE && candidate.ty == reg_ty) {
     *reg = candidate;
     return true;
   }
@@ -477,11 +477,13 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
     struct reg_state reg = {                                                   \
         .live = NULL, .reg = {.ty = reg_ty, .idx = idx}, .free = true};        \
                                                                                \
-    vector_push_back(state.name##_reg_states, &reg);                           \
-                                                                               \
-    if (!info->has_ssp || info->ssp_reg != idx) {                              \
+    if (info->has_ssp && info->ssp_reg == idx) {                               \
+      reg.free = false;                                                        \
+    } else {                                                                   \
       vector_push_back(state.name##_reg_pool, &idx);                           \
     }                                                                          \
+                                                                               \
+    vector_push_back(state.name##_reg_states, &reg);                           \
   }
 
   // prioritise volatile
@@ -611,7 +613,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
     size_t pref_reg = SIZE_MAX;
     if (interval->op->flags & IR_OP_FLAG_FIXED_REG) {
-      DEBUG_ASSERT(interval->op->reg.ty != IR_REG_TY_NONE, "op had .fixed_reg but no reg was given");
+      DEBUG_ASSERT(interval->op->reg.ty != IR_REG_TY_NONE,
+                   "op had .fixed_reg but no reg was given");
       DEBUG_ASSERT(interval->op->reg.ty == reg_ty,
                    "fixed reg was not of right type. if you have moved fp to a "
                    "gp reg (or vice versa) you must also change op type");
@@ -665,7 +668,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       struct ir_reg preferred;
       if (try_get_preferred_reg(&state, reg_ty, interval, &preferred) &&
           !NTH_BIT(fixed_regs, preferred.idx) &&
-          ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
+          preferred.idx < vector_length(reg_states) && ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
         pref_reg = preferred.idx;
       } else {
         for (size_t j = vector_length(reg_pool); j; j--) {
@@ -702,7 +705,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       size_t *last_active = &state.active[state.num_active - 1];
       while (true) {
         struct ir_op *op = state.interval_data.intervals[*last_active].op;
-        if (reg_ty == IR_REG_TY_INTEGRAL && ir_var_ty_is_integral(&op->var_ty)) {
+        if (reg_ty == IR_REG_TY_INTEGRAL &&
+            ir_var_ty_is_integral(&op->var_ty)) {
           break;
         } else if (reg_ty == IR_REG_TY_FP && ir_var_ty_is_fp(&op->var_ty)) {
           break;
