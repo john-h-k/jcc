@@ -285,6 +285,18 @@ static void ir_validate_op(struct ir_validate_state *state,
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
 
+  switch (op->reg.ty) {
+  case IR_REG_TY_NONE:
+  case IR_REG_TY_SPILLED:
+  case IR_REG_TY_FLAGS:
+    break;
+  case IR_REG_TY_INTEGRAL:
+  case IR_REG_TY_FP:
+    // can raise this if needed if we are somehow on a platform with more than 1024 registers
+    VALIDATION_CHECK(op->reg.idx < 1024, op, "reg had type integral/fp but very large idx (%zu), likely badly initialied", op->reg.idx);
+    break;
+  }
+
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("should not have unknown ops");
@@ -428,7 +440,8 @@ static void ir_validate_op(struct ir_validate_state *state,
       //     VALIDATION_CHECK(
       //         (ir_var_ty_is_aggregate(&addr->addr.lcl->var_ty) ||
       //          addr->addr.lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
-      //             ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+      //             ir_var_ty_eq(state->unit,
+      //             &op->store_bitfield.value->var_ty,
       //                          &addr->addr.lcl->var_ty),
       //         op, "lcl %zu must have same type", addr->addr.lcl->id);
       //     break;
@@ -436,7 +449,8 @@ static void ir_validate_op(struct ir_validate_state *state,
       //     VALIDATION_CHECK(
       //         (ir_var_ty_is_aggregate(&addr->addr.glb->var_ty) ||
       //          addr->addr.glb->var_ty.ty == IR_VAR_TY_TY_ARRAY) ||
-      //             ir_var_ty_eq(state->unit, &op->store_bitfield.value->var_ty,
+      //             ir_var_ty_eq(state->unit,
+      //             &op->store_bitfield.value->var_ty,
       //                          &addr->addr.glb->var_ty),
       //         op, "glb %zu must have same type", addr->addr.glb->id);
       //     break;
@@ -455,18 +469,18 @@ static void ir_validate_op(struct ir_validate_state *state,
     switch (op->load.ty) {
     case IR_OP_LOAD_TY_LCL:
       // TODO: disabled, reenable (need to handle struct fields and stuff)
-    //   VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
+      //   VALIDATION_CHECKZ(op->load.lcl, op, "load ty lcl must have lcl");
 
-    //   VALIDATION_CHECK(
-    //       ir_var_ty_eq(state->unit, &op->var_ty, &op->load.lcl->var_ty), op,
-    //       "lcl %zu must have same type", op->load.lcl->id);
+      //   VALIDATION_CHECK(
+      //       ir_var_ty_eq(state->unit, &op->var_ty, &op->load.lcl->var_ty),
+      //       op, "lcl %zu must have same type", op->load.lcl->id);
       break;
     case IR_OP_LOAD_TY_GLB:
-    //   VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
+      //   VALIDATION_CHECKZ(op->load.glb, op, "load ty glb must have glb");
 
-    //   VALIDATION_CHECK(
-    //       ir_var_ty_eq(state->unit, &op->var_ty, &op->load.glb->var_ty), op,
-    //       "glb %zu must have same type", op->load.glb->id);
+      //   VALIDATION_CHECK(
+      //       ir_var_ty_eq(state->unit, &op->var_ty, &op->load.glb->var_ty),
+      //       op, "glb %zu must have same type", op->load.glb->id);
       break;
     case IR_OP_LOAD_TY_ADDR: {
       VALIDATION_CHECKZ(op->load.addr, op, "load ty addr must have addr");

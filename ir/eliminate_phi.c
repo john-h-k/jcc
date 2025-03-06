@@ -119,6 +119,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
         store_var_ty = lcl_ty;
       }
     } else if (move.from.idx == tmp_index) {
+      DEBUG_ASSERT(move.to.idx < SIZE_MAX / 2, "can't do stack<->stack move");
+
       struct ir_op *phi_op;
 
       if (has_free_reg) {
@@ -156,6 +158,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
         *op = phi_op;
       }
     } else if (move.from.idx >= SIZE_MAX / 2) {
+      DEBUG_ASSERT(move.to.idx < SIZE_MAX / 2, "can't do stack<->stack move");
+
       struct ir_lcl *lcl = move.from.metadata[0];
 
       struct ir_op *addr = ir_append_op(irb, stmt, IR_OP_TY_ADDR,
