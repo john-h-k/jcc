@@ -4,6 +4,7 @@
 #include "../hashtbl.h"
 #include "../vector.h"
 #include "ir.h"
+#include "prettyprint.h"
 
 struct bb_reg {
   size_t reg;
@@ -17,12 +18,22 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
                       size_t tmp_index, struct ir_lcl *spill_lcl,
                       enum ir_reg_ty reg_ty, bool early_moves) {
+  if (!moves.num_moves) {
+    return;
+  }
+
   struct ir_stmt *stmt;
   if (early_moves) {
+    printf("early moves for bb %zu\n", basicblock->id);
     stmt = basicblock->first;
     // DEBUG_ASSERT(stmt->flags & IR_STMT_FLAG_PHI, "expected phis");
+  } else if (basicblock->last && basicblock->last->pred && (basicblock->last->pred->flags & IR_STMT_FLAG_PHI_MOV)) {
+    printf("late moves for bb %zu\n", basicblock->id);
+    stmt = basicblock->last->pred;
   } else {
+    printf("late moves for bb %zu\n", basicblock->id);
     stmt = ir_insert_before_stmt(irb, basicblock->last);
+    stmt->flags |= IR_STMT_FLAG_PHI_MOV;
   }
 
   // size_t next_free;
@@ -236,23 +247,26 @@ void eliminate_phi(struct ir_func *irb) {
       basicblock = basicblock->succ;
       continue;
     } else {
+      // dead code
       basicblock = basicblock->succ;
       continue;
     }
 
-    if (stmt) {
+    if (stmt && stmt->flags & IR_STMT_FLAG_PHI) {
       // phis always at start of bb
       struct ir_op *op = stmt->first;
 
+      while (op) {
+        DEBUG_ASSERT(op->ty == IR_OP_TY_PHI, "expected phi in phi stmt");
 
-      while (op && op->ty == IR_OP_TY_PHI) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
-          struct ir_op *value = op->phi.values[i].value;
+          struct ir_phi_entry entry = op->phi.values[i];
+          struct ir_op *value = entry.value;
 
           struct ir_basicblock *mov_bb;
           size_t bb_move_id;
           if (moves_in_preds) {
-            mov_bb = value->stmt->basicblock;
+            mov_bb = entry.basicblock;
             bb_move_id = mov_bb->id * 2;
           } else {
             mov_bb = basicblock;
@@ -355,12 +369,13 @@ void eliminate_phi(struct ir_func *irb) {
 
       while (op && op->ty == IR_OP_TY_PHI) {
         for (size_t i = 0; i < op->phi.num_values; i++) {
-          struct ir_op *value = op->phi.values[i].value;
+          struct ir_phi_entry entry = op->phi.values[i];
+          struct ir_op *value = entry.value;
 
           struct ir_basicblock *mov_bb;
           size_t bb_move_id;
           if (moves_in_preds) {
-            mov_bb = value->stmt->basicblock;
+            mov_bb = entry.basicblock;
             bb_move_id = mov_bb->id * 2;
           } else {
             mov_bb = basicblock;

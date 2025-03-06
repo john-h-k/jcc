@@ -107,6 +107,12 @@ static void insert_active(struct register_alloc_state *state,
   }
 }
 
+struct call_save_lcl {
+  struct ir_lcl *lcl;
+  bool in_use;
+  size_t size;
+};
+
 struct lsra_reg_info {
   bool has_ssp;
   size_t ssp_reg;
@@ -119,6 +125,8 @@ struct lsra_reg_info {
   size_t fp_spill_reg;
 
   struct hashtbl *nonvolatile_registers_used;
+
+  struct vector *call_save_lcls;
 };
 
 static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb,
@@ -419,6 +427,49 @@ static void add_to_prefs_callback(struct ir_op **op,
   *pref = data->consumer->reg;
 }
 
+static struct ir_lcl *get_call_save_lcl(struct ir_func *irb,
+                                        struct lsra_reg_info *state,
+                                        struct ir_var_ty *var_ty
+                                      ) {
+  struct ir_var_ty_info info = ir_var_ty_info(irb->unit, var_ty);
+
+  size_t num_call_save_lcls = vector_length(state->call_save_lcls);
+  for (size_t i = 0; i < num_call_save_lcls; i++) {
+    struct call_save_lcl *save = vector_get(state->call_save_lcls, i);
+
+    if (!save->in_use) {
+      if (save->size < info.size) {
+        // expand this one
+        save->lcl->var_ty = *var_ty;
+        save->size = info.size;
+      }
+
+      save->in_use = true;
+      return save->lcl;
+    }
+  }
+
+  struct call_save_lcl new = {
+    .lcl = ir_add_local(irb, var_ty),
+    .size = info.size,
+    .in_use = true
+  };
+
+  new.lcl->flags |= IR_LCL_FLAG_CALL_SAVE;  
+
+  vector_push_back(state->call_save_lcls, &new);
+
+  return new.lcl;
+}
+
+static void clear_call_save_lcls(struct lsra_reg_info *state) {
+  size_t num_call_save_lcls = vector_length(state->call_save_lcls);
+  for (size_t i = 0; i < num_call_save_lcls; i++) {
+    struct call_save_lcl *save = vector_get(state->call_save_lcls, i);
+    save->in_use = false;
+  }
+}
+
 static struct interval_data register_alloc_pass(struct ir_func *irb,
                                                 struct lsra_reg_info *info) {
 
@@ -525,9 +576,7 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
 
         if ((reg.ty == IR_REG_TY_INTEGRAL && reg.idx < info->num_volatile_gp) ||
             (reg.ty == IR_REG_TY_FP && reg.idx < info->num_volatile_fp)) {
-
-          struct ir_lcl *lcl = ir_add_local(irb, &live->op->var_ty);
-          lcl->flags |= IR_LCL_FLAG_SPILL;
+          struct ir_lcl *lcl = get_call_save_lcl(irb, info, &live->op->var_ty);
 
           struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(irb->unit);
           struct ir_op *store_addr =
@@ -568,6 +617,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           };
         }
       }
+
+      clear_call_save_lcls(info);
     }
 
     if (interval->op->reg.ty == IR_REG_TY_FLAGS ||
@@ -668,7 +719,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
       struct ir_reg preferred;
       if (try_get_preferred_reg(&state, reg_ty, interval, &preferred) &&
           !NTH_BIT(fixed_regs, preferred.idx) &&
-          preferred.idx < vector_length(reg_states) && ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
+          preferred.idx < vector_length(reg_states) &&
+          ((struct reg_state *)vector_get(reg_states, preferred.idx))->free) {
         pref_reg = preferred.idx;
       } else {
         for (size_t j = vector_length(reg_pool); j; j--) {
@@ -773,7 +825,8 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
       .fp_spill_reg = fp_spill_reg,
 
       .nonvolatile_registers_used = nonvolatile_registers_used,
-  };
+
+      .call_save_lcls = vector_create(sizeof(struct call_save_lcl))};
 
   BEGIN_SUB_STAGE("REGALLOC");
 

@@ -649,6 +649,7 @@ void ir_initialise_stmt(struct ir_stmt *stmt, size_t id) {
   stmt->pred = NULL;
   stmt->succ = NULL;
   stmt->flags = IR_STMT_FLAG_NONE;
+  stmt->comment = NULL;
 }
 
 void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
@@ -1601,6 +1602,7 @@ struct ir_stmt *ir_alloc_stmt(struct ir_func *irb,
   stmt->succ = NULL;
   stmt->first = NULL;
   stmt->last = NULL;
+  stmt->comment = NULL;
 
   if (basicblock->last) {
     basicblock->last->succ = stmt;

@@ -7,7 +7,8 @@
 #include "log.h"
 #include "util.h"
 
-static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty, void *cb_metadata) {
+static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
+                             void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
 
   // if (cb->op->ty == IR_OP_TY_PHI) {
@@ -16,9 +17,60 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
-  size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST) ? cb->op->id + 1 : cb->op->id;
+  size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST)
+                      ? cb->op->id + 1
+                      : cb->op->id;
   interval->end = MAX(interval->end, op_end);
 }
+
+#ifndef NDEBUG
+struct validate_intervals_metadata {
+  struct ir_func *func;
+  struct ir_op *consumer;
+  struct interval_data intervals;
+};
+
+static void validate_intervals_cb(struct ir_op **op,
+                                  UNUSED enum ir_op_use_ty ty, void *metadata) {
+  struct validate_intervals_metadata *data = metadata;
+
+  struct interval *interval = &data->intervals.intervals[(*op)->id];
+
+  if (data->consumer->ty == IR_OP_TY_PHI) {
+    struct ir_op_phi phi = data->consumer->phi;
+
+    for (size_t i = 0; i < phi.num_values; i++) {
+      struct ir_phi_entry entry = phi.values[i];
+
+      if (entry.value == *op) {
+        if (interval->start > entry.basicblock->last->last->id ||
+          interval->end < entry.basicblock->last->last->id) {
+        }
+      }
+    }
+
+  } else if (interval->start > data->consumer->id ||
+      interval->end < data->consumer->id) {
+
+    debug_print_ir_func(stderr, data->func, print_ir_intervals, data->intervals.intervals);
+    BUG("op %zu interval (%zu, %zu) but used by op %zu", (*op)->id, interval->start,
+        interval->end, data->consumer->id);
+  }
+}
+
+static void validate_intervals(struct ir_func *func,
+                               struct interval_data data) {
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    struct validate_intervals_metadata metadata = {.func = func, .consumer = op,
+                                                   .intervals = data};
+
+    ir_walk_op_uses(op, validate_intervals_cb, &metadata);
+  }
+}
+#endif
 
 /* Builds the intervals for each value in the SSA representation
      - IDs are rebuilt before calling this so that op ID can be used as an
@@ -57,8 +109,9 @@ struct interval_data construct_intervals(struct ir_func *irb) {
           interval->end = interval->start;
         }
 
-        // i originally had this, but i don't think its needed? the range is still long enough
-        // its just that it will unnecessarily fill up a reg spot?
+        // i originally had this, but i don't think its needed? the range is
+        // still long enough its just that it will unnecessarily fill up a reg
+        // spot?
 
         // removing causes `./tests/struct_arg.c` to fail
         if (op->flags & IR_OP_FLAG_ETERNAL) {
@@ -101,12 +154,14 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
             // force dependent to live until end of the bb
 
-            // FIXME: awkward scenario. Some tests pass using the first line only, some only with the second line
-            // it also varies across arm64 vs x64...
+            // FIXME: awkward scenario. Some tests pass using the first line
+            // only, some only with the second line it also varies across arm64
+            // vs x64...
 
-            dependent_interval->end =
-                op->phi.values[i].basicblock->last->last->id;
-            // dependent_interval->end = MAX(op->id, op->phi.values[i].basicblock->last->last->id);
+            // dependent_interval->end =
+            //     op->phi.values[i].basicblock->last->last->id;
+            dependent_interval->end = MAX(dependent_interval->end, MAX(op->id,
+            op->phi.values[i].basicblock->last->last->id));
           }
         }
 
@@ -118,6 +173,10 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
     basicblock = basicblock->succ;
   }
+
+#ifndef NDEBUG
+  validate_intervals(irb, data);
+#endif
 
   return data;
 }
@@ -172,7 +231,6 @@ void print_ir_intervals(FILE *file, struct ir_op *op,
   //   print_live_regs(file, &interval->op->reg_usage);
   // }
 }
-
 
 int sort_interval_by_start_point(const void *a, const void *b) {
   const struct interval *a_int = (const struct interval *)a;
