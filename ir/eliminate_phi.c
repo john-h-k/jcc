@@ -24,14 +24,10 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
   struct ir_stmt *stmt;
   if (early_moves) {
-    printf("early moves for bb %zu\n", basicblock->id);
     stmt = basicblock->first;
-    // DEBUG_ASSERT(stmt->flags & IR_STMT_FLAG_PHI, "expected phis");
   } else if (basicblock->last && basicblock->last->pred && (basicblock->last->pred->flags & IR_STMT_FLAG_PHI_MOV)) {
-    printf("late moves for bb %zu\n", basicblock->id);
     stmt = basicblock->last->pred;
   } else {
-    printf("late moves for bb %zu\n", basicblock->id);
     stmt = ir_insert_before_stmt(irb, basicblock->last);
     stmt->flags |= IR_STMT_FLAG_PHI_MOV;
   }
