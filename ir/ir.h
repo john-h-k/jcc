@@ -605,10 +605,13 @@ enum ir_stmt_flags {
   IR_STMT_FLAG_NONE = 0,
 
   // contains phi and only phi nodes
-  IR_STMT_FLAG_PHI = 1,
+  IR_STMT_FLAG_PHI = 1 << 0,
 
   // contains param and only param nodes
-  IR_STMT_FLAG_PARAM = 2,
+  IR_STMT_FLAG_PARAM = 1 << 1,
+
+  // phi moves
+  IR_STMT_FLAG_PHI_MOV = 1 << 2,
 };
 
 // set of ops with no SEQ_POINTs
@@ -632,6 +635,8 @@ struct ir_stmt {
   // last is the dominating op of the statement, and can be used as its "root".
   // all other ops in the statement are reachable from it
   struct ir_op *last;
+
+  const char *comment;
 };
 
 // ensures the basic block ends with an appropriate branch and does not contain
@@ -813,6 +818,9 @@ enum ir_lcl_flags {
   // local has been promoted, but still exists as it is a param, and so `lower` is free to remove it
   // if the ABI keeps the param in registers
   IR_LCL_FLAG_PROMOTED = 1 << 5,
+
+  // saving a register across a call boundary
+  IR_LCL_FLAG_CALL_SAVE = 1 << 6,
 };
 
 enum ir_lcl_alloc_ty {
@@ -1285,6 +1293,15 @@ struct ir_op_use_map {
   struct ir_lcl_usage *lcl_use_datas;
   size_t num_lcl_use_datas;
 };
+
+// struct ir_rewrite_op {
+//   struct ir_op *op;
+//   struct ir_op *new;
+// };
+
+// struct ir_rewrite_info {
+//   struct ir_op *
+// };
 
 struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func);
 

@@ -3,6 +3,7 @@
 #include "../graphwriter.h"
 #include "../util.h"
 #include "ir.h"
+
 #include <wchar.h>
 
 static const char *unary_op_string(enum ir_op_unary_op_ty ty) {
@@ -680,19 +681,25 @@ static void prettyprint_begin_visit_stmt_file(UNUSED_ARG(struct ir_func *irb),
                                               struct ir_stmt *stmt,
                                               void *metadata) {
   struct prettyprint_file_metadata *fm = metadata;
+
+  if (stmt->comment) {
+    fprintf(fm->file, "// %s\n", stmt->comment);
+  }
+
   fprintf(fm->file, "STMT ");
   if (stmt->flags) {
- fprintf(fm->file, "[ ");
+    fprintf(fm->file, "[ ");
 
     bool first = true;
 #define PRINT_FLAG(name, str)                                                  \
-  if (stmt->flags & IR_STMT_FLAG_##name) {                                         \
+  if (stmt->flags & IR_STMT_FLAG_##name) {                                     \
     fprintf(fm->file, first ? "." str : ", ." str);                            \
     first = false;                                                             \
   }
 
     PRINT_FLAG(PHI, "phi");
     PRINT_FLAG(PARAM, "param");
+    PRINT_FLAG(PHI_MOV, "phi_mov");
 
 #undef PRINT_FLAG
 
@@ -1028,7 +1035,8 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR: {
     struct ir_var_ty var_ty = var_value->var_ty;
-    DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY, "expected IR_VAR_VALUE_TY_STR to be an array");
+    DEBUG_ASSERT(var_ty.ty == IR_VAR_TY_TY_ARRAY,
+                 "expected IR_VAR_VALUE_TY_STR to be an array");
 
     struct ir_var_ty ch_ty = *var_ty.array.underlying;
 
@@ -1037,9 +1045,12 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
       fprint_str(file, var_value->str_value.value, var_value->str_value.len);
     } else if (ch_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
                ch_ty.primitive == IR_VAR_PRIMITIVE_TY_I32) {
-      // it has now been given its real size (in chars), so pass byte length to wstr
-      // FIXME: we should have `wstr` take # of chars and parse/typechk should hold the right number of chars, not byte length
-      fprint_wstr(file, var_value->str_value.value, var_value->str_value.len * 4);
+      // it has now been given its real size (in chars), so pass byte length to
+      // wstr
+      // FIXME: we should have `wstr` take # of chars and parse/typechk should
+      // hold the right number of chars, not byte length
+      fprint_wstr(file, var_value->str_value.value,
+                  var_value->str_value.len * 4);
     } else {
       BUG("don't know how to print str (expected I8 or I32 array)");
     }
@@ -1202,11 +1213,28 @@ void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
 
   debug_print_var_ty_string(file, lcl->func->unit, &lcl->var_ty);
 
-  if (lcl->flags & IR_LCL_FLAG_SPILL) {
-    fprintf(file, "    (SPILL),\n");
-  } else {
-    fprintf(file, ",\n");
+  if (lcl->flags) {
+    fprintf(file, " [ ");
+
+    bool first = true;
+#define PRINT_FLAG(name, str)                                                  \
+  if (lcl->flags & IR_LCL_FLAG_##name) {                                       \
+    fprintf(file, first ? "." str : ", ." str);                                \
+    first = false;                                                             \
   }
+
+    PRINT_FLAG(SPILL, "spill");
+    PRINT_FLAG(ZEROED, "zeroed");
+    PRINT_FLAG(PARAM, "param");
+    PRINT_FLAG(PROMOTED, "promoted");
+    PRINT_FLAG(CALL_SAVE, "call_save");
+
+#undef PRINT_FLAG
+
+    fprintf(file, " ]");
+  }
+
+  fprintf(file, ",\n");
 }
 
 void debug_print_glb(FILE *file, struct ir_glb *glb,
