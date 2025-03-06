@@ -873,5 +873,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
 
   DEBUG_ASSERT(idx == num_nonvolatile_used, "hashtbl size mismatch");
 
+  vector_free(&lsra_reg_info.call_save_lcls);
   hashtbl_free(&nonvolatile_registers_used);
 }
