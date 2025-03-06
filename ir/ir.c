@@ -5,6 +5,7 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
+#include "prettyprint.h"
 
 enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
@@ -3027,32 +3028,61 @@ void ir_alloc_locals(struct ir_func *func) {
 }
 
 void ir_simplify_phis(struct ir_func *func) {
-  struct ir_op_use_map use_map = ir_build_op_uses_map(func);
-
   // FIXME: phi gen is shit, we should do it better
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-    if (stmt->flags & IR_STMT_FLAG_PHI) {
-      struct ir_op *op = stmt->first;
-      while (op) {
-        if (op->phi.num_values == 1) {
-          struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
-          for (size_t i = 0; i < usage.num_uses; i++) {
-            *usage.uses[i].op = op->phi.values[0].value;
+  bool improved = true;
+
+  while (improved) {
+    struct ir_op_use_map use_map = ir_build_op_uses_map(func);
+
+    improved = false;
+    struct ir_basicblock *basicblock = func->first;
+    while (basicblock) {
+      struct ir_stmt *stmt = basicblock->first;
+      if (stmt->flags & IR_STMT_FLAG_PHI) {
+        struct ir_op *op = stmt->first;
+        while (op) {
+          if (op->phi.num_values == 1) {
+            struct ir_op_usage usage = use_map.op_use_datas[op->id];
+
+            for (size_t i = 0; i < usage.num_uses; i++) {
+              *usage.uses[i].op = op->phi.values[0].value;
+            }
+
+            struct ir_op *succ = op->succ;
+            ir_detach_op(func, op);
+            op = succ;
+            improved = true;
+            continue;
+          } else if (op->phi.num_values == 2) {
+            struct ir_op *other = NULL;
+
+            if (op->phi.values[0].value == op) {
+              other = op->phi.values[1].value;
+            } else if (op->phi.values[1].value == op) {
+              other = op->phi.values[0].value;
+            }
+
+            if (other) {
+              struct ir_op_usage usage = use_map.op_use_datas[op->id];
+
+              for (size_t i = 0; i < usage.num_uses; i++) {
+                *usage.uses[i].op = other;
+              }
+
+              struct ir_op *succ = op->succ;
+              ir_detach_op(func, op);
+              op = succ;
+              improved = true;
+              continue;
+            }
           }
 
-          struct ir_op *succ = op->succ;
-          ir_detach_op(func, op);
-          op = succ;
-          continue;
+          op = op->succ;
         }
-
-        op = op->succ;
       }
-    }
 
-    basicblock = basicblock->succ;
+      basicblock = basicblock->succ;
+    }
   }
 }
