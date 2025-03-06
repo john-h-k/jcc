@@ -237,10 +237,8 @@ static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
     hashtbl_insert(stores, &key, &phi);
 
     for (size_t i = 0; i < basicblock->num_preds; i++) {
-      struct ir_basicblock *pred = basicblock->preds[i];
-
       struct ir_build_phi_build pred_build = {.entry = &phi->phi.values[i],
-                                              .pred = pred};
+                                         .pred = basicblock->preds[i]};
 
       vector_push_back(preds, &pred_build);
     }
@@ -440,6 +438,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       }
     }
   }
+
+  ir_simplify_phis(func);
 
   // can't reuse map from parent because we have added ops
   struct ir_op_use_map use_map = ir_build_op_uses_map(func);

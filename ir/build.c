@@ -3337,34 +3337,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
     basicblock = basicblock->succ;
   }
 
-  struct ir_op_use_map use_map = ir_build_op_uses_map(builder->func);
-
-  // FIXME: phi gen is shit, we should do it better
-  basicblock = builder->func->first;
-  while (basicblock) {
-    struct ir_stmt *stmt = basicblock->first;
-    if (stmt->flags & IR_STMT_FLAG_PHI) {
-      struct ir_op *op = stmt->first;
-      while (op) {
-        if (op->phi.num_values == 1) {
-          struct ir_op_usage usage = use_map.op_use_datas[op->id];
-
-          for (size_t i = 0; i < usage.num_uses; i++) {
-            *usage.uses[i].op = op->phi.values[0].value;
-          }
-
-          struct ir_op *succ = op->succ;
-          ir_detach_op(builder->func, op);
-          op = succ;
-          continue;
-        }
-
-        op = op->succ;
-      }
-    }
-
-    basicblock = basicblock->succ;
-  }
+  ir_simplify_phis(builder->func);
 
   basicblock = builder->func->first;
   while (basicblock) {

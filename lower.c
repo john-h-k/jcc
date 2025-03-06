@@ -74,22 +74,12 @@ static void remove_critical_edges(struct ir_func *irb) {
           while (phi) {
             DEBUG_ASSERT(phi->ty == IR_OP_TY_PHI, "expected phi");
 
-            struct ir_op *int_phi = ir_insert_phi(irb, intermediate, phi->var_ty);
-            int_phi->reg = phi->reg;
-            int_phi->phi = (struct ir_op_phi){
-                .num_values = 1,
-                .values =
-                    arena_alloc(irb->arena, sizeof(*int_phi->phi.values))};
-
             bool found = false;
             for (size_t j = 0; j < phi->phi.num_values; j++) {
               struct ir_phi_entry *entry = &phi->phi.values[j];
 
               if (entry->basicblock == pred) {
-                int_phi->phi.values[0] = (struct ir_phi_entry){
-                    .basicblock = pred, .value = entry->value};
-                *entry = (struct ir_phi_entry){.basicblock = intermediate,
-                                               .value = int_phi};
+                entry->basicblock = intermediate;
                 found = true;
                 break;
               }

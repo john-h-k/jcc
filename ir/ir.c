@@ -2991,8 +2991,10 @@ ir_compute_dominance_frontier(struct ir_func *func) {
 
   compute_df_recursive(entry, idoms.idoms, domf, children);
 
-  return (struct ir_dominance_frontier){
-      .idoms = idoms.idoms, .idom_children = children, .domfs = domf, .dom_trees = dom_trees};
+  return (struct ir_dominance_frontier){.idoms = idoms.idoms,
+                                        .idom_children = children,
+                                        .domfs = domf,
+                                        .dom_trees = dom_trees};
 }
 
 void ir_alloc_locals(struct ir_func *func) {
@@ -3021,5 +3023,36 @@ void ir_alloc_locals(struct ir_func *func) {
     func->total_locals_size += lcl_size;
 
     lcl = lcl->succ;
+  }
+}
+
+void ir_simplify_phis(struct ir_func *func) {
+  struct ir_op_use_map use_map = ir_build_op_uses_map(func);
+
+  // FIXME: phi gen is shit, we should do it better
+  struct ir_basicblock *basicblock = func->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+    if (stmt->flags & IR_STMT_FLAG_PHI) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        if (op->phi.num_values == 1) {
+          struct ir_op_usage usage = use_map.op_use_datas[op->id];
+
+          for (size_t i = 0; i < usage.num_uses; i++) {
+            *usage.uses[i].op = op->phi.values[0].value;
+          }
+
+          struct ir_op *succ = op->succ;
+          ir_detach_op(func, op);
+          op = succ;
+          continue;
+        }
+
+        op = op->succ;
+      }
+    }
+
+    basicblock = basicblock->succ;
   }
 }
