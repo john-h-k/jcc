@@ -301,6 +301,8 @@ static void ir_validate_op(struct ir_validate_state *state,
   case IR_OP_TY_UNKNOWN:
     BUG("should not have unknown ops");
   case IR_OP_TY_PHI:
+    VALIDATION_CHECKZ(op->phi.num_values > 1, op, "phi with <2 operands");
+
     ir_validate_operands_same_ty(state, op);
 
     for (size_t i = 0; i < op->phi.num_values; i++) {

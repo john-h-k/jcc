@@ -1319,6 +1319,8 @@ struct ir_dominance_frontier {
 struct ir_dominance_frontier
 ir_compute_dominance_frontier(struct ir_func *func);
 
+void ir_simplify_phis(struct ir_func *func);
+
 // TODO: this should really be somewhere else
 
 struct location {
