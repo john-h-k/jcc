@@ -8,6 +8,10 @@ int main() {
   int c = 0;
   int d = 0;
 
+  if (!a && ++b) {
+    c = 5;
+  }
+
   if (a || ++b) {
     d = 7;
   }
