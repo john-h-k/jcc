@@ -663,6 +663,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
     }
 
     // HACK: 
+    // we don't really mean a "spill" here anyway
     to_spill->lcl = NULL;
     to_spill->flags &= ~IR_OP_FLAG_SPILLED;
     op->lcl = NULL;
@@ -3415,6 +3416,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
   vector_free(&builder->jumps);
   vector_free(&builder->switch_cases);
+  hashtbl_free(&builder->var_writes);
   var_refs_free(&builder->var_refs);
 
   return builder->func;
