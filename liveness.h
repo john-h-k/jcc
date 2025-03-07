@@ -17,11 +17,6 @@ struct interval_data {
   size_t num_intervals;
 };
 
-struct interval_callback_data {
-  struct ir_op *op;
-  struct interval_data *data;
-};
-
 struct interval_data construct_intervals(struct ir_func *irb);
 
 void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage);

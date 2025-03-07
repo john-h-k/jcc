@@ -2972,9 +2972,9 @@ ir_compute_dominance_frontier(struct ir_func *func) {
   struct ir_idoms idoms = compute_idoms(func);
 
   for (size_t i = 0; i < func->basicblock_count; i++) {
-    domf[i] = vector_create(sizeof(struct ir_basicblock *));
-    children[i] = vector_create(sizeof(struct ir_basicblock *));
-    dom_trees[i] = vector_create(sizeof(struct ir_basicblock *));
+    domf[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    children[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    dom_trees[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
   }
 
   struct ir_basicblock *entry = func->first;
