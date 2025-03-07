@@ -65,9 +65,9 @@ static void validate_op_order(struct ir_op **ir,
 
   struct ir_op *consumer = data->consumer;
 
-  VALIDATION_CHECKZ((*ir)->id != DETACHED_OP, *ir, "op is detached!");
+  VALIDATION_CHECKZ((*ir)->id != DETACHED_OP, consumer, "op uses detached op!");
 
-  VALIDATION_CHECKZ((*ir)->stmt, *ir, "op has no stmt!");
+  VALIDATION_CHECKZ((*ir)->stmt, consumer, "op uses op with no stmt!");
 
   if (consumer->ty == IR_OP_TY_PHI || (consumer->flags & IR_OP_FLAG_PHI_MOV)) {
     // these can work across time
@@ -284,6 +284,8 @@ static void ir_validate_op(struct ir_validate_state *state,
                            struct ir_func *func, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
+
+  VALIDATION_CHECKZ(op->stmt, op, "op has no stmt");
 
   switch (op->reg.ty) {
   case IR_REG_TY_NONE:

@@ -29,8 +29,9 @@ static void remove_critical_edges(struct ir_func *irb) {
         }
 
         // we have a critical edge
+        // insert it after the later of the two blocks because this helps liveness calculations
         struct ir_basicblock *intermediate =
-            ir_insert_before_basicblock(irb, basicblock);
+            ir_insert_after_basicblock(irb, basicblock->id > pred->id ? basicblock : pred);
         intermediate->ty = IR_BASICBLOCK_TY_MERGE;
         intermediate->merge =
             (struct ir_basicblock_merge){.target = basicblock};

@@ -585,15 +585,9 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           struct ir_op *load_addr =
               ir_insert_after_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
 
-          if (info->has_ssp) {
-            store_addr->reg =
-                (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg};
-            load_addr->reg =
-                (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = info->ssp_reg};
-          } else {
-            store_addr->flags |= IR_OP_FLAG_CONTAINED;
-            load_addr->flags |= IR_OP_FLAG_CONTAINED;
-          }
+          // FIXME: need to make sure the save locals are allocated low enough on the stack that they can definitely be contained
+          store_addr->flags |= IR_OP_FLAG_CONTAINED;
+          load_addr->flags |= IR_OP_FLAG_CONTAINED;
 
           store_addr->addr =
               (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};

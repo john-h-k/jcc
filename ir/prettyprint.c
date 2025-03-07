@@ -312,7 +312,7 @@ void debug_print_ir_reg(FILE *file, struct ir_reg reg) {
 
 static void debug_lhs(FILE *file, struct ir_func *irb, struct ir_op *ir) {
   fprintf(file, "%%%zu (", ir->id);
-  debug_print_var_ty_string(file, irb->unit, &ir->var_ty);
+  debug_print_var_ty_string(file, irb ? irb->unit : NULL, &ir->var_ty);
   fprintf(file, ") = ");
 }
 
@@ -836,6 +836,10 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
 
   fprintf(fm->file, " | ");
 
+  if (op->lcl) {
+    fprintf(fm->file, "has lcl");
+  }
+
   if (!ir_op_produces_value(op)) {
     fprintf(fm->file, "                ");
   } else {
@@ -1299,22 +1303,45 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object) {
   case IR_OBJECT_TY_VAR:
     debug_print_ir_var(file, object->var);
     break;
-  case IR_OBJECT_TY_BASICBLOCK:
-    fprintf(file, "In func %s: \n", object->basicblock->func->name);
-    debug_print_basicblock(file, object->stmt->basicblock->func,
-                           object->basicblock, NULL, NULL);
+  case IR_OBJECT_TY_BASICBLOCK: {
+    struct ir_func *func = object->basicblock->func;
+    if (func) {
+      fprintf(file, "In func %s: \n", func->name);
+    } else {
+      fprintf(file, "No func, likely detached\n");
+    }
+    debug_print_basicblock(file, func, object->basicblock, NULL, NULL);
     break;
-  case IR_OBJECT_TY_STMT:
-    fprintf(file, "In func %s, basicblock @ %zu: \n",
-            object->stmt->basicblock->func->name, object->stmt->basicblock->id);
-    debug_print_stmt(file, object->stmt->basicblock->func, object->stmt, NULL,
-                     NULL);
+  }
+  case IR_OBJECT_TY_STMT: {
+    struct ir_basicblock *basicblock = object->stmt->basicblock;
+    struct ir_func *func;
+    if (basicblock) {
+      func = basicblock->func;
+      fprintf(file, "In func %s, basicblock @ %zu: \n", basicblock->func->name,
+              basicblock->id);
+    } else {
+      func = NULL;
+      fprintf(file, "No basicblock, likely detached\n");
+    }
+
+    debug_print_stmt(file, func, object->stmt, NULL, NULL);
     break;
-  case IR_OBJECT_TY_OP:
-    fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n",
-            object->op->stmt->basicblock->func->name,
-            object->op->stmt->basicblock->id, object->op->stmt->id);
-    debug_print_op(file, object->op->stmt->basicblock->func, object->op);
+  }
+  case IR_OBJECT_TY_OP: {
+    struct ir_stmt *stmt = object->op->stmt;
+    struct ir_func *func;
+    if (stmt) {
+      func = stmt->basicblock->func;
+      fprintf(file, "In func %s, basicblock @ %zu, stmt $ %zu: \n",
+              stmt->basicblock->func->name, stmt->basicblock->id, stmt->id);
+    } else {
+      func = NULL;
+      fprintf(file, "No stmt, likely detached\n");
+    }
+
+    debug_print_op(file, func, object->op);
     break;
+  }
   }
 }

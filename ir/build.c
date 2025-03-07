@@ -1,6 +1,7 @@
 #include "build.h"
 
 #include "../alloc.h"
+#include "../hashtbl.h"
 #include "../typechk.h"
 #include "../util.h"
 #include "../var_table.h"
@@ -64,6 +65,9 @@ struct ir_func_builder {
 
   struct ir_label *labels;
 
+  struct hashtbl *var_writes;
+  struct hashtbl *phis;
+
   struct vector *jumps;
   struct vector *switch_cases;
 };
@@ -88,8 +92,9 @@ static struct var_key get_var_key(const struct td_var *var,
 }
 
 static void get_var_ref(struct ir_func_builder *irb,
-                        struct ir_basicblock *basicblock, struct td_var *var,
-                        struct var_key *key, struct var_ref **ref) {
+                        struct ir_basicblock *basicblock,
+                        const struct td_var *var, struct var_key *key,
+                        struct var_ref **ref) {
   *ref = NULL;
 
   // this is when we are _reading_ from the var
@@ -629,6 +634,11 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
                              bool *member_is_bitfield,
                              struct ir_bitfield *member_bitfield);
 
+static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
+                                      struct ir_stmt **stmt,
+                                      struct ir_var_ty var_ty,
+                                      struct td_var *var);
+
 static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
                                                 struct ir_stmt **stmt,
                                                 struct td_var *var) {
@@ -642,24 +652,30 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
   op->ty = IR_OP_TY_ADDR;
 
   switch (ref->ty) {
-  case VAR_REF_TY_SSA:
-    ref->ty = VAR_REF_TY_LCL;
+  case VAR_REF_TY_SSA: {
+    struct ir_op *to_spill = build_ir_for_var(irb, stmt, ref->op->var_ty, var);
 
-    if (ref->op) {
-      ir_spill_op(irb->func, ref->op);
-      ref->lcl = ref->op->lcl;
+    if (to_spill) {
+      ir_spill_op(irb->func, to_spill);
+      ref->lcl = to_spill->lcl;
     } else {
       ref->lcl = ir_add_local(irb->func, &var_ty);
-      op->lcl = ref->lcl;
     }
+
+    // HACK: 
+    to_spill->lcl = NULL;
+    to_spill->flags &= ~IR_OP_FLAG_SPILLED;
+    op->lcl = NULL;
+
+    ref->ty = VAR_REF_TY_LCL;
 
     op->var_ty = var_ty;
     op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
     break;
+  }
   case VAR_REF_TY_LCL:
-    if (!ref->lcl) {
-      ref->lcl = ir_add_local(irb->func, &var_ty);
-    }
+    DEBUG_ASSERT(ref->lcl, "VAR_REF_TY_LCL but no lcl");
+    // ref->lcl = ir_add_local(irb->func, &var_ty);
 
     op->var_ty = var_ty;
     op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = ref->lcl};
@@ -1176,16 +1192,19 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
       .values = arena_alloc(irb->arena, sizeof(struct ir_op_phi) * 2),
   };
 
-  phi->phi.values[0] =
-      (struct ir_phi_entry){.basicblock = false_op->stmt->basicblock, .value = false_op};
-  phi->phi.values[1] =
-      (struct ir_phi_entry){.basicblock = true_op->stmt->basicblock, .value = true_op};
+  phi->phi.values[0] = (struct ir_phi_entry){
+      .basicblock = false_op->stmt->basicblock, .value = false_op};
+  phi->phi.values[1] = (struct ir_phi_entry){
+      .basicblock = true_op->stmt->basicblock, .value = true_op};
 
   struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
 
   *stmt = end_stmt;
   return phi;
 }
+
+static void add_var_write(struct ir_func_builder *irb, struct ir_op *op,
+                          struct td_var *var);
 
 static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
@@ -1217,14 +1236,13 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
 
   case TD_VAR_VAR_TY_VAR: {
     // this is when we are _reading_ from the var
-
     if (ref) {
       switch (ref->ty) {
       case VAR_REF_TY_SSA:
         return ref->op;
       case VAR_REF_TY_LCL: {
-        DEBUG_ASSERT(ref->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
-                     ref->op->id);
+        // DEBUG_ASSERT(ref->lcl, "VAR_REF_TY_LCL but op %zu had no lcl",
+        //              ref->op->id);
 
         // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
         // same with functions
@@ -1267,13 +1285,13 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
   }
   }
 
-  // invariant_assert(var_var_ty.ty != TD_VAR_TY_TY_UNKNOWN,
-  //                  "can't have unknown tyref in phi lowering");
-
   // we generate an empty phi and then after all blocks are built we insert the
   // correct values
   // all phis appear at the start of their bb as they execute ""
   struct ir_op *phi = ir_insert_phi(irb->func, (*stmt)->basicblock, var_ty);
+  phi->phi = (struct ir_op_phi){0};
+
+  add_var_write(irb, phi, var);
 
   phi->metadata = arena_alloc(irb->arena, sizeof(struct td_var));
   *(struct td_var *)phi->metadata = *var;
@@ -1431,6 +1449,22 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
   return op;
 }
 
+static void add_var_write(struct ir_func_builder *irb, struct ir_op *op,
+                          struct td_var *var) {
+  // TODO: consider merging this with var_refs
+  // FIXME: inefficient, we need an easy lookup then insert in hashtbl
+  struct vector **p = hashtbl_lookup(irb->var_writes, var);
+  struct vector *writes;
+  if (p) {
+    writes = *p;
+  } else {
+    writes = vector_create_in_arena(sizeof(struct ir_op *), irb->arena);
+    hashtbl_insert(irb->var_writes, var, &writes);
+  }
+
+  vector_push_back(writes, &op);
+}
+
 static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
                               struct ir_op *op, struct td_var *var) {
   struct var_key key;
@@ -1444,6 +1478,8 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   switch (ref->ty) {
   case VAR_REF_TY_SSA:
     ref->op = op;
+
+    add_var_write(irb, op, var);
     return op;
   case VAR_REF_TY_LCL: {
     // FIXME: is this right
@@ -3003,11 +3039,11 @@ static void gen_var_phis(struct ir_func_builder *irb,
     struct ir_op *op;
 
     struct var_key key = get_var_key(var, basicblock);
-    struct var_ref *ref = var_refs_get(irb->var_refs, &key);
+    struct var_ref *ref = var_refs_get_for_basicblock(irb->var_refs, &key);
 
     if (ref) {
-      DEBUG_ASSERT(ref->ty == VAR_REF_TY_SSA,
-                   "non-ssa ref ty makes no sense for phi");
+      // DEBUG_ASSERT(ref->ty == VAR_REF_TY_SSA,
+      //              "non-ssa ref ty makes no sense for phi");
 
       op = ref->op;
     } else {
@@ -3137,6 +3173,22 @@ static void validate_op_tys_callback(struct ir_op **op,
   }
 }
 
+static void hash_td_var(struct hasher *hasher, const void *o) {
+  const struct td_var *var = o;
+
+  hasher_hash_str(hasher, var->identifier);
+  hasher_hash_integer(hasher, var->scope, sizeof(var->scope));
+}
+
+static bool eq_td_var(const void *l, const void *r) {
+  const struct td_var *vl = l;
+  const struct td_var *vr = r;
+
+  return vl->scope == vr->scope && vl->ty == vr->ty &&
+         !strcmp(vl->identifier, vr->identifier);
+}
+
+
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct arena_allocator *arena,
                                              struct td_funcdef *def,
@@ -3163,6 +3215,9 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       .unit = unit,
       .func = f,
       .tchk = unit->tchk,
+      .var_writes =
+          hashtbl_create(sizeof(struct td_var), sizeof(struct vector *),
+                         hash_td_var, eq_td_var),
       .jumps = vector_create(sizeof(struct ir_jump)),
       .switch_cases = vector_create(sizeof(struct ir_case)),
       .var_refs = var_refs,
@@ -3867,6 +3922,36 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
   }
   }
 }
+
+// static void spill_phis_to_locals(struct ir_func_builder *irb) {
+//   struct hashtbl_iter *iter = hashtbl_iter(irb->var_writes);
+//   struct hashtbl_entry entry;
+
+//   while (hashtbl_iter_next(iter, &entry)) {
+//     const struct td_var *var = entry.key;
+//     struct vector *writes = *(struct vector **)entry.data;
+
+//     struct var_key key = {
+//         .name = var->identifier, .scope = var->scope, .basicblock = NULL};
+
+//     struct var_ref *ref = var_refs_get(irb->var_refs, &key);
+
+//     struct ir_lcl *lcl;
+//     switch (ref->ty) {
+//     case VAR_REF_TY_SSA:
+//       lcl = ir_add_local(irb->func, &ref->op->var_ty);
+//       break;
+//     case VAR_REF_TY_LCL:
+//       lcl = ref->lcl;
+//       break;
+//     case VAR_REF_TY_GLB:
+//       unreachable();
+//     }
+
+//     size_t num_writes = vector_length(writes);
+    
+//   }
+// }
 
 struct ir_unit *
 build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
