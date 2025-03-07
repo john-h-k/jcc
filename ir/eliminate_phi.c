@@ -14,6 +14,8 @@ struct bb_reg {
 #define REG_POS(reg) (reg)
 #define LCL_POS(lcl) (SIZE_MAX - 1 - lcl)
 
+// FIXME: known bug - when lots of spills happen, we get spilled phi with spilled source, which hits asserts in here
+
 static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
                       size_t tmp_index, struct ir_lcl *spill_lcl,
