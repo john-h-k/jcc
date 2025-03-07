@@ -233,7 +233,7 @@ static bool opts_cnst_fold_addr_offset(struct ir_op *op) {
   return false;
 }
 
-static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
+static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op, UNUSED void *data) {
   switch (op->ty) {
   case IR_OP_TY_BINARY_OP:
     return opts_cnst_fold_binary_op(func, op);
@@ -249,7 +249,7 @@ static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op) {
 }
 
 void opts_cnst_fold(struct ir_unit *unit) {
-  struct opts_pass pass = {.name = __func__, .op_callback = opts_cnst_fold_op};
+  struct opts_op_pass pass = {.name = __func__, .op_callback = opts_cnst_fold_op};
 
-  opts_run_pass(unit, &pass);
+  opts_run_op_pass(unit, &pass);
 }

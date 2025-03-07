@@ -48,6 +48,7 @@ set(
 
   opts/opts.c
   opts/cnst_fold.c
+  opts/cnst_branches.c
   opts/instr_comb.c
   opts/promote.c
   opts/inline.c
@@ -94,7 +95,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
   
   add_link_options(-fsanitize=address,undefined)
-  add_compile_options(-fsanitize=address,undefined)
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
 
   add_compile_options(-g)
   add_link_options(-g3 -ldl)

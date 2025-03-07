@@ -6,6 +6,9 @@
 #include "ir.h"
 #include "prettyprint.h"
 
+// TODO: certain failures will cause post-validation printing to fail (e.g basicblock not having a func)
+// we should probably BUG on them instead
+
 struct ir_validate_error {
   const char *err;
   struct ir_object object;
@@ -693,6 +696,10 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
                     "basicblock is detached!");
 
   VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+  if (!basicblock->func) {
+    return;
+  }
+
   VALIDATION_CHECK(basicblock->func == func, basicblock, "basicblock attached to func '%s' but should be attached to '%s'", basicblock->func->name, func->name);
 
   for (size_t i = 0; i < basicblock->num_preds; i++) {
@@ -733,6 +740,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
           basicblock->split.false_target->id);
     }
 
+    VALIDATION_CHECKZ(basicblock->switch_case.default_target, basicblock, "basicblock has no default target! some code acts as if this is legal, but it is not");
     VALIDATION_CHECK(
         has_pred(basicblock, basicblock->switch_case.default_target),
         basicblock,
