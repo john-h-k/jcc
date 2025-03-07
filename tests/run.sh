@@ -388,7 +388,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" --log build_object "$file" \
+            ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -412,7 +412,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" --log build_object "$file" \
+            ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")
@@ -426,7 +426,7 @@ run_tests() {
         }
       else
         build_command() {
-          ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" --log build_object "${files[@]}"
+          ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
           return $?
         }
       fi
