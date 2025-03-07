@@ -2,6 +2,7 @@
 
 #include "../ir/prettyprint.h"
 #include "../log.h"
+#include "../ir/validate.h"
 
 static void opts_run_pass_func(struct ir_func *func,
                                const struct opts_pass *pass) {
@@ -9,6 +10,7 @@ static void opts_run_pass_func(struct ir_func *func,
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
+    ir_validate(func->unit, IR_VALIDATE_FLAG_NONE);
     struct ir_op prev = *op;
 
     bool opt = pass->op_callback(func, op);

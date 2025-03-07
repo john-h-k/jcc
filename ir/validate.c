@@ -281,11 +281,12 @@ static void ir_validate_binary_op(struct ir_validate_state *state,
 }
 
 static void ir_validate_op(struct ir_validate_state *state,
-                           struct ir_func *func, struct ir_op *op) {
+                           struct ir_func *func, struct ir_stmt *stmt, struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
 
   VALIDATION_CHECKZ(op->stmt, op, "op has no stmt");
+  VALIDATION_CHECK(op->stmt == stmt, op, "op attached to stmt %zu but should be attached to %zu", op->stmt->id, stmt->id);
 
   switch (op->reg.ty) {
   case IR_REG_TY_NONE:
@@ -624,10 +625,11 @@ static void ir_validate_op(struct ir_validate_state *state,
 }
 
 static void ir_validate_stmt(struct ir_validate_state *state,
-                             struct ir_func *func, struct ir_stmt *stmt) {
+                             struct ir_func *func, struct ir_basicblock *basicblock, struct ir_stmt *stmt) {
   VALIDATION_CHECKZ(stmt->id != DETACHED_STMT, stmt, "stmt is detached!");
 
   VALIDATION_CHECKZ(stmt->basicblock, stmt, "stmt has no basicblock!");
+  VALIDATION_CHECK(stmt->basicblock == basicblock, stmt, "stmt attached to basicblock %zu but should be attached to %zu", stmt->basicblock->id, basicblock->id);
   VALIDATION_CHECKZ(!(stmt->flags & IR_STMT_FLAG_PHI), stmt,
                     "only phi stmt should be at start of bb");
 
@@ -644,7 +646,7 @@ static void ir_validate_stmt(struct ir_validate_state *state,
           op, "should not have phi except in phi-flagged at start of bb");
     }
 
-    ir_validate_op(state, func, op);
+    ir_validate_op(state, func, stmt, op);
 
     op = op->succ;
   }
@@ -691,6 +693,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
                     "basicblock is detached!");
 
   VALIDATION_CHECKZ(basicblock->func, basicblock, "basicblock has no func!");
+  VALIDATION_CHECK(basicblock->func == func, basicblock, "basicblock attached to func '%s' but should be attached to '%s'", basicblock->func->name, func->name);
 
   for (size_t i = 0; i < basicblock->num_preds; i++) {
     struct ir_basicblock *pred = basicblock->preds[i];
@@ -749,7 +752,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
           VALIDATION_CHECKZ(phi->ty == IR_OP_TY_PHI, phi,
                             "expected all phis in stmt to be phis");
 
-          ir_validate_op(state, func, phi);
+          ir_validate_op(state, func, stmt, phi);
 
           phi = phi->succ;
         }
@@ -769,7 +772,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
   }
 
   while (stmt) {
-    ir_validate_stmt(state, func, stmt);
+    ir_validate_stmt(state, func, basicblock, stmt);
 
     stmt = stmt->succ;
   }
@@ -814,6 +817,7 @@ static void ir_validate_data(struct ir_validate_state *state,
 
 static void ir_validate_func(struct ir_validate_state *state,
                              struct ir_glb *glb) {
+
   switch (glb->def_ty) {
   case IR_GLB_DEF_TY_DEFINED:
     VALIDATION_CHECKZ(glb->func, glb, "defined global should have func");

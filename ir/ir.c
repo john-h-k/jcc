@@ -1029,8 +1029,11 @@ void ir_prune_basicblocks(struct ir_func *irb) {
   bool *seen = arena_alloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
   memset(seen, 0, sizeof(*seen) * irb->basicblock_count);
 
+  printf("BEFORE\n");
+  DEBUG_PRINT_IR(stderr, irb);
   ir_prune_stmts(irb, irb->first);
 
+  DEBUG_PRINT_IR(stderr, irb);
   struct vector *stack = vector_create(sizeof(struct ir_basicblock *));
   vector_push_back(stack, &irb->first);
 
@@ -1099,6 +1102,8 @@ void ir_prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
     struct ir_stmt *succ = stmt->succ;
 
     if (ir_stmt_is_empty(stmt)) {
+      printf("detaching %zu\n", stmt->id);
+      (void)irb;
       ir_detach_stmt(irb, stmt);
     }
 
@@ -1241,9 +1246,6 @@ void ir_attach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *succ) {
   invariant_assert(!basicblock->pred && !basicblock->succ,
                    "non-detached basicblock trying to be attached");
-  invariant_assert((!pred || pred->succ == succ) &&
-                       (!succ || succ->pred == pred),
-                   "`pred` and `succ` are not next to each other");
 
   irb->basicblock_count++;
 
@@ -1983,6 +1985,9 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
   struct ir_basicblock *end_bb = ir_alloc_basicblock(irb);
   struct ir_stmt *end_stmt = ir_alloc_stmt(irb, end_bb);
 
+  struct ir_stmt *after = insert_after->stmt->succ;
+  struct ir_stmt *last = insert_after->stmt->basicblock->last;
+
   // now move all later instructions to the end bb
   // first break up the stmt we are in
   end_stmt->first = insert_after->succ;
@@ -1990,22 +1995,30 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
     insert_after->succ->pred = NULL;
   }
 
-  end_stmt->last = insert_after->stmt->last;
-  insert_after->stmt->last->succ = NULL;
-
   insert_after->stmt->last = insert_after;
+  insert_after->stmt->succ = NULL;
   insert_after->succ = NULL;
-
-  end_stmt->succ = insert_after->stmt->succ;
-  insert_after->stmt->pred = end_stmt;
-
-  end_bb->last = insert_after->stmt == orig_bb->last ? end_stmt : orig_bb->last;
 
   orig_bb->last = insert_after->stmt;
-  insert_after->stmt->succ = NULL;
 
-  insert_after->stmt->last = insert_after;
-  insert_after->succ = NULL;
+  end_stmt->succ = after;
+  if (after) {
+    after->pred = end_stmt;
+    end_bb->last = last;
+  }
+
+  struct ir_stmt *stmt = end_bb->first;
+
+  struct ir_op *stmt_op = stmt->first;
+  while (stmt_op) {
+    stmt_op->stmt = stmt;
+    stmt_op = stmt_op->succ;
+  }
+
+  while (stmt) {
+    stmt->basicblock = end_bb;
+    stmt = stmt->succ;
+  }
 
   // forward block end
   end_bb->ty = orig_bb->ty;
@@ -2017,6 +2030,17 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
 
   orig_bb->ty = IR_BASICBLOCK_TY_MERGE;
   orig_bb->merge.target = first;
+
+  struct ir_stmt *br_stmt = ir_alloc_stmt(irb, orig_bb);
+  struct ir_op *br = ir_alloc_op(irb, br_stmt);
+  br->ty = IR_OP_TY_BR;
+  br->var_ty = IR_VAR_TY_NONE;
+
+  ir_move_after_basicblock(irb, first, orig_bb);
+
+  first->num_preds = 1;
+  first->preds = arena_alloc(irb->arena, sizeof(struct ir_basicblock *));
+  first->preds[0] = orig_bb;
 
   return end_bb;
 }

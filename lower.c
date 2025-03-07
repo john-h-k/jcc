@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
 
@@ -1517,6 +1518,7 @@ void lower(struct ir_unit *unit) {
       // alloc locals EARLY so that targets can contain their addressing nodes
       // properly
       ir_alloc_locals(func);
+
     }
     }
 
