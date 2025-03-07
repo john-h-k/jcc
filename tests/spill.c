@@ -1,3 +1,4 @@
+// expected value: 0
 
 int read(int *p) {
   return *p;
@@ -20,5 +21,5 @@ int main() {
     a *= 3;
   }
 
-  return read(p) == 3;  
+  return read(p) != 3;
 }

@@ -7,22 +7,6 @@
 #include "log.h"
 #include "util.h"
 
-static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
-                             void *cb_metadata) {
-  struct interval_callback_data *cb = cb_metadata;
-
-  // if (cb->op->ty == IR_OP_TY_PHI) {
-  //   return;
-  // }
-
-  struct interval *interval = &cb->data->intervals[(*op)->id];
-
-  size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST)
-                      ? cb->op->id + 1
-                      : cb->op->id;
-  interval->end = MAX(interval->end, op_end);
-}
-
 #ifndef NDEBUG
 struct validate_intervals_metadata {
   struct ir_func *func;
@@ -44,17 +28,26 @@ static void validate_intervals_cb(struct ir_op **op,
 
       if (entry.value == *op) {
         if (interval->start > entry.basicblock->last->last->id ||
-          interval->end < entry.basicblock->last->last->id) {
+            interval->end < entry.basicblock->last->last->id) {
+    debug_print_ir_func(stderr, data->func, print_ir_intervals,
+                        data->intervals.intervals);
+          BUG("op %zu is a phi with interval (%zu, %zu) but used by op %zu "
+              "(expected it to live to end of pred block, op %zu)",
+              data->consumer->id, interval->start, interval->end, (*op)->id,
+              entry.basicblock->last->last->id);
         }
+
+        break;
       }
     }
 
   } else if (interval->start > data->consumer->id ||
-      interval->end < data->consumer->id) {
+             interval->end < data->consumer->id) {
 
-    debug_print_ir_func(stderr, data->func, print_ir_intervals, data->intervals.intervals);
-    BUG("op %zu interval (%zu, %zu) but used by op %zu", (*op)->id, interval->start,
-        interval->end, data->consumer->id);
+    debug_print_ir_func(stderr, data->func, print_ir_intervals,
+                        data->intervals.intervals);
+    BUG("op %zu interval (%zu, %zu) but used by op %zu", (*op)->id,
+        interval->start, interval->end, data->consumer->id);
   }
 }
 
@@ -64,13 +57,43 @@ static void validate_intervals(struct ir_func *func,
 
   struct ir_op *op;
   while (ir_func_iter_next(&iter, &op)) {
-    struct validate_intervals_metadata metadata = {.func = func, .consumer = op,
-                                                   .intervals = data};
+    struct validate_intervals_metadata metadata = {
+        .func = func, .consumer = op, .intervals = data};
 
     ir_walk_op_uses(op, validate_intervals_cb, &metadata);
   }
 }
 #endif
+
+
+static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
+                             void *cb_metadata) {
+  struct interval_callback_data *cb = cb_metadata;
+
+  // if (cb->op->ty == IR_OP_TY_PHI) {
+  //   return;
+  // }
+
+  struct interval *interval = &cb->data->intervals[(*op)->id];
+
+  size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST)
+                      ? cb->op->id + 1
+                      : cb->op->id;
+
+  interval->end = MAX(interval->end, op_end);
+
+  if ((*op)->stmt->basicblock != cb->op->stmt->basicblock) {
+    struct ir_op *consumer = cb->op;
+    struct ir_basicblock *basicblock = consumer->stmt->basicblock;
+    
+    for (size_t i = 0; i < basicblock->num_preds; i++) {
+      if (basicblock->last && basicblock->last->last) {
+        interval->end = MAX(interval->end, basicblock->last->last->id);
+      }
+    }
+  }
+}
+
 
 /* Builds the intervals for each value in the SSA representation
      - IDs are rebuilt before calling this so that op ID can be used as an
@@ -137,6 +160,8 @@ struct interval_data construct_intervals(struct ir_func *irb) {
     basicblock = basicblock->succ;
   }
 
+  // NOTE: liveness assume that if a backward jump happens, any ops needed in that block are immediately used in a phi
+
   // now we use each phi to set it (and its dependent intervals) to the min/max
   // of the dependents
   basicblock = irb->first;
@@ -146,7 +171,6 @@ struct interval_data construct_intervals(struct ir_func *irb) {
       struct ir_op *op = stmt->first;
       while (op) {
         if (op->ty == IR_OP_TY_PHI) {
-
           for (size_t i = 0; i < op->phi.num_values; i++) {
             struct ir_op *dependent = op->phi.values[i].value;
             struct interval *dependent_interval =
@@ -160,8 +184,9 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 
             // dependent_interval->end =
             //     op->phi.values[i].basicblock->last->last->id;
-            dependent_interval->end = MAX(dependent_interval->end, MAX(op->id,
-            op->phi.values[i].basicblock->last->last->id));
+            dependent_interval->end =
+                MAX(dependent_interval->end,
+                    MAX(op->id, op->phi.values[i].basicblock->last->last->id));
           }
         }
 
