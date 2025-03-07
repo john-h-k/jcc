@@ -96,7 +96,7 @@ static bool opts_instr_comb_binary_op(struct ir_func *func, struct ir_op *op) {
   return false;
 }
 
-static bool opts_instr_comb_op(struct ir_func *func, struct ir_op *op) {
+static bool opts_instr_comb_op(struct ir_func *func, struct ir_op *op, UNUSED void *data) {
   switch (op->ty) {
     case IR_OP_TY_BINARY_OP:
       return opts_instr_comb_binary_op(func, op);
@@ -107,10 +107,10 @@ static bool opts_instr_comb_op(struct ir_func *func, struct ir_op *op) {
 
 
 void opts_instr_comb(struct ir_unit *unit) {
-  struct opts_pass pass = {
+  struct opts_op_pass pass = {
     .name = __func__,
     .op_callback = opts_instr_comb_op
   };
 
-  opts_run_pass(unit, &pass);
+  opts_run_op_pass(unit, &pass);
 }

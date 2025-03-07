@@ -13,6 +13,7 @@
 #include "lower.h"
 #include "lsra.h"
 #include "opts/cnst_fold.h"
+#include "opts/cnst_branches.h"
 #include "opts/inline.h"
 #include "opts/instr_comb.h"
 #include "opts/promote.h"
@@ -222,6 +223,13 @@ static enum compile_result compile_stage_opts(struct compiler *compiler,
     break;
   case COMPILE_OPTS_LEVEL_3:
     opts_cnst_fold(ir);
+    opts_promote(ir);
+
+    opts_cnst_fold(ir);
+    opts_instr_comb(ir);
+
+    opts_cnst_branches(ir);
+
     opts_promote(ir);
     opts_cnst_fold(ir);
     opts_instr_comb(ir);

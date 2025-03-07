@@ -1008,6 +1008,14 @@ struct ir_func_iter ir_func_iter(struct ir_func *func,
                                  enum ir_func_iter_flags flags);
 bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op);
 
+struct ir_basicblock_succ_iter {
+  struct ir_basicblock *basicblock;
+  size_t idx;
+};
+
+struct ir_basicblock_succ_iter ir_basicblock_succ_iter(struct ir_basicblock *basicblock);
+bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter, struct ir_basicblock **basicblock);
+
 struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                         enum ir_well_known_glb glb);
 
@@ -1121,6 +1129,9 @@ struct ir_basicblock *
 ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
                                struct ir_basicblock *first);
 
+// we should probably make this implicitly called by below functions
+void ir_remove_basicblock_successors(struct ir_basicblock *basicblock);
+
 void ir_make_basicblock_split(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *true_target,
@@ -1154,6 +1165,11 @@ void ir_initialise_stmt(struct ir_stmt *stmt, size_t id);
 void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_var_ty var_ty, struct ir_reg,
                       struct ir_lcl *lcl);
+
+void ir_insert_basicblock_chain(struct ir_func *irb,
+                              struct ir_basicblock *chain,
+                              struct ir_basicblock *insert_after,
+                            struct ir_basicblock *first_succ);
 
 void ir_move_after_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,

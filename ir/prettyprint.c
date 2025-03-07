@@ -596,10 +596,12 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   case IR_OP_TY_BR: {
     struct ir_basicblock *bb = op->stmt->basicblock;
-    struct ir_basicblock *target = bb->ty == IR_BASICBLOCK_TY_MERGE
-                                       ? bb->merge.target
-                                       : bb->split.false_target;
-    fprintf(file, "br @%zu", target->id);
+    struct ir_basicblock *target = bb->merge.target;
+    if (target) {
+      fprintf(file, "br @%zu", target->id);
+    } else {
+      fprintf(file, "br <!NULL>");
+    }
     break;
   }
   case IR_OP_TY_BR_COND:
@@ -958,7 +960,7 @@ void debug_visit_ir(struct ir_func *irb,
 void debug_print_basicblock(FILE *file, struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             debug_print_op_callback *cb, void *cb_metadata) {
-  int ctr_pad = (int)num_digits(irb->op_count);
+  int ctr_pad = irb ? (int)num_digits(irb->op_count) : 20;
   size_t ctr = 0;
 
   struct prettyprint_file_metadata metadata = {.file = file,

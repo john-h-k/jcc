@@ -842,6 +842,8 @@ static void lower_params(struct ir_func *func) {
             ir_insert_before_op(func, op, IR_OP_TY_MOV, op->ret.value->var_ty);
         mov->mov = (struct ir_op_mov){.value = op->ret.value};
 
+        // HACK: prevent being stripped by elim redundant ops
+        mov->flags |= IR_OP_FLAG_FIXED_REG;
         op->ret.value = mov;
       }
       break;

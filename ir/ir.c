@@ -422,6 +422,8 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value && !(op->flags & IR_OP_FLAG_PARAM)) {
+      DEBUG_ASSERT(op->mov.value, "mov %zu had no value but no PARAM flag",
+                   op->id);
       cb(&op->mov.value, IR_OP_USE_TY_READ, cb_metadata);
     }
     break;
@@ -687,7 +689,7 @@ static void remove_pred(struct ir_basicblock *basicblock,
   }
 }
 
-static void ir_remove_basicblock_successors(struct ir_basicblock *basicblock) {
+void ir_remove_basicblock_successors(struct ir_basicblock *basicblock) {
   switch (basicblock->ty) {
   case IR_BASICBLOCK_TY_RET:
     break;
@@ -934,7 +936,7 @@ void ir_eliminate_redundant_ops(struct ir_func *func,
         break;
       }
 
-      // mov is between registeres, but not needed
+      // mov is between registers, but not needed
       bool redundant_mov = op->mov.value->reg.ty != IR_REG_TY_NONE &&
                            ir_reg_eq(op->reg, op->mov.value->reg);
 
@@ -1083,6 +1085,37 @@ void ir_prune_basicblocks(struct ir_func *irb) {
 
     basicblock = succ;
   }
+
+  // now remove phis pointing to removed blocks
+  basicblock = irb->first;
+  while (basicblock) {
+    struct ir_stmt *stmt = basicblock->first;
+
+    if (stmt && stmt->flags & IR_STMT_FLAG_PHI) {
+      struct ir_op *op = stmt->first;
+      while (op) {
+        for (size_t i = 0; i < op->phi.num_values;) {
+          struct ir_phi_entry *entry = &op->phi.values[i];
+
+          if (entry->basicblock->id == DETACHED_BASICBLOCK) {
+            size_t rem = op->phi.num_values - i - 1;
+            memmove(&op->phi.values[i], &op->phi.values[i + 1],
+                    rem * sizeof(op->phi.values[i]));
+
+            op->phi.num_values--;
+          } else {
+            i++;
+          }
+        }
+
+        op = op->succ;
+      }
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  ir_simplify_phis(irb);
 
   // means bb->id < bb_count for all bbs
   ir_rebuild_ids(irb);
@@ -1240,6 +1273,47 @@ void ir_attach_stmt(struct ir_func *irb, struct ir_stmt *stmt,
     stmt->basicblock->last = stmt;
   }
 }
+
+static void ir_attach_basicblock_pred(struct ir_func *irb,
+                                      struct ir_basicblock *basicblock,
+                                      struct ir_basicblock *pred) {
+  if (basicblock != pred) {
+    basicblock->pred = pred;
+  }
+
+  if (basicblock->pred) {
+    basicblock->pred->succ = basicblock;
+  } else {
+    irb->first = basicblock;
+  }
+
+  if (basicblock->succ) {
+    basicblock->succ->pred = basicblock;
+  } else {
+    irb->last = basicblock;
+  }
+}
+
+static void ir_attach_basicblock_succ(struct ir_func *irb,
+                                      struct ir_basicblock *basicblock,
+                                      struct ir_basicblock *succ) {
+  if (basicblock != succ) {
+    basicblock->succ = succ;
+  }
+
+  if (basicblock->pred) {
+    basicblock->pred->succ = basicblock;
+  } else {
+    irb->first = basicblock;
+  }
+
+  if (basicblock->succ) {
+    basicblock->succ->pred = basicblock;
+  } else {
+    irb->last = basicblock;
+  }
+}
+
 void ir_attach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           struct ir_basicblock *pred,
                           struct ir_basicblock *succ) {
@@ -1331,6 +1405,60 @@ void ir_move_before_stmt(struct ir_func *irb, struct ir_stmt *stmt,
 
   ir_attach_stmt(irb, stmt, move_before->basicblock, move_before->pred,
                  move_before);
+}
+
+void ir_insert_basicblock_chain(struct ir_func *irb,
+                                struct ir_basicblock *chain,
+                                struct ir_basicblock *insert_after,
+                                struct ir_basicblock *first_succ) {
+  invariant_assert(chain->id != insert_after->id,
+                   "trying to move basicblock after itself!");
+
+  if (chain->func) {
+    ir_detach_basicblock(irb, chain, DETACH_IR_BASICBLOCK_FLAG_NONE);
+  }
+
+  chain->func = irb;
+
+  struct ir_basicblock *last = chain;
+  while (true) {
+    irb->basicblock_count++;
+    last->func = irb;
+
+    if (last->succ) {
+      last = last->succ;
+    } else {
+      break;
+    }
+  }
+
+  invariant_assert(!chain->pred, "chain had pred");
+  invariant_assert(!first_succ || !first_succ->pred, "first_succ had pred");
+  // chain->pred = insert_after;
+
+  ir_attach_basicblock_pred(irb, chain, insert_after);
+  ir_attach_basicblock_succ(irb, last, first_succ);
+
+  // // fix up the start link
+  // if (insert_after) {
+  //   insert_after->succ = chain;
+  //   chain->pred = insert_after;
+  // } else {
+  //   irb->first = chain;
+  //   chain->pred = NULL;
+  //   BUG("inserting chain with no insert_after - correct logic is probably to
+  //   "
+  //       "insert at start of func, but is this intentional?");
+  // }
+
+  // // fix up the end link
+  // if (first_succ) {
+  //   first_succ->pred = last;
+  //   last->succ = first_succ;
+  // } else {
+  //   last->succ = NULL;
+  //   irb->last = last;
+  // }
 }
 
 void ir_move_after_basicblock(struct ir_func *irb,
@@ -2037,7 +2165,8 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
   br->ty = IR_OP_TY_BR;
   br->var_ty = IR_VAR_TY_NONE;
 
-  ir_move_after_basicblock(irb, first, orig_bb);
+  end_bb->pred = NULL;
+  ir_insert_basicblock_chain(irb, first, orig_bb, end_bb);
 
   ir_make_basicblock_merge(irb, orig_bb, first);
 
@@ -2497,6 +2626,7 @@ static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
 
   DEBUG_ASSERT((*op)->id != DETACHED_OP, "detached op consumed by %zu",
                use.consumer->id);
+
   vector_push_back(data->use_data[(*op)->id].uses, &use);
 }
 
@@ -2796,6 +2926,53 @@ bool ir_func_iter_next(struct ir_func_iter *iter, struct ir_op **op) {
   return *op;
 }
 
+struct ir_basicblock_succ_iter
+ir_basicblock_succ_iter(struct ir_basicblock *basicblock) {
+  return (struct ir_basicblock_succ_iter){.basicblock = basicblock, .idx = 0};
+}
+
+bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter,
+                                  struct ir_basicblock **basicblock) {
+  switch (iter->basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    return false;
+  case IR_BASICBLOCK_TY_SPLIT:
+    switch (iter->idx) {
+      case 0:
+        *basicblock = iter->basicblock->split.true_target;
+        break;
+      case 1:
+        *basicblock = iter->basicblock->split.false_target;
+        break;
+      default:
+        return false;
+    }
+
+    iter->idx++;
+    return true;
+  case IR_BASICBLOCK_TY_MERGE:
+    if (iter->idx) {
+      return false;
+    }
+    *basicblock = iter->basicblock->merge.target;
+    iter->idx++;
+    return true;
+  case IR_BASICBLOCK_TY_SWITCH:
+    if (!iter->idx) {
+      *basicblock = iter->basicblock->switch_case.default_target;
+      iter->idx++;
+      return true;
+    }
+
+    if (iter->idx <= iter->basicblock->switch_case.num_cases) {
+      *basicblock = iter->basicblock->switch_case.cases[iter->idx - 1].target;
+      iter->idx++;
+      return true;
+    }
+    return false;
+  }
+}
+
 static struct ir_basicblock *intersect(struct ir_basicblock **idoms,
                                        struct ir_basicblock *left,
                                        struct ir_basicblock *right,
@@ -3058,12 +3235,11 @@ void ir_simplify_phis(struct ir_func *func) {
   bool improved = true;
 
   while (improved) {
-
     // first remove duplicate entries
     struct ir_basicblock *basicblock = func->first;
     while (basicblock) {
       struct ir_stmt *stmt = basicblock->first;
-      if (stmt->flags & IR_STMT_FLAG_PHI) {
+      if (stmt && stmt->flags & IR_STMT_FLAG_PHI) {
         struct ir_op *op = stmt->first;
         while (op) {
           struct vector *new_entries =
@@ -3108,7 +3284,7 @@ void ir_simplify_phis(struct ir_func *func) {
     basicblock = func->first;
     while (basicblock) {
       struct ir_stmt *stmt = basicblock->first;
-      if (stmt->flags & IR_STMT_FLAG_PHI) {
+      if (stmt && stmt->flags & IR_STMT_FLAG_PHI) {
         struct ir_op *op = stmt->first;
         while (op) {
           struct ir_op_phi *phi = &op->phi;
