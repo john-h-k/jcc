@@ -428,6 +428,11 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     if (op_copy->ty == IR_OP_TY_RET) {
       ir_make_basicblock_merge(func, op_copy->stmt->basicblock, end_bb);
 
+      struct ir_stmt *br_stmt = ir_alloc_stmt(func, op_copy->stmt->basicblock);
+      struct ir_op *br_op = ir_alloc_op(func, br_stmt);
+      br_op->ty = IR_OP_TY_BR;
+      br_op->var_ty = IR_VAR_TY_NONE;
+
       if (op_copy->ret.value) {
         struct ir_op *value = op_copy->ret.value;
         struct ir_phi_entry entry = {.value = value,
@@ -489,9 +494,18 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     call->mov = (struct ir_op_mov){
         .value = ((struct ir_phi_entry *)vector_head(returns))->value};
   } else {
-    call->ty = IR_OP_TY_PHI;
-    call->phi = (struct ir_op_phi){.num_values = num_rets,
+    struct ir_op *phi = ir_insert_phi(func, call->stmt->basicblock, call->var_ty);
+    phi->ty = IR_OP_TY_PHI;
+    phi->phi = (struct ir_op_phi){.num_values = num_rets,
                                    .values = vector_head(returns)};
+
+    // HACK: we can't remove the op because its used for iteration
+    // so make it a pointless mov (which will get removed in next elim run)
+
+    call->ty = IR_OP_TY_MOV;
+    call->mov = (struct ir_op_mov){
+        .value = phi
+    };
   }
 
   // final stage

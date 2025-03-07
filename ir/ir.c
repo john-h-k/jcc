@@ -3333,3 +3333,27 @@ void ir_simplify_phis(struct ir_func *func) {
     }
   }
 }
+
+
+bool ir_basicblock_is_pred(struct ir_basicblock *basicblock,
+                    struct ir_basicblock *pred) {
+  switch (pred->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    return false;
+  case IR_BASICBLOCK_TY_SPLIT:
+    return pred->split.true_target == basicblock ||
+           pred->split.false_target == basicblock;
+  case IR_BASICBLOCK_TY_MERGE:
+    return pred->merge.target == basicblock;
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < pred->switch_case.num_cases; i++) {
+      if (pred->switch_case.cases[i].target == basicblock) {
+        return true;
+      }
+    }
+
+    return pred->switch_case.default_target == basicblock;
+  }
+
+  BUG("bad bb ty");
+}

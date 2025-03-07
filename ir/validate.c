@@ -655,29 +655,6 @@ static void ir_validate_stmt(struct ir_validate_state *state,
   }
 }
 
-static bool is_pred(struct ir_basicblock *basicblock,
-                    struct ir_basicblock *pred) {
-  switch (pred->ty) {
-  case IR_BASICBLOCK_TY_RET:
-    return false;
-  case IR_BASICBLOCK_TY_SPLIT:
-    return pred->split.true_target == basicblock ||
-           pred->split.false_target == basicblock;
-  case IR_BASICBLOCK_TY_MERGE:
-    return pred->merge.target == basicblock;
-  case IR_BASICBLOCK_TY_SWITCH:
-    for (size_t i = 0; i < pred->switch_case.num_cases; i++) {
-      if (pred->switch_case.cases[i].target == basicblock) {
-        return true;
-      }
-    }
-
-    return pred->switch_case.default_target == basicblock;
-  }
-
-  BUG("bad bb ty");
-}
-
 static bool has_pred(struct ir_basicblock *pred,
                      struct ir_basicblock *basicblock) {
   for (size_t i = 0; i < basicblock->num_preds; i++) {
@@ -705,7 +682,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
   for (size_t i = 0; i < basicblock->num_preds; i++) {
     struct ir_basicblock *pred = basicblock->preds[i];
 
-    VALIDATION_CHECK(is_pred(basicblock, pred), basicblock,
+    VALIDATION_CHECK(ir_basicblock_is_pred(basicblock, pred), basicblock,
                      "basicblock has incorrect pred %zu", pred->id);
   }
 
