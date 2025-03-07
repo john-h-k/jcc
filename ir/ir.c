@@ -687,6 +687,32 @@ static void remove_pred(struct ir_basicblock *basicblock,
   }
 }
 
+static void ir_remove_basicblock_successors(struct ir_basicblock *basicblock) {
+  switch (basicblock->ty) {
+  case IR_BASICBLOCK_TY_RET:
+    break;
+
+  case IR_BASICBLOCK_TY_SPLIT:
+    remove_pred(basicblock->split.false_target, basicblock);
+    remove_pred(basicblock->split.true_target, basicblock);
+    break;
+
+  case IR_BASICBLOCK_TY_SWITCH:
+    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
+      remove_pred(basicblock->switch_case.cases[i].target, basicblock);
+    }
+
+    if (basicblock->switch_case.default_target) {
+      remove_pred(basicblock->switch_case.default_target, basicblock);
+    }
+    break;
+
+  case IR_BASICBLOCK_TY_MERGE:
+    remove_pred(basicblock->merge.target, basicblock);
+    break;
+  }
+}
+
 void ir_detach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
                           enum ir_detach_ir_basicblock_flags flags) {
   if (basicblock->id == DETACHED_BASICBLOCK) {
@@ -721,29 +747,7 @@ void ir_detach_basicblock(struct ir_func *irb, struct ir_basicblock *basicblock,
   irb->stmt_count -= stmt_count;
   irb->op_count -= op_count;
 
-  switch (basicblock->ty) {
-  case IR_BASICBLOCK_TY_RET:
-    break;
-
-  case IR_BASICBLOCK_TY_SPLIT:
-    remove_pred(basicblock->split.false_target, basicblock);
-    remove_pred(basicblock->split.true_target, basicblock);
-    break;
-
-  case IR_BASICBLOCK_TY_SWITCH:
-    for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
-      remove_pred(basicblock->switch_case.cases[i].target, basicblock);
-    }
-
-    if (basicblock->switch_case.default_target) {
-      remove_pred(basicblock->switch_case.default_target, basicblock);
-    }
-    break;
-
-  case IR_BASICBLOCK_TY_MERGE:
-    remove_pred(basicblock->merge.target, basicblock);
-    break;
-  }
+  ir_remove_basicblock_successors(basicblock);
 
   basicblock->id = DETACHED_BASICBLOCK;
 
@@ -1029,11 +1033,8 @@ void ir_prune_basicblocks(struct ir_func *irb) {
   bool *seen = arena_alloc(irb->arena, sizeof(*seen) * irb->basicblock_count);
   memset(seen, 0, sizeof(*seen) * irb->basicblock_count);
 
-  printf("BEFORE\n");
-  DEBUG_PRINT_IR(stderr, irb);
   ir_prune_stmts(irb, irb->first);
 
-  DEBUG_PRINT_IR(stderr, irb);
   struct vector *stack = vector_create(sizeof(struct ir_basicblock *));
   vector_push_back(stack, &irb->first);
 
@@ -1102,8 +1103,6 @@ void ir_prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock) {
     struct ir_stmt *succ = stmt->succ;
 
     if (ir_stmt_is_empty(stmt)) {
-      printf("detaching %zu\n", stmt->id);
-      (void)irb;
       ir_detach_stmt(irb, stmt);
     }
 
@@ -1982,7 +1981,7 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
                                struct ir_basicblock *first) {
   struct ir_basicblock *orig_bb = insert_after->stmt->basicblock;
 
-  struct ir_basicblock *end_bb = ir_alloc_basicblock(irb);
+  struct ir_basicblock *end_bb = ir_insert_after_basicblock(irb, orig_bb);
   struct ir_stmt *end_stmt = ir_alloc_stmt(irb, end_bb);
 
   struct ir_stmt *after = insert_after->stmt->succ;
@@ -2023,13 +2022,15 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
   // forward block end
   end_bb->ty = orig_bb->ty;
   if (orig_bb->ty == IR_BASICBLOCK_TY_SPLIT) {
-    end_bb->split = orig_bb->split;
+    ir_make_basicblock_split(irb, end_bb, orig_bb->split.true_target,
+                             orig_bb->split.false_target);
   } else if (orig_bb->ty == IR_BASICBLOCK_TY_MERGE) {
-    end_bb->merge = orig_bb->merge;
+    ir_make_basicblock_merge(irb, end_bb, orig_bb->merge.target);
+  } else if (orig_bb->ty == IR_BASICBLOCK_TY_SWITCH) {
+    TODO("inline switch");
   }
 
-  orig_bb->ty = IR_BASICBLOCK_TY_MERGE;
-  orig_bb->merge.target = first;
+  ir_remove_basicblock_successors(orig_bb);
 
   struct ir_stmt *br_stmt = ir_alloc_stmt(irb, orig_bb);
   struct ir_op *br = ir_alloc_op(irb, br_stmt);
@@ -2038,9 +2039,7 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
 
   ir_move_after_basicblock(irb, first, orig_bb);
 
-  first->num_preds = 1;
-  first->preds = arena_alloc(irb->arena, sizeof(struct ir_basicblock *));
-  first->preds[0] = orig_bb;
+  ir_make_basicblock_merge(irb, orig_bb, first);
 
   return end_bb;
 }

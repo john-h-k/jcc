@@ -145,7 +145,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, struct ir_op *op,
     case IR_OP_STORE_TY_GLB:
       copy->store.glb = op->store.glb;
       break;
-    default:
+    case IR_OP_STORE_TY_ADDR:
+      copy->store.addr = op->store.addr;
       break;
     }
     break;
@@ -158,7 +159,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, struct ir_op *op,
     case IR_OP_LOAD_TY_GLB:
       copy->load.glb = op->load.glb;
       break;
-    default:
+    case IR_OP_LOAD_TY_ADDR:
+      copy->load.addr = op->load.addr;
       break;
     }
     break;
@@ -173,7 +175,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, struct ir_op *op,
     case IR_OP_STORE_TY_GLB:
       copy->store_bitfield.glb = op->store_bitfield.glb;
       break;
-    default:
+    case IR_OP_STORE_TY_ADDR:
+      copy->store_bitfield.addr = op->store_bitfield.addr;
       break;
     }
     break;
@@ -187,7 +190,8 @@ static struct ir_op *ir_clone_op(struct ir_func *func, struct ir_op *op,
     case IR_OP_LOAD_TY_GLB:
       copy->load_bitfield.glb = op->load_bitfield.glb;
       break;
-    default:
+    case IR_OP_LOAD_TY_ADDR:
+      copy->load_bitfield.addr = op->load_bitfield.addr;
       break;
     }
     break;
