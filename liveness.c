@@ -82,8 +82,9 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 
   interval->end = MAX(interval->end, op_end);
 
+  struct ir_op *consumer = cb->op;
+
   if ((*op)->stmt->basicblock != cb->op->stmt->basicblock) {
-    struct ir_op *consumer = cb->op;
     struct ir_basicblock *basicblock = consumer->stmt->basicblock;
 
     if (basicblock->last && basicblock->last->last) {
@@ -91,7 +92,7 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
     }
     
     for (size_t i = 0; i < basicblock->num_preds; i++) {
-      struct ir_basicblock *pred = basicblock->pred;
+      struct ir_basicblock *pred = basicblock->preds[i];
       if (pred->last && pred->last->last) {
         interval->end = MAX(interval->end, pred->last->last->id);
       }
