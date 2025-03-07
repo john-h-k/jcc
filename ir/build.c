@@ -2860,8 +2860,10 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
   struct ir_lcl *lcl;
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
 
-  if (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
-      decl->var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+  bool always_gen_lcls = true;
+
+  if (always_gen_lcls || (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
+      decl->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(&decl->var, (*stmt)->basicblock);
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
