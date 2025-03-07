@@ -6,6 +6,7 @@
 #include "ir/prettyprint.h"
 #include "log.h"
 #include "util.h"
+#include "vector.h"
 
 #ifndef NDEBUG
 struct validate_intervals_metadata {
@@ -66,6 +67,12 @@ static void validate_intervals(struct ir_func *func,
 #endif
 
 
+struct interval_callback_data {
+  struct ir_op *consumer;
+  struct interval_data *data;
+  struct ir_dominance_frontier df;
+};
+
 static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
                              void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
@@ -76,25 +83,30 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
-  size_t op_end = ((cb->op->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST)
-                      ? cb->op->id + 1
-                      : cb->op->id;
+  size_t op_end = ((cb->consumer->flags | (*op)->flags) & IR_OP_FLAG_READS_DEST)
+                      ? cb->consumer->id + 1
+                      : cb->consumer->id;
 
   interval->end = MAX(interval->end, op_end);
 
-  struct ir_op *consumer = cb->op;
+  // struct ir_op *consumer = cb->consumer;
 
-  if ((*op)->stmt->basicblock != cb->op->stmt->basicblock) {
-    struct ir_basicblock *basicblock = consumer->stmt->basicblock;
+  if ((*op)->stmt->basicblock != cb->consumer->stmt->basicblock) {
+    struct vector *domfs = cb->df.domfs[(*op)->stmt->basicblock->id];
 
-    if (basicblock->last && basicblock->last->last) {
-      interval->end = MAX(interval->end, basicblock->last->last->id);
-    }
+    size_t num_domfs = vector_length(domfs);
+    for (size_t i = 0; i < num_domfs; i++) {
+      struct ir_basicblock *basicblock = *(struct ir_basicblock **)vector_get(domfs, i);
+
+      if (basicblock->last && basicblock->last->last) {
+        interval->end = MAX(interval->end, basicblock->last->last->id);
+      }
     
-    for (size_t i = 0; i < basicblock->num_preds; i++) {
-      struct ir_basicblock *pred = basicblock->preds[i];
-      if (pred->last && pred->last->last) {
-        interval->end = MAX(interval->end, pred->last->last->id);
+      for (size_t j = 0; j < basicblock->num_preds; j++) {
+        struct ir_basicblock *pred = basicblock->preds[j];
+        if (pred->last && pred->last->last) {
+          interval->end = MAX(interval->end, pred->last->last->id);
+        }
       }
     }
   }
@@ -109,6 +121,8 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   ir_rebuild_ids(irb);
+
+  struct ir_dominance_frontier df = ir_compute_dominance_frontier(irb);
 
   struct interval_data data;
   data.intervals =
@@ -152,7 +166,7 @@ struct interval_data construct_intervals(struct ir_func *irb) {
                      "be overwritten");
         op->metadata = interval;
 
-        struct interval_callback_data cb_data = {.op = op, .data = &data};
+        struct interval_callback_data cb_data = {.df = df, .consumer = op, .data = &data};
 
         ir_walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
