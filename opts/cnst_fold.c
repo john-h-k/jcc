@@ -29,6 +29,32 @@ static unsigned long long round_integral(struct ir_func *func,
   }
 }
 
+static signed long long as_signed(struct ir_func *func,
+                                         unsigned long long value,
+                                         struct ir_var_ty var_ty) {
+  enum ir_var_primitive_ty primitive;
+  if (var_ty.ty == IR_VAR_TY_TY_POINTER) {
+    primitive = ir_var_ty_pointer_primitive_ty(func->unit);
+  } else if (var_ty.ty == IR_VAR_TY_TY_PRIMITIVE) {
+    primitive = var_ty.primitive;
+  } else {
+    BUG("called with non primitive/ptr type");
+  }
+
+  switch (primitive) {
+  case IR_VAR_PRIMITIVE_TY_I8:
+    return (int8_t)value;
+  case IR_VAR_PRIMITIVE_TY_I16:
+    return (int16_t)value;
+  case IR_VAR_PRIMITIVE_TY_I32:
+    return (int32_t)value;
+  case IR_VAR_PRIMITIVE_TY_I64:
+    return (int64_t)value;
+  default:
+    unreachable();
+  }
+}
+
 static struct ir_op *opts_follow_movs(struct ir_op *op) {
   while (op->ty == IR_OP_TY_MOV) {
     if (!op->mov.value) {
@@ -66,7 +92,7 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 
 #define CNST_FLD_SBINOP(ty, op)                                                \
   case IR_OP_BINARY_OP_TY_##ty:                                                \
-    value = (signed long long)lhs_cnst op(signed long long) rhs_cnst;          \
+    value = as_signed(func, lhs_cnst, lhs->var_ty) op as_signed(func, rhs_cnst, rhs->var_ty);          \
     break;
 
   switch (ty) {
