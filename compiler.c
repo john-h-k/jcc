@@ -160,8 +160,14 @@ compile_stage_typechk(struct compiler *compiler,
 static enum compile_result
 compile_stage_ir(struct compiler *compiler, const struct target *target,
                  struct typechk_result *typechk_result, struct ir_unit **ir) {
+  enum ir_build_flags flags = IR_BUILD_FLAG_NONE;
+
+  if (compiler->args.opts_level == COMPILE_OPTS_LEVEL_0) {
+    flags |= IR_BUILD_FLAG_SPILL_ALL;
+  }
+
   *ir = build_ir_for_translationunit(target, compiler->typechk, compiler->arena,
-                                     &typechk_result->translation_unit);
+                                     &typechk_result->translation_unit, flags);
 
   if (log_enabled()) {
     debug_print_stage(compiler, *ir, "ir");
