@@ -2972,9 +2972,12 @@ ir_compute_dominance_frontier(struct ir_func *func) {
   struct ir_idoms idoms = compute_idoms(func);
 
   for (size_t i = 0; i < func->basicblock_count; i++) {
-    domf[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
-    children[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
-    dom_trees[i] = vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    domf[i] =
+        vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    children[i] =
+        vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    dom_trees[i] =
+        vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
   }
 
   struct ir_basicblock *entry = func->first;
@@ -3029,24 +3032,69 @@ void ir_alloc_locals(struct ir_func *func) {
 
 void ir_simplify_phis(struct ir_func *func) {
   // FIXME: phi gen is shit, we should do it better
-
   bool improved = true;
 
   while (improved) {
-    struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
-    improved = false;
+    // first remove duplicate entries
     struct ir_basicblock *basicblock = func->first;
     while (basicblock) {
       struct ir_stmt *stmt = basicblock->first;
       if (stmt->flags & IR_STMT_FLAG_PHI) {
         struct ir_op *op = stmt->first;
         while (op) {
-          if (op->phi.num_values == 1) {
+          struct vector *new_entries =
+              vector_create_in_arena(sizeof(struct ir_phi_entry), func->arena);
+          vector_ensure_capacity(new_entries, op->phi.num_values);
+
+          struct ir_op_phi *phi = &op->phi;
+          for (size_t i = 0; i < phi->num_values; i++) {
+            struct ir_op *l = phi->values[i].value;
+
+            size_t num_other = vector_length(new_entries);
+            bool found = false;
+            for (size_t j = 0; j < num_other; j++) {
+              struct ir_phi_entry *other = vector_get(new_entries, j);
+
+              if (other->value == l) {
+                found = true;
+                break;
+              }
+            }
+
+            if (found) {
+              continue;
+            }
+
+            vector_push_back(new_entries, &phi->values[i]);
+          }
+
+          phi->num_values = vector_length(new_entries);
+          phi->values = vector_head(new_entries);
+
+          op = op->succ;
+        }
+      }
+
+      basicblock = basicblock->succ;
+    }
+
+    struct ir_op_use_map use_map = ir_build_op_uses_map(func);
+
+    improved = false;
+    basicblock = func->first;
+    while (basicblock) {
+      struct ir_stmt *stmt = basicblock->first;
+      if (stmt->flags & IR_STMT_FLAG_PHI) {
+        struct ir_op *op = stmt->first;
+        while (op) {
+          struct ir_op_phi *phi = &op->phi;
+
+          if (phi->num_values == 1) {
             struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
             for (size_t i = 0; i < usage.num_uses; i++) {
-              *usage.uses[i].op = op->phi.values[0].value;
+              *usage.uses[i].op = phi->values[0].value;
             }
 
             struct ir_op *succ = op->succ;
@@ -3054,13 +3102,13 @@ void ir_simplify_phis(struct ir_func *func) {
             op = succ;
             improved = true;
             continue;
-          } else if (op->phi.num_values == 2) {
+          } else if (phi->num_values == 2) {
             struct ir_op *other = NULL;
 
-            if (op->phi.values[0].value == op) {
-              other = op->phi.values[1].value;
-            } else if (op->phi.values[1].value == op) {
-              other = op->phi.values[0].value;
+            if (phi->values[0].value == op) {
+              other = phi->values[1].value;
+            } else if (phi->values[1].value == op) {
+              other = phi->values[0].value;
             }
 
             if (other) {

@@ -132,6 +132,8 @@ struct lsra_reg_info {
 static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb,
                                struct ir_op *op) {
   if (op->ty == IR_OP_TY_PHI) {
+    // don't actually do the store, phi elim will deal with that
+
     op->flags |= IR_OP_FLAG_SPILLED;
     op->lcl = ir_add_local(irb, &op->var_ty);
     return;
