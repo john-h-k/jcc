@@ -40,7 +40,7 @@ static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses,
 static void check_store(struct ir_op_use_map *use_map, struct vector *lcl_uses,
                         struct ir_op *op, struct ir_op *addr, size_t field_idx,
                         bool *candidate) {
-  if (op->store.ty == IR_OP_STORE_TY_ADDR && op->store.addr != addr) {
+  if (op->store.ty != IR_OP_STORE_TY_ADDR || op->store.addr != addr) {
     // don't consider stores where the address is the value _being stored_
     *candidate = false;
     return;
