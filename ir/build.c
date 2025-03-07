@@ -54,6 +54,8 @@ struct ir_var_builder {
 };
 
 struct ir_func_builder {
+  enum ir_build_flags flags;
+
   struct arena_allocator *arena;
   struct typechk *tchk;
 
@@ -2854,25 +2856,39 @@ build_ir_for_global_declaration(struct ir_var_builder *irb,
   }
 }
 
-static void build_ir_for_auto_var(struct ir_func_builder *irb,
-                                  struct ir_stmt **stmt,
-                                  struct td_var_declaration *decl) {
+struct ir_var_def {
   struct ir_lcl *lcl;
-  struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
+};
 
-  bool always_gen_lcls = true;
+static struct ir_var_def build_ir_var(struct ir_func_builder *irb,
+                                  struct ir_stmt **stmt,
+                                  struct td_var *var,
+                                  const struct ir_var_ty *var_ty
+                                ) {
+  struct ir_lcl *lcl;
 
-  if (always_gen_lcls || (decl->var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
-      decl->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
+  if ((irb->flags & IR_BUILD_FLAG_SPILL_ALL) || (var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
+      var_ty->ty == TD_VAR_TY_TY_ARRAY)) {
     // this is a new var, so we can safely create a new ref
-    struct var_key key = get_var_key(&decl->var, (*stmt)->basicblock);
+    struct var_key key = get_var_key(var, (*stmt)->basicblock);
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
-    ref->lcl = ir_add_local(irb->func, &var_ty);
+    ref->lcl = ir_add_local(irb->func, var_ty);
 
     lcl = ref->lcl;
   } else {
     lcl = NULL;
   }
+
+  return (struct ir_var_def){.lcl = lcl};
+}
+
+static void build_ir_for_auto_var(struct ir_func_builder *irb,
+                                  struct ir_stmt **stmt,
+                                  struct td_var_declaration *decl) {
+
+  struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
+  struct ir_var_def def = build_ir_var(irb, stmt, &decl->var, &var_ty);
+  struct ir_lcl *lcl = def.lcl;
 
   struct ir_op *assignment = NULL;
   if (decl->init) {
@@ -3195,7 +3211,7 @@ static bool eq_td_var(const void *l, const void *r) {
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct arena_allocator *arena,
                                              struct td_funcdef *def,
-                                             struct var_refs *global_var_refs) {
+                                             struct var_refs *global_var_refs, enum ir_build_flags flags) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
@@ -3214,6 +3230,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
   struct ir_func_builder *builder = arena_alloc(arena, sizeof(b));
   *builder = (struct ir_func_builder){
+      .flags = flags,
       .arena = arena,
       .unit = unit,
       .func = f,
@@ -3236,6 +3253,8 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                    ? ir_insert_before_stmt(f, basicblock->first)
                                    : ir_alloc_stmt(f, basicblock);
   param_stmt->flags |= IR_STMT_FLAG_PARAM;
+
+  struct ir_stmt *after_params = ir_insert_after_stmt(f, param_stmt);
 
   // first statement is a bunch of magic MOV commands that explain to the rest
   // of the IR that these are params this is encoded as MOV NULL with the
@@ -3277,13 +3296,12 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
       ref->lcl = lcl;
     } else {
-      struct var_ref *ref =
-          var_refs_add(builder->var_refs, &key, VAR_REF_TY_SSA);
-
       if (param_var_ty.ty == IR_VAR_TY_TY_ARRAY) {
         // arrays/aggregates are actually pointers
         param_var_ty = IR_VAR_TY_POINTER;
       }
+
+      build_ir_var(builder, &param_stmt, &var, &param_var_ty);
 
       struct ir_op *mov = ir_alloc_op(builder->func, param_stmt);
       mov->ty = IR_OP_TY_MOV;
@@ -3291,7 +3309,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
       mov->flags |= IR_OP_FLAG_PARAM;
       mov->mov.value = NULL;
 
-      ref->op = mov;
+      var_assg(builder, after_params, mov, &var);
     }
   }
 
@@ -3960,7 +3978,7 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
 struct ir_unit *
 build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                              struct arena_allocator *arena,
-                             struct td_translationunit *translation_unit) {
+                             struct td_translationunit *translation_unit, enum ir_build_flags flags) {
 
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = (struct ir_unit){.arena = arena,
@@ -4005,7 +4023,7 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                               &def->var_declaration);
 
       struct ir_func *func =
-          build_ir_for_function(iru, arena, def, global_var_refs);
+          build_ir_for_function(iru, arena, def, global_var_refs, flags);
 
       struct var_key key = {.name = def->var_declaration.var.identifier,
                             .scope = SCOPE_GLOBAL};
