@@ -1,7 +1,6 @@
 #include "cnst_branches.h"
 
 #include "../hashtbl.h"
-#include "../util.h"
 #include "../vector.h"
 #include "opts.h"
 
@@ -11,6 +10,7 @@ struct phi_entry {
 
 struct phi_info {
   struct hashtbl *bb_to_entry;
+  struct ir_dominance_frontier df;
 };
 
 static struct ir_op *opts_follow_movs(struct ir_op *op) {
@@ -27,6 +27,8 @@ static struct ir_op *opts_follow_movs(struct ir_op *op) {
 
 static void opts_cnst_branches_func(struct ir_func *func, void *data) {
   struct phi_info *info = data;
+
+  info->df = ir_compute_dominance_frontier(func);
 
   if (info->bb_to_entry) {
     // TODO: reuse hashtbl (have clear method)
@@ -83,8 +85,16 @@ static void remove_dead_phi_entries(struct ir_basicblock *basicblock,
     for (size_t j = 0; j < op->phi.num_values;) {
       struct ir_phi_entry *entry = &op->phi.values[j];
 
+      bool remove = false;
       if (entry->basicblock->id == DETACHED_BASICBLOCK) {
-        size_t rem = op->phi.num_values - i - 1;
+        remove = true;
+      } else if (!ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock)) {
+        // must be dominated by another, so removing it is fine?
+        remove = true;
+      }
+
+      if (remove) {
+        size_t rem = op->phi.num_values - j - 1;
         memmove(&op->phi.values[j], &op->phi.values[j + 1],
                 rem * sizeof(op->phi.values[j]));
 
@@ -112,17 +122,15 @@ static bool opts_cnst_branches_op(struct ir_func *func, struct ir_op *op,
 
     ir_remove_basicblock_successors(op->stmt->basicblock);
     if (cnst->cnst.int_value) {
-      printf("remove dead from false (%zu)\n",
-             op->stmt->basicblock->split.false_target->id);
-      remove_dead_phi_entries(op->stmt->basicblock->split.false_target, info);
       ir_make_basicblock_merge(func, op->stmt->basicblock,
                                op->stmt->basicblock->split.true_target);
-    } else {
-      printf("remove dead from true %zu as cnst is %llu\n",
-             op->stmt->basicblock->split.true_target->id, cnst->cnst.int_value);
+      remove_dead_phi_entries(op->stmt->basicblock->split.false_target, info);
       remove_dead_phi_entries(op->stmt->basicblock->split.true_target, info);
+    } else {
       ir_make_basicblock_merge(func, op->stmt->basicblock,
                                op->stmt->basicblock->split.false_target);
+      remove_dead_phi_entries(op->stmt->basicblock->split.true_target, info);
+      remove_dead_phi_entries(op->stmt->basicblock->split.false_target, info);
     }
 
     op->ty = IR_OP_TY_BR;
@@ -135,7 +143,7 @@ static bool opts_cnst_branches_op(struct ir_func *func, struct ir_op *op,
 }
 
 void opts_cnst_branches(struct ir_unit *unit) {
-  struct phi_entry data = {0};
+  struct phi_info data = {0};
 
   struct opts_op_pass pass = {.name = __func__,
                            .data = &data,

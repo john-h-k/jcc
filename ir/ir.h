@@ -1239,6 +1239,9 @@ struct ir_op *ir_insert_phi(struct ir_func *irb,
                             struct ir_basicblock *basicblock,
                             struct ir_var_ty var_ty);
 
+bool ir_basicblock_is_pred(struct ir_basicblock *basicblock,
+                    struct ir_basicblock *pred);
+
 struct ir_field_info {
   struct ir_var_ty var_ty;
   size_t offset;
