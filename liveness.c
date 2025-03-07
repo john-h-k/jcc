@@ -92,7 +92,7 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
   // struct ir_op *consumer = cb->consumer;
 
   if ((*op)->stmt->basicblock != cb->consumer->stmt->basicblock) {
-    struct vector *domfs = cb->df.domfs[(*op)->stmt->basicblock->id];
+    struct vector *domfs = cb->df.domfs[cb->consumer->stmt->basicblock->id];
 
     size_t num_domfs = vector_length(domfs);
     for (size_t i = 0; i < num_domfs; i++) {
