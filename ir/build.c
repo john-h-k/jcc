@@ -2867,8 +2867,8 @@ static struct ir_var_def build_ir_var(struct ir_func_builder *irb,
                                 ) {
   struct ir_lcl *lcl;
 
-  if ((irb->flags & IR_BUILD_FLAG_SPILL_ALL) || (var_ty->ty == TD_VAR_TY_TY_AGGREGATE ||
-      var_ty->ty == TD_VAR_TY_TY_ARRAY)) {
+  if ((irb->flags & IR_BUILD_FLAG_SPILL_ALL) || ir_var_ty_is_aggregate(var_ty) ||
+      var_ty->ty == IR_VAR_TY_TY_ARRAY) {
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(var, (*stmt)->basicblock);
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
@@ -2885,7 +2885,6 @@ static struct ir_var_def build_ir_var(struct ir_func_builder *irb,
 static void build_ir_for_auto_var(struct ir_func_builder *irb,
                                   struct ir_stmt **stmt,
                                   struct td_var_declaration *decl) {
-
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
   struct ir_var_def def = build_ir_var(irb, stmt, &decl->var, &var_ty);
   struct ir_lcl *lcl = def.lcl;
