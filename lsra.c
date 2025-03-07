@@ -131,6 +131,12 @@ struct lsra_reg_info {
 
 static void spill_op_and_lower(struct lsra_reg_info *info, struct ir_func *irb,
                                struct ir_op *op) {
+  if (op->ty == IR_OP_TY_PHI) {
+    op->flags |= IR_OP_FLAG_SPILLED;
+    op->lcl = ir_add_local(irb, &op->var_ty);
+    return;
+  }
+
   struct ir_op *store = ir_spill_op(irb, op);
 
   if (store) {

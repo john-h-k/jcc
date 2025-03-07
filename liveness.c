@@ -30,8 +30,8 @@ static void validate_intervals_cb(struct ir_op **op,
       if (entry.value == *op) {
         if (interval->start > entry.basicblock->last->last->id ||
             interval->end < entry.basicblock->last->last->id) {
-    debug_print_ir_func(stderr, data->func, print_ir_intervals,
-                        data->intervals.intervals);
+          debug_print_ir_func(stderr, data->func, print_ir_intervals,
+                              data->intervals.intervals);
           BUG("op %zu is a phi with interval (%zu, %zu) but used by op %zu "
               "(expected it to live to end of pred block, op %zu)",
               data->consumer->id, interval->start, interval->end, (*op)->id,
@@ -66,7 +66,6 @@ static void validate_intervals(struct ir_func *func,
 }
 #endif
 
-
 struct interval_callback_data {
   struct ir_op *consumer;
   struct interval_data *data;
@@ -76,10 +75,6 @@ struct interval_callback_data {
 static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
                              void *cb_metadata) {
   struct interval_callback_data *cb = cb_metadata;
-
-  // if (cb->op->ty == IR_OP_TY_PHI) {
-  //   return;
-  // }
 
   struct interval *interval = &cb->data->intervals[(*op)->id];
 
@@ -91,27 +86,53 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 
   // struct ir_op *consumer = cb->consumer;
 
-  if ((*op)->stmt->basicblock != cb->consumer->stmt->basicblock) {
-    struct vector *domfs = cb->df.domfs[cb->consumer->stmt->basicblock->id];
+  struct ir_basicblock *basicblock = cb->consumer->stmt->basicblock;
+  if ((*op)->stmt->basicblock != basicblock) {
+    struct vector *domfs = cb->df.domfs[basicblock->id];
+
+    if (basicblock->last && basicblock->last->last) {
+      interval->end = MAX(interval->end, basicblock->last->last->id);
+    }
+
+    for (size_t j = 0; j < basicblock->num_preds; j++) {
+      struct ir_basicblock *pred = basicblock->preds[j];
+      if (pred->last && pred->last->last) {
+        interval->end = MAX(interval->end, pred->last->last->id);
+      }
+    }
 
     size_t num_domfs = vector_length(domfs);
     for (size_t i = 0; i < num_domfs; i++) {
-      struct ir_basicblock *basicblock = *(struct ir_basicblock **)vector_get(domfs, i);
+      struct ir_basicblock *domf =
+          *(struct ir_basicblock **)vector_get(domfs, i);
 
-      if (basicblock->last && basicblock->last->last) {
-        interval->end = MAX(interval->end, basicblock->last->last->id);
+      if (domf->last && domf->last->last) {
+        interval->end = MAX(interval->end, domf->last->last->id);
       }
-    
-      for (size_t j = 0; j < basicblock->num_preds; j++) {
-        struct ir_basicblock *pred = basicblock->preds[j];
+
+      for (size_t j = 0; j < domf->num_preds; j++) {
+        struct ir_basicblock *pred = domf->preds[j];
         if (pred->last && pred->last->last) {
           interval->end = MAX(interval->end, pred->last->last->id);
         }
       }
     }
+
+
+    struct ir_basicblock *idom = cb->df.idoms[basicblock->id];
+    while (true) {
+      if (idom->last && idom->last->last) {
+        interval->end = MAX(interval->end, idom->last->last->id);
+      }
+
+      if (cb->df.idoms[idom->id] == idom) {
+        break;
+      }
+
+      idom = cb->df.idoms[idom->id];
+    }
   }
 }
-
 
 /* Builds the intervals for each value in the SSA representation
      - IDs are rebuilt before calling this so that op ID can be used as an
@@ -166,7 +187,8 @@ struct interval_data construct_intervals(struct ir_func *irb) {
                      "be overwritten");
         op->metadata = interval;
 
-        struct interval_callback_data cb_data = {.df = df, .consumer = op, .data = &data};
+        struct interval_callback_data cb_data = {
+            .df = df, .consumer = op, .data = &data};
 
         ir_walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
@@ -180,7 +202,8 @@ struct interval_data construct_intervals(struct ir_func *irb) {
     basicblock = basicblock->succ;
   }
 
-  // NOTE: liveness assume that if a backward jump happens, any ops needed in that block are immediately used in a phi
+  // NOTE: liveness assume that if a backward jump happens, any ops needed in
+  // that block are immediately used in a phi
 
   // now we use each phi to set it (and its dependent intervals) to the min/max
   // of the dependents
