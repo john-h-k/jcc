@@ -1,7 +1,6 @@
 #include "inline.h"
 
 #include "../hashtbl.h"
-#include "../ir/prettyprint.h"
 #include "../log.h"
 #include "../vector.h"
 #include "opts.h"
@@ -37,9 +36,24 @@ static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate, str
   return true;
 }
 
+#define INLINE_COMBINE_FUNC_SZ 512
+#define INLINE_COMBINE_CAND_SZ 64
+// temp disabled due to phi spills being broken
+#define INLINE_CAND_SZ 1
+
 static bool opts_should_inline(struct ir_func *func,
                                struct ir_func *candidate) {
-  return func->op_count < 2048 && candidate->op_count < 128;
+  if (func->op_count < INLINE_COMBINE_FUNC_SZ && candidate->op_count < INLINE_COMBINE_CAND_SZ) {
+    debug("inlining %s into %s due small combine size", candidate->name, func->name);
+    return true;
+  }
+
+  if (candidate->op_count < INLINE_CAND_SZ) {
+    debug("inlining %s into %s due small candidate size", candidate->name, func->name);
+    return true;
+  }
+
+  return false;
 }
 
 static struct ir_lcl *ir_clone_lcl(struct ir_func *func,
@@ -310,7 +324,7 @@ ir_clone_basicblock(struct ir_func *func,
   }
 
   copy->num_preds = basicblock->num_preds;
-  copy->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *));
+  copy->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *) * copy->num_preds);
   for (size_t i = 0; i < copy->num_preds; i++) {
     copy->preds[i] = ir_clone_basicblock(func, basicblock->preds[i], cloned);
   }
@@ -583,7 +597,6 @@ static void opts_inline_func(struct ir_func *func, void *data) {
 }
 
 void opts_inline(struct ir_unit *unit) {
-  return;
   struct opts_inline_info inline_info = {
       .inlined = hashtbl_create(sizeof(struct ir_func *),
                                 sizeof(enum opts_inline_stage), NULL, NULL)};

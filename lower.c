@@ -101,9 +101,9 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op);
 // inline code because else `lower_call` needs to deal with this function
 // potentially generating calls _itself_ biggest thing passed on stack: 4
 // element HVA of 16 byte vectors, so 64 but we do 128 anyway
-// #define MEMMOVE_THRESHOLD 128
-// disabled as we haven't implemented backend
-#define MEMMOVE_THRESHOLD 0
+#define MEMMOVE_THRESHOLD 128
+
+static void lower_mem_copy(struct ir_func *func, struct ir_op *op);
 
 void lower_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *source = op->store.value;
@@ -127,49 +127,11 @@ void lower_store(struct ir_func *func, struct ir_op *op) {
     ir_detach_op(func, op->store.value);
   }
 
-  if (info.size <= MEMMOVE_THRESHOLD) {
-    op->ty = IR_OP_TY_MEM_COPY;
-    op->mem_copy = (struct ir_op_mem_copy){
-        .dest = dest_addr, .source = source_addr, .length = info.size};
-    return;
-  }
+  op->ty = IR_OP_TY_MEM_COPY;
+  op->mem_copy = (struct ir_op_mem_copy){
+      .dest = dest_addr, .source = source_addr, .length = info.size};
 
-  struct ir_op *size =
-      ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
-  ir_mk_pointer_constant(func->unit, size, info.size);
-
-  struct ir_glb *memmove =
-      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
-
-  struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
-  struct ir_op *memmove_addr =
-      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
-  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memmove_addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memmove,
-  };
-
-  size_t num_args = 3;
-  struct ir_op **args =
-      arena_alloc(func->arena, sizeof(struct ir_op *) * num_args);
-
-  args[0] = dest_addr;
-  args[1] = source_addr;
-  args[2] = size;
-
-  func->flags |= IR_FUNC_FLAG_MAKES_CALL;
-  op->ty = IR_OP_TY_CALL;
-  op->var_ty = *memmove->var_ty.func.ret_ty;
-  op->call = (struct ir_op_call){
-      .target = memmove_addr,
-      .num_args = num_args,
-      .args = args,
-      .func_ty = memmove->var_ty,
-  };
-
-  lower_call(func, op);
-  lower_call_registers(func, op);
+  lower_mem_copy(func, op);
 }
 
 enum load_bitfield {
@@ -393,8 +355,70 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   op->br_cond.cond = neq;
 }
 
+#define MEMSET_THRESHOLD (128)
+
 static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->mem_set.addr;
+
+  // only gen for zero because there are efficient ways to write zero on all targets
+  if (op->mem_set.length <= MEMSET_THRESHOLD && op->mem_set.value == 0) {
+    size_t left = op->mem_set.length;
+    struct ir_var_ty ptr = ir_var_ty_for_pointer_size(func->unit);
+    size_t ptr_size = ir_var_ty_info(func->unit, &ptr).size;
+    size_t offset = 0;
+
+    struct ir_op *last = NULL;
+    while (left) {
+      struct ir_var_ty set_ty;
+      size_t sz;
+
+      if (left >= ptr_size) {
+        set_ty = ptr;
+        sz = ptr_size;
+      } else if (left >= 4) {
+        set_ty = IR_VAR_TY_I32;
+        sz = 4;
+      } else if (left >= 2) {
+        set_ty = IR_VAR_TY_I16;
+        sz = 2;
+      } else {
+        set_ty = IR_VAR_TY_I8;
+        sz = 1;
+      }
+
+      struct ir_op *addr_offset;
+      if (last) {
+        addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      } else {
+        addr_offset = ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      }
+
+      addr_offset->addr_offset = (struct ir_op_addr_offset){
+        .base = addr,
+        .offset = offset
+      };
+
+      addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+
+      struct ir_op *value = ir_insert_after_op(func, addr_offset, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+      ir_mk_zero_constant(func->unit, value, &set_ty);
+      value->flags |= IR_OP_FLAG_CONTAINED;
+
+      struct ir_op *store = ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR,
+        .addr = addr_offset,
+        .value = value
+      };
+
+      last = store;
+
+      left -= sz;
+      offset += sz;
+    }
+
+    return;
+  }
 
   struct ir_glb *memset =
       ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMSET);
@@ -446,23 +470,92 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
   DEBUG_ASSERT(dest && source, "dest and source should be non null");
 
-  struct ir_glb *memcopy =
-      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMCPY);
+  // only gen for zero because there are efficient ways to write zero on all targets
+  if (op->mem_copy.length <= MEMSET_THRESHOLD) {
+    size_t left = op->mem_copy.length;
+
+    struct ir_var_ty ptr = ir_var_ty_for_pointer_size(func->unit);
+    size_t ptr_size = ir_var_ty_info(func->unit, &ptr).size;
+    size_t offset = 0;
+
+    struct ir_op *last = NULL;
+    while (left) {
+      struct ir_var_ty set_ty;
+      size_t sz;
+
+      if (left >= ptr_size) {
+        set_ty = ptr;
+        sz = ptr_size;
+      } else if (left >= 4) {
+        set_ty = IR_VAR_TY_I32;
+        sz = 4;
+      } else if (left >= 2) {
+        set_ty = IR_VAR_TY_I16;
+        sz = 2;
+      } else {
+        set_ty = IR_VAR_TY_I8;
+        sz = 1;
+      }
+
+      struct ir_op *src_addr_offset;
+      if (last) {
+        src_addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      } else {
+        src_addr_offset = ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      }
+
+      src_addr_offset->addr_offset = (struct ir_op_addr_offset){
+        .base = source,
+        .offset = offset
+      };
+
+      src_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+
+      struct ir_op *dest_addr_offset= ir_insert_after_op(func, src_addr_offset, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+
+      dest_addr_offset->addr_offset = (struct ir_op_addr_offset){
+        .base = dest,
+        .offset = offset
+      };
+
+      dest_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
+
+      struct ir_op *load = ir_insert_after_op(func, dest_addr_offset, IR_OP_TY_LOAD, set_ty);
+      load->load = (struct ir_op_load){
+        .ty = IR_OP_LOAD_TY_ADDR,
+        .addr = src_addr_offset,
+      };
+
+      struct ir_op *store = ir_insert_after_op(func, load, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR,
+        .addr = dest_addr_offset,
+        .value = load
+      };
+
+      last = store;
+
+      left -= sz;
+      offset += sz;
+    }
+
+    return;
+  }
+
+  struct ir_op *size =
+      ir_insert_before_op(func, op, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+  ir_mk_pointer_constant(func->unit, size, op->mem_copy.length);
+
+  struct ir_glb *memmove =
+      ir_add_well_known_global(func->unit, IR_WELL_KNOWN_GLB_MEMMOVE);
 
   struct ir_var_ty ptr_int = ir_var_ty_for_pointer_size(func->unit);
-
-  struct ir_op *length_cnst =
-      ir_insert_before_op(func, op, IR_OP_TY_CNST, ptr_int);
-  length_cnst->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_INT,
-                                          .int_value = op->mem_copy.length};
-
-  struct ir_op *memcopy_addr =
-      ir_insert_after_op(func, length_cnst, IR_OP_TY_ADDR, ptr_int);
-
-  memcopy_addr->flags |= IR_OP_FLAG_CONTAINED;
-  memcopy_addr->addr = (struct ir_op_addr){
+  struct ir_op *memmove_addr =
+      ir_insert_before_op(func, op, IR_OP_TY_ADDR, ptr_int);
+  memmove_addr->flags |= IR_OP_FLAG_CONTAINED;
+  memmove_addr->addr = (struct ir_op_addr){
       .ty = IR_OP_ADDR_TY_GLB,
-      .glb = memcopy,
+      .glb = memmove,
   };
 
   size_t num_args = 3;
@@ -471,19 +564,20 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
   args[0] = dest;
   args[1] = source;
-  args[2] = length_cnst;
+  args[2] = size;
 
   func->flags |= IR_FUNC_FLAG_MAKES_CALL;
   op->ty = IR_OP_TY_CALL;
-  op->var_ty = *memcopy->var_ty.func.ret_ty;
+  op->var_ty = *memmove->var_ty.func.ret_ty;
   op->call = (struct ir_op_call){
-      .target = memcopy_addr,
+      .target = memmove_addr,
       .num_args = num_args,
       .args = args,
-      .func_ty = memcopy->var_ty,
+      .func_ty = memmove->var_ty,
   };
 
   lower_call(func, op);
+  lower_call_registers(func, op);
 }
 
 // TODO: signs and stuff are wrong
@@ -1267,9 +1361,9 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
             .dest = dest_addr, .source = addr, .length = info.size};
 
         lower_mem_copy(func, mem_copy);
-        // HACK: relies on `lower_mem_copy` transforming the op into a call (not
-        // inserting it later/earlier)
-        lower_call_registers(func, mem_copy);
+        if (mem_copy->ty == IR_OP_TY_CALL) {
+          lower_call_registers(func, mem_copy);
+        }
 
         ir_detach_op(func, arg);
 
