@@ -1027,15 +1027,9 @@ static bool try_expand_token(struct preproc *preproc,
     }
 
     if (!last) {
-      struct preproc_token empty = {
-          .ty = PREPROC_TOKEN_TY_WHITESPACE,
-          .span = MK_INVALID_TEXT_SPAN(0, 0),
-          .text = "",
-      };
-
-      expand_token(preproc, preproc_text, &empty, buffer, parents, flags);
+      preproc->concat_next_token = false;
+      expand_token(preproc, preproc_text, token, buffer, parents, flags);
     } else {
-
 #define TYPE_VAL(l, r)                                                         \
   ((long long)PREPROC_TOKEN_TY_##l << 32) | (PREPROC_TOKEN_TY_##r)
       switch (((long long)token->ty << 32) | last->ty) {
@@ -1062,7 +1056,8 @@ static bool try_expand_token(struct preproc *preproc,
             .text = new,
         };
 
-        // post-concat, self reference is not considered
+        // need to set _before_ recursive call into expand_token
+        preproc->concat_next_token = false;
         parents = hashtbl_create_sized_str_keyed(0);
         expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
         break;
@@ -1073,10 +1068,10 @@ static bool try_expand_token(struct preproc *preproc,
       }
     }
 
+    // post-concat, self reference is not considered
     if (parents) {
       hashtbl_free(&parents);
     }
-    // preproc->concat_next_token = false;
     return true;
   }
 
