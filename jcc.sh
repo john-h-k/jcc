@@ -181,7 +181,7 @@ as() {
         }
     fi
 
-    run "$CALLER_DIR$file" "${args[@]}" $flags -S -o stdout | bat -P --language S
+    run "$CALLER_DIR$file" "${args[@]}" $flags -S -o - | bat -P --language S
 }
 
 find-unused() {
@@ -304,6 +304,12 @@ layout() {
     echo -e "${RESET}"
 }
 
+clean() {
+    cd build
+    cmake --build . --target clean
+
+    cd - > /dev/null
+}
 
 build() {
     mode=$(get_mode "$1")
@@ -333,9 +339,11 @@ build() {
         flags="-DJCC_DEFAULT_TARGET=\"$default_target\""
     fi
 
+    num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
+
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build .) >/dev/null; then
+    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build . --parallel $num_procs); then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi

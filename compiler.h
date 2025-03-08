@@ -70,9 +70,10 @@ enum compile_file_ty {
   COMPILE_FILE_TY_NONE,
   COMPILE_FILE_TY_PATH,
   COMPILE_FILE_TY_STDOUT,
-  COMPILE_FILE_TY_STDERR,
 };
 
+// the point of this struct is passing it around rather than `FILE *`, so we don't keep a file open during the entirety of compilation
+// while still letting us disambiguate between stdout and a path easily
 struct compile_file {
   enum compile_file_ty ty;
 
