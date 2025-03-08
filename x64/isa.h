@@ -713,7 +713,7 @@ struct x64_raw_instr {
                       0x0F, (opc),                                             \
                       MODRM(MOD_REG, ((dest).idx % 8), ((source).idx % 8))}})  \
        : ((struct x64_raw_instr){                                              \
-             .len = 5,                                                         \
+             .len = 4,                                                         \
              .buff = {0x66,                                                    \
                       REX((size_t)1, (size_t)((dest).idx > 7), (size_t)0,      \
                           (size_t)((source).idx > 7)),                         \
@@ -732,7 +732,7 @@ struct x64_raw_instr {
 #define SSE_MOVD(opc, dest, source)                                            \
   (NEEDS_REX((dest)) || NEEDS_REX((source))                                    \
        ? ((struct x64_raw_instr){                                              \
-             .len = 4,                                                         \
+             .len = 5,                                                         \
              .buff = {0x66,                                                    \
                       REX((size_t)0, (size_t)((dest).idx > 7), (size_t)0,      \
                           (size_t)((source).idx > 7)),                         \
