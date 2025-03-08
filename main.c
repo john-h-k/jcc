@@ -149,9 +149,9 @@ static const char *get_default_isysroot(struct arena_allocator *arena, enum comp
 
     size_t len = strlen(path);
 
-    if (len) {
+    if (len && path[len - 1] == '\n') {
       // strip newline
-      path[len - 2] = '\0';
+      path[len - 1] = '\0';
     }
     return path;
 #else
