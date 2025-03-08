@@ -6,8 +6,8 @@
 #include "ir.h"
 #include "prettyprint.h"
 
-// TODO: certain failures will cause post-validation printing to fail (e.g basicblock not having a func)
-// we should probably BUG on them instead
+// TODO: certain failures will cause post-validation printing to fail (e.g
+// basicblock not having a func) we should probably BUG on them instead
 
 struct ir_validate_error {
   const char *err;
@@ -284,12 +284,15 @@ static void ir_validate_binary_op(struct ir_validate_state *state,
 }
 
 static void ir_validate_op(struct ir_validate_state *state,
-                           struct ir_func *func, struct ir_stmt *stmt, struct ir_op *op) {
+                           struct ir_func *func, struct ir_stmt *stmt,
+                           struct ir_op *op) {
   struct validate_op_order_metadata metadata = {.state = state, .consumer = op};
   ir_walk_op_uses(op, validate_op_order, &metadata);
 
   VALIDATION_CHECKZ(op->stmt, op, "op has no stmt");
-  VALIDATION_CHECK(op->stmt == stmt, op, "op attached to stmt %zu but should be attached to %zu", op->stmt->id, stmt->id);
+  VALIDATION_CHECK(op->stmt == stmt, op,
+                   "op attached to stmt %zu but should be attached to %zu",
+                   op->stmt->id, stmt->id);
 
   switch (op->reg.ty) {
   case IR_REG_TY_NONE:
@@ -298,8 +301,12 @@ static void ir_validate_op(struct ir_validate_state *state,
     break;
   case IR_REG_TY_INTEGRAL:
   case IR_REG_TY_FP:
-    // can raise this if needed if we are somehow on a platform with more than 1024 registers
-    VALIDATION_CHECK(op->reg.idx < 1024, op, "reg had type integral/fp but very large idx (%zu), likely badly initialied", op->reg.idx);
+    // can raise this if needed if we are somehow on a platform with more than
+    // 1024 registers
+    VALIDATION_CHECK(op->reg.idx < 1024, op,
+                     "reg had type integral/fp but very large idx (%zu), "
+                     "likely badly initialied",
+                     op->reg.idx);
     break;
   }
 
@@ -318,8 +325,9 @@ static void ir_validate_op(struct ir_validate_state *state,
           ir_var_ty_eq(state->unit, &op->var_ty, &entry->value->var_ty), op,
           "op entry had different type to op!");
 
-      VALIDATION_CHECK(ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock), op, "op entry had bb %zu which was not a pred",
-                       entry->basicblock->id);
+      VALIDATION_CHECK(
+          ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock), op,
+          "op entry had bb %zu which was not a pred", entry->basicblock->id);
     }
     break;
   case IR_OP_TY_GATHER: {
@@ -619,15 +627,22 @@ static void ir_validate_op(struct ir_validate_state *state,
 }
 
 static void ir_validate_stmt(struct ir_validate_state *state,
-                             struct ir_func *func, struct ir_basicblock *basicblock, struct ir_stmt *stmt) {
+                             struct ir_func *func,
+                             struct ir_basicblock *basicblock,
+                             struct ir_stmt *stmt) {
   VALIDATION_CHECKZ(stmt->id != DETACHED_STMT, stmt, "stmt is detached!");
 
   VALIDATION_CHECKZ(stmt->basicblock, stmt, "stmt has no basicblock!");
-  VALIDATION_CHECK(stmt->basicblock == basicblock, stmt, "stmt attached to basicblock %zu but should be attached to %zu", stmt->basicblock->id, basicblock->id);
+  VALIDATION_CHECK(
+      stmt->basicblock == basicblock, stmt,
+      "stmt attached to basicblock %zu but should be attached to %zu",
+      stmt->basicblock->id, basicblock->id);
   VALIDATION_CHECKZ(!(stmt->flags & IR_STMT_FLAG_PHI), stmt,
                     "only phi stmt should be at start of bb");
 
-  VALIDATION_CHECKZ((stmt->first == NULL) == (stmt->last == NULL), stmt, "either stmt->first and stmt->last should be NULL, or neither");
+  VALIDATION_CHECKZ(
+      (stmt->first == NULL) == (stmt->last == NULL), stmt,
+      "either stmt->first and stmt->last should be NULL, or neither");
 
   struct ir_op *op = stmt->first;
 
@@ -670,9 +685,15 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
     return;
   }
 
-  VALIDATION_CHECKZ((basicblock->first == NULL) == (basicblock->last == NULL), basicblock, "either basicblock->first and basicblock->last should be NULL, or neither");
+  VALIDATION_CHECKZ((basicblock->first == NULL) == (basicblock->last == NULL),
+                    basicblock,
+                    "either basicblock->first and basicblock->last should be "
+                    "NULL, or neither");
 
-  VALIDATION_CHECK(basicblock->func == func, basicblock, "basicblock attached to func '%s' but should be attached to '%s'", basicblock->func->name, func->name);
+  VALIDATION_CHECK(
+      basicblock->func == func, basicblock,
+      "basicblock attached to func '%s' but should be attached to '%s'",
+      basicblock->func->name, func->name);
 
   for (size_t i = 0; i < basicblock->num_preds; i++) {
     struct ir_basicblock *pred = basicblock->preds[i];
@@ -700,7 +721,7 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
     VALIDATION_CHECK(has_pred(basicblock, basicblock->merge.target), basicblock,
                      "basicblock has target %zu but it is not in preds for "
                      "that basicblock",
-                     basicblock->split.false_target->id);
+                     basicblock->merge.target->id);
     break;
   case IR_BASICBLOCK_TY_SWITCH:
     for (size_t i = 0; i < basicblock->switch_case.num_cases; i++) {
@@ -709,16 +730,18 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
           basicblock,
           "basicblock has switch target %zu but it is not in preds for that "
           "basicblock",
-          basicblock->split.false_target->id);
+          basicblock->switch_case.cases[i].target->id);
     }
 
-    VALIDATION_CHECKZ(basicblock->switch_case.default_target, basicblock, "basicblock has no default target! some code acts as if this is legal, but it is not");
+    VALIDATION_CHECKZ(basicblock->switch_case.default_target, basicblock,
+                      "basicblock has no default target! some code acts as if "
+                      "this is legal, but it is not");
     VALIDATION_CHECK(
         has_pred(basicblock, basicblock->switch_case.default_target),
         basicblock,
         "basicblock has default_target %zu but it is not in preds for that "
         "basicblock",
-        basicblock->split.false_target->id);
+        basicblock->switch_case.default_target->id);
     break;
   }
 
@@ -869,24 +892,24 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
   }
 
   size_t num_errs = vector_length(state.errors);
-  if (!num_errs) {
+
+  if (num_errs) {
+    fprintf(stderr, "*** IR VALIDATION FAILED ****\n");
+
+    for (size_t i = 0; i < num_errs; i++) {
+      struct ir_validate_error *error = vector_get(state.errors, i);
+
+      fprintf(stderr, "Validation error: %s\n", error->err);
+      debug_print_ir_object(stderr, &error->object);
+
+      fprintf(stderr, "\n\n\n");
+    }
+
     vector_free(&state.errors);
-    return;
-  }
 
-  fprintf(stderr, "*** IR VALIDATION FAILED ****\n");
-
-  for (size_t i = 0; i < num_errs; i++) {
-    struct ir_validate_error *error = vector_get(state.errors, i);
-
-    fprintf(stderr, "Validation error: %s\n", error->err);
-    debug_print_ir_object(stderr, &error->object);
-
-    fprintf(stderr, "\n\n\n");
+    BUG("VALIDATION FAILED");
   }
 
   vector_free(&state.errors);
-
-  BUG("VALIDATION FAILED");
 }
 #endif
