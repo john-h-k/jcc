@@ -151,4 +151,9 @@ void opts_cnst_branches(struct ir_unit *unit) {
                            .op_callback = opts_cnst_branches_op};
 
   opts_run_op_pass(unit, &pass);
+
+  if (data.bb_to_entry) {
+    // TODO: reuse hashtbl (have clear method)
+    hashtbl_free(&data.bb_to_entry);
+  }
 }
