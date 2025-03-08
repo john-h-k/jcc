@@ -129,7 +129,7 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
-static const char *get_default_isysroot(enum compile_target target) {
+static const char *get_default_isysroot(struct arena_allocator *arena, enum compile_target target) {
   // requires target to have been resolved
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
@@ -139,12 +139,13 @@ static const char *get_default_isysroot(enum compile_target target) {
       return env;
     }
 
-    TODO("support macOS without SDKROOT set");
-
-    // FIXME: expects macos platform! should have an assert for that
-    // const char *cmd = "xcrun --show-sdk-path";
-    // system(cmd);
-    break;
+#if OS_APPLE
+    // POSIX!! not C-std. we should have an alternatie
+    FILE *p = popen("xcrun --show-sdk-path", "-r");
+    return read_file(arena, p);
+#else
+    warn("no isysroot found!");
+#endif
   }
   default:
     return "";
@@ -152,7 +153,7 @@ static const char *get_default_isysroot(enum compile_target target) {
 }
 
 static enum parse_args_result
-try_get_compile_args(int argc, char **argv, struct parsed_args *args,
+try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct arena_allocator *arena,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
@@ -266,7 +267,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   }
 
   if (!args->isys_root) {
-    compile_args->isys_root = get_default_isysroot(compile_args->target);
+    compile_args->isys_root = get_default_isysroot(arena, compile_args->target);
   }
 
   return PARSE_ARGS_RESULT_SUCCESS;
@@ -305,7 +306,7 @@ static int jcc_main(int argc, char **argv) {
   size_t num_sources;
   const char **sources;
   enum parse_args_result parse_result = try_get_compile_args(
-      argc, argv, &args, &compile_args, &num_sources, &sources);
+      argc, argv, &args, arena, &compile_args, &num_sources, &sources);
 
   switch (parse_result) {
   case PARSE_ARGS_RESULT_SUCCESS:

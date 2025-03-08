@@ -407,6 +407,7 @@ static bool parse_attribute_list(struct parser *parser,
   do {
     if (!parse_attribute(parser, &sub_attribute)) {
       backtrack(parser->lexer, pos);
+      *attribute_list = (struct ast_attribute_list){0};
       return false;
     }
 
@@ -1066,7 +1067,10 @@ static bool parse_declarator(struct parser *parser,
 
   parse_pointer_list(parser, &declarator->pointer_list);
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
-  parse_attribute_specifier(parser, &declarator->attribute_specifier);
+
+  if (!parse_attribute_specifier(parser, &declarator->attribute_specifier)) {
+    declarator->attribute_specifier = (struct ast_attribute_specifier){0};
+  }
 
   bool has_declarator =
       declarator->direct_declarator_list.num_direct_declarators;
