@@ -142,6 +142,7 @@ static const char *get_default_isysroot(struct arena_allocator *arena, enum comp
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
     FILE *p = popen("xcrun --show-sdk-path", "-r");
+    invariant_assert(p, "xcrun failed!");
     return read_file(arena, p);
 #else
     warn("no isysroot found!");

@@ -95,8 +95,8 @@ struct arg {
 #define TARGET_ENUM_LIST                                                       \
   ENUM_FN(COMPILE_TARGET_MACOS_ARM64, "aarch64-apple-darwin")                  \
   ENUM_FN(COMPILE_TARGET_MACOS_X86_64, "x86_64-apple-darwin")                  \
-  ENUM_FN(COMPILE_TARGET_LINUX_ARM64, "aarch64-unknown-linux-gnu")             \
-  ENUM_FN(COMPILE_TARGET_LINUX_X86_64, "x86_64-unknown-linux-gnu")             \
+  ENUM_FN(COMPILE_TARGET_LINUX_ARM64, "aarch64-linux-gnu")             \
+  ENUM_FN(COMPILE_TARGET_LINUX_X86_64, "x86_64-linux-gnu")             \
   ENUM_FN(COMPILE_TARGET_EEP, "eep-unknown-unknown")                           \
   ENUM_FN(COMPILE_TARGET_LINUX_RV32I, "rv32i-unknown-elf")
 
