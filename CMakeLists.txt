@@ -45,6 +45,7 @@ set(
   ir/eliminate_phi.c
   ir/prettyprint.c
   ir/validate.c
+  ir/rw.c
 
   opts/opts.c
   opts/cnst_fold.c

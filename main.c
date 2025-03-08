@@ -177,13 +177,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     output = (struct compile_file){
         .ty = COMPILE_FILE_TY_NONE,
     };
-  } else if (!strcmp(args->output, "stdout")) {
+  } else if (!strcmp(args->output, "-")) {
     output = (struct compile_file){
         .ty = COMPILE_FILE_TY_STDOUT,
-    };
-  } else if (!strcmp(args->output, "stderr")) {
-    output = (struct compile_file){
-        .ty = COMPILE_FILE_TY_STDERR,
     };
   } else {
     output =
@@ -421,7 +417,6 @@ static int jcc_main(int argc, char **argv) {
       output = compile_args.output.path;
       break;
     case COMPILE_FILE_TY_STDOUT:
-    case COMPILE_FILE_TY_STDERR:
       BUG("linking to stdout/stderr not supported");
     }
 

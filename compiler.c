@@ -109,8 +109,6 @@ FILE *compiler_open_file(struct compile_file file) {
     return fopen(file.path, "w");
   case COMPILE_FILE_TY_STDOUT:
     return stdout;
-  case COMPILE_FILE_TY_STDERR:
-    return stderr;
   }
 }
 
