@@ -352,7 +352,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // we want last store _before_ that in bb
 
   // need to sort uses so we can walk in a temporal way, updating as we encounter new stores
-  if (lcl_uses) {
+  if (vector_head(lcl_uses)) {
     qsort(vector_head(lcl_uses), vector_length(lcl_uses), vector_element_size(lcl_uses), sort_lcl_uses);
   }
 
