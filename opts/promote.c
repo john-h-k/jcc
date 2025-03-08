@@ -40,7 +40,9 @@ static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses,
 static void check_store(struct ir_op_use_map *use_map, struct vector *lcl_uses,
                         struct ir_op *op, struct ir_op *addr, size_t field_idx,
                         bool *candidate) {
-  if (op->store.ty != IR_OP_STORE_TY_ADDR || op->store.addr != addr) {
+  if ((op->store.ty == IR_OP_STORE_TY_ADDR && op->store.addr != addr) ||
+      (op->store.ty == IR_OP_STORE_TY_LCL && op->store.value == op) ||
+      (op->store.ty == IR_OP_STORE_TY_GLB)) {
     // don't consider stores where the address is the value _being stored_
     *candidate = false;
     return;
@@ -95,7 +97,8 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
       // TODO: support partial zeroinit
       struct ir_lcl *lcl = addr->addr.lcl;
       if (field_idx || mem_set.value ||
-          mem_set.length < ir_var_ty_info(data->func->unit, &lcl->var_ty).size) {
+          mem_set.length <
+              ir_var_ty_info(data->func->unit, &lcl->var_ty).size) {
         *data->candidate = false;
         return;
       }
@@ -140,7 +143,8 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
 
         struct ir_var_ty el_ty = *array_ty.array.underlying;
 
-        struct ir_var_ty_info el_info = ir_var_ty_info(data->func->unit, &el_ty);
+        struct ir_var_ty_info el_info =
+            ir_var_ty_info(data->func->unit, &el_ty);
 
         offset_field_idx = offset / el_info.size;
         offset_found = offset % el_info.size == 0 && offset_field_idx < num_els;
@@ -238,7 +242,7 @@ static void gen_var_phis(struct ir_func *irb, struct hashtbl *stores,
 
     for (size_t i = 0; i < basicblock->num_preds; i++) {
       struct ir_build_phi_build pred_build = {.entry = &phi->phi.values[i],
-                                         .pred = basicblock->preds[i]};
+                                              .pred = basicblock->preds[i]};
 
       vector_push_back(preds, &pred_build);
     }
@@ -476,7 +480,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         vector_push_back(depends, &dep_use->consumer);
       }
 
-      DEBUG_ASSERT(!ir_op_is_branch(detach->ty), "should not be detaching branch");
+      DEBUG_ASSERT(!ir_op_is_branch(detach->ty),
+                   "should not be detaching branch");
       ir_detach_op(func, detach);
     }
   }
@@ -531,8 +536,8 @@ static void opts_promote_func(struct ir_func *func) {
             check_store(&use_map, lcl_uses[lcl->id], op, NULL, 0,
                         &candidates[lcl->id]);
 
-            if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
-                op->var_ty.ty != IR_VAR_TY_TY_POINTER) {
+            if (op->store.value->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE &&
+                op->store.value->var_ty.ty != IR_VAR_TY_TY_POINTER) {
               candidates[lcl->id] = false;
             } else {
               struct lcl_use lcl_use = {.op = op, .field_idx = 0};
@@ -560,7 +565,8 @@ static void opts_promote_func(struct ir_func *func) {
           if (op->addr.ty == IR_OP_ADDR_TY_LCL) {
             struct ir_lcl *lcl = op->addr.lcl;
 
-            struct ir_var_ty_info info = ir_var_ty_info(func->unit, &lcl->var_ty);
+            struct ir_var_ty_info info =
+                ir_var_ty_info(func->unit, &lcl->var_ty);
 
             struct addr_uses_data data = {.func = func,
                                           .lcl_uses = lcl_uses[lcl->id],
@@ -602,7 +608,8 @@ static void opts_promote_func(struct ir_func *func) {
 
       opts_do_promote(func, lcl_uses[lcl->id], lcl);
 
-      if (!(lcl->flags & IR_LCL_FLAG_PARAM) && lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED) {
+      if (!(lcl->flags & IR_LCL_FLAG_PARAM) &&
+          lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED) {
         vector_push_back(lcls_to_remove, &lcl);
       }
     }
