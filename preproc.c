@@ -242,7 +242,8 @@ static struct preproc_text create_preproc_text(struct preproc *preproc,
       path ? path_components(preproc->arena, path)
            : (struct path_components){NULL, NULL, NULL};
 
-  struct vector *enabled = vector_create(sizeof(bool));
+  // FIXME: should have this in temp arena
+  struct vector *enabled = vector_create_in_arena(sizeof(bool), preproc->arena);
 
   bool is_enabled = true;
   vector_push_back(enabled, &is_enabled);
