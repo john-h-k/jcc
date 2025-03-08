@@ -314,6 +314,7 @@ static int jcc_main(int argc, char **argv) {
     if (!strcmp(components.ext, "o")) {
       // is object file
 
+      info("linking object file '%s", source_path);
       objects[i] = source_path;
       continue;
     } else if (!strcmp(components.ext, "h")) {

@@ -15,11 +15,6 @@ static void remove_critical_edges(struct ir_func *irb) {
   while (basicblock) {
     size_t num_preds = basicblock->num_preds;
 
-    struct ir_stmt *phi_stmt = NULL;
-    if (basicblock->first && (basicblock->first->flags & IR_STMT_FLAG_PHI)) {
-      phi_stmt = basicblock->first;
-    }
-
     if (num_preds > 1) {
       for (size_t i = 0; i < num_preds; i++) {
         struct ir_basicblock *pred = basicblock->preds[i];
@@ -71,8 +66,10 @@ static void remove_critical_edges(struct ir_func *irb) {
 
         DEBUG_ASSERT(intermediate->num_preds == 1, "intermediate has >1 pred");
 
-        if (phi_stmt) {
+        if (basicblock->first && (basicblock->first->flags & IR_STMT_FLAG_PHI)) {
+          struct ir_stmt *phi_stmt = basicblock->first;
           struct ir_op *phi = phi_stmt->first;
+
           while (phi) {
             DEBUG_ASSERT(phi->ty == IR_OP_TY_PHI, "expected phi");
 
@@ -83,7 +80,6 @@ static void remove_critical_edges(struct ir_func *irb) {
               if (entry->basicblock == pred) {
                 entry->basicblock = intermediate;
                 found = true;
-                break;
               }
             }
 
@@ -916,10 +912,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
         vector_push_back(new_args, &arg);
 
       } else {
-        bool detach = true;
         if (arg->ty != IR_OP_TY_LOAD) {
           arg = ir_spill_op(func, arg);
-          detach = false;
         }
 
         struct ir_op *addr = ir_build_addr(func, arg);
@@ -944,10 +938,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           vector_push_back(new_args, &load);
 
           last = load;
-        }
-
-        if (detach) {
-          ir_detach_op(func, arg);
         }
       }
       break;
@@ -1184,14 +1174,23 @@ static void lower_params_registers(struct ir_func *func) {
 
         struct ir_op *value = gather_val->value;
 
+        struct ir_op *mov = ir_insert_before_op(func, ret_value, IR_OP_TY_MOV, value->var_ty);
+        mov->mov = (struct ir_op_mov){
+          .value = value
+        };
+
         // FIXME: again will fail on registers which return multiple fields in
         // one reg e.g bool[2]
-        value->reg = call_info.ret->regs[i].reg;
-        value->flags |= IR_OP_FLAG_FIXED_REG;
+        mov->reg = call_info.ret->regs[i].reg;
+        mov->flags |= IR_OP_FLAG_FIXED_REG;
+
+        gather_val->value = mov;
       }
       ret_value->flags |= IR_OP_FLAG_FIXED_REG;
 
     } else if (ret_value->ty == IR_OP_TY_MOV) {
+      // TODO: add movs to prevent fixed reg causing LSRA to break
+
       DEBUG_ASSERT(func->call_info.ret->num_regs == 1,
                    "mov but multi reg return? expected gather");
       ret_value->reg = func->call_info.ret->regs[0].reg;

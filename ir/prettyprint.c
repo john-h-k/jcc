@@ -390,7 +390,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     break;
   case IR_OP_TY_MOV:
     if (op->mov.value) {
-      fprintf(file, "%%%zu", op->mov.value->id);
+      debug_print_op_use(file, irb, op->mov.value);
       fprintf(file, " : (");
       debug_print_ir_reg(file, op->mov.value->reg);
       fprintf(file, " -> ");

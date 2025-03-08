@@ -318,16 +318,7 @@ static void ir_validate_op(struct ir_validate_state *state,
           ir_var_ty_eq(state->unit, &op->var_ty, &entry->value->var_ty), op,
           "op entry had different type to op!");
 
-      // FIXME: inefficient
-      bool found = false;
-      for (size_t j = 0; j < op->stmt->basicblock->num_preds; j++) {
-        if (op->stmt->basicblock->preds[j] == entry->basicblock) {
-          found = true;
-          break;
-        }
-      }
-
-      VALIDATION_CHECK(found, op, "op entry had bb %zu which was not a pred",
+      VALIDATION_CHECK(ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock), op, "op entry had bb %zu which was not a pred",
                        entry->basicblock->id);
     }
     break;
@@ -636,6 +627,8 @@ static void ir_validate_stmt(struct ir_validate_state *state,
   VALIDATION_CHECKZ(!(stmt->flags & IR_STMT_FLAG_PHI), stmt,
                     "only phi stmt should be at start of bb");
 
+  VALIDATION_CHECKZ((stmt->first == NULL) == (stmt->last == NULL), stmt, "either stmt->first and stmt->last should be NULL, or neither");
+
   struct ir_op *op = stmt->first;
 
   if (op && ir_op_is_branch(op->ty)) {
@@ -676,6 +669,8 @@ static void ir_validate_basicblock(struct ir_validate_state *state,
   if (!basicblock->func) {
     return;
   }
+
+  VALIDATION_CHECKZ((basicblock->first == NULL) == (basicblock->last == NULL), basicblock, "either basicblock->first and basicblock->last should be NULL, or neither");
 
   VALIDATION_CHECK(basicblock->func == func, basicblock, "basicblock attached to func '%s' but should be attached to '%s'", basicblock->func->name, func->name);
 
