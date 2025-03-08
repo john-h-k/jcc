@@ -576,4 +576,6 @@ void opts_inline(struct ir_unit *unit) {
                            .func_callback = opts_inline_func};
 
   opts_run_func_pass(unit, &pass);
+
+  hashtbl_free(&inline_info.inlined);
 }
