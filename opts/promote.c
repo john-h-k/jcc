@@ -23,6 +23,8 @@ struct lcl_use {
   size_t field_idx;
 };
 
+// TODO: more granular checking and support copies
+
 static void check_load(struct ir_op_use_map *use_map, struct vector *lcl_uses,
                        struct ir_op *op, size_t field_idx, bool *candidate) {
   struct ir_op_usage *usage = &use_map->op_use_datas[op->id];
