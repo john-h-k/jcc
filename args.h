@@ -57,7 +57,7 @@ struct arg {
   };
 };
 
-#define CODEGEN_FLAG_ENUM_LIST                                                      \
+#define CODEGEN_FLAG_ENUM_LIST                                                 \
   ENUM_FN(CODEGEN_FLAG_NONE, "none")                                           \
   ENUM_FN(CODEGEN_FLAG_MNEMONICS, "mnemonics")
 
@@ -213,8 +213,12 @@ VALUES_FN(c_standard, C_STANDARD)
            "Only run preprocessor and compiler; output object file without "   \
            "linking")                                                          \
                                                                                \
-  ARG_STRING_LIST(include_paths, "-I", "",                                     \
-                  "Directories to search for `#include` directives")           \
+  ARG_STRING(isys_root, "", "-isysroot",                                        \
+             "Directories to search for `#include <header>` directives")       \
+                                                                               \
+  ARG_STRING_LIST(                                                             \
+      include_paths, "-I", "",                                                 \
+      "Directories to search for `#include \" header\"` directives")           \
                                                                                \
   ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")           \
                                                                                \
@@ -234,14 +238,18 @@ VALUES_FN(c_standard, C_STANDARD)
   ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
              "C standard to use")                                              \
                                                                                \
-  ARG_FLAGS(enum codegen_flags, codegen_flags, "-C", "--codegen", codegen_flags, "Codegen flags")             \
+  ARG_FLAGS(enum codegen_flags, codegen_flags, "-C", "--codegen",              \
+            codegen_flags, "Codegen flags")                                    \
                                                                                \
   ARG_BOOL(use_graphcol_regalloc, "", "--use-graphcol",                        \
-           "[EXPERIMENTAL] Use graph-colouring based regalloc")                \
+           "[EXPERIMENTAL] Use "                                               \
+           "graph-colouring "                                                  \
+           "based regalloc")                                                   \
                                                                                \
   ARG_BOOL(profile, "", "--profile", "Run profiler")                           \
                                                                                \
-  /* ------------------------- Debug-only options ------------------------- */ \
+  /* ------------------------- Debug-only options                              \
+     ------------------------- */                                              \
                                                                                \
   ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
             "[DEBUG] Log level flags")                                         \

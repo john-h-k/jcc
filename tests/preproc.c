@@ -1,6 +1,9 @@
 // expected value: 8
 // stdout: Hello, World! 10
 
+#ifndef PREPROC_C
+#define PREPROC_C
+
 #define FOO \
 \
 \
@@ -18,7 +21,13 @@ int printf(const char *, ...);
 
 #define PRINT(fmt, ...) printf(fmt, __VA_ARGS__)
 
+#define NOP(x)
+#define NOP2(x) NOP(x)
+
 int main() {
+  NOP(hello);
+  NOP2(Hello);
+
   EMPTY(hi, how are, you);
 
   int a = FOO;
@@ -54,3 +63,5 @@ int main() {
   return 5;
 #endif
 }
+
+#endif

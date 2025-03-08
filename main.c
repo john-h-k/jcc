@@ -204,6 +204,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .opts_level = args->opts,
 
       .fixed_timestamp = args->timestamp,
+      .isys_root = args->isys_root,
       .include_paths = args->include_paths.values,
       .num_include_paths = args->include_paths.num_values,
 
