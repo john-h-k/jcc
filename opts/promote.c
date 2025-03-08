@@ -5,6 +5,7 @@
 #include "../ir/prettyprint.h"
 #include "../log.h"
 #include "../vector.h"
+#include "opts.h"
 
 struct addr_uses_data {
   struct ir_func *func;
@@ -41,7 +42,7 @@ static void check_store(struct ir_op_use_map *use_map, struct vector *lcl_uses,
                         struct ir_op *op, struct ir_op *addr, size_t field_idx,
                         bool *candidate) {
   if ((op->store.ty == IR_OP_STORE_TY_ADDR && op->store.addr != addr) ||
-      (op->store.ty == IR_OP_STORE_TY_LCL && op->store.value == op) ||
+      (op->store.ty == IR_OP_STORE_TY_LCL && op->store.value == addr) ||
       (op->store.ty == IR_OP_STORE_TY_GLB)) {
     // don't consider stores where the address is the value _being stored_
     *candidate = false;
@@ -108,6 +109,7 @@ static void check_addr_uses(struct addr_uses_data *data, struct ir_op *op,
     }
 
     case IR_OP_TY_MOV:
+      check_addr_uses(data, consumer, field_idx);
       break;
 
     case IR_OP_TY_ADDR_OFFSET: {
@@ -287,6 +289,20 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
   vector_free(&phi_builds);
 }
 
+
+static int sort_lcl_uses(const void *a, const void *b) {
+  const struct lcl_use *l = a;
+  const struct lcl_use *r = b;
+
+  if (l->op->id > r->op->id) {
+    return 1;
+  } else if (l->op->id == r->op->id) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
 static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
                             struct ir_lcl *lcl) {
   size_t num_uses = vector_length(lcl_uses);
@@ -334,6 +350,9 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
 
   // FIXME: when generating phis, we want last store, but when generating movs,
   // we want last store _before_ that in bb
+
+  // need to sort uses so we can walk in a temporal way, updating as we encounter new stores
+  qsort(vector_head(lcl_uses), vector_length(lcl_uses), vector_element_size(lcl_uses), sort_lcl_uses);
 
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);
@@ -443,8 +462,6 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
     }
   }
 
-  ir_simplify_phis(func);
-
   // can't reuse map from parent because we have added ops
   struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
@@ -459,6 +476,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
     while (vector_length(depends)) {
       struct ir_op *detach = *(struct ir_op **)vector_pop(depends);
 
+      DEBUG_ASSERT(detach->ty != IR_OP_TY_CALL, "shouldn't be detaching call");
+
       if (detach->id == DETACHED_OP) {
         continue;
       }
@@ -472,8 +491,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
       for (size_t k = 0; k < dep_usage->num_uses; k++) {
         struct ir_op_use *dep_use = &dep_usage->uses[k];
 
-        if (dep_use->consumer->ty == IR_OP_TY_STORE &&
-            dep_use->ty == IR_OP_USE_TY_DEREF) {
+        if (dep_use->ty == IR_OP_USE_TY_DEREF) {
+          // if it uses the value as an address, further uses are not to be removed
           continue;
         }
 
@@ -492,7 +511,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   hashtbl_free(&last_bb_store);
 }
 
-static void opts_promote_func(struct ir_func *func) {
+static bool opts_promote_pass(struct ir_func *func) {
   // rebuilds op ids, important for later
   struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
@@ -501,7 +520,7 @@ static void opts_promote_func(struct ir_func *func) {
       arena_alloc(func->arena, sizeof(*candidates) * func->lcl_count);
 
   if (!candidates) {
-    return;
+    return false;
   }
 
   memset(candidates, true, sizeof(*candidates) * func->lcl_count);
@@ -627,25 +646,31 @@ static void opts_promote_func(struct ir_func *func) {
   }
 
   vector_free(&lcls_to_remove);
+
+  return num > 0;
+}
+
+static void opts_promote_func(struct ir_func *func, UNUSED void *data) {
+  bool promoted = true;
+  while (promoted) {
+    promoted = opts_promote_pass(func);
+
+    debug("promote pass done. continuing? %s\n", promoted ? "yes" : "no");
+
+    // we need to clear flags from the last pass
+    struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+    struct ir_op *op;
+    while (ir_func_iter_next(&iter, &op)) {
+      op->flags &= ~IR_OP_FLAG_PROMOTED;
+    }
+
+    ir_simplify_phis(func);
+  }
 }
 
 void opts_promote(struct ir_unit *unit) {
-  struct ir_glb *glb = unit->first_global;
+  struct opts_func_pass pass = {.name = __func__,
+                                .func_callback = opts_promote_func};
 
-  while (glb) {
-    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
-      glb = glb->succ;
-      continue;
-    }
-
-    switch (glb->ty) {
-    case IR_GLB_TY_DATA:
-      break;
-    case IR_GLB_TY_FUNC:
-      opts_promote_func(glb->func);
-      break;
-    }
-
-    glb = glb->succ;
-  }
+  opts_run_func_pass(unit, &pass);
 }

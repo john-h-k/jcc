@@ -98,6 +98,14 @@ static struct ir_stmt *ir_clone_stmt(struct ir_func *func, struct ir_stmt *stmt,
 
   hashtbl_insert(cloned, &stmt, &copy);
 
+  if (stmt->pred) {
+    copy->pred = ir_clone_stmt(func, stmt->pred, cloned);
+  }
+
+  if (stmt->succ) {
+    copy->succ = ir_clone_stmt(func, stmt->succ, cloned);
+  }
+
   copy->flags = stmt->flags;
   return copy;
 }
@@ -422,6 +430,14 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     // just pulls from cache, but not efficient, should walk the new ops
     struct ir_op *op_copy = ir_clone_op(func, to_clone, cloned);
 
+    if (op_copy->pred == NULL) {
+      op_copy->stmt->first = op_copy;
+    }
+
+    if (op_copy->succ == NULL) {
+      op_copy->stmt->last = op_copy;
+    }
+
     struct clone_uses_data clone_data = {.func = func, .cloned = cloned};
     ir_walk_op_uses(op_copy, clone_uses, &clone_data);
 
@@ -567,6 +583,7 @@ static void opts_inline_func(struct ir_func *func, void *data) {
 }
 
 void opts_inline(struct ir_unit *unit) {
+  return;
   struct opts_inline_info inline_info = {
       .inlined = hashtbl_create(sizeof(struct ir_func *),
                                 sizeof(enum opts_inline_stage), NULL, NULL)};

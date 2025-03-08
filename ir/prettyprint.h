@@ -86,10 +86,16 @@ void debug_print_ir_object(FILE *file, const struct ir_object *object);
 void debug_print_func_info(FILE *file, struct ir_unit *iru,
                            const struct ir_func_info *func_info);
 
-#define DEBUG_PRINT_IR(file, obj)                                              \
+#define FDEBUG_PRINT_IR(file, obj)                                              \
   do {                                                                         \
     struct ir_object ir_obj = IR_MK_OBJECT((obj));                             \
     debug_print_ir_object((file), &ir_obj);                                    \
+  } while (0);
+
+#define DEBUG_PRINT_IR(obj)                                              \
+  do {                                                                         \
+    struct ir_object ir_obj = IR_MK_OBJECT((obj));                             \
+    debug_print_ir_object(stderr, &ir_obj);                                    \
   } while (0);
 
 #endif

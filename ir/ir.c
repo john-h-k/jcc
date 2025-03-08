@@ -2118,6 +2118,10 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
   // now move all later instructions to the end bb
   // first break up the stmt we are in
   end_stmt->first = insert_after->succ;
+  if (!end_stmt->first) {
+    end_stmt->last = NULL;
+  }
+
   if (insert_after->succ) {
     insert_after->succ->pred = NULL;
   }
@@ -2135,10 +2139,12 @@ ir_insert_basicblocks_after_op(struct ir_func *irb, struct ir_op *insert_after,
   }
 
   struct ir_stmt *stmt = end_bb->first;
-
   struct ir_op *stmt_op = stmt->first;
+
+  stmt->first = stmt_op;
   while (stmt_op) {
     stmt_op->stmt = stmt;
+    stmt->last = stmt_op;
     stmt_op = stmt_op->succ;
   }
 
@@ -2938,14 +2944,14 @@ bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter,
     return false;
   case IR_BASICBLOCK_TY_SPLIT:
     switch (iter->idx) {
-      case 0:
-        *basicblock = iter->basicblock->split.true_target;
-        break;
-      case 1:
-        *basicblock = iter->basicblock->split.false_target;
-        break;
-      default:
-        return false;
+    case 0:
+      *basicblock = iter->basicblock->split.true_target;
+      break;
+    case 1:
+      *basicblock = iter->basicblock->split.false_target;
+      break;
+    default:
+      return false;
     }
 
     iter->idx++;
@@ -3289,7 +3295,53 @@ void ir_simplify_phis(struct ir_func *func) {
         while (op) {
           struct ir_op_phi *phi = &op->phi;
 
-          if (phi->num_values == 1) {
+          // given we expect small phis, i think doing n^2 double loop is
+          // actually most efficient
+
+          bool all_ops_phis = phi->num_values > 0;
+          for (size_t i = 0; i < phi->num_values; i++) {
+            if (phi->values[i].value->ty != IR_OP_TY_PHI) {
+              all_ops_phis = false;
+              break;
+            }
+          }
+
+          // something in this logic is broken
+          if (false && all_ops_phis) {
+            struct vector *entries = vector_create_in_arena(sizeof(struct ir_phi_entry),
+                                                 func->arena);
+
+            for (size_t i = 0; i < phi->num_values; i++) {
+              struct ir_op_phi sub = phi->values[i].value->phi;
+
+              size_t num_entries = vector_length(entries);
+              for (size_t j = 0; j < sub.num_values; j++) {
+                struct ir_op *v = sub.values[j].value;
+
+                bool found = false;
+                for (size_t k = 0; k < num_entries; k++) {
+                  struct ir_phi_entry *entry = vector_get(entries, k);
+                  if (entry->value == v) {
+                    found = true;
+                    break;
+                  }
+                }
+
+                if (!found) {
+                  struct ir_phi_entry new_entry = {
+                      .basicblock = phi->values[i].basicblock, .value = v};
+                  vector_push_back(entries, &new_entry);
+                }
+              }
+            }
+
+            phi->num_values = vector_length(entries);
+            phi->values = vector_head(entries);
+
+            op = op->succ;
+            improved = true;
+            continue;
+          } else if (phi->num_values == 1) {
             struct ir_op_usage usage = use_map.op_use_datas[op->id];
 
             for (size_t i = 0; i < usage.num_uses; i++) {
@@ -3334,9 +3386,8 @@ void ir_simplify_phis(struct ir_func *func) {
   }
 }
 
-
 bool ir_basicblock_is_pred(struct ir_basicblock *basicblock,
-                    struct ir_basicblock *pred) {
+                           struct ir_basicblock *pred) {
   switch (pred->ty) {
   case IR_BASICBLOCK_TY_RET:
     return false;
