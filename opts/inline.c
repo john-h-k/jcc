@@ -574,6 +574,8 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
 
   ir_rebuild_ids(func);
 
+  hashtbl_free(&cloned);
+
   return true;
 }
 
