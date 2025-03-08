@@ -142,6 +142,32 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     hashtbl_insert(preproc->defines, &ident, &define);                         \
   } while (0);
 
+  // HACK: apple headers have __asm in them in weird locations. we define a
+  // macro here to get rid of that
+  // FIXME pthis breaks other inline asm as it will silently vanish! should fix
+
+  {
+
+    size_t name_len = strlen("__asm");
+    struct sized_str ident = {.str = "__asm", .len = name_len};
+
+    struct preproc_define define = {
+        .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                 .span = MK_INVALID_TEXT_SPAN(0, name_len),
+                 .text = "__asm"},
+        .value = {
+            .ty = PREPROC_DEFINE_VALUE_TY_MACRO_FN,
+            .macro_fn = {
+              .num_params = 0,
+              .params = NULL,
+              .tokens = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena),
+              .flags = PREPROC_MACRO_FN_FLAG_VARIADIC
+            }
+        }};
+
+    hashtbl_insert(preproc->defines, &ident, &define);
+  }
+
   DEF_BUILTIN("__JCC__", "1");
   DEF_BUILTIN("__jcc__", "1");
 
@@ -2290,10 +2316,10 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         warnsl("preproc warning: ");
         for (size_t i = 0; i < num_directive_tokens; i++) {
           struct preproc_token *warn_token = vector_get(directive_tokens, i);
-          warnsl("%.*s", (int)text_span_len(&warn_token->span),
+          slogsl("%.*s", (int)text_span_len(&warn_token->span),
                  warn_token->text);
         }
-        warnsl("\n");
+        slogsl("\n");
       } else {
         TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
              directive.text);

@@ -7,7 +7,7 @@
 #include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
-#include "prettyprint.h"
+#include "../log.h"
 #include "var_refs.h"
 
 // break/continues will add an entry into the jumps vector

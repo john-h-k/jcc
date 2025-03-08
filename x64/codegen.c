@@ -1,6 +1,7 @@
 #include "codegen.h"
 
 #include "../util.h"
+#include "../log.h"
 #include "../x64.h"
 
 #include <stdio.h>

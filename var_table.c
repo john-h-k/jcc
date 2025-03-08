@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include "vector.h"
+#include "log.h"
 
 static struct var_table_scope
 var_table_scope_create(struct var_table_scope *prev) {

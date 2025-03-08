@@ -1,6 +1,7 @@
 #include "emit.h"
 
 #include "../vector.h"
+#include "../log.h"
 #include "emitter.h"
 
 #include <stdio.h>

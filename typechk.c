@@ -1,6 +1,7 @@
 #include "typechk.h"
 
 #include "alloc.h"
+#include "log.h"
 #include "compiler.h"
 #include "parse.h"
 #include "target.h"
@@ -1108,6 +1109,9 @@ type_specifiers(struct typechk *tchk,
     struct ast_declaration_specifier specifier = list->decl_specifiers[i];
 
     switch (specifier.ty) {
+    case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
+      // TODO: attributes
+      break;
     case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS)) {
         WARN("storage class specifier not valid");
