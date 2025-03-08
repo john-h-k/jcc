@@ -142,7 +142,9 @@ void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
                        void *data) {
   void *p = arena_alloc(allocator, size);
 
-  memcpy(p, data, size);
+  if (p && data) {
+    memcpy(p, data, size);
+  }
 
   return p;
 }
