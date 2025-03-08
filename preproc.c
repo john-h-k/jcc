@@ -427,10 +427,9 @@ static void preproc_next_raw_token(struct preproc *preproc,
       break;
     }
 
-    DEBUG_ASSERT(
-        vector_length(preproc_text->enabled) == 1,
-        "text %s ended with enabled depth of %zu (should have been 1)",
-        preproc_text->file, vector_length(preproc_text->enabled));
+    DEBUG_ASSERT(vector_length(preproc_text->enabled) == 1,
+                 "text %s ended with enabled depth of %zu (should have been 1)",
+                 preproc_text->file, vector_length(preproc_text->enabled));
 
     vector_pop(preproc->texts);
   }
@@ -1434,15 +1433,36 @@ enum try_find_include_mode {
 static bool try_include_path(struct preproc *preproc, const char *path,
                              const char **content,
                              enum try_find_include_mode mode) {
+
+  if (preproc->args.verbose) {
+    fprintf(stderr, "preproc: trying path '%s'\n", path);
+  }
+
+  bool found;
+
   switch (mode) {
   case TRY_FIND_INCLUDE_MODE_READ:
     *content = read_path(preproc->arena, path);
-    return *content != 0;
+    found = *content != NULL;
+    break;
   case TRY_FIND_INCLUDE_MODE_TEST: {
     FILE *file = fopen(path, "r");
     fclose(file);
-    return file != NULL;
+    found = file != NULL;
+    break;
   }
+  }
+
+  if (found) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: found\n");
+    }
+    return true;
+  } else {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: NOT found\n");
+    }
+    return false;
   }
 }
 
@@ -1469,20 +1489,8 @@ static struct include_info try_find_include(struct preproc *preproc,
       search_path = filename;
     }
 
-    if (preproc->args.verbose) {
-      fprintf(stderr,
-              "preproc: trying path '%s' for include '%s' in file '%s'\n",
-              search_path, filename, preproc_text->file);
-    }
-
-    info.content = read_path(preproc->arena, search_path);
-
-    if (preproc->args.verbose) {
-      if (info.content) {
-        fprintf(stderr, "preproc: found\n");
-      } else {
-        fprintf(stderr, "did not find\n");
-      }
+    if (try_include_path(preproc, search_path, &info.content, mode)) {
+      return info;
     }
 
     info.path = search_path;
@@ -1492,18 +1500,8 @@ static struct include_info try_find_include(struct preproc *preproc,
         search_path = path_combine(preproc->arena,
                                    preproc->args.include_paths[i], filename);
 
-        if (preproc->args.verbose) {
-          fprintf(stderr,
-                  "preproc: trying path '%s' for include '%s' in file '%s'\n",
-                  search_path, filename, preproc_text->file);
-        }
-
         if (try_include_path(preproc, search_path, &info.content, mode)) {
-          fprintf(stderr, "preproc: found\n");
-
           return info;
-        } else if (preproc->args.verbose) {
-          fprintf(stderr, "did not find\n");
         }
       }
     }
@@ -1513,11 +1511,7 @@ static struct include_info try_find_include(struct preproc *preproc,
 
   info.path = search_path;
   if (try_include_path(preproc, search_path, &info.content, mode)) {
-    fprintf(stderr, "preproc: found\n");
-
     return info;
-  } else if (preproc->args.verbose) {
-    fprintf(stderr, "did not find\n");
   }
 
   return (struct include_info){0};
@@ -1942,22 +1936,22 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
 #define EXPANDED_DIR_TOKENS()                                                  \
   do {                                                                         \
-    bool old = *(bool *)vector_tail(preproc_text->enabled); \
-    *(bool *)vector_tail(preproc_text->enabled) = true; \
+    bool old = *(bool *)vector_tail(preproc_text->enabled);                    \
+    *(bool *)vector_tail(preproc_text->enabled) = true;                        \
     preproc_tokens_til_eol(preproc, preproc_text, directive_tokens,            \
                            PREPROC_TOKEN_MODE_EXPAND,                          \
                            PREPROC_EXPAND_TOKEN_FLAG_NONE);                    \
-    *(bool *)vector_tail(preproc_text->enabled) = old; \
+    *(bool *)vector_tail(preproc_text->enabled) = old;                         \
     num_directive_tokens = vector_length(directive_tokens);                    \
   } while (0)
 #define EXPANDED_UNDEF_ZERO_DIR_TOKENS()                                       \
   do {                                                                         \
-    bool old = *(bool *)vector_tail(preproc_text->enabled); \
-    *(bool *)vector_tail(preproc_text->enabled) = true; \
+    bool old = *(bool *)vector_tail(preproc_text->enabled);                    \
+    *(bool *)vector_tail(preproc_text->enabled) = true;                        \
     preproc_tokens_til_eol(preproc, preproc_text, directive_tokens,            \
                            PREPROC_TOKEN_MODE_EXPAND,                          \
                            PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO);              \
-    *(bool *)vector_tail(preproc_text->enabled) = old; \
+    *(bool *)vector_tail(preproc_text->enabled) = old;                         \
     num_directive_tokens = vector_length(directive_tokens);                    \
   } while (0)
 
@@ -2041,7 +2035,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                                     vector_length(directive_tokens), 0);
           }
           *(bool *)vector_tail(preproc_text->enabled) = now_enabled;
-          *(bool *)vector_get(preproc_text->enabled, num_enabled - 2) = now_enabled;
+          *(bool *)vector_get(preproc_text->enabled, num_enabled - 2) =
+              now_enabled;
         }
         continue;
       } else if (token_streq(directive, "elifdef")) {

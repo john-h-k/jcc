@@ -129,6 +129,28 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
+static const char *get_default_isysroot(enum compile_target target) {
+  // requires target to have been resolved
+  switch (target) {
+  case COMPILE_TARGET_MACOS_ARM64:
+  case COMPILE_TARGET_MACOS_X86_64: {
+    const char *env = getenv("SDKROOT");
+    if (env) {
+      return env;
+    }
+
+    TODO("support macOS without SDKROOT set");
+
+    // FIXME: expects macos platform! should have an assert for that
+    // const char *cmd = "xcrun --show-sdk-path";
+    // system(cmd);
+    break;
+  }
+  default:
+    return "";
+  }
+}
+
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
                      struct compile_args *compile_args, size_t *num_sources,
@@ -241,6 +263,10 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   if (!args->num_values) {
     err("No sources provided");
     return PARSE_ARGS_RESULT_FAIL;
+  }
+
+  if (!args->isys_root) {
+    compile_args->isys_root = get_default_isysroot(compile_args->target);
   }
 
   return PARSE_ARGS_RESULT_SUCCESS;
