@@ -9,7 +9,7 @@ void disable_log(void) { LOG_ENABLED = false; }
 bool log_enabled(void) { return LOG_ENABLED; }
 
 #ifdef NLOG
-#define DEF_LOG_FN(NAME, _PREFIX)                                              \
+#define DEF_LOG_FN(NAME, _PREFIX, force)                                              \
   bool NAME##_enabled(void)  { return false; }                         \
   void NAME##_nl(void) { (void)format; }                         \
   void NAME(const char *format, ...) { (void)format; }                         \
@@ -17,16 +17,16 @@ bool log_enabled(void) { return LOG_ENABLED; }
   void f##NAME(const char *format, ...) { (void)format; }                      \
   void f##NAME##sl(const char *format, ...) { (void)format; }
 #else
-#define DEF_LOG_FN(NAME, PREFIX)                                               \
+#define DEF_LOG_FN(NAME, PREFIX, force)                                               \
   bool NAME##_enabled(void)  { return LOG_ENABLED; }                         \
   void NAME##_nl(void) {                                         \
-    if (!LOG_ENABLED) {                                                        \
+    if (!force && !LOG_ENABLED) {                                                        \
       return;                                                                  \
     }                                                                          \
     fprintf(stderr, "\n");                                                     \
   } \
   void NAME(const char *format, ...) {                                         \
-    if (!LOG_ENABLED) {                                                        \
+    if (!force && !LOG_ENABLED) {                                                        \
       return;                                                                  \
     }                                                                          \
     va_list v;                                                                 \
@@ -37,7 +37,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     va_end(v);                                                                 \
   }                                                                            \
   void NAME##sl(const char *format, ...) {                                     \
-    if (!LOG_ENABLED) {                                                        \
+    if (!force && !LOG_ENABLED) {                                                        \
       return;                                                                  \
     }                                                                          \
     va_list v;                                                                 \
@@ -47,7 +47,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     va_end(v);                                                                 \
   }                                                                            \
   void f##NAME(FILE *file, const char *format, ...) {                          \
-    if (!LOG_ENABLED) {                                                        \
+    if (!force && !LOG_ENABLED) {                                                        \
       return;                                                                  \
     }                                                                          \
     va_list v;                                                                 \
@@ -58,7 +58,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     va_end(v);                                                                 \
   }                                                                            \
   void f##NAME##sl(FILE *file, const char *format, ...) {                      \
-    if (!LOG_ENABLED) {                                                        \
+    if (!force && !LOG_ENABLED) {                                                        \
       return;                                                                  \
     }                                                                          \
     va_list v;                                                                 \
@@ -79,10 +79,10 @@ bool log_enabled(void) { return LOG_ENABLED; }
 #define PR_WHITE "\x1B[37m"
 #define PR_BOLD "\033[1m"
 
-DEF_LOG_FN(err, PR_RED PR_BOLD "ERROR: ")
-DEF_LOG_FN(warn, PR_YELLOW PR_BOLD "WARN: ")
-DEF_LOG_FN(info, PR_GREEN PR_BOLD "INFO: ")
-DEF_LOG_FN(debug, PR_WHITE PR_BOLD "DEBUG: ")
-DEF_LOG_FN(trace, PR_WHITE PR_BOLD "TRACE: ")
+DEF_LOG_FN(err, PR_RED PR_BOLD "ERROR: ", true)
+DEF_LOG_FN(warn, PR_YELLOW PR_BOLD "WARN: ", true)
+DEF_LOG_FN(info, PR_GREEN PR_BOLD "INFO: ", false)
+DEF_LOG_FN(debug, PR_WHITE PR_BOLD "DEBUG: ", false)
+DEF_LOG_FN(trace, PR_WHITE PR_BOLD "TRACE: ", false)
 
-DEF_LOG_FN(slog, "")
+DEF_LOG_FN(slog, "", false)

@@ -478,6 +478,10 @@ static inline bool try_parse_str(const char *str, size_t len, unsigned long long
     char digit;
 
     char ch = str[i];
+    if (ch == 'L') {
+      break;
+    }
+
     if (ch >= '0' && ch <= '7') {
       digit = ch - '0';
     } else if (base > 8 && ch >= '8' && ch <= '9') {

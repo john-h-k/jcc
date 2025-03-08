@@ -5,7 +5,8 @@
 
 #include <stdio.h>
 
-struct path_components path_components(struct arena_allocator *arena, const char *path) {
+struct path_components path_components(struct arena_allocator *arena,
+                                       const char *path) {
   const char *last_slash = strrchr(path, '/');
 
   const char *dir;
@@ -27,20 +28,24 @@ struct path_components path_components(struct arena_allocator *arena, const char
     ext = "";
   }
 
-  return (struct path_components){.dir = dir, .file = file, .ext = ext };
+  return (struct path_components){.dir = dir, .file = file, .ext = ext};
 }
 
-char *path_combine(struct arena_allocator *arena, const char *l, const char *r) {
+char *path_combine(struct arena_allocator *arena, const char *l,
+                   const char *r) {
   size_t l_len = strlen(l);
   size_t r_len = strlen(r);
 
-  size_t total = l_len + 1 + r_len + 1;
+  size_t total = (l_len ? l_len + 1 : 0) + r_len + 1;
   char *path = arena_alloc(arena, sizeof(*path) * total);
 
   char *head = path;
-  memcpy(head, l, l_len);
-  head += l_len;
-  *head++ = '/';
+  if (l_len) {
+    memcpy(head, l, l_len);
+    head += l_len;
+    *head++ = '/';
+  }
+
   memcpy(head, r, r_len);
   head += r_len;
   *head++ = '\0';
@@ -48,7 +53,8 @@ char *path_combine(struct arena_allocator *arena, const char *l, const char *r) 
   return path;
 }
 
-char *path_replace_ext(struct arena_allocator *arena, const char *path, const char *ext) {
+char *path_replace_ext(struct arena_allocator *arena, const char *path,
+                       const char *ext) {
   DEBUG_ASSERT(ext[0] != '.', "ext should not start with the `.`");
 
   // NOTE: if given no extension, this will append
@@ -81,7 +87,8 @@ char *path_replace_ext(struct arena_allocator *arena, const char *path, const ch
   return buff;
 }
 
-char *path_add_ext(struct arena_allocator *arena, const char *path, const char *ext) {
+char *path_add_ext(struct arena_allocator *arena, const char *path,
+                   const char *ext) {
   DEBUG_ASSERT(ext[0] != '.', "ext should not start with the `.`");
 
   size_t path_len = strlen(path);
@@ -120,8 +127,8 @@ char *read_file(struct arena_allocator *arena, FILE *file) {
   long fsize = ftell(file);
 
   if (fsize == -1L) {
-    // can't tell size of file (e.g stdin), just iteratively read instead
-    #define READ_BUF_SZ (4096)
+// can't tell size of file (e.g stdin), just iteratively read instead
+#define READ_BUF_SZ (4096)
 
     size_t read = 0;
     size_t len = 0;

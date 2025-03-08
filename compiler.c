@@ -51,6 +51,7 @@ create_compiler(struct program *program, const struct target *target,
   struct preproc_create_args preproc_args = {
       .target = args->target,
       .path = path,
+      .isys_root = args->isys_root,
       .num_include_paths = args->num_include_paths,
       .include_paths = args->include_paths,
       .verbose = args->verbose,
