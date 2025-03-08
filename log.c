@@ -85,4 +85,4 @@ DEF_LOG_FN(info, PR_GREEN PR_BOLD "INFO: ", false)
 DEF_LOG_FN(debug, PR_WHITE PR_BOLD "DEBUG: ", false)
 DEF_LOG_FN(trace, PR_WHITE PR_BOLD "TRACE: ", false)
 
-DEF_LOG_FN(slog, "", false)
+DEF_LOG_FN(slog, "", true)
