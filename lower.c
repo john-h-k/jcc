@@ -398,11 +398,8 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
         .offset = offset
       };
 
-      addr_offset->flags |= IR_OP_FLAG_CONTAINED;
-
       struct ir_op *value = ir_insert_after_op(func, addr_offset, IR_OP_TY_CNST, IR_VAR_TY_NONE);
       ir_mk_zero_constant(func->unit, value, &set_ty);
-      value->flags |= IR_OP_FLAG_CONTAINED;
 
       struct ir_op *store = ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
@@ -509,16 +506,12 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
         .offset = offset
       };
 
-      src_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
-
       struct ir_op *dest_addr_offset= ir_insert_after_op(func, src_addr_offset, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
 
       dest_addr_offset->addr_offset = (struct ir_op_addr_offset){
         .base = dest,
         .offset = offset
       };
-
-      dest_addr_offset->flags |= IR_OP_FLAG_CONTAINED;
 
       struct ir_op *load = ir_insert_after_op(func, dest_addr_offset, IR_OP_TY_LOAD, set_ty);
       load->load = (struct ir_op_load){
