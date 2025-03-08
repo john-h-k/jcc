@@ -36,15 +36,6 @@ char *path_combine(struct arena_allocator *arena, const char *l,
   size_t l_len = strlen(l);
   size_t r_len = strlen(r);
 
-  if (r_len && r[0] == '/') {
-    r++;
-    r_len--;
-  }
-
-  if (l_len && l[l_len - 1] == '/') {
-    l_len--;
-  }
-
   size_t total = (l_len ? l_len + 1 : 0) + r_len + 1;
   char *path = arena_alloc(arena, sizeof(*path) * total);
 
@@ -53,6 +44,11 @@ char *path_combine(struct arena_allocator *arena, const char *l,
     memcpy(head, l, l_len);
     head += l_len;
     *head++ = '/';
+
+    if (r_len && r[0] == '/') {
+      r++;
+      r_len--;
+    }
   }
 
   memcpy(head, r, r_len);
