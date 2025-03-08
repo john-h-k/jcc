@@ -25,9 +25,10 @@ static void remove_critical_edges(struct ir_func *irb) {
         }
 
         // we have a critical edge
-        // insert it after the later of the two blocks because this helps liveness calculations
-        struct ir_basicblock *intermediate =
-            ir_insert_after_basicblock(irb, basicblock->id > pred->id ? basicblock : pred);
+        // insert it after the later of the two blocks because this helps
+        // liveness calculations
+        struct ir_basicblock *intermediate = ir_insert_after_basicblock(
+            irb, basicblock->id > pred->id ? basicblock : pred);
         intermediate->ty = IR_BASICBLOCK_TY_MERGE;
         intermediate->merge =
             (struct ir_basicblock_merge){.target = basicblock};
@@ -66,7 +67,8 @@ static void remove_critical_edges(struct ir_func *irb) {
 
         DEBUG_ASSERT(intermediate->num_preds == 1, "intermediate has >1 pred");
 
-        if (basicblock->first && (basicblock->first->flags & IR_STMT_FLAG_PHI)) {
+        if (basicblock->first &&
+            (basicblock->first->flags & IR_STMT_FLAG_PHI)) {
           struct ir_stmt *phi_stmt = basicblock->first;
           struct ir_op *phi = phi_stmt->first;
 
@@ -325,7 +327,7 @@ static void lower_br_switch(struct ir_func *func, struct ir_op *op) {
       propogate_switch_phis(func, bb, prev_bb, split_case->target);
       propogate_switch_phis(func, bb, prev_bb, bb_switch->default_target);
       ir_make_basicblock_split(func, prev_bb, split_case->target,
-                            bb_switch->default_target);
+                               bb_switch->default_target);
     }
   }
 }
@@ -355,12 +357,17 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
   op->br_cond.cond = neq;
 }
 
-#define MEMSET_THRESHOLD (128)
+// #define MEMSET_THRESHOLD (128)
+// disabled: failing tests (aarch64: can generate 8-byte loads of non 8-byte
+// aligned addresses and we don't generate byte-offset loads, other platforms:
+// unknown failure in vec3/main.c)
+#define MEMSET_THRESHOLD (0)
 
 static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->mem_set.addr;
 
-  // only gen for zero because there are efficient ways to write zero on all targets
+  // only gen for zero because there are efficient ways to write zero on all
+  // targets
   if (op->mem_set.length <= MEMSET_THRESHOLD && op->mem_set.value == 0) {
     size_t left = op->mem_set.length;
     struct ir_var_ty ptr = ir_var_ty_for_pointer_size(func->unit);
@@ -388,25 +395,24 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
 
       struct ir_op *addr_offset;
       if (last) {
-        addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                         IR_VAR_TY_POINTER);
       } else {
-        addr_offset = ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        addr_offset =
+            ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
       }
 
-      addr_offset->addr_offset = (struct ir_op_addr_offset){
-        .base = addr,
-        .offset = offset
-      };
+      addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = addr, .offset = offset};
 
-      struct ir_op *value = ir_insert_after_op(func, addr_offset, IR_OP_TY_CNST, IR_VAR_TY_NONE);
+      struct ir_op *value =
+          ir_insert_after_op(func, addr_offset, IR_OP_TY_CNST, IR_VAR_TY_NONE);
       ir_mk_zero_constant(func->unit, value, &set_ty);
 
-      struct ir_op *store = ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      struct ir_op *store =
+          ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR,
-        .addr = addr_offset,
-        .value = value
-      };
+          .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = value};
 
       last = store;
 
@@ -467,7 +473,8 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
   DEBUG_ASSERT(dest && source, "dest and source should be non null");
 
-  // only gen for zero because there are efficient ways to write zero on all targets
+  // only gen for zero because there are efficient ways to write zero on all
+  // targets
   if (op->mem_copy.length <= MEMSET_THRESHOLD) {
     size_t left = op->mem_copy.length;
 
@@ -496,35 +503,33 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
 
       struct ir_op *src_addr_offset;
       if (last) {
-        src_addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        src_addr_offset = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                             IR_VAR_TY_POINTER);
       } else {
-        src_addr_offset = ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        src_addr_offset =
+            ir_replace_op(func, op, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
       }
 
-      src_addr_offset->addr_offset = (struct ir_op_addr_offset){
-        .base = source,
-        .offset = offset
-      };
+      src_addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = source, .offset = offset};
 
-      struct ir_op *dest_addr_offset= ir_insert_after_op(func, src_addr_offset, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      struct ir_op *dest_addr_offset = ir_insert_after_op(
+          func, src_addr_offset, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
 
-      dest_addr_offset->addr_offset = (struct ir_op_addr_offset){
-        .base = dest,
-        .offset = offset
-      };
+      dest_addr_offset->addr_offset =
+          (struct ir_op_addr_offset){.base = dest, .offset = offset};
 
-      struct ir_op *load = ir_insert_after_op(func, dest_addr_offset, IR_OP_TY_LOAD, set_ty);
+      struct ir_op *load =
+          ir_insert_after_op(func, dest_addr_offset, IR_OP_TY_LOAD, set_ty);
       load->load = (struct ir_op_load){
-        .ty = IR_OP_LOAD_TY_ADDR,
-        .addr = src_addr_offset,
+          .ty = IR_OP_LOAD_TY_ADDR,
+          .addr = src_addr_offset,
       };
 
-      struct ir_op *store = ir_insert_after_op(func, load, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      struct ir_op *store =
+          ir_insert_after_op(func, load, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR,
-        .addr = dest_addr_offset,
-        .value = load
-      };
+          .ty = IR_OP_STORE_TY_ADDR, .addr = dest_addr_offset, .value = load};
 
       last = store;
 
@@ -968,7 +973,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
     // FIXME: don't use succ find usage
     struct ir_op *store = op->succ;
-    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s", func->name);
+    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s",
+                 func->name);
 
     // move store before op so the generated address is before the call
     ir_detach_op(func, store);
@@ -1261,10 +1267,9 @@ static void lower_params_registers(struct ir_func *func) {
 
         struct ir_op *value = gather_val->value;
 
-        struct ir_op *mov = ir_insert_before_op(func, ret_value, IR_OP_TY_MOV, value->var_ty);
-        mov->mov = (struct ir_op_mov){
-          .value = value
-        };
+        struct ir_op *mov =
+            ir_insert_before_op(func, ret_value, IR_OP_TY_MOV, value->var_ty);
+        mov->mov = (struct ir_op_mov){.value = value};
 
         // FIXME: again will fail on registers which return multiple fields in
         // one reg e.g bool[2]
@@ -1600,13 +1605,14 @@ void lower(struct ir_unit *unit) {
         basicblock = basicblock->succ;
       }
 
-      // run an early elimination pass before we alloc locals, as it is hard to do after
-      ir_eliminate_redundant_ops(func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
+      // run an early elimination pass before we alloc locals, as it is hard to
+      // do after
+      ir_eliminate_redundant_ops(
+          func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
 
       // alloc locals EARLY so that targets can contain their addressing nodes
       // properly
       ir_alloc_locals(func);
-
     }
     }
 
@@ -1642,7 +1648,9 @@ void lower(struct ir_unit *unit) {
       // FIXME: phis are not propogated properly
       remove_critical_edges(func);
 
-      ir_eliminate_redundant_ops(func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS | IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
+      ir_eliminate_redundant_ops(
+          func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS |
+                    IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
     }
     }
     glb = glb->succ;
