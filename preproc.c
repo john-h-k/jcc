@@ -308,14 +308,14 @@ enum preproc_create_result preproc_create(struct program *program,
   p->args = args;
 
   if (args.verbose) {
-    printf("sys_include_paths: \n");
+    fprintf(stderr, "sys_include_paths: \n");
     for (size_t i = 0; i < args.num_sys_include_paths; i++) {
-      printf(" %s\n", args.sys_include_paths[i]);
+      fprintf(stderr, " %s\n", args.sys_include_paths[i]);
     }
 
-    printf("\ninclude_paths: \n");
+    fprintf(stderr, "\ninclude_paths: \n");
     for (size_t i = 0; i < args.num_include_paths; i++) {
-      printf(" %s\n", args.include_paths[i]);
+      fprintf(stderr, " %s\n", args.include_paths[i]);
     }
   }
 
@@ -1933,8 +1933,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
     }
 
     struct preproc_text *preproc_text = vector_tail(preproc->texts);
-    // printf(" text %s\n", preproc_text->file);
-    // printf(" en %d\n", *(bool *)vector_head(preproc_text->enabled));
 
     // handle conditional directives first, as they can change `enabled`
 
