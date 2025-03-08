@@ -25,16 +25,24 @@ static struct ir_op *opts_follow_movs(struct ir_op *op) {
   return op;
 }
 
-static void opts_cnst_branches_func(struct ir_func *func, void *data) {
+static void opts_cnst_branches_func_end(UNUSED struct ir_func *func, void *data) {
+  struct phi_info *info = data;
+
+  struct hashtbl_iter *iter = hashtbl_iter(info->bb_to_entry);
+  struct hashtbl_entry entry;
+  while (hashtbl_iter_next(iter, &entry)) {
+    struct vector **vector = entry.data;
+    vector_free(vector);
+  }
+
+  // TODO: reuse hashtbl (have clear method)
+  hashtbl_free(&info->bb_to_entry);
+}
+
+static void opts_cnst_branches_func_begin(struct ir_func *func, void *data) {
   struct phi_info *info = data;
 
   info->df = ir_compute_dominance_frontier(func);
-
-  if (info->bb_to_entry) {
-    // TODO: reuse hashtbl (have clear method)
-    hashtbl_free(&info->bb_to_entry);
-  }
-
   info->bb_to_entry = hashtbl_create(sizeof(struct ir_basicblock *),
                                      sizeof(struct vector *), NULL, NULL);
 
@@ -147,13 +155,9 @@ void opts_cnst_branches(struct ir_unit *unit) {
 
   struct opts_op_pass pass = {.name = __func__,
                            .data = &data,
-                           .begin_func_callback = opts_cnst_branches_func,
+                           .begin_func_callback = opts_cnst_branches_func_begin,
+                           .end_func_callback = opts_cnst_branches_func_end,
                            .op_callback = opts_cnst_branches_op};
 
   opts_run_op_pass(unit, &pass);
-
-  if (data.bb_to_entry) {
-    // TODO: reuse hashtbl (have clear method)
-    hashtbl_free(&data.bb_to_entry);
-  }
 }
