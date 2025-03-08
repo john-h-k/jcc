@@ -271,6 +271,14 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
     compile_args->isys_root = get_default_isysroot(arena, compile_args->target);
   }
 
+  if (args->verbose) {
+    printf("isysroot: %s\n", args->isys_root);
+
+    for (size_t i = 0; i < args->include_paths.num_values; i++) {
+      printf("include_path: %s\n", args->include_paths.values[i]);
+    }
+  }
+
   return PARSE_ARGS_RESULT_SUCCESS;
 }
 
