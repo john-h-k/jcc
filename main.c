@@ -143,7 +143,17 @@ static const char *get_default_isysroot(struct arena_allocator *arena, enum comp
     // POSIX!! not C-std. we should have an alternatie
     FILE *p = popen("xcrun --show-sdk-path", "r");
     invariant_assert(p, "xcrun failed!");
-    return read_file(arena, p);
+    char *path = read_file(arena, p);
+
+    invariant_assert(path, "failed to read process");
+
+    size_t len = strlen(path);
+
+    if (len) {
+      // strip newline
+      path[len - 2] = '\0';
+    }
+    return path;
 #else
     warn("no isysroot found!");
 #endif
