@@ -1507,37 +1507,33 @@ static struct include_info try_find_include(struct preproc *preproc,
     }
   }
 
-  const char *search_path;
   if (!is_angle) {
     if (preproc_text->path.dir) {
-      search_path =
+      info.path =
           path_combine(preproc->arena, preproc_text->path.dir, filename);
     } else {
-      search_path = filename;
+      info.path = filename;
     }
 
-    if (try_include_path(preproc, search_path, &info.content, mode)) {
+    if (try_include_path(preproc, info.path, &info.content, mode)) {
       return info;
     }
 
-    info.path = search_path;
-
     if (!info.content) {
       for (size_t i = 0; i < preproc->args.num_include_paths; i++) {
-        search_path = path_combine(preproc->arena,
+        info.path = path_combine(preproc->arena,
                                    preproc->args.include_paths[i], filename);
 
-        if (try_include_path(preproc, search_path, &info.content, mode)) {
+        if (try_include_path(preproc, info.path, &info.content, mode)) {
           return info;
         }
       }
     }
   }
 
-  search_path = path_combine(preproc->arena, preproc->args.isys_root, filename);
+  info.path = path_combine(preproc->arena, preproc->args.isys_root, filename);
 
-  info.path = search_path;
-  if (try_include_path(preproc, search_path, &info.content, mode)) {
+  if (try_include_path(preproc, info.path, &info.content, mode)) {
     return info;
   }
 
