@@ -338,6 +338,114 @@ static bool parse_type_specifier_kw(struct parser *parser,
 
 static bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
+static bool parse_compoundexpr(struct parser *parser,
+                               struct ast_compoundexpr *compound_expr);
+
+static bool parse_attribute(struct parser *parser,
+                            struct ast_attribute *attribute) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  struct lex_token identifier;
+  peek_token(parser->lexer, &identifier);
+
+  if (identifier.ty == LEX_TOKEN_TY_COMMA ||
+      identifier.ty == LEX_TOKEN_TY_CLOSE_BRACKET) {
+    attribute->ty = AST_ATTRIBUTE_TY_EMPTY;
+    return true;
+  }
+
+  EXP_PARSE(identifier.ty == LEX_TOKEN_TY_IDENTIFIER,
+            "expected attribute to be identifier");
+
+  consume_token(parser->lexer, identifier);
+
+  struct lex_token open;
+  peek_token(parser->lexer, &open);
+  if (open.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
+    attribute->ty = AST_ATTRIBUTE_TY_NAMED;
+    attribute->name = identifier;
+    return true;
+  }
+
+  consume_token(parser->lexer, open);
+
+  // reuse compoundexpr parsing, but intentionally a different type so we can support
+  // other attributes (e.g types, `__attribute__((foo(char *)))`)
+
+  struct ast_compoundexpr compoundexpr;
+  if (!parse_compoundexpr(parser, &compoundexpr)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  attribute->ty = AST_ATTRIBUTE_TY_PARAMETERIZED;
+  attribute->name = identifier;
+  attribute->params =
+      arena_alloc(parser->arena, sizeof(*attribute->params) * compoundexpr.num_exprs);
+  attribute->num_params = compoundexpr.num_exprs;
+
+  for (size_t i = 0; i < compoundexpr.num_exprs; i++) {
+    attribute->params[i] =
+        (struct ast_attribute_param){.expr = &compoundexpr.exprs[i]};
+  }
+
+  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET), "expected `)` after attribute params");
+  return true;
+}
+
+static bool parse_attribute_list(struct parser *parser,
+                                 struct ast_attribute_list *attribute_list) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  // copied from parse_compoundexpr. maybe we should unify
+
+  struct vector *attributes =
+      vector_create_in_arena(sizeof(struct ast_attribute), parser->arena);
+
+  struct lex_token token;
+  struct ast_attribute sub_attribute;
+  do {
+    if (!parse_attribute(parser, &sub_attribute)) {
+      backtrack(parser->lexer, pos);
+      return false;
+    }
+
+    vector_push_back(attributes, &sub_attribute);
+
+    peek_token(parser->lexer, &token);
+  } while (token.ty == LEX_TOKEN_TY_COMMA &&
+           /* hacky */ (consume_token(parser->lexer, token), true));
+
+  attribute_list->attributes = vector_head(attributes);
+  attribute_list->num_attributes = vector_length(attributes);
+
+  struct lex_token identifier;
+  peek_token(parser->lexer, &identifier);
+  return true;
+}
+
+static bool
+parse_attribute_specifier(struct parser *parser,
+                          struct ast_attribute_specifier *attribute_specifier) {
+  struct text_pos pos = get_position(parser->lexer);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_ATTRIBUTE) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
+      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  parse_attribute_list(parser, &attribute_specifier->attribute_list);
+
+
+  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET) &&
+                parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
+            "expected )) after attribute");
+
+  return true;
+}
+
 static bool parse_enumerator(struct parser *parser,
                              struct ast_enumerator *enumerator) {
   if (!parse_identifier(parser, &enumerator->identifier)) {
@@ -543,6 +651,11 @@ static bool parse_decl_specifier(struct parser *parser,
 
   if (parse_type_specifier(parser, &specifier->type_specifier, mode)) {
     specifier->ty = AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER;
+    return true;
+  }
+
+  if (parse_attribute_specifier(parser, &specifier->attribute_specifier)) {
+    specifier->ty = AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER;
     return true;
   }
 
@@ -953,6 +1066,7 @@ static bool parse_declarator(struct parser *parser,
 
   parse_pointer_list(parser, &declarator->pointer_list);
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
+  parse_attribute_specifier(parser, &declarator->attribute_specifier);
 
   bool has_declarator =
       declarator->direct_declarator_list.num_direct_declarators;
@@ -1206,7 +1320,6 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
     is_string = true;
 
-
     if (token.ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL) {
       cnst->ty = AST_CNST_TY_WIDE_STR_LITERAL;
     } else {
@@ -1237,10 +1350,8 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
     vector_push_back(strings, &null);
   }
 
-  cnst->str_value = (struct ast_cnst_str){
-    .value = vector_head(strings),
-    .len = len
-  };
+  cnst->str_value =
+      (struct ast_cnst_str){.value = vector_head(strings), .len = len};
 
   return true;
 }
@@ -1321,9 +1432,6 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
   return true;
 }
-
-static bool parse_compoundexpr(struct parser *parser,
-                               struct ast_compoundexpr *compound_expr);
 
 static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   struct text_pos pos = get_position(parser->lexer);
@@ -2974,12 +3082,52 @@ DEBUG_FUNC(direct_declarator_list, direct_declarator_list) {
   UNINDENT();
 }
 
+DEBUG_FUNC(attribute_specifier, attribute_specifier);
+
 DEBUG_FUNC(declarator, declarator) {
   AST_PRINTZ("DECLARATOR");
   INDENT();
   DEBUG_CALL(pointer_list, &declarator->pointer_list);
   DEBUG_CALL(direct_declarator_list, &declarator->direct_declarator_list);
+  DEBUG_CALL(attribute_specifier, &declarator->attribute_specifier);
   UNINDENT();
+}
+
+DEBUG_FUNC(attribute_param, attribute_param) {
+  DEBUG_CALL(expr, attribute_param->expr);
+}
+
+DEBUG_FUNC(attribute, attribute) {
+  switch (attribute->ty) {
+  case AST_ATTRIBUTE_TY_EMPTY:
+    AST_PRINTZ("EMPTY");
+    break;
+  case AST_ATTRIBUTE_TY_NAMED:
+    AST_PRINT("'%s'", identifier_str(state->parser, &attribute->name));
+    break;
+  case AST_ATTRIBUTE_TY_PARAMETERIZED:
+    AST_PRINT("'%s'", identifier_str(state->parser, &attribute->name));
+    AST_PRINTZ("ATTRIBUTE PARAMS");
+    INDENT();
+    for (size_t i = 0; i < attribute->num_params; i++) {
+      DEBUG_CALL(attribute_param, &attribute->params[i]);
+    }
+    UNINDENT();
+    break;
+  }
+}
+
+DEBUG_FUNC(attribute_list, attribute_list) {
+  AST_PRINTZ("ATTRIBUTE LIST");
+  INDENT();
+  for (size_t i = 0; i < attribute_list->num_attributes; i++) {
+    DEBUG_CALL(attribute, &attribute_list->attributes[i]);
+  }
+  UNINDENT();
+}
+
+DEBUG_FUNC(attribute_specifier, attribute_specifier) {
+  DEBUG_CALL(attribute_list, &attribute_specifier->attribute_list);
 }
 
 DEBUG_FUNC(declaration_specifier, specifier) {
@@ -2998,6 +3146,9 @@ DEBUG_FUNC(declaration_specifier, specifier) {
     break;
   case AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER:
     DEBUG_CALL(function_specifier, &specifier->function_specifier);
+    break;
+  case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
+    DEBUG_CALL(attribute_specifier, &specifier->attribute_specifier);
     break;
   }
 

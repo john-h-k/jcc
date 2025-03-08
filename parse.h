@@ -1,14 +1,38 @@
 #ifndef PARSE_H
 #define PARSE_H
 
-#include "alloc.h"
 #include "lex.h"
-#include "log.h"
 #include "program.h"
-#include "util.h"
 
 /* Type refs - `<enum|struct|union> <identifier`, `<typedef-name>`, or
  * `<keyword>` */
+
+enum ast_attribute_ty {
+  AST_ATTRIBUTE_TY_EMPTY,
+  AST_ATTRIBUTE_TY_NAMED,
+  AST_ATTRIBUTE_TY_PARAMETERIZED,
+};
+
+struct ast_attribute_param {
+  struct ast_expr *expr;
+};
+
+struct ast_attribute {
+  enum ast_attribute_ty ty;
+
+  struct lex_token name;
+  struct ast_attribute_param *params;
+  size_t num_params;
+};
+
+struct ast_attribute_list {
+  struct ast_attribute *attributes;
+  size_t num_attributes;
+};
+
+struct ast_attribute_specifier {  
+  struct ast_attribute_list attribute_list;
+};
 
 enum ast_storage_class_specifier {
   AST_STORAGE_CLASS_SPECIFIER_TYPEDEF,
@@ -73,6 +97,10 @@ enum ast_declarator_ty {
 struct ast_declarator {
   struct ast_pointer_list pointer_list;
   struct ast_direct_declarator_list direct_declarator_list;
+  // TODO: we actually want attribute_list_list
+  // __attribute__((foo, bar)) is an attribute_list
+  // __attribute__((foo)) __attribute__(bar) is an attribute_list_list
+  struct ast_attribute_specifier attribute_specifier;
   struct ast_expr *bitfield_size;
 };
 
@@ -168,6 +196,7 @@ enum ast_decl_specifier_ty {
   AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER,
   AST_DECL_SPECIFIER_TY_TYPE_QUALIFIER,
   AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER,
+  AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER,
 };
 
 struct ast_declaration_specifier {
@@ -178,6 +207,7 @@ struct ast_declaration_specifier {
     enum ast_type_qualifier type_qualifier;
     enum ast_function_specifier function_specifier;
     struct ast_type_specifier type_specifier;
+    struct ast_attribute_specifier attribute_specifier;
   };
 };
 
