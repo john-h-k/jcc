@@ -478,7 +478,8 @@ static inline bool try_parse_str(const char *str, size_t len, unsigned long long
     char digit;
 
     char ch = str[i];
-    if (ch == 'L') {
+    // FIXME: should only allow as last chars
+    if (tolower(ch) == 'l' || tolower(ch) == 'u') {
       break;
     }
 

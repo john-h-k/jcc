@@ -944,10 +944,7 @@ static bool try_expand_token(struct preproc *preproc,
                              struct preproc_token *token, struct vector *buffer,
                              struct hashtbl *parents,
                              enum preproc_expand_token_flags flags) {
-  info("expanding sub tok: %.*s", (int)text_span_len(&token->span),
-       token->text);
   if (preproc->keep_next_token) {
-    info("keep next");
     if (token_is_trivial(token)) {
       return true;
     } else if (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
@@ -982,7 +979,6 @@ static bool try_expand_token(struct preproc *preproc,
     }
 
     preproc->concat_next_token = true;
-    info("concat next\n");
     return true;
   }
 
@@ -992,7 +988,6 @@ static bool try_expand_token(struct preproc *preproc,
     // have been processed and passsed out)
 
     if (token_is_trivial(token)) {
-      info("trivial");
       return true;
     }
 
@@ -1041,8 +1036,6 @@ static bool try_expand_token(struct preproc *preproc,
             .text = new,
         };
 
-        info("concat next END\n");
-
         // post-concat, self reference is not considered
         parents = hashtbl_create_sized_str_keyed(0);
         expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
@@ -1062,7 +1055,6 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   if (token->ty != PREPROC_TOKEN_TY_IDENTIFIER) {
-    info("non ident");
     return false;
   }
 
@@ -1405,7 +1397,6 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   if (well_known_token(ident)) {
-    info("well known");
     // mark to not expand symbols until we end this check
     preproc->keep_next_token = true;
     vector_push_back(buffer, token);
@@ -1413,7 +1404,6 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   if (flags & PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO) {
-    info("insert zero");
     struct preproc_token zero_tok = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
                                      .span = MK_INVALID_TEXT_SPAN(0, 1),
                                      .text = "0"};
@@ -1421,7 +1411,6 @@ static bool try_expand_token(struct preproc *preproc,
     return true;
   }
 
-  info("false");
   return false;
 }
 
@@ -1918,11 +1907,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
       // values in buffer have already been expanded
       *token = *(struct preproc_token *)vector_pop(preproc->buffer_tokens);
       mode = PREPROC_TOKEN_MODE_NO_EXPAND;
-      info("took buffer tok\n");
     }
 
-    info("new tok\n");
-    info("text %.*s", 50, token->text);
     if (token->ty == PREPROC_TOKEN_TY_EOF) {
       return;
     }
@@ -1935,7 +1921,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
     size_t num_enabled = vector_length(preproc_text->enabled);
     bool enabled = *(bool *)vector_tail(preproc_text->enabled);
-    info("enabled? %s", enabled ? "yes" : "no");
 
     // outer enabled is whether this block runs at all
     // cond done is whether an `if` or `elif` branch has run, and so the rest
@@ -1985,9 +1970,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
   } while (0)
 
     if (token->ty == PREPROC_TOKEN_TY_DIRECTIVE) {
-      info("DIRECTIVE");
-      info("text %.*s", 150, token->text);
-      info("enabled? %s", enabled ? "yes" : "no");
       directive_tokens =
           vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
 
@@ -2000,11 +1982,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         TODO("error for non identifier directive");
       }
 
-      static size_t if_seen = 0;
-      static size_t ifdef_seen = 0;
-      static size_t ifndef_seen = 0;
-      static size_t endif_seen = 0;
-
       if (token_streq(directive, "ifdef")) {
         bool now_enabled = false;
         if (enabled) {
@@ -2012,7 +1989,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           now_enabled = get_define(
               preproc, *(struct preproc_token *)vector_head(directive_tokens));
         }
-        ifdef_seen++;
         vector_push_back(preproc_text->enabled, &now_enabled);
         vector_push_back(preproc_text->enabled, &now_enabled);
         continue;
@@ -2020,20 +1996,15 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         bool now_enabled = false;
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
-          // printf("ifndef %.*s\n", 30,
-              // (*(struct preproc_token *)vector_head(directive_tokens)).text);
           now_enabled = !get_define(
               preproc,
 
               *(struct preproc_token *)vector_head(directive_tokens));
-          // printf("now en %d\n", now_enabled);
         }
-        ifndef_seen++;
         vector_push_back(preproc_text->enabled, &now_enabled);
         vector_push_back(preproc_text->enabled, &now_enabled);
         continue;
       } else if (token_streq(directive, "if")) {
-        info("processing if");
         size_t i = 0;
         bool now_enabled = false;
         if (enabled) {
@@ -2041,18 +2012,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           now_enabled = eval_expr(preproc, preproc_text, directive_tokens, &i,
                                   vector_length(directive_tokens), 0);
         }
-        if_seen++;
         vector_push_back(preproc_text->enabled, &now_enabled);
         vector_push_back(preproc_text->enabled, &now_enabled);
-        info("new enabled? %s", now_enabled ? "yes" : "no");
         continue;
       } else if (token_streq(directive, "endif")) {
-        endif_seen++;
         UNEXPANDED_DIR_TOKENS();
-
-        info("seen %zu if, %zu ifdef, %zu ifndef (total=%zu), and %zu endif\n",
-             if_seen, ifdef_seen, ifndef_seen,
-             if_seen + ifdef_seen + ifndef_seen, endif_seen);
 
         vector_pop(preproc_text->enabled);
         vector_pop(preproc_text->enabled);
@@ -2065,53 +2029,19 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             outer_enabled && !cond_done;
         continue;
       } else if (token_streq(directive, "elif")) {
-          static size_t elif_id = 0;
-          elif_id++;
-        info("processing elif %zu", elif_id);
-
-
-  //   DEBUG_ASSERT(
-  //       vector_length(preproc_text->enabled) == 1,
-  //       "text %s ended with enabled depth of %zu (should have been 1)",
-  //       preproc_text->file, vector_length(preproc_text->enabled));
-  //   // enable_log();
-  //   printf("leaving text %s\n", preproc_text->file);
-
-  //   vector_pop(preproc->texts);
-  //   if (vector_length(preproc->texts))
-  //   printf("next en? %s\n", (*(bool *)vector_tail(((struct preproc_text *)vector_tail(preproc->texts))->enabled)) ? "yes" : "no");
-  // }
-
-  // if (vector_empty(preproc->texts)) {
-  //   printf("eof\n");
-  //   token->ty = PREPROC_TOKEN_TY_EOF;
-  //   token->text = NULL;
-  //   token->span.start = (struct text_pos){0};
-  //   token->span.end = (struct text_pos){0};
-  //   return;
-  // }
-
         if (cond_done) {
           *(bool *)vector_tail(preproc_text->enabled) = false;
-          printf("cond done\n");
         } else {
           size_t i = 0;
 
           bool now_enabled = false;
           if (outer_enabled) {
             EXPANDED_UNDEF_ZERO_DIR_TOKENS();
-            info("done processing elif %zu", elif_id);
-            for (size_t j = 0; j < vector_length(directive_tokens); j++) {
-              struct preproc_token *tok = vector_get(directive_tokens, j);
-              info("tok: %.*s", (int)text_span_len(&tok->span), tok->text);
-            }
-            info("end");
             now_enabled = eval_expr(preproc, preproc_text, directive_tokens, &i,
                                     vector_length(directive_tokens), 0);
           }
           *(bool *)vector_tail(preproc_text->enabled) = now_enabled;
           *(bool *)vector_get(preproc_text->enabled, num_enabled - 2) = now_enabled;
-          info("new enabled? %s", now_enabled ? "yes" : "no");
         }
         continue;
       } else if (token_streq(directive, "elifdef")) {
@@ -2146,7 +2076,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
     }
 
     if (!enabled) {
-      // printf("DISABLED: // %.*s\n", (int)text_span_len(&token->span), token->text);
       continue;
     }
 
@@ -2156,12 +2085,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
       // these directives do NOT expand
       if (token_streq(directive, "define")) {
         UNEXPANDED_DIR_TOKENS();
-
-        for (size_t i = 0; i < vector_length(directive_tokens); i++) {
-          struct preproc_token *tok = vector_get(directive_tokens, i);
-          info("tok: %.*s", (int)text_span_len(&tok->span), tok->text);
-        }
-        info("end");
 
         struct preproc_token def_name =
             *(struct preproc_token *)vector_head(directive_tokens);
