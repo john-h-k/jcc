@@ -129,7 +129,8 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
-static const char *get_default_isysroot(struct arena_allocator *arena, enum compile_target target) {
+static const char *get_default_isysroot(struct arena_allocator *arena,
+                                        enum compile_target target) {
   // requires target to have been resolved
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
@@ -158,13 +159,16 @@ static const char *get_default_isysroot(struct arena_allocator *arena, enum comp
     warn("no isysroot found!");
 #endif
   }
+  case COMPILE_TARGET_LINUX_RV32I:
+    return "/opt/riscv/riscv64-unknown-elf/include";
   default:
     return "";
   }
 }
 
 static enum parse_args_result
-try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct arena_allocator *arena,
+try_get_compile_args(int argc, char **argv, struct parsed_args *args,
+                     struct arena_allocator *arena,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
@@ -220,6 +224,31 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
         (struct compile_file){.ty = COMPILE_FILE_TY_PATH, .path = args->output};
   }
 
+  if (!args->target) {
+    if (!get_target_for_args(args->arch, &args->target)) {
+      return PARSE_ARGS_RESULT_FAIL;
+    }
+  } else {
+    if (args->arch) {
+      err("Cannot provide '-arch' and '-target'");
+      return PARSE_ARGS_RESULT_FAIL;
+    }
+
+    compile_args->target = args->target;
+  }
+
+  size_t num_sys_include_paths = 2;
+  const char **sys_include_paths =
+      arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
+
+  if (!args->isys_root) {
+    args->isys_root = get_default_isysroot(arena, args->target);
+  }
+
+  sys_include_paths[0] = path_combine(arena, args->isys_root, "/usr/include");
+  sys_include_paths[1] =
+      path_combine(arena, sys_include_paths[0], string_target(args->target));
+
   // is having two seperate structs for args really sensible?
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`
   // whereas `compile_args` only has `target`, but it is a hassle
@@ -228,6 +257,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
       .codegen_flags = args->codegen_flags,
+      .target = args->target,
 
       .log_symbols = log_symbols,
 
@@ -238,7 +268,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
       .opts_level = args->opts,
 
       .fixed_timestamp = args->timestamp,
-      .isys_root = args->isys_root,
+      .sys_include_paths = sys_include_paths,
+      .num_sys_include_paths = num_sys_include_paths,
+
       .include_paths = args->include_paths.values,
       .num_include_paths = args->include_paths.num_values,
 
@@ -254,19 +286,6 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
     debug_print_parsed_args(stderr, args);
   }
 
-  if (!args->target) {
-    if (!get_target_for_args(args->arch, &compile_args->target)) {
-      return PARSE_ARGS_RESULT_FAIL;
-    }
-  } else {
-    if (args->arch) {
-      err("Cannot provide '-arch' and '-target'");
-      return PARSE_ARGS_RESULT_FAIL;
-    }
-
-    compile_args->target = args->target;
-  }
-
   if (compile_args->fixed_timestamp &&
       !validate_fixed_timestamp(compile_args->fixed_timestamp)) {
     return PARSE_ARGS_RESULT_FAIL;
@@ -275,18 +294,6 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args, struct are
   if (!args->num_values) {
     err("No sources provided");
     return PARSE_ARGS_RESULT_FAIL;
-  }
-
-  if (!args->isys_root) {
-    compile_args->isys_root = get_default_isysroot(arena, compile_args->target);
-  }
-
-  if (args->verbose) {
-    printf("isysroot: %s\n", args->isys_root);
-
-    for (size_t i = 0; i < args->include_paths.num_values; i++) {
-      printf("include_path: %s\n", args->include_paths.values[i]);
-    }
   }
 
   return PARSE_ARGS_RESULT_SUCCESS;

@@ -101,7 +101,9 @@ struct compile_args {
 
   bool use_graphcol_regalloc;
 
-  const char *isys_root;
+  size_t num_sys_include_paths;
+  const char **sys_include_paths;
+
   size_t num_include_paths;
   const char **include_paths;
 

@@ -16,7 +16,9 @@ struct preproc_create_args {
   enum compile_target target;
   const char *path;
 
-  const char *isys_root;
+  size_t num_sys_include_paths;
+  const char **sys_include_paths;
+
   size_t num_include_paths;
   const char **include_paths;
 

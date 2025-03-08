@@ -157,13 +157,11 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
                  .text = "__asm"},
         .value = {
             .ty = PREPROC_DEFINE_VALUE_TY_MACRO_FN,
-            .macro_fn = {
-              .num_params = 0,
-              .params = NULL,
-              .tokens = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena),
-              .flags = PREPROC_MACRO_FN_FLAG_VARIADIC
-            }
-        }};
+            .macro_fn = {.num_params = 0,
+                         .params = NULL,
+                         .tokens = vector_create_in_arena(
+                             sizeof(struct preproc_token), preproc->arena),
+                         .flags = PREPROC_MACRO_FN_FLAG_VARIADIC}}};
 
     hashtbl_insert(preproc->defines, &ident, &define);
   }
@@ -309,9 +307,17 @@ enum preproc_create_result preproc_create(struct program *program,
   p->arena = arena;
   p->args = args;
 
-  // so we don't do it on every include, build the full base for root here
-  p->args.isys_root = path_combine(
-      p->arena, p->args.isys_root ? p->args.isys_root : "", "/usr/include");
+  if (args.verbose) {
+    printf("sys_include_paths: \n");
+    for (size_t i = 0; i < args.num_sys_include_paths; i++) {
+      printf(" %s\n", args.sys_include_paths[i]);
+    }
+
+    printf("\ninclude_paths: \n");
+    for (size_t i = 0; i < args.num_include_paths; i++) {
+      printf(" %s\n", args.include_paths[i]);
+    }
+  }
 
   p->texts = vector_create(sizeof(struct preproc_text));
 
@@ -1514,22 +1520,23 @@ static struct include_info try_find_include(struct preproc *preproc,
       return info;
     }
 
-    if (!info.content) {
-      for (size_t i = 0; i < preproc->args.num_include_paths; i++) {
-        info.path = path_combine(preproc->arena,
-                                   preproc->args.include_paths[i], filename);
+    for (size_t i = 0; i < preproc->args.num_include_paths; i++) {
+      info.path = path_combine(preproc->arena, preproc->args.include_paths[i],
+                               filename);
 
-        if (try_include_path(preproc, info.path, &info.content, mode)) {
-          return info;
-        }
+      if (try_include_path(preproc, info.path, &info.content, mode)) {
+        return info;
       }
     }
   }
 
-  info.path = path_combine(preproc->arena, preproc->args.isys_root, filename);
+  for (size_t i = 0; i < preproc->args.num_sys_include_paths; i++) {
+    info.path = path_combine(preproc->arena, preproc->args.sys_include_paths[i],
+                             filename);
 
-  if (try_include_path(preproc, info.path, &info.content, mode)) {
-    return info;
+    if (try_include_path(preproc, info.path, &info.content, mode)) {
+      return info;
+    }
   }
 
   return (struct include_info){0};
