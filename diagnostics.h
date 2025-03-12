@@ -1,7 +1,7 @@
 #ifndef DIAGNOSTIC_H
 #define DIAGNOSTIC_H
 
-#include "lex.h"
+#include "program.h"
 
 struct diagnostics;
 

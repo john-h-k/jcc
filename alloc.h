@@ -13,7 +13,7 @@ void arena_allocator_free(struct arena_allocator **allocator);
 void *arena_alloc(struct arena_allocator *allocator, size_t size);
 
 void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
-                       void *data);
+                       const void *data);
 
 /* Alloc space necessary for `str` (including null-terminator), then copy it
    into that space. Returns the start of the new allocation */

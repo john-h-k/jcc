@@ -425,7 +425,7 @@ static inline void *nonnull_realloc(void *p, size_t size) {
     } \
   } \
    \
-  fprintf(file, "\""); // Close wide string literal
+  fprintf(file, "\"");
 
 // explicit len because may contain null chars
 static inline void fprint_str(FILE *file, const char *input, size_t len) {
@@ -439,7 +439,7 @@ static inline void fprint_wstr(FILE *file, const char *input, size_t len) {
   PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i += sizeof(ch),w,L);
 }
 
-static inline bool try_parse_str(const char *str, size_t len, unsigned long long *value) {
+static inline bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
   if (!*str) {
     return false;
   }

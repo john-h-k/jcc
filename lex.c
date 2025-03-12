@@ -18,6 +18,8 @@ struct lexer {
   struct vector *tokens;
   size_t pos;
 
+  struct text_pos text_pos;
+
   const char **associated_texts;
 };
 
@@ -299,132 +301,6 @@ bool lexer_at_eof(struct lexer *lexer) {
   return token.ty == LEX_TOKEN_TY_EOF;
 }
 
-// FIXME: keeping this code so don't need to rewrite it, but not sure if needed
-// static void lex_literal() {
-// // all integers must begin with a digit
-// // any digit for decimal, `0` for hex/octal
-// // floats can be digit or `.`
-
-// bool is_float = c == '.';
-
-// next_col(&end);
-
-// // remove hex prefix
-// bool is_hex = try_consume(lexer, &end, 'x');
-
-// // this is generous and will allow 0BE for example, when only 0xBE is valid
-// // that's okay, let parser handle it
-// for (; end.idx < lexer->len; next_col(&end)) {
-//   if (lexer->text[end.idx] == '.') {
-//     is_float = true;
-//     continue;
-//   }
-
-//   if (!is_hex &&
-//       (lexer->text[end.idx] == 'E' || lexer->text[end.idx] == 'e')) {
-//     is_float = true;
-//     next_col(&end);
-
-//     if (end.idx < lexer->len &&
-//         (lexer->text[end.idx] == '+' || lexer->text[end.idx] == '-')) {
-//       next_col(&end);
-//     }
-
-//     // skip the sign after exponent
-//     continue;
-//   }
-
-//   if ((is_float && !isdigit(lexer->text[end.idx])) ||
-//       (!is_float && !isxdigit(lexer->text[end.idx]))) {
-//     break;
-//   }
-// }
-
-// bool is_unsigned = false;
-
-// ty = is_float ? LEX_TOKEN_TY_DOUBLE_LITERAL :
-// LEX_TOKEN_TY_SIGNED_INT_LITERAL; while (end.idx < lexer->len) {
-//   switch (tolower(lexer->text[end.idx])) {
-//   case 'u':
-//     is_unsigned = true;
-//     next_col(&end);
-//     continue;
-//   case 'f':
-//     ty = LEX_TOKEN_TY_FLOAT_LITERAL;
-//     next_col(&end);
-//     continue;
-//   case 'l':
-//     if (!is_float && end.idx + 2 < lexer->len &&
-//         tolower(lexer->text[end.idx + 1]) == 'l') {
-//       ty = LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL;
-//     } else if (is_float) {
-//       ty = LEX_TOKEN_TY_LONG_DOUBLE_LITERAL;
-//     } else {
-//       ty = LEX_TOKEN_TY_SIGNED_LONG_LITERAL;
-//     }
-//     next_col(&end);
-//     continue;
-//   default:
-//     break;
-//   }
-
-//   break;
-// }
-
-// if (is_unsigned) {
-//   invariant_assert(!is_float, "can't be unsigned and float");
-//   ty++;
-// }
-// break;
-
-// // default: {
-// if (c == '\'' ||
-//     (c == 'L' && end.idx < lexer->len && lexer->text[end.idx + 1] == '\'')) {
-//   ty = LEX_TOKEN_TY_ASCII_CHAR_LITERAL;
-
-//   // skip first single-quote
-//   if (c == 'L') {
-//     next_col(&end);
-//     ty = LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL;
-//   }
-//   next_col(&end);
-
-//   // move forward while
-//   bool char_escaped = false;
-//   for (size_t i = end.idx;
-//        i < lexer->len && !(!char_escaped && lexer->text[i] == '\''); i++) {
-//     // next char is escaped if this char is a non-escaped backslash
-//     char_escaped = !char_escaped && lexer->text[i] == '\\';
-//     next_col(&end);
-//   }
-
-//   // skip final single-quote
-//   next_col(&end);
-// } else if (c == '"' || (c == 'L' && end.idx < lexer->len &&
-//                         lexer->text[end.idx + 1] == '"')) {
-//   // TODO: logic is same as for char, could dedupe
-//   ty = LEX_TOKEN_TY_ASCII_STR_LITERAL;
-
-//   // skip first double-quote
-//   if (c == 'L') {
-//     next_col(&end);
-//     ty = LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
-//   }
-//   next_col(&end);
-
-//   // move forward while
-//   bool char_escaped = false;
-//   for (size_t i = end.idx;
-//        i < lexer->len && !(!char_escaped && lexer->text[i] == '"'); i++) {
-//     // next char is escaped if this char is a non-escaped backslash
-//     char_escaped = !char_escaped && lexer->text[i] == '\\';
-//     next_col(&end);
-//   }
-
-//   // skip final double-quote
-//   next_col(&end);
-// }
-
 static enum lex_token_ty
 preproc_punctuator_to_lex_token_ty(enum preproc_token_punctuator_ty ty);
 
@@ -630,12 +506,20 @@ void peek_token(struct lexer *lexer, struct lex_token *token) {
 
 // TODO: make this return a real type
 // just hacking it into text pos as not to need to change `parse.c`
-struct text_pos get_position(struct lexer *lexer) {
-  return (struct text_pos){.idx = lexer->pos};
+lex_pos get_position(struct lexer *lexer) {
+  return lexer->pos;
 }
 
-void backtrack(struct lexer *lexer, struct text_pos position) {
-  lexer->pos = position.idx;
+void backtrack(struct lexer *lexer, lex_pos position) {
+  lexer->pos = position;
+}
+
+struct text_pos get_last_text_pos(const struct lexer *lexer) {
+  if (vector_empty(lexer->tokens)) {
+    return (struct text_pos){0};
+  }
+
+  return ((struct lex_token *)vector_tail(lexer->tokens))->span.end;
 }
 
 void consume_token(struct lexer *lexer, struct lex_token token) {
