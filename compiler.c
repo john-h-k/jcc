@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "codegen.h"
+#include "diagnostics.h"
 #include "graphcol.h"
 #include "hashtbl.h"
 #include "ir/build.h"
@@ -12,14 +13,15 @@
 #include "log.h"
 #include "lower.h"
 #include "lsra.h"
-#include "opts/cnst_fold.h"
 #include "opts/cnst_branches.h"
+#include "opts/cnst_fold.h"
 #include "opts/inline.h"
 #include "opts/instr_comb.h"
 #include "opts/promote.h"
 #include "parse.h"
 #include "preproc.h"
 #include "profile.h"
+#include "program.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
@@ -29,6 +31,7 @@
 struct compiler {
   struct arena_allocator *arena;
 
+  struct program program;
   struct compile_args args;
   struct preproc *preproc;
   struct parser *parser;
@@ -47,6 +50,8 @@ create_compiler(struct program *program, const struct target *target,
   (*compiler)->args = *args;
   (*compiler)->target = target;
   (*compiler)->output = output;
+
+  (*compiler)->program = *program;
 
   struct preproc_create_args preproc_args = {
       .target = args->target,
@@ -132,10 +137,139 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
+#define PR_RESET "\x1B[0m"
+#define PR_RED "\x1B[31m"
+#define PR_GREEN "\x1B[32m"
+#define PR_MAGENTA "\x1B[35m"
+#define PR_YELLOW "\x1B[33m"
+#define PR_WHITE "\x1B[37m"
+#define PR_BOLD "\033[1m"
+
+static void compiler_print_diagnostics_context(struct compiler *compiler,
+                                               struct text_pos start,
+                                               struct text_pos point,
+                                               struct text_pos end) {
+  // FIXME: super inefficient
+
+  const char *text = compiler->program.text;
+  size_t line = 0;
+  size_t len = strlen(text);
+  for (size_t i = 0; i < len; i++) {
+    if (text[i] != '\n') {
+      continue;
+    }
+
+    line++;
+    if (line > end.line) {
+      return;
+    }
+
+    if (i + 1 >= len) {
+      BUG("diagnostic span went past end");
+      return;
+    }
+
+    if (line >= start.line) {
+      const char *next = strchr(&text[i + 1], '\n');
+      size_t line_len = next - &text[i + 1];
+
+      size_t offset = 6 + num_digits(line + 1);
+      fprintf(stderr, "    %zu | %.*s\n", line + 1, (int)line_len,
+              &text[i + 1]);
+
+      fprintf(stderr, "%*s", (int)offset, "");
+      size_t rel_idx_start = start.idx - (i + 1);
+      size_t start_span_len;
+      size_t end_span_len;
+      bool has_point;
+
+      if (TEXT_POS_INVALID(point)) {
+        has_point = false;
+        start_span_len = end.idx - start.idx;
+        end_span_len = 0;
+      } else {
+        has_point = true;
+        start_span_len = point.idx - start.idx;
+        if (start_span_len) {
+          start_span_len -= 1 /* bc inclusive ranges */;
+        }
+
+        end_span_len = end.idx - point.idx;
+      }
+
+      fprintf(stderr, "%*s", (int)rel_idx_start, "");
+      fprintf(stderr, PR_GREEN);
+      for (size_t j = 0; j < start_span_len; j++) {
+        fprintf(stderr, "~");
+      }
+
+      if (has_point) {
+        fprintf(stderr, "^");
+      }
+
+      for (size_t j = 0; j < end_span_len; j++) {
+        fprintf(stderr, "~");
+      }
+      fprintf(stderr, PR_RESET);
+
+      fprintf(stderr, "\n");
+    }
+  }
+}
+
+static void
+compiler_print_diagnostics(struct compiler *compiler,
+                           struct compiler_diagnostics *diagnostics) {
+  struct compiler_diagnostics_iter iter =
+      compiler_diagnostics_iter(diagnostics);
+  struct compiler_diagnostic diagnostic;
+
+  while (compiler_diagnostics_iter_next(&iter, &diagnostic)) {
+    fprintf(stderr, "jcc: ");
+    switch (diagnostic.ty.severity) {
+    case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
+      fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
+      break;
+    case COMPILER_DIAGNOSTIC_SEVERITY_WARN:
+      fprintf(stderr, PR_BOLD PR_MAGENTA "warning: " PR_RESET);
+      break;
+    case COMPILER_DIAGNOSTIC_SEVERITY_INFO:
+      fprintf(stderr, PR_BOLD PR_WHITE "info: " PR_RESET);
+      break;
+    }
+
+    switch (diagnostic.ty.class) {
+    case COMPILER_DIAGNOSTIC_CLASS_PARSE:
+      switch (diagnostic.parse_diagnostic.ty) {
+      case PARSE_DIAGNOSTIC_TY_EXPECTED_TOKEN:
+        fprintf(stderr, PR_BOLD PR_WHITE "expected token %s\n" PR_RESET,
+                diagnostic.parse_diagnostic.expected_token);
+        compiler_print_diagnostics_context(
+            compiler, diagnostic.parse_diagnostic.start,
+            diagnostic.parse_diagnostic.point, diagnostic.parse_diagnostic.end);
+        break;
+      }
+      break;
+    case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
+      TODO("semantic diagnostics");
+      break;
+    case COMPILER_DIAGNOSTIC_CLASS_INTERNAL:
+      break;
+    }
+
+    fprintf(stderr, "\n");
+  }
+}
+
 static enum compile_result
 compile_stage_parse(struct compiler *compiler,
                     struct parse_result *parse_result) {
   *parse_result = parse(compiler->parser);
+
+  if (parse_result->ty == PARSE_RESULT_TY_FAILURE) {
+    compiler_print_diagnostics(compiler, parse_result->diagnostics);
+    return COMPILE_RESULT_FAILURE;
+  }
 
   if (log_enabled()) {
     debug_print_ast(compiler->parser, &parse_result->translation_unit);
@@ -448,7 +582,8 @@ static enum compile_result
 compile_stage_build_object(struct compiler *compiler,
                            struct emitted_unit *emitted_unit) {
 
-  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH, "can't build object to stdout/stderr");
+  invariant_assert(compiler->output.ty == COMPILE_FILE_TY_PATH,
+                   "can't build object to stdout/stderr");
 
   struct build_object_args args = {.compile_args = &compiler->args,
                                    .output = compiler->output.path,

@@ -5,6 +5,8 @@
 #include "vector.h"
 #include <stdlib.h>
 
+#define ALWAYS_MALLOC
+
 #ifdef ALWAYS_MALLOC
 #define BLOCK_SIZE (0)
 #else
