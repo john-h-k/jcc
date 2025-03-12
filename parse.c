@@ -207,11 +207,19 @@ static void parse_expected_token(struct parser *parser, enum lex_token_ty ty,
 
   struct text_pos end = token.span.end;
 
+  const char *prefix = "expected token ";
+  size_t pref_len = strlen(prefix);
+  size_t err_len = strlen(err);
+  char *msg = arena_alloc(parser->arena, pref_len + err_len + 1);
+  memcpy(msg, prefix, pref_len);
+  memcpy(msg + pref_len, err, err_len);
+  msg[pref_len + err_len] = '\0';
+
   parser->result_ty = PARSE_RESULT_TY_FAILURE;
   compiler_diagnostics_add(parser->diagnostics,
                            MK_PARSER_DIAGNOSTIC(EXPECTED_TOKEN, expected_token,
                                                 MK_TEXT_SPAN(start, end), end,
-                                                err));
+                                                msg));
 
   if (span) {
     *span = MK_TEXT_SPAN(end, end);
@@ -1751,7 +1759,9 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
       parse_compoundexpr(parser, &expr->compound_expr)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, expr->compound_expr.span.end, "`)` after expression", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET,
+                         expr->compound_expr.span.end, "`)` after expression",
+                         NULL);
 
     expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
     expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
@@ -1836,7 +1846,7 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
     expr->array_access.lhs = lhs;
     expr->array_access.rhs = rhs;
 
-  expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
     return true;
   }
 
@@ -2111,7 +2121,7 @@ static bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
                        "`)` after alignof keyword", NULL);
 
   expr->ty = AST_EXPR_TY_ALIGNOF;
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+  expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
   return true;
 }
 
@@ -2408,7 +2418,8 @@ parse_declaration_list(struct parser *parser,
 
   declaration_list->declarations = vector_head(list);
   declaration_list->num_declarations = vector_length(list);
-  declaration_list->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+  declaration_list->span =
+      MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
 }
 
 static bool parse_jumpstmt(struct parser *parser,
@@ -2419,7 +2430,9 @@ static bool parse_jumpstmt(struct parser *parser,
   struct ast_expr expr;
   if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN, NULL) &&
       parse_expr(parser, &expr)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, get_last_text_pos(parser->lexer), "`;` after return expression", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                         get_last_text_pos(parser->lexer),
+                         "`;` after return expression", NULL);
 
     jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
     jump_stmt->return_stmt.expr =
@@ -2433,7 +2446,9 @@ static bool parse_jumpstmt(struct parser *parser,
   backtrack(parser->lexer, pos);
 
   if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN, NULL)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, get_last_text_pos(parser->lexer), "`;` or expression after return keyword", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                         get_last_text_pos(parser->lexer),
+                         "`;` or expression after return keyword", NULL);
 
     jump_stmt->ty = AST_JUMPSTMT_TY_RETURN;
     jump_stmt->return_stmt.expr = NULL;
@@ -2445,7 +2460,9 @@ static bool parse_jumpstmt(struct parser *parser,
   backtrack(parser->lexer, pos);
 
   if (parse_token(parser, LEX_TOKEN_TY_KW_BREAK, NULL)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, get_last_text_pos(parser->lexer), "`;` after break keyword", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                         get_last_text_pos(parser->lexer),
+                         "`;` after break keyword", NULL);
     jump_stmt->ty = AST_JUMPSTMT_TY_BREAK;
 
     jump_stmt->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
@@ -2455,7 +2472,9 @@ static bool parse_jumpstmt(struct parser *parser,
   backtrack(parser->lexer, pos);
 
   if (parse_token(parser, LEX_TOKEN_TY_KW_CONTINUE, NULL)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, get_last_text_pos(parser->lexer), "`;` after continue keyword", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                         get_last_text_pos(parser->lexer),
+                         "`;` after continue keyword", NULL);
     jump_stmt->ty = AST_JUMPSTMT_TY_CONTINUE;
 
     jump_stmt->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
@@ -2471,7 +2490,9 @@ static bool parse_jumpstmt(struct parser *parser,
     if (label.ty == LEX_TOKEN_TY_IDENTIFIER) {
       consume_token(parser->lexer, label);
 
-      parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, get_last_text_pos(parser->lexer), "`;` after goto label", NULL);
+      parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                           get_last_text_pos(parser->lexer),
+                           "`;` after goto label", NULL);
       jump_stmt->ty = AST_JUMPSTMT_TY_GOTO;
       jump_stmt->goto_stmt.label = label;
 
@@ -2511,7 +2532,8 @@ static bool parse_labeledstmt(struct parser *parser,
   }
 
   struct ast_stmt stmt;
-  if (!parse_token(parser, LEX_TOKEN_TY_COLON, NULL) || !parse_stmt(parser, &stmt)) {
+  if (!parse_token(parser, LEX_TOKEN_TY_COLON, NULL) ||
+      !parse_stmt(parser, &stmt)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2590,7 +2612,8 @@ static bool parse_switchstmt(struct parser *parser,
   struct text_pos start = get_last_text_pos(parser->lexer);
   struct lex_pos pos = get_position(parser->lexer);
 
-  // TODO: some places here can use `parse_expected_token` instead to get better errors
+  // TODO: some places here can use `parse_expected_token` instead to get better
+  // errors
 
   struct ast_expr ctrl_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SWITCH, NULL) ||

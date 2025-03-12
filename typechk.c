@@ -1,9 +1,11 @@
 #include "typechk.h"
 
 #include "alloc.h"
-#include "log.h"
 #include "compiler.h"
+#include "diagnostics.h"
+#include "log.h"
 #include "parse.h"
+#include "program.h"
 #include "target.h"
 #include "var_table.h"
 #include "vector.h"
@@ -54,6 +56,9 @@ struct typechk {
 
   // types (e.g declared structs)
   struct var_table ty_table;
+
+  enum typechk_result_ty result_ty;
+  struct compiler_diagnostics *diagnostics;
 };
 
 static struct td_var_ty
@@ -358,14 +363,21 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
 
 static bool is_cast_needed(struct typechk *tchk, const struct td_var_ty *var_ty,
                            const struct td_var_ty *target_ty) {
+  if (target_ty->ty == TD_VAR_TY_TY_UNKNOWN ||
+      var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
+    return false;
+  }
+
   return !td_var_ty_eq(tchk, var_ty, target_ty);
 }
 
 static struct td_expr add_cast_if_needed(struct typechk *tchk,
                                          struct td_expr expr,
                                          struct td_var_ty target_ty) {
-  if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER && target_ty.ty == TD_VAR_TY_TY_ARRAY) {
-    // HACK: change the string literal type to array so ir build knows to have it inline
+  if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
+      target_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // HACK: change the string literal type to array so ir build knows to have
+    // it inline
     expr.var_ty = target_ty;
     return expr;
   }
@@ -389,13 +401,9 @@ static struct td_expr perform_integer_promotion(struct typechk *tchk,
   return expr;
 }
 
-// TODO:
-#define WARN(...) BUG(__VA_ARGS__)
-
-static struct td_var_ty
-resolve_usual_arithmetic_conversions(struct typechk *tchk,
-                                     const struct td_var_ty *lhs_ty,
-                                     const struct td_var_ty *rhs_ty) {
+static struct td_var_ty resolve_usual_arithmetic_conversions(
+    struct typechk *tchk, const struct td_var_ty *lhs_ty,
+    const struct td_var_ty *rhs_ty, struct text_span context) {
   // it is expected integer promotion has already been performed
 
   DEBUG_ASSERT(lhs_ty->ty != TD_VAR_TY_TY_UNKNOWN &&
@@ -415,7 +423,11 @@ resolve_usual_arithmetic_conversions(struct typechk *tchk,
     } else if (td_var_ty_eq(tchk, lhs_ty, rhs_ty)) {
       return *lhs_ty;
     } else {
-      WARN("incompatible pointer types");
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH, pointer_type_mismatch,
+                                 context, MK_INVALID_TEXT_POS(0),
+                                 "pointer type mismatch"));
     }
   }
 
@@ -461,8 +473,8 @@ struct td_binary_op_tys {
 
 static struct td_binary_op_tys
 resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
-                        const struct td_expr *rhs_expr,
-                        enum td_binary_op_ty ty) {
+                        const struct td_expr *rhs_expr, enum td_binary_op_ty ty,
+                        struct text_span context) {
   // it is expected integer promotion has already been performed
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
@@ -472,18 +484,41 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
 
   if (lhs->ty == TD_VAR_TY_TY_POINTER && rhs->ty == TD_VAR_TY_TY_POINTER) {
     if (ty == TD_BINARY_OP_TY_SUB) {
-      if (!td_var_ty_eq(tchk, lhs, rhs)) {
-        WARN("subtraction on pointers of different kinds is forbidden");
-      }
+      if (!td_var_ty_eq(tchk, lhs->pointer.underlying,
+                        rhs->pointer.underlying)) {
 
-      lhs_op_ty = rhs_op_ty = *lhs;
-      result_ty = td_var_ty_pointer_sized_int(tchk, true);
+        // TODO: instead of setting this everywhere have a method that does it
+        // all for us
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                POINTER_SUB_TYPES, pointer_sub_types, context,
+                MK_INVALID_TEXT_POS(0),
+                "subtraction on pointers of different kinds is forbidden"));
+
+        lhs_op_ty = TD_VAR_TY_UNKNOWN;
+        rhs_op_ty = TD_VAR_TY_UNKNOWN;
+        result_ty = TD_VAR_TY_UNKNOWN;
+      } else {
+        lhs_op_ty = rhs_op_ty = *lhs;
+        result_ty = td_var_ty_pointer_sized_int(tchk, true);
+      }
     } else if (td_binary_op_is_comparison(ty)) {
       lhs_op_ty = rhs_op_ty = *lhs;
       result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
     } else {
-      WARN("binary operations where both types are pointer only makes sense "
-           "for subtraction or comparisons");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              POINTER_TYPES, pointer_types, context, MK_INVALID_TEXT_POS(0),
+              "binary operations where both types are pointer only makes sense "
+              "for subtraction or comparisons"));
+
+      lhs_op_ty = TD_VAR_TY_UNKNOWN;
+      rhs_op_ty = TD_VAR_TY_UNKNOWN;
+      result_ty = TD_VAR_TY_UNKNOWN;
     }
   } else if (lhs->ty == TD_VAR_TY_TY_POINTER) {
     lhs_op_ty = *lhs;
@@ -499,7 +534,7 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
     result_ty = *lhs;
   } else {
     lhs_op_ty = rhs_op_ty =
-        resolve_usual_arithmetic_conversions(tchk, lhs, rhs);
+        resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
 
     if (td_binary_op_is_comparison(ty)) {
       result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
@@ -572,7 +607,13 @@ td_var_ty_for_enum(struct typechk *tchk,
                    const struct ast_enum_specifier *specifier) {
   if (!specifier->enumerator_list) {
     if (!specifier->identifier) {
-      WARN("enum without identifier or decl list");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(ENUM_TYPE, enum_type, specifier->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "enum must have values or an identifier"));
+      return TD_VAR_TY_UNKNOWN;
     }
   } else {
     unsigned long last_value;
@@ -654,7 +695,14 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 
   if (!specifier->decl_list) {
     if (!specifier->identifier) {
-      WARN("struct/union without identifier or decl list");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              AGGREGATE_TYPE, aggregate_type, specifier->span,
+              MK_INVALID_TEXT_POS(0),
+              "struct/union must have an identifier or a decl list"));
+      return TD_VAR_TY_UNKNOWN;
     }
 
     // FIXME: check scope too
@@ -693,9 +741,8 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   for (size_t i = 0; i < num_var_decls; i++) {
     struct td_var_declaration *var_decl = vector_get(var_decls, i);
 
-    if (var_decl->init) {
-      WARN("initializer not supported in struct");
-    }
+    DEBUG_ASSERT(!var_decl->init,
+                 "field decl with init should have been caught earlier");
 
     enum td_struct_field_flags flags = TD_STRUCT_FIELD_FLAG_NONE;
     unsigned long long bitfield_width = 0;
@@ -726,16 +773,17 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   return var_ty;
 }
 
-enum td_declarator_bitfields {
-  TD_DECLARATOR_BITFIELDS_FORBID,
-  TD_DECLARATOR_BITFIELDS_ALLOW
+enum td_declarator_mode {
+  TD_DECLARATOR_MODE_NORMAL,
+
+  // allows bitfields and forbids initializers
+  TD_DECLARATOR_MODE_STRUCT
 };
 
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
-                const struct ast_init *init,
-                enum td_declarator_bitfields bitfields);
+                const struct ast_init *init, enum td_declarator_mode bitfields);
 
 static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
@@ -784,9 +832,17 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     case AST_INIT_TY_EXPR: {
       // TODO: maybe this should be a helper func
       if (init->expr.ty != AST_EXPR_TY_CNST ||
-          (init->expr.cnst.ty != AST_CNST_TY_STR_LITERAL && init->expr.cnst.ty != AST_CNST_TY_WIDE_STR_LITERAL)) {
-        WARN("cannot initialise unsized array except with normal string "
-             "literal");
+          (init->expr.cnst.ty != AST_CNST_TY_STR_LITERAL &&
+           init->expr.cnst.ty != AST_CNST_TY_WIDE_STR_LITERAL)) {
+
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(ARRAY_INIT_TYPE, array_init_type, init->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "cannot initialise unsized array except "
+                                   "with normal string literal"));
+        return TD_VAR_TY_UNKNOWN;
       }
 
       // change the constant type to an array, as it is currently a pointer
@@ -812,7 +868,14 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
           switch (designator->ty) {
           case AST_DESIGNATOR_TY_FIELD:
-            WARN("field designator in array init");
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(
+                    ARRAY_INIT_FIELD_DESIGNATOR, array_init_field_designator,
+                    designator->span, MK_INVALID_TEXT_POS(0),
+                    "cannot have a field designator in array init"));
+            return TD_VAR_TY_UNKNOWN;
           case AST_DESIGNATOR_TY_INDEX:
             size = type_constant_integral_expr(tchk, designator->index) + 1;
             break;
@@ -886,7 +949,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     case AST_PARAM_TY_DECL: {
       struct td_var_declaration param_decl =
           type_declarator(tchk, &param_specifiers, &param->declarator, NULL,
-                          TD_DECLARATOR_BITFIELDS_FORBID);
+                          TD_DECLARATOR_MODE_NORMAL);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty};
       break;
@@ -932,7 +995,14 @@ static struct td_var_ty type_abstract_declarator_inner(
     switch (direct_declarator->ty) {
     case AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR:
       if (inner_idx != -1) {
-        WARN("declarator has multiple sub-declarators");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(DECL_MULTIPLE_SUB, decl_multiple_sub,
+                                   direct_declarator->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "declarator has multiple sub-declarators"));
+        return TD_VAR_TY_UNKNOWN;
       }
 
       inner_idx = i - 1;
@@ -977,7 +1047,13 @@ td_var_ty_for_typedef(struct typechk *tchk,
       &tchk->ty_table, identifier_str(tchk->parser, identifier));
 
   if (!entry) {
-    WARN("typedef not recognised");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(BAD_TYPEDEF, bad_typedef, identifier->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "typedef name does not exist"));
+    return TD_VAR_TY_UNKNOWN;
   }
 
   return *entry->var_ty;
@@ -1028,7 +1104,14 @@ static struct td_var_declaration type_declarator_inner(
       break;
     case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR: {
       if (inner_idx != -1) {
-        WARN("declarator has multiple sub-declarators");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(DECL_MULTIPLE_SUB, decl_multiple_sub,
+                                   direct_declarator->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "declarator has multiple sub-declarators"));
+        var_ty = TD_VAR_TY_UNKNOWN;
       }
 
       inner_idx = i - 1;
@@ -1069,15 +1152,21 @@ static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
                 const struct ast_init *init,
-                enum td_declarator_bitfields bitfields) {
+                enum td_declarator_mode bitfields) {
 
   // TODO: handle storage class/qualifier/function specifiers
   struct td_var_declaration declaration = type_declarator_inner(
       tchk, &specifiers->type_specifier, declarator, init);
 
   if (declarator->bitfield_size) {
-    if (bitfields == TD_DECLARATOR_BITFIELDS_FORBID) {
-      WARN("bitfields not allowed in this context");
+    if (bitfields == TD_DECLARATOR_MODE_NORMAL) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              BAD_BITFIELD_CONTEXT, bad_bitfield_context, declarator->span,
+              MK_INVALID_TEXT_POS(0),
+              "subtraction on pointers of different kinds is forbidden"));
     }
 
     declaration.ty = TD_VAR_DECLARATION_TY_BITFIELD;
@@ -1114,11 +1203,21 @@ type_specifiers(struct typechk *tchk,
       break;
     case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS)) {
-        WARN("storage class specifier not valid");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                BAD_STORAGE_CONTEXT, bad_storage_context, specifier.span,
+                MK_INVALID_TEXT_POS(0),
+                "storage class specifier not valid in this context"));
       }
 
       if (specifiers.storage != TD_STORAGE_CLASS_SPECIFIER_NONE) {
-        WARN("multiple storage specifiers");
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                STORAGE_CLASS_MULTIPLE, storage_class_multiple, specifier.span,
+                MK_INVALID_TEXT_POS(0), "multiple storage specifiers"));
       }
 
       switch (specifier.storage_class_specifier) {
@@ -1142,27 +1241,48 @@ type_specifiers(struct typechk *tchk,
       break;
     case AST_DECL_SPECIFIER_TY_TYPE_QUALIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS)) {
-        WARN("type qualifier not valid");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(BAD_TYPE_QUALIFIER_CONTEXT,
+                                   bad_type_qualifier_context, specifier.span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "type qualifier not valid in this context"));
       }
 
       switch (specifier.type_qualifier) {
       case AST_TYPE_QUALIFIER_CONST:
         if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_CONST) {
-          WARN("duplicate const flag");
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
+                                     type_qualifier_duplicate, specifier.span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "duplicate const flag"));
         }
 
         specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_CONST;
         break;
       case AST_TYPE_QUALIFIER_VOLATILE:
         if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_VOLATILE) {
-          WARN("duplicate volatile flag");
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
+                                     type_qualifier_duplicate, specifier.span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "duplicate volatile flag"));
         }
 
         specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_VOLATILE;
         break;
       case AST_TYPE_QUALIFIER_RESTRICT:
         if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_RESTRICT) {
-          WARN("duplicate restrict flag");
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
+                                     type_qualifier_duplicate, specifier.span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "duplicate restrict flag"));
         }
 
         specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_RESTRICT;
@@ -1171,11 +1291,22 @@ type_specifiers(struct typechk *tchk,
       break;
     case AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS)) {
-        WARN("function specifier not valid");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                BAD_FUNCTION_SPECIFIER_CONTEXT, bad_function_specifier_context,
+                specifier.span, MK_INVALID_TEXT_POS(0),
+                "function specifier not valid in this context"));
       }
 
       if (specifiers.function != TD_FUNCTION_SPECIFIER_NONE) {
-        WARN("multiple function specifiers");
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(FUNCTION_SPECIFIER_MULTIPLE,
+                                   function_specifier_multiple, specifier.span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "multiple function specifiers"));
       }
 
       switch (specifier.function_specifier) {
@@ -1186,7 +1317,13 @@ type_specifiers(struct typechk *tchk,
       break;
     case AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER: {
       if (!(allow & TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS)) {
-        WARN("type specifier not valid");
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(BAD_TYPE_SPECIFIER_CONTEXT,
+                                   bad_type_specifier_context, specifier.span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "type specifier not valid in this context"));
       }
 
       type_specifier_count++;
@@ -1194,13 +1331,70 @@ type_specifiers(struct typechk *tchk,
         enum ast_type_specifier_kw kw =
             specifier.type_specifier.type_specifier_kw;
         if (kw == AST_TYPE_SPECIFIER_KW_INT) {
-          int_count++;
+          if (int_count) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(
+                    BAD_TYPE_SPECIFIERS, bad_type_specifiers, specifier.span,
+                    MK_INVALID_TEXT_POS(0),
+                    "multiple 'int' type specifiers is invalid"));
+          } else {
+            int_count++;
+          }
         } else if (kw == AST_TYPE_SPECIFIER_KW_LONG) {
-          long_count++;
+          if (long_count >= 2) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(
+                    BAD_TYPE_SPECIFIERS, bad_type_specifiers, specifier.span,
+                    MK_INVALID_TEXT_POS(0),
+                    "more than two 'long' type specifiers is invalid"));
+          } else {
+            long_count++;
+          }
         } else if (kw == AST_TYPE_SPECIFIER_KW_SIGNED) {
-          signed_count++;
+          if (signed_count) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(
+                    BAD_TYPE_SPECIFIERS, bad_type_specifiers, specifier.span,
+                    MK_INVALID_TEXT_POS(0),
+                    "multiple 'signed' type specifiers is invalid"));
+          } else if (unsigned_count) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(BAD_TYPE_SPECIFIERS, bad_type_specifiers,
+                                       specifier.span, MK_INVALID_TEXT_POS(0),
+                                       "'signed' type specifiers is invalid "
+                                       "after an 'unsigned' type specifier"));
+          } else {
+            signed_count++;
+          }
         } else if (kw == AST_TYPE_SPECIFIER_KW_UNSIGNED) {
-          unsigned_count++;
+          if (unsigned_count) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(
+                    BAD_TYPE_SPECIFIERS, bad_type_specifiers, specifier.span,
+                    MK_INVALID_TEXT_POS(0),
+                    "multiple 'unsigned' type specifiers is invalid"));
+          } else if (signed_count) {
+            tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(BAD_TYPE_SPECIFIERS, bad_type_specifiers,
+                                       specifier.span, MK_INVALID_TEXT_POS(0),
+                                       "'unsigned' type specifiers is invalid "
+                                       "after an 'signed' type specifier"));
+          } else {
+
+            unsigned_count++;
+          }
         } else {
           last_specifier = specifier.type_specifier;
         }
@@ -1211,27 +1405,21 @@ type_specifiers(struct typechk *tchk,
     }
   }
 
-  if (int_count > 1) {
-    WARN("multiple int");
-  }
-
-  if (signed_count > 1) {
-    WARN("multiple signed");
-  }
-
-  if (unsigned_count > 1) {
-    WARN("multiple unsigned");
-  }
-
-  if (signed_count && unsigned_count) {
-    WARN("signed and unsigned");
-  }
+  DEBUG_ASSERT(int_count <= 1 && long_count <= 2 && signed_count <= 1 &&
+                   unsigned_count <= 1 &&
+                   (signed_count == 0 || unsigned_count == 0),
+               "diagnostic handling should have prevented");
 
   int total_modifiers = int_count + long_count + signed_count + unsigned_count;
   int remaining = type_specifier_count - total_modifiers;
 
   if (remaining > 1) {
-    WARN("multiple type specifiers did not make sense");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(BAD_TYPE_SPECIFIERS, bad_type_specifiers,
+                               list->span, MK_INVALID_TEXT_POS(0),
+                               "multiple type specifiers did not make sense"));
   }
 
   // only uses signed/unsigned/int/long
@@ -1354,8 +1542,10 @@ static struct td_expr type_ternary(struct typechk *tchk,
   *td_ternary.false_expr = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
 
+  struct text_span context = ternary->span;
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
-      tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty);
+      tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
+      context);
 
   *td_ternary.true_expr =
       add_cast_if_needed(tchk, *td_ternary.true_expr, result_ty);
@@ -1410,16 +1600,28 @@ static struct td_expr type_call(struct typechk *tchk,
   }
 
   if (target_var_ty.ty != TD_VAR_TY_TY_FUNC) {
-    WARN("can't call non_func");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(FN_NOT_CALLABLE, fn_not_callable, call->span,
+                               MK_INVALID_TEXT_POS(0), "can't call non func"));
   }
 
   size_t num_params = target_var_ty.func.num_params;
   if (target_var_ty.func.ty != TD_TY_FUNC_TY_UNKNOWN_ARGS &&
       call->arg_list.num_args < num_params) {
-    WARN("too few params");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(BAD_PARAM_COUNT, bad_param_count, call->span,
+                               MK_INVALID_TEXT_POS(0), "too few params"));
   } else if (target_var_ty.func.ty == TD_TY_FUNC_TY_KNOWN_ARGS &&
              call->arg_list.num_args > num_params) {
-    WARN("too many params");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(BAD_PARAM_COUNT, bad_param_count, call->span,
+                               MK_INVALID_TEXT_POS(0), "too many params"));
   }
 
   for (size_t i = 0; i < td_call.arg_list.num_args; i++) {
@@ -1509,7 +1711,14 @@ static struct td_expr type_unary_op(struct typechk *tchk,
       result_ty = *expr.var_ty.array.underlying;
       break;
     default:
-      WARN("cannot dereference a non pointer/array");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_DEREF, bad_deref, unary_op->expr->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "cannot dereference a non pointer/array"));
+
+      result_ty = TD_VAR_TY_UNKNOWN;
     }
 
     break;
@@ -1607,8 +1816,9 @@ static struct td_expr type_binary_op(struct typechk *tchk,
   *td_binary_op.lhs = lhs;
   *td_binary_op.rhs = rhs;
 
-  struct td_binary_op_tys op_tys = resolve_binary_op_types(
-      tchk, td_binary_op.lhs, td_binary_op.rhs, td_binary_op.ty);
+  struct td_binary_op_tys op_tys =
+      resolve_binary_op_types(tchk, td_binary_op.lhs, td_binary_op.rhs,
+                              td_binary_op.ty, binary_op->span);
 
   *td_binary_op.lhs =
       add_cast_if_needed(tchk, *td_binary_op.lhs, op_tys.lhs_op_ty);
@@ -1631,37 +1841,56 @@ type_arrayaccess(struct typechk *tchk,
   struct td_expr lhs = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, arrayaccess->lhs);
   struct td_expr rhs = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, arrayaccess->rhs);
 
+  struct td_var_ty var_ty;
+
   if (lhs.var_ty.ty == TD_VAR_TY_TY_POINTER ||
       lhs.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
     *td_arrayaccess.lhs = lhs;
     *td_arrayaccess.rhs = rhs;
+
+    var_ty = td_var_ty_get_underlying(tchk, &td_arrayaccess.lhs->var_ty);
   } else if (rhs.var_ty.ty == TD_VAR_TY_TY_POINTER ||
              rhs.var_ty.ty == TD_VAR_TY_TY_ARRAY) {
     *td_arrayaccess.lhs = rhs;
     *td_arrayaccess.rhs = lhs;
+
+    var_ty = td_var_ty_get_underlying(tchk, &td_arrayaccess.lhs->var_ty);
   } else {
-    WARN("array access should have at least one pointer type");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            BAD_DEREF, bad_deref, arrayaccess->span, MK_INVALID_TEXT_POS(0),
+            "array access should have at least one pointer type"));
+
+    var_ty = TD_VAR_TY_UNKNOWN;
   }
 
   if (!td_var_ty_is_integral_ty(&td_arrayaccess.rhs->var_ty)) {
-    WARN("array access should have at least one integral type");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            POINTER_TYPES, pointer_types, arrayaccess->span,
+            MK_INVALID_TEXT_POS(0),
+            "array access should have at least one pointer type"));
+
+    *td_arrayaccess.rhs = *td_arrayaccess.rhs;
+  } else {
+    struct td_var_ty pointer_ty = td_var_ty_pointer_sized_int(tchk, false);
+
+    *td_arrayaccess.rhs =
+        add_cast_if_needed(tchk, *td_arrayaccess.rhs, pointer_ty);
   }
-
-  struct td_var_ty pointer_ty = td_var_ty_pointer_sized_int(tchk, false);
-
-  *td_arrayaccess.rhs =
-      add_cast_if_needed(tchk, *td_arrayaccess.rhs, pointer_ty);
-
-  struct td_var_ty var_ty =
-      td_var_ty_get_underlying(tchk, &td_arrayaccess.lhs->var_ty);
 
   return (struct td_expr){.ty = TD_EXPR_TY_ARRAYACCESS,
                           .var_ty = var_ty,
                           .array_access = td_arrayaccess};
 }
 
-static struct td_var_ty
-get_completed_aggregate(struct typechk *tchk, const struct td_var_ty *var_ty) {
+static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
+                                                const struct td_var_ty *var_ty,
+                                                struct text_span context) {
   if (var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct var_table_entry *entry =
         var_table_get_entry(&tchk->ty_table, var_ty->incomplete_aggregate.name);
@@ -1669,7 +1898,13 @@ get_completed_aggregate(struct typechk *tchk, const struct td_var_ty *var_ty) {
     // FIXME: ALSO needs to check scope
     // if (!entry || entry->var->scope != td_var_ty)
     if (!entry) {
-      WARN("incomplete type in member access");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "incomplete type in member access"));
+      return TD_VAR_TY_UNKNOWN;
     }
 
     DEBUG_ASSERT(entry->var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
@@ -1707,15 +1942,18 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
 
 static bool try_get_member_idx(struct typechk *tchk,
                                const struct td_var_ty *td_var_ty,
-                               const char *member_name, size_t *member_idx) {
+                               const char *member_name, size_t *member_idx,
+                               struct text_span context) {
 
-  const struct td_var_ty var_ty = get_completed_aggregate(tchk, td_var_ty);
+  const struct td_var_ty var_ty =
+      get_completed_aggregate(tchk, td_var_ty, context);
 
   // FIXME: super slow hashtable needed
   for (size_t i = 0; i < var_ty.aggregate.num_fields; i++) {
     const struct td_struct_field *field = &var_ty.aggregate.fields[i];
     if (field->identifier == NULL) {
-      if (try_get_member_idx(tchk, &field->var_ty, member_name, member_idx)) {
+      if (try_get_member_idx(tchk, &field->var_ty, member_name, member_idx,
+                             context)) {
         return true;
       }
     }
@@ -1731,7 +1969,8 @@ static bool try_get_member_idx(struct typechk *tchk,
 
 static bool try_resolve_member_access_ty_by_index(
     struct typechk *tchk, const struct td_var_ty *td_var_ty, size_t member_idx,
-    struct td_var_ty *member_var_ty) {
+    struct td_var_ty *member_var_ty, struct text_span context) {
+
   if (td_var_ty->ty == TD_VAR_TY_TY_ARRAY) {
     if (member_idx >= td_var_ty->array.size) {
       return false;
@@ -1741,7 +1980,8 @@ static bool try_resolve_member_access_ty_by_index(
     return true;
   }
 
-  const struct td_var_ty var_ty = get_completed_aggregate(tchk, td_var_ty);
+  const struct td_var_ty var_ty =
+      get_completed_aggregate(tchk, td_var_ty, context);
 
   if (member_idx >= var_ty.aggregate.num_fields) {
     return false;
@@ -1752,12 +1992,13 @@ static bool try_resolve_member_access_ty_by_index(
 }
 
 static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk,
-                                               const struct td_var_ty *var_ty) {
+                                               const struct td_var_ty *var_ty,
+                                               struct text_span context) {
   if (var_ty->ty != TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     return *var_ty;
   }
 
-  return get_completed_aggregate(tchk, var_ty);
+  return get_completed_aggregate(tchk, var_ty, context);
 }
 
 static struct td_expr
@@ -1769,15 +2010,20 @@ type_memberaccess(struct typechk *tchk,
 
   *td_memberaccess.lhs =
       type_expr(tchk, TYPE_EXPR_FLAGS_NONE, memberaccess->lhs);
-  td_memberaccess.lhs->var_ty =
-      type_incomplete_var_ty(tchk, &td_memberaccess.lhs->var_ty);
+  td_memberaccess.lhs->var_ty = type_incomplete_var_ty(
+      tchk, &td_memberaccess.lhs->var_ty, memberaccess->span);
 
   const char *member_name = identifier_str(tchk->parser, &memberaccess->member);
 
   struct td_var_ty var_ty;
   if (!try_resolve_member_access_ty(tchk, &td_memberaccess.lhs->var_ty,
                                     member_name, &var_ty)) {
-    WARN("unknown member");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, memberaccess->span,
+                               MK_INVALID_TEXT_POS(0), "unknown member"));
+    var_ty = TD_VAR_TY_UNKNOWN;
   }
 
   struct td_expr expr = {.ty = TD_EXPR_TY_MEMBERACCESS,
@@ -1817,14 +2063,22 @@ type_pointeraccess(struct typechk *tchk,
   switch (td_pointeraccess.lhs->var_ty.ty) {
   case TD_VAR_TY_TY_POINTER:
     *td_pointeraccess.lhs->var_ty.pointer.underlying = type_incomplete_var_ty(
-        tchk, td_pointeraccess.lhs->var_ty.pointer.underlying);
+        tchk, td_pointeraccess.lhs->var_ty.pointer.underlying,
+        pointeraccess->span);
     break;
   case TD_VAR_TY_TY_ARRAY:
     *td_pointeraccess.lhs->var_ty.array.underlying = type_incomplete_var_ty(
-        tchk, td_pointeraccess.lhs->var_ty.array.underlying);
+        tchk, td_pointeraccess.lhs->var_ty.array.underlying,
+        pointeraccess->span);
     break;
   default:
-    WARN("doesn't make sense for pointer access");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(BAD_DEREF, bad_deref, pointeraccess->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "type doesn't make sense for pointer access"));
+    td_pointeraccess.lhs->var_ty = TD_VAR_TY_UNKNOWN;
   }
 
   const char *pointer_name =
@@ -1835,7 +2089,12 @@ type_pointeraccess(struct typechk *tchk,
 
   struct td_var_ty var_ty;
   if (!try_resolve_member_access_ty(tchk, &underlying, pointer_name, &var_ty)) {
-    WARN("unknown member");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, pointeraccess->span,
+                               MK_INVALID_TEXT_POS(0), "unknown member"));
+    var_ty = TD_VAR_TY_UNKNOWN;
   }
 
   struct td_expr expr = {.ty = TD_EXPR_TY_POINTERACCESS,
@@ -1923,8 +2182,8 @@ static struct td_expr type_assg(struct typechk *tchk,
   if (td_assg.ty != TD_ASSG_TY_BASIC) {
     struct td_expr promoted_assignee =
         perform_integer_promotion(tchk, *td_assg.assignee);
-    struct td_binary_op_tys tys =
-        resolve_binary_op_types(tchk, &promoted_assignee, td_assg.expr, bin_op);
+    struct td_binary_op_tys tys = resolve_binary_op_types(
+        tchk, &promoted_assignee, td_assg.expr, bin_op, assg->span);
 
     *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr, tys.rhs_op_ty);
 
@@ -1955,12 +2214,23 @@ static struct td_expr type_var(struct typechk *tchk,
   const char *name = identifier_str(tchk->parser, &var->identifier);
   struct var_table_entry *entry = var_table_get_entry(&tchk->var_table, name);
 
-  if (!entry) {
-    WARN("variable '%s' does not exist", name);
-  }
+  struct td_var_ty var_ty;
+  struct td_var td_var;
+  if (entry) {
+    var_ty = *entry->var_ty;
+    td_var = *entry->var;
+  } else {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(tchk->diagnostics,
+                             MK_SEMANTIC_DIAGNOSTIC(NO_VAR, no_var, var->span,
+                                                    MK_INVALID_TEXT_POS(0),
+                                                    "variable does not exist"));
 
-  struct td_var_ty var_ty = *entry->var_ty;
-  struct td_var td_var = *entry->var;
+    var_ty = TD_VAR_TY_UNKNOWN;
+    td_var = (struct td_var){.ty = TD_VAR_VAR_TY_VAR,
+                             .identifier = name,
+                             .scope = cur_scope(&tchk->ty_table)};
+  }
 
   return (struct td_expr){
       .ty = TD_EXPR_TY_VAR, .var_ty = var_ty, .var = td_var};
@@ -2074,6 +2344,7 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
     td_compoundexpr.exprs[i] = type_expr(tchk, flags, &compoundexpr->exprs[i]);
   }
 
+  // skip: not implemented
   DEBUG_ASSERT(td_compoundexpr.num_exprs,
                "compound expression must have at least one expression");
   struct td_var_ty var_ty =
@@ -2094,7 +2365,8 @@ static struct td_expr type_expr(struct typechk *tchk,
 
   switch (expr->ty) {
   case AST_EXPR_TY_INVALID:
-    BUG("INVALID expr type should not reach typechk (should trigger diagnostic -> trigger parse fail)");
+    BUG("INVALID expr type should not reach typechk (should trigger diagnostic "
+        "-> trigger parse fail)");
     break;
   case AST_EXPR_TY_TERNARY:
     td_expr = type_ternary(tchk, &expr->ternary);
@@ -2162,7 +2434,16 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     struct td_expr var = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
 
     if (var.var.ty != TD_VAR_VAR_TY_ENUMERATOR) {
-      WARN("variables in enum initializers must be other enum values");
+      // FIXME: this is actually more general "bad value in constant expr", not
+      // just for enums
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "variables in enum initializers or constant "
+                                 "expressions must be other enum values"));
+      return 0;
     }
 
     return var.var.enumerator;
@@ -2215,7 +2496,13 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     }
   }
 
-  WARN("constant integral expr was expected");
+  tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+  compiler_diagnostics_add(
+      tchk->diagnostics,
+      MK_SEMANTIC_DIAGNOSTIC(BAD_INTEGRAL_CNST_EXPR, bad_integral_cnst_expr,
+                             expr->span, MK_INVALID_TEXT_POS(0),
+                             "constant integral expr was expected"));
+  return 0;
 }
 
 // static unsigned long long type_constant_expr(UNUSED struct typechk *tchk,
@@ -2538,7 +2825,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
   struct td_var_declaration declaration =
       type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
-                      TD_DECLARATOR_BITFIELDS_FORBID);
+                      TD_DECLARATOR_MODE_NORMAL);
 
   struct var_table_entry *func_entry =
       var_table_create_entry(&tchk->var_table, declaration.var.identifier);
@@ -2608,7 +2895,13 @@ type_designator(struct typechk *tchk, const struct td_var_ty *var_ty,
 
     struct td_var_ty field_ty;
     if (!try_resolve_member_access_ty(tchk, var_ty, field, &field_ty)) {
-      WARN("unrecognised field in designator");
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, designator->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "unknown member in designator"));
+      field_ty = TD_VAR_TY_UNKNOWN;
     }
 
     return (struct td_designator){
@@ -2680,26 +2973,47 @@ TODO_FUNC(static struct td_expr type_zero_expr(struct typechk *tchk,
 static struct td_expr
 type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
                           const struct ast_init_list *init_list) {
+  struct td_var_ty res_var_ty = *var_ty;
+
   if (init_list->num_inits == 0) {
     // zero-init
     return type_zero_expr(tchk, var_ty);
-  } else if (init_list->num_inits == 1) {
-    const struct ast_init_list_init *init_list_init = &init_list->inits[0];
+  }
 
-    if (init_list_init->designator_list) {
-      WARN("cannot use designator list in scalar initialization");
-    }
+  if (init_list->num_inits > 1) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(SCALAR_INIT_MULTIPLE_VALUES,
+                               scalar_init_multiple_values, init_list->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "trying to initialise scalar with init list "
+                               "with multiple values"));
 
-    const struct ast_init *init = init_list_init->init;
-    switch (init->ty) {
-    case AST_INIT_TY_EXPR:
-      return add_cast_if_needed(
-          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
-    case AST_INIT_TY_INIT_LIST:
-      return type_init_list_for_scalar(tchk, var_ty, &init->init_list);
-    }
-  } else {
-    WARN("trying to initialise scalar with init list with multiple values");
+    res_var_ty = TD_VAR_TY_UNKNOWN;
+  }
+
+  const struct ast_init_list_init *init_list_init = &init_list->inits[0];
+
+  if (init_list_init->designator_list) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            SCALAR_DESIGNATOR, scalar_designator, init_list->span,
+            MK_INVALID_TEXT_POS(0),
+            "cannot use designator list in scalar initialization"));
+
+    res_var_ty = TD_VAR_TY_UNKNOWN;
+  }
+
+  const struct ast_init *init = init_list_init->init;
+  switch (init->ty) {
+  case AST_INIT_TY_EXPR:
+    return add_cast_if_needed(
+        tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), res_var_ty);
+  case AST_INIT_TY_INIT_LIST:
+    return type_init_list_for_scalar(tchk, &res_var_ty, &init->init_list);
   }
 }
 
@@ -2747,8 +3061,13 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       case AST_DESIGNATOR_TY_FIELD: {
         if (!try_get_member_idx(
                 tchk, var_ty, identifier_str(tchk->parser, &designator->field),
-                &field_index)) {
-          WARN("unrecognised member for init list");
+                &field_index, designator->span)) {
+          tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, designator->span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "unknown member for init list"));
         }
 
         break;
@@ -2758,8 +3077,15 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       size_t cur_field_index = field_index;
 
       if (!try_resolve_member_access_ty_by_index(tchk, var_ty, cur_field_index,
-                                                 &member_var_ty)) {
-        WARN("bad field");
+                                                 &member_var_ty, init->span)) {
+        member_var_ty = TD_VAR_TY_UNKNOWN;
+
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, init->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "unknown member for init list"));
       }
     }
 
@@ -2803,20 +3129,22 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
                const struct ast_init_list *init_list) {
   if (init_list->num_inits == 0 &&
       tchk->args->c_standard < COMPILE_C_STANDARD_C23) {
-    WARN("empy initializer is a c23 feature");
-  }
 
-  DEBUG_ASSERT(
-      !td_var_ty_is_scalar_ty(var_ty),
-      "scalar init list should have been converted to expression init");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, init_list->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "empy initializer is a c23 feature"));
+  }
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
       var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
     return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list, 0,
                                                  true);
-  } else {
-    WARN("cannot use initializer list for type");
   }
+
+  BUG("scalar init list should have been converted to expression init");
 }
 
 static struct td_init type_init(struct typechk *tchk,
@@ -2849,7 +3177,7 @@ static struct td_var_declaration
 type_init_declarator(struct typechk *tchk,
                      const struct td_specifiers *specifiers,
                      const struct ast_init_declarator *init_declarator,
-                     enum td_declarator_bitfields bitfields) {
+                     enum td_declarator_mode bitfields) {
   struct td_var_declaration td_var_decl =
       type_declarator(tchk, specifiers, &init_declarator->declarator,
                       init_declarator->init, bitfields);
@@ -2862,7 +3190,8 @@ type_init_declarator(struct typechk *tchk,
         var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
 
     if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
-      td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty);
+      td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty,
+                                                   init_declarator->span);
     }
   }
 
@@ -2872,6 +3201,16 @@ type_init_declarator(struct typechk *tchk,
   *entry->var_ty = td_var_decl.var_ty;
 
   if (init_declarator->init) {
+    if (bitfields == TD_DECLARATOR_MODE_STRUCT) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              INIT_IN_AGGREGATE, init_in_aggregate, init_declarator->init->span,
+              MK_INVALID_TEXT_POS(0),
+              "struct/union must have an identifier or a decl list"));
+    }
+
     struct td_init init =
         type_init(tchk, &td_var_decl.var_ty, init_declarator->init);
 
@@ -2885,7 +3224,7 @@ type_init_declarator(struct typechk *tchk,
 static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, const struct td_specifiers *specifiers,
     const struct ast_init_declarator_list *declarator_list,
-    enum td_declarator_bitfields bitfields) {
+    enum td_declarator_mode bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .num_var_declarations = declarator_list->num_init_declarators,
@@ -2912,7 +3251,7 @@ type_declaration(struct typechk *tchk,
 
   return type_init_declarator_list(tchk, &specifiers,
                                    &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_FORBID);
+                                   TD_DECLARATOR_MODE_NORMAL);
 }
 
 static struct td_declaration
@@ -2924,7 +3263,7 @@ type_struct_declaration(struct typechk *tchk,
 
   return type_init_declarator_list(tchk, &specifiers,
                                    &declaration->declarator_list,
-                                   TD_DECLARATOR_BITFIELDS_ALLOW);
+                                   TD_DECLARATOR_MODE_STRUCT);
 }
 
 static struct td_external_declaration type_external_declaration(
@@ -2952,15 +3291,15 @@ enum typechk_create_result typechk_create(const struct target *target,
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
-  *t = (struct typechk){
-      .arena = arena,
-      .args = args,
-      .parser = parser,
-      .target = target,
-      .next_anonymous_type_name_id = 0,
-      .ty_table = var_table_create(arena),
-      .var_table = var_table_create(arena),
-  };
+  *t = (struct typechk){.arena = arena,
+                        .args = args,
+                        .parser = parser,
+                        .target = target,
+                        .next_anonymous_type_name_id = 0,
+                        .ty_table = var_table_create(arena),
+                        .var_table = var_table_create(arena),
+                        .result_ty = TYPECHK_RESULT_TY_SUCCESS,
+                        .diagnostics = compiler_diagnostics_create()};
 
   *tchk = t;
 
@@ -2970,6 +3309,7 @@ enum typechk_create_result typechk_create(const struct target *target,
 void typechk_free(struct typechk **tchk) {
   var_table_free(&(*tchk)->ty_table);
   var_table_free(&(*tchk)->var_table);
+  compiler_diagnostics_free(&(*tchk)->diagnostics);
 
   arena_allocator_free(&(*tchk)->arena);
   (*tchk)->arena = NULL;
@@ -2991,7 +3331,9 @@ struct typechk_result td_typechk(struct typechk *tchk,
         tchk, &translation_unit->external_declarations[i]);
   }
 
-  return (struct typechk_result){.translation_unit = td_translation_unit};
+  return (struct typechk_result){.ty = tchk->result_ty,
+                                 .diagnostics = tchk->diagnostics,
+                                 .translation_unit = td_translation_unit};
 }
 
 struct td_printstate {
