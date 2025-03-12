@@ -1461,6 +1461,33 @@ enum try_find_include_mode {
 static bool try_include_path(struct preproc *preproc, const char *path,
                              const char **content,
                              enum try_find_include_mode mode) {
+  if (!strcmp(path, "stdarg.h")) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: special header 'starg.h'");
+    }
+
+    const char *STDARG_CONTENT =
+        ""
+        "#ifndef STDARG_H\n"
+        "#define STDARG_H\n"
+        "typedef __builtin_va_list va_list;\n"
+        "\n"
+        "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
+        "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
+        "#else\n"
+        "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
+        "#endif\n"
+        "\n"
+        "#define va_end(ap) __builtin_va_end(ap);\n"
+        "#define va_arg(ap, type) __builtin_va_arg(ap, type);\n"
+        "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
+        "typedef __builtin_va_list va_list;\n"
+        "#endif\n";
+
+    *content = STDARG_CONTENT;
+
+    return true;
+  }
 
   if (preproc->args.verbose) {
     fprintf(stderr, "preproc: trying path '%s'\n", path);
@@ -1506,6 +1533,13 @@ static struct include_info try_find_include(struct preproc *preproc,
     } else {
       fprintf(stderr, "preproc: including \"%s\"\n", filename);
     }
+  }
+
+  
+  if (!strcmp(filename, "stdarg.h")) { 
+    info.path = filename;
+    try_include_path(preproc, info.path, &info.content, mode);
+    return info;
   }
 
   if (!is_angle) {
@@ -1679,38 +1713,42 @@ static unsigned long long eval_atom(struct preproc *preproc,
     switch (token->ty) {
     case PREPROC_TOKEN_TY_PREPROC_NUMBER: {
       unsigned long long num;
-      if (!try_parse_str(token->text, text_span_len(&token->span), &num)) {
+      if (!try_parse_integer(token->text, text_span_len(&token->span), &num)) {
         BUG("bad value in preproc expr");
       }
 
       (*i)++;
       return num;
     }
+#define MAX_PREC 100
     case PREPROC_TOKEN_TY_PUNCTUATOR:
       switch (token->punctuator.ty) {
       case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET: {
         (*i)++;
-        return eval_expr(preproc, preproc_text, tokens, i, num_tokens, 0);
+        return eval_expr(preproc, preproc_text, tokens, i, num_tokens,
+                         MAX_PREC);
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB: {
+        // THIS IS WRONG ! min prec needs to be higha
         (*i)++;
         unsigned long long val =
-            eval_atom(preproc, preproc_text, tokens, i, num_tokens);
+            eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
         return -val;
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT: {
         (*i)++;
         unsigned long long val =
-            eval_atom(preproc, preproc_text, tokens, i, num_tokens);
+            eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
         return !val;
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_NOT: {
         (*i)++;
         unsigned long long val =
-            eval_atom(preproc, preproc_text, tokens, i, num_tokens);
+            eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
         return ~val;
       }
       default:
+        fprintf(stderr, "%.*s\n", 50, token->text);
         BUG("did not expect this token type in directive expr");
         break;
       }
@@ -1782,6 +1820,7 @@ static unsigned long long eval_atom(struct preproc *preproc,
       (*i)++;
       continue;
     default:
+      fprintf(stderr, "%.*s\n", 50, token->text);
       BUG("did not expect this token type in directive expr");
     }
   }
@@ -1809,17 +1848,31 @@ static unsigned long long eval_expr(struct preproc *preproc,
     case PREPROC_TOKEN_TY_NEWLINE:
     case PREPROC_TOKEN_TY_IDENTIFIER:
     case PREPROC_TOKEN_TY_PREPROC_NUMBER:
-      BUG("did not expect this token type in directive expr");
+      fprintf(stderr, "%.*s\n", 50, token->text);
+      BUG("did not expect this token type in directive expr (%s)",
+          preproc_text->file);
     case PREPROC_TOKEN_TY_PUNCTUATOR: {
       if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET ||
           token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COLON) {
+
+        (*i)--;
         return value;
       }
 
       if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_QMARK) {
         long long ternary_lhs =
             eval_expr(preproc, preproc_text, tokens, i, num_tokens, 0);
-        token = vector_get(tokens, *i);
+
+        while (*i < num_tokens) {
+          struct preproc_token *t = vector_get(tokens, *i);
+          if (t->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+              t->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COLON) {
+            break;
+          }
+
+          (*i)++;
+        }
+        (*i)++;
 
         long long ternary_rhs =
             eval_expr(preproc, preproc_text, tokens, i, num_tokens, 0);

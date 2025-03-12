@@ -348,6 +348,12 @@ build() {
         exit -1
     fi
 
+    
+    if [ -n "$default_target" ]; then
+        # verifies --default-target
+        MallocNanoZone=0 ./jcc --version >/dev/null
+    fi
+
     echo -e "${BOLD}Build complete${RESET}"  1>&2
 
     cd - > /dev/null

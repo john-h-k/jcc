@@ -1,12 +1,9 @@
 #include "alloc.h"
 
-#include "codegen.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
 #include <stdlib.h>
-
-// TODO: allow larger allocs
 
 #ifdef ALWAYS_MALLOC
 #define BLOCK_SIZE (0)
@@ -139,7 +136,7 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
 }
 
 void *arena_alloc_init(struct arena_allocator *allocator, size_t size,
-                       void *data) {
+                       const void *data) {
   void *p = arena_alloc(allocator, size);
 
   if (p && data) {

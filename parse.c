@@ -15,7 +15,7 @@
 #define EXP_PARSE(e, diag)                                                     \
   do {                                                                         \
     if (!(e)) {                                                                \
-      struct text_pos err_pos = get_position(parser->lexer);                   \
+      struct text_pos err_pos = get_last_text_pos(parser->lexer);              \
       BUG("failure during parsing at line %zu, col %zu, idx %zu: %s",          \
           err_pos.line, err_pos.col, err_pos.idx, diag);                       \
     }                                                                          \
@@ -205,7 +205,7 @@ static bool parse_token(struct parser *parser, enum lex_token_ty ty) {
 }
 
 static bool parse_identifier(struct parser *parser, struct lex_token *token) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   peek_token(parser->lexer, token);
 
@@ -343,7 +343,7 @@ static bool parse_compoundexpr(struct parser *parser,
 
 static bool parse_attribute(struct parser *parser,
                             struct ast_attribute *attribute) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct lex_token identifier;
   peek_token(parser->lexer, &identifier);
@@ -369,8 +369,8 @@ static bool parse_attribute(struct parser *parser,
 
   consume_token(parser->lexer, open);
 
-  // reuse compoundexpr parsing, but intentionally a different type so we can support
-  // other attributes (e.g types, `__attribute__((foo(char *)))`)
+  // reuse compoundexpr parsing, but intentionally a different type so we can
+  // support other attributes (e.g types, `__attribute__((foo(char *)))`)
 
   struct ast_compoundexpr compoundexpr;
   if (!parse_compoundexpr(parser, &compoundexpr)) {
@@ -380,8 +380,8 @@ static bool parse_attribute(struct parser *parser,
 
   attribute->ty = AST_ATTRIBUTE_TY_PARAMETERIZED;
   attribute->name = identifier;
-  attribute->params =
-      arena_alloc(parser->arena, sizeof(*attribute->params) * compoundexpr.num_exprs);
+  attribute->params = arena_alloc(parser->arena, sizeof(*attribute->params) *
+                                                     compoundexpr.num_exprs);
   attribute->num_params = compoundexpr.num_exprs;
 
   for (size_t i = 0; i < compoundexpr.num_exprs; i++) {
@@ -389,13 +389,14 @@ static bool parse_attribute(struct parser *parser,
         (struct ast_attribute_param){.expr = &compoundexpr.exprs[i]};
   }
 
-  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET), "expected `)` after attribute params");
+  EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
+            "expected `)` after attribute params");
   return true;
 }
 
 static bool parse_attribute_list(struct parser *parser,
                                  struct ast_attribute_list *attribute_list) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   // copied from parse_compoundexpr. maybe we should unify
 
@@ -428,7 +429,7 @@ static bool parse_attribute_list(struct parser *parser,
 static bool
 parse_attribute_specifier(struct parser *parser,
                           struct ast_attribute_specifier *attribute_specifier) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_ATTRIBUTE) ||
       !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) ||
@@ -438,7 +439,6 @@ parse_attribute_specifier(struct parser *parser,
   }
 
   parse_attribute_list(parser, &attribute_specifier->attribute_list);
-
 
   EXP_PARSE(parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET) &&
                 parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET),
@@ -487,7 +487,7 @@ static void parse_enumerator_list(struct parser *parser,
 
 static bool parse_enum_specifier(struct parser *parser,
                                  struct ast_enum_specifier *enum_specifier) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_ENUM)) {
     return false;
@@ -536,7 +536,7 @@ parse_declaration_list(struct parser *parser,
 static bool parse_struct_or_union_specifier(
     struct parser *parser,
     struct ast_struct_or_union_specifier *struct_or_union_specifier) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   enum ast_struct_or_union_specifier_ty ty;
   if (parse_token(parser, LEX_TOKEN_TY_KW_STRUCT)) {
@@ -698,7 +698,7 @@ static void parse_declaration_specifier_list(
 
 static bool parse_designator(struct parser *parser,
                              struct ast_designator *designator) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
     struct ast_expr expr;
@@ -764,7 +764,7 @@ static bool parse_init(struct parser *parser, struct ast_init *init) {
 
 static bool parse_init_list_init(struct parser *parser,
                                  struct ast_init_list_init *init_list) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   *init_list =
       (struct ast_init_list_init){.designator_list = NULL, .init = NULL};
@@ -794,7 +794,7 @@ static bool parse_init_list_init(struct parser *parser,
 
 static bool parse_init_list(struct parser *parser,
                             struct ast_init_list *init_list) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE)) {
     backtrack(parser->lexer, pos);
@@ -910,7 +910,7 @@ parse_abstract_declarator(struct parser *parser,
 static bool parse_direct_abstract_declarator(
     struct parser *parser,
     struct ast_direct_abstract_declarator *direct_abstract_declarator) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_array_declarator array_declarator;
   if (parse_ast_array_declarator(parser, &array_declarator)) {
@@ -973,7 +973,7 @@ parse_direct_abstract_declarator_list(struct parser *parser,
 static bool
 parse_abstract_declarator(struct parser *parser,
                           struct ast_abstract_declarator *abstract_declarator) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   parse_pointer_list(parser, &abstract_declarator->pointer_list);
   parse_direct_abstract_declarator_list(
@@ -992,7 +992,7 @@ parse_abstract_declarator(struct parser *parser,
 static bool
 parse_direct_declarator(struct parser *parser,
                         struct ast_direct_declarator *direct_declarator) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_identifier(parser, &direct_declarator->identifier)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_IDENTIFIER;
@@ -1063,7 +1063,7 @@ static void parse_direct_declarator_list(
 
 static bool parse_declarator(struct parser *parser,
                              struct ast_declarator *declarator) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   parse_pointer_list(parser, &declarator->pointer_list);
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
@@ -1075,7 +1075,7 @@ static bool parse_declarator(struct parser *parser,
   bool has_declarator =
       declarator->direct_declarator_list.num_direct_declarators;
 
-  struct text_pos end_of_declarator = get_position(parser->lexer);
+  lex_pos end_of_declarator = get_position(parser->lexer);
 
   struct ast_expr expr;
   if (parse_token(parser, LEX_TOKEN_TY_COLON) && parse_expr(parser, &expr)) {
@@ -1101,7 +1101,7 @@ static bool parse_init_declarator(struct parser *parser,
     return false;
   }
 
-  struct text_pos pre_init_pos = get_position(parser->lexer);
+  lex_pos pre_init_pos = get_position(parser->lexer);
 
   struct ast_init init;
   if (parse_token(parser, LEX_TOKEN_TY_OP_ASSG) && parse_init(parser, &init)) {
@@ -1135,7 +1135,7 @@ static void parse_init_declarator_list(
 
 static bool parse_type_name(struct parser *parser,
                             struct ast_type_name *type_name) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &type_name->specifier_list);
   if (!type_name->specifier_list.num_decl_specifiers) {
@@ -1309,7 +1309,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
 }
 
 static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct lex_token token;
 
@@ -1372,7 +1372,7 @@ static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
 
 static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_expr assignee;
   if (!parse_atom_3(parser, &assignee)) {
@@ -1438,7 +1438,7 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 }
 
 static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_compoundexpr compound_expr;
 
@@ -1467,7 +1467,7 @@ static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
 
 // parses highest precedence (literals, vars, constants)
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct lex_token token;
   peek_token(parser->lexer, &token);
@@ -1534,7 +1534,7 @@ static bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
 
 static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
                                struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET)) {
     struct ast_expr *rhs = arena_alloc(parser->arena, sizeof(*rhs));
@@ -1558,7 +1558,7 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
 static bool parse_member_access(struct parser *parser,
                                 struct ast_expr *sub_expr,
                                 struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_DOT)) {
     backtrack(parser->lexer, pos);
@@ -1579,7 +1579,7 @@ static bool parse_member_access(struct parser *parser,
 static bool parse_pointer_access(struct parser *parser,
                                  struct ast_expr *sub_expr,
                                  struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_ARROW)) {
     backtrack(parser->lexer, pos);
@@ -1650,7 +1650,7 @@ static bool parse_atom_2(struct parser *parser, struct ast_expr *expr) {
 }
 
 static bool parse_cast(struct parser *parser, struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_type_name type_name;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
@@ -1681,7 +1681,7 @@ static bool parse_cast(struct parser *parser, struct ast_expr *expr) {
 
 static bool parse_unary_prefix_op(struct parser *parser,
                                   struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct lex_token token;
   peek_token(parser->lexer, &token);
@@ -1740,7 +1740,7 @@ static bool parse_unary_prefix_op(struct parser *parser,
 }
 
 static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SIZEOF)) {
     backtrack(parser->lexer, pos);
@@ -1752,7 +1752,7 @@ static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
   // resolves as `sizeof( (char) + sizeof(short) )` that is, the size of
   // `+sizeof(short)` cast to `char`
 
-  struct text_pos post_sizeof_pos = get_position(parser->lexer);
+  lex_pos post_sizeof_pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET) &&
       parse_type_name(parser, &expr->size_of.type_name) &&
@@ -1859,7 +1859,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
 }
 
 static bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_expr cond, true_expr, false_expr;
   if (parse_expr_precedence_aware(parser, 0, &cond) &&
@@ -1887,7 +1887,7 @@ static bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
 }
 
 static bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_ternary(parser, expr)) {
     return true;
@@ -1925,7 +1925,7 @@ static bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 // a compound expr
 static bool parse_compoundexpr(struct parser *parser,
                                struct ast_compoundexpr *compound_expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   // this could be made recursive instead
 
@@ -1960,7 +1960,7 @@ static bool parse_compoundexpr(struct parser *parser,
 static bool
 parse_compoundexpr_with_semicolon(struct parser *parser,
                                   struct ast_compoundexpr *compoundexpr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_compoundexpr(parser, compoundexpr) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
@@ -1991,7 +1991,7 @@ static void add_typedefs_to_table(
 
 static bool parse_declaration(struct parser *parser,
                               struct ast_declaration *declaration) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &declaration->specifier_list);
 
@@ -2053,7 +2053,7 @@ parse_declaration_list(struct parser *parser,
 
 static bool parse_jumpstmt(struct parser *parser,
                            struct ast_jumpstmt *jump_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_expr expr;
   if (parse_token(parser, LEX_TOKEN_TY_KW_RETURN) &&
@@ -2118,7 +2118,7 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
 
 static bool parse_labeledstmt(struct parser *parser,
                               struct ast_labeledstmt *labeled_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct lex_token label;
   peek_token(parser->lexer, &label);
@@ -2151,7 +2151,7 @@ static bool parse_labeledstmt(struct parser *parser,
 }
 
 static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_IF) ||
       !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
@@ -2188,7 +2188,7 @@ static bool parse_ifelsestmt(struct parser *parser,
   // parse `if {}`, then try parse `else`
   // not perfectly efficient but more elegant
 
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_ifstmt if_stmt;
   struct ast_stmt else_stmt;
@@ -2211,7 +2211,7 @@ static bool parse_ifelsestmt(struct parser *parser,
 
 static bool parse_switchstmt(struct parser *parser,
                              struct ast_switchstmt *switch_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct ast_expr ctrl_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SWITCH) ||
@@ -2237,7 +2237,7 @@ static bool parse_switchstmt(struct parser *parser,
 
 static bool parse_whilestmt(struct parser *parser,
                             struct ast_whilestmt *while_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_WHILE) ||
       !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET)) {
@@ -2271,7 +2271,7 @@ static bool parse_whilestmt(struct parser *parser,
 
 static bool parse_dowhilestmt(struct parser *parser,
                               struct ast_dowhilestmt *do_while_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_DO)) {
     backtrack(parser->lexer, pos);
@@ -2312,7 +2312,7 @@ static bool parse_dowhilestmt(struct parser *parser,
 static bool
 parse_declaration_or_expr(struct parser *parser,
                           struct ast_declaration_or_expr *decl_or_expr) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_declaration(parser, &decl_or_expr->decl)) {
     decl_or_expr->ty = AST_DECLARATION_OR_EXPR_TY_DECL;
@@ -2331,7 +2331,7 @@ parse_declaration_or_expr(struct parser *parser,
 }
 
 static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   // first parse the `for (`
   if (!(parse_token(parser, LEX_TOKEN_TY_KW_FOR) &&
@@ -2448,7 +2448,7 @@ static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt);
 
 static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON)) {
     stmt->ty = AST_STMT_TY_NULL;
@@ -2512,7 +2512,7 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 
 static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   push_scope(&parser->ty_table);
 
@@ -2542,7 +2542,7 @@ static bool parse_compoundstmt(struct parser *parser,
 }
 
 static bool parse_param(struct parser *parser, struct ast_param *param) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_ELLIPSIS)) {
     param->ty = AST_PARAM_TY_VARIADIC;
@@ -2584,7 +2584,7 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
 
 static bool parse_paramlist(struct parser *parser,
                             struct ast_paramlist *param_list) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   struct vector *params =
       vector_create_in_arena(sizeof(struct ast_param), parser->arena);
@@ -2621,7 +2621,7 @@ static bool parse_paramlist(struct parser *parser,
 }
 
 static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
-  struct text_pos pos = get_position(parser->lexer);
+  lex_pos pos = get_position(parser->lexer);
 
   parse_declaration_specifier_list(parser, &func_def->specifier_list);
 
@@ -2685,7 +2685,7 @@ struct parse_result parse(struct parser *parser) {
 
     if (!lexer_at_eof(lexer)) {
       // parser failed
-      struct text_pos pos = get_position(lexer);
+      struct text_pos pos = get_last_text_pos(lexer);
       err("parser finished at position %zu, line=%zu, col=%zu", pos.idx,
           pos.line, pos.col);
       break;

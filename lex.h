@@ -3,9 +3,6 @@
 
 #include "preproc.h"
 #include "program.h"
-#include "util.h"
-
-#include <stdlib.h>
 
 enum lex_token_ty {
   LEX_TOKEN_TY_UNKNOWN,
@@ -168,11 +165,15 @@ enum lex_create_result lexer_create(struct program *program,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
-struct text_pos get_position(struct lexer *lexer);
-void backtrack(struct lexer *lexer, struct text_pos position);
+typedef size_t lex_pos;
+
+lex_pos get_position(struct lexer *lexer);
+void backtrack(struct lexer *lexer, lex_pos position);
 
 void peek_token(struct lexer *lexer, struct lex_token *token);
 void consume_token(struct lexer *lexer, struct lex_token token);
+
+struct text_pos get_last_text_pos(const struct lexer *lexer);
 
 // returns the associated text for a token, or NULL
 // e.g
