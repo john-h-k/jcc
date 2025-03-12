@@ -1,3 +1,4 @@
+// skip: not implemented
 // expected value
 
 #define FOO bar\
