@@ -3,6 +3,7 @@
 
 #include "compiler.h"
 #include "parse.h"
+#include "program.h"
 #include "target.h"
 #include "var_table.h"
 
@@ -489,6 +490,9 @@ struct td_expr {
     struct td_pointeraccess pointer_access;
     struct td_compound_literal compound_literal;
   };
+
+  // // TODO: add to more types
+  // struct text_span span;
 };
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
@@ -501,6 +505,8 @@ struct td_init {
     struct td_expr expr;
     struct td_init_list init_list;
   };
+
+  // struct text_span span;
 };
 
 enum td_var_declaration_ty {
@@ -739,7 +745,15 @@ enum typechk_create_result {
   TYPECHK_CREATE_RESULT_FAILURE
 };
 
+enum typechk_result_ty {
+  TYPECHK_RESULT_TY_SUCCESS,
+  TYPECHK_RESULT_TY_FAILURE,
+};
+
 struct typechk_result {
+  enum typechk_result_ty ty;
+
+  struct compiler_diagnostics *diagnostics;
   struct td_translationunit translation_unit;
 };
 

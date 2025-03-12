@@ -266,30 +266,18 @@ compiler_print_diagnostics(struct compiler *compiler,
 
     switch (diagnostic.ty.class) {
     case COMPILER_DIAGNOSTIC_CLASS_PARSE:
-      switch (diagnostic.parse_diagnostic.ty) {
-      case PARSE_DIAGNOSTIC_TY_EXPECTED_TOKEN:
-        fprintf(stderr, PR_BOLD PR_WHITE "expected token %s\n" PR_RESET,
-                diagnostic.parse_diagnostic.expected_token);
-        break;
-      case PARSE_DIAGNOSTIC_TY_EXPECTED_EXPR:
-        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-                diagnostic.parse_diagnostic.expected_expr);
-        break;
-      case PARSE_DIAGNOSTIC_TY_EXPECTED_INIT:
-        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-                diagnostic.parse_diagnostic.expected_init);
-        break;
-      case PARSE_DIAGNOSTIC_TY_EXPECTED_TYPE_NAME:
-        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-                diagnostic.parse_diagnostic.expected_type_name);
-        break;
-      }
+      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+              diagnostic.parse_diagnostic.message);
       compiler_print_diagnostics_context(compiler,
                                          diagnostic.parse_diagnostic.span,
                                          diagnostic.parse_diagnostic.point);
       break;
     case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
-      TODO("semantic diagnostics");
+      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+              diagnostic.semantic_diagnostic.message);
+      compiler_print_diagnostics_context(compiler,
+                                         diagnostic.semantic_diagnostic.span,
+                                         diagnostic.semantic_diagnostic.point);
       break;
     case COMPILER_DIAGNOSTIC_CLASS_INTERNAL:
       break;
@@ -322,6 +310,11 @@ compile_stage_typechk(struct compiler *compiler,
                       struct typechk_result *typechk_result) {
   *typechk_result =
       td_typechk(compiler->typechk, &parse_result->translation_unit);
+
+  if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
+    compiler_print_diagnostics(compiler, typechk_result->diagnostics);
+    return COMPILE_RESULT_FAILURE;
+  }
 
   if (log_enabled()) {
     debug_print_td(compiler->typechk, &typechk_result->translation_unit);
