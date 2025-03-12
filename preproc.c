@@ -1462,7 +1462,13 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         ""
         "#ifndef STDARG_H\n"
         "#define STDARG_H\n"
-        "typedef __builtin_va_list va_list;\n"
+        "\n"
+        "typedef void * __gnuc_va_list;\n"
+        "#define __GNUC_VA_LIST"
+        "\n"
+        "#ifndef __need___va_list\n"
+        "\n"
+        "typedef void * va_list;\n"
         "\n"
         "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
         "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
@@ -1474,6 +1480,35 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_arg(ap, type) __builtin_va_arg(ap, type);\n"
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
         "typedef __builtin_va_list va_list;\n"
+        "#endif\n"
+        "#endif\n";
+
+    *content = STDARG_CONTENT;
+
+    return true;
+  } else if (!strcmp(path, "stddef.h")) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: special header 'starg.h'");
+    }
+
+    const char *STDARG_CONTENT =
+        ""
+        "#ifndef STDDEF_H\n"
+        "#define STDDEF_H\n"
+        "\n"
+        "#define NULL ((void*)0)\n"
+        "typedef long ptrdiff_t;\n"
+        "typedef unsigned long size_t;\n"
+        // TODO: `max_align_t`
+        // "typedef align max_align_t;\n"
+        "\n"
+        "#define offsetof(st, m) __builtin_offsetof(st, m)\n"
+        "\n"
+        "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
+        "typedef __NULLPTR_TYPE__ nullptr_t;\n"
+        "#define unreachable() __builtin_unreachable()\n"
+        "#endif\n"
+        "\n"
         "#endif\n";
 
     *content = STDARG_CONTENT;
@@ -1528,7 +1563,7 @@ static struct include_info try_find_include(struct preproc *preproc,
   }
 
   
-  if (!strcmp(filename, "stdarg.h")) { 
+  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h")) { 
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;

@@ -507,8 +507,10 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
     }
   }
 
-  qsort(codegen_unit->entries, codegen_unit->num_entries,
-        sizeof(struct cg_entry), cg_sort_entries_by_id);
+  if (codegen_unit->entries) {
+    qsort(codegen_unit->entries, codegen_unit->num_entries,
+          sizeof(struct cg_entry), cg_sort_entries_by_id);
+  }
 
   return codegen_unit;
 }

@@ -550,7 +550,6 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
   ADD_REGS(info->num_gp_regs, 0, IR_REG_TY_INTEGRAL, gp);
   ADD_REGS(info->num_fp_regs, 0, IR_REG_TY_FP, fp);
 
-  BEGIN_SUB_STAGE("INTERVALS");
   if (log_enabled()) {
     debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
   }
@@ -830,8 +829,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
 
       .call_save_lcls = vector_create(sizeof(struct call_save_lcl))};
 
-  BEGIN_SUB_STAGE("REGALLOC");
-
   ir_clear_metadata(irb);
   struct interval_data data = register_alloc_pass(irb, &lsra_reg_info);
 
@@ -841,8 +838,6 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   if (log_enabled()) {
     debug_print_ir_func(stderr, irb, print_ir_intervals, data.intervals);
   }
-
-  BEGIN_SUB_STAGE("SPILL HANDLING");
 
   // insert LOAD and STORE ops as needed
   fixup_spills(irb, &lsra_reg_info);

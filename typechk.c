@@ -2423,6 +2423,112 @@ static struct td_expr type_expr(struct typechk *tchk,
   return td_expr;
 }
 
+// we need this logic for constant expressions that use sizeof/alignof
+// it is basically ripped out of `ir/ir.c`
+// this is ugly, i would love a better solution
+struct td_var_ty_info {
+  size_t size;
+  size_t alignment;
+};
+
+static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
+                                            const struct td_var_ty *ty) {
+  switch (ty->ty) {
+  case TD_VAR_TY_TY_UNKNOWN:
+    BUG("TD_VAR_TY_TY_UNKNOWN has no size");
+  case TD_VAR_TY_TY_VARIADIC:
+    BUG("TD_VAR_TY_TY_VARIADIC has no size");
+  case TD_VAR_TY_TY_VOID:
+    BUG("TD_VAR_TY_TY_VOID has no size");
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    BUG("TD_VAR_TY_TY_INCOMPLETE_AGGREGATE has no size");
+  case TD_VAR_TY_TY_FUNC:
+  case TD_VAR_TY_TY_POINTER:
+    switch (tchk->target->lp_sz) {
+    case TARGET_LP_SZ_LP32:
+      return (struct td_var_ty_info){.size = 4, .alignment = 4};
+    case TARGET_LP_SZ_LP64:
+      return (struct td_var_ty_info){.size = 8, .alignment = 8};
+    }
+  case TD_VAR_TY_TY_WELL_KNOWN:
+    switch (ty->well_known) {
+    case WELL_KNOWN_TY_CHAR:
+    case WELL_KNOWN_TY_SIGNED_CHAR:
+    case WELL_KNOWN_TY_UNSIGNED_CHAR:
+      return (struct td_var_ty_info){.size = 1, .alignment = 1};
+    case WELL_KNOWN_TY_SIGNED_SHORT:
+    case WELL_KNOWN_TY_UNSIGNED_SHORT:
+    case WELL_KNOWN_TY_HALF:
+      return (struct td_var_ty_info){.size = 2, .alignment = 2};
+    case WELL_KNOWN_TY_SIGNED_INT:
+    case WELL_KNOWN_TY_UNSIGNED_INT:
+    case WELL_KNOWN_TY_FLOAT:
+      return (struct td_var_ty_info){.size = 4, .alignment = 4};
+    case WELL_KNOWN_TY_SIGNED_LONG:
+    case WELL_KNOWN_TY_UNSIGNED_LONG:
+      switch (tchk->target->lp_sz) {
+      case TARGET_LP_SZ_LP32:
+        return (struct td_var_ty_info){.size = 4, .alignment = 4};
+      case TARGET_LP_SZ_LP64:
+        return (struct td_var_ty_info){.size = 8, .alignment = 8};
+      }
+    case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+    case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+      return (struct td_var_ty_info){.size = 8, .alignment = 8};
+    case WELL_KNOWN_TY_DOUBLE:
+      return (struct td_var_ty_info){.size = 8, .alignment = 8};
+    case WELL_KNOWN_TY_LONG_DOUBLE:
+      return (struct td_var_ty_info){.size = 8, .alignment = 8};
+    }
+  case TD_VAR_TY_TY_ARRAY: {
+    struct td_var_ty_info element_info =
+        td_var_ty_info(tchk, ty->array.underlying);
+    size_t size = ty->array.size * element_info.size;
+
+    return (struct td_var_ty_info){.size = size,
+                                   .alignment = element_info.alignment};
+  }
+  case TD_VAR_TY_TY_AGGREGATE: {
+    switch (ty->aggregate.ty) {
+    case TD_TY_AGGREGATE_TY_STRUCT: {
+      size_t max_alignment = 0;
+      size_t size = 0;
+      size_t num_fields = ty->aggregate.num_fields;
+      size_t *offsets = arena_alloc(tchk->arena, sizeof(*offsets) * num_fields);
+
+      for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
+        struct td_struct_field *field = &ty->aggregate.fields[i];
+        struct td_var_ty_info info = td_var_ty_info(tchk, &field->var_ty);
+        max_alignment = MAX(max_alignment, info.alignment);
+
+        size = ROUND_UP(size, info.alignment);
+
+        offsets[i] = size;
+
+        size += info.size;
+      }
+
+      return (struct td_var_ty_info){.size = size, .alignment = max_alignment};
+    }
+    case TD_TY_AGGREGATE_TY_UNION: {
+      size_t max_alignment = 0;
+      size_t size = 0;
+
+      for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
+        struct td_struct_field *field = &ty->aggregate.fields[i];
+        struct td_var_ty_info info = td_var_ty_info(tchk, &field->var_ty);
+        max_alignment = MAX(max_alignment, info.alignment);
+
+        size = MAX(size, info.size);
+      }
+
+      return (struct td_var_ty_info){.size = size, .alignment = max_alignment};
+    }
+    }
+  }
+  }
+}
+
 static unsigned long long
 type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
   // FIXME: error on float/str
@@ -2430,12 +2536,34 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     return expr->cnst.int_value;
   }
 
+  if (expr->ty == AST_EXPR_TY_SIZEOF) {
+    struct td_expr size_of = type_sizeof(tchk, &expr->size_of);
+    struct td_var_ty var_ty;
+    switch (size_of.size_of.ty) {
+    case TD_SIZEOF_TY_TYPE:
+      var_ty = size_of.size_of.var_ty;
+      break;
+    case TD_SIZEOF_TY_EXPR:
+      var_ty = size_of.size_of.expr->var_ty;
+      break;
+    }
+
+    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
+    return info.size;
+  }
+
+  if (expr->ty == AST_EXPR_TY_ALIGNOF) {
+    struct td_var_ty var_ty = type_type_name(tchk, &expr->align_of.type_name);
+    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
+    return info.alignment;
+  }
+
   if (expr->ty == AST_EXPR_TY_VAR) {
     struct td_expr var = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
 
     if (var.var.ty != TD_VAR_VAR_TY_ENUMERATOR) {
-      // FIXME: this is actually more general "bad value in constant expr", not
-      // just for enums
+      // FIXME: this is actually more general "bad value in constant expr",
+      // not just for enums
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
           tchk->diagnostics,
@@ -2506,7 +2634,8 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
 }
 
 // static unsigned long long type_constant_expr(UNUSED struct typechk *tchk,
-//                                              const struct ast_expr *expr) {
+//                                              const struct ast_expr *expr)
+//                                              {
 //   switch (expr->ty) {
 //   case AST_EXPR_TY_CNST:
 //     return expr->cnst.int_value;
