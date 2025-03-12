@@ -490,9 +490,6 @@ struct td_expr {
     struct td_pointeraccess pointer_access;
     struct td_compound_literal compound_literal;
   };
-
-  // // TODO: add to more types
-  // struct text_span span;
 };
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
@@ -505,8 +502,6 @@ struct td_init {
     struct td_expr expr;
     struct td_init_list init_list;
   };
-
-  // struct text_span span;
 };
 
 enum td_var_declaration_ty {
