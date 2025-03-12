@@ -2093,6 +2093,9 @@ static struct td_expr type_expr(struct typechk *tchk,
   struct td_expr td_expr;
 
   switch (expr->ty) {
+  case AST_EXPR_TY_INVALID:
+    BUG("INVALID expr type should not reach typechk (should trigger diagnostic -> trigger parse fail)");
+    break;
   case AST_EXPR_TY_TERNARY:
     td_expr = type_ternary(tchk, &expr->ternary);
     break;

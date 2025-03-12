@@ -23,7 +23,10 @@ enum compiler_diagnostic_class {
 };
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
-  DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN, const char *)
+  DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN, const char *) \
+  DIAG_FN(ERROR, "expected-expr", expected_expr, EXPECTED_EXPR, const char *) \
+  DIAG_FN(ERROR, "expected-init", expected_init, EXPECTED_INIT, const char *) \
+  DIAG_FN(ERROR, "expected-type-name", expected_type_name, EXPECTED_TYPE_NAME, const char *) \
 
 enum parse_diagnostic_ty {
 #define DIAG_FN(_0, _1, _2, enum, ...) PARSE_DIAGNOSTIC_TY_##enum,

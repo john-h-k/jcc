@@ -515,6 +515,8 @@ struct ast_compound_literal {
 };
 
 enum ast_expr_ty {
+  AST_EXPR_TY_INVALID,
+
   AST_EXPR_TY_TERNARY,
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_UNARY_OP,
