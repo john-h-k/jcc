@@ -165,10 +165,13 @@ enum lex_create_result lexer_create(struct program *program,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
-typedef size_t lex_pos;
+struct lex_pos {
+  size_t id;
+  struct text_pos text_pos;
+};
 
-lex_pos get_position(struct lexer *lexer);
-void backtrack(struct lexer *lexer, lex_pos position);
+struct lex_pos get_position(struct lexer *lexer);
+void backtrack(struct lexer *lexer, struct lex_pos position);
 
 void peek_token(struct lexer *lexer, struct lex_token *token);
 void consume_token(struct lexer *lexer, struct lex_token token);

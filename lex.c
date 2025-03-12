@@ -506,12 +506,13 @@ void peek_token(struct lexer *lexer, struct lex_token *token) {
 
 // TODO: make this return a real type
 // just hacking it into text pos as not to need to change `parse.c`
-lex_pos get_position(struct lexer *lexer) {
-  return lexer->pos;
+struct lex_pos get_position(struct lexer *lexer) {
+  // shouldn't really be last tex pos... should be "next"
+  return (struct lex_pos){ .id = lexer->pos, .text_pos = get_last_text_pos(lexer) };
 }
 
-void backtrack(struct lexer *lexer, lex_pos position) {
-  lexer->pos = position;
+void backtrack(struct lexer *lexer, struct lex_pos position) {
+  lexer->pos = position.id;
 }
 
 struct text_pos get_last_text_pos(const struct lexer *lexer) {

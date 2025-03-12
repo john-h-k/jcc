@@ -1,6 +1,7 @@
 #ifndef PARSE_H
 #define PARSE_H
 
+#include "diagnostics.h"
 #include "lex.h"
 #include "program.h"
 
@@ -770,7 +771,15 @@ enum parser_create_result {
   PARSER_CREATE_RESULT_FAILURE
 };
 
+enum parse_result_ty {
+  PARSE_RESULT_TY_SUCCESS,
+  PARSE_RESULT_TY_FAILURE,
+};
+
 struct parse_result {
+  enum parse_result_ty ty;
+
+  struct compiler_diagnostics *diagnostics;
   struct ast_translationunit translation_unit;
 };
 
