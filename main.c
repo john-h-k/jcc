@@ -238,7 +238,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     compile_args->target = args->target;
   }
 
-  size_t num_sys_include_paths = 3;
+  size_t num_sys_include_paths = 2;
   const char **sys_include_paths =
       arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
 
@@ -248,15 +248,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
   const char *target = string_target(args->target);
 
-  const char *start = strchr(target, '-') + 1;
-  const char *end = strchr(start, '-') - 1;
-  size_t len = end - start;
-  char *os = arena_alloc_init(arena, len + 1, start);
-  os[len + 1] = '\0';
-
   sys_include_paths[0] = path_combine(arena, args->isys_root, "/usr/include");
   sys_include_paths[1] = path_combine(arena, sys_include_paths[0], target);
-  sys_include_paths[2] = path_combine(arena, sys_include_paths[0], os);
 
   // is having two seperate structs for args really sensible?
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`

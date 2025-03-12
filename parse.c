@@ -1073,6 +1073,9 @@ parse_ast_array_declarator(struct parser *parser,
 
     is_static = is_static || parse_token(parser, LEX_TOKEN_TY_KW_STATIC, NULL);
 
+    struct lex_token next;
+    peek_token(parser->lexer, &next);
+
     struct ast_expr size;
     if (is_static) {
       parse_expected_expr(parser, &size, "expected expr in static array type");
@@ -1080,19 +1083,20 @@ parse_ast_array_declarator(struct parser *parser,
       array_declarator->size =
           arena_alloc(parser->arena, sizeof(*array_declarator->size));
       *array_declarator->size = size;
-    } else if (parse_expr(parser, &size)) {
+    } else if (next.ty == LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET) {
+      ty = AST_ARRAY_DECLARATOR_TY_UNSIZED;
+    } else {
+      parse_expected_expr(parser, &size, "expected expr in array type");
       ty = AST_ARRAY_DECLARATOR_TY_SIZED;
       array_declarator->size =
           arena_alloc(parser->arena, sizeof(*array_declarator->size));
       *array_declarator->size = size;
-    } else {
-      ty = AST_ARRAY_DECLARATOR_TY_UNSIZED;
     }
   }
 
   struct text_span close;
   parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET, pos.text_pos,
-                       "`)` after abstract declarator after", &close);
+                       "`]` after array declarator", &close);
 
   struct text_pos end = close.end;
 
@@ -1157,10 +1161,8 @@ static bool parse_direct_abstract_declarator(
 
   struct ast_abstract_declarator abstract_declarator;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
-      parse_abstract_declarator(parser, &abstract_declarator)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, pos.text_pos,
-                         "`)` after abstract declarator after", &end);
-
+      parse_abstract_declarator(parser, &abstract_declarator) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     direct_abstract_declarator->ty =
         AST_DIRECT_ABSTRACT_DECLARATOR_TY_PAREN_DECLARATOR;
     direct_abstract_declarator->paren_declarator = arena_alloc(
@@ -1264,10 +1266,8 @@ parse_direct_declarator(struct parser *parser,
 
   struct ast_declarator declarator;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
-      parse_declarator(parser, &declarator)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, pos.text_pos,
-                         "`)` after declarator after", &end);
-
+      parse_declarator(parser, &declarator) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
     direct_declarator->paren_declarator = arena_alloc(
         parser->arena, sizeof(*direct_declarator->paren_declarator));
@@ -3130,6 +3130,7 @@ struct parse_result parse(struct parser *parser) {
       struct text_pos pos = get_last_text_pos(lexer);
       err("parser finished at position %zu, line=%zu, col=%zu", pos.idx,
           pos.line, pos.col);
+      parser->result_ty = PARSE_RESULT_TY_FAILURE;
       break;
     }
 

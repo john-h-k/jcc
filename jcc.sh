@@ -400,7 +400,7 @@ get_mode() {
 run() {
     mode=$(get_mode "$1")
     [ -z "$mode" ] || shift  
-    build "$mode"
+    build "$mode" 1>&2
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
