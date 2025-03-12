@@ -95,8 +95,8 @@ struct arg {
 #define TARGET_ENUM_LIST                                                       \
   ENUM_FN(COMPILE_TARGET_MACOS_ARM64, "aarch64-apple-darwin")                  \
   ENUM_FN(COMPILE_TARGET_MACOS_X86_64, "x86_64-apple-darwin")                  \
-  ENUM_FN(COMPILE_TARGET_LINUX_ARM64, "aarch64-linux-gnu")             \
-  ENUM_FN(COMPILE_TARGET_LINUX_X86_64, "x86_64-linux-gnu")             \
+  ENUM_FN(COMPILE_TARGET_LINUX_ARM64, "aarch64-linux-gnu")                     \
+  ENUM_FN(COMPILE_TARGET_LINUX_X86_64, "x86_64-linux-gnu")                     \
   ENUM_FN(COMPILE_TARGET_EEP, "eep-unknown-unknown")                           \
   ENUM_FN(COMPILE_TARGET_LINUX_RV32I, "rv32i-unknown-elf")
 
@@ -213,8 +213,11 @@ VALUES_FN(c_standard, C_STANDARD)
            "Only run preprocessor and compiler; output object file without "   \
            "linking")                                                          \
                                                                                \
-  ARG_STRING(isys_root, "", "-isysroot",                                        \
-             "Directories to search for `#include <header>` directives")       \
+  ARG_STRING(isys_root, "", "-isysroot",                                       \
+             "Root directory for `#include <header>` directives")              \
+                                                                               \
+  ARG_STRING_LIST(sys_include_paths, "", "-isystem",                           \
+                  "Directories to search for `#include <header>` directives")  \
                                                                                \
   ARG_STRING_LIST(                                                             \
       include_paths, "-I", "",                                                 \
