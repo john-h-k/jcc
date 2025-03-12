@@ -6,6 +6,6 @@ int main() {
   int a = "hello" * 10;
 
   struct foo f = {
-    . = 1,
+    .baz = ,
   };
 }

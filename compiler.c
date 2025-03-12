@@ -244,11 +244,23 @@ compiler_print_diagnostics(struct compiler *compiler,
       case PARSE_DIAGNOSTIC_TY_EXPECTED_TOKEN:
         fprintf(stderr, PR_BOLD PR_WHITE "expected token %s\n" PR_RESET,
                 diagnostic.parse_diagnostic.expected_token);
-        compiler_print_diagnostics_context(
-            compiler, diagnostic.parse_diagnostic.start,
-            diagnostic.parse_diagnostic.point, diagnostic.parse_diagnostic.end);
+        break;
+      case PARSE_DIAGNOSTIC_TY_EXPECTED_EXPR:
+        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+                diagnostic.parse_diagnostic.expected_expr);
+        break;
+      case PARSE_DIAGNOSTIC_TY_EXPECTED_INIT:
+        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+                diagnostic.parse_diagnostic.expected_init);
+        break;
+      case PARSE_DIAGNOSTIC_TY_EXPECTED_TYPE_NAME:
+        fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+                diagnostic.parse_diagnostic.expected_type_name);
         break;
       }
+      compiler_print_diagnostics_context(
+          compiler, diagnostic.parse_diagnostic.start,
+          diagnostic.parse_diagnostic.point, diagnostic.parse_diagnostic.end);
       break;
     case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
       TODO("semantic diagnostics");
