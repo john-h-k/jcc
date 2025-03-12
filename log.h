@@ -31,8 +31,6 @@ DECL_LOG_FN(slog)
 
 #define BEGIN_STAGE(name) slog("\n\n****************************** " name " ******************************\n")
 
-#define BEGIN_SUB_STAGE(name) slog("\n\n>> " name " \n")
-
 #define _DBG_FORMAT_STR(val, specifier) #val ": " specifier "\n"
 #define _GENERIC_DBG_FORMAT_SPECIFIER(val)                                     \
   _Generic((val),                                                              \
