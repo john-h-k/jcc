@@ -12,9 +12,9 @@
 #include "util.h"
 #include "x64.h"
 
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define JCC_VERSION "0.0.1"
 
@@ -255,10 +255,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   os[len + 1] = '\0';
 
   sys_include_paths[0] = path_combine(arena, args->isys_root, "/usr/include");
-  sys_include_paths[1] =
-      path_combine(arena, sys_include_paths[0], target);
-  sys_include_paths[2] =
-      path_combine(arena, sys_include_paths[0], os);
+  sys_include_paths[1] = path_combine(arena, sys_include_paths[0], target);
+  sys_include_paths[2] = path_combine(arena, sys_include_paths[0], os);
 
   // is having two seperate structs for args really sensible?
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`
@@ -461,6 +459,8 @@ static int jcc_main(int argc, char **argv) {
     if (compile(compiler) != COMPILE_RESULT_SUCCESS) {
       // FIXME: `err`/`warn` should ignore log levels
       err("compilation failed!");
+
+      free_compiler(&compiler);
       exc = -1;
       goto exit;
     }
