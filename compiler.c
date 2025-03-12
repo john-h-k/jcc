@@ -146,10 +146,33 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
 #define PR_BOLD "\033[1m"
 
 static void compiler_print_diagnostics_context(struct compiler *compiler,
-                                               struct text_pos start,
-                                               struct text_pos point,
-                                               struct text_pos end) {
+                                               struct text_span span,
+                                               struct text_pos point) {
   // FIXME: super inefficient
+
+  struct text_pos start = span.start;
+  struct text_pos end = span.end;
+
+  DEBUG_ASSERT(end.line >= start.line, "end line %zu was before start line %zu",
+               end.line, start.line);
+
+  size_t start_len;
+  size_t end_len;
+  bool has_point;
+
+  if (TEXT_POS_INVALID(point)) {
+    has_point = false;
+    start_len = end.idx - start.idx;
+    end_len = 0;
+  } else {
+    has_point = true;
+    start_len = point.idx - start.idx;
+    if (start_len) {
+      start_len -= 1 /* bc inclusive ranges */;
+    }
+
+    end_len = end.idx - point.idx;
+  }
 
   const char *text = compiler->program.text;
   size_t line = 0;
@@ -165,7 +188,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
     }
 
     if (i + 1 >= len) {
-      BUG("diagnostic span went past end");
+      fprintf(stderr, "    %zu | <eof>\n", line + 1);
       return;
     }
 
@@ -178,40 +201,43 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
               &text[i + 1]);
 
       fprintf(stderr, "%*s", (int)offset, "");
-      size_t rel_idx_start = start.idx - (i + 1);
-      size_t start_span_len;
-      size_t end_span_len;
-      bool has_point;
 
-      if (TEXT_POS_INVALID(point)) {
-        has_point = false;
-        start_span_len = end.idx - start.idx;
-        end_span_len = 0;
-      } else {
-        has_point = true;
-        start_span_len = point.idx - start.idx;
-        if (start_span_len) {
-          start_span_len -= 1 /* bc inclusive ranges */;
-        }
+      if (line == start.line) {
+        size_t rel_idx_start = start.idx - (i + 1);
+        fprintf(stderr, "%*s", (int)rel_idx_start, "");
 
-        end_span_len = end.idx - point.idx;
+        line_len -= rel_idx_start;
       }
 
-      fprintf(stderr, "%*s", (int)rel_idx_start, "");
       fprintf(stderr, PR_GREEN);
-      for (size_t j = 0; j < start_span_len; j++) {
+
+      if (line_len == 0) {
+        fprintf(stderr, "~");
+        fprintf(stderr, "\n");
+        fprintf(stderr, PR_RESET);
+        continue;
+      }
+
+      size_t start_print_len = MIN(start_len, line_len);
+      for (size_t j = 0; j < start_print_len; j++) {
         fprintf(stderr, "~");
       }
+      start_len -= start_print_len;
+      line_len -= start_print_len;
 
-      if (has_point) {
+      if (has_point && point.line == line) {
         fprintf(stderr, "^");
       }
 
-      for (size_t j = 0; j < end_span_len; j++) {
-        fprintf(stderr, "~");
+      if (!start_len) {
+        size_t end_print_len = MIN(end_len, line_len);
+        for (size_t j = 0; j < end_print_len; j++) {
+          fprintf(stderr, "~");
+        }
+        end_len -= end_print_len;
       }
-      fprintf(stderr, PR_RESET);
 
+      fprintf(stderr, PR_RESET);
       fprintf(stderr, "\n");
     }
   }
@@ -258,9 +284,9 @@ compiler_print_diagnostics(struct compiler *compiler,
                 diagnostic.parse_diagnostic.expected_type_name);
         break;
       }
-      compiler_print_diagnostics_context(
-          compiler, diagnostic.parse_diagnostic.start,
-          diagnostic.parse_diagnostic.point, diagnostic.parse_diagnostic.end);
+      compiler_print_diagnostics_context(compiler,
+                                         diagnostic.parse_diagnostic.span,
+                                         diagnostic.parse_diagnostic.point);
       break;
     case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
       TODO("semantic diagnostics");
