@@ -456,7 +456,7 @@ static void preproc_next_raw_token(struct preproc *preproc,
   while (vector_length(preproc->texts)) {
     preproc_text = vector_tail(preproc->texts);
 
-    if (preproc_text->pos.idx < preproc_text->len) {
+    if (preproc_text->pos.idx < preproc_text->len || vector_length(preproc->texts) == 1) {
       break;
     }
 
@@ -465,14 +465,6 @@ static void preproc_next_raw_token(struct preproc *preproc,
                  preproc_text->file, vector_length(preproc_text->enabled));
 
     vector_pop(preproc->texts);
-  }
-
-  if (vector_empty(preproc->texts)) {
-    token->ty = PREPROC_TOKEN_TY_EOF;
-    token->text = NULL;
-    token->span.start = (struct text_pos){0};
-    token->span.end = (struct text_pos){0};
-    return;
   }
 
   struct text_pos start = preproc_text->pos;

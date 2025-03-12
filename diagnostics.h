@@ -39,10 +39,9 @@ enum parse_diagnostic_ty {
 struct parse_diagnostic {
   enum parse_diagnostic_ty ty;
 
-  struct text_pos start;
   // puts a caret here
   struct text_pos point;
-  struct text_pos end;
+  struct text_span span;
 
   union {
 #define DIAG_FN(_0, _1, name, _3, ty) ty name;
@@ -54,8 +53,7 @@ struct parse_diagnostic {
 };
 
 struct semantic_diagnostic {
-  struct text_pos start;
-  struct text_pos end;
+  struct text_span span;
 };
 
 struct internal_diagnostic {
@@ -74,14 +72,13 @@ COMPILER_PARSE_DIAGNOSTIC_LIST
 
 #undef DIAG_FN
 
-#define MK_PARSER_DIAGNOSTIC(name, lo, start_val, point_val, end_val, value)   \
+#define MK_PARSER_DIAGNOSTIC(name, lo, span_val, point_val, value)   \
   (struct compiler_diagnostic) {                                               \
     .ty = DIAGNOSTIC_PARSER_##name, .parse_diagnostic = {                      \
       .ty = PARSE_DIAGNOSTIC_TY_##name,                                        \
       .lo = value,                                                             \
-      .start = start_val,                                                      \
+      .span = span_val,                                                      \
       .point = point_val,                                                      \
-      .end = end_val                                                           \
     }                                                                          \
   }
 

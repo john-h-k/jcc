@@ -16,6 +16,8 @@ enum ast_attribute_ty {
 
 struct ast_attribute_param {
   struct ast_expr *expr;
+
+  struct text_span span;
 };
 
 struct ast_attribute {
@@ -24,15 +26,21 @@ struct ast_attribute {
   struct lex_token name;
   struct ast_attribute_param *params;
   size_t num_params;
+
+  struct text_span span;
 };
 
 struct ast_attribute_list {
   struct ast_attribute *attributes;
   size_t num_attributes;
+
+  struct text_span span;
 };
 
 struct ast_attribute_specifier {  
   struct ast_attribute_list attribute_list;
+
+  struct text_span span;
 };
 
 enum ast_storage_class_specifier {
@@ -56,15 +64,21 @@ enum ast_type_qualifier {
 struct ast_declaration_specifier_list {
   size_t num_decl_specifiers;
   struct ast_declaration_specifier *decl_specifiers;
+
+  struct text_span span;
 };
 
 struct ast_pointer {
   struct ast_declaration_specifier_list specifier_list;
+
+  struct text_span span;
 };
 
 struct ast_pointer_list {
   size_t num_pointers;
   struct ast_pointer *pointers;
+
+  struct text_span span;
 };
 
 enum ast_direct_declarator_ty {
@@ -83,11 +97,15 @@ struct ast_direct_declarator {
     struct ast_array_declarator *array_declarator;
     struct ast_func_declarator *func_declarator;
   };
+
+  struct text_span span;
 };
 
 struct ast_direct_declarator_list {
   size_t num_direct_declarators;
   struct ast_direct_declarator *direct_declarators;
+
+  struct text_span span;
 };
 
 enum ast_declarator_ty {
@@ -103,6 +121,8 @@ struct ast_declarator {
   // __attribute__((foo)) __attribute__(bar) is an attribute_list_list
   struct ast_attribute_specifier attribute_specifier;
   struct ast_expr *bitfield_size;
+
+  struct text_span span;
 };
 
 // struct ast_struct_declarator {
@@ -123,6 +143,8 @@ struct ast_declarator {
 struct ast_struct_declaration_list {
   size_t num_declarations;
   struct ast_declaration *declarations;
+
+  struct text_span span;
 };
 
 enum ast_struct_or_union_specifier_ty {
@@ -133,6 +155,8 @@ enum ast_struct_or_union_specifier_ty {
 struct ast_declaration_list {
   size_t num_declarations;
   struct ast_declaration *declarations;
+
+  struct text_span span;
 };
 
 struct ast_struct_or_union_specifier {
@@ -140,21 +164,29 @@ struct ast_struct_or_union_specifier {
 
   struct lex_token *identifier;
   struct ast_declaration_list *decl_list;
+
+  struct text_span span;
 };
 
 struct ast_enumerator {
   struct lex_token identifier;
   struct ast_expr *value;
+
+  struct text_span span;
 };
 
 struct ast_enumerator_list {
   size_t num_enumerators;
   struct ast_enumerator *enumerators;
+
+  struct text_span span;
 };
 
 struct ast_enum_specifier {
   struct lex_token *identifier;
   struct ast_enumerator_list *enumerator_list;
+
+  struct text_span span;
 };
 
 enum ast_type_specifier_ty {
@@ -190,6 +222,8 @@ struct ast_type_specifier {
     struct ast_enum_specifier enum_specifier;
     struct lex_token typedef_name;
   };
+
+  struct text_span span;
 };
 
 enum ast_decl_specifier_ty {
@@ -210,6 +244,8 @@ struct ast_declaration_specifier {
     struct ast_type_specifier type_specifier;
     struct ast_attribute_specifier attribute_specifier;
   };
+
+  struct text_span span;
 };
 
 enum ast_array_declarator_ty {
@@ -223,10 +259,14 @@ struct ast_array_declarator {
   enum ast_array_declarator_ty ty;
   struct ast_declaration_specifier_list specifier_list;
   struct ast_expr *size;
+
+  struct text_span span;
 };
 
 struct ast_func_declarator {
   struct ast_paramlist *param_list;
+
+  struct text_span span;
 };
 
 enum ast_direct_abstract_declarator_ty {
@@ -243,21 +283,29 @@ struct ast_direct_abstract_declarator {
     struct ast_array_declarator *array_declarator;
     struct ast_func_declarator *func_declarator;
   };
+
+  struct text_span span;
 };
 
 struct ast_direct_abstract_declarator_list {
   size_t num_direct_abstract_declarators;
   struct ast_direct_abstract_declarator *direct_abstract_declarators;
+
+  struct text_span span;
 };
 
 struct ast_abstract_declarator {
   struct ast_pointer_list pointer_list;
   struct ast_direct_abstract_declarator_list direct_abstract_declarator_list;
+
+  struct text_span span;
 };
 
 struct ast_type_name {
   struct ast_declaration_specifier_list specifier_list;
   struct ast_abstract_declarator abstract_declarator;
+
+  struct text_span span;
 };
 
 // TODO: try and parse init lists as expressions to give better error messages
@@ -269,12 +317,16 @@ enum ast_init_ty {
 struct ast_arglist {
   struct ast_expr *args;
   size_t num_args;
+
+  struct text_span span;
 };
 
 /* Variable references */
 
 struct ast_var {
   struct lex_token identifier;
+
+  struct text_span span;
 };
 
 enum ast_param_ty {
@@ -293,11 +345,15 @@ struct ast_param {
     struct ast_declarator declarator;
     struct ast_abstract_declarator abstract_declarator;
   };
+
+  struct text_span span;
 };
 
 struct ast_paramlist {
   struct ast_param *params;
   size_t num_params;
+
+  struct text_span span;
 };
 
 /* Constant values (literals) */
@@ -324,6 +380,8 @@ enum ast_cnst_ty {
 struct ast_cnst_str {
   const char *value;
   size_t len;
+
+  struct text_span span;
 };
 
 struct ast_cnst {
@@ -334,6 +392,8 @@ struct ast_cnst {
     struct ast_cnst_str str_value;
     long double flt_value;
   };
+
+  struct text_span span;
 };
 
 /* Binary expressions - `a <OP> b` */
@@ -356,6 +416,8 @@ enum ast_unary_op_ty {
 
 struct ast_cast {
   struct ast_type_name type_name;
+
+  struct text_span span;
 };
 
 struct ast_unary_op {
@@ -365,6 +427,8 @@ struct ast_unary_op {
   union {
     struct ast_cast cast;
   };
+
+  struct text_span span;
 };
 
 enum ast_binary_op_ty {
@@ -394,11 +458,15 @@ struct ast_binary_op {
   enum ast_binary_op_ty ty;
   struct ast_expr *lhs;
   struct ast_expr *rhs;
+
+  struct text_span span;
 };
 
 struct ast_call {
   struct ast_expr *target;
   struct ast_arglist arg_list;
+
+  struct text_span span;
 };
 
 /* Compound expr - comma seperated expressions with well-defined order of
@@ -407,6 +475,8 @@ struct ast_call {
 struct ast_compoundexpr {
   struct ast_expr *exprs;
   size_t num_exprs;
+
+  struct text_span span;
 };
 
 /* atom - expression which is entirely isolated and not affected by other
@@ -424,21 +494,29 @@ struct ast_designator {
     struct lex_token field;
     struct ast_expr *index;
   };
+
+  struct text_span span;
 };
 
 struct ast_designator_list {
   size_t num_designators;
   struct ast_designator *designators;
+
+  struct text_span span;
 };
 
 struct ast_init_list_init {
   struct ast_designator_list *designator_list;
   struct ast_init *init;
+
+  struct text_span span;
 };
 
 struct ast_init_list {
   struct ast_init_list_init *inits;
   size_t num_inits;
+
+  struct text_span span;
 };
 
 // Assignments - anything of form `<lvalue> = <lvalue | rvalue>` (so `<lvalue>
@@ -463,6 +541,8 @@ struct ast_assg {
 
   struct ast_expr *assignee;
   struct ast_expr *expr;
+
+  struct text_span span;
 };
 
 struct ast_arrayaccess {
@@ -470,16 +550,22 @@ struct ast_arrayaccess {
   // rhs may be integral type
   struct ast_expr *lhs;
   struct ast_expr *rhs;
+
+  struct text_span span;
 };
 
 struct ast_memberaccess {
   struct ast_expr *lhs;
   struct lex_token member;
+
+  struct text_span span;
 };
 
 struct ast_pointeraccess {
   struct ast_expr *lhs;
   struct lex_token member;
+
+  struct text_span span;
 };
 
 enum ast_sizeof_ty {
@@ -494,16 +580,22 @@ struct ast_sizeof {
     struct ast_expr *expr;
     struct ast_type_name type_name;
   };
+
+  struct text_span span;
 };
 
 struct ast_alignof {
   struct ast_type_name type_name;
+
+  struct text_span span;
 };
 
 struct ast_ternary {
   struct ast_expr *cond;
   struct ast_expr *true_expr;
   struct ast_expr *false_expr;
+
+  struct text_span span;
 };
 
 /* Expressions - divided into `lvalue` (can be on left hand side of assignment)
@@ -512,6 +604,8 @@ struct ast_ternary {
 struct ast_compound_literal {
   struct ast_type_name type_name;
   struct ast_init_list init_list;
+
+  struct text_span span;
 };
 
 enum ast_expr_ty {
@@ -552,6 +646,8 @@ struct ast_expr {
     struct ast_pointeraccess pointer_access;
     struct ast_compound_literal compound_literal;
   };
+
+  struct text_span span;
 };
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
@@ -564,31 +660,43 @@ struct ast_init {
     struct ast_expr expr;
     struct ast_init_list init_list;
   };
+
+  struct text_span span;
 };
 
 struct ast_init_declarator {
   struct ast_declarator declarator;
   struct ast_init *init;
+
+  struct text_span span;
 };
 
 struct ast_init_declarator_list {
   size_t num_init_declarators;
   struct ast_init_declarator *init_declarators;
+
+  struct text_span span;
 };
 
 struct ast_declaration {
   struct ast_declaration_specifier_list specifier_list;
   struct ast_init_declarator_list declarator_list;
+
+  struct text_span span;
 };
 
 /* Jump statements - `return`, `break`, `continue`, `goto` */
 
 struct ast_returnstmt {
   struct ast_expr *expr;
+
+  struct text_span span;
 };
 
 struct ast_gotostmt {
   struct lex_token label;
+
+  struct text_span span;
 };
 
 enum ast_jumpstmt_ty {
@@ -605,6 +713,8 @@ struct ast_jumpstmt {
     struct ast_returnstmt return_stmt;
     struct ast_gotostmt goto_stmt;
   };
+
+  struct text_span span;
 };
 
 /* Statements - either declaration, labelled, expression, compound, jump,
@@ -625,22 +735,30 @@ struct ast_labeledstmt {
     struct ast_expr cnst;
     struct lex_token label;
   };
+
+  struct text_span span;
 };
 
 struct ast_ifstmt {
   struct ast_expr cond;
   struct ast_stmt *body;
+
+  struct text_span span;
 };
 
 struct ast_ifelsestmt {
   struct ast_expr cond;
   struct ast_stmt *body;
   struct ast_stmt *else_body;
+
+  struct text_span span;
 };
 
 struct ast_switchstmt {
   struct ast_expr ctrl_expr;
   struct ast_stmt *body;
+
+  struct text_span span;
 };
 
 enum ast_selectstmt_ty {
@@ -657,22 +775,30 @@ struct ast_selectstmt {
     struct ast_ifelsestmt if_else_stmt;
     struct ast_switchstmt switch_stmt;
   };
+
+  struct text_span span;
 };
 
 struct ast_stmt;
 struct ast_compoundstmt {
   struct ast_stmt *stmts;
   size_t num_stmts;
+
+  struct text_span span;
 };
 
 struct ast_whilestmt {
   struct ast_expr cond;
   struct ast_stmt *body;
+
+  struct text_span span;
 };
 
 struct ast_dowhilestmt {
   struct ast_expr cond;
   struct ast_stmt *body;
+
+  struct text_span span;
 };
 
 enum ast_declaration_or_expr_ty {
@@ -687,6 +813,8 @@ struct ast_declaration_or_expr {
     struct ast_declaration decl;
     struct ast_expr expr;
   };
+
+  struct text_span span;
 };
 
 struct ast_forstmt {
@@ -694,6 +822,8 @@ struct ast_forstmt {
   struct ast_expr *cond;
   struct ast_expr *iter;
   struct ast_stmt *body;
+
+  struct text_span span;
 };
 
 enum ast_iterstmt_ty {
@@ -710,6 +840,8 @@ struct ast_iterstmt {
     struct ast_dowhilestmt do_while_stmt;
     struct ast_forstmt for_stmt;
   };
+
+  struct text_span span;
 };
 
 enum ast_stmt_ty {
@@ -734,6 +866,8 @@ struct ast_stmt {
     struct ast_iterstmt iter;
     struct ast_labeledstmt labeled;
   };
+
+  struct text_span span;
 };
 
 /* Function definitions and declarations */
@@ -743,6 +877,8 @@ struct ast_funcdef {
   struct ast_declarator declarator;
   struct ast_declaration_list declaration_list;
   struct ast_compoundstmt body;
+
+  struct text_span span;
 };
 
 enum ast_external_declaration_ty {
@@ -757,6 +893,8 @@ struct ast_external_declaration {
     struct ast_funcdef func_def;
     struct ast_declaration declaration;
   };
+
+  struct text_span span;
 };
 
 /* Translation unit (top level) */

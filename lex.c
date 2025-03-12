@@ -17,6 +17,7 @@ struct lexer {
   // once we generate a token, we put it here
   struct vector *tokens;
   size_t pos;
+  struct text_pos last_text_pos;
 
   struct text_pos text_pos;
 
@@ -112,6 +113,7 @@ enum lex_create_result lexer_create(struct program *program,
 
   l->tokens = vector_create(sizeof(struct lex_token));
   l->pos = 0;
+  l->last_text_pos = (struct text_pos){0};
 
   *lexer = l;
 
@@ -513,14 +515,11 @@ struct lex_pos get_position(struct lexer *lexer) {
 
 void backtrack(struct lexer *lexer, struct lex_pos position) {
   lexer->pos = position.id;
+  lexer->last_text_pos = position.text_pos;
 }
 
 struct text_pos get_last_text_pos(const struct lexer *lexer) {
-  if (vector_empty(lexer->tokens)) {
-    return (struct text_pos){0};
-  }
-
-  return ((struct lex_token *)vector_tail(lexer->tokens))->span.end;
+  return lexer->last_text_pos;
 }
 
 void consume_token(struct lexer *lexer, struct lex_token token) {
@@ -536,7 +535,7 @@ void consume_token(struct lexer *lexer, struct lex_token token) {
                "jumped %zu tokens (expected 1)",
                token.internal_lexer_next_pos - lexer->pos);
   lexer->pos = token.internal_lexer_next_pos;
-  // lexer->pos = token.span.end;
+  lexer->last_text_pos = token.span.end;
 }
 
 const char *strlike_associated_text(const struct lexer *lexer,
