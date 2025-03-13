@@ -2190,7 +2190,8 @@ static bool parse_expr_precedence_aware(struct parser *parser,
     binary_op->rhs = arena_alloc(parser->arena, sizeof(*binary_op->rhs));
     *binary_op->rhs = rhs;
 
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    binary_op->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    expr->span = binary_op->span;
   }
 }
 

@@ -15,6 +15,9 @@
 
 #define EMPTY(a, b, c)
 
+#define GET_TRUE(a) 1
+#define TRUE(a) GET_TRUE(a)
+
 int printf(const char *, ...);
 
 #define STR()
@@ -24,6 +27,7 @@ int printf(const char *, ...);
 #define NOP(x)
 #define NOP2(x) NOP(x)
 
+#if TRUE(1)
 int main() {
   NOP(hello);
   NOP2(Hello);
@@ -63,5 +67,6 @@ int main() {
   return 5;
 #endif
 }
+#endif
 
 #endif
