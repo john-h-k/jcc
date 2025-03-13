@@ -367,9 +367,11 @@ static int jcc_main(int argc, char **argv) {
 
     struct path_components components = path_components(arena, source_path);
 
-    if (!strcmp(components.ext, "o")) {
+    if (!strcmp(source_path, "-")) {
+      // stdin, fine
+      info("reading source file from stdin\n");
+    } else if (!strcmp(components.ext, "o")) {
       // is object file
-
       info("linking object file '%s", source_path);
       objects[i] = source_path;
       continue;
