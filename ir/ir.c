@@ -883,6 +883,8 @@ void ir_order_basicblocks(struct ir_func *func) {
   size_t bb_count = 0;
   struct ir_basicblock **queue = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
   // bfs generates really large live ranges that cause phi spilling and break stuff
+#define IR_BB_SORT_BFS 1
+
 #if IR_BB_SORT_BFS
   size_t head = 0;
   size_t tail = 0;
@@ -906,6 +908,7 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 
 #else
+  // FIXME: this breaks things, but it shouldn't...
   struct ir_basicblock **stack = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
   size_t top = 0;
   stack[top++] = func->first;
