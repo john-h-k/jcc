@@ -870,9 +870,50 @@ enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty) {
 }
 
 void ir_order_basicblocks(struct ir_func *func) {
+  ir_rebuild_ids(func);
+
   // TODO: topological sort basicblocks
 
   // for now, just swap conditions that result in two branches becoming one
+
+  size_t total = func->basicblock_count;
+  bool *visited = arena_alloc(func->arena, total * sizeof(bool));
+  memset(visited, 0, total * sizeof(bool));
+
+  struct ir_basicblock **queue = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
+  size_t head = 0, tail = 0;
+
+  queue[tail++] = func->first;
+  visited[func->first->id] = true;
+
+  while (head < tail) {
+    struct ir_basicblock *basicblock = queue[head++];
+
+    struct ir_basicblock_succ_iter it = ir_basicblock_succ_iter(basicblock);
+    struct ir_basicblock *succ;
+    while (ir_basicblock_succ_iter_next(&it, &succ)) {
+      if (!visited[succ->id]) {
+        visited[succ->id] = true;
+        queue[tail++] = succ;
+      }
+    }
+  }
+
+  struct ir_basicblock *prev = func->first;
+  for (size_t i = 1; i < tail; i++) {
+    struct ir_basicblock *succ = queue[i];
+
+    prev->succ = succ;
+    if (succ) {
+      succ->pred = prev;
+      succ->succ = NULL;
+    }
+
+    prev = succ;
+  }
+
+  ir_rebuild_ids(func);
+  func->basicblock_count = tail;
 
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
@@ -1115,7 +1156,7 @@ void ir_prune_basicblocks(struct ir_func *irb) {
     basicblock = basicblock->succ;
   }
 
-  ir_simplify_phis(irb);
+  // i recommend doing a simplify phi run where you call this
 
   // means bb->id < bb_count for all bbs
   ir_rebuild_ids(irb);
@@ -3240,6 +3281,9 @@ void ir_simplify_phis(struct ir_func *func) {
   // FIXME: phi gen is shit, we should do it better
   bool improved = true;
 
+// FIXME: super unimaginably ineffecieitn because it generates a new use map
+// after _every_ change
+loop:
   while (improved) {
     // first remove duplicate entries
     struct ir_basicblock *basicblock = func->first;
@@ -3286,6 +3330,8 @@ void ir_simplify_phis(struct ir_func *func) {
 
     struct ir_op_use_map use_map = ir_build_op_uses_map(func);
 
+    ir_clear_metadata(func);
+
     improved = false;
     basicblock = func->first;
     while (basicblock) {
@@ -3293,6 +3339,12 @@ void ir_simplify_phis(struct ir_func *func) {
       if (stmt && stmt->flags & IR_STMT_FLAG_PHI) {
         struct ir_op *op = stmt->first;
         while (op) {
+          if (op->metadata) {
+            // going to be detached
+            op = op->succ;
+            continue;
+          }
+
           struct ir_op_phi *phi = &op->phi;
 
           // given we expect small phis, i think doing n^2 double loop is
@@ -3308,8 +3360,8 @@ void ir_simplify_phis(struct ir_func *func) {
 
           // something in this logic is broken
           if (false && all_ops_phis) {
-            struct vector *entries = vector_create_in_arena(sizeof(struct ir_phi_entry),
-                                                 func->arena);
+            struct vector *entries = vector_create_in_arena(
+                sizeof(struct ir_phi_entry), func->arena);
 
             for (size_t i = 0; i < phi->num_values; i++) {
               struct ir_op_phi sub = phi->values[i].value->phi;
@@ -3348,11 +3400,9 @@ void ir_simplify_phis(struct ir_func *func) {
               *usage.uses[i].op = phi->values[0].value;
             }
 
-            struct ir_op *succ = op->succ;
             ir_detach_op(func, op);
-            op = succ;
             improved = true;
-            continue;
+            goto loop;
           } else if (phi->num_values == 2) {
             struct ir_op *other = NULL;
 
@@ -3369,11 +3419,9 @@ void ir_simplify_phis(struct ir_func *func) {
                 *usage.uses[i].op = other;
               }
 
-              struct ir_op *succ = op->succ;
               ir_detach_op(func, op);
-              op = succ;
               improved = true;
-              continue;
+              goto loop;
             }
           }
 
