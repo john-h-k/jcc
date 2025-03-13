@@ -56,6 +56,8 @@ void opts_run_op_pass(struct ir_unit *unit, const struct opts_op_pass *pass) {
       ir_eliminate_redundant_ops(glb->func,
                                  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
       ir_prune_basicblocks(glb->func);
+      ir_order_basicblocks(glb->func);
+      ir_simplify_phis(glb->func);
 
       ir_validate(unit, IR_VALIDATE_FLAG_NONE);
       break;
@@ -85,6 +87,8 @@ void opts_run_func_pass(struct ir_unit *unit,
       ir_eliminate_redundant_ops(glb->func,
                                  IR_ELIMINATE_REDUNDANT_OPS_FLAG_ELIM_MOVS);
       ir_prune_basicblocks(glb->func);
+      ir_order_basicblocks(glb->func);
+      ir_simplify_phis(glb->func);
 
       ir_validate(unit, IR_VALIDATE_FLAG_NONE);
       break;
