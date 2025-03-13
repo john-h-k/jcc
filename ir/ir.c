@@ -880,11 +880,16 @@ void ir_order_basicblocks(struct ir_func *func) {
   bool *visited = arena_alloc(func->arena, total * sizeof(bool));
   memset(visited, 0, total * sizeof(bool));
 
+  size_t bb_count = 0;
   struct ir_basicblock **queue = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
-  size_t head = 0, tail = 0;
+  // bfs generates really large live ranges that cause phi spilling and break stuff
+#if IR_BB_SORT_BFS
+  size_t head = 0;
+  size_t tail = 0;
 
   queue[tail++] = func->first;
   visited[func->first->id] = true;
+  bb_count++;
 
   while (head < tail) {
     struct ir_basicblock *basicblock = queue[head++];
@@ -895,12 +900,37 @@ void ir_order_basicblocks(struct ir_func *func) {
       if (!visited[succ->id]) {
         visited[succ->id] = true;
         queue[tail++] = succ;
+        bb_count++;
       }
     }
   }
 
+#else
+  struct ir_basicblock **stack = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
+  size_t top = 0;
+  stack[top++] = func->first;
+
+  while (top > 0) {
+    struct ir_basicblock *basicblock = stack[--top];
+    if (visited[basicblock->id]) {
+      continue;
+    }
+
+    queue[bb_count++] = basicblock;
+    visited[basicblock->id] = true;
+
+    struct ir_basicblock_succ_iter it = ir_basicblock_succ_iter(basicblock);
+    struct ir_basicblock *succ;
+    while (ir_basicblock_succ_iter_next(&it, &succ)) {
+      if (!visited[succ->id]) {
+        stack[top++] = succ;
+      }
+    }
+  }
+#endif
+
   struct ir_basicblock *prev = func->first;
-  for (size_t i = 1; i < tail; i++) {
+  for (size_t i = 1; i < bb_count; i++) {
     struct ir_basicblock *succ = queue[i];
 
     prev->succ = succ;
@@ -913,7 +943,7 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 
   ir_rebuild_ids(func);
-  func->basicblock_count = tail;
+  func->basicblock_count = bb_count;
 
   struct ir_basicblock *basicblock = func->first;
   while (basicblock) {
