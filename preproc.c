@@ -969,6 +969,51 @@ static bool well_known_token(struct sized_str token) {
   return false;
 }
 
+static struct preproc_token preproc_concat(struct preproc *preproc,
+                                           struct preproc_token *token,
+                                           struct preproc_token *last) {
+  if (!token->text) {
+    return *last;
+  }
+
+  if (!last->text) {
+    return *token;
+  }
+
+#define TYPE_VAL(l, r)                                                         \
+  ((long long)PREPROC_TOKEN_TY_##l << 32) | (PREPROC_TOKEN_TY_##r)
+  switch (((long long)token->ty << 32) | last->ty) {
+  case TYPE_VAL(IDENTIFIER, IDENTIFIER):
+  case TYPE_VAL(IDENTIFIER, PREPROC_NUMBER):
+  // because we process backwards, we have to accept `0 ## _bar`, because it
+  // could be part of `foo_ ## 0 ## _bar`
+  case TYPE_VAL(PREPROC_NUMBER, IDENTIFIER):
+  case TYPE_VAL(PREPROC_NUMBER, PREPROC_NUMBER): {
+    // for preproc number ## preproc number we just assume the output is
+    // valid this isn't the best idea, we should probably re-parse it
+
+    // because we use buffer as a stack, this is in REVERSE order
+    size_t llen = text_span_len(&token->span);
+    size_t rlen = text_span_len(&last->span);
+
+    char *new = arena_alloc(preproc->arena, llen + rlen);
+    memcpy(new, token->text, llen);
+    memcpy(new + llen, last->text, rlen);
+
+    struct preproc_token new_tok = {
+        .ty = token->ty,
+        .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
+        .text = new,
+    };
+
+    return new_tok;
+  }
+  default:
+    BUG("unsupported pair for concatenating tokens (%s ## %s)",
+        preproc_token_name(token->ty), preproc_token_name(last->ty));
+  }
+}
+
 static struct preproc_token preproc_stringify(struct preproc *preproc,
                                               struct vector *tokens);
 
@@ -1017,8 +1062,8 @@ static bool try_expand_token(struct preproc *preproc,
 
   if (preproc->concat_next_token) {
     // this should only be called by fn macros, so it is fine to rely on the
-    // tokens we care about being in buffer (else the prev token could already
-    // have been processed and passsed out)
+    // tokens we care about being in unexpanded buffer (else the prev token
+    // could already have been processed and passed out)
 
     if (token_is_trivial(token)) {
       return true;
@@ -1037,42 +1082,12 @@ static bool try_expand_token(struct preproc *preproc,
       preproc->concat_next_token = false;
       expand_token(preproc, preproc_text, token, buffer, parents, flags);
     } else {
-#define TYPE_VAL(l, r)                                                         \
-  ((long long)PREPROC_TOKEN_TY_##l << 32) | (PREPROC_TOKEN_TY_##r)
-      switch (((long long)token->ty << 32) | last->ty) {
-      case TYPE_VAL(IDENTIFIER, IDENTIFIER):
-      case TYPE_VAL(IDENTIFIER, PREPROC_NUMBER):
-      // because we process backwards, we have to accept `0 ## _bar`, because it
-      // could be part of `foo_ ## 0 ## _bar`
-      case TYPE_VAL(PREPROC_NUMBER, IDENTIFIER):
-      case TYPE_VAL(PREPROC_NUMBER, PREPROC_NUMBER): {
-        // for preproc number ## preproc number we just assume the output is
-        // valid this isn't the best idea, we should probably re-parse it
+      struct preproc_token new_tok = preproc_concat(preproc, token, last);
 
-        // because we use buffer as a stack, this is in REVERSE order
-        size_t llen = text_span_len(&token->span);
-        size_t rlen = text_span_len(&last->span);
-
-        char *new = arena_alloc(preproc->arena, llen + rlen);
-        memcpy(new, token->text, llen);
-        memcpy(new + llen, last->text, rlen);
-
-        struct preproc_token new_tok = {
-            .ty = token->ty,
-            .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
-            .text = new,
-        };
-
-        // need to set _before_ recursive call into expand_token
-        preproc->concat_next_token = false;
-        parents = hashtbl_create_sized_str_keyed(0);
-        expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
-        break;
-      }
-      default:
-        BUG("unsupported pair for concatenating tokens (%s ## %s)",
-            preproc_token_name(token->ty), preproc_token_name(last->ty));
-      }
+      // need to set _before_ recursive call into expand_token
+      preproc->concat_next_token = false;
+      parents = hashtbl_create_sized_str_keyed(0);
+      expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
     }
 
     // post-concat, self reference is not considered
@@ -1199,12 +1214,23 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       struct vector *expanded_fn = vector_create(sizeof(struct preproc_token));
+      struct vector *concat_points = vector_create(sizeof(size_t));
 
       // FIXME: super inefficient O(nm), macro fn should have hashtbl in it
       size_t num_tokens = vector_length(macro_fn.tokens);
       bool stringify = false;
+
       for (size_t i = num_tokens; i; i--) {
         struct preproc_token *def_tok = vector_get(macro_fn.tokens, i - 1);
+
+        if (def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            def_tok->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+          size_t len = vector_length(expanded_fn);
+          // so we concat `len - 1` and `len`
+          vector_push_back(concat_points, &len);
+
+          continue;
+        }
 
         if (stringify && !token_is_trivial(def_tok)) {
           DEBUG_ASSERT(def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
@@ -1316,8 +1342,6 @@ static bool try_expand_token(struct preproc *preproc,
 
         if (!expanded) {
           vector_push_back(expanded_fn, def_tok);
-          // expand_token(preproc, preproc_text, def_tok, expanded_fn, parents,
-          //              flags);
         }
       }
 
@@ -1327,12 +1351,45 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       size_t num_exp_tokens = vector_length(expanded_fn);
+      size_t num_concat_points = vector_length(concat_points);
+      for (size_t i = 0; i < num_concat_points; i++) {
+        size_t concat_point = *(size_t *)vector_get(concat_points, i);
+
+        struct preproc_token *left = vector_get(expanded_fn, concat_point - 1);
+
+        for (size_t j = concat_point; j; (j--, left--)) {
+          if (left->text && !token_is_trivial(left)) {
+            break;
+          }
+        }
+
+        struct preproc_token *right = vector_get(expanded_fn, concat_point);
+
+        for (size_t j = concat_point; j < num_exp_tokens; (j++, right++)) {
+          if (right->text && !token_is_trivial(right)) {
+            break;
+          }
+        }
+
+        struct preproc_token new = preproc_concat(preproc, right, left);
+        *left = new;
+
+        // use this as marker to skip token
+        right->text = NULL;
+      }
+
       for (size_t i = 0; i < num_exp_tokens; i++) {
         struct preproc_token *tok = vector_get(expanded_fn, i);
+
+        if (!tok->text) {
+          continue;
+        }
+
         vector_push_back(preproc->unexpanded_buffer_tokens, tok);
       }
 
       vector_free(&expanded_fn);
+      vector_free(&concat_points);
 
       break;
     }
