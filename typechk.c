@@ -2577,6 +2577,64 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     return var.var.enumerator;
   }
 
+  if (expr->ty == AST_EXPR_TY_COMPOUNDEXPR) {
+    DEBUG_ASSERT(expr->compound_expr.num_exprs, "empty compound expr");
+
+    unsigned long long value = 0;
+    for (size_t i = 0; i < expr->compound_expr.num_exprs; i++) {
+      value = type_constant_integral_expr(tchk, &expr->compound_expr.exprs[i]);
+    }
+
+    return value;
+  }
+
+  if (expr->ty == AST_EXPR_TY_UNARY_OP) {
+    unsigned long long value =
+        type_constant_integral_expr(tchk, expr->unary_op.expr);
+
+    // FIXME: casts and round to real type so no overflow
+    switch (expr->unary_op.ty) {
+    case AST_UNARY_OP_TY_PLUS:
+      return value;
+    case AST_UNARY_OP_TY_MINUS:
+      return -value;
+    case AST_UNARY_OP_TY_LOGICAL_NOT:
+      return !value;
+    case AST_UNARY_OP_TY_NOT:
+      return ~value;
+    case AST_UNARY_OP_TY_CAST:
+      return value;
+    case AST_UNARY_OP_TY_PREFIX_INC:
+    case AST_UNARY_OP_TY_PREFIX_DEC:
+    case AST_UNARY_OP_TY_POSTFIX_INC:
+    case AST_UNARY_OP_TY_POSTFIX_DEC:
+      // FIXME: this is actually more general "bad value in constant expr",
+      // not just for enums
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "cannot use ++/-- in constant expr"));
+      return 0;
+    case AST_UNARY_OP_TY_INDIRECTION:
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "cannot use & in constant expr"));
+      return 0;
+    case AST_UNARY_OP_TY_ADDRESSOF:
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "cannot use & in constant expr"));
+      return 0;
+    }
+  }
+
   if (expr->ty == AST_EXPR_TY_BINARY_OP) {
     unsigned long long lhs =
         type_constant_integral_expr(tchk, expr->binary_op.lhs);

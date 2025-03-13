@@ -1758,11 +1758,7 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
 
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &expr->compound_expr)) {
-    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET,
-                         expr->compound_expr.span.end, "`)` after expression",
-                         NULL);
-
+      parse_compoundexpr(parser, &expr->compound_expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
     expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
     return true;
@@ -2201,10 +2197,21 @@ static bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
 
   struct ast_expr cond, true_expr, false_expr;
   if (parse_expr_precedence_aware(parser, 0, &cond) &&
-      parse_token(parser, LEX_TOKEN_TY_QMARK, NULL) &&
-      parse_expr_precedence_aware(parser, 0, &true_expr) &&
-      parse_token(parser, LEX_TOKEN_TY_COLON, NULL) &&
-      parse_expr_precedence_aware(parser, 0, &false_expr)) {
+      parse_token(parser, LEX_TOKEN_TY_QMARK, NULL)) {
+
+    struct ast_compoundexpr true_compound_expr;
+    // in `cond ? true : false`, `true` is parsed as if it were parenthesised
+    if (!parse_compoundexpr(parser, &true_compound_expr)) {
+      return false;
+    }
+
+    true_expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
+    true_expr.compound_expr = true_compound_expr;
+    true_expr.span = true_compound_expr.span;
+
+    parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start, "expected ':' after ternary true expression", NULL);
+    parse_expected_expr(parser, &false_expr, "expected expr after ':'");
+
     expr->ty = AST_EXPR_TY_TERNARY;
     expr->ternary = (struct ast_ternary){
         .cond = arena_alloc(parser->arena, sizeof(*expr->ternary.cond)),

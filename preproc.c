@@ -166,6 +166,14 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     hashtbl_insert(preproc->defines, &ident, &define);
   }
 
+  DEF_BUILTIN("__extension__", "");
+  DEF_BUILTIN("__inline", "");
+
+  if (target == COMPILE_TARGET_LINUX_RV32I) {
+    // TEMP: stops it generating `bswap64` using `uint64_t` which causes IR to fail (as no 64 bit support on RV32I yet)
+    DEF_BUILTIN("__GNUC__", "1");
+  }
+
   DEF_BUILTIN("__JCC__", "1");
   DEF_BUILTIN("__jcc__", "1");
 
@@ -1580,6 +1588,10 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         "#ifndef STDDEF_H\n"
         "#define STDDEF_H\n"
+        "\n"
+        // "#ifdef __need_wint_t\n"
+        "typedef int wint_t;\n"
+        // "#endif\n"
         "\n"
         "#define NULL ((void*)0)\n"
         "typedef long ptrdiff_t;\n"

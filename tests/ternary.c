@@ -3,5 +3,5 @@
 int main() {
   int a = 1;
 
-  return a ? 7 : 10;
+  return a ? a ? a ? 7 : 8 : 9 : 10;
 }
