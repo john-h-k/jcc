@@ -37,7 +37,7 @@ struct preproc {
   // struct preproc_text
   struct vector *texts;
 
-  // struct preproc_token
+  struct vector *unexpanded_buffer_tokens;
   struct vector *buffer_tokens;
 
   // struct sized_str, struct preproc_define
@@ -334,6 +334,7 @@ enum preproc_create_result preproc_create(struct program *program,
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
   p->buffer_tokens = vector_create(sizeof(struct preproc_token));
+  p->unexpanded_buffer_tokens = vector_create(sizeof(struct preproc_token));
 
   *preproc = p;
 
@@ -365,6 +366,7 @@ void preproc_free(struct preproc **preproc) {
 
   vector_free(&(*preproc)->texts);
   vector_free(&(*preproc)->buffer_tokens);
+  vector_free(&(*preproc)->unexpanded_buffer_tokens);
 
   arena_allocator_free(&(*preproc)->arena);
 
@@ -456,7 +458,8 @@ static void preproc_next_raw_token(struct preproc *preproc,
   while (vector_length(preproc->texts)) {
     preproc_text = vector_tail(preproc->texts);
 
-    if (preproc_text->pos.idx < preproc_text->len || vector_length(preproc->texts) == 1) {
+    if (preproc_text->pos.idx < preproc_text->len ||
+        vector_length(preproc->texts) == 1) {
       break;
     }
 
@@ -465,6 +468,12 @@ static void preproc_next_raw_token(struct preproc *preproc,
                  preproc_text->file, vector_length(preproc_text->enabled));
 
     vector_pop(preproc->texts);
+  }
+
+  if (vector_length(preproc->unexpanded_buffer_tokens)) {
+    *token =
+        *(struct preproc_token *)vector_pop(preproc->unexpanded_buffer_tokens);
+    return;
   }
 
   struct text_pos start = preproc_text->pos;
@@ -1189,6 +1198,8 @@ static bool try_expand_token(struct preproc *preproc,
             vector_length(args), macro_fn.num_params);
       }
 
+      struct vector *expanded_fn = vector_create(sizeof(struct preproc_token));
+
       // FIXME: super inefficient O(nm), macro fn should have hashtbl in it
       size_t num_tokens = vector_length(macro_fn.tokens);
       bool stringify = false;
@@ -1238,11 +1249,16 @@ static bool try_expand_token(struct preproc *preproc,
               if (stringify) {
                 struct preproc_token str_tok =
                     preproc_stringify(preproc, arg_tokens);
-                expand_token(preproc, preproc_text, &str_tok, buffer, parents,
-                             flags);
+
+                vector_push_back(expanded_fn, &str_tok);
               } else {
-                preproc_append_tokens(preproc, preproc_text, arg_tokens, buffer,
-                                      parents, flags);
+                size_t num_arg_tokens = vector_length(arg_tokens);
+                // for (size_t k = num_arg_tokens; k; k--) {
+                //   vector_push_back(expanded_fn, vector_get(arg_tokens, k -
+                //   1));
+                for (size_t k = 0; k < num_arg_tokens; k++) {
+                  vector_push_back(expanded_fn, vector_get(arg_tokens, k));
+                }
               }
 
               if (j - 1 != macro_fn.num_params) {
@@ -1251,8 +1267,7 @@ static bool try_expand_token(struct preproc *preproc,
                                               .span =
                                                   MK_INVALID_TEXT_SPAN(0, 1)};
 
-                expand_token(preproc, preproc_text, &space, buffer, parents,
-                             flags);
+                vector_push_back(expanded_fn, &space);
 
                 struct preproc_token comma = {
                     .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
@@ -1260,8 +1275,7 @@ static bool try_expand_token(struct preproc *preproc,
                     .text = ",",
                     .span = MK_INVALID_TEXT_SPAN(0, 1)};
 
-                expand_token(preproc, preproc_text, &comma, buffer, parents,
-                             flags);
+                vector_push_back(expanded_fn, &comma);
               }
             }
             expanded = true;
@@ -1284,11 +1298,14 @@ static bool try_expand_token(struct preproc *preproc,
                 if (stringify) {
                   struct preproc_token str_tok =
                       preproc_stringify(preproc, arg_tokens);
-                  expand_token(preproc, preproc_text, &str_tok, buffer, parents,
-                               flags);
+
+                  vector_push_back(expanded_fn, &str_tok);
                 } else {
-                  preproc_append_tokens(preproc, preproc_text, arg_tokens,
-                                        buffer, parents, flags);
+                  size_t num_arg_tokens = vector_length(arg_tokens);
+                  for (size_t k = num_arg_tokens; k; k--) {
+                    vector_push_back(expanded_fn,
+                                     vector_get(arg_tokens, k - 1));
+                  }
                 }
                 expanded = true;
                 break;
@@ -1298,7 +1315,9 @@ static bool try_expand_token(struct preproc *preproc,
         }
 
         if (!expanded) {
-          expand_token(preproc, preproc_text, def_tok, buffer, parents, flags);
+          vector_push_back(expanded_fn, def_tok);
+          // expand_token(preproc, preproc_text, def_tok, expanded_fn, parents,
+          //              flags);
         }
       }
 
@@ -1306,6 +1325,15 @@ static bool try_expand_token(struct preproc *preproc,
         // no arg found after stringify token
         BUG("expected macro parameter token after stringify operator '#'");
       }
+
+      size_t num_exp_tokens = vector_length(expanded_fn);
+      for (size_t i = 0; i < num_exp_tokens; i++) {
+        struct preproc_token *tok = vector_get(expanded_fn, i);
+        vector_push_back(preproc->unexpanded_buffer_tokens, tok);
+      }
+
+      vector_free(&expanded_fn);
+
       break;
     }
     }
@@ -1459,12 +1487,12 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     }
 
     const char *STDARG_CONTENT =
-        ""
+        "\n"
         "#ifndef STDARG_H\n"
         "#define STDARG_H\n"
         "\n"
         "typedef void * __gnuc_va_list;\n"
-        "#define __GNUC_VA_LIST"
+        "#define __GNUC_VA_LIST\n"
         "\n"
         "#ifndef __need___va_list\n"
         "\n"
@@ -1492,7 +1520,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     }
 
     const char *STDARG_CONTENT =
-        ""
+        "\n"
         "#ifndef STDDEF_H\n"
         "#define STDDEF_H\n"
         "\n"
@@ -1562,8 +1590,7 @@ static struct include_info try_find_include(struct preproc *preproc,
     }
   }
 
-  
-  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h")) { 
+  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h")) {
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;
@@ -1999,13 +2026,13 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
     enum preproc_token_mode mode;
 
-    if (vector_empty(preproc->buffer_tokens)) {
-      preproc_next_raw_token(preproc, token);
-      mode = PREPROC_TOKEN_MODE_EXPAND;
-    } else {
+    if (vector_length(preproc->buffer_tokens)) {
       // values in buffer have already been expanded
       *token = *(struct preproc_token *)vector_pop(preproc->buffer_tokens);
       mode = PREPROC_TOKEN_MODE_NO_EXPAND;
+    } else {
+      preproc_next_raw_token(preproc, token);
+      mode = PREPROC_TOKEN_MODE_EXPAND;
     }
 
     if (token->ty == PREPROC_TOKEN_TY_EOF) {
@@ -2078,7 +2105,6 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
       if (directive.ty != PREPROC_TOKEN_TY_IDENTIFIER) {
         TODO("error for non identifier directive");
       }
-
       if (token_streq(directive, "ifdef")) {
         bool now_enabled = false;
         if (enabled) {
