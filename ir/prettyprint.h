@@ -58,7 +58,7 @@ void debug_print_ir_reg(FILE *file, struct ir_reg reg);
 void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
                                const struct ir_var_ty *var_ty);
 
-void debug_print_ir_graph(FILE *file, struct ir_func *irb);
+void debug_print_ir_graph(FILE *file, struct ir_unit *iru);
 
 void debug_print_ir(FILE *file, struct ir_unit *iru,
                     debug_print_op_callback *cb, void *cb_metadata);

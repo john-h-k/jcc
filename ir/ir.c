@@ -876,65 +876,51 @@ void ir_order_basicblocks(struct ir_func *func) {
 
   // for now, just swap conditions that result in two branches becoming one
 
+  struct bb_with_iter {
+    struct ir_basicblock *basicblock;
+    struct ir_basicblock_succ_iter iter;
+  };
+
   size_t total = func->basicblock_count;
   bool *visited = arena_alloc(func->arena, total * sizeof(bool));
   memset(visited, 0, total * sizeof(bool));
 
-  size_t bb_count = 0;
-  struct ir_basicblock **queue = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
-  // bfs generates really large live ranges that cause phi spilling and break stuff
-#define IR_BB_SORT_BFS 1
-
-#if IR_BB_SORT_BFS
-  size_t head = 0;
-  size_t tail = 0;
-
-  queue[tail++] = func->first;
-  visited[func->first->id] = true;
-  bb_count++;
-
-  while (head < tail) {
-    struct ir_basicblock *basicblock = queue[head++];
-
-    struct ir_basicblock_succ_iter it = ir_basicblock_succ_iter(basicblock);
-    struct ir_basicblock *succ;
-    while (ir_basicblock_succ_iter_next(&it, &succ)) {
-      if (!visited[succ->id]) {
-        visited[succ->id] = true;
-        queue[tail++] = succ;
-        bb_count++;
-      }
-    }
-  }
-
-#else
-  // FIXME: this breaks things, but it shouldn't...
-  struct ir_basicblock **stack = arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
+  struct bb_with_iter *stack = arena_alloc(func->arena, total * sizeof(*stack));
   size_t top = 0;
-  stack[top++] = func->first;
+
+  struct ir_basicblock **postorder =
+      malloc(total * sizeof(struct ir_basicblock *));
+  size_t postorder_count = 0;
+
+  struct ir_basicblock *entry = func->first;
+
+  visited[entry->id] = true;
+  stack[top].basicblock = entry;
+  stack[top].iter = ir_basicblock_succ_iter(entry);
+  top++;
 
   while (top > 0) {
-    struct ir_basicblock *basicblock = stack[--top];
-    if (visited[basicblock->id]) {
-      continue;
-    }
-
-    queue[bb_count++] = basicblock;
-    visited[basicblock->id] = true;
-
-    struct ir_basicblock_succ_iter it = ir_basicblock_succ_iter(basicblock);
+    struct bb_with_iter *elem = &stack[top - 1];
     struct ir_basicblock *succ;
-    while (ir_basicblock_succ_iter_next(&it, &succ)) {
+
+    if (ir_basicblock_succ_iter_next(&elem->iter, &succ)) {
       if (!visited[succ->id]) {
-        stack[top++] = succ;
+        visited[succ->id] = true;
+        stack[top].basicblock = succ;
+        stack[top].iter = ir_basicblock_succ_iter(succ);
+        top++;
       }
+    } else {
+      postorder[postorder_count++] = elem->basicblock;
+      top--;
     }
   }
-#endif
 
   struct ir_basicblock *prev = func->first;
-  for (size_t i = 1; i < bb_count; i++) {
-    struct ir_basicblock *succ = queue[i];
+  DEBUG_ASSERT(postorder[postorder_count - 1] == entry, "first bb should always be entry");
+
+  for (size_t i = postorder_count - 1; i; i--) {
+    struct ir_basicblock *succ = postorder[i - 1];
 
     prev->succ = succ;
     if (succ) {
@@ -946,32 +932,32 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 
   ir_rebuild_ids(func);
-  func->basicblock_count = bb_count;
+  func->basicblock_count = postorder_count;
 
-  struct ir_basicblock *basicblock = func->first;
-  while (basicblock) {
-    if (basicblock->ty == IR_BASICBLOCK_TY_SPLIT) {
-      struct ir_basicblock_split *split = &basicblock->split;
+  // struct ir_basicblock *basicblock = func->first;
+  // while (basicblock) {
+  //   if (basicblock->ty == IR_BASICBLOCK_TY_SPLIT) {
+  //     struct ir_basicblock_split *split = &basicblock->split;
 
-      if (split->true_target == basicblock->succ) {
-        struct ir_op *br_cond = basicblock->last->last;
-        DEBUG_ASSERT(br_cond->ty == IR_OP_TY_BR_COND,
-                     "expected `br.cond` at end of SPLIT bb");
-        struct ir_op *cond = br_cond->br_cond.cond;
+  //     if (split->true_target == basicblock->succ) {
+  //       struct ir_op *br_cond = basicblock->last->last;
+  //       DEBUG_ASSERT(br_cond->ty == IR_OP_TY_BR_COND,
+  //                    "expected `br.cond` at end of SPLIT bb");
+  //       struct ir_op *cond = br_cond->br_cond.cond;
 
-        if (cond->ty == IR_OP_TY_BINARY_OP &&
-            ir_binary_op_is_comparison(cond->binary_op.ty)) {
-          cond->binary_op.ty = ir_invert_binary_comparison(cond->binary_op.ty);
+  //       if (cond->ty == IR_OP_TY_BINARY_OP &&
+  //           ir_binary_op_is_comparison(cond->binary_op.ty)) {
+  //         cond->binary_op.ty = ir_invert_binary_comparison(cond->binary_op.ty);
 
-          struct ir_basicblock *tmp = split->true_target;
-          split->true_target = split->false_target;
-          split->false_target = tmp;
-        }
-      }
-    }
+  //         struct ir_basicblock *tmp = split->true_target;
+  //         split->true_target = split->false_target;
+  //         split->false_target = tmp;
+  //       }
+  //     }
+  //   }
 
-    basicblock = basicblock->succ;
-  }
+  //   basicblock = basicblock->succ;
+  // }
 }
 
 void ir_rebuild_flags(struct ir_func *func) {

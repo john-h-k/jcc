@@ -33,14 +33,13 @@ without having to enter the shoggoth of Clang/GCC.
 
 ## Support
 
-AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented.
+AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented and RISC-V 32 64 bit integers are WIP.
 Working with RISC-V requires installing a RISC-V linker.
 
 #### Things that don't work yet
 
 1. `va_list` and variadic function implementation. Calling them works fine
 2. Compound literals
-3. Complex constant expressions like `int foo[7 * 3 + sizeof(int)] = {};`
 
 #### Development
 

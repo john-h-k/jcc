@@ -12,6 +12,8 @@ static void remove_critical_edges(struct ir_func *irb) {
 
   struct ir_basicblock *basicblock = irb->first;
 
+  bool inserted_new = false;
+
   while (basicblock) {
     size_t num_preds = basicblock->num_preds;
 
@@ -27,6 +29,8 @@ static void remove_critical_edges(struct ir_func *irb) {
         // we have a critical edge
         // insert it after the later of the two blocks because this helps
         // liveness calculations
+        inserted_new = true;
+
         struct ir_basicblock *intermediate = ir_insert_after_basicblock(
             irb, basicblock->id > pred->id ? basicblock : pred);
         intermediate->ty = IR_BASICBLOCK_TY_MERGE;
@@ -94,6 +98,12 @@ static void remove_critical_edges(struct ir_func *irb) {
     }
 
     basicblock = basicblock->succ;
+  }
+
+  if (inserted_new) {
+    // re-sort in RPO order
+    // TODO: is this needed? or can we insert in a way that guarantees it implicitly
+    ir_order_basicblocks(irb);
   }
 }
 

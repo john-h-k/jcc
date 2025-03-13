@@ -144,6 +144,8 @@ struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
   ir_rebuild_ids(irb);
 
+  // relies on the BBs being in RPO
+
   struct ir_dominance_frontier df = ir_compute_dominance_frontier(irb);
 
   struct interval_data data;

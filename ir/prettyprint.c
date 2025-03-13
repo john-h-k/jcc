@@ -1174,7 +1174,7 @@ get_basicblock_vertex(struct ir_func *irb, struct ir_basicblock *basicblock,
   return basicblock->metadata;
 }
 
-void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
+static void debug_print_ir_func_graph(FILE *file, struct ir_func *irb) {
   ir_clear_metadata(irb);
 
   struct graphwriter *gwr = graphwriter_create(irb->arena, GRAPH_TY_DIRECTED,
@@ -1196,6 +1196,17 @@ void debug_print_ir_graph(FILE *file, struct ir_func *irb) {
   }
 
   graphwriter_free(&gwr);
+}
+
+void debug_print_ir_graph(FILE *file, struct ir_unit *iru) {
+  struct ir_glb *glb = iru->first_global;
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED && glb->ty == IR_GLB_TY_FUNC) {
+      debug_print_ir_func_graph(file, glb->func);
+    }
+
+    glb = glb->succ;
+  }
 }
 
 void debug_print_lcl(FILE *file, struct ir_lcl *lcl) {
