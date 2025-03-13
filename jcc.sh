@@ -460,14 +460,9 @@ ci-test() {
 }
 
 cfg() {
-    jcc=$(readlink -f ./build/jcc)
-    cd "$CALLER_DIR"
-    "$jcc" "$@"
-    cd - > /dev/null
-
-    for file in $(find $(dirname $0)/build -name '*.gv' -print); do
+    for file in $(find build -name '*.gv' -print); do
         name=$(basename $file)
-        dot -Tpng "$(dirname $0)/$file" > "$name.png" && open "$name.png"
+        dot -Tpng "$file" > "$name.png" && open "$name.png"
     done
 }
 
