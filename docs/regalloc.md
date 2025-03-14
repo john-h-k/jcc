@@ -12,7 +12,8 @@ Each class has a certain number of available registers, split into two groups:
 * Volatile - a _volatile_ register is one where it must be saved and reloaded across a `call` boundary, as the callee is free to use that register
 * Non-volatile - a _non-volatile_ register is one where we must save its prior value at the start of the function, and restore at the end, but can use freely without being concerned that it will be overwritten by `call`s
 
-The save/restore of non-volatile registers can be ignored and does not affect register allocation.
+The save/restore of non-volatile registers can be ignored and does not affect register allocation. However, it is important across `call` boundaries, as if a variable lives across >1 calls (in terms of "actual execution", so being live across a single call in a loop would count),
+it is advantageous to put it in a non-volatile register.
 
 Control flow in general is represented as a list of _basicblocks_. A basicblock has the property that if any instruction within the block is executed, they are all executed (it has no control-flow).
 There is a single entry basicblock, and then each block may have 0 or more successors. A basicblock with 0 successors is either dead, or returns a value. Dead basicblocks are removed before regalloc and can be ignored.
