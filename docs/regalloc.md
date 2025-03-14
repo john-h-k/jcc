@@ -23,23 +23,23 @@ The goal by the end of register allocation is that every operation has a registe
 You can fix this by performing a _spill_, where you write the register value to a stack, and then reload it before a usage.
 
 ```
-%0 = 10
+  %0 = 10
 
-// other instructions, which use all the registers so none are available for %0
+  // other instructions, which use all the registers so none are available for %0
 
-%10 = %0 + 5
+  %10 = %0 + 5
 ```
 
 would be transformed to
 
 ```
-%0 = 10
-store.lcl [LCL(0)], %0
+  %0 = 10
+  store.lcl [LCL(0)], %0
 
-// other instructions, which can use registers freely as %0 does not occupy one
+  // other instructions, which can use registers freely as %0 does not occupy one
 
-%10 = load.lcl [LCL(0)]
-%11 = %10 + 5
+  %10 = load.lcl [LCL(0)]
+  %11 = %10 + 5
 ```
 
 This reduces the "live range" of `%0` from being `[%0, %10]` to just `[%0, %1]`, and then introduces a new live range for its use.
@@ -75,9 +75,9 @@ Determining these registers is not the job of the register allocator, and they h
 Additionally, it is beneficial for it to consider these in other assignments. For example
 
 ```
-%0 = 10
-%1 = %0 register=R0 // this is a mov instruction to put the value into the correct register, %0 has no register here
-call foo ( %1 )
+  %0 = 10
+  %1 = %0 register=R0 // this is a mov instruction to put the value into the correct register, %0 has no register here
+  call foo ( %1 )
 ```
 
 In this case, we want the register allocator to try and put `%0` in register `R0` so it doesn't introduce a meaningless mov afterwards. The move will still exist in IR, but if it is between the same reg, it can be eliminated after regalloc.
@@ -86,14 +86,29 @@ An immediate question is "why does the move exist?". This is because it reduces 
 Consider
 
 ```
-%0 = 10 register=R0
-%1 = 20 register=$0
-call foo ( %0 )
-call bar ( %1 )
+  %0 = 10 register=R0
+  %1 = 20 register=$0
+  call foo ( %0 )
+  call bar ( %1 )
 ```
 
 This will fail, because there are overlapping ranges with fixed registers. So instead, all fixed-register operands get split:
 * If their output is fixed, a move directly afterwards will be inserted and all consumers will use that
 * If their input is fixed, a move will be inserted directly before use that fixes the register
 
+
+### Fixed output:
+
+```
+  %0 = call foo () register=R0
+  %1 = %0 // no fixed register, all other ops will use this
+```
+
+### Fixed input:
+
+```
+  %0 = 10 // no fixed register, it is only fixed before use
+  %1 = %0 register=R0
+  call foo ( %1 )
+```
 
