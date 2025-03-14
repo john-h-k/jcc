@@ -889,7 +889,7 @@ void ir_order_basicblocks(struct ir_func *func) {
   size_t top = 0;
 
   struct ir_basicblock **postorder =
-      malloc(total * sizeof(struct ir_basicblock *));
+      arena_alloc(func->arena, total * sizeof(struct ir_basicblock *));
   size_t postorder_count = 0;
 
   struct ir_basicblock *entry = func->first;
