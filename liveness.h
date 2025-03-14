@@ -6,10 +6,17 @@
 #include <stddef.h>
 #include <stdio.h>
 
+enum interval_flags {
+  INTERVAL_FLAG_NONE = 0,
+  INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS = 1 << 0,
+};
+
 struct interval {
   struct ir_op *op;
   size_t start;
   size_t end;
+
+  enum interval_flags flags;
 };
 
 struct interval_data {

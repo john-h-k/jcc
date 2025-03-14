@@ -163,7 +163,9 @@ static void spill_at_interval(struct lsra_reg_info *info, struct ir_func *irb,
                               size_t cur_interval) {
   struct interval *intervals = state->interval_data.intervals;
 
+    printf("spiling %zu as it ends at %zu whereas %zu ends at %zu\n", last_active->op->id, last_active->end, intervals[cur_interval].op->id, intervals[cur_interval].end);
   if (last_active->end > intervals[cur_interval].end) {
+    printf("spiling %zu as it ends at %zu whereas %zu ends at %zu\n", last_active->op->id, last_active->end, intervals[cur_interval].op->id, intervals[cur_interval].end);
     // spill active
     intervals[cur_interval].op->reg = last_active->op->reg;
     spill_op_and_lower(info, irb, last_active->op);
