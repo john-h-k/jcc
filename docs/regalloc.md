@@ -36,7 +36,7 @@ would be transformed to
 %0 = 10
 store.lcl [LCL(0)], %0
 
-// other instructions, which use all the registers so none are available for %0
+// other instructions, which can use registers freely as %0 does not occupy one
 
 %10 = load.lcl [LCL(0)]
 %11 = %10 + 5
