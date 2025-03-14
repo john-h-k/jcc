@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "bitset.h"
+#include "hashtbl.h"
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "log.h"
@@ -67,7 +68,106 @@ static void validate_intervals(struct ir_func *func,
 }
 #endif
 
+struct scc_context {
+  struct hashtbl *index_map; // basic block -> dfs inex
+  struct hashtbl *low_link;  // basic blocks -> low-link values
+  struct hashtbl *on_stack;
+  struct vector *sccs;
+  struct vector *stack;
+  size_t stack_size;
+  size_t stack_capacity;
+  size_t index;
+};
+
+// tarjan based strongly connected component finding
+static void scc_process(struct ir_func *func, struct scc_context *ctx,
+                        struct ir_basicblock *basicblock) {
+  ctx->index++;
+
+  hashtbl_insert(ctx->index_map, &basicblock, &ctx->index);
+  hashtbl_insert(ctx->low_link, &basicblock, &ctx->index);
+
+  vector_push_back(ctx->stack, &basicblock);
+
+  hashtbl_insert(ctx->on_stack, &basicblock, &(bool){true});
+
+  struct ir_basicblock_succ_iter iter = ir_basicblock_succ_iter(basicblock);
+  struct ir_basicblock *succ;
+
+  while (ir_basicblock_succ_iter_next(&iter, &succ)) {
+    if (!hashtbl_lookup(ctx->index_map, &succ)) {
+
+      // recurse
+      scc_process(func, ctx, succ);
+
+      size_t *low_bb = hashtbl_lookup(ctx->low_link, &basicblock);
+      size_t *low_succ = hashtbl_lookup(ctx->low_link, &succ);
+
+      if (low_bb && low_succ) {
+        *low_bb = (*low_bb < *low_succ) ? *low_bb : *low_succ;
+      }
+    } else if (hashtbl_lookup(ctx->on_stack, &succ)) {
+
+      // is scc
+      size_t *low_bb = hashtbl_lookup(ctx->low_link, &basicblock);
+      size_t *index_succ = hashtbl_lookup(ctx->index_map, &succ);
+
+      if (low_bb && index_succ) {
+        *low_bb = (*low_bb < *index_succ) ? *low_bb : *index_succ;
+      }
+    }
+  }
+
+  size_t *low_bb = hashtbl_lookup(ctx->low_link, &basicblock);
+  size_t *index_bb = hashtbl_lookup(ctx->index_map, &basicblock);
+  if (low_bb && index_bb && *low_bb == *index_bb) {
+    struct vector *scc =
+        vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena);
+    struct ir_basicblock **member;
+
+    do {
+      member = vector_pop(ctx->stack);
+      hashtbl_insert(ctx->on_stack, member, &(bool){false});
+      vector_push_back(scc, member);
+    } while (*member != basicblock);
+
+    vector_push_back(ctx->sccs, &scc);
+  }
+}
+
+static struct vector *find_sccs(struct ir_func *func) {
+  struct scc_context ctx = {
+      .index_map =
+          hashtbl_create_in_arena(func->arena, sizeof(struct ir_basicblock *),
+                                  sizeof(size_t), NULL, NULL),
+      .low_link =
+          hashtbl_create_in_arena(func->arena, sizeof(struct ir_basicblock *),
+                                  sizeof(size_t), NULL, NULL),
+      .on_stack =
+          hashtbl_create_in_arena(func->arena, sizeof(struct ir_basicblock *),
+                                  sizeof(bool), NULL, NULL),
+      .sccs = vector_create_in_arena(sizeof(struct vector *), func->arena),
+      .stack =
+          vector_create_in_arena(sizeof(struct ir_basicblock *), func->arena),
+      .stack_size = 0,
+      .stack_capacity = 0,
+      .index = 0};
+
+  struct ir_basicblock *basicblock = func->first;
+
+  while (basicblock) {
+    if (!hashtbl_lookup(ctx.index_map, &basicblock)) {
+      scc_process(func, &ctx, basicblock);
+    }
+
+    basicblock = basicblock->succ;
+  }
+
+  return ctx.sccs;
+}
+
 struct interval_callback_data {
+  bool *visited;
   struct ir_op *consumer;
   struct interval_data *data;
   struct ir_dominance_frontier df;
@@ -85,54 +185,58 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 
   interval->end = MAX(interval->end, op_end);
 
-  // struct ir_op *consumer = cb->consumer;
+  struct ir_op *consumer = cb->consumer;
 
-  struct ir_basicblock *basicblock = cb->consumer->stmt->basicblock;
+  struct ir_basicblock *basicblock = consumer->stmt->basicblock;
   if ((*op)->stmt->basicblock != basicblock) {
-    struct vector *domfs = cb->df.domfs[basicblock->id];
-
-    if (basicblock->last && basicblock->last->last) {
-      interval->end = MAX(interval->end, basicblock->last->last->id);
-    }
-
-    for (size_t j = 0; j < basicblock->num_preds; j++) {
-      struct ir_basicblock *pred = basicblock->preds[j];
-      if (pred->last && pred->last->last) {
-        interval->end = MAX(interval->end, pred->last->last->id);
-      }
-    }
-
-    size_t num_domfs = vector_length(domfs);
-    for (size_t i = 0; i < num_domfs; i++) {
-      struct ir_basicblock *domf =
-          *(struct ir_basicblock **)vector_get(domfs, i);
-
-      if (domf->last && domf->last->last) {
-        interval->end = MAX(interval->end, domf->last->last->id);
-      }
-
-      for (size_t j = 0; j < domf->num_preds; j++) {
-        struct ir_basicblock *pred = domf->preds[j];
-        if (pred->last && pred->last->last) {
-          interval->end = MAX(interval->end, pred->last->last->id);
-        }
-      }
-    }
-
-
-    struct ir_basicblock *idom = cb->df.idoms[basicblock->id];
-    while (true) {
-      if (idom->last && idom->last->last) {
-        interval->end = MAX(interval->end, idom->last->last->id);
-      }
-
-      if (cb->df.idoms[idom->id] == idom) {
-        break;
-      }
-
-      idom = cb->df.idoms[idom->id];
+    if (consumer->ty != IR_OP_TY_PHI ||
+        !ir_basicblock_is_pred(basicblock, (*op)->stmt->basicblock)) {
+      interval->flags |= INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS;
     }
   }
+  //   struct vector *domfs = cb->df.domfs[basicblock->id];
+
+  //   if (basicblock->last && basicblock->last->last) {
+  //     interval->end = MAX(interval->end, basicblock->last->last->id);
+  //   }
+
+  //   for (size_t j = 0; j < basicblock->num_preds; j++) {
+  //     struct ir_basicblock *pred = basicblock->preds[j];
+  //     if (pred->last && pred->last->last) {
+  //       interval->end = MAX(interval->end, pred->last->last->id);
+  //     }
+  //   }
+
+  //   size_t num_domfs = vector_length(domfs);
+  //   for (size_t i = 0; i < num_domfs; i++) {
+  //     struct ir_basicblock *domf =
+  //         *(struct ir_basicblock **)vector_get(domfs, i);
+
+  //     if (domf->last && domf->last->last) {
+  //       interval->end = MAX(interval->end, domf->last->last->id);
+  //     }
+
+  //     for (size_t j = 0; j < domf->num_preds; j++) {
+  //       struct ir_basicblock *pred = domf->preds[j];
+  //       if (pred->last && pred->last->last) {
+  //         interval->end = MAX(interval->end, pred->last->last->id);
+  //       }
+  //     }
+  //   }
+
+  //   struct ir_basicblock *idom = cb->df.idoms[basicblock->id];
+  //   while (true) {
+  //     if (idom->last && idom->last->last) {
+  //       interval->end = MAX(interval->end, idom->last->last->id);
+  //     }
+
+  //     if (cb->df.idoms[idom->id] == idom) {
+  //       break;
+  //     }
+
+  //     idom = cb->df.idoms[idom->id];
+  //   }
+  // }
 }
 
 /* Builds the intervals for each value in the SSA representation
@@ -203,6 +307,53 @@ struct interval_data construct_intervals(struct ir_func *irb) {
     }
 
     basicblock = basicblock->succ;
+  }
+
+  struct vector *sccs = find_sccs(irb);
+
+  bool changed = true;
+  while (changed) {
+    changed = false;
+
+    size_t num_sccs = vector_length(sccs);
+    for (size_t i = 0; i < num_sccs; i++) {
+      struct vector *scc = *(struct vector **)vector_get(sccs, i);
+
+      size_t num_blocks = vector_length(scc);
+      size_t max_end = 0;
+      for (size_t j = 0; j < num_blocks; j++) {
+        struct ir_basicblock *scc_block =
+            *(struct ir_basicblock **)vector_get(scc, j);
+
+        max_end = MAX(max_end, scc_block->last->last->id);
+      }
+
+      for (size_t j = 0; j < num_blocks; j++) {
+        struct ir_basicblock *scc_block =
+            *(struct ir_basicblock **)vector_get(scc, j);
+
+        for (size_t k = 0; k < data.num_intervals; k++) {
+          struct interval *interval = &data.intervals[k];
+
+          if (!(interval->flags & INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS)) {
+            continue;
+          }
+
+          size_t num_preds = scc_block->num_preds;
+          for (size_t l = 0; l < num_preds; l++) {
+            struct ir_basicblock *pred = scc_block->preds[l];
+
+            if (pred->last && interval->end >= pred->last->last->id) {
+              size_t new_end = MAX(interval->end, max_end);
+              if (new_end > interval->end) {
+                interval->end = new_end;
+                changed = true;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // NOTE: liveness assume that if a backward jump happens, any ops needed in
