@@ -2,7 +2,7 @@
 int main() {
   int a = 5;
 
-  if (1) {
+  if 1 {
     a = 10;
   }
 
