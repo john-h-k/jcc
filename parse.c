@@ -2556,11 +2556,13 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
   struct text_pos start = get_last_text_pos(parser->lexer);
   struct lex_pos pos = get_position(parser->lexer);
 
-  if (!parse_token(parser, LEX_TOKEN_TY_KW_IF, NULL) ||
-      !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL)) {
+  struct text_span kw;
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_IF, &kw)) {
     backtrack(parser->lexer, pos);
     return false;
   }
+
+  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start, "'(' as condition must be wrapped in brackets", NULL);
 
   struct ast_expr expr;
   if (!parse_expr(parser, &expr)) {
@@ -2568,10 +2570,7 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
     return false;
   }
 
-  if (!parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
+  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, kw.start, "')' as condition must be wrapped in brackets", NULL);
 
   struct ast_stmt stmt;
   if (!parse_stmt(parser, &stmt)) {
