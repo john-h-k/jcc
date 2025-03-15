@@ -6,6 +6,7 @@
 #include "../util.h"
 
 #include <stdio.h>
+#include <assert.h>
 
 #define NOT_SP(reg)                                                            \
   (DEBUG_ASSERT(!reg_eq(reg, STACK_PTR_REG),                                   \
