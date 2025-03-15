@@ -10,6 +10,7 @@ set(
   main.c
   args.c
 
+  util.c
   vector.c
   hashtbl.c
   deque.c
