@@ -7,72 +7,72 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(
   SOURCE_FILES
-  main.c
-  args.c
+  src/main.c
+  src/args.c
 
-  util.c
-  vector.c
-  hashtbl.c
-  deque.c
-  hash.c
-  bitset.c
+  src/util.c
+  src/vector.c
+  src/hashtbl.c
+  src/deque.c
+  src/hash.c
+  src/bitset.c
 
-  profile.c
+  src/profile.c
 
-  alloc.c
-  log.c
-  graphwriter.c
+  src/alloc.c
+  src/log.c
+  src/graphwriter.c
 
-  compiler.c
-  diagnostics.c
-  builtins.c
-  lex.c
-  io.c
-  parse.c
-  preproc.c
-  program.c
-  lower.c
-  liveness.c
-  disasm.c
-  codegen.c
-  var_table.c
-  typechk.c
-  lsra.c
-  graphcol.c
-  
-  ir/ir.c
-  ir/build.c
-  ir/var_refs.c
-  ir/eliminate_phi.c
-  ir/prettyprint.c
-  ir/validate.c
-  ir/rw.c
+  src/compiler.c
+  src/diagnostics.c
+  src/builtins.c
+  src/lex.c
+  src/io.c
+  src/parse.c
+  src/preproc.c
+  src/program.c
+  src/lower.c
+  src/liveness.c
+  src/disasm.c
+  src/codegen.c
+  src/var_table.c
+  src/typechk.c
+  src/lsra.c
+  src/graphcol.c
+  src/
+  src/ir/ir.c
+  src/ir/build.c
+  src/ir/var_refs.c
+  src/ir/eliminate_phi.c
+  src/ir/prettyprint.c
+  src/ir/validate.c
+  src/ir/rw.c
 
-  opts/opts.c
-  opts/cnst_fold.c
-  opts/cnst_branches.c
-  opts/instr_comb.c
-  opts/promote.c
-  opts/inline.c
+  src/opts/opts.c
+  src/opts/cnst_fold.c
+  src/opts/cnst_branches.c
+  src/opts/instr_comb.c
+  src/opts/promote.c
+  src/opts/inline.c
 
-  aarch64.c
-  aarch64/codegen.c
-  aarch64/lower.c
-  aarch64/emit.c
-  aarch64/emitter.c
+  src/aarch64.c
+  src/aarch64/codegen.c
+  src/aarch64/lower.c
+  src/aarch64/emit.c
+  src/aarch64/emitter.c
 
-  x64.c
-  x64/codegen.c
-  x64/lower.c
-  x64/emit.c
-  x64/emitter.c
+  src/x64.c
+  src/x64/codegen.c
+  src/x64/lower.c
+  src/x64/emit.c
+  src/x64/emitter.c
 
-  rv32i.c
-  rv32i/codegen.c
-  rv32i/lower.c
-  rv32i/emit.c
-  rv32i/emitter.c
-  rv32i/object.c
+  src/rv32i.c
+  src/rv32i/codegen.c
+  src/rv32i/lower.c
+  src/rv32i/emit.c
+  src/rv32i/emitter.c
+  src/rv32i/object.c
 
   # eep.c
   # eep/codegen.c
@@ -82,11 +82,11 @@ set(
   # eep/object.c
   # eep/disasm.c
 
-  macos/mach-o.c
-  macos/link.c
+  src/macos/mach-o.c
+  src/macos/link.c
 
-  linux/elf.c
-  linux/link.c
+  src/linux/elf.c
+  src/linux/link.c
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
