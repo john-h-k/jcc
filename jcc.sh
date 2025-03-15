@@ -39,53 +39,46 @@ jcc_cmd() {
     desc="$1"
     help="$2"
 
+    echo "$cmd"
     case "$cmd" in
         help)
           echo -e "$help"
-          exit 0
+          exit 1
           ;;
         desc)
           echo -e "$desc"
-          exit 0
+          exit 1
           ;;
     esac
 }
 
 langproc() {
-    help() {
-        echo "JCC langproc"
-        echo "John Kelly <johnharrykelly@gmail.com>"
-        echo ""
-        echo "jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE"
-        echo ""
-        echo "OPTIONS:"
-        echo "    -n, --no-mnemonics "
-        echo "        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')"
-        echo ""
-        echo "FILE:"
-        echo "    The langproc test to run, e.g 'integer/add' or 'integer/add.c'"
-        echo ""
+    echo $1 | jcc_cmd \
+        '(Temporary) Show output for langproc test' \
+        "
+JCC langproc
+John Kelly <johnharrykelly@gmail.com>
 
-        if ! command -v bat &>/dev/null; then
-            echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
-        fi
+jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE
 
-        echo ""
-    }
+OPTIONS:
+    -n, --no-mnemonics 
+        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')
 
-    if [[ $# -eq 0 ]]; then
-      help
-      exit 0
-    fi
+FILE:
+    The langproc test to run, e.g 'integer/add' or 'integer/add.c'
+" || exit 0
+
+         # if ! command -v bat &>/dev/null; then
+        #     echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
+        # fi
+
+        # echo ""
 
     file=""
     args=()
     while [[ $# -gt 0 ]]; do
       case "$1" in
-        --help|-h|help)
-          help
-          exit 0
-          ;;
         -*)
           args+=("$1")
           shift
@@ -591,19 +584,19 @@ debug() {
 test() {
     build
 
-    ./tests/run.sh "$@" || exit $?
+    ./scripts/test.sh "$@" || exit $?
 }
 
 test-all() {
     build
 
-    ./tests/run.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    ./scripts/test.sh --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
 }
 
 ci-test() {
     build
 
-    ./tests/run.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    ./scripts/test.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
 }
 
 cfg() {
