@@ -11,6 +11,8 @@ PROFILE=""
 ASSEMBLER=""
 LINKER=""
 
+TEST_DIR="../tests"
+
 arg_groups=()
 args=()
 num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
@@ -221,7 +223,7 @@ mkfifo "$fifo"
 if [ -z $exp_file ]; then
   while IFS= read -r file; do
       all_files+=("$file")
-  done < <(find "$(dirname "$0")" -name '*.c' -print | sort)
+  done < <(find "$(dirname "$0")/$TEST_DIR" -name '*.c' -print | sort)
 fi
 
 if ! [ -z $num ]; then
