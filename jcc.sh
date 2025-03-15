@@ -304,55 +304,138 @@ layout() {
     echo -e "${RESET}"
 }
 
-clean() {
-    cd build
-    cmake --build . --target clean
+clean-all() {
+    # nukes entire build directory
+    # occasionally useful
 
-    cd - > /dev/null
+    echo -e "${BOLD}Cleaning..." 1>&2
+
+    mkdir -p build
+    rm -rf build/*
+
+    echo -e "${BOLD}Done!\n" 1>&2
 }
 
-build() {
-    mode=$(get_mode "$1")
-    mode="${mode:-Debug}"
+clean() {
+    echo -e "${BOLD}Cleaning..." 1>&2
 
-    args=()
+    cd build
+    cmake --build . --target clean
+    cd - > /dev/null
+
+    echo -e "${BOLD}Done!\n" 1>&2
+}
+
+configure() {
+    mode="Debug"
+    default_target=""
+    profile_build=""
+
+    # if already configured, use current generator
+    generator=$(grep -Eo 'CMAKE_GENERATOR:INTERNAL=.*$' build/CMakeCache.txt | sed 's/^.*=//' 2>/dev/null)
+
+    if [ -z "$generator" ]; then
+        # else, default to Ninja, fallback to Make
+        generator="$(command -v Ninja &>/dev/null && echo "Ninja" || echo "Unix Makefiles")"
+        generator="Unix Makefiles"
+    fi
 
     while [[ $# -gt 0 ]]; do
-        if [[ "$1" == "--default-target" ]]; then
-            shift
-            default_target="$1"
-        else
-            args+=("$1")
-        fi
+      case "$1" in
+        --profile-build)
+          profile_build="1"
+          shift
+          ;;
+        -t|--default-target)
+          shift
+          default_target="$1"
+          shift
+          ;;
+        --clean)
+          clean
+          shift
+          ;;
+        --clean-all)
+          clean-all
+          shift
+          ;;
+        -m|--mode)
+          shift
+          mode=$(get_mode "$1")
 
-        shift
+          if [ -z "$mode" ]; then
+            echo -e "${BOLDRED}Unrecognised mode '$1'!${RESET}"
+          fi
+
+          shift
+          ;;
+        -G)
+          shift
+          generator="$1"
+          shift
+          ;;
+        *)
+          echo "Unknown argument: $1"
+          exit 1
+          ;;
+      esac
     done
 
-    echo -e "${BOLD}Building (mode='$mode')...${RESET}" 1>&2
+    echo -e "${BOLD}Build configuration: ${RESET}"
+    echo -e "${BOLD}    mode=$mode${RESET}"
+    echo -e "${BOLD}    generator=$generator${RESET}"
+    if [ -n "$profile_build" ]; then
+    echo -e "${BOLD}    profile_build=true"
+    fi
+    if [ -n "$default_target" ]; then
+        echo -e "${BOLD}    default_target=$default_target${RESET}"
+    fi
+    echo -e ""
 
     flags=""
+
+    flags="$flags -fdiagnostics-color=always"
+
+    if [ -n "$profile_build" ]; then
+        mkdir -p build/traces
+        flags="$flags -ftime-trace=traces"
+    fi
+
     if [ -n "$default_target" ]; then
         # ideally we would statically validate this is a valid target but not sure if there is a way to do that
         # without just hard coding the values here
         echo -e "${BOLD}Building with JCC_DEFAULT_TARGET=$default_target${RESET}" 1>&2
 
-        flags="-DJCC_DEFAULT_TARGET=\"$default_target\""
+        flags="$flags -DJCC_DEFAULT_TARGET=\"$default_target\""
     fi
-
-    num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
     mkdir -p build
     cd build
-    if ! (cmake -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. && cmake --build . --parallel $num_procs); then
+    if ! (cmake -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+        echo -e "${BOLDRED}Configuring build failed!${RESET}"
+        exit -1
+    fi
+}
+
+build() {
+    configure "$@"
+
+    num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
+
+    if ! cmake --build . --parallel $num_procs; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
 
-    
-    if [ -n "$default_target" ]; then
-        # verifies --default-target
-        MallocNanoZone=0 ./jcc --version >/dev/null
+    # we are now in build dir (should make this clearer)
+    if [ -d traces ]; then
+        jq -s '{traceEvents: map(.traceEvents) | add}' traces/*.json > trace.json
     fi
+    
+    # if [ -n "$default_target" ]; then
+    #     # verifies --default-target
+    #     MallocNanoZone=0 ./jcc --version >/dev/null
+    # fi
 
     echo -e "${BOLD}Build complete${RESET}"  1>&2
 
@@ -383,10 +466,10 @@ diff() {
 
 get_mode() {
     case "$1" in
-        d|D|debug|Debug)
+        d|D|deb|debug|Debug)
             echo "Debug"
             ;;
-        r|R|release|Release)
+        r|R|rel|release|Release)
             echo "Release"
             ;;
         rd|RD|reldeb|RelWithDebInfo)
