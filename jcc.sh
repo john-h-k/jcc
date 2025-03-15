@@ -13,7 +13,11 @@ help() {
   echo "COMMANDS:"
   echo  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
   echo "    help        Show help"
+  echo "    configure   Configure build"
   echo "    build       Build JCC"
+  echo "    clean       Clean artifacts"
+  echo "    clean-all   Clean CMake cache & artifacts"
+  echo "    layout      Show project layout"
   echo "    run         Build, then run JCC with provided arguments"
   echo "    diff        Build, then run JCC with two different sets of args, and diff them"
   echo "    debug       Build, then run JCC under LLDB/GDB with provided arguments"
@@ -29,6 +33,24 @@ help() {
   exit
 }
 
+jcc_cmd() {
+    read -r cmd
+
+    desc="$1"
+    help="$2"
+
+    case "$cmd" in
+        help)
+          echo -e "$help"
+          exit 0
+          ;;
+        desc)
+          echo -e "$desc"
+          exit 0
+          ;;
+    esac
+}
+
 langproc() {
     help() {
         echo "JCC langproc"
@@ -37,7 +59,7 @@ langproc() {
         echo "jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE"
         echo ""
         echo "OPTIONS:"
-        echo "    -n|--no-mnemonics "
+        echo "    -n, --no-mnemonics "
         echo "        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')"
         echo ""
         echo "FILE:"
@@ -326,7 +348,58 @@ clean() {
     echo -e "${BOLD}Done!\n" 1>&2
 }
 
+get_mode() {
+    case "$1" in
+        d|D|deb|debug|Debug)
+            echo "Debug"
+            ;;
+        r|R|rel|release|Release)
+            echo "Release"
+            ;;
+        rd|RD|reldeb|relwithdebinfo|RelWithDebInfo)
+            echo "RelWithDebInfo"
+            ;;
+    esac
+}
+
 configure() {
+    help() {
+        echo "JCC configure"
+        echo "John Kelly <johnharrykelly@gmail.com>"
+        echo ""
+        echo "jcc.sh configure [-h|--help] OPTIONS"
+        echo ""
+        echo "OPTIONS:"
+        echo "    -G "
+        echo "        CMake Generator to use (default: 'Ninja' if installed, else 'Unix Makefiles')"
+        echo ""
+        echo "    --clean "
+        echo "        Clean artifacts"
+        echo ""
+        echo "    --clean-all "
+        echo "        Completely clean all artifacts, including CMakeCache"
+        echo ""
+        echo "    -t, --default-target "
+        echo "        Set the default target for the build (equivalent to providing '-target <DEFAULT>' on every invocation)"
+        echo ""
+        echo "    -m, --mode"
+        echo "        Mode to build. Values:"
+        echo "            * d | D | deb   | debug          | Debug           - Debug"
+        echo "            * r | R | rel   | release        | Release         - Release"
+        echo "            * rd| RD| reldeb| relwithdebinfo | RelWithDebInfo  - Release with debug info"
+        echo ""
+        echo "    --profile-build "
+        echo "        Enable '-ftime-trace', output traces to \$BUILD_DIR/traces, and a unified trace to \$BUILD_DIR/trace.json"
+        echo ""
+
+        if ! command -v bat &>/dev/null; then
+           echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
+        fi
+
+        echo ""
+    }
+    
+
     mode="Debug"
     default_target=""
     profile_build=""
@@ -342,6 +415,10 @@ configure() {
 
     while [[ $# -gt 0 ]]; do
       case "$1" in
+        --help|-h|h|help)
+          help
+          exit 0
+          ;;
         --profile-build)
           profile_build="1"
           shift
@@ -394,6 +471,7 @@ configure() {
 
     flags=""
 
+    # ninja causes colours to get dropped, so force them
     flags="$flags -fdiagnostics-color=always"
 
     if [ -n "$profile_build" ]; then
@@ -464,26 +542,12 @@ diff() {
     rm -f $ltmp $rtmp
 }
 
-get_mode() {
-    case "$1" in
-        d|D|deb|debug|Debug)
-            echo "Debug"
-            ;;
-        r|R|rel|release|Release)
-            echo "Release"
-            ;;
-        rd|RD|reldeb|RelWithDebInfo)
-            echo "RelWithDebInfo"
-            ;;
-    esac
-}
-
 # In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on on macOS
 
 run() {
     mode=$(get_mode "$1")
-    [ -z "$mode" ] || shift  
-    build "$mode" 1>&2
+    [ -z "$mode" ] && mode="Debug" || shift  
+    build --mode "$mode" 1>&2
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
@@ -620,4 +684,3 @@ export CALLER_DIR="$(pwd)/"
 export CALLER_DIR="${CALLER_DIR%/}/"
 cd "$(dirname "$0")"
 _invoke-subcommand "$@"
-
