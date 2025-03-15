@@ -11,23 +11,23 @@ help() {
   echo "jcc.sh COMMAND"
   echo ""
   echo "COMMANDS:"
-  echo  "    <none>      Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
-  echo "    help        Show help"
-  echo "    configure   Configure build"
-  echo "    build       Build JCC"
-  echo "    clean       Clean artifacts"
-  echo "    clean-all   Clean CMake cache & artifacts"
-  echo "    layout      Show project layout"
-  echo "    run         Build, then run JCC with provided arguments"
-  echo "    diff        Build, then run JCC with two different sets of args, and diff them"
-  echo "    debug       Build, then run JCC under LLDB/GDB with provided arguments"
-  echo "    test        Run tests"
-  echo "    test-all    Run tests with all optimisation levels"
-  echo "    format      Format codebase"
-  echo "    layout      Show code distribution"
-  echo "    find-unused Finds symbols that can be made static"
-  echo "    as          Assemble and show output for file"
-  echo "    langproc    (Temporary) Show output for langproc test"
+  echo  "   <none>       Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
+  echo "    help         Show help"
+  echo "    configure    Configure build"
+  echo "    build        Build JCC"
+  echo "    clean        Clean artifacts"
+  echo "    clean-all    Clean CMake cache & artifacts"
+  echo "    layout       Show project layout"
+  echo "    run          Build, then run JCC with provided arguments"
+  echo "    diff         Build, then run JCC with two different sets of args, and diff them"
+  echo "    debug        Build, then run JCC under LLDB/GDB with provided arguments"
+  echo "    test         Run tests"
+  echo "    test-all     Run tests with all optimisation levels"
+  echo "    format       Format codebase"
+  echo "    layout       Show code distribution"
+  echo "    find-unused  Finds symbols that can be made static"
+  echo "    as           Assemble and show output for file"
+  echo "    langproc     (Temporary) Show output for langproc test"
   echo ""
 
   exit
@@ -53,27 +53,26 @@ jcc_cmd() {
 }
 
 langproc() {
-    echo $1 | jcc_cmd \
-        '(Temporary) Show output for langproc test' \
-        "
-JCC langproc
-John Kelly <johnharrykelly@gmail.com>
+    help() {
+        echo "JCC langproc"
+        echo "John Kelly <johnharrykelly@gmail.com>"
+        echo ""
+        echo "jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE"
+        echo ""
+        echo "OPTIONS:"
+        echo "    -n, --no-mnemonics "
+        echo "        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')"
+        echo ""
+        echo "FILE:"
+        echo "    The langproc test to run, e.g 'integer/add' or 'integer/add.c'"
+        echo ""
 
-jcc.sh langproc [-h|--help] [-n|--no-mnemonics] FILE
+        if ! command -v bat &>/dev/null; then
+            echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
+        fi
 
-OPTIONS:
-    -n, --no-mnemonics 
-        Don't print mnemonics (e.g 'ret' instead of 'jalr zero, ra')
-
-FILE:
-    The langproc test to run, e.g 'integer/add' or 'integer/add.c'
-" || exit 0
-
-         # if ! command -v bat &>/dev/null; then
-        #     echo -e "${BOLD}Install 'bat' for syntax highlighting${RESET}"
-        # fi
-
-        # echo ""
+        echo ""
+    }
 
     file=""
     args=()
@@ -255,14 +254,14 @@ layout() {
     }
 
     categories=("preproc" "lex" "parse" "ir" "opts" "lower" "targets" "objects" "tests")
-    paths=("preproc.h preproc.c"
-           "lex.h lex.c"
-           "parse.h parse.c typechk.h typechk.c"
-           "ir"
-           "opts"
-           "lower.c lower.h graphcol.h graphcol.c lsra.h lsra.c"
-           "x64.h x64.c x64 rv32i.h rv32i.c rv32i aarch64.h aarch64.c aarch64 eep.h eep.c eep"
-           "macOS linux"
+    paths=("src/preproc.h src/preproc.c"
+           "src/lex.h src/lex.c"
+           "src/parse.h src/parse.c src/typechk.h src/typechk.c"
+           "src/ir"
+           "src/opts"
+           "src/lower.c src/lower.h src/graphcol.h src/graphcol.c src/lsra.h src/lsra.c"
+           "src/x64.h src/x64.c src/x64 src/rv32i.h src/rv32i.c src/rv32i src/aarch64.h src/aarch64.c src/aarch64 src/eep.h src/eep.c src/eep"
+           "src/macOS src/linux"
            "tests"
            )
 
@@ -376,7 +375,7 @@ configure() {
         echo "        Set the default target for the build (equivalent to providing '-target <DEFAULT>' on every invocation)"
         echo ""
         echo "    -m, --mode"
-        echo "        Mode to build. Values:"
+        echo "        Mode to build (default: 'Debug'). Values:"
         echo "            * d | D | deb   | debug          | Debug           - Debug"
         echo "            * r | R | rel   | release        | Release         - Release"
         echo "            * rd| RD| reldeb| relwithdebinfo | RelWithDebInfo  - Release with debug info"
@@ -482,7 +481,7 @@ configure() {
 
     mkdir -p build
     cd build
-    if ! (cmake -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+    if ! (cmake -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi
