@@ -6,6 +6,7 @@
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "log.h"
+#include "profile.h"
 #include "util.h"
 #include "vector.h"
 
@@ -167,6 +168,7 @@ static struct vector *find_sccs(struct ir_func *func) {
 }
 
 struct interval_callback_data {
+  bool *seen_cross_bb_op;
   bool *visited;
   struct ir_op *consumer;
   struct interval_data *data;
@@ -191,6 +193,7 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
   if ((*op)->stmt->basicblock != basicblock) {
     if (consumer->ty != IR_OP_TY_PHI ||
         !ir_basicblock_is_pred(basicblock, (*op)->stmt->basicblock)) {
+      *cb->seen_cross_bb_op = true;
       interval->flags |= INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS;
     }
   }
@@ -257,6 +260,8 @@ struct interval_data construct_intervals(struct ir_func *irb) {
       arena_alloc(irb->arena, sizeof(*data.intervals) * irb->op_count);
   data.num_intervals = 0;
 
+  bool seen_cross_bb = false;
+
   memset(data.intervals, 0, sizeof(*data.intervals) * irb->op_count);
 
   struct ir_basicblock *basicblock = irb->first;
@@ -294,8 +299,11 @@ struct interval_data construct_intervals(struct ir_func *irb) {
                      "be overwritten");
         op->metadata = interval;
 
-        struct interval_callback_data cb_data = {
-            .df = df, .consumer = op, .data = &data};
+        struct interval_callback_data cb_data = {.seen_cross_bb_op =
+                                                     &seen_cross_bb,
+                                                 .df = df,
+                                                 .consumer = op,
+                                                 .data = &data};
 
         ir_walk_op_uses(op, op_used_callback, &cb_data);
         data.num_intervals++;
@@ -309,45 +317,47 @@ struct interval_data construct_intervals(struct ir_func *irb) {
     basicblock = basicblock->succ;
   }
 
-  struct vector *sccs = find_sccs(irb);
+  if (seen_cross_bb) {
+    struct vector *sccs = find_sccs(irb);
 
-  bool changed = true;
-  while (changed) {
-    changed = false;
+    bool changed = true;
+    while (changed) {
+      changed = false;
 
-    size_t num_sccs = vector_length(sccs);
-    for (size_t i = 0; i < num_sccs; i++) {
-      struct vector *scc = *(struct vector **)vector_get(sccs, i);
+      size_t num_sccs = vector_length(sccs);
+      for (size_t i = 0; i < num_sccs; i++) {
+        struct vector *scc = *(struct vector **)vector_get(sccs, i);
 
-      size_t num_blocks = vector_length(scc);
-      size_t max_end = 0;
-      for (size_t j = 0; j < num_blocks; j++) {
-        struct ir_basicblock *scc_block =
-            *(struct ir_basicblock **)vector_get(scc, j);
+        size_t num_blocks = vector_length(scc);
+        size_t max_end = 0;
+        for (size_t j = 0; j < num_blocks; j++) {
+          struct ir_basicblock *scc_block =
+              *(struct ir_basicblock **)vector_get(scc, j);
 
-        max_end = MAX(max_end, scc_block->last->last->id);
-      }
+          max_end = MAX(max_end, scc_block->last->last->id);
+        }
 
-      for (size_t j = 0; j < num_blocks; j++) {
-        struct ir_basicblock *scc_block =
-            *(struct ir_basicblock **)vector_get(scc, j);
+        for (size_t j = 0; j < num_blocks; j++) {
+          struct ir_basicblock *scc_block =
+              *(struct ir_basicblock **)vector_get(scc, j);
 
-        for (size_t k = 0; k < data.num_intervals; k++) {
-          struct interval *interval = &data.intervals[k];
+          for (size_t k = 0; k < data.num_intervals; k++) {
+            struct interval *interval = &data.intervals[k];
 
-          if (!(interval->flags & INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS)) {
-            continue;
-          }
+            if (!(interval->flags & INTERVAL_FLAG_LIVE_ACROSS_BASICBLOCKS)) {
+              continue;
+            }
 
-          size_t num_preds = scc_block->num_preds;
-          for (size_t l = 0; l < num_preds; l++) {
-            struct ir_basicblock *pred = scc_block->preds[l];
+            size_t num_preds = scc_block->num_preds;
+            for (size_t l = 0; l < num_preds; l++) {
+              struct ir_basicblock *pred = scc_block->preds[l];
 
-            if (pred->last && interval->end >= pred->last->last->id) {
-              size_t new_end = MAX(interval->end, max_end);
-              if (new_end > interval->end) {
-                interval->end = new_end;
-                changed = true;
+              if (pred->last && interval->end >= pred->last->last->id) {
+                size_t new_end = MAX(interval->end, max_end);
+                if (new_end > interval->end) {
+                  interval->end = new_end;
+                  changed = true;
+                }
               }
             }
           }
