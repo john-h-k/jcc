@@ -94,6 +94,7 @@ if [ "$os" = "Darwin" ]; then
 
     printf "%b\n" "${BOLD}JCC installed to '$target'${RESET}"
 elif [ "$os" = "Linux" ]; then
+    printf "Installing....\n"
     target="/usr/local/bin"
 
     if ! try_root cp "$output" "$target"; then
