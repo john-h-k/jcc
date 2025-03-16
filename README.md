@@ -40,6 +40,7 @@ Working with RISC-V requires installing a RISC-V linker.
 
 1. `va_list` and variadic function implementation. Calling them works fine
 2. Compound literals
+3. Linking on musl-based distros. This is relatively simple and should work soon
 
 ## Requirements
 
