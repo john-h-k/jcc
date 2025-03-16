@@ -63,7 +63,7 @@ if has_tool bash && has_tool cmake && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
     output="build/jcc"
     ./jcc.sh build
 else
-    printf "%b\n" "${BOLD} Bash/CMake is not installed; reverting to a simple build...$RESET"
+    printf "%b\n" "${BOLD}Bash/CMake is not installed; reverting to a simple build...$RESET"
     # if bash isn't installed, manually do a simple build
 
     mkdir -p build
@@ -83,7 +83,11 @@ else
         exit 1
     fi
 
-    if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
+    flags=""
+    flags="$flags -O3" # full opts
+    flags="$flags -DJCC_ALL" # define JCC_ALL for a fat build
+
+    if ! "$CC" $flags -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
         printf "%b\n" "${BOLDRED}Build failed!${RESET}"
 
         cd - > /dev/null 2>&1
