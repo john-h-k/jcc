@@ -80,7 +80,7 @@ curl -sSL https://jcc.johnk.dev/install.sh | sh
 ```
 
 <sup><sub>The above URL is just a direct fetch of [./scripts/install.sh](./scripts/install.sh) which you can verify by visiting it. </sub></sup>
-<sup><sub>It is NOT a redirect, it forwards the content itself. If you prefer, you can directly curl the script from raw.githubusercontent.com/john-h-k/jcc/refs/heads/main/scripts/install.sh</sub></sup>
+<sup><sub>It is NOT a redirect, it forwards the content itself. If you prefer, you can directly curl the script from <a>raw.githubusercontent.com/john-h-k/jcc/refs/heads/main/scripts/install.sh</a></sub></sup>
 
 `wget` can also be used, or you can clone the repository and run `./scripts/install.sh` if you somehow have `git` but not `curl` or `wget`(???).
 
