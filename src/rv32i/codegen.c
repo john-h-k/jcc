@@ -75,6 +75,7 @@ static ssize_t get_lcl_stack_offset(const struct cg_state *state,
 
 static enum rv32i_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -304,6 +305,7 @@ static void codegen_cnst_op(struct cg_state *state,
     TODO("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
     case IR_VAR_PRIMITIVE_TY_I8:
     case IR_VAR_PRIMITIVE_TY_I16:
     case IR_VAR_PRIMITIVE_TY_I32: {
@@ -1132,6 +1134,8 @@ static void codegen_sext_op(struct cg_state *state,
 
   size_t sh_sz;
   switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+    BUG("sext i1 makes no sense (never negative)");
   case IR_VAR_PRIMITIVE_TY_I8:
     sh_sz = 24;
     goto sext;
@@ -1172,6 +1176,13 @@ static void codegen_zext_op(struct cg_state *state,
                    "can't sext from non-primitive");
 
   switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1: {
+    struct instr *and = cg_alloc_instr(state->func, basicblock);
+    and->rv32i->ty = RV32I_INSTR_TY_ANDI;
+    and->rv32i->andi =
+        (struct rv32i_op_imm){.source = source, .dest = dest, .imm = 0x1};
+    break;
+  }
   case IR_VAR_PRIMITIVE_TY_I8: {
     struct instr *and = cg_alloc_instr(state->func, basicblock);
     and->rv32i->ty = RV32I_INSTR_TY_ANDI;

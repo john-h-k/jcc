@@ -384,6 +384,7 @@ UNUSED static struct aarch64_reg get_full_reg_for_ir_reg(struct ir_reg reg) {
 
 static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -1206,6 +1207,7 @@ static void codegen_cnst_op(struct cg_state *state,
     TODO("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
     case IR_VAR_PRIMITIVE_TY_I8:
     case IR_VAR_PRIMITIVE_TY_I16:
     case IR_VAR_PRIMITIVE_TY_I32:
@@ -1559,6 +1561,8 @@ static void codegen_sext_op(struct cg_state *state,
                    "can't sext from non-primitive");
 
   switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+    BUG("sext i1 makes no sense (never negative)");
   case IR_VAR_PRIMITIVE_TY_I8:
     instr->aarch64->ty = AARCH64_INSTR_TY_SBFM;
     instr->aarch64->sbfm = (struct aarch64_bitfield){
@@ -1606,6 +1610,15 @@ static void codegen_trunc_op(struct cg_state *state,
   // https://kddnewton.com/2022/08/11/aarch64-bitmask-immediates.html
   // for understanding the immediates
   switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+    instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
+    instr->aarch64->and_imm = (struct aarch64_logical_imm){
+        .dest = dest,
+        .source = source,
+        .immr = 0b0,
+        .imms = 0b0,
+    };
+    break;
   case IR_VAR_PRIMITIVE_TY_I8:
     instr->aarch64->ty = AARCH64_INSTR_TY_AND_IMM;
     instr->aarch64->and_imm = (struct aarch64_logical_imm){

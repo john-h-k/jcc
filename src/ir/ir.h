@@ -190,6 +190,7 @@ struct ir_op_binary_op {
 // IR_OP_VAR_TY_32) and instead encodes it in operations (e.g there are
 // different IR ops for signed and unsigned division)
 enum ir_var_primitive_ty {
+  IR_VAR_PRIMITIVE_TY_I1,
   IR_VAR_PRIMITIVE_TY_I8,
   IR_VAR_PRIMITIVE_TY_I16,
   IR_VAR_PRIMITIVE_TY_I32,

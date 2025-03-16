@@ -2574,6 +2574,7 @@ bool ir_var_ty_is_primitive(const struct ir_var_ty *var_ty,
 
 bool ir_primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   switch (ty) {
+  case IR_VAR_PRIMITIVE_TY_I1:
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -2593,6 +2594,7 @@ bool ir_primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
     return true;
+  case IR_VAR_PRIMITIVE_TY_I1:
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -2694,6 +2696,7 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
     }
   case IR_VAR_TY_TY_PRIMITIVE:
     switch (ty->primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
     case IR_VAR_PRIMITIVE_TY_I8:
       return (struct ir_var_ty_info){.size = 1, .alignment = 1};
     case IR_VAR_PRIMITIVE_TY_I16:

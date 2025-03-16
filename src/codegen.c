@@ -170,6 +170,7 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
     break;
   case IR_VAR_TY_TY_PRIMITIVE: {
     switch (value->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
     case IR_VAR_PRIMITIVE_TY_I8:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
       COPY(uint8_t, int_value);

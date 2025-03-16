@@ -358,9 +358,9 @@ void hashtbl_remove(struct hashtbl *hashtbl, const void *key) {
 }
 
 void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
-  if (!hashtbl->len) {
-    return NULL;
-  }
+  // if (!hashtbl->len) {
+  //   return NULL;
+  // }
 
   struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
 
