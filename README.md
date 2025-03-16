@@ -79,6 +79,8 @@ To directly install `jcc` for playing around with (tested on macOS & various Lin
 curl -sSL https://jcc.johnk.dev/install.sh | sh
 ```
 
+<sup><sub>The above URL is just a direct fetch of [./scripts/install.sh](./scripts/install.sh) which you can verify by visiting it. It is NOT a redirect, it forwards the content itself. If you prefer, you can directly curl the script from raw.github</sub></sup>
+
 `wget` can also be used, or you can clone the repository and run `./scripts/install.sh` if you somehow have `git` but not `curl` or `wget`(???).
 
 To install for development (which is realistically what you should do!):
