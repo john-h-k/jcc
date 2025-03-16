@@ -3,6 +3,9 @@
 # This is a standalone - not used by other scripts
 # needs lots of logic improvements this is a vEpsilon
 
+# TODO: what should it do if `jcc` folder already exists - unhandled
+# TODO: should it delete folder at end? probably yes
+
 BOLD="\033[1m"
 BOLDRED="\033[1;31m"
 BOLDYELLOW="\033[1;33m"
