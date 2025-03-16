@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <limits.h>
+#include <wctype.h>
 
 #ifdef UTIL_STACK_TRACE_IMPL
 
