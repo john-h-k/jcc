@@ -36,6 +36,11 @@ without having to enter the shoggoth of Clang/GCC.
 AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented and RISC-V 32 64 bit integers are WIP.
 Working with RISC-V requires installing a RISC-V linker.
 
+#### Things that don't work yet
+
+1. `va_list` and variadic function implementation. Calling them works fine
+2. Compound literals
+
 ## Requirements
 
 <div style="display: flex; justify-content: space-between;">
@@ -65,11 +70,6 @@ Working with RISC-V requires installing a RISC-V linker.
 
 </div>
 
-#### Things that don't work yet
-
-1. `va_list` and variadic function implementation. Calling them works fine
-2. Compound literals
-
 ### Installation
 
 To directly install `jcc` for playing around with (tested on macOS & various Linux distros):
@@ -86,7 +86,7 @@ To install for development (which is realistically what you should do!):
 * Fork & clone the repo (exercise left to reader)
 * Run `./jcc.sh` for help
 
-#### Development
+### Development
 
 All of JCC is either C11 or Bash.
 
