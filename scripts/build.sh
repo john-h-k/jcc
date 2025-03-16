@@ -76,7 +76,6 @@ configure() {
     if [ -z "$generator" ]; then
         # else, default to Ninja, fallback to Make
         generator="$(command -v Ninja &>/dev/null && echo "Ninja" || echo "Unix Makefiles")"
-        generator="Unix Makefiles"
     fi
 
     while [[ $# -gt 0 ]]; do
