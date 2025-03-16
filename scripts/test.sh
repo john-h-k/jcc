@@ -12,6 +12,7 @@ ASSEMBLER=""
 LINKER=""
 
 TEST_TIMEOUT=10s
+BUILD_TIMEOUT=1m
 
 TEST_DIR="../tests"
 
@@ -430,7 +431,7 @@ run_tests() {
         }
       else
         build_command() {
-          ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
+          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
           return $?
         }
       fi
