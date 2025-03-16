@@ -2,6 +2,7 @@
 
 BOLD="\033[1m"
 BOLDRED="\033[1;31m"
+BOLDYELLOW="\033[1;33m"
 RESET="\033[0m"
 
 help() {

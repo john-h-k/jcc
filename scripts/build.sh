@@ -125,7 +125,7 @@ configure() {
     mkdir -p build
 
     if ! has_tool cmake; then
-      # TODO: respect flags in simple build
+      # TODO: respect flags in simple build (also in install.sh)
       echo -e "${BOLDYELLOW}CMake not installed; reverting to simple build (flags will be ignored) ${RESET}"
       return
     fi
