@@ -89,14 +89,6 @@ To install for development (which is realistically what you should do!):
 
 ### Development
 
-All of JCC is either C11 or Bash.
-
-Prequisites:
-* CMake
-* Bash
-* A C11 compiler
-* A system linker (this is almost certainly already installed)
-
 The `jcc.sh` script can be used for common workflows. A key subset of the commands can be seen here (run `./jcc.sh` for all commands):
 
 ```
