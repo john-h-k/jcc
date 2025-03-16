@@ -177,7 +177,7 @@ build() {
     else
       output="build/jcc"
       # explicit -lm as we need math
-      if ! cc -o "$output" $(find src -type f -name '*.c') -lm; then
+      if ! cc -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
           echo -e "${BOLDRED}Build failed!${RESET}"
           exit -1
       fi
