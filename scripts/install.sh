@@ -96,13 +96,16 @@ if [ "$os" = "Darwin" ]; then
 elif [ "$os" = "Linux" ]; then
     target="/usr/local/bin"
 
+    echo "linux"
     if ! try_root cp "$output" "$target"; then
+        echo "WTF"
         printf "%b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
 
         cd - > /dev/null 2>&1
         exit 1
     fi
 
+    echo "success"
     printf "%b\n" "${BOLD}JCC installed to '$target'${RESET}"
 else
     printf "%b\n" "${BOLDYELLOW}JCC built, but unsure how to install for OS '$os'${RESET}"
