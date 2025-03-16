@@ -5,6 +5,39 @@
 #include <limits.h>
 #include <wctype.h>
 
+NORETURN void unreachable(void) {
+  fprintf(stderr, "`unreachable` hit, program exiting");
+  EXIT_FAIL(-2);
+}
+
+PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
+  FMTPRINT(stderr, "unsupported: ", msg);
+  EXIT_FAIL(-2);
+}
+
+PRINTF_ARGS(1) void invariant_assert(bool b, const char *msg, ...) {
+  if (!b) {
+    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
+    EXIT_FAIL(-1);
+  }
+}
+
+void util_debug_assert(bool b, const char *cond, const char *func,
+                              const char *file, int line, const char *msg,
+                              ...) {
+  if (!b) {
+    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
+            line, func, cond);
+
+    va_list v;
+    va_start(v, msg);
+    vfprintf(stderr, msg, v);
+    fprintf(stderr, "\n");
+    va_end(v);
+    EXIT_FAIL(-1);
+  }
+}
+
 #ifdef UTIL_STACK_TRACE_IMPL
 
 #include <errno.h>
