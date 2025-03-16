@@ -175,7 +175,8 @@ build() {
           exit -1
       fi
     else
-      if ! cc $(find src -type f -name '*.c'); then
+      # explicit -lm as we need math
+      if ! cc -lm $(find src -type f -name '*.c'); then
           echo -e "${BOLDRED}Build failed!${RESET}"
           exit -1
       fi
