@@ -23,6 +23,8 @@ script_dir="$(dirname "$0")"
 
 ispipe="1"
 if [ -f "$script_dir/../jcc.sh" ]; then
+    printf "%b\n\n" "${BOLD}Assuming run is from inside JCC directory; will not download${RESET}"
+
     # use presence of `jcc.sh` as marker for being in repo already (rather than being a piped script)
     ispipe=""
 
