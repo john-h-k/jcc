@@ -181,7 +181,7 @@ static enum ir_var_primitive_ty
 var_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   switch (wkt) {
   case WELL_KNOWN_TY_BOOL:
-    TODO("ir bool");
+    return IR_VAR_PRIMITIVE_TY_I1;
   case WELL_KNOWN_TY_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
@@ -2785,7 +2785,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
 
   const char *name = decl->var.identifier;
   const char *symbol_name;
-  if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC) {
+  if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC && var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
   } else {
     symbol_name = name;

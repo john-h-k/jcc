@@ -240,6 +240,9 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
   case IR_VAR_TY_TY_PRIMITIVE: {
     const char *name;
     switch (var_ty->primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
+      name = "i1";
+      break;
     case IR_VAR_PRIMITIVE_TY_I8:
       name = "i8";
       break;

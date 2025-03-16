@@ -16,6 +16,8 @@ static unsigned long long round_integral(struct ir_func *func,
   }
 
   switch (primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+    return (bool)value;
   case IR_VAR_PRIMITIVE_TY_I8:
     return (uint8_t)value;
   case IR_VAR_PRIMITIVE_TY_I16:

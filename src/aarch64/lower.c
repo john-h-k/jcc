@@ -23,10 +23,16 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
 // variable shifts require both operands to be the same size, as they use the
 // same register this is fine, because we can just "fake" the type required and
 // get the correct behaviour
-static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
+// we do need to insert a dummy move so it does not affect behaviour of prev instruction though
+static void lower_shift(struct ir_func *func, struct ir_op *op) {
   struct ir_op_binary_op *binary_op = &op->binary_op;
 
-  binary_op->rhs->var_ty = binary_op->lhs->var_ty;
+  struct ir_op *mov = ir_insert_before_op(func, op, IR_OP_TY_MOV, binary_op->lhs->var_ty);
+  mov->mov = (struct ir_op_mov){
+    .value = binary_op->rhs
+  };
+
+  binary_op->rhs = mov;
 }
 
 // ARM has no quotient function

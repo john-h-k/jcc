@@ -328,6 +328,7 @@ UNUSED static size_t get_ir_reg_idx(struct x64_reg reg) {
 
 static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
   switch (var_ty->primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
   case IR_VAR_PRIMITIVE_TY_I8:
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
@@ -703,6 +704,7 @@ static void codegen_cnst_op(struct cg_state *state,
     TODO("simple float constants (not lowered)");
   case IR_OP_CNST_TY_INT:
     switch (op->var_ty.primitive) {
+    case IR_VAR_PRIMITIVE_TY_I1:
     case IR_VAR_PRIMITIVE_TY_I8:
     case IR_VAR_PRIMITIVE_TY_I16:
     case IR_VAR_PRIMITIVE_TY_I32:
@@ -1063,6 +1065,8 @@ static void codegen_sext_op(struct cg_state *state,
                    "can't sext from non-primitive");
 
   switch (op->cast_op.value->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1:
+    BUG("sext i1 makes no sense (never negative)");
   case IR_VAR_PRIMITIVE_TY_I8:
     instr->x64->ty = X64_INSTR_TY_MOVSX;
     instr->x64->movsx = (struct x64_mov_reg){.dest = dest, .source = source};
@@ -1104,6 +1108,21 @@ static void codegen_trunc_op(struct cg_state *state,
                    "can't truncate non-primitive");
 
   switch (op->var_ty.primitive) {
+  case IR_VAR_PRIMITIVE_TY_I1: {
+    if (dest.idx != source.idx) {
+      struct instr *mov = cg_alloc_instr(state->func, basicblock);
+      mov->x64->ty = X64_INSTR_TY_MOV_REG;
+      mov->x64->mov_reg = (struct x64_mov_reg){.dest = dest, .source = source};
+    }
+
+    struct instr *instr = cg_alloc_instr(state->func, basicblock);
+    instr->x64->ty = X64_INSTR_TY_AND_IMM;
+    instr->x64->and_imm = (struct x64_alu_imm){
+        .dest = dest,
+        .imm = 0x1,
+    };
+    break;
+  }
   case IR_VAR_PRIMITIVE_TY_I8: {
     if (dest.idx != source.idx) {
       struct instr *mov = cg_alloc_instr(state->func, basicblock);
