@@ -59,7 +59,7 @@ fi
 printf "%b\n\n" "${BOLD}Downloading done!${RESET}"
 
 output=""
-if has_tool bash && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
+if has_tool bash && has_tool cmake && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
     output="build/jcc"
     ./jcc.sh build
 else
