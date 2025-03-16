@@ -16,12 +16,7 @@ has_tool() {
 }
 
 try_root() {
-    if has_tool sudo; then
-        echo "has sudo"
-        sudo "$@"
-    else
-        "$@"
-    fi
+    has_tool sudo && sudo "$@" || exec "$@"
 }
 
 mkdir -p jcc
