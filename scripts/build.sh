@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# the build environment of this script expects both bash and cmake
+# minimal builds, requiring only sh and a C compiler, can be achieved via install.sh
+
 clean-all() {
     # nukes entire build directory
     # occasionally useful
@@ -121,14 +124,7 @@ configure() {
       esac
     done
 
-    # need to make the build directory earlier
     mkdir -p build
-
-    if ! has_tool cmake; then
-      # TODO: respect flags in simple build (also in install.sh)
-      echo -e "${BOLDYELLOW}CMake not installed; reverting to simple build (flags will be ignored) ${RESET}"
-      return
-    fi
 
     echo -e "${BOLD}Build configuration: ${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
@@ -171,18 +167,9 @@ build() {
 
     num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
-    if has_tool cmake; then
-      if ! cmake --build . --parallel $num_procs; then
-          echo -e "${BOLDRED}Build failed!${RESET}"
-          exit -1
-      fi
-    else
-      output="build/jcc"
-      # explicit -lm as we need math
-      if ! cc -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
-          echo -e "${BOLDRED}Build failed!${RESET}"
-          exit -1
-      fi
+    if ! cmake --build . --parallel $num_procs; then
+        echo -e "${BOLDRED}Build failed!${RESET}"
+        exit -1
     fi
 
     # we are now in build dir (should make this clearer)
