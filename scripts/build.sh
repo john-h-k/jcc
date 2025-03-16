@@ -121,6 +121,8 @@ configure() {
       esac
     done
 
+    ensure_cmake
+
     echo -e "${BOLD}Build configuration: ${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
