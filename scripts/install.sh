@@ -19,43 +19,42 @@ try_root() {
     has_tool sudo && sudo "$@" || "$@"
 }
 
-mkdir -p jcc
-if has_tool git; then
-    printf "%b\n" "${BOLD}Downloading with 'git clone'...${RESET}"
-    git clone --quiet https://github.com/john-h-k/jcc jcc
-else
-    if has_tool curl; then
-        printf "%b\n" "${BOLD}Downloading tarball with 'curl'...${RESET}"
-        curl -sSL https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
-    elif has_tool wget; then
-        printf "%b\n" "${BOLD}Downloading tarball with 'wget'...${RESET}"
-        wget -q -O - https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
-    else
-        # could be that the script has been copied over file system or similar
-        printf "%b\n" "${BOLDRED}'curl' or 'wget' required to install JCC${RESET}"
+script_dir="$(dirname "$0")"
 
-        cd - > /dev/null 2>&1
-        exit 1
+ispipe="1"
+if [ -f "$script_dir/../jcc.sh" ]; then
+    # use presence of `jcc.sh` as marker for being in repo already (rather than being a piped script)
+    ispipe=""
+
+    # hmm, we don't update if in a git repo. maybe this is not optimal
+    cd ..
+fi
+
+if [ -n "$ispipe "]; then
+    mkdir -p jcc
+    if has_tool git; then
+        printf "%b\n" "${BOLD}Downloading with 'git clone'...${RESET}"
+        git clone --quiet https://github.com/john-h-k/jcc jcc
+    else
+        if has_tool curl; then
+            printf "%b\n" "${BOLD}Downloading tarball with 'curl'...${RESET}"
+            curl -sSL https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
+        elif has_tool wget; then
+            printf "%b\n" "${BOLD}Downloading tarball with 'wget'...${RESET}"
+            wget -q -O - https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
+        else
+            # could be that the script has been copied over file system or similar
+            printf "%b\n" "${BOLDRED}'curl' or 'wget' required to install JCC${RESET}"
+
+            cd - > /dev/null 2>&1
+            exit 1
+        fi
     fi
+
+    cd jcc
 fi
 
 printf "%b\n\n" "${BOLD}Downloading done!${RESET}"
-
-# first, find a C compiler we can use
-CC=""
-has_tool cc && CC=cc
-has_tool jcc && CC=jcc
-has_tool gcc && CC=gcc
-has_tool clang && CC=clang
-
-if [ -z "$CC" ]; then
-    printf "%b\n" "${BOLDRED}Could not find a C compiler! (tried 'cc', 'jcc', 'gcc', 'clang')${RESET}"
-
-    cd - > /dev/null 2>&1
-    exit 1
-fi
-
-cd jcc
 
 output=""
 if has_tool bash; then
@@ -68,12 +67,7 @@ else
     mkdir -p build
     output="build/jcc"
 
-    if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
-        printf "%b\n" "${BOLDRED}Build failed!${RESET}"
-
-        cd - > /dev/null 2>&1
-        exit 1
-    fi
+    source simple_build.sh
 fi
 
 
