@@ -62,6 +62,9 @@ struct ir_func_builder {
   struct ir_unit *unit;
   struct ir_func *func;
 
+  // the global for `__func__`
+  struct ir_glb *func_name_cnst;
+
   struct var_refs *var_refs;
   struct var_refs *global_var_refs;
 
@@ -1213,10 +1216,77 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
 static void add_var_write(struct ir_func_builder *irb, struct ir_op *op,
                           struct td_var *var);
 
+static const char *mangle_static_name(struct ir_var_builder *irb,
+                                      struct ir_func *func, const char *name) {
+  // need to mangle the name as statics cannot interfere with others
+  size_t base_len = strlen(name);
+
+  size_t len = base_len + 2; // null char and leading "."
+
+  size_t func_name_len = 0;
+  if (func) {
+    func_name_len = strlen(func->name);
+    len += func_name_len;
+    len++; // for "."
+  }
+
+  char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
+  size_t head = 0;
+
+  buff[head++] = '.';
+
+  if (func) {
+    memcpy(&buff[head], func->name, func_name_len);
+    head += func_name_len;
+    buff[head++] = '.';
+  }
+
+  memcpy(&buff[head], name, base_len);
+  head += base_len;
+  buff[head++] = '\0';
+
+  DEBUG_ASSERT(head == len, "string/buff length mismatch");
+
+  return buff;
+}
+
 static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
                                       struct ir_var_ty var_ty,
                                       struct td_var *var) {
+  if (strlen(var->identifier) == strlen("__func__") && !strcmp(var->identifier, "__func__")) {
+    if (!irb->func_name_cnst) {
+      const char *value = irb->func->name;
+      struct ir_var_ty str_var_ty = ir_var_ty_make_array(irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
+      const char *name = mangle_static_name(&(struct ir_var_builder){.arena = irb->arena}, irb->func, "__func__");
+
+      struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty, IR_GLB_DEF_TY_DEFINED, name);
+      glb->linkage = IR_LINKAGE_INTERNAL;
+      glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+      *glb->var = (struct ir_var){
+        .ty = IR_VAR_TY_STRING_LITERAL,
+        .unit = irb->unit,
+        .var_ty = str_var_ty,
+        .value = {
+          .var_ty = str_var_ty,
+          .ty = IR_VAR_VALUE_TY_STR,
+          .str_value = { .value = value, .len = strlen(value) }
+        }
+      };
+
+      irb->func_name_cnst = glb;
+    }
+
+    struct ir_op *op = ir_alloc_op(irb->func, *stmt);
+    op->ty = IR_OP_TY_ADDR;
+    op->var_ty = IR_VAR_TY_POINTER;
+    op->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_GLB,
+      .glb = irb->func_name_cnst
+    };
+    return op;
+  }
+
   // if `a` is an array/function, then reading `a` is actually `&a[0]`/&a
   // same with functions
   if (var_ty.ty == IR_VAR_TY_TY_ARRAY || var_ty.ty == IR_VAR_TY_TY_FUNC) {
@@ -2705,40 +2775,6 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
-
-static const char *mangle_static_name(struct ir_var_builder *irb,
-                                      struct ir_func *func, const char *name) {
-  // need to mangle the name as statics cannot interfere with others
-  size_t base_len = strlen(name);
-
-  size_t len = base_len + 2; // null char and leading "."
-
-  size_t func_name_len = 0;
-  if (func) {
-    func_name_len = strlen(func->name);
-    len += func_name_len;
-    len++; // for "."
-  }
-
-  char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
-  size_t head = 0;
-
-  buff[head++] = '.';
-
-  if (func) {
-    memcpy(&buff[head], func->name, func_name_len);
-    head += func_name_len;
-    buff[head++] = '.';
-  }
-
-  memcpy(&buff[head], name, base_len);
-  head += base_len;
-  buff[head++] = '\0';
-
-  DEBUG_ASSERT(head == len, "string/buff length mismatch");
-
-  return buff;
-}
 
 static void
 build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
