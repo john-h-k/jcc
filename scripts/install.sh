@@ -20,7 +20,7 @@ if has_tool git; then
     printf "%b\n" "${BOLD}Downloading with 'git clone'...${RESET}"
     git clone https://github.com/john-h-k/jcc jcc
 else
-    if has_tool curl && has_tool wget; then
+    if has_tool curl; then
         printf "%b\n" "${BOLD}Downloading tarball with 'curl'...${RESET}"
         curl -L https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
     elif has_tool wget; then
@@ -29,7 +29,7 @@ else
     else
         # could be that the script has been copied over file system or similar
         printf "%b\n" "${BOLDRED}'curl' or 'wget' required to install JCC${RESET}"
-        exit -1
+        exit 1
     fi
 fi
 
@@ -49,7 +49,7 @@ else
     output="build/jcc"
     if ! cc -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
           printf "%\b\n" "${BOLDRED}Build failed!${RESET}"
-          exit -1
+          exit 1
     fi
 fi
 
