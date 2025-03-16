@@ -194,42 +194,19 @@ static inline void debug_print_stack_trace(void) {
   util_debug_assert(b, #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 PRINTF_ARGS(5)
-static void util_debug_assert(bool b, const char *cond, const char *func,
+ void util_debug_assert(bool b, const char *cond, const char *func,
                               const char *file, int line, const char *msg,
-                              ...) {
-  if (!b) {
-    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
-            line, func, cond);
+                              ...);
 
-    va_list v;
-    va_start(v, msg);
-    vfprintf(stderr, msg, v);
-    fprintf(stderr, "\n");
-    va_end(v);
-    EXIT_FAIL(-1);
-  }
-}
+ #endif
 
-#endif
+NORETURN void unreachable(void);
 
-NORETURN static inline void unreachable(void) {
-  fprintf(stderr, "`unreachable` hit, program exiting");
-  EXIT_FAIL(-2);
-}
-
-PRINTF_ARGS(0) NORETURN static inline void unsupported(const char *msg, ...) {
-  FMTPRINT(stderr, "unsupported: ", msg);
-  EXIT_FAIL(-2);
-}
+PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 
 // present in all mode, always causes program exit if fails
 PRINTF_ARGS(1)
-static inline void invariant_assert(bool b, const char *msg, ...) {
-  if (!b) {
-    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
-    EXIT_FAIL(-1);
-  }
-}
+void invariant_assert(bool b, const char *msg, ...);
 
 #if HAS_BUILTIN(__builtin_debugtrap)
 #define BREAKPOINT() __builtin_debugtrap()
