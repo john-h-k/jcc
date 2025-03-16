@@ -12,6 +12,7 @@ RESET="\033[0m"
 
 has_tool() {
  command -v "$1" > /dev/null 2>&1
+ return $?
 }
 
 mkdir -p jcc
@@ -26,6 +27,7 @@ else
         printf "%b\n" "${BOLD}Downloading tarball with 'wget'...${RESET}"
         wget -q0- https://github.com/john-h-k/jcc/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C jcc
     else
+        # could be that the script has been copied over file system or similar
         printf "%b\n" "${BOLDRED}'curl' or 'wget' required to install JCC${RESET}"
         exit -1
     fi
