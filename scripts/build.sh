@@ -121,6 +121,9 @@ configure() {
       esac
     done
 
+    # need to make the build directory earlier
+    mkdir -p build
+
     if ! has_tool cmake; then
       # TODO: respect flags in simple build
       echo -e "${BOLDYELLOW}CMake not installed; reverting to simple build (flags will be ignored) ${RESET}"
@@ -156,7 +159,6 @@ configure() {
         flags="$flags -DJCC_DEFAULT_TARGET=\"$default_target\""
     fi
 
-    mkdir -p build
     cd build
     if ! (cmake -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
