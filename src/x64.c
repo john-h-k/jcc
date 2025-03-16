@@ -9,6 +9,13 @@
 #include "x64/lower.h"
 #include "target.h"
 
+#if !defined(JCC_ALL) && !defined(JCC_X64)
+
+const struct target X64_MACOS_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+const struct target X64_LINUX_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+
+#else
+
 const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
@@ -61,3 +68,5 @@ const struct target X64_LINUX_TARGET = {
    },
     x64_emit, write_elf, linux_link_objects, objdump_debug_disasm,
     x64_debug_print_codegen, NULL};
+
+#endif

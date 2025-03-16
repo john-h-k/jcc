@@ -111,7 +111,7 @@ enum lex_create_result lexer_create(struct program *program,
   l->program = program;
   l->preproc = preproc;
 
-  l->tokens = vector_create(sizeof(struct lex_token));
+  l->tokens = vector_create_in_arena(sizeof(struct lex_token), arena);
   l->pos = 0;
   l->last_text_pos = (struct text_pos){0};
 
@@ -121,9 +121,9 @@ enum lex_create_result lexer_create(struct program *program,
 }
 
 void lexer_free(struct lexer **lexer) {
-  arena_allocator_free(&(*lexer)->arena);
-
   vector_free(&(*lexer)->tokens);
+
+  arena_allocator_free(&(*lexer)->arena);
 
   (*lexer)->arena = NULL;
   free(*lexer);
@@ -164,7 +164,7 @@ static const char *process_raw_string(const struct lexer *lexer,
   size_t len = text_span_len(&token->span);
 
   bool is_wide = token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL || token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
-  struct vector *buff = vector_create(is_wide ? sizeof(int32_t) : sizeof(char));
+  struct vector *buff = vector_create_in_arena(is_wide ? sizeof(int32_t) : sizeof(char), lexer->arena);
 
   char end_char = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                    token->ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
@@ -287,12 +287,7 @@ static const char *process_raw_string(const struct lexer *lexer,
 
   PUSH_CHAR(0);
 
-  // can't strdup because potential null chars
-  char *value = arena_alloc(lexer->arena, vector_byte_size(buff));
-  vector_copy_to(buff, value);
-  vector_free(&buff);
-
-  return value;
+  return vector_head(buff);
 }
 
 bool lexer_at_eof(struct lexer *lexer) {

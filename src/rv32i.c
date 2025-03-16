@@ -8,6 +8,11 @@
 #include "disasm.h"
 #include "target.h"
 
+#if !defined(JCC_ALL) && !defined(JCC_RV32I)
+
+const struct target RV32I_LINUX_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+
+#else
 
 const struct target RV32I_LINUX_TARGET = {
     TARGET_ID_RV32I_LINUX,
@@ -39,3 +44,5 @@ const struct target RV32I_LINUX_TARGET = {
     objdump_debug_disasm,
     rv32i_debug_print_codegen,
   rv32i_emit_asm};
+
+#endif

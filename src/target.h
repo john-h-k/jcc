@@ -149,6 +149,7 @@ typedef void (*debug_disasm)(const char *filename, const char *output);
 typedef void (*debug_print_codegen)(FILE *file, struct cg_unit *unit);
 
 enum target_id {
+  TARGET_ID_NOT_SUPPORTED,
   TARGET_ID_X64_MACOS,
   TARGET_ID_X64_LINUX,
   TARGET_ID_AARCH64_MACOS,
