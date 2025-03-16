@@ -46,6 +46,9 @@ enum lex_create_result lexer_create(struct program *program,
 
     KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
+    // We falsely reserve some keywords here i believe (e.g banning `align` in C11)
+
+    KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
     KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
     KEYWORD("break", LEX_TOKEN_TY_KW_BREAK);
     KEYWORD("continue", LEX_TOKEN_TY_KW_CONTINUE);
@@ -634,6 +637,7 @@ const char *token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 
+    CASE_RET(LEX_TOKEN_TY_KW_NORETURN)
     CASE_RET(LEX_TOKEN_TY_KW_ATTRIBUTE)
     CASE_RET(LEX_TOKEN_TY_KW_GOTO)
     CASE_RET(LEX_TOKEN_TY_KW_BREAK)

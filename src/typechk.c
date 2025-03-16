@@ -555,7 +555,7 @@ struct assg_ty_map {
 
 struct td_specifiers {
   enum td_storage_class_specifier storage;
-  enum td_function_specifier function;
+  enum td_function_specifier_flags function;
   enum td_type_qualifier_flags qualifier_flags;
   struct td_var_ty type_specifier;
 };
@@ -1183,11 +1183,11 @@ static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
                 enum td_specifier_allow allow) {
-  struct td_specifiers specifiers = {.storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
-                                     .function = TD_FUNCTION_SPECIFIER_NONE,
-                                     .qualifier_flags =
-                                         TD_TYPE_QUALIFIER_FLAG_NONE,
-                                     .type_specifier = TD_VAR_TY_UNKNOWN};
+  struct td_specifiers specifiers = {
+      .storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
+      .function = TD_FUNCTION_SPECIFIER_FLAG_NONE,
+      .qualifier_flags = TD_TYPE_QUALIFIER_FLAG_NONE,
+      .type_specifier = TD_VAR_TY_UNKNOWN};
 
   int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
   int type_specifier_count = 0;
@@ -1300,20 +1300,26 @@ type_specifiers(struct typechk *tchk,
                 "function specifier not valid in this context"));
       }
 
-      if (specifiers.function != TD_FUNCTION_SPECIFIER_NONE) {
+      enum td_function_specifier_flags flag;
+      switch (specifier.function_specifier) {
+      case AST_FUNCTION_SPECIFIER_INLINE:
+        flag = TD_FUNCTION_SPECIFIER_FLAG_INLINE;
+        break;
+      case AST_FUNCTION_SPECIFIER_NORETURN:
+        flag = TD_FUNCTION_SPECIFIER_FLAG_NORETURN;
+        break;
+      }
+
+      if (specifiers.function & flag) {
         compiler_diagnostics_add(
             tchk->diagnostics,
             MK_SEMANTIC_DIAGNOSTIC(FUNCTION_SPECIFIER_MULTIPLE,
                                    function_specifier_multiple, specifier.span,
                                    MK_INVALID_TEXT_POS(0),
-                                   "multiple function specifiers"));
+                                   "duplicate function specifiers"));
       }
 
-      switch (specifier.function_specifier) {
-      case AST_FUNCTION_SPECIFIER_INLINE:
-        specifiers.function = TD_FUNCTION_SPECIFIER_INLINE;
-        break;
-      }
+      specifiers.function |= flag;
       break;
     case AST_DECL_SPECIFIER_TY_TYPE_SPECIFIER: {
       if (!(allow & TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS)) {
@@ -2590,9 +2596,12 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
 
   if (expr->ty == AST_EXPR_TY_TERNARY) {
     // i think evaluating both is the correct thing to do?
-    unsigned long long cond = type_constant_integral_expr(tchk, expr->ternary.cond);
-    unsigned long long lhs = type_constant_integral_expr(tchk, expr->ternary.true_expr);
-    unsigned long long rhs = type_constant_integral_expr(tchk, expr->ternary.false_expr);
+    unsigned long long cond =
+        type_constant_integral_expr(tchk, expr->ternary.cond);
+    unsigned long long lhs =
+        type_constant_integral_expr(tchk, expr->ternary.true_expr);
+    unsigned long long rhs =
+        type_constant_integral_expr(tchk, expr->ternary.false_expr);
 
     return cond ? lhs : rhs;
   }
