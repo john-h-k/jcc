@@ -481,6 +481,7 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
                         const struct td_expr *rhs_expr, enum td_binary_op_ty ty,
                         struct text_span context) {
   // it is expected integer promotion has already been performed
+  // TODO: resolve cmps as bool (because otherwise IR will generate many pointless `trunc` ops)
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
   const struct td_var_ty *rhs = &rhs_expr->var_ty;
