@@ -52,7 +52,7 @@ Working with RISC-V requires installing a RISC-V linker.
 * C11-compliant C compiler
 * POSIX shell
 * `git`, `curl`, or `wget` for downloading sources
-* Nothing else
+* Nothing else!
 
 </div>
 
