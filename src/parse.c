@@ -691,7 +691,7 @@ static bool parse_struct_or_union_specifier(
 
     struct text_span brace;
     parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACE, pos.text_pos,
-                         "`}` after struct_or_union_declaration body", &brace);
+                         "`}` after struct/union body", &brace);
 
     end = brace.end;
   }
@@ -1753,6 +1753,19 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct lex_pos pos = get_position(parser->lexer);
   struct text_pos start = get_last_text_pos(parser->lexer);
 
+  struct lex_token token;
+  peek_token(parser->lexer, &token);
+
+  // parenthesised expression
+  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
+      parse_compoundexpr(parser, &expr->compound_expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
+    expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
+    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    return true;
+  }
+
+  backtrack(parser->lexer, pos);
+
   if (parse_cnst(parser, &expr->cnst)) {
     expr->ty = AST_EXPR_TY_CNST;
     expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
@@ -1765,15 +1778,6 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
     return true;
   }
 
-  // parenthesised expression
-  if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &expr->compound_expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
-    return true;
-  }
-
-  backtrack(parser->lexer, pos);
   return false;
 }
 
@@ -1850,12 +1854,12 @@ static bool parse_member_access(struct parser *parser,
                                 struct ast_expr *sub_expr,
                                 struct ast_expr *expr) {
   struct text_pos start = get_last_text_pos(parser->lexer);
+  struct lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_DOT, NULL)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
-
-  struct lex_pos pos = get_position(parser->lexer);
 
   struct lex_token token;
   parse_expected_identifier(parser, &token, pos.text_pos,
@@ -1873,12 +1877,12 @@ static bool parse_pointer_access(struct parser *parser,
                                  struct ast_expr *sub_expr,
                                  struct ast_expr *expr) {
   struct text_pos start = get_last_text_pos(parser->lexer);
+  struct lex_pos pos = get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_ARROW, NULL)) {
+    backtrack(parser->lexer, pos);
     return false;
   }
-
-  struct lex_pos pos = get_position(parser->lexer);
 
   struct lex_token token;
   parse_expected_identifier(parser, &token, pos.text_pos,
@@ -2121,8 +2125,9 @@ static bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
 // prefix ++, prefix --, unary +, unary -, !, ~, (type), *, &, sizeof,
 // _Alignof
 static bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
-  if (!parse_atom_2(parser, expr) && !parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
-      !parse_sizeof(parser, expr) && !parse_alignof(parser, expr)) {
+  if (!parse_unary_prefix_op(parser, expr) && !parse_cast(parser, expr) &&
+      !parse_sizeof(parser, expr) && !parse_alignof(parser, expr) &&
+      !parse_atom_2(parser, expr)) {
     return false;
   }
 
@@ -2142,7 +2147,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
   while (true) {
     struct lex_token lookahead;
     peek_token(parser->lexer, &lookahead);
-
+    debug("looked ahead to %s", token_name(parser->lexer, &lookahead));
     struct ast_op_info info;
 
     if (!op_info_for_token(&lookahead, &info) ||
@@ -2876,25 +2881,6 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
-  struct ast_compoundstmt compound_stmt;
-  if (parse_compoundstmt(parser, &compound_stmt)) {
-    stmt->ty = AST_STMT_TY_COMPOUND;
-    stmt->compound = compound_stmt;
-    stmt->span = compound_stmt.span;
-    return true;
-  }
-
-  struct ast_compoundexpr compound_expr;
-  if (parse_compoundexpr_with_semicolon(parser, &compound_expr)) {
-    stmt->ty = AST_STMT_TY_EXPR;
-    stmt->expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
-    stmt->expr.compound_expr = compound_expr;
-    stmt->expr.span = compound_expr.span;
-    stmt->span = compound_expr.span;
-
-    return true;
-  }
-
   struct ast_declaration declaration;
   if (parse_declaration(parser, &declaration)) {
     stmt->ty = AST_STMT_TY_DECLARATION;
@@ -2935,6 +2921,25 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
+  struct ast_compoundstmt compound_stmt;
+  if (parse_compoundstmt(parser, &compound_stmt)) {
+    stmt->ty = AST_STMT_TY_COMPOUND;
+    stmt->compound = compound_stmt;
+    stmt->span = compound_stmt.span;
+    return true;
+  }
+
+  struct ast_compoundexpr compound_expr;
+  if (parse_compoundexpr_with_semicolon(parser, &compound_expr)) {
+    stmt->ty = AST_STMT_TY_EXPR;
+    stmt->expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
+    stmt->expr.compound_expr = compound_expr;
+    stmt->expr.span = compound_expr.span;
+    stmt->span = compound_expr.span;
+
+    return true;
+  }
+
   backtrack(parser->lexer, pos);
   return false;
 }
@@ -2942,12 +2947,15 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
 static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt) {
   struct text_pos start = get_last_text_pos(parser->lexer);
-
-  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE, NULL)) {
-    return false;
-  }
+  struct lex_pos pos = get_position(parser->lexer);
 
   push_scope(&parser->ty_table);
+
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACE, NULL)) {
+    backtrack(parser->lexer, pos);
+    pop_scope(&parser->ty_table);
+    return false;
+  }
 
   struct vector *stmts =
       vector_create_in_arena(sizeof(struct ast_stmt), parser->arena);

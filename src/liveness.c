@@ -249,7 +249,7 @@ static void op_used_callback(struct ir_op **op, UNUSED enum ir_op_use_ty use_ty,
 */
 struct interval_data construct_intervals(struct ir_func *irb) {
   // first rebuild ids so they are sequential and increasing
-  ir_rebuild_ids(irb);
+  ir_rebuild_func_ids(irb);
 
   // relies on the BBs being in RPO
 

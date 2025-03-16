@@ -404,8 +404,8 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
   debug("inlining %s into %s at callsite op %zu", candidate->name, func->name,
         call->id);
 
-  ir_rebuild_ids(func);
-  ir_rebuild_ids(candidate);
+  ir_rebuild_func_ids(func);
+  ir_rebuild_func_ids(candidate);
 
   // we effectively deep clone the IR into our IR
 
@@ -475,7 +475,7 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     }
   }
 
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   struct ir_stmt *params = copy->first;
   if (params->flags & IR_STMT_FLAG_PARAM) {
@@ -572,7 +572,7 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     }
   }
 
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   hashtbl_free(&cloned);
 

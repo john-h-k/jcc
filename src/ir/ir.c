@@ -870,7 +870,7 @@ enum ir_reg_ty ir_reg_ty_for_var_ty(const struct ir_var_ty var_ty) {
 }
 
 void ir_order_basicblocks(struct ir_func *func) {
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   // TODO: topological sort basicblocks
 
@@ -931,7 +931,7 @@ void ir_order_basicblocks(struct ir_func *func) {
     prev = succ;
   }
 
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
   func->basicblock_count = postorder_count;
 
   // struct ir_basicblock *basicblock = func->first;
@@ -1087,6 +1087,108 @@ void ir_eliminate_redundant_ops(struct ir_func *func,
   vector_free(&detach);
 }
 
+void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb) {
+  glb->id = DETACHED_GLB;
+
+  iru->num_globals--;
+
+  // fix links on either side of glb
+  if (glb->pred) {
+    glb->pred->succ = glb->succ;
+  } else {
+    iru->first_global = glb->succ;
+  }
+
+  if (glb->succ) {
+    glb->succ->pred = glb->pred;
+  } else {
+    iru->last_global = glb->pred;
+  }
+
+  glb->succ = NULL;
+  glb->pred = NULL;
+}
+
+void ir_prune_globals(struct ir_unit *iru) {
+  bool *seen = arena_alloc(iru->arena, sizeof(*seen) * iru->num_globals);
+  memset(seen, 0, sizeof(*seen) * iru->num_globals);
+
+  struct ir_glb *glb = iru->first_global;
+
+  while (glb) {
+    if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+      glb = glb->succ;
+      continue;
+    }
+
+    switch (glb->ty) {
+    case IR_GLB_TY_DATA: {
+      break;
+    }
+    case IR_GLB_TY_FUNC: {
+      struct ir_func *func = glb->func;
+
+      struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+      struct ir_op *op;
+      while (ir_func_iter_next(&iter, &op)) {
+        switch (op->ty) {
+          case IR_OP_TY_ADDR:
+            if (op->addr.ty == IR_OP_ADDR_TY_GLB) {
+              seen[op->addr.glb->id] = true;
+            }
+            break;
+          case IR_OP_TY_LOAD:
+            if (op->load.ty == IR_OP_LOAD_TY_GLB) {
+              seen[op->load.glb->id] = true;
+            }
+            break;
+          case IR_OP_TY_LOAD_BITFIELD:
+            if (op->load_bitfield.ty == IR_OP_LOAD_TY_GLB) {
+              seen[op->load_bitfield.glb->id] = true;
+            }
+            break;
+          case IR_OP_TY_STORE:
+            if (op->store.ty == IR_OP_STORE_TY_GLB) {
+              seen[op->store.glb->id] = true;
+            }
+            break;
+          case IR_OP_TY_STORE_BITFIELD:
+            if (op->store_bitfield.ty == IR_OP_STORE_TY_GLB) {
+              seen[op->store_bitfield.glb->id] = true;
+            }
+            break;
+          default:
+          continue;
+        }
+      }
+      break;
+    }
+    }
+
+    glb = glb->succ;
+  }
+
+  
+  glb = iru->first_global;
+  while (glb) {
+    // can only strip internal linkage defined things
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED && glb->linkage == IR_LINKAGE_EXTERNAL) {
+      glb = glb->succ;
+      continue;
+    }
+
+    if (seen[glb->id]) {
+      glb = glb->succ;
+      continue;
+    }
+
+   
+    struct ir_glb *succ = glb->succ;
+    ir_detach_global(iru, glb);
+    glb = succ;
+  }
+}
+
 void ir_prune_basicblocks(struct ir_func *irb) {
   if (!irb->first) {
     return;
@@ -1178,7 +1280,7 @@ void ir_prune_basicblocks(struct ir_func *irb) {
   // i recommend doing a simplify phi run where you call this
 
   // means bb->id < bb_count for all bbs
-  ir_rebuild_ids(irb);
+  ir_rebuild_func_ids(irb);
 
   vector_free(&stack);
 }
@@ -1226,7 +1328,20 @@ void ir_clear_metadata(struct ir_func *irb) {
   }
 }
 
-void ir_rebuild_ids(struct ir_func *irb) {
+void ir_rebuild_glb_ids(struct ir_unit *iru) {
+  size_t next_glb_id = 0;
+
+  struct ir_glb *glc = iru->first_global;
+  while (glc) {
+    glc->id = next_glb_id++;
+
+    glc = glc->succ;
+  }
+
+  DEBUG_ASSERT(next_glb_id == iru->num_globals, "found diff number of globals to expected");
+}
+
+void ir_rebuild_func_ids(struct ir_func *irb) {
   irb->next_lcl_id = 0;
   struct ir_lcl *lcl = irb->first_lcl;
   while (lcl) {
@@ -2697,7 +2812,7 @@ static void build_op_uses_callback(struct ir_op **op, enum ir_op_use_ty use_ty,
 }
 
 struct ir_op_use_map ir_build_op_uses_map(struct ir_func *func) {
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   struct build_op_uses_callback_data data = {
       .op = NULL,

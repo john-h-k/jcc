@@ -982,6 +982,7 @@ struct ir_object {
 #define DETACHED_OP (SIZE_MAX)
 #define DETACHED_STMT (SIZE_MAX)
 #define DETACHED_LCL (SIZE_MAX)
+#define DETACHED_GLB (SIZE_MAX)
 
 // TODO: is this well defined? the casts
 #define IR_MK_OBJECT(obj)                                                      \
@@ -1042,6 +1043,8 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
 bool ir_stmt_is_empty(struct ir_stmt *stmt);
 bool ir_basicblock_is_empty(struct ir_basicblock *basicblock);
 
+void ir_prune_globals(struct ir_unit *iru);
+
 void ir_prune_basicblocks(struct ir_func *irb);
 void ir_prune_stmts(struct ir_func *irb, struct ir_basicblock *basicblock);
 
@@ -1070,13 +1073,15 @@ void ir_eliminate_redundant_ops(struct ir_func *func,
                                 enum ir_eliminate_redundant_ops_flags flags);
 
 void ir_clear_metadata(struct ir_func *irb);
-void ir_rebuild_ids(struct ir_func *irb);
+void ir_rebuild_glb_ids(struct ir_unit *iru);
+void ir_rebuild_func_ids(struct ir_func *irb);
 
 struct ir_lcl *ir_add_local(struct ir_func *irb,
                             const struct ir_var_ty *var_ty);
 void ir_detach_local(struct ir_func *irb, struct ir_lcl *lcl);
 void ir_alloc_locals(struct ir_func *func);
 
+void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb);
 struct ir_glb *ir_add_global(struct ir_unit *iru, enum ir_glb_ty ty,
                              const struct ir_var_ty *var_ty,
                              enum ir_glb_def_ty def_ty, const char *name);

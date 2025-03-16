@@ -218,7 +218,7 @@ struct bb_moves {
 };
 
 void eliminate_phi(struct ir_func *irb) {
-  ir_rebuild_ids(irb);
+  ir_rebuild_func_ids(irb);
 
   struct ir_basicblock *basicblock = irb->first;
 

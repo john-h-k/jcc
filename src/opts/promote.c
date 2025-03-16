@@ -322,7 +322,7 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // TODO: use this here (and in build) to pick better phi locations
   // struct ir_dominance_frontier domf = ir_compute_dominance_frontier(func);
 
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   for (size_t i = 0; i < num_uses; i++) {
     struct lcl_use *use = vector_get(lcl_uses, i);

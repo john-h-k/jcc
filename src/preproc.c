@@ -172,11 +172,6 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   DEF_BUILTIN("__extension__", "");
   DEF_BUILTIN("__inline", "");
 
-  if (target == COMPILE_TARGET_LINUX_RV32I) {
-    // TEMP: stops it generating `bswap64` using `uint64_t` which causes IR to fail (as no 64 bit support on RV32I yet)
-    DEF_BUILTIN("__GNUC__", "1");
-  }
-
   DEF_BUILTIN("__JCC__", "1");
   DEF_BUILTIN("__jcc__", "1");
 
@@ -1739,8 +1734,6 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
          token_streq(token, "__has_include"))) {
       preproc->in_angle_string_context = true;
     }
-
-    info("sub tok: %.*s", (int)text_span_len(&token.span), token.text);
 
     if (mode == PREPROC_TOKEN_MODE_NO_EXPAND ||
         !try_expand_token(preproc, preproc_text, &token, buffer, NULL, flags)) {
