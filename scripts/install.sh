@@ -59,12 +59,18 @@ else
 
     mkdir -p build
     output="build/jcc"
+
+    echo "DEBUG: output='$output'"
+    echo "DEBUG: full='$full'"
     if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
           printf "%\b\n" "${BOLDRED}Build failed!${RESET}"
           exit 1
     fi
 fi
 
+
+echo "DEBUG: output='$output'"
+echo "DEBUG: full='$full'"
 full="$(pwd)/${output}"
 printf "%b\n" "${BOLD}JCC installed to '$full'!${RESET}"
 
