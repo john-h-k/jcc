@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 ensure_cmake() {
+  command -v cmake &>/dev/null && return
+
   os="$(uname)"
 
   if [ "$os" = "Darwin" ]; then
