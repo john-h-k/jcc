@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+!/usr/bin/env bash
 
 BOLD="\033[1m"
 BOLDRED="\033[1;31m"
@@ -401,7 +401,7 @@ test-all() {
 ci-test() {
     build
 
-    ./scripts/test.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    timeout -k 30m 30m ./scripts/test.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
 }
 
 cfg() {
