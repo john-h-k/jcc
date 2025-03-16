@@ -11,8 +11,8 @@ PROFILE=""
 ASSEMBLER=""
 LINKER=""
 
-TEST_TIMEOUT=10s
-BUILD_TIMEOUT=1m
+TEST_TIMEOUT="10s"
+BUILD_TIMEOUT="1m"
 
 TEST_DIR="../tests"
 
@@ -393,7 +393,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -417,7 +417,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")

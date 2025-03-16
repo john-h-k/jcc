@@ -15,6 +15,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --fix-missing \
+              clang \
               coreutils
 
       - name: Checkout repository
