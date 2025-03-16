@@ -917,7 +917,8 @@ void ir_order_basicblocks(struct ir_func *func) {
   }
 
   struct ir_basicblock *prev = func->first;
-  DEBUG_ASSERT(postorder[postorder_count - 1] == entry, "first bb should always be entry");
+  DEBUG_ASSERT(postorder[postorder_count - 1] == entry,
+               "first bb should always be entry");
 
   for (size_t i = postorder_count - 1; i; i--) {
     struct ir_basicblock *succ = postorder[i - 1];
@@ -947,7 +948,8 @@ void ir_order_basicblocks(struct ir_func *func) {
 
   //       if (cond->ty == IR_OP_TY_BINARY_OP &&
   //           ir_binary_op_is_comparison(cond->binary_op.ty)) {
-  //         cond->binary_op.ty = ir_invert_binary_comparison(cond->binary_op.ty);
+  //         cond->binary_op.ty =
+  //         ir_invert_binary_comparison(cond->binary_op.ty);
 
   //         struct ir_basicblock *tmp = split->true_target;
   //         split->true_target = split->false_target;
@@ -1109,6 +1111,25 @@ void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb) {
   glb->pred = NULL;
 }
 
+static void ir_prune_globals_walk_var_value(struct ir_unit *iru, bool *seen,
+                               const struct ir_var_value *value) {
+  switch (value->ty) {
+  case IR_VAR_VALUE_TY_ADDR:
+    if (value->addr.glb) {
+      seen[value->addr.glb->id] = true;
+    }
+    break;
+  case IR_VAR_VALUE_TY_VALUE_LIST:
+    for (size_t i = 0; i < value->value_list.num_values; i++) {
+      // can this inf loop?
+      ir_prune_globals_walk_var_value(iru, seen, &value->value_list.values[i]);
+    }
+    break;
+  default:
+    break;
+  }
+}
+
 void ir_prune_globals(struct ir_unit *iru) {
   bool *seen = arena_alloc(iru->arena, sizeof(*seen) * iru->num_globals);
   memset(seen, 0, sizeof(*seen) * iru->num_globals);
@@ -1123,6 +1144,8 @@ void ir_prune_globals(struct ir_unit *iru) {
 
     switch (glb->ty) {
     case IR_GLB_TY_DATA: {
+      struct ir_var *var = glb->var;
+      ir_prune_globals_walk_var_value(iru, seen, &var->value);
       break;
     }
     case IR_GLB_TY_FUNC: {
@@ -1132,32 +1155,32 @@ void ir_prune_globals(struct ir_unit *iru) {
       struct ir_op *op;
       while (ir_func_iter_next(&iter, &op)) {
         switch (op->ty) {
-          case IR_OP_TY_ADDR:
-            if (op->addr.ty == IR_OP_ADDR_TY_GLB) {
-              seen[op->addr.glb->id] = true;
-            }
-            break;
-          case IR_OP_TY_LOAD:
-            if (op->load.ty == IR_OP_LOAD_TY_GLB) {
-              seen[op->load.glb->id] = true;
-            }
-            break;
-          case IR_OP_TY_LOAD_BITFIELD:
-            if (op->load_bitfield.ty == IR_OP_LOAD_TY_GLB) {
-              seen[op->load_bitfield.glb->id] = true;
-            }
-            break;
-          case IR_OP_TY_STORE:
-            if (op->store.ty == IR_OP_STORE_TY_GLB) {
-              seen[op->store.glb->id] = true;
-            }
-            break;
-          case IR_OP_TY_STORE_BITFIELD:
-            if (op->store_bitfield.ty == IR_OP_STORE_TY_GLB) {
-              seen[op->store_bitfield.glb->id] = true;
-            }
-            break;
-          default:
+        case IR_OP_TY_ADDR:
+          if (op->addr.ty == IR_OP_ADDR_TY_GLB) {
+            seen[op->addr.glb->id] = true;
+          }
+          break;
+        case IR_OP_TY_LOAD:
+          if (op->load.ty == IR_OP_LOAD_TY_GLB) {
+            seen[op->load.glb->id] = true;
+          }
+          break;
+        case IR_OP_TY_LOAD_BITFIELD:
+          if (op->load_bitfield.ty == IR_OP_LOAD_TY_GLB) {
+            seen[op->load_bitfield.glb->id] = true;
+          }
+          break;
+        case IR_OP_TY_STORE:
+          if (op->store.ty == IR_OP_STORE_TY_GLB) {
+            seen[op->store.glb->id] = true;
+          }
+          break;
+        case IR_OP_TY_STORE_BITFIELD:
+          if (op->store_bitfield.ty == IR_OP_STORE_TY_GLB) {
+            seen[op->store_bitfield.glb->id] = true;
+          }
+          break;
+        default:
           continue;
         }
       }
@@ -1168,11 +1191,11 @@ void ir_prune_globals(struct ir_unit *iru) {
     glb = glb->succ;
   }
 
-  
   glb = iru->first_global;
   while (glb) {
     // can only strip internal linkage defined things
-    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED && glb->linkage == IR_LINKAGE_EXTERNAL) {
+    if (glb->def_ty == IR_GLB_DEF_TY_DEFINED &&
+        glb->linkage == IR_LINKAGE_EXTERNAL) {
       glb = glb->succ;
       continue;
     }
@@ -1182,7 +1205,6 @@ void ir_prune_globals(struct ir_unit *iru) {
       continue;
     }
 
-   
     struct ir_glb *succ = glb->succ;
     ir_detach_global(iru, glb);
     glb = succ;
@@ -1338,7 +1360,8 @@ void ir_rebuild_glb_ids(struct ir_unit *iru) {
     glc = glc->succ;
   }
 
-  DEBUG_ASSERT(next_glb_id == iru->num_globals, "found diff number of globals to expected");
+  DEBUG_ASSERT(next_glb_id == iru->num_globals,
+               "found diff number of globals to expected");
 }
 
 void ir_rebuild_func_ids(struct ir_func *irb) {
