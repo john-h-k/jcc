@@ -69,7 +69,7 @@ else
     output="build/jcc"
 
     if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
-        printf "%\b\n" "${BOLDRED}Build failed!${RESET}"
+        printf "%b\n" "${BOLDRED}Build failed!${RESET}"
 
         cd - > /dev/null 2>&1
         exit 1
@@ -86,7 +86,7 @@ if [ "$os" = "Darwin" ]; then
     target="~/usr/local/bin"
 
     if ! try_root cp "$output" "$target"; then
-        printf "%\b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
+        printf "%b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
 
         cd - > /dev/null 2>&1
         exit 1
@@ -94,11 +94,10 @@ if [ "$os" = "Darwin" ]; then
 
     printf "%b\n" "${BOLD}JCC installed to '$target'${RESET}"
 elif [ "$os" = "Linux" ]; then
-    printf "Installing....\n"
     target="/usr/local/bin"
 
     if ! try_root cp "$output" "$target"; then
-        printf "%\b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
+        printf "%b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
 
         cd - > /dev/null 2>&1
         exit 1
@@ -106,7 +105,7 @@ elif [ "$os" = "Linux" ]; then
 
     printf "%b\n" "${BOLD}JCC installed to '$target'${RESET}"
 else
-    printf "%\b\n" "${BOLDYELLOW}JCC built, but unsure how to install for OS '$os'${RESET}"
+    printf "%b\n" "${BOLDYELLOW}JCC built, but unsure how to install for OS '$os'${RESET}"
 
     cd - > /dev/null 2>&1
     exit 1
