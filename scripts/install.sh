@@ -49,7 +49,9 @@ fi
 
 cd jcc
 
-if has_tool bash > /dev/null 2>&1; then
+output=""
+if has_tool bash; then
+    output="build/jcc"
     ./jcc.sh build
 else
     printf "%b\n" "${BOLD} Bash is not installed; reverting to a simple build...$RESET"
@@ -63,7 +65,7 @@ else
     fi
 fi
 
-full="$(pwd)/$output"
+full="$(pwd)/${output}"
 printf "%b\n" "${BOLD}JCC installed to '$full'!${RESET}"
 
 cd - > /dev/null 2>&1
