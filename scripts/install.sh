@@ -59,7 +59,7 @@ fi
 printf "%b\n\n" "${BOLD}Downloading done!${RESET}"
 
 output=""
-if has_tool bash && has_tool cmake && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
+if has_tool bash && has_tool cmake && [ -z "$JCC_FORCE_SIMPLE_BUILD" ]; then
     output="build/jcc"
     ./jcc.sh build
 else
@@ -103,7 +103,7 @@ printf "%b\n" "${BOLD}JCC built to '$full'!${RESET}"
 os="$(uname)"
 
 if [ "$os" = "Darwin" ]; then
-    target="~/usr/local/bin"
+    target="$HOME/usr/local/bin"
 
     if ! try_root cp "$output" "$target"; then
         printf "%b\n" "${BOLDYELLOW}JCC built, but installing to '$target' failed${RESET}"
