@@ -89,6 +89,10 @@ set(
   src/linux/link.c
 )
 
+# build for all platforms (support cross compilation)
+# TODO: add a more granular system for including targets
+add_definitions(-DJCC_ALL)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
 

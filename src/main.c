@@ -28,23 +28,35 @@ static bool target_needs_linking(const struct compile_args *args,
 }
 
 static const struct target *get_target(enum compile_target target) {
+  const struct target *target_val;
+
   switch (target) {
   case COMPILE_TARGET_MACOS_X86_64:
-    return &X64_MACOS_TARGET;
+    target_val = &X64_MACOS_TARGET;
+    break;
   case COMPILE_TARGET_LINUX_X86_64:
-    return &X64_LINUX_TARGET;
+    target_val = &X64_LINUX_TARGET;
+    break;
   case COMPILE_TARGET_LINUX_ARM64:
-    return &AARCH64_LINUX_TARGET;
+    target_val = &AARCH64_LINUX_TARGET;
+    break;
   case COMPILE_TARGET_MACOS_ARM64:
-    return &AARCH64_MACOS_TARGET;
+    target_val = &AARCH64_MACOS_TARGET;
+    break;
   case COMPILE_TARGET_LINUX_RV32I:
-    return &RV32I_LINUX_TARGET;
+    target_val = &RV32I_LINUX_TARGET;
+    break;
   case COMPILE_TARGET_EEP:
     BUG("redo eep");
     // return &EEP_TARGET;
   }
 
-  BUG("unexpected target in `get_target`");
+  if (target_val->target_id == TARGET_ID_NOT_SUPPORTED) {
+    fprintf(stderr, "jcc was not built with support for target '%s'\n", string_target(target));
+    return NULL;
+  }
+
+  return target_val;
 }
 
 static bool validate_fixed_timestamp(const char *str) {
@@ -352,6 +364,11 @@ static int jcc_main(int argc, char **argv) {
   }
 
   const struct target *target = get_target(compile_args.target);
+  if (!target) {
+    exc = -1;
+    goto exit;
+  }
+
   objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");

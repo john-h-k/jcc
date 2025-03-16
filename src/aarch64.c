@@ -10,6 +10,13 @@
 #include "macos/mach-o.h"
 #include "target.h"
 
+#if !defined(JCC_ALL) && !defined(JCC_AARCH64)
+
+const struct target AARCH64_MACOS_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+const struct target AARCH64_LINUX_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+
+#else
+
 const struct target AARCH64_MACOS_TARGET = {
     TARGET_ID_AARCH64_MACOS,
     TARGET_LP_SZ_LP64,
@@ -75,3 +82,5 @@ const struct target AARCH64_LINUX_TARGET = {
     linux_link_objects,
     objdump_debug_disasm,
     aarch64_debug_print_codegen, NULL};
+
+#endif
