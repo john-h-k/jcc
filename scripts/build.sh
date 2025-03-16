@@ -59,13 +59,16 @@ configure() {
         echo ""
     }
     
-
     mode="Debug"
     default_target=""
     profile_build=""
 
+    generator=""
+
     # if already configured, use current generator
-    generator=$(grep -Eo 'CMAKE_GENERATOR:INTERNAL=.*$' build/CMakeCache.txt | sed 's/^.*=//' 2>/dev/null)
+    if [ -f build/CMakeCache.txt ]; then
+      generator=$(grep -Eo 'CMAKE_GENERATOR:INTERNAL=.*$' build/CMakeCache.txt | sed 's/^.*=//' 2>/dev/null)
+    fi
 
     if [ -z "$generator" ]; then
         # else, default to Ninja, fallback to Make
@@ -117,8 +120,6 @@ configure() {
           ;;
       esac
     done
-
-    ensure_cmake
 
     echo -e "${BOLD}Build configuration: ${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
