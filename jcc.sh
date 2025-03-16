@@ -1,4 +1,4 @@
-!/usr/bin/env bash
+#!/usr/bin/env bash
 
 BOLD="\033[1m"
 BOLDRED="\033[1;31m"
