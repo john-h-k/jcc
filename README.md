@@ -38,32 +38,32 @@ Working with RISC-V requires installing a RISC-V linker.
 
 ## Requirements
 
-<table>
-  <tr>
-    <th style="text-align:left; width: 50%;">Installation</th>
-    <th style="text-align:left; width: 50%; border-left: 1px solid black;">Development</th>
-  </tr>
-  <tr>
-    <td>
-      <ul>
-        <li>C11-compliant C compiler</li>
-        <li>POSIX shell</li>
-        <li>`git`, `curl`, or `wget` for downloading sources</li>
-        <li>Nothing else!</li>
-      </ul>
-    </td>
-    <td style="border-left: 1px solid black;">
-      <ul>
-        <li>C11-compliant C compiler</li>
-        <li>Bash, version &gt;=3</li>
-        <li>CMake<li>
-        <li>A few other tools are used by `jcc.sh` commands to make for a more pleasant experience, but are not needed.
-        These include `bat` (for syntax-highlighting), `fd`, and `rg`</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+<div style="display: flex; justify-content: space-between;">
 
+#### For installation
+
+<div style="width: 48%;">
+
+* C11-compliant C compiler
+* POSIX shell
+* `git`, `curl`, or `wget` for downloading sources
+* Nothing else
+
+</div>
+
+#### For development
+
+<div style="width: 48%; border-left: 1px solid black; padding-left: 10px;">
+
+* C11-compliant C compiler
+* Bash, version >=3
+* CMake
+* A few other tools are used by `jcc.sh` commands to make for a more pleasant experience, but are not needed. These include `bat` (for syntax-highlighting), `fd`, and `rg`</li>
+
+
+</div>
+
+</div>
 #### Things that don't work yet
 
 1. `va_list` and variadic function implementation. Calling them works fine
