@@ -36,6 +36,16 @@ fi
 printf "%b\n\n" "${BOLD}Downloading done!${RESET}"
 
 # first, find a C compiler we can use
+CC=""
+has_tool cc && CC=cc
+has_tool jcc && CC=jcc
+has_tool gcc && CC=gcc
+has_tool clang && CC=clang
+
+if [ -z "$CC" ]; then
+    printf "%b\n" "${BOLDRED}Could not find a C compiler! (tried 'cc', 'jcc', 'gcc', 'clang')${RESET}"
+    exit 1
+fi
 
 cd jcc
 
@@ -47,7 +57,7 @@ else
 
     mkdir -p build
     output="build/jcc"
-    if ! cc -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
+    if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
           printf "%\b\n" "${BOLDRED}Build failed!${RESET}"
           exit 1
     fi
