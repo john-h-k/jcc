@@ -16,7 +16,7 @@ has_tool() {
 }
 
 try_root() {
-    has_tool "$1" && sudo "$@" || "$@"
+    has_tool sudo && sudo "$@" || "$@"
 }
 
 mkdir -p jcc

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 has_tool() {
- command -v "$1" &>/dev/null
+    command -v "$1" &>/dev/null
 }
 
 try_root() {
-command -v sudo &>dev/null && sudo "$@" || "$@"
+    command -v sudo &>dev/null && sudo "$@" || "$@"
 }
 
 # currently unused (if cmake is not installed, it will revert to slow build)
