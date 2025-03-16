@@ -59,7 +59,7 @@ fi
 printf "%b\n\n" "${BOLD}Downloading done!${RESET}"
 
 output=""
-if has_tool bash; then
+if has_tool bash && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
     output="build/jcc"
     ./jcc.sh build
 else
@@ -69,7 +69,26 @@ else
     mkdir -p build
     output="build/jcc"
 
-    source simple_build.sh
+    # first, find a C compiler we can use
+    CC=""
+    has_tool cc && CC=cc
+    has_tool jcc && CC=jcc
+    has_tool gcc && CC=gcc
+    has_tool clang && CC=clang
+
+    if [ -z "$CC" ]; then
+        printf "%b\n" "${BOLDRED}Could not find a C compiler! (tried 'cc', 'jcc', 'gcc', 'clang')${RESET}"
+
+        cd - > /dev/null 2>&1
+        exit 1
+    fi
+
+    if ! "$CC" -DJCC_ALL -o "$output" $(find src -type f -name '*.c') -lm; then
+        printf "%b\n" "${BOLDRED}Build failed!${RESET}"
+
+        cd - > /dev/null 2>&1
+        exit 1
+    fi
 fi
 
 
