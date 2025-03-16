@@ -4,6 +4,10 @@ has_tool() {
  command -v "$1" &>/dev/null
 }
 
+try_root() {
+command -v sudo &>dev/null && sudo "$@" || "$@"
+}
+
 # currently unused (if cmake is not installed, it will revert to slow build)
 ensure_tool() {
   cmd="$1"
@@ -12,10 +16,6 @@ ensure_tool() {
   has_tool "$cmd" && return
 
   os="$(uname)"
-
-  try_root() {
-    command -v sudo &>dev/null && sudo "$@" || "$@"
-  }
 
   if [ "$os" = "Darwin" ]; then
     echo "macOS detected."
