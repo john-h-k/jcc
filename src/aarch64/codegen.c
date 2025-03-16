@@ -5,8 +5,8 @@
 #include "../log.h"
 #include "../util.h"
 
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 
 #define NOT_SP(reg)                                                            \
   (DEBUG_ASSERT(!reg_eq(reg, STACK_PTR_REG),                                   \
@@ -63,8 +63,8 @@ static enum aarch64_reg_ty fp_reg_ty_for_size(size_t size) {
   BUG("bad size %zu", size);
 }
 
-UNUSED static enum aarch64_reg_ty reg_ty_for_size(enum aarch64_reg_class reg_class,
-                                           size_t size) {
+UNUSED static enum aarch64_reg_ty
+reg_ty_for_size(enum aarch64_reg_class reg_class, size_t size) {
   switch (reg_class) {
   case AARCH64_REG_CLASS_GP:
     return gp_reg_ty_for_size(size);
@@ -396,6 +396,8 @@ static enum aarch64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
     return AARCH64_REG_TY_S;
   case IR_VAR_PRIMITIVE_TY_F64:
     return AARCH64_REG_TY_D;
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   }
 }
 
@@ -1214,6 +1216,8 @@ static void codegen_cnst_op(struct cg_state *state,
       codegen_64_bit_int(state, basicblock, dest,
                          (union b64){.ull = op->cnst.int_value});
       break;
+    case IR_VAR_PRIMITIVE_TY_I128:
+      TODO("codegen uint128");
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_F32:
     case IR_VAR_PRIMITIVE_TY_F64:
@@ -1572,6 +1576,8 @@ static void codegen_sext_op(struct cg_state *state,
     break;
   case IR_VAR_PRIMITIVE_TY_I64:
     BUG("can't sext from I64");
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
@@ -1623,6 +1629,8 @@ static void codegen_trunc_op(struct cg_state *state,
     break;
   case IR_VAR_PRIMITIVE_TY_I64:
     break;
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
@@ -3225,7 +3233,7 @@ void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit) {
     while (basicblock) {
       fprintf(file, "\nBB @ %03zu", basicblock->id);
       if (basicblock->ir_basicblock) {
-         fprintf(file, " (ir_basicblock %zu)", basicblock->ir_basicblock->id);
+        fprintf(file, " (ir_basicblock %zu)", basicblock->ir_basicblock->id);
       }
       fprintf(file, "\n");
 

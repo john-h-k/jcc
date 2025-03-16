@@ -252,6 +252,9 @@ void debug_print_var_ty_string(FILE *file, struct ir_unit *iru,
     case IR_VAR_PRIMITIVE_TY_I64:
       name = "i64";
       break;
+    case IR_VAR_PRIMITIVE_TY_I128:
+      name = "i128";
+      break;
     case IR_VAR_PRIMITIVE_TY_F16:
       name = "f16";
       break;

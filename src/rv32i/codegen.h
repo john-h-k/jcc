@@ -263,9 +263,13 @@ struct rv32i_target {
   };
 };
 
-#define RV32I_BASICBLOCK_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_BASICBLOCK, .basicblock = (value) })
-#define RV32I_OFFSET_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_OFFSET, .offset = (value) })
-#define RV32I_SYMBOL_TARGET(value) ((struct rv32i_target){ .ty = RV32I_TARGET_TY_SYMBOL, .symbol = (value) })
+#define RV32I_BASICBLOCK_TARGET(value)                                         \
+  ((struct rv32i_target){.ty = RV32I_TARGET_TY_BASICBLOCK,                     \
+                         .basicblock = (value)})
+#define RV32I_OFFSET_TARGET(value)                                             \
+  ((struct rv32i_target){.ty = RV32I_TARGET_TY_OFFSET, .offset = (value)})
+#define RV32I_SYMBOL_TARGET(value)                                             \
+  ((struct rv32i_target){.ty = RV32I_TARGET_TY_SYMBOL, .symbol = (value)})
 
 struct rv32i_jal {
   struct rv32i_reg ret_addr;
@@ -377,7 +381,8 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
                void *metadata);
 
 void rv32i_codegen_start(struct cg_state *state);
-void rv32i_codegen_basicblock(struct cg_state *state, struct ir_basicblock *basicblock);
+void rv32i_codegen_basicblock(struct cg_state *state,
+                              struct ir_basicblock *basicblock);
 void rv32i_codegen_end(struct cg_state *state);
 
 void rv32i_debug_print_codegen(FILE *file, struct cg_unit *unit);

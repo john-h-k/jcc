@@ -173,7 +173,6 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
 
   DEF_BUILTIN_IDENT("__extension__", "");
-  DEF_BUILTIN_IDENT("__inline", "");
 
   DEF_BUILTIN_NUM("__JCC__", "1");
   DEF_BUILTIN_NUM("__jcc__", "1");
@@ -1264,8 +1263,9 @@ static bool try_expand_token(struct preproc *preproc,
               next_tok->punctuator.ty ==
                   PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY) {
             stringify = true;
-            break;
           }
+
+          break;
         }
 
         bool expanded = false;
@@ -1559,9 +1559,9 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define STDBOOL_H\n"
         "\n"
         "#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L\n"
-        "#define bool int\n" // TODO: _Bool
-        "#define true 1\n" // TODO: _Bool
-        "#define false 0\n" // TODO: _Bool
+        "#define bool _Bool\n"
+        "#define true 1\n"
+        "#define false 0\n"
         "#endif\n"
         "#endif\n";
 
@@ -1600,7 +1600,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "typedef void * __gnuc_va_list;\n"
         "#define __GNUC_VA_LIST\n"
         "\n"
-        "#ifndef __need___va_list\n"
+        "#ifdef __need___va_list\n"
         "\n"
         "typedef void * va_list;\n"
         "\n"

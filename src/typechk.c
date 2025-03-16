@@ -114,6 +114,7 @@ bool td_var_ty_is_fp_ty(const struct td_var_ty *ty) {
   case WELL_KNOWN_TY_LONG_DOUBLE:
     return true;
 
+  case WELL_KNOWN_TY_BOOL:
   case WELL_KNOWN_TY_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
@@ -125,6 +126,7 @@ bool td_var_ty_is_fp_ty(const struct td_var_ty *ty) {
   case WELL_KNOWN_TY_UNSIGNED_LONG:
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+  case WELL_KNOWN_TY_UINT128:
     return false;
   }
 }
@@ -258,6 +260,7 @@ bool td_var_ty_is_integral_ty(const struct td_var_ty *ty) {
   }
 
   switch (ty->well_known) {
+  case WELL_KNOWN_TY_BOOL:
   case WELL_KNOWN_TY_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
@@ -269,6 +272,7 @@ bool td_var_ty_is_integral_ty(const struct td_var_ty *ty) {
   case WELL_KNOWN_TY_UNSIGNED_LONG:
   case WELL_KNOWN_TY_SIGNED_LONG_LONG:
   case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+  case WELL_KNOWN_TY_UINT128:
     return true;
 
   case WELL_KNOWN_TY_HALF:
@@ -1489,16 +1493,19 @@ type_specifiers(struct typechk *tchk,
           wk = WELL_KNOWN_TY_DOUBLE;
           break;
         case AST_TYPE_SPECIFIER_KW_BOOL:
-          TODO("bool");
-          // wk = WELL_KNOWN_TY_BOOL;
+          wk = WELL_KNOWN_TY_BOOL;
+          break;
         case AST_TYPE_SPECIFIER_KW_COMPLEX:
           TODO("complex");
           // wk = WELL_KNOWN_TY_COMPLEX;
         case AST_TYPE_SPECIFIER_KW_HALF:
           wk = WELL_KNOWN_TY_HALF;
           break;
+        case AST_TYPE_SPECIFIER_KW_UINT128:
+          wk = WELL_KNOWN_TY_UINT128;
+          break;
         default:
-          unreachable();
+          TODO("other type specifiers");
         }
 
         specifiers.type_specifier =
@@ -2458,6 +2465,7 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
     }
   case TD_VAR_TY_TY_WELL_KNOWN:
     switch (ty->well_known) {
+    case WELL_KNOWN_TY_BOOL:
     case WELL_KNOWN_TY_CHAR:
     case WELL_KNOWN_TY_SIGNED_CHAR:
     case WELL_KNOWN_TY_UNSIGNED_CHAR:
@@ -2485,6 +2493,8 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
       return (struct td_var_ty_info){.size = 8, .alignment = 8};
     case WELL_KNOWN_TY_LONG_DOUBLE:
       return (struct td_var_ty_info){.size = 8, .alignment = 8};
+    case WELL_KNOWN_TY_UINT128:
+      return (struct td_var_ty_info){.size = 16, .alignment = 16};
     }
   case TD_VAR_TY_TY_ARRAY: {
     struct td_var_ty_info element_info =
@@ -3694,6 +3704,9 @@ DEBUG_FUNC(var_ty, var_ty) {
     break;
   case TD_VAR_TY_TY_WELL_KNOWN:
     switch (var_ty->well_known) {
+    case WELL_KNOWN_TY_BOOL:
+      TD_PRINTZ("bool");
+      break;
     case WELL_KNOWN_TY_CHAR:
       TD_PRINTZ("char");
       break;
@@ -3738,6 +3751,9 @@ DEBUG_FUNC(var_ty, var_ty) {
       break;
     case WELL_KNOWN_TY_LONG_DOUBLE:
       TD_PRINTZ("long double");
+      break;
+    case WELL_KNOWN_TY_UINT128:
+      TD_PRINTZ("__uint128_t");
       break;
     }
 
