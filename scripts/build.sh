@@ -156,8 +156,7 @@ configure() {
 
     cd build
     # HACK: temp force clang as gcc super slow with ASAN
-    # just have way to configure + have tests use clang
-    if ! (cmake -G -DCMAKE_C_COMPILER=clang "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
+    if ! (cmake -DCMAKE_C_COMPILER=clang -G -DCMAKE_C_COMPILER=clang "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi
