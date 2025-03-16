@@ -1558,8 +1558,8 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         // libc
         "typedef void * __gnuc_va_list;\n"
-        // musl
-        "typedef void * __isoc_va_list;\n"
+        // musl (temp)
+        "#define __builtin_va_list void *"
         "#define __GNUC_VA_LIST\n"
         "\n"
         "#ifndef __need___va_list\n"
