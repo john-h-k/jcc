@@ -166,6 +166,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     hashtbl_insert(preproc->defines, &ident, &define);
   }
 
+  // HACK: musl doesn't include `stdarg.h` so until we support `__builtin_va_list`, just typedef it away
+  DEF_BUILTIN("__builtin_va_list", "void *");
+
   DEF_BUILTIN("__extension__", "");
   DEF_BUILTIN("__inline", "");
 
@@ -1558,8 +1561,6 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         // libc
         "typedef void * __gnuc_va_list;\n"
-        // musl (temp)
-        "#define __builtin_va_list void *"
         "#define __GNUC_VA_LIST\n"
         "\n"
         "#ifndef __need___va_list\n"
