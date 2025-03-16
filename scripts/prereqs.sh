@@ -5,6 +5,10 @@ ensure_cmake() {
 
   os="$(uname)"
 
+  try_root() {
+    command -v sudo &>dev/null && sudo "$@" || "$@"
+  }
+
   if [ "$os" = "Darwin" ]; then
     echo "macOS detected."
     if ! command -v brew &>/dev/null; then
@@ -17,17 +21,17 @@ ensure_cmake() {
   elif [ "$os" = "Linux" ]; then
     if [ -f /etc/debian_version ]; then
       echo "Debian/Ubuntu detected."
-      sudo apt-get update && sudo apt-get install -y cmake
+      try_root apt-get update && try_root apt-get install -y cmake
     elif [ -f /etc/redhat-release ]; then
       echo "Red Hat/CentOS/Fedora detected."
       if command -v dnf &>/dev/null; then
-        sudo dnf install -y cmake
+        try_root dnf install -y cmake
       else
-        sudo yum install -y cmake
+        try_root yum install -y cmake
       fi
     elif [ -f /etc/arch-release ]; then
       echo "Arch Linux detected."
-      sudo pacman -Sy --noconfirm cmake
+      try_root pacman -Sy --noconfirm cmake
     else
       echo "Linux distro. Use your package manager manually."
       exit 1
