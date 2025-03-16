@@ -32,7 +32,7 @@ if [ -f "$script_dir/../jcc.sh" ]; then
     cd ..
 fi
 
-if [ -n "$ispipe "]; then
+if [ -n "$ispipe" ]; then
     mkdir -p jcc
     if has_tool git; then
         printf "%b\n" "${BOLD}Downloading with 'git clone'...${RESET}"
