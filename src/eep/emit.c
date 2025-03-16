@@ -1,3 +1,5 @@
+#if 0
+
 #include "emit.h"
 
 #include "../aarch64.h"
@@ -249,3 +251,5 @@ struct emitted_unit eep_emit(const struct codegen_unit *unit) {
 
   return result;
 }
+
+#endif

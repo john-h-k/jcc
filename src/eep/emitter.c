@@ -1,3 +1,5 @@
+#if 0
+
 #include "emitter.h"
 
 #include "../alloc.h"
@@ -150,3 +152,5 @@ void eep_emit_jump(struct eep_emitter *emitter, const struct eep_jmp jmp) {
 void eep_emit_ext(struct eep_emitter *emitter, const struct eep_ext ext) {
   eep_emit_instr(emitter, EXT(ext.imm));
 }
+
+#endif

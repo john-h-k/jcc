@@ -1,3 +1,5 @@
+#if 0
+
 #include "object.h"
 
 #include "isa.h"
@@ -20,3 +22,5 @@ void write_eep(const struct build_object_args *args) {
 
   fclose(file);
 }
+
+#endif

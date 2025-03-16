@@ -1,3 +1,5 @@
+#if 0
+
 #include "lower.h"
 
 #include "../ir/build.h"
@@ -544,3 +546,5 @@ void eep_lower(struct ir_unit *unit) {
     glb = glb->succ;
   }
 }
+
+#endif

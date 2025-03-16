@@ -1,3 +1,5 @@
+#if 0
+
 #include "eep.h"
 
 #include "eep/codegen.h"
@@ -24,3 +26,5 @@ const struct target EEP_TARGET = {
     write_eep,
     eep_debug_disasm,
     NULL};
+
+#endif
