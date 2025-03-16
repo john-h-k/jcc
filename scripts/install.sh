@@ -29,7 +29,7 @@ if [ -f "$script_dir/../jcc.sh" ]; then
     ispipe=""
 
     # hmm, we don't update if in a git repo. maybe this is not optimal
-    cd ..
+    cd "$script_dir/.."
 fi
 
 if [ -n "$ispipe" ]; then
