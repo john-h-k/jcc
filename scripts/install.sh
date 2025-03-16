@@ -3,8 +3,6 @@
 # This is a standalone - not used by other scripts
 # needs lots of logic improvements this is a vEpsilon
 
-set -e
-
 BOLD="\033[1m"
 BOLDRED="\033[1;31m"
 BOLDYELLOW="\033[1;33m"
