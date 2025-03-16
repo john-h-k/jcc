@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "compiler.h"
 #include "diagnostics.h"
+#include "lex.h"
 #include "log.h"
 #include "parse.h"
 #include "program.h"
@@ -3084,6 +3085,59 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
                                               TD_TYPE_QUALIFIER_FLAG_NONE);
     }
   }
+
+  // push the magic "__func__" variable
+  struct td_var var = {
+      .ty = TD_VAR_VAR_TY_VAR,
+      .identifier = "__func__",
+      .scope = SCOPE_PARAMS,
+  };
+
+  struct var_table_entry *entry =
+      var_table_create_entry(&tchk->var_table, var.identifier);
+  entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
+  *entry->var = var;
+  entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
+  *entry->var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
+
+  struct ast_expr lhs = {
+    .ty = AST_EXPR_TY_VAR,
+    .var = {
+      .identifier = {
+        .ty = LEX_TOKEN_TY_IDENTIFIER,
+        .span = MK_INVALID_TEXT_SPAN(0, strlen("__func__")),
+        .text = "__func__",
+        // doesn't init internal lexer position because if this reaches the lexer what the hell is going on
+      },
+      .span = MK_INVALID_TEXT_SPAN(0, 0)
+    },
+    .span = MK_INVALID_TEXT_SPAN(0, 0)
+  };
+
+  const char *func_name = declaration.var.identifier;
+
+  struct ast_expr value = {
+    .ty = AST_EXPR_TY_VAR,
+    .var = {
+      .identifier = {
+        .ty = LEX_TOKEN_TY_ASCII_STR_LITERAL,
+        .span = MK_INVALID_TEXT_SPAN(0, strlen(func_name)),
+        .text = func_name,
+        // doesn't init internal lexer position because if this reaches the lexer what the hell is going on
+      },
+      .span = MK_INVALID_TEXT_SPAN(0, 0)
+    },
+    .span = MK_INVALID_TEXT_SPAN(0, 0)
+  };
+
+  struct ast_assg func_assg = {
+    .ty = AST_ASSG_TY_BASIC,
+    .assignee = &lhs,
+    .expr = &value,
+    .span = MK_INVALID_TEXT_SPAN(0, 0)
+  };
+
+  type_assg(tchk, &func_assg);
 
   struct td_funcdef td_funcdef = {
       .storage_class_specifier = specifiers.storage,
