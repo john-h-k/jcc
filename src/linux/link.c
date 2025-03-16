@@ -103,7 +103,11 @@ enum link_result linux_link_objects(const struct link_args *args) {
 
   total_size += strlen(template_suffix);
 
+  const char *stderr_null = " 2>/dev/null";
+
   total_size++; // null terminator
+
+  total_size += strlen(stderr_null);
 
   char *buff = arena_alloc(arena, total_size);
 
@@ -135,6 +139,9 @@ enum link_result linux_link_objects(const struct link_args *args) {
 
   strcpy(&buff[head], template_suffix);
   head += strlen(template_suffix);
+
+  strcpy(&buff[head], stderr_null);
+  head += strlen(stderr_null);
 
   buff[head++] = 0;
 
