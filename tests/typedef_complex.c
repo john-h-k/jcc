@@ -1,3 +1,6 @@
+// expected value: 0
+// stdout: Hello, World!
+
 typedef unsigned long size_t;
 typedef long ssize_t;
 typedef long off_t;

@@ -2588,6 +2588,15 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
     return value;
   }
 
+  if (expr->ty == AST_EXPR_TY_TERNARY) {
+    // i think evaluating both is the correct thing to do?
+    unsigned long long cond = type_constant_integral_expr(tchk, expr->ternary.cond);
+    unsigned long long lhs = type_constant_integral_expr(tchk, expr->ternary.true_expr);
+    unsigned long long rhs = type_constant_integral_expr(tchk, expr->ternary.false_expr);
+
+    return cond ? lhs : rhs;
+  }
+
   if (expr->ty == AST_EXPR_TY_UNARY_OP) {
     unsigned long long value =
         type_constant_integral_expr(tchk, expr->unary_op.expr);

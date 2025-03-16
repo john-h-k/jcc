@@ -6,6 +6,19 @@ int main() {
   char c[1 ? 2 : 4];
   char d[1 * 5 + 9 + (~-1)];
 
-  return !(sizeof(a) == 1 & sizeof(b) == 4 & sizeof(c) == 2 & sizeof(d) ==
-  14);
+  if (sizeof(a) != 1) {
+    return 1;
+  }
+
+  if (sizeof(b) != 4) {
+    return 2;
+  }
+
+  if (sizeof(c) != 2) {
+    return 3;
+  }
+
+  if (sizeof(d) != 14) {
+    return 4;
+  }
 }
