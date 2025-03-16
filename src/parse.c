@@ -369,6 +369,14 @@ static bool parse_type_specifier_kw(struct parser *parser,
     consume_token(parser->lexer, token);
     *wkt = AST_TYPE_SPECIFIER_KW_INT;
     return true;
+  case LEX_TOKEN_TY_KW_BOOL:
+    consume_token(parser->lexer, token);
+    *wkt = AST_TYPE_SPECIFIER_KW_BOOL;
+    return true;
+  case LEX_TOKEN_TY_KW_UINT128:
+    consume_token(parser->lexer, token);
+    *wkt = AST_TYPE_SPECIFIER_KW_UINT128;
+    return true;
   case LEX_TOKEN_TY_KW_LONG:
     consume_token(parser->lexer, token);
     *wkt = AST_TYPE_SPECIFIER_KW_LONG;
@@ -3281,6 +3289,9 @@ DEBUG_FUNC_ENUM(type_specifier_kw, type_specifier_kw) {
     break;
   case AST_TYPE_SPECIFIER_KW_HALF:
     AST_PRINTZ("HALF");
+    break;
+  case AST_TYPE_SPECIFIER_KW_UINT128:
+    AST_PRINTZ("UINT128");
     break;
   }
 }

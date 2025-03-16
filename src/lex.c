@@ -76,8 +76,17 @@ enum lex_create_result lexer_create(struct program *program,
 
     // TODO: indicate non standard to user
     KEYWORD("__restrict", LEX_TOKEN_TY_KW_RESTRICT);
+    KEYWORD("__inline", LEX_TOKEN_TY_KW_INLINE);
 
     KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
+
+    KEYWORD("_Bool", LEX_TOKEN_TY_KW_BOOL);
+    // TODO: only allow for C23 (similar with alignof)
+    KEYWORD("bool", LEX_TOKEN_TY_KW_BOOL);
+
+    // required by macOS
+    KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
+
     KEYWORD("__fp16", LEX_TOKEN_TY_KW_HALF);
     KEYWORD("_Float16", LEX_TOKEN_TY_KW_HALF);
     KEYWORD("float", LEX_TOKEN_TY_KW_FLOAT);
@@ -637,6 +646,8 @@ const char *token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 
+    CASE_RET(LEX_TOKEN_TY_KW_BOOL)
+    CASE_RET(LEX_TOKEN_TY_KW_UINT128)
     CASE_RET(LEX_TOKEN_TY_KW_NORETURN)
     CASE_RET(LEX_TOKEN_TY_KW_ATTRIBUTE)
     CASE_RET(LEX_TOKEN_TY_KW_GOTO)

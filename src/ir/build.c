@@ -2,12 +2,12 @@
 
 #include "../alloc.h"
 #include "../hashtbl.h"
+#include "../log.h"
 #include "../typechk.h"
 #include "../util.h"
 #include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
-#include "../log.h"
 #include "var_refs.h"
 
 // break/continues will add an entry into the jumps vector
@@ -177,6 +177,8 @@ static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
 static enum ir_var_primitive_ty
 var_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   switch (wkt) {
+  case WELL_KNOWN_TY_BOOL:
+    TODO("ir bool");
   case WELL_KNOWN_TY_CHAR:
   case WELL_KNOWN_TY_SIGNED_CHAR:
   case WELL_KNOWN_TY_UNSIGNED_CHAR:
@@ -205,6 +207,8 @@ var_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   case WELL_KNOWN_TY_DOUBLE:
   case WELL_KNOWN_TY_LONG_DOUBLE:
     return IR_VAR_PRIMITIVE_TY_F64;
+  case WELL_KNOWN_TY_UINT128:
+    return IR_VAR_PRIMITIVE_TY_I128;
   }
 }
 
@@ -664,7 +668,7 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
       ref->lcl = ir_add_local(irb->func, &var_ty);
     }
 
-    // HACK: 
+    // HACK:
     // we don't really mean a "spill" here anyway
     to_spill->lcl = NULL;
     to_spill->flags &= ~IR_OP_FLAG_SPILLED;
@@ -2861,14 +2865,12 @@ struct ir_var_def {
 };
 
 static struct ir_var_def build_ir_var(struct ir_func_builder *irb,
-                                  struct ir_stmt **stmt,
-                                  struct td_var *var,
-                                  const struct ir_var_ty *var_ty
-                                ) {
+                                      struct ir_stmt **stmt, struct td_var *var,
+                                      const struct ir_var_ty *var_ty) {
   struct ir_lcl *lcl;
 
-  if ((irb->flags & IR_BUILD_FLAG_SPILL_ALL) || ir_var_ty_is_aggregate(var_ty) ||
-      var_ty->ty == IR_VAR_TY_TY_ARRAY) {
+  if ((irb->flags & IR_BUILD_FLAG_SPILL_ALL) ||
+      ir_var_ty_is_aggregate(var_ty) || var_ty->ty == IR_VAR_TY_TY_ARRAY) {
     // this is a new var, so we can safely create a new ref
     struct var_key key = get_var_key(var, (*stmt)->basicblock);
     struct var_ref *ref = var_refs_add(irb->var_refs, &key, VAR_REF_TY_LCL);
@@ -3206,11 +3208,11 @@ static bool eq_td_var(const void *l, const void *r) {
          !strcmp(vl->identifier, vr->identifier);
 }
 
-
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct arena_allocator *arena,
                                              struct td_funcdef *def,
-                                             struct var_refs *global_var_refs, enum ir_build_flags flags) {
+                                             struct var_refs *global_var_refs,
+                                             enum ir_build_flags flags) {
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
@@ -3970,14 +3972,15 @@ static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
 //     }
 
 //     size_t num_writes = vector_length(writes);
-    
+
 //   }
 // }
 
 struct ir_unit *
 build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
                              struct arena_allocator *arena,
-                             struct td_translationunit *translation_unit, enum ir_build_flags flags) {
+                             struct td_translationunit *translation_unit,
+                             enum ir_build_flags flags) {
 
   struct ir_unit *iru = arena_alloc(arena, sizeof(*iru));
   *iru = (struct ir_unit){.arena = arena,

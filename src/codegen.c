@@ -189,6 +189,10 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
       COPY(uint64_t, int_value);
       break;
+    case IR_VAR_PRIMITIVE_TY_I128:
+      DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_INT, "expected int");
+      COPY(uint128_t, int_value);
+      break;
     case IR_VAR_PRIMITIVE_TY_F32:
       DEBUG_ASSERT(value->ty == IR_VAR_VALUE_TY_FLT, "expected flt");
       COPY(float, flt_value);

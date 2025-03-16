@@ -212,6 +212,8 @@ enum ast_type_specifier_kw {
   AST_TYPE_SPECIFIER_KW_COMPLEX,
 
   AST_TYPE_SPECIFIER_KW_HALF,
+
+  AST_TYPE_SPECIFIER_KW_UINT128,
 };
 
 struct ast_type_specifier {

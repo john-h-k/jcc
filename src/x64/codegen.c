@@ -1,7 +1,7 @@
 #include "codegen.h"
 
-#include "../util.h"
 #include "../log.h"
+#include "../util.h"
 #include "../x64.h"
 
 #include <stdio.h>
@@ -334,6 +334,8 @@ static enum x64_reg_ty reg_ty_for_var_ty(const struct ir_var_ty *var_ty) {
     return X64_REG_TY_E;
   case IR_VAR_PRIMITIVE_TY_I64:
     return X64_REG_TY_R;
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
@@ -708,6 +710,8 @@ static void codegen_cnst_op(struct cg_state *state,
       codegen_int(state, basicblock, dest,
                   (union b64){.ull = (unsigned long long)op->cnst.int_value});
       break;
+    case IR_VAR_PRIMITIVE_TY_I128:
+      TODO("codegen uint128");
     case IR_VAR_PRIMITIVE_TY_F16:
     case IR_VAR_PRIMITIVE_TY_F32:
     case IR_VAR_PRIMITIVE_TY_F64:
@@ -1073,6 +1077,8 @@ static void codegen_sext_op(struct cg_state *state,
     break;
   case IR_VAR_PRIMITIVE_TY_I64:
     BUG("can't sext from I64");
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:
@@ -1136,6 +1142,8 @@ static void codegen_trunc_op(struct cg_state *state,
   }
   case IR_VAR_PRIMITIVE_TY_I64:
     break;
+  case IR_VAR_PRIMITIVE_TY_I128:
+    TODO("codegen uint128");
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
   case IR_VAR_PRIMITIVE_TY_F64:

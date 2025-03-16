@@ -1112,7 +1112,7 @@ void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb) {
 }
 
 static void ir_prune_globals_walk_var_value(struct ir_unit *iru, bool *seen,
-                               const struct ir_var_value *value) {
+                                            const struct ir_var_value *value) {
   switch (value->ty) {
   case IR_VAR_VALUE_TY_ADDR:
     if (value->addr.glb) {
@@ -2578,6 +2578,7 @@ bool ir_primitive_ty_is_integral(enum ir_var_primitive_ty ty) {
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
   case IR_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I128:
     return true;
   case IR_VAR_PRIMITIVE_TY_F16:
   case IR_VAR_PRIMITIVE_TY_F32:
@@ -2596,6 +2597,7 @@ bool ir_primitive_ty_is_fp(enum ir_var_primitive_ty ty) {
   case IR_VAR_PRIMITIVE_TY_I16:
   case IR_VAR_PRIMITIVE_TY_I32:
   case IR_VAR_PRIMITIVE_TY_I64:
+  case IR_VAR_PRIMITIVE_TY_I128:
     return false;
   }
 }
@@ -2706,6 +2708,8 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
       return (struct ir_var_ty_info){.size = 4, .alignment = 4};
     case IR_VAR_PRIMITIVE_TY_F64:
       return (struct ir_var_ty_info){.size = 8, .alignment = 8};
+    case IR_VAR_PRIMITIVE_TY_I128:
+      return (struct ir_var_ty_info){.size = 16, .alignment = 16};
     }
   case IR_VAR_TY_TY_ARRAY: {
     struct ir_var_ty_info element_info =

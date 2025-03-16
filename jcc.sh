@@ -360,8 +360,8 @@ run() {
 
 debug() {
     mode=$(get_mode "$1")
-    [ -z "$mode" ] || shift  
-    build "$mode"
+    [ -z "$mode" ] && mode="Debug" || shift  
+    build --mode "$mode" 1>&2
 
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"

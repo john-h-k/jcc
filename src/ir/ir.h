@@ -194,6 +194,7 @@ enum ir_var_primitive_ty {
   IR_VAR_PRIMITIVE_TY_I16,
   IR_VAR_PRIMITIVE_TY_I32,
   IR_VAR_PRIMITIVE_TY_I64,
+  IR_VAR_PRIMITIVE_TY_I128,
 
   IR_VAR_PRIMITIVE_TY_F16,
   IR_VAR_PRIMITIVE_TY_F32,
@@ -1014,8 +1015,10 @@ struct ir_basicblock_succ_iter {
   size_t idx;
 };
 
-struct ir_basicblock_succ_iter ir_basicblock_succ_iter(struct ir_basicblock *basicblock);
-bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter, struct ir_basicblock **basicblock);
+struct ir_basicblock_succ_iter
+ir_basicblock_succ_iter(struct ir_basicblock *basicblock);
+bool ir_basicblock_succ_iter_next(struct ir_basicblock_succ_iter *iter,
+                                  struct ir_basicblock **basicblock);
 
 struct ir_glb *ir_add_well_known_global(struct ir_unit *iru,
                                         enum ir_well_known_glb glb);
@@ -1172,9 +1175,9 @@ void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
                       struct ir_lcl *lcl);
 
 void ir_insert_basicblock_chain(struct ir_func *irb,
-                              struct ir_basicblock *chain,
-                              struct ir_basicblock *insert_after,
-                            struct ir_basicblock *first_succ);
+                                struct ir_basicblock *chain,
+                                struct ir_basicblock *insert_after,
+                                struct ir_basicblock *first_succ);
 
 void ir_move_after_basicblock(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
@@ -1245,7 +1248,7 @@ struct ir_op *ir_insert_phi(struct ir_func *irb,
                             struct ir_var_ty var_ty);
 
 bool ir_basicblock_is_pred(struct ir_basicblock *basicblock,
-                    struct ir_basicblock *pred);
+                           struct ir_basicblock *pred);
 
 struct ir_field_info {
   struct ir_var_ty var_ty;
