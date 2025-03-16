@@ -36,10 +36,54 @@ without having to enter the shoggoth of Clang/GCC.
 AArch64, x64, and RISC-V 32 are supported, although some of the x64 ABI is not yet fully implemented and RISC-V 32 64 bit integers are WIP.
 Working with RISC-V requires installing a RISC-V linker.
 
+## Requirements
+
+<table>
+  <tr>
+    <th style="text-align:left; width: 50%;">Installation</th>
+    <th style="text-align:left; width: 50%; border-left: 1px solid black;">Development</th>
+  </tr>
+  <tr>
+    <td>
+      <ul>
+        <li>C11-compliant C compiler</li>
+        <li>POSIX shell</li>
+        <li>`git`, `curl`, or `wget` for downloading sources</li>
+        <li>Nothing else!</li>
+      </ul>
+    </td>
+    <td style="border-left: 1px solid black;">
+      <ul>
+        <li>C11-compliant C compiler</li>
+        <li>Bash, version &gt;=3</li>
+        <li>CMake<li>
+        <li>A few other tools are used by `jcc.sh` commands to make for a more pleasant experience, but are not needed.
+        These include `bat` (for syntax-highlighting), `fd`, and `rg`</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
 #### Things that don't work yet
 
 1. `va_list` and variadic function implementation. Calling them works fine
 2. Compound literals
+
+### Installation
+
+To directly install `jcc` for playing around with (tested on macOS & various Linux distros):
+
+```sh
+curl -sSL https://jcc.johnk.dev/install.sh | sh
+```
+
+`wget` can also be used, or you can clone the repository and run `./scripts/install.sh` if you somehow have `git` but not `curl` or `wget`(???).
+
+To install for development (which is realistically what you should do!):
+
+* Ensure you have `bash` and `cmake` installed
+* Fork & clone the repo (exercise left to reader)
+* Run `./jcc.sh` for help
 
 #### Development
 
@@ -51,7 +95,7 @@ Prequisites:
 * A C11 compiler
 * A system linker (this is almost certainly already installed)
 
-The `jcc.sh` script can be used for common workflows:
+The `jcc.sh` script can be used for common workflows. A key subset of the commands can be seen here (run `./jcc.sh` for all commands):
 
 ```
 jcc.sh COMMAND
