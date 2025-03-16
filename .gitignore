@@ -2,7 +2,7 @@
 .cache/
 
 a.out
-build*
+build*/
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
