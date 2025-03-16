@@ -836,7 +836,7 @@ static void ir_validate_func(struct ir_validate_state *state,
   struct ir_func *func = glb->func;
   struct ir_basicblock *basicblock = func->first;
 
-  ir_rebuild_ids(func);
+  ir_rebuild_func_ids(func);
 
   struct ir_lcl *lcl = func->first_lcl;
 

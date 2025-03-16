@@ -341,6 +341,10 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
 
   ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
 
+  ir_prune_globals(*ir);
+  
+  ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
+
   return COMPILE_RESULT_SUCCESS;
 }
 
@@ -474,7 +478,7 @@ static enum compile_result compile_stage_elim_phi(struct compiler *compiler,
       break;
     case IR_GLB_TY_FUNC:
       eliminate_phi(glb->func);
-      ir_rebuild_ids(glb->func);
+      ir_rebuild_func_ids(glb->func);
       break;
     }
 
@@ -493,6 +497,8 @@ static enum compile_result compile_stage_elim_phi(struct compiler *compiler,
 
 static enum compile_result
 compile_stage_codegen_prepare(struct compiler *compiler, struct ir_unit *ir) {
+  ir_rebuild_glb_ids(ir);
+
   struct ir_glb *glb = ir->first_global;
 
   while (glb) {
@@ -540,7 +546,7 @@ compile_stage_codegen_prepare(struct compiler *compiler, struct ir_unit *ir) {
       vector_free(&gathers);
 
       ir_rebuild_flags(glb->func);
-      ir_rebuild_ids(glb->func);
+      ir_rebuild_func_ids(glb->func);
       break;
     }
 
