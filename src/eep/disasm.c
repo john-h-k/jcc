@@ -1,3 +1,5 @@
+#if 0
+
 #include "disasm.h"
 
 #include "../bit_twiddle.h"
@@ -153,3 +155,5 @@ static void disasm_instr(const char *line) {
 
   printf("\n");
 }
+
+#endif

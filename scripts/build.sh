@@ -121,7 +121,11 @@ configure() {
       esac
     done
 
-    ensure_cmake
+    if ! has_tool cmake; then
+      # TODO: respect flags in simple build
+      echo -e "${BOLDYELLOW}CMake not installed; reverting to simple build (flags will be ignored) ${RESET}"
+      return
+    fi
 
     echo -e "${BOLD}Build configuration: ${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
@@ -165,9 +169,16 @@ build() {
 
     num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
-    if ! cmake --build . --parallel $num_procs; then
-        echo -e "${BOLDRED}Build failed!${RESET}"
-        exit -1
+    if has_tool cmake; then
+      if ! cmake --build . --parallel $num_procs; then
+          echo -e "${BOLDRED}Build failed!${RESET}"
+          exit -1
+      fi
+    else
+      if ! cc $(find src -type f -name '*.c'); then
+          echo -e "${BOLDRED}Build failed!${RESET}"
+          exit -1
+      fi
     fi
 
     # we are now in build dir (should make this clearer)

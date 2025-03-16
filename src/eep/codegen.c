@@ -1,3 +1,5 @@
+#if 0
+
 #include "codegen.h"
 
 #include "../alloc.h"
@@ -188,3 +190,5 @@ struct codegen_unit *eep_codegen(struct ir_unit *ir) {
 
   return unit;
 }
+
+#endif
