@@ -123,24 +123,27 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
                                           enum compile_target target) {
   // FIXME: vectors leak, vector should probably be arena-based
 
-#define DEF_BUILTIN(n, v)                                                      \
+#define DEF_BUILTIN(tok_ty, n, v)                                                      \
   do {                                                                         \
     size_t name_len = strlen((n));                                             \
     struct sized_str ident = {.str = (n), .len = name_len};                    \
                                                                                \
     struct preproc_define define = {                                           \
-        .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,                            \
+        .name = {.ty = tok_ty,                            \
                  .span = MK_INVALID_TEXT_SPAN(0, name_len),                    \
                  .text = (n)},                                                 \
         .value = {                                                             \
             .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,                               \
-            .token = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,                       \
+            .token = {.ty = tok_ty,                       \
                       .span = MK_INVALID_TEXT_SPAN(0, strlen((v))),            \
                       .text = (v)},                                            \
         }};                                                                    \
                                                                                \
     hashtbl_insert(preproc->defines, &ident, &define);                         \
   } while (0);
+
+#define DEF_BUILTIN_NUM(n, v) DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v))
+#define DEF_BUILTIN_IDENT(n, v) DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v))
 
   // HACK: apple headers have __asm in them in weird locations. we define a
   // macro here to get rid of that
@@ -167,68 +170,68 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   }
 
   // HACK: musl doesn't include `stdarg.h` so until we support `__builtin_va_list`, just typedef it away
-  DEF_BUILTIN("__builtin_va_list", "void *");
+  DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
 
-  DEF_BUILTIN("__extension__", "");
-  DEF_BUILTIN("__inline", "");
+  DEF_BUILTIN_IDENT("__extension__", "");
+  DEF_BUILTIN_IDENT("__inline", "");
 
-  DEF_BUILTIN("__JCC__", "1");
-  DEF_BUILTIN("__jcc__", "1");
+  DEF_BUILTIN_NUM("__JCC__", "1");
+  DEF_BUILTIN_NUM("__jcc__", "1");
 
-  DEF_BUILTIN("__STDC__", "1");
+  DEF_BUILTIN_NUM("__STDC__", "1");
 
   // TODO: support different version targets. This is C11
-  DEF_BUILTIN("__STDC_VERSION__", "201112L");
-  DEF_BUILTIN("__STDC_HOSTED__", "1");
+  DEF_BUILTIN_NUM("__STDC_VERSION__", "201112L");
+  DEF_BUILTIN_NUM("__STDC_HOSTED__", "1");
 
-  DEF_BUILTIN("__STDC_UTF_16__", "1");
-  DEF_BUILTIN("__STDC_UTF_32__", "1");
+  DEF_BUILTIN_NUM("__STDC_UTF_16__", "1");
+  DEF_BUILTIN_NUM("__STDC_UTF_32__", "1");
 
   // C23 only
-  DEF_BUILTIN("__STDC_EMBED_NOT_FOUND__", "0");
-  DEF_BUILTIN("__STDC_EMBED_FOUND__", "1");
-  DEF_BUILTIN("__STDC_EMBED_EMPTY__", "2");
+  DEF_BUILTIN_NUM("__STDC_EMBED_NOT_FOUND__", "0");
+  DEF_BUILTIN_NUM("__STDC_EMBED_FOUND__", "1");
+  DEF_BUILTIN_NUM("__STDC_EMBED_EMPTY__", "2");
 
   // C11
-  DEF_BUILTIN("__STDC_NO_ATOMICS__", "1");
-  DEF_BUILTIN("__STDC_NO_COMPLEX__", "1");
-  DEF_BUILTIN("__STDC_NO_THREADS__", "1");
-  DEF_BUILTIN("__STDC_NO_VLA__", "1");
+  DEF_BUILTIN_NUM("__STDC_NO_ATOMICS__", "1");
+  DEF_BUILTIN_NUM("__STDC_NO_COMPLEX__", "1");
+  DEF_BUILTIN_NUM("__STDC_NO_THREADS__", "1");
+  DEF_BUILTIN_NUM("__STDC_NO_VLA__", "1");
 
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
-    DEF_BUILTIN("__APPLE__", "1");
-    DEF_BUILTIN("__aarch64__", "1");
-    DEF_BUILTIN("__arm64__", "1");
-    DEF_BUILTIN("__LP64__", "1");
-    DEF_BUILTIN("_LP64", "1");
+    DEF_BUILTIN_NUM("__APPLE__", "1");
+    DEF_BUILTIN_NUM("__aarch64__", "1");
+    DEF_BUILTIN_NUM("__arm64__", "1");
+    DEF_BUILTIN_NUM("__LP64__", "1");
+    DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_MACOS_X86_64:
-    DEF_BUILTIN("__APPLE__", "1");
-    DEF_BUILTIN("__x86_64__", "1");
-    DEF_BUILTIN("__LP64__", "1");
-    DEF_BUILTIN("_LP64", "1");
+    DEF_BUILTIN_NUM("__APPLE__", "1");
+    DEF_BUILTIN_NUM("__x86_64__", "1");
+    DEF_BUILTIN_NUM("__LP64__", "1");
+    DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_ARM64:
-    DEF_BUILTIN("__linux__", "1");
-    DEF_BUILTIN("__aarch64__", "1");
-    DEF_BUILTIN("__arm64__", "1");
-    DEF_BUILTIN("__LP64__", "1");
-    DEF_BUILTIN("_LP64", "1");
+    DEF_BUILTIN_NUM("__linux__", "1");
+    DEF_BUILTIN_NUM("__aarch64__", "1");
+    DEF_BUILTIN_NUM("__arm64__", "1");
+    DEF_BUILTIN_NUM("__LP64__", "1");
+    DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_X86_64:
-    DEF_BUILTIN("__linux__", "1");
-    DEF_BUILTIN("__x86_64__", "1");
-    DEF_BUILTIN("__LP64__", "1");
-    DEF_BUILTIN("_LP64", "1");
+    DEF_BUILTIN_NUM("__linux__", "1");
+    DEF_BUILTIN_NUM("__x86_64__", "1");
+    DEF_BUILTIN_NUM("__LP64__", "1");
+    DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_LINUX_RV32I:
-    DEF_BUILTIN("__linux__", "1");
-    DEF_BUILTIN("__riscv", "1");
-    DEF_BUILTIN("__riscv32", "1");
-    DEF_BUILTIN("__riscv__", "1");
-    DEF_BUILTIN("__LP32__", "1");
-    DEF_BUILTIN("_LP32", "1");
+    DEF_BUILTIN_NUM("__linux__", "1");
+    DEF_BUILTIN_NUM("__riscv", "1");
+    DEF_BUILTIN_NUM("__riscv32", "1");
+    DEF_BUILTIN_NUM("__riscv__", "1");
+    DEF_BUILTIN_NUM("__LP32__", "1");
+    DEF_BUILTIN_NUM("_LP32", "1");
     break;
   case COMPILE_TARGET_EEP:
     break;
@@ -1544,7 +1547,46 @@ enum try_find_include_mode {
 static bool try_include_path(struct preproc *preproc, const char *path,
                              const char **content,
                              enum try_find_include_mode mode) {
-  if (!strcmp(path, "stdarg.h")) {
+
+  if (!strcmp(path, "stdbool.h")) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: special header 'stdbool.h'");
+    }
+
+    const char *STDBOOL_CONTENT =
+        "\n"
+        "#ifndef STDBOOL_H\n"
+        "#define STDBOOL_H\n"
+        "\n"
+        "#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L\n"
+        "#define bool int\n" // TODO: _Bool
+        "#define true 1\n" // TODO: _Bool
+        "#define false 0\n" // TODO: _Bool
+        "#endif\n"
+        "#endif\n";
+
+    *content = STDBOOL_CONTENT;
+
+    return true;
+ } else if (!strcmp(path, "stdnoreturn.h")) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: special header 'stdnoreturn.h'");
+    }
+
+    const char *STDNORETURN_CONTENT =
+        "\n"
+        "#ifndef STDNORETURN_H\n"
+        "#define STDNORETURN_H\n"
+        "\n"
+        "#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L\n"
+        "#define noreturn _Noreturn\n" // TODO: _Bool
+        "#endif\n"
+        "#endif\n";
+
+    *content = STDNORETURN_CONTENT;
+
+    return true;
+  } else if (!strcmp(path, "stdarg.h")) {
     if (preproc->args.verbose) {
       fprintf(stderr, "preproc: special header 'starg.h'");
     }
@@ -1580,10 +1622,10 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     return true;
   } else if (!strcmp(path, "stddef.h")) {
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: special header 'starg.h'");
+      fprintf(stderr, "preproc: special header 'stddef.h'");
     }
 
-    const char *STDARG_CONTENT =
+    const char *STDDEF_CONTENT =
         "\n"
         "#ifndef STDDEF_H\n"
         "#define STDDEF_H\n"
@@ -1607,7 +1649,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         "#endif\n";
 
-    *content = STDARG_CONTENT;
+    *content = STDDEF_CONTENT;
 
     return true;
   }
@@ -1658,7 +1700,7 @@ static struct include_info try_find_include(struct preproc *preproc,
     }
   }
 
-  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h")) {
+  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h") || !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h")) {
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;

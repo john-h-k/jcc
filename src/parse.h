@@ -53,6 +53,7 @@ enum ast_storage_class_specifier {
 
 enum ast_function_specifier {
   AST_FUNCTION_SPECIFIER_INLINE,
+  AST_FUNCTION_SPECIFIER_NORETURN,
 };
 
 enum ast_type_qualifier {

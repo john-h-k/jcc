@@ -307,6 +307,8 @@ static bool parse_function_specifier(struct parser *parser,
 
   if (token.ty == LEX_TOKEN_TY_KW_INLINE) {
     *specifier = AST_FUNCTION_SPECIFIER_INLINE;
+  } else if (token.ty == LEX_TOKEN_TY_KW_NORETURN) {
+    *specifier = AST_FUNCTION_SPECIFIER_NORETURN;
   } else {
     return false;
   }
@@ -3201,6 +3203,9 @@ DEBUG_FUNC_ENUM(function_specifier, function_specifier) {
   switch (*function_specifier) {
   case AST_FUNCTION_SPECIFIER_INLINE:
     AST_PRINTZ("INLINE");
+    break;
+  case AST_FUNCTION_SPECIFIER_NORETURN:
+    AST_PRINTZ("NORETURN");
     break;
   }
 }
