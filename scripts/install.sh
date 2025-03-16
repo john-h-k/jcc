@@ -64,7 +64,8 @@ if has_tool bash && has_tool cmake && [ -z "JCC_FORCE_SIMPLE_BUILD" ]; then
     ./jcc.sh build
 else
     printf "%b\n" "${BOLD}Bash/CMake is not installed; reverting to a simple build...$RESET"
-    # if bash isn't installed, manually do a simple build
+
+    # if bash isn't installed, manually do a simple build (literally feeding all files directly to the C compiler)
 
     mkdir -p build
     output="build/jcc"
