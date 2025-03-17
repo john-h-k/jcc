@@ -1,4 +1,3 @@
-// skip: not yet implemented
 // expected value: 13
 
 struct foo {
