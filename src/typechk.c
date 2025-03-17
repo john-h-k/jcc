@@ -1973,9 +1973,9 @@ type_arrayaccess(struct typechk *tchk,
                           .array_access = td_arrayaccess};
 }
 
-static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
-                                                const struct td_var_ty *var_ty,
-                                                struct text_span context) {
+static bool try_get_completed_aggregate(struct typechk *tchk,
+                                        const struct td_var_ty *var_ty,
+                                        struct td_var_ty *complete) {
   if (var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     enum var_table_ns ns =
         var_ty->incomplete_aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
@@ -1987,21 +1987,34 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
     // FIXME: ALSO needs to check scope
     // if (!entry || entry->var->scope != td_var_ty)
     if (!entry) {
-      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-      compiler_diagnostics_add(
-          tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
-                                 MK_INVALID_TEXT_POS(0),
-                                 "incomplete type in member access"));
-      return TD_VAR_TY_UNKNOWN;
+      return false;
     }
 
     DEBUG_ASSERT(entry->var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
-    return *entry->var_ty;
+    *complete = *entry->var_ty;
+    return true;
   } else {
     DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
-    return *var_ty;
+    *complete = *var_ty;
+    return true;
   }
+}
+
+static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
+                                                const struct td_var_ty *var_ty,
+                                                struct text_span context) {
+  struct td_var_ty complete;
+  if (!try_get_completed_aggregate(tchk, var_ty, &complete)) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
+                               MK_INVALID_TEXT_POS(0),
+                               "incomplete type in member access"));
+    return TD_VAR_TY_UNKNOWN;
+  }
+
+  return complete;
 }
 
 static bool try_resolve_member_access_ty(struct typechk *tchk,
@@ -2456,16 +2469,14 @@ type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
 static struct td_expr
 type_compound_literal(struct typechk *tchk,
                       const struct ast_compound_literal *compound_literal) {
-  struct td_var_ty var_ty =
-      type_type_name(tchk, &compound_literal->type_name);
+  struct td_var_ty var_ty = type_type_name(tchk, &compound_literal->type_name);
 
   return (struct td_expr){
       .ty = TD_EXPR_TY_COMPOUND_LITERAL,
       .var_ty = var_ty,
-      .compound_literal = {
-          .var_ty = var_ty,
-          .init_list =
-              type_init_list(tchk, &var_ty, &compound_literal->init_list)}};
+      .compound_literal = {.var_ty = var_ty,
+                           .init_list = type_init_list(
+                               tchk, &var_ty, &compound_literal->init_list)}};
 }
 
 static struct td_expr type_expr(struct typechk *tchk,
@@ -2528,6 +2539,12 @@ static struct td_expr type_expr(struct typechk *tchk,
 
     td_expr.var_ty.ty = TD_VAR_TY_TY_POINTER;
     td_expr.var_ty.pointer = (struct td_ty_pointer){.underlying = el};
+  }
+
+  if (td_expr.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    (void)try_get_completed_aggregate(tchk, &td_expr.var_ty, &complete);
+    td_expr.var_ty = complete;
   }
 
   return td_expr;

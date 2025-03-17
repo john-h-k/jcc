@@ -319,6 +319,18 @@ static enum aarch64_cond get_cond_for_op(struct ir_op *op) {
   }
 }
 
+static ssize_t get_rel_stack_offset(const struct cg_state *state,
+                                    ssize_t offset) {
+  offset += state->ir->caller_stack_needed;
+
+  if (!state->aarch64_prologue_info->prologue_generated) {
+    // using red zone
+    offset = (ssize_t)state->aarch64_prologue_info->stack_size - offset;
+  }
+
+  return offset;
+}
+
 static ssize_t get_lcl_stack_offset(const struct cg_state *state,
                                     const struct ir_op *op,
                                     const struct ir_lcl *lcl) {
@@ -332,12 +344,7 @@ static ssize_t get_lcl_stack_offset(const struct cg_state *state,
   }
 
   if (lcl->alloc_ty == IR_LCL_ALLOC_TY_NORMAL) {
-    offset += state->ir->caller_stack_needed;
-
-    if (!state->aarch64_prologue_info->prologue_generated) {
-      // using red zone
-      offset = (ssize_t)state->aarch64_prologue_info->stack_size - offset;
-    }
+    offset = get_rel_stack_offset(state, offset);
   }
 
   if (!op) {
@@ -517,7 +524,8 @@ enum addr_mode {
 static enum aarch64_instr_ty load_ty_for_op(struct ir_op *op,
                                             enum addr_mode mode) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return mode == ADDR_MODE_IMM ? AARCH64_INSTR_TY_LOAD_BYTE_IMM
                                  : AARCH64_INSTR_TY_LOAD_BYTE;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
@@ -533,7 +541,8 @@ static enum aarch64_instr_ty load_ty_for_op(struct ir_op *op,
 static enum aarch64_instr_ty store_ty_for_op(struct ir_op *op,
                                              enum addr_mode mode) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return mode == ADDR_MODE_IMM ? AARCH64_INSTR_TY_STORE_BYTE_IMM
                                  : AARCH64_INSTR_TY_STORE_BYTE;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
@@ -641,6 +650,7 @@ static struct folded_addr_op fold_addr_op(struct cg_state *state,
 static void codegen_load_addr_op(struct cg_state *state,
                                  struct cg_basicblock *basicblock,
                                  struct ir_op *op) {
+  // if (op->id == 206) BREAKPOINT();
   struct instr *instr = cg_alloc_instr(state->func, basicblock);
 
   struct aarch64_reg dest = codegen_reg(op);
