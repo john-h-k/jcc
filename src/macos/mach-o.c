@@ -124,13 +124,31 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
   return info;
 }
 
+static void write_single_relocation(FILE *file, struct relocation_info info) {
+  // macOS makes them bitfields but this is not technically proper C (as you can't assume bitfields are packed)
+  // FIXME: do this for ELF too
+
+  fwrite(&info.r_address, sizeof(info.r_address), 1, file);
+
+
+  // r_symbolnum : 24
+	// r_pcrel     : 1
+	// r_length    : 2
+	// r_extern    : 1
+	// r_type      : 4
+  uint32_t other = info.r_symbolnum;
+  other |= (info.r_pcrel << 24);
+  other |= (info.r_length << 25);
+  other |= (info.r_extern << 27);
+  other |= (info.r_type << 28);
+  fwrite(&other, sizeof(other), 1, file);
+}
+
 static void write_relocation(FILE *file, struct vector *relocations) {
   size_t num_relocations = vector_length(relocations);
 
   for (size_t i = 0; i < num_relocations; i++) {
     const struct relocation *reloc = vector_get(relocations, i);
-
-    fprintf(stderr, "reloc %d %zu %zu\n", reloc->ty, reloc->size, reloc->address);
 
     size_t index = reloc->symbol_index;
     size_t addr = reloc->address;
@@ -144,8 +162,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
                                      .r_extern = 1,
                                      .r_type = ARM64_RELOC_UNSIGNED};
 
-      fwrite(&info, sizeof(info), 1, file);
-
+      write_single_relocation(file, info);
       break;
     }
     case RELOCATION_TY_CALL: {
@@ -156,8 +173,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
                                      .r_extern = 1,
                                      .r_type = ARM64_RELOC_BRANCH26};
 
-      fwrite(&info, sizeof(info), 1, file);
-
+      write_single_relocation(file, info);
       break;
     }
     case RELOCATION_TY_LOCAL_SINGLE: {
@@ -168,8 +184,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
                                      .r_extern = 1,
                                      .r_type = X86_64_RELOC_SIGNED};
 
-      fwrite(&info, sizeof(info), 1, file);
-
+      write_single_relocation(file, info);
       break;
     }
     case RELOCATION_TY_LOCAL_PAIR: {
@@ -188,8 +203,8 @@ static void write_relocation(FILE *file, struct vector *relocations) {
            .r_type = ARM64_RELOC_PAGEOFF12},
       };
 
-      fwrite(infos, sizeof(infos), 1, file);
-
+      write_single_relocation(file, infos[0]);
+      write_single_relocation(file, infos[1]);
       break;
     }
  case RELOCATION_TY_UNDEF_SINGLE: {
@@ -200,8 +215,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
                                      .r_extern = 1,
                                      .r_type = X86_64_RELOC_GOT};
 
-      fwrite(&info, sizeof(info), 1, file);
-
+      write_single_relocation(file, info);
       break;
     }
     case RELOCATION_TY_UNDEF_PAIR: {
@@ -220,8 +234,8 @@ static void write_relocation(FILE *file, struct vector *relocations) {
            .r_type = ARM64_RELOC_GOT_LOAD_PAGEOFF12},
       };
 
-      fwrite(infos, sizeof(infos), 1, file);
-
+      write_single_relocation(file, infos[0]);
+      write_single_relocation(file, infos[1]);
       break;
     }
     }

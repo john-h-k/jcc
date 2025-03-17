@@ -15,20 +15,22 @@ int main() {
     .c = 0
   };
 
-  unsigned *c = &f;
-  c[0] |= 0xFFFFFFFE;
-  c[1] |= 0x7FFFFFE0;
-  c[2] |= 0x7FFFFFFE;
-
-  if (f.a != 1) {
+  if (sizeof(f) != 1) {
     return 1;
   }
 
-  if (f.b != 3) {
+  unsigned *c = &f;
+  c[0] |= 0xFFFFFF80;
+
+  if (f.a != 1) {
     return 2;
   }
 
-  if (f.c != 0) {
+  if (f.b != 3) {
     return 3;
+  }
+
+  if (f.c != 0) {
+    return 4;
   }
 }
