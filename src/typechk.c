@@ -2035,9 +2035,7 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
                                        member_var_ty)) {
         return true;
       }
-    }
-
-    if (strcmp(field->identifier, member_name) == 0) {
+    } else if (strcmp(field->identifier, member_name) == 0) {
       *member_var_ty = field->var_ty;
       return true;
     }

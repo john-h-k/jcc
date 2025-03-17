@@ -21,7 +21,7 @@ static uint64_t folded_multiply(uint64_t l, uint64_t r) {
 #else
   uint32_t ll = (uint32_t)l;
   uint32_t lr = (uint32_t)r;
-  uint32_t hr = (uint32_t)(l >> 32);
+  uint32_t hl = (uint32_t)(l >> 32);
   uint32_t hr = (uint32_t)(r >> 32);
 
   uint64_t afull = (uint64_t)ll * (uint64_t)hr;

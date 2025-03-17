@@ -203,24 +203,24 @@ mini-boostrap() {
         # src/alloc.c
         src/args.c
         src/bitset.c
-        src/builtins.c
+        # src/builtins.c
         src/codegen.c
         src/compiler.c
-        src/deque.c
+        # src/deque.c
         src/diagnostics.c
-        src/disasm.c
-        src/eep/codegen.c
-        src/eep/disasm.c
-        src/eep/emit.c
-        src/eep/emitter.c
-        src/eep/lower.c
-        src/eep/object.c
-        src/eep.c
-        src/graphcol.c
-        src/graphwriter.c
-        src/hash.c
+        # src/disasm.c
+        # src/eep/codegen.c
+        # src/eep/disasm.c
+        # src/eep/emit.c
+        # src/eep/emitter.c
+        # src/eep/lower.c
+        # src/eep/object.c
+        # src/eep.c
+        # src/graphcol.c
+        # src/graphwriter.c
+        # src/hash.c
         src/hashtbl.c
-        src/io.c
+        # src/io.c
         src/ir/build.c
         src/ir/eliminate_phi.c
         src/ir/ir.c
