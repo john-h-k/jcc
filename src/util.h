@@ -215,7 +215,12 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 // present in all mode, always causes program exit if fails
 PRINTF_ARGS(1) static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
+#ifdef __JCC__
+    // doesn't support varargs
+    fprintf(stderr, "invariant_assertion failed, program exiting");
+#else
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
+#endif
     EXIT_FAIL(-1);
   }
 }

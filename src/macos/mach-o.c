@@ -5,9 +5,11 @@
 #include "../vector.h"
 
 // TODO: bring in needed types so this is portable
-#if __has_include(<mach/machine.h>)
+#if 1 || __has_include(<mach/machine.h>)
 #include <mach/machine.h>
 #include <mach-o/loader.h>
+// why do we need this when compiling with JCC?
+#include <mach/vm_prot.h>
 #include <mach-o/nlist.h>
 #include <mach-o/reloc.h>
 #include <mach-o/x86_64/reloc.h>
@@ -127,6 +129,8 @@ static void write_relocation(FILE *file, struct vector *relocations) {
 
   for (size_t i = 0; i < num_relocations; i++) {
     const struct relocation *reloc = vector_get(relocations, i);
+
+    fprintf(stderr, "reloc %d %zu %zu\n", reloc->ty, reloc->size, reloc->address);
 
     size_t index = reloc->symbol_index;
     size_t addr = reloc->address;

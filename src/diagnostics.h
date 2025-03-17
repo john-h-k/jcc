@@ -23,6 +23,8 @@ enum compiler_diagnostic_class {
 };
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
+  DIAG_FN(ERROR, "syntax-err", syntax_err, SYNTAX_ERR,             \
+          const char *)                                                        \
   DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN,             \
           const char *)                                                        \
   DIAG_FN(ERROR, "expected-expr", expected_expr, EXPECTED_EXPR, const char *)  \

@@ -1633,8 +1633,10 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define STDARG_H\n"
         "\n"
         // libc
+        "#ifdef __GLIBC__\n"
         "typedef void * __gnuc_va_list;\n"
         "#define __GNUC_VA_LIST\n"
+        "#endif\n"
         "\n"
         "#ifndef __need___va_list\n"
         "\n"
@@ -1650,9 +1652,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_arg(ap, type) __builtin_va_arg(ap, type)\n"
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
         // "typedef __builtin_va_list va_list;\n"
-        "typedef void * va_list;\n"
-        // TEMP:
-        
+        // TEMP:        
         
         "#undef va_end\n"
         "#undef va_arg\n"

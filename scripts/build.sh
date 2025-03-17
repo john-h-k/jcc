@@ -186,3 +186,60 @@ build() {
 
     cd - > /dev/null
 }
+
+mini-boostrap() {
+    build
+
+    flags="-DJCC_ALL"
+    # doesn't support -D yet
+    jcc_flags=""
+
+    jcc_files=("$@")
+
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+
+    objects=()
+    for file in src/**/*.c src/*.c; do
+        jcc=""
+
+        for other in "${jcc_files[@]}"; do
+            if [[ "$other" == "$file" ]]; then
+                jcc="1"
+                continue
+            fi
+
+            break
+        done
+
+        filename="$(basename "$file")"
+        output="$(mktemp -p $tmpdir)_$filename.o"
+
+        if [ -n "$jcc" ]; then
+            echo "Using JCC for $file"
+            # jcc $flags "$file" -o "$tmpdir/$filename.o"
+            # use preproc seperately because it breaks for some things in combined mode
+            if ! build/jcc $jcc_flags "$file" -E > "$tmpdir/$filename.c"; then
+                echo "preproc fail"
+                exit -1
+            fi
+
+            if ! build/jcc $jcc_flags "$tmpdir/$filename.c" -c -o "$output"; then
+                echo "jcc fail"
+                exit -1
+            fi
+
+            cp "$tmpdir/$filename.o" build/"$filename".o
+
+        else
+            cc $flags "$file" -c -o "$output"
+        fi
+
+        objects+=("$output")
+    done
+
+    # cc $flags -DJCC_ALL -o build/jcc "${objects[@]}" -lm
+    cp build/jcc build/jcc0
+    rm build/jcc
+    build/jcc0 -o build/jcc "${objects[@]}"
+}

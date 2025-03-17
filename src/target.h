@@ -184,7 +184,6 @@ struct cg_state {
 struct ir_glb;
 struct ir_basicblock;
 
-typedef void (*target_codegen)(struct cg_state *state);
 typedef void (*target_codegen_basicblock)(struct cg_state *state, struct ir_basicblock *basicblock);
 typedef void (*target_codegen)(struct cg_state *state);
 

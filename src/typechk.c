@@ -184,15 +184,13 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
       return false;
     }
 
-    goto pointer;
-
-  pointer:
-  case TD_VAR_TY_TY_POINTER: {
+    // cast never needed for actual array?
     return true;
+  case TD_VAR_TY_TY_POINTER:
+    return r->ty == TD_VAR_TY_TY_POINTER;
     // struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
     // struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
     // return td_var_ty_eq(tchk, &l_underlying, &r_underlying);
-  }
 
   case TD_VAR_TY_TY_VARIADIC:
     return true;
@@ -426,7 +424,8 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
                 rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
                td_var_ty_is_integral_ty(rhs_ty)) {
       return *lhs_ty;
-    } else if (td_var_ty_eq(tchk, lhs_ty, rhs_ty)) {
+    } else if (td_var_ty_eq(tchk, lhs_ty->pointer.underlying,
+                            rhs_ty->pointer.underlying)) {
       return *lhs_ty;
     } else {
       compiler_diagnostics_add(
@@ -490,7 +489,12 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
 
   struct td_var_ty lhs_op_ty, rhs_op_ty, result_ty;
 
-  if (lhs->ty == TD_VAR_TY_TY_POINTER && rhs->ty == TD_VAR_TY_TY_POINTER) {
+  if (ty == TD_BINARY_OP_TY_LOGICAL_OR || ty == TD_BINARY_OP_TY_LOGICAL_AND) {
+    lhs_op_ty = *lhs;
+    rhs_op_ty = *rhs;
+    result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+  } else if (lhs->ty == TD_VAR_TY_TY_POINTER &&
+             rhs->ty == TD_VAR_TY_TY_POINTER) {
     if (ty == TD_BINARY_OP_TY_SUB) {
       if (!td_var_ty_eq(tchk, lhs->pointer.underlying,
                         rhs->pointer.underlying)) {
@@ -617,6 +621,25 @@ static char *anonymous_name(struct typechk *tchk) {
 static struct td_var_ty
 td_var_ty_for_enum(struct typechk *tchk,
                    const struct ast_enum_specifier *specifier) {
+
+  const char *name;
+  if (specifier->identifier) {
+    name = identifier_str(tchk->parser, specifier->identifier);
+  } else {
+    name = anonymous_name(tchk);
+  }
+
+  struct td_var ty_var = {.ty = TD_VAR_VAR_TY_VAR,
+                          .identifier = name,
+                          .scope = cur_scope(&tchk->ty_table)};
+
+  struct var_table_entry *ty_entry =
+      var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
+  ty_entry->var = arena_alloc(tchk->arena, sizeof(*ty_entry->var));
+  *ty_entry->var = ty_var;
+  ty_entry->var_ty = arena_alloc(tchk->arena, sizeof(*ty_entry->var_ty));
+  *ty_entry->var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+
   if (!specifier->enumerator_list) {
     if (!specifier->identifier) {
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -651,9 +674,11 @@ td_var_ty_for_enum(struct typechk *tchk,
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
       if (tchk->ty_table.first->scope == SCOPE_GLOBAL) {
-        entry = var_table_create_top_level_entry(&tchk->var_table, enum_name);
+        entry = var_table_create_top_level_entry(&tchk->var_table,
+                                                 VAR_TABLE_NS_NONE, enum_name);
       } else {
-        entry = var_table_create_entry(&tchk->var_table, enum_name);
+        entry = var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
+                                       enum_name);
       }
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
@@ -703,7 +728,11 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     name = anonymous_name(tchk);
   }
 
-  struct var_table_entry *entry = var_table_get_entry(&tchk->ty_table, name);
+  enum var_table_ns ns = var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
+                             ? VAR_TABLE_NS_STRUCT
+                             : VAR_TABLE_NS_ENUM;
+  struct var_table_entry *entry =
+      var_table_get_entry(&tchk->ty_table, ns, name);
 
   if (!specifier->decl_list) {
     if (!specifier->identifier) {
@@ -799,11 +828,13 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 
   vector_free(&var_decls);
 
+  ns = var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT ? VAR_TABLE_NS_STRUCT
+                                                        : VAR_TABLE_NS_ENUM;
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
                        .scope = cur_scope(&tchk->ty_table)};
 
-  entry = var_table_get_or_create_entry(&tchk->ty_table, name);
+  entry = var_table_get_or_create_entry(&tchk->ty_table, ns, name);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
   entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -1082,8 +1113,9 @@ static struct td_var_ty type_abstract_declarator(
 static struct td_var_ty
 td_var_ty_for_typedef(struct typechk *tchk,
                       const struct lex_token *identifier) {
-  struct var_table_entry *entry = var_table_get_entry(
-      &tchk->ty_table, identifier_str(tchk->parser, identifier));
+  struct var_table_entry *entry =
+      var_table_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
+                          identifier_str(tchk->parser, identifier));
 
   if (!entry) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -1653,6 +1685,9 @@ static struct td_expr type_call(struct typechk *tchk,
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(FN_NOT_CALLABLE, fn_not_callable, call->span,
                                MK_INVALID_TEXT_POS(0), "can't call non func"));
+
+    return (struct td_expr){
+        .ty = TD_EXPR_TY_CALL, .var_ty = TD_VAR_TY_UNKNOWN, .call = td_call};
   }
 
   size_t num_params = target_var_ty.func.num_params;
@@ -1940,8 +1975,12 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
                                                 const struct td_var_ty *var_ty,
                                                 struct text_span context) {
   if (var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
-    struct var_table_entry *entry =
-        var_table_get_entry(&tchk->ty_table, var_ty->incomplete_aggregate.name);
+    enum var_table_ns ns =
+        var_ty->incomplete_aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
+            ? VAR_TABLE_NS_STRUCT
+            : VAR_TABLE_NS_ENUM;
+    struct var_table_entry *entry = var_table_get_entry(
+        &tchk->ty_table, ns, var_ty->incomplete_aggregate.name);
 
     // FIXME: ALSO needs to check scope
     // if (!entry || entry->var->scope != td_var_ty)
@@ -2260,7 +2299,8 @@ static struct td_expr type_assg(struct typechk *tchk,
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
   const char *name = identifier_str(tchk->parser, &var->identifier);
-  struct var_table_entry *entry = var_table_get_entry(&tchk->var_table, name);
+  struct var_table_entry *entry =
+      var_table_get_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
 
   struct td_var_ty var_ty;
   struct td_var td_var;
@@ -3077,8 +3117,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
                       TD_DECLARATOR_MODE_NORMAL);
 
-  struct var_table_entry *func_entry =
-      var_table_create_entry(&tchk->var_table, declaration.var.identifier);
+  struct var_table_entry *func_entry = var_table_create_entry(
+      &tchk->var_table, VAR_TABLE_NS_NONE, declaration.var.identifier);
   func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
   *func_entry->var = declaration.var;
   func_entry->var_ty = arena_alloc(tchk->arena, sizeof(*func_entry->var_ty));
@@ -3105,7 +3145,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
     };
 
     struct var_table_entry *entry =
-        var_table_create_entry(&tchk->var_table, identifier);
+        var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, identifier);
     entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
     *entry->var = var;
     entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -3127,8 +3167,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       .scope = SCOPE_PARAMS,
   };
 
-  struct var_table_entry *entry =
-      var_table_create_entry(&tchk->var_table, var.identifier);
+  struct var_table_entry *entry = var_table_create_entry(
+      &tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
   entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -3448,10 +3488,11 @@ type_init_declarator(struct typechk *tchk,
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
-    entry = var_table_create_entry(&tchk->ty_table, td_var_decl.var.identifier);
+    entry = var_table_create_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
+                                   td_var_decl.var.identifier);
   } else {
-    entry =
-        var_table_create_entry(&tchk->var_table, td_var_decl.var.identifier);
+    entry = var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
+                                   td_var_decl.var.identifier);
 
     if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
       td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty,
