@@ -292,8 +292,8 @@ compile_stage_parse(struct compiler *compiler,
                     struct parse_result *parse_result) {
   *parse_result = parse(compiler->parser);
 
+  compiler_print_diagnostics(compiler, parse_result->diagnostics);
   if (parse_result->ty == PARSE_RESULT_TY_FAILURE) {
-    compiler_print_diagnostics(compiler, parse_result->diagnostics);
     return COMPILE_RESULT_FAILURE;
   }
 
@@ -311,8 +311,8 @@ compile_stage_typechk(struct compiler *compiler,
   *typechk_result =
       td_typechk(compiler->typechk, &parse_result->translation_unit);
 
+  compiler_print_diagnostics(compiler, typechk_result->diagnostics);
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
-    compiler_print_diagnostics(compiler, typechk_result->diagnostics);
     return COMPILE_RESULT_FAILURE;
   }
 

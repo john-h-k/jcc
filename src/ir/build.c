@@ -1254,25 +1254,26 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
                                       struct ir_var_ty var_ty,
                                       struct td_var *var) {
-  if (strlen(var->identifier) == strlen("__func__") && !strcmp(var->identifier, "__func__")) {
+  if (strlen(var->identifier) == strlen("__func__") &&
+      !strcmp(var->identifier, "__func__")) {
     if (!irb->func_name_cnst) {
       const char *value = irb->func->name;
-      struct ir_var_ty str_var_ty = ir_var_ty_make_array(irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
-      const char *name = mangle_static_name(&(struct ir_var_builder){.arena = irb->arena}, irb->func, "__func__");
+      struct ir_var_ty str_var_ty = ir_var_ty_make_array(
+          irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
+      const char *name = mangle_static_name(
+          &(struct ir_var_builder){.arena = irb->arena}, irb->func, "__func__");
 
-      struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty, IR_GLB_DEF_TY_DEFINED, name);
+      struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty,
+                                         IR_GLB_DEF_TY_DEFINED, name);
       glb->linkage = IR_LINKAGE_INTERNAL;
       glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
       *glb->var = (struct ir_var){
-        .ty = IR_VAR_TY_STRING_LITERAL,
-        .unit = irb->unit,
-        .var_ty = str_var_ty,
-        .value = {
+          .ty = IR_VAR_TY_STRING_LITERAL,
+          .unit = irb->unit,
           .var_ty = str_var_ty,
-          .ty = IR_VAR_VALUE_TY_STR,
-          .str_value = { .value = value, .len = strlen(value) }
-        }
-      };
+          .value = {.var_ty = str_var_ty,
+                    .ty = IR_VAR_VALUE_TY_STR,
+                    .str_value = {.value = value, .len = strlen(value)}}};
 
       irb->func_name_cnst = glb;
     }
@@ -1280,10 +1281,8 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
     struct ir_op *op = ir_alloc_op(irb->func, *stmt);
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = IR_VAR_TY_POINTER;
-    op->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_GLB,
-      .glb = irb->func_name_cnst
-    };
+    op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB,
+                                   .glb = irb->func_name_cnst};
     return op;
   }
 
@@ -1602,9 +1601,29 @@ static void get_member_info(struct ir_unit *iru,
   }
 
   *member_idx = 0;
+  *member_offset = 0;
   for (; *member_idx < aggregate->aggregate.num_fields; (*member_idx)++) {
     struct td_struct_field *field = &aggregate->aggregate.fields[*member_idx];
-    if (strcmp(field->identifier, member_name) == 0) {
+    if (!field->identifier) {
+      // anonymous field
+      size_t anon_member_idx;
+      size_t anon_member_offset;
+
+      get_member_info(iru, &field->var_ty, member_name, member_ty,
+                      &anon_member_idx, &anon_member_offset, member_is_bitfield,
+                      member_bitfield, td_member_ty);
+
+      DEBUG_ASSERT(*member_idx < aggregate->aggregate.num_fields,
+                   "member_idx out of range");
+
+      struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, aggregate);
+      struct ir_var_ty_info info = ir_var_ty_info(iru, &ir_aggregate);
+
+      // offsets are null for a union
+      *member_offset += anon_member_offset;
+      *member_offset += info.offsets ? info.offsets[*member_idx] : 0;
+      return;
+    } else if (strcmp(field->identifier, member_name) == 0) {
       if (member_bitfield) {
         if (field->flags & TD_STRUCT_FIELD_FLAG_BITFIELD) {
           *member_is_bitfield = true;
@@ -1625,15 +1644,20 @@ static void get_member_info(struct ir_unit *iru,
         // pointer decay
         *member_ty = *member_ty->array.underlying;
       }
-      break;
+
+      DEBUG_ASSERT(*member_idx < aggregate->aggregate.num_fields,
+                   "member_idx out of range");
+
+      struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, aggregate);
+      struct ir_var_ty_info info = ir_var_ty_info(iru, &ir_aggregate);
+
+      // offsets are null for a union
+      *member_offset += info.offsets ? info.offsets[*member_idx] : 0;
+      return;
     }
   }
 
-  struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, aggregate);
-  struct ir_var_ty_info info = ir_var_ty_info(iru, &ir_aggregate);
-
-  // offsets are null for a union
-  *member_offset = info.offsets ? info.offsets[*member_idx] : 0;
+  unreachable();
 }
 
 static size_t get_member_address_offset(struct ir_func_builder *irb,
@@ -2785,7 +2809,8 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
 
   const char *name = decl->var.identifier;
   const char *symbol_name;
-  if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC && var_ty.ty != IR_VAR_TY_TY_FUNC) {
+  if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC &&
+      var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
   } else {
     symbol_name = name;
