@@ -324,6 +324,8 @@ td_var_ty_make_pointer(struct typechk *tchk, const struct td_var_ty *var_ty,
 struct td_var_ty td_var_ty_get_underlying(UNUSED_ARG(struct typechk *tchk),
                                           const struct td_var_ty *ty_ref) {
   switch (ty_ref->ty) {
+  case TD_VAR_TY_TY_UNKNOWN:
+    return TD_VAR_TY_UNKNOWN;
   case TD_VAR_TY_TY_POINTER:
     return *ty_ref->pointer.underlying;
   case TD_VAR_TY_TY_ARRAY:
@@ -2006,6 +2008,10 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
                                          const struct td_var_ty *var_ty,
                                          const char *member_name,
                                          struct td_var_ty *member_var_ty) {
+  if (var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
+    return false;
+  }
+
   DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
 
   // FIXME: super slow hashtable needed
@@ -2443,8 +2449,24 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
                           .compound_expr = td_compoundexpr};
 }
 
-TODO_FUNC(static struct td_expr type_compound_literal(
-    struct typechk *tchk, const struct ast_compound_literal *compound_literal))
+static struct td_init_list
+type_init_list(struct typechk *tchk, const struct td_var_ty *var_ty,
+               const struct ast_init_list *init_list);
+
+static struct td_expr
+type_compound_literal(struct typechk *tchk,
+                      const struct ast_compound_literal *compound_literal) {
+  struct td_var_ty var_ty =
+      type_type_name(tchk, &compound_literal->type_name);
+
+  return (struct td_expr){
+      .ty = TD_EXPR_TY_COMPOUND_LITERAL,
+      .var_ty = var_ty,
+      .compound_literal = {
+          .var_ty = var_ty,
+          .init_list =
+              type_init_list(tchk, &var_ty, &compound_literal->init_list)}};
+}
 
 static struct td_expr type_expr(struct typechk *tchk,
                                 enum type_expr_flags flags,
@@ -3176,6 +3198,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
 
   struct td_funcdef td_funcdef = {
       .storage_class_specifier = specifiers.storage,
+      .function_specifier_flags = specifiers.function,
       .var_declaration = declaration,
       .body = {.ty = TD_STMT_TY_COMPOUND,
                .compound = type_compoundstmt(tchk, &func_def->body)}};
@@ -3532,6 +3555,7 @@ static struct td_declaration type_init_declarator_list(
     enum td_declarator_mode bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
+      .function_specifier_flags = specifiers->function,
       .base_ty = specifiers->type_specifier,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
@@ -4261,6 +4285,14 @@ DEBUG_FUNC(ternary, ternary) {
   UNINDENT();
 }
 
+DEBUG_FUNC(compound_literal, compound_literal) {
+  TD_PRINTZ("COMPOUND LITERAL");
+  INDENT();
+  DEBUG_CALL(var_ty, &compound_literal->var_ty);
+  DEBUG_CALL(init_list, &compound_literal->init_list);
+  UNINDENT();
+}
+
 DEBUG_FUNC(expr, expr) {
   TD_PRINTZ("EXPRESSION");
 
@@ -4307,7 +4339,7 @@ DEBUG_FUNC(expr, expr) {
     DEBUG_CALL(alignof, &expr->align_of);
     break;
   case TD_EXPR_TY_COMPOUND_LITERAL:
-    TODO("compound literal");
+    DEBUG_CALL(compound_literal, &expr->compound_literal);
   }
   UNINDENT();
 }

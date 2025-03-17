@@ -102,7 +102,8 @@ static void remove_critical_edges(struct ir_func *irb) {
 
   if (inserted_new) {
     // re-sort in RPO order
-    // TODO: is this needed? or can we insert in a way that guarantees it implicitly
+    // TODO: is this needed? or can we insert in a way that guarantees it
+    // implicitly
     ir_order_basicblocks(irb);
   }
 }
@@ -983,17 +984,28 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
     // FIXME: don't use succ find usage
     struct ir_op *store = op->succ;
-    DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s",
-                 func->name);
+    struct ir_op *addr;
+    if (store) {
+      DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s",
+                   func->name);
 
-    // move store before op so the generated address is before the call
-    ir_detach_op(func, store);
-    ir_attach_op(func, store, op->stmt, op->pred, op);
+      // move store before op so the generated address is before the call
+      ir_detach_op(func, store);
+      ir_attach_op(func, store, op->stmt, op->pred, op);
 
-    struct ir_op *addr = ir_build_addr(func, store);
+      addr = ir_build_addr(func, store);
+
+      ir_detach_op(func, store);
+    } else {
+      struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
+      addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      addr->addr = (struct ir_op_addr){
+        .ty = IR_OP_ADDR_TY_LCL,
+        .lcl = lcl
+      };
+    }
 
     vector_push_back(new_args, &addr);
-    ir_detach_op(func, store);
 
     op->var_ty = IR_VAR_TY_NONE;
   }

@@ -139,7 +139,6 @@ struct td_var_ty {
   enum td_var_ty_ty ty;
 
   enum td_type_qualifier_flags type_qualifiers;
-  // enum td_function_specifier_flags function_specifiers;
 
   union {
     enum well_known_ty well_known;
@@ -527,6 +526,7 @@ struct td_var_declaration {
 
 struct td_declaration {
   enum td_storage_class_specifier storage_class_specifier;
+  enum td_function_specifier_flags function_specifier_flags;
 
   struct td_var_ty base_ty;
 
@@ -698,6 +698,8 @@ struct td_declaration_list {
 
 struct td_funcdef {
   enum td_storage_class_specifier storage_class_specifier;
+  enum td_function_specifier_flags function_specifier_flags;
+
   struct td_var_declaration var_declaration;
   struct td_stmt body;
 };

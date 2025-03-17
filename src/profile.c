@@ -74,7 +74,7 @@ void profiler_end_region(struct profiler_region region) {
 
   struct profiler_region_data *data = vector_get(regions, region.idx);
 
-  DEBUG_ASSERT(!data->ended, "region'%s' already ended!", data->name);
+  DEBUG_ASSERT(!data->ended, "region '%s' already ended!", data->name);
 
   data->end = end;
   data->ended = true;
