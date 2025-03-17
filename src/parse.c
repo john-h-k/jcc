@@ -2829,10 +2829,16 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   }
 
   // parse the iteration statement if present, else nothing
-  struct ast_expr iter;
-  if (parse_expr(parser, &iter)) {
+  struct ast_compoundexpr compound;
+  if (parse_compoundexpr(parser, &compound)) {
     for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
-    *for_stmt->iter = iter;
+    // FIXME: there are more places where compound expressions are legal
+    // rework expression parsing to handle them better
+    *for_stmt->iter = (struct ast_expr){
+      .ty = AST_EXPR_TY_COMPOUNDEXPR,
+      .compound_expr = compound,
+      .span = compound.span
+    };
   } else {
     for_stmt->iter = NULL;
   }

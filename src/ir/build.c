@@ -1625,7 +1625,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
   }
 }
 
-static void get_member_info(struct ir_unit *iru,
+static bool try_get_member_info(struct ir_unit *iru,
                             const struct td_var_ty *aggregate,
                             const char *member_name,
                             struct ir_var_ty *member_ty, size_t *member_idx,
@@ -1650,9 +1650,11 @@ static void get_member_info(struct ir_unit *iru,
       size_t anon_member_idx;
       size_t anon_member_offset;
 
-      get_member_info(iru, &field->var_ty, member_name, member_ty,
+      if (!try_get_member_info(iru, &field->var_ty, member_name, member_ty,
                       &anon_member_idx, &anon_member_offset, member_is_bitfield,
-                      member_bitfield, td_member_ty);
+                      member_bitfield, td_member_ty)) {
+        continue;
+      }
 
       DEBUG_ASSERT(*member_idx < aggregate->aggregate.num_fields,
                    "member_idx out of range");
@@ -1663,7 +1665,7 @@ static void get_member_info(struct ir_unit *iru,
       // offsets are null for a union
       *member_offset += anon_member_offset;
       *member_offset += info.offsets ? info.offsets[*member_idx] : 0;
-      return;
+      return true;
     } else if (strcmp(field->identifier, member_name) == 0) {
       if (member_bitfield) {
         if (field->flags & TD_STRUCT_FIELD_FLAG_BITFIELD) {
@@ -1694,8 +1696,22 @@ static void get_member_info(struct ir_unit *iru,
 
       // offsets are null for a union
       *member_offset += info.offsets ? info.offsets[*member_idx] : 0;
-      return;
+      return true;
     }
+  }
+
+  return false;
+}
+
+static void get_member_info(struct ir_unit *iru,
+                            const struct td_var_ty *aggregate,
+                            const char *member_name,
+                            struct ir_var_ty *member_ty, size_t *member_idx,
+                            size_t *member_offset, bool *member_is_bitfield,
+                            struct ir_bitfield *member_bitfield,
+                            struct td_var_ty *td_member_ty) {
+  if (try_get_member_info(iru, aggregate, member_name, member_ty, member_idx, member_offset, member_is_bitfield, member_bitfield, td_member_ty)) {
+    return;
   }
 
   unreachable();
