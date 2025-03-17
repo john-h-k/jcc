@@ -985,24 +985,44 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     // FIXME: don't use succ find usage
     struct ir_op *store = op->succ;
     struct ir_op *addr;
-    if (store) {
-      DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store in %s",
-                   func->name);
 
-      // move store before op so the generated address is before the call
-      ir_detach_op(func, store);
-      ir_attach_op(func, store, op->stmt, op->pred, op);
+    // HACK: should use op uses
+    while (store && store->ty != IR_OP_TY_STORE) {
+      store = store->succ;
+    }
 
-      addr = ir_build_addr(func, store);
+    if (store && store->store.value == op) {
+      switch (store->store.ty) {
+      case IR_OP_STORE_TY_LCL:
+      case IR_OP_STORE_TY_GLB:
+        // move store before op so the generated address is before the call
+        ir_detach_op(func, store);
+        ir_attach_op(func, store, op->stmt, op->pred, op);
 
-      ir_detach_op(func, store);
+        addr = ir_build_addr(func, store);
+
+        ir_detach_op(func, store);
+        break;
+      case IR_OP_STORE_TY_ADDR: {
+        struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
+        addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+        addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+        struct ir_op *load = ir_insert_before_op(func, op, IR_OP_TY_LOAD, op->var_ty);
+        load->load = (struct ir_op_load){
+          .ty = IR_OP_LOAD_TY_LCL,
+          .lcl = lcl
+        };
+
+        store->store.value = load;
+        break;
+      }
+      }
+
     } else {
       struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
       addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-      addr->addr = (struct ir_op_addr){
-        .ty = IR_OP_ADDR_TY_LCL,
-        .lcl = lcl
-      };
+      addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
     }
 
     vector_push_back(new_args, &addr);
@@ -1107,8 +1127,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     // HACK: should use op uses
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
-    while (prev_store->ty != IR_OP_TY_STORE)
+    while (prev_store->ty != IR_OP_TY_STORE) {
       prev_store = prev_store->succ;
+    }
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
 
     struct ir_op *addr = ir_build_addr(func, prev_store);

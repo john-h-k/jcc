@@ -200,7 +200,7 @@ mini-boostrap() {
         src/aarch64/emitter.c
         src/aarch64/lower.c
         src/aarch64.c
-        src/alloc.c
+        # src/alloc.c
         src/args.c
         src/bitset.c
         src/builtins.c
@@ -256,7 +256,7 @@ mini-boostrap() {
         src/rv32i.c
         src/typechk.c
         src/util.c
-        src/var_table.c
+        # src/var_table.c
         # src/vector.c
         src/x64/codegen.c
         src/x64/emit.c

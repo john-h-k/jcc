@@ -454,10 +454,11 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
           .ty = IR_PARAM_INFO_TY_POINTER,
           .var_ty = func_ty.ret_ty,
           .num_regs = 1,
-          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 0}, .size = 8},
+          // macOS/linux implicit ret is x8
+          // NOTE: on windows it is x0
+          .regs[0] = {.reg = {.ty = IR_REG_TY_INTEGRAL, .idx = 8}, .size = 8},
       };
 
-      ngrn++;
       vector_push_front(params, &IR_VAR_TY_POINTER);
     } else if (ir_var_ty_is_fp(func_ty.ret_ty)) {
       *ret_info = (struct ir_param_info){
