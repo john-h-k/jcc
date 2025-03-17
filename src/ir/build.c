@@ -8,6 +8,7 @@
 #include "../var_table.h"
 #include "../vector.h"
 #include "ir.h"
+#include "prettyprint.h"
 #include "var_refs.h"
 
 // break/continues will add an entry into the jumps vector
@@ -166,6 +167,10 @@ static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
   enum ir_var_primitive_ty pointer_prim =
       ir_var_ty_pointer_primitive_ty(irb->unit);
 
+  if (l->ty == IR_VAR_TY_TY_PRIMITIVE && l->primitive == IR_VAR_PRIMITIVE_TY_I1) {
+    return true;
+  }
+
   if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && l->primitive == pointer_prim) ||
        l->ty == IR_VAR_TY_TY_POINTER) &&
       ((r->ty == IR_VAR_TY_TY_PRIMITIVE && r->primitive == pointer_prim) ||
@@ -313,9 +318,14 @@ UNUSED struct ir_var_ty static var_ty_return_ty_for_td_var_ty(
   return *func_ty.func.ret_ty;
 }
 
-static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
-                                                   const struct td_var_ty *from,
-                                                   const struct td_var_ty *to) {
+struct ir_cast_info {
+  bool cmp_nz; // don't generate `cast` IR; generate `>= 0` instead
+  enum ir_op_cast_op_ty cast_ty;
+};
+
+static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
+                                                 const struct td_var_ty *from,
+                                                 const struct td_var_ty *to) {
   struct ir_var_ty from_var_ty = var_ty_for_td_var_ty(irb->unit, from);
   struct ir_var_ty to_var_ty = var_ty_for_td_var_ty(irb->unit, to);
 
@@ -332,15 +342,22 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
     }
 
     if (WKT_IS_SIGNED(to->well_known)) {
-      return IR_OP_CAST_OP_TY_SEXT;
+      return (struct ir_cast_info){.cmp_nz = false,
+                                   .cast_ty = IR_OP_CAST_OP_TY_SEXT};
     } else {
-      return IR_OP_CAST_OP_TY_ZEXT;
+      return (struct ir_cast_info){.cmp_nz = false,
+                                   .cast_ty = IR_OP_CAST_OP_TY_ZEXT};
     }
+  }
+
+  if (to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE && to_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1) {
+    return (struct ir_cast_info){.cmp_nz = true};
   }
 
   if (from_var_ty.ty == IR_VAR_TY_TY_POINTER &&
       to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE) {
-    return IR_OP_CAST_OP_TY_TRUNC;
+    return (struct ir_cast_info){.cmp_nz = false,
+                                 .cast_ty = IR_OP_CAST_OP_TY_TRUNC};
   }
 
   if (from_var_ty.ty != IR_VAR_TY_TY_PRIMITIVE ||
@@ -350,7 +367,8 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   }
 
   if (td_var_ty_is_fp_ty(from) && td_var_ty_is_fp_ty(to)) {
-    return IR_OP_CAST_OP_TY_CONV;
+    return (struct ir_cast_info){.cmp_nz = false,
+                                 .cast_ty = IR_OP_CAST_OP_TY_CONV};
   }
 
   if (td_var_ty_is_fp_ty(from) || td_var_ty_is_fp_ty(to)) {
@@ -365,18 +383,23 @@ static enum ir_op_cast_op_ty cast_ty_for_td_var_ty(struct ir_func_builder *irb,
     bool is_signed = td_var_ty_is_fp_ty(from) ? WKT_IS_SIGNED(to->well_known)
                                               : WKT_IS_SIGNED(from->well_known);
 
-    return is_signed ? IR_OP_CAST_OP_TY_SCONV : IR_OP_CAST_OP_TY_UCONV;
+    return (struct ir_cast_info){.cmp_nz = false,
+                                 .cast_ty = is_signed ? IR_OP_CAST_OP_TY_SCONV
+                                                      : IR_OP_CAST_OP_TY_UCONV};
   }
 
   if (to_var_ty.primitive < from_var_ty.primitive) {
-    return IR_OP_CAST_OP_TY_TRUNC;
+    return (struct ir_cast_info){.cmp_nz = false,
+                                 .cast_ty = IR_OP_CAST_OP_TY_TRUNC};
   } else {
     invariant_assert(from_var_ty.primitive != to_var_ty.primitive,
                      "cast not needed for types of same size");
     if (WKT_IS_SIGNED(to->well_known)) {
-      return IR_OP_CAST_OP_TY_SEXT;
+      return (struct ir_cast_info){.cmp_nz = false,
+                                   .cast_ty = IR_OP_CAST_OP_TY_SEXT};
     } else {
-      return IR_OP_CAST_OP_TY_ZEXT;
+      return (struct ir_cast_info){.cmp_nz = false,
+                                   .cast_ty = IR_OP_CAST_OP_TY_ZEXT};
     }
   }
 }
@@ -388,15 +411,31 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
 static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
                                         struct ir_stmt *stmt, struct ir_op *op,
                                         const struct ir_var_ty *to,
-                                        enum ir_op_cast_op_ty ty) {
-  struct ir_op *cast = ir_alloc_op(irb->func, stmt);
+                                        struct ir_cast_info info) {
 
-  cast->ty = IR_OP_TY_CAST_OP;
-  cast->var_ty = *to;
-  cast->cast_op.ty = ty;
-  cast->cast_op.value = op;
+  if (info.cmp_nz) {
+    struct ir_op *zero = ir_alloc_op(irb->func, stmt);
+    ir_mk_zero_constant(irb->unit, zero, &op->var_ty);
 
-  return cast;
+    struct ir_op *cast = ir_alloc_op(irb->func, stmt);
+    cast->ty = IR_OP_TY_BINARY_OP;
+    cast->var_ty = *to;
+    cast->binary_op = (struct ir_op_binary_op){
+      .ty = ir_var_ty_is_fp(&op->var_ty) ? IR_OP_BINARY_OP_TY_FNEQ : IR_OP_BINARY_OP_TY_NEQ,
+      .lhs = op,
+      .rhs = zero
+    };
+
+    return cast;
+  } else {
+    struct ir_op *cast = ir_alloc_op(irb->func, stmt);
+    cast->ty = IR_OP_TY_CAST_OP;
+    cast->var_ty = *to;
+    cast->cast_op.ty = info.cast_ty;
+    cast->cast_op.value = op;
+
+    return cast;
+  }
 }
 
 static struct ir_op *insert_ir_for_cast_if_needed(struct ir_func_builder *irb,
@@ -3248,9 +3287,10 @@ static void validate_op_tys_callback(struct ir_op **op,
   }
 
   if (ir_op_produces_value(consumer)) {
-    invariant_assert(
-        !var_ty_needs_cast_op(metadata->irb, &res_ty, &consumer->var_ty),
-        "op %zu uses op %zu with different type!", consumer->id, (*op)->id);
+    if (var_ty_needs_cast_op(metadata->irb, &res_ty, &consumer->var_ty)) {
+      DEBUG_PRINT_IR(metadata->irb->func);
+      BUG("op %zu uses op %zu with different type!", consumer->id, (*op)->id);
+    }
   }
 }
 

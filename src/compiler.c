@@ -153,6 +153,9 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   struct text_pos start = span.start;
   struct text_pos end = span.end;
 
+  const char *text = compiler->program.text;
+  size_t len = strlen(text);
+
   DEBUG_ASSERT(end.line >= start.line, "end line %zu was before start line %zu",
                end.line, start.line);
 
@@ -174,9 +177,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
     end_len = end.idx - point.idx;
   }
 
-  const char *text = compiler->program.text;
   size_t line = 0;
-  size_t len = strlen(text);
   for (size_t i = 0; i < len; i++) {
     if (text[i] != '\n') {
       continue;

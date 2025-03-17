@@ -1,8 +1,8 @@
 #include "var_table.h"
 
+#include "log.h"
 #include "util.h"
 #include "vector.h"
-#include "log.h"
 
 static struct var_table_scope
 var_table_scope_create(struct var_table_scope *prev) {
@@ -28,10 +28,11 @@ struct var_table var_table_create(struct arena_allocator *arena) {
 }
 
 struct var_table_entry *
-var_table_create_top_level_entry(struct var_table *var_table, const char *name) {
+var_table_create_top_level_entry(struct var_table *var_table,
+                                 enum var_table_ns ns, const char *name) {
   struct var_table_scope *first = var_table->first;
   struct var_table_entry entry = {
-      .name = name, .scope = first->scope, .var = NULL, .var_ty = NULL};
+     .ns = ns, .name = name, .scope = first->scope, .var = NULL, .var_ty = NULL};
 
   struct var_table_entry *p = vector_push_back(first->entries, &entry);
 
@@ -39,11 +40,12 @@ var_table_create_top_level_entry(struct var_table *var_table, const char *name) 
 }
 
 struct var_table_entry *var_table_create_entry(struct var_table *var_table,
+                                               enum var_table_ns ns,
                                                const char *name) {
   struct var_table_scope *last = var_table->last;
 
   struct var_table_entry entry = {
-      .name = name, .scope = last->scope, .var = NULL, .var_ty = NULL};
+      .ns = ns,.name = name, .scope = last->scope, .var = NULL, .var_ty = NULL};
 
   struct var_table_entry *p = vector_push_back(last->entries, &entry);
 
@@ -97,10 +99,11 @@ void pop_scope(struct var_table *var_table) {
 }
 
 struct var_table_entry *
-var_table_get_or_create_entry(struct var_table *var_table, const char *name) {
+var_table_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
+                              const char *name) {
   DEBUG_ASSERT(name, "name must be non-null");
 
-  struct var_table_entry *entry = var_table_get_entry(var_table, name);
+  struct var_table_entry *entry = var_table_get_entry(var_table, ns, name);
 
   if (entry) {
     return entry;
@@ -109,10 +112,11 @@ var_table_get_or_create_entry(struct var_table *var_table, const char *name) {
   trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
         var_table->last->scope);
 
-  return var_table_create_entry(var_table, name);
+  return var_table_create_entry(var_table, ns, name);
 }
 
 struct var_table_entry *var_table_get_entry(struct var_table *var_table,
+                                            enum var_table_ns ns,
                                             const char *name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
@@ -125,7 +129,7 @@ struct var_table_entry *var_table_get_entry(struct var_table *var_table,
     for (size_t i = 0; i < num_vars; i++) {
       struct var_table_entry *entry = vector_get(scope->entries, i);
 
-      if (strcmp(entry->name, name) == 0) {
+      if (ns == entry->ns && !strcmp(entry->name, name)) {
         trace("found '%s' at scope %d", entry->name, scope->scope);
         return entry;
       }

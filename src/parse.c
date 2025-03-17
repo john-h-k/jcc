@@ -725,8 +725,9 @@ static bool parse_typedef_name(struct parser *parser,
     return false;
   }
 
-  struct var_table_entry *entry = var_table_get_entry(
-      &parser->ty_table, identifier_str(parser, &identifier));
+  struct var_table_entry *entry =
+      var_table_get_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF,
+                          identifier_str(parser, &identifier));
   if (!entry) {
     return false;
   }
@@ -1276,8 +1277,10 @@ parse_direct_declarator(struct parser *parser,
 
   struct ast_declarator declarator;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, &start) &&
-      parse_declarator(parser, &declarator) &&
-      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
+      parse_declarator(parser, &declarator)) {
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, pos.text_pos,
+                         "')' after declarator", NULL);
+
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR;
     direct_declarator->paren_declarator = arena_alloc(
         parser->arena, sizeof(*direct_declarator->paren_declarator));
@@ -1768,7 +1771,8 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
 
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &expr->compound_expr) && parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
+      parse_compoundexpr(parser, &expr->compound_expr) &&
+      parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
     expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
     return true;
@@ -1830,8 +1834,9 @@ static bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
   expr->call.target = arena_alloc(parser->arena, sizeof(*expr->call.target));
   expr->call.target = sub_expr;
   expr->call.arg_list = arg_list;
+  expr->call.span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
 
-  expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+  expr->span = expr->call.span;
   return true;
 }
 
@@ -1877,10 +1882,10 @@ static bool parse_member_access(struct parser *parser,
                             "identifier after . in member access");
 
   expr->ty = AST_EXPR_TY_MEMBERACCESS;
-  expr->member_access =
-      (struct ast_memberaccess){.lhs = sub_expr, .member = token,
-    .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))
-  };
+  expr->member_access = (struct ast_memberaccess){
+      .lhs = sub_expr,
+      .member = token,
+      .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))};
 
   expr->span = expr->member_access.span;
   return true;
@@ -1902,10 +1907,10 @@ static bool parse_pointer_access(struct parser *parser,
                             "identifier after -> in pointer access");
 
   expr->ty = AST_EXPR_TY_POINTERACCESS;
-  expr->pointer_access =
-      (struct ast_pointeraccess){.lhs = sub_expr, .member = token,
-    .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))
-    };
+  expr->pointer_access = (struct ast_pointeraccess){
+      .lhs = sub_expr,
+      .member = token,
+      .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))};
 
   expr->span = expr->pointer_access.span;
   return true;
@@ -2224,7 +2229,8 @@ static bool parse_ternary(struct parser *parser, struct ast_expr *expr) {
     true_expr.compound_expr = true_compound_expr;
     true_expr.span = true_compound_expr.span;
 
-    parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start, "expected ':' after ternary true expression", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start,
+                         "expected ':' after ternary true expression", NULL);
     parse_expected_expr(parser, &false_expr, "expected expr after ':'");
 
     expr->ty = AST_EXPR_TY_TERNARY;
@@ -2368,7 +2374,7 @@ static void add_typedefs_to_table(
         &direct_decl_list->direct_declarators[i];
 
     if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
-      var_table_create_entry(&parser->ty_table,
+      var_table_create_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF,
                              identifier_str(parser, &direct_decl->identifier));
     } else if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
       add_typedefs_to_table(
@@ -2394,10 +2400,9 @@ static bool parse_declaration(struct parser *parser,
 
   parse_init_declarator_list(parser, &declaration->declarator_list);
 
-  if (!parse_token(parser, LEX_TOKEN_TY_SEMICOLON, NULL)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
+  parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON,
+                       declaration->specifier_list.span.start,
+                       "';' after declaration", NULL);
 
   // FIXME: inefficient
   bool is_typedef = false;
@@ -2577,7 +2582,8 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
     return false;
   }
 
-  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start, "'(' as condition must be wrapped in brackets", NULL);
+  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start,
+                       "'(' as condition must be wrapped in brackets", NULL);
 
   struct ast_expr expr;
   if (!parse_expr(parser, &expr)) {
@@ -2585,7 +2591,8 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
     return false;
   }
 
-  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, kw.start, "')' as condition must be wrapped in brackets", NULL);
+  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, kw.start,
+                       "')' as condition must be wrapped in brackets", NULL);
 
   struct ast_stmt stmt;
   if (!parse_stmt(parser, &stmt)) {
@@ -3135,6 +3142,7 @@ struct parse_result parse(struct parser *parser) {
   struct vector *declarations = vector_create_in_arena(
       sizeof(struct ast_external_declaration), parser->arena);
 
+  struct text_span last = {0};
   while (true) {
     if (lexer_at_eof(lexer)) {
       info("EOF reached by lexer");
@@ -3144,6 +3152,7 @@ struct parse_result parse(struct parser *parser) {
     struct ast_external_declaration external_declaration;
     if (parse_external_declaration(parser, &external_declaration)) {
       vector_push_back(declarations, &external_declaration);
+      last = external_declaration.span;
       continue;
     }
 
@@ -3152,7 +3161,16 @@ struct parse_result parse(struct parser *parser) {
       struct text_pos pos = get_last_text_pos(lexer);
       err("parser finished at position %zu, line=%zu, col=%zu", pos.idx,
           pos.line, pos.col);
+
+      struct lex_token fail;
+      peek_token(lexer, &fail);
+
       parser->result_ty = PARSE_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          parser->diagnostics,
+          MK_PARSER_DIAGNOSTIC(SYNTAX_ERR, syntax_err,
+                               MK_TEXT_SPAN(last.end, fail.span.end), pos,
+                               "syntax error"));
       break;
     }
 
