@@ -1851,8 +1851,9 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
     expr->ty = AST_EXPR_TY_ARRAYACCESS;
     expr->array_access.lhs = lhs;
     expr->array_access.rhs = rhs;
-
     expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+
+    expr->span = expr->array_access.span;
     return true;
   }
 
@@ -1877,9 +1878,11 @@ static bool parse_member_access(struct parser *parser,
 
   expr->ty = AST_EXPR_TY_MEMBERACCESS;
   expr->member_access =
-      (struct ast_memberaccess){.lhs = sub_expr, .member = token};
+      (struct ast_memberaccess){.lhs = sub_expr, .member = token,
+    .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))
+  };
 
-  expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+  expr->span = expr->member_access.span;
   return true;
 }
 
@@ -1900,9 +1903,11 @@ static bool parse_pointer_access(struct parser *parser,
 
   expr->ty = AST_EXPR_TY_POINTERACCESS;
   expr->pointer_access =
-      (struct ast_pointeraccess){.lhs = sub_expr, .member = token};
+      (struct ast_pointeraccess){.lhs = sub_expr, .member = token,
+    .span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer))
+    };
 
-  expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+  expr->span = expr->pointer_access.span;
   return true;
 }
 

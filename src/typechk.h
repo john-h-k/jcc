@@ -528,6 +528,8 @@ struct td_var_declaration {
 struct td_declaration {
   enum td_storage_class_specifier storage_class_specifier;
 
+  struct td_var_ty base_ty;
+
   size_t num_var_declarations;
   struct td_var_declaration *var_declarations;
 };

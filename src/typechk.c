@@ -411,9 +411,10 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
     const struct td_var_ty *rhs_ty, struct text_span context) {
   // it is expected integer promotion has already been performed
 
-  DEBUG_ASSERT(lhs_ty->ty != TD_VAR_TY_TY_UNKNOWN &&
-                   rhs_ty->ty != TD_VAR_TY_TY_UNKNOWN,
-               "unknown ty in call to `%s`", __func__);
+  if (lhs_ty->ty == TD_VAR_TY_TY_UNKNOWN ||
+      rhs_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
+    return TD_VAR_TY_UNKNOWN;
+  }
 
   if (lhs_ty->ty == TD_VAR_TY_TY_POINTER ||
       rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
@@ -481,7 +482,8 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
                         const struct td_expr *rhs_expr, enum td_binary_op_ty ty,
                         struct text_span context) {
   // it is expected integer promotion has already been performed
-  // TODO: resolve cmps as bool (because otherwise IR will generate many pointless `trunc` ops)
+  // TODO: resolve cmps as bool (because otherwise IR will generate many
+  // pointless `trunc` ops)
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
   const struct td_var_ty *rhs = &rhs_expr->var_ty;
@@ -567,10 +569,10 @@ struct td_specifiers {
 };
 
 enum td_specifier_allow {
-  TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS = 1,
-  TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS = 2,
-  TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS = 4,
-  TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS = 4,
+  TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS = 1 << 0,
+  TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS = 1 << 1,
+  TD_SPECIFIER_ALLOW_FUNCTION_SPECIFIERS = 1 << 2,
+  TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS = 1 << 3,
 };
 
 static unsigned long long
@@ -594,6 +596,10 @@ type_specifiers(struct typechk *tchk,
                 enum td_specifier_allow allow);
 
 enum sign_state { SIGN_STATE_NONE, SIGN_STATE_SIGNED, SIGN_STATE_UNSIGNED };
+
+static bool is_anonymous_name(const char *name) {
+  return !strncmp(name, "<anonymous>", strlen("<anonymous>"));
+}
 
 static char *anonymous_name(struct typechk *tchk) {
   size_t id = tchk->next_anonymous_type_name_id++;
@@ -732,6 +738,33 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     push_scope(&tchk->var_table);
 
     struct td_declaration td_decl = type_struct_declaration(tchk, declaration);
+
+    if (!td_decl.num_var_declarations &&
+        td_decl.base_ty.ty == TD_VAR_TY_TY_AGGREGATE) {
+      if (!is_anonymous_name(td_decl.base_ty.aggregate.name)) {
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(NO_DECL, no_decl, declaration->span,
+                                   MK_INVALID_TEXT_POS(0),
+                                   "does not declare anything"));
+      } else {
+        // anonymous type
+
+        struct td_var_declaration anon_decl = {
+            .ty = TD_VAR_DECLARATION_TY_VAR,
+            .var =
+                {
+                    .ty = TD_VAR_VAR_TY_VAR,
+                    .identifier = NULL,
+                    .scope = cur_scope(&tchk->var_table),
+                },
+            .var_ty = td_decl.base_ty,
+            .init = NULL,
+        };
+        vector_push_back(var_decls, &anon_decl);
+      }
+    }
+
     vector_extend(var_decls, td_decl.var_declarations,
                   td_decl.num_var_declarations);
 
@@ -3458,6 +3491,7 @@ static struct td_declaration type_init_declarator_list(
     enum td_declarator_mode bitfields) {
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
+      .base_ty = specifiers->type_specifier,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
           arena_alloc(tchk->arena, sizeof(*td_declaration.var_declarations) *
