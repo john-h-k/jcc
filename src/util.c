@@ -15,13 +15,6 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
   EXIT_FAIL(-2);
 }
 
-PRINTF_ARGS(1) void invariant_assert(bool b, const char *msg, ...) {
-  if (!b) {
-    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
-    EXIT_FAIL(-1);
-  }
-}
-
 void util_debug_assert(bool b, const char *cond, const char *func,
                               const char *file, int line, const char *msg,
                               ...) {

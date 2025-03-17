@@ -139,6 +139,14 @@ static inline void debug_print_stack_trace(void) {
 
 #endif
 
+// TEMP:
+#ifdef __JCC__
+#undef va_start
+#define va_start(...)
+#undef va_end
+#define va_end(...)
+#endif
+
 #define START_NO_UNUSED_ARGS PUSH_NO_WARN("-Wunused-parameter")
 #define END_NO_UNUSED_ARGS POP_NO_WARN()
 
@@ -205,8 +213,12 @@ NORETURN void unreachable(void);
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 
 // present in all mode, always causes program exit if fails
-PRINTF_ARGS(1)
-void invariant_assert(bool b, const char *msg, ...);
+PRINTF_ARGS(1) static inline void invariant_assert(bool b, const char *msg, ...) {
+  if (!b) {
+    FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
+    EXIT_FAIL(-1);
+  }
+}
 
 #if HAS_BUILTIN(__builtin_debugtrap)
 #define BREAKPOINT() __builtin_debugtrap()
@@ -243,8 +255,9 @@ static inline int tzcnt(unsigned long long l) {
 #if HAS_BUILTIN(__builtin_ctzll)
   return __builtin_ctzll(l);
 #else
-  if (l == 0)
+  if (l == 0) {
     return sizeof(l) * 8;
+  }
 
   int count = 0;
   while ((l & 1) == 0) {
@@ -262,8 +275,9 @@ static inline int lzcnt(unsigned long long l) {
   }
   return __builtin_clzll(l);
 #else
-  if (l == 0)
+  if (l == 0) {
     return sizeof(l) * 8;
+  }
 
   int count = 0;
   for (int i = (sizeof(l) * 8) - 1; i >= 0; i--) {
