@@ -194,22 +194,89 @@ mini-boostrap() {
     # doesn't support -D yet
     jcc_flags=""
 
-    jcc_files=("$@")
+    clang_files=(
+        src/aarch64/codegen.c
+        src/aarch64/emit.c
+        src/aarch64/emitter.c
+        src/aarch64/lower.c
+        src/aarch64.c
+        src/alloc.c
+        src/args.c
+        src/bitset.c
+        src/builtins.c
+        src/codegen.c
+        src/compiler.c
+        src/deque.c
+        src/diagnostics.c
+        src/disasm.c
+        src/eep/codegen.c
+        src/eep/disasm.c
+        src/eep/emit.c
+        src/eep/emitter.c
+        src/eep/lower.c
+        src/eep/object.c
+        src/eep.c
+        src/graphcol.c
+        src/graphwriter.c
+        src/hash.c
+        src/hashtbl.c
+        src/io.c
+        src/ir/build.c
+        src/ir/eliminate_phi.c
+        src/ir/ir.c
+        src/ir/prettyprint.c
+        src/ir/rw.c
+        src/ir/validate.c
+        src/ir/var_refs.c
+        src/lex.c
+        src/linux/elf.c
+        src/linux/link.c
+        src/liveness.c
+        src/log.c
+        src/lower.c
+        src/lsra.c
+        # src/macos/link.c
+        # src/macos/mach-o.c
+        src/main.c
+        src/opts/cnst_branches.c
+        src/opts/cnst_fold.c
+        src/opts/inline.c
+        src/opts/instr_comb.c
+        src/opts/opts.c
+        src/opts/promote.c
+        src/parse.c
+        src/preproc.c
+        # src/profile.c
+        # src/program.c
+        src/rv32i/codegen.c
+        src/rv32i/emit.c
+        src/rv32i/emitter.c
+        src/rv32i/lower.c
+        src/rv32i/object.c
+        src/rv32i.c
+        src/typechk.c
+        src/util.c
+        src/var_table.c
+        # src/vector.c
+        src/x64/codegen.c
+        src/x64/emit.c
+        src/x64/emitter.c
+        src/x64/lower.c
+        src/x64.c
+    )
 
     tmpdir=$(mktemp -d)
     trap "rm -rf $tmpdir" EXIT
 
     objects=()
     for file in src/**/*.c src/*.c; do
-        jcc=""
+        jcc="1"
 
-        for other in "${jcc_files[@]}"; do
-            if [[ "$other" == "$file" ]]; then
-                jcc="1"
-                continue
+        for other in "${clang_files[@]}"; do
+            if [[ "$(realpath $other)" == "$(realpath $file)" ]]; then
+                jcc=""
+                break
             fi
-
-            break
         done
 
         filename="$(basename "$file")"
@@ -229,7 +296,9 @@ mini-boostrap() {
                 exit -1
             fi
 
-            cp "$tmpdir/$filename.o" build/"$filename".o
+            objname="build/$filename.o"
+            mkdir -p "$objname"
+            cp "$output.o" "$objname"
 
         else
             cc $flags "$file" -c -o "$output"

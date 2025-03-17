@@ -9,21 +9,34 @@ int main() {
     return 1;
   }
 
+  bool v = false;
+  bool *p = &v;
+
+  if (*p) {
+    return 2;
+  }
+
+  *p = true;
+  
+  if (!*p) {
+    return 3;
+  }
+
   bool b = 100.0;
 
   if (!b) {
-    return 2;
+    return 4;
   }
 
   bool c = 0;
 
   if (c) {
-    return 3;
+    return 5;
   }
 
   bool d = 0.0;
 
   if (d) {
-    return 4;
+    return 6;
   }
 }

@@ -1769,12 +1769,20 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct lex_token token;
   peek_token(parser->lexer, &token);
 
+  struct ast_compoundexpr compound_expr;
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &expr->compound_expr) &&
+      parse_compoundexpr(parser, &compound_expr) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    // if its one elem, promote it to an expr (as compound expr must have >1 expressions)
+
+    if (compound_expr.num_exprs == 1) {
+      *expr = compound_expr.exprs[0];
+    } else {
+      expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
+      expr->compound_expr = compound_expr;
+      expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    }
     return true;
   }
 
@@ -1796,10 +1804,25 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
 }
 
 static bool
-parse_compound_literal(UNUSED struct parser *parser,
-                       UNUSED struct ast_compound_literal *compound_literal) {
-  // TODO
-  return false;
+parse_compound_literal(struct parser *parser,
+                       struct ast_compound_literal *compound_literal) {
+  struct lex_pos pos = get_position(parser->lexer);
+
+  struct ast_type_name type_name;
+  struct ast_init_list init_list;
+  if (!parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) ||
+      !parse_type_name(parser, &type_name) ||
+      !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL) ||
+      !parse_init_list(parser, &init_list)) {
+    backtrack(parser->lexer, pos);
+    return false;
+  }
+
+  compound_literal->type_name = type_name;
+  compound_literal->init_list = init_list;
+  compound_literal->span = MK_TEXT_SPAN(type_name.span.start, init_list.span.end);
+
+  return true;
 }
 
 // parses precedence level 0:
@@ -4017,9 +4040,11 @@ DEBUG_FUNC(ternary, ternary) {
 }
 
 DEBUG_FUNC(compound_literal, compound_literal) {
-  if (state->parser) {
-    TODO("compound literal");
-  }
+  AST_PRINTZ("COMPOUND LITERAL");
+  INDENT();
+  DEBUG_CALL(type_name, &compound_literal->type_name);
+  DEBUG_CALL(init_list, &compound_literal->init_list);
+  UNINDENT();
 }
 
 DEBUG_FUNC(expr, expr) {

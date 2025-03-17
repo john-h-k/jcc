@@ -517,7 +517,7 @@ enum addr_mode {
 static enum aarch64_instr_ty load_ty_for_op(struct ir_op *op,
                                             enum addr_mode mode) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
     return mode == ADDR_MODE_IMM ? AARCH64_INSTR_TY_LOAD_BYTE_IMM
                                  : AARCH64_INSTR_TY_LOAD_BYTE;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
@@ -533,7 +533,7 @@ static enum aarch64_instr_ty load_ty_for_op(struct ir_op *op,
 static enum aarch64_instr_ty store_ty_for_op(struct ir_op *op,
                                              enum addr_mode mode) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
     return mode == ADDR_MODE_IMM ? AARCH64_INSTR_TY_STORE_BYTE_IMM
                                  : AARCH64_INSTR_TY_STORE_BYTE;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&

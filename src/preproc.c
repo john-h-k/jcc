@@ -1313,12 +1313,13 @@ static bool try_expand_token(struct preproc *preproc,
                 vector_push_back(expanded_fn, &str_tok);
               } else {
                 size_t num_arg_tokens = vector_length(arg_tokens);
-                // for (size_t k = num_arg_tokens; k; k--) {
-                //   vector_push_back(expanded_fn, vector_get(arg_tokens, k -
-                //   1));
-                for (size_t k = 0; k < num_arg_tokens; k++) {
-                  vector_push_back(expanded_fn, vector_get(arg_tokens, k));
+                for (size_t k = num_arg_tokens; k; k--) {
+                  vector_push_back(expanded_fn, vector_get(arg_tokens, k -
+                  1));
                 }
+                // for (size_t k = 0; k < num_arg_tokens; k++) {
+                //   vector_push_back(expanded_fn, vector_get(arg_tokens, k));
+                // }
               }
 
               if (j - 1 != macro_fn.num_params) {

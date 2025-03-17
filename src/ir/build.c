@@ -167,7 +167,8 @@ static bool var_ty_needs_cast_op(struct ir_func_builder *irb,
   enum ir_var_primitive_ty pointer_prim =
       ir_var_ty_pointer_primitive_ty(irb->unit);
 
-  if (l->ty == IR_VAR_TY_TY_PRIMITIVE && l->primitive == IR_VAR_PRIMITIVE_TY_I1) {
+  if (l->ty == IR_VAR_TY_TY_PRIMITIVE &&
+      l->primitive == IR_VAR_PRIMITIVE_TY_I1) {
     return true;
   }
 
@@ -350,7 +351,8 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
     }
   }
 
-  if (to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE && to_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1) {
+  if (to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      to_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1) {
     return (struct ir_cast_info){.cmp_nz = true};
   }
 
@@ -421,10 +423,10 @@ static struct ir_op *insert_ir_for_cast(struct ir_func_builder *irb,
     cast->ty = IR_OP_TY_BINARY_OP;
     cast->var_ty = *to;
     cast->binary_op = (struct ir_op_binary_op){
-      .ty = ir_var_ty_is_fp(&op->var_ty) ? IR_OP_BINARY_OP_TY_FNEQ : IR_OP_BINARY_OP_TY_NEQ,
-      .lhs = op,
-      .rhs = zero
-    };
+        .ty = ir_var_ty_is_fp(&op->var_ty) ? IR_OP_BINARY_OP_TY_FNEQ
+                                           : IR_OP_BINARY_OP_TY_NEQ,
+        .lhs = op,
+        .rhs = zero};
 
     return cast;
   } else {
@@ -2060,6 +2062,44 @@ build_ir_for_pointeraccess(struct ir_func_builder *irb, struct ir_stmt **stmt,
   }
 }
 
+static void build_ir_for_init_list(struct ir_func_builder *irb,
+                                   struct ir_stmt **stmt, struct ir_op *address,
+                                   struct td_init_list *init_list);
+
+static struct ir_op *build_ir_for_compoundliteral(struct ir_func_builder *irb,
+                                                  struct ir_stmt **stmt,
+                                                  struct ir_op *address,
+                                                  struct td_expr *expr) {
+  struct td_compound_literal *compound_literal = &expr->compound_literal;
+  struct ir_var_ty var_ty =
+      var_ty_for_td_var_ty(irb->unit, &compound_literal->var_ty);
+
+  bool needs_load = false;
+  if (!address) {
+    needs_load = true;
+    
+    struct ir_lcl *lcl = ir_add_local(irb->func, &var_ty);
+
+    address = ir_alloc_op(irb->func, *stmt);
+    address->ty = IR_OP_TY_ADDR;
+    address->var_ty = IR_VAR_TY_POINTER;
+    address->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+  }
+
+  build_ir_for_init_list(irb, stmt, address, &compound_literal->init_list);
+
+  if (needs_load) {
+    struct ir_op *load = ir_alloc_op(irb->func, *stmt);
+    load->ty = IR_OP_TY_LOAD;
+    load->var_ty = var_ty;
+    load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = address};
+
+    return load;
+  }
+
+  return address;
+}
+
 static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
                                        struct td_expr *expr) {
@@ -2110,7 +2150,8 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     op = build_ir_for_alignof(irb, stmt, expr);
     break;
   case TD_EXPR_TY_COMPOUND_LITERAL:
-    TODO("compound literals");
+    op = build_ir_for_compoundliteral(irb, stmt, NULL, expr);
+    break;
   }
 
   invariant_assert(op, "null op!");
@@ -2826,7 +2867,16 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
                                        struct td_init *init) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR:
-    return build_ir_for_expr(irb, stmt, &init->expr);
+    // FIXME: special case compound expr so it gets the local to write into
+    // this logic is BROKEN if a cast is needed (e.g `struct foo a = { .field =
+    // (int){1} }`;
+    if (init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
+      build_ir_for_compoundliteral(irb, stmt, start_address, &init->expr);
+      return NULL; // return null signifies build_ir_for_var should not insert a
+                   // STORE
+    } else {
+      return build_ir_for_expr(irb, stmt, &init->expr);
+    }
   case TD_INIT_TY_INIT_LIST:
     DEBUG_ASSERT(start_address,
                  "start_address required when building with init list");
@@ -2843,6 +2893,7 @@ static void
 build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
                         enum td_storage_class_specifier storage_class,
+                        enum td_function_specifier_flags func_specifiers,
                         struct td_var_declaration *decl) {
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
 
@@ -2874,15 +2925,16 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
   }
 
   enum ir_linkage linkage;
-
   bool is_func = decl->var_ty.ty == TD_VAR_TY_TY_FUNC;
   bool is_extern = storage_class == TD_STORAGE_CLASS_SPECIFIER_EXTERN;
   bool is_static = storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC;
+  bool is_inline = func_specifiers & TD_FUNCTION_SPECIFIER_FLAG_INLINE;
   bool is_file_scope = key.scope == SCOPE_GLOBAL;
   bool is_unspecified_storage =
       storage_class == TD_STORAGE_CLASS_SPECIFIER_NONE;
 
-  if ((is_func && !is_static) || is_extern || (is_file_scope && !is_static)) {
+  if ((is_func && !is_static && !is_inline) || is_extern ||
+      (is_file_scope && !is_inline && !is_static)) {
     linkage = IR_LINKAGE_EXTERNAL;
   } else if (is_file_scope && is_static) {
     linkage = IR_LINKAGE_INTERNAL;
@@ -2956,6 +3008,7 @@ build_ir_for_global_declaration(struct ir_var_builder *irb,
 
     build_ir_for_global_var(irb, func, var_refs,
                             declaration->storage_class_specifier,
+                            declaration->function_specifier_flags,
                             &declaration->var_declarations[i]);
   }
 }
@@ -3062,7 +3115,8 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
       };
 
       build_ir_for_global_var(&builder, irb->func, irb->global_var_refs,
-                              declaration->storage_class_specifier, decl);
+                              declaration->storage_class_specifier,
+                              declaration->function_specifier_flags, decl);
     }
   }
 }
@@ -3757,14 +3811,21 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
 
     switch (init->init->ty) {
     case TD_INIT_TY_EXPR: {
-      struct ir_build_init build_init = {
-          .is_bitfield = is_bitfield,
-          .bitfield = bitfield,
-          .offset = init_offset,
-          .expr = &init->init->expr,
-      };
+      if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
+        // again broken if cast needed
+        DEBUG_ASSERT(td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty), "todo handle non equal tys");
+        build_init_list_layout_entry(iru, &init->init->expr.compound_literal.init_list, &member_ty,
+                                     init_offset, inits);
+      } else {
+        struct ir_build_init build_init = {
+            .is_bitfield = is_bitfield,
+            .bitfield = bitfield,
+            .offset = init_offset,
+            .expr = &init->init->expr,
+        };
 
-      vector_push_back(inits, &build_init);
+        vector_push_back(inits, &build_init);
+      }
       break;
     }
     case TD_INIT_TY_INIT_LIST:
@@ -4121,9 +4182,9 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
       struct td_funcdef *def = &external_declaration->func_def;
 
-      build_ir_for_global_var(&var_builder, NULL, global_var_refs,
-                              def->storage_class_specifier,
-                              &def->var_declaration);
+      build_ir_for_global_var(
+          &var_builder, NULL, global_var_refs, def->storage_class_specifier,
+          def->function_specifier_flags, &def->var_declaration);
 
       struct ir_func *func =
           build_ir_for_function(iru, arena, def, global_var_refs, flags);

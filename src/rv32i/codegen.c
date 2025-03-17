@@ -916,7 +916,8 @@ static void codegen_binary_op(struct cg_state *state,
 
 static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return RV32I_INSTR_TY_LBU;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
@@ -937,7 +938,8 @@ static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
 
 static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
     return RV32I_INSTR_TY_SB;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {

@@ -575,14 +575,12 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
           fprintf(file, "addr LCL(%zu)", op->addr.lcl->id);
           break;
         case IR_LCL_ALLOC_TY_NORMAL:
-          fprintf(file, "addr LCL(%zu) { ", op->addr.lcl->id);
+          fprintf(file, "addr LCL(%zu) ; ", op->addr.lcl->id);
           debug_print_lcl_alloc(file, &op->addr.lcl->alloc);
-          fprintf(file, " }");
           break;
         case IR_LCL_ALLOC_TY_FIXED:
-          fprintf(file, "addr LCL(%zu) { FIXED ", op->addr.lcl->id);
+          fprintf(file, "addr LCL(%zu) ; FIXED ", op->addr.lcl->id);
           debug_print_lcl_alloc(file, &op->addr.lcl->alloc);
-          fprintf(file, " }");
           break;
         }
       }
@@ -594,7 +592,7 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
         fprintf(file, "addr GLB(%zu)", op->addr.glb->id);
 
         if (op->addr.glb->name) {
-          fprintf(file, " { \"%s\" }", op->addr.glb->name);
+          fprintf(file, " ; \"%s\"", op->addr.glb->name);
         }
       }
       break;
