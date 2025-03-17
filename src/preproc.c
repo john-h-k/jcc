@@ -123,18 +123,18 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
                                           enum compile_target target) {
   // FIXME: vectors leak, vector should probably be arena-based
 
-#define DEF_BUILTIN(tok_ty, n, v)                                                      \
+#define DEF_BUILTIN(tok_ty, n, v)                                              \
   do {                                                                         \
     size_t name_len = strlen((n));                                             \
     struct sized_str ident = {.str = (n), .len = name_len};                    \
                                                                                \
     struct preproc_define define = {                                           \
-        .name = {.ty = tok_ty,                            \
+        .name = {.ty = tok_ty,                                                 \
                  .span = MK_INVALID_TEXT_SPAN(0, name_len),                    \
                  .text = (n)},                                                 \
         .value = {                                                             \
             .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,                               \
-            .token = {.ty = tok_ty,                       \
+            .token = {.ty = tok_ty,                                            \
                       .span = MK_INVALID_TEXT_SPAN(0, strlen((v))),            \
                       .text = (v)},                                            \
         }};                                                                    \
@@ -142,8 +142,10 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     hashtbl_insert(preproc->defines, &ident, &define);                         \
   } while (0);
 
-#define DEF_BUILTIN_NUM(n, v) DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v))
-#define DEF_BUILTIN_IDENT(n, v) DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v))
+#define DEF_BUILTIN_NUM(n, v)                                                  \
+  DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v))
+#define DEF_BUILTIN_IDENT(n, v)                                                \
+  DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v))
 
   // HACK: apple headers have __asm in them in weird locations. we define a
   // macro here to get rid of that
@@ -169,8 +171,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     hashtbl_insert(preproc->defines, &ident, &define);
   }
 
-  // HACK: musl doesn't include `stdarg.h` so until we support `__builtin_va_list`, just typedef it away
-  DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
+  // HACK: musl doesn't include `stdarg.h` so until we support
+  // `__builtin_va_list`, just typedef it away
+  // DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
 
   DEF_BUILTIN_IDENT("__extension__", "");
 
@@ -473,8 +476,9 @@ static void preproc_next_raw_token(struct preproc *preproc,
 
     // FIXME: why does this sometimes get hit?
     // DEBUG_ASSERT(vector_length(preproc_text->enabled) == 1,
-    //              "text %s ended with enabled depth of %zu (should have been 1)",
-    //              preproc_text->file, vector_length(preproc_text->enabled));
+    //              "text %s ended with enabled depth of %zu (should have been
+    //              1)", preproc_text->file,
+    //              vector_length(preproc_text->enabled));
 
     vector_pop(preproc->texts);
   }
@@ -992,6 +996,26 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
 #define TYPE_VAL(l, r)                                                         \
   ((long long)PREPROC_TOKEN_TY_##l << 32) | (PREPROC_TOKEN_TY_##r)
   switch (((long long)token->ty << 32) | last->ty) {
+  case TYPE_VAL(IDENTIFIER, STRING_LITERAL): {
+    size_t llen = text_span_len(&token->span);
+    size_t rlen = text_span_len(&last->span);
+
+    if (llen && (llen > 1 || token->text[0] != 'L')) {
+      BUG("can only concat L with string/char literal");
+    }
+
+    char *new = arena_alloc(preproc->arena, llen + rlen);
+    memcpy(new, token->text, llen);
+    memcpy(new + llen, last->text, rlen);
+
+    struct preproc_token new_tok = {
+        .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
+        .span = MK_INVALID_TEXT_SPAN(0, llen + rlen),
+        .text = new,
+    };
+
+    return new_tok;
+  }
   case TYPE_VAL(IDENTIFIER, IDENTIFIER):
   case TYPE_VAL(IDENTIFIER, PREPROC_NUMBER):
   // because we process backwards, we have to accept `0 ## _bar`, because it
@@ -1338,9 +1362,20 @@ static bool try_expand_token(struct preproc *preproc,
                   vector_push_back(expanded_fn, &str_tok);
                 } else {
                   size_t num_arg_tokens = vector_length(arg_tokens);
-                  for (size_t k = num_arg_tokens; k; k--) {
-                    vector_push_back(expanded_fn,
-                                     vector_get(arg_tokens, k - 1));
+
+                  if (num_arg_tokens) {
+                    for (size_t k = num_arg_tokens; k; k--) {
+                      vector_push_back(expanded_fn,
+                                       vector_get(arg_tokens, k - 1));
+                    }
+                  } else {
+                    struct preproc_token empty = {
+                        .ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                        .span = MK_INVALID_TEXT_SPAN(0, 0),
+                        .text = "",
+                    };
+
+                    vector_push_back(expanded_fn, &empty);
                   }
                 }
                 expanded = true;
@@ -1569,7 +1604,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     *content = STDBOOL_CONTENT;
 
     return true;
- } else if (!strcmp(path, "stdnoreturn.h")) {
+  } else if (!strcmp(path, "stdnoreturn.h")) {
     if (preproc->args.verbose) {
       fprintf(stderr, "preproc: special header 'stdnoreturn.h'");
     }
@@ -1597,25 +1632,35 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#ifndef STDARG_H\n"
         "#define STDARG_H\n"
         "\n"
-        // libc
-        "typedef void * __gnuc_va_list;\n"
-        "#define __GNUC_VA_LIST\n"
-        "\n"
-        "#ifdef __need___va_list\n"
-        "\n"
-        "typedef void * va_list;\n"
-        "\n"
-        "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
-        "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
-        "#else\n"
-        "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
-        "#endif\n"
-        "\n"
-        "#define va_end(ap) __builtin_va_end(ap);\n"
-        "#define va_arg(ap, type) __builtin_va_arg(ap, type);\n"
-        "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
-        "typedef __builtin_va_list va_list;\n"
-        "#endif\n"
+        // // libc
+        // "typedef void * __gnuc_va_list;\n"
+        // "#define __GNUC_VA_LIST\n"
+        // "\n"
+        // "#ifdef __need___va_list\n"
+        // "\n"
+        // "typedef void * va_list;\n"
+        // "\n"
+        // "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
+        // "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
+        // "#else\n"
+        // "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
+        // "#endif\n"
+        // "\n"
+        // "#define va_end(ap) __builtin_va_end(ap)\n"
+        // "#define va_arg(ap, type) __builtin_va_arg(ap, type)\n"
+        // "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
+        // // "typedef __builtin_va_list va_list;\n"
+        // "typedef void * va_list;\n"
+        // TEMP:
+        
+        
+        "#undef va_end\n"
+        "#undef va_arg\n"
+        "#undef va_copy\n"
+        "#define va_end(ap)\n"
+        "#define va_arg(ap, type)\n"
+        "#define va_copy(dest, src) \n"
+        // "#endif\n"
         "#endif\n";
 
     *content = STDARG_CONTENT;
@@ -1701,7 +1746,8 @@ static struct include_info try_find_include(struct preproc *preproc,
     }
   }
 
-  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h") || !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h")) {
+  if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h") ||
+      !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h")) {
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;

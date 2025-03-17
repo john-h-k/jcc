@@ -395,6 +395,7 @@ static int jcc_main(int argc, char **argv) {
     } else if (!strcmp(components.ext, "h")) {
       warn("compiling header file '%s', is this intentional?", source_path);
     } else if (strcmp(components.ext, "c")) {
+      err("unrecognised file type \"%s\"", components.ext);
       exc = -1;
       goto exit;
     }
