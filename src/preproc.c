@@ -2611,26 +2611,26 @@ static void add_escaped_str(struct vector *buf, const char *str, size_t len) {
   for (size_t i = 0; i < len; i++) {
     char ch = str[i];
 
-#define ADD_ESCAPED(esc)                                                       \
+#define ADD_ESCAPED(esc, c)                                                       \
   case esc: {                                                                  \
-    char c = esc;                                                              \
     vector_push_back(buf, &slash);                                             \
-    vector_push_back(buf, &c);                                                 \
+    vector_push_back(buf, &(char){c});                                                 \
     break;                                                                     \
   }
 
     switch (ch) {
-      ADD_ESCAPED('\0')
-      ADD_ESCAPED('\a')
-      ADD_ESCAPED('\b')
-      ADD_ESCAPED('\f')
-      ADD_ESCAPED('\n')
-      ADD_ESCAPED('\r')
-      ADD_ESCAPED('\t')
-      ADD_ESCAPED('\v')
-      ADD_ESCAPED('\\')
-      ADD_ESCAPED('\'')
-      ADD_ESCAPED('"')
+      ADD_ESCAPED('\0', '0')
+      ADD_ESCAPED('\a', 'a')
+      ADD_ESCAPED('\b', 'b')
+      ADD_ESCAPED('\f', 'f')
+      ADD_ESCAPED('\n', 'n')
+      ADD_ESCAPED('\r', 'r')
+      ADD_ESCAPED('\t', 't')
+      ADD_ESCAPED('\v', 'v')
+      ADD_ESCAPED('\\', '\\')
+      // hmm, we only want to add this in the right type of string...
+      ADD_ESCAPED('\'', '\'')
+      ADD_ESCAPED('"', '"')
     default:
       vector_push_back(buf, &ch);
       break;

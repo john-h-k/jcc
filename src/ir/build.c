@@ -776,6 +776,28 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     return build_ir_for_expr(irb, stmt, expr->unary_op.expr);
   }
 
+  if (expr->ty == TD_EXPR_TY_CALL) {
+    struct ir_op *value = build_ir_for_expr(irb, stmt, expr);
+
+    // spill call, and address spill
+    struct ir_lcl *lcl = ir_add_local(irb->func, &value->var_ty);
+
+    struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_LCL,
+      .lcl = lcl,
+      .value = value
+    };
+
+    struct ir_op *addr = ir_append_op(irb->func, *stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    addr->addr = (struct ir_op_addr){
+      .ty = IR_OP_ADDR_TY_LCL,
+      .lcl = lcl,
+    };
+
+    return addr;
+  }
+
   if (expr->ty != TD_EXPR_TY_VAR) {
     TODO("unknown type for addressof");
   }
@@ -2331,7 +2353,7 @@ build_ir_for_switch(struct ir_func_builder *irb,
 jumps:
 
   if (!default_block) {
-    default_block = after_body_bb;
+    default_block = after_body_bb;   
   }
 
   ir_make_basicblock_switch(irb->func, basicblock, vector_length(cases),
@@ -2345,9 +2367,7 @@ jumps:
     switch (jump->ty) {
     case IR_JUMP_TY_NEW_LOOP:
       // end
-      vector_free(&cases);
-      vector_free(&continues);
-      return after_body_bb;
+      goto end;
     case IR_JUMP_TY_BREAK: {
       ir_make_basicblock_merge(irb->func, jump->basicblock, after_body_bb);
       struct ir_stmt *break_br_stmt =
@@ -2363,6 +2383,7 @@ jumps:
     }
   }
 
+end:
   // propogate the `continue`s to the next level up
   vector_extend(irb->jumps, vector_head(continues), vector_length(continues));
 

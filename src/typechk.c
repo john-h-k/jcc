@@ -654,7 +654,7 @@ td_var_ty_for_enum(struct typechk *tchk,
                           .scope = cur_scope(&tchk->ty_table)};
 
   struct var_table_entry *ty_entry =
-      var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
+      var_table_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
   ty_entry->var = arena_alloc(tchk->arena, sizeof(*ty_entry->var));
   *ty_entry->var = ty_var;
   ty_entry->var_ty = arena_alloc(tchk->arena, sizeof(*ty_entry->var_ty));
@@ -1962,6 +1962,10 @@ static struct td_expr type_binary_op(struct typechk *tchk,
                           .binary_op = td_binary_op};
 }
 
+static bool try_get_completed_aggregate(struct typechk *tchk,
+                                        const struct td_var_ty *var_ty,
+                                        struct td_var_ty *complete);
+
 static struct td_expr
 type_arrayaccess(struct typechk *tchk,
                  const struct ast_arrayaccess *arrayaccess) {
@@ -1996,6 +2000,31 @@ type_arrayaccess(struct typechk *tchk,
             "array access should have at least one pointer type"));
 
     var_ty = TD_VAR_TY_UNKNOWN;
+  }
+
+  struct td_var_ty complete;
+  if (var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    if (!try_get_completed_aggregate(tchk, &var_ty, &complete)) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_DEREF, bad_deref, arrayaccess->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "array access had incomplete type"));
+    }
+
+    var_ty = complete;
+
+    switch (lhs.var_ty.ty) {
+    case TD_VAR_TY_TY_POINTER:
+      *lhs.var_ty.pointer.underlying = var_ty;
+      break;
+    case TD_VAR_TY_TY_ARRAY:
+      *lhs.var_ty.array.underlying = var_ty;
+      break;
+    default:
+      unreachable();
+    }
   }
 
   if (!td_var_ty_is_integral_ty(&td_arrayaccess.rhs->var_ty)) {
@@ -2107,9 +2136,7 @@ static bool try_get_member_idx(struct typechk *tchk,
                              context)) {
         return true;
       }
-    }
-
-    if (strcmp(field->identifier, member_name) == 0) {
+    } else if (strcmp(field->identifier, member_name) == 0) {
       *member_idx = i;
       return true;
     }

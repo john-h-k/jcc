@@ -188,6 +188,7 @@ build() {
 }
 
 mini-boostrap() {
+    clean
     build
 
     flags="-DJCC_ALL"
@@ -223,7 +224,7 @@ mini-boostrap() {
         # src/io.c
         src/ir/build.c
         src/ir/eliminate_phi.c
-        src/ir/ir.c
+        # src/ir/ir.c
         src/ir/prettyprint.c
         # src/ir/rw.c
         src/ir/validate.c
@@ -297,7 +298,7 @@ mini-boostrap() {
             fi
 
             objname="build/$filename.o"
-            mkdir -p "$objname"
+            mkdir -p "$(dirname "$objname")"
             cp "$output.o" "$objname"
 
         else
