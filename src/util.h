@@ -19,6 +19,11 @@ typedef ptrdiff_t ssize_t;
 #error "do not compile jcc as C++"
 #endif
 
+#ifdef __JCC__
+// don't yet support -D flag so just do this
+#define JCC_ALL
+#endif
+
 #include "compinfo.h"
 
 #ifdef INT128_C

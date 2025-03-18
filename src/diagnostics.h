@@ -28,6 +28,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN,             \
           const char *)                                                        \
   DIAG_FN(ERROR, "expected-expr", expected_expr, EXPECTED_EXPR, const char *)  \
+  DIAG_FN(ERROR, "invalid-int-literal", invalid_int_literal, INVALID_INT_LITERAL, const char *)  \
+  DIAG_FN(ERROR, "invalid-float-literal", invalid_float_literal, INVALID_FLOAT_LITERAL, const char *)  \
   DIAG_FN(ERROR, "expected-init", expected_init, EXPECTED_INIT, const char *)  \
   DIAG_FN(ERROR, "expected-type-name", expected_type_name, EXPECTED_TYPE_NAME, \
           const char *)
