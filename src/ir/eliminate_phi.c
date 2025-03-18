@@ -1,10 +1,9 @@
 #include "eliminate_phi.h"
 
-#include "../bitset.h"
 #include "../hashtbl.h"
 #include "../vector.h"
+#include "../target.h"
 #include "ir.h"
-#include "prettyprint.h"
 
 struct bb_reg {
   size_t reg;

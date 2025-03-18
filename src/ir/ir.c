@@ -2745,6 +2745,8 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
       size += info.size;
     }
 
+    size = ROUND_UP(size, max_alignment);
+
     return (struct ir_var_ty_info){.size = size,
                                    .alignment = max_alignment,
                                    .num_fields = num_fields,
@@ -2762,6 +2764,8 @@ struct ir_var_ty_info ir_var_ty_info(struct ir_unit *iru,
 
       size = MAX(size, info.size);
     }
+
+    size = ROUND_UP(size, max_alignment);
 
     return (struct ir_var_ty_info){.size = size,
                                    .alignment = max_alignment,
