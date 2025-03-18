@@ -181,6 +181,9 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
   if (rem >= 2 && str[i] == '0' && str[i + 1] == 'x') {
     i += 2;
     base = 16;
+  } else if (rem >= 2 && str[i] == '0' && str[i + 1] == 'b') {
+    i += 2;
+    base = 2;
   } else if (rem >= 1 && str[i] == '0') {
     i++;
     base = 8;
@@ -196,7 +199,9 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
       break;
     }
 
-    if (ch >= '0' && ch <= '7') {
+    if (ch >= '0' && ch <= '1') {
+      digit = ch - '0';
+    } else if (base > 2 && ch >= '0' && ch <= '7') {
       digit = ch - '0';
     } else if (base > 8 && ch >= '8' && ch <= '9') {
       digit = ch - '0';

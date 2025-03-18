@@ -1565,18 +1565,28 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   size_t literal_len = strlen(literal_text);
   DEBUG_ASSERT(literal_len, "literal_len was 0");
 
+  cnst->ty = ty;
+  consume_token(parser->lexer, token);
+  cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+
   unsigned long long int_value;
 
   if (!try_parse_integer(literal_text, literal_len, &int_value)) {
-    TODO("handle constant int parse failure");
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        parser->diagnostics,
+        MK_PARSER_DIAGNOSTIC(INVALID_INT_LITERAL, invalid_int_literal,
+                             cnst->span, MK_INVALID_TEXT_POS(0),
+                             "invalid int literal"));
+
+
+    cnst->int_value = 0;
+    return true;
   }
 
   // TODO: handle unrepresentedly large values
-  cnst->ty = ty;
   cnst->int_value = int_value;
 
-  consume_token(parser->lexer, token);
-  cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
   return true;
 }
 
@@ -3202,6 +3212,11 @@ struct parse_result parse(struct parser *parser) {
     if (lexer_at_eof(lexer)) {
       info("EOF reached by lexer");
       break;
+    }
+
+    struct text_span null_span;
+    if (parse_token(parser, LEX_TOKEN_TY_SEMICOLON, &null_span)) {
+      continue;
     }
 
     struct ast_external_declaration external_declaration;

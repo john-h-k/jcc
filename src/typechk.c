@@ -3291,7 +3291,8 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     case TD_UNARY_OP_TY_CAST:
       if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
           (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER ||
-           expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
+           expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY ||
+           expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_FUNC)) {
         // pointer to pointer cast, fine
         return expr;
       }

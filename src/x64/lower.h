@@ -1,7 +1,7 @@
 #ifndef X64_LOWER_H
 #define X64_LOWER_H
 
-#include "../ir/build.h"
+#include "../ir/ir.h"
 
 // performs platform specific lowering transformations to the IR
 void x64_lower(struct ir_unit *unit);

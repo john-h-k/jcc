@@ -1,4 +1,4 @@
-#include <assert.h>
+// expected value: 0
 
 int main() {
   static_assert(1.0 * 2 == 2.0, "floats work");
