@@ -28,8 +28,8 @@ No, it is text based
 
 ## Why?
 
-I just wanted to write a C compiler. It happens to be an easily buildable, easily runnable compiler that is still an accessible size, and so is good for people trying to understand compilers
-without having to enter the shoggoth of Clang/GCC.
+I just wanted to write a C compiler. It happens to be an easily buildable, easily runnable compiler that is still a grokkable size, It is probably too large to be considered a toy compiler, but the core architecture is much more accessible
+than the the shoggoth of Clang/GCC.
 
 ## Support
 

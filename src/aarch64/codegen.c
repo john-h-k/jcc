@@ -1555,9 +1555,9 @@ static void codegen_binary_op(struct cg_state *state,
         .rhs = codegen_reg(rhs_op),
     };
     break;
-  case IR_OP_BINARY_OP_TY_SQUOT:
-  case IR_OP_BINARY_OP_TY_UQUOT:
-    BUG("squot/uquot shoud have been lowered");
+  case IR_OP_BINARY_OP_TY_SMOD:
+  case IR_OP_BINARY_OP_TY_UMOD:
+    BUG("smod/umod shoud have been lowered");
   }
 }
 

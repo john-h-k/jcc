@@ -216,6 +216,7 @@ var_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   case WELL_KNOWN_TY_DOUBLE:
   case WELL_KNOWN_TY_LONG_DOUBLE:
     return IR_VAR_PRIMITIVE_TY_F64;
+  case WELL_KNOWN_TY_INT128:
   case WELL_KNOWN_TY_UINT128:
     return IR_VAR_PRIMITIVE_TY_I128;
   }
@@ -335,6 +336,11 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
     BUG("cast between pointer types is implicit");
   }
 
+  if (to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
+      to_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1) {
+    return (struct ir_cast_info){.cmp_nz = true};
+  }
+
   if (from_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       to_var_ty.ty == IR_VAR_TY_TY_POINTER) {
     // primitive -> pointer
@@ -342,18 +348,13 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
       BUG("cast between primitive & pointer type of same size is implicit");
     }
 
-    if (WKT_IS_SIGNED(to->well_known)) {
+    if (WKT_IS_SIGNED(from->well_known)) {
       return (struct ir_cast_info){.cmp_nz = false,
                                    .cast_ty = IR_OP_CAST_OP_TY_SEXT};
     } else {
       return (struct ir_cast_info){.cmp_nz = false,
                                    .cast_ty = IR_OP_CAST_OP_TY_ZEXT};
     }
-  }
-
-  if (to_var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      to_var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1) {
-    return (struct ir_cast_info){.cmp_nz = true};
   }
 
   if (from_var_ty.ty == IR_VAR_TY_TY_POINTER &&
@@ -396,7 +397,7 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
   } else {
     invariant_assert(from_var_ty.primitive != to_var_ty.primitive,
                      "cast not needed for types of same size");
-    if (WKT_IS_SIGNED(to->well_known)) {
+    if (WKT_IS_SIGNED(from->well_known)) {
       return (struct ir_cast_info){.cmp_nz = false,
                                    .cast_ty = IR_OP_CAST_OP_TY_SEXT};
     } else {
@@ -655,11 +656,11 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
       b->ty = IR_OP_BINARY_OP_TY_UDIV;
     }
     break;
-  case TD_BINARY_OP_TY_QUOT:
+  case TD_BINARY_OP_TY_MOD:
     if (WKT_IS_SIGNED(td_var_ty->well_known)) {
-      b->ty = IR_OP_BINARY_OP_TY_SQUOT;
+      b->ty = IR_OP_BINARY_OP_TY_SMOD;
     } else {
-      b->ty = IR_OP_BINARY_OP_TY_UQUOT;
+      b->ty = IR_OP_BINARY_OP_TY_UMOD;
     }
     break;
   }
@@ -1626,12 +1627,12 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
 }
 
 static bool try_get_member_info(struct ir_unit *iru,
-                            const struct td_var_ty *aggregate,
-                            const char *member_name,
-                            struct ir_var_ty *member_ty, size_t *member_idx,
-                            size_t *member_offset, bool *member_is_bitfield,
-                            struct ir_bitfield *member_bitfield,
-                            struct td_var_ty *td_member_ty) {
+                                const struct td_var_ty *aggregate,
+                                const char *member_name,
+                                struct ir_var_ty *member_ty, size_t *member_idx,
+                                size_t *member_offset, bool *member_is_bitfield,
+                                struct ir_bitfield *member_bitfield,
+                                struct td_var_ty *td_member_ty) {
   DEBUG_ASSERT(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
 
   *member_ty = IR_VAR_TY_NONE;
@@ -1651,8 +1652,9 @@ static bool try_get_member_info(struct ir_unit *iru,
       size_t anon_member_offset;
 
       if (!try_get_member_info(iru, &field->var_ty, member_name, member_ty,
-                      &anon_member_idx, &anon_member_offset, member_is_bitfield,
-                      member_bitfield, td_member_ty)) {
+                               &anon_member_idx, &anon_member_offset,
+                               member_is_bitfield, member_bitfield,
+                               td_member_ty)) {
         continue;
       }
 
@@ -1710,7 +1712,9 @@ static void get_member_info(struct ir_unit *iru,
                             size_t *member_offset, bool *member_is_bitfield,
                             struct ir_bitfield *member_bitfield,
                             struct td_var_ty *td_member_ty) {
-  if (try_get_member_info(iru, aggregate, member_name, member_ty, member_idx, member_offset, member_is_bitfield, member_bitfield, td_member_ty)) {
+  if (try_get_member_info(iru, aggregate, member_name, member_ty, member_idx,
+                          member_offset, member_is_bitfield, member_bitfield,
+                          td_member_ty)) {
     return;
   }
 
@@ -1880,8 +1884,8 @@ static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
   case TD_ASSG_TY_DIV:
     ty = TD_BINARY_OP_TY_DIV;
     goto compound_assg;
-  case TD_ASSG_TY_QUOT:
-    ty = TD_BINARY_OP_TY_QUOT;
+  case TD_ASSG_TY_MOD:
+    ty = TD_BINARY_OP_TY_MOD;
     goto compound_assg;
   case TD_ASSG_TY_AND:
     ty = TD_BINARY_OP_TY_AND;
@@ -2093,7 +2097,7 @@ static struct ir_op *build_ir_for_compoundliteral(struct ir_func_builder *irb,
   bool needs_load = false;
   if (!address) {
     needs_load = true;
-    
+
     struct ir_lcl *lcl = ir_add_local(irb->func, &var_ty);
 
     address = ir_alloc_op(irb->func, *stmt);
@@ -2124,6 +2128,8 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
 
   switch (expr->ty) {
+  case TD_EXPR_TY_INVALID:
+    BUG("invalid expr should not reach ir gen");
   case TD_EXPR_TY_TERNARY:
     op = build_ir_for_ternary(irb, stmt, var_ty, &expr->ternary);
     break;
@@ -3829,9 +3835,12 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
     case TD_INIT_TY_EXPR: {
       if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
         // again broken if cast needed
-        DEBUG_ASSERT(td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty), "todo handle non equal tys");
-        build_init_list_layout_entry(iru, &init->init->expr.compound_literal.init_list, &member_ty,
-                                     init_offset, inits);
+        DEBUG_ASSERT(
+            td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty),
+            "todo handle non equal tys");
+        build_init_list_layout_entry(
+            iru, &init->init->expr.compound_literal.init_list, &member_ty,
+            init_offset, inits);
       } else {
         struct ir_build_init build_init = {
             .is_bitfield = is_bitfield,
@@ -4030,14 +4039,33 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                         const struct td_cnst *cnst);
 
 static struct ir_var_value
+build_ir_for_var_value_var(struct ir_var_builder *irb,
+                           const struct td_expr *expr,
+                           const struct td_var_ty *var_ty) {
+  // a var can only ever be used as an init when it is an address or constant
+  // (enum)
+
+  switch (expr->var.ty) {
+  case TD_VAR_VAR_TY_ENUMERATOR:
+    // FIXME: i think this is wrong for `int *p = ENUM_VALUE`
+    return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
+                                 .var_ty =
+                                     var_ty_for_td_var_ty(irb->unit, var_ty),
+                                 .int_value = expr->var.enumerator};
+  case TD_VAR_VAR_TY_VAR:
+    return build_ir_for_var_value_addr(irb, expr, NULL, var_ty);
+  }
+}
+
+static struct ir_var_value
 build_ir_for_var_value_expr(struct ir_var_builder *irb,
                             const struct td_expr *expr,
                             const struct td_var_ty *var_ty) {
-  // it feels more elegant to do the resolving of constant expressions in
-  // typechk but this requires being able to evaluate `sizeof`, which it cannot
   switch (expr->ty) {
+  // TODO: some of this is no longer needed as typechk can resolve
+  // sizeof/alignof/etc
   case TD_EXPR_TY_VAR:
-    return build_ir_for_var_value_addr(irb, expr, NULL, var_ty);
+    return build_ir_for_var_value_var(irb, expr, var_ty);
   case TD_EXPR_TY_UNARY_OP:
     return build_ir_for_var_value_unary_op(irb, expr, var_ty);
   case TD_EXPR_TY_BINARY_OP:

@@ -57,8 +57,8 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OP_MUL_ASSG,    // *=
   LEX_TOKEN_TY_OP_DIV,         // /
   LEX_TOKEN_TY_OP_DIV_ASSG,    // /=
-  LEX_TOKEN_TY_OP_QUOT,        // %
-  LEX_TOKEN_TY_OP_QUOT_ASSG,   // %=
+  LEX_TOKEN_TY_OP_MOD,        // %
+  LEX_TOKEN_TY_OP_MOD_ASSG,   // %=
 
   LEX_TOKEN_TY_OP_ASSG, // =
 

@@ -846,7 +846,7 @@ static void codegen_binary_op(struct cg_state *state,
         .rhs = rhs,
     };
     break;
-  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_SMOD:
     instr->rv32i->ty = RV32I_INSTR_TY_REM;
     instr->rv32i->rem = (struct rv32i_op){
         .dest = dest,
@@ -854,7 +854,7 @@ static void codegen_binary_op(struct cg_state *state,
         .rhs = rhs,
     };
     break;
-  case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_UMOD:
     instr->rv32i->ty = RV32I_INSTR_TY_REMU;
     instr->rv32i->remu = (struct rv32i_op){
         .dest = dest,

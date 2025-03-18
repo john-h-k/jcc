@@ -51,6 +51,8 @@ enum compiler_diagnostic_class {
           const char *)                                                        \
   DIAG_FN(ERROR, "typecheck-no-var", no_var, NO_VAR,     \
           const char *)                                                        \
+  DIAG_FN(ERROR, "typecheck-fp-bitwise", fp_bitwise, FP_BITWISE,     \
+          const char *)                                                        \
   DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL,     \
           const char *)                                                        \
           \
@@ -65,6 +67,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "bad-enum-init", bad_enum_init, BAD_ENUM_INIT,              \
           const char *)                                                        \
   DIAG_FN(ERROR, "bad-integral-cnst-expr", bad_integral_cnst_expr, BAD_INTEGRAL_CNST_EXPR,              \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "bad-static-init-expr", bad_static_init_expr, BAD_STATIC_INIT_EXPR,              \
           const char *)                                                        \
   DIAG_FN(ERROR, "struct-or-union-identifier-or-list", aggregate_type,         \
           AGGREGATE_TYPE, const char *)                                        \

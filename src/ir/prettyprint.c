@@ -96,9 +96,9 @@ static const char *binary_op_string(enum ir_op_binary_op_ty ty) {
     return "s/";
   case IR_OP_BINARY_OP_TY_UDIV:
     return "u/";
-  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_SMOD:
     return "s%";
-  case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_UMOD:
     return "u%";
   case IR_OP_BINARY_OP_TY_FADD:
     return "f+";

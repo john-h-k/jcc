@@ -859,7 +859,7 @@ static void codegen_binary_op(struct cg_state *state,
     };
     return;
   }
-  case IR_OP_BINARY_OP_TY_SQUOT: {
+  case IR_OP_BINARY_OP_TY_SMOD: {
     DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
     DEBUG_ASSERT(dest.idx == REG_IDX_DX,
                  "expected dest to be in an DX register");
@@ -878,7 +878,7 @@ static void codegen_binary_op(struct cg_state *state,
     };
     return;
   }
-  case IR_OP_BINARY_OP_TY_UQUOT: {
+  case IR_OP_BINARY_OP_TY_UMOD: {
     DEBUG_ASSERT(lhs.idx == REG_IDX_AX, "expected lhs to be in an AX register");
     DEBUG_ASSERT(dest.idx == REG_IDX_DX,
                  "expected dest to be in an DX register");

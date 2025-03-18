@@ -57,25 +57,26 @@ enum well_known_ty {
   WELL_KNOWN_TY_SIGNED_LONG_LONG,
   WELL_KNOWN_TY_UNSIGNED_LONG_LONG,
 
+  WELL_KNOWN_TY_INT128,
+  WELL_KNOWN_TY_UINT128,
+
+  WELL_KNOWN_TY_BOOL,
+
   WELL_KNOWN_TY_HALF,
   WELL_KNOWN_TY_FLOAT,
   WELL_KNOWN_TY_DOUBLE,
   WELL_KNOWN_TY_LONG_DOUBLE,
-
-  WELL_KNOWN_TY_BOOL,
-
-  WELL_KNOWN_TY_UINT128,
 };
 
 #define WKT_IS_INTEGRAL(wkt) ((wkt) < WELL_KNOWN_TY_HALF)
 #define WKT_IS_FP(wkt) ((wkt) >= WELL_KNOWN_TY_HALF)
 
 #define WKT_MAKE_SIGNED(wkt)                                                   \
-  (((wkt) >= WELL_KNOWN_TY_HALF) ? (wkt) : ((wkt) & ~1))
+  (((wkt) >= WELL_KNOWN_TY_BOOL) ? (wkt) : ((wkt) & ~1))
 #define WKT_MAKE_UNSIGNED(wkt)                                                 \
-  (((wkt) >= WELL_KNOWN_TY_HALF) ? (wkt) : ((wkt) | 1))
+  (((wkt) >= WELL_KNOWN_TY_BOOL) ? (wkt) : ((wkt) | 1))
 
-#define WKT_IS_SIGNED(wkt) (((wkt) & 1) == 0)
+#define WKT_IS_SIGNED(wkt) (((wkt) != WELL_KNOWN_TY_BOOL) && ((wkt) & 1) == 0)
 
 struct td_ty_pointer {
   struct td_var_ty *underlying;
@@ -186,6 +187,7 @@ extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_LONG;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_LONG;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_SIGNED_LONG_LONG;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_UNSIGNED_LONG_LONG;
+extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_HALF;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_FLOAT;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_DOUBLE;
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_LONG_DOUBLE;
@@ -320,7 +322,7 @@ enum td_binary_op_ty {
   TD_BINARY_OP_TY_SUB,
   TD_BINARY_OP_TY_MUL,
   TD_BINARY_OP_TY_DIV,
-  TD_BINARY_OP_TY_QUOT
+  TD_BINARY_OP_TY_MOD
 };
 
 struct td_binary_op {
@@ -390,7 +392,7 @@ enum td_assg_ty {
   TD_ASSG_TY_SUB,
   TD_ASSG_TY_MUL,
   TD_ASSG_TY_DIV,
-  TD_ASSG_TY_QUOT,
+  TD_ASSG_TY_MOD,
   TD_ASSG_TY_AND,
   TD_ASSG_TY_OR,
   TD_ASSG_TY_XOR,
@@ -458,6 +460,7 @@ struct td_compound_literal {
 };
 
 enum td_expr_ty {
+  TD_EXPR_TY_INVALID,
   TD_EXPR_TY_TERNARY,
   TD_EXPR_TY_CALL,
   TD_EXPR_TY_UNARY_OP,

@@ -119,8 +119,8 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
     CNST_FLD_BINOP(XOR, ^);
     CNST_FLD_SBINOP(SDIV, /);
     CNST_FLD_BINOP(UDIV, /);
-    CNST_FLD_SBINOP(SQUOT, %);
-    CNST_FLD_BINOP(UQUOT, %);
+    CNST_FLD_SBINOP(SMOD, %);
+    CNST_FLD_BINOP(UMOD, %);
   default:
     BUG("bad type");
   }

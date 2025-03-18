@@ -6,7 +6,6 @@ int main()
 {
     int  count, n;
 
-    int *z = &n;
     short *from, *to;
     short a[39], b[39];
 
