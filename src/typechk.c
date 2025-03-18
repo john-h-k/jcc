@@ -2759,8 +2759,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
             tchk->diagnostics,
             MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
                                    MK_INVALID_TEXT_POS(0),
-                                   "variables in enum initializers or constant "
-                                   "expressions must be other enum values"));
+                                   "variables in constant "
+                                   "expressions must be constants or enum values"));
       }
 
       return false;
@@ -3151,19 +3151,20 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     // we pass flag DONT_DECAY so we can look at the returned value to check it
     // is an array
 
-    if (expr.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
-      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-      compiler_diagnostics_add(
-          tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                                 expr.span, MK_INVALID_TEXT_POS(0),
-                                 "expression not valid as static "
-                                 "initializer; assigment is only allowed when "
-                                 "rhs is an array decaying to a pointer"));
+    // TODO: make this diagnostic work
+    // if (expr.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
+      // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      // compiler_diagnostics_add(
+      //     tchk->diagnostics,
+      //     MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+      //                            expr.span, MK_INVALID_TEXT_POS(0),
+      //                            "expression not valid as static "
+      //                            "initializer; assigment is only allowed when "
+      //                            "rhs is an array decaying to a pointer"));
 
-      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                              .var_ty = TD_VAR_TY_UNKNOWN};
-    }
+      // return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+      //                         .var_ty = TD_VAR_TY_UNKNOWN};
+    // }
 
     return expr;
   }
@@ -3171,9 +3172,14 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
   case TD_EXPR_TY_UNARY_OP:
     // may be address-of
     switch (expr.unary_op.ty) {
-    case TD_UNARY_OP_TY_ADDRESSOF: {
+    case TD_UNARY_OP_TY_ADDRESSOF:
       return expr;
-    }
+    case TD_UNARY_OP_TY_CAST:
+      if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER && (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER || expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
+        // pointer to pointer cast, fine
+        return expr;
+      }
+      break;
     default:
       // invalid for some other reason
       break;
@@ -3941,7 +3947,7 @@ static struct td_init type_init(struct typechk *tchk,
       break;
     case TD_INIT_MODE_CONSTANT_EXPRS:
       td_init.expr = type_static_init_expr(
-          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
+          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr), *var_ty);
       break;
     }
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
