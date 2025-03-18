@@ -89,7 +89,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define UNUSED_ARG(arg) __attribute__((__unused__)) arg
 #define UNUSED __attribute__((__unused__))
 #else
-#define UNUSED_ARG(arg)
+#define UNUSED_ARG(arg) arg
 #define UNUSED
 #endif
 

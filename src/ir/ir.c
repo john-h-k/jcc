@@ -2264,6 +2264,8 @@ void ir_make_basicblock_split(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *true_target,
                               struct ir_basicblock *false_target) {
+  ir_remove_basicblock_successors(basicblock);
+
   basicblock->ty = IR_BASICBLOCK_TY_SPLIT;
   basicblock->split = (struct ir_basicblock_split){
       .true_target = true_target, .false_target = false_target};
@@ -2275,6 +2277,8 @@ void ir_make_basicblock_split(struct ir_func *irb,
 void ir_make_basicblock_merge(struct ir_func *irb,
                               struct ir_basicblock *basicblock,
                               struct ir_basicblock *target) {
+  ir_remove_basicblock_successors(basicblock);
+
   basicblock->ty = IR_BASICBLOCK_TY_MERGE;
   basicblock->merge = (struct ir_basicblock_merge){.target = target};
 
@@ -2285,6 +2289,8 @@ void ir_make_basicblock_switch(struct ir_func *irb,
                                struct ir_basicblock *basicblock,
                                size_t num_cases, struct ir_split_case *cases,
                                struct ir_basicblock *default_target) {
+  ir_remove_basicblock_successors(basicblock);
+
   basicblock->ty = IR_BASICBLOCK_TY_SWITCH;
   basicblock->switch_case = (struct ir_basicblock_switch){
       .cases = arena_alloc(irb->arena,
