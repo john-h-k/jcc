@@ -61,6 +61,8 @@ enum compiler_diagnostic_class {
           const char *)                                                        \
   DIAG_FN(WARN, "typecheck-static-assert", static_assert, STATIC_ASSERT,     \
           const char *)                                                        \
+  DIAG_FN(WARN, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,     \
+          const char *)                                                        \
           \
   DIAG_FN(ERROR, "empty-init", empty_init, EMPTY_INIT,     \
           const char *)                                                        \

@@ -1740,6 +1740,30 @@ static struct td_expr type_call(struct typechk *tchk,
       .ty = TD_EXPR_TY_CALL, .var_ty = var_ty, .call = td_call};
 }
 
+static bool td_expr_is_lvalue(UNUSED struct typechk *tchk,
+                              const struct td_expr *expr) {
+  switch (expr->ty) {
+  case TD_EXPR_TY_UNARY_OP:
+    return expr->unary_op.ty == TD_UNARY_OP_TY_INDIRECTION;
+  case TD_EXPR_TY_ARRAYACCESS:
+  case TD_EXPR_TY_INVALID:
+  case TD_EXPR_TY_MEMBERACCESS:
+  case TD_EXPR_TY_POINTERACCESS:
+  case TD_EXPR_TY_ASSG:
+  case TD_EXPR_TY_COMPOUNDEXPR:
+  case TD_EXPR_TY_VAR:
+    return true;
+  case TD_EXPR_TY_CALL:
+  case TD_EXPR_TY_TERNARY:
+  case TD_EXPR_TY_BINARY_OP:
+  case TD_EXPR_TY_CNST:
+  case TD_EXPR_TY_SIZEOF:
+  case TD_EXPR_TY_ALIGNOF:
+  case TD_EXPR_TY_COMPOUND_LITERAL:
+    return false;
+  }
+}
+
 static struct td_expr type_unary_op(struct typechk *tchk,
                                     const struct ast_unary_op *unary_op) {
   struct td_var_ty result_ty;
@@ -1790,6 +1814,19 @@ static struct td_expr type_unary_op(struct typechk *tchk,
     goto inc_dec;
 
   inc_dec:
+    if (!td_expr_is_lvalue(tchk, &expr)) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              NOT_ASSIGNABLE, not_assignable, unary_op->expr->span,
+              MK_INVALID_TEXT_POS(0),
+              "not an assignable expression; cannot use ++/--"));
+
+      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                              .var_ty = TD_VAR_TY_UNKNOWN};
+    }
+
     result_ty = expr.var_ty;
     break;
   case AST_UNARY_OP_TY_LOGICAL_NOT:
@@ -2292,6 +2329,19 @@ static struct td_expr type_assg(struct typechk *tchk,
   *td_assg.expr = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, assg->expr));
   *td_assg.assignee = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, assg->assignee);
+
+  if (!td_expr_is_lvalue(tchk, td_assg.assignee)) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            NOT_ASSIGNABLE, not_assignable, assg->assignee->span,
+            MK_INVALID_TEXT_POS(0),
+            "not an assignable expression; cannot use ++/--"));
+
+    return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                            .var_ty = TD_VAR_TY_UNKNOWN};
+  }
 
   if (td_assg.ty != TD_ASSG_TY_BASIC) {
     struct td_expr promoted_assignee =
@@ -2904,7 +2954,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
           to_int:
             *value =
                 (struct td_val){.var_ty = expr->var_ty,
-                 .val = ap_val_to_int(expr_value.val, num_bits)};
+                                .val = ap_val_to_int(expr_value.val, num_bits)};
             return true;
           case WELL_KNOWN_TY_HALF:
             float_ty = AP_FLOAT_TY_F16;
@@ -2920,9 +2970,9 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
             goto to_float;
 
           to_float:
-            *value =
-                (struct td_val){.var_ty = expr->var_ty,
-                 .val = ap_val_to_float(expr_value.val, float_ty)};
+            *value = (struct td_val){
+                .var_ty = expr->var_ty,
+                .val = ap_val_to_float(expr_value.val, float_ty)};
             return true;
           }
         default:
