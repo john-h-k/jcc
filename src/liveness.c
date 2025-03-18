@@ -90,7 +90,8 @@ static void scc_process(struct ir_func *func, struct scc_context *ctx,
 
   vector_push_back(ctx->stack, &basicblock);
 
-  hashtbl_insert(ctx->on_stack, &basicblock, &(bool){true});
+  bool yes = true;
+  hashtbl_insert(ctx->on_stack, &basicblock, &yes);
 
   struct ir_basicblock_succ_iter iter = ir_basicblock_succ_iter(basicblock);
   struct ir_basicblock *succ;
@@ -128,7 +129,8 @@ static void scc_process(struct ir_func *func, struct scc_context *ctx,
 
     do {
       member = vector_pop(ctx->stack);
-      hashtbl_insert(ctx->on_stack, member, &(bool){false});
+      bool no = false;
+      hashtbl_insert(ctx->on_stack, member, &no);
       vector_push_back(scc, member);
     } while (*member != basicblock);
 
