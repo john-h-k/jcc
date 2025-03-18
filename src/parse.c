@@ -2904,6 +2904,33 @@ static bool parse_selectstmt(struct parser *parser,
   return false;
 }
 
+static bool parse_staticassert(struct parser *parser, struct ast_staticassert *staticassert) {
+  struct text_span start;
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_STATICASSERT, &start)) {
+    return false;
+  }
+
+  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start.start, "'(' after 'static_assert' keyword", NULL);
+
+  parse_expected_expr(parser, &staticassert->cond, "expr after 'static_assert'");
+
+  if (parse_token(parser, LEX_TOKEN_TY_COMMA, NULL)) {
+    staticassert->message = arena_alloc(parser->arena, sizeof(*staticassert->message));
+
+    parse_expected_expr(parser, staticassert->message, "message after 'static_assert' expr");
+  } else {
+    staticassert->message = NULL;
+  }
+
+  struct text_span end;
+  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start.start, "'(' after 'static_assert' keyword", &end);
+
+  staticassert->span = MK_TEXT_SPAN(start.start, end.end);
+
+  return true;
+}
+
 static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt);
 
@@ -2973,6 +3000,14 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     stmt->expr.span = compound_expr.span;
     stmt->span = compound_expr.span;
 
+    return true;
+  }
+
+  struct ast_staticassert staticassert;
+  if (parse_staticassert(parser, &staticassert)) {
+    stmt->ty = AST_STMT_TY_STATICASSERT;
+    stmt->staticassert = staticassert;
+    stmt->span = staticassert.span;
     return true;
   }
 
@@ -3144,6 +3179,12 @@ static bool parse_external_declaration(
   if (parse_declaration(parser, &external_declaration->declaration)) {
     external_declaration->ty = AST_EXTERNAL_DECLARATION_TY_DECLARATION;
     external_declaration->span = external_declaration->declaration.span;
+    return true;
+  }
+
+  if (parse_staticassert(parser, &external_declaration->staticassert)) {
+    external_declaration->ty = AST_EXTERNAL_DECLARATION_TY_STATIC_ASSERT;
+    external_declaration->span = external_declaration->staticassert.span;
     return true;
   }
 
@@ -4287,11 +4328,31 @@ DEBUG_FUNC(labeledstmt, labeled_stmt) {
   UNINDENT();
 }
 
+DEBUG_FUNC(staticassert, staticassert) {
+  AST_PRINTZ("STATIC_ASSERT");
+  INDENT();
+
+  AST_PRINTZ("COND");
+  INDENT();
+  DEBUG_CALL(expr, &staticassert->cond);
+  UNINDENT();
+
+  if (staticassert->message) {
+    AST_PRINTZ("MESSAGE");
+    INDENT();
+    DEBUG_CALL(expr, staticassert->message);
+    UNINDENT();
+  }
+}
+
 DEBUG_FUNC(stmt, stmt) {
   INDENT();
 
   switch (stmt->ty) {
   case AST_STMT_TY_NULL:
+    break;
+  case AST_STMT_TY_STATICASSERT:
+    DEBUG_CALL(staticassert, &stmt->staticassert);
     break;
   case AST_STMT_TY_DECLARATION:
     DEBUG_CALL(declaration, &stmt->declaration);
@@ -4371,6 +4432,9 @@ DEBUG_FUNC(external_declaration, external_declaration) {
     break;
   case AST_EXTERNAL_DECLARATION_TY_FUNC_DEF:
     DEBUG_CALL(funcdef, &external_declaration->func_def);
+    break;
+  case AST_EXTERNAL_DECLARATION_TY_STATIC_ASSERT:
+    DEBUG_CALL(staticassert, &external_declaration->staticassert);
     break;
   }
 }

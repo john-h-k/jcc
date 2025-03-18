@@ -57,6 +57,10 @@ enum compiler_diagnostic_class {
           const char *)                                                        \
   DIAG_FN(WARN, "typecheck-cast", cast, CAST,     \
           const char *)                                                        \
+  DIAG_FN(WARN, "typecheck-static-assert-message", static_assert_message, STATIC_ASSERT_MESSAGE,     \
+          const char *)                                                        \
+  DIAG_FN(WARN, "typecheck-static-assert", static_assert, STATIC_ASSERT,     \
+          const char *)                                                        \
           \
   DIAG_FN(ERROR, "empty-init", empty_init, EMPTY_INIT,     \
           const char *)                                                        \
