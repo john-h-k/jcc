@@ -55,6 +55,8 @@ enum compiler_diagnostic_class {
           const char *)                                                        \
   DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL,     \
           const char *)                                                        \
+  DIAG_FN(WARN, "typecheck-cast", cast, CAST,     \
+          const char *)                                                        \
           \
   DIAG_FN(ERROR, "empty-init", empty_init, EMPTY_INIT,     \
           const char *)                                                        \
