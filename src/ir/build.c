@@ -2864,38 +2864,42 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   vector_push_back(init_ranges, &end_range);
 
   // TODO: logic to determine if all fields are set can be improved
-  size_t num_offsets = vector_length(init_ranges);
+  // size_t num_offsets = vector_length(init_ranges);
 
-  bool needs_zero = false;
-  size_t head = 0;
-  size_t end = info.size;
-  for (size_t i = 0; i < num_offsets + 1; i++) {
-    size_t new_head;
-    size_t offset;
+  // bool needs_zero = false;
+  // size_t head = 0;
+  // size_t end = info.size;
+  // for (size_t i = 0; i < num_offsets + 1; i++) {
+  //   size_t new_head;
+  //   size_t offset;
 
-    if (i < num_offsets) {
-      struct init_range *init_range = vector_get(init_ranges, i);
-      new_head = init_range->offset + init_range->size;
-      offset = init_range->offset;
-    } else {
-      new_head = head;
-      offset = end;
-    }
+  //   if (i < num_offsets) {
+  //     struct init_range *init_range = vector_get(init_ranges, i);
+  //     new_head = init_range->offset + init_range->size;
+  //     offset = init_range->offset;
+  //   } else {
+  //     new_head = head;
+  //     offset = end;
+  //   }
 
-    if (i != 0) {
-      ssize_t gap = (ssize_t)offset - (ssize_t)head;
-      DEBUG_ASSERT(gap >= 0, "bad math");
+  //   if (i != 0) {
+  //     ssize_t gap = (ssize_t)offset - (ssize_t)head;
+  //     DEBUG_ASSERT(gap >= 0, "bad math");
 
-      needs_zero = true;
-      break;
-    }
+  //     needs_zero = true;
+  //     break;
+  //   }
 
-    head = new_head;
-  }
+  //   head = new_head;
+  // }
 
-  if (needs_zero) {
-    build_ir_zero_range(irb, *stmt, first_init, address, info.size);
-  }
+  // if (needs_zero) {
+
+  // FIXME: we always zero because:
+  //   * the code above doesn't handle arbitrary order inits (from designated initializers)
+  //   * opts_promote works better if it can see whole thing is zeroed
+  build_ir_zero_range(irb, *stmt, first_init, address, info.size);
+  // }
 
   vector_free(&init_ranges);
 }

@@ -1462,7 +1462,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
 
   switch (ret_info.ty) {
   case IR_PARAM_INFO_TY_REGISTER: {
-    if (ret_info.num_regs == 1) {
+    // if ty is none, its a multi reg return and lower has generated magic movs already
+    if (ret_info.num_regs == 1 && op->var_ty.ty != IR_VAR_TY_TY_NONE) {
       struct ir_op *new_call =
           ir_insert_before_op(func, op, IR_OP_TY_CALL, op->var_ty);
       new_call->call = op->call;
