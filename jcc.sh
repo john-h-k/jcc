@@ -351,11 +351,14 @@ run() {
     cd "$CALLER_DIR"
     if [[ $(uname) == "Darwin" ]]; then
         MallocNanoZone=0 "$jcc" "$@"
+        exc="$?"
     else
         "$jcc" "$@"
+        exc="$?"
     fi
 
     cd - > /dev/null
+    return $exc
 }
 
 debug() {
@@ -379,11 +382,14 @@ debug() {
 
     if [[ $(uname) == "Darwin" ]]; then
         MallocNanoZone=0 $debugger "$jcc" "$@"
+        exc="$?"
     else
         $debugger "$jcc" "$@"
+        exc="$?"
     fi
 
     cd - > /dev/null
+    return $exc
 }
 
 test() {

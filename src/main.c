@@ -334,11 +334,11 @@ int main(int argc, char **argv) {
   }
 #endif
 
-  jcc_main(argc, argv);
+  return jcc_main(argc, argv);
 }
 
 static int jcc_main(int argc, char **argv) {
-  size_t exc = -1;
+  int exc = 1;
 
   struct arena_allocator *arena = NULL;
   char const **objects = NULL;
