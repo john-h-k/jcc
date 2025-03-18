@@ -897,10 +897,6 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
   case TD_UNARY_OP_TY_PLUS:
     // no work needed, build_expr will handle type conversion
     return ir_expr;
-  case TD_UNARY_OP_TY_SIZEOF:
-  case TD_UNARY_OP_TY_ALIGNOF:
-    TODO("sizeof/alignof build (will need different node as they take types "
-         "not exprs)");
   case TD_UNARY_OP_TY_CAST:
     if (expr->var_ty.ty == TD_VAR_TY_TY_VOID) {
       // do nothing, just let it be an unused node

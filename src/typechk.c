@@ -589,7 +589,8 @@ static unsigned long long
 type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr);
 
 static struct td_expr type_static_init_expr(struct typechk *tchk,
-                                            const struct ast_expr *expr);
+                                            struct td_expr expr,
+                                            struct td_var_ty target_ty);
 
 enum td_declarator_mode {
   TD_DECLARATOR_MODE_NORMAL,
@@ -2560,6 +2561,8 @@ static struct td_expr type_expr(struct typechk *tchk,
     td_expr.var_ty = complete;
   }
 
+  td_expr.span = expr->span;
+
   return td_expr;
 }
 
@@ -2678,23 +2681,31 @@ enum eval_constant_integral_expr_flags {
   EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS = 1 << 0,
 };
 
+// temporary type while td_cnst does not use ap_val
+struct td_val {
+  struct td_var_ty var_ty;
+  struct ap_val val;
+};
+
 static bool
-eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
+eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
                             enum eval_constant_integral_expr_flags flags,
-                            struct ap_val *value) {
+                            struct td_val *value) {
   // for recurse calls make sure value stays well defined
-  *value = MK_AP_VAL_INVALID();
+  *value =
+      (struct td_val){.var_ty = TD_VAR_TY_UNKNOWN, .val = MK_AP_VAL_INVALID()};
 
-  if (expr->ty == AST_EXPR_TY_CNST) {
-    struct td_expr cnst = type_cnst(tchk, &expr->cnst);
-
+  if (expr->ty == TD_EXPR_TY_CNST) {
     // TODO: migrate all usages of cnst to ap_val
-    if (is_cnst_ty_integral(cnst.cnst.ty)) {
-      *value = ap_val_from_ull(expr->cnst.int_value);
+    if (is_cnst_ty_integral(expr->cnst.ty)) {
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_from_ull(expr->cnst.int_value)};
       return true;
-    } else if (is_cnst_ty_fp(cnst.cnst.ty)) {
-      *value = MK_AP_VAL_FLT(((struct ap_float){.ty = AP_FLOAT_TY_F64,
-                                                .f64 = cnst.cnst.flt_value}));
+    } else if (is_cnst_ty_fp(expr->cnst.ty)) {
+      *value = (struct td_val){
+          .var_ty = expr->var_ty,
+          .val = MK_AP_VAL_FLT(((struct ap_float){
+              .ty = AP_FLOAT_TY_F64, .f64 = expr->cnst.flt_value}))};
       return true;
     } else {
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
@@ -2711,36 +2722,34 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
     }
   }
 
-  if (expr->ty == AST_EXPR_TY_SIZEOF) {
-    struct td_expr size_of = type_sizeof(tchk, &expr->size_of);
+  if (expr->ty == TD_EXPR_TY_SIZEOF) {
     struct td_var_ty var_ty;
-    switch (size_of.size_of.ty) {
+    switch (expr->size_of.ty) {
     case TD_SIZEOF_TY_TYPE:
-      var_ty = size_of.size_of.var_ty;
+      var_ty = expr->size_of.var_ty;
       break;
     case TD_SIZEOF_TY_EXPR:
-      var_ty = size_of.size_of.expr->var_ty;
+      var_ty = expr->size_of.expr->var_ty;
       break;
     }
 
     struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
 
-    *value = ap_val_from_ull(info.size);
+    *value = (struct td_val){.var_ty = expr->var_ty,
+                             .val = ap_val_from_ull(info.size)};
     return true;
   }
 
-  if (expr->ty == AST_EXPR_TY_ALIGNOF) {
-    struct td_var_ty var_ty = type_type_name(tchk, &expr->align_of.type_name);
-    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
+  if (expr->ty == TD_EXPR_TY_ALIGNOF) {
+    struct td_var_ty_info info = td_var_ty_info(tchk, &expr->align_of.var_ty);
 
-    *value = ap_val_from_ull(info.alignment);
+    *value = (struct td_val){.var_ty = expr->var_ty,
+                             .val = ap_val_from_ull(info.alignment)};
     return true;
   }
 
-  if (expr->ty == AST_EXPR_TY_VAR) {
-    struct td_expr var = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
-
-    if (var.var.ty != TD_VAR_VAR_TY_ENUMERATOR) {
+  if (expr->ty == TD_EXPR_TY_VAR) {
+    if (expr->var.ty != TD_VAR_VAR_TY_ENUMERATOR) {
       // FIXME: this is actually more general "bad value in constant expr",
       // not just for enums
 
@@ -2757,16 +2766,16 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
       return false;
     }
 
-    *value = ap_val_from_ull(var.var.enumerator);
+    *value = (struct td_val){.var_ty = expr->var_ty,
+                             .val = ap_val_from_ull(expr->var.enumerator)};
     return true;
   }
 
-  size_t num_bits = 64; // FIXME: how do we choose this?
-
-  if (expr->ty == AST_EXPR_TY_COMPOUNDEXPR) {
+  if (expr->ty == TD_EXPR_TY_COMPOUNDEXPR) {
     DEBUG_ASSERT(expr->compound_expr.num_exprs, "empty compound expr");
 
-    struct ap_val expr_value = MK_AP_VAL_INT(ap_int_zero(num_bits));
+    struct td_val expr_value = {.var_ty = TD_VAR_TY_UNKNOWN,
+                                .val = MK_AP_VAL_INVALID()};
     for (size_t i = 0; i < expr->compound_expr.num_exprs; i++) {
       eval_constant_integral_expr(tchk, &expr->compound_expr.exprs[i], flags,
                                   &expr_value);
@@ -2776,31 +2785,31 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
     return true;
   }
 
-  if (expr->ty == AST_EXPR_TY_TERNARY) {
+  if (expr->ty == TD_EXPR_TY_TERNARY) {
     // i think evaluating both is the correct thing to do?
-    struct ap_val cond;
+    struct td_val cond;
     if (!eval_constant_integral_expr(tchk, expr->ternary.cond, flags, &cond)) {
       return false;
     }
 
-    struct ap_val lhs;
+    struct td_val lhs;
     if (!eval_constant_integral_expr(tchk, expr->ternary.true_expr, flags,
                                      &lhs)) {
       return false;
     }
 
-    struct ap_val rhs;
+    struct td_val rhs;
     if (!eval_constant_integral_expr(tchk, expr->ternary.false_expr, flags,
                                      &rhs)) {
       return false;
     }
 
-    *value = ap_val_nonzero(cond) ? lhs : rhs;
+    *value = ap_val_nonzero(cond.val) ? lhs : rhs;
     return true;
   }
 
-  if (expr->ty == AST_EXPR_TY_UNARY_OP) {
-    struct ap_val expr_value;
+  if (expr->ty == TD_EXPR_TY_UNARY_OP) {
+    struct td_val expr_value;
     if (!eval_constant_integral_expr(tchk, expr->unary_op.expr, flags,
                                      &expr_value)) {
       return false;
@@ -2808,26 +2817,89 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
 
     // FIXME: casts and round to real type so no overflow (+ bool casts)
     switch (expr->unary_op.ty) {
-    case AST_UNARY_OP_TY_PLUS:
+    case TD_UNARY_OP_TY_PLUS:
       *value = expr_value; // FIXME: this should promote type
       return true;
-    case AST_UNARY_OP_TY_MINUS:
-      *value = ap_val_negate(expr_value);
+    case TD_UNARY_OP_TY_MINUS:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_negate(expr_value.val)};
       return true;
-    case AST_UNARY_OP_TY_LOGICAL_NOT:
-      *value = ap_val_from_ull(ap_val_zero(expr_value));
+    case TD_UNARY_OP_TY_LOGICAL_NOT:
+      *value =
+          (struct td_val){.var_ty = expr->var_ty,
+                          .val = ap_val_from_ull(ap_val_zero(expr_value.val))};
       return true;
-    case AST_UNARY_OP_TY_NOT:
-      *value = ap_val_not(expr_value);
+    case TD_UNARY_OP_TY_NOT:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_not(expr_value.val)};
       return true;
-    case AST_UNARY_OP_TY_CAST:
-      // TODO:
-      *value = expr_value;
-      return true;
-    case AST_UNARY_OP_TY_PREFIX_INC:
-    case AST_UNARY_OP_TY_PREFIX_DEC:
-    case AST_UNARY_OP_TY_POSTFIX_INC:
-    case AST_UNARY_OP_TY_POSTFIX_DEC:
+    case TD_UNARY_OP_TY_CAST:
+      switch (expr->var_ty.ty) {
+      case TD_VAR_TY_TY_POINTER:
+        switch (expr_value.var_ty.ty) {
+        case TD_VAR_TY_TY_POINTER:
+          // nop
+          *value =
+              (struct td_val){.var_ty = expr->var_ty, .val = expr_value.val};
+          return true;
+
+        case TD_VAR_TY_TY_WELL_KNOWN:
+          if (td_var_ty_is_fp_ty(&expr_value.var_ty)) {
+            goto bad_cast;
+          } else {
+            td_var_ty_pointer_sized_int(tchk, false);
+            DEBUG_ASSERT(expr_value.val.ty == AP_VAL_TY_INT, "expected int?");
+
+            // TODO: trunc/sext/zext to ptr size
+            *value =
+                (struct td_val){.var_ty = expr->var_ty, .val = expr_value.val};
+            return true;
+          }
+        default:
+          goto bad_cast;
+        }
+
+      case TD_VAR_TY_TY_WELL_KNOWN:
+        switch (expr_value.var_ty.ty) {
+        case TD_VAR_TY_TY_POINTER:
+        case TD_VAR_TY_TY_WELL_KNOWN:
+          // nop
+          if (expr->var_ty.well_known == WELL_KNOWN_TY_BOOL) {
+            *value = (struct td_val){
+                .var_ty = expr->var_ty,
+                .val = ap_val_from_ull(ap_val_nonzero(expr_value.val))};
+            return true;
+          } else {
+            *value =
+                (struct td_val){.var_ty = expr->var_ty, .val = expr_value.val};
+            return true;
+          }
+
+        default:
+          goto bad_cast;
+        }
+
+      case TD_VAR_TY_TY_UNKNOWN:
+        return false;
+
+      default:
+        goto bad_cast;
+      }
+
+    bad_cast:
+      if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(tchk->diagnostics,
+                                 MK_SEMANTIC_DIAGNOSTIC(CAST, cast, expr->span,
+                                                        MK_INVALID_TEXT_POS(0),
+                                                        "invalid cast"));
+      }
+      return false;
+
+    case TD_UNARY_OP_TY_PREFIX_INC:
+    case TD_UNARY_OP_TY_PREFIX_DEC:
+    case TD_UNARY_OP_TY_POSTFIX_INC:
+    case TD_UNARY_OP_TY_POSTFIX_DEC:
       // FIXME: this is actually more general "bad value in constant expr",
       // not just for enums
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
@@ -2839,7 +2911,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
                                    "cannot use ++/-- in constant expr"));
       }
       return false;
-    case AST_UNARY_OP_TY_INDIRECTION:
+    case TD_UNARY_OP_TY_INDIRECTION:
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         compiler_diagnostics_add(
             tchk->diagnostics,
@@ -2848,7 +2920,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
                                    "cannot use & in constant expr"));
       }
       return false;
-    case AST_UNARY_OP_TY_ADDRESSOF:
+    case TD_UNARY_OP_TY_ADDRESSOF:
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
         compiler_diagnostics_add(
@@ -2861,19 +2933,19 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
     }
   }
 
-  if (expr->ty == AST_EXPR_TY_BINARY_OP) {
-    struct ap_val lhs;
+  if (expr->ty == TD_EXPR_TY_BINARY_OP) {
+    struct td_val lhs;
     if (!eval_constant_integral_expr(tchk, expr->binary_op.lhs, flags, &lhs)) {
       return false;
     }
 
-    struct ap_val rhs;
+    struct td_val rhs;
     if (!eval_constant_integral_expr(tchk, expr->binary_op.rhs, flags, &rhs)) {
       return false;
     }
 
 #define CHECK_INT_OPS()                                                        \
-  if (lhs.ty == AP_VAL_TY_FLOAT || rhs.ty == AP_VAL_TY_FLOAT) {                \
+  if (lhs.val.ty == AP_VAL_TY_FLOAT || rhs.val.ty == AP_VAL_TY_FLOAT) {        \
     if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {           \
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;                             \
       compiler_diagnostics_add(                                                \
@@ -2883,73 +2955,94 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
               "cannot perform bitwise operations on floating-point types"));   \
     }                                                                          \
                                                                                \
-    *value = MK_AP_VAL_INVALID();                                              \
+    *value = (struct td_val){.var_ty = TD_VAR_TY_UNKNOWN,                      \
+                             .val = MK_AP_VAL_INVALID()};                      \
     return false;                                                              \
   }
 
     // FIXME: maybe wrong wrt sizes, definitely wrong wrt to signs
     switch (expr->binary_op.ty) {
-    case AST_BINARY_OP_TY_EQ:
-      *value = ap_val_eq(lhs, rhs);
+    case TD_BINARY_OP_TY_EQ:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_eq(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_NEQ:
-      *value = ap_val_neq(lhs, rhs);
+    case TD_BINARY_OP_TY_NEQ:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_neq(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_GT:
-      *value = ap_val_gt(lhs, rhs);
+    case TD_BINARY_OP_TY_GT:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_gt(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_GTEQ:
-      *value = ap_val_gteq(lhs, rhs);
+    case TD_BINARY_OP_TY_GTEQ:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_gteq(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_LT:
-      *value = ap_val_lt(lhs, rhs);
+    case TD_BINARY_OP_TY_LT:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_lt(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_LTEQ:
-      *value = ap_val_lteq(lhs, rhs);
+    case TD_BINARY_OP_TY_LTEQ:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_lteq(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_LOGICAL_OR:
+    case TD_BINARY_OP_TY_LOGICAL_OR:
       *value =
-          ap_val_from_ull((int)ap_val_nonzero(lhs) | (int)ap_val_nonzero(rhs));
+          (struct td_val){.var_ty = expr->var_ty,
+                          .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) |
+                                                 (int)ap_val_nonzero(rhs.val))};
       return true;
-    case AST_BINARY_OP_TY_LOGICAL_AND:
+    case TD_BINARY_OP_TY_LOGICAL_AND:
       *value =
-          ap_val_from_ull((int)ap_val_nonzero(lhs) & (int)ap_val_nonzero(rhs));
+          (struct td_val){.var_ty = expr->var_ty,
+                          .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) &
+                                                 (int)ap_val_nonzero(rhs.val))};
       return true;
-    case AST_BINARY_OP_TY_OR:
+    case TD_BINARY_OP_TY_OR:
       CHECK_INT_OPS();
-      *value = ap_val_or(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_or(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_AND:
+    case TD_BINARY_OP_TY_AND:
       CHECK_INT_OPS();
-      *value = ap_val_and(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_and(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_XOR:
+    case TD_BINARY_OP_TY_XOR:
       CHECK_INT_OPS();
-      *value = ap_val_xor(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_xor(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_LSHIFT:
+    case TD_BINARY_OP_TY_LSHIFT:
       CHECK_INT_OPS();
-      *value = ap_val_lshift(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_lshift(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_RSHIFT:
+    case TD_BINARY_OP_TY_RSHIFT:
       CHECK_INT_OPS();
-      *value = ap_val_rshift(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_rshift(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_ADD:
-      *value = ap_val_add(lhs, rhs);
+    case TD_BINARY_OP_TY_ADD:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_add(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_SUB:
-      *value = ap_val_sub(lhs, rhs);
+    case TD_BINARY_OP_TY_SUB:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_sub(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_MUL:
-      *value = ap_val_mul(lhs, rhs);
+    case TD_BINARY_OP_TY_MUL:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_mul(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_DIV:
-      *value = ap_val_div(lhs, rhs);
+    case TD_BINARY_OP_TY_DIV:
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_div(lhs.val, rhs.val)};
       return true;
-    case AST_BINARY_OP_TY_MOD:
+    case TD_BINARY_OP_TY_MOD:
       CHECK_INT_OPS();
-      *value = ap_val_mod(lhs, rhs);
+      *value = (struct td_val){.var_ty = expr->var_ty,
+                               .val = ap_val_mod(lhs.val, rhs.val)};
       return true;
     }
   }
@@ -2968,17 +3061,20 @@ eval_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr,
 
 static unsigned long long
 type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
-  struct ap_val value;
+  struct td_val value;
+
+  struct td_expr td_expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
 
   (void)eval_constant_integral_expr(
-      tchk, expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS, &value);
+      tchk, &td_expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS,
+      &value);
 
-  switch (value.ty) {
+  switch (value.val.ty) {
   case AP_VAL_TY_INVALID:
     // invalid, diagnostics already emitted
     return 0;
   case AP_VAL_TY_INT:
-    return ap_int_as_ull(value.ap_int);
+    return ap_int_as_ull(value.val.ap_int);
   case AP_VAL_TY_FLOAT:
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
@@ -2992,94 +3088,75 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
 }
 
 static struct td_expr type_static_init_expr(struct typechk *tchk,
-                                            const struct ast_expr *expr) {
+                                            struct td_expr expr,
+                                            struct td_var_ty target_ty) {
   // FIXME: i think casting logic in here may be inadequate (ie need more calls
   // to add_cast_if_needed)
 
-  struct ap_val cnst_value;
+  expr = add_cast_if_needed(tchk, expr, target_ty);
+
+  struct td_val cnst_value;
   if (eval_constant_integral_expr(
-          tchk, expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cnst_value)) {
+          tchk, &expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cnst_value)) {
 
     // FIXME: types are wrong here, it is hacked in because this returns td_expr
-    switch (cnst_value.ty) {
+    switch (cnst_value.val.ty) {
     case AP_VAL_TY_INVALID:
       return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
                               .var_ty = TD_VAR_TY_UNKNOWN};
     case AP_VAL_TY_INT: {
-      enum td_cnst_ty cnst_ty;
-      struct td_var_ty var_ty;
+      // HACK: ir build does not actually use TD_CNST_TY except to distinguish
+      // int
+      enum td_cnst_ty cnst_ty = TD_CNST_TY_SIGNED_LONG_LONG;
+      struct td_var_ty var_ty = cnst_value.var_ty;
 
-      // FIXME: logic here is completely messed up
-      // how do we get the type back out? probably need to compute it in `eval_constant_integral_expr`
-      switch (cnst_value.ap_int.num_bits) {
-      case 8:
-        cnst_ty = TD_CNST_TY_CHAR;
-        var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_CHAR;
-        break;
-      case 16:
-        cnst_ty = TD_CNST_TY_SIGNED_INT;
-        var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_SHORT;
-        break;
-      case 32:
-        cnst_ty = TD_CNST_TY_SIGNED_INT;
-        var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
-        break;
-      case 64:
-        cnst_ty = TD_CNST_TY_SIGNED_LONG;
-        var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_LONG;
-        break;
-      }
       return (struct td_expr){
           .ty = TD_EXPR_TY_CNST,
           .var_ty = var_ty,
           .cnst = {.ty = cnst_ty,
-                   .int_value = ap_int_as_ull(cnst_value.ap_int)}};
+                   .int_value = ap_int_as_ull(cnst_value.val.ap_int)}};
     }
     case AP_VAL_TY_FLOAT: {
-      enum td_cnst_ty cnst_ty;
-      struct td_var_ty var_ty;
-      switch (cnst_value.ap_float.ty) {
+      enum td_cnst_ty cnst_ty = TD_CNST_TY_LONG_DOUBLE;
+      struct td_var_ty var_ty = cnst_value.var_ty;
+
+      long double val;
+      switch (cnst_value.val.ap_float.ty) {
       case AP_FLOAT_TY_F16:
-        cnst_ty = TD_CNST_TY_HALF;
-        var_ty = TD_VAR_TY_WELL_KNOWN_HALF;
+        val = (long double)cnst_value.val.ap_float.f16;
         break;
       case AP_FLOAT_TY_F32:
-        cnst_ty = TD_CNST_TY_FLOAT;
-        var_ty = TD_VAR_TY_WELL_KNOWN_FLOAT;
+        val = (long double)cnst_value.val.ap_float.f32;
         break;
       case AP_FLOAT_TY_F64:
-        cnst_ty = TD_CNST_TY_DOUBLE;
-        var_ty = TD_VAR_TY_WELL_KNOWN_DOUBLE;
+        val = (long double)cnst_value.val.ap_float.f64;
         break;
       }
-      return (struct td_expr){
-          .ty = TD_EXPR_TY_CNST,
-          .var_ty = var_ty,
-          .cnst = {.ty = cnst_ty, .flt_value = cnst_value.ap_float.f64}};
+
+      return (struct td_expr){.ty = TD_EXPR_TY_CNST,
+                              .var_ty = var_ty,
+                              .cnst = {.ty = cnst_ty, .flt_value = val}};
     }
     }
   }
 
-  switch (expr->ty) {
-  case AST_EXPR_TY_CNST: {
+  switch (expr.ty) {
+  case TD_EXPR_TY_CNST: {
     // string literals are allowed here but not in cnst expressions
 
-    return type_cnst(tchk, &expr->cnst);
+    return expr;
   }
-  case AST_EXPR_TY_VAR: {
+  case TD_EXPR_TY_VAR: {
     // important special case: `int *p = a` where a is an array
     // we pass flag DONT_DECAY so we can look at the returned value to check it
     // is an array
 
-    struct td_expr value =
-        type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, expr);
-
-    if (value.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
+    if (expr.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
           tchk->diagnostics,
           MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                                 expr->span, MK_INVALID_TEXT_POS(0),
+                                 expr.span, MK_INVALID_TEXT_POS(0),
                                  "expression not valid as static "
                                  "initializer; assigment is only allowed when "
                                  "rhs is an array decaying to a pointer"));
@@ -3088,90 +3165,81 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
                               .var_ty = TD_VAR_TY_UNKNOWN};
     }
 
-    return value;
+    return expr;
   }
 
-  case AST_EXPR_TY_UNARY_OP:
+  case TD_EXPR_TY_UNARY_OP:
     // may be address-of
-    switch (expr->unary_op.ty) {
-    case AST_UNARY_OP_TY_ADDRESSOF: {
-      return type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
+    switch (expr.unary_op.ty) {
+    case TD_UNARY_OP_TY_ADDRESSOF: {
+      return expr;
     }
     default:
       // invalid for some other reason
       break;
     }
     break;
-  case AST_EXPR_TY_BINARY_OP: {
+  case TD_EXPR_TY_BINARY_OP: {
     // may be `ptr + cnst` or `cnst + ptr`
-    struct td_expr lhs = type_static_init_expr(tchk, expr->binary_op.lhs);
-    struct td_expr rhs = type_static_init_expr(tchk, expr->binary_op.rhs);
+    struct td_expr lhs =
+        type_static_init_expr(tchk, *expr.binary_op.lhs, expr.var_ty);
+    struct td_expr rhs =
+        type_static_init_expr(tchk, *expr.binary_op.rhs, expr.var_ty);
 
-    if (lhs.var_ty.ty == TD_VAR_TY_TY_POINTER ||
-        rhs.var_ty.ty == TD_VAR_TY_TY_POINTER) {
-      if (lhs.var_ty.ty == TD_VAR_TY_TY_POINTER &&
-          rhs.var_ty.ty == TD_VAR_TY_TY_POINTER) {
-        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-        compiler_diagnostics_add(
-            tchk->diagnostics,
-            MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                                   expr->span, MK_INVALID_TEXT_POS(0),
-                                   "expression not valid as static "
-                                   "initializer; both sides are pointer-type"));
+    struct td_val cnst_val;
+    struct td_expr ptr, cnst;
+    if (eval_constant_integral_expr(
+            tchk, &lhs, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cnst_val)) {
+      ptr = rhs;
+      cnst = lhs;
+    } else if (eval_constant_integral_expr(
+                   tchk, &rhs, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE,
+                   &cnst_val)) {
+      ptr = lhs;
+      cnst = rhs;
+    } else {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+                                 expr.span, MK_INVALID_TEXT_POS(0),
+                                 "expression not valid as static "
+                                 "initializer; both sides are pointer-type"));
 
-        return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                                .var_ty = TD_VAR_TY_UNKNOWN};
-      }
-
-      struct td_expr ptr, cnst;
-
-      if (lhs.var_ty.ty == TD_VAR_TY_TY_POINTER) {
-        ptr = lhs;
-        cnst = rhs;
-      } else {
-        ptr = rhs;
-        cnst = lhs;
-      }
-
-      struct td_expr res = {
-          .ty = TD_EXPR_TY_BINARY_OP,
-          .var_ty = ptr.var_ty,
-          .binary_op = (struct td_binary_op){
-              .lhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.lhs)),
-              .rhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.rhs)),
-          }};
-
-      *res.binary_op.lhs = ptr;
-      *res.binary_op.rhs = cnst;
-
-      switch (expr->binary_op.ty) {
-      case AST_BINARY_OP_TY_ADD:
-        res.binary_op.ty = TD_BINARY_OP_TY_ADD;
-        break;
-      case AST_BINARY_OP_TY_SUB:
-        res.binary_op.ty = TD_BINARY_OP_TY_SUB;
-        break;
-      default:
-        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-        compiler_diagnostics_add(
-            tchk->diagnostics,
-            MK_SEMANTIC_DIAGNOSTIC(
-                BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr->span,
-                MK_INVALID_TEXT_POS(0),
-                "expression not valid as static initializer; only add/sub are "
-                "allowed for pointer arithmetic"));
-      }
-
-      return res;
+      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                              .var_ty = TD_VAR_TY_UNKNOWN};
     }
 
-    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-    compiler_diagnostics_add(
-        tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                               expr->span, MK_INVALID_TEXT_POS(0),
-                               "expression not valid as static initializer"));
-    break;
+    struct td_expr res = {
+        .ty = TD_EXPR_TY_BINARY_OP,
+        .var_ty = ptr.var_ty,
+        .binary_op = (struct td_binary_op){
+            .lhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.lhs)),
+            .rhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.rhs)),
+        }};
+
+    *res.binary_op.lhs = ptr;
+    *res.binary_op.rhs = cnst;
+
+    switch (expr.binary_op.ty) {
+    case TD_BINARY_OP_TY_ADD:
+      res.binary_op.ty = TD_BINARY_OP_TY_ADD;
+      break;
+    case TD_BINARY_OP_TY_SUB:
+      res.binary_op.ty = TD_BINARY_OP_TY_SUB;
+      break;
+    default:
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr.span,
+              MK_INVALID_TEXT_POS(0),
+              "expression not valid as static initializer; only add/sub are "
+              "allowed for pointer arithmetic"));
+    }
+
+    return res;
   }
 
   default:
@@ -3179,23 +3247,24 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     compiler_diagnostics_add(
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                               expr->span, MK_INVALID_TEXT_POS(0),
+                               expr.span, MK_INVALID_TEXT_POS(0),
                                "expression not valid as static initializer"));
     return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
                             .var_ty = TD_VAR_TY_UNKNOWN};
   }
 
   // expr failed in constant eval, but was not a pointer/address expr we
-  // expected so has some other issue rerun constant eval with diagnostics flag
-  // to get good errors
-  // if it succeeds, then emit a generic error
+  // expected so has some other issue rerun constant eval with diagnostics
+  // flag to get good errors if it succeeds, then emit a generic error
 
-  if (type_constant_integral_expr(tchk, expr)) {
+  if (eval_constant_integral_expr(
+          tchk, &expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS,
+          &cnst_value)) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                               expr->span, MK_INVALID_TEXT_POS(0),
+                               expr.span, MK_INVALID_TEXT_POS(0),
                                "expression not valid as static initializer"));
   }
 
@@ -3871,7 +3940,8 @@ static struct td_init type_init(struct typechk *tchk,
       td_init.expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr);
       break;
     case TD_INIT_MODE_CONSTANT_EXPRS:
-      td_init.expr = type_static_init_expr(tchk, &init->expr);
+      td_init.expr = type_static_init_expr(
+          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), *var_ty);
       break;
     }
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
@@ -3977,8 +4047,9 @@ type_declaration(struct typechk *tchk,
 
   if (mode == TD_DECLARATOR_MODE_NORMAL) {
     // if it is a normal declarator, e.g in a function, it may actually be
-    // static i.e when we call `type_declaration` from the top level, it passes
-    // `MODE_STATIC` because all file-scope variables are static-initialized
+    // static i.e when we call `type_declaration` from the top level, it
+    // passes `MODE_STATIC` because all file-scope variables are
+    // static-initialized
     //
     // however, this local
     // ```c
@@ -3988,7 +4059,8 @@ type_declaration(struct typechk *tchk,
     // is _also_ static-initialized, but will be called with normal
     // so we need to promote based on specifiers
 
-    // this sort of duplicates some logic done in ir build, maybe we could unify
+    // this sort of duplicates some logic done in ir build, maybe we could
+    // unify
 
     if (specifiers.storage ==
         TD_STORAGE_CLASS_SPECIFIER_STATIC /* or thread_local */) {
@@ -4371,14 +4443,8 @@ DEBUG_FUNC(unary_op, unary_op) {
   case TD_UNARY_OP_TY_INDIRECTION:
     TD_PRINTZ("INDIRECTION");
     break;
-  case TD_UNARY_OP_TY_SIZEOF:
-    TD_PRINTZ("SIZEOF");
-    break;
   case TD_UNARY_OP_TY_ADDRESSOF:
     TD_PRINTZ("ADDRESSOF");
-    break;
-  case TD_UNARY_OP_TY_ALIGNOF:
-    TD_PRINTZ("ALIGNOF");
     break;
   case TD_UNARY_OP_TY_CAST:
     TD_PRINTZ("CAST");

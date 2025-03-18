@@ -283,9 +283,7 @@ enum td_unary_op_ty {
   TD_UNARY_OP_TY_LOGICAL_NOT,
   TD_UNARY_OP_TY_NOT,
   TD_UNARY_OP_TY_INDIRECTION,
-  TD_UNARY_OP_TY_SIZEOF,
   TD_UNARY_OP_TY_ADDRESSOF,
-  TD_UNARY_OP_TY_ALIGNOF,
   TD_UNARY_OP_TY_CAST,
 };
 
@@ -497,6 +495,9 @@ struct td_expr {
     struct td_pointeraccess pointer_access;
     struct td_compound_literal compound_literal;
   };
+
+  // TODO: have on more td_ types for analysis
+  struct text_span span;
 };
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
