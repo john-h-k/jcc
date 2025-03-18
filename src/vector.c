@@ -145,7 +145,7 @@ void *vector_head(struct vector *v) { return v->data; }
 void *vector_tail(struct vector *v) { return vector_get(v, v->len - 1); }
 
 void *vector_get(struct vector *v, size_t index) {
-  DEBUG_ASSERT(index < v->len, "index out of bounds!");
+  DEBUG_ASSERT(index < v->len, "index out of bounds! (idx=%zu, len=%zu)", index, v->len);
   return &v->data[index * v->element_size];
 }
 

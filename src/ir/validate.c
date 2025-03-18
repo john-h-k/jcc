@@ -173,11 +173,16 @@ static void ir_validate_mov_op(struct ir_validate_state *state,
 
   struct ir_var_ty r = value->var_ty;
 
-  struct ir_var_ty_info l_info = ir_var_ty_info(state->unit, &l);
-  struct ir_var_ty_info r_info = ir_var_ty_info(state->unit, &r);
+  VALIDATION_CHECKZ(r.ty != IR_VAR_TY_TY_NONE, op,
+                    "mov op with none type makes no sense");
 
-  VALIDATION_CHECKZ(l_info.size == r_info.size, op,
-                    "mov op should have same-sized operands");
+  if (l.ty != IR_VAR_TY_TY_NONE && r.ty != IR_VAR_TY_TY_NONE) {
+    struct ir_var_ty_info l_info = ir_var_ty_info(state->unit, &l);
+    struct ir_var_ty_info r_info = ir_var_ty_info(state->unit, &r);
+
+    VALIDATION_CHECKZ(l_info.size == r_info.size, op,
+                      "mov op should have same-sized operands");
+  }
 }
 
 static void ir_validate_cast_op(struct ir_validate_state *state,

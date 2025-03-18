@@ -197,15 +197,15 @@ mini-boostrap() {
 
     clang_files=(
         src/aarch64/codegen.c
-        src/aarch64/emit.c
+        # src/aarch64/emit.c
         src/aarch64/emitter.c
-        src/aarch64/lower.c
+        # src/aarch64/lower.c
         # src/aarch64.c
         # src/alloc.c
         src/args.c
-        src/bitset.c
+        # src/bitset.c
         # src/builtins.c
-        src/codegen.c
+        # src/codegen.c
         src/compiler.c
         # src/deque.c
         src/diagnostics.c
@@ -220,12 +220,12 @@ mini-boostrap() {
         # src/graphcol.c
         # src/graphwriter.c
         # src/hash.c
-        src/hashtbl.c
+        # src/hashtbl.c
         # src/io.c
         src/ir/build.c
         # src/ir/eliminate_phi.c
         # src/ir/ir.c
-        src/ir/prettyprint.c
+        # src/ir/prettyprint.c
         # src/ir/rw.c
         src/ir/validate.c
         # src/ir/var_refs.c
@@ -235,7 +235,7 @@ mini-boostrap() {
         # src/liveness.c
         src/log.c
         # src/lower.c
-        src/lsra.c
+        # src/lsra.c
         # src/macos/link.c
         # src/macos/mach-o.c
         src/main.c
@@ -250,19 +250,19 @@ mini-boostrap() {
         # src/profile.c
         # src/program.c
         src/rv32i/codegen.c
-        src/rv32i/emit.c
+        # src/rv32i/emit.c
         src/rv32i/emitter.c
-        src/rv32i/lower.c
-        src/rv32i/object.c
+        # src/rv32i/lower.c
+        # src/rv32i/object.c
         # src/rv32i.c
         src/typechk.c
         src/util.c
         # src/var_table.c
         # src/vector.c
         src/x64/codegen.c
-        src/x64/emit.c
+        # src/x64/emit.c
         src/x64/emitter.c
-        src/x64/lower.c
+        # src/x64/lower.c
         # src/x64.c
     )
 
