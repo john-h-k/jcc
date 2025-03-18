@@ -116,7 +116,7 @@ static struct ast_op_info op_info(enum ast_binary_op_ty ty) {
     break;
   case AST_BINARY_OP_TY_MUL:
   case AST_BINARY_OP_TY_DIV:
-  case AST_BINARY_OP_TY_QUOT:
+  case AST_BINARY_OP_TY_MOD:
     info.precedence = 10;
     info.associativity = AST_ASSOCIATIVITY_LEFT;
     break;
@@ -179,8 +179,8 @@ static bool op_info_for_token(const struct lex_token *token,
   case LEX_TOKEN_TY_OP_DIV:
     *info = op_info(AST_BINARY_OP_TY_DIV);
     return true;
-  case LEX_TOKEN_TY_OP_QUOT:
-    *info = op_info(AST_BINARY_OP_TY_QUOT);
+  case LEX_TOKEN_TY_OP_MOD:
+    *info = op_info(AST_BINARY_OP_TY_MOD);
     return true;
   default:
     // not an op
@@ -1565,24 +1565,9 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   size_t literal_len = strlen(literal_text);
   DEBUG_ASSERT(literal_len, "literal_len was 0");
 
-  int base = 10;
-  if (literal_len >= 2 && literal_text[0] == '0' && literal_text[1] == 'x') {
-    base = 16;
-  } else if (literal_text[0] == '0') {
-    // this classes '0' as octal but that is fine
-    base = 8;
-  }
+  unsigned long long int_value;
 
-  char *end_ptr;
-  unsigned long long int_value = strtoull(literal_text, &end_ptr, base);
-
-  size_t literal_end = literal_len;
-  do {
-    literal_end--;
-  } while (literal_len && (tolower(literal_text[literal_end]) == 'u' ||
-                           tolower(literal_text[literal_end]) == 'l'));
-
-  if (end_ptr - 1 != &literal_text[literal_end]) {
+  if (!try_parse_integer(literal_text, literal_len, &int_value)) {
     TODO("handle constant int parse failure");
   }
 
@@ -1707,8 +1692,8 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
   case LEX_TOKEN_TY_OP_DIV_ASSG:
     ty = AST_ASSG_TY_DIV;
     break;
-  case LEX_TOKEN_TY_OP_QUOT_ASSG:
-    ty = AST_ASSG_TY_QUOT;
+  case LEX_TOKEN_TY_OP_MOD_ASSG:
+    ty = AST_ASSG_TY_MOD;
     break;
   default:
     backtrack(parser->lexer, pos);
@@ -3790,8 +3775,8 @@ DEBUG_FUNC(binary_op, binary_op) {
   case AST_BINARY_OP_TY_DIV:
     AST_PRINTZ("DIV");
     break;
-  case AST_BINARY_OP_TY_QUOT:
-    AST_PRINTZ("QUOT");
+  case AST_BINARY_OP_TY_MOD:
+    AST_PRINTZ("MOD");
     break;
   case AST_BINARY_OP_TY_LOGICAL_OR:
     AST_PRINTZ("LOGICAL OR");
@@ -3848,7 +3833,7 @@ DEBUG_FUNC(assg, assg) {
   case AST_ASSG_TY_DIV:
     AST_PRINTZ("/=");
     break;
-  case AST_ASSG_TY_QUOT:
+  case AST_ASSG_TY_MOD:
     AST_PRINTZ("%%=");
     break;
   case AST_ASSG_TY_LSHIFT:

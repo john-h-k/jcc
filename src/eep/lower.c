@@ -9,7 +9,7 @@ TODO_FUNC(void eep_debug_print_custom_ir_op(FILE *file,
                                             const struct ir_func *func,
                                             const struct ir_op *op))
 
-// EEP has no mul, div, or quot functions
+// EEP has no mul, div, or mod functions
 // mul:
 //   `
 // quot:

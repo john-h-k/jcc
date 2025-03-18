@@ -199,7 +199,7 @@ mini-boostrap() {
         src/aarch64/emit.c
         src/aarch64/emitter.c
         src/aarch64/lower.c
-        src/aarch64.c
+        # src/aarch64.c
         # src/alloc.c
         src/args.c
         src/bitset.c
@@ -225,9 +225,9 @@ mini-boostrap() {
         src/ir/eliminate_phi.c
         src/ir/ir.c
         src/ir/prettyprint.c
-        src/ir/rw.c
+        # src/ir/rw.c
         src/ir/validate.c
-        src/ir/var_refs.c
+        # src/ir/var_refs.c
         src/lex.c
         src/linux/elf.c
         src/linux/link.c
@@ -253,7 +253,7 @@ mini-boostrap() {
         src/rv32i/emitter.c
         src/rv32i/lower.c
         src/rv32i/object.c
-        src/rv32i.c
+        # src/rv32i.c
         src/typechk.c
         src/util.c
         # src/var_table.c
@@ -262,7 +262,7 @@ mini-boostrap() {
         src/x64/emit.c
         src/x64/emitter.c
         src/x64/lower.c
-        src/x64.c
+        # src/x64.c
     )
 
     tmpdir=$(mktemp -d)

@@ -856,9 +856,9 @@ static void preproc_next_raw_token(struct preproc *preproc,
   case '%':
     next_col(&end);
     if (try_consume(preproc_text, &end, '=')) {
-      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT_ASSG;
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD_ASSG;
     } else {
-      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT;
+      punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD;
     }
     break;
 
@@ -1877,7 +1877,7 @@ static int op_precedence(enum preproc_token_punctuator_ty ty) {
     return 9;
   case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL:
   case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV:
-  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT:
+  case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD:
     return 10;
   default:
     BUG("bad token ty");
@@ -2152,7 +2152,7 @@ static unsigned long long eval_expr(struct preproc *preproc,
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV:
         value = value / rhs;
         break;
-      case PREPROC_TOKEN_PUNCTUATOR_TY_OP_QUOT:
+      case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD:
         value = value % rhs;
         break;
       default:

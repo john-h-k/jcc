@@ -46,8 +46,8 @@ bool ir_binary_op_is_comparison(enum ir_op_binary_op_ty ty) {
   case IR_OP_BINARY_OP_TY_MUL:
   case IR_OP_BINARY_OP_TY_SDIV:
   case IR_OP_BINARY_OP_TY_UDIV:
-  case IR_OP_BINARY_OP_TY_SQUOT:
-  case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_SMOD:
+  case IR_OP_BINARY_OP_TY_UMOD:
   case IR_OP_BINARY_OP_TY_FADD:
   case IR_OP_BINARY_OP_TY_FSUB:
   case IR_OP_BINARY_OP_TY_FMUL:
@@ -605,7 +605,7 @@ enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty ty) {
     return IR_OP_SIGN_NA;
   case IR_OP_BINARY_OP_TY_SRSHIFT:
   case IR_OP_BINARY_OP_TY_SDIV:
-  case IR_OP_BINARY_OP_TY_SQUOT:
+  case IR_OP_BINARY_OP_TY_SMOD:
   case IR_OP_BINARY_OP_TY_SLT:
   case IR_OP_BINARY_OP_TY_SLTEQ:
   case IR_OP_BINARY_OP_TY_SGT:
@@ -613,7 +613,7 @@ enum ir_op_sign ir_binary_op_sign(enum ir_op_binary_op_ty ty) {
     return IR_OP_SIGN_SIGNED;
   case IR_OP_BINARY_OP_TY_URSHIFT:
   case IR_OP_BINARY_OP_TY_UDIV:
-  case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_UMOD:
   case IR_OP_BINARY_OP_TY_ULT:
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_UGT:

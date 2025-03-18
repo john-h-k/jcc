@@ -776,8 +776,8 @@ void x64_lower(struct ir_unit *unit) {
                                     .idx = IR_REG_IDX_AX});
 
                 break;
-              case IR_OP_BINARY_OP_TY_SQUOT:
-              case IR_OP_BINARY_OP_TY_UQUOT:
+              case IR_OP_BINARY_OP_TY_SMOD:
+              case IR_OP_BINARY_OP_TY_UMOD:
                 op->flags |= IR_OP_FLAG_READS_DEST;
 
                 op->write_info = (struct ir_op_write_info){

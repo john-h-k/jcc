@@ -454,7 +454,7 @@ enum ast_binary_op_ty {
   AST_BINARY_OP_TY_SUB,
   AST_BINARY_OP_TY_MUL,
   AST_BINARY_OP_TY_DIV,
-  AST_BINARY_OP_TY_QUOT
+  AST_BINARY_OP_TY_MOD
 };
 
 struct ast_binary_op {
@@ -531,7 +531,7 @@ enum ast_assg_ty {
   AST_ASSG_TY_SUB,
   AST_ASSG_TY_MUL,
   AST_ASSG_TY_DIV,
-  AST_ASSG_TY_QUOT,
+  AST_ASSG_TY_MOD,
   AST_ASSG_TY_AND,
   AST_ASSG_TY_OR,
   AST_ASSG_TY_XOR,

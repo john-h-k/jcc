@@ -6,4 +6,4 @@ IndentWidth: 2
 Language: Cpp
 
 IncludeBlocks: Regroup
-
+TrimTrailingWhitespace: true

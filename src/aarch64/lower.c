@@ -35,20 +35,20 @@ static void lower_shift(struct ir_func *func, struct ir_op *op) {
   binary_op->rhs = mov;
 }
 
-// ARM has no quotient function
+// ARM has no modulo function
 // so instead of `x = a % b` we do
 // `c = a / b; x = a - (c * b)`
-static void lower_quot(struct ir_func *func, struct ir_op *op) {
+static void lower_mod(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP &&
-                   (op->binary_op.ty == IR_OP_BINARY_OP_TY_UQUOT ||
-                    op->binary_op.ty == IR_OP_BINARY_OP_TY_SQUOT),
-               "lower_quot called on invalid op");
+                   (op->binary_op.ty == IR_OP_BINARY_OP_TY_UMOD ||
+                    op->binary_op.ty == IR_OP_BINARY_OP_TY_SMOD),
+               "lower_mod called on invalid op");
 
   enum ir_op_binary_op_ty div_ty;
   enum ir_op_sign sign = ir_binary_op_sign(op->binary_op.ty);
   switch (sign) {
   case IR_OP_SIGN_NA:
-    BUG("trying to `lower_quot` but `binary_op_sign` return `IR_OP_SIGN_NA`");
+    BUG("trying to `lower_mod` but `binary_op_sign` return `IR_OP_SIGN_NA`");
   case IR_OP_SIGN_SIGNED:
     div_ty = IR_OP_BINARY_OP_TY_SDIV;
     break;
@@ -183,8 +183,8 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   case IR_OP_BINARY_OP_TY_MUL:
   case IR_OP_BINARY_OP_TY_SDIV:
   case IR_OP_BINARY_OP_TY_UDIV:
-  case IR_OP_BINARY_OP_TY_SQUOT:
-  case IR_OP_BINARY_OP_TY_UQUOT:
+  case IR_OP_BINARY_OP_TY_SMOD:
+  case IR_OP_BINARY_OP_TY_UMOD:
     supports_lhs_contained = false;
     supports_rhs_contained = false;
     break;
@@ -729,9 +729,9 @@ void aarch64_lower(struct ir_unit *unit) {
               break;
             case IR_OP_TY_BINARY_OP:
               switch (op->binary_op.ty) {
-              case IR_OP_BINARY_OP_TY_UQUOT:
-              case IR_OP_BINARY_OP_TY_SQUOT:
-                lower_quot(func, op);
+              case IR_OP_BINARY_OP_TY_UMOD:
+              case IR_OP_BINARY_OP_TY_SMOD:
+                lower_mod(func, op);
                 break;
               case IR_OP_BINARY_OP_TY_SRSHIFT:
               case IR_OP_BINARY_OP_TY_LSHIFT:
