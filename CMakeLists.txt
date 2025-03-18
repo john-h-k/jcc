@@ -23,6 +23,8 @@ set(
   src/log.c
   src/graphwriter.c
 
+  src/ap_val.c
+
   src/compiler.c
   src/diagnostics.c
   src/builtins.c
