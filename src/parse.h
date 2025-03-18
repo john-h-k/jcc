@@ -681,6 +681,13 @@ struct ast_init_declarator_list {
   struct text_span span;
 };
 
+struct ast_staticassert {
+  struct ast_expr cond;
+  struct ast_expr *message;
+
+  struct text_span span;
+};
+
 struct ast_declaration {
   struct ast_declaration_specifier_list specifier_list;
   struct ast_init_declarator_list declarator_list;
@@ -856,6 +863,7 @@ enum ast_stmt_ty {
   AST_STMT_TY_JUMP,
   AST_STMT_TY_ITER,
   AST_STMT_TY_SELECT,
+  AST_STMT_TY_STATICASSERT,
 };
 
 struct ast_stmt {
@@ -868,6 +876,7 @@ struct ast_stmt {
     struct ast_selectstmt select;
     struct ast_iterstmt iter;
     struct ast_labeledstmt labeled;
+    struct ast_staticassert staticassert;
   };
 
   struct text_span span;
@@ -886,7 +895,8 @@ struct ast_funcdef {
 
 enum ast_external_declaration_ty {
   AST_EXTERNAL_DECLARATION_TY_DECLARATION,
-  AST_EXTERNAL_DECLARATION_TY_FUNC_DEF
+  AST_EXTERNAL_DECLARATION_TY_FUNC_DEF,
+  AST_EXTERNAL_DECLARATION_TY_STATIC_ASSERT
 };
 
 struct ast_external_declaration {
@@ -895,6 +905,7 @@ struct ast_external_declaration {
   union {
     struct ast_funcdef func_def;
     struct ast_declaration declaration;
+    struct ast_staticassert staticassert;
   };
 
   struct text_span span;

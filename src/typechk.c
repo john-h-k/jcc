@@ -588,6 +588,9 @@ enum td_specifier_allow {
 static unsigned long long
 type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr);
 
+static struct ap_val type_constant_expr(struct typechk *tchk,
+                                        const struct ast_expr *expr);
+
 static struct td_expr type_static_init_expr(struct typechk *tchk,
                                             struct td_expr expr,
                                             struct td_var_ty target_ty);
@@ -2757,10 +2760,11 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
         compiler_diagnostics_add(
             tchk->diagnostics,
-            MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
-                                   MK_INVALID_TEXT_POS(0),
-                                   "variables in constant "
-                                   "expressions must be constants or enum values"));
+            MK_SEMANTIC_DIAGNOSTIC(
+                BAD_ENUM_INIT, bad_enum_init, expr->span,
+                MK_INVALID_TEXT_POS(0),
+                "variables in constant "
+                "expressions must be constants or enum values"));
       }
 
       return false;
@@ -2862,21 +2866,68 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
       case TD_VAR_TY_TY_WELL_KNOWN:
         switch (expr_value.var_ty.ty) {
         case TD_VAR_TY_TY_POINTER:
-        case TD_VAR_TY_TY_WELL_KNOWN:
+        case TD_VAR_TY_TY_WELL_KNOWN: {
           // nop
-          if (expr->var_ty.well_known == WELL_KNOWN_TY_BOOL) {
+
+          size_t num_bits;
+          enum ap_float_ty float_ty;
+          switch (expr->var_ty.well_known) {
+          case WELL_KNOWN_TY_BOOL:
             *value = (struct td_val){
                 .var_ty = expr->var_ty,
                 .val = ap_val_from_ull(ap_val_nonzero(expr_value.val))};
             return true;
-          } else {
+          case WELL_KNOWN_TY_CHAR:
+          case WELL_KNOWN_TY_SIGNED_CHAR:
+          case WELL_KNOWN_TY_UNSIGNED_CHAR:
+            num_bits = 8;
+            goto to_int;
+          case WELL_KNOWN_TY_SIGNED_SHORT:
+          case WELL_KNOWN_TY_UNSIGNED_SHORT:
+            num_bits = 16;
+            goto to_int;
+          case WELL_KNOWN_TY_SIGNED_INT:
+          case WELL_KNOWN_TY_UNSIGNED_INT:
+            num_bits = 32;
+            goto to_int;
+          case WELL_KNOWN_TY_SIGNED_LONG:
+          case WELL_KNOWN_TY_UNSIGNED_LONG:
+          case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+          case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+            num_bits = 64;
+            goto to_int;
+          case WELL_KNOWN_TY_INT128:
+          case WELL_KNOWN_TY_UINT128:
+            num_bits = 128;
+            goto to_int;
+
+          to_int:
             *value =
-                (struct td_val){.var_ty = expr->var_ty, .val = expr_value.val};
+                (struct td_val){.var_ty = expr->var_ty,
+                 .val = ap_val_to_int(expr_value.val, num_bits)};
+            return true;
+          case WELL_KNOWN_TY_HALF:
+            float_ty = AP_FLOAT_TY_F16;
+            goto to_float;
+          case WELL_KNOWN_TY_FLOAT:
+            float_ty = AP_FLOAT_TY_F32;
+            goto to_float;
+          case WELL_KNOWN_TY_DOUBLE:
+            float_ty = AP_FLOAT_TY_F64;
+            goto to_float;
+          case WELL_KNOWN_TY_LONG_DOUBLE:
+            float_ty = AP_FLOAT_TY_F64;
+            goto to_float;
+
+          to_float:
+            *value =
+                (struct td_val){.var_ty = expr->var_ty,
+                 .val = ap_val_to_float(expr_value.val, float_ty)};
             return true;
           }
-
         default:
           goto bad_cast;
+        }
         }
 
       case TD_VAR_TY_TY_UNKNOWN:
@@ -3087,6 +3138,19 @@ type_constant_integral_expr(struct typechk *tchk, const struct ast_expr *expr) {
   }
 }
 
+static struct ap_val type_constant_expr(struct typechk *tchk,
+                                        const struct ast_expr *expr) {
+  struct td_val value;
+
+  struct td_expr td_expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, expr);
+
+  (void)eval_constant_integral_expr(
+      tchk, &td_expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS,
+      &value);
+
+  return value.val;
+}
+
 static struct td_expr type_static_init_expr(struct typechk *tchk,
                                             struct td_expr expr,
                                             struct td_var_ty target_ty) {
@@ -3153,17 +3217,17 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
 
     // TODO: make this diagnostic work
     // if (expr.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
-      // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-      // compiler_diagnostics_add(
-      //     tchk->diagnostics,
-      //     MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-      //                            expr.span, MK_INVALID_TEXT_POS(0),
-      //                            "expression not valid as static "
-      //                            "initializer; assigment is only allowed when "
-      //                            "rhs is an array decaying to a pointer"));
+    // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    // compiler_diagnostics_add(
+    //     tchk->diagnostics,
+    //     MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+    //                            expr.span, MK_INVALID_TEXT_POS(0),
+    //                            "expression not valid as static "
+    //                            "initializer; assigment is only allowed when "
+    //                            "rhs is an array decaying to a pointer"));
 
-      // return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-      //                         .var_ty = TD_VAR_TY_UNKNOWN};
+    // return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+    //                         .var_ty = TD_VAR_TY_UNKNOWN};
     // }
 
     return expr;
@@ -3175,7 +3239,9 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     case TD_UNARY_OP_TY_ADDRESSOF:
       return expr;
     case TD_UNARY_OP_TY_CAST:
-      if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER && (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER || expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
+      if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
+          (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER ||
+           expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
         // pointer to pointer cast, fine
         return expr;
       }
@@ -3504,12 +3570,21 @@ static struct td_compoundstmt
 type_compoundstmt(struct typechk *tchk,
                   const struct ast_compoundstmt *compound_stmt);
 
+static void type_staticassert(struct typechk *tchk,
+                              const struct ast_staticassert *staticassert);
+
 static struct td_stmt type_stmt(struct typechk *tchk,
                                 const struct ast_stmt *stmt) {
   struct td_stmt td_stmt;
 
   switch (stmt->ty) {
   case AST_STMT_TY_NULL:
+    td_stmt = (struct td_stmt){
+        .ty = TD_STMT_TY_NULL,
+    };
+    break;
+  case AST_STMT_TY_STATICASSERT:
+    type_staticassert(tchk, &stmt->staticassert);
     td_stmt = (struct td_stmt){
         .ty = TD_STMT_TY_NULL,
     };
@@ -3947,7 +4022,8 @@ static struct td_init type_init(struct typechk *tchk,
       break;
     case TD_INIT_MODE_CONSTANT_EXPRS:
       td_init.expr = type_static_init_expr(
-          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr), *var_ty);
+          tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr),
+          *var_ty);
       break;
     }
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
@@ -4104,6 +4180,9 @@ static struct td_external_declaration type_external_declaration(
     return (struct td_external_declaration){
         .ty = TD_EXTERNAL_DECLARATION_TY_FUNC_DEF,
         .func_def = type_funcdef(tchk, &external_declaration->func_def)};
+  default:
+    // static assert handled outside (as it does not generate a decl)
+    unreachable();
   }
 }
 
@@ -4143,6 +4222,43 @@ void typechk_free(struct typechk **tchk) {
   *tchk = NULL;
 }
 
+static void type_staticassert(struct typechk *tchk,
+                              const struct ast_staticassert *staticassert) {
+  // FIXME: should also allow floating point!
+  struct ap_val cond = type_constant_expr(tchk, &staticassert->cond);
+
+  const char *message;
+  if (staticassert->message) {
+    if (staticassert->message->ty != AST_EXPR_TY_CNST ||
+        staticassert->message->cnst.ty != AST_CNST_TY_STR_LITERAL) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              STATIC_ASSERT_MESSAGE, static_assert_message,
+              staticassert->message->span, MK_INVALID_TEXT_POS(0),
+              "'static_assert' message must be a string literal"));
+
+      return;
+    }
+
+    struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
+
+    message = arena_alloc_snprintf(tchk->arena, "static_assert failed: %.*s",
+                                   (int)cnst.len, cnst.value);
+  } else {
+    message = "static_assert failed";
+  }
+
+  if (ap_val_zero(cond)) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(STATIC_ASSERT, static_assert, staticassert->span,
+                               MK_INVALID_TEXT_POS(0), message));
+  }
+}
+
 struct typechk_result td_typechk(struct typechk *tchk,
                                  struct ast_translationunit *translation_unit) {
   struct td_translationunit td_translation_unit = {
@@ -4151,10 +4267,22 @@ struct typechk_result td_typechk(struct typechk *tchk,
           tchk->arena, sizeof(*td_translation_unit.external_declarations) *
                            translation_unit->num_external_declarations)};
 
+  size_t head = 0;
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
-    td_translation_unit.external_declarations[i] = type_external_declaration(
-        tchk, &translation_unit->external_declarations[i]);
+    if (translation_unit->external_declarations[i].ty ==
+        AST_EXTERNAL_DECLARATION_TY_STATIC_ASSERT) {
+      type_staticassert(
+          tchk, &translation_unit->external_declarations[i].staticassert);
+    } else {
+      td_translation_unit.external_declarations[head++] =
+          type_external_declaration(
+              tchk, &translation_unit->external_declarations[i]);
+    }
   }
+
+  // slightly overallocates (bc it allocates for static_asserts) but shouldn't
+  // matter
+  td_translation_unit.num_external_declarations = head;
 
   return (struct typechk_result){.ty = tchk->result_ty,
                                  .diagnostics = tchk->diagnostics,

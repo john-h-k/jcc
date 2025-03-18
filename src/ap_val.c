@@ -18,7 +18,7 @@ struct ap_int ap_int_zero(size_t num_bits) {
 #define CHECK64(v) DEBUG_ASSERT((v).num_bits <= 64, ">64 bit ap_int");
 #define CHECK_SAME(lhs, rhs)                                                   \
   DEBUG_ASSERT((lhs).num_bits == (rhs).num_bits, "ap_int bit count mismatch");
-#define CHECK_BINN(lhs, rhs)                                                            \
+#define CHECK_BINN(lhs, rhs)                                                   \
   CHECK64(lhs);                                                                \
   CHECK64(rhs);                                                                \
   CHECK_SAME(lhs, rhs);
@@ -115,17 +115,13 @@ static void ap_int_add_into_i32(struct ap_int *a, int addend) {
 void ap_int_set(struct ap_int *ap_int, signed long long value) {
   static_assert(sizeof(ap_int->chunks[0]) == sizeof(value), "size mismatch!");
 
-  *ap_int = (struct ap_int){
-    .num_bits = ap_int->num_bits,
-    .chunks[0] = (uint64_t)value
-  };
+  size_t num_bits = ap_int->num_bits;
+  *ap_int = (struct ap_int){.num_bits = num_bits, .chunks[0] = (uint64_t)value};
 }
 
 static void ap_int_negate_into(struct ap_int *value) {
-  *value = (struct ap_int){
-    .num_bits = value->num_bits,
-    .chunks[0] = -(int64_t)value->chunks[0]
-  };
+  *value = (struct ap_int){.num_bits = value->num_bits,
+                           .chunks[0] = -(int64_t)value->chunks[0]};
 }
 
 struct ap_int ap_int_negate(struct ap_int value) {
@@ -366,7 +362,7 @@ struct ap_int ap_int_lshift(struct ap_int lhs, struct ap_int rhs) {
 }
 
 struct ap_int ap_int_rshift(struct ap_int lhs, struct ap_int rhs) {
-   CHECK_BIN();
+  CHECK_BIN();
 
   struct ap_int res = {.num_bits = lhs.num_bits,
                        .chunks = {[0] = lhs.chunks[0] >> rhs.chunks[0]}};
@@ -502,15 +498,13 @@ POP_NO_WARN()
     return (struct ap_float){.ty = (value).ty, .f64 = op(value).f64};          \
   }
 
-struct ap_float ap_float_negate(struct ap_float value) {
+    struct ap_float ap_float_negate(struct ap_float value) {
   AP_FLOAT_UN_OP(-)
 }
 
 // FIXME: this method is INHERENTLY BROKEN because it cannot handle sign
 struct ap_val ap_val_from_ull(unsigned long long value) {
-  struct ap_int ap_int = {
-    .num_bits = 64
-  };
+  struct ap_int ap_int = {.num_bits = 64};
   ap_int_set(&ap_int, value);
 
   return MK_AP_VAL_INT(ap_int);
@@ -647,4 +641,93 @@ struct ap_val ap_val_not(struct ap_val value) {
     return (struct ap_val){.ty = AP_VAL_TY_INT,
                            .ap_int = (ap_int_not(value.ap_int))};
   };
+}
+
+struct ap_val ap_val_to_int(struct ap_val value, size_t num_bits) {
+  switch (value.ty) {
+  case AP_VAL_TY_INVALID:
+    return value;
+  case AP_VAL_TY_INT: {
+    // just truncate
+    size_t old_bits = value.ap_int.num_bits;
+
+    value.ap_int.num_bits = num_bits;
+    if (num_bits > old_bits) {
+      // TODO: sign extend properly
+    }
+    return value;
+  }
+  case AP_VAL_TY_FLOAT:
+    switch (value.ap_float.ty) {
+    case AP_FLOAT_TY_F16:
+      return ap_val_from_ull((unsigned long long)value.ap_float.f16);
+    case AP_FLOAT_TY_F32:
+      return ap_val_from_ull((unsigned long long)value.ap_float.f32);
+    case AP_FLOAT_TY_F64:
+      return ap_val_from_ull((unsigned long long)value.ap_float.f64);
+    }
+  }
+}
+
+typedef float half_t;
+typedef float float_t;
+typedef double double_t;
+
+struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty) {
+  switch (value.ty) {
+  case AP_VAL_TY_INVALID:
+    return value;
+  case AP_VAL_TY_INT: {
+    unsigned long long ull = ap_int_as_ull(value.ap_int);
+
+    switch (ty) {
+    case AP_FLOAT_TY_F16:
+      return MK_AP_VAL_FLT(((struct ap_float){.ty = ty, .f16 = ull}));
+    case AP_FLOAT_TY_F32:
+      return MK_AP_VAL_FLT(((struct ap_float){.ty = ty, .f32 = ull}));
+    case AP_FLOAT_TY_F64:
+      return MK_AP_VAL_FLT(((struct ap_float){.ty = ty, .f64 = ull}));
+    }
+  }
+  case AP_VAL_TY_FLOAT:
+    if (value.ap_float.ty == ty) {
+      return value;
+    }
+
+    switch (ty) {
+    case AP_FLOAT_TY_F16:
+      switch (value.ap_float.ty) {
+      case AP_FLOAT_TY_F32:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f16 = (half_t)value.ap_float.f32}));
+      case AP_FLOAT_TY_F64:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f16 = (half_t)value.ap_float.f64}));
+      default:
+        unreachable();
+      }
+    case AP_FLOAT_TY_F32:
+      switch (value.ap_float.ty) {
+      case AP_FLOAT_TY_F16:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f32 = (float_t)value.ap_float.f16}));
+      case AP_FLOAT_TY_F64:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f32 = (float_t)value.ap_float.f64}));
+      default:
+        unreachable();
+      }
+    case AP_FLOAT_TY_F64:
+      switch (value.ap_float.ty) {
+      case AP_FLOAT_TY_F16:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f64 = (double_t)value.ap_float.f16}));
+      case AP_FLOAT_TY_F32:
+        return MK_AP_VAL_FLT(
+            ((struct ap_float){.ty = ty, .f64 = (double_t)value.ap_float.f32}));
+      default:
+        unreachable();
+      }
+    }
+  }
 }

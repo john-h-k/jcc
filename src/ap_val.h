@@ -136,5 +136,8 @@ struct ap_val ap_val_xor(struct ap_val lhs, struct ap_val rhs);
 struct ap_val ap_val_negate(struct ap_val value);
 struct ap_val ap_val_not(struct ap_val value);
 
+struct ap_val ap_val_to_int(struct ap_val value, size_t num_bits);
+struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty);
+
 #endif
 
