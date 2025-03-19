@@ -95,7 +95,7 @@ set(
 # TODO: add a more granular system for including targets
 
 if("$ENV{BOOTSTRAP}" STREQUAL "1")
-  CMAKE_FORCE_C_COMPILER(build/jcc JCC)
+  CMAKE_FORCE_C_COMPILER(jcc JCC)
 endif()
 
 if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")

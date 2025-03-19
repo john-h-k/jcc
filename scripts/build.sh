@@ -243,7 +243,7 @@ mini-boostrap() {
         # src/opts/cnst_fold.c
         # src/opts/inline.c
         # src/opts/instr_comb.c
-        src/opts/opts.c
+        # src/opts/opts.c
         # src/opts/promote.c
         src/parse.c
         src/preproc.c
