@@ -2,7 +2,6 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
-#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
 

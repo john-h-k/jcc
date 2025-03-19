@@ -13,7 +13,7 @@ static bool try_get_hfa_info(struct ir_func *func,
   }
 
   if (var_ty->ty == IR_VAR_TY_TY_UNION) {
-    TODO("union hfa handling");
+    return false;
   }
 
   if (!var_ty->aggregate.num_fields) {
