@@ -46,7 +46,8 @@ enum lex_create_result lexer_create(struct program *program,
 
     KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
-    // We falsely reserve some keywords here i believe (e.g banning `align` in C11)
+    // We falsely reserve some keywords here i believe (e.g banning `align` in
+    // C11)
 
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
@@ -178,8 +179,10 @@ static const char *process_raw_string(const struct lexer *lexer,
   const char *text = token->text;
   size_t len = text_span_len(&token->span);
 
-  bool is_wide = token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL || token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
-  struct vector *buff = vector_create_in_arena(is_wide ? sizeof(int32_t) : sizeof(char), lexer->arena);
+  bool is_wide = token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
+                 token->ty == LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL;
+  struct vector *buff = vector_create_in_arena(
+      is_wide ? sizeof(int32_t) : sizeof(char), lexer->arena);
 
   char end_char = (token->ty == LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL ||
                    token->ty == LEX_TOKEN_TY_ASCII_CHAR_LITERAL)
@@ -192,20 +195,28 @@ static const char *process_raw_string(const struct lexer *lexer,
 
   *str_len = 0;
   bool char_escaped = false;
-  for (size_t i = str_start; i < len && !(!char_escaped && text[i] == end_char);
-       i++) {
+
+  // BUG: JCC fails with this
+  // for (size_t i = str_start; i < len && !(!char_escaped && text[i] ==
+  // end_char);
+  //      i++) {
+  for (size_t i = str_start;; i++) {
+    if (!(i < len && !(!char_escaped && text[i] == end_char))) {
+      break;
+    }
+
     if (char_escaped) {
-  #define PUSH_CHAR(ch) \
-  if (is_wide) { \
-    int32_t pc = ch;                                                              \
-    vector_push_back(buff, &pc);                                                \
-  } else { \
-    char pc = (char)ch;                                                              \
-    vector_push_back(buff, &pc);                                                \
+#define PUSH_CHAR(ch)                                                          \
+  if (is_wide) {                                                               \
+    int32_t pc = ch;                                                           \
+    vector_push_back(buff, &pc);                                               \
+  } else {                                                                     \
+    char pc = (char)ch;                                                        \
+    vector_push_back(buff, &pc);                                               \
   }
 #define ADD_ESCAPED(ch, esc)                                                   \
   case ch: {                                                                   \
-    PUSH_CHAR(esc); \
+    PUSH_CHAR(esc);                                                            \
     break;                                                                     \
   }
 
@@ -456,8 +467,10 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
 
     struct preproc_token preproc_token;
     do {
-      preproc_next_token(lexer->preproc, &preproc_token, PREPROC_EXPAND_TOKEN_FLAG_NONE);
-    } while (preproc_token.ty != PREPROC_TOKEN_TY_EOF && !text_span_len(&preproc_token.span));
+      preproc_next_token(lexer->preproc, &preproc_token,
+                         PREPROC_EXPAND_TOKEN_FLAG_NONE);
+    } while (preproc_token.ty != PREPROC_TOKEN_TY_EOF &&
+             !text_span_len(&preproc_token.span));
 
     switch (preproc_token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:
@@ -522,7 +535,8 @@ void peek_token(struct lexer *lexer, struct lex_token *token) {
 // just hacking it into text pos as not to need to change `parse.c`
 struct lex_pos get_position(struct lexer *lexer) {
   // shouldn't really be last tex pos... should be "next"
-  return (struct lex_pos){ .id = lexer->pos, .text_pos = get_last_text_pos(lexer) };
+  return (struct lex_pos){.id = lexer->pos,
+                          .text_pos = get_last_text_pos(lexer)};
 }
 
 void backtrack(struct lexer *lexer, struct lex_pos position) {

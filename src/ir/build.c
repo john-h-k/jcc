@@ -741,6 +741,15 @@ static struct ir_op *build_ir_for_addressof_var(struct ir_func_builder *irb,
   return op;
 }
 
+enum build_compoundliteral_mode {
+  BUILD_COMPOUNDLITERAL_MODE_ADDR,
+  BUILD_COMPOUNDLITERAL_MODE_LOAD,
+};
+
+static struct ir_op *build_ir_for_compoundliteral(
+    struct ir_func_builder *irb, struct ir_stmt **stmt, struct ir_op *address,
+    enum build_compoundliteral_mode mode, struct td_expr *expr);
+
 static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
                                             struct ir_stmt **stmt,
                                             struct td_expr *expr) {
@@ -782,20 +791,24 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     // spill call, and address spill
     struct ir_lcl *lcl = ir_add_local(irb->func, &value->var_ty);
 
-    struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    struct ir_op *store =
+        ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
     store->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_LCL,
-      .lcl = lcl,
-      .value = value
-    };
+        .ty = IR_OP_STORE_TY_LCL, .lcl = lcl, .value = value};
 
-    struct ir_op *addr = ir_append_op(irb->func, *stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    struct ir_op *addr =
+        ir_append_op(irb->func, *stmt, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     addr->addr = (struct ir_op_addr){
-      .ty = IR_OP_ADDR_TY_LCL,
-      .lcl = lcl,
+        .ty = IR_OP_ADDR_TY_LCL,
+        .lcl = lcl,
     };
 
     return addr;
+  }
+
+  if (expr->ty == TD_EXPR_TY_COMPOUND_LITERAL) {
+    return build_ir_for_compoundliteral(irb, stmt, NULL,
+                                        BUILD_COMPOUNDLITERAL_MODE_ADDR, expr);
   }
 
   if (expr->ty != TD_EXPR_TY_VAR) {
@@ -1257,15 +1270,28 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   false_br->var_ty = IR_VAR_TY_NONE;
 
   // need to handle the case of `foo ? aggregate : aggregate`
-  // in which case we want to do a phi of the _addresses_ not the loads themselves
+  // in which case we want to do a phi of the _addresses_ not the loads
+  // themselves
 
   bool gen_load = false;
   struct ir_var_ty load_ty;
-  if (false_op->ty == IR_OP_TY_LOAD && true_op->ty == IR_OP_TY_LOAD) {
-    DEBUG_ASSERT(ir_var_ty_eq(irb->unit, &false_op->var_ty, &true_op->var_ty), "expected branches to have same ty");
+  if ((ir_var_ty_is_aggregate(&false_op->var_ty) &&
+       ir_var_ty_is_aggregate(&true_op->var_ty))) {
+    DEBUG_ASSERT(ir_var_ty_eq(irb->unit, &false_op->var_ty, &true_op->var_ty),
+                 "expected branches to have same ty");
 
     gen_load = true;
     load_ty = false_op->var_ty;
+
+    if (false_op->ty == IR_OP_TY_CALL) {
+      // need to spill
+      false_op = ir_spill_op(irb->func, false_op);
+    }
+
+    if (true_op->ty == IR_OP_TY_CALL) {
+      // need to spill
+      true_op = ir_spill_op(irb->func, true_op);
+    }
 
     struct ir_op *false_addr = ir_build_addr(irb->func, false_op);
     struct ir_op *true_addr = ir_build_addr(irb->func, true_op);
@@ -1294,11 +1320,9 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   if (gen_load) {
     phi->var_ty = IR_VAR_TY_POINTER;
 
-    struct ir_op *load = ir_append_op(irb->func, end_stmt, IR_OP_TY_LOAD, load_ty);
-    load->load = (struct ir_op_load){
-      .ty = IR_OP_LOAD_TY_ADDR,
-      .addr = phi
-    };
+    struct ir_op *load =
+        ir_append_op(irb->func, end_stmt, IR_OP_TY_LOAD, load_ty);
+    load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = phi};
 
     return load;
   }
@@ -2137,18 +2161,14 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
                                    struct ir_stmt **stmt, struct ir_op *address,
                                    struct td_init_list *init_list);
 
-static struct ir_op *build_ir_for_compoundliteral(struct ir_func_builder *irb,
-                                                  struct ir_stmt **stmt,
-                                                  struct ir_op *address,
-                                                  struct td_expr *expr) {
+static struct ir_op *build_ir_for_compoundliteral(
+    struct ir_func_builder *irb, struct ir_stmt **stmt, struct ir_op *address,
+    enum build_compoundliteral_mode mode, struct td_expr *expr) {
   struct td_compound_literal *compound_literal = &expr->compound_literal;
   struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->unit, &compound_literal->var_ty);
 
-  bool needs_load = false;
   if (!address) {
-    needs_load = true;
-
     struct ir_lcl *lcl = ir_add_local(irb->func, &var_ty);
 
     address = ir_alloc_op(irb->func, *stmt);
@@ -2159,7 +2179,7 @@ static struct ir_op *build_ir_for_compoundliteral(struct ir_func_builder *irb,
 
   build_ir_for_init_list(irb, stmt, address, &compound_literal->init_list);
 
-  if (needs_load) {
+  if (mode == BUILD_COMPOUNDLITERAL_MODE_LOAD) {
     struct ir_op *load = ir_alloc_op(irb->func, *stmt);
     load->ty = IR_OP_TY_LOAD;
     load->var_ty = var_ty;
@@ -2223,7 +2243,8 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     op = build_ir_for_alignof(irb, stmt, expr);
     break;
   case TD_EXPR_TY_COMPOUND_LITERAL:
-    op = build_ir_for_compoundliteral(irb, stmt, NULL, expr);
+    op = build_ir_for_compoundliteral(irb, stmt, NULL,
+                                      BUILD_COMPOUNDLITERAL_MODE_LOAD, expr);
     break;
   }
 
@@ -2386,7 +2407,7 @@ build_ir_for_switch(struct ir_func_builder *irb,
 jumps:
 
   if (!default_block) {
-    default_block = after_body_bb;   
+    default_block = after_body_bb;
   }
 
   ir_make_basicblock_switch(irb->func, basicblock, vector_length(cases),
@@ -2929,7 +2950,8 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   // if (needs_zero) {
 
   // FIXME: we always zero because:
-  //   * the code above doesn't handle arbitrary order inits (from designated initializers)
+  //   * the code above doesn't handle arbitrary order inits (from designated
+  //   initializers)
   //   * opts_promote works better if it can see whole thing is zeroed
   build_ir_zero_range(irb, *stmt, first_init, address, info.size);
   // }
@@ -2947,7 +2969,9 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
     // this logic is BROKEN if a cast is needed (e.g `struct foo a = { .field =
     // (int){1} }`;
     if (init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
-      build_ir_for_compoundliteral(irb, stmt, start_address, &init->expr);
+      build_ir_for_compoundliteral(irb, stmt, start_address,
+                                   BUILD_COMPOUNDLITERAL_MODE_ADDR,
+                                   &init->expr);
       return NULL; // return null signifies build_ir_for_var should not insert a
                    // STORE
     } else {

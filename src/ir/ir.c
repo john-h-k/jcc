@@ -3432,6 +3432,12 @@ void ir_alloc_locals(struct ir_func *func) {
 
     struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
 
+    // HACK: sometimes we generate i64 load of a less aligned type because the type is returned in a register
+    // arm64 currently needs i64 loads to be i64 aligned
+    // so make alignment always >=8
+    // the solution is to make arm64 support non aligned loads (`ldur`/`stur`)
+    ty_info.alignment = MAX(ty_info.alignment, 8);
+
     size_t lcl_pad =
         (ty_info.alignment - (func->total_locals_size % ty_info.alignment)) %
         ty_info.alignment;

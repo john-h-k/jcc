@@ -416,17 +416,17 @@ struct interval_data construct_intervals(struct ir_func *irb) {
 }
 
 void print_live_regs(FILE *file, const struct ir_reg_usage *reg_usage) {
-  fslogsl(file, " - LIVE REGS (");
+  fprintf(file, " - LIVE REGS (");
 
   for (size_t i = 0; i < reg_usage->num_nonvolatile_used; i++) {
     if (i + 1 != reg_usage->num_nonvolatile_used) {
-      fslogsl(file, ", ");
+      fprintf(file, ", ");
     }
 
     debug_print_ir_reg(file, reg_usage->nonvolatile_used[i]);
   }
 
-  fslogsl(file, ")");
+  fprintf(file, ")");
 }
 
 void print_ir_intervals(FILE *file, struct ir_op *op,
@@ -434,30 +434,30 @@ void print_ir_intervals(FILE *file, struct ir_op *op,
   struct interval *interval = op->metadata;
   if (interval) {
     invariant_assert(interval->op->id == op->id, "intervals are not ID keyed");
-    fslogsl(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
+    fprintf(file, "start=%05zu, end=%05zu | ", interval->start, interval->end);
   } else {
-    fslogsl(file, "no associated interval | ");
+    fprintf(file, "no associated interval | ");
   }
 
   switch (op->reg.ty) {
   case IR_REG_TY_NONE:
-    fslogsl(file, "    (UNASSIGNED)");
+    fprintf(file, "    (UNASSIGNED)");
     break;
   case IR_REG_TY_SPILLED:
     if (op->lcl) {
-      fslogsl(file, "    (SPILLED), LCL=%zu", op->lcl->id);
+      fprintf(file, "    (SPILLED), LCL=%zu", op->lcl->id);
     } else {
-      fslogsl(file, "    (SPILLED), LCL=(UNASSIGNED)");
+      fprintf(file, "    (SPILLED), LCL=(UNASSIGNED)");
     }
     break;
   case IR_REG_TY_FLAGS:
-    fslogsl(file, "    (FLAGS)");
+    fprintf(file, "    (FLAGS)");
     break;
   case IR_REG_TY_INTEGRAL:
-    fslogsl(file, "    register=R%zu", op->reg.idx);
+    fprintf(file, "    register=R%zu", op->reg.idx);
     break;
   case IR_REG_TY_FP:
-    fslogsl(file, "    register=F%zu", op->reg.idx);
+    fprintf(file, "    register=F%zu", op->reg.idx);
     break;
   }
 

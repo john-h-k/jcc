@@ -137,14 +137,6 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
-#define PR_RESET "\x1B[0m"
-#define PR_RED "\x1B[31m"
-#define PR_GREEN "\x1B[32m"
-#define PR_MAGENTA "\x1B[35m"
-#define PR_YELLOW "\x1B[33m"
-#define PR_WHITE "\x1B[37m"
-#define PR_BOLD "\033[1m"
-
 static void compiler_print_diagnostics_context(struct compiler *compiler,
                                                struct text_span span,
                                                struct text_pos point) {

@@ -144,6 +144,17 @@ static inline void debug_print_stack_trace(void) {
 
 #endif
 
+// TEMP: these should go somewhere else
+#define PR_RESET "\x1B[0m"
+#define PR_RED "\x1B[31m"
+#define PR_GREEN "\x1B[32m"
+#define PR_YELLOW "\x1B[33m"
+#define PR_BLUE "\x1B[34m"
+#define PR_MAGENTA "\x1B[35m"
+#define PR_CYAN "\x1B[36m"
+#define PR_WHITE "\x1B[37m"
+#define PR_BOLD "\033[1m"
+
 // TEMP:
 #ifdef __JCC__
 #undef va_start
