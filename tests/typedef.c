@@ -5,12 +5,9 @@ void baz(int *p) {
 }
 
 typedef void *bazl;
-typedef void *bazl;
 
 typedef int my_int;
 
-typedef void (*foo)(int *);
-// it should accept duplicate
 typedef void (*foo)(int *);
 
 struct cg_state {

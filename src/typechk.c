@@ -836,7 +836,7 @@ td_var_ty_for_enum(struct typechk *tchk,
       struct var_table_entry *entry;
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
-      if (tchk->ty_table.first->scope == SCOPE_GLOBAL) {
+      if (cur_scope(&tchk->ty_table) == SCOPE_GLOBAL) {
         entry = var_table_create_top_level_entry(&tchk->var_table,
                                                  VAR_TABLE_NS_NONE, enum_name);
       } else {

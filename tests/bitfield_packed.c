@@ -1,3 +1,4 @@
+// skip: not yet implemented
 // expected value: 0
 
 struct foo {
@@ -15,15 +16,23 @@ int main() {
     .c = 0
   };
 
-  if (f.a != 1) {
+  if (sizeof(f) != 1) {
     return 1;
   }
 
-  if (f.b != 3) {
+  unsigned *c = &f;
+  c[0] |= 0xFFFFFF80;
+
+  if (f.a != 1) {
     return 2;
   }
 
-  if (f.c != 0) {
+  if (f.b != 3) {
     return 3;
   }
+
+  if (f.c != 0) {
+    return 4;
+  }
 }
+

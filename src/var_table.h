@@ -3,8 +3,8 @@
 
 #include "alloc.h"
 
-#define SCOPE_GLOBAL (-1)
-#define SCOPE_PARAMS (0)
+#define SCOPE_GLOBAL (0)
+#define SCOPE_PARAMS (1)
 
 // namespacing (e.g `struct foo` and `union foo` are allowed as distinct types)
 enum var_table_ns {
@@ -29,21 +29,15 @@ struct var_table_entry {
 };
 
 struct var_table {
-  struct var_table_scope *first;
-  struct var_table_scope *last;
+  struct vector *scopes;
 
   struct arena_allocator *arena;
 };
 
 struct var_table_scope {
-  struct var_table_scope *pred;
-  struct var_table_scope *succ;
+  struct hashtbl *entries;
 
-  // vector of `var_table_entry`
-  // change to hash eventually?
-  struct vector *entries;
-
-  int scope;
+  size_t scope;
 };
 
 struct var_table var_table_create(struct arena_allocator *arena);

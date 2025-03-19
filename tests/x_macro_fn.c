@@ -21,7 +21,7 @@ int main() {
 
   #undef FIZZ
 
-  if (!BAR) {
+  if (BAR) {
     return 4;
   }
 }
