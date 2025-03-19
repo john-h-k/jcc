@@ -48,7 +48,7 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key);
 void *hashtbl_lookup_or_insert(struct hashtbl *hashtbl, const void *key, void *data);
 
 // given a pointer to data and should write to it
-typedef void *(hashtbl_data_fn)(void *data, void *metadata);
+typedef void hashtbl_data_fn(void *data, void *metadata);
 void *hashtbl_lookup_or_insert_with(struct hashtbl *hashtbl, const void *key, hashtbl_data_fn fn, void *metadata);
 
 // Often hash tables are keyed by either a standard C string, or a C string with

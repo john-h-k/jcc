@@ -1,101 +1,105 @@
 #include "var_table.h"
 
+#include "alloc.h"
+#include "hashtbl.h"
 #include "log.h"
 #include "util.h"
 #include "vector.h"
 
-static struct var_table_scope
-var_table_scope_create(struct var_table_scope *prev) {
-  struct var_table_scope var_table_scope = {
-      .succ = NULL,
-      .pred = prev,
-      .entries = vector_create(sizeof(struct var_table_entry)),
-      .scope = prev ? prev->scope + 1 : SCOPE_GLOBAL};
+struct var_key {
+  const char *identifier;
+  enum var_table_ns ns;
+};
 
-  return var_table_scope;
+static void hash_var_key(struct hasher *hasher, const void *value) {
+  const struct var_key *s = value;
+
+  // TODO: having parser/typechk used sized str would improve efficiency
+  hasher_hash_str(hasher, s->identifier);
+  hasher_hash_integer(hasher, s->ns, sizeof(s->ns));
+}
+
+static bool eq_var_key(const void *l, const void *r) {
+  const struct var_key *sl = l;
+  const struct var_key *sr = r;
+
+  if (sl->ns != sr->ns) {
+    return false;
+  }
+
+  return !strcmp(sl->identifier, sr->identifier);
+}
+
+static struct var_table_scope *var_table_scope_create(struct var_table *table,
+                                                      int scope) {
+  struct var_table_scope var_table_scope = {
+      .entries = hashtbl_create_in_arena(table->arena, sizeof(struct var_key),
+                                         sizeof(struct var_table_entry),
+                                         hash_var_key, eq_var_key),
+      .scope = scope};
+
+  return vector_push_back(table->scopes, &var_table_scope);
 }
 
 struct var_table var_table_create(struct arena_allocator *arena) {
   struct var_table var_table = {
       .arena = arena,
-      .first = arena_alloc(arena, sizeof(*var_table.first)),
-      .last = NULL};
+      .scopes = vector_create_in_arena(sizeof(struct var_table_scope), arena)};
 
-  *var_table.first = var_table_scope_create(NULL);
-  var_table.last = var_table.first;
+  var_table_scope_create(&var_table, SCOPE_GLOBAL);
 
   return var_table;
+}
+
+static struct var_table_entry *add_entry(struct var_table_scope *scope,
+                                         enum var_table_ns ns,
+                                         const char *name) {
+  struct var_key key = {.identifier = name, .ns = ns};
+
+  struct var_table_entry *entry =
+      hashtbl_lookup_or_insert(scope->entries, &key, NULL);
+  *entry =
+      (struct var_table_entry){.name = name, .ns = ns, .scope = scope->scope};
+
+  return entry;
 }
 
 struct var_table_entry *
 var_table_create_top_level_entry(struct var_table *var_table,
                                  enum var_table_ns ns, const char *name) {
-  struct var_table_scope *first = var_table->first;
-  struct var_table_entry entry = {
-     .ns = ns, .name = name, .scope = first->scope, .var = NULL, .var_ty = NULL};
+  struct var_table_scope *first = vector_head(var_table->scopes);
 
-  struct var_table_entry *p = vector_push_back(first->entries, &entry);
-
-  return p;
+  return add_entry(first, ns, name);
 }
 
 struct var_table_entry *var_table_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,
                                                const char *name) {
-  struct var_table_scope *last = var_table->last;
+  struct var_table_scope *last = vector_tail(var_table->scopes);
 
-  struct var_table_entry entry = {
-      .ns = ns,.name = name, .scope = last->scope, .var = NULL, .var_ty = NULL};
-
-  struct var_table_entry *p = vector_push_back(last->entries, &entry);
-
-  return p;
+  return add_entry(last, ns, name);
 }
 
-void var_table_free(struct var_table *var_table) {
-  struct var_table_scope *scope = var_table->first;
-  while (scope) {
-    vector_free(&scope->entries);
-
-    scope = scope->succ;
-  }
-
-  *var_table = (struct var_table){.first = NULL};
+void var_table_free(UNUSED struct var_table *var_table) {
+  // nop all arena alloc'd
 }
 
-// to show all entries
-// size_t num_entries = vector_length(var_table->entries);
-// for (size_t i = 0; i < num_entries; i++) {
-//   struct var_table_entry *entry = vector_get(var_table->entries, i);
-//   err("%s @ %d", entry->name, entry->scope);
-// }
-
-int cur_scope(struct var_table *var_table) { return var_table->last->scope; }
+int cur_scope(struct var_table *var_table) {
+  struct var_table_scope *last = vector_tail(var_table->scopes);
+  DEBUG_ASSERT(last->scope + 1 == vector_length(var_table->scopes), "scope + 1 (%zu) should eq len (%zu)", last->scope + 1, vector_length(var_table->scopes));
+  return last->scope;
+}
 
 void push_scope(struct var_table *var_table) {
-  struct var_table_scope *last = var_table->last;
-
-  last->succ = arena_alloc(var_table->arena, sizeof(*last->succ));
-  *last->succ = var_table_scope_create(last);
-
-  var_table->last = last->succ;
+  var_table_scope_create(var_table, cur_scope(var_table) + 1);
 }
 
 void pop_scope(struct var_table *var_table) {
-  struct var_table_scope *last = var_table->last;
 
-  DEBUG_ASSERT(last->scope != SCOPE_GLOBAL,
+  DEBUG_ASSERT(cur_scope(var_table) != SCOPE_GLOBAL,
                "popping global scope is never correct");
 
-  vector_free(&last->entries);
-
-  DEBUG_ASSERT(!last->succ, "popping var_table_scope but it has a `next` "
-                            "entry? should be impossible");
-
-  var_table->last = last->pred;
-
-  last->pred->succ = NULL;
-  last->pred = NULL;
+  vector_pop(var_table->scopes);
 }
 
 struct var_table_entry *
@@ -110,7 +114,7 @@ var_table_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
   }
 
   trace("couldn't find variable, creating new entry '%s' with scope '%d'", name,
-        var_table->last->scope);
+        cur_scope(var_table));
 
   return var_table_create_entry(var_table, ns, name);
 }
@@ -122,44 +126,17 @@ struct var_table_entry *var_table_get_entry(struct var_table *var_table,
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
 
-  struct var_table_scope *scope = var_table->last;
-  while (scope) {
-    size_t num_vars = vector_length(scope->entries);
+  for (ssize_t scope_idx = cur_scope(var_table); scope_idx >= SCOPE_GLOBAL; scope_idx--) {
+    struct var_table_scope *scope = vector_get(var_table->scopes, scope_idx);
 
-    for (size_t i = 0; i < num_vars; i++) {
-      struct var_table_entry *entry = vector_get(scope->entries, i);
+    struct var_key key = { .ns = ns, .identifier = name };
+    struct var_table_entry *entry = hashtbl_lookup(scope->entries, &key);
 
-      if (ns == entry->ns && !strcmp(entry->name, name)) {
-        trace("found '%s' at scope %d", entry->name, scope->scope);
-        return entry;
-      }
+    if (entry) {
+      return entry;
     }
-
-    scope = scope->pred;
   }
 
   trace("did not find entry for %s", name);
   return NULL;
-}
-
-void debug_print_entries(FILE *file, struct var_table *var_table,
-                         debug_print_entries_callback cb, void *metadata) {
-  fprintf(file, "var_table entries:\n");
-
-  struct var_table_scope *scope = var_table->last;
-  while (scope) {
-    size_t num_vars = vector_length(scope->entries);
-
-    for (size_t i = 0; i < num_vars; i++) {
-      struct var_table_entry *entry = vector_get(scope->entries, i);
-
-      if (cb) {
-        cb(file, entry, metadata);
-      } else {
-        fprintf(file, "entry %s\n @ %d\n", entry->name, entry->scope);
-      }
-    }
-
-    scope = scope->pred;
-  }
 }
