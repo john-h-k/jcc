@@ -3,6 +3,7 @@
 
 #include "preproc.h"
 #include "program.h"
+#include "util.h"
 
 enum lex_token_ty {
   LEX_TOKEN_TY_UNKNOWN,
