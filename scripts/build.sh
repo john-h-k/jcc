@@ -343,7 +343,7 @@ bootstrap() {
         exit -1
     fi
 
-    if ! cmake --build . --parallel 1; then
+    if ! cmake --build .; then
         echo -e "${BOLDRED}stage1 build fail${RESET}"
         exit -1
     fi

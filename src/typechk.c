@@ -893,7 +893,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 
   enum var_table_ns ns = var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
                              ? VAR_TABLE_NS_STRUCT
-                             : VAR_TABLE_NS_ENUM;
+                             : VAR_TABLE_NS_UNION;
   struct var_table_entry *entry =
       var_table_get_entry(&tchk->ty_table, ns, name);
 
@@ -992,7 +992,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   vector_free(&var_decls);
 
   ns = var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT ? VAR_TABLE_NS_STRUCT
-                                                        : VAR_TABLE_NS_ENUM;
+                                                        : VAR_TABLE_NS_UNION;
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
                        .scope = cur_scope(&tchk->ty_table)};
@@ -2199,7 +2199,7 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
     enum var_table_ns ns =
         var_ty->incomplete_aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
             ? VAR_TABLE_NS_STRUCT
-            : VAR_TABLE_NS_ENUM;
+            : VAR_TABLE_NS_UNION;
     struct var_table_entry *entry = var_table_get_entry(
         &tchk->ty_table, ns, var_ty->incomplete_aggregate.name);
 
