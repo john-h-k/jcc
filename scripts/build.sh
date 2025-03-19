@@ -222,7 +222,7 @@ mini-boostrap() {
         # src/hash.c
         # src/hashtbl.c
         # src/io.c
-        src/ir/build.c
+        # src/ir/build.c
         # src/ir/eliminate_phi.c
         # src/ir/ir.c
         # src/ir/prettyprint.c
@@ -230,8 +230,8 @@ mini-boostrap() {
         # src/ir/validate.c
         # src/ir/var_refs.c
         # src/lex.c
-        src/linux/elf.c
-        src/linux/link.c
+        # src/linux/elf.c
+        # src/linux/link.c
         # src/liveness.c
         src/log.c
         # src/lower.c

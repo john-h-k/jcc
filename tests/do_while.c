@@ -4,8 +4,10 @@ int main() {
   int b = 0;
 
   do {
-    a = a - 1;
-    b = b + 1;
+    do {
+      a = a - 1;
+      b = b + 1;
+    } while (0);
   } while (a);
 
   return b;

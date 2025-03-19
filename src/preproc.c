@@ -944,7 +944,7 @@ static void expand_token(struct preproc *preproc,
   }
 }
 
-static void preproc_append_tokens(struct preproc *preproc,
+UNUSED static void preproc_append_tokens(struct preproc *preproc,
                                   struct preproc_text *preproc_text,
                                   struct vector *tokens, struct vector *buffer,
                                   struct hashtbl *parents,
@@ -1160,12 +1160,19 @@ static bool try_expand_token(struct preproc *preproc,
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
     case PREPROC_DEFINE_VALUE_TY_TOKEN:
-      expand_token(preproc, preproc_text, &value->token, buffer, parents,
-                   flags);
+      // expand_token(preproc, preproc_text, &value->token, buffer, parents,
+      //              flags);
+
+      vector_push_back(preproc->unexpanded_buffer_tokens, &value->token);
       break;
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
-      preproc_append_tokens(preproc, preproc_text, value->vec, buffer, parents,
-                            flags);
+      // preproc_append_tokens(preproc, preproc_text, value->vec, buffer, parents,
+      //                       flags);
+
+      size_t num_tokens = vector_length(value->vec);
+      for (size_t i = num_tokens; i; i--) {        
+        vector_push_back(preproc->unexpanded_buffer_tokens, vector_get(value->vec, i - 1));
+      }
       break;
     }
     case PREPROC_DEFINE_VALUE_TY_MACRO_FN: {
@@ -1646,7 +1653,10 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         "#else\n"
         "\n"
+        // for some reason apple predefines it
+        "#if !defined(__APPLE__) && !defined(__MACH__)\n"
         "typedef void * va_list;\n"
+        "#endif\n"
         "\n"
         "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
         "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
