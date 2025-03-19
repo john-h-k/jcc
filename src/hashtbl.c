@@ -410,9 +410,5 @@ bool hashtbl_eq_sized_str(const void *l, const void *r) {
   const struct sized_str *sl = l;
   const struct sized_str *sr = r;
 
-  if (sl->len != sr->len) {
-    return false;
-  }
-
-  return strncmp(sl->str, sr->str, sl->len) == 0;
+  return szstreq(*sl, *sr);
 }

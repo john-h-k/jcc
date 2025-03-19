@@ -43,7 +43,7 @@ static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
   for (size_t i = 0; i < num_refs; i++) {
     struct var_ref *ref = vector_get(var_refs->refs, i);
 
-    if (ref->key.scope != key->scope || strcmp(ref->key.name, key->name) != 0) {
+    if (ref->key.scope != key->scope || !szstreq(ref->key.name, key->name)) {
       continue;
     }
 

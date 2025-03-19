@@ -170,9 +170,8 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
-static const char *process_raw_string(const struct lexer *lexer,
-                                      const struct lex_token *token,
-                                      size_t *str_len) {
+static struct sized_str process_raw_string(const struct lexer *lexer,
+                                    const struct lex_token *token) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
@@ -193,7 +192,7 @@ static const char *process_raw_string(const struct lexer *lexer,
                          ? 2
                          : 1;
 
-  *str_len = 0;
+  size_t str_len = 0;
   bool char_escaped = false;
 
   // BUG: JCC fails with this
@@ -309,11 +308,11 @@ static const char *process_raw_string(const struct lexer *lexer,
     char_escaped = !char_escaped && text[i] == '\\';
   }
 
-  *str_len = vector_byte_size(buff);
+  str_len = vector_byte_size(buff);
 
   PUSH_CHAR(0);
 
-  return vector_head(buff);
+  return (struct sized_str){.str = vector_head(buff), .len = str_len};
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
@@ -564,14 +563,13 @@ void consume_token(struct lexer *lexer, struct lex_token token) {
   lexer->last_text_pos = token.span.end;
 }
 
-const char *strlike_associated_text(const struct lexer *lexer,
-                                    const struct lex_token *token,
-                                    size_t *str_len) {
-  return process_raw_string(lexer, token, str_len);
+struct sized_str strlike_associated_text(const struct lexer *lexer,
+                                         const struct lex_token *token) {
+  return process_raw_string(lexer, token);
 }
 
-const char *associated_text(const struct lexer *lexer,
-                            const struct lex_token *token) {
+struct sized_str associated_text(const struct lexer *lexer,
+                                 const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
@@ -592,10 +590,10 @@ const char *associated_text(const struct lexer *lexer,
     char *p = arena_alloc(lexer->arena, len + 1);
     memcpy(p, token->text, len);
     p[len] = '\0';
-    return p;
+    return (struct sized_str){p, len};
   }
   case LEX_TOKEN_TY_ELLIPSIS:
-    return "...";
+    return (struct sized_str){"...", 3};
   default:
     BUG("associated text did not make sense for token '%s'",
         token_name(lexer, token));

@@ -54,11 +54,6 @@ void *hashtbl_lookup_or_insert_with(struct hashtbl *hashtbl, const void *key, ha
 // Often hash tables are keyed by either a standard C string, or a C string with
 // an explicit size so we provide convenience methods for them
 
-struct sized_str {
-  const char *str;
-  size_t len;
-};
-
 void hashtbl_hash_str(struct hasher *hasher, const void *obj);
 bool hashtbl_eq_str(const void *l, const void *r);
 
