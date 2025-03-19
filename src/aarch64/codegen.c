@@ -2419,6 +2419,10 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
 }
 
 static void codegen_fprintf(FILE *file, const char *format, ...) {
+#ifdef __JCC__
+  TODO("jcc va_arg");
+#else
+
   va_list list;
   va_start(list, format);
   while (format[0] != '\0') {
@@ -2706,6 +2710,7 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       BUG("unrecognised format starting '%%%s'", format);
     }
   }
+#endif
 }
 
 static void

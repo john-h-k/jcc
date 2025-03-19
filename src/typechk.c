@@ -4029,16 +4029,25 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
     if (init->init->ty == AST_INIT_TY_EXPR && !init->designator_list &&
         (member_var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
          member_var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
-      td_init_list_init = (struct td_init_list_init){
-          .designator_list = NULL,
-          .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
+      // if the next value is the same type as the element, it initialises the whole thing
+      // FIXME: we are double typing this expression because it gets retyped in the branches
+      struct td_expr typed = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
-      *td_init_list_init.init = (struct td_init){
-          .ty = TD_INIT_TY_INIT_LIST,
-          .init_list = type_init_list_for_aggregate_or_array(
-              tchk, &member_var_ty, init_list, mode, i, false)};
+      if (td_var_ty_eq(tchk, &member_var_ty, &typed.var_ty)) {
+        td_init_list_init =
+            type_init_list_init(tchk, var_ty, &member_var_ty, init, mode);
+      } else {
+        td_init_list_init = (struct td_init_list_init){
+            .designator_list = NULL,
+            .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
-      i += td_init_list_init.init->init_list.num_inits - 1;
+        *td_init_list_init.init = (struct td_init){
+            .ty = TD_INIT_TY_INIT_LIST,
+            .init_list = type_init_list_for_aggregate_or_array(
+                tchk, &member_var_ty, init_list, mode, i, false)};
+
+        i += td_init_list_init.init->init_list.num_inits - 1;
+      }
     } else {
       td_init_list_init =
           type_init_list_init(tchk, var_ty, &member_var_ty, init, mode);

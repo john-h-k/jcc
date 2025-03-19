@@ -196,7 +196,7 @@ mini-boostrap() {
     jcc_flags=""
 
     clang_files=(
-        src/aarch64/codegen.c
+        # src/aarch64/codegen.c
         # src/aarch64/emit.c
         src/aarch64/emitter.c
         # src/aarch64/lower.c
@@ -239,12 +239,12 @@ mini-boostrap() {
         # src/macos/link.c
         # src/macos/mach-o.c
         src/main.c
-        src/opts/cnst_branches.c
-        src/opts/cnst_fold.c
-        src/opts/inline.c
-        src/opts/instr_comb.c
+        # src/opts/cnst_branches.c
+        # src/opts/cnst_fold.c
+        # src/opts/inline.c
+        # src/opts/instr_comb.c
         src/opts/opts.c
-        src/opts/promote.c
+        # src/opts/promote.c
         src/parse.c
         src/preproc.c
         # src/profile.c

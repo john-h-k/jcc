@@ -1256,6 +1256,27 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
   false_br->ty = IR_OP_TY_BR;
   false_br->var_ty = IR_VAR_TY_NONE;
 
+  // need to handle the case of `foo ? aggregate : aggregate`
+  // in which case we want to do a phi of the _addresses_ not the loads themselves
+
+  bool gen_load = false;
+  struct ir_var_ty load_ty;
+  if (false_op->ty == IR_OP_TY_LOAD && true_op->ty == IR_OP_TY_LOAD) {
+    DEBUG_ASSERT(ir_var_ty_eq(irb->unit, &false_op->var_ty, &true_op->var_ty), "expected branches to have same ty");
+
+    gen_load = true;
+    load_ty = false_op->var_ty;
+
+    struct ir_op *false_addr = ir_build_addr(irb->func, false_op);
+    struct ir_op *true_addr = ir_build_addr(irb->func, true_op);
+
+    ir_detach_op(irb->func, false_op);
+    ir_detach_op(irb->func, true_op);
+
+    false_op = false_addr;
+    true_op = true_addr;
+  }
+
   struct ir_op *phi = ir_insert_phi(irb->func, end_bb, var_ty);
   phi->phi = (struct ir_op_phi){
       .num_values = 2,
@@ -1268,8 +1289,20 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
       .basicblock = true_op->stmt->basicblock, .value = true_op};
 
   struct ir_stmt *end_stmt = ir_alloc_stmt(irb->func, end_bb);
-
   *stmt = end_stmt;
+
+  if (gen_load) {
+    phi->var_ty = IR_VAR_TY_POINTER;
+
+    struct ir_op *load = ir_append_op(irb->func, end_stmt, IR_OP_TY_LOAD, load_ty);
+    load->load = (struct ir_op_load){
+      .ty = IR_OP_LOAD_TY_ADDR,
+      .addr = phi
+    };
+
+    return load;
+  }
+
   return phi;
 }
 
@@ -3733,64 +3766,6 @@ static size_t get_designator_offset(struct ir_unit *iru,
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty);
-
-// UNUSED static struct ir_var_value
-// build_ir_value_for_struct_init_list(struct ir_unit *iru,
-//                                     struct td_init_list *init_list,
-//                                     const struct td_var_ty *var_ty) {
-
-//   // debug_assert(var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-//   //                  var_ty->aggregate.ty == TD_TY__AGGREGATE_TY_STRUCT,
-//   //              "non stuct init list");
-
-//   size_t num_elements = var_ty->array.size;
-
-//   if (!num_elements) {
-//     bug("empty structs are GNU extension");
-//   }
-
-//   struct ir_var_value_list value_list = {
-//       .num_values = init_list->num_inits,
-//       .values = arena_alloc(iru->arena,
-//                             sizeof(*value_list.values) *
-//                             init_list->num_inits),
-//       .offsets = arena_alloc(iru->arena, sizeof(*value_list.offsets) *
-//                                              init_list->num_inits)};
-
-//   size_t member_idx = 0;
-//   for (size_t i = 0; i < num_elements; i++) {
-//     debug_assert(i < num_elements, "too many items in struct init-list");
-
-//     struct td_init_list_init *init = &init_list->inits[i];
-
-//     size_t offset;
-//     struct td_var_ty member_ty;
-//     if (i < init_list->num_inits && init->designator_list->num_designators)
-//     {
-//       offset = get_designator_offset(iru, var_ty,
-//                                      init_list->inits[i].designator_list,
-//                                      &member_idx, &member_ty);
-//     } else {
-//       offset = get_member_index_offset(iru, var_ty, member_idx,
-//       &member_ty);
-//     }
-//     member_idx++;
-
-//     struct ir_var_value value;
-//     if (i < init_list->num_inits) {
-//       value = build_ir_for_var_value(iru, init->init, &member_ty);
-//     } else {
-//       value = build_ir_for_zero_var(iru, &member_ty);
-//     }
-
-//     value_list.values[i] = value;
-//     value_list.offsets[i] = offset;
-//   }
-
-//   return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-//                                .var_ty = var_ty_for_td_var_ty(iru, var_ty),
-//                                .value_list = value_list};
-// }
 
 enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_STRUCT,
