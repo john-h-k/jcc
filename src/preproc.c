@@ -1184,6 +1184,7 @@ static bool try_expand_token(struct preproc *preproc,
       if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
           open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
         vector_push_back(buffer, &open);
+        hashtbl_remove(parents, &ident);
         return false;
       }
 
@@ -1441,6 +1442,8 @@ static bool try_expand_token(struct preproc *preproc,
     }
     }
 
+    hashtbl_remove(parents, &ident);
+
     if (free_parents) {
       hashtbl_free(&parents);
     }
@@ -1635,11 +1638,13 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         // libc
         "#ifdef __GLIBC__\n"
-        "typedef void * __gnuc_va_list;\n"
-        "#define __GNUC_VA_LIST\n"
         "#endif\n"
         "\n"
-        "#ifndef __need___va_list\n"
+        "#ifdef __need___va_list\n"
+        "typedef void * __gnuc_va_list;\n"
+        "#define __GNUC_VA_LIST\n"
+        "\n"
+        "#else\n"
         "\n"
         "typedef void * va_list;\n"
         "\n"
@@ -1661,7 +1666,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_end(ap)\n"
         "#define va_arg(ap, type)\n"
         "#define va_copy(dest, src) \n"
-        // "#endif\n"
+        "#endif\n"
         "#endif\n";
 
     *content = STDARG_CONTENT;

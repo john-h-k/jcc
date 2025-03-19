@@ -1696,6 +1696,10 @@ static void print_bb_symbol(FILE *file, struct ir_basicblock *basicblock) {
 
 static void codegen_fprintf(const struct codegen_debug_state *state,
                             const char *format, ...) {
+#ifdef __JCC__
+  TODO("jcc va_arg");
+#else
+
   FILE *file = state->file;
 
   va_list list;
@@ -1764,6 +1768,7 @@ static void codegen_fprintf(const struct codegen_debug_state *state,
       BUG("unrecognised format starting '%%%s'", format);
     }
   }
+#endif
 }
 
 static void debug_print_op_imm(const struct codegen_debug_state *state,

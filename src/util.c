@@ -22,11 +22,13 @@ void util_debug_assert(bool b, const char *cond, const char *func,
     fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
             line, func, cond);
 
+#ifndef __JCC__
     va_list v;
     va_start(v, msg);
     vfprintf(stderr, msg, v);
     fprintf(stderr, "\n");
     va_end(v);
+#endif
     EXIT_FAIL(-1);
   }
 }
