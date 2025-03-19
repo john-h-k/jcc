@@ -11,10 +11,6 @@ struct foo {
 };
 
 int main() {
-  // TODO: scalar compound literal
-  // int a = (int){0};
-  // int *b = &(((int){10}));
-
   struct foo f = (struct foo){
     .a = 100,
     .b = (struct bar){
@@ -22,20 +18,12 @@ int main() {
     }
   };
 
-  // if (a) {
-  //   return 1;
-  // }
-
-  // if (*b != 10) {
-  //   return 2;
-  // }
-
   if (f.a != 100) {
-    return 3;
+    return 1;
   }
 
   if (f.b.value[0] != 'h') {
-    return 4;
+    return 2;
   }
 
   struct foo *p = &f;

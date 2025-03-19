@@ -177,6 +177,8 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   DEF_BUILTIN_IDENT("__extension__", "");
 
+  DEF_BUILTIN_NUM("NDEBUG", "1");
+
   DEF_BUILTIN_NUM("__JCC__", "1");
   DEF_BUILTIN_NUM("__jcc__", "1");
 
@@ -309,7 +311,7 @@ enum preproc_create_result preproc_create(struct program *program,
     debug("built special macro table (len=%zu)", hashtbl_size(SPECIAL_MACROS));
   }
 
-  info("beginning lex stage");
+  info("beginning preproc stage");
 
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
@@ -578,16 +580,30 @@ static void preproc_next_raw_token(struct preproc *preproc,
 
   switch (c) {
   case 'L':
-    if (end.idx < preproc_text->len) {
-      c = preproc_text->text[end.idx + 1];
+    if (end.idx + 1 < preproc_text->len) {
+      char next = preproc_text->text[end.idx + 1];
 
-      if (c == '<' || c == '"' || c == '\'') {
+      if (next == '<' || next == '"' || next == '\'') {
+        c = next;
         next_col(&end);
         goto string_literal;
       }
     }
 
-    break;
+    // BUG: doesn't work on JCC
+    // goto not_punctuator;
+
+    while (end.idx < preproc_text->len &&
+           is_identifier_char(preproc_text->text[end.idx])) {
+      next_col(&end);
+    }
+
+    token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
+    token->text = &preproc_text->text[start.idx];
+    token->span = (struct text_span){.start = start, .end = end};
+
+    preproc_text->pos = end;
+    return;
 
   case '<':
   case '"':
@@ -607,10 +623,17 @@ static void preproc_next_raw_token(struct preproc *preproc,
 
     // move forward while
     bool char_escaped = false;
-    for (size_t i = end.idx;
-         i < preproc_text->len &&
-         !(!char_escaped && preproc_text->text[i] == end_char);
-         i++) {
+
+    // BUG: doesn't work on JCC
+    // for (size_t i = end.idx;
+    //      i < preproc_text->len &&
+    //      !(!char_escaped && preproc_text->text[i] == end_char);
+    //      i++) {
+    for (size_t i = end.idx;; i++) {
+      if (!(i < preproc_text->len &&
+            !(!char_escaped && preproc_text->text[i] == end_char))) {
+        break;
+      }
       // next char is escaped if this char is a non-escaped backslash
       char_escaped = !char_escaped && preproc_text->text[i] == '\\';
       next_col(&end);
@@ -944,11 +967,11 @@ static void expand_token(struct preproc *preproc,
   }
 }
 
-UNUSED static void preproc_append_tokens(struct preproc *preproc,
-                                  struct preproc_text *preproc_text,
-                                  struct vector *tokens, struct vector *buffer,
-                                  struct hashtbl *parents,
-                                  enum preproc_expand_token_flags flags) {
+UNUSED static void
+preproc_append_tokens(struct preproc *preproc,
+                      struct preproc_text *preproc_text, struct vector *tokens,
+                      struct vector *buffer, struct hashtbl *parents,
+                      enum preproc_expand_token_flags flags) {
   size_t num_tokens = vector_length(tokens);
   for (size_t i = num_tokens; i; i--) {
     struct preproc_token *def_tok = vector_get(tokens, i - 1);
@@ -1004,9 +1027,10 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
       BUG("can only concat L with string/char literal");
     }
 
-    char *new = arena_alloc(preproc->arena, llen + rlen);
+    char *new = arena_alloc(preproc->arena, llen + rlen + 1);
     memcpy(new, token->text, llen);
     memcpy(new + llen, last->text, rlen);
+    new[llen + rlen] = '\0';
 
     struct preproc_token new_tok = {
         .ty = PREPROC_TOKEN_TY_STRING_LITERAL,
@@ -1166,12 +1190,14 @@ static bool try_expand_token(struct preproc *preproc,
       vector_push_back(preproc->unexpanded_buffer_tokens, &value->token);
       break;
     case PREPROC_DEFINE_VALUE_TY_TOKEN_VEC: {
-      // preproc_append_tokens(preproc, preproc_text, value->vec, buffer, parents,
+      // preproc_append_tokens(preproc, preproc_text, value->vec, buffer,
+      // parents,
       //                       flags);
 
       size_t num_tokens = vector_length(value->vec);
-      for (size_t i = num_tokens; i; i--) {        
-        vector_push_back(preproc->unexpanded_buffer_tokens, vector_get(value->vec, i - 1));
+      for (size_t i = num_tokens; i; i--) {
+        vector_push_back(preproc->unexpanded_buffer_tokens,
+                         vector_get(value->vec, i - 1));
       }
       break;
     }
@@ -1208,13 +1234,18 @@ static bool try_expand_token(struct preproc *preproc,
         }
 
         if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-            (next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE || next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET)) {
+            (next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE ||
+             next.punctuator.ty ==
+                 PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET)) {
           brace_depth++;
 
           vector_push_back(arg, &next);
           skip_trivial = false;
         } else if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-            (next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE || next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET)) {
+                   (next.punctuator.ty ==
+                        PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE ||
+                    next.punctuator.ty ==
+                        PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET)) {
           if (!brace_depth) {
             BUG("more close braces than valid");
           }
@@ -1224,7 +1255,8 @@ static bool try_expand_token(struct preproc *preproc,
           vector_push_back(arg, &next);
           skip_trivial = false;
         } else if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
-            next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
+                   next.punctuator.ty ==
+                       PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
           depth++;
 
           vector_push_back(arg, &next);
@@ -1246,7 +1278,8 @@ static bool try_expand_token(struct preproc *preproc,
           }
 
           vector_push_back(arg, &next);
-        } else if (depth == 1 && !brace_depth && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+        } else if (depth == 1 && !brace_depth &&
+                   next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                    next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
           arg = vector_create_in_arena(sizeof(struct preproc_token),
                                        preproc->arena);
@@ -1257,7 +1290,8 @@ static bool try_expand_token(struct preproc *preproc,
           // strip leading whitespace
           skip_trivial = true;
         } else {
-          if (!skip_trivial || (!token_is_trivial(&next) && next.ty != PREPROC_TOKEN_TY_NEWLINE)) {
+          if (!skip_trivial || (!token_is_trivial(&next) &&
+                                next.ty != PREPROC_TOKEN_TY_NEWLINE)) {
             vector_push_back(arg, &next);
             skip_trivial = false;
           }
@@ -1339,8 +1373,7 @@ static bool try_expand_token(struct preproc *preproc,
               } else {
                 size_t num_arg_tokens = vector_length(arg_tokens);
                 for (size_t k = num_arg_tokens; k; k--) {
-                  vector_push_back(expanded_fn, vector_get(arg_tokens, k -
-                  1));
+                  vector_push_back(expanded_fn, vector_get(arg_tokens, k - 1));
                 }
                 // for (size_t k = 0; k < num_arg_tokens; k++) {
                 //   vector_push_back(expanded_fn, vector_get(arg_tokens, k));
@@ -1685,8 +1718,8 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_arg(ap, type) __builtin_va_arg(ap, type)\n"
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
         // "typedef __builtin_va_list va_list;\n"
-        // TEMP:        
-        
+        // TEMP:
+
         "#undef va_end\n"
         "#undef va_arg\n"
         "#undef va_copy\n"
@@ -2603,14 +2636,25 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
       } else if (token_streq(directive, "warning")) {
         EXPANDED_DIR_TOKENS();
 
+        bool wrote = false;
+        
         // TODO: emit diagnostic (once we have those...)
-        warnsl("preproc warning: ");
         for (size_t i = 0; i < num_directive_tokens; i++) {
           struct preproc_token *warn_token = vector_get(directive_tokens, i);
+
+          if (num_directive_tokens == 1 && !strncmp(warn_token->text, "\"Unsupported compiler detected\"", strlen("\"Unsupported compiler detected\""))) {
+            // ignore
+            break;
+          }
+
+          wrote = true;
           slogsl("%.*s", (int)text_span_len(&warn_token->span),
                  warn_token->text);
         }
-        slogsl("\n");
+
+        if (wrote) {
+          slogsl("\n");
+        }
       } else {
         TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
              directive.text);
@@ -2643,10 +2687,11 @@ static void add_escaped_str(struct vector *buf, const char *str, size_t len) {
   for (size_t i = 0; i < len; i++) {
     char ch = str[i];
 
-#define ADD_ESCAPED(esc, c)                                                       \
+#define ADD_ESCAPED(esc, c)                                                    \
   case esc: {                                                                  \
+    char v = c;                                                                \
     vector_push_back(buf, &slash);                                             \
-    vector_push_back(buf, &(char){c});                                                 \
+    vector_push_back(buf, &v);                                                 \
     break;                                                                     \
   }
 

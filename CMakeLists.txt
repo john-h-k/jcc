@@ -64,10 +64,10 @@ set(
   src/aarch64/emitter.c
 
   src/x64.c
-  src/x64/codegen.c
-  src/x64/lower.c
-  src/x64/emit.c
-  src/x64/emitter.c
+  # src/x64/codegen.c
+  # src/x64/lower.c
+  # src/x64/emit.c
+  # src/x64/emitter.c
 
   src/rv32i.c
   src/rv32i/codegen.c
@@ -94,12 +94,14 @@ set(
 # build for all platforms (support cross compilation)
 # TODO: add a more granular system for including targets
 
-if("$ENV{BOOTSTRAP}" STREQUAL "1")
-  CMAKE_FORCE_C_COMPILER(jcc JCC)
+if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
+    set(CMAKE_C_COMPILER_ID "JCC" CACHE STRING "Custom compiler ID" FORCE)
 endif()
 
 if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-  add_definitions(-DJCC_ALL)
+  # add_definitions(-DJCC_ALL)
+  add_definitions(-DJCC_AARCH64)
+  add_definitions(-DJCC_RV32I)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -122,6 +124,7 @@ endif()
 
 if(MSVC)
   add_compile_option(/W4 /WX)
+elseif(CMAKE_C_COMPILER_ID STREQUAL "JCC")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
   message(STATUS "Building with AppleClang")
 

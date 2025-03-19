@@ -20,7 +20,7 @@ struct preproc_create_args {
   const char **sys_include_paths;
 
   size_t num_include_paths;
-  const char **include_paths;
+  char **include_paths;
 
   // for debugging: fixes the value of __TIME__ and __DATE__
   const char *fixed_timestamp;
