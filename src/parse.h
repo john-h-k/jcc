@@ -611,9 +611,19 @@ struct ast_compound_literal {
   struct text_span span;
 };
 
+struct ast_generic {
+  struct ast_expr *ctrl_expr;
+
+  size_t num_associations;
+  struct ast_generic_association *associations;
+
+  struct text_span span;
+};
+
 enum ast_expr_ty {
   AST_EXPR_TY_INVALID,
 
+  AST_EXPR_TY_GENERIC,
   AST_EXPR_TY_TERNARY,
   AST_EXPR_TY_CALL,
   AST_EXPR_TY_UNARY_OP,
@@ -634,6 +644,7 @@ struct ast_expr {
   enum ast_expr_ty ty;
 
   union {
+    struct ast_generic generic;
     struct ast_ternary ternary;
     struct ast_sizeof size_of;
     struct ast_alignof align_of;
@@ -652,6 +663,25 @@ struct ast_expr {
 
   struct text_span span;
 };
+
+
+enum ast_generic_association_ty {
+  AST_GENERIC_ASSOCIATION_TY_TYPE_NAME,
+  AST_GENERIC_ASSOCIATION_TY_DEFAULT,
+};
+
+struct ast_generic_association {
+  enum ast_generic_association_ty ty;
+
+  struct ast_expr expr;
+
+  union {
+    struct ast_type_name type_name;
+  };
+
+  struct text_span span;
+};
+
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
  * where each declaration is `<name>` or `<name> = <expr>` */

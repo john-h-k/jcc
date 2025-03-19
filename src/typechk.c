@@ -135,6 +135,140 @@ bool td_var_ty_is_fp_ty(const struct td_var_ty *ty) {
   }
 }
 
+enum td_var_ty_compatible_flags {
+  TD_VAR_TY_COMPATIBLE_FLAG_NONE = 0,
+  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT = 1 << 0
+};
+
+static bool td_var_ty_compatible(struct typechk *tchk,
+                                 const struct td_var_ty *l,
+                                 const struct td_var_ty *r,
+                                 enum td_var_ty_compatible_flags flags) {
+  struct td_var_ty left = *l;
+
+  if (flags & TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT) {
+    // arrays and functions decay to pointers
+    // const/volatile/restrict qualifiers stripped
+
+    left.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
+
+    if (left.ty == TD_VAR_TY_TY_ARRAY) {
+      left = td_var_ty_make_pointer(tchk, left.array.underlying,
+                                    TD_TYPE_QUALIFIER_FLAG_NONE);
+    } else if (left.ty == TD_VAR_TY_TY_FUNC) {
+      left = td_var_ty_make_pointer(tchk, &left, TD_TYPE_QUALIFIER_FLAG_NONE);
+    }
+  }
+
+  if (left.type_qualifiers != r->type_qualifiers) {
+    return false;
+  }
+
+  if (left.ty != r->ty) {
+    // possible bug source: what if one is incomplete aggregate and one is
+    // complete aggregate? this will return false but maybe shouldn't
+    return false;
+  }
+
+  switch (left.ty) {
+  case TD_VAR_TY_TY_UNKNOWN:
+    return true;
+  case TD_VAR_TY_TY_VOID:
+  case TD_VAR_TY_TY_VARIADIC:
+    BUG("doesn't make sense")
+  case TD_VAR_TY_TY_WELL_KNOWN:
+    return left.well_known == r->well_known;
+  case TD_VAR_TY_TY_FUNC: {
+    struct td_ty_func l_func = left.func;
+    struct td_ty_func r_func = r->func;
+
+    if (!td_var_ty_compatible(tchk, l_func.ret, r_func.ret,
+                              TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
+      return false;
+    }
+
+    if (l_func.ty == TD_TY_FUNC_TY_UNKNOWN_ARGS ||
+        r_func.ty == TD_TY_FUNC_TY_UNKNOWN_ARGS) {
+      // TODO: absolute minefield. from C spec
+      //
+      //   * one is an old-style (parameter-less) definition, the other has a
+      //   parameter list,
+      //     the parameter list does not use an ellipsis and each parameter is
+      //     compatible (after function parameter type adjustment) with the
+      //     corresponding old-style parameter after default argument promotions
+      //
+      //   * one is an old-style (parameter-less) declaration, the other has a
+      //   parameter list, the parameter list does not use an ellipsis,
+      //     and all parameters (after function parameter type adjustment) are
+      //     unaffected by default argument promotions
+
+      return true;
+    }
+
+    if (l_func.ty != r_func.ty) {
+      return false;
+    }
+
+    if (l_func.num_params != r_func.num_params) {
+      return false;
+    }
+
+    size_t num_params = l_func.num_params;
+    for (size_t i = 0; i < num_params; i++) {
+      if (!td_var_ty_compatible(tchk, &l_func.params[i].var_ty,
+                                &r_func.params[i].var_ty,
+                                TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+  case TD_VAR_TY_TY_POINTER: {
+    struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
+    struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
+    return td_var_ty_compatible(tchk, &l_underlying, &r_underlying,
+                                TD_VAR_TY_COMPATIBLE_FLAG_NONE);
+  }
+  case TD_VAR_TY_TY_ARRAY: {
+    // unknown size array type is turned to pointer, but we don't know how to
+    // distinguish that from normal pointer, so this is wrong there as it should
+    // do `if (one_is_pointer) { return true }`
+    if (l->array.size != r->array.size) {
+      return false;
+    }
+
+    struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
+    struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
+    return td_var_ty_compatible(tchk, &l_underlying, &r_underlying,
+                                TD_VAR_TY_COMPATIBLE_FLAG_NONE);
+  }
+  case TD_VAR_TY_TY_AGGREGATE: {
+    struct td_ty_aggregate l_agg = l->aggregate;
+    struct td_ty_aggregate r_agg = r->aggregate;
+
+    if (l_agg.ty != r_agg.ty) {
+      return false;
+    }
+
+    // aggregate types are the same iff they have the same name or come from the
+    // same declaration we give anonymous types a name per-declaration
+    return !strcmp(l_agg.name, r_agg.name);
+  }
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE: {
+    // same logic as for aggregate
+    struct td_ty_incomplete_aggregate l_agg = l->incomplete_aggregate;
+    struct td_ty_incomplete_aggregate r_agg = r->incomplete_aggregate;
+
+    if (l_agg.ty != r_agg.ty) {
+      return false;
+    }
+
+    return !strcmp(l_agg.name, r_agg.name);
+  }
+  }
+}
+
 // FIXME: consider qualifiers, and "compatible" types rather than just equal
 // this method likely still needed, but most consumers of it care about
 // "compatible"
@@ -189,11 +323,13 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
     // cast never needed for actual array?
     return true;
-  case TD_VAR_TY_TY_POINTER:
+  case TD_VAR_TY_TY_POINTER: {
+    // FIXME: why did i change this to this
     return r->ty == TD_VAR_TY_TY_POINTER;
     // struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
     // struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
     // return td_var_ty_eq(tchk, &l_underlying, &r_underlying);
+  }
 
   case TD_VAR_TY_TY_VARIADIC:
     return true;
@@ -2572,6 +2708,86 @@ type_compound_literal(struct typechk *tchk,
                                       &compound_literal->init_list, mode)}};
 }
 
+static struct td_expr type_generic(struct typechk *tchk,
+                                   const struct ast_generic *generic) {
+  // NOTE: ctrl_expr is never evaluated, so gets discarded here
+
+  struct td_expr ctrl =
+      type_expr(tchk, TYPE_EXPR_FLAGS_NONE, generic->ctrl_expr);
+
+  // do a first pass through to validate
+  // TODO: also validate for duplicate types (not just duplicate `default`)
+
+  struct ast_generic_association *selected_association = NULL;
+  struct ast_generic_association *default_association = NULL;
+
+  for (size_t i = 0; i < generic->num_associations; i++) {
+    struct ast_generic_association *association = &generic->associations[i];
+
+    switch (association->ty) {
+    case AST_GENERIC_ASSOCIATION_TY_TYPE_NAME: {
+      struct td_var_ty assoc_var_ty =
+          type_type_name(tchk, &association->type_name);
+
+      if (td_var_ty_compatible(tchk, &ctrl.var_ty, &assoc_var_ty,
+                               TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+        if (selected_association) {
+          tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(
+                  COMPATIBLE_GENERIC_ASSOCIATIONS,
+                  compatible_generic_associations, association->span,
+                  MK_INVALID_TEXT_POS(0),
+                  "multiple associations in '_Generic' matched"));
+
+          return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                                  .var_ty = TD_VAR_TY_UNKNOWN};
+        } else {
+          selected_association = association;
+        }
+      }
+      break;
+    }
+    case AST_GENERIC_ASSOCIATION_TY_DEFAULT:
+      if (default_association) {
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                DUPLICATE_GENERIC_DEFAULT, duplicate_generic_default,
+                association->span, MK_INVALID_TEXT_POS(0),
+                "duplicate 'default' expression in '_Generic'"));
+
+        return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                                .var_ty = TD_VAR_TY_UNKNOWN};
+      } else {
+        default_association = association;
+      }
+      break;
+    }
+  }
+
+  if (!selected_association) {
+    if (!default_association) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              DUPLICATE_GENERIC_DEFAULT, duplicate_generic_default,
+              generic->span, MK_INVALID_TEXT_POS(0),
+              "no association matched and no default found"));
+
+      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
+                              .var_ty = TD_VAR_TY_UNKNOWN};
+    }
+
+    selected_association = default_association;
+  }
+
+  return type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &selected_association->expr);
+}
+
 static struct td_expr type_expr(struct typechk *tchk,
                                 enum type_expr_flags flags,
                                 const struct ast_expr *expr) {
@@ -2581,6 +2797,9 @@ static struct td_expr type_expr(struct typechk *tchk,
   case AST_EXPR_TY_INVALID:
     BUG("INVALID expr type should not reach typechk (should trigger diagnostic "
         "-> trigger parse fail)");
+    break;
+  case AST_EXPR_TY_GENERIC:
+    td_expr = type_generic(tchk, &expr->generic);
     break;
   case AST_EXPR_TY_TERNARY:
     td_expr = type_ternary(tchk, &expr->ternary);
@@ -4029,9 +4248,12 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
     if (init->init->ty == AST_INIT_TY_EXPR && !init->designator_list &&
         (member_var_ty.ty == TD_VAR_TY_TY_AGGREGATE ||
          member_var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
-      // if the next value is the same type as the element, it initialises the whole thing
-      // FIXME: we are double typing this expression because it gets retyped in the branches
-      struct td_expr typed = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
+      // if the next value is the same type as the element, it initialises the
+      // whole thing
+      // FIXME: we are double typing this expression because it gets retyped in
+      // the branches
+      struct td_expr typed =
+          type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
       if (td_var_ty_eq(tchk, &member_var_ty, &typed.var_ty)) {
         td_init_list_init =

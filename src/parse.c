@@ -1579,7 +1579,6 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
                              cnst->span, MK_INVALID_TEXT_POS(0),
                              "invalid int literal"));
 
-
     cnst->int_value = 0;
     return true;
   }
@@ -1756,6 +1755,101 @@ static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   return false;
 }
 
+static bool
+parse_generic_association(struct parser *parser,
+                          struct ast_generic_association *generic_association) {
+  struct text_span start;
+
+  // need to parse kw first, because `parse_type_name` will parse `default` as
+  // an invalid type name successfully
+
+  if (parse_token(parser, LEX_TOKEN_TY_KW_DEFAULT, &start)) {
+    generic_association->ty = AST_GENERIC_ASSOCIATION_TY_DEFAULT;
+  } else {
+    generic_association->ty = AST_GENERIC_ASSOCIATION_TY_TYPE_NAME;
+
+    if (!parse_type_name(parser, &generic_association->type_name)) {
+      // HACK: get next token for err
+      // we need a more general way to say "next token" for diagnostic
+      struct lex_token err_tok;
+      peek_token(parser->lexer, &err_tok);
+
+      parser->result_ty = PARSE_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          parser->diagnostics,
+          MK_PARSER_DIAGNOSTIC(EXPECTED_TYPE_NAME, expected_type_name,
+                               err_tok.span, err_tok.span.start,
+                               "expected type-name to begin generic association"));
+
+      // 0 init so not in an invalid state
+      generic_association->type_name = (struct ast_type_name){0};
+      generic_association->span =
+          MK_TEXT_SPAN(start.start, err_tok.span.start);
+      return true;
+    }
+
+    start = generic_association->type_name.span;
+  }
+
+  parse_expected_token(parser, LEX_TOKEN_TY_COLON, start.start,
+                       "':' after generic association list type name", NULL);
+
+  parse_expected_expr(parser, &generic_association->expr,
+                      "expression after ':' in generic association list");
+
+  generic_association->span =
+      MK_TEXT_SPAN(start.start, generic_association->expr.span.end);
+  return true;
+}
+
+static bool parse_generic(struct parser *parser, struct ast_generic *generic) {
+  struct text_span start;
+
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_GENERIC, &start)) {
+    return false;
+  }
+
+  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start.start,
+                       "'(' after '_Generic' keyword", NULL);
+
+  generic->ctrl_expr = arena_alloc(parser->arena, sizeof(*generic->ctrl_expr));
+  parse_expected_expr(parser, generic->ctrl_expr,
+                      "expression after '_Generic' keyword");
+
+  parse_expected_token(parser, LEX_TOKEN_TY_COMMA, start.start,
+                       "',' after '_Generic' controlling expression", NULL);
+
+  struct lex_pos pos = get_position(parser->lexer);
+
+  // this could be made recursive instead
+
+  struct vector *associations = vector_create_in_arena(
+      sizeof(struct ast_generic_association), parser->arena);
+
+  struct lex_token token;
+  struct ast_generic_association association;
+  do {
+    if (!parse_generic_association(parser, &association)) {
+      backtrack(parser->lexer, pos);
+      break;
+    }
+
+    vector_push_back(associations, &association);
+
+    peek_token(parser->lexer, &token);
+  } while (token.ty == LEX_TOKEN_TY_COMMA &&
+           /* hacky */ (consume_token(parser->lexer, token), true));
+
+  struct text_span end;
+  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start.start,
+                       "')' after '_Generic' association list", &end);
+
+  generic->associations = vector_head(associations);
+  generic->num_associations = vector_length(associations);
+  generic->span = MK_TEXT_SPAN(start.start, end.end);
+  return true;
+}
+
 // parses highest precedence (literals, vars, constants)
 static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct lex_pos pos = get_position(parser->lexer);
@@ -1764,12 +1858,21 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
   struct lex_token token;
   peek_token(parser->lexer, &token);
 
+  struct ast_generic generic;
+  if (parse_generic(parser, &generic)) {
+    expr->ty = AST_EXPR_TY_GENERIC;
+    expr->generic = generic;
+    expr->span = generic.span;
+    return true;
+  }
+
   struct ast_compoundexpr compound_expr;
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
       parse_compoundexpr(parser, &compound_expr) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    // if its one elem, promote it to an expr (as compound expr must have >1 expressions)
+    // if its one elem, promote it to an expr (as compound expr must have >1
+    // expressions)
 
     if (compound_expr.num_exprs == 1) {
       *expr = compound_expr.exprs[0];
@@ -1815,7 +1918,8 @@ parse_compound_literal(struct parser *parser,
 
   compound_literal->type_name = type_name;
   compound_literal->init_list = init_list;
-  compound_literal->span = MK_TEXT_SPAN(type_name.span.start, init_list.span.end);
+  compound_literal->span =
+      MK_TEXT_SPAN(type_name.span.start, init_list.span.end);
 
   return true;
 }
@@ -2829,11 +2933,9 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
     for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
     // FIXME: there are more places where compound expressions are legal
     // rework expression parsing to handle them better
-    *for_stmt->iter = (struct ast_expr){
-      .ty = AST_EXPR_TY_COMPOUNDEXPR,
-      .compound_expr = compound,
-      .span = compound.span
-    };
+    *for_stmt->iter = (struct ast_expr){.ty = AST_EXPR_TY_COMPOUNDEXPR,
+                                        .compound_expr = compound,
+                                        .span = compound.span};
   } else {
     for_stmt->iter = NULL;
   }
@@ -2914,27 +3016,33 @@ static bool parse_selectstmt(struct parser *parser,
   return false;
 }
 
-static bool parse_staticassert(struct parser *parser, struct ast_staticassert *staticassert) {
+static bool parse_staticassert(struct parser *parser,
+                               struct ast_staticassert *staticassert) {
   struct text_span start;
 
   if (!parse_token(parser, LEX_TOKEN_TY_KW_STATICASSERT, &start)) {
     return false;
   }
 
-  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start.start, "'(' after 'static_assert' keyword", NULL);
+  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start.start,
+                       "'(' after 'static_assert' keyword", NULL);
 
-  parse_expected_expr(parser, &staticassert->cond, "expr after 'static_assert'");
+  parse_expected_expr(parser, &staticassert->cond,
+                      "expr after 'static_assert'");
 
   if (parse_token(parser, LEX_TOKEN_TY_COMMA, NULL)) {
-    staticassert->message = arena_alloc(parser->arena, sizeof(*staticassert->message));
+    staticassert->message =
+        arena_alloc(parser->arena, sizeof(*staticassert->message));
 
-    parse_expected_expr(parser, staticassert->message, "message after 'static_assert' expr");
+    parse_expected_expr(parser, staticassert->message,
+                        "message after 'static_assert' expr");
   } else {
     staticassert->message = NULL;
   }
 
   struct text_span end;
-  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start.start, "'(' after 'static_assert' keyword", &end);
+  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start.start,
+                       "'(' after 'static_assert' keyword", &end);
 
   staticassert->span = MK_TEXT_SPAN(start.start, end.end);
 
@@ -4094,6 +4202,44 @@ DEBUG_FUNC(compound_literal, compound_literal) {
   UNINDENT();
 }
 
+DEBUG_FUNC(generic_association, generic_association) {
+  switch (generic_association->ty) {
+  case AST_GENERIC_ASSOCIATION_TY_TYPE_NAME:
+    AST_PRINTZ("TYPE NAME");
+    INDENT();
+    DEBUG_CALL(type_name, &generic_association->type_name);
+    UNINDENT();
+    break;
+  case AST_GENERIC_ASSOCIATION_TY_DEFAULT:
+    AST_PRINTZ("DEFAULT");
+    break;
+  }
+
+  AST_PRINTZ("EXPR");
+  INDENT();
+  DEBUG_CALL(expr, &generic_association->expr);
+  UNINDENT();
+}
+
+DEBUG_FUNC(generic, generic) {
+  AST_PRINTZ("GENERIC");
+  INDENT();
+
+  AST_PRINTZ("CTRL");
+  INDENT();
+  DEBUG_CALL(expr, generic->ctrl_expr);
+  UNINDENT();
+
+  AST_PRINTZ("ASSOCIATION LIST");
+  INDENT();
+  for (size_t i = 0; i < generic->num_associations; i++) {
+    DEBUG_CALL(generic_association, &generic->associations[i]);
+  }
+  UNINDENT();
+
+  UNINDENT();
+}
+
 DEBUG_FUNC(expr, expr) {
   AST_PRINTZ("EXPRESSION");
 
@@ -4101,6 +4247,9 @@ DEBUG_FUNC(expr, expr) {
   switch (expr->ty) {
   case AST_EXPR_TY_INVALID:
     AST_PRINTZ("<INVALID>");
+    break;
+  case AST_EXPR_TY_GENERIC:
+    DEBUG_CALL(generic, &expr->generic);
     break;
   case AST_EXPR_TY_TERNARY:
     DEBUG_CALL(ternary, &expr->ternary);
