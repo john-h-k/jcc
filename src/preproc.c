@@ -1196,7 +1196,8 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       int depth = 1;
-      bool skip_trivial = false;
+      int brace_depth = 0;
+      bool skip_trivial = true;
       bool seen_first_arg = false;
       while (true) {
         struct preproc_token next;
@@ -1207,6 +1208,22 @@ static bool try_expand_token(struct preproc *preproc,
         }
 
         if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            (next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACE || next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_SQUARE_BRACKET)) {
+          brace_depth++;
+
+          vector_push_back(arg, &next);
+          skip_trivial = false;
+        } else if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+            (next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACE || next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_SQUARE_BRACKET)) {
+          if (!brace_depth) {
+            BUG("more close braces than valid");
+          }
+
+          brace_depth--;
+
+          vector_push_back(arg, &next);
+          skip_trivial = false;
+        } else if (next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
             next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
           depth++;
 
@@ -1229,7 +1246,7 @@ static bool try_expand_token(struct preproc *preproc,
           }
 
           vector_push_back(arg, &next);
-        } else if (depth == 1 && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+        } else if (depth == 1 && !brace_depth && next.ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                    next.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) {
           arg = vector_create_in_arena(sizeof(struct preproc_token),
                                        preproc->arena);
@@ -1240,7 +1257,7 @@ static bool try_expand_token(struct preproc *preproc,
           // strip leading whitespace
           skip_trivial = true;
         } else {
-          if (!skip_trivial || !token_is_trivial(&next)) {
+          if (!skip_trivial || (!token_is_trivial(&next) && next.ty != PREPROC_TOKEN_TY_NEWLINE)) {
             vector_push_back(arg, &next);
             skip_trivial = false;
           }

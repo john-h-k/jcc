@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
 
@@ -985,12 +986,12 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     struct ir_op *store = op->succ;
     struct ir_op *addr;
 
-    // HACK: should use op uses
-    while (store && store->ty != IR_OP_TY_STORE) {
+    // HACK: should use op uses. won't work across stmts (which might happen i think)
+    while (store && (store->ty != IR_OP_TY_STORE || store->store.value != op)) {
       store = store->succ;
     }
 
-    if (store && store->store.value == op) {
+    if (store) {
       switch (store->store.ty) {
       case IR_OP_STORE_TY_LCL:
       case IR_OP_STORE_TY_GLB:
@@ -1126,9 +1127,10 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     // HACK: should use op uses
     struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
-    while (prev_store->ty != IR_OP_TY_STORE) {
+    while (prev_store && prev_store->ty != IR_OP_TY_STORE) {
       prev_store = prev_store->succ;
     }
+
     DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
 
     struct ir_op *addr = ir_build_addr(func, prev_store);

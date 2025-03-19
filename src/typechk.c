@@ -687,8 +687,13 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
     rhs_op_ty = *rhs;
     result_ty = *lhs;
   } else {
-    lhs_op_ty = rhs_op_ty =
+    // BUG: does not work when compiled with JCC
+    // lhs_op_ty = rhs_op_ty =
+    //     resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
+    rhs_op_ty =
         resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
+
+    lhs_op_ty = rhs_op_ty;
 
     if (td_binary_op_is_comparison(ty)) {
       result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
