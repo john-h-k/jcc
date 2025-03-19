@@ -63,6 +63,9 @@ DECL_LOG_FN(slog)
 
 #define info(...)                                                              \
   do {                                                                         \
+    if (!log_enabled()) {                                                      \
+      break;                                                                   \
+    }                                                                          \
     fprintf(stderr, PR_GREEN PR_BOLD "INFO: " PR_RESET __VA_ARGS__);           \
     fprintf(stderr, "\n");                                                     \
   } while (0);
@@ -78,7 +81,7 @@ DECL_LOG_FN(slog)
 
 #define debug(...)                                                             \
   do {                                                                         \
-    if (log_enabled()) {                                                       \
+    if (!log_enabled()) {                                                       \
       break;                                                                   \
     }                                                                          \
     fprintf(stderr, PR_WHITE PR_BOLD "DEBUG: " PR_RESET __VA_ARGS__);          \

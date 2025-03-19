@@ -15,6 +15,7 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
   EXIT_FAIL(-2);
 }
 
+#ifndef NDEBUG
 void util_debug_assert(bool b, const char *cond, const char *func,
                               const char *file, int line, const char *msg,
                               ...) {
@@ -32,6 +33,7 @@ void util_debug_assert(bool b, const char *cond, const char *func,
     EXIT_FAIL(-1);
   }
 }
+#endif
 
 #ifdef UTIL_STACK_TRACE_IMPL
 

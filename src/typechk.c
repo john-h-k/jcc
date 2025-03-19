@@ -570,11 +570,13 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
                             rhs_ty->pointer.underlying)) {
       return *lhs_ty;
     } else {
-      compiler_diagnostics_add(
-          tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH, pointer_type_mismatch,
-                                 context, MK_INVALID_TEXT_POS(0),
-                                 "pointer type mismatch"));
+      // TEMP: false positives so disabled
+      (void)context;
+      // compiler_diagnostics_add(
+      //     tchk->diagnostics,
+      //     MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH, pointer_type_mismatch,
+      //                            context, MK_INVALID_TEXT_POS(0),
+      //                            "pointer type mismatch"));
     }
   }
 

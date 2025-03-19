@@ -7,6 +7,8 @@
 
 #include <stdlib.h>
 
+// BUG: JCC fails on this file
+
 struct x64_emitter {
   unsigned char *block;
   size_t count;

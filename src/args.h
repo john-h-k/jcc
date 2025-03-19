@@ -28,7 +28,7 @@ enum arg_ty {
 
 struct arg_string_list {
   size_t num_values;
-  const char **values;
+  char **values;
 };
 
 typedef bool (*try_parse_arg)(const char *, int *);
@@ -218,6 +218,11 @@ VALUES_FN(c_standard, C_STANDARD)
                                                                                \
   ARG_STRING_LIST(sys_include_paths, "", "-isystem",                           \
                   "Directories to search for `#include <header>` directives")  \
+                                                                               \
+  /* FIXME: these are currently ignored */                                     \
+  ARG_STRING_LIST(linker_args, "", "-Wl,", "Arguments to pass to the linker")  \
+                                                                               \
+  ARG_STRING_LIST(link_libraries, "-l", "", "Libraries to link against")       \
                                                                                \
   ARG_STRING_LIST(                                                             \
       include_paths, "-I", "",                                                 \

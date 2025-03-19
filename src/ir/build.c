@@ -3571,6 +3571,8 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
 
   basicblock = build_ir_for_stmt(builder, basicblock, &def->body);
 
+  struct ir_basicblock *last_bb = basicblock;
+
   // now we have generated the IR we first need to fix up labels
   basicblock = builder->func->first;
   while (basicblock) {
@@ -3606,8 +3608,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   ir_prune_basicblocks(builder->func);
 
   // may not end in a return, but needs to to be well-formed IR
-  struct ir_basicblock *last_bb = builder->func->last;
-  if (!last_bb || (last_bb->last && last_bb->last->last &&
+  if (!last_bb || last_bb->id == DETACHED_BASICBLOCK || (last_bb->last && last_bb->last->last &&
                    ir_op_is_branch(last_bb->last->last->ty) &&
                    last_bb->last->last->ty != IR_OP_TY_RET)) {
     // add extra bb if there is no last bb, or if there is one

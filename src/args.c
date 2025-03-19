@@ -153,6 +153,10 @@ void free_args(struct parsed_args *args) {
     POP_NO_WARN();                                                             \
     POP_NO_WARN();                                                             \
                                                                                \
+    for (size_t i = 0; i < string_list->num_values; i++) {                     \
+      free((char *)string_list->values[i]);                                            \
+    }                                                                          \
+                                                                               \
     free(string_list->values);                                                 \
   }
 
@@ -305,13 +309,20 @@ enum parse_args_result parse_args(int argc, char **argv,
     }
 
     if (!values_only && len && s[0] == '-') {
-      const char *value = NULL;
+      char *value = NULL;
 
-      struct sized_str lookup_str = {.len = MIN(len, 2), .str = s};
+      size_t lookup_len = MIN(len, 2);
+
+      const char *comma = strchr(s, ',');
+      if (comma) {
+        lookup_len = comma - s + 1;
+      }
+
+      struct sized_str lookup_str = {.len = lookup_len, .str = s};
 
       struct arg *arg = hashtbl_lookup(opts, &lookup_str);
       if (arg) {
-        value = len > 2 ? &s[2] : NULL;
+        value = len > lookup_len ? &s[lookup_len] : NULL;
       } else {
         value = strchr(s, '=');
 
@@ -369,7 +380,7 @@ enum parse_args_result parse_args(int argc, char **argv,
         }
 
         do {
-          const char *next = strchr(value, ',');
+          char *next = strchr(value, ',');
 
           char *buf = NULL;
           if (next) {
@@ -430,12 +441,26 @@ enum parse_args_result parse_args(int argc, char **argv,
           goto fail;
         }
 
-        arg->arg_string_list->values =
-            realloc(arg->arg_string_list->values,
-                    sizeof(*arg->arg_string_list->values) *
-                        ++arg->arg_string_list->num_values);
-        arg->arg_string_list->values[arg->arg_string_list->num_values - 1] =
-            value;
+        do {
+          char *next = strchr(value, ',');
+
+          if (next) {
+            size_t val_len = next - value;
+
+            value = strndup(value, val_len);
+          } else {
+            value = strdup(value);            
+          }
+
+          arg->arg_string_list->values =
+              realloc(arg->arg_string_list->values,
+                      sizeof(*arg->arg_string_list->values) *
+                          ++arg->arg_string_list->num_values);
+          arg->arg_string_list->values[arg->arg_string_list->num_values - 1] =
+              value;
+
+          value = next;
+        } while (value ? value++ : 0);
         break;
       }
 

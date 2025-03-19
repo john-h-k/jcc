@@ -84,6 +84,14 @@ configure() {
           help
           exit 0
           ;;
+        --clean)
+          clean
+          shift
+          ;;
+        --clean-all)
+          clean-all
+          shift
+          ;;
         --profile-build)
           profile_build="1"
           shift
@@ -188,8 +196,8 @@ build() {
 }
 
 mini-boostrap() {
-    clean
-    build
+    # build --clean --mode rel
+    build --clean
 
     flags="-DJCC_ALL"
     # doesn't support -D yet
@@ -198,15 +206,15 @@ mini-boostrap() {
     clang_files=(
         # src/aarch64/codegen.c
         # src/aarch64/emit.c
-        src/aarch64/emitter.c
+        # src/aarch64/emitter.c
         # src/aarch64/lower.c
         # src/aarch64.c
         # src/alloc.c
-        src/args.c
+        # src/args.c
         # src/bitset.c
         # src/builtins.c
         # src/codegen.c
-        src/compiler.c
+        # src/compiler.c
         # src/deque.c
         # src/diagnostics.c
         # src/disasm.c
@@ -238,20 +246,20 @@ mini-boostrap() {
         # src/lsra.c
         # src/macos/link.c
         # src/macos/mach-o.c
-        src/main.c
+        # src/main.c
         # src/opts/cnst_branches.c
         # src/opts/cnst_fold.c
         # src/opts/inline.c
         # src/opts/instr_comb.c
         # src/opts/opts.c
         # src/opts/promote.c
-        src/parse.c
-        src/preproc.c
+        # src/parse.c
+        # src/preproc.c
         # src/profile.c
         # src/program.c
         # src/rv32i/codegen.c
         # src/rv32i/emit.c
-        src/rv32i/emitter.c
+        # src/rv32i/emitter.c
         # src/rv32i/lower.c
         # src/rv32i/object.c
         # src/rv32i.c
@@ -312,4 +320,48 @@ mini-boostrap() {
     cp build/jcc build/jcc0
     rm build/jcc
     build/jcc0 -o build/jcc "${objects[@]}"
+    cp build/jcc build/jcc1
+}
+
+bootstrap() {
+    rm jcc0 jcc1
+
+    if ! build --clean-all --mode rel; then
+        echo -e "${BOLDRED}stage0 configure fail${RESET}"
+        exit -1
+    fi
+
+    cd build
+
+    cp jcc jcc0
+    echo -e "${BOLD}stage0 built to 'jcc0'${RESET}"
+
+    rm jcc
+
+    if ! cmake --fresh -G Ninja .. -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
+        echo -e "${BOLDRED}stage1 configure fail${RESET}"
+        exit -1
+    fi
+
+    if ! cmake --build . --parallel 1; then
+        echo -e "${BOLDRED}stage1 build fail${RESET}"
+        exit -1
+    fi
+
+    cp jcc jcc1
+    echo -e "${BOLD}stage1 built to 'jcc1'${RESET}"
+
+    
+    # if ! cmake --fresh -G Ninja .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
+    #     echo -e "${BOLDRED}stage2 configure fail${RESET}"
+    #     exit -1
+    # fi
+
+    # if ! cmake --build .; then
+    #     echo -e "${BOLDRED}stage2 build fail${RESET}"
+    #     exit -1
+    # fi
+
+    # echo -e "${BOLD}stage2 built to 'jcc2'${RESET}"
+    # echo -e "${BOLD}Done!${RESET}"
 }

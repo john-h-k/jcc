@@ -105,7 +105,7 @@ struct compile_args {
   const char **sys_include_paths;
 
   size_t num_include_paths;
-  const char **include_paths;
+  char **include_paths;
 
   const char *fixed_timestamp;
 

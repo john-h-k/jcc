@@ -320,7 +320,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 static int jcc_main(int argc, char **argv);
 
 int main(int argc, char **argv) {
-  enable_log();
+  // enable_log();
 
 #if SAN && OS_APPLE
   // sanitizer running causes spurious 'malloc: nano zone abandoned due to
@@ -484,7 +484,7 @@ static int jcc_main(int argc, char **argv) {
 
     profiler_end_region(compile_region);
 
-    enable_log();
+    // enable_log();
 
     free_compiler(&compiler);
   }
