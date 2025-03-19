@@ -66,6 +66,12 @@ enum compiler_diagnostic_class {
   DIAG_FN(WARN, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,     \
           const char *)                                                        \
           \
+  DIAG_FN(ERROR, "generic-no-match", generic_no_match, GENERIC_NO_MATCH,     \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "duplicate-generic-default", duplicate_generic_default, DUPLICATE_GENERIC_DEFAULT,     \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "compatible-generic-associations", compatible_generic_associations, COMPATIBLE_GENERIC_ASSOCIATIONS,     \
+          const char *)                                                        \
   DIAG_FN(ERROR, "empty-init", empty_init, EMPTY_INIT,     \
           const char *)                                                        \
   DIAG_FN(ERROR, "scalar-designator", scalar_designator, SCALAR_DESIGNATOR,              \

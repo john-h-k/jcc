@@ -30,8 +30,10 @@ struct aarch64 {
 unsigned long translate_reg_idx(unsigned long idx, int ty) { return idx; }
 
 int main() {
+  struct aarch64 aarch64;
   struct instr inst;
   struct instr *restore = &inst;
+  restore->aarch64 = &aarch64;
   restore->aarch64->ty = 1;
   restore->aarch64->ldr_imm = (struct aarch64_load_imm){
       .mode = 45,
