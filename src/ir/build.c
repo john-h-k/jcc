@@ -78,11 +78,11 @@ struct ir_func_builder {
   struct vector *switch_cases;
 };
 
-static struct ir_label *add_label(struct ir_func_builder *irb, const char *name,
+static struct ir_label *add_label(struct ir_func_builder *irb, struct sized_str name,
                                   struct ir_basicblock *basicblock) {
   struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
 
-  label->name = name;
+  label->name = arena_alloc_strndup(irb->arena, name.str, name.len);
   label->basicblock = basicblock;
   label->succ = irb->labels;
 
@@ -675,13 +675,13 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
 
 static struct ir_op *
 build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                            struct td_expr *lhs_expr, const char *member_name,
+                            struct td_expr *lhs_expr, struct sized_str member_name,
                             bool *member_is_bitfield,
                             struct ir_bitfield *member_bitfield);
 
 static struct ir_op *
 build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                             struct td_expr *lhs_expr, const char *member_name,
+                             struct td_expr *lhs_expr, struct sized_str member_name,
                              bool *member_is_bitfield,
                              struct ir_bitfield *member_bitfield);
 
@@ -1334,9 +1334,9 @@ static void add_var_write(struct ir_func_builder *irb, struct ir_op *op,
                           struct td_var *var);
 
 static const char *mangle_static_name(struct ir_var_builder *irb,
-                                      struct ir_func *func, const char *name) {
+                                      struct ir_func *func, struct sized_str name) {
   // need to mangle the name as statics cannot interfere with others
-  size_t base_len = strlen(name);
+  size_t base_len = name.len;
 
   size_t len = base_len + 2; // null char and leading "."
 
@@ -1347,7 +1347,7 @@ static const char *mangle_static_name(struct ir_var_builder *irb,
     len++; // for "."
   }
 
-  char *buff = arena_alloc(irb->arena, sizeof(*name) * len);
+  char *buff = arena_alloc(irb->arena, sizeof(*name.str) * len);
   size_t head = 0;
 
   buff[head++] = '.';
@@ -1358,7 +1358,7 @@ static const char *mangle_static_name(struct ir_var_builder *irb,
     buff[head++] = '.';
   }
 
-  memcpy(&buff[head], name, base_len);
+  memcpy(&buff[head], name.str, base_len);
   head += base_len;
   buff[head++] = '\0';
 
@@ -1371,14 +1371,13 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
                                       struct ir_var_ty var_ty,
                                       struct td_var *var) {
-  if (strlen(var->identifier) == strlen("__func__") &&
-      !strcmp(var->identifier, "__func__")) {
+  if (szstreq(var->identifier, MK_SIZED("__func__"))) {
     if (!irb->func_name_cnst) {
       const char *value = irb->func->name;
       struct ir_var_ty str_var_ty = ir_var_ty_make_array(
           irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
       const char *name = mangle_static_name(
-          &(struct ir_var_builder){.arena = irb->arena}, irb->func, "__func__");
+          &(struct ir_var_builder){.arena = irb->arena}, irb->func, MK_SIZED("__func__"));
 
       struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty,
                                          IR_GLB_DEF_TY_DEFINED, name);
@@ -1541,8 +1540,8 @@ static struct ir_op *build_ir_for_intrinsic(struct ir_func_builder *irb,
 
   struct ir_var_ty ret_ty = var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
 
-  if (!strcmp(var.identifier, "fabs") || !strcmp(var.identifier, "fabsf") ||
-      !strcmp(var.identifier, "fabsl")) {
+  if (szstreq(var.identifier, MK_SIZED("fabs")) || szstreq(var.identifier, MK_SIZED("fabsf")) ||
+      szstreq(var.identifier, MK_SIZED("fabsl"))) {
     DEBUG_ASSERT(call->arg_list.num_args == 1, "more than 1 arg to fabs");
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
@@ -1553,9 +1552,9 @@ static struct ir_op *build_ir_for_intrinsic(struct ir_func_builder *irb,
         (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_FABS, .value = value};
 
     return op;
-  } else if (!strcmp(var.identifier, "sqrt") ||
-             !strcmp(var.identifier, "sqrtf") ||
-             !strcmp(var.identifier, "sqrtl")) {
+  } else if (szstreq(var.identifier, MK_SIZED("sqrt")) ||
+             szstreq(var.identifier, MK_SIZED("sqrtf")) ||
+             szstreq(var.identifier, MK_SIZED("sqrtl"))) {
     DEBUG_ASSERT(call->arg_list.num_args == 1, "more than 1 arg to fabs");
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
@@ -1703,7 +1702,7 @@ static struct ir_op *var_assg(struct ir_func_builder *irb, struct ir_stmt *stmt,
 
 static bool try_get_member_info(struct ir_unit *iru,
                                 const struct td_var_ty *aggregate,
-                                const char *member_name,
+                                struct sized_str member_name,
                                 struct ir_var_ty *member_ty, size_t *member_idx,
                                 size_t *member_offset, bool *member_is_bitfield,
                                 struct ir_bitfield *member_bitfield,
@@ -1721,7 +1720,7 @@ static bool try_get_member_info(struct ir_unit *iru,
   *member_offset = 0;
   for (; *member_idx < aggregate->aggregate.num_fields; (*member_idx)++) {
     struct td_struct_field *field = &aggregate->aggregate.fields[*member_idx];
-    if (!field->identifier) {
+    if (!field->identifier.len) {
       // anonymous field
       size_t anon_member_idx;
       size_t anon_member_offset;
@@ -1743,7 +1742,7 @@ static bool try_get_member_info(struct ir_unit *iru,
       *member_offset += anon_member_offset;
       *member_offset += info.offsets ? info.offsets[*member_idx] : 0;
       return true;
-    } else if (strcmp(field->identifier, member_name) == 0) {
+    } else if (szstreq(field->identifier, member_name)) {
       if (member_bitfield) {
         if (field->flags & TD_STRUCT_FIELD_FLAG_BITFIELD) {
           *member_is_bitfield = true;
@@ -1782,7 +1781,7 @@ static bool try_get_member_info(struct ir_unit *iru,
 
 static void get_member_info(struct ir_unit *iru,
                             const struct td_var_ty *aggregate,
-                            const char *member_name,
+                            struct sized_str member_name,
                             struct ir_var_ty *member_ty, size_t *member_idx,
                             size_t *member_offset, bool *member_is_bitfield,
                             struct ir_bitfield *member_bitfield,
@@ -1798,7 +1797,7 @@ static void get_member_info(struct ir_unit *iru,
 
 static size_t get_member_address_offset(struct ir_func_builder *irb,
                                         const struct td_var_ty *aggregate,
-                                        const char *member_name,
+                                        struct sized_str member_name,
                                         struct ir_var_ty *member_ty,
                                         bool *member_is_bitfield,
                                         struct ir_bitfield *member_bitfield,
@@ -1815,7 +1814,7 @@ static size_t get_member_address_offset(struct ir_func_builder *irb,
 
 static struct ir_op *
 build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                            struct td_expr *lhs_expr, const char *member_name,
+                            struct td_expr *lhs_expr, struct sized_str member_name,
                             bool *member_is_bitfield,
                             struct ir_bitfield *member_bitfield) {
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
@@ -1840,7 +1839,7 @@ build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
 static struct ir_op *
 build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                             struct td_expr *lhs_expr, const char *member_name,
+                             struct td_expr *lhs_expr, struct sized_str member_name,
                              bool *member_is_bitfield,
                              struct ir_bitfield *member_bitfield) {
   DEBUG_ASSERT(lhs_expr->var_ty.ty == TD_VAR_TY_TY_POINTER,
@@ -2722,9 +2721,9 @@ static struct ir_basicblock *build_ir_for_goto(struct ir_func_builder *irb,
 
   // put the label we target into metadata
   // copy it out to ignore const warnings
-  size_t label_len = strlen(goto_stmt->label);
+  size_t label_len = goto_stmt->label.len;
   br->metadata = arena_alloc(irb->arena, label_len + 1);
-  memcpy(br->metadata, goto_stmt->label, label_len + 1);
+  memcpy(br->metadata, goto_stmt->label.str, label_len + 1);
 
   struct ir_basicblock *after_goto_basicblock = ir_alloc_basicblock(irb->func);
   return after_goto_basicblock;
@@ -2997,13 +2996,13 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct td_var_declaration *decl) {
   struct ir_var_ty var_ty = var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
 
-  const char *name = decl->var.identifier;
+  struct sized_str name = decl->var.identifier;
   const char *symbol_name;
   if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC &&
       var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
   } else {
-    symbol_name = name;
+    symbol_name = arena_alloc_strndup(irb->arena, name.str, name.len);
   }
 
   struct var_key key = {.name = name,
@@ -3451,7 +3450,7 @@ static void validate_op_tys_callback(struct ir_op **op,
 static void hash_td_var(struct hasher *hasher, const void *o) {
   const struct td_var *var = o;
 
-  hasher_hash_str(hasher, var->identifier);
+  hashtbl_hash_sized_str(hasher, &var->identifier);
   hasher_hash_integer(hasher, var->scope, sizeof(var->scope));
 }
 
@@ -3460,7 +3459,7 @@ static bool eq_td_var(const void *l, const void *r) {
   const struct td_var *vr = r;
 
   return vl->scope == vr->scope && vl->ty == vr->ty &&
-         !strcmp(vl->identifier, vr->identifier);
+         szstreq(vl->identifier, vr->identifier);
 }
 
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
@@ -3468,11 +3467,13 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct td_funcdef *def,
                                              struct var_refs *global_var_refs,
                                              enum ir_build_flags flags) {
+  struct sized_str ident = def->var_declaration.var.identifier;
+  
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
       .func_ty = var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
-      .name = def->var_declaration.var.identifier,
+      .name = arena_alloc_strndup(unit->arena, ident.str, ident.len),
       .arena = arena,
       .flags = IR_FUNC_FLAG_NONE,
       .first = NULL,
@@ -3520,7 +3521,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   for (size_t i = 0; i < func_ty.num_params; i++) {
     const struct td_ty_param *param = &func_ty.params[i];
 
-    if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC || !param->identifier) {
+    if (param->var_ty.ty == TD_VAR_TY_TY_VARIADIC || !param->identifier.len) {
       continue;
     }
 
@@ -3733,7 +3734,7 @@ get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
                      var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
-    const char *member_name = var_ty->aggregate.fields[member_index].identifier;
+    struct sized_str member_name = var_ty->aggregate.fields[member_index].identifier;
     struct ir_var_ty ir_member_ty;
     size_t member_offset;
     size_t idx;
@@ -3761,7 +3762,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
 
     switch (designator->ty) {
     case TD_DESIGNATOR_TY_FIELD: {
-      const char *member_name = designator->field;
+      struct sized_str member_name = designator->field;
       struct ir_var_ty ir_member_ty;
       size_t member_offset;
       get_member_info(iru, &cur_var_ty, member_name, &ir_member_ty,

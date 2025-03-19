@@ -253,7 +253,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
 
     // aggregate types are the same iff they have the same name or come from the
     // same declaration we give anonymous types a name per-declaration
-    return !strcmp(l_agg.name, r_agg.name);
+    return szstreq(l_agg.name, r_agg.name);
   }
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE: {
     // same logic as for aggregate
@@ -264,7 +264,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
       return false;
     }
 
-    return !strcmp(l_agg.name, r_agg.name);
+    return szstreq(l_agg.name, r_agg.name);
   }
   }
 }
@@ -343,7 +343,7 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
     // aggregate types are the same iff they have the same name or come from the
     // same declaration we give anonymous types a name per-declaration
-    return !strcmp(l_agg.name, r_agg.name);
+    return szstreq(l_agg.name, r_agg.name);
   }
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
     BUG("can't check incomplete");
@@ -574,7 +574,8 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
       (void)context;
       // compiler_diagnostics_add(
       //     tchk->diagnostics,
-      //     MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH, pointer_type_mismatch,
+      //     MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH,
+      //     pointer_type_mismatch,
       //                            context, MK_INVALID_TEXT_POS(0),
       //                            "pointer type mismatch"));
     }
@@ -692,8 +693,7 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
     // BUG: does not work when compiled with JCC
     // lhs_op_ty = rhs_op_ty =
     //     resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
-    rhs_op_ty =
-        resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
+    rhs_op_ty = resolve_usual_arithmetic_conversions(tchk, lhs, rhs, context);
 
     lhs_op_ty = rhs_op_ty;
 
@@ -764,28 +764,28 @@ type_specifiers(struct typechk *tchk,
 
 enum sign_state { SIGN_STATE_NONE, SIGN_STATE_SIGNED, SIGN_STATE_UNSIGNED };
 
-static bool is_anonymous_name(const char *name) {
-  return !strncmp(name, "<anonymous>", strlen("<anonymous>"));
+static bool is_anonymous_name(struct sized_str name) {
+  return szstr_prefix(name, MK_SIZED("<anonymous>"));
 }
 
-static char *anonymous_name(struct typechk *tchk) {
+static struct sized_str anonymous_name(struct typechk *tchk) {
   size_t id = tchk->next_anonymous_type_name_id++;
   size_t char_size = num_digits(id);
   size_t len_prefix = strlen("<anonymous>");
-  size_t len = len_prefix + char_size + 1;
+  size_t len = len_prefix + char_size;
 
-  char *buff = arena_alloc(tchk->arena, sizeof(*buff) * len);
+  char *buff = arena_alloc(tchk->arena, sizeof(*buff) * len + 1);
   snprintf(buff, len, "<anonymous>%zu", id);
   buff[len] = '\0';
 
-  return buff;
+  return (struct sized_str){buff, len};
 }
 
 static struct td_var_ty
 td_var_ty_for_enum(struct typechk *tchk,
                    const struct ast_enum_specifier *specifier) {
 
-  const char *name;
+  struct sized_str name;
   if (specifier->identifier) {
     name = identifier_str(tchk->parser, specifier->identifier);
   } else {
@@ -826,7 +826,7 @@ td_var_ty_for_enum(struct typechk *tchk,
         value = i ? last_value + 1 : 0;
       }
 
-      const char *enum_name =
+      struct sized_str enum_name =
           identifier_str(tchk->parser, &enumerator->identifier);
       struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
                            .identifier = enum_name,
@@ -884,7 +884,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     break;
   }
 
-  const char *name;
+  struct sized_str name;
   if (specifier->identifier) {
     name = identifier_str(tchk->parser, specifier->identifier);
   } else {
@@ -947,7 +947,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
             .var =
                 {
                     .ty = TD_VAR_VAR_TY_VAR,
-                    .identifier = NULL,
+                    .identifier = MK_NULL_STR(),
                     .scope = cur_scope(&tchk->var_table),
                 },
             .var_ty = td_decl.base_ty,
@@ -1185,7 +1185,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
           tchk, &param_specifiers, &param->abstract_declarator);
 
       *td_param =
-          (struct td_ty_param){.identifier = NULL, .var_ty = param_var_ty};
+          (struct td_ty_param){.identifier = MK_NULL_STR(), .var_ty = param_var_ty};
       break;
     }
     }
@@ -2238,7 +2238,7 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
 
 static bool try_resolve_member_access_ty(struct typechk *tchk,
                                          const struct td_var_ty *var_ty,
-                                         const char *member_name,
+                                         struct sized_str member_name,
                                          struct td_var_ty *member_var_ty) {
   if (var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
     return false;
@@ -2249,12 +2249,12 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
   // FIXME: super slow hashtable needed
   for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
     const struct td_struct_field *field = &var_ty->aggregate.fields[i];
-    if (field->identifier == NULL) {
+    if (field->identifier.str == NULL) {
       if (try_resolve_member_access_ty(tchk, &field->var_ty, member_name,
                                        member_var_ty)) {
         return true;
       }
-    } else if (strcmp(field->identifier, member_name) == 0) {
+    } else if (szstreq(field->identifier, member_name)) {
       *member_var_ty = field->var_ty;
       return true;
     }
@@ -2265,7 +2265,7 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
 
 static bool try_get_member_idx(struct typechk *tchk,
                                const struct td_var_ty *td_var_ty,
-                               const char *member_name, size_t *member_idx,
+                               struct sized_str member_name, size_t *member_idx,
                                struct text_span context) {
 
   const struct td_var_ty var_ty =
@@ -2274,12 +2274,12 @@ static bool try_get_member_idx(struct typechk *tchk,
   // FIXME: super slow hashtable needed
   for (size_t i = 0; i < var_ty.aggregate.num_fields; i++) {
     const struct td_struct_field *field = &var_ty.aggregate.fields[i];
-    if (field->identifier == NULL) {
+    if (field->identifier.str == NULL) {
       if (try_get_member_idx(tchk, &field->var_ty, member_name, member_idx,
                              context)) {
         return true;
       }
-    } else if (strcmp(field->identifier, member_name) == 0) {
+    } else if (szstreq(field->identifier, member_name)) {
       *member_idx = i;
       return true;
     }
@@ -2334,7 +2334,8 @@ type_memberaccess(struct typechk *tchk,
   td_memberaccess.lhs->var_ty = type_incomplete_var_ty(
       tchk, &td_memberaccess.lhs->var_ty, memberaccess->span);
 
-  const char *member_name = identifier_str(tchk->parser, &memberaccess->member);
+  struct sized_str member_name =
+      identifier_str(tchk->parser, &memberaccess->member);
 
   struct td_var_ty var_ty;
   if (!try_resolve_member_access_ty(tchk, &td_memberaccess.lhs->var_ty,
@@ -2402,7 +2403,7 @@ type_pointeraccess(struct typechk *tchk,
     td_pointeraccess.lhs->var_ty = TD_VAR_TY_UNKNOWN;
   }
 
-  const char *pointer_name =
+  struct sized_str pointer_name =
       identifier_str(tchk->parser, &pointeraccess->member);
 
   struct td_var_ty underlying =
@@ -2545,7 +2546,7 @@ static struct td_expr type_assg(struct typechk *tchk,
 
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
-  const char *name = identifier_str(tchk->parser, &var->identifier);
+  struct sized_str name = identifier_str(tchk->parser, &var->identifier);
   struct var_table_entry *entry =
       var_table_get_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
 
@@ -3985,9 +3986,9 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   for (size_t i = 0; i < declaration.var_ty.func.num_params; i++) {
     struct td_ty_param *param = &declaration.var_ty.func.params[i];
 
-    const char *identifier = param->identifier;
+    struct sized_str identifier = param->identifier;
 
-    if (!identifier) {
+    if (!identifier.len) {
       continue;
     }
 
@@ -4016,7 +4017,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   // push the magic "__func__" variable
   struct td_var var = {
       .ty = TD_VAR_VAR_TY_VAR,
-      .identifier = "__func__",
+      .identifier = MK_SIZED("__func__"),
       .scope = SCOPE_PARAMS,
   };
 
@@ -4050,7 +4051,7 @@ type_designator(struct typechk *tchk, const struct td_var_ty *var_ty,
                 const struct ast_designator *designator) {
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD: {
-    const char *field = identifier_str(tchk->parser, &designator->field);
+    struct sized_str field = identifier_str(tchk->parser, &designator->field);
 
     struct td_var_ty field_ty;
     if (!try_resolve_member_access_ty(tchk, var_ty, field, &field_ty)) {
@@ -4678,6 +4679,9 @@ DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
   }
 }
 
+#define TD_PRINT_STR(s)                                                      \
+  TD_PRINT_SAMELINE_NOINDENT("'%.*s'\n", (int)(s).len, (s).str);
+
 DEBUG_FUNC(var_ty, var_ty) {
   DEBUG_CALL(type_qualifier_flags, &var_ty->type_qualifiers);
 
@@ -4688,20 +4692,24 @@ DEBUG_FUNC(var_ty, var_ty) {
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
-      TD_PRINT("INCOMPLETE STRUCT '%s'", var_ty->aggregate.name);
+      TD_PRINTZ("INCOMPLETE STRUCT ");
+      TD_PRINT_STR(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
-      TD_PRINT("INCOMPLETE UNION '%s'", var_ty->aggregate.name);
+      TD_PRINTZ("INCOMPLETE UNION ");
+      TD_PRINT_STR(var_ty->aggregate.name);
       break;
     }
     break;
   case TD_VAR_TY_TY_AGGREGATE:
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
-      TD_PRINT("STRUCT '%s'", var_ty->aggregate.name);
+      TD_PRINTZ("STRUCT ");
+      TD_PRINT_STR(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
-      TD_PRINT("UNION '%s'", var_ty->aggregate.name);
+      TD_PRINTZ("UNION ");
+      TD_PRINT_STR(var_ty->aggregate.name);
       break;
     }
 
@@ -4834,7 +4842,9 @@ DEBUG_FUNC(compoundstmt, compound_stmt);
 DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
-  TD_PRINT("VARIABLE '%s' SCOPE %d", var->identifier, var->scope);
+  TD_PRINTZ("VARIABLE ");
+  TD_PRINT_STR(var->identifier);
+  TD_PRINT(" SCOPE %d", var->scope);
 
   switch (var->ty) {
   case TD_VAR_VAR_TY_VAR:
@@ -5075,7 +5085,7 @@ DEBUG_FUNC(pointeraccess, pointer_access) {
   TD_PRINTZ("MEMBER");
 
   INDENT();
-  TD_PRINT("%s", pointer_access->member);
+  TD_PRINT_STR(pointer_access->member);
   UNINDENT();
 }
 
@@ -5089,7 +5099,7 @@ DEBUG_FUNC(memberaccess, member_access) {
   TD_PRINTZ("MEMBER");
 
   INDENT();
-  TD_PRINT("%s", member_access->member);
+  TD_PRINT_STR(member_access->member);
   UNINDENT();
 }
 
@@ -5115,7 +5125,8 @@ DEBUG_FUNC(designator, designator) {
   INDENT();
   switch (designator->ty) {
   case TD_DESIGNATOR_TY_FIELD:
-    TD_PRINT("FIELD '%s'", designator->field);
+    TD_PRINTZ("FIELD ");
+    TD_PRINT_STR(designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
     TD_PRINT("INDEX '%llu'", designator->index);
@@ -5312,7 +5323,8 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     UNINDENT();
     break;
   case TD_JUMPSTMT_TY_GOTO:
-    TD_PRINT("GOTO %s", jump_stmt->goto_stmt.label);
+    TD_PRINTZ("GOTO ");
+    TD_PRINT_STR(jump_stmt->goto_stmt.label);
     break;
   case TD_JUMPSTMT_TY_BREAK:
     TD_PRINTZ("BREAK");
@@ -5453,7 +5465,8 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
 DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case TD_LABELEDSTMT_TY_LABEL:
-    TD_PRINT("LABEL %s", labeled_stmt->label);
+    TD_PRINTZ("LABEL ");
+    TD_PRINT_STR(labeled_stmt->label);
     break;
   case TD_LABELEDSTMT_TY_CASE:
     TD_PRINT("CASE %llu", labeled_stmt->cnst);
@@ -5514,7 +5527,8 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   TD_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(var_ty, &param->var_ty);
-  TD_PRINT(" '%s'", param->name);
+  TD_PRINTZ(" ");
+  TD_PRINT_STR(param->name);
 }
 
 UNUSED DEBUG_FUNC(paramlist, param_list) {

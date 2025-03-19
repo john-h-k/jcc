@@ -725,9 +725,10 @@ static bool parse_typedef_name(struct parser *parser,
     return false;
   }
 
+  struct sized_str name = identifier_str(parser, &identifier);
+
   struct var_table_entry *entry =
-      var_table_get_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF,
-                          identifier_str(parser, &identifier));
+      var_table_get_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF, name);
   if (!entry) {
     return false;
   }
@@ -1456,21 +1457,20 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return false;
   }
 
-  const char *literal_text = associated_text(parser->lexer, &token);
-  size_t literal_len = strlen(literal_text);
+  struct sized_str literal = associated_text(parser->lexer, &token);
 
-  DEBUG_ASSERT(literal_len, "literal_len was 0");
+  DEBUG_ASSERT(literal.len, "literal_len was 0");
 
   char *end_ptr;
-  long double float_value = strtold(literal_text, &end_ptr);
+  long double float_value = strtold(literal.str, &end_ptr);
 
-  size_t literal_end = literal_len;
+  size_t literal_end = literal.len;
   do {
     literal_end--;
-  } while (literal_len && (tolower(literal_text[literal_end]) == 'f' ||
-                           tolower(literal_text[literal_end]) == 'l'));
+  } while (literal.len && (tolower(literal.str[literal_end]) == 'f' ||
+                           tolower(literal.str[literal_end]) == 'l'));
 
-  if (end_ptr - 1 != &literal_text[literal_end]) {
+  if (end_ptr - 1 != &literal.str[literal_end]) {
     TODO("handle constant float parse failure");
   }
 
@@ -1497,23 +1497,19 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL: {
     ty = AST_CNST_TY_CHAR;
 
-    size_t literal_len;
-    const char *literal_text =
-        strlike_associated_text(parser->lexer, &token, &literal_len);
-    DEBUG_ASSERT(literal_len, "literal_len was 0");
-    int_value = (unsigned long long)literal_text[0];
+    struct sized_str literal = strlike_associated_text(parser->lexer, &token);
+    DEBUG_ASSERT(literal.len, "literal_len was 0");
+    int_value = (unsigned long long)literal.str[0];
     break;
   }
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL: {
     ty = AST_CNST_TY_SIGNED_INT;
 
-    size_t literal_len;
-    const char *literal_text =
-        strlike_associated_text(parser->lexer, &token, &literal_len);
-    DEBUG_ASSERT(literal_len, "literal_len was 0");
+    struct sized_str literal = strlike_associated_text(parser->lexer, &token);
+    DEBUG_ASSERT(literal.len, "literal_len was 0");
 
     wchar_t wchar;
-    mbtowc(&wchar, literal_text, literal_len);
+    mbtowc(&wchar, literal.str, literal.len);
     int_value = (unsigned long long)wchar;
     break;
   }
@@ -1561,9 +1557,8 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return false;
   }
 
-  const char *literal_text = associated_text(parser->lexer, &token);
-  size_t literal_len = strlen(literal_text);
-  DEBUG_ASSERT(literal_len, "literal_len was 0");
+  struct sized_str literal = associated_text(parser->lexer, &token);
+  DEBUG_ASSERT(literal.len, "literal_len was 0");
 
   cnst->ty = ty;
   consume_token(parser->lexer, token);
@@ -1571,7 +1566,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   unsigned long long int_value;
 
-  if (!try_parse_integer(literal_text, literal_len, &int_value)) {
+  if (!try_parse_integer(literal.str, literal.len, &int_value)) {
     parser->result_ty = PARSE_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         parser->diagnostics,
@@ -1613,9 +1608,8 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
       cnst->ty = AST_CNST_TY_STR_LITERAL;
     }
 
-    size_t str_len;
-    const char *str = strlike_associated_text(parser->lexer, &token, &str_len);
-    vector_extend(strings, str, str_len);
+    struct sized_str str = strlike_associated_text(parser->lexer, &token);
+    vector_extend(strings, str.str, str.len);
 
     consume_token(parser->lexer, token);
     peek_token(parser->lexer, &token);
@@ -2494,8 +2488,9 @@ static void add_typedefs_to_table(
         &direct_decl_list->direct_declarators[i];
 
     if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
-      var_table_create_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF,
-                             identifier_str(parser, &direct_decl->identifier));
+      struct sized_str name = identifier_str(parser, &direct_decl->identifier);
+
+      var_table_create_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF, name);
     } else if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
       add_typedefs_to_table(
           parser, &direct_decl->paren_declarator->direct_declarator_list);
@@ -3278,8 +3273,8 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
 
-const char *identifier_str(struct parser *parser,
-                           const struct lex_token *token) {
+struct sized_str identifier_str(struct parser *parser,
+                                const struct lex_token *token) {
   return associated_text(parser->lexer, token);
 }
 
@@ -3506,13 +3501,19 @@ DEBUG_FUNC(declaration_list, declaration_list) {
   }
 }
 
+#define AST_PRINT_IDENTIFIER(identifier)                                       \
+  do {                                                                         \
+    struct sized_str str = identifier_str(state->parser, identifier);          \
+    AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
+    AST_PRINTZ("");                                                            \
+  } while (0);
+
 DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
   switch (struct_or_union_specifier->ty) {
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT:
     if (struct_or_union_specifier->identifier) {
-      AST_PRINT(
-          "STRUCT '%s'",
-          identifier_str(state->parser, struct_or_union_specifier->identifier));
+      AST_PRINTZ("STRUCT ");
+      AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
 
     } else {
       AST_PRINTZ("STRUCT");
@@ -3520,10 +3521,8 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
     break;
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION:
     if (struct_or_union_specifier->identifier) {
-      AST_PRINT(
-          "UNION '%s'",
-          identifier_str(state->parser, struct_or_union_specifier->identifier));
-
+      AST_PRINTZ("UNION ");
+      AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
     } else {
       AST_PRINTZ("UNION");
     }
@@ -3536,8 +3535,8 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
 }
 
 DEBUG_FUNC(enumerator, enumerator) {
-  AST_PRINT("ENUMERATOR '%s'",
-            identifier_str(state->parser, &enumerator->identifier));
+  AST_PRINT_SAMELINE_Z("ENUMERATOR ");
+  AST_PRINT_IDENTIFIER(&enumerator->identifier);
 
   if (enumerator->value) {
     AST_PRINTZ("VALUE");
@@ -3555,9 +3554,8 @@ DEBUG_FUNC(enumerator_list, enumerator_list) {
 
 DEBUG_FUNC(enum_specifier, enum_specifier) {
   if (enum_specifier->identifier) {
-    AST_PRINT("ENUM '%s'",
-              identifier_str(state->parser, enum_specifier->identifier));
-
+    AST_PRINTZ("ENUM ");
+    AST_PRINT_IDENTIFIER(enum_specifier->identifier);
   } else {
     AST_PRINTZ("ENUM");
   }
@@ -3582,8 +3580,8 @@ DEBUG_FUNC(type_specifier, type_specifier) {
     DEBUG_CALL(enum_specifier, &type_specifier->enum_specifier);
     break;
   case AST_TYPE_SPECIFIER_TYPEDEF_NAME:
-    AST_PRINT("TYPEDEF '%s'",
-              identifier_str(state->parser, &type_specifier->typedef_name));
+    AST_PRINTZ("TYPEDEF ");
+    AST_PRINT_IDENTIFIER(&type_specifier->typedef_name);
     break;
   }
   UNINDENT();
@@ -3592,7 +3590,8 @@ DEBUG_FUNC(type_specifier, type_specifier) {
 DEBUG_FUNC(compoundstmt, compound_stmt);
 
 DEBUG_FUNC(var, var) {
-  AST_PRINT("VARIABLE '%s'", identifier_str(state->parser, &var->identifier));
+  AST_PRINTZ("VARIABLE ");
+  AST_PRINT_IDENTIFIER(&var->identifier);
 }
 
 DEBUG_FUNC(cnst, cnst) {
@@ -3727,8 +3726,8 @@ DEBUG_FUNC(direct_declarator, direct_declarator) {
   INDENT();
   switch (direct_declarator->ty) {
   case AST_DIRECT_DECLARATOR_TY_IDENTIFIER:
-    AST_PRINT("IDENTIFIER '%s'",
-              identifier_str(state->parser, &direct_declarator->identifier));
+    AST_PRINTZ("IDENTIFIER ");
+    AST_PRINT_IDENTIFIER(&direct_declarator->identifier);
     break;
   case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
     DEBUG_CALL(declarator, direct_declarator->paren_declarator);
@@ -3774,10 +3773,10 @@ DEBUG_FUNC(attribute, attribute) {
     AST_PRINTZ("EMPTY");
     break;
   case AST_ATTRIBUTE_TY_NAMED:
-    AST_PRINT("'%s'", identifier_str(state->parser, &attribute->name));
+    AST_PRINT_IDENTIFIER(&attribute->name);
     break;
   case AST_ATTRIBUTE_TY_PARAMETERIZED:
-    AST_PRINT("'%s'", identifier_str(state->parser, &attribute->name));
+    AST_PRINT_IDENTIFIER(&attribute->name);
     AST_PRINTZ("ATTRIBUTE PARAMS");
     INDENT();
     for (size_t i = 0; i < attribute->num_params; i++) {
@@ -4052,7 +4051,7 @@ DEBUG_FUNC(pointeraccess, pointer_access) {
   AST_PRINTZ("MEMBER");
 
   INDENT();
-  AST_PRINT("%s", identifier_str(state->parser, &pointer_access->member));
+  AST_PRINT_IDENTIFIER(&pointer_access->member);
   UNINDENT();
 }
 
@@ -4066,7 +4065,7 @@ DEBUG_FUNC(memberaccess, member_access) {
   AST_PRINTZ("MEMBER");
 
   INDENT();
-  AST_PRINT("%s", identifier_str(state->parser, &member_access->member));
+  AST_PRINT_IDENTIFIER(&member_access->member);
   UNINDENT();
 }
 
@@ -4090,7 +4089,8 @@ DEBUG_FUNC(designator, designator) {
   INDENT();
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD:
-    AST_PRINT("FIELD '%s'", identifier_str(state->parser, &designator->field));
+    AST_PRINTZ("FIELD ");
+    AST_PRINT_IDENTIFIER(&designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
     AST_PRINTZ("INDEX");
@@ -4306,8 +4306,8 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     UNINDENT();
     break;
   case AST_JUMPSTMT_TY_GOTO:
-    AST_PRINT("GOTO %s",
-              identifier_str(state->parser, &jump_stmt->goto_stmt.label));
+    AST_PRINTZ("GOTO ");
+    AST_PRINT_IDENTIFIER(&jump_stmt->goto_stmt.label);
     break;
   case AST_JUMPSTMT_TY_BREAK:
     AST_PRINTZ("BREAK");
@@ -4474,7 +4474,8 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
 DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case AST_LABELEDSTMT_TY_LABEL:
-    AST_PRINT("LABEL %s", identifier_str(state->parser, &labeled_stmt->label));
+    AST_PRINTZ("LABEL ");
+    AST_PRINT_IDENTIFIER(&labeled_stmt->label);
     break;
   case AST_LABELEDSTMT_TY_CASE:
     AST_PRINTZ("CASE");

@@ -49,6 +49,14 @@ typedef unsigned _BitInt(128) uint128_t;
 #define PRINTF_ARGS(idx)
 #endif
 
+#if STDC_C23 && __GNUC__
+#define COLD [gnu::cold]
+#elif __GNUC__
+#define COLD __attribute__((cold))
+#else
+#define COLD
+#endif
+
 #if STDC_C23 && HAS_C_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM [gnu::flag_enum]
 #elif HAS_ATTRIBUTE(flag_enum)
@@ -99,9 +107,14 @@ typedef unsigned _BitInt(128) uint128_t;
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-// fails on one-length arrays, but that is okay because who uses one-length arrays
-// ensures it is not a pointer type
-#define ARR_LENGTH(a) ((void)sizeof(struct { int _your_array_is_a_pointer_or_one_length[(sizeof((a)) / sizeof((a)[0])) > 1 ? 1 : -1]; }), sizeof((a)) / sizeof((a)[0]))
+// fails on one-length arrays, but that is okay because who uses one-length
+// arrays ensures it is not a pointer type
+#define ARR_LENGTH(a)                                                          \
+  ((void)sizeof(struct {                                                       \
+     int _your_array_is_a_pointer_or_one_length                                \
+         [(sizeof((a)) / sizeof((a)[0])) > 1 ? 1 : -1];                        \
+   }),                                                                         \
+   sizeof((a)) / sizeof((a)[0]))
 
 static inline size_t num_digits(size_t num) {
   return (num ? (size_t)log10(num) : 0) + 1;
@@ -111,32 +124,30 @@ static inline size_t num_digits(size_t num) {
 static inline void debug_print_stack_trace(void) {
   __sanitizer_print_stack_trace();
 }
-#elif !defined(NDEBUG) && __has_include(<execinfo.h>) && __has_include(<unistd.h>) && __has_include(<errno.h>)
+#elif !defined(NDEBUG) &&                                                      \
+    __has_include(                                                             \
+        <execinfo.h>) && __has_include(<unistd.h>) && __has_include(<errno.h>)
 #define UTIL_STACK_TRACE_IMPL
 void debug_print_stack_trace(void);
 #else
-static inline void debug_print_stack_trace(void) {
-  
-}
+static inline void debug_print_stack_trace(void) {}
 #endif
-
 
 #if __clang__
 
-#define DO_PRAGMA(x) _Pragma (#x)
-#define PUSH_NO_WARN(warn)  \
-  _Pragma("clang diagnostic push")                                             \
-      DO_PRAGMA(clang diagnostic ignored warn)
+#define DO_PRAGMA(x) _Pragma(#x)
+#define PUSH_NO_WARN(warn)                                                     \
+  _Pragma("clang diagnostic push") DO_PRAGMA(clang diagnostic ignored warn)
 #define POP_NO_WARN() _Pragma("clang diagnostic pop")
 
 #elif __GNUC__ && 0
-// this does not work for some reason? errors about "expected declaration specifiers before '#pragma'"
-// so disabled
+// this does not work for some reason? errors about "expected declaration
+// specifiers before '#pragma'" so disabled
 
-#define DO_PRAGMA(x) _Pragma (#x)
-#define PUSH_NO_WARN(warn) \
-  DO_PRAGMA(GCC diagnostic push)                                              \
-      DO_PRAGMA(GCC diagnostic ignored warn)
+#define DO_PRAGMA(x) _Pragma(#x)
+#define PUSH_NO_WARN(warn)                                                     \
+  DO_PRAGMA(GCC diagnostic push)                                               \
+  DO_PRAGMA(GCC diagnostic ignored warn)
 
 #define POP_NO_WARN() DO_PRAGMA(GCC diagnostic pop)
 
@@ -208,13 +219,13 @@ static inline void debug_print_stack_trace(void) {
 
 #define TODO(...)                                                              \
   do {                                                                         \
-    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting  ", __VA_ARGS__);        \
+    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting  ", __VA_ARGS__);      \
     EXIT_FAIL(-2);                                                             \
   } while (0);
 
 #define BUG(...)                                                               \
   do {                                                                         \
-    MACRO_FMTPRINT(stderr, "`BUG` hit, program exiting:  ", __VA_ARGS__);       \
+    MACRO_FMTPRINT(stderr, "`BUG` hit, program exiting:  ", __VA_ARGS__);      \
     EXIT_FAIL(-2);                                                             \
   } while (0);
 
@@ -225,18 +236,18 @@ static inline void debug_print_stack_trace(void) {
   util_debug_assert(b, #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 PRINTF_ARGS(5)
- void util_debug_assert(bool b, const char *cond, const char *func,
-                              const char *file, int line, const char *msg,
-                              ...);
+void util_debug_assert(bool b, const char *cond, const char *func,
+                       const char *file, int line, const char *msg, ...);
 
- #endif
+#endif
 
 NORETURN void unreachable(void);
 
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 
 // present in all mode, always causes program exit if fails
-PRINTF_ARGS(1) static inline void invariant_assert(bool b, const char *msg, ...) {
+PRINTF_ARGS(1)
+static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
 #ifdef __JCC__
     // doesn't support varargs
@@ -345,5 +356,47 @@ static inline void *nonnull_realloc(void *p, size_t size) {
 void fprint_str(FILE *file, const char *input, size_t len);
 void fprint_wstr(FILE *file, const char *input, size_t len);
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
+
+struct sized_str {
+  const char *str;
+  size_t len;
+};
+
+static inline bool szstreq(struct sized_str l,
+                           struct sized_str r) {
+  if (l.len != r.len) {
+    return false;
+  }
+
+  if (!l.len) {
+    return true;
+  }
+
+  return !memcmp(l.str, r.str, l.len);
+}
+
+static inline bool szstr_prefix(struct sized_str str,
+                           struct sized_str prefix) {
+  if (str.len < prefix.len) {
+    return false;
+  }
+
+  return !memcmp(str.str, prefix.str, prefix.len);
+}
+
+static inline int szstrcmp(struct sized_str l,
+                           struct sized_str r) {
+  size_t len = (l.len < r.len) ? l.len : r.len;
+  int cmp = memcmp(l.str, r.str, len);
+
+  if (cmp == 0) {
+    return (l.len > r.len) - (l.len < r.len);
+  }
+
+  return cmp;
+}
+
+#define MK_SIZED(s) ((struct sized_str){ s, strlen(s) })
+#define MK_NULL_STR() ((struct sized_str){ NULL, 0 })
 
 #endif
