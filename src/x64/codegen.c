@@ -1617,6 +1617,10 @@ void x64_codegen_basicblock(struct cg_state *state,
 void x64_codegen_end(UNUSED struct cg_state *state) {}
 
 static void codegen_fprintf(FILE *file, const char *format, ...) {
+#ifdef __JCC__
+  TODO("jcc va_arg");
+#else
+
   static const char *reg_names[] = {"ax", "cx", "dx", "bx",
                                     "sp", "bp", "si", "di"};
 
@@ -1794,6 +1798,8 @@ static void codegen_fprintf(FILE *file, const char *format, ...) {
       BUG("unrecognised format starting '%%%s'", format);
     }
   }
+
+#endif
 }
 
 static void debug_print_shift(FILE *file, const struct x64_shift *shift) {

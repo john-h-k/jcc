@@ -208,7 +208,7 @@ mini-boostrap() {
         # src/codegen.c
         src/compiler.c
         # src/deque.c
-        src/diagnostics.c
+        # src/diagnostics.c
         # src/disasm.c
         # src/eep/codegen.c
         # src/eep/disasm.c
@@ -227,9 +227,9 @@ mini-boostrap() {
         # src/ir/ir.c
         # src/ir/prettyprint.c
         # src/ir/rw.c
-        src/ir/validate.c
+        # src/ir/validate.c
         # src/ir/var_refs.c
-        src/lex.c
+        # src/lex.c
         src/linux/elf.c
         src/linux/link.c
         # src/liveness.c
@@ -249,7 +249,7 @@ mini-boostrap() {
         src/preproc.c
         # src/profile.c
         # src/program.c
-        src/rv32i/codegen.c
+        # src/rv32i/codegen.c
         # src/rv32i/emit.c
         src/rv32i/emitter.c
         # src/rv32i/lower.c
@@ -259,7 +259,7 @@ mini-boostrap() {
         src/util.c
         # src/var_table.c
         # src/vector.c
-        src/x64/codegen.c
+        # src/x64/codegen.c
         # src/x64/emit.c
         src/x64/emitter.c
         # src/x64/lower.c

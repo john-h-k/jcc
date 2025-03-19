@@ -160,6 +160,9 @@ static inline void debug_print_stack_trace(void) {
 #define SIZE_T_MAX (static_assert(false, "use SIZE_MAX instead"))
 #endif
 
+#ifdef __JCC__
+#define FMTPRINT(file, message, format) TODO("jcc va_arg");
+#else
 #define FMTPRINT(file, message, format)                                        \
   do {                                                                         \
     va_list v;                                                                 \
@@ -169,6 +172,7 @@ static inline void debug_print_stack_trace(void) {
     fprintf(file, "\n");                                                       \
     va_end(v);                                                                 \
   } while (0);
+#endif
 
 #define MACRO_FMTPRINT(file, message, ...)                                     \
   do {                                                                         \

@@ -93,7 +93,14 @@ set(
 
 # build for all platforms (support cross compilation)
 # TODO: add a more granular system for including targets
-add_definitions(-DJCC_ALL)
+
+if("$ENV{BOOTSTRAP}" STREQUAL "1")
+  CMAKE_FORCE_C_COMPILER(build/jcc JCC)
+endif()
+
+if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+  add_definitions(-DJCC_ALL)
+endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
@@ -102,12 +109,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(WARNING "Debug mode may be VERY SLOW on GCC due to ASan problems - Clang w/ ASan is significantly faster")
   endif()
   
-  add_link_options(-fsanitize=address,undefined)
-  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
 
-  add_compile_options(-g)
-  add_link_options(-g3 -ldl)
-  add_link_options(-rdynamic)
+  if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+    add_link_options(-fsanitize=address,undefined)
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
+
+    add_compile_options(-g)
+    add_link_options(-g3 -ldl)
+    add_link_options(-rdynamic)
+  endif()
 endif()
 
 if(MSVC)
