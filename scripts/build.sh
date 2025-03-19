@@ -255,7 +255,7 @@ mini-boostrap() {
         # src/rv32i/lower.c
         # src/rv32i/object.c
         # src/rv32i.c
-        src/typechk.c
+        # src/typechk.c
         src/util.c
         # src/var_table.c
         # src/vector.c
