@@ -9,7 +9,7 @@ try_root() {
 }
 
 # currently unused (if cmake is not installed, it will revert to slow build)
-ensure_tool() {
+ensure-tool() {
   cmd="$1"
   pkg="$2"
 
