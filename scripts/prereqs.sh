@@ -29,7 +29,8 @@ ensure-tool() {
   elif [ "$os" = "Linux" ]; then
     if [ -f /etc/debian_version ]; then
       echo "Debian/Ubuntu detected."
-      try_root apt-get update && try_root apt-get install -y "$pkg"
+      try_root apt-get update
+      try_root apt-get install -y "$pkg"
     elif [ -f /etc/redhat-release ]; then
       echo "Red Hat/CentOS/Fedora detected."
       if command -v dnf &>/dev/null; then
