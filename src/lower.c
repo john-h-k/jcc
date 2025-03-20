@@ -980,6 +980,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
   op->call.func_ty.func = func_info.func_ty;
   op->call.func_info = func_info;
 
+  func->caller_stack_needed =
+      MAX(func->caller_stack_needed, func_info.call_info.stack_size);
+
   if (func_info.call_info.ret &&
       func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
     // FIXME: don't use succ find usage
@@ -1352,9 +1355,6 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
 
     op->call.target = mov;
   }
-
-  func->caller_stack_needed =
-      MAX(func->caller_stack_needed, func_info.call_info.stack_size);
 
   size_t param_idx = 0;
   size_t reg_idx = 0;
