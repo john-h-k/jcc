@@ -10,5 +10,11 @@ int main() {
   unsigned long d1 = 11Ul;
   unsigned long d2 = 11uL;
   unsigned long d3 = 11UL;
+
+  int hi = 0xFFFFFFFF;
+  if (hi != -1) {
+    return 1;
+  }
+
   return c + a + b0 + b1 + c0 + c1 + d0 + d1 + d2 + d3;
 }
