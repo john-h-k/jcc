@@ -675,6 +675,10 @@ void ir_initialise_op(struct ir_op *op, size_t id, enum ir_op_ty ty,
 
 static void remove_pred(struct ir_basicblock *basicblock,
                         struct ir_basicblock *pred) {
+  if (!basicblock) {
+    return;
+  }
+
   for (size_t i = 0; i < basicblock->num_preds; i++) {
     if (basicblock->preds[i] == pred) {
       if (i + 1 < basicblock->num_preds) {

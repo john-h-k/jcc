@@ -1052,7 +1052,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
         }
 
         struct ir_op *addr = ir_build_addr(func, arg);
-        struct ir_op *last = op;
 
         for (size_t j = 0; j < param_info.num_regs; j++) {
           struct ir_param_reg reg = param_info.regs[j];
@@ -1060,7 +1059,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
           struct ir_var_ty load_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
 
           struct ir_op *load =
-              ir_insert_before_op(func, last, IR_OP_TY_LOAD, load_ty);
+              ir_insert_after_op(func, arg, IR_OP_TY_LOAD, load_ty);
 
           struct ir_op *addr_offset = ir_insert_before_op(
               func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
@@ -1071,8 +1070,6 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
                                            .addr = addr_offset};
 
           vector_push_back(new_args, &load);
-
-          last = load;
         }
       }
       break;

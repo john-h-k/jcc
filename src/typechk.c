@@ -1184,8 +1184,8 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       struct td_var_ty param_var_ty = type_abstract_declarator(
           tchk, &param_specifiers, &param->abstract_declarator);
 
-      *td_param =
-          (struct td_ty_param){.identifier = MK_NULL_STR(), .var_ty = param_var_ty};
+      *td_param = (struct td_ty_param){.identifier = MK_NULL_STR(),
+                                       .var_ty = param_var_ty};
       break;
     }
     }
@@ -4561,8 +4561,13 @@ static void type_staticassert(struct typechk *tchk,
 
     struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
 
+#ifdef __JCC__
+    // BUG jcc doesn't support va_list
+    message = "static_assert failed";
+#else
     message = arena_alloc_snprintf(tchk->arena, "static_assert failed: %.*s",
                                    (int)cnst.len, cnst.value);
+#endif
   } else {
     message = "static_assert failed";
   }
@@ -4679,7 +4684,7 @@ DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
   }
 }
 
-#define TD_PRINT_STR(s)                                                      \
+#define TD_PRINT_STR(s)                                                        \
   TD_PRINT_SAMELINE_NOINDENT("'%.*s'\n", (int)(s).len, (s).str);
 
 DEBUG_FUNC(var_ty, var_ty) {

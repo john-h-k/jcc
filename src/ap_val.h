@@ -2,6 +2,7 @@
 #define AP_FLOAT_H
 
 #include "alloc.h"
+#include <stdint.h>
 
 /**************************  ap_int  **************************/
 
