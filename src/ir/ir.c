@@ -3468,6 +3468,9 @@ static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
 void ir_alloc_locals(struct ir_func *func) {
   struct ir_lcl *lcl = func->first_lcl;
 
+  size_t total_locals_size = func->total_locals_size;
+  func->total_locals_size = 0;
+
   // first pass do call saves
   while (lcl) {
     if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE || !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
@@ -3479,6 +3482,10 @@ void ir_alloc_locals(struct ir_func *func) {
 
     lcl = lcl->succ;
   }
+
+  DEBUG_ASSERT(func->total_locals_size <= total_locals_size, "allocating call saves overflowed their region");
+
+  func->total_locals_size = total_locals_size;
 
   lcl = func->first_lcl;
   while (lcl) {
