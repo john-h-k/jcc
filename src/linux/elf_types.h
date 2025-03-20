@@ -88,8 +88,8 @@ typedef struct elf64_sym {
   Elf64_Xword st_size;    /* Associated symbol size */
 } Elf64_Sym;
 
-#define ELF32_ST_INFO(b, t) (((b) << 4) + ((t) & 0xF))
-#define ELF64_ST_INFO(b, t) (((b) << 4) + ((t) & 0xF))
+#define ELF32_ST_INFO(b, t) ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
+#define ELF64_ST_INFO(b, t) ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
 
 typedef struct elf32_rela {
   Elf32_Addr r_offset;
