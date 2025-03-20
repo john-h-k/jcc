@@ -3426,36 +3426,68 @@ ir_compute_dominance_frontier(struct ir_func *func) {
                                         .dom_trees = dom_trees};
 }
 
+void ir_alloc_locals_conservative(struct ir_func *func) {
+  const struct target *target = func->unit->target;
+
+  size_t max_callee_save = (target->reg_info.fp_registers.num_nonvolatile *
+                            target->reg_info.fp_registers.max_reg_size) +
+                           (target->reg_info.gp_registers.num_nonvolatile *
+                            target->reg_info.gp_registers.max_reg_size);
+
+  func->total_locals_size = max_callee_save;
+
+  ir_alloc_locals(func);
+}
+
+static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
+  struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
+
+  // HACK: sometimes we generate i64 load of a less aligned type because the
+  // type is returned in a register arm64 currently needs i64 loads to be i64
+  // aligned so make alignment always >=8 the solution is to make arm64 support
+  // non aligned loads (`ldur`/`stur`)
+  if (func->unit->target->target_id == TARGET_ID_AARCH64_LINUX || func->unit->target->target_id == TARGET_ID_AARCH64_MACOS) {
+    ty_info.alignment = MAX(ty_info.alignment, 8);
+  }
+
+  size_t lcl_pad =
+      (ty_info.alignment - (func->total_locals_size % ty_info.alignment)) %
+      ty_info.alignment;
+
+  size_t lcl_size = ty_info.size;
+
+  func->total_locals_size += lcl_pad;
+
+  lcl->alloc_ty = IR_LCL_ALLOC_TY_NORMAL;
+  lcl->alloc = (struct ir_lcl_alloc){
+      .offset = func->total_locals_size, .padding = lcl_pad, .size = lcl_size};
+
+  func->total_locals_size += lcl_size;
+}
+
 void ir_alloc_locals(struct ir_func *func) {
   struct ir_lcl *lcl = func->first_lcl;
+
+  // first pass do call saves
+  while (lcl) {
+    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE || !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
+      lcl = lcl->succ;
+      continue;
+    }
+
+    ir_alloc_local(func, lcl);
+
+    lcl = lcl->succ;
+  }
+
+  lcl = func->first_lcl;
   while (lcl) {
     if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE) {
       lcl = lcl->succ;
       continue;
     }
 
-    struct ir_var_ty_info ty_info = ir_var_ty_info(func->unit, &lcl->var_ty);
-
-    // HACK: sometimes we generate i64 load of a less aligned type because the type is returned in a register
-    // arm64 currently needs i64 loads to be i64 aligned
-    // so make alignment always >=8
-    // the solution is to make arm64 support non aligned loads (`ldur`/`stur`)
-    ty_info.alignment = MAX(ty_info.alignment, 8);
-
-    size_t lcl_pad =
-        (ty_info.alignment - (func->total_locals_size % ty_info.alignment)) %
-        ty_info.alignment;
-
-    size_t lcl_size = ty_info.size;
-
-    func->total_locals_size += lcl_pad;
-
-    lcl->alloc_ty = IR_LCL_ALLOC_TY_NORMAL;
-    lcl->alloc = (struct ir_lcl_alloc){.offset = func->total_locals_size,
-                                       .padding = lcl_pad,
-                                       .size = lcl_size};
-
-    func->total_locals_size += lcl_size;
+    ir_alloc_local(func, lcl);
 
     lcl = lcl->succ;
   }
