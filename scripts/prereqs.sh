@@ -5,7 +5,7 @@ has_tool() {
 }
 
 try_root() {
-    command -v sudo &>dev/null && sudo "$@" || "$@"
+    command -v sudo &>/dev/null && sudo "$@" || "$@"
 }
 
 # currently unused (if cmake is not installed, it will revert to slow build)
