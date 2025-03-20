@@ -112,6 +112,9 @@ struct ir_var_func_ty;
 // For register N, if `N >= num_volatile && N < (num_volatile +
 // num_nonvolatile)`, it is an involatile reg Else, it is a reserved reg
 struct reg_set_info {
+  // the maximum size of a register in this set (e.g 64 for a x64 GP reg but 256 for an FP reg if AVX is enabled)
+  size_t max_reg_size;
+
   size_t num_volatile;
   size_t num_nonvolatile;
   size_t num_reserved; // e.g x29 and x30 - can't be touched by regalloc

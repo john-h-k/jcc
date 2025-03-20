@@ -1083,6 +1083,9 @@ void ir_rebuild_func_ids(struct ir_func *irb);
 struct ir_lcl *ir_add_local(struct ir_func *irb,
                             const struct ir_var_ty *var_ty);
 void ir_detach_local(struct ir_func *irb, struct ir_lcl *lcl);
+
+// allocates locals with a gap for caller saves
+void ir_alloc_locals_conservative(struct ir_func *func);
 void ir_alloc_locals(struct ir_func *func);
 
 void ir_detach_global(struct ir_unit *iru, struct ir_glb *glb);

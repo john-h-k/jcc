@@ -11,16 +11,20 @@ struct three_elem {
 };
 
 int main() {
+#if __STDC_VERSION__ >= 202311L
   int a[2] = {};
+#endif
   int b[2] = {7};
   int c[2] = {4, 8};
 
+#if __STDC_VERSION__ >= 202311L
   if (a[0] != 0) {
     return 1;
   }
   if (a[1] != 0) {
     return 2;
   }
+#endif
 
   if (b[0] != 7) {
     return 3;
@@ -36,22 +40,31 @@ int main() {
     return 6;
   }
 
+#if __STDC_VERSION__ >= 202311L
   struct one_elem one_init_zero = {};
+#endif
+
   struct one_elem one_init_one = {1};
 
+#if __STDC_VERSION__ >= 202311L
   struct three_elem three_init_zero = {};
+#endif
+
   struct three_elem three_init_one = {1};
   struct three_elem three_init_two = {1, 2};
   struct three_elem three_init_three = {1, 2, 3};
 
+#if __STDC_VERSION__ >= 202311L
   if (one_init_zero.a != 0) {
     return 7;
   }
+#endif
 
   if (one_init_one.a != 1) {
     return 8;
   }
 
+#if __STDC_VERSION__ >= 202311L
   if (three_init_zero.a != 0) {
     return 9;
   }
@@ -63,6 +76,7 @@ int main() {
   if (three_init_zero.c != 0) {
     return 11;
   }
+#endif
 
   if (three_init_one.a != 1) {
     return 12;

@@ -1654,7 +1654,7 @@ void lower(struct ir_unit *unit) {
 
       // alloc locals EARLY so that targets can contain their addressing nodes
       // properly
-      ir_alloc_locals(func);
+      ir_alloc_locals_conservative(func);
     }
     }
 

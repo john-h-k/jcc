@@ -5,7 +5,7 @@
 #define RV32I_INSTR_SIZE (2)
 
 #define U32(v) ((uint32_t)(v))
-#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) || ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0), "imm did not fit!"), imm)
+#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) || ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0), "immediate %lld did not fit!", (long long)imm), imm)
 #define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \

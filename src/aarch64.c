@@ -12,8 +12,10 @@
 
 #if !defined(JCC_ALL) && !defined(JCC_AARCH64)
 
-const struct target AARCH64_MACOS_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
-const struct target AARCH64_LINUX_TARGET = { .target_id = TARGET_ID_NOT_SUPPORTED };
+const struct target AARCH64_MACOS_TARGET = {.target_id =
+                                                TARGET_ID_NOT_SUPPORTED};
+const struct target AARCH64_LINUX_TARGET = {.target_id =
+                                                TARGET_ID_NOT_SUPPORTED};
 
 #else
 
@@ -23,12 +25,14 @@ const struct target AARCH64_MACOS_TARGET = {
     // x0..x30 excluding x18
     {
         .ssp = 9,
-        .gp_registers = {.num_volatile = 18,
+        .gp_registers = {.max_reg_size = 8,
+                         .num_volatile = 18,
                          .num_nonvolatile = 10,
                          .num_reserved = 2},
         .fp_registers =
             {// FIXME: technically v8-15 are volatile top half
              // but we don't suppport vectors yet
+             .max_reg_size = 8, // TODO: vectors
              .num_volatile = 24,
              .num_nonvolatile = 8,
              .num_reserved = 0},
@@ -37,18 +41,20 @@ const struct target AARCH64_MACOS_TARGET = {
     aarch64_macos_mangle,
     aarch64_lower,
     aarch64_lower_func_ty,
-    {.ty = CODEGEN_UNIT_TY_AARCH64,
-     .instr_sz = sizeof(struct aarch64_instr),
-     .function_align = AARCH64_FUNCTION_ALIGNMENT,
-     .codegen_start = aarch64_codegen_start,
-     .codegen_basicblock = aarch64_codegen_basicblock,
-     .codegen_end = aarch64_codegen_end,
-   },
+    {
+        .ty = CODEGEN_UNIT_TY_AARCH64,
+        .instr_sz = sizeof(struct aarch64_instr),
+        .function_align = AARCH64_FUNCTION_ALIGNMENT,
+        .codegen_start = aarch64_codegen_start,
+        .codegen_basicblock = aarch64_codegen_basicblock,
+        .codegen_end = aarch64_codegen_end,
+    },
     aarch64_emit,
     write_macho,
     macos_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen, NULL};
+    aarch64_debug_print_codegen,
+    NULL};
 
 const struct target AARCH64_LINUX_TARGET = {
     TARGET_ID_AARCH64_LINUX,
@@ -56,12 +62,14 @@ const struct target AARCH64_LINUX_TARGET = {
     // x0..x30 excluding x18
     {
         .ssp = 9,
-        .gp_registers = {.num_volatile = 18,
+        .gp_registers = {.max_reg_size = 8,
+                         .num_volatile = 18,
                          .num_nonvolatile = 10,
                          .num_reserved = 2},
         .fp_registers =
             {// FIXME: technically v8-15 are volatile top half
              // but we don't suppport vectors yet
+             .max_reg_size = 8, // TODO: vectors
              .num_volatile = 24,
              .num_nonvolatile = 8,
              .num_reserved = 0},
@@ -70,17 +78,19 @@ const struct target AARCH64_LINUX_TARGET = {
     aarch64_linux_mangle,
     aarch64_lower,
     aarch64_lower_func_ty,
-    {.ty = CODEGEN_UNIT_TY_AARCH64,
-     .instr_sz = sizeof(struct aarch64_instr),
-     .function_align = AARCH64_FUNCTION_ALIGNMENT,
-     .codegen_start = aarch64_codegen_start,
-     .codegen_basicblock = aarch64_codegen_basicblock,
-     .codegen_end = aarch64_codegen_end,
-   },
+    {
+        .ty = CODEGEN_UNIT_TY_AARCH64,
+        .instr_sz = sizeof(struct aarch64_instr),
+        .function_align = AARCH64_FUNCTION_ALIGNMENT,
+        .codegen_start = aarch64_codegen_start,
+        .codegen_basicblock = aarch64_codegen_basicblock,
+        .codegen_end = aarch64_codegen_end,
+    },
     aarch64_emit,
     write_elf,
     linux_link_objects,
     objdump_debug_disasm,
-    aarch64_debug_print_codegen, NULL};
+    aarch64_debug_print_codegen,
+    NULL};
 
 #endif

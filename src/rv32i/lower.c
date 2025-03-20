@@ -381,7 +381,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
     }
 
     op->load.addr = ir_alloc_contained_op(func, addr, op);
-  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET && !(addr->flags & IR_OP_FLAG_CONTAINED)) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index && addr_offset.offset <= MAX_IMM_SIZE) {
@@ -407,7 +407,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
     }
 
     op->store.addr = ir_alloc_contained_op(func, addr, op);
-  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+  } else if (addr->ty == IR_OP_TY_ADDR_OFFSET && !(addr->flags & IR_OP_FLAG_CONTAINED)) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
     if (!addr_offset.index && addr_offset.offset <= MAX_IMM_SIZE) {

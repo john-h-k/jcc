@@ -19,7 +19,7 @@
 #define IMM_ASSERT(imm, expected) imm
 // (debug_assert(imm == expected, "imm did not match expected"), imm)
 #define IMM(imm, bitc)                                                         \
-  (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate did not fit!"),            \
+  (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate %lld did not fit!", (long long)imm),            \
    CLAMP_BITS(imm, bitc))
 
 /* Nop */
