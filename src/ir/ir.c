@@ -3429,9 +3429,9 @@ ir_compute_dominance_frontier(struct ir_func *func) {
 void ir_alloc_locals_conservative(struct ir_func *func) {
   const struct target *target = func->unit->target;
 
-  size_t max_callee_save = (target->reg_info.fp_registers.num_nonvolatile *
+  size_t max_callee_save = (target->reg_info.fp_registers.num_volatile *
                             target->reg_info.fp_registers.max_reg_size) +
-                           (target->reg_info.gp_registers.num_nonvolatile *
+                           (target->reg_info.gp_registers.num_volatile *
                             target->reg_info.gp_registers.max_reg_size);
 
   func->total_locals_size = max_callee_save;
