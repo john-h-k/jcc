@@ -207,13 +207,13 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size) {
 
   struct arena *arena;
 
-  if (aligned > BLOCK_SIZE) {
+  if (UNLIKELY(aligned > BLOCK_SIZE)) {
     return arena_alloc_large(allocator, size);
   } else {
     arena = allocator->last;
 
     void *allocation;
-    if (try_alloc_in_arena(arena, aligned, &allocation)) {
+    if (LIKELY(try_alloc_in_arena(arena, aligned, &allocation))) {
       return allocation;
     }
   }

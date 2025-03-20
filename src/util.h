@@ -16,10 +16,6 @@
 
 typedef ptrdiff_t ssize_t;
 
-#ifdef __cplusplus
-#error "do not compile jcc as C++"
-#endif
-
 #ifdef __JCC__
 // don't yet support -D flag so just do this
 // #define JCC_ALL
@@ -56,6 +52,14 @@ typedef unsigned _BitInt(128) uint128_t;
 #define COLD __attribute__((cold))
 #else
 #define COLD
+#endif
+
+#if __GNUC__ || __clang__
+#define LIKELY(x) __builtin_expect(x, 1)
+#define UNLIKELY(x) __builtin_expect(x, 0)
+#else
+#define LIKELY(x) x
+#define UNLIKELY(x) x
 #endif
 
 #if STDC_C23 && HAS_C_ATTRIBUTE(flag_enum)
