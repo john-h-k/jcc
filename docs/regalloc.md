@@ -88,7 +88,7 @@ Consider
 
 ```
   %0 = 10 register=R0
-  %1 = 20 register=$0
+  %1 = 20 register=R0
   call foo ( %0 )
   call bar ( %1 )
 ```
