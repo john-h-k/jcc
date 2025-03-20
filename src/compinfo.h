@@ -1,6 +1,10 @@
 #ifndef COMPINFO_H
 #define COMPINFO_H
 
+#ifdef __cplusplus
+#error "do not compile jcc as C++"
+#endif
+
 // information about the compilation of JCC, e.g arch it was built for, OS, C
 // version
 
