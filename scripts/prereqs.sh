@@ -13,6 +13,8 @@ ensure-tool() {
   cmd="$1"
   pkg="${2:-1}"
 
+  echo "Checking for cmd '$cmd' (pkg='$pkg')..."
+
   has_tool "$cmd" && return
 
   os="$(uname)"
