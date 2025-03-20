@@ -50,10 +50,12 @@
 
 #ifdef UTIL_MACRO_DEBUG
 
-#ifdef __clang__
+#if __JCC__
+#pragma message "Compiler is JCC"
+#elif __clang__
 #pragma message "Compiler is clang"
 #elif __GNUC__
-#warn "Compiler is GCC"
+#pragma message "Compiler is GCC"
 #else
 #pragma message "unrecognised compiler"
 #endif
