@@ -128,7 +128,9 @@ static bool opts_cnst_branches_op(struct ir_func *func, struct ir_op *op,
       return false;
     }
 
-    ir_remove_basicblock_successors(op->stmt->basicblock);
+    // BUG: fails do_while.c
+    // this can leave phis in BBs with only one pred. they need to be moved to prior BBs
+
     if (cnst->cnst.int_value) {
       ir_make_basicblock_merge(func, op->stmt->basicblock,
                                op->stmt->basicblock->split.true_target);
