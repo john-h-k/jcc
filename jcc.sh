@@ -488,6 +488,7 @@ export CALLER_DIR="$(pwd)/"
 export CALLER_DIR="${CALLER_DIR%/}/"
 cd "$(dirname "$0")"
 
+source ./scripts/profile.sh
 source ./scripts/prereqs.sh
 source ./scripts/build.sh
 

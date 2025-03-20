@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+source ./scripts/profile.sh
+
 BOLD="\033[1m"
 BOLDGREEN="\033[1;32m"
 BOLDRED="\033[1;31m"
@@ -10,6 +12,7 @@ VERBOSE_LEVEL="1"
 PROFILE=""
 ASSEMBLER=""
 LINKER=""
+JCC="build/jcc"
 
 TEST_TIMEOUT="30s"
 BUILD_TIMEOUT="1m"
@@ -90,6 +93,10 @@ while [[ $# -gt 0 ]]; do
     -n|--number)
       shift
       num="$1"
+      ;;
+    --jcc)
+      shift
+      JCC="$CALLER_DIR$1"
       ;;
     --assembler)
       shift
@@ -181,30 +188,16 @@ else
   printf "'${RESET}\n"
 fi
 
-if command -v gdate &>/dev/null; then
-  date="gdate"
-elif date --version 2>/dev/null | grep -q "GNU coreutils"; then
-  date="date"
-else
-  if [ -n "$PROFILE" ]; then
-    echo -e "${BOLDRED}GNU date not available, cannot profile. Install coreutils or use gdate.${RESET}"
-    exit -1
-  fi
 
-  echo -e "${BOLDYELLOW}GNU date not available, not timestamping. Install coreutils or use gdate.${RESET}"
-fi
-
-if [ -n "$date" ]; then
-  start_time=$($date +%s%3N)
-fi
+start_time=$(profile_begin)
 
 if [ -n "$RUNNER" ] && ! command -v "$RUNNER" &>/dev/null; then
   echo -e "${BOLDRED}Runner '$RUNNER' could not be found! Exiting${RESET}"
   exit -1
 fi
 
-if [ ! -x build/jcc ]; then
-  echo "Expected file 'build/jcc' to be present & executable" >&2
+if [ ! -x "$JCC" ]; then
+  echo "Expected file '$JCC' to be present & executable" >&2
   exit -1
 fi
 
@@ -393,7 +386,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -417,7 +410,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")
@@ -431,7 +424,7 @@ run_tests() {
         }
       else
         build_command() {
-          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT ./build/jcc "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
+          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
           return $?
         }
       fi
@@ -569,11 +562,6 @@ exec 3>&-
 wait "$agg_pid"
 exc=$?
 
-if [ -n "$date" ]; then
-  end_time=$($date +%s%3N)
-  elapsed=$((end_time - start_time))
-
-  printf "${BOLD}Tests took %d.%03d${RESET}s\n" $((elapsed / 1000)) $((elapsed % 1000))
-fi
+profile_end "Tests took " $start_time
 
 exit $exc

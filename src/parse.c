@@ -1649,16 +1649,10 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
 
-static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
+static bool parse_assg(struct parser *parser, const struct ast_expr *assignee, struct ast_assg *assg) {
   struct text_pos start = get_last_text_pos(parser->lexer);
 
   struct lex_pos pos = get_position(parser->lexer);
-
-  struct ast_expr assignee;
-  if (!parse_atom_3(parser, &assignee)) {
-    backtrack(parser->lexer, pos);
-    return false;
-  }
 
   struct lex_token token;
   peek_token(parser->lexer, &token);
@@ -1710,7 +1704,7 @@ static bool parse_assg(struct parser *parser, struct ast_assg *assg) {
 
   assg->ty = ty;
   assg->assignee = arena_alloc(parser->arena, sizeof(*assg->assignee));
-  *assg->assignee = assignee;
+  *assg->assignee = *assignee;
   assg->expr = arena_alloc(parser->arena, sizeof(*assg->expr));
   *assg->expr = expr;
 
@@ -2272,10 +2266,13 @@ static bool parse_atom_3(struct parser *parser, struct ast_expr *expr) {
 
 static bool parse_expr_precedence_aware(struct parser *parser,
                                         unsigned min_precedence,
+                                        const struct ast_expr *atom,
                                         struct ast_expr *expr) {
   struct text_pos start = get_last_text_pos(parser->lexer);
 
-  if (!parse_atom_3(parser, expr)) {
+  if (atom) {
+    *expr = *atom;
+  } else if (!parse_atom_3(parser, expr)) {
     return false;
   }
 
@@ -2304,7 +2301,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
 
     struct ast_expr rhs;
     invariant_assert(
-        parse_expr_precedence_aware(parser, next_min_precedence, &rhs),
+        parse_expr_precedence_aware(parser, next_min_precedence, NULL, &rhs),
         "expected parse failed");
 
     // slightly odd design where `expr` now contains lhs and `rhs` contains
@@ -2371,9 +2368,22 @@ static bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
   struct text_pos start = get_last_text_pos(parser->lexer);
   struct lex_pos pos = get_position(parser->lexer);
 
+  struct ast_expr atom;
+  if (!parse_atom_3(parser, &atom)) {
+    return false;
+  }
+
+  struct ast_assg assg;
+  if (parse_assg(parser, &atom, &assg)) {
+    expr->ty = AST_EXPR_TY_ASSG;
+    expr->assg = assg;
+    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    return true;
+  }
+
   // all non-assignment expressions
   struct ast_expr cond;
-  if (!parse_expr_precedence_aware(parser, 0, &cond)) {
+  if (!parse_expr_precedence_aware(parser, 0, &atom, &cond)) {
     backtrack(parser->lexer, pos);
     return false;
   }
@@ -2406,18 +2416,7 @@ static void parse_expected_expr(struct parser *parser, struct ast_expr *expr,
 
 // parse a non-compound expression
 static bool parse_expr(struct parser *parser, struct ast_expr *expr) {
-  // assignment is lowest precedence, so we parse it here
-  struct text_pos start = get_last_text_pos(parser->lexer);
-
-  struct ast_assg assg;
-  if (parse_assg(parser, &assg)) {
-    expr->ty = AST_EXPR_TY_ASSG;
-    expr->assg = assg;
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
-
-    return true;
-  }
-
+  // historically needed, now useless (assg will be rejected in typechk)
   return parse_constant_expr(parser, expr);
 }
 
