@@ -33,7 +33,6 @@ jobs:
         with:
           repository: john-h-k/john-site
           path: john-site
-        with:
           source: ./docs
           destination: ./_site
       - name: Upload artifact
