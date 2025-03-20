@@ -3,7 +3,7 @@
 Memory management in C is significantly constrained compared to literally any other language.
 Correctness and performance are essential within a compiler.
 
-The principal memory management primitives are located in [`alloc.h`](https://johnk.dev/jcc/src/alloc.h) and [`alloc.c`](https://johnk.dev/jcc/src/alloc.c).
+The principal memory management primitives are located in [`alloc.h`](https://github.com/john-h-k/jcc/tree/main/src/alloc.h) and [`alloc.c`](https://github.com/john-h-k/jcc/tree/main/src/alloc.c).
 
 The basic interface is:
 
