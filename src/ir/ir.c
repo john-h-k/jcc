@@ -3575,7 +3575,7 @@ loop:
           }
 
           // something in this logic is broken
-          if (false && all_ops_phis) {
+          if (/* DISABLES CODE */ (false) && all_ops_phis) {
             struct vector *entries = vector_create_in_arena(
                 sizeof(struct ir_phi_entry), func->arena);
 

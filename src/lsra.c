@@ -799,7 +799,7 @@ void lsra_register_alloc(struct ir_func *irb, struct reg_info reg_info) {
   // then during spilling we exceed this and need another
   // FIXME: temp disable SSP because it forces prologue
   // if (false && (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
-  if (true || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
+  if (/* DISABLES CODE */ (true) || (irb->flags & IR_FUNC_FLAG_NEEDS_SSP)) {
     has_ssp = true;
     ssp_reg = reg_info.ssp;
   }
