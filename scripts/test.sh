@@ -333,6 +333,8 @@ aggregator() {
   
   echo ""
 
+  profile_end "Tests took " $start_time
+
   [ "$failed" -eq "0" ]
   exit $?
 }
@@ -561,7 +563,5 @@ exec 3>&-
 
 wait "$agg_pid"
 exc=$?
-
-profile_end "Tests took " $start_time
 
 exit $exc
