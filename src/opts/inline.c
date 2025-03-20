@@ -7,7 +7,8 @@
 
 enum opts_inline_stage {
   // this is about the CALLER not CALLEE
-  // i.e if `foo() { return bar(); }`, stage INLINING means `foo` is currently undergoing inlining and may inline `bar`
+  // i.e if `foo() { return bar(); }`, stage INLINING means `foo` is currently
+  // undergoing inlining and may inline `bar`
 
   OPTS_INLINE_STAGE_INLINING,
   OPTS_INLINE_STAGE_INLINED,
@@ -18,9 +19,11 @@ struct opts_inline_info {
   struct hashtbl *inlined;
 };
 
-static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate, struct opts_inline_info *info) {
+static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate,
+                            struct opts_inline_info *info) {
   if (func == candidate) {
-    debug("cannot inline %s into %s due to recursion", candidate->name, func->name);
+    debug("cannot inline %s into %s due to recursion", candidate->name,
+          func->name);
     return false;
   }
 
@@ -28,7 +31,8 @@ static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate, str
 
   if (stage && stage == OPTS_INLINE_STAGE_INLINING) {
     // cannot inline; mutually recursive
-    debug("cannot inline %s into %s due to [mutual] recursion", candidate->name, func->name);
+    debug("cannot inline %s into %s due to [mutual] recursion", candidate->name,
+          func->name);
     return false;
   }
 
@@ -43,13 +47,16 @@ static bool opts_can_inline(struct ir_func *func, struct ir_func *candidate, str
 
 static bool opts_should_inline(struct ir_func *func,
                                struct ir_func *candidate) {
-  if (func->op_count < INLINE_COMBINE_FUNC_SZ && candidate->op_count < INLINE_COMBINE_CAND_SZ) {
-    debug("inlining %s into %s due small combine size", candidate->name, func->name);
+  if (func->op_count < INLINE_COMBINE_FUNC_SZ &&
+      candidate->op_count < INLINE_COMBINE_CAND_SZ) {
+    debug("inlining %s into %s due small combine size", candidate->name,
+          func->name);
     return true;
   }
 
   if (candidate->op_count < INLINE_CAND_SZ) {
-    debug("inlining %s into %s due small candidate size", candidate->name, func->name);
+    debug("inlining %s into %s due small candidate size", candidate->name,
+          func->name);
     return true;
   }
 
@@ -324,7 +331,8 @@ ir_clone_basicblock(struct ir_func *func,
   }
 
   copy->num_preds = basicblock->num_preds;
-  copy->preds = arena_alloc(func->arena, sizeof(struct ir_basicblock *) * copy->num_preds);
+  copy->preds = arena_alloc(func->arena,
+                            sizeof(struct ir_basicblock *) * copy->num_preds);
   for (size_t i = 0; i < copy->num_preds; i++) {
     copy->preds[i] = ir_clone_basicblock(func, basicblock->preds[i], cloned);
   }
@@ -524,18 +532,17 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
     call->mov = (struct ir_op_mov){
         .value = ((struct ir_phi_entry *)vector_head(returns))->value};
   } else {
-    struct ir_op *phi = ir_insert_phi(func, call->stmt->basicblock, call->var_ty);
+    struct ir_op *phi =
+        ir_insert_phi(func, call->stmt->basicblock, call->var_ty);
     phi->ty = IR_OP_TY_PHI;
     phi->phi = (struct ir_op_phi){.num_values = num_rets,
-                                   .values = vector_head(returns)};
+                                  .values = vector_head(returns)};
 
     // HACK: we can't remove the op because its used for iteration
     // so make it a pointless mov (which will get removed in next elim run)
 
     call->ty = IR_OP_TY_MOV;
-    call->mov = (struct ir_op_mov){
-        .value = phi
-    };
+    call->mov = (struct ir_op_mov){.value = phi};
   }
 
   // final stage
@@ -579,7 +586,6 @@ static bool opts_inline_op(struct ir_func *func, struct ir_op *call,
   return true;
 }
 
-
 static void opts_inline_func(struct ir_func *func, void *data) {
   struct opts_inline_info *info = data;
 
@@ -595,7 +601,6 @@ static void opts_inline_func(struct ir_func *func, void *data) {
 
     opts_inline_op(func, op, data);
   }
-
 }
 
 void opts_inline(struct ir_unit *unit) {
@@ -604,8 +609,8 @@ void opts_inline(struct ir_unit *unit) {
                                 sizeof(enum opts_inline_stage), NULL, NULL)};
 
   struct opts_func_pass pass = {.name = __func__,
-                           .data = &inline_info,
-                           .func_callback = opts_inline_func};
+                                .data = &inline_info,
+                                .func_callback = opts_inline_func};
 
   opts_run_func_pass(unit, &pass);
 

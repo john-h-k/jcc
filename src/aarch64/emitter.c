@@ -883,7 +883,7 @@ void aarch64_emit_csneg(struct aarch64_emitter *emitter,
 void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
                          const struct aarch64_conditional_branch br) {
   signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id; 
+  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -893,7 +893,7 @@ void aarch64_emit_b_cond(struct aarch64_emitter *emitter,
 void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
                           const struct aarch64_conditional_branch br) {
   signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id; 
+  signed long long target_pos = cg_get_next_instr(br.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -903,7 +903,7 @@ void aarch64_emit_bc_cond(struct aarch64_emitter *emitter,
 void aarch64_emit_b(struct aarch64_emitter *emitter,
                     const struct aarch64_branch b) {
   signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(b.target->cg_basicblock)->id; 
+  signed long long target_pos = cg_get_next_instr(b.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -921,7 +921,8 @@ void aarch64_emit_bl(struct aarch64_emitter *emitter,
   simm_t offset = 0;
   if (bl.target) {
     signed long long cur_pos = aarch64_emitted_count(emitter);
-    signed long long target_pos = cg_get_next_instr(bl.target->cg_basicblock)->id; 
+    signed long long target_pos =
+        cg_get_next_instr(bl.target->cg_basicblock)->id;
 
     offset = target_pos - cur_pos;
   }
@@ -937,7 +938,8 @@ void aarch64_emit_blr(struct aarch64_emitter *emitter,
 void aarch64_emit_cbz(struct aarch64_emitter *emitter,
                       const struct aarch64_compare_and_branch cmp) {
   signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(cmp.target->cg_basicblock)->id; 
+  signed long long target_pos =
+      cg_get_next_instr(cmp.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 
@@ -947,7 +949,8 @@ void aarch64_emit_cbz(struct aarch64_emitter *emitter,
 void aarch64_emit_cbnz(struct aarch64_emitter *emitter,
                        const struct aarch64_compare_and_branch cmp) {
   signed long long cur_pos = aarch64_emitted_count(emitter);
-  signed long long target_pos = cg_get_next_instr(cmp.target->cg_basicblock)->id; 
+  signed long long target_pos =
+      cg_get_next_instr(cmp.target->cg_basicblock)->id;
 
   simm_t offset = target_pos - cur_pos;
 

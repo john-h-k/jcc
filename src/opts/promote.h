@@ -6,5 +6,3 @@
 void opts_promote(struct ir_unit *unit);
 
 #endif
-
-

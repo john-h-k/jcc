@@ -146,8 +146,8 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
     goto finished;
   }
 
-  // BUG: this does not work! i assume lower is moving around ops and messing up order
-  // void *triple = vector_get(bucket->elems, hashtbl_iter->elem_idx++);
+  // BUG: this does not work! i assume lower is moving around ops and messing up
+  // order void *triple = vector_get(bucket->elems, hashtbl_iter->elem_idx++);
   void *triple = vector_get(bucket->elems, hashtbl_iter->elem_idx);
   hashtbl_iter->elem_idx++;
 

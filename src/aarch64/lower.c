@@ -23,14 +23,14 @@ static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
 // variable shifts require both operands to be the same size, as they use the
 // same register this is fine, because we can just "fake" the type required and
 // get the correct behaviour
-// we do need to insert a dummy move so it does not affect behaviour of prev instruction though
+// we do need to insert a dummy move so it does not affect behaviour of prev
+// instruction though
 static void lower_shift(struct ir_func *func, struct ir_op *op) {
   struct ir_op_binary_op *binary_op = &op->binary_op;
 
-  struct ir_op *mov = ir_insert_before_op(func, op, IR_OP_TY_MOV, binary_op->lhs->var_ty);
-  mov->mov = (struct ir_op_mov){
-    .value = binary_op->rhs
-  };
+  struct ir_op *mov =
+      ir_insert_before_op(func, op, IR_OP_TY_MOV, binary_op->lhs->var_ty);
+  mov->mov = (struct ir_op_mov){.value = binary_op->rhs};
 
   binary_op->rhs = mov;
 }
@@ -715,7 +715,8 @@ void aarch64_lower(struct ir_unit *unit) {
                 break;
               }
 
-              DEBUG_ASSERT(!ir_var_ty_is_fp(&op->var_ty), "int-ty cnst but fp var ty");
+              DEBUG_ASSERT(!ir_var_ty_is_fp(&op->var_ty),
+                           "int-ty cnst but fp var ty");
 
               break;
             }

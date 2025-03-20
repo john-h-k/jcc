@@ -1,13 +1,14 @@
 #include "link.h"
 
 #include "../alloc.h"
-#include "../util.h"
 #include "../compiler.h"
+#include "../util.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-static enum link_result macos_link_objects_with_ld(const struct link_args *args) {
+static enum link_result
+macos_link_objects_with_ld(const struct link_args *args) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
@@ -77,7 +78,6 @@ static enum link_result macos_link_objects_with_ld(const struct link_args *args)
     return LINK_RESULT_FAILURE;
   }
 }
-
 
 enum link_result macos_link_objects(const struct link_args *args) {
   return macos_link_objects_with_ld(args);

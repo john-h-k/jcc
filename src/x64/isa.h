@@ -354,99 +354,98 @@ struct x64_raw_instr {
 #define MOV_LOAD_IMM(reg, addr, imm)                                           \
   MOV_MEM_IMM((size_t)0x8B, (reg), (addr), (imm))
 
-
-#define MOVZX_MEM_IMM8(opc0, opc1, reg, addr, imm)                                      \
+#define MOVZX_MEM_IMM8(opc0, opc1, reg, addr, imm)                             \
   ((struct x64_raw_instr){                                                     \
       .len = 4,                                                                \
-      .buff = {opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+      .buff = {opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),  \
                IMM_BYTES8((imm))}})
 
-#define MOVZX_MEM_IMM32(opc0, opc1, reg, addr, imm)                                     \
+#define MOVZX_MEM_IMM32(opc0, opc1, reg, addr, imm)                            \
   ((struct x64_raw_instr){                                                     \
       .len = 7,                                                                \
-      .buff = {opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+      .buff = {opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8), \
                IMM_BYTES32((imm))}})
 
-#define MOVZX_MEM_IMM8_REX(opc0, opc1, reg, addr, imm)                                  \
+#define MOVZX_MEM_IMM8_REX(opc0, opc1, reg, addr, imm)                         \
   ((struct x64_raw_instr){                                                     \
       .len = 5,                                                                \
       .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0,             \
                    (size_t)((addr).idx > 7)),                                  \
-               opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),  \
                IMM_BYTES8((imm))}})
 
-#define MOVZX_MEM_IMM32_REX(opc0, opc1, reg, addr, imm)                                 \
+#define MOVZX_MEM_IMM32_REX(opc0, opc1, reg, addr, imm)                        \
   ((struct x64_raw_instr){                                                     \
       .len = 8,                                                                \
       .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0,             \
                    (size_t)((addr).idx > 7)),                                  \
-               opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8), \
                IMM_BYTES32((imm))}})
 
-#define MOVZX_MEM_IMM8_SIB(opc0, opc1, reg, addr, imm)                                  \
+#define MOVZX_MEM_IMM8_SIB(opc0, opc1, reg, addr, imm)                         \
   ((struct x64_raw_instr){                                                     \
       .len = 5,                                                                \
-      .buff = {opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+      .buff = {opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),  \
                SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
                IMM_BYTES8((imm))}})
 
-#define MOVZX_MEM_IMM32_SIB(opc0, opc1, reg, addr, imm)                                 \
+#define MOVZX_MEM_IMM32_SIB(opc0, opc1, reg, addr, imm)                        \
   ((struct x64_raw_instr){                                                     \
       .len = 8,                                                                \
-      .buff = {opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+      .buff = {opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8), \
                SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
                IMM_BYTES32((imm))}})
 
-#define MOVZX_MEM_IMM8_REX_SIB(opc0, opc1, reg, addr, imm)                              \
+#define MOVZX_MEM_IMM8_REX_SIB(opc0, opc1, reg, addr, imm)                     \
   ((struct x64_raw_instr){                                                     \
       .len = 6,                                                                \
       .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0,             \
                    (size_t)((addr).idx > 7)),                                  \
-               opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),       \
+               opc0, opc1, MODRM(MOD_RM_IMM8, (reg).idx % 8, (addr).idx % 8),  \
                SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
                IMM_BYTES8((imm))}})
 
-#define MOVZX_MEM_IMM32_REX_SIB(opc0, opc1, reg, addr, imm)                             \
+#define MOVZX_MEM_IMM32_REX_SIB(opc0, opc1, reg, addr, imm)                    \
   ((struct x64_raw_instr){                                                     \
       .len = 9,                                                                \
       .buff = {REX(REX_W(reg), (size_t)((reg).idx > 7), (size_t)0,             \
                    (size_t)((addr).idx > 7)),                                  \
-               opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8),      \
+               opc0, opc1, MODRM(MOD_RM_IMM32, (reg).idx % 8, (addr).idx % 8), \
                SIB(SIB_SCALE_1, SIB_INDEX_NONE, (addr).idx % 8),               \
                IMM_BYTES32((imm))}})
 
-#define MOVZX_MEM_IMM_SIB(opc0, opc1, reg, addr, imm)                                   \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
-                      ? MOVZX_MEM_IMM8_REX_SIB(opc0, opc1, (reg), (addr), (imm))      \
-                      : MOVZX_MEM_IMM8_SIB(opc0, opc1, (reg), (addr), (imm)))         \
+#define MOVZX_MEM_IMM_SIB(opc0, opc1, reg, addr, imm)                          \
+  ((imm) < 256                                                                 \
+       ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                \
+              ? MOVZX_MEM_IMM8_REX_SIB(opc0, opc1, (reg), (addr), (imm))       \
+              : MOVZX_MEM_IMM8_SIB(opc0, opc1, (reg), (addr), (imm)))          \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
-       ? MOVZX_MEM_IMM32_REX_SIB(opc0, opc1, (reg), (addr), (imm))                    \
+       ? MOVZX_MEM_IMM32_REX_SIB(opc0, opc1, (reg), (addr), (imm))             \
        : MOVZX_MEM_IMM32_SIB(opc0, opc1, (reg), (addr), (imm)))
 
-#define MOVZX_MEM_IMM_NOSIB(opc0, opc1, reg, addr, imm)                                 \
+#define MOVZX_MEM_IMM_NOSIB(opc0, opc1, reg, addr, imm)                        \
   ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
-                      ? MOVZX_MEM_IMM8_REX(opc0, opc1, (reg), (addr), (imm))          \
-                      : MOVZX_MEM_IMM8(opc0, opc1, (reg), (addr), (imm)))             \
+                      ? MOVZX_MEM_IMM8_REX(opc0, opc1, (reg), (addr), (imm))   \
+                      : MOVZX_MEM_IMM8(opc0, opc1, (reg), (addr), (imm)))      \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
-       ? MOVZX_MEM_IMM32_REX(opc0, opc1, (reg), (addr), (imm))                        \
+       ? MOVZX_MEM_IMM32_REX(opc0, opc1, (reg), (addr), (imm))                 \
        : MOVZX_MEM_IMM32(opc0, opc1, (reg), (addr), (imm)))
 
-#define MOVZX_MEM_IMM(opc0, opc1, reg, addr, imm)                                       \
-  ((NEEDS_SIB(addr)) ? MOVZX_MEM_IMM_SIB(opc0, opc1, (reg), (addr), (imm))            \
+#define MOVZX_MEM_IMM(opc0, opc1, reg, addr, imm)                              \
+  ((NEEDS_SIB(addr)) ? MOVZX_MEM_IMM_SIB(opc0, opc1, (reg), (addr), (imm))     \
                      : MOVZX_MEM_IMM_NOSIB(opc0, opc1, (reg), (addr), (imm)))
 
-#define MOVZX_LOAD_BYTE_IMM(reg, addr, imm)                                           \
+#define MOVZX_LOAD_BYTE_IMM(reg, addr, imm)                                    \
   MOVZX_MEM_IMM(0x0F, 0xB6, (reg), (addr), (imm))
 
-#define MOVZX_LOAD_HALF_IMM(reg, addr, imm)                                           \
+#define MOVZX_LOAD_HALF_IMM(reg, addr, imm)                                    \
   MOVZX_MEM_IMM(0x0F, 0xB7, (reg), (addr), (imm))
 
-#define MOVSX_LOAD_BYTE_IMM(reg, addr, imm)                                           \
+#define MOVSX_LOAD_BYTE_IMM(reg, addr, imm)                                    \
   MOVZX_MEM_IMM(0x0F, 0xBE, (reg), (addr), (imm))
 
-#define MOVSX_LOAD_HALF_IMM(reg, addr, imm)                                           \
+#define MOVSX_LOAD_HALF_IMM(reg, addr, imm)                                    \
   MOVZX_MEM_IMM(0x0F, 0xBF, (reg), (addr), (imm))
-  
 
 #define MOV_MEM16_IMM8(opc, reg, addr, imm)                                    \
   ((struct x64_raw_instr){                                                     \
@@ -539,7 +538,6 @@ struct x64_raw_instr {
 
 #define MOV_STORE_BYTE_IMM(reg, addr, imm)                                     \
   MOV_MEM_IMM((size_t)0x88, (reg), (addr), (imm))
-
 
 #define JMP_REL8(disp)                                                         \
   ((struct x64_raw_instr){.len = 2, .buff = {0xEB, IMM_BYTES8(disp)}})

@@ -43,7 +43,8 @@ void create_x64_emitter(struct x64_emitter **emitter) {
       nonnull_malloc((*emitter)->len * sizeof((*emitter)->block));
   (*emitter)->head = 0;
   (*emitter)->count = 0;
-  (*emitter)->target_relocs = vector_create(sizeof(struct x64_target_reloc_data));
+  (*emitter)->target_relocs =
+      vector_create(sizeof(struct x64_target_reloc_data));
 }
 
 size_t x64_emit_bytesize(struct x64_emitter *emitter) {
@@ -52,11 +53,12 @@ size_t x64_emit_bytesize(struct x64_emitter *emitter) {
 
 size_t x64_emitted_count(struct x64_emitter *emitter) { return emitter->count; }
 
-void x64_get_bytes(struct x64_emitter *emitter, size_t start, size_t count, char *buff) {
-  DEBUG_ASSERT(start < emitter->head && start + count <= emitter->head, "out of range");
+void x64_get_bytes(struct x64_emitter *emitter, size_t start, size_t count,
+                   char *buff) {
+  DEBUG_ASSERT(start < emitter->head && start + count <= emitter->head,
+               "out of range");
   memcpy(buff, &emitter->block[start], count);
 }
-
 
 void x64_emit_copy_to(struct x64_emitter *emitter, void *dest) {
   memcpy(dest, emitter->block, emitter->head * sizeof(*emitter->block));
@@ -90,17 +92,25 @@ void x64_emit_nop(struct x64_emitter *emitter) { x64_emit_instr(emitter, NOP); }
 
 /* SSE */
 
-void x64_emit_mov_store_ss_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_ss) {
-  x64_emit_instr(emitter, MOV_STORE_SS(mov_store_ss.source, mov_store_ss.addr, mov_store_ss.imm));
+void x64_emit_mov_store_ss_imm(struct x64_emitter *emitter,
+                               struct x64_mov_store_imm mov_store_ss) {
+  x64_emit_instr(emitter, MOV_STORE_SS(mov_store_ss.source, mov_store_ss.addr,
+                                       mov_store_ss.imm));
 }
-void x64_emit_mov_store_sd_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_sd) {
-  x64_emit_instr(emitter, MOV_STORE_SD(mov_store_sd.source, mov_store_sd.addr, mov_store_sd.imm));
+void x64_emit_mov_store_sd_imm(struct x64_emitter *emitter,
+                               struct x64_mov_store_imm mov_store_sd) {
+  x64_emit_instr(emitter, MOV_STORE_SD(mov_store_sd.source, mov_store_sd.addr,
+                                       mov_store_sd.imm));
 }
-void x64_emit_mov_load_ss_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_ss) {
-  x64_emit_instr(emitter,MOV_LOAD_SS(mov_load_ss.dest, mov_load_ss.addr, mov_load_ss.imm));
+void x64_emit_mov_load_ss_imm(struct x64_emitter *emitter,
+                              struct x64_mov_load_imm mov_load_ss) {
+  x64_emit_instr(emitter, MOV_LOAD_SS(mov_load_ss.dest, mov_load_ss.addr,
+                                      mov_load_ss.imm));
 }
-void x64_emit_mov_load_sd_imm(struct x64_emitter *emitter, struct x64_mov_load_imm mov_load_sd) {
-  x64_emit_instr(emitter,MOV_LOAD_SD(mov_load_sd.dest, mov_load_sd.addr, mov_load_sd.imm));
+void x64_emit_mov_load_sd_imm(struct x64_emitter *emitter,
+                              struct x64_mov_load_imm mov_load_sd) {
+  x64_emit_instr(emitter, MOV_LOAD_SD(mov_load_sd.dest, mov_load_sd.addr,
+                                      mov_load_sd.imm));
 }
 
 void x64_emit_ucomiss(struct x64_emitter *emitter, struct x64_cmp ucomiss) {
@@ -110,39 +120,49 @@ void x64_emit_ucomisd(struct x64_emitter *emitter, struct x64_cmp ucomisd) {
   x64_emit_instr(emitter, UCOMISD(ucomisd.lhs, ucomisd.rhs));
 }
 
-void x64_emit_movaps(struct x64_emitter *emitter, struct x64_2_reg_unary movaps) {
+void x64_emit_movaps(struct x64_emitter *emitter,
+                     struct x64_2_reg_unary movaps) {
   x64_emit_instr(emitter, MOVAPS(movaps.dest, movaps.source));
 }
 
-void x64_emit_movapd(struct x64_emitter *emitter, struct x64_2_reg_unary movapd) {
+void x64_emit_movapd(struct x64_emitter *emitter,
+                     struct x64_2_reg_unary movapd) {
   x64_emit_instr(emitter, MOVAPD(movapd.dest, movapd.source));
 }
 
-void x64_emit_cvtsi2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2ss) {
+void x64_emit_cvtsi2ss(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtsi2ss) {
   x64_emit_instr(emitter, CVTSI2SS(cvtsi2ss.dest, cvtsi2ss.source));
 }
-void x64_emit_cvtsi2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsi2sd) {
+void x64_emit_cvtsi2sd(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtsi2sd) {
   x64_emit_instr(emitter, CVTSI2SD(cvtsi2sd.dest, cvtsi2sd.source));
 }
 
-void x64_emit_cvttss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttss2si) {
+void x64_emit_cvttss2si(struct x64_emitter *emitter,
+                        struct x64_2_reg_unary cvttss2si) {
   x64_emit_instr(emitter, CVTTSS2SI(cvttss2si.dest, cvttss2si.source));
 }
-void x64_emit_cvttsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvttsd2si) {
+void x64_emit_cvttsd2si(struct x64_emitter *emitter,
+                        struct x64_2_reg_unary cvttsd2si) {
   x64_emit_instr(emitter, CVTTSD2SI(cvttsd2si.dest, cvttsd2si.source));
 }
 
-void x64_emit_cvtss2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2si) {
+void x64_emit_cvtss2si(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtss2si) {
   x64_emit_instr(emitter, CVTSS2SI(cvtss2si.dest, cvtss2si.source));
 }
-void x64_emit_cvtsd2si(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2si) {
+void x64_emit_cvtsd2si(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtsd2si) {
   x64_emit_instr(emitter, CVTSD2SI(cvtsd2si.dest, cvtsd2si.source));
 }
 
-void x64_emit_cvtss2sd(struct x64_emitter *emitter, struct x64_2_reg_unary cvtss2sd) {
+void x64_emit_cvtss2sd(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtss2sd) {
   x64_emit_instr(emitter, CVTSS2SD(cvtss2sd.dest, cvtss2sd.source));
 }
-void x64_emit_cvtsd2ss(struct x64_emitter *emitter, struct x64_2_reg_unary cvtsd2ss) {
+void x64_emit_cvtsd2ss(struct x64_emitter *emitter,
+                       struct x64_2_reg_unary cvtsd2ss) {
   x64_emit_instr(emitter, CVTSD2SS(cvtsd2ss.dest, cvtsd2ss.source));
 }
 
@@ -171,12 +191,13 @@ void x64_emit_divsd(struct x64_emitter *emitter, struct x64_alu_reg divsd) {
   x64_emit_instr(emitter, DIVSD(divsd.dest, divsd.rhs));
 }
 
-
-void x64_emit_sqrtss(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtss) {
+void x64_emit_sqrtss(struct x64_emitter *emitter,
+                     struct x64_2_reg_unary sqrtss) {
   x64_emit_instr(emitter, SQRTSS(sqrtss.dest, sqrtss.source));
 }
 
-void x64_emit_sqrtsd(struct x64_emitter *emitter, struct x64_2_reg_unary sqrtsd) {
+void x64_emit_sqrtsd(struct x64_emitter *emitter,
+                     struct x64_2_reg_unary sqrtsd) {
   x64_emit_instr(emitter, SQRTSD(sqrtsd.dest, sqrtsd.source));
 }
 
@@ -231,8 +252,8 @@ void x64_emit_or(struct x64_emitter *emitter, struct x64_alu_reg or) {
   x64_emit_instr(emitter, OR_REG(or.dest, or.rhs));
 }
 
-void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not ) {
-  x64_emit_instr(emitter, NOT_REG(not .dest));
+void x64_emit_not(struct x64_emitter *emitter, struct x64_1_reg not) {
+  x64_emit_instr(emitter, NOT_REG(not.dest));
 }
 
 void x64_emit_neg(struct x64_emitter *emitter, struct x64_1_reg neg) {
@@ -258,8 +279,7 @@ void x64_emit_add_imm(struct x64_emitter *emitter, struct x64_alu_imm add_imm) {
 void x64_emit_movsx(struct x64_emitter *emitter, struct x64_mov_reg movsx) {
   struct x64_reg dest = movsx.dest;
 
-  DEBUG_ASSERT(dest.ty == X64_REG_TY_R ||
-                   dest.ty == X64_REG_TY_E,
+  DEBUG_ASSERT(dest.ty == X64_REG_TY_R || dest.ty == X64_REG_TY_E,
                "movsx dest must be 32 or 64 bit");
 
   switch (movsx.source.ty) {
@@ -309,11 +329,15 @@ void x64_emit_mov_reg(struct x64_emitter *emitter, struct x64_mov_reg mov_reg) {
 }
 
 void x64_emit_movq(struct x64_emitter *emitter, struct x64_mov_reg movq) {
-  x64_emit_instr(emitter, movq.dest.ty == X64_REG_TY_XMM ? SSE_MOVQ(0x6E, movq.dest, movq.source) : SSE_MOVQ(0x7E, movq.source, movq.dest));
+  x64_emit_instr(emitter, movq.dest.ty == X64_REG_TY_XMM
+                              ? SSE_MOVQ(0x6E, movq.dest, movq.source)
+                              : SSE_MOVQ(0x7E, movq.source, movq.dest));
 }
 
 void x64_emit_movd(struct x64_emitter *emitter, struct x64_mov_reg movd) {
-  x64_emit_instr(emitter, movd.dest.ty == X64_REG_TY_XMM ? SSE_MOVD(0x6E, movd.dest, movd.source) : SSE_MOVD(0x7E, movd.source, movd.dest));
+  x64_emit_instr(emitter, movd.dest.ty == X64_REG_TY_XMM
+                              ? SSE_MOVD(0x6E, movd.dest, movd.source)
+                              : SSE_MOVD(0x7E, movd.source, movd.dest));
 }
 
 void x64_emit_mov_load_imm(struct x64_emitter *emitter,
@@ -328,36 +352,49 @@ void x64_emit_mov_store_imm(struct x64_emitter *emitter,
                                         mov_store_imm.addr, mov_store_imm.imm));
 }
 
-void x64_emit_movzx_load_half_imm(struct x64_emitter *emitter, struct x64_mov_load_imm movzx_load_half_imm) {
+void x64_emit_movzx_load_half_imm(struct x64_emitter *emitter,
+                                  struct x64_mov_load_imm movzx_load_half_imm) {
   x64_emit_instr(emitter, MOVZX_LOAD_HALF_IMM(movzx_load_half_imm.dest,
-                                        movzx_load_half_imm.addr, movzx_load_half_imm.imm));
+                                              movzx_load_half_imm.addr,
+                                              movzx_load_half_imm.imm));
 }
 
-void x64_emit_movzx_load_byte_imm(struct x64_emitter *emitter, struct x64_mov_load_imm movzx_load_byte_imm) {
+void x64_emit_movzx_load_byte_imm(struct x64_emitter *emitter,
+                                  struct x64_mov_load_imm movzx_load_byte_imm) {
   x64_emit_instr(emitter, MOVZX_LOAD_BYTE_IMM(movzx_load_byte_imm.dest,
-                                        movzx_load_byte_imm.addr, movzx_load_byte_imm.imm));
+                                              movzx_load_byte_imm.addr,
+                                              movzx_load_byte_imm.imm));
 }
 
-void x64_emit_mov_store_half_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_half_imm) {
+void x64_emit_mov_store_half_imm(struct x64_emitter *emitter,
+                                 struct x64_mov_store_imm mov_store_half_imm) {
   x64_emit_instr(emitter, MOV_STORE_HALF_IMM(mov_store_half_imm.source,
-                                        mov_store_half_imm.addr, mov_store_half_imm.imm));
+                                             mov_store_half_imm.addr,
+                                             mov_store_half_imm.imm));
 }
 
-void x64_emit_mov_store_byte_imm(struct x64_emitter *emitter, struct x64_mov_store_imm mov_store_byte_imm) {
+void x64_emit_mov_store_byte_imm(struct x64_emitter *emitter,
+                                 struct x64_mov_store_imm mov_store_byte_imm) {
   x64_emit_instr(emitter, MOV_STORE_BYTE_IMM(mov_store_byte_imm.source,
-                                        mov_store_byte_imm.addr, mov_store_byte_imm.imm));
+                                             mov_store_byte_imm.addr,
+                                             mov_store_byte_imm.imm));
 }
 
-void x64_emit_lea_pcrel(struct x64_emitter *emitter, struct x64_lea_pcrel lea_pcrel) {
+void x64_emit_lea_pcrel(struct x64_emitter *emitter,
+                        struct x64_lea_pcrel lea_pcrel) {
   x64_emit_instr(emitter, LEA_PCREL(lea_pcrel.dest, lea_pcrel.offset));
 }
 
 void x64_emit_lea(struct x64_emitter *emitter, struct x64_lea lea) {
   if (lea.scale) {
-    x64_emit_instr(emitter, LEA_REG64(lea.dest, lea.index, lea.base, (size_t)(lea.scale ? tzcnt(lea.scale) : 0), lea.offset));
+    x64_emit_instr(emitter,
+                   LEA_REG64(lea.dest, lea.index, lea.base,
+                             (size_t)(lea.scale ? tzcnt(lea.scale) : 0),
+                             lea.offset));
   } else if ((lea.base.idx % 8) == 0b100) {
-    struct x64_reg none = { .idx = 0b100 };
-    x64_emit_instr(emitter, LEA_REG64(lea.dest, none, lea.base, (size_t)0, lea.offset));
+    struct x64_reg none = {.idx = 0b100};
+    x64_emit_instr(emitter,
+                   LEA_REG64(lea.dest, none, lea.base, (size_t)0, lea.offset));
   } else {
     x64_emit_instr(emitter, LEA_NOIDX_REG64(lea.dest, lea.base, lea.offset));
   }
@@ -375,45 +412,49 @@ void x64_emit_call(struct x64_emitter *emitter, UNUSED struct x64_branch call) {
   x64_emit_instr(emitter, CALL_REL32(0));
 }
 
-TODO_FUNC(void x64_emit_jmp_reg(struct x64_emitter *emitter, struct x64_branch_reg jmp_reg))
+TODO_FUNC(void x64_emit_jmp_reg(struct x64_emitter *emitter,
+                                struct x64_branch_reg jmp_reg))
 
-void x64_emit_call_reg(struct x64_emitter *emitter, struct x64_branch_reg call_reg) {
+void x64_emit_call_reg(struct x64_emitter *emitter,
+                       struct x64_branch_reg call_reg) {
   x64_emit_instr(emitter, CALL_REG(call_reg.target));
 }
 
-void x64_emit_setcc(struct x64_emitter *emitter, struct x64_conditional_select setcc) {
+void x64_emit_setcc(struct x64_emitter *emitter,
+                    struct x64_conditional_select setcc) {
   x64_emit_instr(emitter, SET_COND(setcc.cond, setcc.dest));
 }
 
 struct x64_target_reloc x64_emit_jmp(struct x64_emitter *emitter,
-                                      UNUSED struct x64_branch jmp) {
+                                     UNUSED struct x64_branch jmp) {
   size_t cur_pos = x64_emit_bytesize(emitter);
   x64_emit_instr(emitter, JMP_REL());
 
   struct x64_target_reloc_data reloc = {.ty = X64_TARGET_RELOC_TY_JMP,
-                                   .offset = cur_pos};
+                                        .offset = cur_pos};
 
   size_t idx = vector_length(emitter->target_relocs);
   vector_push_back(emitter->target_relocs, &reloc);
-  return (struct x64_target_reloc){ idx };
+  return (struct x64_target_reloc){idx};
 }
 
 struct x64_target_reloc x64_emit_jcc(struct x64_emitter *emitter,
-                                      struct x64_conditional_branch jcc) {
+                                     struct x64_conditional_branch jcc) {
   size_t cur_pos = x64_emit_bytesize(emitter);
   x64_emit_instr(emitter, JMP_COND_REL(jcc.cond));
 
   struct x64_target_reloc_data reloc = {.ty = X64_TARGET_RELOC_TY_JCC,
-                                   .offset = cur_pos};
+                                        .offset = cur_pos};
 
   size_t idx = vector_length(emitter->target_relocs);
   vector_push_back(emitter->target_relocs, &reloc);
-  return (struct x64_target_reloc){ idx };
+  return (struct x64_target_reloc){idx};
 }
 
-void x64_reloc(struct x64_emitter *emitter,
-               struct x64_target_reloc reloc, size_t offset) {
-  struct x64_target_reloc_data *data = vector_get(emitter->target_relocs, reloc.idx);
+void x64_reloc(struct x64_emitter *emitter, struct x64_target_reloc reloc,
+               size_t offset) {
+  struct x64_target_reloc_data *data =
+      vector_get(emitter->target_relocs, reloc.idx);
   size_t base = data->offset;
   size_t reloc_offset = data->offset;
 
@@ -441,9 +482,10 @@ void x64_emit_test(struct x64_emitter *emitter, struct x64_cmp test) {
   x64_emit_instr(emitter, TEST_REG(test.lhs, test.rhs));
 }
 
-TODO_FUNC(void x64_emit_cmp_imm(struct x64_emitter *emitter, struct x64_cmp_imm cmp_imm))
+TODO_FUNC(void x64_emit_cmp_imm(struct x64_emitter *emitter,
+                                struct x64_cmp_imm cmp_imm))
 
 TODO_FUNC(void x64_emit_test_imm(struct x64_emitter *emitter,
-                       struct x64_cmp_imm test_imm))
+                                 struct x64_cmp_imm test_imm))
 
 void x64_emit_ret(struct x64_emitter *emitter) { x64_emit_instr(emitter, RET); }

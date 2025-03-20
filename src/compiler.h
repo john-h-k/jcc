@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include "program.h"
+
 #include <stdio.h>
 
 struct compiler;
@@ -72,8 +73,9 @@ enum compile_file_ty {
   COMPILE_FILE_TY_STDOUT,
 };
 
-// the point of this struct is passing it around rather than `FILE *`, so we don't keep a file open during the entirety of compilation
-// while still letting us disambiguate between stdout and a path easily
+// the point of this struct is passing it around rather than `FILE *`, so we
+// don't keep a file open during the entirety of compilation while still letting
+// us disambiguate between stdout and a path easily
 struct compile_file {
   enum compile_file_ty ty;
 
@@ -124,12 +126,10 @@ enum compile_result {
 };
 
 struct target;
-enum compiler_create_result create_compiler(struct program *program,
-                                            const struct target *target,
-                                            struct compile_file output,
-                                            const char *working_dir,
-                                            const struct compile_args *args,
-                                            struct compiler **compiler);
+enum compiler_create_result
+create_compiler(struct program *program, const struct target *target,
+                struct compile_file output, const char *working_dir,
+                const struct compile_args *args, struct compiler **compiler);
 enum compile_result compile(struct compiler *compiler);
 void free_compiler(struct compiler **compiler);
 

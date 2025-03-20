@@ -58,8 +58,8 @@ enum lex_token_ty {
   LEX_TOKEN_TY_OP_MUL_ASSG,    // *=
   LEX_TOKEN_TY_OP_DIV,         // /
   LEX_TOKEN_TY_OP_DIV_ASSG,    // /=
-  LEX_TOKEN_TY_OP_MOD,        // %
-  LEX_TOKEN_TY_OP_MOD_ASSG,   // %=
+  LEX_TOKEN_TY_OP_MOD,         // %
+  LEX_TOKEN_TY_OP_MOD_ASSG,    // %=
 
   LEX_TOKEN_TY_OP_ASSG, // =
 
@@ -190,10 +190,10 @@ struct text_pos get_last_text_pos(const struct lexer *lexer);
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
 struct sized_str associated_text(const struct lexer *lexer,
-                            const struct lex_token *token);
+                                 const struct lex_token *token);
 
 struct sized_str strlike_associated_text(const struct lexer *lexer,
-                                    const struct lex_token *token);
+                                         const struct lex_token *token);
 
 const char *token_name(const struct lexer *lexer,
                        const struct lex_token *token);

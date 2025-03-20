@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include "vector.h"
+
 #include <stdlib.h>
 
 #ifdef ALWAYS_MALLOC
@@ -53,7 +54,7 @@ void arena_allocator_create(struct arena_allocator **allocator) {
 
   p->last = nonnull_malloc(sizeof(*p->last));
   *p->last = new_arena(p, BLOCK_SIZE);
-  
+
   p->first = p->last;
 }
 

@@ -3105,9 +3105,9 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
                                .val = ap_val_negate(expr_value.val)};
       return true;
     case TD_UNARY_OP_TY_LOGICAL_NOT:
-      *value =
-          (struct td_val){.var_ty = expr->var_ty,
-                          .val = ap_val_from_ull(ap_val_iszero(expr_value.val))};
+      *value = (struct td_val){
+          .var_ty = expr->var_ty,
+          .val = ap_val_from_ull(ap_val_iszero(expr_value.val))};
       return true;
     case TD_UNARY_OP_TY_NOT:
       *value = (struct td_val){.var_ty = expr->var_ty,

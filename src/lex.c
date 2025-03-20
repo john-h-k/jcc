@@ -171,7 +171,7 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
 }
 
 static struct sized_str process_raw_string(const struct lexer *lexer,
-                                    const struct lex_token *token) {
+                                           const struct lex_token *token) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 

@@ -72,7 +72,6 @@
 
 /******************************** Sanitizers ********************************/
 
-
 #if HAS_FEATURE(memory_sanitizer) || defined(MEMORY_SANITIZER) ||              \
     defined(__SANITIZE_MEMORY__)
 #define MSAN 1
@@ -132,10 +131,10 @@
 #if defined(__aarch64__)
 #define ARCH_AARCH64 1
 #define ARCH_NAME "ARM64"
-#elif defined (__x86_64__)
+#elif defined(__x86_64__)
 #define ARCH_X86_64 1
 #define ARCH_NAME "X86_64"
-#elif defined (__riscv__) || defined(__riscv) || defined(__riscv32)
+#elif defined(__riscv__) || defined(__riscv) || defined(__riscv32)
 #define ARCH_RISCV32 1
 #define ARCH_NAME "RISCV 32"
 #else

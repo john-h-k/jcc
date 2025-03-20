@@ -89,7 +89,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NOINLINE
 #endif
 
-#define ROUND_UP(value, pow2) (((value) + ((pow2)-1ull)) & ~((pow2)-1ull))
+#define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 
 #define ISPOW2(value) (popcntl((value)) == 1)
 #define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
@@ -364,8 +364,7 @@ struct sized_str {
   size_t len;
 };
 
-static inline bool szstreq(struct sized_str l,
-                           struct sized_str r) {
+static inline bool szstreq(struct sized_str l, struct sized_str r) {
   if (l.len != r.len) {
     return false;
   }
@@ -377,8 +376,7 @@ static inline bool szstreq(struct sized_str l,
   return !memcmp(l.str, r.str, l.len);
 }
 
-static inline bool szstr_prefix(struct sized_str str,
-                           struct sized_str prefix) {
+static inline bool szstr_prefix(struct sized_str str, struct sized_str prefix) {
   if (str.len < prefix.len) {
     return false;
   }
@@ -386,8 +384,7 @@ static inline bool szstr_prefix(struct sized_str str,
   return !memcmp(str.str, prefix.str, prefix.len);
 }
 
-static inline int szstrcmp(struct sized_str l,
-                           struct sized_str r) {
+static inline int szstrcmp(struct sized_str l, struct sized_str r) {
   size_t len = (l.len < r.len) ? l.len : r.len;
   int cmp = memcmp(l.str, r.str, len);
 
@@ -398,7 +395,7 @@ static inline int szstrcmp(struct sized_str l,
   return cmp;
 }
 
-#define MK_SIZED(s) ((struct sized_str){ s, strlen(s) })
-#define MK_NULL_STR() ((struct sized_str){ NULL, 0 })
+#define MK_SIZED(s) ((struct sized_str){s, strlen(s)})
+#define MK_NULL_STR() ((struct sized_str){NULL, 0})
 
 #endif

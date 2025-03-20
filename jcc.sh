@@ -419,7 +419,7 @@ cfg() {
 
 format() {
     echo "Formatting..."
-    fd '.*\.[hc]' . -x clang-format -style=file -i
+    fd '.*\.[hc]' src -x clang-format -style=file -i
 }
 
 _invoke-subcommand() {

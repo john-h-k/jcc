@@ -989,7 +989,8 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     struct ir_op *store = op->succ;
     struct ir_op *addr;
 
-    // HACK: should use op uses. won't work across stmts (which might happen i think)
+    // HACK: should use op uses. won't work across stmts (which might happen i
+    // think)
     while (store && (store->ty != IR_OP_TY_STORE || store->store.value != op)) {
       store = store->succ;
     }
@@ -1011,11 +1012,9 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
         addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
         addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
-        struct ir_op *load = ir_insert_before_op(func, op, IR_OP_TY_LOAD, op->var_ty);
-        load->load = (struct ir_op_load){
-          .ty = IR_OP_LOAD_TY_LCL,
-          .lcl = lcl
-        };
+        struct ir_op *load =
+            ir_insert_before_op(func, op, IR_OP_TY_LOAD, op->var_ty);
+        load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
 
         store->store.value = load;
         break;
@@ -1460,7 +1459,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
 
   switch (ret_info.ty) {
   case IR_PARAM_INFO_TY_REGISTER: {
-    // if ty is none, its a multi reg return and lower has generated magic movs already
+    // if ty is none, its a multi reg return and lower has generated magic movs
+    // already
     if (ret_info.num_regs == 1 && op->var_ty.ty != IR_VAR_TY_TY_NONE) {
       struct ir_op *new_call =
           ir_insert_before_op(func, op, IR_OP_TY_CALL, op->var_ty);

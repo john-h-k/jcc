@@ -3,7 +3,7 @@
 
 #define FITS_IN_BITS(value, bitc)                                              \
   _Generic((value),                                                            \
-      imm_t: (((value) & ~((1ull << (bitc)) - 1ull)) == 0),                \
+      imm_t: (((value) & ~((1ull << (bitc)) - 1ull)) == 0),                    \
       simm_t: ((llabs(((simm_t)value)) & ~((1ll << (bitc)) - 1l)) == 0))
 
 // Constants must be casted to uint32_t to be well-defined behaviour
@@ -19,7 +19,8 @@
 #define IMM_ASSERT(imm, expected) imm
 // (debug_assert(imm == expected, "imm did not match expected"), imm)
 #define IMM(imm, bitc)                                                         \
-  (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate %lld did not fit!", (long long)imm),            \
+  (DEBUG_ASSERT(FITS_IN_BITS(imm, bitc), "immediate %lld did not fit!",        \
+                (long long)imm),                                               \
    CLAMP_BITS(imm, bitc))
 
 /* Nop */
@@ -46,13 +47,16 @@
 #define LDP_128(mode, fp, imm7, Rt2, Rn, Rt)                                   \
   LDR_STR_PAIR(0b10, fp, mode, 1, imm7, Rt2, Rn, Rt)
 
-#define LDR_STR_REG(size, VR, opc, Rm, option, S, Rn, Rt)                     \
+#define LDR_STR_REG(size, VR, opc, Rm, option, S, Rn, Rt)                      \
   (uint32_t)((U32(size) << 30) | (U32(0b111) << 27) | (U32(VR) << 26) |        \
-             (U32(opc) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |                            \
-             (U32(option) << 13) | (U32(S) << 12) | (U32(0b10) << 10) | (U32(Rn) << 5) | U32(Rt))
+             (U32(opc) << 22) | (U32(0b1) << 21) | (U32(Rm) << 16) |           \
+             (U32(option) << 13) | (U32(S) << 12) | (U32(0b10) << 10) |        \
+             (U32(Rn) << 5) | U32(Rt))
 
-#define LDR_REG(size, VR, Rm, option, S, Rn, Rt) LDR_STR_REG(size, VR, 0b01, Rm, option, S, Rn, Rt)
-#define STR_REG(size, VR, Rm, option, S, Rn, Rt) LDR_STR_REG(size, VR, 0b00, Rm, option, S, Rn, Rt)
+#define LDR_REG(size, VR, Rm, option, S, Rn, Rt)                               \
+  LDR_STR_REG(size, VR, 0b01, Rm, option, S, Rn, Rt)
+#define STR_REG(size, VR, Rm, option, S, Rn, Rt)                               \
+  LDR_STR_REG(size, VR, 0b00, Rm, option, S, Rn, Rt)
 
 #define LDR_LITERAL(opc, V, imm19, Rt)                                         \
   (uin32_t)((U32(opc) << 30) | (U32(0b011) << 27) | (U32(V) << 26) |           \

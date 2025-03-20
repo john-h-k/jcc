@@ -3,22 +3,22 @@
 
 #include "alloc.h"
 
-#define CLONE_AND_FREE_VECTOR(arena, vec, num, p) \
-  do { \
-    void *buf = arena_alloc((arena), vector_byte_size((vec))); \
-    vector_copy_to((vec), buf); \
-    (num) = vector_length((vec)); \
-    (p) = buf; \
-    vector_free(&(vec)); \
-  } while (0); 
-
+#define CLONE_AND_FREE_VECTOR(arena, vec, num, p)                              \
+  do {                                                                         \
+    void *buf = arena_alloc((arena), vector_byte_size((vec)));                 \
+    vector_copy_to((vec), buf);                                                \
+    (num) = vector_length((vec));                                              \
+    (p) = buf;                                                                 \
+    vector_free(&(vec));                                                       \
+  } while (0);
 
 struct vector;
 
 struct vector *vector_create(size_t element_size);
 
 // TODO: make arena first param for consistency
-struct vector *vector_create_in_arena(size_t element_size, struct arena_allocator *arena);
+struct vector *vector_create_in_arena(size_t element_size,
+                                      struct arena_allocator *arena);
 
 void vector_extend(struct vector *v, const void *data, size_t num_elems);
 

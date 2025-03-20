@@ -1,8 +1,8 @@
 #include "util.h"
 
-#include <stdint.h>
 #include <ctype.h>
 #include <limits.h>
+#include <stdint.h>
 #include <wctype.h>
 
 NORETURN void unreachable(void) {
@@ -17,11 +17,10 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
 
 #ifndef NDEBUG
 void util_debug_assert(bool b, const char *cond, const char *func,
-                              const char *file, int line, const char *msg,
-                              ...) {
+                       const char *file, int line, const char *msg, ...) {
   if (!b) {
-    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
-            line, func, cond);
+    fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ",
+            file, line, func, cond);
 
 #ifndef __JCC__
     va_list v;
@@ -88,70 +87,69 @@ void debug_print_stack_trace(void) {
 }
 #endif
 
-#define PRINT_STR(get_ch, fn_prefix, literal_prefix) \
-  DEBUG_ASSERT(file, "null arg"); \
-   \
-  if (!input) { \
-    fprintf(file, "(null)"); \
-    return; \
-  } \
-   \
-  fprintf(file, # literal_prefix "\""); \
-   \
-  for (size_t i = 0; i < len;) { \
-    get_ch; \
-    switch (ch) { \
-    case literal_prefix ## '\0': \
-      fprintf(file, "\\0"); \
-      break; \
-    case literal_prefix ## '\\': \
-      fprintf(file, "\\\\"); \
-      break; \
-    case literal_prefix ## '\"': \
-      fprintf(file, "\\\""); \
-      break; \
-    case literal_prefix ## '\n': \
-      fprintf(file, "\\n"); \
-      break; \
-    case literal_prefix ## '\t': \
-      fprintf(file, "\\t"); \
-      break; \
-    case literal_prefix ## '\r': \
-      fprintf(file, "\\r"); \
-      break; \
-    case literal_prefix ## '\b': \
-      fprintf(file, "\\b"); \
-      break; \
-    case literal_prefix ## '\f': \
-      fprintf(file, "\\f"); \
-      break; \
-    case literal_prefix ## '\v': \
-      fprintf(file, "\\v"); \
-      break; \
-    default: \
-      if (is ## fn_prefix ## print(ch)) { \
-        fputc(((int32_t)ch < 128) ? (char)ch : '?', file); \
-      } else if ((int32_t)ch <= 0xFFFF) { \
-        fprintf(file, "\\u%04x", (unsigned)ch); \
-      } else { \
-        fprintf(file, "\\U%08x", (unsigned)ch); \
-      } \
-      break; \
-    } \
-  } \
-   \
+#define PRINT_STR(get_ch, fn_prefix, literal_prefix)                           \
+  DEBUG_ASSERT(file, "null arg");                                              \
+                                                                               \
+  if (!input) {                                                                \
+    fprintf(file, "(null)");                                                   \
+    return;                                                                    \
+  }                                                                            \
+                                                                               \
+  fprintf(file, #literal_prefix "\"");                                         \
+                                                                               \
+  for (size_t i = 0; i < len;) {                                               \
+    get_ch;                                                                    \
+    switch (ch) {                                                              \
+    case literal_prefix##'\0':                                                 \
+      fprintf(file, "\\0");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\\':                                                 \
+      fprintf(file, "\\\\");                                                   \
+      break;                                                                   \
+    case literal_prefix##'\"':                                                 \
+      fprintf(file, "\\\"");                                                   \
+      break;                                                                   \
+    case literal_prefix##'\n':                                                 \
+      fprintf(file, "\\n");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\t':                                                 \
+      fprintf(file, "\\t");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\r':                                                 \
+      fprintf(file, "\\r");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\b':                                                 \
+      fprintf(file, "\\b");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\f':                                                 \
+      fprintf(file, "\\f");                                                    \
+      break;                                                                   \
+    case literal_prefix##'\v':                                                 \
+      fprintf(file, "\\v");                                                    \
+      break;                                                                   \
+    default:                                                                   \
+      if (is##fn_prefix##print(ch)) {                                          \
+        fputc(((int32_t)ch < 128) ? (char)ch : '?', file);                     \
+      } else if ((int32_t)ch <= 0xFFFF) {                                      \
+        fprintf(file, "\\u%04x", (unsigned)ch);                                \
+      } else {                                                                 \
+        fprintf(file, "\\U%08x", (unsigned)ch);                                \
+      }                                                                        \
+      break;                                                                   \
+    }                                                                          \
+  }                                                                            \
+                                                                               \
   fprintf(file, "\"");
-
-
 
 // explicit len because may contain null chars
 void fprint_str(FILE *file, const char *input, size_t len) {
-  PRINT_STR(char ch = input[i++],,);
+  PRINT_STR(char ch = input[i++], , );
 }
 
-// this takes BYTE length of string because thats the info we have easiest access to throughout most of frontend
+// this takes BYTE length of string because thats the info we have easiest
+// access to throughout most of frontend
 void fprint_wstr(FILE *file, const uint32_t *input, size_t len) {
-  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i++,w,L);
+  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i++, w, L);
 }
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
@@ -163,15 +161,15 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
 
   bool neg = false;
   switch (*str) {
-    case '+':
-      i++;
-      break;
-    case '-':
-      neg = true;
-      i++;
-      break;
-    default:
-      break;
+  case '+':
+    i++;
+    break;
+  case '-':
+    neg = true;
+    i++;
+    break;
+  default:
+    break;
   }
 
   if (i == len) {
@@ -209,26 +207,26 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
       digit = ch - '0';
     } else if (base > 10) {
       switch (tolower(ch)) {
-        case 'a':
-          digit = 10;
-          break;
-        case 'b':
-          digit = 11;
-          break;
-        case 'c':
-          digit = 12;
-          break;
-        case 'd':
-          digit = 13;
-          break;
-        case 'e':
-          digit = 14;
-          break;
-        case 'f':
-          digit = 15;
-          break;
-        default:
-          return false;
+      case 'a':
+        digit = 10;
+        break;
+      case 'b':
+        digit = 11;
+        break;
+      case 'c':
+        digit = 12;
+        break;
+      case 'd':
+        digit = 13;
+        break;
+      case 'e':
+        digit = 14;
+        break;
+      case 'f':
+        digit = 15;
+        break;
+      default:
+        return false;
       }
     } else {
       return false;
@@ -238,7 +236,7 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
     cur += digit;
   }
 
-  *value = neg && cur ? ULLONG_MAX - (cur  - 1) : cur;
+  *value = neg && cur ? ULLONG_MAX - (cur - 1) : cur;
   return true;
 }
 

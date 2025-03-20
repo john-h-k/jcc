@@ -73,8 +73,8 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
   } else {
     struct ir_var_ty_info info =
         ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
-                                    ? &IR_VAR_TY_POINTER
-                                    : func_ty.ret_ty);
+                                       ? &IR_VAR_TY_POINTER
+                                       : func_ty.ret_ty);
 
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
@@ -196,7 +196,8 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
           // pointer to it
 
           param_info.regs[j] = (struct ir_param_reg){
-              .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j}, .size = hfa_member_size};
+              .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j},
+              .size = hfa_member_size};
 
           vector_push_back(params, &member_ty);
         }
@@ -828,7 +829,7 @@ void x64_lower(struct ir_unit *unit) {
                 struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I64,
-                                     op->addr_offset.scale);
+                                        op->addr_offset.scale);
 
                 struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);

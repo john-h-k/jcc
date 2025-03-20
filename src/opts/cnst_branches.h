@@ -6,5 +6,3 @@
 void opts_cnst_branches(struct ir_unit *unit);
 
 #endif
-
-

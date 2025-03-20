@@ -88,8 +88,10 @@ typedef struct elf64_sym {
   Elf64_Xword st_size;    /* Associated symbol size */
 } Elf64_Sym;
 
-#define ELF32_ST_INFO(b, t) ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
-#define ELF64_ST_INFO(b, t) ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
+#define ELF32_ST_INFO(b, t)                                                    \
+  ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
+#define ELF64_ST_INFO(b, t)                                                    \
+  ((unsigned char)((b) << 4) + (unsigned char)((t) & 0xF))
 
 typedef struct elf32_rela {
   Elf32_Addr r_offset;
@@ -220,7 +222,6 @@ typedef struct elf64_shdr {
 // deprecated, use CALL_PLT instead
 // #define R_RISCV_CALL 18
 #define R_RISCV_CALL_PLT 19
-
 
 #define R_RISCV_PCREL_HI20 23
 #define R_RISCV_PCREL_LO12_I 24

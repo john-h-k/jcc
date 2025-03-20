@@ -4,7 +4,6 @@
 #include "linux/link.h"
 #include "macos/link.h"
 #include "macos/mach-o.h"
-
 #include "target.h"
 #include "x64/codegen.h"
 #include "x64/lower.h"

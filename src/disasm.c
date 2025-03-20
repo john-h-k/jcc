@@ -9,12 +9,14 @@ void objdump_debug_disasm(const char *filename, const char *output) {
   // static const char COMMAND[] = "objdump --macho --no-show-raw-insn -d ";
   // macho mode causes some instructions to show wrongly (half instructions)
   static const char COMMAND[] = "objdump -M intel --no-show-raw-insn -r -d ";
-  // static const char COMMAND[] = "riscv64-unknown-elf-objdump --no-show-raw-insn -r -d ";
+  // static const char COMMAND[] = "riscv64-unknown-elf-objdump
+  // --no-show-raw-insn -r -d ";
 
   char *command;
 
   if (output) {
-    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + strlen(" > ") + strlen(output) + 1);
+    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + strlen(" > ") +
+                             strlen(output) + 1);
     strcpy(command, COMMAND);
     strcat(command, filename);
     strcat(command, " > ");

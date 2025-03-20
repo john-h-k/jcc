@@ -4,7 +4,6 @@
 #include "ir/ir.h"
 #include "target.h"
 
-
 struct aarch64_instr;
 struct eep_instr;
 struct rv32i_instr;
@@ -106,13 +105,16 @@ struct cg_unit {
 // returns the next instr that can be jumped to (ie skips empty blocks)
 struct instr *cg_get_next_instr(struct cg_basicblock *target);
 
-struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func, struct ir_basicblock *ir_basicblock);
-struct instr *cg_alloc_instr(struct cg_func *func, struct cg_basicblock *basicblock);
+struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
+                                          struct ir_basicblock *ir_basicblock);
+struct instr *cg_alloc_instr(struct cg_func *func,
+                             struct cg_basicblock *basicblock);
 
-void cg_detach_basicblock(struct cg_func *func, struct cg_basicblock *basicblock);
+void cg_detach_basicblock(struct cg_func *func,
+                          struct cg_basicblock *basicblock);
 
 const char *cg_mangle_str_cnst_name(struct arena_allocator *arena,
-                                 const char *func_name, size_t id);
+                                    const char *func_name, size_t id);
 
 int cg_sort_entries_by_id(const void *a, const void *b);
 

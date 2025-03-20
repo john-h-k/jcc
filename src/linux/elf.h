@@ -6,4 +6,3 @@
 void write_elf(const struct build_object_args *args);
 
 #endif
-

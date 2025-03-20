@@ -188,17 +188,17 @@ void aarch64_emit_store_imm(struct aarch64_emitter *emitter,
                             const struct aarch64_store_imm str);
 
 void aarch64_emit_load_byte(struct aarch64_emitter *emitter,
-                                const struct aarch64_load ldrb);
+                            const struct aarch64_load ldrb);
 void aarch64_emit_store_byte(struct aarch64_emitter *emitter,
-                                 const struct aarch64_store strb);
+                             const struct aarch64_store strb);
 void aarch64_emit_load_half(struct aarch64_emitter *emitter,
-                                const struct aarch64_load ldrh);
+                            const struct aarch64_load ldrh);
 void aarch64_emit_store_half(struct aarch64_emitter *emitter,
-                                 const struct aarch64_store strh);
+                             const struct aarch64_store strh);
 void aarch64_emit_load(struct aarch64_emitter *emitter,
-                           const struct aarch64_load ldr);
+                       const struct aarch64_load ldr);
 void aarch64_emit_store(struct aarch64_emitter *emitter,
-                            const struct aarch64_store str);
+                        const struct aarch64_store str);
 
 /* Conditional selects */
 

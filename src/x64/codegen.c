@@ -421,7 +421,8 @@ static void codegen_mov_op(struct cg_state *state,
 
 static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return X64_INSTR_TY_MOVZX_LOAD_BYTE_IMM;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
@@ -439,7 +440,8 @@ static enum x64_instr_ty load_ty_for_op(struct ir_op *op) {
 
 static enum x64_instr_ty store_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
-      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 || op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
+      (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return X64_INSTR_TY_MOV_STORE_BYTE_IMM;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
@@ -829,9 +831,9 @@ static void codegen_binary_op(struct cg_state *state,
     struct instr *clear_hi = cg_alloc_instr(state->func, basicblock);
     clear_hi->x64->ty = X64_INSTR_TY_XOR;
     clear_hi->x64->xor = (struct x64_alu_reg){
-                           .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
-                           .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
-                       };
+        .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
+        .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
+    };
 
     struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->x64->ty = X64_INSTR_TY_IDIV;
@@ -848,9 +850,9 @@ static void codegen_binary_op(struct cg_state *state,
     struct instr *clear_hi = cg_alloc_instr(state->func, basicblock);
     clear_hi->x64->ty = X64_INSTR_TY_XOR;
     clear_hi->x64->xor = (struct x64_alu_reg){
-                           .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
-                           .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
-                       };
+        .dest = {.ty = lhs.ty, .idx = REG_IDX_DX},
+        .rhs = {.ty = lhs.ty, .idx = REG_IDX_DX},
+    };
 
     struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->x64->ty = X64_INSTR_TY_DIV;
@@ -867,9 +869,9 @@ static void codegen_binary_op(struct cg_state *state,
     struct instr *clear_hi = cg_alloc_instr(state->func, basicblock);
     clear_hi->x64->ty = X64_INSTR_TY_XOR;
     clear_hi->x64->xor = (struct x64_alu_reg){
-                           .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
-                           .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
-                       };
+        .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+        .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+    };
 
     struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->x64->ty = X64_INSTR_TY_IDIV;
@@ -886,9 +888,9 @@ static void codegen_binary_op(struct cg_state *state,
     struct instr *clear_hi = cg_alloc_instr(state->func, basicblock);
     clear_hi->x64->ty = X64_INSTR_TY_XOR;
     clear_hi->x64->xor = (struct x64_alu_reg){
-                           .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
-                           .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
-                       };
+        .dest = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+        .rhs = {.ty = X64_REG_TY_R, .idx = REG_IDX_DX},
+    };
 
     struct instr *instr = cg_alloc_instr(state->func, basicblock);
     instr->x64->ty = X64_INSTR_TY_DIV;
@@ -980,16 +982,16 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_OR:
     instr->x64->ty = GET_BITWISE(X64_INSTR_TY_OR);
     instr->x64->or = (struct x64_alu_reg){
-                       .dest = dest,
-                       .rhs = rhs,
-                   };
+        .dest = dest,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
     instr->x64->ty = GET_BITWISE(X64_INSTR_TY_XOR);
     instr->x64->xor = (struct x64_alu_reg){
-                        .dest = dest,
-                        .rhs = rhs,
-                    };
+        .dest = dest,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->x64->ty = X64_INSTR_TY_ADD;
@@ -2145,7 +2147,7 @@ void x64_debug_print_instr(FILE *file, UNUSED_ARG(const struct cg_func *func),
     break;
   case X64_INSTR_TY_NOT:
     fprintf(file, "not");
-    debug_print_1_reg(file, &instr->x64->not );
+    debug_print_1_reg(file, &instr->x64->not);
     break;
   case X64_INSTR_TY_NEG:
     fprintf(file, "neg");

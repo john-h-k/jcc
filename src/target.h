@@ -112,7 +112,8 @@ struct ir_var_func_ty;
 // For register N, if `N >= num_volatile && N < (num_volatile +
 // num_nonvolatile)`, it is an involatile reg Else, it is a reserved reg
 struct reg_set_info {
-  // the maximum size of a register in this set (e.g 64 for a x64 GP reg but 256 for an FP reg if AVX is enabled)
+  // the maximum size of a register in this set (e.g 64 for a x64 GP reg but 256
+  // for an FP reg if AVX is enabled)
   size_t max_reg_size;
 
   size_t num_volatile;
@@ -121,7 +122,8 @@ struct reg_set_info {
 };
 
 struct reg_info {
-  size_t ssp; // a GP register that can be safely used as a scratch register around calls (so not an arg register)
+  size_t ssp; // a GP register that can be safely used as a scratch register
+              // around calls (so not an arg register)
   struct reg_set_info gp_registers;
   struct reg_set_info fp_registers;
 };
@@ -138,10 +140,9 @@ enum link_result { LINK_RESULT_SUCCESS, LINK_RESULT_FAILURE };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
 typedef void (*target_lower)(struct ir_unit *unit);
-typedef struct ir_func_info (*target_lower_func_ty)(struct ir_func *func,
-                                             struct ir_var_func_ty func_ty,
-                                             struct ir_op **args,
-                                             size_t num_args);
+typedef struct ir_func_info (*target_lower_func_ty)(
+    struct ir_func *func, struct ir_var_func_ty func_ty, struct ir_op **args,
+    size_t num_args);
 
 struct cg_unit;
 
@@ -167,7 +168,6 @@ enum cg_unit_ty {
   CODEGEN_UNIT_TY_RV32I,
 };
 
-
 struct cg_state {
   struct arena_allocator *arena;
 
@@ -187,12 +187,15 @@ struct cg_state {
 struct ir_glb;
 struct ir_basicblock;
 
-typedef void (*target_codegen_basicblock)(struct cg_state *state, struct ir_basicblock *basicblock);
+typedef void (*target_codegen_basicblock)(struct cg_state *state,
+                                          struct ir_basicblock *basicblock);
 typedef void (*target_codegen)(struct cg_state *state);
 
-typedef void (*emit_asm)(FILE *file, struct cg_unit *unit, enum codegen_flags flags);
+typedef void (*emit_asm)(FILE *file, struct cg_unit *unit,
+                         enum codegen_flags flags);
 
-typedef struct cg_entry (*target_codegen_var)(struct cg_unit *unit, struct ir_glb *glb);
+typedef struct cg_entry (*target_codegen_var)(struct cg_unit *unit,
+                                              struct ir_glb *glb);
 
 struct codegen_info {
   enum cg_unit_ty ty;
