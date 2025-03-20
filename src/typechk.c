@@ -2986,7 +2986,6 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
           (struct td_val){.var_ty = expr->var_ty, .val = expr->cnst.num_value};
       return true;
     case TD_CNST_TY_STRING:
-      break;
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
         compiler_diagnostics_add(
