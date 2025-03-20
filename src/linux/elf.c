@@ -287,7 +287,8 @@ static void write_relocations_elf(FILE *file,
       memset(&rela, 0, sizeof(rela));
       rela.r_offset = r->address;
       rela.r_addend = r->offset - 4;
-      rela.r_info = ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_GOTPCREL);
+      rela.r_info =
+          ELF64_R_INFO(sym_id_to_idx[r->symbol_index], R_X86_64_GOTPCREL);
       fwrite(&rela, sizeof(rela), 1, file);
       break;
     }
@@ -346,10 +347,12 @@ static void write_elf_object(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
   invariant_assert(file, "could not open object output file");
 
-  size_t text_align = 1, const_align = 1, data_align = 1;
-  size_t total_text = 0, total_const = 0, total_data = 0;
   size_t *entry_offsets =
       nonnull_malloc(args->num_entries * sizeof(*entry_offsets));
+
+  size_t text_align = 1;
+  size_t const_align = 1;
+  size_t data_align = 1;
 
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
@@ -369,29 +372,32 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
+  size_t total_text_size = 0;
+  size_t total_const_size = 0;
+  size_t total_data_size = 0;
+
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
     switch (e->ty) {
     case OBJECT_ENTRY_TY_FUNC:
-      entry_offsets[i] = total_text;
-      total_text += ROUND_UP(e->len_data, text_align);
+      entry_offsets[i] = total_text_size;
+      total_text_size += ROUND_UP(e->len_data, text_align);
       break;
     case OBJECT_ENTRY_TY_C_STRING:
     case OBJECT_ENTRY_TY_CONST_DATA:
-      entry_offsets[i] = total_const;
-      total_const += ROUND_UP(e->len_data, const_align);
+      entry_offsets[i] = total_const_size;
+      total_const_size += ROUND_UP(e->len_data, const_align);
       break;
     case OBJECT_ENTRY_TY_MUT_DATA:
-      entry_offsets[i] = total_data;
-      total_data += ROUND_UP(e->len_data, data_align);
+      entry_offsets[i] = total_data_size;
+      total_data_size += ROUND_UP(e->len_data, data_align);
       break;
     case OBJECT_ENTRY_TY_DECL:
       break;
     }
   }
 
-  struct reloc_info info =
-      build_reloc_info(args, entry_offsets);
+  struct reloc_info info = build_reloc_info(args, entry_offsets);
 
   /* assign file offsets to sections in order:
      elf header | .text | .cstring | .const | .data |
@@ -400,11 +406,11 @@ static void write_elf_object(const struct build_object_args *args) {
   */
   size_t offset = sizeof(Elf64_Ehdr);
   size_t text_off = offset;
-  offset += total_text;
+  offset += total_text_size;
   size_t const_off = offset;
-  offset += total_const;
+  offset += total_const_size;
   size_t data_off = offset;
-  offset += total_data;
+  offset += total_data_size;
   size_t rela_text_off = offset;
   offset += info.num_text_reloc_instrs * sizeof(Elf64_Rela);
   size_t rela_const_off = offset;
@@ -502,13 +508,11 @@ static void write_elf_object(const struct build_object_args *args) {
     unsupported("unsupported arch for elf");
   }
 
-  // FIXME: leak
   size_t *sym_id_to_idx =
       nonnull_malloc(sizeof(*sym_id_to_idx) * args->num_entries);
 
   size_t *sym_order = nonnull_malloc(sizeof(*sym_order) * args->num_entries);
 
-  size_t text_sym = 0, const_sym = 0, data_sym = 0;
   size_t str_off = 1;
 
   enum symbol_visibility sym_vises[3] = {SYMBOL_VISIBILITY_PRIVATE,
@@ -530,30 +534,29 @@ static void write_elf_object(const struct build_object_args *args) {
       sym_id_to_idx[i] = last_sym_idx++;
       sym_order[last_sym_pos++] = i;
 
-      unsigned short st_shndx;
-      unsigned long st_name, st_value, st_size;
+      unsigned short st_shndx = 0;
+      unsigned long st_name = 0;
+      unsigned long st_value = 0;
+      unsigned long st_size = 0;
 
       st_name = str_off;
       if (s->visibility != SYMBOL_VISIBILITY_UNDEF) {
         switch (s->ty) {
         case SYMBOL_TY_FUNC:
           st_shndx = 1;
-          st_value = text_sym;
+          st_value = entry_offsets[i];
           st_size = args->entries[i].len_data;
-          text_sym += ROUND_UP(args->entries[i].len_data, text_align);
           break;
         case SYMBOL_TY_STRING:
         case SYMBOL_TY_CONST_DATA:
           st_shndx = 2;
-          st_value = const_sym;
+          st_value = entry_offsets[i];
           st_size = args->entries[i].len_data;
-          const_sym += ROUND_UP(args->entries[i].len_data, const_align);
           break;
         case SYMBOL_TY_DATA:
           st_shndx = 3;
-          st_value = data_sym;
+          st_value = entry_offsets[i];
           st_size = args->entries[i].len_data;
-          data_sym += ROUND_UP(args->entries[i].len_data, data_align);
           break;
         case SYMBOL_TY_DECL:
           BUG("decl symbol must be undefined");
@@ -562,16 +565,38 @@ static void write_elf_object(const struct build_object_args *args) {
         st_shndx = SHN_UNDEF;
       }
 
+      unsigned char stb;
+      unsigned char stt;
+
+      switch (s->visibility) {
+      case SYMBOL_VISIBILITY_PRIVATE:
+        stb = STB_GLOBAL;
+        break;
+      case SYMBOL_VISIBILITY_GLOBAL:
+      case SYMBOL_VISIBILITY_UNDEF:
+        stb = STB_GLOBAL;
+        break;
+      }
+
+      switch (s->ty) {
+      case SYMBOL_TY_DECL:
+      case SYMBOL_TY_FUNC:
+        stt = STT_FUNC;
+        break;
+      case SYMBOL_TY_STRING:
+      case SYMBOL_TY_CONST_DATA:
+      case SYMBOL_TY_DATA:
+        stt = STT_OBJECT;
+        break;
+      }
+
       switch (args->compile_args->target) {
       case COMPILE_TARGET_LINUX_RV32I: {
         Elf32_Sym sym = {.st_name = st_name,
                          .st_shndx = st_shndx,
                          .st_value = st_value,
                          .st_size = st_size,
-                         .st_info =
-                             (s->visibility == SYMBOL_VISIBILITY_GLOBAL)
-                                 ? ELF32_ST_INFO(STB_GLOBAL, STT_FUNC)
-                                 : ELF32_ST_INFO(STB_GLOBAL, STT_NOTYPE)};
+                         .st_info = ELF32_ST_INFO(stb, stt)};
         fwrite(&sym, sizeof(sym), 1, file);
         break;
       }
@@ -581,10 +606,7 @@ static void write_elf_object(const struct build_object_args *args) {
                          .st_shndx = st_shndx,
                          .st_value = st_value,
                          .st_size = st_size,
-                         .st_info =
-                             (s->visibility == SYMBOL_VISIBILITY_GLOBAL)
-                                 ? ELF64_ST_INFO(STB_GLOBAL, STT_FUNC)
-                                 : ELF64_ST_INFO(STB_GLOBAL, STT_NOTYPE)};
+                         .st_info = ELF64_ST_INFO(stb, stt)};
         fwrite(&sym, sizeof(sym), 1, file);
         break;
       }
@@ -626,27 +648,27 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[1].sh_type = SHT_PROGBITS;                                              \
   shdr[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;                                \
   shdr[1].sh_offset = text_off;                                                \
-  shdr[1].sh_size = total_text;                                                \
+  shdr[1].sh_size = total_text_size;                                           \
   shdr[1].sh_addralign = text_align;                                           \
                                                                                \
   shdr[2].sh_name = 7;                                                         \
   shdr[2].sh_type = SHT_PROGBITS;                                              \
   shdr[2].sh_flags = SHF_ALLOC;                                                \
   shdr[2].sh_offset = const_off;                                               \
-  shdr[2].sh_size = total_const;                                               \
+  shdr[2].sh_size = total_const_size;                                          \
   shdr[2].sh_addralign = const_align;                                          \
                                                                                \
   shdr[3].sh_name = 15;                                                        \
   shdr[3].sh_type = SHT_PROGBITS;                                              \
   shdr[3].sh_flags = SHF_ALLOC;                                                \
   shdr[3].sh_offset = data_off;                                                \
-  shdr[3].sh_size = total_data;                                                \
+  shdr[3].sh_size = total_data_size;                                           \
   shdr[3].sh_addralign = data_align;                                           \
                                                                                \
   shdr[4].sh_name = 21;                                                        \
   shdr[4].sh_type = SHT_RELA;                                                  \
   shdr[4].sh_offset = rela_text_off;                                           \
-  shdr[4].sh_size = info.num_text_reloc_instrs * sizeof(Elf##sz##_Rela);      \
+  shdr[4].sh_size = info.num_text_reloc_instrs * sizeof(Elf##sz##_Rela);       \
   shdr[4].sh_link = 7;                                                         \
   shdr[4].sh_info = 1;                                                         \
   shdr[4].sh_addralign = 8;                                                    \
@@ -656,8 +678,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[5].sh_name = 32;                                                        \
   shdr[5].sh_type = SHT_RELA;                                                  \
   shdr[5].sh_offset = rela_const_off;                                          \
-  shdr[5].sh_size =                                                            \
-      info.num_const_data_reloc_instrs * sizeof(Elf##sz##_Rela);              \
+  shdr[5].sh_size = info.num_const_data_reloc_instrs * sizeof(Elf##sz##_Rela); \
   shdr[5].sh_link = 7;                                                         \
   shdr[5].sh_info = 2;                                                         \
   shdr[5].sh_addralign = 8;                                                    \
@@ -666,7 +687,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[6].sh_name = 45;                                                        \
   shdr[6].sh_type = SHT_RELA;                                                  \
   shdr[6].sh_offset = rela_data_off;                                           \
-  shdr[6].sh_size = info.num_data_reloc_instrs * sizeof(Elf##sz##_Rela);      \
+  shdr[6].sh_size = info.num_data_reloc_instrs * sizeof(Elf##sz##_Rela);       \
   shdr[6].sh_link = 7;                                                         \
   shdr[6].sh_info = 3;                                                         \
   shdr[6].sh_addralign = 8;                                                    \
