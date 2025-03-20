@@ -6,4 +6,3 @@
 void opts_cnst_fold(struct ir_unit *unit);
 
 #endif
-

@@ -35,7 +35,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     va_list v;                                                                 \
     va_start(v, format);                                                       \
     fprintf(stderr, PREFIX PR_BOLD PR_RESET);                                  \
-    vfprintf(stderr, format, v);                                                   \
+    vfprintf(stderr, format, v);                                               \
     fprintf(stderr, "\n");                                                     \
     va_end(v);                                                                 \
   }                                                                            \

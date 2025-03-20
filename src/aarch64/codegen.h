@@ -525,7 +525,8 @@ enum aarch64_reg_usage_ty {
   AARCH64_REG_USAGE_TY_WRITE, // mov x9, ...
   AARCH64_REG_USAGE_TY_READ,  // mov ..., x9
   AARCH64_REG_USAGE_TY_DEREF, // ldr ..., [x9]
-  AARCH64_REG_USAGE_TY_NULL, // means the op may be overwritten and so reading from it is meaningless
+  AARCH64_REG_USAGE_TY_NULL,  // means the op may be overwritten and so reading
+                              // from it is meaningless
 };
 
 size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty);
@@ -539,7 +540,8 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
                void *metadata);
 
 void aarch64_codegen_start(struct cg_state *state);
-void aarch64_codegen_basicblock(struct cg_state *state, struct ir_basicblock *basicblock);
+void aarch64_codegen_basicblock(struct cg_state *state,
+                                struct ir_basicblock *basicblock);
 void aarch64_codegen_end(struct cg_state *state);
 
 void aarch64_debug_print_codegen(FILE *file, struct cg_unit *unit);

@@ -191,8 +191,8 @@ static enum rv32i_instr_ty invert_cond(enum rv32i_instr_ty ty) {
 }
 
 #define SIGNED_IMM_FITS(imm, sz)                                               \
-  (((imm) < 0 && ((simm_t)(imm) >> ((sz)-1)) == -1) ||                         \
-   ((imm) >= 0 && ((simm_t)(imm) >> ((sz)-1)) == 0))
+  (((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) ||                       \
+   ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0))
 
 static void codegen_br_cond_op(struct cg_state *state,
                                struct cg_basicblock *basicblock,
@@ -667,10 +667,10 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_EQ: {
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
-                          .dest = dest,
-                          .lhs = lhs,
-                          .rhs = rhs,
-                      };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
 
     struct instr *sltiu = cg_alloc_instr(state->func, basicblock);
     sltiu->rv32i->ty = RV32I_INSTR_TY_SLTIU;
@@ -682,10 +682,10 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_NEQ: {
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
-                          .dest = dest,
-                          .lhs = lhs,
-                          .rhs = rhs,
-                      };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
 
     struct instr *sltu = cg_alloc_instr(state->func, basicblock);
     sltu->rv32i->ty = RV32I_INSTR_TY_SLTU;
@@ -793,18 +793,18 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_OR:
     instr->rv32i->ty = RV32I_INSTR_TY_OR;
     instr->rv32i->or = (struct rv32i_op){
-                         .dest = dest,
-                         .lhs = lhs,
-                         .rhs = rhs,
-                     };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_XOR:
     instr->rv32i->ty = RV32I_INSTR_TY_XOR;
     instr->rv32i->xor = (struct rv32i_op){
-                          .dest = dest,
-                          .lhs = lhs,
-                          .rhs = rhs,
-                      };
+        .dest = dest,
+        .lhs = lhs,
+        .rhs = rhs,
+    };
     break;
   case IR_OP_BINARY_OP_TY_ADD:
     instr->rv32i->ty = RV32I_INSTR_TY_ADD;
@@ -939,7 +939,7 @@ static enum rv32i_instr_ty load_ty_for_op(struct ir_op *op) {
 static enum rv32i_instr_ty store_ty_for_op(struct ir_op *op) {
   if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
       (op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I8 ||
-       op->var_ty.primitive  == IR_VAR_PRIMITIVE_TY_I1)) {
+       op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I1)) {
     return RV32I_INSTR_TY_SB;
   } else if (op->var_ty.ty == IR_VAR_TY_TY_PRIMITIVE &&
              op->var_ty.primitive == IR_VAR_PRIMITIVE_TY_I16) {
@@ -2143,7 +2143,7 @@ static void print_instr(const struct codegen_debug_state *state,
     break;
   }
   case RV32I_INSTR_TY_OR: {
-    struct rv32i_op * or = &instr->rv32i->or ;
+    struct rv32i_op *or = &instr->rv32i->or ;
     fprintf(file, "or");
     debug_print_op(state, or);
     break;
@@ -2155,7 +2155,7 @@ static void print_instr(const struct codegen_debug_state *state,
     break;
   }
   case RV32I_INSTR_TY_XOR: {
-    struct rv32i_op * xor = &instr->rv32i->xor ;
+    struct rv32i_op *xor = &instr->rv32i->xor ;
     fprintf(file, "xor");
     debug_print_op(state, xor);
     break;

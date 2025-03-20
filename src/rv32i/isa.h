@@ -5,7 +5,11 @@
 #define RV32I_INSTR_SIZE (2)
 
 #define U32(v) ((uint32_t)(v))
-#define CHECK_IMM(imm, sz) (DEBUG_ASSERT(((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) || ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0), "immediate %lld did not fit!", (long long)imm), imm)
+#define CHECK_IMM(imm, sz)                                                     \
+  (DEBUG_ASSERT(((imm) < 0 && ((simm_t)(imm) >> ((sz) - 1)) == -1) ||          \
+                    ((imm) >= 0 && ((simm_t)(imm) >> ((sz) - 1)) == 0),        \
+                "immediate %lld did not fit!", (long long)imm),                \
+   imm)
 #define U32_S(v, hi, lo) ((U32(v) & ((1u << (hi + 1)) - 1)) >> lo)
 
 #define R_TYPE(funct7, rs2, rs1, funct3, rd, opcode)                           \
@@ -13,28 +17,30 @@
              (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define I_TYPE(imm12, rs1, funct3, rd, opcode)                                 \
-  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 11, 0) << 20) | (U32(rs1) << 15) |                  \
+  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 11, 0) << 20) | (U32(rs1) << 15) |   \
              (U32(funct3) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define S_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (uint32_t)((U32(((simm_t)(CHECK_IMM(imm12, 12)) >> 5) & 0b1111111) << 25) |                 \
+  (uint32_t)((U32(((simm_t)(CHECK_IMM(imm12, 12)) >> 5) & 0b1111111) << 25) |  \
              (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
              (U32((imm12) & 0b11111) << 7) | U32(opcode))
 
 #define B_TYPE(imm12, rs2, rs1, funct3, opcode)                                \
-  (DEBUG_ASSERT(!(imm12 & 1), "B-type instructions must be multiple of 2"), \
-  (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 12, 12) << 31) | (U32_S(imm12, 10, 5) << 25) |      \
-             (U32(rs2) << 20) | (U32(rs1) << 15) | (U32(funct3) << 12) |       \
-             (U32_S(imm12, 4, 1) << 8) | (U32_S(imm12, 11, 11) << 7) | U32(opcode)))
+  (DEBUG_ASSERT(!(imm12 & 1), "B-type instructions must be multiple of 2"),    \
+   (uint32_t)((U32_S(CHECK_IMM(imm12, 12), 12, 12) << 31) |                    \
+              (U32_S(imm12, 10, 5) << 25) | (U32(rs2) << 20) |                 \
+              (U32(rs1) << 15) | (U32(funct3) << 12) |                         \
+              (U32_S(imm12, 4, 1) << 8) | (U32_S(imm12, 11, 11) << 7) |        \
+              U32(opcode)))
 
 #define U_TYPE(imm20, rd, opcode)                                              \
   (uint32_t)((U32(CHECK_IMM(imm20, 20)) << 12) | (U32(rd) << 7) | U32(opcode))
 
 #define J_TYPE(imm20, rd, opcode)                                              \
-  (DEBUG_ASSERT(!(imm20 & 1), "J-type instructions must be multiple of 2"), \
-  (uint32_t)((U32_S(CHECK_IMM(imm20, 20), 20, 20) << 31) | (U32_S(imm20, 10, 1) << 21) |      \
-             (U32_S(imm20, 11, 11) << 20) | (U32_S(imm20, 19, 12) << 12) |     \
-             (U32(rd) << 7) | U32(opcode)))
+  (DEBUG_ASSERT(!(imm20 & 1), "J-type instructions must be multiple of 2"),    \
+   (uint32_t)((U32_S(CHECK_IMM(imm20, 20), 20, 20) << 31) |                    \
+              (U32_S(imm20, 10, 1) << 21) | (U32_S(imm20, 11, 11) << 20) |     \
+              (U32_S(imm20, 19, 12) << 12) | (U32(rd) << 7) | U32(opcode)))
 
 #define OPC_LOAD U32(0b0000011)
 #define OPC_LOAD_FP U32(0b0000111)
@@ -191,9 +197,12 @@
 #define SLTI(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_SLT, rd, OPC_OP_IMM)
 #define SLTIU(imm12, rs1, rd) I_TYPE(imm12, rs1, FUNCT3_SLTU, rd, OPC_OP_IMM)
 
-#define SLLI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLLI, rd, OPC_OP_IMM)
-#define SRLI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLRI, rd, OPC_OP_IMM)
-#define SRAI(shamt, rs1, rd) I_TYPE(U32((FUNCT7_SRA << 5) | shamt), rs1, FUNCT3_SRAI, rd, OPC_OP_IMM)
+#define SLLI(shamt, rs1, rd)                                                   \
+  I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLLI, rd, OPC_OP_IMM)
+#define SRLI(shamt, rs1, rd)                                                   \
+  I_TYPE(U32((FUNCT7_SRL << 5) | shamt), rs1, FUNCT3_SLRI, rd, OPC_OP_IMM)
+#define SRAI(shamt, rs1, rd)                                                   \
+  I_TYPE(U32((FUNCT7_SRA << 5) | shamt), rs1, FUNCT3_SRAI, rd, OPC_OP_IMM)
 
 #define LUI(imm20, rd) U_TYPE(imm20, rd, OPC_LUI)
 #define AUIPC(imm20, rd) U_TYPE(imm20, rd, OPC_AUIPC)
@@ -206,11 +215,11 @@
 
 #define MUL(rs2, rs1, rd)                                                      \
   R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MUL, rd, OPC_OP)
-#define MULH(rs2, rs1, rd)                                                      \
+#define MULH(rs2, rs1, rd)                                                     \
   R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MULH, rd, OPC_OP)
-#define MULHU(rs2, rs1, rd)                                                      \
+#define MULHU(rs2, rs1, rd)                                                    \
   R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MULHU, rd, OPC_OP)
-#define MULHSU(rs2, rs1, rd)                                                      \
+#define MULHSU(rs2, rs1, rd)                                                   \
   R_TYPE(FUNCT7_MULDIV, rs2, rs1, FUNCT3_MULHSU, rd, OPC_OP)
 
 #define DIV(rs2, rs1, rd)                                                      \
@@ -240,29 +249,29 @@
 #define BLTU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BLTU, OPC_BRANCH)
 #define BGEU(imm, rs2, rs1) B_TYPE(imm, rs2, rs1, FUNCT3_BGEU, OPC_BRANCH)
 
-#define FCVT_S_D(rs1, rd)                                                        \
+#define FCVT_S_D(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_S_D, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVT_D_S(rs1, rd)                                                        \
+#define FCVT_D_S(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_D_S, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FCVT_SW(rs1, rd)                                                        \
+#define FCVT_SW(rs1, rd)                                                       \
   R_TYPE(FUNCT7_FCVT_SW, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVT_WS(rs1, rd)                                                        \
+#define FCVT_WS(rs1, rd)                                                       \
   R_TYPE(FUNCT7_FCVT_WS, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FCVTU_SW(rs1, rd)                                                        \
+#define FCVTU_SW(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_SW, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVTU_WS(rs1, rd)                                                        \
+#define FCVTU_WS(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_WS, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FCVT_DW(rs1, rd)                                                        \
+#define FCVT_DW(rs1, rd)                                                       \
   R_TYPE(FUNCT7_FCVT_DW, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVT_WD(rs1, rd)                                                        \
+#define FCVT_WD(rs1, rd)                                                       \
   R_TYPE(FUNCT7_FCVT_WD, RS2_FCVT, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
-#define FCVTU_DW(rs1, rd)                                                        \
+#define FCVTU_DW(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_DW, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
-#define FCVTU_WD(rs1, rd)                                                        \
+#define FCVTU_WD(rs1, rd)                                                      \
   R_TYPE(FUNCT7_FCVT_WD, RS2_FCVTU, rs1, FUNCT3_FMV_WX, rd, OPC_OP_FP)
 
 #define FMV_SW(rs1, rd)                                                        \
@@ -276,14 +285,21 @@
 #define FSQRT_D(rs1, rd)                                                       \
   R_TYPE(FUNCT7_FSQRT_D, 0b00000, rs1, 0b000, rd, OPC_OP_FP)
 
-#define FEQ_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
-#define FLT_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
-#define FLE_S(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
+#define FEQ_S(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
+#define FLT_S(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
+#define FLE_S(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_S, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
 
-#define FADD_S(rs2, rs1, rd) R_TYPE(FUNCT7_FADD_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FSUB_S(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FMUL_S(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FDIV_S(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FADD_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FADD_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FSUB_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FSUB_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FMUL_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMUL_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FDIV_S(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FDIV_S, rs2, rs1, 0b000, rd, OPC_OP_FP)
 
 #define FMAX_S(rs2, rs1, rd)                                                   \
   R_TYPE(FUNCT7_FMINMAX_S, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)
@@ -297,14 +313,21 @@
 #define FSGNJX_S(rs2, rs1, rd)                                                 \
   R_TYPE(FUNCT7_FSGNJ_S, rs2, rs1, FUNCT3_FSGNJX, rd, OPC_OP_FP)
 
-#define FEQ_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
-#define FLT_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
-#define FLE_D(rs2, rs1, rd) R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
+#define FEQ_D(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FEQ, rd, OPC_OP_FP)
+#define FLT_D(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLT, rd, OPC_OP_FP)
+#define FLE_D(rs2, rs1, rd)                                                    \
+  R_TYPE(FUNCT7_FCMP_D, rs2, rs1, RM_FLE, rd, OPC_OP_FP)
 
-#define FADD_D(rs2, rs1, rd) R_TYPE(FUNCT7_FADD_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FSUB_D(rs2, rs1, rd) R_TYPE(FUNCT7_FSUB_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FMUL_D(rs2, rs1, rd) R_TYPE(FUNCT7_FMUL_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
-#define FDIV_D(rs2, rs1, rd) R_TYPE(FUNCT7_FDIV_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FADD_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FADD_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FSUB_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FSUB_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FMUL_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FMUL_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
+#define FDIV_D(rs2, rs1, rd)                                                   \
+  R_TYPE(FUNCT7_FDIV_D, rs2, rs1, 0b000, rd, OPC_OP_FP)
 
 #define FMAX_D(rs2, rs1, rd)                                                   \
   R_TYPE(FUNCT7_FMINMAX_D, rs2, rs1, FUNCT3_MIN, rd, OPC_OP_FP)

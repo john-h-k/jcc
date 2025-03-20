@@ -25,7 +25,8 @@ static struct ir_op *opts_follow_movs(struct ir_op *op) {
   return op;
 }
 
-static void opts_cnst_branches_func_end(UNUSED struct ir_func *func, void *data) {
+static void opts_cnst_branches_func_end(UNUSED struct ir_func *func,
+                                        void *data) {
   struct phi_info *info = data;
 
   struct hashtbl_iter *iter = hashtbl_iter(info->bb_to_entry);
@@ -96,7 +97,8 @@ static void remove_dead_phi_entries(struct ir_basicblock *basicblock,
       bool remove = false;
       if (entry->basicblock->id == DETACHED_BASICBLOCK) {
         remove = true;
-      } else if (!ir_basicblock_is_pred(op->stmt->basicblock, entry->basicblock)) {
+      } else if (!ir_basicblock_is_pred(op->stmt->basicblock,
+                                        entry->basicblock)) {
         // must be dominated by another, so removing it is fine?
         remove = true;
       }
@@ -124,12 +126,14 @@ static bool opts_cnst_branches_op(struct ir_func *func, struct ir_op *op,
 
     struct ir_op *cnst = opts_follow_movs(br_cond.cond);
 
-    if (!cnst || (cnst->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&cnst->var_ty))) {
+    if (!cnst ||
+        (cnst->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&cnst->var_ty))) {
       return false;
     }
 
     // BUG: fails do_while.c
-    // this can leave phis in BBs with only one pred. they need to be moved to prior BBs
+    // this can leave phis in BBs with only one pred. they need to be moved to
+    // prior BBs
 
     if (cnst->cnst.int_value) {
       ir_make_basicblock_merge(func, op->stmt->basicblock,
@@ -156,10 +160,11 @@ void opts_cnst_branches(struct ir_unit *unit) {
   struct phi_info data = {0};
 
   struct opts_op_pass pass = {.name = __func__,
-                           .data = &data,
-                           .begin_func_callback = opts_cnst_branches_func_begin,
-                           .end_func_callback = opts_cnst_branches_func_end,
-                           .op_callback = opts_cnst_branches_op};
+                              .data = &data,
+                              .begin_func_callback =
+                                  opts_cnst_branches_func_begin,
+                              .end_func_callback = opts_cnst_branches_func_end,
+                              .op_callback = opts_cnst_branches_op};
 
   opts_run_op_pass(unit, &pass);
 }

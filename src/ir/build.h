@@ -13,7 +13,8 @@ enum ir_build_flags {
 };
 
 struct ir_unit *build_ir_for_translationunit(
-const struct target *target, struct typechk *typechk,
-  struct arena_allocator *arena, struct td_translationunit *translation_unit, enum ir_build_flags flags);
+    const struct target *target, struct typechk *typechk,
+    struct arena_allocator *arena, struct td_translationunit *translation_unit,
+    enum ir_build_flags flags);
 
 #endif

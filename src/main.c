@@ -52,7 +52,8 @@ static const struct target *get_target(enum compile_target target) {
   }
 
   if (target_val->target_id == TARGET_ID_NOT_SUPPORTED) {
-    fprintf(stderr, "jcc was not built with support for target '%s'\n", string_target(target));
+    fprintf(stderr, "jcc was not built with support for target '%s'\n",
+            string_target(target));
     return NULL;
   }
 

@@ -6,6 +6,3 @@
 void opts_inline(struct ir_unit *unit);
 
 #endif
-
-
-

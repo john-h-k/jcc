@@ -989,23 +989,24 @@ struct ir_object {
 // TODO: is this well defined? the casts
 #define IR_MK_OBJECT(obj)                                                      \
   (_Generic((obj),                                                             \
-      struct ir_glb *: (struct ir_object){.ty = IR_OBJECT_TY_GLB,              \
-                                          .glb = (void *)(obj)},               \
-      struct ir_lcl *: (struct ir_object){.ty = IR_OBJECT_TY_LCL,              \
-                                          .lcl = (void *)(obj)},               \
+       struct ir_glb *: (struct ir_object){.ty = IR_OBJECT_TY_GLB,             \
+                                           .glb = (void *)(obj)},              \
+       struct ir_lcl *: (struct ir_object){.ty = IR_OBJECT_TY_LCL,             \
+                                           .lcl = (void *)(obj)},              \
                                                                                \
-      struct ir_func *: (struct ir_object){.ty = IR_OBJECT_TY_FUNC,            \
-                                           .func = (void *)(obj)},             \
-      struct ir_var *: (struct ir_object){.ty = IR_OBJECT_TY_VAR,              \
-                                          .var = (void *)(obj)},               \
-      struct ir_basicblock *: (struct ir_object){.ty =                         \
-                                                     IR_OBJECT_TY_BASICBLOCK,  \
-                                                 .basicblock = (void *)(obj)}, \
+       struct ir_func *: (struct ir_object){.ty = IR_OBJECT_TY_FUNC,           \
+                                            .func = (void *)(obj)},            \
+       struct ir_var *: (struct ir_object){.ty = IR_OBJECT_TY_VAR,             \
+                                           .var = (void *)(obj)},              \
+       struct ir_basicblock *: (struct ir_object){.ty =                        \
+                                                      IR_OBJECT_TY_BASICBLOCK, \
+                                                  .basicblock =                \
+                                                      (void *)(obj)},          \
                                                                                \
-      struct ir_stmt *: (struct ir_object){.ty = IR_OBJECT_TY_STMT,            \
-                                           .stmt = (void *)(obj)},             \
-      struct ir_op *: (struct ir_object){.ty = IR_OBJECT_TY_OP,                \
-                                         .op = (void *)(obj)}))
+       struct ir_stmt *: (struct ir_object){.ty = IR_OBJECT_TY_STMT,           \
+                                            .stmt = (void *)(obj)},            \
+       struct ir_op *: (struct ir_object){.ty = IR_OBJECT_TY_OP,               \
+                                          .op = (void *)(obj)}))
 
 struct ir_func_iter ir_func_iter(struct ir_func *func,
                                  enum ir_func_iter_flags flags);

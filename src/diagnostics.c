@@ -15,8 +15,8 @@ COMPILER_PARSE_DIAGNOSTIC_LIST
 #undef DIAG_FN
 
 #define DIAG_FN(sev, _0, name, enum, ty)                                       \
-  struct compiler_diagnostic_ty DIAGNOSTIC_SEMANTIC_##enum = {                   \
-      .class = COMPILER_DIAGNOSTIC_CLASS_SEMANTIC,                                \
+  struct compiler_diagnostic_ty DIAGNOSTIC_SEMANTIC_##enum = {                 \
+      .class = COMPILER_DIAGNOSTIC_CLASS_SEMANTIC,                             \
       .severity = COMPILER_DIAGNOSTIC_SEVERITY_##sev};
 
 COMPILER_SEMANTIC_DIAGNOSTIC_LIST
@@ -41,19 +41,19 @@ static void hash_compiler_diagnostic(struct hasher *hasher, const void *obj) {
     hasher_hash_integer(hasher, diag->parse_diagnostic.span.start.line,
                         sizeof(diag->parse_diagnostic.span.start.line));
   } else {
-    hasher_hash_integer(hasher, diag->ty.class,
-                        sizeof(diag->ty.class));
-    hasher_hash_integer(hasher, diag->ty.severity,
-                        sizeof(diag->ty.severity));
+    hasher_hash_integer(hasher, diag->ty.class, sizeof(diag->ty.class));
+    hasher_hash_integer(hasher, diag->ty.severity, sizeof(diag->ty.severity));
   }
 }
 
 static bool eq_compiler_diagnostic(const void *l, const void *r) {
   const struct compiler_diagnostic *ld = l;
   const struct compiler_diagnostic *rd = r;
-  
-  if (ld->ty.class == COMPILER_DIAGNOSTIC_CLASS_PARSE && rd->ty.class == ld->ty.class) {
-    return ld->parse_diagnostic.span.start.line == rd->parse_diagnostic.span.start.line;
+
+  if (ld->ty.class == COMPILER_DIAGNOSTIC_CLASS_PARSE &&
+      rd->ty.class == ld->ty.class) {
+    return ld->parse_diagnostic.span.start.line ==
+           rd->parse_diagnostic.span.start.line;
   } else {
     return false;
   }

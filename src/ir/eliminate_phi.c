@@ -1,8 +1,8 @@
 #include "eliminate_phi.h"
 
 #include "../hashtbl.h"
-#include "../vector.h"
 #include "../target.h"
+#include "../vector.h"
 #include "ir.h"
 
 struct bb_reg {
@@ -13,7 +13,8 @@ struct bb_reg {
 #define REG_POS(reg) (reg)
 #define LCL_POS(lcl) (SIZE_MAX - 1 - lcl)
 
-// FIXME: known bug - when lots of spills happen, we get spilled phi with spilled source, which hits asserts in here
+// FIXME: known bug - when lots of spills happen, we get spilled phi with
+// spilled source, which hits asserts in here
 
 static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
                       struct hashtbl *reg_to_val, struct move_set moves,
@@ -26,7 +27,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
   struct ir_stmt *stmt;
   if (early_moves) {
     stmt = basicblock->first;
-  } else if (basicblock->last && basicblock->last->pred && (basicblock->last->pred->flags & IR_STMT_FLAG_PHI_MOV)) {
+  } else if (basicblock->last && basicblock->last->pred &&
+             (basicblock->last->pred->flags & IR_STMT_FLAG_PHI_MOV)) {
     stmt = basicblock->last->pred;
   } else {
     stmt = ir_insert_before_stmt(irb, basicblock->last);
@@ -102,8 +104,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
         tmp_mov = mov;
       } else {
-        struct ir_op *addr = ir_append_op(irb, stmt, IR_OP_TY_ADDR,
-                                          ir_var_ty_for_pointer_size(irb->unit));
+        struct ir_op *addr = ir_append_op(
+            irb, stmt, IR_OP_TY_ADDR, ir_var_ty_for_pointer_size(irb->unit));
         addr->addr = (struct ir_op_addr){
             .ty = IR_OP_ADDR_TY_LCL,
             .lcl = spill_lcl,
@@ -133,8 +135,8 @@ static void gen_moves(struct ir_func *irb, struct ir_basicblock *basicblock,
 
         phi_op = mov;
       } else {
-        struct ir_op *addr = ir_append_op(irb, stmt, IR_OP_TY_ADDR,
-                                          ir_var_ty_for_pointer_size(irb->unit));
+        struct ir_op *addr = ir_append_op(
+            irb, stmt, IR_OP_TY_ADDR, ir_var_ty_for_pointer_size(irb->unit));
         addr->addr = (struct ir_op_addr){
             .ty = IR_OP_ADDR_TY_LCL,
             .lcl = spill_lcl,
@@ -344,8 +346,6 @@ void eliminate_phi(struct ir_func *irb) {
 
     basicblock = basicblock->succ;
   }
-
-  
 
   basicblock = irb->first;
   while (basicblock) {

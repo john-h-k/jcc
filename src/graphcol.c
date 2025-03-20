@@ -70,7 +70,8 @@ static void build_interf_graph(struct graphcol_state *state,
     if (reg_ty == IR_REG_TY_INTEGRAL &&
         ir_var_ty_is_integral(&interval->op->var_ty)) {
       interf[i] = vector_create(sizeof(size_t));
-    } else if (reg_ty == IR_REG_TY_FP && ir_var_ty_is_fp(&interval->op->var_ty)) {
+    } else if (reg_ty == IR_REG_TY_FP &&
+               ir_var_ty_is_fp(&interval->op->var_ty)) {
       interf[i] = vector_create(sizeof(size_t));
     }
   }

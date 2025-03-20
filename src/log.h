@@ -29,7 +29,7 @@ DECL_LOG_FN(trace)
 DECL_LOG_FN(slog)
 #else
 
-#define err_nl(...)                                                             \
+#define err_nl(...)                                                            \
   do {                                                                         \
     fprintf(stderr, "\n");                                                     \
   } while (0);
@@ -45,7 +45,7 @@ DECL_LOG_FN(slog)
     fprintf(stderr, PR_RED PR_BOLD "ERROR: " PR_RESET __VA_ARGS__);            \
   } while (0);
 
-#define warn_nl(...)                                                            \
+#define warn_nl(...)                                                           \
   do {                                                                         \
     fprintf(stderr, "\n");                                                     \
   } while (0);
@@ -71,7 +71,7 @@ DECL_LOG_FN(slog)
   } while (0);
 
 #define debug_enabled() log_enabled()
-#define debug_nl()                                                              \
+#define debug_nl()                                                             \
   do {                                                                         \
     if (!log_enabled()) {                                                      \
       break;                                                                   \
@@ -81,7 +81,7 @@ DECL_LOG_FN(slog)
 
 #define debug(...)                                                             \
   do {                                                                         \
-    if (!log_enabled()) {                                                       \
+    if (!log_enabled()) {                                                      \
       break;                                                                   \
     }                                                                          \
     fprintf(stderr, PR_WHITE PR_BOLD "DEBUG: " PR_RESET __VA_ARGS__);          \

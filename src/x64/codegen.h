@@ -423,7 +423,8 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
                void *metadata);
 
 void x64_codegen_start(struct cg_state *state);
-void x64_codegen_basicblock(struct cg_state *state, struct ir_basicblock *basicblock);
+void x64_codegen_basicblock(struct cg_state *state,
+                            struct ir_basicblock *basicblock);
 void x64_codegen_end(struct cg_state *state);
 
 void x64_debug_print_instr(FILE *file, const struct cg_func *func,

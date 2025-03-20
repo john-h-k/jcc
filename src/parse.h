@@ -38,7 +38,7 @@ struct ast_attribute_list {
   struct text_span span;
 };
 
-struct ast_attribute_specifier {  
+struct ast_attribute_specifier {
   struct ast_attribute_list attribute_list;
 
   struct text_span span;
@@ -387,7 +387,8 @@ enum ast_cnst_str_ty {
 };
 
 // we don't use sized_str
-// maybe we could, but just because the way we work with these strings is different a seperate type is sort of useful
+// maybe we could, but just because the way we work with these strings is
+// different a seperate type is sort of useful
 struct ast_ascii_str {
   char *value;
   size_t len;
@@ -684,7 +685,6 @@ struct ast_expr {
   struct text_span span;
 };
 
-
 enum ast_generic_association_ty {
   AST_GENERIC_ASSOCIATION_TY_TYPE_NAME,
   AST_GENERIC_ASSOCIATION_TY_DEFAULT,
@@ -701,7 +701,6 @@ struct ast_generic_association {
 
   struct text_span span;
 };
-
 
 /* Variable declarations - `<typename> <comma seperated list of declarations>`
  * where each declaration is `<name>` or `<name> = <expr>` */
@@ -996,7 +995,7 @@ struct parse_result parse(struct parser *parser);
 void parser_free(struct parser **parser);
 
 struct sized_str identifier_str(struct parser *parser,
-                           const struct lex_token *token);
+                                const struct lex_token *token);
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit);

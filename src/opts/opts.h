@@ -4,7 +4,8 @@
 #include "../ir/ir.h"
 
 typedef void(opts_func_callback)(struct ir_func *func, void *data);
-typedef bool(opts_op_callback)(struct ir_func *func, struct ir_op *op, void *data);
+typedef bool(opts_op_callback)(struct ir_func *func, struct ir_op *op,
+                               void *data);
 
 // passes which modify single/small groups of ops
 struct opts_op_pass {
@@ -25,6 +26,7 @@ struct opts_func_pass {
   void *data;
 };
 
-void opts_run_func_pass(struct ir_unit *unit, const struct opts_func_pass *pass);
+void opts_run_func_pass(struct ir_unit *unit,
+                        const struct opts_func_pass *pass);
 
 #endif

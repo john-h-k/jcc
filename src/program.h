@@ -26,13 +26,15 @@ struct text_span {
 #define TEXT_POS_INVALID_COL (SIZE_MAX)
 #define TEXT_POS_INVALID_LINE (SIZE_MAX)
 
-#define MK_TEXT_SPAN(start, end) \
+#define MK_TEXT_SPAN(start, end)                                               \
   (struct text_span) { (start), (end) }
 
 #define MK_INVALID_TEXT_POS(idx)                                               \
   (struct text_pos) { (idx), TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
 #define MK_INVALID_TEXT_SPAN(start, end)                                       \
-  (struct text_span) { MK_INVALID_TEXT_POS((start)), MK_INVALID_TEXT_POS((end)) }
+  (struct text_span) {                                                         \
+    MK_INVALID_TEXT_POS((start)), MK_INVALID_TEXT_POS((end))                   \
+  }
 
 #define TEXT_POS_INVALID(pos) ((pos).col == TEXT_POS_INVALID_COL)
 

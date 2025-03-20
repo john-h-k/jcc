@@ -2,6 +2,7 @@
 #define PROFILE_H
 
 #include "util.h"
+
 #include <stdio.h>
 
 // this is all done by globals so we don't need to pass around stuff
@@ -14,9 +15,9 @@
 #define PROFILE_END(name) profiler_end_region(profiler_##name##_region);
 
 #define PROFILE(name, code)                                                    \
-    PROFILE_BEGIN(name);                                                       \
-      code;                                                                    \
-    PROFILE_END(name);                                                         \
+  PROFILE_BEGIN(name);                                                         \
+  code;                                                                        \
+  PROFILE_END(name);
 
 struct profiler_region {
   size_t idx;

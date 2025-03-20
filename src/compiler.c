@@ -335,7 +335,7 @@ compile_stage_ir(struct compiler *compiler, const struct target *target,
   ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
 
   ir_prune_globals(*ir);
-  
+
   ir_validate(*ir, IR_VALIDATE_FLAG_NONE);
 
   return COMPILE_RESULT_SUCCESS;

@@ -291,7 +291,6 @@ static void find_phi_exprs(struct ir_func *irb, struct hashtbl *stores,
   vector_free(&phi_builds);
 }
 
-
 static int sort_lcl_uses(const void *a, const void *b) {
   const struct lcl_use *l = a;
   const struct lcl_use *r = b;
@@ -353,9 +352,11 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
   // FIXME: when generating phis, we want last store, but when generating movs,
   // we want last store _before_ that in bb
 
-  // need to sort uses so we can walk in a temporal way, updating as we encounter new stores
+  // need to sort uses so we can walk in a temporal way, updating as we
+  // encounter new stores
   if (vector_head(lcl_uses)) {
-    qsort(vector_head(lcl_uses), vector_length(lcl_uses), vector_element_size(lcl_uses), sort_lcl_uses);
+    qsort(vector_head(lcl_uses), vector_length(lcl_uses),
+          vector_element_size(lcl_uses), sort_lcl_uses);
   }
 
   for (size_t i = 0; i < num_uses; i++) {
@@ -496,7 +497,8 @@ static void opts_do_promote(struct ir_func *func, struct vector *lcl_uses,
         struct ir_op_use *dep_use = &dep_usage->uses[k];
 
         if (dep_use->ty == IR_OP_USE_TY_DEREF) {
-          // if it uses the value as an address, further uses are not to be removed
+          // if it uses the value as an address, further uses are not to be
+          // removed
           continue;
         }
 

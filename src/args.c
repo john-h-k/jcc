@@ -154,7 +154,7 @@ void free_args(struct parsed_args *args) {
     POP_NO_WARN();                                                             \
                                                                                \
     for (size_t i = 0; i < string_list->num_values; i++) {                     \
-      free((char *)string_list->values[i]);                                            \
+      free((char *)string_list->values[i]);                                    \
     }                                                                          \
                                                                                \
     free(string_list->values);                                                 \
@@ -449,7 +449,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
             value = strndup(value, val_len);
           } else {
-            value = strdup(value);            
+            value = strdup(value);
           }
 
           arg->arg_string_list->values =

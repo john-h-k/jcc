@@ -364,7 +364,8 @@ void cg_detach_basicblock(struct cg_func *func,
   basicblock->func = NULL;
 }
 
-static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb, enum codegen_flags flags) {
+static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb,
+                                    enum codegen_flags flags) {
   struct ir_func *ir_func = glb->func;
 
   ir_clear_metadata(ir_func);
@@ -390,7 +391,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb, en
 
   struct cg_func *func = &entry.func;
   struct cg_state state = {.arena = unit->arena,
-    .flags = flags,
+                           .flags = flags,
                            .target = unit->target,
                            .func = func,
                            .ir = ir_func};

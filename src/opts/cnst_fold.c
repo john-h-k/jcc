@@ -32,8 +32,8 @@ static unsigned long long round_integral(struct ir_func *func,
 }
 
 static signed long long as_signed(struct ir_func *func,
-                                         unsigned long long value,
-                                         struct ir_var_ty var_ty) {
+                                  unsigned long long value,
+                                  struct ir_var_ty var_ty) {
   enum ir_var_primitive_ty primitive;
   if (var_ty.ty == IR_VAR_TY_TY_POINTER) {
     primitive = ir_var_ty_pointer_primitive_ty(func->unit);
@@ -78,8 +78,9 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 
   unsigned long long lhs_cnst, rhs_cnst;
 
-  if (!lhs || lhs->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&lhs->var_ty) ||
-      !rhs || rhs->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&rhs->var_ty)) {
+  if (!lhs || lhs->ty != IR_OP_TY_CNST ||
+      !ir_var_ty_is_integral(&lhs->var_ty) || !rhs ||
+      rhs->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&rhs->var_ty)) {
     return false;
   }
 
@@ -94,7 +95,8 @@ static bool opts_cnst_fold_binary_op(struct ir_func *func, struct ir_op *op) {
 
 #define CNST_FLD_SBINOP(ty, op)                                                \
   case IR_OP_BINARY_OP_TY_##ty:                                                \
-    value = as_signed(func, lhs_cnst, lhs->var_ty) op as_signed(func, rhs_cnst, rhs->var_ty);          \
+    value = as_signed(func, lhs_cnst, lhs->var_ty)                             \
+        op as_signed(func, rhs_cnst, rhs->var_ty);                             \
     break;
 
   switch (ty) {
@@ -141,7 +143,8 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 
   unsigned long long cnst;
 
-  if (!value || value->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST ||
+      !ir_var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -178,11 +181,12 @@ static bool opts_cnst_fold_unary_op(struct ir_func *func, struct ir_op *op) {
 static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
   struct ir_var_ty var_ty = op->var_ty;
   enum ir_op_cast_op_ty ty = op->cast_op.ty;
-  struct ir_op *value =  opts_follow_movs(op->cast_op.value);
+  struct ir_op *value = opts_follow_movs(op->cast_op.value);
 
   unsigned long long cnst;
 
-  if (!value || value->ty != IR_OP_TY_CNST || !ir_var_ty_is_integral(&value->var_ty)) {
+  if (!value || value->ty != IR_OP_TY_CNST ||
+      !ir_var_ty_is_integral(&value->var_ty)) {
     return false;
   }
 
@@ -207,10 +211,7 @@ static bool opts_cnst_fold_cast_op(struct ir_func *func, struct ir_op *op) {
 
     op->ty = IR_OP_TY_CNST;
     op->var_ty = var_ty;
-    op->cnst = (struct ir_op_cnst){
-      .ty = IR_OP_CNST_TY_FLT,
-      .flt_value = 0
-    };
+    op->cnst = (struct ir_op_cnst){.ty = IR_OP_CNST_TY_FLT, .flt_value = 0};
     return true;
   }
 }
@@ -226,7 +227,8 @@ static bool opts_cnst_fold_addr_offset(struct ir_op *op) {
 
   // only need to fold `index * scale` as the rest is already constant-ified
   if (addr_offset->index && addr_offset->index->ty == IR_OP_TY_CNST) {
-    unsigned long long value = addr_offset->index->cnst.int_value * addr_offset->scale;
+    unsigned long long value =
+        addr_offset->index->cnst.int_value * addr_offset->scale;
     addr_offset->index = NULL;
     addr_offset->offset += value;
     return true;
@@ -235,7 +237,8 @@ static bool opts_cnst_fold_addr_offset(struct ir_op *op) {
   return false;
 }
 
-static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op, UNUSED void *data) {
+static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op,
+                              UNUSED void *data) {
   switch (op->ty) {
   case IR_OP_TY_BINARY_OP:
     return opts_cnst_fold_binary_op(func, op);
@@ -251,7 +254,8 @@ static bool opts_cnst_fold_op(struct ir_func *func, struct ir_op *op, UNUSED voi
 }
 
 void opts_cnst_fold(struct ir_unit *unit) {
-  struct opts_op_pass pass = {.name = __func__, .op_callback = opts_cnst_fold_op};
+  struct opts_op_pass pass = {.name = __func__,
+                              .op_callback = opts_cnst_fold_op};
 
   opts_run_op_pass(unit, &pass);
 }

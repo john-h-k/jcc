@@ -3446,7 +3446,8 @@ static void ir_alloc_local(struct ir_func *func, struct ir_lcl *lcl) {
   // type is returned in a register arm64 currently needs i64 loads to be i64
   // aligned so make alignment always >=8 the solution is to make arm64 support
   // non aligned loads (`ldur`/`stur`)
-  if (func->unit->target->target_id == TARGET_ID_AARCH64_LINUX || func->unit->target->target_id == TARGET_ID_AARCH64_MACOS) {
+  if (func->unit->target->target_id == TARGET_ID_AARCH64_LINUX ||
+      func->unit->target->target_id == TARGET_ID_AARCH64_MACOS) {
     ty_info.alignment = MAX(ty_info.alignment, 8);
   }
 
@@ -3473,7 +3474,8 @@ void ir_alloc_locals(struct ir_func *func) {
 
   // first pass do call saves
   while (lcl) {
-    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE || !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
+    if (lcl->alloc_ty != IR_LCL_ALLOC_TY_NONE ||
+        !(lcl->flags & IR_LCL_FLAG_CALL_SAVE)) {
       lcl = lcl->succ;
       continue;
     }
@@ -3483,7 +3485,8 @@ void ir_alloc_locals(struct ir_func *func) {
     lcl = lcl->succ;
   }
 
-  DEBUG_ASSERT(func->total_locals_size <= total_locals_size, "allocating call saves overflowed their region");
+  DEBUG_ASSERT(func->total_locals_size <= total_locals_size,
+               "allocating call saves overflowed their region");
 
   func->total_locals_size = total_locals_size;
 

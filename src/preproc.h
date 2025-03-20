@@ -26,9 +26,9 @@ struct preproc_create_args {
   const char *fixed_timestamp;
 };
 
-enum preproc_create_result
-preproc_create(struct program *program, 
-               struct preproc_create_args args, struct preproc **preproc);
+enum preproc_create_result preproc_create(struct program *program,
+                                          struct preproc_create_args args,
+                                          struct preproc **preproc);
 
 struct preprocessed_program {
   const char *text;
@@ -95,8 +95,8 @@ enum preproc_token_punctuator_ty {
   PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL_ASSG,    // *=
   PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV,         // /
   PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV_ASSG,    // /=
-  PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD,        // %
-  PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD_ASSG,   // %=
+  PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD,         // %
+  PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD_ASSG,    // %=
 
   PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG, // =
 
@@ -139,7 +139,8 @@ enum preproc_expand_token_flags {
   PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO = 1
 };
 
-void preproc_next_token(struct preproc *preproc, struct preproc_token *token, enum preproc_expand_token_flags flags);
+void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
+                        enum preproc_expand_token_flags flags);
 
 void preproc_process(struct preproc *preproc, FILE *file);
 

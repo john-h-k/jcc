@@ -61,7 +61,8 @@ enum link_result linux_link_objects(const struct link_args *args) {
         "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../"
         "riscv64-unknown-elf/lib -L/opt/riscv/bin/../riscv64-unknown-elf/lib ";
 
-    template_suffix = " -lgcc --start-group -lc -lm -lgloss --end-group -lgcc "
+    template_suffix =
+        " -lgcc --start-group -lc -lm -lgloss --end-group -lgcc "
         "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/"
         "crtend.o";
     // template_prefix = "riscv64-unknown-elf-ld "
@@ -99,7 +100,10 @@ enum link_result linux_link_objects(const struct link_args *args) {
     total_size += 5; // separator space + quotes
     total_size += strlen(args->objects[i]);
   }
-  total_size += 3 + 2 + strlen(args->output); // for "-o " and output filename surrounded by quotes
+  total_size +=
+      3 + 2 +
+      strlen(
+          args->output); // for "-o " and output filename surrounded by quotes
 
   total_size += strlen(template_suffix);
 

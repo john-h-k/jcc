@@ -38,7 +38,8 @@ struct var_ref *var_refs_add(struct var_refs *var_refs,
 
 // TODO: needs general refactor, old code
 static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
-                             const struct var_key *key, bool bb_specific) {
+                                         const struct var_key *key,
+                                         bool bb_specific) {
   size_t num_refs = vector_length(var_refs->refs);
   for (size_t i = 0; i < num_refs; i++) {
     struct var_ref *ref = vector_get(var_refs->refs, i);
@@ -53,7 +54,8 @@ static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
     // accessed anywhere
     if (ref->ty == VAR_REF_TY_SSA && ref->key.basicblock == key->basicblock) {
       return ref;
-    } else if ((!bb_specific && ref->ty != VAR_REF_TY_SSA) || key->basicblock == NULL) {
+    } else if ((!bb_specific && ref->ty != VAR_REF_TY_SSA) ||
+               key->basicblock == NULL) {
       return ref;
     }
   }
@@ -62,7 +64,7 @@ static struct var_ref *var_refs_get_impl(const struct var_refs *var_refs,
 }
 
 struct var_ref *var_refs_get_for_basicblock(const struct var_refs *var_refs,
-                             const struct var_key *key) {
+                                            const struct var_key *key) {
   return var_refs_get_impl(var_refs, key, true);
 }
 

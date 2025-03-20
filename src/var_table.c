@@ -86,7 +86,9 @@ void var_table_free(UNUSED struct var_table *var_table) {
 
 int cur_scope(struct var_table *var_table) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
-  DEBUG_ASSERT(last->scope + 1 == vector_length(var_table->scopes), "scope + 1 (%zu) should eq len (%zu)", last->scope + 1, vector_length(var_table->scopes));
+  DEBUG_ASSERT(last->scope + 1 == vector_length(var_table->scopes),
+               "scope + 1 (%zu) should eq len (%zu)", last->scope + 1,
+               vector_length(var_table->scopes));
   return last->scope;
 }
 
@@ -113,8 +115,8 @@ var_table_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
     return entry;
   }
 
-  trace("couldn't find variable, creating new entry '%s' with scope '%d'", name.str,
-        cur_scope(var_table));
+  trace("couldn't find variable, creating new entry '%s' with scope '%d'",
+        name.str, cur_scope(var_table));
 
   return var_table_create_entry(var_table, ns, name);
 }
@@ -126,10 +128,11 @@ struct var_table_entry *var_table_get_entry(struct var_table *var_table,
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
 
-  for (ssize_t scope_idx = cur_scope(var_table); scope_idx >= SCOPE_GLOBAL; scope_idx--) {
+  for (ssize_t scope_idx = cur_scope(var_table); scope_idx >= SCOPE_GLOBAL;
+       scope_idx--) {
     struct var_table_scope *scope = vector_get(var_table->scopes, scope_idx);
 
-    struct var_key key = { .ns = ns, .identifier = name };
+    struct var_key key = {.ns = ns, .identifier = name};
     struct var_table_entry *entry = hashtbl_lookup(scope->entries, &key);
 
     if (entry) {

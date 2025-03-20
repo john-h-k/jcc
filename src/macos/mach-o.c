@@ -6,15 +6,14 @@
 
 // TODO: bring in needed types so this is portable
 #if __has_include(<mach/machine.h>)
-#include <mach/machine.h>
 #include <mach-o/loader.h>
+#include <mach/machine.h>
 // why do we need this when compiling with JCC?
-#include <mach/vm_prot.h>
+#include <mach-o/arm64/reloc.h>
 #include <mach-o/nlist.h>
 #include <mach-o/reloc.h>
 #include <mach-o/x86_64/reloc.h>
-#include <mach-o/arm64/reloc.h>
-
+#include <mach/vm_prot.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -125,17 +124,17 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
 }
 
 static void write_single_relocation(FILE *file, struct relocation_info info) {
-  // macOS makes them bitfields but this is not technically proper C (as you can't assume bitfields are packed)
+  // macOS makes them bitfields but this is not technically proper C (as you
+  // can't assume bitfields are packed)
   // FIXME: do this for ELF too
 
   fwrite(&info.r_address, sizeof(info.r_address), 1, file);
 
-
   // r_symbolnum : 24
-	// r_pcrel     : 1
-	// r_length    : 2
-	// r_extern    : 1
-	// r_type      : 4
+  // r_pcrel     : 1
+  // r_length    : 2
+  // r_extern    : 1
+  // r_type      : 4
   uint32_t other = info.r_symbolnum;
   other |= (info.r_pcrel << 24);
   other |= (info.r_length << 25);
@@ -207,7 +206,7 @@ static void write_relocation(FILE *file, struct vector *relocations) {
       write_single_relocation(file, infos[1]);
       break;
     }
- case RELOCATION_TY_UNDEF_SINGLE: {
+    case RELOCATION_TY_UNDEF_SINGLE: {
       struct relocation_info info = {.r_address = addr,
                                      .r_length = reloc->size,
                                      .r_pcrel = 1,

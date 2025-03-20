@@ -435,8 +435,7 @@ static void add_to_prefs_callback(struct ir_op **op,
 
 static struct ir_lcl *get_call_save_lcl(struct ir_func *irb,
                                         struct lsra_reg_info *state,
-                                        struct ir_var_ty *var_ty
-                                      ) {
+                                        struct ir_var_ty *var_ty) {
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, var_ty);
 
   size_t num_call_save_lcls = vector_length(state->call_save_lcls);
@@ -456,12 +455,9 @@ static struct ir_lcl *get_call_save_lcl(struct ir_func *irb,
   }
 
   struct call_save_lcl new = {
-    .lcl = ir_add_local(irb, var_ty),
-    .size = info.size,
-    .in_use = true
-  };
+      .lcl = ir_add_local(irb, var_ty), .size = info.size, .in_use = true};
 
-  new.lcl->flags |= IR_LCL_FLAG_CALL_SAVE;  
+  new.lcl->flags |= IR_LCL_FLAG_CALL_SAVE;
 
   vector_push_back(state->call_save_lcls, &new);
 
@@ -590,7 +586,8 @@ static struct interval_data register_alloc_pass(struct ir_func *irb,
           struct ir_op *load_addr =
               ir_insert_after_op(irb, interval->op, IR_OP_TY_ADDR, ptr_int);
 
-          // FIXME: need to make sure the save locals are allocated low enough on the stack that they can definitely be contained
+          // FIXME: need to make sure the save locals are allocated low enough
+          // on the stack that they can definitely be contained
           store_addr->flags |= IR_OP_FLAG_CONTAINED;
           load_addr->flags |= IR_OP_FLAG_CONTAINED;
 
