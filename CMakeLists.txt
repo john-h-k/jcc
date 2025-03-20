@@ -140,13 +140,16 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
   
 
-  if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-    add_link_options(-fsanitize=address,undefined)
-    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
+  if(DEFINED NO_SAN AND NOT NO_SAN STREQUAL "")
+    message(STATUS "Sanitisers disabled")
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+      add_link_options(-fsanitize=address,undefined)
+      add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)
 
-    add_compile_options(-g)
-    add_link_options(-g3 -ldl)
-    add_link_options(-rdynamic)
+      add_compile_options(-g)
+      add_link_options(-g3 -ldl)
+      add_link_options(-rdynamic)
+    endif()
   endif()
 endif()
 

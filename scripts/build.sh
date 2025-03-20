@@ -50,6 +50,9 @@ configure() {
         echo "    --enable-arch "
         echo "        Enable architecture"
         echo ""
+        echo "    --no-san "
+        echo "        Disable sanitisers in debug mode - can speedup build and testing"
+        echo ""
         echo "    -m, --mode"
         echo "        Mode to build (default: 'Debug'). Values:"
         echo "            * d | D | deb   | debug          | Debug           - Debug"
@@ -73,6 +76,7 @@ configure() {
 
     generator=""
     archs=""
+    no_san=""
 
     # if already configured, use current generator
     if [ -f build/CMakeCache.txt ]; then
@@ -96,6 +100,10 @@ configure() {
           ;;
         --clean-all)
           clean-all
+          shift
+          ;;
+        --no-san)
+          no_san="1"
           shift
           ;;
         --enable-arch)
@@ -178,7 +186,8 @@ configure() {
 
     cd build
     # HACK: temp force clang as gcc super slow with ASAN
-    if ! (cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
+    # if ! (NO_SAN=$no_san cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
+    if ! (cmake -DNO_SAN="$no_san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi
