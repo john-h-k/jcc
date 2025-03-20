@@ -64,10 +64,10 @@ set(
   src/aarch64/emitter.c
 
   src/x64.c
-  # src/x64/codegen.c
-  # src/x64/lower.c
-  # src/x64/emit.c
-  # src/x64/emitter.c
+  src/x64/codegen.c
+  src/x64/lower.c
+  src/x64/emit.c
+  src/x64/emitter.c
 
   src/rv32i.c
   src/rv32i/codegen.c
@@ -99,9 +99,7 @@ if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
 endif()
 
 if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-  # add_definitions(-DJCC_ALL)
-  add_definitions(-DJCC_AARCH64)
-  add_definitions(-DJCC_RV32I)
+  add_definitions(-DJCC_ALL)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
