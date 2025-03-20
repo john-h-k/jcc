@@ -57,8 +57,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
   } else {
     struct ir_var_ty_info info =
         ir_var_ty_info(func->unit, func_ty.ret_ty->ty == IR_VAR_TY_TY_ARRAY
-                                    ? &IR_VAR_TY_POINTER
-                                    : func_ty.ret_ty);
+                                       ? &IR_VAR_TY_POINTER
+                                       : func_ty.ret_ty);
 
     ret_info = arena_alloc(func->arena, sizeof(*ret_info));
 
@@ -76,9 +76,9 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       for (size_t i = 0; i < num_hfa_members; i++) {
         struct ir_var_ty *member = &func_ty.ret_ty->aggregate.fields[i];
 
-        ret_info->regs[i] =
-            (struct ir_param_reg){.reg = {.ty = IR_REG_TY_FP, .idx = i},
-                                  .size = ir_var_ty_info(func->unit, member).size};
+        ret_info->regs[i] = (struct ir_param_reg){
+            .reg = {.ty = IR_REG_TY_FP, .idx = i},
+            .size = ir_var_ty_info(func->unit, member).size};
       }
     } else if (info.size > 8) {
       ret_ty = IR_VAR_TY_NONE;
@@ -176,7 +176,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     }
 
     size_t dw_size = (info.size + 3) / 4;
-    if ((ir_var_ty_is_aggregate(var_ty) || (variadic && ir_var_ty_is_fp(var_ty))) &&
+    if ((ir_var_ty_is_aggregate(var_ty) ||
+         (variadic && ir_var_ty_is_fp(var_ty))) &&
         dw_size <= (8 - ngrn)) {
       struct ir_param_info param_info = {
           .ty = ty, .var_ty = var_ty, .num_regs = dw_size};
@@ -265,7 +266,7 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
   }
   case IR_VAR_PRIMITIVE_TY_F64: {
     struct ir_glb *glb = ir_add_global(func->unit, IR_GLB_TY_DATA, &op->var_ty,
-                                    IR_GLB_DEF_TY_DEFINED, NULL);
+                                       IR_GLB_DEF_TY_DEFINED, NULL);
 
     glb->var = arena_alloc(func->arena, sizeof(*glb->var));
 
@@ -324,6 +325,26 @@ static void lower_br_cond(struct ir_func *func, struct ir_op *op) {
 
 #define MAX_IMM_SIZE (2047)
 
+static bool can_contain_lcl_addr(struct ir_func *func, struct ir_lcl *lcl, size_t offset) {
+
+  switch (lcl->alloc_ty) {
+  case IR_LCL_ALLOC_TY_NONE:
+    return false;
+  case IR_LCL_ALLOC_TY_FIXED:
+    // TODO: try and contain these, need to carefully work with offset
+    return false;
+  case IR_LCL_ALLOC_TY_NORMAL: {
+    offset += func->caller_stack_needed + lcl->alloc.offset;
+
+    if (offset > MAX_IMM_SIZE) {
+      return false;
+    }
+
+    return true;
+  }
+  }
+}
+
 static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
   if (op->flags & IR_OP_FLAG_CONTAINED) {
     return;
@@ -331,6 +352,12 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *base = op->addr_offset.base;
   if (base->ty != IR_OP_TY_ADDR || base->addr.ty != IR_OP_ADDR_TY_LCL) {
+    return;
+  }
+
+  struct ir_lcl *lcl = base->addr.lcl;
+
+  if (!can_contain_lcl_addr(func, lcl, op->addr_offset.offset)) {
     return;
   }
 
@@ -349,11 +376,15 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->load.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    if (!can_contain_lcl_addr(func, addr->addr.lcl, 0)) {
+      return;
+    }
+
     op->load.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
-    if (!addr_offset.index) {
+    if (!addr_offset.index && addr_offset.offset <= MAX_IMM_SIZE) {
       op->load.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
@@ -371,11 +402,15 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   struct ir_op *addr = op->store.addr;
 
   if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+    if (!can_contain_lcl_addr(func, addr->addr.lcl, 0)) {
+      return;
+    }
+
     op->store.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
 
-    if (!addr_offset.index) {
+    if (!addr_offset.index && addr_offset.offset <= MAX_IMM_SIZE) {
       op->store.addr = ir_alloc_contained_op(func, addr, op);
     }
   }
@@ -426,7 +461,7 @@ void rv32i_lower(struct ir_unit *unit) {
                 struct ir_op *cnst = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
                 ir_mk_integral_constant(unit, cnst, IR_VAR_PRIMITIVE_TY_I32,
-                                     op->addr_offset.scale);
+                                        op->addr_offset.scale);
 
                 struct ir_op *mul = ir_insert_before_op(
                     func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
@@ -440,8 +475,8 @@ void rv32i_lower(struct ir_unit *unit) {
 
                 struct ir_op *lhs = op->addr_offset.base;
 
-                struct ir_op *add = ir_replace_op(
-                    func, op, IR_OP_TY_BINARY_OP, IR_VAR_TY_POINTER);
+                struct ir_op *add = ir_replace_op(func, op, IR_OP_TY_BINARY_OP,
+                                                  IR_VAR_TY_POINTER);
                 add->binary_op = (struct ir_op_binary_op){
                     .ty = IR_OP_BINARY_OP_TY_ADD, .lhs = lhs, .rhs = mul};
               } else {
