@@ -150,10 +150,8 @@ void fprint_str(FILE *file, const char *input, size_t len) {
 }
 
 // this takes BYTE length of string because thats the info we have easiest access to throughout most of frontend
-void fprint_wstr(FILE *file, const char *input, size_t len) {
-  DEBUG_ASSERT(len % 4 == 0, "expected len to be mod 4 for wstr");
-
-  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i += sizeof(ch),w,L);
+void fprint_wstr(FILE *file, const uint32_t *input, size_t len) {
+  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i++,w,L);
 }
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {

@@ -745,7 +745,7 @@ enum ir_var_value_ty {
 };
 
 struct ir_var_str {
-  const char *value;
+  const void *value;
   size_t len;
 };
 

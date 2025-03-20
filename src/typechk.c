@@ -350,48 +350,6 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
   }
 }
 
-static bool is_cnst_ty_integral(enum td_cnst_ty ty) {
-  switch (ty) {
-  case TD_CNST_TY_CHAR:
-  case TD_CNST_TY_WIDE_CHAR:
-  case TD_CNST_TY_SIGNED_INT:
-  case TD_CNST_TY_UNSIGNED_INT:
-  case TD_CNST_TY_SIGNED_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG:
-  case TD_CNST_TY_SIGNED_LONG_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG_LONG:
-    return true;
-  case TD_CNST_TY_HALF:
-  case TD_CNST_TY_FLOAT:
-  case TD_CNST_TY_DOUBLE:
-  case TD_CNST_TY_LONG_DOUBLE:
-  case TD_CNST_TY_STR_LITERAL:
-  case TD_CNST_TY_WIDE_STR_LITERAL:
-    return false;
-  }
-}
-
-static bool is_cnst_ty_fp(enum td_cnst_ty ty) {
-  switch (ty) {
-  case TD_CNST_TY_HALF:
-  case TD_CNST_TY_FLOAT:
-  case TD_CNST_TY_DOUBLE:
-  case TD_CNST_TY_LONG_DOUBLE:
-    return true;
-  case TD_CNST_TY_CHAR:
-  case TD_CNST_TY_WIDE_CHAR:
-  case TD_CNST_TY_SIGNED_INT:
-  case TD_CNST_TY_UNSIGNED_INT:
-  case TD_CNST_TY_SIGNED_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG:
-  case TD_CNST_TY_SIGNED_LONG_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG_LONG:
-  case TD_CNST_TY_STR_LITERAL:
-  case TD_CNST_TY_WIDE_STR_LITERAL:
-    return false;
-  }
-}
-
 bool td_var_ty_is_integral_ty(const struct td_var_ty *ty) {
   if (ty->ty != TD_VAR_TY_TY_WELL_KNOWN) {
     return false;
@@ -1074,9 +1032,16 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       // change the constant type to an array, as it is currently a pointer
       const struct ast_cnst *cnst = &init->expr.cnst;
 
-      // FIXME: won't work for literals with null in them
-      // the cnst node needs to also hold string length
-      array_ty.array.size = cnst->str_value.len + 1;
+      switch (cnst->ty) {
+      case AST_CNST_TY_STR_LITERAL:
+        array_ty.array.size = cnst->str_value.ascii.len + 1;
+        break;
+      case AST_CNST_TY_WIDE_STR_LITERAL:
+        array_ty.array.size = cnst->str_value.wide.len + 1;
+        break;
+      default:
+        unreachable();
+      }
       break;
     }
     case AST_INIT_TY_INIT_LIST: {
@@ -2579,7 +2544,6 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
 
 #define CNST_TY_ENTRY(name, jump)                                              \
   case AST_CNST_TY_##name:                                                     \
-    td_cnst.ty = TD_CNST_TY_##name;                                            \
     var_ty = TD_VAR_TY_WELL_KNOWN_##name;                                      \
     jump
 
@@ -2593,12 +2557,12 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     CNST_TY_ENTRY(CHAR, goto integral);
 
   case AST_CNST_TY_WIDE_CHAR:
-    td_cnst.ty = TD_CNST_TY_WIDE_CHAR;
     var_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
     goto integral;
 
   integral:
-    td_cnst.int_value = cnst->int_value;
+    td_cnst.ty = TD_CNST_TY_NUM;
+    td_cnst.num_value = cnst->num_value;
     break;
 
     CNST_TY_ENTRY(FLOAT, goto floating_point);
@@ -2606,24 +2570,37 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     CNST_TY_ENTRY(LONG_DOUBLE, goto floating_point);
 
   floating_point:
-    td_cnst.flt_value = cnst->flt_value;
+    td_cnst.ty = TD_CNST_TY_NUM;
+    td_cnst.num_value = cnst->num_value;
     break;
 
   case AST_CNST_TY_STR_LITERAL:
+    // FIXME: we have duplication, both the cnst ty and the enum ty encode ascii
+    // vs wide
+    DEBUG_ASSERT(cnst->str_value.ty == AST_CNST_STR_TY_ASCII, "expected ascii");
+
     // FIXME: lifetimes
-    td_cnst.ty = TD_CNST_TY_STR_LITERAL;
-    td_cnst.str_value = (struct td_cnst_str){
-        .value = cnst->str_value.value,
-        .len = cnst->str_value.len,
-    };
+    td_cnst.ty = TD_CNST_TY_STRING;
+    td_cnst.str_value =
+        (struct td_cnst_str){.ty = TD_CNST_STR_TY_ASCII,
+                             .ascii = {
+                                 .value = cnst->str_value.ascii.value,
+                                 .len = cnst->str_value.ascii.len,
+                             }};
     var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    td_cnst.ty = TD_CNST_TY_WIDE_STR_LITERAL;
-    td_cnst.str_value = (struct td_cnst_str){
-        .value = cnst->str_value.value,
-        .len = cnst->str_value.len,
-    };
+    // FIXME: we have duplication, both the cnst ty and the enum ty encode ascii
+    // vs wide
+    DEBUG_ASSERT(cnst->str_value.ty == AST_CNST_STR_TY_WIDE, "expected wide");
+
+    td_cnst.ty = TD_CNST_TY_STRING;
+    td_cnst.str_value =
+        (struct td_cnst_str){.ty = TD_CNST_STR_TY_WIDE,
+                             .wide = {
+                                 .value = cnst->str_value.wide.value,
+                                 .len = cnst->str_value.wide.len,
+                             }};
     var_ty = (struct td_var_ty){
         .ty = TD_VAR_TY_TY_POINTER,
         .type_qualifiers = TD_TYPE_QUALIFIER_FLAG_CONST,
@@ -3003,26 +2980,22 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
       (struct td_val){.var_ty = TD_VAR_TY_UNKNOWN, .val = MK_AP_VAL_INVALID()};
 
   if (expr->ty == TD_EXPR_TY_CNST) {
-    // TODO: migrate all usages of cnst to ap_val
-    if (is_cnst_ty_integral(expr->cnst.ty)) {
-      *value = (struct td_val){.var_ty = expr->var_ty,
-                               .val = ap_val_from_ull(expr->cnst.int_value)};
+    switch (expr->cnst.ty) {
+    case TD_CNST_TY_NUM:
+      *value =
+          (struct td_val){.var_ty = expr->var_ty, .val = expr->cnst.num_value};
       return true;
-    } else if (is_cnst_ty_fp(expr->cnst.ty)) {
-      *value = (struct td_val){
-          .var_ty = expr->var_ty,
-          .val = MK_AP_VAL_FLT(((struct ap_float){
-              .ty = AP_FLOAT_TY_F64, .f64 = expr->cnst.flt_value}))};
-      return true;
-    } else {
+    case TD_CNST_TY_STRING:
+      break;
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
         compiler_diagnostics_add(
             tchk->diagnostics,
-            MK_SEMANTIC_DIAGNOSTIC(BAD_ENUM_INIT, bad_enum_init, expr->span,
-                                   MK_INVALID_TEXT_POS(0),
-                                   "only integer constants are "
-                                   "allowed in integer constant expressions"));
+            MK_SEMANTIC_DIAGNOSTIC(
+                BAD_ENUM_INIT, bad_enum_init, expr->span,
+                MK_INVALID_TEXT_POS(0),
+                "only integer or floating-point constants are "
+                "allowed in constant expressions, not string"));
       }
 
       return false;
@@ -3135,7 +3108,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     case TD_UNARY_OP_TY_LOGICAL_NOT:
       *value =
           (struct td_val){.var_ty = expr->var_ty,
-                          .val = ap_val_from_ull(ap_val_zero(expr_value.val))};
+                          .val = ap_val_from_ull(ap_val_iszero(expr_value.val))};
       return true;
     case TD_UNARY_OP_TY_NOT:
       *value = (struct td_val){.var_ty = expr->var_ty,
@@ -3472,39 +3445,12 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     case AP_VAL_TY_INVALID:
       return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
                               .var_ty = TD_VAR_TY_UNKNOWN};
-    case AP_VAL_TY_INT: {
-      // HACK: ir build does not actually use TD_CNST_TY except to distinguish
-      // int
-      enum td_cnst_ty cnst_ty = TD_CNST_TY_SIGNED_LONG_LONG;
-      struct td_var_ty var_ty = cnst_value.var_ty;
-
+    case AP_VAL_TY_INT:
+    case AP_VAL_TY_FLOAT:
       return (struct td_expr){
           .ty = TD_EXPR_TY_CNST,
-          .var_ty = var_ty,
-          .cnst = {.ty = cnst_ty,
-                   .int_value = ap_int_as_ull(cnst_value.val.ap_int)}};
-    }
-    case AP_VAL_TY_FLOAT: {
-      enum td_cnst_ty cnst_ty = TD_CNST_TY_LONG_DOUBLE;
-      struct td_var_ty var_ty = cnst_value.var_ty;
-
-      long double val;
-      switch (cnst_value.val.ap_float.ty) {
-      case AP_FLOAT_TY_F16:
-        val = (long double)cnst_value.val.ap_float.f16;
-        break;
-      case AP_FLOAT_TY_F32:
-        val = (long double)cnst_value.val.ap_float.f32;
-        break;
-      case AP_FLOAT_TY_F64:
-        val = (long double)cnst_value.val.ap_float.f64;
-        break;
-      }
-
-      return (struct td_expr){.ty = TD_EXPR_TY_CNST,
-                              .var_ty = var_ty,
-                              .cnst = {.ty = cnst_ty, .flt_value = val}};
-    }
+          .var_ty = cnst_value.var_ty,
+          .cnst = {.ty = TD_CNST_TY_NUM, .num_value = cnst_value.val}};
     }
   }
 
@@ -3516,8 +3462,8 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
   }
   case TD_EXPR_TY_VAR: {
     // important special case: `int *p = a` where a is an array
-    // we pass flag DONT_DECAY so we can look at the returned value to check it
-    // is an array
+    // we pass flag DONT_DECAY so we can look at the returned value to check
+    // it is an array
 
     // TODO: make this diagnostic work
     // if (expr.var_ty.ty != TD_VAR_TY_TY_ARRAY) {
@@ -3527,8 +3473,8 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     //     MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
     //                            expr.span, MK_INVALID_TEXT_POS(0),
     //                            "expression not valid as static "
-    //                            "initializer; assigment is only allowed when "
-    //                            "rhs is an array decaying to a pointer"));
+    //                            "initializer; assigment is only allowed when
+    //                            " "rhs is an array decaying to a pointer"));
 
     // return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
     //                         .var_ty = TD_VAR_TY_UNKNOWN};
@@ -4258,8 +4204,8 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
          member_var_ty.ty == TD_VAR_TY_TY_ARRAY)) {
       // if the next value is the same type as the element, it initialises the
       // whole thing
-      // FIXME: we are double typing this expression because it gets retyped in
-      // the branches
+      // FIXME: we are double typing this expression because it gets retyped
+      // in the branches
       struct td_expr typed =
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
@@ -4566,13 +4512,13 @@ static void type_staticassert(struct typechk *tchk,
     message = "static_assert failed";
 #else
     message = arena_alloc_snprintf(tchk->arena, "static_assert failed: %.*s",
-                                   (int)cnst.len, cnst.value);
+                                   (int)cnst.ascii.len, cnst.ascii.value);
 #endif
   } else {
     message = "static_assert failed";
   }
 
-  if (ap_val_zero(cond)) {
+  if (ap_val_iszero(cond)) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
@@ -4860,20 +4806,24 @@ DEBUG_FUNC(var, var) {
 }
 
 DEBUG_FUNC(cnst, cnst) {
-  if (is_cnst_ty_integral(cnst->ty)) {
-    TD_PRINT("CONSTANT '%llu'", cnst->int_value);
-  } else if (is_cnst_ty_fp(cnst->ty)) {
-    TD_PRINT("CONSTANT '%Lf'", cnst->flt_value);
-  } else if (cnst->ty == TD_CNST_TY_STR_LITERAL) {
-    TD_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
+  switch (cnst->ty) {
+  case TD_CNST_TY_NUM:
+    TD_PRINTZ("CONSTANT ");
+    ap_val_fprintf(stderr, cnst->num_value);
+    break;
+  case TD_CNST_TY_STRING:
+    TD_PRINTZ("CONSTANT ");
+
+    switch (cnst->str_value.ty) {
+    case TD_CNST_STR_TY_ASCII:
+      fprint_str(stderr, cnst->str_value.ascii.value,
+                 cnst->str_value.ascii.len);
+      break;
+    case TD_CNST_STR_TY_WIDE:
+      fprint_wstr(stderr, cnst->str_value.wide.value, cnst->str_value.wide.len);
+      break;
+    }
     fprintf(stderr, "\n");
-  } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
-    TD_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_wstr(stderr, cnst->str_value.value, cnst->str_value.len);
-    fprintf(stderr, "\n");
-  } else {
-    BUG("dont know how to print cnst");
   }
 }
 

@@ -354,7 +354,8 @@ static inline void *nonnull_realloc(void *p, size_t size) {
 }
 
 void fprint_str(FILE *file, const char *input, size_t len);
-void fprint_wstr(FILE *file, const char *input, size_t len);
+void fprint_wstr(FILE *file, const uint32_t *input, size_t len);
+
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
 
 struct sized_str {

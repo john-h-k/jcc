@@ -15,6 +15,10 @@ struct ap_int ap_int_zero(size_t num_bits) {
   return (struct ap_int){.num_bits = num_bits};
 }
 
+struct ap_int ap_int_one(size_t num_bits) {
+  return (struct ap_int){.num_bits = num_bits, .chunks[0] = 1};
+}
+
 #define CHECK64(v) DEBUG_ASSERT((v).num_bits <= 64, ">64 bit ap_int");
 #define CHECK_SAME(lhs, rhs)                                                   \
   DEBUG_ASSERT((lhs).num_bits == (rhs).num_bits, "ap_int bit count mismatch");
@@ -140,15 +144,15 @@ struct ap_int ap_int_not(struct ap_int value) {
 }
 
 bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
-                      const char *str, size_t len, struct ap_int *ap_int) {
-  if (!*str) {
+                      struct sized_str str, struct ap_int *ap_int) {
+  if (!str.len) {
     return false;
   }
 
   size_t i = 0;
 
   bool neg = false;
-  switch (*str) {
+  switch (str.str[0]) {
   case '+':
     i++;
     break;
@@ -160,20 +164,20 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
     break;
   }
 
-  if (i == len) {
+  if (i == str.len) {
     return false;
   }
 
-  size_t rem = len - i - 1;
+  size_t rem = str.len - i - 1;
   int base = 10;
 
-  if (rem >= 2 && str[i] == '0' && str[i + 1] == 'x') {
+  if (rem >= 2 && str.str[i] == '0' && str.str[i + 1] == 'x') {
     i += 2;
     base = 16;
-  } else if (rem >= 2 && str[i] == '0' && str[i + 1] == 'b') {
+  } else if (rem >= 2 && str.str[i] == '0' && str.str[i + 1] == 'b') {
     i += 2;
     base = 2;
-  } else if (rem >= 1 && str[i] == '0') {
+  } else if (rem >= 1 && str.str[i] == '0') {
     i++;
     base = 8;
   }
@@ -182,8 +186,8 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
 
   struct ap_int value = ap_int_zero(num_bits);
 
-  for (; i < len; i++) {
-    char ch = str[i];
+  for (; i < str.len; i++) {
+    char ch = str.str[i];
 
     if (ch == '\'') {
       // digit seperator
@@ -217,7 +221,6 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
   if (neg) {
     ap_int_negate_into(&value);
   }
-
   *ap_int = value;
   return true;
 }
@@ -373,17 +376,17 @@ struct ap_int ap_int_rshift(struct ap_int lhs, struct ap_int rhs) {
 /************************** ap_float **************************/
 
 bool ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
-                        const char *str, size_t len,
-                        struct ap_float *ap_float) {
-  char *buf = arena_alloc_strndup(arena, str, len);
+                        struct sized_str str, struct ap_float *ap_float) {
+  char *buf = arena_alloc_strndup(arena, str.str, str.len);
 
   char *end;
 
-  bool has_suf = false;
-  if (len) {
-    char ch = (char)tolower(str[len - 1]);
-    has_suf = ch == 'l' || ch == 'f';
+  if (!str.len) {
+    return false;
   }
+
+  char ch = (char)tolower(str.str[str.len - 1]);
+  bool has_suf = ch == 'l' || ch == 'f';
 
   ap_float->ty = ty;
   switch (ty) {
@@ -400,10 +403,10 @@ bool ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
 
   size_t parse_len = end - buf;
   if (has_suf) {
-    len--;
+    str.len--;
   }
 
-  return parse_len == len;
+  return parse_len == str.len;
 }
 
 struct ap_float ap_float_zero(enum ap_float_ty ty) {
@@ -414,6 +417,17 @@ struct ap_float ap_float_zero(enum ap_float_ty ty) {
     return (struct ap_float){.ty = ty, .f32 = 0};
   case AP_FLOAT_TY_F64:
     return (struct ap_float){.ty = ty, .f64 = 0};
+  }
+}
+
+struct ap_float ap_float_one(enum ap_float_ty ty) {
+  switch (ty) {
+  case AP_FLOAT_TY_F16:
+    return (struct ap_float){.ty = ty, .f16 = 1};
+  case AP_FLOAT_TY_F32:
+    return (struct ap_float){.ty = ty, .f32 = 1};
+  case AP_FLOAT_TY_F64:
+    return (struct ap_float){.ty = ty, .f64 = 1};
   }
 }
 
@@ -502,6 +516,17 @@ POP_NO_WARN()
   AP_FLOAT_UN_OP(-)
 }
 
+long double ap_float_as_ld(struct ap_float value) {
+  switch (value.ty) {
+  case AP_FLOAT_TY_F16:
+    return (long double)value.f16;
+  case AP_FLOAT_TY_F32:
+    return (long double)value.f32;
+  case AP_FLOAT_TY_F64:
+    return (long double)value.f64;
+  }
+}
+
 // FIXME: this method is INHERENTLY BROKEN because it cannot handle sign
 struct ap_val ap_val_from_ull(unsigned long long value) {
   struct ap_int ap_int = {.num_bits = 64};
@@ -566,7 +591,7 @@ bool ap_val_nonzero(struct ap_val value) {
   }
 }
 
-bool ap_val_zero(struct ap_val value) {
+bool ap_val_iszero(struct ap_val value) {
   switch (value.ty) {
   case AP_VAL_TY_INVALID:
     return false;
@@ -729,5 +754,51 @@ struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty) {
         unreachable();
       }
     }
+  }
+}
+
+bool ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
+                          struct sized_str str, struct ap_val *ap_val) {
+  if (!ap_int_try_parse(arena, num_bits, str, &ap_val->ap_int)) {
+    *ap_val = MK_AP_VAL_INVALID();
+    return false;
+  }
+
+  ap_val->ty = AP_VAL_TY_INT;
+  return true;
+}
+
+bool ap_val_try_parse_float(struct arena_allocator *arena, enum ap_float_ty ty,
+                            struct sized_str str, struct ap_val *ap_val) {
+  if (!ap_float_try_parse(arena, ty, str, &ap_val->ap_float)) {
+    *ap_val = MK_AP_VAL_INVALID();
+    return false;
+  }
+
+  ap_val->ty = AP_VAL_TY_FLOAT;
+  return true;
+}
+
+void ap_val_fprintf(FILE *file, struct ap_val value) {
+  switch (value.ty) {
+  case AP_VAL_TY_INVALID:
+    fprintf(file, "AP_VAL_INVALID");
+    break;
+  case AP_VAL_TY_INT:
+    fprintf(file, "AP_VAL_INVALID");
+    break;
+  case AP_VAL_TY_FLOAT:
+    switch (value.ap_float.ty) {
+    case AP_FLOAT_TY_F16:
+      fprintf(file, "%f", (double)value.ap_float.f16);
+      break;
+    case AP_FLOAT_TY_F32:
+      fprintf(file, "%f", (double)value.ap_float.f32);
+      break;
+    case AP_FLOAT_TY_F64:
+      fprintf(file, "%f", value.ap_float.f64);
+      break;
+    }
+    break;
   }
 }
