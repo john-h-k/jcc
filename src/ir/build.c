@@ -78,7 +78,8 @@ struct ir_func_builder {
   struct vector *switch_cases;
 };
 
-static struct ir_label *add_label(struct ir_func_builder *irb, struct sized_str name,
+static struct ir_label *add_label(struct ir_func_builder *irb,
+                                  struct sized_str name,
                                   struct ir_basicblock *basicblock) {
   struct ir_label *label = arena_alloc(irb->arena, sizeof(*label));
 
@@ -673,17 +674,15 @@ static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
                                                 struct td_expr *lhs_expr,
                                                 struct td_expr *rhs_expr);
 
-static struct ir_op *
-build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                            struct td_expr *lhs_expr, struct sized_str member_name,
-                            bool *member_is_bitfield,
-                            struct ir_bitfield *member_bitfield);
+static struct ir_op *build_ir_for_member_address(
+    struct ir_func_builder *irb, struct ir_stmt **stmt,
+    struct td_expr *lhs_expr, struct sized_str member_name,
+    bool *member_is_bitfield, struct ir_bitfield *member_bitfield);
 
-static struct ir_op *
-build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                             struct td_expr *lhs_expr, struct sized_str member_name,
-                             bool *member_is_bitfield,
-                             struct ir_bitfield *member_bitfield);
+static struct ir_op *build_ir_for_pointer_address(
+    struct ir_func_builder *irb, struct ir_stmt **stmt,
+    struct td_expr *lhs_expr, struct sized_str member_name,
+    bool *member_is_bitfield, struct ir_bitfield *member_bitfield);
 
 static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
@@ -878,34 +877,37 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
 
     struct td_expr one;
     if (td_var_ty_is_fp_ty(&unary_op->expr->var_ty)) {
-      enum td_cnst_ty ty;
+      enum ap_float_ty ty;
 
       switch (unary_op->expr->var_ty.well_known) {
       case WELL_KNOWN_TY_HALF:
-        ty = TD_CNST_TY_HALF;
+        ty = AP_FLOAT_TY_F16;
         break;
       case WELL_KNOWN_TY_FLOAT:
-        ty = TD_CNST_TY_FLOAT;
+        ty = AP_FLOAT_TY_F32;
         break;
       case WELL_KNOWN_TY_DOUBLE:
-        ty = TD_CNST_TY_DOUBLE;
+        ty = AP_FLOAT_TY_F64;
         break;
       case WELL_KNOWN_TY_LONG_DOUBLE:
-        ty = TD_CNST_TY_LONG_DOUBLE;
+        // FIXME: long double
+        ty = AP_FLOAT_TY_F64;
         break;
       default:
         unreachable();
       }
 
-      one =
-          (struct td_expr){.ty = TD_EXPR_TY_CNST,
-                           .var_ty = cnst_ty,
-                           .cnst = (struct td_cnst){.ty = ty, .flt_value = 1}};
-    } else {
       one = (struct td_expr){.ty = TD_EXPR_TY_CNST,
                              .var_ty = cnst_ty,
                              .cnst = (struct td_cnst){
-                                 .ty = TD_CNST_TY_SIGNED_INT, .int_value = 1}};
+                                 .ty = TD_CNST_TY_NUM,
+                                 .num_value = MK_AP_VAL_FLT(ap_float_one(ty))}};
+    } else {
+      one = (struct td_expr){
+          .ty = TD_EXPR_TY_CNST,
+          .var_ty = cnst_ty,
+          .cnst = (struct td_cnst){.ty = TD_CNST_TY_NUM,
+                                   .num_value = MK_AP_VAL_INT(ap_int_one(8))}};
     }
 
     struct td_assg td_assg = {
@@ -1112,11 +1114,44 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
 static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                         const struct td_var_ty *td_var_ty,
                                         const struct td_cnst *cnst) {
+  DEBUG_ASSERT(cnst->ty == TD_CNST_TY_STRING, "expected string");
+
+  size_t num_chrs;
   struct ir_var_ty *chr = arena_alloc(iru->arena, sizeof(*chr));
-  // FIXME: in several places we assume wide char is int - not sure when this is
-  // true
-  *chr = cnst->ty == TD_CNST_TY_STR_LITERAL ? IR_VAR_TY_I8 : IR_VAR_TY_I32;
-  size_t num_chrs = cnst->str_value.len / ir_var_ty_info(iru, chr).size;
+
+  // if string literal contains null chars (or is wide char), it will mess up
+  // counting and so put it in data
+  bool is_data;
+  struct ir_var_str str_value;
+
+  switch (cnst->str_value.ty) {
+  case TD_CNST_STR_TY_ASCII:
+    // data if contains null char
+    is_data = strlen(cnst->str_value.ascii.value) < cnst->str_value.ascii.len;
+    *chr = IR_VAR_TY_I8;
+    num_chrs = cnst->str_value.ascii.len;
+    str_value = (struct ir_var_str){
+        .value = cnst->str_value.ascii.value,
+        .len = cnst->str_value.ascii.len,
+    };
+    break;
+  case TD_CNST_STR_TY_WIDE:
+    is_data = true;
+    *chr = IR_VAR_TY_I32;
+    num_chrs = cnst->str_value.wide.len;
+
+    str_value = (struct ir_var_str){
+        .value = cnst->str_value.wide.value,
+        .len = cnst->str_value.wide.len,
+    };
+    break;
+  }
+
+  if (td_var_ty->ty != TD_VAR_TY_TY_POINTER ||
+      !(td_var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST)) {
+    is_data = true;
+  }
+
   struct ir_var_ty var_ty = {
       .ty = IR_VAR_TY_TY_ARRAY,
       .array = {.underlying = chr, .num_elements = num_chrs + 1 /* null */}};
@@ -1126,28 +1161,7 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
 
   glb->var = arena_alloc(iru->arena, sizeof(*glb->var));
 
-  // if string literal contains null chars (or is wide char), it will mess up
-  // counting and so put it in data
-  if (td_var_ty->ty != TD_VAR_TY_TY_POINTER ||
-      !(td_var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST) ||
-      strlen(cnst->str_value.value) < cnst->str_value.len ||
-      cnst->ty != TD_CNST_TY_STR_LITERAL) {
-    struct ir_var_str str_value;
-    switch (cnst->ty) {
-    case TD_CNST_TY_STR_LITERAL:
-      str_value = (struct ir_var_str){.value = cnst->str_value.value,
-                                      .len = num_chrs + 1};
-      break;
-    case TD_CNST_TY_WIDE_STR_LITERAL:
-      // kinda hacky, but in parse/typechk we generate a string with 4x the
-      // length of the actual str
-      str_value = (struct ir_var_str){.value = cnst->str_value.value,
-                                      .len = num_chrs + 1};
-      break;
-    default:
-      unreachable();
-    }
-
+  if (is_data) {
     *glb->var = (struct ir_var){.unit = iru,
                                 .ty = IR_VAR_TY_CONST_DATA,
                                 .var_ty = var_ty,
@@ -1156,14 +1170,12 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                           .str_value = str_value}};
 
   } else {
-    *glb->var =
-        (struct ir_var){.unit = iru,
-                        .ty = IR_VAR_TY_STRING_LITERAL,
-                        .var_ty = var_ty,
-                        .value = {.ty = IR_VAR_VALUE_TY_STR,
-                                  .var_ty = var_ty,
-                                  .str_value = {.value = cnst->str_value.value,
-                                                .len = num_chrs}}};
+    *glb->var = (struct ir_var){.unit = iru,
+                                .ty = IR_VAR_TY_STRING_LITERAL,
+                                .var_ty = var_ty,
+                                .value = {.ty = IR_VAR_VALUE_TY_STR,
+                                          .var_ty = var_ty,
+                                          .str_value = str_value}};
   }
 
   return glb;
@@ -1176,43 +1188,37 @@ static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
   struct ir_op *op = ir_alloc_op(irb->func, *stmt);
 
   switch (expr->cnst.ty) {
-  case TD_CNST_TY_CHAR:
-  case TD_CNST_TY_WIDE_CHAR:
-  case TD_CNST_TY_SIGNED_INT:
-  case TD_CNST_TY_UNSIGNED_INT:
-  case TD_CNST_TY_SIGNED_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG:
-  case TD_CNST_TY_SIGNED_LONG_LONG:
-  case TD_CNST_TY_UNSIGNED_LONG_LONG:
-    op->ty = IR_OP_TY_CNST;
-    op->var_ty = var_ty;
-    op->cnst.ty = IR_OP_CNST_TY_INT;
-    op->cnst.int_value = expr->cnst.int_value;
+  case TD_CNST_TY_NUM:
+    switch (expr->cnst.num_value.ty) {
+    case AP_VAL_TY_INT:
+      op->ty = IR_OP_TY_CNST;
+      op->var_ty = var_ty;
+      op->cnst.ty = IR_OP_CNST_TY_INT;
+      op->cnst.int_value = ap_int_as_ull(expr->cnst.num_value.ap_int);
+      break;
+    case AP_VAL_TY_FLOAT:
+      op->ty = IR_OP_TY_CNST;
+      op->var_ty = var_ty;
+      op->cnst.ty = IR_OP_CNST_TY_FLT;
+      op->cnst.flt_value = ap_float_as_ld(expr->cnst.num_value.ap_float);
+      break;
+    case AP_VAL_TY_INVALID:
+      BUG("INVALID should not reach ir gen");
+    }
     break;
-  case TD_CNST_TY_HALF:
-  case TD_CNST_TY_FLOAT:
-  case TD_CNST_TY_DOUBLE:
-  case TD_CNST_TY_LONG_DOUBLE:
-    op->ty = IR_OP_TY_CNST;
-    op->var_ty = var_ty;
-    op->cnst.ty = IR_OP_CNST_TY_FLT;
-    op->cnst.flt_value = expr->cnst.flt_value;
-    break;
-  case TD_CNST_TY_STR_LITERAL:
-  case TD_CNST_TY_WIDE_STR_LITERAL: {
+  case TD_CNST_TY_STRING: {
     struct ir_glb *glb =
         build_str_literal(irb->unit, &expr->var_ty, &expr->cnst);
 
     op->ty = IR_OP_TY_ADDR;
     op->var_ty = IR_VAR_TY_POINTER;
     op->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_GLB, .glb = glb};
-
-    // FIXME: the user needs to load from the address if they want to get the
-    // value principally in `const char[] = "foo"`
-
     break;
   }
   }
+
+  // FIXME: the user needs to load from the address if they want to get the
+  // value principally in `const char[] = "foo"`
 
   return op;
 }
@@ -1334,7 +1340,8 @@ static void add_var_write(struct ir_func_builder *irb, struct ir_op *op,
                           struct td_var *var);
 
 static const char *mangle_static_name(struct ir_var_builder *irb,
-                                      struct ir_func *func, struct sized_str name) {
+                                      struct ir_func *func,
+                                      struct sized_str name) {
   // need to mangle the name as statics cannot interfere with others
   size_t base_len = name.len;
 
@@ -1376,8 +1383,9 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
       const char *value = irb->func->name;
       struct ir_var_ty str_var_ty = ir_var_ty_make_array(
           irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
-      const char *name = mangle_static_name(
-          &(struct ir_var_builder){.arena = irb->arena}, irb->func, MK_SIZED("__func__"));
+      const char *name =
+          mangle_static_name(&(struct ir_var_builder){.arena = irb->arena},
+                             irb->func, MK_SIZED("__func__"));
 
       struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty,
                                          IR_GLB_DEF_TY_DEFINED, name);
@@ -1540,7 +1548,8 @@ static struct ir_op *build_ir_for_intrinsic(struct ir_func_builder *irb,
 
   struct ir_var_ty ret_ty = var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
 
-  if (szstreq(var.identifier, MK_SIZED("fabs")) || szstreq(var.identifier, MK_SIZED("fabsf")) ||
+  if (szstreq(var.identifier, MK_SIZED("fabs")) ||
+      szstreq(var.identifier, MK_SIZED("fabsf")) ||
       szstreq(var.identifier, MK_SIZED("fabsl"))) {
     DEBUG_ASSERT(call->arg_list.num_args == 1, "more than 1 arg to fabs");
 
@@ -1812,11 +1821,10 @@ static size_t get_member_address_offset(struct ir_func_builder *irb,
   return member_offset;
 }
 
-static struct ir_op *
-build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                            struct td_expr *lhs_expr, struct sized_str member_name,
-                            bool *member_is_bitfield,
-                            struct ir_bitfield *member_bitfield) {
+static struct ir_op *build_ir_for_member_address(
+    struct ir_func_builder *irb, struct ir_stmt **stmt,
+    struct td_expr *lhs_expr, struct sized_str member_name,
+    bool *member_is_bitfield, struct ir_bitfield *member_bitfield) {
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
   struct ir_var_ty member_ty;
@@ -1837,11 +1845,10 @@ build_ir_for_member_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
   return op;
 }
 
-static struct ir_op *
-build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
-                             struct td_expr *lhs_expr, struct sized_str member_name,
-                             bool *member_is_bitfield,
-                             struct ir_bitfield *member_bitfield) {
+static struct ir_op *build_ir_for_pointer_address(
+    struct ir_func_builder *irb, struct ir_stmt **stmt,
+    struct td_expr *lhs_expr, struct sized_str member_name,
+    bool *member_is_bitfield, struct ir_bitfield *member_bitfield) {
   DEBUG_ASSERT(lhs_expr->var_ty.ty == TD_VAR_TY_TY_POINTER,
                "makes no sense except on LHS pointer");
 
@@ -1863,35 +1870,6 @@ build_ir_for_pointer_address(struct ir_func_builder *irb, struct ir_stmt **stmt,
       (struct ir_op_addr_offset){.base = lhs, .offset = offset, .index = NULL};
 
   return op;
-}
-
-UNUSED static bool is_integral_cnst(struct ir_func_builder *irb,
-                                    const struct td_expr *expr,
-                                    unsigned long long *value) {
-  if (expr->ty == TD_EXPR_TY_UNARY_OP &&
-      expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
-    return is_integral_cnst(irb, expr->unary_op.expr, value);
-  }
-
-  if (expr->ty != TD_EXPR_TY_CNST) {
-    return false;
-  }
-
-  switch (expr->cnst.ty) {
-  case TD_CNST_TY_FLOAT:
-  case TD_CNST_TY_DOUBLE:
-  case TD_CNST_TY_LONG_DOUBLE:
-  case TD_CNST_TY_CHAR:
-  case TD_CNST_TY_WIDE_CHAR:
-  case TD_CNST_TY_STR_LITERAL:
-  case TD_CNST_TY_WIDE_STR_LITERAL:
-    return false;
-  default:
-    break;
-  }
-
-  *value = expr->cnst.int_value;
-  return true;
 }
 
 static struct ir_op *build_ir_for_array_address(struct ir_func_builder *irb,
@@ -3468,7 +3446,7 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct var_refs *global_var_refs,
                                              enum ir_build_flags flags) {
   struct sized_str ident = def->var_declaration.var.identifier;
-  
+
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
@@ -3609,9 +3587,10 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   ir_prune_basicblocks(builder->func);
 
   // may not end in a return, but needs to to be well-formed IR
-  if (!last_bb || last_bb->id == DETACHED_BASICBLOCK || (last_bb->last && last_bb->last->last &&
-                   ir_op_is_branch(last_bb->last->last->ty) &&
-                   last_bb->last->last->ty != IR_OP_TY_RET)) {
+  if (!last_bb || last_bb->id == DETACHED_BASICBLOCK ||
+      (last_bb->last && last_bb->last->last &&
+       ir_op_is_branch(last_bb->last->last->ty) &&
+       last_bb->last->last->ty != IR_OP_TY_RET)) {
     // add extra bb if there is no last bb, or if there is one
     debug("adding bb to create ret");
     last_bb = ir_alloc_basicblock(builder->func);
@@ -3734,7 +3713,8 @@ get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
                      var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
-    struct sized_str member_name = var_ty->aggregate.fields[member_index].identifier;
+    struct sized_str member_name =
+        var_ty->aggregate.fields[member_index].identifier;
     struct ir_var_ty ir_member_ty;
     size_t member_offset;
     size_t idx;
@@ -4094,38 +4074,44 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
     return build_ir_for_var_value_binary_op(irb, expr, var_ty);
   case TD_EXPR_TY_CNST: {
     const struct td_cnst *cnst = &expr->cnst;
-    if (cnst->ty == TD_CNST_TY_STR_LITERAL) {
-      struct ir_glb *glb = build_str_literal(irb->unit, &expr->var_ty, cnst);
+    switch (cnst->ty) {
+    case TD_CNST_TY_STRING:
+      switch (cnst->str_value.ty) {
+      case TD_CNST_STR_TY_ASCII: {
+        struct ir_glb *glb = build_str_literal(irb->unit, &expr->var_ty, cnst);
 
-      if (var_ty->ty == TD_VAR_TY_TY_POINTER) {
-        return (struct ir_var_value){
-            .ty = IR_VAR_VALUE_TY_ADDR,
-            .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
-            .addr = {.glb = glb, .offset = 0}};
-      } else {
-        // FIXME: this leads to duplicates in the IR (as a glb was constructed
-        // in build_str_literal)
-        return glb->var->value;
+        if (var_ty->ty == TD_VAR_TY_TY_POINTER) {
+          return (struct ir_var_value){
+              .ty = IR_VAR_VALUE_TY_ADDR,
+              .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+              .addr = {.glb = glb, .offset = 0}};
+        } else {
+          // FIXME: this leads to duplicates in the IR (as a glb was constructed
+          // in build_str_literal)
+          return glb->var->value;
+        }
       }
-    } else if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
-      TODO("wide str globals");
-    } else if (td_var_ty_is_integral_ty(&expr->var_ty)) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
-                                   .var_ty =
-                                       var_ty_for_td_var_ty(irb->unit, var_ty),
-                                   .int_value = cnst->int_value};
-    } else if (td_var_ty_is_fp_ty(&expr->var_ty)) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_FLT,
-                                   .var_ty =
-                                       var_ty_for_td_var_ty(irb->unit, var_ty),
-                                   .flt_value = cnst->flt_value};
-    } else if (expr->var_ty.ty == TD_VAR_TY_TY_POINTER) {
-      return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_INT,
-                                   .var_ty =
-                                       var_ty_for_td_var_ty(irb->unit, var_ty),
-                                   .int_value = cnst->int_value};
-    } else {
-      TODO("other types");
+      case TD_CNST_STR_TY_WIDE: {
+        TODO("wide str globals");
+        break;
+      }
+      }
+      break;
+    case TD_CNST_TY_NUM:
+      switch (cnst->num_value.ty) {
+      case AP_VAL_TY_INT:
+        return (struct ir_var_value){
+            .ty = IR_VAR_VALUE_TY_INT,
+            .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+            .int_value = ap_int_as_ull(cnst->num_value.ap_int)};
+      case AP_VAL_TY_FLOAT:
+        return (struct ir_var_value){
+            .ty = IR_VAR_VALUE_TY_FLT,
+            .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+            .flt_value = ap_float_as_ld(cnst->num_value.ap_float)};
+      case AP_VAL_TY_INVALID:
+        BUG("invalid ap val should not reach ir gen");
+      }
     }
   }
   default:

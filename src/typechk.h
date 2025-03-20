@@ -235,37 +235,40 @@ struct td_paramlist {
 /* Constant values (literals) */
 
 enum td_cnst_ty {
-  TD_CNST_TY_SIGNED_INT,
-  TD_CNST_TY_UNSIGNED_INT,
-  TD_CNST_TY_SIGNED_LONG,
-  TD_CNST_TY_UNSIGNED_LONG,
-  TD_CNST_TY_SIGNED_LONG_LONG,
-  TD_CNST_TY_UNSIGNED_LONG_LONG,
+  TD_CNST_TY_NUM,
+  TD_CNST_TY_STRING,
+};
 
-  TD_CNST_TY_HALF,
-  TD_CNST_TY_FLOAT,
-  TD_CNST_TY_DOUBLE,
-  TD_CNST_TY_LONG_DOUBLE,
+enum td_cnst_str_ty {
+  TD_CNST_STR_TY_ASCII,
+  TD_CNST_STR_TY_WIDE,
+};
 
-  TD_CNST_TY_CHAR,
-  TD_CNST_TY_WIDE_CHAR,
+struct td_ascii_str {
+  char *value;
+  size_t len;
+};
 
-  TD_CNST_TY_STR_LITERAL,
-  TD_CNST_TY_WIDE_STR_LITERAL,
+struct td_wide_str {
+  uint32_t *value;
+  size_t len;
 };
 
 struct td_cnst_str {
-  const char *value;
-  size_t len;
+  enum td_cnst_str_ty ty;
+
+  union {
+    struct td_ascii_str ascii;
+    struct td_wide_str wide;
+  };
 };
 
 struct td_cnst {
   enum td_cnst_ty ty;
 
   union {
-    unsigned long long int_value;
+    struct ap_val num_value;
     struct td_cnst_str str_value;
-    long double flt_value;
   };
 };
 

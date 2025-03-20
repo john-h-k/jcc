@@ -1,16 +1,15 @@
 #include "parse.h"
 
 #include "alloc.h"
+#include "ap_val.h"
 #include "diagnostics.h"
 #include "lex.h"
 #include "log.h"
 #include "program.h"
-#include "typechk.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
 
-#include <ctype.h>
 #include <string.h>
 
 struct parser {
@@ -1443,15 +1442,20 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
   peek_token(parser->lexer, &token);
 
   enum ast_cnst_ty ty;
+  enum ap_float_ty float_ty;
   switch (token.ty) {
   case LEX_TOKEN_TY_FLOAT_LITERAL:
     ty = AST_CNST_TY_FLOAT;
+    float_ty = AP_FLOAT_TY_F32;
     break;
   case LEX_TOKEN_TY_DOUBLE_LITERAL:
     ty = AST_CNST_TY_DOUBLE;
+    float_ty = AP_FLOAT_TY_F64;
     break;
   case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
     ty = AST_CNST_TY_LONG_DOUBLE;
+    // FIXME: long double types
+    float_ty = AP_FLOAT_TY_F64;
     break;
   default:
     return false;
@@ -1461,22 +1465,18 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   DEBUG_ASSERT(literal.len, "literal_len was 0");
 
-  char *end_ptr;
-  long double float_value = strtold(literal.str, &end_ptr);
-
-  size_t literal_end = literal.len;
-  do {
-    literal_end--;
-  } while (literal.len && (tolower(literal.str[literal_end]) == 'f' ||
-                           tolower(literal.str[literal_end]) == 'l'));
-
-  if (end_ptr - 1 != &literal.str[literal_end]) {
-    TODO("handle constant float parse failure");
-  }
-
-  // TODO: handle unrepresentedly large values
   cnst->ty = ty;
-  cnst->flt_value = float_value;
+
+  if (!ap_val_try_parse_float(parser->arena, float_ty, literal,
+                              &cnst->num_value)) {
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        parser->diagnostics,
+        MK_PARSER_DIAGNOSTIC(INVALID_FLOATING_POINT_LITERAL,
+                             invalid_floating_point_literal, cnst->span,
+                             MK_INVALID_TEXT_POS(0),
+                             "invalid floating-point literal"));
+  }
 
   consume_token(parser->lexer, token);
   cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
@@ -1520,7 +1520,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   consume_token(parser->lexer, token);
 
   cnst->ty = ty;
-  cnst->int_value = int_value;
+  cnst->num_value = ap_val_from_ull(int_value);
 
   cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
   return true;
@@ -1564,22 +1564,15 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
   consume_token(parser->lexer, token);
   cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
 
-  unsigned long long int_value;
-
-  if (!try_parse_integer(literal.str, literal.len, &int_value)) {
+  if (!ap_val_try_parse_int(parser->arena, 64, literal, &cnst->num_value)) {
     parser->result_ty = PARSE_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         parser->diagnostics,
         MK_PARSER_DIAGNOSTIC(INVALID_INT_LITERAL, invalid_int_literal,
                              cnst->span, MK_INVALID_TEXT_POS(0),
                              "invalid int literal"));
-
-    cnst->int_value = 0;
-    return true;
+    return false;
   }
-
-  // TODO: handle unrepresentedly large values
-  cnst->int_value = int_value;
 
   return true;
 }
@@ -1624,15 +1617,22 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
   char null = 0;
   vector_push_back(strings, &null);
-  if (cnst->ty == TD_CNST_TY_WIDE_STR_LITERAL) {
+  if (cnst->ty == AST_CNST_TY_WIDE_STR_LITERAL) {
     // so its a full `int` 0
     vector_push_back(strings, &null);
     vector_push_back(strings, &null);
     vector_push_back(strings, &null);
-  }
 
-  cnst->str_value =
-      (struct ast_cnst_str){.value = vector_head(strings), .len = len};
+    DEBUG_ASSERT(len % 4 == 0, "expected wide str to be length multiple of 4");
+
+    cnst->str_value = (struct ast_cnst_str){
+        .ty = AST_CNST_STR_TY_WIDE,
+        .wide = {.value = vector_head(strings), .len = len}};
+  } else {
+    cnst->str_value = (struct ast_cnst_str){
+        .ty = AST_CNST_STR_TY_ASCII,
+        .ascii = {.value = vector_head(strings), .len = len}};
+  }
 
   cnst->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
   return true;
@@ -1649,7 +1649,8 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_2(struct parser *parser, struct ast_expr *expr);
 static bool parse_atom_3(struct parser *parser, struct ast_expr *expr);
 
-static bool parse_assg(struct parser *parser, const struct ast_expr *assignee, struct ast_assg *assg) {
+static bool parse_assg(struct parser *parser, const struct ast_expr *assignee,
+                       struct ast_assg *assg) {
   struct text_pos start = get_last_text_pos(parser->lexer);
 
   struct lex_pos pos = get_position(parser->lexer);
@@ -3601,27 +3602,37 @@ DEBUG_FUNC(cnst, cnst) {
   case AST_CNST_TY_UNSIGNED_LONG:
   case AST_CNST_TY_SIGNED_LONG_LONG:
   case AST_CNST_TY_UNSIGNED_LONG_LONG:
-    AST_PRINT("CONSTANT '%llu'", cnst->int_value);
-    break;
   case AST_CNST_TY_FLOAT:
   case AST_CNST_TY_DOUBLE:
   case AST_CNST_TY_LONG_DOUBLE:
-    AST_PRINT("CONSTANT '%Lf'", cnst->flt_value);
+    AST_PRINTZ("CONSTANT ");
+    ap_val_fprintf(stderr, cnst->num_value);
     break;
   case AST_CNST_TY_CHAR:
-    AST_PRINT("CONSTANT '%c'", (char)cnst->int_value);
+    switch (cnst->num_value.ty) {
+    case AP_VAL_TY_INVALID:
+      AST_PRINTZ("CONSTANT ");
+      ap_val_fprintf(stderr, cnst->num_value);
+      break;
+    case AP_VAL_TY_INT:
+      AST_PRINT("CONSTANT '%c'", (char)ap_int_as_ull(cnst->num_value.ap_int));
+      break;
+    case AP_VAL_TY_FLOAT:
+      unreachable();
+    }
     break;
   case AST_CNST_TY_WIDE_CHAR:
-    AST_PRINT("CONSTANT (wide char) '%'llu", cnst->int_value);
+    AST_PRINTZ("CONSTANT (wide char) ");
+    ap_val_fprintf(stderr, cnst->num_value);
     break;
   case AST_CNST_TY_STR_LITERAL:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_str(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprint_str(stderr, cnst->str_value.ascii.value, cnst->str_value.ascii.len);
     fprintf(stderr, "\n");
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
-    fprint_wstr(stderr, cnst->str_value.value, cnst->str_value.len);
+    fprint_wstr(stderr, cnst->str_value.wide.value, cnst->str_value.wide.len);
     fprintf(stderr, "\n");
     break;
   }

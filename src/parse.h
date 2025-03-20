@@ -1,6 +1,7 @@
 #ifndef PARSE_H
 #define PARSE_H
 
+#include "ap_val.h"
 #include "diagnostics.h"
 #include "lex.h"
 #include "program.h"
@@ -380,20 +381,39 @@ enum ast_cnst_ty {
   AST_CNST_TY_WIDE_STR_LITERAL,
 };
 
-struct ast_cnst_str {
-  const char *value;
-  size_t len;
+enum ast_cnst_str_ty {
+  AST_CNST_STR_TY_ASCII,
+  AST_CNST_STR_TY_WIDE,
+};
 
-  struct text_span span;
+// we don't use sized_str
+// maybe we could, but just because the way we work with these strings is different a seperate type is sort of useful
+struct ast_ascii_str {
+  char *value;
+  size_t len;
+};
+
+// it may be 16/32 bits but we store as 32
+struct ast_wide_str {
+  uint32_t *value;
+  size_t len;
+};
+
+struct ast_cnst_str {
+  enum ast_cnst_str_ty ty;
+
+  union {
+    struct ast_ascii_str ascii;
+    struct ast_wide_str wide;
+  };
 };
 
 struct ast_cnst {
   enum ast_cnst_ty ty;
 
   union {
-    unsigned long long int_value;
+    struct ap_val num_value;
     struct ast_cnst_str str_value;
-    long double flt_value;
   };
 
   struct text_span span;
