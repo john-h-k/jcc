@@ -11,7 +11,7 @@ try_root() {
 # currently unused (if cmake is not installed, it will revert to slow build)
 ensure-tool() {
   cmd="$1"
-  pkg="${2:-1}"
+  pkg="${2:-$1}"
 
   echo "Checking for cmd '$cmd' (pkg='$pkg')..."
 
