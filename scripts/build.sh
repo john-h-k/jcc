@@ -47,6 +47,9 @@ configure() {
         echo "    -t, --default-target "
         echo "        Set the default target for the build (equivalent to providing '-target <DEFAULT>' on every invocation)"
         echo ""
+        echo "    --enable-arch "
+        echo "        Enable architecture"
+        echo ""
         echo "    -m, --mode"
         echo "        Mode to build (default: 'Debug'). Values:"
         echo "            * d | D | deb   | debug          | Debug           - Debug"
@@ -69,6 +72,7 @@ configure() {
     profile_build=""
 
     generator=""
+    archs=""
 
     # if already configured, use current generator
     if [ -f build/CMakeCache.txt ]; then
@@ -92,6 +96,11 @@ configure() {
           ;;
         --clean-all)
           clean-all
+          shift
+          ;;
+        --enable-arch)
+          shift
+          [ -z "$archs" ] && archs="$1" || archs="$archs;$1"
           shift
           ;;
         --profile-build)
@@ -138,6 +147,9 @@ configure() {
     echo -e "${BOLD}Build configuration: ${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
+    if [ -n "$arches" ]; then
+    echo -e "${BOLD}    architectures=$archs"
+    fi
     if [ -n "$profile_build" ]; then
     echo -e "${BOLD}    profile_build=true"
     fi
@@ -166,7 +178,7 @@ configure() {
 
     cd build
     # HACK: temp force clang as gcc super slow with ASAN
-    if ! (cmake -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
+    if ! (cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi

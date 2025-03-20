@@ -58,31 +58,8 @@ set(
   src/opts/inline.c
 
   src/aarch64.c
-  src/aarch64/codegen.c
-  src/aarch64/lower.c
-  src/aarch64/emit.c
-  src/aarch64/emitter.c
-
   src/x64.c
-  src/x64/codegen.c
-  src/x64/lower.c
-  src/x64/emit.c
-  src/x64/emitter.c
-
   src/rv32i.c
-  src/rv32i/codegen.c
-  src/rv32i/lower.c
-  src/rv32i/emit.c
-  src/rv32i/emitter.c
-  src/rv32i/object.c
-
-  # eep.c
-  # eep/codegen.c
-  # eep/lower.c
-  # eep/emit.c
-  # eep/emitter.c
-  # eep/object.c
-  # eep/disasm.c
 
   src/macos/mach-o.c
   src/macos/link.c
@@ -98,9 +75,62 @@ if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
     set(CMAKE_C_COMPILER_ID "JCC" CACHE STRING "Custom compiler ID" FORCE)
 endif()
 
-if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-  add_definitions(-DJCC_ALL)
+if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")
+  set(ARCHITECTURES "aarch64;rv32i;x64")
+
+  if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+    add_definitions(-DJCC_ALL)
+  endif()
 endif()
+
+foreach(arch IN LISTS ARCHITECTURES)
+  if("${arch}" STREQUAL "aarch64")
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+      add_definitions(-DJCC_AARCH64)
+    endif()
+
+    list(APPEND SOURCE_FILES
+      src/aarch64/codegen.c
+      src/aarch64/lower.c
+      src/aarch64/emit.c
+      src/aarch64/emitter.c
+    )
+  elseif("${arch}" STREQUAL "x64")
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+      add_definitions(-DJCC_X64)
+    endif()
+
+    list(APPEND SOURCE_FILES
+      src/x64/codegen.c
+      src/x64/lower.c
+      src/x64/emit.c
+      src/x64/emitter.c
+    )
+  elseif("${arch}" STREQUAL "rv32i")
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
+      add_definitions(-DJCC_RV32I)
+    endif()
+
+    list(APPEND SOURCE_FILES
+      src/rv32i/codegen.c
+      src/rv32i/lower.c
+      src/rv32i/emit.c
+      src/rv32i/emitter.c
+      src/rv32i/object.c
+    )
+  else()
+    message(WARNING "Unsupported architecture: ${arch}")
+  endif()
+endforeach()
+
+# currently unused
+# eep.c
+# eep/codegen.c
+# eep/lower.c
+# eep/emit.c
+# eep/emitter.c
+# eep/object.c
+# eep/disasm.c
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug build detected")
