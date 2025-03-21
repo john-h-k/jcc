@@ -65,12 +65,12 @@ create_compiler(struct program *program, const struct target *target,
       .fixed_timestamp = args->fixed_timestamp,
   };
 
-  // slightly odd that we create it outside preproc when everything else does it inside
-  // but its because preproc is wrapped by the parser normally
+  // slightly odd that we create it outside preproc when everything else does it
+  // inside but its because preproc is wrapped by the parser normally
   (*compiler)->preproc_diagnostics = compiler_diagnostics_create();
 
-  if (preproc_create(program, preproc_args, (*compiler)->preproc_diagnostics, &(*compiler)->preproc) !=
-      PREPROC_CREATE_RESULT_SUCCESS) {
+  if (preproc_create(program, preproc_args, (*compiler)->preproc_diagnostics,
+                     &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
@@ -682,6 +682,11 @@ enum compile_result compile(struct compiler *compiler) {
   struct typechk_result typechk_result;
   COMPILER_STAGE(TYPECHK, typechk, &parse_result, &typechk_result);
 
+  if (compiler->args.syntax_only) {
+    // if diagnostics occurred, exit will of already occurred via COMPILER_STAGE macro
+    return COMPILE_RESULT_SUCCESS;
+  }
+
   const struct target *target = compiler->target;
   struct ir_unit *ir;
 
@@ -725,10 +730,11 @@ enum compile_result compile(struct compiler *compiler) {
 }
 
 void free_compiler(struct compiler **compiler) {
-  arena_allocator_free(&(*compiler)->arena);
   preproc_free(&(*compiler)->preproc);
   parser_free(&(*compiler)->parser);
   typechk_free(&(*compiler)->typechk);
+  compiler_diagnostics_free(&(*compiler)->preproc_diagnostics);
+  arena_allocator_free(&(*compiler)->arena);
 
   free(*compiler);
   *compiler = NULL;

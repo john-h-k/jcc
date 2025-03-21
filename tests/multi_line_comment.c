@@ -5,5 +5,11 @@ int main() {                        /* this */
        multi
        linecomments
      */
+
+/*
+** fizz
+** buzz
+*/
   return a;
 }
+

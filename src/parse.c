@@ -2871,10 +2871,16 @@ parse_declaration_or_expr(struct parser *parser,
     return true;
   }
 
-  if (parse_expr(parser, &decl_or_expr->expr)) {
+  struct ast_compoundexpr compoundexpr;
+  if (parse_compoundexpr(parser, &compoundexpr)) {
     parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, pos.text_pos,
                          "`;` after expr in for loop initializer", NULL);
     decl_or_expr->ty = AST_DECLARATION_OR_EXPR_TY_EXPR;
+    decl_or_expr->expr = (struct ast_expr){
+      .ty = AST_EXPR_TY_COMPOUNDEXPR,
+      .compound_expr = compoundexpr,
+      .span = compoundexpr.span
+    };
     decl_or_expr->span = decl_or_expr->expr.span;
     return true;
   }
