@@ -2,7 +2,7 @@
 
 This site contains architectural/design information about JCC.
 
-* [General style & utilities](./general.html)
+* [General style & utilities + code hygiene](./general.html)
 * [Memory Management](./memory.html)
 * [Parse](./parse.html)
 * [Typechk](./typechk.html)
