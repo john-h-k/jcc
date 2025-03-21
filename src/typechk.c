@@ -3016,7 +3016,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
 
     *value = (struct td_val){.var_ty = expr->var_ty,
-                             .val = ap_val_from_ull(info.size)};
+                             .val = ap_val_from_ull(info.size, 32)};
     return true;
   }
 
@@ -3024,7 +3024,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     struct td_var_ty_info info = td_var_ty_info(tchk, &expr->align_of.var_ty);
 
     *value = (struct td_val){.var_ty = expr->var_ty,
-                             .val = ap_val_from_ull(info.alignment)};
+                             .val = ap_val_from_ull(info.alignment, 32)};
     return true;
   }
 
@@ -3048,7 +3048,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     }
 
     *value = (struct td_val){.var_ty = expr->var_ty,
-                             .val = ap_val_from_ull(expr->var.enumerator)};
+                             .val = ap_val_from_ull(expr->var.enumerator, 32)};
     return true;
   }
 
@@ -3108,7 +3108,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     case TD_UNARY_OP_TY_LOGICAL_NOT:
       *value = (struct td_val){
           .var_ty = expr->var_ty,
-          .val = ap_val_from_ull(ap_val_iszero(expr_value.val))};
+          .val = ap_val_from_ull(ap_val_iszero(expr_value.val), 32)};
       return true;
     case TD_UNARY_OP_TY_NOT:
       *value = (struct td_val){.var_ty = expr->var_ty,
@@ -3152,7 +3152,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
           case WELL_KNOWN_TY_BOOL:
             *value = (struct td_val){
                 .var_ty = expr->var_ty,
-                .val = ap_val_from_ull(ap_val_nonzero(expr_value.val))};
+                .val = ap_val_from_ull(ap_val_nonzero(expr_value.val), 1)};
             return true;
           case WELL_KNOWN_TY_CHAR:
           case WELL_KNOWN_TY_SIGNED_CHAR:
@@ -3298,6 +3298,15 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
   }
 
     // FIXME: maybe wrong wrt sizes, definitely wrong wrt to signs
+
+    // TEMP: hack sizes
+    if (lhs.val.ty == AP_VAL_TY_INT && rhs.val.ty == AP_VAL_TY_INT && lhs.val.ap_int.num_bits != rhs.val.ap_int.num_bits) {
+      size_t num_bits = MAX(lhs.val.ap_int.num_bits, rhs.val.ap_int.num_bits);
+
+      lhs.val = ap_val_from_ull(ap_int_as_ull(lhs.val.ap_int), num_bits);
+      rhs.val = ap_val_from_ull(ap_int_as_ull(rhs.val.ap_int), num_bits);
+    }
+
     switch (expr->binary_op.ty) {
     case TD_BINARY_OP_TY_EQ:
       *value = (struct td_val){.var_ty = expr->var_ty,
@@ -3327,13 +3336,13 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
       *value =
           (struct td_val){.var_ty = expr->var_ty,
                           .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) |
-                                                 (int)ap_val_nonzero(rhs.val))};
+                                                 (int)ap_val_nonzero(rhs.val), 32)};
       return true;
     case TD_BINARY_OP_TY_LOGICAL_AND:
       *value =
           (struct td_val){.var_ty = expr->var_ty,
                           .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) &
-                                                 (int)ap_val_nonzero(rhs.val))};
+                                                 (int)ap_val_nonzero(rhs.val), 32)};
       return true;
     case TD_BINARY_OP_TY_OR:
       CHECK_INT_OPS();

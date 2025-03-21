@@ -530,8 +530,8 @@ long double ap_float_as_ld(struct ap_float value) {
 }
 
 // FIXME: this method is INHERENTLY BROKEN because it cannot handle sign
-struct ap_val ap_val_from_ull(unsigned long long value) {
-  struct ap_int ap_int = {.num_bits = 64};
+struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits) {
+  struct ap_int ap_int = {.num_bits = num_bits};
   ap_int_set(&ap_int, value);
 
   return MK_AP_VAL_INT(ap_int);
@@ -568,9 +568,9 @@ struct ap_val ap_val_from_ull(unsigned long long value) {
   DEBUG_ASSERT((lhs).ty == (rhs).ty, "ap_val type mismatch");                  \
   switch ((lhs).ty) {                                                          \
   case AP_VAL_TY_INT:                                                          \
-    return ap_val_from_ull(ap_int_##op((lhs).ap_int, (rhs).ap_int));           \
+    return ap_val_from_ull(ap_int_##op((lhs).ap_int, (rhs).ap_int), 1);           \
   case AP_VAL_TY_FLOAT:                                                        \
-    return ap_val_from_ull(ap_float_##op((lhs).ap_float, (rhs).ap_float));     \
+    return ap_val_from_ull(ap_float_##op((lhs).ap_float, (rhs).ap_float), 1);     \
   case AP_VAL_TY_INVALID:                                                      \
     unreachable();                                                             \
   }
@@ -687,11 +687,11 @@ struct ap_val ap_val_to_int(struct ap_val value, size_t num_bits) {
   case AP_VAL_TY_FLOAT:
     switch (value.ap_float.ty) {
     case AP_FLOAT_TY_F16:
-      return ap_val_from_ull((unsigned long long)value.ap_float.f16);
+      return ap_val_from_ull((unsigned long long)value.ap_float.f16, num_bits);
     case AP_FLOAT_TY_F32:
-      return ap_val_from_ull((unsigned long long)value.ap_float.f32);
+      return ap_val_from_ull((unsigned long long)value.ap_float.f32, num_bits);
     case AP_FLOAT_TY_F64:
-      return ap_val_from_ull((unsigned long long)value.ap_float.f64);
+      return ap_val_from_ull((unsigned long long)value.ap_float.f64, num_bits);
     }
   }
 }

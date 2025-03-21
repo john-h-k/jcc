@@ -117,7 +117,7 @@ struct ap_val {
 #define MK_AP_VAL_FLT(val)                                                     \
   (struct ap_val) { .ty = AP_VAL_TY_FLOAT, .ap_float = (val) }
 
-struct ap_val ap_val_from_ull(unsigned long long value);
+struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits);
 
 bool ap_val_nonzero(struct ap_val value);
 bool ap_val_iszero(struct ap_val value);

@@ -1498,9 +1498,11 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   unsigned long long int_value;
 
   enum ast_cnst_ty ty;
+  size_t num_bits;
   switch (token.ty) {
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL: {
     ty = AST_CNST_TY_CHAR;
+    num_bits = 8;
 
     struct sized_str literal =
         lex_strlike_associated_text(parser->lexer, &token);
@@ -1510,6 +1512,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   }
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL: {
     ty = AST_CNST_TY_SIGNED_INT;
+    num_bits = 32;
 
     struct sized_str literal =
         lex_strlike_associated_text(parser->lexer, &token);
@@ -1527,7 +1530,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   lex_consume_token(parser->lexer, token);
 
   cnst->ty = ty;
-  cnst->num_value = ap_val_from_ull(int_value);
+  cnst->num_value = ap_val_from_ull(int_value, num_bits);
 
   cnst->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
   return true;
