@@ -318,7 +318,7 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 bool lexer_at_eof(struct lexer *lexer) {
   // needed to skip whitespace
   struct lex_token token;
-  peek_token(lexer, &token);
+  lex_peek_token(lexer, &token);
 
   return token.ty == LEX_TOKEN_TY_EOF;
 }
@@ -454,7 +454,8 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     break;
 
   default:
-    TODO("handle bad suffixes for number literals");
+    // return an arbitrary type, but try and respect is_flt so that parser can generate a more accurate diagnostic
+    return (lit_ty & LIT_TY_FLT) ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
   }
 
   return ty;
@@ -482,8 +483,6 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
                                   .text = preproc_token.text,
                                   .span = preproc_token.span};
       return;
-    case PREPROC_TOKEN_TY_DIRECTIVE:
-      BUG("directive token reached lexer");
     case PREPROC_TOKEN_TY_IDENTIFIER: {
       enum lex_token_ty ty = refine_ty(&preproc_token);
       *token = (struct lex_token){
@@ -506,18 +505,19 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
           .text = preproc_token.text,
           .span = preproc_token.span};
       return;
-    case PREPROC_TOKEN_TY_OTHER:
-      TODO("handler OTHER preproc tokens in lexer");
-
     case PREPROC_TOKEN_TY_COMMENT:
     case PREPROC_TOKEN_TY_NEWLINE:
     case PREPROC_TOKEN_TY_WHITESPACE:
       continue;
+    case PREPROC_TOKEN_TY_DIRECTIVE:
+      BUG("directive token reached lexer");
+    case PREPROC_TOKEN_TY_OTHER:
+      TODO("handler OTHER preproc tokens in lexer");
     }
   }
 }
 
-void peek_token(struct lexer *lexer, struct lex_token *token) {
+void lex_peek_token(struct lexer *lexer, struct lex_token *token) {
   // TODO: we could use a deque instead of vector and pop tokens as we go?
 
   if (lexer->pos < vector_length(lexer->tokens)) {
@@ -532,22 +532,22 @@ void peek_token(struct lexer *lexer, struct lex_token *token) {
 
 // TODO: make this return a real type
 // just hacking it into text pos as not to need to change `parse.c`
-struct lex_pos get_position(struct lexer *lexer) {
+struct lex_pos lex_get_position(struct lexer *lexer) {
   // shouldn't really be last tex pos... should be "next"
   return (struct lex_pos){.id = lexer->pos,
-                          .text_pos = get_last_text_pos(lexer)};
+                          .text_pos = lex_get_last_text_pos(lexer)};
 }
 
-void backtrack(struct lexer *lexer, struct lex_pos position) {
+void lex_backtrack(struct lexer *lexer, struct lex_pos position) {
   lexer->pos = position.id;
   lexer->last_text_pos = position.text_pos;
 }
 
-struct text_pos get_last_text_pos(const struct lexer *lexer) {
+struct text_pos lex_get_last_text_pos(const struct lexer *lexer) {
   return lexer->last_text_pos;
 }
 
-void consume_token(struct lexer *lexer, struct lex_token token) {
+void lex_consume_token(struct lexer *lexer, struct lex_token token) {
   // FIXME: when you consume `token`, you jump to the next token regardless of
   // if you have consumed previous tokens instead, it should move forward 1
   // token we have the `internal_lexer_pos` field which corresponds to
@@ -563,12 +563,12 @@ void consume_token(struct lexer *lexer, struct lex_token token) {
   lexer->last_text_pos = token.span.end;
 }
 
-struct sized_str strlike_associated_text(const struct lexer *lexer,
+struct sized_str lex_strlike_associated_text(const struct lexer *lexer,
                                          const struct lex_token *token) {
   return process_raw_string(lexer, token);
 }
 
-struct sized_str associated_text(const struct lexer *lexer,
+struct sized_str lex_associated_text(const struct lexer *lexer,
                                  const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
@@ -596,11 +596,11 @@ struct sized_str associated_text(const struct lexer *lexer,
     return (struct sized_str){"...", 3};
   default:
     BUG("associated text did not make sense for token '%s'",
-        token_name(lexer, token));
+        lex_token_name(lexer, token));
   }
 }
 
-const char *token_name(UNUSED_ARG(const struct lexer *lexer),
+const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
                        const struct lex_token *token) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \

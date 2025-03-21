@@ -995,6 +995,7 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       store = store->succ;
     }
 
+    // insert the phantom return address as first arg
     struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
     addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};

@@ -41,7 +41,7 @@ static struct var_table_scope *var_table_scope_create(struct var_table *table,
   return vector_push_back(table->scopes, &var_table_scope);
 }
 
-struct var_table var_table_create(struct arena_allocator *arena) {
+struct var_table vt_create(struct arena_allocator *arena) {
   struct var_table var_table = {
       .arena = arena,
       .scopes = vector_create_in_arena(sizeof(struct var_table_scope), arena)};
@@ -65,14 +65,14 @@ static struct var_table_entry *add_entry(struct var_table_scope *scope,
 }
 
 struct var_table_entry *
-var_table_create_top_level_entry(struct var_table *var_table,
+vt_create_top_level_entry(struct var_table *var_table,
                                  enum var_table_ns ns, struct sized_str name) {
   struct var_table_scope *first = vector_head(var_table->scopes);
 
   return add_entry(first, ns, name);
 }
 
-struct var_table_entry *var_table_create_entry(struct var_table *var_table,
+struct var_table_entry *vt_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,
                                                struct sized_str name) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
@@ -80,11 +80,11 @@ struct var_table_entry *var_table_create_entry(struct var_table *var_table,
   return add_entry(last, ns, name);
 }
 
-void var_table_free(UNUSED struct var_table *var_table) {
+void vt_free(UNUSED struct var_table *var_table) {
   // nop all arena alloc'd
 }
 
-int cur_scope(struct var_table *var_table) {
+int vt_cur_scope(struct var_table *var_table) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
   DEBUG_ASSERT(last->scope + 1 == vector_length(var_table->scopes),
                "scope + 1 (%zu) should eq len (%zu)", last->scope + 1,
@@ -92,43 +92,43 @@ int cur_scope(struct var_table *var_table) {
   return last->scope;
 }
 
-void push_scope(struct var_table *var_table) {
-  var_table_scope_create(var_table, cur_scope(var_table) + 1);
+void vt_push_scope(struct var_table *var_table) {
+  var_table_scope_create(var_table, vt_cur_scope(var_table) + 1);
 }
 
-void pop_scope(struct var_table *var_table) {
+void vt_pop_scope(struct var_table *var_table) {
 
-  DEBUG_ASSERT(cur_scope(var_table) != SCOPE_GLOBAL,
+  DEBUG_ASSERT(vt_cur_scope(var_table) != SCOPE_GLOBAL,
                "popping global scope is never correct");
 
   vector_pop(var_table->scopes);
 }
 
 struct var_table_entry *
-var_table_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
+vt_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
                               struct sized_str name) {
   DEBUG_ASSERT(name.str, "name must be non-null");
 
-  struct var_table_entry *entry = var_table_get_entry(var_table, ns, name);
+  struct var_table_entry *entry = vt_get_entry(var_table, ns, name);
 
   if (entry) {
     return entry;
   }
 
   trace("couldn't find variable, creating new entry '%s' with scope '%d'",
-        name.str, cur_scope(var_table));
+        name.str, vt_cur_scope(var_table));
 
-  return var_table_create_entry(var_table, ns, name);
+  return vt_create_entry(var_table, ns, name);
 }
 
-struct var_table_entry *var_table_get_entry(struct var_table *var_table,
+struct var_table_entry *vt_get_entry(struct var_table *var_table,
                                             enum var_table_ns ns,
                                             struct sized_str name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
 
-  for (ssize_t scope_idx = cur_scope(var_table); scope_idx >= SCOPE_GLOBAL;
+  for (ssize_t scope_idx = vt_cur_scope(var_table); scope_idx >= SCOPE_GLOBAL;
        scope_idx--) {
     struct var_table_scope *scope = vector_get(var_table->scopes, scope_idx);
 

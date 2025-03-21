@@ -71,7 +71,7 @@ bool log_enabled(void) { return LOG_ENABLED; }
     va_end(v);                                                                 \
   }
 
-DEF_LOG_FN(err, PR_RED PR_BOLD "ERROR: ", true)
+DEF_LOG_FN(err, PR_RED PR_BOLD "error: ", true)
 DEF_LOG_FN(warn, PR_YELLOW PR_BOLD "WARN: ", true)
 DEF_LOG_FN(info, PR_GREEN PR_BOLD "INFO: ", false)
 DEF_LOG_FN(debug, PR_WHITE PR_BOLD "DEBUG: ", false)
