@@ -11,6 +11,7 @@ The parsing stage involves 4 principal stages:
   - This allows emitting significantly clearer diagnostics than if it parsed more strictly
 * Typing
   - Types the tree and performs most validation to reject invalid programs
+
 Being able to perform all of these steps very quickly is essential, and so these components have been carefully optimised. The current parser-lexer-preprocessor combination can achieve approximately 600k lines-of-code per second per thread, a very similar rate to clang and marginally faster than gcc. These benchmarks were performed on generated code from `csmith`, JCC itself, and the sqlite3 amalgamation file.
 
 Preprocessing will mostly be ignored here, but it is important to understand how it interacts with the lexer and the parser. The preprocessor produces `struct preproc_token`s in a forward-only manner - it cannot backtrack. Each preprocessor token is 1-1 with a lexer token, no splitting nor merging occurs by the lexer.
