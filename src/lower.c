@@ -727,7 +727,6 @@ static void lower_params(struct ir_func *func) {
 
       switch (param_info.ty) {
       case IR_PARAM_INFO_TY_REGISTER:
-      case IR_PARAM_INFO_TY_STACK:
         if (ir_var_ty_is_aggregate(param_info.var_ty)) {
           DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
                            param_op->addr.ty == IR_OP_ADDR_TY_LCL,
@@ -772,6 +771,8 @@ static void lower_params(struct ir_func *func) {
           DEBUG_ASSERT(param_info.num_regs == 1,
                        "expected 1 reg for non aggregate");
         }
+        break;
+      case IR_PARAM_INFO_TY_STACK:
         break;
       case IR_PARAM_INFO_TY_POINTER: {
         DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
