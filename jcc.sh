@@ -408,6 +408,7 @@ ci-test() {
     build
 
     timeout -k 30m 30m ./scripts/test.sh --quiet --arg-group -O0 --arg-group -O1 --arg-group -O2 --arg-group -O3 "$@" || exit $?
+    timeout -k 30m 30m ./scripts/test.sh --quiet "$@" || exit $?
 }
 
 cfg() {
