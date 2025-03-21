@@ -169,13 +169,6 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
     struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
-    if (info.size > 8) {
-      // copy to mem
-      var_ty = &IR_VAR_TY_POINTER;
-      ty = IR_PARAM_INFO_TY_POINTER;
-      info = ir_var_ty_info(func->unit, var_ty);
-    }
-
     struct hfa_info hfa_info[2];
     size_t num_int, num_fp;
     if (ir_var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
@@ -226,6 +219,13 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
         vector_push_back(param_infos, &param_info);
         continue;
       }
+    }
+
+    if (info.size > 8) {
+      // copy to mem
+      var_ty = &IR_VAR_TY_POINTER;
+      ty = IR_PARAM_INFO_TY_POINTER;
+      info = ir_var_ty_info(func->unit, var_ty);
     }
 
     if (ir_var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {

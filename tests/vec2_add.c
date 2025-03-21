@@ -1,7 +1,7 @@
 // expected value: 0
 
 struct vec2 {
-  float a, b;
+  double a, b;
 };
 
 struct vec2 add(struct vec2 a, struct vec2 b) {
