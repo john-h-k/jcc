@@ -213,6 +213,9 @@ VALUES_FN(c_standard, C_STANDARD)
            "Only run preprocessor and compiler; output object file without "   \
            "linking")                                                          \
                                                                                \
+  ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
+           "Only run preprocessor, syntax, and typechecking stages")           \
+                                                                               \
   ARG_STRING(isys_root, "", "-isysroot",                                       \
              "Root directory for `#include <header>` directives")              \
                                                                                \

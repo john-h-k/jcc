@@ -20,7 +20,7 @@
 
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
-  if (args->preproc_only || args->build_asm_file || args->build_object_file) {
+  if (args->preproc_only || args->syntax_only || args->build_asm_file || args->build_object_file) {
     return false;
   }
 
@@ -273,6 +273,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   // whereas `compile_args` only has `target`, but it is a hassle
   *compile_args = (struct compile_args){
       .preproc_only = args->preprocess,
+      .syntax_only = args->syntax_only,
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
       .codegen_flags = args->codegen_flags,

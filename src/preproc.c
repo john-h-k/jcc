@@ -381,13 +381,13 @@ preproc_create(struct program *program, struct preproc_create_args args,
   p->keep_next_token = false;
   p->waiting_for_close = false;
 
-  p->defines = hashtbl_create_sized_str_keyed(sizeof(struct preproc_define));
+  p->defines = hashtbl_create_sized_str_keyed_in_arena(p->arena, sizeof(struct preproc_define));
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
   p->buffer_tokens = vector_create(sizeof(struct preproc_token));
   p->unexpanded_buffer_tokens =
       vector_create(sizeof(struct preproc_unexpanded_token));
-  p->parents = hashtbl_create_sized_str_keyed(0);
+  p->parents = hashtbl_create_sized_str_keyed_in_arena(p->arena, 0);
 
   *preproc = p;
 
@@ -1217,8 +1217,8 @@ static bool try_expand_token(struct preproc *preproc,
       return false;
     }
 
-    struct vector *expanded_fn = vector_create(sizeof(struct preproc_token));
-    struct vector *concat_points = vector_create(sizeof(size_t));
+    struct vector *expanded_fn = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
+    struct vector *concat_points = vector_create_in_arena(sizeof(size_t), preproc->arena);
 
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
@@ -1669,7 +1669,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
 
   if (!strcmp(path, "stdbool.h")) {
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: special header 'stdbool.h'");
+      fprintf(stderr, "preproc: special header 'stdbool.h'\n");
     }
 
     const char *STDBOOL_CONTENT =
@@ -1689,7 +1689,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     return true;
   } else if (!strcmp(path, "stdnoreturn.h")) {
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: special header 'stdnoreturn.h'");
+      fprintf(stderr, "preproc: special header 'stdnoreturn.h'\n");
     }
 
     const char *STDNORETURN_CONTENT =
@@ -1707,7 +1707,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     return true;
   } else if (!strcmp(path, "stdarg.h")) {
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: special header 'starg.h'");
+      fprintf(stderr, "preproc: special header 'starg.h'\n");
     }
 
     const char *STDARG_CONTENT =
@@ -1716,6 +1716,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define STDARG_H\n"
         "\n"
         // libc
+        "#define __gnuc_va_list void *\n"
         "#ifdef __GLIBC__\n"
         "#endif\n"
         "\n"
@@ -1745,9 +1746,9 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#undef va_end\n"
         "#undef va_arg\n"
         "#undef va_copy\n"
-        "#define va_end(ap)\n"
-        "#define va_arg(ap, type)\n"
-        "#define va_copy(dest, src) \n"
+        "#define va_end(ap) 0\n"
+        "#define va_arg(ap, type) 0\n"
+        "#define va_copy(dest, src) 0\n"
         "#endif\n"
         "#endif\n";
 
@@ -1756,7 +1757,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     return true;
   } else if (!strcmp(path, "stddef.h")) {
     if (preproc->args.verbose) {
-      fprintf(stderr, "preproc: special header 'stddef.h'");
+      fprintf(stderr, "preproc: special header 'stddef.h'\n");
     }
 
     const char *STDDEF_CONTENT =
@@ -1766,6 +1767,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "\n"
         // "#ifdef __need_wint_t\n"
         "typedef int wint_t;\n"
+        "typedef int wchar_t;\n"
         // "#endif\n"
         "\n"
         "#define NULL ((void*)0)\n"
