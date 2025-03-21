@@ -1636,7 +1636,7 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
 
     cnst->str_value = (struct ast_cnst_str){
         .ty = AST_CNST_STR_TY_WIDE,
-        .wide = {.value = vector_head(strings), .len = len}};
+        .wide = {.value = vector_head(strings), .len = len / 4}};
   } else {
     cnst->str_value = (struct ast_cnst_str){
         .ty = AST_CNST_STR_TY_ASCII,

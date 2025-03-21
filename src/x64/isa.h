@@ -9,11 +9,16 @@
 // NOTE: if you get an instruction encoding issue
 // it is likely `rm=100` encoding a SIB but us not generating a SIB
 
+#ifdef __JCC__
+// BUG: broken on jcc
+#define FITS_IN_BITS(...) 1
+#else
 #define FITS_IN_BITS(value, bitc)                                              \
   _Generic((value),                                                            \
       size_t: (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0),               \
       imm_t: (((value) & ~((1ull << (bitc + 1)) - 1ull)) == 0),                \
       simm_t: ((llabs(((simm_t)value)) & ~((1ll << (bitc)) - 1l)) == 0))
+#endif
 
 struct x64_raw_instr {
   size_t len;
