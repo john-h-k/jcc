@@ -1,7 +1,6 @@
 # clangd
 .cache/
 
-a.out
 build*/
 CMakeLists.txt.user
 CMakeCache.txt
@@ -16,6 +15,7 @@ CTestTestfile.cmake
 _deps
 *.obj
 *.o
+*.out
 
 *.gv
 *.png
