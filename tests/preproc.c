@@ -4,6 +4,8 @@
 #ifndef PREPROC_C
 #define PREPROC_C
 
+#warning Hi test warning
+
 #define FOO \
 \
 \

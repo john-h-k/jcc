@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "compiler.h"
+#include "diagnostics.h"
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
@@ -42,6 +43,11 @@ struct preproc {
 
   // struct sized_str, struct preproc_define
   struct hashtbl *defines;
+
+  // stores current macros we are expanding in to prevent recursion
+  struct hashtbl *parents;
+
+  struct compiler_diagnostics *diagnostics;
 
   struct preproc_create_args args;
 
@@ -293,9 +299,25 @@ enum preproc_special_macro {
 
 static struct hashtbl *SPECIAL_MACROS = NULL;
 
-enum preproc_create_result preproc_create(struct program *program,
-                                          struct preproc_create_args args,
-                                          struct preproc **preproc) {
+enum preproc_unexpanded_token_ty {
+  PREPROC_UNEXPANDED_TOKEN_TY_BEGIN_EXPAND,
+  PREPROC_UNEXPANDED_TOKEN_TY_END_EXPAND,
+  PREPROC_UNEXPANDED_TOKEN_TY_TOKEN,
+};
+
+struct preproc_unexpanded_token {
+  enum preproc_unexpanded_token_ty ty;
+
+  union {
+    struct sized_str ident;
+    struct preproc_token token;
+  };
+};
+
+enum preproc_create_result
+preproc_create(struct program *program, struct preproc_create_args args,
+               struct compiler_diagnostics *diagnostics,
+               struct preproc **preproc) {
   if (args.fixed_timestamp) {
     DEBUG_ASSERT(strlen(args.fixed_timestamp) >= 19,
                  "`fixed_timestamp` must be at least 19");
@@ -334,6 +356,7 @@ enum preproc_create_result preproc_create(struct program *program,
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
   p->args = args;
+  p->diagnostics = diagnostics;
 
   if (args.verbose) {
     fprintf(stderr, "sys_include_paths: \n");
@@ -362,7 +385,9 @@ enum preproc_create_result preproc_create(struct program *program,
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
   p->buffer_tokens = vector_create(sizeof(struct preproc_token));
-  p->unexpanded_buffer_tokens = vector_create(sizeof(struct preproc_token));
+  p->unexpanded_buffer_tokens =
+      vector_create(sizeof(struct preproc_unexpanded_token));
+  p->parents = hashtbl_create_sized_str_keyed(0);
 
   *preproc = p;
 
@@ -500,10 +525,21 @@ static void preproc_next_raw_token(struct preproc *preproc,
     vector_pop(preproc->texts);
   }
 
-  if (vector_length(preproc->unexpanded_buffer_tokens)) {
-    *token =
-        *(struct preproc_token *)vector_pop(preproc->unexpanded_buffer_tokens);
-    return;
+  while (vector_length(preproc->unexpanded_buffer_tokens)) {
+    struct preproc_unexpanded_token *unexp =
+        vector_pop(preproc->unexpanded_buffer_tokens);
+
+    switch (unexp->ty) {
+    case PREPROC_UNEXPANDED_TOKEN_TY_BEGIN_EXPAND:
+      hashtbl_insert(preproc->parents, &unexp->ident, NULL);
+      break;
+    case PREPROC_UNEXPANDED_TOKEN_TY_END_EXPAND:
+      hashtbl_remove(preproc->parents, &unexp->ident);
+      break;
+    case PREPROC_UNEXPANDED_TOKEN_TY_TOKEN:
+      *token = unexp->token;
+      return;
+    }
   }
 
   struct text_pos start = preproc_text->pos;
@@ -969,15 +1005,13 @@ preproc_next_nontrivial_token(struct preproc *preproc,
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token, struct vector *buffer,
-                             struct hashtbl *parents,
                              enum preproc_expand_token_flags flags);
 
 static void expand_token(struct preproc *preproc,
                          struct preproc_text *preproc_text,
                          struct preproc_token *token, struct vector *buffer,
-                         struct hashtbl *parents,
                          enum preproc_expand_token_flags flags) {
-  if (!try_expand_token(preproc, preproc_text, token, buffer, parents, flags)) {
+  if (!try_expand_token(preproc, preproc_text, token, buffer, flags)) {
     vector_push_back(buffer, token);
   }
 }
@@ -985,12 +1019,12 @@ static void expand_token(struct preproc *preproc,
 UNUSED static void
 preproc_append_tokens(struct preproc *preproc,
                       struct preproc_text *preproc_text, struct vector *tokens,
-                      struct vector *buffer, struct hashtbl *parents,
+                      struct vector *buffer,
                       enum preproc_expand_token_flags flags) {
   size_t num_tokens = vector_length(tokens);
   for (size_t i = num_tokens; i; i--) {
     struct preproc_token *def_tok = vector_get(tokens, i - 1);
-    expand_token(preproc, preproc_text, def_tok, buffer, parents, flags);
+    expand_token(preproc, preproc_text, def_tok, buffer, flags);
   }
 }
 
@@ -1092,7 +1126,6 @@ static struct preproc_token preproc_stringify(struct preproc *preproc,
 static bool try_expand_token(struct preproc *preproc,
                              struct preproc_text *preproc_text,
                              struct preproc_token *token, struct vector *buffer,
-                             struct hashtbl *parents,
                              enum preproc_expand_token_flags flags) {
   if (preproc->keep_next_token) {
     if (token_is_trivial(token)) {
@@ -1152,20 +1185,18 @@ static bool try_expand_token(struct preproc *preproc,
 
     if (!last) {
       preproc->concat_next_token = false;
-      expand_token(preproc, preproc_text, token, buffer, parents, flags);
+      expand_token(preproc, preproc_text, token, buffer, flags);
     } else {
       struct preproc_token new_tok = preproc_concat(preproc, token, last);
 
       // need to set _before_ recursive call into expand_token
       preproc->concat_next_token = false;
-      parents = hashtbl_create_sized_str_keyed(0);
-      expand_token(preproc, preproc_text, &new_tok, buffer, parents, flags);
+      expand_token(preproc, preproc_text, &new_tok, buffer, flags);
     }
 
-    // post-concat, self reference is not considered
-    if (parents) {
-      hashtbl_free(&parents);
-    }
+    // HMMM: concat and recursion have weird behaviours, do we need to modify
+    // parents?
+
     return true;
   }
 
@@ -1180,21 +1211,11 @@ static bool try_expand_token(struct preproc *preproc,
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
 
   if (macro) {
-    bool free_parents;
-    if (!parents) {
-      parents = hashtbl_create_sized_str_keyed(0);
-      free_parents = true;
-    } else {
-      free_parents = false;
-      void *parent = hashtbl_lookup(parents, &ident);
-
-      if (parent) {
-        // already seen this macro, do not expand it again
-        return false;
-      }
+    // TODO: lookup/insert pair can be made more efficient
+    if (hashtbl_lookup(preproc->parents, &ident)) {
+      // already seen this macro, do not expand it again
+      return false;
     }
-
-    hashtbl_insert(parents, &ident, NULL);
 
     struct vector *expanded_fn = vector_create(sizeof(struct preproc_token));
     struct vector *concat_points = vector_create(sizeof(size_t));
@@ -1239,7 +1260,6 @@ static bool try_expand_token(struct preproc *preproc,
       if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
           open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
         vector_push_back(buffer, &open);
-        hashtbl_remove(parents, &ident);
         return false;
       }
 
@@ -1481,6 +1501,11 @@ static bool try_expand_token(struct preproc *preproc,
       right->text = NULL;
     }
 
+    // reverse order
+    struct preproc_unexpanded_token begin = {
+        .ty = PREPROC_UNEXPANDED_TOKEN_TY_END_EXPAND, .ident = ident};
+    vector_push_back(preproc->unexpanded_buffer_tokens, &begin);
+
     for (size_t i = 0; i < num_exp_tokens; i++) {
       struct preproc_token *tok = vector_get(expanded_fn, i);
 
@@ -1488,17 +1513,19 @@ static bool try_expand_token(struct preproc *preproc,
         continue;
       }
 
-      vector_push_back(preproc->unexpanded_buffer_tokens, tok);
+      struct preproc_unexpanded_token unexp_tok = {
+          .ty = PREPROC_UNEXPANDED_TOKEN_TY_TOKEN, .token = *tok};
+
+      vector_push_back(preproc->unexpanded_buffer_tokens, &unexp_tok);
     }
+
+    struct preproc_unexpanded_token end = {
+        .ty = PREPROC_UNEXPANDED_TOKEN_TY_BEGIN_EXPAND, .ident = ident};
+    vector_push_back(preproc->unexpanded_buffer_tokens, &end);
 
     vector_free(&expanded_fn);
     vector_free(&concat_points);
 
-    hashtbl_remove(parents, &ident);
-
-    if (free_parents) {
-      hashtbl_free(&parents);
-    }
     return true;
   }
 
@@ -1886,7 +1913,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
     }
 
     if (mode == PREPROC_TOKEN_MODE_NO_EXPAND ||
-        !try_expand_token(preproc, preproc_text, &token, buffer, NULL, flags)) {
+        !try_expand_token(preproc, preproc_text, &token, buffer, flags)) {
       vector_push_back(buffer, &token);
     }
 
@@ -1982,29 +2009,35 @@ static unsigned long long eval_atom(struct preproc *preproc,
 
     switch (token->ty) {
     case PREPROC_TOKEN_TY_PREPROC_NUMBER: {
+      (*i)++;
+
       unsigned long long num;
       if (!try_parse_integer(token->text, text_span_len(&token->span), &num)) {
-        BUG("bad value in preproc expr");
+        compiler_diagnostics_add(
+            preproc->diagnostics,
+            MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
+                                  token->span, MK_INVALID_TEXT_POS(0),
+                                  "bad token in preprocessor condition"));
+        return 0;
       }
 
-      (*i)++;
       return num;
     }
     case PREPROC_TOKEN_TY_STRING_LITERAL: {
       // FIXME: this is hacked logic, it needs to more generally parse chars
-      // will break for 
+      // will break for
 
       (*i)++;
 
       size_t len = text_span_len(&token->span);
       switch (len) {
-        case 3:
-          return token->text[1];
-        case 6: {
-          return strtoul(&token->text[2], NULL, 8);
-        }
-        default:
-          TODO("proper preproc char parse ('%.*s')", (int)len, token->text);
+      case 3:
+        return token->text[1];
+      case 6: {
+        return strtoul(&token->text[2], NULL, 8);
+      }
+      default:
+        TODO("proper preproc char parse ('%.*s')", (int)len, token->text);
       }
     }
 #define MAX_PREC 100
@@ -2035,9 +2068,13 @@ static unsigned long long eval_atom(struct preproc *preproc,
         return ~val;
       }
       default:
-        fprintf(stderr, "%.*s\n", 50, token->text);
-        BUG("did not expect this token type in directive expr");
-        break;
+        (*i)++;
+        compiler_diagnostics_add(
+            preproc->diagnostics,
+            MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
+                                  token->span, MK_INVALID_TEXT_POS(0),
+                                  "bad token in preprocessor condition"));
+        return 0;
       }
     case PREPROC_TOKEN_TY_IDENTIFIER: {
       (*i)++;
@@ -2107,8 +2144,13 @@ static unsigned long long eval_atom(struct preproc *preproc,
       (*i)++;
       continue;
     default:
-      fprintf(stderr, "%.*s\n", 50, token->text);
-      BUG("did not expect this token type in directive expr");
+      (*i)++;
+      compiler_diagnostics_add(
+          preproc->diagnostics,
+          MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
+                                token->span, MK_INVALID_TEXT_POS(0),
+                                "bad token in preprocessor condition"));
+      return 0;
     }
   }
 
@@ -2135,9 +2177,13 @@ static unsigned long long eval_expr(struct preproc *preproc,
     case PREPROC_TOKEN_TY_NEWLINE:
     case PREPROC_TOKEN_TY_IDENTIFIER:
     case PREPROC_TOKEN_TY_PREPROC_NUMBER:
-      fprintf(stderr, "%.*s\n", 50, token->text);
-      BUG("did not expect this token type in directive expr (%s)",
-          preproc_text->file);
+      (*i)++;
+      compiler_diagnostics_add(
+          preproc->diagnostics,
+          MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
+                                token->span, MK_INVALID_TEXT_POS(0),
+                                "bad token in preprocessor condition"));
+      return 0;
     case PREPROC_TOKEN_TY_PUNCTUATOR: {
       if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET ||
           token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COLON) {
@@ -2233,7 +2279,13 @@ static unsigned long long eval_expr(struct preproc *preproc,
         value = value % rhs;
         break;
       default:
-        BUG("bad token ty");
+        (*i)++;
+        compiler_diagnostics_add(
+            preproc->diagnostics,
+            MK_PREPROC_DIAGNOSTIC(BAD_TOKEN_IN_COND, bad_token_in_cond,
+                                  token->span, MK_INVALID_TEXT_POS(0),
+                                  "bad token in preprocessor condition"));
+        return 0;
       }
       break;
     }
@@ -2690,37 +2742,57 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           preproc_text->file = file;
           debug("set file to '%s'", file);
         }
-      } else if (token_streq(directive, "error")) {
-        // these directives DO expand
+      } else if (token_streq(directive, "warning") ||
+                 token_streq(directive, "error")) {
         EXPANDED_DIR_TOKENS();
 
-        errsl("preproc error: ");
-        for (size_t i = 0; i < num_directive_tokens; i++) {
-          struct preproc_token *err_token = vector_get(directive_tokens, i);
-          errsl("%.*s", (int)text_span_len(&err_token->span), err_token->text);
-        }
-        errsl("\n");
-
-        BUG("PREPROC #error directive");
-      } else if (token_streq(directive, "warning")) {
-        EXPANDED_DIR_TOKENS();
+        bool is_warn = token_streq(directive, "warning");
 
         bool wrote = false;
 
-        // TODO: emit diagnostic (once we have those...)
+        struct vector *msg =
+            vector_create_in_arena(sizeof(char), preproc->arena);
+
         for (size_t i = 0; i < num_directive_tokens; i++) {
           struct preproc_token *warn_token = vector_get(directive_tokens, i);
 
-          if (num_directive_tokens == 1 &&
-              !strncmp(warn_token->text, "\"Unsupported compiler detected\"",
-                       strlen("\"Unsupported compiler detected\""))) {
+          // TODO: only do this in system header files
+          if (is_warn &&
+              (num_directive_tokens == 1 &&
+               !strncmp(warn_token->text, "\"Unsupported compiler detected\"",
+                        strlen("\"Unsupported compiler detected\"")))) {
             // ignore
             break;
           }
 
           wrote = true;
-          slogsl("%.*s", (int)text_span_len(&warn_token->span),
-                 warn_token->text);
+          vector_extend(msg, warn_token->text,
+                        text_span_len(&warn_token->span));
+        }
+
+        struct text_pos end;
+        if (num_directive_tokens) {
+          end =
+              ((struct preproc_token *)vector_tail(directive_tokens))->span.end;
+        } else {
+          end = token->span.end;
+        }
+
+        char nll = 0;
+        vector_push_back(msg, &nll);
+
+        if (is_warn) {
+          compiler_diagnostics_add(
+              preproc->diagnostics,
+              MK_PREPROC_DIAGNOSTIC(WARN_DIRECTIVE, warn_directive,
+                                    MK_TEXT_SPAN(token->span.start, end),
+                                    MK_INVALID_TEXT_POS(0), vector_head(msg)));
+        } else {
+          compiler_diagnostics_add(
+              preproc->diagnostics,
+              MK_PREPROC_DIAGNOSTIC(ERROR_DIRECTIVE, error_directive,
+                                    MK_TEXT_SPAN(token->span.start, end),
+                                    MK_INVALID_TEXT_POS(0), vector_head(msg)));
         }
 
         if (wrote) {
@@ -2740,7 +2812,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
     if (mode == PREPROC_TOKEN_MODE_EXPAND &&
         try_expand_token(preproc, preproc_text, token, preproc->buffer_tokens,
-                         NULL, flags)) {
+                         flags)) {
       continue;
     }
 

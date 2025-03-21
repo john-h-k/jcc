@@ -6,6 +6,15 @@
 #include "vector.h"
 
 #define DIAG_FN(sev, _0, name, enum, ty)                                       \
+  struct compiler_diagnostic_ty DIAGNOSTIC_PREPROC_##enum = {                   \
+      .class = COMPILER_DIAGNOSTIC_CLASS_PREPROC,                                \
+      .severity = COMPILER_DIAGNOSTIC_SEVERITY_##sev};
+
+COMPILER_PREPROC_DIAGNOSTIC_LIST
+
+#undef DIAG_FN
+
+#define DIAG_FN(sev, _0, name, enum, ty)                                       \
   struct compiler_diagnostic_ty DIAGNOSTIC_PARSER_##enum = {                   \
       .class = COMPILER_DIAGNOSTIC_CLASS_PARSE,                                \
       .severity = COMPILER_DIAGNOSTIC_SEVERITY_##sev};
