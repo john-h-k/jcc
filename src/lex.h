@@ -163,24 +163,25 @@ struct lex_token {
   size_t internal_lexer_next_pos;
 };
 
-struct lexer;
-
-bool lexer_at_eof(struct lexer *lexer);
-enum lex_create_result lexer_create(struct program *program,
-                                    struct preproc *preproc,
-                                    struct lexer **lexer);
-void lexer_free(struct lexer **lexer);
-
 struct lex_pos {
   size_t id;
   struct text_pos text_pos;
 };
+
+struct lexer;
+
+enum lex_create_result lexer_create(struct program *program,
+                                    struct preproc *preproc,
+                                    struct lexer **lexer);
+void lexer_free(struct lexer **lexer);
 
 struct lex_pos lex_get_position(struct lexer *lexer);
 void lex_backtrack(struct lexer *lexer, struct lex_pos position);
 
 void lex_peek_token(struct lexer *lexer, struct lex_token *token);
 void lex_consume_token(struct lexer *lexer, struct lex_token token);
+
+bool lexer_at_eof(struct lexer *lexer);
 
 struct text_pos lex_get_last_text_pos(const struct lexer *lexer);
 
