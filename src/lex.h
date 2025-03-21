@@ -176,26 +176,26 @@ struct lex_pos {
   struct text_pos text_pos;
 };
 
-struct lex_pos get_position(struct lexer *lexer);
-void backtrack(struct lexer *lexer, struct lex_pos position);
+struct lex_pos lex_get_position(struct lexer *lexer);
+void lex_backtrack(struct lexer *lexer, struct lex_pos position);
 
-void peek_token(struct lexer *lexer, struct lex_token *token);
-void consume_token(struct lexer *lexer, struct lex_token token);
+void lex_peek_token(struct lexer *lexer, struct lex_token *token);
+void lex_consume_token(struct lexer *lexer, struct lex_token token);
 
-struct text_pos get_last_text_pos(const struct lexer *lexer);
+struct text_pos lex_get_last_text_pos(const struct lexer *lexer);
 
 // returns the associated text for a token, or NULL
 // e.g
 // * `token.ty == LEX_TOKEN_TY_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
-struct sized_str associated_text(const struct lexer *lexer,
+struct sized_str lex_associated_text(const struct lexer *lexer,
                                  const struct lex_token *token);
 
-struct sized_str strlike_associated_text(const struct lexer *lexer,
+struct sized_str lex_strlike_associated_text(const struct lexer *lexer,
                                          const struct lex_token *token);
 
-const char *token_name(const struct lexer *lexer,
+const char *lex_token_name(const struct lexer *lexer,
                        const struct lex_token *token);
 
 #endif

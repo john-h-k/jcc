@@ -756,10 +756,10 @@ td_var_ty_for_enum(struct typechk *tchk,
 
   struct td_var ty_var = {.ty = TD_VAR_VAR_TY_VAR,
                           .identifier = name,
-                          .scope = cur_scope(&tchk->ty_table)};
+                          .scope = vt_cur_scope(&tchk->ty_table)};
 
   struct var_table_entry *ty_entry =
-      var_table_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
+      vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
   ty_entry->var = arena_alloc(tchk->arena, sizeof(*ty_entry->var));
   *ty_entry->var = ty_var;
   ty_entry->var_ty = arena_alloc(tchk->arena, sizeof(*ty_entry->var_ty));
@@ -792,17 +792,17 @@ td_var_ty_for_enum(struct typechk *tchk,
           identifier_str(tchk->parser, &enumerator->identifier);
       struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
                            .identifier = enum_name,
-                           .scope = cur_scope(&tchk->var_table),
+                           .scope = vt_cur_scope(&tchk->var_table),
                            .enumerator = value};
 
       struct var_table_entry *entry;
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
-      if (cur_scope(&tchk->ty_table) == SCOPE_GLOBAL) {
-        entry = var_table_create_top_level_entry(&tchk->var_table,
+      if (vt_cur_scope(&tchk->ty_table) == SCOPE_GLOBAL) {
+        entry = vt_create_top_level_entry(&tchk->var_table,
                                                  VAR_TABLE_NS_NONE, enum_name);
       } else {
-        entry = var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
+        entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
                                        enum_name);
       }
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
@@ -820,13 +820,13 @@ td_var_ty_for_enum(struct typechk *tchk,
 // FIXME: i don't think ty table scope changes same as var table does
 
 static void tchk_push_scope(struct typechk *tchk) {
-  push_scope(&tchk->var_table);
-  push_scope(&tchk->ty_table);
+  vt_push_scope(&tchk->var_table);
+  vt_push_scope(&tchk->ty_table);
 }
 
 static void tchk_pop_scope(struct typechk *tchk) {
-  pop_scope(&tchk->var_table);
-  pop_scope(&tchk->ty_table);
+  vt_pop_scope(&tchk->var_table);
+  vt_pop_scope(&tchk->ty_table);
 }
 
 static struct td_var_ty td_var_ty_for_struct_or_union(
@@ -857,7 +857,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                              ? VAR_TABLE_NS_STRUCT
                              : VAR_TABLE_NS_UNION;
   struct var_table_entry *entry =
-      var_table_get_entry(&tchk->ty_table, ns, name);
+      vt_get_entry(&tchk->ty_table, ns, name);
 
   if (!specifier->decl_list) {
     if (!specifier->identifier) {
@@ -889,7 +889,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     const struct ast_declaration *declaration =
         &specifier->decl_list->declarations[i];
 
-    push_scope(&tchk->var_table);
+    vt_push_scope(&tchk->var_table);
 
     struct td_declaration td_decl = type_struct_declaration(tchk, declaration);
 
@@ -910,7 +910,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                 {
                     .ty = TD_VAR_VAR_TY_VAR,
                     .identifier = MK_NULL_STR(),
-                    .scope = cur_scope(&tchk->var_table),
+                    .scope = vt_cur_scope(&tchk->var_table),
                 },
             .var_ty = td_decl.base_ty,
             .init = NULL,
@@ -922,7 +922,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     vector_extend(var_decls, td_decl.var_declarations,
                   td_decl.num_var_declarations);
 
-    pop_scope(&tchk->var_table);
+    vt_pop_scope(&tchk->var_table);
   }
 
   size_t num_var_decls = vector_length(var_decls);
@@ -957,9 +957,9 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                                                         : VAR_TABLE_NS_UNION;
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
-                       .scope = cur_scope(&tchk->ty_table)};
+                       .scope = vt_cur_scope(&tchk->ty_table)};
 
-  entry = var_table_get_or_create_entry(&tchk->ty_table, ns, name);
+  entry = vt_get_or_create_entry(&tchk->ty_table, ns, name);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
   entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -1239,7 +1239,7 @@ static struct td_var_ty
 td_var_ty_for_typedef(struct typechk *tchk,
                       const struct lex_token *identifier) {
   struct var_table_entry *entry =
-      var_table_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
+      vt_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
                           identifier_str(tchk->parser, identifier));
 
   if (!entry) {
@@ -1292,7 +1292,7 @@ static struct td_var_declaration type_declarator_inner(
       var_decl.var = (struct td_var){
           // FIXME: other fields
           .ty = TD_VAR_VAR_TY_VAR,
-          .scope = cur_scope(&tchk->var_table),
+          .scope = vt_cur_scope(&tchk->var_table),
           .identifier =
               identifier_str(tchk->parser, &direct_declarator->identifier),
       };
@@ -2169,7 +2169,7 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
         var_ty->incomplete_aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
             ? VAR_TABLE_NS_STRUCT
             : VAR_TABLE_NS_UNION;
-    struct var_table_entry *entry = var_table_get_entry(
+    struct var_table_entry *entry = vt_get_entry(
         &tchk->ty_table, ns, var_ty->incomplete_aggregate.name);
 
     // FIXME: ALSO needs to check scope
@@ -2517,7 +2517,7 @@ static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
   struct sized_str name = identifier_str(tchk->parser, &var->identifier);
   struct var_table_entry *entry =
-      var_table_get_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
+      vt_get_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
 
   struct td_var_ty var_ty;
   struct td_var td_var;
@@ -2534,7 +2534,7 @@ static struct td_expr type_var(struct typechk *tchk,
     var_ty = TD_VAR_TY_UNKNOWN;
     td_var = (struct td_var){.ty = TD_VAR_VAR_TY_VAR,
                              .identifier = name,
-                             .scope = cur_scope(&tchk->ty_table)};
+                             .scope = vt_cur_scope(&tchk->ty_table)};
   }
 
   return (struct td_expr){
@@ -3996,7 +3996,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
                       TD_DECLARATOR_MODE_NORMAL);
 
-  struct var_table_entry *func_entry = var_table_create_entry(
+  struct var_table_entry *func_entry = vt_create_entry(
       &tchk->var_table, VAR_TABLE_NS_NONE, declaration.var.identifier);
   func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
   *func_entry->var = declaration.var;
@@ -4024,7 +4024,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
     };
 
     struct var_table_entry *entry =
-        var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, identifier);
+        vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, identifier);
     entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
     *entry->var = var;
     entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -4046,7 +4046,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       .scope = SCOPE_PARAMS,
   };
 
-  struct var_table_entry *entry = var_table_create_entry(
+  struct var_table_entry *entry = vt_create_entry(
       &tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
@@ -4397,10 +4397,10 @@ type_init_declarator(struct typechk *tchk,
 
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
-    entry = var_table_create_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
+    entry = vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
                                    td_var_decl.var.identifier);
   } else {
-    entry = var_table_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
+    entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
                                    td_var_decl.var.identifier);
 
     if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
@@ -4542,8 +4542,8 @@ enum typechk_create_result typechk_create(const struct target *target,
                         .parser = parser,
                         .target = target,
                         .next_anonymous_type_name_id = 0,
-                        .ty_table = var_table_create(arena),
-                        .var_table = var_table_create(arena),
+                        .ty_table = vt_create(arena),
+                        .var_table = vt_create(arena),
                         .result_ty = TYPECHK_RESULT_TY_SUCCESS,
                         .diagnostics = compiler_diagnostics_create()};
 
@@ -4553,8 +4553,8 @@ enum typechk_create_result typechk_create(const struct target *target,
 }
 
 void typechk_free(struct typechk **tchk) {
-  var_table_free(&(*tchk)->ty_table);
-  var_table_free(&(*tchk)->var_table);
+  vt_free(&(*tchk)->ty_table);
+  vt_free(&(*tchk)->var_table);
   compiler_diagnostics_free(&(*tchk)->diagnostics);
 
   arena_allocator_free(&(*tchk)->arena);

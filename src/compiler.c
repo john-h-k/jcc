@@ -231,7 +231,7 @@ compiler_print_diagnostics(struct compiler *compiler,
   struct compiler_diagnostic diagnostic;
 
   while (compiler_diagnostics_iter_next(&iter, &diagnostic)) {
-    fprintf(stderr, "jcc: ");
+    // fprintf(stderr, "jcc: ");
     switch (diagnostic.ty.severity) {
     case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
       fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);

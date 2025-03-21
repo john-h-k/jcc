@@ -41,27 +41,27 @@ struct var_table_scope {
   size_t scope;
 };
 
-struct var_table var_table_create(struct arena_allocator *arena);
-void var_table_free(struct var_table *var_table);
+struct var_table vt_create(struct arena_allocator *arena);
+void vt_free(struct var_table *var_table);
 
 struct var_table_entry *
-var_table_create_top_level_entry(struct var_table *var_table,
+vt_create_top_level_entry(struct var_table *var_table,
                                  enum var_table_ns ns, struct sized_str name);
-struct var_table_entry *var_table_create_entry(struct var_table *var_table,
+struct var_table_entry *vt_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,
                                                struct sized_str name);
 
-int cur_scope(struct var_table *var_table);
+int vt_cur_scope(struct var_table *var_table);
 
-void push_scope(struct var_table *var_table);
-void pop_scope(struct var_table *var_table);
+void vt_push_scope(struct var_table *var_table);
+void vt_pop_scope(struct var_table *var_table);
 
-struct var_table_entry *var_table_get_entry(struct var_table *var_table,
+struct var_table_entry *vt_get_entry(struct var_table *var_table,
                                             enum var_table_ns ns,
                                             struct sized_str name);
 
 struct var_table_entry *
-var_table_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
+vt_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
                               struct sized_str name);
 
 typedef void (*debug_print_entries_callback)(FILE *file,
