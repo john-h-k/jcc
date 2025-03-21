@@ -312,6 +312,7 @@ struct ir_param_info {
 
   // union {
   // RV32I STRUCK HACK:
+  bool split;
   struct {
     struct {
       size_t num_regs;

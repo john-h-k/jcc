@@ -1243,7 +1243,7 @@ static void lower_params_registers(struct ir_func *func) {
           struct ir_var_ty_info info =
               ir_var_ty_info(func->unit, param_info->var_ty);
 
-          if (param_info->num_regs == 1 && info.size > 4) {
+          if (param_info->num_regs == 1 && info.size > 4 && param_info->split) {
             ssize_t offset = -param_info->stack_offset;
 
             if (param_op->stmt->succ) {
@@ -1480,7 +1480,7 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
         struct ir_var_ty_info info =
             ir_var_ty_info(func->unit, param_info->var_ty);
 
-        if (param_info->num_regs == 1 && info.size > 4) {
+        if (param_info->num_regs == 1 && info.size > 4 && param_info->split) {
           struct ir_lcl *lcl = ir_add_local(func, &IR_VAR_TY_I32);
           lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
           lcl->alloc =

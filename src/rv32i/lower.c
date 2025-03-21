@@ -269,8 +269,6 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
         ngrn++;
       }
 
-      vector_push_back(param_infos, &param_info);
-
       if (dw_size) {
         // dont push param, let lower recognise it
         // param_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_STACK,
@@ -278,9 +276,11 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
         //                                    .stack_offset = nsaa};
         // vector_push_back(param_infos, &param_info);
 
+        param_info.split = true;
         param_info.stack_offset = nsaa;
         nsaa += 4;
       }
+      vector_push_back(param_infos, &param_info);
 
       continue;
     }
