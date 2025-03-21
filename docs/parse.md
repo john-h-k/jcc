@@ -165,3 +165,101 @@ static bool parse_typedef_name(struct parser *parser,
   return true;
 }
 ```
+
+In general, the aim of the parser's grammar is to be as flexible as possible while still allowing sensible error recovery. For example, it allows all forms of type specifiers anywhere (such as `inline int a` or `register int main();`), as this does not make recovery any harder but can easily be rejected in the typecheck pass. The parser will emits its own diagnostics in scenarios where it knows which token is required next (such as missing close-brackets or semicolons), but in all these scenarios it is able to return an error expression (`AST_EXPR_TY_INVALID`) and continue parsing. The error diagnostics will then cause termination after parsing has completed.
+
+## Expression parsing
+
+Precedence climbing is used for parsing binary expressions. Unary operators are parsed as part of the grammar in classic recursive descent style, with common prefixes lifted from their nodes for efficiency. For example, the core of the top-level expression parser:
+
+```c
+// All paths require an atom_3, so we lift the common prefix
+
+struct ast_expr atom;
+if (!parse_atom_3(parser, &atom)) {
+  return false;
+}
+
+// Explicitly pass the atom_3 to parse_assg
+
+struct ast_assg assg;
+if (parse_assg(parser, &atom, &assg)) {
+  expr->ty = AST_EXPR_TY_ASSG;
+  expr->assg = assg;
+  expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  return true;
+}
+
+// all non-assignment expressions
+// This function is the entrypoint to the precedence climber
+struct ast_expr cond;
+if (!parse_expr_precedence_aware(parser, 0, &atom, &cond)) {
+  lex_backtrack(parser->lexer, pos);
+  return false;
+}
+
+// A ternary is the lowest precedence other than comma operator
+// So we have now found its prefix (an expr), we attempt to parse the rest of it
+if (!parse_ternary(parser, &cond, expr)) {
+  *expr = cond;
+}
+```
+
+Because in macro-heavy code, ternary and compound expressions are extremely common, minimising backtracking is essential. During the first iteration of bootstrapping the compiler, parsing the `rv32i/emitter.c` file would take ~4s and the `x64/emitter.c` file would stack overflow. By lifting these prefixes, the parse time of both was reduced to under 50ms.
+
+Rewriting this code to use full Pratt parsing for unary and binary expressions is on my TODO list as I suspect it will improve performance and be clearer code.
+
+
+## Debugging
+
+As with all sections of the compilers, parsing has a general purpose prettyprint tool that prints the AST. For example, the AST for a simple hello-world program:
+
+```c
+```
+
+can be seen here:
+
+
+```
+PRINTING AST
+DECLARATION
+    DECLARATION SPECIFIER LIST
+        DECLARATION SPECIFIER
+            TYPE SPECIFIER
+                INT
+    INIT DECLARATOR LIST
+        DECLARATOR
+            DIRECT DECLARATOR LIST
+                DIRECT DECLARATOR
+                    IDENTIFIER 'printf'
+                DIRECT DECLARATOR
+                    FUNC DECLARATOR
+                        PARAM
+                            DECLARATION SPECIFIER LIST
+                                DECLARATION SPECIFIER
+                                    CONST
+                                DECLARATION SPECIFIER
+                                    TYPE SPECIFIER
+                                        CHAR
+                            ABSTRACT DECLARATOR
+                                POINTER LIST
+                                    POINTER
+                                    DECLARATION SPECIFIER LIST
+                                DIRECT ABSTRACT DECLARATOR LIST
+                        PARAM
+                            VARIADIC
+            ATTRIBUTE LIST
+FUNCTION DEFINITION
+    COMPOUND STATEMENT:
+            EXPRESSION
+                COMPOUND EXPRESSION:
+                    EXPRESSION
+                        CALL
+                            EXPRESSION
+                                VARIABLE 'printf'
+                            ARGLIST:
+                                EXPRESSION
+                                    CONSTANT "Hello, World!\n"
+            RETURN
+                EXPRESSION
+                    CONSTANT 0```

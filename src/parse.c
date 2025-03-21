@@ -3518,7 +3518,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
   switch (struct_or_union_specifier->ty) {
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT:
     if (struct_or_union_specifier->identifier) {
-      AST_PRINTZ("STRUCT ");
+      AST_PRINT_SAMELINE_Z("STRUCT ");
       AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
 
     } else {
@@ -3527,7 +3527,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
     break;
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION:
     if (struct_or_union_specifier->identifier) {
-      AST_PRINTZ("UNION ");
+      AST_PRINT_SAMELINE_Z("UNION ");
       AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
     } else {
       AST_PRINTZ("UNION");
@@ -3560,7 +3560,7 @@ DEBUG_FUNC(enumerator_list, enumerator_list) {
 
 DEBUG_FUNC(enum_specifier, enum_specifier) {
   if (enum_specifier->identifier) {
-    AST_PRINTZ("ENUM ");
+    AST_PRINT_SAMELINE_Z("ENUM ");
     AST_PRINT_IDENTIFIER(enum_specifier->identifier);
   } else {
     AST_PRINTZ("ENUM");
@@ -3586,7 +3586,7 @@ DEBUG_FUNC(type_specifier, type_specifier) {
     DEBUG_CALL(enum_specifier, &type_specifier->enum_specifier);
     break;
   case AST_TYPE_SPECIFIER_TYPEDEF_NAME:
-    AST_PRINTZ("TYPEDEF ");
+    AST_PRINT_SAMELINE_Z("TYPEDEF ");
     AST_PRINT_IDENTIFIER(&type_specifier->typedef_name);
     break;
   }
@@ -3596,7 +3596,7 @@ DEBUG_FUNC(type_specifier, type_specifier) {
 DEBUG_FUNC(compoundstmt, compound_stmt);
 
 DEBUG_FUNC(var, var) {
-  AST_PRINTZ("VARIABLE ");
+  AST_PRINT_SAMELINE_Z("VARIABLE ");
   AST_PRINT_IDENTIFIER(&var->identifier);
 }
 
@@ -3611,13 +3611,13 @@ DEBUG_FUNC(cnst, cnst) {
   case AST_CNST_TY_FLOAT:
   case AST_CNST_TY_DOUBLE:
   case AST_CNST_TY_LONG_DOUBLE:
-    AST_PRINTZ("CONSTANT ");
+    AST_PRINT_SAMELINE_Z("CONSTANT ");
     ap_val_fprintf(stderr, cnst->num_value);
     break;
   case AST_CNST_TY_CHAR:
     switch (cnst->num_value.ty) {
     case AP_VAL_TY_INVALID:
-      AST_PRINTZ("CONSTANT ");
+      AST_PRINT_SAMELINE_Z("CONSTANT ");
       ap_val_fprintf(stderr, cnst->num_value);
       break;
     case AP_VAL_TY_INT:
@@ -3628,7 +3628,7 @@ DEBUG_FUNC(cnst, cnst) {
     }
     break;
   case AST_CNST_TY_WIDE_CHAR:
-    AST_PRINTZ("CONSTANT (wide char) ");
+    AST_PRINT_SAMELINE_Z("CONSTANT (wide char) ");
     ap_val_fprintf(stderr, cnst->num_value);
     break;
   case AST_CNST_TY_STR_LITERAL:
@@ -3652,6 +3652,10 @@ DEBUG_FUNC(pointer, pointer) {
 }
 
 DEBUG_FUNC(pointer_list, pointer_list) {
+  if (!pointer_list->num_pointers) {
+    return;
+  }
+
   AST_PRINTZ("POINTER LIST");
   INDENT();
   for (size_t i = 0; i < pointer_list->num_pointers; i++) {
@@ -3742,7 +3746,7 @@ DEBUG_FUNC(direct_declarator, direct_declarator) {
   INDENT();
   switch (direct_declarator->ty) {
   case AST_DIRECT_DECLARATOR_TY_IDENTIFIER:
-    AST_PRINTZ("IDENTIFIER ");
+    AST_PRINT_SAMELINE_Z("IDENTIFIER ");
     AST_PRINT_IDENTIFIER(&direct_declarator->identifier);
     break;
   case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
@@ -4105,7 +4109,7 @@ DEBUG_FUNC(designator, designator) {
   INDENT();
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD:
-    AST_PRINTZ("FIELD ");
+    AST_PRINT_SAMELINE_Z("FIELD ");
     AST_PRINT_IDENTIFIER(&designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
@@ -4322,7 +4326,7 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     UNINDENT();
     break;
   case AST_JUMPSTMT_TY_GOTO:
-    AST_PRINTZ("GOTO ");
+    AST_PRINT_SAMELINE_Z("GOTO ");
     AST_PRINT_IDENTIFIER(&jump_stmt->goto_stmt.label);
     break;
   case AST_JUMPSTMT_TY_BREAK:
@@ -4490,7 +4494,7 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
 DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case AST_LABELEDSTMT_TY_LABEL:
-    AST_PRINTZ("LABEL ");
+    AST_PRINT_SAMELINE_Z("LABEL ");
     AST_PRINT_IDENTIFIER(&labeled_stmt->label);
     break;
   case AST_LABELEDSTMT_TY_CASE:
@@ -4599,9 +4603,11 @@ DEBUG_FUNC(paramlist, param_list) {
 }
 
 DEBUG_FUNC(funcdef, func_def) {
-  AST_PRINT_SAMELINE_Z("FUNCTION DEFINITION ");
+  AST_PRINTZ("FUNCTION DEFINITION ");
 
+  INDENT();
   DEBUG_CALL(compoundstmt, &func_def->body);
+  UNINDENT();
 }
 
 DEBUG_FUNC(external_declaration, external_declaration) {
@@ -4630,4 +4636,6 @@ void debug_print_ast(struct parser *parser,
     DEBUG_CALL(external_declaration,
                &translation_unit->external_declarations[i]);
   }
+
+  AST_PRINTZ("");
 }

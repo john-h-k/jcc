@@ -787,7 +787,7 @@ void ap_val_fprintf(FILE *file, struct ap_val value) {
     fprintf(file, "AP_VAL_INVALID");
     break;
   case AP_VAL_TY_INT:
-    fprintf(file, "AP_VAL_INVALID");
+    fprintf(file, "%llu", ap_int_as_ull(value.ap_int));
     break;
   case AP_VAL_TY_FLOAT:
     switch (value.ap_float.ty) {
