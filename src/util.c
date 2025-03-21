@@ -237,6 +237,7 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
   }
 
   *value = neg && cur ? ULLONG_MAX - (cur - 1) : cur;
+
   return true;
 }
 
