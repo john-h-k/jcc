@@ -449,10 +449,6 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
                                           struct ir_op **args,
                                           size_t num_args) {
 
-  size_t ngrn = 0;
-  size_t nsrn = 0;
-  size_t nsaa = 0;
-
   struct vector *param_infos = vector_create(sizeof(struct ir_param_info));
   struct vector *params = vector_create(sizeof(struct ir_var_ty));
 
@@ -528,6 +524,10 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     variadics_on_stack = false;
     break;
   }
+
+  size_t ngrn = 0;
+  size_t nsrn = 0;
+  size_t nsaa = 0;
 
   size_t num = MAX(func_ty.num_params, num_args);
   for (size_t i = 0; i < num; i++) {

@@ -9,6 +9,7 @@
 #include "parse.h"
 #include "program.h"
 #include "target.h"
+#include "util.h"
 #include "var_table.h"
 #include "vector.h"
 
@@ -975,6 +976,27 @@ static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
     const struct ast_abstract_declarator *abstract_declarator);
 
+static void td_walk_init_list(struct td_var_ty *var_ty,
+                              const struct ast_init_list *init_list,
+                              size_t *idx) {
+  if (var_ty->ty != TD_VAR_TY_TY_ARRAY &&
+      (var_ty->ty != TD_VAR_TY_TY_AGGREGATE ||
+       (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
+        var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_UNION))) {
+    (*idx)++;
+  }
+
+  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+      td_walk_init_list(&var_ty->aggregate.fields[i].var_ty, init_list, idx);
+    }
+  } else {
+    for (size_t i = 0; i < var_ty->array.size; i++) {
+      td_walk_init_list(var_ty->array.underlying, init_list, idx);
+    }
+  }
+}
+
 static struct td_var_ty
 type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
                       const struct ast_array_declarator *array_declarator,
@@ -1049,10 +1071,13 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
     case AST_INIT_TY_INIT_LIST: {
       const struct ast_init_list *init_list = &init->init_list;
 
-      size_t max_size = 0;
+      size_t idx = 0;
       size_t size = 0;
-      for (size_t i = 0; i < init_list->num_inits; i++) {
-        const struct ast_init_list_init *init_list_init = &init_list->inits[i];
+      size_t max_size = 0;
+
+      while (idx < init_list->num_inits) {
+        const struct ast_init_list_init *init_list_init =
+            &init_list->inits[idx];
 
         if (init_list_init->designator_list &&
             init_list_init->designator_list->num_designators) {
@@ -1078,6 +1103,8 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
         }
 
         max_size = MAX(max_size, size);
+
+        td_walk_init_list(&var_ty, init_list, &idx);
       }
 
       array_ty.array.size = max_size;
@@ -3300,7 +3327,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     // FIXME: maybe wrong wrt sizes, definitely wrong wrt to signs
 
     // TEMP: hack sizes
-    if (lhs.val.ty == AP_VAL_TY_INT && rhs.val.ty == AP_VAL_TY_INT && lhs.val.ap_int.num_bits != rhs.val.ap_int.num_bits) {
+    if (lhs.val.ty == AP_VAL_TY_INT && rhs.val.ty == AP_VAL_TY_INT &&
+        lhs.val.ap_int.num_bits != rhs.val.ap_int.num_bits) {
       size_t num_bits = MAX(lhs.val.ap_int.num_bits, rhs.val.ap_int.num_bits);
 
       lhs.val = ap_val_from_ull(ap_int_as_ull(lhs.val.ap_int), num_bits);
@@ -3333,16 +3361,16 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
                                .val = ap_val_lteq(lhs.val, rhs.val)};
       return true;
     case TD_BINARY_OP_TY_LOGICAL_OR:
-      *value =
-          (struct td_val){.var_ty = expr->var_ty,
-                          .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) |
-                                                 (int)ap_val_nonzero(rhs.val), 32)};
+      *value = (struct td_val){
+          .var_ty = expr->var_ty,
+          .val = ap_val_from_ull(
+              (int)ap_val_nonzero(lhs.val) | (int)ap_val_nonzero(rhs.val), 32)};
       return true;
     case TD_BINARY_OP_TY_LOGICAL_AND:
-      *value =
-          (struct td_val){.var_ty = expr->var_ty,
-                          .val = ap_val_from_ull((int)ap_val_nonzero(lhs.val) &
-                                                 (int)ap_val_nonzero(rhs.val), 32)};
+      *value = (struct td_val){
+          .var_ty = expr->var_ty,
+          .val = ap_val_from_ull(
+              (int)ap_val_nonzero(lhs.val) & (int)ap_val_nonzero(rhs.val), 32)};
       return true;
     case TD_BINARY_OP_TY_OR:
       CHECK_INT_OPS();
@@ -3454,6 +3482,10 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
                       bool is_addr) {
   // FIXME: i think casting logic in here may be inadequate (ie need more calls
   // to add_cast_if_needed)
+
+  if (expr.ty == TD_EXPR_TY_CNST && expr.cnst.ty == TD_CNST_TY_STRING) {
+    return expr;
+  }
 
   expr = add_cast_if_needed(tchk, expr, target_ty);
 
@@ -4085,8 +4117,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   return td_funcdef;
 }
 
-static struct td_init type_init(struct typechk *tchk,
-                                const struct td_var_ty *var_ty,
+static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
                                 const struct ast_init *init,
                                 enum td_init_mode mode);
 
@@ -4230,26 +4261,36 @@ static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
   }
 
   if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-    return var_ty->aggregate.num_fields;
+    size_t sum = 0;
+    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+      sum += td_num_init_fields(&var_ty->aggregate.fields[i].var_ty);
+    }
+    return sum;
   }
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    return var_ty->array.size;
+    return var_ty->array.size * td_num_init_fields(var_ty->array.underlying);
   }
 
-  BUG("doesn't make sense");
+  return 1;
 }
 
 static struct td_init_list type_init_list_for_aggregate_or_array(
     struct typechk *tchk, const struct td_var_ty *var_ty,
     const struct ast_init_list *init_list, enum td_init_mode mode,
-    size_t start_idx, bool top) {
+    size_t start_idx, bool top, size_t *inits_used) {
+
+  size_t d = 0;
+  if (!inits_used) {
+    DEBUG_ASSERT(top, "expected to be top");
+    inits_used = &d;
+  }
 
   struct vector *inits = vector_create(sizeof(struct td_init_list_init));
 
   size_t num_inits =
       top ? init_list->num_inits
-          : MIN(init_list->num_inits, td_num_init_fields(var_ty));
+          : MIN(init_list->num_inits - start_idx, td_num_init_fields(var_ty));
 
   size_t field_index = 0;
   for (size_t i = start_idx; i < start_idx + num_inits; i++) {
@@ -4274,7 +4315,7 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, designator->span,
                                      MK_INVALID_TEXT_POS(0),
-                                     "unknown member for init list"));
+                                     "unknown designator for init list"));
         }
 
         break;
@@ -4307,24 +4348,31 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
       struct td_expr typed =
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->init->expr);
 
-      if (td_var_ty_eq(tchk, &member_var_ty, &typed.var_ty)) {
+      if (td_var_ty_compatible(tchk, &member_var_ty, &typed.var_ty,
+                               TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
         td_init_list_init =
             type_init_list_init(tchk, var_ty, &member_var_ty, init, mode);
+
+        (*inits_used)++;
       } else {
         td_init_list_init = (struct td_init_list_init){
             .designator_list = NULL,
             .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
+        size_t sub_inits_used = 0;
         *td_init_list_init.init = (struct td_init){
             .ty = TD_INIT_TY_INIT_LIST,
             .init_list = type_init_list_for_aggregate_or_array(
-                tchk, &member_var_ty, init_list, mode, i, false)};
+                tchk, &member_var_ty, init_list, mode, i, false, &sub_inits_used)};
 
-        i += td_init_list_init.init->init_list.num_inits - 1;
+        i += sub_inits_used - 1;
+        *inits_used += sub_inits_used;
       }
     } else {
       td_init_list_init =
           type_init_list_init(tchk, var_ty, &member_var_ty, init, mode);
+
+      (*inits_used)++;
     }
 
     vector_push_back(inits, &td_init_list_init);
@@ -4361,14 +4409,13 @@ static struct td_init_list type_init_list(struct typechk *tchk,
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
       var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
     return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list, mode,
-                                                 0, true);
+                                                 0, true, NULL);
   }
 
   BUG("scalar init list should have been converted to expression init");
 }
 
-static struct td_init type_init(struct typechk *tchk,
-                                const struct td_var_ty *var_ty,
+static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
                                 const struct ast_init *init,
                                 enum td_init_mode mode) {
   struct td_init td_init;
@@ -4387,6 +4434,27 @@ static struct td_init type_init(struct typechk *tchk,
           *var_ty, false);
       break;
     }
+
+    if (td_init.expr.ty == TD_EXPR_TY_CNST &&
+        td_init.expr.cnst.ty == TD_CNST_TY_STRING) {
+      // if the desired type is not pointer, we must be in a context where it is
+      // an array
+      if (var_ty->ty != TD_VAR_TY_TY_POINTER) {
+        // FIXME: mutating existing
+        struct td_cnst_str str = td_init.expr.cnst.str_value;
+        td_init.expr.var_ty = (struct td_var_ty){
+            .ty = TD_VAR_TY_TY_ARRAY,
+            .array = {.size = str.ty == TD_CNST_STR_TY_ASCII ? str.ascii.len
+                                                             : str.wide.len,
+                      .underlying = arena_alloc(
+                          tchk->arena,
+                          sizeof(*td_init.expr.var_ty.array.underlying))}};
+
+        *td_init.expr.var_ty.array.underlying = *var_ty;
+      }
+      break;
+    }
+
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
 
     break;

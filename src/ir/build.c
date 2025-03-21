@@ -1106,41 +1106,41 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
   return op;
 }
 
+static struct ir_var_str build_ir_str(const struct td_cnst *cnst,
+                                      struct ir_var_ty *char_ty,
+                                      bool *is_data) {
+
+  switch (cnst->str_value.ty) {
+  case TD_CNST_STR_TY_ASCII:
+    // data if contains null char
+    *is_data = strlen(cnst->str_value.ascii.value) < cnst->str_value.ascii.len;
+    *char_ty = IR_VAR_TY_I8;
+    return (struct ir_var_str){
+        .value = cnst->str_value.ascii.value,
+        .len = cnst->str_value.ascii.len,
+    };
+  case TD_CNST_STR_TY_WIDE:
+    *is_data = true;
+    *char_ty = IR_VAR_TY_I32;
+
+    return (struct ir_var_str){
+        .value = cnst->str_value.wide.value,
+        .len = cnst->str_value.wide.len,
+    };
+  }
+}
+
 static struct ir_glb *build_str_literal(struct ir_unit *iru,
                                         const struct td_var_ty *td_var_ty,
                                         const struct td_cnst *cnst) {
   DEBUG_ASSERT(cnst->ty == TD_CNST_TY_STRING, "expected string");
 
-  size_t num_chrs;
   struct ir_var_ty *chr = arena_alloc(iru->arena, sizeof(*chr));
 
   // if string literal contains null chars (or is wide char), it will mess up
   // counting and so put it in data
   bool is_data;
-  struct ir_var_str str_value;
-
-  switch (cnst->str_value.ty) {
-  case TD_CNST_STR_TY_ASCII:
-    // data if contains null char
-    is_data = strlen(cnst->str_value.ascii.value) < cnst->str_value.ascii.len;
-    *chr = IR_VAR_TY_I8;
-    num_chrs = cnst->str_value.ascii.len;
-    str_value = (struct ir_var_str){
-        .value = cnst->str_value.ascii.value,
-        .len = cnst->str_value.ascii.len,
-    };
-    break;
-  case TD_CNST_STR_TY_WIDE:
-    is_data = true;
-    *chr = IR_VAR_TY_I32;
-    num_chrs = cnst->str_value.wide.len;
-
-    str_value = (struct ir_var_str){
-        .value = cnst->str_value.wide.value,
-        .len = cnst->str_value.wide.len,
-    };
-    break;
-  }
+  struct ir_var_str str_value = build_ir_str(cnst, chr, &is_data);
 
   if (td_var_ty->ty != TD_VAR_TY_TY_POINTER ||
       !(td_var_ty->type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST)) {
@@ -1149,7 +1149,8 @@ static struct ir_glb *build_str_literal(struct ir_unit *iru,
 
   struct ir_var_ty var_ty = {
       .ty = IR_VAR_TY_TY_ARRAY,
-      .array = {.underlying = chr, .num_elements = num_chrs + 1 /* null */}};
+      .array = {.underlying = chr,
+                .num_elements = str_value.len + 1 /* null */}};
 
   struct ir_glb *glb =
       ir_add_global(iru, IR_GLB_TY_DATA, &var_ty, IR_GLB_DEF_TY_DEFINED, NULL);
@@ -4165,25 +4166,39 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
     const struct td_cnst *cnst = &expr->cnst;
     switch (cnst->ty) {
     case TD_CNST_TY_STRING:
-      switch (cnst->str_value.ty) {
-      case TD_CNST_STR_TY_ASCII: {
-        struct ir_glb *glb = build_str_literal(irb->unit, &expr->var_ty, cnst);
+      if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
+        struct ir_var_ty ir_var_ty = var_ty_for_td_var_ty(irb->unit, var_ty);
 
-        if (var_ty->ty == TD_VAR_TY_TY_POINTER) {
-          return (struct ir_var_value){
-              .ty = IR_VAR_VALUE_TY_ADDR,
-              .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
-              .addr = {.glb = glb, .offset = 0}};
-        } else {
-          // FIXME: this leads to duplicates in the IR (as a glb was constructed
-          // in build_str_literal)
-          return glb->var->value;
+        struct ir_var_ty char_ty;
+        bool is_data;
+        struct ir_var_value str = {.ty = IR_VAR_VALUE_TY_STR,
+                                   .var_ty = ir_var_ty,
+                                   .str_value =
+                                       build_ir_str(cnst, &char_ty, &is_data)};
+
+        return str;
+      } else {
+        switch (cnst->str_value.ty) {
+        case TD_CNST_STR_TY_ASCII: {
+          struct ir_glb *glb =
+              build_str_literal(irb->unit, &expr->var_ty, cnst);
+
+          if (var_ty->ty == TD_VAR_TY_TY_POINTER) {
+            return (struct ir_var_value){
+                .ty = IR_VAR_VALUE_TY_ADDR,
+                .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+                .addr = {.glb = glb, .offset = 0}};
+          } else {
+            // FIXME: this leads to duplicates in the IR (as a glb was
+            // constructed in build_str_literal)
+            return glb->var->value;
+          }
         }
-      }
-      case TD_CNST_STR_TY_WIDE: {
-        TODO("wide str globals");
-        break;
-      }
+        case TD_CNST_STR_TY_WIDE: {
+          TODO("wide str globals");
+          break;
+        }
+        }
       }
       break;
     case TD_CNST_TY_NUM:
