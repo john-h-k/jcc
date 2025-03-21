@@ -2067,10 +2067,9 @@ static unsigned long long eval_atom(struct preproc *preproc,
       case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET: {
         (*i)++;
         return eval_expr(preproc, preproc_text, tokens, i, num_tokens,
-                         MAX_PREC);
+                         0);
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB: {
-        // THIS IS WRONG ! min prec needs to be higha
         (*i)++;
         unsigned long long val =
             eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
@@ -2243,6 +2242,7 @@ static unsigned long long eval_expr(struct preproc *preproc,
 
       long long rhs = eval_expr(preproc, preproc_text, tokens, i, num_tokens,
                                 precedence + 1);
+      printf("value = %llu rhs = %llu\n", value, rhs);
 
       switch (token->punctuator.ty) {
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR:
@@ -2294,6 +2294,11 @@ static unsigned long long eval_expr(struct preproc *preproc,
         value = value * rhs;
         break;
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV:
+        if (rhs == 0) {
+          // TODO: emit diagnostic only if being executed
+          // ie `0 && (0/0)` should not emit
+          return 0;
+        }
         value = value / rhs;
         break;
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD:
