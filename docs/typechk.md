@@ -1,6 +1,6 @@
 # Typechk
 
-The typechk phase performs semantic analyis and validation, turning the generic parse AST into a typed AST of legal C code.
+The typechk phase performs semantic analyis and validation, turning the generic parse AST into a typed AST of legal C code. It keeps the namespacing convention the rest of the project uses by having a short prefix for all public types, in this case `td` (for **t**ype**d**)
 
 It is mostly a mapping over the parser AST, but not all types are 1:1. For example, a declaration in the AST is:
 
@@ -20,14 +20,26 @@ struct td_declaration {
   enum td_storage_class_specifier storage_class_specifier;
   enum td_function_specifier_flags function_specifier_flags;
 
+  // this field can be ignored! it is only needed for C11 anonymous structs & unions
   struct td_var_ty base_ty;
 
   size_t num_var_declarations;
   struct td_var_declaration *var_declarations;
 };
+
+struct td_var_declaration {
+  enum td_var_declaration_ty ty;
+
+  struct td_var_ty var_ty;
+
+  struct td_var var;
+  struct td_init *init;
+
+  unsigned long long bitfield_width;
+};
 ```
 
-The declaration & type specifiers have been split into a more canonical format which makes analysis and building the IR more simple. Storage and function specifiers are explicitly stored, and the declaration type stored in `base_ty`, with each `td_var_declaration` containing the type of the declaration.
+The declaration & type specifiers have been split into a more canonical format which makes analysis and building the IR more simple. Storage and function specifiers are explicitly stored, and then each individual `struct td_var_declaration` contains the type of the declaration, the initializer expression, and bitfield width if applicable.
 
 This phase is also responsible for folding all expressions which are constant at compile time. For example, an array size is a expression within the parse AST, but here it is finalised into the numeric value of the array size, or rejected with a diagnostic if it is not a valid constant expression.
 
