@@ -2,6 +2,8 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
+#include "ir/validate.h"
 #include "util.h"
 #include "vector.h"
 
@@ -1344,7 +1346,6 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
   bool has_implicit_first =
       call_info.ret && call_info.ret->ty == IR_PARAM_INFO_TY_POINTER;
 
-  struct ir_op *first = op;
   for (size_t i = 0; i < op->call.num_args; i++) {
     struct ir_param_info *param_info;
 
@@ -1367,7 +1368,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
           .padding = 0, .size = info.size, .offset = param_info->stack_offset};
 
       struct ir_op *dest_addr =
-          ir_insert_before_op(func, first, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+          ir_insert_after_op(func, arg, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+      // ir_insert_before_op(func, first, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
       dest_addr->addr = (struct ir_op_addr){
           .ty = IR_OP_ADDR_TY_LCL,
           .lcl = lcl,
@@ -1376,8 +1378,9 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
       if (arg->ty == IR_OP_TY_LOAD) {
         struct ir_op *addr = ir_build_addr(func, arg);
 
-        struct ir_op *mem_copy =
-            ir_insert_before_op(func, first, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
+        struct ir_op *mem_copy = ir_insert_after_op(
+            func, dest_addr, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
+        // ir_insert_before_op(func, first, IR_OP_TY_MEM_COPY, IR_VAR_TY_NONE);
         mem_copy->mem_copy = (struct ir_op_mem_copy){
             .dest = dest_addr, .source = addr, .length = info.size};
 
@@ -1400,10 +1403,6 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
       struct ir_op *mov =
           ir_insert_before_op(func, op, IR_OP_TY_MOV, arg->var_ty);
       mov->mov = (struct ir_op_mov){.value = arg};
-
-      if (i == 0) {
-        first = mov;
-      }
 
       mov->reg = param_info->regs[reg_idx++].reg;
       mov->flags = (arg->flags & ~(IR_OP_FLAG_SPILLED | IR_OP_FLAG_ETERNAL |
@@ -1578,7 +1577,7 @@ void lower(struct ir_unit *unit) {
 
         lower_call_registers(func, op);
       }
-
+  
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
 

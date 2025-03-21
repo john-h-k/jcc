@@ -2242,7 +2242,6 @@ static unsigned long long eval_expr(struct preproc *preproc,
 
       long long rhs = eval_expr(preproc, preproc_text, tokens, i, num_tokens,
                                 precedence + 1);
-      printf("value = %llu rhs = %llu\n", value, rhs);
 
       switch (token->punctuator.ty) {
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR:

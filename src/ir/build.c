@@ -3712,15 +3712,14 @@ get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
                      var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
-    struct td_struct_field *struct_field = &var_ty->aggregate.fields[member_index];
-    struct sized_str member_name =
-        struct_field->identifier;
+    struct td_struct_field *struct_field =
+        &var_ty->aggregate.fields[member_index];
+    struct sized_str member_name = struct_field->identifier;
 
     if (!member_name.str) {
       // anonymous field
       // get info for first field of sub ty
 
-      
       struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, var_ty);
       struct ir_var_ty_info info = ir_var_ty_info(iru, &ir_aggregate);
 
@@ -3900,16 +3899,24 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
                             const struct td_expr *expr,
                             const struct td_var_ty *var_ty);
 
+static struct ir_var_value
+build_ir_for_var_value_init_list(struct ir_var_builder *irb,
+                                 const struct td_init_list *init_list,
+                                 const struct td_var_ty *var_ty);
+
 static struct ir_var_value build_ir_for_var_value_addr(
     struct ir_var_builder *irb, const struct td_expr *addr,
     const struct td_expr *offset, const struct td_var_ty *var_ty) {
-  if (addr->ty == TD_EXPR_TY_UNARY_OP &&
-      addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
-    return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset,
-                                       var_ty);
+  switch (addr->ty) {
+  case TD_EXPR_TY_UNARY_OP: {
+    if (addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
+      return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset,
+                                         var_ty);
+    }
+    BUG("non var addr of global (ty %d)", addr->ty);
   }
 
-  if (addr->ty == TD_EXPR_TY_MEMBERACCESS) {
+  case TD_EXPR_TY_MEMBERACCESS: {
     struct ir_var_ty member_ty;
     bool member_is_bitfield;
     struct ir_bitfield member_bitfield;
@@ -3925,7 +3932,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
     return base_addr;
   }
 
-  if (addr->ty == TD_EXPR_TY_BINARY_OP) {
+  case TD_EXPR_TY_BINARY_OP: {
     struct td_var_ty underlying =
         td_var_ty_get_underlying(irb->tchk, &addr->binary_op.lhs->var_ty);
     struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
@@ -3935,15 +3942,18 @@ static struct ir_var_value build_ir_for_var_value_addr(
     struct ir_var_value base_addr =
         build_ir_for_var_value_addr(irb, addr->binary_op.lhs, NULL, var_ty);
 
-    DEBUG_ASSERT(addr->binary_op.rhs->ty == TD_EXPR_TY_CNST, "expected cnst rhs");
+    DEBUG_ASSERT(addr->binary_op.rhs->ty == TD_EXPR_TY_CNST,
+                 "expected cnst rhs");
     struct td_cnst cnst = addr->binary_op.rhs->cnst;
-    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM && cnst.num_value.ty == AP_VAL_TY_INT, "expected integer ty");
+    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM &&
+                     cnst.num_value.ty == AP_VAL_TY_INT,
+                 "expected integer ty");
 
     base_addr.addr.offset += info.size * ap_int_as_ull(cnst.num_value.ap_int);
     return base_addr;
   }
 
-if (addr->ty == TD_EXPR_TY_ARRAYACCESS) {
+  case TD_EXPR_TY_ARRAYACCESS: {
     struct td_var_ty underlying =
         td_var_ty_get_underlying(irb->tchk, &addr->array_access.lhs->var_ty);
     struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
@@ -3953,48 +3963,60 @@ if (addr->ty == TD_EXPR_TY_ARRAYACCESS) {
     struct ir_var_value base_addr =
         build_ir_for_var_value_addr(irb, addr->array_access.lhs, NULL, var_ty);
 
-    DEBUG_ASSERT(addr->array_access.rhs->ty == TD_EXPR_TY_CNST, "expected cnst rhs (got %d)", addr->array_access.rhs->ty);
+    DEBUG_ASSERT(addr->array_access.rhs->ty == TD_EXPR_TY_CNST,
+                 "expected cnst rhs (got %d)", addr->array_access.rhs->ty);
     struct td_cnst cnst = addr->array_access.rhs->cnst;
-    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM && cnst.num_value.ty == AP_VAL_TY_INT, "expected integer ty");
+    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM &&
+                     cnst.num_value.ty == AP_VAL_TY_INT,
+                 "expected integer ty");
 
     base_addr.addr.offset += info.size * ap_int_as_ull(cnst.num_value.ap_int);
     return base_addr;
   }
 
-  if (addr->ty != TD_EXPR_TY_VAR) {
-    TODO("non var addr of global (ty %d)", addr->ty);
+  case TD_EXPR_TY_COMPOUND_LITERAL: {
+    TODO("compound literal glb");
+    // struct ir_var_value var_value = build_ir_for_var_value_init_list(
+    //     irb, &addr->compound_literal.init_list, &addr->var_ty);
   }
 
-  const struct td_var *var = &addr->var;
+  case TD_EXPR_TY_VAR: {
 
-  struct var_key key = get_var_key(var, NULL);
-  struct var_ref *ref = var_refs_get(irb->global_var_refs, &key);
+    const struct td_var *var = &addr->var;
 
-  DEBUG_ASSERT(ref, "var did not exist");
-  DEBUG_ASSERT(ref->ty == VAR_REF_TY_GLB, "wasn't global");
+    struct var_key key = get_var_key(var, NULL);
+    struct var_ref *ref = var_refs_get(irb->global_var_refs, &key);
 
-  size_t offset_cnst = 0;
-  if (offset) {
-    struct ir_var_value offset_value =
-        build_ir_for_var_value_expr(irb, offset, var_ty);
+    DEBUG_ASSERT(ref, "var did not exist");
+    DEBUG_ASSERT(ref->ty == VAR_REF_TY_GLB, "wasn't global");
 
-    if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
-      TODO("non-int global values offset");
+    size_t offset_cnst = 0;
+    if (offset) {
+      struct ir_var_value offset_value =
+          build_ir_for_var_value_expr(irb, offset, var_ty);
+
+      if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
+        TODO("non-int global values offset");
+      }
+
+      struct td_var_ty underlying_td_var_ty =
+          td_var_ty_get_underlying(irb->tchk, var_ty);
+      struct ir_var_ty underlying_var_ty =
+          var_ty_for_td_var_ty(irb->unit, &underlying_td_var_ty);
+      struct ir_var_ty_info info =
+          ir_var_ty_info(irb->unit, &underlying_var_ty);
+
+      offset_cnst = offset_value.int_value * info.size;
     }
 
-    struct td_var_ty underlying_td_var_ty =
-        td_var_ty_get_underlying(irb->tchk, var_ty);
-    struct ir_var_ty underlying_var_ty =
-        var_ty_for_td_var_ty(irb->unit, &underlying_td_var_ty);
-    struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &underlying_var_ty);
-
-    offset_cnst = offset_value.int_value * info.size;
+    return (struct ir_var_value){
+        .ty = IR_VAR_VALUE_TY_ADDR,
+        .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
+        .addr = {.glb = ref->glb, .offset = offset_cnst}};
   }
-
-  return (struct ir_var_value){
-      .ty = IR_VAR_VALUE_TY_ADDR,
-      .var_ty = var_ty_for_td_var_ty(irb->unit, var_ty),
-      .addr = {.glb = ref->glb, .offset = offset_cnst}};
+  default:
+    BUG("non var addr of global (ty %d)", addr->ty);
+  }
 }
 
 static struct ir_var_value
@@ -4186,44 +4208,48 @@ build_ir_for_var_value_expr(struct ir_var_builder *irb,
   }
 }
 
+static struct ir_var_value
+build_ir_for_var_value_init_list(struct ir_var_builder *irb,
+                                 const struct td_init_list *init_list,
+                                 const struct td_var_ty *var_ty) {
+
+  struct ir_build_init_list_layout layout =
+      build_init_list_layout(irb->unit, init_list);
+
+  struct ir_var_value_list value_list = {
+      .num_values = layout.num_inits,
+      .values = arena_alloc(irb->arena,
+                            sizeof(*value_list.values) * layout.num_inits),
+      .offsets = arena_alloc(irb->arena,
+                             sizeof(*value_list.offsets) * layout.num_inits),
+  };
+
+  for (size_t i = 0; i < layout.num_inits; i++) {
+    struct ir_build_init *build_init = &layout.inits[i];
+
+    if (build_init->is_bitfield) {
+      TODO("bitfield init for globals");
+    }
+
+    value_list.values[i] = build_ir_for_var_value_expr(
+        irb, build_init->expr, &build_init->expr->var_ty);
+    value_list.offsets[i] = build_init->offset;
+  }
+
+  return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
+                               .var_ty =
+                                   var_ty_for_td_var_ty(irb->unit, var_ty),
+                               .value_list = value_list};
+}
+
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
                                                   struct td_var_ty *var_ty) {
   switch (init->ty) {
-  case TD_INIT_TY_EXPR: {
+  case TD_INIT_TY_EXPR:
     return build_ir_for_var_value_expr(irb, &init->expr, &init->expr.var_ty);
-  }
-  case TD_INIT_TY_INIT_LIST: {
-    const struct td_init_list *init_list = &init->init_list;
-
-    struct ir_build_init_list_layout layout =
-        build_init_list_layout(irb->unit, init_list);
-
-    struct ir_var_value_list value_list = {
-        .num_values = layout.num_inits,
-        .values = arena_alloc(irb->arena,
-                              sizeof(*value_list.values) * layout.num_inits),
-        .offsets = arena_alloc(irb->arena,
-                               sizeof(*value_list.offsets) * layout.num_inits),
-    };
-
-    for (size_t i = 0; i < layout.num_inits; i++) {
-      struct ir_build_init *build_init = &layout.inits[i];
-
-      if (build_init->is_bitfield) {
-        TODO("bitfield init for globals");
-      }
-
-      value_list.values[i] = build_ir_for_var_value_expr(
-          irb, build_init->expr, &build_init->expr->var_ty);
-      value_list.offsets[i] = build_init->offset;
-    }
-
-    return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_VALUE_LIST,
-                                 .var_ty =
-                                     var_ty_for_td_var_ty(irb->unit, var_ty),
-                                 .value_list = value_list};
-  }
+  case TD_INIT_TY_INIT_LIST:
+    return build_ir_for_var_value_init_list(irb, &init->init_list, var_ty);
   }
 }
 

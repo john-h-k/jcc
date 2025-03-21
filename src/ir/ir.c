@@ -1705,6 +1705,16 @@ struct ir_op *ir_insert_after_op(struct ir_func *irb,
                                  struct ir_var_ty var_ty) {
   DEBUG_ASSERT(insert_after, "invalid insertion point!");
 
+  if (insert_after->ty == IR_OP_TY_PHI && ty != IR_OP_TY_PHI) {
+    // if trying to insert after phi, put it in statement after
+
+    if (!insert_after->stmt->succ) {
+      ir_alloc_stmt(irb, insert_after->stmt->basicblock);
+    }
+
+    insert_after = insert_after->stmt->succ->first;
+  }
+
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
   ir_initialise_op(op, irb->next_op_id++, ty, var_ty, NO_REG, NULL);
@@ -1718,6 +1728,7 @@ struct ir_op *ir_insert_before_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
+  DEBUG_ASSERT((insert_before->ty == IR_OP_TY_PHI) == (ty == IR_OP_TY_PHI), "cannot insert non phi before phi/phi before non phi");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 
@@ -3434,7 +3445,7 @@ void ir_alloc_locals_conservative(struct ir_func *func) {
                            (target->reg_info.gp_registers.num_volatile *
                             target->reg_info.gp_registers.max_reg_size);
 
-  func->total_locals_size = max_callee_save;
+  func->total_locals_size = func->caller_stack_needed + max_callee_save;
 
   ir_alloc_locals(func);
 }
@@ -3470,7 +3481,7 @@ void ir_alloc_locals(struct ir_func *func) {
   struct ir_lcl *lcl = func->first_lcl;
 
   size_t total_locals_size = func->total_locals_size;
-  func->total_locals_size = 0;
+  func->total_locals_size = func->caller_stack_needed;
 
   // first pass do call saves
   while (lcl) {
