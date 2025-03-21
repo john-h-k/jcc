@@ -248,24 +248,40 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     }
 
     size_t dw_size = (info.size + 3) / 4;
-    if ((ir_var_ty_is_aggregate(var_ty) ||
-         (variadic && ir_var_ty_is_fp(var_ty))) &&
-        dw_size <= (8 - ngrn)) {
+    // if ((ir_var_ty_is_aggregate(var_ty) ||
+    //      (variadic && ir_var_ty_is_fp(var_ty))) &&
+    //     ngrn < 8) {
+        // dw_size <= (8 - ngrn)) {
+    if (dw_size <= 2 && ngrn < 8) {
+      size_t rem = MIN(dw_size, 8 - ngrn);
       struct ir_param_info param_info = {
-          .ty = ty, .var_ty = var_ty, .num_regs = dw_size};
+          .ty = ty, .var_ty = var_ty, .num_regs = rem};
 
-      for (size_t j = 0; j < dw_size; j++) {
+      for (size_t j = 0; j < rem; j++) {
         // given this is a composite, we assume `source` contains a
         // pointer to it
         param_info.regs[j] = (struct ir_param_reg){
-            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn + j}, .size = 4};
+            .reg = {.ty = IR_REG_TY_INTEGRAL, .idx = ngrn}, .size = 4};
 
         vector_push_back(params, &IR_VAR_TY_I32);
+
+        dw_size--;
+        ngrn++;
       }
 
       vector_push_back(param_infos, &param_info);
 
-      ngrn += dw_size;
+      if (dw_size) {
+        // dont push param, let lower recognise it
+        // param_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_STACK,
+        //                                    .var_ty = &IR_VAR_TY_I32,
+        //                                    .stack_offset = nsaa};
+        // vector_push_back(param_infos, &param_info);
+
+        param_info.stack_offset = nsaa;
+        nsaa += 4;
+      }
+
       continue;
     }
 
