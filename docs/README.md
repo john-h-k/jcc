@@ -22,7 +22,7 @@ The driver performs argument parsing, as well as invoking the various components
 
 The frontend runs the preprocessor, lexer, and parser in lockstep, before performing semantic analysis (called 'typechk' within the compiler).
 
-See the (Parse)[parse.html] article for a detailed breakdown of the lexer & parser.
+See the [Parse](./parse.html) article for a detailed breakdown of the lexer & parser.
 
 * Preprocessor
   * Has two modes
