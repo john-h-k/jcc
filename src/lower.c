@@ -4,6 +4,7 @@
 #include "ir/ir.h"
 #include "ir/prettyprint.h"
 #include "ir/validate.h"
+#include "target.h"
 #include "util.h"
 #include "vector.h"
 
@@ -1032,6 +1033,14 @@ void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
         // no change needed
         vector_push_back(new_args, &arg);
 
+        // if (func->unit->target->target_id == TARGET_ID_RV32I_LINUX) {
+        //   struct ir_var_ty_info info =
+        //       ir_var_ty_info(func->unit, param_info.var_ty);
+
+        //   if (param_info.num_regs == 1 && info.size > 4) {
+        //     ssize_t offset = -param_info.stack_offset;
+        // }
+
       } else {
         if (arg->ty != IR_OP_TY_LOAD) {
           arg = ir_spill_op(func, arg);
@@ -1230,6 +1239,59 @@ static void lower_params_registers(struct ir_func *func) {
 
         reg_idx++;
 
+        if (func->unit->target->target_id == TARGET_ID_RV32I_LINUX) {
+          struct ir_var_ty_info info =
+              ir_var_ty_info(func->unit, param_info->var_ty);
+
+          if (param_info->num_regs == 1 && info.size > 4) {
+            ssize_t offset = -param_info->stack_offset;
+
+            if (param_op->stmt->succ) {
+              struct ir_op *store = param_op->stmt->succ->first;
+
+              while (store && (store->ty != IR_OP_TY_STORE ||
+                               store->store.value != param_op)) {
+                store = store->succ;
+              }
+
+              if (store) {
+                // struct ir_lcl *lcl = ir_add_local(func, &param_op->var_ty);
+                struct ir_lcl *lcl;
+                struct ir_op *addr = store->store.addr;
+                while (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+                  addr = addr->addr_offset.base;
+                }
+                if (addr->ty == IR_OP_TY_ADDR &&
+                    addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+                  func->caller_stack_needed += 4;
+                  lcl = addr->addr.lcl;
+                  lcl->flags |= IR_LCL_FLAG_PARAM;
+                  lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+                  lcl->alloc = (struct ir_lcl_alloc){.padding = 0,
+                                                     .size = info.size,
+                                                     .offset = (ssize_t)offset};
+
+                  // if (param_op->ty == IR_OP_TY_MOV) {
+
+                  //   param_op = ir_replace_op(func, param_op, IR_OP_TY_LOAD,
+                  //                            param_op->var_ty);
+                  //   param_op->load =
+                  //       (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl =
+                  //       lcl};
+                  // } else {
+                  //   DEBUG_ASSERT(param_op->ty == IR_OP_TY_ADDR &&
+                  //                    param_op->addr.ty == IR_OP_ADDR_TY_LCL,
+                  //                "expected addr.lcl");
+
+                  //   // FIXME: this won't dealloc allocated locals
+                  //   lcl = param_op->addr.lcl;
+                  // }
+                }
+              }
+            }
+          }
+        }
+
         if (reg_idx >= param_info->num_regs) {
           reg_idx = 0;
           param_idx++;
@@ -1414,6 +1476,53 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
 
       vector_push_back(new_args, &mov);
 
+      if (func->unit->target->target_id == TARGET_ID_RV32I_LINUX) {
+        struct ir_var_ty_info info =
+            ir_var_ty_info(func->unit, param_info->var_ty);
+
+        if (param_info->num_regs == 1 && info.size > 4) {
+          struct ir_lcl *lcl = ir_add_local(func, &IR_VAR_TY_I32);
+          lcl->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+          lcl->alloc =
+              (struct ir_lcl_alloc){.padding = 0,
+                                    .size = info.size,
+                                    .offset = param_info->stack_offset};
+
+          if (arg->ty == IR_OP_TY_LOAD) {
+            // struct ir_lcl *stlcl = ir_add_local(func, &);
+            // struct ir_lcl *lcl;
+            struct ir_op *addr = arg->load.addr;
+            if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
+              struct ir_op *off = ir_insert_before_op(
+                  func, arg, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+              off->addr_offset =
+                  (struct ir_op_addr_offset){.base = addr, .offset = 4};
+
+              struct ir_op *load = ir_insert_after_op(
+                  func, off, IR_OP_TY_LOAD, IR_VAR_TY_I32);
+              load->load =
+                  (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = off};
+
+              struct ir_op *lcl_addr = ir_insert_after_op(
+                  func, load, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+              lcl_addr->addr =
+                  (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+              struct ir_op *lcl_off = ir_insert_before_op(
+                  func, arg, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+              lcl_off->addr_offset =
+                  (struct ir_op_addr_offset){.base = lcl_addr, .offset = 4};
+
+              struct ir_op *store = ir_insert_after_op(
+                  func, lcl_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+              store->store = (struct ir_op_store){
+                  .ty = IR_OP_STORE_TY_ADDR, .addr = lcl_off, .value = load};
+            }
+          }
+        }
+      }
+
       if (reg_idx >= param_info->num_regs) {
         reg_idx = 0;
         param_idx++;
@@ -1442,8 +1551,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
 
   switch (ret_info.ty) {
   case IR_PARAM_INFO_TY_REGISTER: {
-    // if ty is none, its a multi reg return and lower has generated magic movs
-    // already
+    // if ty is none, its a multi reg return and lower has generated magic
+    // movs already
     if (ret_info.num_regs == 1 && op->var_ty.ty != IR_VAR_TY_TY_NONE) {
       struct ir_op *new_call =
           ir_insert_before_op(func, op, IR_OP_TY_CALL, op->var_ty);
@@ -1502,8 +1611,8 @@ void lower_abi(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      // TODO: make this lowering global (and call a target-specific function)
-      // and also do it for undef symbols
+      // TODO: make this lowering global (and call a target-specific
+      // function) and also do it for undef symbols
       struct ir_func_info info =
           unit->target->lower_func_ty(func, func->func_ty, NULL, 0);
       func->func_ty = info.func_ty;
@@ -1578,7 +1687,7 @@ void lower(struct ir_unit *unit) {
 
         lower_call_registers(func, op);
       }
-  
+
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
 
@@ -1637,13 +1746,13 @@ void lower(struct ir_unit *unit) {
         basicblock = basicblock->succ;
       }
 
-      // run an early elimination pass before we alloc locals, as it is hard to
-      // do after
+      // run an early elimination pass before we alloc locals, as it is hard
+      // to do after
       ir_eliminate_redundant_ops(
           func, IR_ELIMINATE_REDUNDANT_OPS_FLAG_DONT_ELIM_LCLS);
 
-      // alloc locals EARLY so that targets can contain their addressing nodes
-      // properly
+      // alloc locals EARLY so that targets can contain their addressing
+      // nodes properly
       ir_alloc_locals_conservative(func);
     }
     }

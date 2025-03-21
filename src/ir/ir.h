@@ -310,7 +310,9 @@ struct ir_param_info {
   // offset within the param
   size_t offset;
 
-  union {
+  // union {
+  // RV32I STRUCK HACK:
+  struct {
     struct {
       size_t num_regs;
       struct ir_param_reg regs[8]; // also used for pointer
