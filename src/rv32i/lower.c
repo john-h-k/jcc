@@ -4,8 +4,8 @@
 #include "../util.h"
 #include "../vector.h"
 
-static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
-                             struct ir_var_ty *member_ty, size_t *num_members) {
+static bool try_get_hfa_info(struct ir_func *func, const struct ir_var_ty *var_ty,
+                             struct ir_var_ty *member_ty, size_t *num_members, size_t *sizes) {
   if (var_ty->ty != IR_VAR_TY_TY_UNION && var_ty->ty != IR_VAR_TY_TY_STRUCT) {
     return false;
   }
@@ -29,6 +29,8 @@ static bool try_get_hfa_info(const struct ir_var_ty *var_ty,
   }
 
   for (size_t i = 1; i < var_ty->aggregate.num_fields; i++) {
+    sizes[i] = ir_var_ty_info(func->unit, &var_ty->aggregate.fields[i]).size;
+
     if (!ir_var_ty_is_fp(&var_ty->aggregate.fields[i])) {
       return false;
     }
@@ -64,7 +66,8 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
     struct ir_var_ty member_ty;
     size_t num_hfa_members;
-    if (try_get_hfa_info(func_ty.ret_ty, &member_ty, &num_hfa_members)) {
+    size_t hfa_sizes[2];
+    if (try_get_hfa_info(func, func_ty.ret_ty, &member_ty, &num_hfa_members, &hfa_sizes[0])) {
       // nop
       *ret_info = (struct ir_param_info){.ty = IR_PARAM_INFO_TY_REGISTER,
                                          .var_ty = func_ty.ret_ty,
@@ -142,6 +145,10 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
       info = ir_var_ty_info(func->unit, var_ty);
     }
 
+    size_t num_hfa_members;
+    struct ir_var_ty member_ty;
+    size_t hfa_sizes[2];
+
     if (ir_var_ty_is_fp(var_ty) && nsrn < 8 && !variadic) {
       vector_push_back(params, var_ty);
 
@@ -156,7 +163,34 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
       nsrn++;
       continue;
-    } else if (ir_var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {
+    } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members, &hfa_sizes[0])) {
+      if (nsrn + num_hfa_members <= 8) {
+        struct ir_param_info param_info = {
+            .ty = IR_PARAM_INFO_TY_REGISTER,
+            .var_ty = var_ty,
+            .num_regs = num_hfa_members,
+        };
+
+        for (size_t j = 0; j < num_hfa_members; j++) {
+          // given this is a composite, we assume `source` contains a
+          // pointer to it
+        struct ir_var_ty *member = &func_ty.ret_ty->aggregate.fields[i];
+
+          param_info.regs[j] = (struct ir_param_reg){
+              .reg = {.ty = IR_REG_TY_FP, .idx = nsrn + j},
+              .size = ir_var_ty_info(func->unit, member).size};
+
+          vector_push_back(params, &member_ty);
+        }
+
+        vector_push_back(param_infos, &param_info);
+
+        nsrn += num_hfa_members;
+        continue;
+      }
+    }
+
+    if (ir_var_ty_is_integral(var_ty) && info.size <= 4 && ngrn < 8) {
       vector_push_back(params, var_ty);
 
       struct ir_param_info param_info = {
