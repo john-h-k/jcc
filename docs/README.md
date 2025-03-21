@@ -9,42 +9,48 @@ This site contains architectural/design information about JCC.
 
 # Architecture Overview
 
-
 ## Driver
 
-* Arg parsing
-  * Declarative style arguments for simplicit. Very macro-heavy
-  * Code is [`args.h`](args.h) and [`args.c`](args.c)
+The driver performs argument parsing, as well as invoking the various components used for compilation.
+
+### Arg parsing
+
+* Declarative style arguments for simplicit. Very macro-heavy
+* Code is [`args.h`](https://github.com/john-h-k/jcc/tree/main/args.h) and [`args.c`](https://github.com/john-h-k/jcc/tree/main/args.c)
 
 ## Frontend
+
+The frontend runs the preprocessor, lexer, and parser in lockstep, before performing semantic analysis (called 'typechk' within the compiler).
+
+See the (Parse)[parse.html] article for a detailed breakdown of the lexer & parser.
 
 * Preprocessor
   * Has two modes
     * Self-contained - when invoked with the `-E` flag, will run the preprocessor and output the result
     * Streaming - in normal compilation, tokens from the preprocessor are consumed and fed to the lexer
-  * Code is [`preproc.h`](preproc.h) and [`preproc.c`](preproc.c)
+  * Code is [`preproc.h`](https://github.com/john-h-k/jcc/tree/main/preproc.h) and [`preproc.c`](https://github.com/john-h-k/jcc/tree/main/preproc.c)
 * Lexer + Parser
   * These work in lockstep (tokens are provided on-demand by the lexer), and build the AST
   * It is a very loose and untyped AST, to try and parse as many programs as possible, with little verification
-  * Lexing code is [`lex.h`](lex.h) and [`lex.c`](lex.c)
+  * Lexing code is [`lex.h`](https://github.com/john-h-k/jcc/tree/main/lex.h) and [`lex.c`](https://github.com/john-h-k/jcc/tree/main/lex.c)
     * Lexer takes preproc tokens
-  * Parsing code is [`parse.h`](parse.h) and [`parse.c`](parse.c)
+  * Parsing code is [`parse.h`](https://github.com/john-h-k/jcc/tree/main/parse.h) and [`parse.c`](https://github.com/john-h-k/jcc/tree/main/parse.c)
 * Semantic analysis - Typecheck
   * Builds a _typed_ AST from the parser output
   * Performs most validation (are types correct, do variables exist, etc)
-  * Parsing code is [`typechk.h`](typechk.h) and [`typechk.c`](typechk.c)
+  * Parsing code is [`typechk.h`](https://github.com/john-h-k/jcc/tree/main/typechk.h) and [`typechk.c`](https://github.com/john-h-k/jcc/tree/main/typechk.c)
 
 ## Backend
 
 * Intermediate Representations and passes
   * All code located in the [`ir`](ir) folder
-  * IR representation structs and helper methods are in [`ir/ir.h`](ir/ir.h) and [`ir/ir.c`](ir/ir.c)
-  * Pretty-printing functionality is in [`ir/prettyprint.h`](ir/prettyprint.h) and [`ir/prettyprint.c`](ir/prettyprint.c)
+  * IR representation structs and helper methods are in [`ir/ir.h`](ir/https://github.com/john-h-k/jcc/tree/main/ir.h) and [`ir/ir.c`](ir/https://github.com/john-h-k/jcc/tree/main/ir.c)
+  * Pretty-printing functionality is in [`ir/prettyprint.h`](ir/https://github.com/john-h-k/jcc/tree/main/prettyprint.h) and [`ir/prettyprint.c`](ir/https://github.com/john-h-k/jcc/tree/main/prettyprint.c)
     * This also includes graph-building functionality with graphviz
   * IR building
     * This stage converts the AST into an SSA IR form
     * It assumes the AST is entirely valid and well-typed
-    * Code is [`ir/build.h`](ir/build.h) and [`ir/build.c`](ir/build.c)
+    * Code is [`ir/build.h`](ir/https://github.com/john-h-k/jcc/tree/main/build.h) and [`ir/build.c`](ir/https://github.com/john-h-k/jcc/tree/main/build.c)
   * Optimisation passes
     * These include inlining, constant folding, dead-branch elimination, and local promotion (a la LLVM's `mem2reg`)
   * Lowering
