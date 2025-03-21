@@ -520,6 +520,12 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
 
   if (lhs_ty->ty == TD_VAR_TY_TY_POINTER ||
       rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
+    if (lhs_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+      return *rhs_ty;
+    } else if (rhs_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+      return *lhs_ty;
+    }
+
     if ((lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
          lhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
         td_var_ty_is_integral_ty(lhs_ty)) {
@@ -2341,8 +2347,7 @@ static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk,
 }
 
 static struct td_expr
-type_memberaccess(struct typechk *tchk,
-                   enum type_expr_flags flags,
+type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
                   const struct ast_memberaccess *memberaccess) {
   struct td_memberaccess td_memberaccess = {
       .lhs = arena_alloc(tchk->arena, sizeof(*td_memberaccess.lhs)),
@@ -2371,7 +2376,8 @@ type_memberaccess(struct typechk *tchk,
                          .var_ty = var_ty,
                          .member_access = td_memberaccess};
 
-  if (var_ty.ty == TD_VAR_TY_TY_ARRAY && !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY &&
+      !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
@@ -2391,8 +2397,7 @@ type_memberaccess(struct typechk *tchk,
 }
 
 static struct td_expr
-type_pointeraccess(struct typechk *tchk,
-                   enum type_expr_flags flags,
+type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
                    const struct ast_pointeraccess *pointeraccess) {
 
   struct td_pointeraccess td_pointeraccess = {
@@ -2443,7 +2448,8 @@ type_pointeraccess(struct typechk *tchk,
                          .var_ty = var_ty,
                          .pointer_access = td_pointeraccess};
 
-  if (var_ty.ty == TD_VAR_TY_TY_ARRAY && !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY &&
+      !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
@@ -4365,10 +4371,11 @@ static struct td_init_list type_init_list_for_aggregate_or_array(
             .init = arena_alloc(tchk->arena, sizeof(*td_init_list_init.init))};
 
         size_t sub_inits_used = 0;
-        *td_init_list_init.init = (struct td_init){
-            .ty = TD_INIT_TY_INIT_LIST,
-            .init_list = type_init_list_for_aggregate_or_array(
-                tchk, &member_var_ty, init_list, mode, i, false, &sub_inits_used)};
+        *td_init_list_init.init =
+            (struct td_init){.ty = TD_INIT_TY_INIT_LIST,
+                             .init_list = type_init_list_for_aggregate_or_array(
+                                 tchk, &member_var_ty, init_list, mode, i,
+                                 false, &sub_inits_used)};
 
         i += sub_inits_used - 1;
         *inits_used += sub_inits_used;
