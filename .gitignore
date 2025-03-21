@@ -19,3 +19,7 @@ _deps
 
 *.gv
 *.png
+
+# allow gv/png files within docs, as they may be embedded in markdown
+!docs/**/*.gv
+!docs/**/*.png
