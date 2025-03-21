@@ -3509,6 +3509,10 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
     return expr;
   }
 
+  case TD_EXPR_TY_COMPOUND_LITERAL: {
+    return expr;
+  }
+
   case TD_EXPR_TY_MEMBERACCESS: {
     if (!is_addr) {
       goto generic_fail;
