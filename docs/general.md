@@ -3,6 +3,7 @@
 JCC uses 'LLVM C-style', where typedefs are rarely used (preferring explicit `struct`/`union`/`enum`) usage. Some of the conventions in this style are odd, particularly in comparison to C++, but they are used consistently throughout the project. Examples:
 * Two-letter prefixes
   * In a normal language you could have `codegen::alloc_instr` or similar, but that is not an option. Instead of cluttering files with huge function names, two letter prefixes are used, such as `cg_alloc_instr` or `vt_create_entry` (for creating an entry in a **v**ar-**t**able)
+  * Namespacing is ignored for `static` functions only defined in the C file as there is no risk of collision
 
 The two most important utility files are:
 
