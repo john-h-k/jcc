@@ -4722,11 +4722,11 @@ DEBUG_FUNC(var_ty, var_ty) {
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
-      TD_PRINTZ("INCOMPLETE STRUCT ");
+      TD_PRINT_SAMELINE_Z("INCOMPLETE STRUCT ");
       TD_PRINT_STR(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
-      TD_PRINTZ("INCOMPLETE UNION ");
+      TD_PRINT_SAMELINE_Z("INCOMPLETE UNION ");
       TD_PRINT_STR(var_ty->aggregate.name);
       break;
     }
@@ -4734,11 +4734,11 @@ DEBUG_FUNC(var_ty, var_ty) {
   case TD_VAR_TY_TY_AGGREGATE:
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
-      TD_PRINTZ("STRUCT ");
+      TD_PRINT_SAMELINE_Z("STRUCT ");
       TD_PRINT_STR(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
-      TD_PRINTZ("UNION ");
+      TD_PRINT_SAMELINE_Z("UNION ");
       TD_PRINT_STR(var_ty->aggregate.name);
       break;
     }
@@ -4788,10 +4788,12 @@ DEBUG_FUNC(var_ty, var_ty) {
       DEBUG_CALL(var_ty, &var_ty->func.params[i].var_ty);
     }
     UNINDENT();
-    TD_PRINTZ(")");
 
-    TD_PRINTZ(" -> ");
+    TD_PRINTZ(") RETURNS");
+
+    INDENT();
     DEBUG_CALL(var_ty, var_ty->func.ret);
+    UNINDENT();
 
     break;
   case TD_VAR_TY_TY_WELL_KNOWN:
@@ -4872,9 +4874,19 @@ DEBUG_FUNC(compoundstmt, compound_stmt);
 DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
-  TD_PRINTZ("VARIABLE ");
+  TD_PRINT_SAMELINE_Z("VARIABLE ");
   TD_PRINT_STR(var->identifier);
-  TD_PRINT(" SCOPE %d", var->scope);
+  switch (var->scope) {
+    case SCOPE_GLOBAL:
+      TD_PRINTZ("SCOPE GLOBAL");
+      break;
+    case SCOPE_PARAMS:
+      TD_PRINTZ("SCOPE PARAMS");
+      break;
+    default:
+      TD_PRINT("SCOPE %d", var->scope);
+      break;
+  }
 
   switch (var->ty) {
   case TD_VAR_VAR_TY_VAR:
@@ -4887,11 +4899,11 @@ DEBUG_FUNC(var, var) {
 DEBUG_FUNC(cnst, cnst) {
   switch (cnst->ty) {
   case TD_CNST_TY_NUM:
-    TD_PRINTZ("CONSTANT ");
+    TD_PRINT_SAMELINE_Z("CONSTANT ");
     ap_val_fprintf(stderr, cnst->num_value);
     break;
   case TD_CNST_TY_STRING:
-    TD_PRINTZ("CONSTANT ");
+    TD_PRINT_SAMELINE_Z("CONSTANT ");
 
     switch (cnst->str_value.ty) {
     case TD_CNST_STR_TY_ASCII:
@@ -5159,7 +5171,7 @@ DEBUG_FUNC(designator, designator) {
   INDENT();
   switch (designator->ty) {
   case TD_DESIGNATOR_TY_FIELD:
-    TD_PRINTZ("FIELD ");
+    TD_PRINT_SAMELINE_Z("FIELD ");
     TD_PRINT_STR(designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
@@ -5357,7 +5369,7 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     UNINDENT();
     break;
   case TD_JUMPSTMT_TY_GOTO:
-    TD_PRINTZ("GOTO ");
+    TD_PRINT_SAMELINE_Z("GOTO ");
     TD_PRINT_STR(jump_stmt->goto_stmt.label);
     break;
   case TD_JUMPSTMT_TY_BREAK:
@@ -5499,7 +5511,7 @@ DEBUG_FUNC(iterstmt, iter_stmt) {
 DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case TD_LABELEDSTMT_TY_LABEL:
-    TD_PRINTZ("LABEL ");
+    TD_PRINT_SAMELINE_Z("LABEL ");
     TD_PRINT_STR(labeled_stmt->label);
     break;
   case TD_LABELEDSTMT_TY_CASE:
@@ -5623,10 +5635,12 @@ void debug_print_td(struct typechk *tchk,
 
   struct td_printstate *state = &state_;
 
-  TD_PRINTZ("PRINTING td");
+  TD_PRINTZ("PRINTING TD");
 
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
     DEBUG_CALL(external_declaration,
                &translation_unit->external_declarations[i]);
   }
+
+  TD_PRINTZ("");
 }
