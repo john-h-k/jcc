@@ -1990,6 +1990,23 @@ static unsigned long long eval_atom(struct preproc *preproc,
       (*i)++;
       return num;
     }
+    case PREPROC_TOKEN_TY_STRING_LITERAL: {
+      // FIXME: this is hacked logic, it needs to more generally parse chars
+      // will break for 
+
+      (*i)++;
+
+      size_t len = text_span_len(&token->span);
+      switch (len) {
+        case 3:
+          return token->text[1];
+        case 6: {
+          return strtoul(&token->text[2], NULL, 8);
+        }
+        default:
+          TODO("proper preproc char parse ('%.*s')", (int)len, token->text);
+      }
+    }
 #define MAX_PREC 100
     case PREPROC_TOKEN_TY_PUNCTUATOR:
       switch (token->punctuator.ty) {
@@ -2711,8 +2728,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         }
       } else {
         UNEXPANDED_DIR_TOKENS();
-        // TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
-             // directive.text);
+        // TODO("other directives ('%.*s')",
+        // (int)text_span_len(&directive.span), directive.text);
       }
 
 #undef UNEXPANDED_DIR_TOKENS
