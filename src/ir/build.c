@@ -1804,7 +1804,7 @@ static void get_member_info(struct ir_unit *iru,
   unreachable();
 }
 
-static size_t get_member_address_offset(struct ir_func_builder *irb,
+static size_t get_member_address_offset(struct ir_unit *unit,
                                         const struct td_var_ty *aggregate,
                                         struct sized_str member_name,
                                         struct ir_var_ty *member_ty,
@@ -1814,9 +1814,8 @@ static size_t get_member_address_offset(struct ir_func_builder *irb,
 
   size_t member_offset;
   size_t idx;
-  get_member_info(irb->unit, aggregate, member_name, member_ty, &idx,
-                  &member_offset, member_is_bitfield, member_bitfield,
-                  td_member_ty);
+  get_member_info(unit, aggregate, member_name, member_ty, &idx, &member_offset,
+                  member_is_bitfield, member_bitfield, td_member_ty);
 
   return member_offset;
 }
@@ -1828,9 +1827,9 @@ static struct ir_op *build_ir_for_member_address(
   struct ir_op *lhs = build_ir_for_addressof(irb, stmt, lhs_expr);
 
   struct ir_var_ty member_ty;
-  size_t offset =
-      get_member_address_offset(irb, &lhs_expr->var_ty, member_name, &member_ty,
-                                member_is_bitfield, member_bitfield, NULL);
+  size_t offset = get_member_address_offset(
+      irb->unit, &lhs_expr->var_ty, member_name, &member_ty, member_is_bitfield,
+      member_bitfield, NULL);
 
   if (!offset) {
     return lhs;
@@ -1856,7 +1855,7 @@ static struct ir_op *build_ir_for_pointer_address(
 
   struct ir_var_ty member_ty;
   size_t offset = get_member_address_offset(
-      irb, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
+      irb->unit, lhs_expr->var_ty.pointer.underlying, member_name, &member_ty,
       member_is_bitfield, member_bitfield, NULL);
 
   if (!offset) {
@@ -3894,8 +3893,60 @@ static struct ir_var_value build_ir_for_var_value_addr(
                                        var_ty);
   }
 
+  if (addr->ty == TD_EXPR_TY_MEMBERACCESS) {
+    struct ir_var_ty member_ty;
+    bool member_is_bitfield;
+    struct ir_bitfield member_bitfield;
+
+    size_t field_offset = get_member_address_offset(
+        irb->unit, &addr->member_access.lhs->var_ty, addr->member_access.member,
+        &member_ty, &member_is_bitfield, &member_bitfield, NULL);
+
+    struct ir_var_value base_addr =
+        build_ir_for_var_value_addr(irb, addr->member_access.lhs, NULL, var_ty);
+
+    base_addr.addr.offset += field_offset;
+    return base_addr;
+  }
+
+  if (addr->ty == TD_EXPR_TY_BINARY_OP) {
+    struct td_var_ty underlying =
+        td_var_ty_get_underlying(irb->tchk, &addr->binary_op.lhs->var_ty);
+    struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
+
+    struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &el_ty);
+
+    struct ir_var_value base_addr =
+        build_ir_for_var_value_addr(irb, addr->binary_op.lhs, NULL, var_ty);
+
+    DEBUG_ASSERT(addr->binary_op.rhs->ty == TD_EXPR_TY_CNST, "expected cnst rhs");
+    struct td_cnst cnst = addr->binary_op.rhs->cnst;
+    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM && cnst.num_value.ty == AP_VAL_TY_INT, "expected integer ty");
+
+    base_addr.addr.offset += info.size * ap_int_as_ull(cnst.num_value.ap_int);
+    return base_addr;
+  }
+
+if (addr->ty == TD_EXPR_TY_ARRAYACCESS) {
+    struct td_var_ty underlying =
+        td_var_ty_get_underlying(irb->tchk, &addr->array_access.lhs->var_ty);
+    struct ir_var_ty el_ty = var_ty_for_td_var_ty(irb->unit, &underlying);
+
+    struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &el_ty);
+
+    struct ir_var_value base_addr =
+        build_ir_for_var_value_addr(irb, addr->array_access.lhs, NULL, var_ty);
+
+    DEBUG_ASSERT(addr->array_access.rhs->ty == TD_EXPR_TY_CNST, "expected cnst rhs (got %d)", addr->array_access.rhs->ty);
+    struct td_cnst cnst = addr->array_access.rhs->cnst;
+    DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM && cnst.num_value.ty == AP_VAL_TY_INT, "expected integer ty");
+
+    base_addr.addr.offset += info.size * ap_int_as_ull(cnst.num_value.ap_int);
+    return base_addr;
+  }
+
   if (addr->ty != TD_EXPR_TY_VAR) {
-    TODO("non var addr of global");
+    TODO("non var addr of global (ty %d)", addr->ty);
   }
 
   const struct td_var *var = &addr->var;

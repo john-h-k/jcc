@@ -455,10 +455,13 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
   struct td_expr td_expr = (struct td_expr){
       .ty = TD_EXPR_TY_UNARY_OP,
       .var_ty = target_ty,
-      .unary_op = (struct td_unary_op){
-          .ty = TD_UNARY_OP_TY_CAST,
-          .expr = arena_alloc(tchk->arena, sizeof(*td_expr.unary_op.expr)),
-          .cast = (struct td_cast){.var_ty = target_ty}}};
+      .unary_op =
+          (struct td_unary_op){
+              .ty = TD_UNARY_OP_TY_CAST,
+              .expr = arena_alloc(tchk->arena, sizeof(*td_expr.unary_op.expr)),
+              .cast = (struct td_cast){.var_ty = target_ty}},
+
+      .span = expr.span};
 
   *td_expr.unary_op.expr = expr;
   return td_expr;
@@ -694,7 +697,8 @@ static struct ap_val type_constant_expr(struct typechk *tchk,
 
 static struct td_expr type_static_init_expr(struct typechk *tchk,
                                             struct td_expr expr,
-                                            struct td_var_ty target_ty);
+                                            struct td_var_ty target_ty,
+                                            bool is_addr);
 
 enum td_declarator_mode {
   TD_DECLARATOR_MODE_NORMAL,
@@ -3427,9 +3431,12 @@ static struct ap_val type_constant_expr(struct typechk *tchk,
   return value.val;
 }
 
-static struct td_expr type_static_init_expr(struct typechk *tchk,
-                                            struct td_expr expr,
-                                            struct td_var_ty target_ty) {
+static struct td_expr
+type_static_init_expr(struct typechk *tchk, struct td_expr expr,
+                      struct td_var_ty target_ty,
+                      // whether we are in an addressing node and so array
+                      // access + member access are legal
+                      bool is_addr) {
   // FIXME: i think casting logic in here may be inadequate (ie need more calls
   // to add_cast_if_needed)
 
@@ -3442,14 +3449,19 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     // FIXME: types are wrong here, it is hacked in because this returns td_expr
     switch (cnst_value.val.ty) {
     case AP_VAL_TY_INVALID:
-      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                              .var_ty = TD_VAR_TY_UNKNOWN};
+      return (struct td_expr){
+          .ty = TD_EXPR_TY_INVALID,
+          .var_ty = TD_VAR_TY_UNKNOWN,
+          .span = expr.span,
+      };
     case AP_VAL_TY_INT:
     case AP_VAL_TY_FLOAT:
       return (struct td_expr){
           .ty = TD_EXPR_TY_CNST,
           .var_ty = cnst_value.var_ty,
-          .cnst = {.ty = TD_CNST_TY_NUM, .num_value = cnst_value.val}};
+          .cnst = {.ty = TD_CNST_TY_NUM, .num_value = cnst_value.val},
+          .span = expr.span,
+      };
     }
   }
 
@@ -3482,18 +3494,75 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
     return expr;
   }
 
+  case TD_EXPR_TY_MEMBERACCESS: {
+    if (!is_addr) {
+      goto generic_fail;
+    }
+
+    struct td_expr res = {
+        .ty = TD_EXPR_TY_MEMBERACCESS,
+        .var_ty = expr.var_ty,
+        .member_access =
+            (struct td_memberaccess){
+                .lhs = arena_alloc(tchk->arena, sizeof(*res.member_access.lhs)),
+                .member = expr.member_access.member,
+            },
+        .span = expr.span,
+    };
+
+    *res.member_access.lhs = type_static_init_expr(
+        tchk, *expr.member_access.lhs, expr.member_access.lhs->var_ty, is_addr);
+    return res;
+  }
+
+  case TD_EXPR_TY_ARRAYACCESS: {
+    if (!is_addr) {
+      goto generic_fail;
+    }
+
+    struct td_expr res = {
+        .ty = TD_EXPR_TY_ARRAYACCESS,
+        .var_ty = expr.var_ty,
+        .array_access =
+            (struct td_arrayaccess){
+                .lhs = arena_alloc(tchk->arena, sizeof(*res.array_access.lhs)),
+                .rhs = arena_alloc(tchk->arena, sizeof(*res.array_access.rhs)),
+            },
+        .span = expr.span,
+    };
+
+    *res.array_access.lhs = type_static_init_expr(
+        tchk, *expr.array_access.lhs, expr.array_access.lhs->var_ty, is_addr);
+    *res.array_access.rhs = type_static_init_expr(
+        tchk, *expr.array_access.rhs, expr.array_access.rhs->var_ty, is_addr);
+    return res;
+  }
   case TD_EXPR_TY_UNARY_OP:
     // may be address-of
     switch (expr.unary_op.ty) {
-    case TD_UNARY_OP_TY_ADDRESSOF:
-      return expr;
+    case TD_UNARY_OP_TY_ADDRESSOF: {
+      struct td_expr addr = {
+          .ty = TD_EXPR_TY_UNARY_OP,
+          .var_ty = expr.var_ty,
+          .unary_op = (struct td_unary_op){.ty = TD_UNARY_OP_TY_ADDRESSOF,
+                                           .expr = arena_alloc(
+                                               tchk->arena,
+                                               sizeof(*addr.unary_op.expr))},
+          .span = expr.span,
+      };
+
+      *addr.unary_op.expr = type_static_init_expr(
+          tchk, *expr.unary_op.expr, expr.unary_op.expr->var_ty, true);
+      return addr;
+    }
     case TD_UNARY_OP_TY_CAST:
       if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
           (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER ||
            expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY ||
            expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_FUNC)) {
         // pointer to pointer cast, fine
-        return expr;
+        return type_static_init_expr(tchk, *expr.unary_op.expr,
+                                     expr.unary_op.expr->var_ty, is_addr);
       }
       break;
     default:
@@ -3504,9 +3573,9 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
   case TD_EXPR_TY_BINARY_OP: {
     // may be `ptr + cnst` or `cnst + ptr`
     struct td_expr lhs =
-        type_static_init_expr(tchk, *expr.binary_op.lhs, expr.var_ty);
+        type_static_init_expr(tchk, *expr.binary_op.lhs, expr.var_ty, is_addr);
     struct td_expr rhs =
-        type_static_init_expr(tchk, *expr.binary_op.rhs, expr.var_ty);
+        type_static_init_expr(tchk, *expr.binary_op.rhs, expr.var_ty, is_addr);
 
     struct td_val cnst_val;
     struct td_expr ptr, cnst;
@@ -3528,27 +3597,31 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
                                  "expression not valid as static "
                                  "initializer; both sides are pointer-type"));
 
-      return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                              .var_ty = TD_VAR_TY_UNKNOWN};
+      return (struct td_expr){
+          .ty = TD_EXPR_TY_INVALID,
+          .var_ty = TD_VAR_TY_UNKNOWN,
+          .span = expr.span,
+      };
     }
 
     struct td_expr res = {
         .ty = TD_EXPR_TY_BINARY_OP,
         .var_ty = ptr.var_ty,
-        .binary_op = (struct td_binary_op){
-            .lhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.lhs)),
-            .rhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.rhs)),
-        }};
+        .binary_op =
+            (struct td_binary_op){
+                .ty = expr.binary_op.ty,
+                .lhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.lhs)),
+                .rhs = arena_alloc(tchk->arena, sizeof(*res.binary_op.rhs)),
+            },
+        .span = expr.span,
+    };
 
     *res.binary_op.lhs = ptr;
     *res.binary_op.rhs = cnst;
 
-    switch (expr.binary_op.ty) {
+    switch (res.binary_op.ty) {
     case TD_BINARY_OP_TY_ADD:
-      res.binary_op.ty = TD_BINARY_OP_TY_ADD;
-      break;
     case TD_BINARY_OP_TY_SUB:
-      res.binary_op.ty = TD_BINARY_OP_TY_SUB;
       break;
     default:
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -3565,14 +3638,18 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
   }
 
   default:
+  generic_fail:
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
                                expr.span, MK_INVALID_TEXT_POS(0),
                                "expression not valid as static initializer"));
-    return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                            .var_ty = TD_VAR_TY_UNKNOWN};
+    return (struct td_expr){
+        .ty = TD_EXPR_TY_INVALID,
+        .var_ty = TD_VAR_TY_UNKNOWN,
+        .span = expr.span,
+    };
   }
 
   // expr failed in constant eval, but was not a pointer/address expr we
@@ -3590,8 +3667,11 @@ static struct td_expr type_static_init_expr(struct typechk *tchk,
                                "expression not valid as static initializer"));
   }
 
-  return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
-                          .var_ty = TD_VAR_TY_UNKNOWN};
+  return (struct td_expr){
+      .ty = TD_EXPR_TY_INVALID,
+      .var_ty = TD_VAR_TY_UNKNOWN,
+      .span = expr.span,
+  };
 }
 
 static struct td_stmt type_stmt(struct typechk *tchk,
@@ -4285,7 +4365,7 @@ static struct td_init type_init(struct typechk *tchk,
     case TD_INIT_MODE_CONSTANT_EXPRS:
       td_init.expr = type_static_init_expr(
           tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr),
-          *var_ty);
+          *var_ty, false);
       break;
     }
     td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
