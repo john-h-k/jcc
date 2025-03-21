@@ -205,7 +205,7 @@ if (!parse_ternary(parser, &cond, expr)) {
 }
 ```
 
-Because in macro-heavy code, ternary and compound expressions are extremely common, minimising backtracking is essential. During the first iteration of bootstrapping the compiler, parsing the `rv32i/emitter.c` file would take ~4s and the `x64/emitter.c` file would stack overflow. By lifting these prefixes, the parse time of both was reduced to under 50ms.
+Because in macro-heavy code, ternary and compound expressions are extremely common, minimising backtracking is essential. During the first iteration of bootstrapping the compiler, parsing the `rv32i/emitter.c` file would take ~4s and the `x64/emitter.c` file would stack overflow (both of these use macros extensively for encoding instructions). By lifting these prefixes, the parse time of both was reduced to under 50ms.
 
 Rewriting this code to use full Pratt parsing for unary and binary expressions is on my TODO list as I suspect it will improve performance and be clearer code.
 
@@ -214,13 +214,7 @@ Rewriting this code to use full Pratt parsing for unary and binary expressions i
 
 As with all sections of the compilers, parsing has a general purpose prettyprint tool that prints the AST. For example, the AST for a simple hello-world program:
 
-```c
-```
-
-can be seen here:
-
-
-```
+```text
 PRINTING AST
 DECLARATION
     DECLARATION SPECIFIER LIST
@@ -262,4 +256,5 @@ FUNCTION DEFINITION
                                     CONSTANT "Hello, World!\n"
             RETURN
                 EXPRESSION
-                    CONSTANT 0```
+                    CONSTANT 0
+```
