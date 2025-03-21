@@ -1967,7 +1967,7 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
     expr->ty = AST_EXPR_TY_ARRAYACCESS;
     expr->array_access.lhs = lhs;
     expr->array_access.rhs = rhs;
-    expr->span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
+    expr->array_access.span = MK_TEXT_SPAN(start, get_last_text_pos(parser->lexer));
 
     expr->span = expr->array_access.span;
     return true;

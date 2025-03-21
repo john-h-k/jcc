@@ -995,39 +995,19 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
       store = store->succ;
     }
 
-    if (store) {
-      switch (store->store.ty) {
-      case IR_OP_STORE_TY_LCL:
-      case IR_OP_STORE_TY_GLB:
-        // move store before op so the generated address is before the call
-        ir_detach_op(func, store);
-        ir_attach_op(func, store, op->stmt, op->pred, op);
-
-        addr = ir_build_addr(func, store);
-
-        ir_detach_op(func, store);
-        break;
-      case IR_OP_STORE_TY_ADDR: {
-        struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
-        addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-        addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-
-        struct ir_op *load =
-            ir_insert_before_op(func, op, IR_OP_TY_LOAD, op->var_ty);
-        load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_LCL, .lcl = lcl};
-
-        store->store.value = load;
-        break;
-      }
-      }
-
-    } else {
-      struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
-      addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-      addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
-    }
-
+    struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
+    addr = ir_insert_before_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
     vector_push_back(new_args, &addr);
+
+    if (store) {
+      struct ir_op *load = ir_insert_after_op(func, op, IR_OP_TY_LOAD, lcl->var_ty);
+      load->load = (struct ir_op_load){
+        .ty = IR_OP_LOAD_TY_ADDR,
+        .addr = addr,
+      };
+      store->store.value = load;
+    }
 
     op->var_ty = IR_VAR_TY_NONE;
   }

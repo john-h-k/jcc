@@ -126,6 +126,27 @@ static bool fits_in_alu_imm(unsigned long long value) {
   return value < MAX_IMM_SIZE;
 }
 
+static bool can_contain_lcl_addr(struct ir_func *func, struct ir_lcl *lcl,
+                                 size_t offset) {
+
+  switch (lcl->alloc_ty) {
+  case IR_LCL_ALLOC_TY_NONE:
+    return false;
+  case IR_LCL_ALLOC_TY_FIXED:
+    // TODO: try and contain these, need to carefully work with offset
+    return false;
+  case IR_LCL_ALLOC_TY_NORMAL: {
+    offset += func->caller_stack_needed + lcl->alloc.offset;
+
+    if (offset > MAX_IMM_SIZE) {
+      return false;
+    }
+
+    return true;
+  }
+  }
+}
+
 static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
   DEBUG_ASSERT(op->ty == IR_OP_TY_BINARY_OP, "expected binary op");
 
@@ -230,6 +251,12 @@ static void try_contain_addr_offset(struct ir_func *func, struct ir_op *op) {
     return;
   }
 
+  struct ir_lcl *lcl = base->addr.lcl;
+
+  if (!can_contain_lcl_addr(func, lcl, 0)) {
+    return;
+  }
+
   op->addr_offset.base = ir_alloc_contained_op(func, base, op);
 }
 
@@ -244,7 +271,7 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->load.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL && can_contain_lcl_addr(func, addr->addr.lcl, 0)) {
     op->load.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
@@ -258,6 +285,10 @@ static void try_contain_load(struct ir_func *func, struct ir_op *op) {
                           (base->addr.lcl->alloc.offset ||
                            (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
                             func->caller_stack_needed));
+
+    if (base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL && !can_contain_lcl_addr(func, base->addr.lcl, addr_offset.offset)) {
+      return;
+    }
 
     bool offset_contain = !addr_offset.index;
     bool index_contain =
@@ -282,7 +313,7 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
 
   struct ir_op *addr = op->store.addr;
 
-  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL) {
+  if (addr->ty == IR_OP_TY_ADDR && addr->addr.ty == IR_OP_ADDR_TY_LCL && can_contain_lcl_addr(func, addr->addr.lcl, 0)) {
     op->store.addr = ir_alloc_contained_op(func, addr, op);
   } else if (addr->ty == IR_OP_TY_ADDR_OFFSET) {
     struct ir_op_addr_offset addr_offset = addr->addr_offset;
@@ -293,6 +324,10 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
                           (base->addr.lcl->alloc.offset ||
                            (base->addr.lcl->alloc_ty != IR_LCL_ALLOC_TY_FIXED &&
                             func->caller_stack_needed));
+
+    if (base->ty == IR_OP_TY_ADDR && base->addr.ty == IR_OP_ADDR_TY_LCL && !can_contain_lcl_addr(func, base->addr.lcl, addr_offset.offset)) {
+      return;
+    }
 
     bool offset_contain = !addr_offset.index;
     bool index_contain =

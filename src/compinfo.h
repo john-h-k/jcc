@@ -98,7 +98,7 @@
 #define TSAN 1
 #endif
 
-// NOTE: for reasons, there is no _SANITIZE_UNDEFINED__, and so we cannot detect
+// NOTE: for reasons, there is no __SANITIZE_UNDEFINED__, and so we cannot detect
 // this on GCC
 #if HAS_FEATURE(undefined_behavior_sanitizer) ||                               \
     defined(UNDEFINED_BEHAVIOR_SANITIZER)

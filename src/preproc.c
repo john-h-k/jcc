@@ -191,6 +191,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   DEF_BUILTIN_IDENT("__extension__", "");
 
+  DEF_BUILTIN_NUM("__FLT_MAX__", "3.40282347E+38");
+  DEF_BUILTIN_NUM("__DBL_MAX__", "1.7976931348623157E+308");
+
   DEF_BUILTIN_NUM("__JCC__", "1");
   DEF_BUILTIN_NUM("__jcc__", "1");
 
@@ -2707,8 +2710,9 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           slogsl("\n");
         }
       } else {
-        TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
-             directive.text);
+        UNEXPANDED_DIR_TOKENS();
+        // TODO("other directives ('%.*s')", (int)text_span_len(&directive.span),
+             // directive.text);
       }
 
 #undef UNEXPANDED_DIR_TOKENS
