@@ -31,9 +31,10 @@
 struct compiler {
   struct arena_allocator *arena;
 
+  struct compiler_diagnostics *preproc_diagnostics;
+  struct preproc *preproc;
   struct program program;
   struct compile_args args;
-  struct preproc *preproc;
   struct parser *parser;
   struct typechk *typechk;
   const struct target *target;
@@ -64,7 +65,11 @@ create_compiler(struct program *program, const struct target *target,
       .fixed_timestamp = args->fixed_timestamp,
   };
 
-  if (preproc_create(program, preproc_args, &(*compiler)->preproc) !=
+  // slightly odd that we create it outside preproc when everything else does it inside
+  // but its because preproc is wrapped by the parser normally
+  (*compiler)->preproc_diagnostics = compiler_diagnostics_create();
+
+  if (preproc_create(program, preproc_args, (*compiler)->preproc_diagnostics, &(*compiler)->preproc) !=
       PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -119,24 +124,6 @@ FILE *compiler_open_file(struct compile_file file) {
   }
 }
 
-static enum compile_result compile_stage_preproc(struct compiler *compiler,
-                                                 ...) {
-  // variadic dummy because takes no args but macro needs args
-
-  // this is only run in preproc only mode (`-E/--preprocess`), else it is
-  // part of parsing
-
-  FILE *file = compiler_open_file(compiler->output);
-  if (!file) {
-    return COMPILE_RESULT_BAD_FILE;
-  }
-
-  // TODO: preproc can fail
-  preproc_process(compiler->preproc, file);
-
-  return COMPILE_RESULT_SUCCESS;
-}
-
 static void compiler_print_diagnostics_context(struct compiler *compiler,
                                                struct text_span span,
                                                struct text_pos point) {
@@ -189,7 +176,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
       const char *next = strchr(&text[i + 1], '\n');
       size_t line_len = next - &text[i + 1];
 
-      size_t offset = 6 + num_digits(line + 1);
+      size_t offset = 7 + num_digits(line + 1);
       fprintf(stderr, "    %zu | %.*s\n", line + 1, (int)line_len,
               &text[i + 1]);
 
@@ -258,6 +245,13 @@ compiler_print_diagnostics(struct compiler *compiler,
     }
 
     switch (diagnostic.ty.class) {
+    case COMPILER_DIAGNOSTIC_CLASS_PREPROC:
+      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
+              diagnostic.preproc_diagnostic.message);
+      compiler_print_diagnostics_context(compiler,
+                                         diagnostic.preproc_diagnostic.span,
+                                         diagnostic.preproc_diagnostic.point);
+      break;
     case COMPILER_DIAGNOSTIC_CLASS_PARSE:
       fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
               diagnostic.parse_diagnostic.message);
@@ -280,10 +274,33 @@ compiler_print_diagnostics(struct compiler *compiler,
   }
 }
 
+static enum compile_result compile_stage_preproc(struct compiler *compiler,
+                                                 ...) {
+  // variadic dummy because takes no args but macro needs args
+
+  // this is only run in preproc only mode (`-E/--preprocess`), else it is
+  // part of parsing
+
+  FILE *file = compiler_open_file(compiler->output);
+  if (!file) {
+    return COMPILE_RESULT_BAD_FILE;
+  }
+
+  // TODO: preproc can fail
+  preproc_process(compiler->preproc, file);
+
+  compiler_print_diagnostics(compiler, compiler->preproc_diagnostics);
+
+  return COMPILE_RESULT_SUCCESS;
+}
+
 static enum compile_result
 compile_stage_parse(struct compiler *compiler,
                     struct parse_result *parse_result) {
   *parse_result = parse(compiler->parser);
+
+  // TODO: err out if preproc fails
+  compiler_print_diagnostics(compiler, compiler->preproc_diagnostics);
 
   compiler_print_diagnostics(compiler, parse_result->diagnostics);
   if (parse_result->ty == PARSE_RESULT_TY_FAILURE) {

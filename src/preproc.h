@@ -3,6 +3,7 @@
 
 #include "compiler.h"
 #include "program.h"
+#include "diagnostics.h"
 
 #include <stdio.h>
 
@@ -28,6 +29,7 @@ struct preproc_create_args {
 
 enum preproc_create_result preproc_create(struct program *program,
                                           struct preproc_create_args args,
+                                          struct compiler_diagnostics *diagnostics,
                                           struct preproc **preproc);
 
 struct preprocessed_program {

@@ -12,6 +12,9 @@ enum compiler_diagnostic_severity {
 };
 
 enum compiler_diagnostic_class {
+  /* Preprocessor errors */
+  COMPILER_DIAGNOSTIC_CLASS_PREPROC,
+
   /* Syntax errors */
   COMPILER_DIAGNOSTIC_CLASS_PARSE,
 
@@ -21,6 +24,14 @@ enum compiler_diagnostic_class {
   /* Internal errors/bugs in compiler */
   COMPILER_DIAGNOSTIC_CLASS_INTERNAL
 };
+
+#define COMPILER_PREPROC_DIAGNOSTIC_LIST                                       \
+  DIAG_FN(WARN, "warn-directive", warn_directive, WARN_DIRECTIVE,              \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "error-directive", error_directive, ERROR_DIRECTIVE,          \
+          const char *) \
+  DIAG_FN(ERROR, "bad-token-in-cond", bad_token_in_cond, BAD_TOKEN_IN_COND,          \
+          const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
   DIAG_FN(ERROR, "syntax-err", syntax_err, SYNTAX_ERR, const char *)           \
@@ -119,6 +130,24 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "bad-type-specifiers", bad_type_specifiers,                   \
           BAD_TYPE_SPECIFIERS, const char *)
 
+enum preproc_diagnostic_ty {
+#define DIAG_FN(_0, _1, _2, enum, ...) PREPROC_DIAGNOSTIC_TY_##enum,
+
+  COMPILER_PREPROC_DIAGNOSTIC_LIST
+
+#undef DIAG_FN
+};
+
+struct preproc_diagnostic {
+  enum preproc_diagnostic_ty ty;
+
+  // puts a caret here
+  struct text_pos point;
+  struct text_span span;
+
+  const char *message;
+};
+
 enum parse_diagnostic_ty {
 #define DIAG_FN(_0, _1, _2, enum, ...) PARSE_DIAGNOSTIC_TY_##enum,
 
@@ -135,14 +164,6 @@ struct parse_diagnostic {
   struct text_span span;
 
   const char *message;
-
-  //   union {
-  // #define DIAG_FN(_0, _1, name, _3, ty) ty name;
-
-  //     COMPILER_PARSE_DIAGNOSTIC_LIST
-
-  // #undef DIAG_FN
-  //   };
 };
 
 enum semantic_diagnostic_ty {
@@ -161,14 +182,6 @@ struct semantic_diagnostic {
   struct text_span span;
 
   const char *message;
-
-  //   union {
-  // #define DIAG_FN(_0, _1, name, _3, ty) ty name;
-
-  //     COMPILER_SEMANTIC_DIAGNOSTIC_LIST
-
-  // #undef DIAG_FN
-  //   };
 };
 
 struct internal_diagnostic {
@@ -179,6 +192,13 @@ struct compiler_diagnostic_ty {
   enum compiler_diagnostic_class class;
   enum compiler_diagnostic_severity severity;
 };
+
+#define DIAG_FN(_0, _1, name, enum, ty)                                        \
+  extern struct compiler_diagnostic_ty DIAGNOSTIC_PREPROC_##enum;
+
+COMPILER_PREPROC_DIAGNOSTIC_LIST
+
+#undef DIAG_FN
 
 #define DIAG_FN(_0, _1, name, enum, ty)                                        \
   extern struct compiler_diagnostic_ty DIAGNOSTIC_PARSER_##enum;
@@ -193,6 +213,16 @@ COMPILER_PARSE_DIAGNOSTIC_LIST
 COMPILER_SEMANTIC_DIAGNOSTIC_LIST
 
 #undef DIAG_FN
+
+#define MK_PREPROC_DIAGNOSTIC(name, lo, span_val, point_val, value)             \
+  (struct compiler_diagnostic) {                                               \
+    .ty = DIAGNOSTIC_PREPROC_##name, .preproc_diagnostic = {                      \
+      .ty = PREPROC_DIAGNOSTIC_TY_##name,                                        \
+      .message = value,                                                        \
+      .span = span_val,                                                        \
+      .point = point_val,                                                      \
+    }                                                                          \
+  }
 
 #define MK_PARSER_DIAGNOSTIC(name, lo, span_val, point_val, value)             \
   (struct compiler_diagnostic) {                                               \
@@ -218,6 +248,7 @@ struct compiler_diagnostic {
   struct compiler_diagnostic_ty ty;
 
   union {
+    struct preproc_diagnostic preproc_diagnostic;
     struct parse_diagnostic parse_diagnostic;
     struct semantic_diagnostic semantic_diagnostic;
     struct internal_diagnostic internal_diagnostic;
