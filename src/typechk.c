@@ -976,6 +976,27 @@ static struct td_var_ty type_abstract_declarator(
     struct typechk *tchk, const struct td_specifiers *specifiers,
     const struct ast_abstract_declarator *abstract_declarator);
 
+static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
+  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
+      var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_UNION) {
+    return 1;
+  }
+
+  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
+    size_t sum = 0;
+    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
+      sum += td_num_init_fields(&var_ty->aggregate.fields[i].var_ty);
+    }
+    return sum;
+  }
+
+  if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
+    return var_ty->array.size * td_num_init_fields(var_ty->array.underlying);
+  }
+
+  return 1;
+}
+
 static void td_walk_init_list(struct td_var_ty *var_ty,
                               const struct ast_init_list *init_list,
                               size_t *idx) {
@@ -1096,15 +1117,18 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
             return TD_VAR_TY_UNKNOWN;
           case AST_DESIGNATOR_TY_INDEX:
             size = type_constant_integral_expr(tchk, designator->index) + 1;
+            idx = size;
             break;
           }
+        } else if (init_list_init->init->ty != AST_INIT_TY_INIT_LIST) {
+          td_walk_init_list(&var_ty, init_list, &idx);
         } else {
-          size++;
+          idx++;
         }
 
-        max_size = MAX(max_size, size);
+        size++;
 
-        td_walk_init_list(&var_ty, init_list, &idx);
+        max_size = MAX(max_size, size);
       }
 
       array_ty.array.size = max_size;
@@ -2318,6 +2342,7 @@ static struct td_var_ty type_incomplete_var_ty(struct typechk *tchk,
 
 static struct td_expr
 type_memberaccess(struct typechk *tchk,
+                   enum type_expr_flags flags,
                   const struct ast_memberaccess *memberaccess) {
   struct td_memberaccess td_memberaccess = {
       .lhs = arena_alloc(tchk->arena, sizeof(*td_memberaccess.lhs)),
@@ -2346,7 +2371,7 @@ type_memberaccess(struct typechk *tchk,
                          .var_ty = var_ty,
                          .member_access = td_memberaccess};
 
-  if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY && !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
@@ -2367,6 +2392,7 @@ type_memberaccess(struct typechk *tchk,
 
 static struct td_expr
 type_pointeraccess(struct typechk *tchk,
+                   enum type_expr_flags flags,
                    const struct ast_pointeraccess *pointeraccess) {
 
   struct td_pointeraccess td_pointeraccess = {
@@ -2417,7 +2443,7 @@ type_pointeraccess(struct typechk *tchk,
                          .var_ty = var_ty,
                          .pointer_access = td_pointeraccess};
 
-  if (var_ty.ty == TD_VAR_TY_TY_ARRAY) {
+  if (var_ty.ty == TD_VAR_TY_TY_ARRAY && !(flags & TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY)) {
     // array member access
     // decay this to addressof
     struct td_unary_op addr = {
@@ -2830,10 +2856,10 @@ static struct td_expr type_expr(struct typechk *tchk,
     td_expr = type_arrayaccess(tchk, &expr->array_access);
     break;
   case AST_EXPR_TY_MEMBERACCESS:
-    td_expr = type_memberaccess(tchk, &expr->member_access);
+    td_expr = type_memberaccess(tchk, flags, &expr->member_access);
     break;
   case AST_EXPR_TY_POINTERACCESS:
-    td_expr = type_pointeraccess(tchk, &expr->pointer_access);
+    td_expr = type_pointeraccess(tchk, flags, &expr->pointer_access);
     break;
   case AST_EXPR_TY_ASSG:
     td_expr = type_assg(tchk, &expr->assg);
@@ -4252,27 +4278,6 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
   case AST_INIT_TY_INIT_LIST:
     return type_init_list_for_scalar(tchk, &res_var_ty, &init->init_list, mode);
   }
-}
-
-static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
-  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-      var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_UNION) {
-    return 1;
-  }
-
-  if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-    size_t sum = 0;
-    for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
-      sum += td_num_init_fields(&var_ty->aggregate.fields[i].var_ty);
-    }
-    return sum;
-  }
-
-  if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    return var_ty->array.size * td_num_init_fields(var_ty->array.underlying);
-  }
-
-  return 1;
 }
 
 static struct td_init_list type_init_list_for_aggregate_or_array(

@@ -204,10 +204,30 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
       break;
     }
 
+    if (is_wide) {
+      if ((text[i] & 0xC0) == 0xC0) {
+        int32_t ch = ((text[i] & 0x1F) << 6) | (text[i + 1] & 0x3F);
+        vector_push_back(buff, &ch);
+        i += 1;
+        continue;
+      } else if ((text[i] & 0xE0) == 0xE0) {
+        int32_t ch = ((text[i] & 0x0F) << 12) | ((text[i + 1] & 0x3F) << 6) |
+                     (text[i + 2] & 0x3F);
+        vector_push_back(buff, &ch);
+        i += 2;
+        continue;
+      } else if ((text[i] & 0xF0) == 0xF0) {
+        int32_t ch = ((text[i] & 0x07) << 18) | ((text[i + 1] & 0x3F) << 12) |
+                     ((text[i + 2] & 0x3F) << 6) | (text[i + 3] & 0x3F);
+        vector_push_back(buff, &ch);
+        i += 3;
+        continue;
+      }
+    }
     if (char_escaped) {
 #define PUSH_CHAR(ch)                                                          \
   if (is_wide) {                                                               \
-    int32_t pc = ch;                                                           \
+    int32_t pc = (uint32_t)(unsigned char)ch;                                  \
     vector_push_back(buff, &pc);                                               \
   } else {                                                                     \
     char pc = (char)ch;                                                        \
@@ -218,7 +238,6 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
     PUSH_CHAR(esc);                                                            \
     break;                                                                     \
   }
-
       if (text[i] >= '0' && text[i] <= '7') {
         size_t octal_start = i;
 
@@ -454,8 +473,10 @@ lex_number_literal(const struct preproc_token *preproc_token) {
     break;
 
   default:
-    // return an arbitrary type, but try and respect is_flt so that parser can generate a more accurate diagnostic
-    return (lit_ty & LIT_TY_FLT) ? LEX_TOKEN_TY_DOUBLE_LITERAL : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
+    // return an arbitrary type, but try and respect is_flt so that parser can
+    // generate a more accurate diagnostic
+    return (lit_ty & LIT_TY_FLT) ? LEX_TOKEN_TY_DOUBLE_LITERAL
+                                 : LEX_TOKEN_TY_SIGNED_INT_LITERAL;
   }
 
   return ty;
@@ -564,12 +585,12 @@ void lex_consume_token(struct lexer *lexer, struct lex_token token) {
 }
 
 struct sized_str lex_strlike_associated_text(const struct lexer *lexer,
-                                         const struct lex_token *token) {
+                                             const struct lex_token *token) {
   return process_raw_string(lexer, token);
 }
 
 struct sized_str lex_associated_text(const struct lexer *lexer,
-                                 const struct lex_token *token) {
+                                     const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
   case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
@@ -601,7 +622,7 @@ struct sized_str lex_associated_text(const struct lexer *lexer,
 }
 
 const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
-                       const struct lex_token *token) {
+                           const struct lex_token *token) {
 #define CASE_RET(name)                                                         \
   case name:                                                                   \
     return #name;
