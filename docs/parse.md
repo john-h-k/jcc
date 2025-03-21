@@ -12,6 +12,8 @@ The parsing stage involves 4 principal stages:
 * Typing
   - Types the tree and performs most validation to reject invalid programs
 
+## Lexer
+
 Being able to perform all of these steps very quickly is essential, and so these components have been carefully optimised. The current parser-lexer-preprocessor combination can achieve approximately 600k lines-of-code per second per thread, a very similar rate to clang and marginally faster than gcc. These benchmarks were performed on generated code from `csmith`, JCC itself, and the sqlite3 amalgamation file.
 
 Preprocessing will mostly be ignored here, but it is important to understand how it interacts with the lexer and the parser. The preprocessor produces `struct preproc_token`s in a forward-only manner - it cannot backtrack. Each preprocessor token is 1-1 with a lexer token, no splitting nor merging occurs by the lexer.
@@ -128,7 +130,7 @@ case PREPROC_TOKEN_TY_OTHER:
 }
 ```
 
-### Parsing
+## Parser
 
 The parser is a hand-written recursive-descent parser. It builds a very flexible AST with significantly weaker rules than C in order to faciliate good diagnostic generation as well as making error-recovery significantly easier.
 
@@ -169,7 +171,7 @@ static bool parse_typedef_name(struct parser *parser,
 
 In general, the aim of the parser's grammar is to be as flexible as possible while still allowing sensible error recovery. For example, it allows all forms of type specifiers anywhere (such as `inline int a` or `register int main();`), as this does not make recovery any harder but can easily be rejected in the typecheck pass. The parser will emits its own diagnostics in scenarios where it knows which token is required next (such as missing close-brackets or semicolons), but in all these scenarios it is able to return an error expression (`AST_EXPR_TY_INVALID`) and continue parsing. The error diagnostics will then cause termination after parsing has completed.
 
-## Expression parsing
+### Expression parsing
 
 Precedence climbing is used for parsing binary expressions. Unary operators are parsed as part of the grammar in classic recursive descent style, with common prefixes lifted from their nodes for efficiency. For example, the core of the top-level expression parser:
 
@@ -211,7 +213,7 @@ Because in macro-heavy code, ternary and compound expressions are extremely comm
 Rewriting this code to use full Pratt parsing for unary and binary expressions is on my TODO list as I suspect it will improve performance and be clearer code.
 
 
-## Debugging
+### Debugging
 
 As with all sections of the compilers, parsing has a general purpose prettyprint tool that prints the AST. For example, the AST for a simple hello-world program:
 
