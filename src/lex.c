@@ -8,6 +8,9 @@
 #include "util.h"
 #include "vector.h"
 
+#include <assert.h>
+#include <wchar.h>
+
 struct lexer {
   struct arena_allocator *arena;
 
@@ -204,26 +207,6 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
       break;
     }
 
-    if (is_wide) {
-      if ((text[i] & 0xC0) == 0xC0) {
-        int32_t ch = ((text[i] & 0x1F) << 6) | (text[i + 1] & 0x3F);
-        vector_push_back(buff, &ch);
-        i += 1;
-        continue;
-      } else if ((text[i] & 0xE0) == 0xE0) {
-        int32_t ch = ((text[i] & 0x0F) << 12) | ((text[i + 1] & 0x3F) << 6) |
-                     (text[i + 2] & 0x3F);
-        vector_push_back(buff, &ch);
-        i += 2;
-        continue;
-      } else if ((text[i] & 0xF0) == 0xF0) {
-        int32_t ch = ((text[i] & 0x07) << 18) | ((text[i + 1] & 0x3F) << 12) |
-                     ((text[i + 2] & 0x3F) << 6) | (text[i + 3] & 0x3F);
-        vector_push_back(buff, &ch);
-        i += 3;
-        continue;
-      }
-    }
     if (char_escaped) {
 #define PUSH_CHAR(ch)                                                          \
   if (is_wide) {                                                               \
@@ -320,7 +303,39 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 
 #undef ADD_ESCAPED
     } else if (text[i] != '\\') {
-      PUSH_CHAR(text[i]);
+
+      if (is_wide) {
+        mbstate_t state = {0};
+        wchar_t wide;
+        i += mbrtowc(&wide, &text[i], MB_CUR_MAX, &state);
+        i--;
+        static_assert(sizeof(wide) == sizeof(int32_t),
+                      "only supports 4byte wide char");
+        vector_push_back(buff, &wide);
+        // if ((text[i] & 0xC0) == 0xC0) {
+        //   int32_t ch = ((text[i] & 0x1F) << 6) | (text[i + 1] & 0x3F);
+        //   vector_push_back(buff, &ch);
+        //   i += 1;
+        //   continue;
+        // } else if ((text[i] & 0xE0) == 0xE0) {
+        //   int32_t ch = ((text[i] & 0x0F) << 12) | ((text[i + 1] & 0x3F) << 6)
+        //   |
+        //                (text[i + 2] & 0x3F);
+        //   vector_push_back(buff, &ch);
+        //   i += 2;
+        //   continue;
+        // } else if ((text[i] & 0xF0) == 0xF0) {
+        //   int32_t ch = ((text[i] & 0x07) << 18) | ((text[i + 1] & 0x3F) <<
+        //   12)
+        //   |
+        //                ((text[i + 2] & 0x3F) << 6) | (text[i + 3] & 0x3F);
+        //   vector_push_back(buff, &ch);
+        //   i += 3;
+        //   continue;
+        // }
+      } else {
+        PUSH_CHAR(text[i]);
+      }
     }
 
     // next char is escaped if this char is a non-escaped backslash
