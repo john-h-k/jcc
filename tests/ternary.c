@@ -20,5 +20,10 @@ int main() {
     return 3;
   }
 
+  int *p = (a ? &a : 0);
+  if (*p != a) {
+    return 100;
+  }
+
   return a ? a ? a ? 7 : 8 : 9 : 10;
 }

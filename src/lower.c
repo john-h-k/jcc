@@ -2,7 +2,6 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
-#include "ir/prettyprint.h"
 #include "util.h"
 #include "vector.h"
 
@@ -475,7 +474,7 @@ static void lower_mem_set(struct ir_func *func, struct ir_op *op) {
       .func_ty = memset->var_ty,
   };
 
-  lower_call(func, op);
+  lower_call(func, NULL, op);
 }
 
 static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
@@ -585,7 +584,7 @@ static void lower_mem_copy(struct ir_func *func, struct ir_op *op) {
       .func_ty = memmove->var_ty,
   };
 
-  lower_call(func, op);
+  lower_call(func, NULL, op);
   lower_call_registers(func, op);
 }
 
@@ -971,7 +970,8 @@ static void lower_params(struct ir_func *func) {
   }
 }
 
-void lower_call(struct ir_func *func, struct ir_op *op) {
+void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
+                struct ir_op *op) {
   struct ir_func_info func_info = func->unit->target->lower_func_ty(
       func, op->call.func_ty.func, op->call.args, op->call.num_args);
 
@@ -985,15 +985,11 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
   if (func_info.call_info.ret &&
       func_info.call_info.ret->ty == IR_PARAM_INFO_TY_POINTER) {
-    // FIXME: don't use succ find usage
-    struct ir_op *store = op->succ;
     struct ir_op *addr;
 
-    // HACK: should use op uses. won't work across stmts (which might happen i
-    // think)
-    while (store && (store->ty != IR_OP_TY_STORE || store->store.value != op)) {
-      store = store->succ;
-    }
+    DEBUG_ASSERT(use_map, "use_map NULL but return was via a shadow struct "
+                          "(use_map is required for this)");
+    struct ir_op_usage usage = use_map->op_use_datas[op->id];
 
     // insert the phantom return address as first arg
     struct ir_lcl *lcl = ir_add_local(func, &op->var_ty);
@@ -1001,11 +997,15 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
     addr->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
     vector_push_back(new_args, &addr);
 
-    if (store) {
-      struct ir_op *load = ir_insert_after_op(func, op, IR_OP_TY_LOAD, lcl->var_ty);
+    for (size_t i = 0; i < usage.num_uses; i++) {
+      struct ir_op *store = usage.uses[i].consumer;
+      DEBUG_ASSERT(store->ty == IR_OP_TY_STORE, "expected store");
+
+      struct ir_op *load =
+          ir_insert_after_op(func, op, IR_OP_TY_LOAD, lcl->var_ty);
       load->load = (struct ir_op_load){
-        .ty = IR_OP_LOAD_TY_ADDR,
-        .addr = addr,
+          .ty = IR_OP_LOAD_TY_ADDR,
+          .addr = addr,
       };
       store->store.value = load;
     }
@@ -1105,71 +1105,73 @@ void lower_call(struct ir_func *func, struct ir_op *op) {
 
     op->var_ty = IR_VAR_TY_NONE;
 
-    // HACK: should use op uses
-    struct ir_op *prev_store = op->succ ? op->succ : op->stmt->succ->first;
-    while (prev_store && prev_store->ty != IR_OP_TY_STORE) {
-      prev_store = prev_store->succ;
-    }
+    DEBUG_ASSERT(use_map, "use_map NULL but return was via a shadow struct "
+                          "(use_map is required for this)");
+    struct ir_op_usage usage = use_map->op_use_datas[op->id];
 
-    DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store after call");
+    for (size_t i = 0; i < usage.num_uses; i++) {
+      struct ir_op *prev_store = usage.uses[i].consumer;
+      DEBUG_ASSERT(prev_store->ty == IR_OP_TY_STORE, "expected store");
 
-    struct ir_op *addr = ir_build_addr(func, prev_store);
+      struct ir_op *addr = ir_build_addr(func, prev_store);
 
-    size_t field_idx = 0;
-    size_t offset = 0;
+      size_t field_idx = 0;
+      size_t offset = 0;
 
-    // HACK: order of stores must be order of fields for `lower_call_registers`
-    struct ir_op *last_mov = op;
-    struct ir_op *last = prev_store;
-    for (size_t j = 0; j < param_info.num_regs; j++) {
-      struct ir_param_reg reg = param_info.regs[j];
+      // HACK: order of stores must be order of fields for
+      // `lower_call_registers`
+      struct ir_op *last_mov = op;
+      struct ir_op *last = prev_store;
+      for (size_t j = 0; j < param_info.num_regs; j++) {
+        struct ir_param_reg reg = param_info.regs[j];
 
-      size_t offset_add;
-      struct ir_var_ty store_ty;
-      size_t field_offset = info.fields[field_idx + 1].offset - offset;
-      if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
-        // only storeing one field, so store the field ty
-        size_t field_size =
-            ir_var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
-        store_ty = get_var_ty_for_size(reg.reg.ty, field_size);
+        size_t offset_add;
+        struct ir_var_ty store_ty;
+        size_t field_offset = info.fields[field_idx + 1].offset - offset;
+        if (field_idx + 1 >= info.num_fields || field_offset >= reg.size) {
+          // only storeing one field, so store the field ty
+          size_t field_size =
+              ir_var_ty_info(func->unit, &info.fields[field_idx].var_ty).size;
+          store_ty = get_var_ty_for_size(reg.reg.ty, field_size);
 
-        offset_add = field_offset;
-      } else {
-        store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
+          offset_add = field_offset;
+        } else {
+          store_ty = get_var_ty_for_size(reg.reg.ty, reg.size);
 
-        offset_add = reg.size;
+          offset_add = reg.size;
+        }
+
+        struct ir_op *mov =
+            ir_insert_after_op(func, last_mov, IR_OP_TY_MOV, store_ty);
+        last_mov = mov;
+
+        mov->mov = (struct ir_op_mov){.value = NULL};
+        // we should probs have a different flag for this
+        mov->flags |= IR_OP_FLAG_PARAM;
+
+        struct ir_op *addr_offset = ir_insert_after_op(
+            func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        addr_offset->addr_offset =
+            (struct ir_op_addr_offset){.base = addr, .offset = offset};
+
+        offset += offset_add;
+
+        while (field_idx < info.num_fields &&
+               info.fields[field_idx].offset < offset) {
+          field_idx++;
+        }
+
+        struct ir_op *store = ir_insert_after_op(
+            func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+        store->store = (struct ir_op_store){
+            .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
+
+        last = store;
       }
 
-      struct ir_op *mov =
-          ir_insert_after_op(func, last_mov, IR_OP_TY_MOV, store_ty);
-      last_mov = mov;
-
-      mov->mov = (struct ir_op_mov){.value = NULL};
-      // we should probs have a different flag for this
-      mov->flags |= IR_OP_FLAG_PARAM;
-
-      struct ir_op *addr_offset = ir_insert_after_op(
-          func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-      addr_offset->addr_offset =
-          (struct ir_op_addr_offset){.base = addr, .offset = offset};
-
-      offset += offset_add;
-
-      while (field_idx < info.num_fields &&
-             info.fields[field_idx].offset < offset) {
-        field_idx++;
-      }
-
-      struct ir_op *store =
-          ir_insert_after_op(func, addr_offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-
-      store->store = (struct ir_op_store){
-          .ty = IR_OP_STORE_TY_ADDR, .addr = addr_offset, .value = mov};
-
-      last = store;
+      ir_detach_op(func, prev_store);
     }
-
-    ir_detach_op(func, prev_store);
   } else {
     // single reg. don't need to do anything, call value can be used directly
   }
@@ -1454,6 +1456,11 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
     } else {
       struct ir_op *mov_op = op->succ;
 
+      if (!mov_op || !(mov_op->flags & IR_OP_FLAG_PARAM)) {
+        // did not need to generate bc unused return
+        break;
+      }
+
       for (size_t i = 0; i < ret_info.num_regs; i++) {
         DEBUG_ASSERT(mov_op->flags & IR_OP_FLAG_PARAM, "expected param ret op");
 
@@ -1504,6 +1511,8 @@ void lower_abi(struct ir_unit *unit) {
 
       lower_params(func);
 
+      struct ir_op_use_map use_map = ir_build_op_uses_map(func);
+
       struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
       struct ir_op *op;
@@ -1512,7 +1521,7 @@ void lower_abi(struct ir_unit *unit) {
           continue;
         }
 
-        lower_call(func, op);
+        lower_call(func, &use_map, op);
       }
     }
     }

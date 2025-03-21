@@ -417,8 +417,11 @@ static void parse_expected_expr(struct parser *parser, struct ast_expr *expr,
                                 const char *err);
 static bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
-static bool parse_compoundexpr(struct parser *parser,
+static bool parse_compoundexpr_raw(struct parser *parser,
                                struct ast_compoundexpr *compound_expr);
+
+static bool parse_compoundexpr_as_expr(struct parser *parser,
+                               struct ast_expr *expr);
 
 static bool parse_attribute(struct parser *parser,
                             struct ast_attribute *attribute) {
@@ -454,7 +457,7 @@ static bool parse_attribute(struct parser *parser,
   // support other attributes (e.g types, `__attribute__((foo(char *)))`)
 
   struct ast_compoundexpr compoundexpr;
-  if (!parse_compoundexpr(parser, &compoundexpr)) {
+  if (!parse_compoundexpr_raw(parser, &compoundexpr)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -1382,7 +1385,8 @@ static bool parse_init_declarator(struct parser *parser,
     init_declarator->init = NULL;
   }
 
-  init_declarator->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  init_declarator->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
   return true;
 }
 
@@ -1498,7 +1502,8 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   case LEX_TOKEN_TY_ASCII_CHAR_LITERAL: {
     ty = AST_CNST_TY_CHAR;
 
-    struct sized_str literal = lex_strlike_associated_text(parser->lexer, &token);
+    struct sized_str literal =
+        lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
     int_value = (unsigned long long)literal.str[0];
     break;
@@ -1506,7 +1511,8 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
   case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL: {
     ty = AST_CNST_TY_SIGNED_INT;
 
-    struct sized_str literal = lex_strlike_associated_text(parser->lexer, &token);
+    struct sized_str literal =
+        lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
 
     wchar_t wchar;
@@ -1720,7 +1726,7 @@ static bool parse_arglist(struct parser *parser, struct ast_arglist *arg_list) {
   struct ast_compoundexpr compound_expr;
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &compound_expr) &&
+      parse_compoundexpr_raw(parser, &compound_expr) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     arg_list->args = compound_expr.exprs;
     arg_list->num_args = compound_expr.num_exprs;
@@ -1855,21 +1861,10 @@ static bool parse_atom_0(struct parser *parser, struct ast_expr *expr) {
     return true;
   }
 
-  struct ast_compoundexpr compound_expr;
   // parenthesised expression
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_compoundexpr(parser, &compound_expr) &&
+      parse_compoundexpr_as_expr(parser, expr) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
-    // if its one elem, promote it to an expr (as compound expr must have >1
-    // expressions)
-
-    if (compound_expr.num_exprs == 1) {
-      *expr = compound_expr.exprs[0];
-    } else {
-      expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
-      expr->compound_expr = compound_expr;
-      expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
-    }
     return true;
   }
 
@@ -1967,7 +1962,8 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
     expr->ty = AST_EXPR_TY_ARRAYACCESS;
     expr->array_access.lhs = lhs;
     expr->array_access.rhs = rhs;
-    expr->array_access.span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+    expr->array_access.span =
+        MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
 
     expr->span = expr->array_access.span;
     return true;
@@ -2336,15 +2332,10 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
     return false;
   }
 
-  struct ast_compoundexpr true_compound_expr;
   // in `cond ? true : false`, `true` is parsed as if it were parenthesised
-  if (!parse_compoundexpr(parser, &true_compound_expr)) {
+  if (!parse_compoundexpr_as_expr(parser, &true_expr)) {
     return false;
   }
-
-  true_expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
-  true_expr.compound_expr = true_compound_expr;
-  true_expr.span = true_compound_expr.span;
 
   parse_expected_token(parser, LEX_TOKEN_TY_COLON, true_expr.span.start,
                        "expected ':' after ternary true expression", NULL);
@@ -2427,8 +2418,8 @@ static bool parse_expr(struct parser *parser, struct ast_expr *expr) {
 // so only those places call this method for that purpose.
 // `parse_call` calls this method as a helper but doesn't actually parse it as
 // a compound expr
-static bool parse_compoundexpr(struct parser *parser,
-                               struct ast_compoundexpr *compound_expr) {
+static bool parse_compoundexpr_raw(struct parser *parser,
+                                   struct ast_compoundexpr *compound_expr) {
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
@@ -2457,21 +2448,41 @@ static bool parse_compoundexpr(struct parser *parser,
 
   compound_expr->exprs = vector_head(exprs);
   compound_expr->num_exprs = vector_length(exprs);
-  compound_expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  compound_expr->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
 
+  return true;
+}
+
+static bool parse_compoundexpr_as_expr(struct parser *parser,
+                                       struct ast_expr *expr) {
+  struct ast_compoundexpr compound_expr;
+  if (!parse_compoundexpr_raw(parser, &compound_expr)) {
+    return false;
+  }
+
+  // if its one elem, promote it to an expr (as compound expr must have >1
+  // expressions)
+
+  if (compound_expr.num_exprs == 1) {
+    *expr = compound_expr.exprs[0];
+  } else {
+    expr->ty = AST_EXPR_TY_COMPOUNDEXPR;
+    expr->compound_expr = compound_expr;
+    expr->span = compound_expr.span;
+  }
+  
   return true;
 }
 
 // parse a non-compound expression, ending with a semicolon
 static bool
 parse_compoundexpr_with_semicolon(struct parser *parser,
-                                  struct ast_compoundexpr *compoundexpr) {
-  struct text_pos start = lex_get_last_text_pos(parser->lexer);
+                                  struct ast_expr *expr) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  if (parse_compoundexpr(parser, compoundexpr) &&
+  if (parse_compoundexpr_as_expr(parser, expr) &&
       parse_token(parser, LEX_TOKEN_TY_SEMICOLON, NULL)) {
-    compoundexpr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
     return true;
   }
 
@@ -2639,7 +2650,8 @@ static bool parse_jumpstmt(struct parser *parser,
       jump_stmt->ty = AST_JUMPSTMT_TY_GOTO;
       jump_stmt->goto_stmt.label = label;
 
-      jump_stmt->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+      jump_stmt->span =
+          MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
       return true;
     }
   }
@@ -2683,7 +2695,8 @@ static bool parse_labeledstmt(struct parser *parser,
 
   labeled_stmt->stmt = arena_alloc(parser->arena, sizeof(*labeled_stmt->stmt));
   *labeled_stmt->stmt = stmt;
-  labeled_stmt->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  labeled_stmt->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
   return true;
 }
 
@@ -2746,7 +2759,8 @@ static bool parse_ifelsestmt(struct parser *parser,
   if_else_stmt->else_body =
       arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
   *if_else_stmt->else_body = else_stmt;
-  if_else_stmt->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  if_else_stmt->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
 
   return true;
 }
@@ -2855,7 +2869,8 @@ static bool parse_dowhilestmt(struct parser *parser,
   do_while_stmt->body =
       arena_alloc(parser->arena, sizeof(*do_while_stmt->body));
   *do_while_stmt->body = stmt;
-  do_while_stmt->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  do_while_stmt->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
 
   return true;
 }
@@ -2871,16 +2886,10 @@ parse_declaration_or_expr(struct parser *parser,
     return true;
   }
 
-  struct ast_compoundexpr compoundexpr;
-  if (parse_compoundexpr(parser, &compoundexpr)) {
+  if (parse_compoundexpr_as_expr(parser, &decl_or_expr->expr)) {
     parse_expected_token(parser, LEX_TOKEN_TY_SEMICOLON, pos.text_pos,
                          "`;` after expr in for loop initializer", NULL);
     decl_or_expr->ty = AST_DECLARATION_OR_EXPR_TY_EXPR;
-    decl_or_expr->expr = (struct ast_expr){
-      .ty = AST_EXPR_TY_COMPOUNDEXPR,
-      .compound_expr = compoundexpr,
-      .span = compoundexpr.span
-    };
     decl_or_expr->span = decl_or_expr->expr.span;
     return true;
   }
@@ -2927,14 +2936,12 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   }
 
   // parse the iteration statement if present, else nothing
-  struct ast_compoundexpr compound;
-  if (parse_compoundexpr(parser, &compound)) {
+  struct ast_expr iter;
+  if (parse_compoundexpr_as_expr(parser, &iter)) {
     for_stmt->iter = arena_alloc(parser->arena, sizeof(*for_stmt->iter));
     // FIXME: there are more places where compound expressions are legal
     // rework expression parsing to handle them better
-    *for_stmt->iter = (struct ast_expr){.ty = AST_EXPR_TY_COMPOUNDEXPR,
-                                        .compound_expr = compound,
-                                        .span = compound.span};
+    *for_stmt->iter = iter;
   } else {
     for_stmt->iter = NULL;
   }
@@ -3061,19 +3068,20 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
-  struct ast_declaration declaration;
-  if (parse_declaration(parser, &declaration)) {
-    stmt->ty = AST_STMT_TY_DECLARATION;
-    stmt->declaration = declaration;
-    stmt->span = declaration.span;
-    return true;
-  }
-
+  // must parse labels first in case the label name is also a declaration
   struct ast_labeledstmt labeled_stmt;
   if (parse_labeledstmt(parser, &labeled_stmt)) {
     stmt->ty = AST_STMT_TY_LABELED;
     stmt->labeled = labeled_stmt;
     stmt->span = labeled_stmt.span;
+    return true;
+  }
+
+  struct ast_declaration declaration;
+  if (parse_declaration(parser, &declaration)) {
+    stmt->ty = AST_STMT_TY_DECLARATION;
+    stmt->declaration = declaration;
+    stmt->span = declaration.span;
     return true;
   }
 
@@ -3109,12 +3117,10 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     return true;
   }
 
-  struct ast_compoundexpr compound_expr;
+  struct ast_expr compound_expr;
   if (parse_compoundexpr_with_semicolon(parser, &compound_expr)) {
     stmt->ty = AST_STMT_TY_EXPR;
-    stmt->expr.ty = AST_EXPR_TY_COMPOUNDEXPR;
-    stmt->expr.compound_expr = compound_expr;
-    stmt->expr.span = compound_expr.span;
+    stmt->expr = compound_expr;
     stmt->span = compound_expr.span;
 
     return true;
@@ -3163,7 +3169,8 @@ static bool parse_compoundstmt(struct parser *parser,
                        "`}` at end of compound stmt", NULL);
 
   vt_pop_scope(&parser->ty_table);
-  compound_stmt->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  compound_stmt->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
   return true;
 }
 
@@ -3510,6 +3517,13 @@ DEBUG_FUNC(declaration_list, declaration_list) {
 #define AST_PRINT_IDENTIFIER(identifier)                                       \
   do {                                                                         \
     struct sized_str str = identifier_str(state->parser, identifier);          \
+    AST_PRINT("'%.*s'", (int)str.len, str.str);              \
+    AST_PRINTZ("");                                                            \
+  } while (0);
+
+#define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                                       \
+  do {                                                                         \
+    struct sized_str str = identifier_str(state->parser, identifier);          \
     AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
     AST_PRINTZ("");                                                            \
   } while (0);
@@ -3519,7 +3533,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT:
     if (struct_or_union_specifier->identifier) {
       AST_PRINT_SAMELINE_Z("STRUCT ");
-      AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
+      AST_PRINT_IDENTIFIER_SAMELINE(struct_or_union_specifier->identifier);
 
     } else {
       AST_PRINTZ("STRUCT");
@@ -3528,7 +3542,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
   case AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION:
     if (struct_or_union_specifier->identifier) {
       AST_PRINT_SAMELINE_Z("UNION ");
-      AST_PRINT_IDENTIFIER(struct_or_union_specifier->identifier);
+      AST_PRINT_IDENTIFIER_SAMELINE(struct_or_union_specifier->identifier);
     } else {
       AST_PRINTZ("UNION");
     }
@@ -3542,7 +3556,7 @@ DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
 
 DEBUG_FUNC(enumerator, enumerator) {
   AST_PRINT_SAMELINE_Z("ENUMERATOR ");
-  AST_PRINT_IDENTIFIER(&enumerator->identifier);
+  AST_PRINT_IDENTIFIER_SAMELINE(&enumerator->identifier);
 
   if (enumerator->value) {
     AST_PRINTZ("VALUE");
@@ -3561,7 +3575,7 @@ DEBUG_FUNC(enumerator_list, enumerator_list) {
 DEBUG_FUNC(enum_specifier, enum_specifier) {
   if (enum_specifier->identifier) {
     AST_PRINT_SAMELINE_Z("ENUM ");
-    AST_PRINT_IDENTIFIER(enum_specifier->identifier);
+    AST_PRINT_IDENTIFIER_SAMELINE(enum_specifier->identifier);
   } else {
     AST_PRINTZ("ENUM");
   }
@@ -3587,7 +3601,7 @@ DEBUG_FUNC(type_specifier, type_specifier) {
     break;
   case AST_TYPE_SPECIFIER_TYPEDEF_NAME:
     AST_PRINT_SAMELINE_Z("TYPEDEF ");
-    AST_PRINT_IDENTIFIER(&type_specifier->typedef_name);
+    AST_PRINT_IDENTIFIER_SAMELINE(&type_specifier->typedef_name);
     break;
   }
   UNINDENT();
@@ -3597,7 +3611,7 @@ DEBUG_FUNC(compoundstmt, compound_stmt);
 
 DEBUG_FUNC(var, var) {
   AST_PRINT_SAMELINE_Z("VARIABLE ");
-  AST_PRINT_IDENTIFIER(&var->identifier);
+  AST_PRINT_IDENTIFIER_SAMELINE(&var->identifier);
 }
 
 DEBUG_FUNC(cnst, cnst) {
@@ -3613,12 +3627,14 @@ DEBUG_FUNC(cnst, cnst) {
   case AST_CNST_TY_LONG_DOUBLE:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
     ap_val_fprintf(stderr, cnst->num_value);
+    AST_PRINTZ("");
     break;
   case AST_CNST_TY_CHAR:
     switch (cnst->num_value.ty) {
     case AP_VAL_TY_INVALID:
       AST_PRINT_SAMELINE_Z("CONSTANT ");
       ap_val_fprintf(stderr, cnst->num_value);
+      AST_PRINTZ("");
       break;
     case AP_VAL_TY_INT:
       AST_PRINT("CONSTANT '%c'", (char)ap_int_as_ull(cnst->num_value.ap_int));
@@ -3630,6 +3646,7 @@ DEBUG_FUNC(cnst, cnst) {
   case AST_CNST_TY_WIDE_CHAR:
     AST_PRINT_SAMELINE_Z("CONSTANT (wide char) ");
     ap_val_fprintf(stderr, cnst->num_value);
+    AST_PRINTZ("");
     break;
   case AST_CNST_TY_STR_LITERAL:
     AST_PRINT_SAMELINE_Z("CONSTANT ");
@@ -3747,7 +3764,7 @@ DEBUG_FUNC(direct_declarator, direct_declarator) {
   switch (direct_declarator->ty) {
   case AST_DIRECT_DECLARATOR_TY_IDENTIFIER:
     AST_PRINT_SAMELINE_Z("IDENTIFIER ");
-    AST_PRINT_IDENTIFIER(&direct_declarator->identifier);
+    AST_PRINT_IDENTIFIER_SAMELINE(&direct_declarator->identifier);
     break;
   case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR:
     DEBUG_CALL(declarator, direct_declarator->paren_declarator);
@@ -4110,7 +4127,7 @@ DEBUG_FUNC(designator, designator) {
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD:
     AST_PRINT_SAMELINE_Z("FIELD ");
-    AST_PRINT_IDENTIFIER(&designator->field);
+    AST_PRINT_IDENTIFIER_SAMELINE(&designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
     AST_PRINTZ("INDEX");
@@ -4327,7 +4344,7 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     break;
   case AST_JUMPSTMT_TY_GOTO:
     AST_PRINT_SAMELINE_Z("GOTO ");
-    AST_PRINT_IDENTIFIER(&jump_stmt->goto_stmt.label);
+    AST_PRINT_IDENTIFIER_SAMELINE(&jump_stmt->goto_stmt.label);
     break;
   case AST_JUMPSTMT_TY_BREAK:
     AST_PRINTZ("BREAK");
@@ -4495,7 +4512,7 @@ DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case AST_LABELEDSTMT_TY_LABEL:
     AST_PRINT_SAMELINE_Z("LABEL ");
-    AST_PRINT_IDENTIFIER(&labeled_stmt->label);
+    AST_PRINT_IDENTIFIER_SAMELINE(&labeled_stmt->label);
     break;
   case AST_LABELEDSTMT_TY_CASE:
     AST_PRINTZ("CASE");

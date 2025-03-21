@@ -8,5 +8,5 @@ union foo {
 int main() {
   union foo bar;
   bar.a = 1;
-  return bar.a;
+  return bar.b;
 }

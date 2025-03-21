@@ -799,11 +799,10 @@ td_var_ty_for_enum(struct typechk *tchk,
       // enums have same behaviour as types, but are in the var table
       // so if type table is at global level, insert enum there too
       if (vt_cur_scope(&tchk->ty_table) == SCOPE_GLOBAL) {
-        entry = vt_create_top_level_entry(&tchk->var_table,
-                                                 VAR_TABLE_NS_NONE, enum_name);
+        entry = vt_create_top_level_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
+                                          enum_name);
       } else {
-        entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
-                                       enum_name);
+        entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, enum_name);
       }
       entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
       *entry->var = var;
@@ -856,8 +855,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   enum var_table_ns ns = var_ty.aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
                              ? VAR_TABLE_NS_STRUCT
                              : VAR_TABLE_NS_UNION;
-  struct var_table_entry *entry =
-      vt_get_entry(&tchk->ty_table, ns, name);
+  struct var_table_entry *entry = vt_get_entry(&tchk->ty_table, ns, name);
 
   if (!specifier->decl_list) {
     if (!specifier->identifier) {
@@ -1240,7 +1238,7 @@ td_var_ty_for_typedef(struct typechk *tchk,
                       const struct lex_token *identifier) {
   struct var_table_entry *entry =
       vt_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
-                          identifier_str(tchk->parser, identifier));
+                   identifier_str(tchk->parser, identifier));
 
   if (!entry) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -2169,8 +2167,8 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
         var_ty->incomplete_aggregate.ty == TD_TY_AGGREGATE_TY_STRUCT
             ? VAR_TABLE_NS_STRUCT
             : VAR_TABLE_NS_UNION;
-    struct var_table_entry *entry = vt_get_entry(
-        &tchk->ty_table, ns, var_ty->incomplete_aggregate.name);
+    struct var_table_entry *entry =
+        vt_get_entry(&tchk->ty_table, ns, var_ty->incomplete_aggregate.name);
 
     // FIXME: ALSO needs to check scope
     // if (!entry || entry->var->scope != td_var_ty)
@@ -2661,7 +2659,6 @@ type_compoundexpr(struct typechk *tchk, enum type_expr_flags flags,
     td_compoundexpr.exprs[i] = type_expr(tchk, flags, &compoundexpr->exprs[i]);
   }
 
-  // skip: not implemented
   DEBUG_ASSERT(td_compoundexpr.num_exprs,
                "compound expression must have at least one expression");
   struct td_var_ty var_ty =
@@ -3172,6 +3169,15 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
             goto to_int;
           case WELL_KNOWN_TY_SIGNED_LONG:
           case WELL_KNOWN_TY_UNSIGNED_LONG:
+            switch (tchk->target->lp_sz) {
+            case TARGET_LP_SZ_LP32:
+              num_bits = 32;
+              break;
+            case TARGET_LP_SZ_LP64:
+              num_bits = 64;
+              break;
+            }
+            goto to_int;
           case WELL_KNOWN_TY_SIGNED_LONG_LONG:
           case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
             num_bits = 64;
@@ -4046,8 +4052,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       .scope = SCOPE_PARAMS,
   };
 
-  struct var_table_entry *entry = vt_create_entry(
-      &tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
+  struct var_table_entry *entry =
+      vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
   *entry->var = var;
   entry->var_ty = arena_alloc(tchk->arena, sizeof(*entry->var_ty));
@@ -4206,7 +4212,7 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
 
 static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
   if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
-      var_ty->ty == TD_TY_AGGREGATE_TY_UNION) {
+      var_ty->aggregate.ty == TD_TY_AGGREGATE_TY_UNION) {
     return 1;
   }
 
@@ -4398,10 +4404,10 @@ type_init_declarator(struct typechk *tchk,
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
     entry = vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
-                                   td_var_decl.var.identifier);
+                            td_var_decl.var.identifier);
   } else {
     entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
-                                   td_var_decl.var.identifier);
+                            td_var_decl.var.identifier);
 
     if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
       td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty,
@@ -4709,8 +4715,10 @@ DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
   }
 }
 
-#define TD_PRINT_STR(s)                                                        \
+#define TD_PRINT_STR_SAMELINE(s)                                               \
   TD_PRINT_SAMELINE_NOINDENT("'%.*s'\n", (int)(s).len, (s).str);
+
+#define TD_PRINT_STR(s) TD_PRINT("'%.*s'\n", (int)(s).len, (s).str);
 
 DEBUG_FUNC(var_ty, var_ty) {
   DEBUG_CALL(type_qualifier_flags, &var_ty->type_qualifiers);
@@ -4723,11 +4731,11 @@ DEBUG_FUNC(var_ty, var_ty) {
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
       TD_PRINT_SAMELINE_Z("INCOMPLETE STRUCT ");
-      TD_PRINT_STR(var_ty->aggregate.name);
+      TD_PRINT_STR_SAMELINE(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
       TD_PRINT_SAMELINE_Z("INCOMPLETE UNION ");
-      TD_PRINT_STR(var_ty->aggregate.name);
+      TD_PRINT_STR_SAMELINE(var_ty->aggregate.name);
       break;
     }
     break;
@@ -4735,11 +4743,11 @@ DEBUG_FUNC(var_ty, var_ty) {
     switch (var_ty->aggregate.ty) {
     case TD_TY_AGGREGATE_TY_STRUCT:
       TD_PRINT_SAMELINE_Z("STRUCT ");
-      TD_PRINT_STR(var_ty->aggregate.name);
+      TD_PRINT_STR_SAMELINE(var_ty->aggregate.name);
       break;
     case TD_TY_AGGREGATE_TY_UNION:
       TD_PRINT_SAMELINE_Z("UNION ");
-      TD_PRINT_STR(var_ty->aggregate.name);
+      TD_PRINT_STR_SAMELINE(var_ty->aggregate.name);
       break;
     }
 
@@ -4875,17 +4883,17 @@ DEBUG_FUNC(expr, expr);
 
 DEBUG_FUNC(var, var) {
   TD_PRINT_SAMELINE_Z("VARIABLE ");
-  TD_PRINT_STR(var->identifier);
+  TD_PRINT_STR_SAMELINE(var->identifier);
   switch (var->scope) {
-    case SCOPE_GLOBAL:
-      TD_PRINTZ("SCOPE GLOBAL");
-      break;
-    case SCOPE_PARAMS:
-      TD_PRINTZ("SCOPE PARAMS");
-      break;
-    default:
-      TD_PRINT("SCOPE %d", var->scope);
-      break;
+  case SCOPE_GLOBAL:
+    TD_PRINTZ("SCOPE GLOBAL");
+    break;
+  case SCOPE_PARAMS:
+    TD_PRINTZ("SCOPE PARAMS");
+    break;
+  default:
+    TD_PRINT("SCOPE %d", var->scope);
+    break;
   }
 
   switch (var->ty) {
@@ -4901,6 +4909,7 @@ DEBUG_FUNC(cnst, cnst) {
   case TD_CNST_TY_NUM:
     TD_PRINT_SAMELINE_Z("CONSTANT ");
     ap_val_fprintf(stderr, cnst->num_value);
+    TD_PRINTZ("");
     break;
   case TD_CNST_TY_STRING:
     TD_PRINT_SAMELINE_Z("CONSTANT ");
@@ -5172,7 +5181,7 @@ DEBUG_FUNC(designator, designator) {
   switch (designator->ty) {
   case TD_DESIGNATOR_TY_FIELD:
     TD_PRINT_SAMELINE_Z("FIELD ");
-    TD_PRINT_STR(designator->field);
+    TD_PRINT_STR_SAMELINE(designator->field);
     break;
   case AST_DESIGNATOR_TY_INDEX:
     TD_PRINT("INDEX '%llu'", designator->index);
@@ -5370,7 +5379,7 @@ DEBUG_FUNC(jumpstmt, jump_stmt) {
     break;
   case TD_JUMPSTMT_TY_GOTO:
     TD_PRINT_SAMELINE_Z("GOTO ");
-    TD_PRINT_STR(jump_stmt->goto_stmt.label);
+    TD_PRINT_STR_SAMELINE(jump_stmt->goto_stmt.label);
     break;
   case TD_JUMPSTMT_TY_BREAK:
     TD_PRINTZ("BREAK");
@@ -5512,7 +5521,7 @@ DEBUG_FUNC(labeledstmt, labeled_stmt) {
   switch (labeled_stmt->ty) {
   case TD_LABELEDSTMT_TY_LABEL:
     TD_PRINT_SAMELINE_Z("LABEL ");
-    TD_PRINT_STR(labeled_stmt->label);
+    TD_PRINT_STR_SAMELINE(labeled_stmt->label);
     break;
   case TD_LABELEDSTMT_TY_CASE:
     TD_PRINT("CASE %llu", labeled_stmt->cnst);
@@ -5573,7 +5582,6 @@ DEBUG_FUNC(compoundstmt, compound_stmt) {
 DEBUG_FUNC(param, param) {
   TD_PRINT_SAMELINE_Z("PARAM ");
   DEBUG_CALL(var_ty, &param->var_ty);
-  TD_PRINTZ(" ");
   TD_PRINT_STR(param->name);
 }
 
