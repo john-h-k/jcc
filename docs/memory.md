@@ -18,14 +18,11 @@ void *arena_alloc(struct arena_allocator *allocator, size_t size);
 
 ## Correctness
 
-All debug & test builds use address sanitiser and leak sanitiser where available, including in CI.
-This catches the vast majority of leaks, which primarily occur from the few usages of non-arena such as in the top-level compiler instances and the linker invokers.
-The small number of arenas used in the project, seperated generally by compiler stage, make verifying that they are freed very easy.
+All debug & test builds use address sanitiser and leak sanitiser where available, including in CI. This catches the vast majority of leaks, which primarily occur from the few usages of non-arena such as in the top-level compiler instances and the linker invokers. The small number of arenas used in the project, seperated generally by compiler stage, make verifying that they are freed very easy.
 
 ## Performance
 
-The tree/graph-like nature of ASTs and IR mean allocations must be very fast. Parsing extremely large (100k lines+) files with `ALWAYS_MALLOC`, which does not use the arena,
-can lead to compile times with ~45% of time spent in `malloc` and ~50% spent in `free`, dominating program execution.
+The tree/graph-like nature of ASTs and IR mean allocations must be very fast. Parsing extremely large (100k lines+) files with `ALWAYS_MALLOC`, which does not use the arena, can lead to compile times with ~45% of time spent in `malloc` and ~50% spent in `free`, dominating program execution.
 
 The core `arena_alloc` function is carefully optimised to be extremely fast.
 
@@ -72,6 +69,4 @@ The `ALWAYS_MALLOC` macro can be defined to force all allocations go through `ma
 
 ## Containers
 
-Originally, the container types (principally `struct vector` and `struct hashtbl`) allocated their memory via `malloc`.
-They have since been changed to support using arenas, and the majority of usages in the compile use these variants.
-At some point I will remove the old versions entirely, but it is not a priority.
+Originally, the container types (principally `struct vector` and `struct hashtbl`) allocated their memory via `malloc`. They have since been changed to support using arenas, and the majority of usages in the compile use these variants. At some point I will remove the old versions entirely, but it is not a priority.
