@@ -769,11 +769,6 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
                                         expr->pointer_access.member, NULL,
                                         NULL);
   }
-  case TD_EXPR_TY_COMPOUNDEXPR: {
-    return build_ir_for_addressof(
-        irb, stmt,
-        &expr->compound_expr.exprs[expr->compound_expr.num_exprs - 1]);
-  }
   default:
     break;
   }
@@ -1230,6 +1225,9 @@ build_ir_for_compoundexpr(struct ir_func_builder *irb, struct ir_stmt **stmt,
   struct ir_op *op = NULL;
   for (size_t i = 0; i < compound_expr->num_exprs; i++) {
     op = build_ir_for_expr(irb, stmt, &compound_expr->exprs[i]);
+
+    // compound expressions create a sequence point
+    *stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
   }
 
   return op;
@@ -3701,6 +3699,8 @@ static size_t
 get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
                         size_t member_index, struct td_var_ty *member_ty,
                         bool *is_bitfield, struct ir_bitfield *bitfield) {
+  *is_bitfield = false;
+
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY) {
     *member_ty = td_var_ty_get_underlying(iru->tchk, var_ty);
     struct ir_var_ty el_ty = var_ty_for_td_var_ty(iru, member_ty);
@@ -3712,8 +3712,24 @@ get_member_index_offset(struct ir_unit *iru, const struct td_var_ty *var_ty,
                      var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE,
                  "bad type");
 
+    struct td_struct_field *struct_field = &var_ty->aggregate.fields[member_index];
     struct sized_str member_name =
-        var_ty->aggregate.fields[member_index].identifier;
+        struct_field->identifier;
+
+    if (!member_name.str) {
+      // anonymous field
+      // get info for first field of sub ty
+
+      
+      struct ir_var_ty ir_aggregate = var_ty_for_td_var_ty(iru, var_ty);
+      struct ir_var_ty_info info = ir_var_ty_info(iru, &ir_aggregate);
+
+      *member_ty = struct_field->var_ty;
+
+      // offsets are null for a union
+      return info.offsets ? info.offsets[member_index] : 0;
+    }
+
     struct ir_var_ty ir_member_ty;
     size_t member_offset;
     size_t idx;

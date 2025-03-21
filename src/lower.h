@@ -17,7 +17,8 @@ void lower_abi(struct ir_unit *unit);
 void lower(struct ir_unit *unit);
 
 // needed so that target lowering which generates instructions can lower them
-void lower_call(struct ir_func *func, struct ir_op *op);
+// it is okay to provide NULL for `use_map` provided the call being lowered does not return a structure
+void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map, struct ir_op *op);
 void lower_bitfield_insert(struct ir_func *func, struct ir_op *op);
 void lower_bitfield_extract(struct ir_func *func, struct ir_op *op);
 void lower_store(struct ir_func *func, struct ir_op *op);

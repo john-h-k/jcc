@@ -1705,6 +1705,23 @@ static bool try_include_path(struct preproc *preproc, const char *path,
     *content = STDNORETURN_CONTENT;
 
     return true;
+  } else if (!strcmp(path, "float.h")) {
+    if (preproc->args.verbose) {
+      fprintf(stderr, "preproc: special header 'float.h'\n");
+    }
+
+    const char *FLOAT_CONTENT =
+        "\n"
+        "#ifndef FLOAT_H\n"
+        "#define FLOAT_H\n"
+        "\n"
+        "#define FLT_MAX __FLT_MAX__\n"
+        "#define DBL_MAX __DBL_MAX__\n"
+        "#endif\n";
+
+    *content = FLOAT_CONTENT;
+
+    return true;
   } else if (!strcmp(path, "stdarg.h")) {
     if (preproc->args.verbose) {
       fprintf(stderr, "preproc: special header 'starg.h'\n");
@@ -1721,7 +1738,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#endif\n"
         "\n"
         "#ifdef __need___va_list\n"
-        "typedef void * __gnuc_va_list;\n"
+        // "typedef void * __gnuc_va_list;\n"
         "#define __GNUC_VA_LIST\n"
         "\n"
         "#else\n"
@@ -1837,7 +1854,7 @@ static struct include_info try_find_include(struct preproc *preproc,
   }
 
   if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h") ||
-      !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h")) {
+      !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h") || !strcmp(filename, "float.h")) {
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;
@@ -2035,9 +2052,11 @@ static unsigned long long eval_atom(struct preproc *preproc,
       switch (len) {
       case 3:
         return token->text[1];
-      case 6: {
+      case 5:
+        // assume `L'\0'` for test
+        return 0;
+      case 6:
         return strtoul(&token->text[2], NULL, 8);
-      }
       default:
         TODO("proper preproc char parse ('%.*s')", (int)len, token->text);
       }
@@ -2752,7 +2771,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
         bool wrote = false;
 
-        struct vector *msg =
+        struct vector *buf =
             vector_create_in_arena(sizeof(char), preproc->arena);
 
         for (size_t i = 0; i < num_directive_tokens; i++) {
@@ -2768,8 +2787,12 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           }
 
           wrote = true;
-          vector_extend(msg, warn_token->text,
+          vector_extend(buf, warn_token->text,
                         text_span_len(&warn_token->span));
+        }
+
+        if (!wrote) {
+          continue;
         }
 
         struct text_pos end;
@@ -2780,21 +2803,28 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           end = token->span.end;
         }
 
-        char nll = 0;
-        vector_push_back(msg, &nll);
+        const char *msg;
+
+        if (vector_empty(buf)) {
+          msg = "empty '#warning' directive";
+        } else {
+          char nll = 0;
+          vector_push_back(buf, &nll);
+          msg = vector_head(buf);
+        }
 
         if (is_warn) {
           compiler_diagnostics_add(
               preproc->diagnostics,
               MK_PREPROC_DIAGNOSTIC(WARN_DIRECTIVE, warn_directive,
                                     MK_TEXT_SPAN(token->span.start, end),
-                                    MK_INVALID_TEXT_POS(0), vector_head(msg)));
+                                    MK_INVALID_TEXT_POS(0), msg));
         } else {
           compiler_diagnostics_add(
               preproc->diagnostics,
               MK_PREPROC_DIAGNOSTIC(ERROR_DIRECTIVE, error_directive,
                                     MK_TEXT_SPAN(token->span.start, end),
-                                    MK_INVALID_TEXT_POS(0), vector_head(msg)));
+                                    MK_INVALID_TEXT_POS(0), msg));
         }
 
         if (wrote) {
