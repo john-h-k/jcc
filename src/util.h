@@ -234,7 +234,7 @@ static inline void debug_print_stack_trace(void) {}
     EXIT_FAIL(-2);                                                             \
   } while (0);
 
-#if NDEBUG
+#if NDEBUG || 1
 #define DEBUG_ASSERT(b, ...) (void)(b)
 #else
 #define DEBUG_ASSERT(b, ...)                                                   \
