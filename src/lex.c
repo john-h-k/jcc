@@ -55,7 +55,6 @@ enum lex_create_result lexer_create(struct program *program,
     KEYWORD("typeof", LEX_TOKEN_TY_KW_TYPEOF);
     KEYWORD("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
-    KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
     KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
     KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);

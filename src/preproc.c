@@ -1763,7 +1763,6 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         // "typedef __builtin_va_list va_list;\n"
         // TEMP:
 
-        "static inline  f\n"
         "#endif\n"
         "#endif\n";
 
