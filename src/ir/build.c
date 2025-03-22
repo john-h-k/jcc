@@ -2980,8 +2980,10 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
       struct ir_op *value = build_ir_for_compoundliteral(irb, stmt, start_address,
                                    mode,
                                    &init->expr);
-      return mode == BUILD_COMPOUNDLITERAL_MODE_ADDR ? NULL : value; // return null signifies build_ir_for_var should not insert a
-                   // STORE
+
+      // null signifies build_ir_for_var should not insert a STORE
+      // so if build_ir_for_compoundliteral did the writing (non scalar) return null
+      return mode == BUILD_COMPOUNDLITERAL_MODE_ADDR ? NULL : value; 
     } else {
       return build_ir_for_expr(irb, stmt, &init->expr);
     }

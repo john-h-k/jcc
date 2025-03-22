@@ -187,11 +187,13 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
 // when len >= buckets * max_fill, double bucket size and rebuild
 static const float MAX_FILL = 0.8f;
 
+#define MIN_BUCKET_COUNT (8)
+
 static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   struct vector *buckets = hashtbl->buckets;
   size_t num_buckets = vector_length(buckets);
 
-  size_t new_num_buckets = num_buckets < 8 ? 8 : num_buckets * 2;
+  size_t new_num_buckets = num_buckets < MIN_BUCKET_COUNT ? MIN_BUCKET_COUNT : num_buckets * 2;
 
   hashtbl->len = 0;
   hashtbl->buckets =
