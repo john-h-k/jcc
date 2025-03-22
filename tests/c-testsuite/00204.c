@@ -1,3 +1,5 @@
+// skip: va_list not implemented
+
 // This program is designed to test some arm64-specific things, such as the
 // calling convention, but should give the same results on any architecture.
 
@@ -244,70 +246,70 @@ int match(const char **s, const char *f)
 
 void myprintf(const char *format, ...)
 {
-    // const char *s;
-    // va_list ap;
-    // va_start(ap, format);
-    // for (s = format; *s; s++) {
-    //     if (match(&s, "%7s")) {
-    //         struct s7 t7 = va_arg(ap, struct s7);
-    //         printf("%.7s", t7.x);
-    //     }
-    //     else if (match(&s, "%9s")) {
-    //         struct s9 t9 = va_arg(ap, struct s9);
-    //         printf("%.9s", t9.x);
-    //     }
-    //     else if (match(&s, "%hfa11")) {
-    //         struct hfa11 x = va_arg(ap, struct hfa11);
-    //         printf("%.1f,%.1f", x.a, x.a);
-    //     }
-    //     else if (match(&s, "%hfa12")) {
-    //         struct hfa12 x = va_arg(ap, struct hfa12);
-    //         printf("%.1f,%.1f", x.a, x.b);
-    //     }
-    //     else if (match(&s, "%hfa13")) {
-    //         struct hfa13 x = va_arg(ap, struct hfa13);
-    //         printf("%.1f,%.1f", x.a, x.c);
-    //     }
-    //     else if (match(&s, "%hfa14")) {
-    //         struct hfa14 x = va_arg(ap, struct hfa14);
-    //         printf("%.1f,%.1f", x.a, x.d);
-    //     }
-    //     else if (match(&s, "%hfa21")) {
-    //         struct hfa21 x = va_arg(ap, struct hfa21);
-    //         printf("%.1f,%.1f", x.a, x.a);
-    //     }
-    //     else if (match(&s, "%hfa22")) {
-    //         struct hfa22 x = va_arg(ap, struct hfa22);
-    //         printf("%.1f,%.1f", x.a, x.b);
-    //     }
-    //     else if (match(&s, "%hfa23")) {
-    //         struct hfa23 x = va_arg(ap, struct hfa23);
-    //         printf("%.1f,%.1f", x.a, x.c);
-    //     }
-    //     else if (match(&s, "%hfa24")) {
-    //         struct hfa24 x = va_arg(ap, struct hfa24);
-    //         printf("%.1f,%.1f", x.a, x.d);
-    //     }
-    //     else if (match(&s, "%hfa31")) {
-    //         struct hfa31 x = va_arg(ap, struct hfa31);
-    //         printf("%.1Lf,%.1Lf", x.a, x.a);
-    //     }
-    //     else if (match(&s, "%hfa32")) {
-    //         struct hfa32 x = va_arg(ap, struct hfa32);
-    //         printf("%.1Lf,%.1Lf", x.a, x.b);
-    //     }
-    //     else if (match(&s, "%hfa33")) {
-    //         struct hfa33 x = va_arg(ap, struct hfa33);
-    //         printf("%.1Lf,%.1Lf", x.a, x.c);
-    //     }
-    //     else if (match(&s, "%hfa34")) {
-    //         struct hfa34 x = va_arg(ap, struct hfa34);
-    //         printf("%.1Lf,%.1Lf", x.a, x.d);
-    //     }
-    //     else
-    //         putchar(*s);
-    // }
-    // putchar('\n');
+    const char *s;
+    va_list ap;
+    va_start(ap, format);
+    for (s = format; *s; s++) {
+        if (match(&s, "%7s")) {
+            struct s7 t7 = va_arg(ap, struct s7);
+            printf("%.7s", t7.x);
+        }
+        else if (match(&s, "%9s")) {
+            struct s9 t9 = va_arg(ap, struct s9);
+            printf("%.9s", t9.x);
+        }
+        else if (match(&s, "%hfa11")) {
+            struct hfa11 x = va_arg(ap, struct hfa11);
+            printf("%.1f,%.1f", x.a, x.a);
+        }
+        else if (match(&s, "%hfa12")) {
+            struct hfa12 x = va_arg(ap, struct hfa12);
+            printf("%.1f,%.1f", x.a, x.b);
+        }
+        else if (match(&s, "%hfa13")) {
+            struct hfa13 x = va_arg(ap, struct hfa13);
+            printf("%.1f,%.1f", x.a, x.c);
+        }
+        else if (match(&s, "%hfa14")) {
+            struct hfa14 x = va_arg(ap, struct hfa14);
+            printf("%.1f,%.1f", x.a, x.d);
+        }
+        else if (match(&s, "%hfa21")) {
+            struct hfa21 x = va_arg(ap, struct hfa21);
+            printf("%.1f,%.1f", x.a, x.a);
+        }
+        else if (match(&s, "%hfa22")) {
+            struct hfa22 x = va_arg(ap, struct hfa22);
+            printf("%.1f,%.1f", x.a, x.b);
+        }
+        else if (match(&s, "%hfa23")) {
+            struct hfa23 x = va_arg(ap, struct hfa23);
+            printf("%.1f,%.1f", x.a, x.c);
+        }
+        else if (match(&s, "%hfa24")) {
+            struct hfa24 x = va_arg(ap, struct hfa24);
+            printf("%.1f,%.1f", x.a, x.d);
+        }
+        else if (match(&s, "%hfa31")) {
+            struct hfa31 x = va_arg(ap, struct hfa31);
+            printf("%.1Lf,%.1Lf", x.a, x.a);
+        }
+        else if (match(&s, "%hfa32")) {
+            struct hfa32 x = va_arg(ap, struct hfa32);
+            printf("%.1Lf,%.1Lf", x.a, x.b);
+        }
+        else if (match(&s, "%hfa33")) {
+            struct hfa33 x = va_arg(ap, struct hfa33);
+            printf("%.1Lf,%.1Lf", x.a, x.c);
+        }
+        else if (match(&s, "%hfa34")) {
+            struct hfa34 x = va_arg(ap, struct hfa34);
+            printf("%.1Lf,%.1Lf", x.a, x.d);
+        }
+        else
+            putchar(*s);
+    }
+    putchar('\n');
 }
 
 void stdarg(void)
