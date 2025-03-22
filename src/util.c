@@ -21,8 +21,10 @@ void util_debug_assert(bool b, const char *cond, const char *func,
   if (!b) {
     fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ",
             file, line, func, cond);
-
-#ifndef __JCC__
+#ifdef __JCC__
+    // print raw message
+    fprintf(stderr, "%s\n", msg);
+#else
     va_list v;
     va_start(v, msg);
     vfprintf(stderr, msg, v);

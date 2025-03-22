@@ -8,6 +8,8 @@ struct foo {
   int a;
 
   struct bar b;
+
+  int c;
 };
 
 int main() {
@@ -26,6 +28,10 @@ int main() {
     return 2;
   }
 
+  if (f.c) {
+    return 3;
+  }
+
   struct foo *p = &f;
   *p = (struct foo){
     .a = 200,
@@ -35,10 +41,30 @@ int main() {
   };
 
   if (f.a != 200) {
-    return 3;
+    return 4;
   }
 
   if (f.b.value[0] != 'w') {
-    return 4;
+    return 5;
+  }
+
+  if (f.c) {
+    return 6;
+  }
+
+  *p = (struct foo){
+    .c = 1
+  };
+
+  if (f.a) {
+    return 7;
+  }
+
+  if (f.b.value) {
+    return 8;
+  }
+
+  if (f.c != 1) {
+    return 9;
   }
 }

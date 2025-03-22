@@ -123,11 +123,11 @@ static struct reloc_info build_reloc_info(const struct build_object_args *args,
   return info;
 }
 
+// macOS makes them bitfields but this is not technically proper C (as you
+// can't assume bitfields are packed)
+// FIXME: do this for ELF too
+#define RELOC_INFO_SIZE 8
 static void write_single_relocation(FILE *file, struct relocation_info info) {
-  // macOS makes them bitfields but this is not technically proper C (as you
-  // can't assume bitfields are packed)
-  // FIXME: do this for ELF too
-
   fwrite(&info.r_address, sizeof(info.r_address), 1, file);
 
   // r_symbolnum : 24
@@ -379,7 +379,7 @@ static void write_segment_command(FILE *file,
   const_data.size = total_const_size;
   const_data.offset = segment.fileoff + text.size + cstrings.size;
   const_data.align = ILOG2(const_align);
-  const_data.reloff = text.reloff + (sizeof(struct relocation_info) *
+  const_data.reloff = text.reloff + (RELOC_INFO_SIZE *
                                      info.num_text_reloc_instrs);
   const_data.nreloc = info.num_const_data_reloc_instrs;
   const_data.flags = S_REGULAR;
@@ -395,7 +395,7 @@ static void write_segment_command(FILE *file,
   data.size = total_data_size;
   data.offset = segment.fileoff + text.size + cstrings.size + const_data.size;
   data.align = ILOG2(data_align);
-  data.reloff = const_data.reloff + (sizeof(struct relocation_info) *
+  data.reloff = const_data.reloff + (RELOC_INFO_SIZE *
                                      info.num_const_data_reloc_instrs);
   data.nreloc = info.num_data_reloc_instrs;
   data.flags = S_REGULAR;
@@ -416,7 +416,7 @@ static void write_segment_command(FILE *file,
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
   symtab.symoff =
-      relocs_offset + sizeof(struct relocation_info) * total_reloc_instrs;
+      relocs_offset + RELOC_INFO_SIZE * total_reloc_instrs;
   symtab.nsyms = args->num_entries;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
 

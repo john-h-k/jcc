@@ -10,6 +10,11 @@ struct three_elem {
   int c;
 };
 
+const char *strs[] = {
+  "hello",
+  "goodbye"
+};
+
 int main() {
 #if __STDC_VERSION__ >= 202311L
   int a[2] = {};
@@ -112,6 +117,14 @@ int main() {
 
   if (three_init_three.c != 3) {
     return 20;
+  }
+
+  if (strs[0][0] != 'h') {
+    return 21;
+  }
+
+  if (strs[1][0] != 'g') {
+    return 22;
   }
 
   return 0;

@@ -564,6 +564,10 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   b->rhs = rhs;
 
   bool is_fp = ir_var_ty_is_fp(&op->binary_op.lhs->var_ty);
+
+  bool is_sgn = args->lhs_ty.ty == TD_VAR_TY_TY_WELL_KNOWN && WKT_IS_SIGNED(args->lhs_ty.well_known);
+  DEBUG_ASSERT(is_fp == ir_var_ty_is_fp(&op->binary_op.rhs->var_ty),
+               "type mismatch between lhs/rhs");
   DEBUG_ASSERT(is_fp == ir_var_ty_is_fp(&op->binary_op.rhs->var_ty),
                "type mismatch between lhs/rhs");
 
@@ -587,7 +591,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   case TD_BINARY_OP_TY_GT:
     if (is_fp) {
       b->ty = IR_OP_BINARY_OP_TY_FGT;
-    } else if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    } else if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SGT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGT;
@@ -596,7 +600,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   case TD_BINARY_OP_TY_GTEQ:
     if (is_fp) {
       b->ty = IR_OP_BINARY_OP_TY_FGTEQ;
-    } else if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    } else if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SGTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UGTEQ;
@@ -605,7 +609,7 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   case TD_BINARY_OP_TY_LT:
     if (is_fp) {
       b->ty = IR_OP_BINARY_OP_TY_FLT;
-    } else if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    } else if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SLT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULT;
@@ -614,14 +618,14 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   case TD_BINARY_OP_TY_LTEQ:
     if (is_fp) {
       b->ty = IR_OP_BINARY_OP_TY_FLTEQ;
-    } else if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    } else if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SLTEQ;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_ULTEQ;
     }
     break;
   case TD_BINARY_OP_TY_RSHIFT:
-    if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SRSHIFT;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_URSHIFT;
@@ -651,14 +655,14 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
   case TD_BINARY_OP_TY_DIV:
     if (is_fp) {
       b->ty = IR_OP_BINARY_OP_TY_FDIV;
-    } else if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    } else if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SDIV;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UDIV;
     }
     break;
   case TD_BINARY_OP_TY_MOD:
-    if (WKT_IS_SIGNED(td_var_ty->well_known)) {
+    if (is_sgn) {
       b->ty = IR_OP_BINARY_OP_TY_SMOD;
     } else {
       b->ty = IR_OP_BINARY_OP_TY_UMOD;
@@ -1300,9 +1304,6 @@ static struct ir_op *build_ir_for_ternary(struct ir_func_builder *irb,
 
     struct ir_op *false_addr = ir_build_addr(irb->func, false_op);
     struct ir_op *true_addr = ir_build_addr(irb->func, true_op);
-
-    ir_detach_op(irb->func, false_op);
-    ir_detach_op(irb->func, true_op);
 
     false_op = false_addr;
     true_op = true_addr;
@@ -3224,7 +3225,7 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
           .global_var_refs = irb->global_var_refs,
       };
 
-      build_ir_for_global_var(&builder, irb->func, irb->global_var_refs,
+      build_ir_for_global_var(&builder, irb->func, irb->var_refs,
                               declaration->storage_class_specifier,
                               declaration->function_specifier_flags, decl);
     }

@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <time.h>
+#include <wchar.h>
 
 struct preproc_text {
   struct text_pos pos;
@@ -381,7 +382,8 @@ preproc_create(struct program *program, struct preproc_create_args args,
   p->keep_next_token = false;
   p->waiting_for_close = false;
 
-  p->defines = hashtbl_create_sized_str_keyed_in_arena(p->arena, sizeof(struct preproc_define));
+  p->defines = hashtbl_create_sized_str_keyed_in_arena(
+      p->arena, sizeof(struct preproc_define));
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
   p->buffer_tokens = vector_create(sizeof(struct preproc_token));
@@ -948,12 +950,45 @@ static void preproc_next_raw_token(struct preproc *preproc,
   preproc_text->pos = end;
   return;
 
-not_punctuator:
+not_punctuator: {
+  size_t rem = preproc_text->len - end.idx;
 
-  if (is_first_identifier_char(c)) {
-    while (end.idx < preproc_text->len &&
-           is_identifier_char(preproc_text->text[end.idx])) {
-      next_col(&end);
+  wchar_t wch;
+  size_t read = mbtowc(&wch, &preproc_text->text[end.idx], rem);
+  switch (read) {
+  case 0: // null char??
+  case (size_t)-1:
+  case (size_t)-2:
+    // invalid in some manner
+    goto other;
+  }
+
+  for (size_t i = 0; i < read; i++) {
+    next_col(&end);
+  }
+
+  // TODO: this logic will consider unicode whitespace etc as part of identifier
+
+  if (read > 1 || is_first_identifier_char(c)) {
+    // all multi-byte chars accepted as identifier characters
+
+    while (end.idx < preproc_text->len) {
+      read = mbtowc(&wch, &preproc_text->text[end.idx], rem);
+      switch (read) {
+      case 0: // null char??
+      case (size_t)-1:
+      case (size_t)-2:
+        // invalid in some manner
+        goto other;
+      }
+
+      if (read == 1 && !is_identifier_char((char)wch)) {
+        break;
+      }
+
+      for (size_t i = 0; i < read; i++) {
+        next_col(&end);
+      }
     }
 
     token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
@@ -964,12 +999,14 @@ not_punctuator:
     return;
   }
 
+other:
   next_col(&end);
   token->ty = PREPROC_TOKEN_TY_OTHER;
   token->text = &preproc_text->text[start.idx];
   token->span = (struct text_span){.start = start, .end = end};
 
   preproc_text->pos = end;
+}
 }
 
 static bool token_streq(struct preproc_token token, const char *str) {
@@ -1133,7 +1170,8 @@ static bool try_expand_token(struct preproc *preproc,
     } else if (token->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                token->punctuator.ty ==
                    PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
-      // do we need to keep the whitespace/parens? we implicitly strip them here
+      // do we need to keep the whitespace/parens? we implicitly strip them
+      // here
       preproc->waiting_for_close = true;
       return true;
     } else if (token->ty == PREPROC_TOKEN_TY_IDENTIFIER ||
@@ -1217,8 +1255,10 @@ static bool try_expand_token(struct preproc *preproc,
       return false;
     }
 
-    struct vector *expanded_fn = vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
-    struct vector *concat_points = vector_create_in_arena(sizeof(size_t), preproc->arena);
+    struct vector *expanded_fn =
+        vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
+    struct vector *concat_points =
+        vector_create_in_arena(sizeof(size_t), preproc->arena);
 
     struct preproc_define_value *value = &macro->value;
     switch (value->ty) {
@@ -1710,14 +1750,13 @@ static bool try_include_path(struct preproc *preproc, const char *path,
       fprintf(stderr, "preproc: special header 'float.h'\n");
     }
 
-    const char *FLOAT_CONTENT =
-        "\n"
-        "#ifndef FLOAT_H\n"
-        "#define FLOAT_H\n"
-        "\n"
-        "#define FLT_MAX __FLT_MAX__\n"
-        "#define DBL_MAX __DBL_MAX__\n"
-        "#endif\n";
+    const char *FLOAT_CONTENT = "\n"
+                                "#ifndef FLOAT_H\n"
+                                "#define FLOAT_H\n"
+                                "\n"
+                                "#define FLT_MAX __FLT_MAX__\n"
+                                "#define DBL_MAX __DBL_MAX__\n"
+                                "#endif\n";
 
     *content = FLOAT_CONTENT;
 
@@ -1852,7 +1891,8 @@ static struct include_info try_find_include(struct preproc *preproc,
   }
 
   if (!strcmp(filename, "stdarg.h") || !strcmp(filename, "stddef.h") ||
-      !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h") || !strcmp(filename, "float.h")) {
+      !strcmp(filename, "stdbool.h") || !strcmp(filename, "stdnoreturn.h") ||
+      !strcmp(filename, "float.h")) {
     info.path = filename;
     try_include_path(preproc, info.path, &info.content, mode);
     return info;
@@ -2064,8 +2104,7 @@ static unsigned long long eval_atom(struct preproc *preproc,
       switch (token->punctuator.ty) {
       case PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET: {
         (*i)++;
-        return eval_expr(preproc, preproc_text, tokens, i, num_tokens,
-                         0);
+        return eval_expr(preproc, preproc_text, tokens, i, num_tokens, 0);
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB: {
         (*i)++;

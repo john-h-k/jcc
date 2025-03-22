@@ -506,6 +506,32 @@ static struct td_expr add_cast_if_needed(struct typechk *tchk,
   return expr;
 }
 
+// turns long long to long on LP64, and long to int on LP32
+// for easier comparison
+static enum well_known_ty canonicalize_wkt(struct typechk *tchk,
+                                           enum well_known_ty wkt) {
+  switch (tchk->target->lp_sz) {
+  case TARGET_LP_SZ_LP32:
+    switch (wkt) {
+    case WELL_KNOWN_TY_SIGNED_LONG:
+      return WELL_KNOWN_TY_SIGNED_INT;
+    case WELL_KNOWN_TY_UNSIGNED_LONG:
+      return WELL_KNOWN_TY_UNSIGNED_INT;
+    default:
+      return wkt;
+    }
+  case TARGET_LP_SZ_LP64:
+    switch (wkt) {
+    case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+      return WELL_KNOWN_TY_SIGNED_LONG;
+    case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+      return WELL_KNOWN_TY_UNSIGNED_LONG;
+    default:
+      return wkt;
+    }
+  }
+}
+
 static struct td_expr perform_integer_promotion(struct typechk *tchk,
                                                 struct td_expr expr) {
   if (expr.var_ty.ty == TD_VAR_TY_TY_WELL_KNOWN &&
@@ -584,14 +610,46 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
     enum well_known_ty signed_lhs = WKT_MAKE_SIGNED(lhs_ty->well_known);
     enum well_known_ty signed_rhs = WKT_MAKE_SIGNED(rhs_ty->well_known);
 
-    if (signed_lhs != signed_rhs) {
+    /* Otherwise, if both operands have signed integer types or both have
+    ** unsigned integer types, the operand with the type of lesser integer
+    ** conversion rank is converted to the type of the operand with greater
+    ** rank.
+    */
+
+    if (WKT_IS_SIGNED(lhs_ty->well_known) ==
+        WKT_IS_SIGNED(rhs_ty->well_known)) {
+      result_ty.well_known = MAX(lhs_ty->well_known, rhs_ty->well_known);
+
+      /* Otherwise, if the operand that has unsigned integer type has rank
+      ** greater or equal to the rank of the type of the other operand, then the
+      ** operand with signed integer type is converted to the type of the
+      ** operand with unsigned integer type.
+      */
+    } else if (!WKT_IS_SIGNED(lhs_ty->well_known) && signed_lhs >= signed_rhs) {
+      result_ty.well_known = lhs_ty->well_known;
+    } else if (!WKT_IS_SIGNED(rhs_ty->well_known) && signed_rhs >= signed_lhs) {
+      result_ty.well_known = rhs_ty->well_known;
+
+      /* Otherwise, if the type of the operand with signed integer type can
+      ** represent all of the values of the type of the operand with unsigned
+      ** integer type, then the operand with unsigned integer type is converted
+      ** to the type of the operand with signed integer type.
+      */
+
+    } else if (WKT_IS_SIGNED(lhs_ty->well_known) &&
+               (canonicalize_wkt(tchk, lhs_ty->well_known) >
+                canonicalize_wkt(tchk, rhs_ty->well_known))) {
       // one is bigger than other
       // type of expression is simply the larger type
-      result_ty.well_known = MAX(signed_lhs, signed_rhs);
-    } else {
-      // they are the same size
-      // the unsigned one is chosen (C spec dictates)
-      result_ty.well_known = WKT_MAKE_UNSIGNED(signed_lhs);
+      // FIXME: is this correct
+      result_ty.well_known =
+          signed_lhs > signed_rhs ? lhs_ty->well_known : rhs_ty->well_known;
+    }
+    /* Otherwise, both operands are converted to the unsigned integer type
+    ** corresponding to the type of the operand with signed integer type.
+    */
+    else {
+      result_ty.well_known = WKT_IS_SIGNED(lhs_ty->well_known) ? WKT_MAKE_UNSIGNED(lhs_ty->well_known) : WKT_MAKE_UNSIGNED(rhs_ty->well_known);
     }
   }
 
@@ -4531,7 +4589,9 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
                           tchk->arena,
                           sizeof(*td_init.expr.var_ty.array.underlying))}};
 
-        *td_init.expr.var_ty.array.underlying = *var_ty;
+        *td_init.expr.var_ty.array.underlying = var_ty->ty == TD_VAR_TY_TY_ARRAY
+                                                    ? *var_ty->array.underlying
+                                                    : *var_ty;
       }
       break;
     }
