@@ -4812,12 +4812,11 @@ static void type_staticassert(struct typechk *tchk,
       return;
     }
 
-    struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
-
 #ifdef __JCC__
     // BUG jcc doesn't support va_list
     message = "static_assert failed";
 #else
+    struct ast_cnst_str cnst = staticassert->message->cnst.str_value;
     message = arena_alloc_snprintf(tchk->arena, "static_assert failed: %.*s",
                                    (int)cnst.ascii.len, cnst.ascii.value);
 #endif

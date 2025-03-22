@@ -109,6 +109,8 @@ PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...) {
 #ifdef __JCC__
+  (void)allocator;
+  (void)format;
   TODO("not supported via JCC");
   return NULL;
 #else

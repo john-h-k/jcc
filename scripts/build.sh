@@ -371,8 +371,9 @@ bootstrap() {
 
     generator="$(_get_generator)"
 
-    # if ! cmake --fresh .. -DCMAKE_C_FLAGS="-target rv32i-unknown-elf -isysroot /opt/riscv -isystem /opt/riscv/riscv64-unknown-elf/include" -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
-    if ! cmake --fresh -G "$generator" ..  -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
+    cmake_flags="--fresh -G $generator -DARCHITECTURES=aarch64;rv32i"
+    echo $cmake_flags
+    if ! cmake $cmake_flags ..  -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
         echo -e "${BOLDRED}stage1 configure fail${RESET}"
         exit -1
     fi
@@ -388,9 +389,8 @@ bootstrap() {
 
     cp jcc jcc1
     echo -e "${BOLD}stage1 built to 'jcc1'${RESET}"
-
-    
-    if ! cmake --fresh -G "$generator" -DARCHITECTURES="aarch64;rv32i" .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
+   
+    if ! cmake $cmake_flags .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
         echo -e "${BOLDRED}stage2 configure fail${RESET}"
         exit -1
     fi
@@ -404,4 +404,31 @@ bootstrap() {
 
     echo -e "${BOLD}stage2 built to 'jcc2'${RESET}"
     echo -e "${BOLD}Done!${RESET}"
+
+    if command diff jcc1 jcc2; then
+        echo -e "${BOLDGREEN}jcc1 and jcc2 are the same!${RESET}"
+    else
+        echo -e "${BOLDRED}Differences found between jcc1 and jcc2!${RESET}"
+    fi
+
+    if ! cmake $cmake_flags .. -DCMAKE_C_COMPILER=$(pwd)/jcc2 >/dev/null; then
+        echo -e "${BOLDRED}stage3 configure fail${RESET}"
+        exit -1
+    fi
+
+    if ! cmake --build . --parallel 1; then
+        echo -e "${BOLDRED}stage3 build fail${RESET}"
+        exit -1
+    fi
+
+    cp jcc jcc3
+
+    echo -e "${BOLD}stage3 built to 'jcc3'${RESET}"
+    echo -e "${BOLD}Done!${RESET}"
+
+    if command diff jcc2 jcc3; then
+        echo -e "${BOLDGREEN}jcc2 and jcc3 are the same!${RESET}"
+    else
+        echo -e "${BOLDRED}Differences found between jcc2 and jcc3!${RESET}"
+    fi
 }

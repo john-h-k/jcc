@@ -1620,6 +1620,8 @@ void x64_codegen_end(UNUSED struct cg_state *state) {}
 
 static void codegen_fprintf(FILE *file, const char *format, ...) {
 #ifdef __JCC__
+  (void)file;
+  (void)format;
   TODO("jcc va_arg");
 #else
 
