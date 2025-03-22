@@ -2835,6 +2835,8 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     DEBUG_ASSERT(!init->designator_list, "scalar should not have designator");
     DEBUG_ASSERT(init->init->ty == TD_INIT_TY_EXPR, "scalar should have expr init");
 
+    // BUG: this needs to write an op to var refs for phi gen
+
     struct ir_op *value = build_ir_for_expr(irb, stmt, &init->init->expr);
     struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
