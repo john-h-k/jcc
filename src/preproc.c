@@ -1754,18 +1754,16 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
         "#endif\n"
         "\n"
+        "#undef va_end\n"
+        "#undef va_arg\n"
+        "#undef va_copy\n"
         "#define va_end(ap) __builtin_va_end(ap)\n"
         "#define va_arg(ap, type) __builtin_va_arg(ap, type)\n"
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
         // "typedef __builtin_va_list va_list;\n"
         // TEMP:
 
-        "#undef va_end\n"
-        "#undef va_arg\n"
-        "#undef va_copy\n"
-        "#define va_end(ap) 0\n"
-        "#define va_arg(ap, type) 0\n"
-        "#define va_copy(dest, src) 0\n"
+        "static inline  f\n"
         "#endif\n"
         "#endif\n";
 
@@ -1793,7 +1791,8 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         // TODO: `max_align_t`
         // "typedef align max_align_t;\n"
         "\n"
-        "#define offsetof(st, m) __builtin_offsetof(st, m)\n"
+        "#define offsetof(st, m) ((size_t)&(((st *)0)->m))\n"
+        // "#define offsetof(st, m) __builtin_offsetof(st, m)\n"
         "\n"
         "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
         "typedef __NULLPTR_TYPE__ nullptr_t;\n"

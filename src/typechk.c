@@ -346,8 +346,18 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
     // same declaration we give anonymous types a name per-declaration
     return szstreq(l_agg.name, r_agg.name);
   }
-  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    BUG("can't check incomplete");
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE: {
+    struct td_ty_incomplete_aggregate l_agg = l->incomplete_aggregate;
+    struct td_ty_incomplete_aggregate r_agg = r->incomplete_aggregate;
+
+    if (l_agg.ty != r_agg.ty) {
+      return false;
+    }
+
+    // aggregate types are the same iff they have the same name or come from the
+    // same declaration we give anonymous types a name per-declaration
+    return szstreq(l_agg.name, r_agg.name);
+  }
   }
 }
 
@@ -515,6 +525,11 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
 
   if (lhs_ty->ty == TD_VAR_TY_TY_UNKNOWN ||
       rhs_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
+    return TD_VAR_TY_UNKNOWN;
+  }
+
+  if (lhs_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE ||
+      rhs_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     return TD_VAR_TY_UNKNOWN;
   }
 
@@ -2919,16 +2934,24 @@ struct td_var_ty_info {
 };
 
 static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
-                                            const struct td_var_ty *ty) {
+                                            const struct td_var_ty *ty,
+                                            const struct text_span *context) {
   switch (ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
-    BUG("TD_VAR_TY_TY_UNKNOWN has no size");
+    // FIXME: should emit diagnostic
+    return (struct td_var_ty_info){0};
   case TD_VAR_TY_TY_VARIADIC:
     BUG("TD_VAR_TY_TY_VARIADIC has no size");
   case TD_VAR_TY_TY_VOID:
     BUG("TD_VAR_TY_TY_VOID has no size");
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    BUG("TD_VAR_TY_TY_INCOMPLETE_AGGREGATE has no size");
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            INCOMPLETE_TYPE, incomplete_type, *context, MK_INVALID_TEXT_POS(0),
+            "cannot get size or alignment of incomplete type"));
+    return (struct td_var_ty_info){0};
   case TD_VAR_TY_TY_FUNC:
   case TD_VAR_TY_TY_POINTER:
     switch (tchk->target->lp_sz) {
@@ -2973,7 +2996,7 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
     }
   case TD_VAR_TY_TY_ARRAY: {
     struct td_var_ty_info element_info =
-        td_var_ty_info(tchk, ty->array.underlying);
+        td_var_ty_info(tchk, ty->array.underlying, context);
     size_t size = ty->array.size * element_info.size;
 
     return (struct td_var_ty_info){.size = size,
@@ -2989,7 +3012,8 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
 
       for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
         struct td_struct_field *field = &ty->aggregate.fields[i];
-        struct td_var_ty_info info = td_var_ty_info(tchk, &field->var_ty);
+        struct td_var_ty_info info =
+            td_var_ty_info(tchk, &field->var_ty, context);
         max_alignment = MAX(max_alignment, info.alignment);
 
         size = ROUND_UP(size, info.alignment);
@@ -3007,7 +3031,8 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
 
       for (size_t i = 0; i < ty->aggregate.num_fields; i++) {
         struct td_struct_field *field = &ty->aggregate.fields[i];
-        struct td_var_ty_info info = td_var_ty_info(tchk, &field->var_ty);
+        struct td_var_ty_info info =
+            td_var_ty_info(tchk, &field->var_ty, context);
         max_alignment = MAX(max_alignment, info.alignment);
 
         size = MAX(size, info.size);
@@ -3072,7 +3097,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
       break;
     }
 
-    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty);
+    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty, &expr->span);
 
     *value = (struct td_val){.var_ty = expr->var_ty,
                              .val = ap_val_from_ull(info.size, 32)};
@@ -3080,7 +3105,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
   }
 
   if (expr->ty == TD_EXPR_TY_ALIGNOF) {
-    struct td_var_ty_info info = td_var_ty_info(tchk, &expr->align_of.var_ty);
+    struct td_var_ty_info info =
+        td_var_ty_info(tchk, &expr->align_of.var_ty, &expr->span);
 
     *value = (struct td_val){.var_ty = expr->var_ty,
                              .val = ap_val_from_ull(info.alignment, 32)};
@@ -4407,15 +4433,16 @@ static struct td_init_list type_init_list(struct typechk *tchk,
                                           const struct td_var_ty *var_ty,
                                           const struct ast_init_list *init_list,
                                           enum td_init_mode mode) {
-  if (init_list->num_inits == 0 &&
-      tchk->args->c_standard < COMPILE_C_STANDARD_C23) {
-
-    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-    compiler_diagnostics_add(
-        tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, init_list->span,
-                               MK_INVALID_TEXT_POS(0),
-                               "empy initializer is a c23 feature"));
+  if (init_list->num_inits == 0) {
+    if (tchk->args->c_standard < COMPILE_C_STANDARD_C23) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(EMPTY_INIT_C23, empty_init_c23,
+                                 init_list->span, MK_INVALID_TEXT_POS(0),
+                                 "empy initializer is a c23 feature"));
+      return (struct td_init_list){.var_ty = TD_VAR_TY_UNKNOWN};
+    }
   }
 
   if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
@@ -4424,7 +4451,49 @@ static struct td_init_list type_init_list(struct typechk *tchk,
                                                  0, true, NULL);
   }
 
-  BUG("scalar init list should have been converted to expression init");
+  if (init_list->num_inits > 1) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(TOO_MANY_INITS, too_many_inits, init_list->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "scalar initialiser should have 1 or 0 values"));
+    return (struct td_init_list){.var_ty = TD_VAR_TY_UNKNOWN};
+  }
+
+  if (init_list->inits[0].designator_list) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(NO_MEMBER, no_member, init_list->span,
+                               MK_INVALID_TEXT_POS(0),
+                               "scalar init list should not have designator"));
+    return (struct td_init_list){.var_ty = TD_VAR_TY_UNKNOWN};
+  }
+
+  switch (init_list->inits[0].init->ty) {
+  case AST_INIT_TY_EXPR: {
+    struct td_init_list scalar = {
+        .var_ty = *var_ty,
+        .num_inits = 1,
+        .inits = arena_alloc(tchk->arena, sizeof(*scalar.inits))};
+
+    scalar.inits[0] = (struct td_init_list_init){
+        .designator_list = NULL,
+        .init = arena_alloc(tchk->arena, sizeof(*scalar.inits[0].init))};
+
+    *scalar.inits[0].init = (struct td_init){
+        .ty = TD_INIT_TY_EXPR,
+        .expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
+                          &init_list->inits[0].init->expr),
+    };
+
+    return scalar;
+  }
+  case AST_INIT_TY_INIT_LIST:
+    return type_init_list(tchk, var_ty, &init_list->inits[0].init->init_list,
+                          mode);
+  }
 }
 
 static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
@@ -4449,8 +4518,8 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
 
     if (td_init.expr.ty == TD_EXPR_TY_CNST &&
         td_init.expr.cnst.ty == TD_CNST_TY_STRING) {
-      // if the desired type is not pointer, we must be in a context where it is
-      // an array
+      // if the desired type is not pointer, we must be in a context where it
+      // is an array
       if (var_ty->ty != TD_VAR_TY_TY_POINTER) {
         // FIXME: mutating existing
         struct td_cnst_str str = td_init.expr.cnst.str_value;

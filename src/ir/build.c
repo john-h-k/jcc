@@ -2827,6 +2827,26 @@ static void build_ir_zero_range(struct ir_func_builder *irb,
 static void build_ir_for_init_list(struct ir_func_builder *irb,
                                    struct ir_stmt **stmt, struct ir_op *address,
                                    struct td_init_list *init_list) {
+  if (td_var_ty_is_scalar_ty(&init_list->var_ty)) {
+    DEBUG_ASSERT(init_list->num_inits == 1, "expected 1 init");
+
+    struct td_init_list_init *init = &init_list->inits[0];
+
+    DEBUG_ASSERT(!init->designator_list, "scalar should not have designator");
+    DEBUG_ASSERT(init->init->ty == TD_INIT_TY_EXPR, "scalar should have expr init");
+
+    struct ir_op *value = build_ir_for_expr(irb, stmt, &init->init->expr);
+    struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+    store->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_ADDR,
+      .addr = address,
+      .value = value
+    };
+
+    return;
+  }
+
   struct ir_build_init_list_layout layout =
       build_init_list_layout(irb->unit, init_list);
 

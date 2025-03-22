@@ -50,6 +50,10 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
+  DIAG_FN(WARN, "empty-init-c23", empty_init_c23,                \
+          EMPTY_INIT_C23, const char *)                                 \
+  DIAG_FN(WARN, "too-many-inits", too_many_inits,                \
+          TOO_MANY_INITS, const char *)                                 \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
           POINTER_TYPE_MISMATCH, const char *)                                 \
   DIAG_FN(ERROR, "typecheck-sub-ptr-compatible", pointer_sub_types,            \
