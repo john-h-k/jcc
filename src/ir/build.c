@@ -2140,6 +2140,12 @@ static struct ir_op *build_ir_for_compoundliteral(
     struct ir_func_builder *irb, struct ir_stmt **stmt, struct ir_op *address,
     enum build_compoundliteral_mode mode, struct td_expr *expr) {
   struct td_compound_literal *compound_literal = &expr->compound_literal;
+
+  if (mode == BUILD_COMPOUNDLITERAL_MODE_LOAD && td_var_ty_is_scalar_ty(&expr->var_ty)) {
+    DEBUG_ASSERT(expr->compound_literal.init_list.num_inits == 1, "expected 1 init");
+    return build_ir_for_expr(irb, stmt, &expr->compound_literal.init_list.inits->init->expr);
+  }
+
   struct ir_var_ty var_ty =
       var_ty_for_td_var_ty(irb->unit, &compound_literal->var_ty);
 
@@ -2838,13 +2844,16 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     // BUG: this needs to write an op to var refs for phi gen
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &init->init->expr);
-    struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
-    store->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_ADDR,
-      .addr = address,
-      .value = value
-    };
+    if (address) {
+      struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+
+      store->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR,
+        .addr = address,
+        .value = value
+      };
+    }
 
     return;
   }
@@ -2966,10 +2975,12 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
     // this logic is BROKEN if a cast is needed (e.g `struct foo a = { .field =
     // (int){1} }`;
     if (init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
-      build_ir_for_compoundliteral(irb, stmt, start_address,
-                                   BUILD_COMPOUNDLITERAL_MODE_ADDR,
+      enum build_compoundliteral_mode mode = td_var_ty_is_scalar_ty(&init->expr.var_ty) ? BUILD_COMPOUNDLITERAL_MODE_LOAD : BUILD_COMPOUNDLITERAL_MODE_ADDR;
+
+      struct ir_op *value = build_ir_for_compoundliteral(irb, stmt, start_address,
+                                   mode,
                                    &init->expr);
-      return NULL; // return null signifies build_ir_for_var should not insert a
+      return mode == BUILD_COMPOUNDLITERAL_MODE_ADDR ? NULL : value; // return null signifies build_ir_for_var should not insert a
                    // STORE
     } else {
       return build_ir_for_expr(irb, stmt, &init->expr);
