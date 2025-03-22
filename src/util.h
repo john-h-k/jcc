@@ -1,6 +1,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#define __JCC__
+
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own
 // header
 
@@ -20,8 +22,14 @@ typedef ptrdiff_t ssize_t;
 // don't yet support -D flag so just do this
 // #define JCC_ALL
 // x64 emitter very very slow so ignore for now
+#ifndef JCC_AARCH64
 #define JCC_AARCH64
+#endif
+
+#ifndef JCC_RV32I
 #define JCC_RV32I
+#endif
+
 #endif
 
 #include "compinfo.h"
@@ -255,6 +263,7 @@ PRINTF_ARGS(1)
 static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
 #ifdef __JCC__
+    (void)msg;
     // doesn't support varargs
     fprintf(stderr, "invariant_assertion failed, program exiting");
 #else

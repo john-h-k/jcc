@@ -11,7 +11,11 @@ NORETURN void unreachable(void) {
 }
 
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
+#ifdef __JCC__
+  fprintf(stderr, "unsupported: %s\n", msg);
+#else
   FMTPRINT(stderr, "unsupported: ", msg);
+#endif
   EXIT_FAIL(-2);
 }
 

@@ -2220,28 +2220,6 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
   data->last = instr;
 }
 
-static char reg_prefix(struct aarch64_reg reg) {
-  switch (reg.ty) {
-  case AARCH64_REG_TY_NONE:
-    return '!';
-  case AARCH64_REG_TY_W:
-    return 'w';
-  case AARCH64_REG_TY_X:
-    return 'x';
-  case AARCH64_REG_TY_V:
-    return 'b';
-  case AARCH64_REG_TY_Q:
-    return 'q';
-  case AARCH64_REG_TY_D:
-    return 'd';
-  case AARCH64_REG_TY_S:
-    return 's';
-  case AARCH64_REG_TY_H:
-    return 'h';
-  case AARCH64_REG_TY_B:
-    return 'b';
-  }
-}
 
 void aarch64_codegen_end(struct cg_state *state) {
   // codegen is now done
@@ -2421,8 +2399,35 @@ void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
   }
 }
 
+#ifndef __JCC__
+static char reg_prefix(struct aarch64_reg reg) {
+  switch (reg.ty) {
+  case AARCH64_REG_TY_NONE:
+    return '!';
+  case AARCH64_REG_TY_W:
+    return 'w';
+  case AARCH64_REG_TY_X:
+    return 'x';
+  case AARCH64_REG_TY_V:
+    return 'b';
+  case AARCH64_REG_TY_Q:
+    return 'q';
+  case AARCH64_REG_TY_D:
+    return 'd';
+  case AARCH64_REG_TY_S:
+    return 's';
+  case AARCH64_REG_TY_H:
+    return 'h';
+  case AARCH64_REG_TY_B:
+    return 'b';
+  }
+}
+#endif
+
 static void codegen_fprintf(FILE *file, const char *format, ...) {
 #ifdef __JCC__
+  (void)file;
+  (void)format;
   TODO("jcc va_arg");
 #else
 

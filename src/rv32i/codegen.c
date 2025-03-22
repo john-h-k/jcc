@@ -1655,6 +1655,7 @@ void rv32i_codegen_end(struct cg_state *state) {
   cg_rebuild_ids(state->func);
 }
 
+#ifndef __JCC__
 static const char *GP_REG_ABI_NAMES[] = {
     "zero",
 
@@ -1683,6 +1684,7 @@ static const char *FP_REG_ABI_NAMES[] = {
 
     "ft8", "ft9", "ft10", "ft11",
 };
+#endif
 
 struct codegen_debug_state {
   FILE *file;
@@ -1697,6 +1699,8 @@ static void print_bb_symbol(FILE *file, struct ir_basicblock *basicblock) {
 static void codegen_fprintf(const struct codegen_debug_state *state,
                             const char *format, ...) {
 #ifdef __JCC__
+  (void)state;
+  (void)format;
   TODO("jcc va_arg");
 #else
 
