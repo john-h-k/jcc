@@ -52,6 +52,9 @@ enum lex_create_result lexer_create(struct program *program,
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
 
+    KEYWORD("typeof", LEX_TOKEN_TY_KW_TYPEOF);
+    KEYWORD("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
+    KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
     KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
@@ -707,6 +710,8 @@ const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 
+    CASE_RET(LEX_TOKEN_TY_KW_TYPEOF)
+    CASE_RET(LEX_TOKEN_TY_KW_TYPEOF_UNQUAL)
     CASE_RET(LEX_TOKEN_TY_KW_GENERIC)
     CASE_RET(LEX_TOKEN_TY_KW_STATICASSERT)
     CASE_RET(LEX_TOKEN_TY_KW_BOOL)
