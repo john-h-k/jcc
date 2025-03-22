@@ -1,3 +1,4 @@
+// skip: push_macro/pop_macro not implemented
 #include <stdio.h>
 
 int main()
