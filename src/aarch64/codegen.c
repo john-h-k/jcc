@@ -1376,6 +1376,9 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     CONTAINED_OP(addsub, SUBS, subs);
+    if (instr->aarch64->ty == AARCH64_INSTR_TY_SUBS_IMM && instr->aarch64->addsub_imm.imm == SIZE_MAX) {
+      printf("op %zu\n", op->id);
+    }
     break;
   case IR_OP_BINARY_OP_TY_LSHIFT:
     if (rhs_op->flags & IR_OP_FLAG_CONTAINED) {

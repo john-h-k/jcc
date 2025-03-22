@@ -1032,15 +1032,6 @@ void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
       if (arg->ty != IR_OP_TY_LOAD && param_info.num_regs == 1) {
         // no change needed
         vector_push_back(new_args, &arg);
-
-        // if (func->unit->target->target_id == TARGET_ID_RV32I_LINUX) {
-        //   struct ir_var_ty_info info =
-        //       ir_var_ty_info(func->unit, param_info.var_ty);
-
-        //   if (param_info.num_regs == 1 && info.size > 4) {
-        //     ssize_t offset = -param_info.stack_offset;
-        // }
-
       } else {
         if (arg->ty != IR_OP_TY_LOAD) {
           arg = ir_spill_op(func, arg);

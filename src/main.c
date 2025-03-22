@@ -12,6 +12,7 @@
 #include "util.h"
 #include "x64.h"
 
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -323,6 +324,9 @@ static int jcc_main(int argc, char **argv);
 
 int main(int argc, char **argv) {
   // enable_log();
+
+  // we want to use the user's locale i think?
+  setlocale(LC_ALL, "");
 
 #if SAN && OS_APPLE
   // sanitizer running causes spurious 'malloc: nano zone abandoned due to

@@ -1250,6 +1250,25 @@ parse_direct_declarator(struct parser *parser,
                         struct ast_direct_declarator *direct_declarator) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
+  struct lex_token tok;
+  lex_peek_token(parser->lexer, &tok);
+  if (tok.ty == LEX_TOKEN_TY_UNKNOWN) {
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        parser->diagnostics,
+        MK_PARSER_DIAGNOSTIC(
+            EXPECTED_TYPE_NAME, expected_type_name, tok.span,
+            tok.span.start,
+            "no foreigners please! www.reformparty.uk"));
+
+    lex_consume_token(parser->lexer, tok);
+    direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_IDENTIFIER;
+    tok.ty = LEX_TOKEN_TY_IDENTIFIER;
+    direct_declarator->identifier = tok;
+    direct_declarator->span = direct_declarator->identifier.span;
+    return true;
+  }
+
   if (parse_identifier(parser, &direct_declarator->identifier)) {
     direct_declarator->ty = AST_DIRECT_DECLARATOR_TY_IDENTIFIER;
     direct_declarator->span = direct_declarator->identifier.span;

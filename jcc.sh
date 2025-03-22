@@ -336,6 +336,25 @@ diff() {
     rm -f $ltmp $rtmp
 }
 
+bs-diff() {
+    if ! [[ -f build/jcc0 && -f build/jcc1 ]]; then
+        echo "${BOLDRED}Expected jcc0 and jcc1 to be present!${RESET}"
+        exit 1
+    fi
+
+
+    cd "$CALLER_DIR"
+    "$(dirname $0)"/build/jcc0 "$@" 2>&1 > 0.txt
+    "$(dirname $0)"/build/jcc1 "$@" 2>&1 > 1.txt
+
+    delta 0.txt 1.txt
+
+    rm 0.txt
+    rm 1.txt
+
+    cd - > /dev/null
+}
+
 build() {
     ./scripts/build.sh "$@"
 }

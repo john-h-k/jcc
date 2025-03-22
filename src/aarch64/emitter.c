@@ -521,6 +521,11 @@ void aarch64_emit_sub_imm(struct aarch64_emitter *emitter,
 
 void aarch64_emit_subs_imm(struct aarch64_emitter *emitter,
                            const struct aarch64_addsub_imm sub) {
+  imm_t imm = sub.imm;
+  if (!(((sub.imm) & ~((1ull << (12 + 1)) - 1ull)) == 0)) {
+    printf("imm %llu did not fit\n", imm);
+  }
+  // ((llabs(((simm_t)value)) & ~((1ll << (bitc)) - 1l)) == 0))
   aarch64_emit_instr(emitter, SUBS_IMM(SF_FOR_REG(sub.dest), sub.shift, sub.imm,
                                        sub.source.idx, sub.dest.idx));
 }

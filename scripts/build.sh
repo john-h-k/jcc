@@ -27,6 +27,16 @@ clean() {
     echo -e "${BOLD}Done!\n" 1>&2
 }
 
+_get_generator() {
+    # if already configured, use current generator
+    if [ -f build/CMakeCache.txt ]; then
+        grep -Eo 'CMAKE_GENERATOR:INTERNAL=.*$' build/CMakeCache.txt | sed 's/^.*=//' 2>/dev/null
+    else
+        # else, default to Ninja, fallback to Make
+        command -v Ninja &>/dev/null && echo "Ninja" || echo "Unix Makefiles"
+    fi
+}
+
 configure() {
     help() {
         echo "JCC configure"
@@ -78,14 +88,8 @@ configure() {
     archs=""
     no_san=""
 
-    # if already configured, use current generator
-    if [ -f build/CMakeCache.txt ]; then
-      generator=$(grep -Eo 'CMAKE_GENERATOR:INTERNAL=.*$' build/CMakeCache.txt | sed 's/^.*=//' 2>/dev/null)
-    fi
-
     if [ -z "$generator" ]; then
-        # else, default to Ninja, fallback to Make
-        generator="$(command -v Ninja &>/dev/null && echo "Ninja" || echo "Unix Makefiles")"
+        generator="$(_get_generator)"
     fi
 
     while [[ $# -gt 0 ]]; do
@@ -248,14 +252,14 @@ mini-bootstrap() {
         src/eep/lower.c
         src/eep/object.c
         src/eep.c
-        src/graphcol.c
-        src/graphwriter.c
-        src/hash.c
-        src/hashtbl.c
-        src/io.c
-        src/ir/build.c
-        src/ir/eliminate_phi.c
-        src/ir/ir.c
+        # src/graphcol.c
+        # src/graphwriter.c
+        # src/hash.c
+        # src/hashtbl.c
+        # src/io.c
+        # src/ir/build.c
+        # src/ir/eliminate_phi.c
+        # src/ir/ir.c
         src/ir/prettyprint.c
         src/ir/rw.c
         src/ir/validate.c
@@ -290,7 +294,7 @@ mini-bootstrap() {
         src/typechk.c
         src/util.c
         src/var_table.c
-        # src/vector.c
+        src/vector.c
         src/x64/codegen.c
         src/x64/emit.c
         src/x64/emitter.c
@@ -319,12 +323,12 @@ mini-bootstrap() {
             echo "Using JCC for $file"
             # jcc $flags "$file" -o "$tmpdir/$filename.o"
             # use preproc seperately because it breaks for some things in combined mode
-            if ! build/jcc $jcc_flags "$file" -E > "$tmpdir/$filename.c"; then
+            if ! build/jcc1 $jcc_flags "$file" -E > "$tmpdir/$filename.c"; then
                 echo "preproc fail"
                 exit -1
             fi
 
-            if ! build/jcc $jcc_flags "$tmpdir/$filename.c" -c -o "$output"; then
+            if ! build/jcc1 $jcc_flags "$tmpdir/$filename.c" -c -o "$output"; then
                 echo "jcc fail"
                 exit -1
             fi
@@ -343,8 +347,7 @@ mini-bootstrap() {
     # cc $flags -DJCC_ALL -o build/jcc "${objects[@]}" -lm
     cp build/jcc build/jcc0
     rm build/jcc
-    build/jcc0 -o build/jcc "${objects[@]}"
-    cp build/jcc build/jcc1
+    build/jcc0 -o build/jccm1 "${objects[@]}"
 }
 
 bootstrap() {
@@ -366,8 +369,10 @@ bootstrap() {
 
     rm jcc
 
+    generator="$(_get_generator)"
+
     # if ! cmake --fresh .. -DCMAKE_C_FLAGS="-target rv32i-unknown-elf -isysroot /opt/riscv -isystem /opt/riscv/riscv64-unknown-elf/include" -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
-    if ! cmake --fresh ..  -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
+    if ! cmake --fresh -G "$generator" ..  -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
         echo -e "${BOLDRED}stage1 configure fail${RESET}"
         exit -1
     fi
@@ -385,16 +390,18 @@ bootstrap() {
     echo -e "${BOLD}stage1 built to 'jcc1'${RESET}"
 
     
-    # if ! cmake --fresh -G Ninja .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
-    #     echo -e "${BOLDRED}stage2 configure fail${RESET}"
-    #     exit -1
-    # fi
+    if ! cmake --fresh -G "$generator" -DARCHITECTURES="aarch64;rv32i" .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
+        echo -e "${BOLDRED}stage2 configure fail${RESET}"
+        exit -1
+    fi
 
-    # if ! cmake --build .; then
-    #     echo -e "${BOLDRED}stage2 build fail${RESET}"
-    #     exit -1
-    # fi
+    if ! cmake --build . --parallel 1; then
+        echo -e "${BOLDRED}stage2 build fail${RESET}"
+        exit -1
+    fi
 
-    # echo -e "${BOLD}stage2 built to 'jcc2'${RESET}"
-    # echo -e "${BOLD}Done!${RESET}"
+    cp jcc jcc2
+
+    echo -e "${BOLD}stage2 built to 'jcc2'${RESET}"
+    echo -e "${BOLD}Done!${RESET}"
 }

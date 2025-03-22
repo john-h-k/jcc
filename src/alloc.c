@@ -108,6 +108,10 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
 PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...) {
+#ifdef __JCC__
+  TODO("not supported via JCC");
+  return NULL;
+#else
   va_list args, args_copy;
 
   va_start(args, format);
@@ -130,6 +134,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
   va_end(args);
 
   return buf;
+#endif
 }
 
 void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {

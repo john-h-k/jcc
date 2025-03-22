@@ -359,10 +359,11 @@ run_tests() {
       continue
     fi
 
+    stdout=""
+
     # have not properly configured the expected stdout for these yet
-    ignore_stdout=""
     if [[ "$file" == *"/c-testsuite/"*  ]]; then
-      ignore_stdout="1"
+      stdout=$(cat "$file.expected")
 
       # HACK: skip on rv32i
       if [[ "$arch" == "rv32i" ]]; then
@@ -488,7 +489,11 @@ run_tests() {
 
       expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
       stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
-      stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
+
+      if [ -z "$stdout" ]; then
+        stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')
+      fi
+
       [ -z "$expected" ] && expected="0"
 
       if [ "$VERBOSE_LEVEL" -ge "2" ]; then

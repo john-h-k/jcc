@@ -842,10 +842,6 @@ static void prettyprint_visit_op_file(struct ir_func *irb, struct ir_op *op,
 
   fprintf(fm->file, " | ");
 
-  if (op->lcl) {
-    fprintf(fm->file, "has lcl");
-  }
-
   if (!ir_op_produces_value(op)) {
     fprintf(fm->file, "                ");
   } else {

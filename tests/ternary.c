@@ -4,7 +4,24 @@ struct baz {
   int val;
 };
 
+struct baz get() {
+  return (struct baz){10};
+}
+
+struct baz glb = {1};
+
 int main() {
+  int lhs = 1;
+  int rhs = 2;
+
+  struct baz f;
+  struct baz *p = &f;
+
+  *p = lhs && rhs ? get() : glb;
+  if (p->val != 10) {
+    return 1;
+  }
+
   int a = 1;
 
   struct baz l = {1};
