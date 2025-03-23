@@ -1,8 +1,6 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define __JCC__
-
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own
 // header
 
@@ -411,7 +409,7 @@ static inline int szstrcmp(struct sized_str l, struct sized_str r) {
   return cmp;
 }
 
-#define MK_SIZED(s) ((struct sized_str){s, strlen(s)})
+#define MK_SIZED(s) ((struct sized_str){(s), (s != NULL) ? strlen(s) : 0})
 #define MK_NULL_STR() ((struct sized_str){NULL, 0})
 
 #endif

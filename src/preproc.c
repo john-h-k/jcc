@@ -1,5 +1,7 @@
 #include "preproc.h"
 
+#include <TargetConditionals.h>
+
 #include "alloc.h"
 #include "compiler.h"
 #include "diagnostics.h"
@@ -180,7 +182,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   {
 
     size_t name_len = strlen("__asm");
-    struct sized_str ident = {.str = "__asm", .len = name_len};
+    struct sized_str ident = MK_SIZED("__asm");
 
     struct preproc_define define = {
         .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
@@ -193,6 +195,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
                                    preproc->arena),
                                .flags = PREPROC_MACRO_FN_FLAG_VARIADIC}}};
 
+    hashtbl_insert(preproc->defines, &ident, &define);
+
+    ident = MK_SIZED("__asm__");
     hashtbl_insert(preproc->defines, &ident, &define);
   }
 
@@ -230,6 +235,10 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
+    // needed for <TargetConditionals.h>   
+    DEF_BUILTIN_NUM("TARGET_CPU_ARM64", "1");
+    DEF_BUILTIN_NUM("TARGET_OS_MAC", "1");
+
     DEF_BUILTIN_NUM("__APPLE__", "1");
     DEF_BUILTIN_NUM("__aarch64__", "1");
     DEF_BUILTIN_NUM("__arm64__", "1");
@@ -237,6 +246,10 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_MACOS_X86_64:
+    // needed for <TargetConditionals.h>   
+    DEF_BUILTIN_NUM("TARGET_CPU_X86_64", "1");
+    DEF_BUILTIN_NUM("TARGET_OS_MAC", "1");
+
     DEF_BUILTIN_NUM("__APPLE__", "1");
     DEF_BUILTIN_NUM("__x86_64__", "1");
     DEF_BUILTIN_NUM("__LP64__", "1");
@@ -289,13 +302,14 @@ static struct preproc_text create_preproc_text(struct preproc *preproc,
   vector_push_back(enabled, &is_enabled);
 
   // FIXME: spans are entirely broken at the moment
-  return (struct preproc_text){.text = text,
-                               .len = strlen(text),
-                               .pos = {.col = 0, .line = 0, .idx = 0},
-                               .line = 0,
-                               .file = components.file,
-                               .path = components,
-                               .enabled = enabled};
+  return (struct preproc_text){
+      .text = text,
+      .len = strlen(text),
+      .pos = {.file = path, .col = 0, .line = 0, .idx = 0},
+      .line = 0,
+      .file = components.file,
+      .path = components,
+      .enabled = enabled};
 }
 
 enum preproc_special_macro {
@@ -1129,9 +1143,13 @@ static bool token_is_trivial(const struct preproc_token *token) {
 
 // tokens that shouldn't be stripped from an `#if` expression or similar
 static bool well_known_token(struct sized_str token) {
+  // FIXME: from TargetConditionals
+  // 'The long term solution is to add suppport for __is_target_arch and __is_target_os'
+
   static const char *well_known[] = {
       "defined", "has_include", "__has_include", "has_embed", "__has_embed",
       "__has_feature", "__has_builtin", "__has_attribute", "__has_c_attribute",
+      "__has_extension",
       // needed because clang headers do not properly avoid it
       // TODO: have more flexible solution to this (so we can ignore arbitary
       // __foo type macros)
@@ -1449,6 +1467,16 @@ static bool try_expand_token(struct preproc *preproc,
       }
 
       size_t num_tokens = vector_length(macro_fn.tokens);
+
+      if (!num_tokens) {
+        struct preproc_token empty = {
+            .ty = PREPROC_TOKEN_TY_IDENTIFIER,
+            .span = MK_INVALID_TEXT_SPAN(0, 0),
+            .text = "",
+        };
+
+        vector_push_back(expanded_fn, &empty);
+      }
 
       for (size_t i = num_tokens; i; i--) {
         struct preproc_macro_fn_token *fn_tok =
@@ -2747,7 +2775,8 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                 if ((prev && prev->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
                      prev->punctuator.ty ==
                          PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) &&
-                    (succ && text_span_len(&succ->span) == strlen("__VA_ARGS__") &&
+                    (succ &&
+                     text_span_len(&succ->span) == strlen("__VA_ARGS__") &&
                      !strncmp(succ->text, "__VA_ARGS__",
                               strlen("__VA_ARGS__")))) {
 

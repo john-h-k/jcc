@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "codegen.h"
 #include "diagnostics.h"
+#include "fcache.h"
 #include "graphcol.h"
 #include "hashtbl.h"
 #include "ir/build.h"
@@ -30,6 +31,7 @@
 
 struct compiler {
   struct arena_allocator *arena;
+  struct fcache *fcache;
 
   struct compiler_diagnostics *preproc_diagnostics;
   struct preproc *preproc;
@@ -43,13 +45,13 @@ struct compiler {
 };
 
 enum compiler_create_result
-create_compiler(struct program *program,
-                struct fcache *fcache,
-                 const struct target *target,
-                struct compile_file output, const char *path,
-                const struct compile_args *args, struct compiler **compiler) {
+create_compiler(struct program *program, struct fcache *fcache,
+                const struct target *target, struct compile_file output,
+                const char *path, const struct compile_args *args,
+                struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
+  (*compiler)->fcache = fcache;
   (*compiler)->args = *args;
   (*compiler)->target = target;
   (*compiler)->output = output;
@@ -73,7 +75,8 @@ create_compiler(struct program *program,
   // inside but its because preproc is wrapped by the parser normally
   (*compiler)->preproc_diagnostics = compiler_diagnostics_create();
 
-  if (preproc_create(program, fcache, preproc_args, (*compiler)->preproc_diagnostics,
+  if (preproc_create(program, fcache, preproc_args,
+                     (*compiler)->preproc_diagnostics,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -136,6 +139,16 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   struct text_pos start = span.start;
   struct text_pos end = span.end;
 
+  struct fcache_file file;
+
+  // TODO: handle span that crosses file
+
+  if (!span.start.file ||
+      !fcache_read_path(compiler->fcache, MK_SIZED(span.start.file), &file)) {
+    fprintf(stderr, "(could not read function file %s)", span.start.file);
+    return;
+  }
+
   const char *text = compiler->program.text;
   size_t len = strlen(text);
 
@@ -162,13 +175,17 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 
 #define DIAG_LINE_LIM 50
 
-  if (start.line == TEXT_POS_INVALID_LINE || end.line == TEXT_POS_INVALID_LINE) {
-    fprintf(stderr, "(unable to print due to invalid line pos, likely from macro expansion)");
+  if (start.line == TEXT_POS_INVALID_LINE ||
+      end.line == TEXT_POS_INVALID_LINE) {
+    fprintf(stderr, "(unable to print due to invalid line pos, likely from "
+                    "macro expansion)");
     return;
   }
 
   if (end.line - start.line > DIAG_LINE_LIM) {
-    fprintf(stderr, "(unable to print due to line lim %d, from line %zu to line %zu)", DIAG_LINE_LIM, start.line, end.line);
+    fprintf(stderr,
+            "(unable to print due to line lim %d, from line %zu to line %zu)",
+            DIAG_LINE_LIM, start.line, end.line);
     return;
   }
 
@@ -247,7 +264,38 @@ compiler_print_diagnostics(struct compiler *compiler,
   struct compiler_diagnostic diagnostic;
 
   while (compiler_diagnostics_iter_next(&iter, &diagnostic)) {
-    // fprintf(stderr, "jcc: ");
+    struct text_span span;
+    struct text_pos point;
+    bool has_pos;
+    const char *message;
+
+    switch (diagnostic.ty.class) {
+    case COMPILER_DIAGNOSTIC_CLASS_PREPROC:
+      has_pos = true;
+      message = diagnostic.preproc_diagnostic.message;
+      span = diagnostic.preproc_diagnostic.span;
+      point = diagnostic.preproc_diagnostic.point;
+      break;
+    case COMPILER_DIAGNOSTIC_CLASS_PARSE:
+      has_pos = true;
+      message = diagnostic.parse_diagnostic.message;
+      span = diagnostic.parse_diagnostic.span;
+      point = diagnostic.parse_diagnostic.point;
+      break;
+    case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
+      has_pos = true;
+      message = diagnostic.semantic_diagnostic.message;
+      span = diagnostic.semantic_diagnostic.span;
+      point = diagnostic.semantic_diagnostic.point;
+      break;
+    case COMPILER_DIAGNOSTIC_CLASS_INTERNAL:
+      has_pos = false;
+      message = diagnostic.internal_diagnostic.message;
+      break;
+    }
+
+    fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file, span.start.line, span.start.col);
+
     switch (diagnostic.ty.severity) {
     case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
       fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
@@ -260,30 +308,9 @@ compiler_print_diagnostics(struct compiler *compiler,
       break;
     }
 
-    switch (diagnostic.ty.class) {
-    case COMPILER_DIAGNOSTIC_CLASS_PREPROC:
-      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-              diagnostic.preproc_diagnostic.message);
-      compiler_print_diagnostics_context(compiler,
-                                         diagnostic.preproc_diagnostic.span,
-                                         diagnostic.preproc_diagnostic.point);
-      break;
-    case COMPILER_DIAGNOSTIC_CLASS_PARSE:
-      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-              diagnostic.parse_diagnostic.message);
-      compiler_print_diagnostics_context(compiler,
-                                         diagnostic.parse_diagnostic.span,
-                                         diagnostic.parse_diagnostic.point);
-      break;
-    case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
-      fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET,
-              diagnostic.semantic_diagnostic.message);
-      compiler_print_diagnostics_context(compiler,
-                                         diagnostic.semantic_diagnostic.span,
-                                         diagnostic.semantic_diagnostic.point);
-      break;
-    case COMPILER_DIAGNOSTIC_CLASS_INTERNAL:
-      break;
+    fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET, message);
+    if (has_pos) {
+      compiler_print_diagnostics_context(compiler, span, point);
     }
 
     fprintf(stderr, "\n");
@@ -699,7 +726,8 @@ enum compile_result compile(struct compiler *compiler) {
   COMPILER_STAGE(TYPECHK, typechk, &parse_result, &typechk_result);
 
   if (compiler->args.syntax_only) {
-    // if diagnostics occurred, exit will of already occurred via COMPILER_STAGE macro
+    // if diagnostics occurred, exit will of already occurred via COMPILER_STAGE
+    // macro
     return COMPILE_RESULT_SUCCESS;
   }
 
