@@ -119,7 +119,7 @@ foreach(arch IN LISTS ARCHITECTURES)
       src/rv32i/object.c
     )
   else()
-    message(WARNING "Unsupported architecture: ${arch}")
+    message(FATAL_ERROR "Unsupported architecture: ${arch}")
   endif()
 endforeach()
 

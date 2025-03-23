@@ -28,6 +28,10 @@ typedef ptrdiff_t ssize_t;
 
 #ifndef JCC_RV32I
 #define JCC_RV32I
+
+#ifdef JCC_X64
+#error "JCC fails on x64 emitter file"
+#endif
 #endif
 
 #endif
@@ -36,7 +40,7 @@ typedef ptrdiff_t ssize_t;
 
 #ifdef INT128_C
 #define HAS_INT128 1
-#elif __clang__ || __GNUC__
+#elif (__clang__ || __GNUC__) && defined(__SIZEOF_INT128__)
 #define HAS_INT128 1
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
@@ -78,7 +82,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define FLAG_ENUM
 #endif
 
-#if ASAN || MSAN || TSAN || UBSAN
+#if (ASAN || MSAN || TSAN || UBSAN) && __has_include(<sanitizer/common_interface_defs.h>)
 #define SANITIZER_PRINT_STACK_TRACE
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
@@ -263,9 +267,8 @@ PRINTF_ARGS(1)
 static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
 #ifdef __JCC__
-    (void)msg;
     // doesn't support varargs
-    fprintf(stderr, "invariant_assertion failed, program exiting");
+    fprintf(stderr, "invariant_assertion failed, program exiting: %s", msg);
 #else
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
 #endif

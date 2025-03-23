@@ -104,8 +104,14 @@ enum lex_create_result lexer_create(struct program *program,
     KEYWORD("short", LEX_TOKEN_TY_KW_SHORT);
     KEYWORD("int", LEX_TOKEN_TY_KW_INT);
     KEYWORD("long", LEX_TOKEN_TY_KW_LONG);
+
+    // needed on linux?
+    KEYWORD("__unsigned__", LEX_TOKEN_TY_KW_UNSIGNED);
+    KEYWORD("__signed__", LEX_TOKEN_TY_KW_SIGNED);
+
     KEYWORD("unsigned", LEX_TOKEN_TY_KW_UNSIGNED);
     KEYWORD("signed", LEX_TOKEN_TY_KW_SIGNED);
+
     KEYWORD("enum", LEX_TOKEN_TY_KW_ENUM);
     KEYWORD("struct", LEX_TOKEN_TY_KW_STRUCT);
     KEYWORD("union", LEX_TOKEN_TY_KW_UNION);

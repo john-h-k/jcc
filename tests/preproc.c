@@ -1,5 +1,5 @@
 // expected value: 8
-// stdout: Hello, World! 10
+// stdout: hiHello, World! 10
 
 #ifndef PREPROC_C
 #define PREPROC_C

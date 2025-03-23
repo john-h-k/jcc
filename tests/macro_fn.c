@@ -10,6 +10,8 @@
 #define CONCAT2(a, b) a ## b ## _bar
 #define CONCAT3(a, b) foo_ ## a ## b ## _bar
 
+#define GET(a, b, c) a b c
+
 #define AB a ## b
 
 int puts(const char *);
@@ -19,6 +21,11 @@ int main() {
   int foo_ab = 1;
   int ab_bar = 2;
   int foo_a0_bar = 3;
+
+  int k = GET(,,4);
+  if (k != 4) {
+    return 1;
+  }
 
   puts(STRINGIFY(string) STRINGIFY("foo bar\n") STRINGIFY(bar("foo bar\n")));
 

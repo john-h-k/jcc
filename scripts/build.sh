@@ -63,6 +63,9 @@ configure() {
         echo "    --no-san "
         echo "        Disable sanitisers in debug mode - can speedup build and testing"
         echo ""
+        echo "    --cc "
+        echo "        C compiler to use"
+        echo ""
         echo "    -m, --mode"
         echo "        Mode to build (default: 'Debug'). Values:"
         echo "            * d | D | deb   | debug          | Debug           - Debug"
@@ -87,6 +90,7 @@ configure() {
     generator=""
     archs=""
     no_san=""
+    cc=""
 
     if [ -z "$generator" ]; then
         generator="$(_get_generator)"
@@ -117,6 +121,16 @@ configure() {
           ;;
         --profile-build)
           profile_build="1"
+          shift
+          ;;
+        --cc)
+          shift
+          cc="$1"
+          shift
+          ;;
+        --cflags)
+          shift
+          cflags="$1"
           shift
           ;;
         -t|--default-target)
@@ -157,6 +171,8 @@ configure() {
     mkdir -p build
 
     echo -e "${BOLD}Build configuration: ${RESET}"
+    echo -e "${BOLD}    cc=$cc${RESET}"
+    echo -e "${BOLD}    cflags=$cflags${RESET}"
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
     if [ -n "$arches" ]; then
@@ -170,10 +186,14 @@ configure() {
     fi
     echo -e ""
 
-    flags=""
+    flags="$cflags"
 
     # ninja causes colours to get dropped, so force them
     flags="$flags -fdiagnostics-color=always"
+
+    if [ -z "$cc" ]; then
+        cc=$(command -v clang &>/dev/null && echo clang || echo cc)
+    fi
 
     if [ -n "$profile_build" ]; then
         mkdir -p build/traces
@@ -191,7 +211,7 @@ configure() {
     cd build
     # HACK: temp force clang as gcc super slow with ASAN
     # if ! (NO_SAN=$no_san cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
-    if ! (cmake -DNO_SAN="$no_san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+    if ! (cmake -DNO_SAN="$no_san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi
@@ -371,9 +391,14 @@ bootstrap() {
 
     generator="$(_get_generator)"
 
-    cmake_flags="--fresh -G $generator -DARCHITECTURES=aarch64;rv32i"
-    echo $cmake_flags
-    if ! cmake $cmake_flags ..  -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
+    cmake_flags=(
+        "--fresh"
+        "-G"
+        "$generator"
+        "-DARCHITECTURES=aarch64;rv32i"
+    )   
+
+    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
         echo -e "${BOLDRED}stage1 configure fail${RESET}"
         exit -1
     fi
@@ -390,12 +415,12 @@ bootstrap() {
     cp jcc jcc1
     echo -e "${BOLD}stage1 built to 'jcc1'${RESET}"
    
-    if ! cmake $cmake_flags .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
+    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
         echo -e "${BOLDRED}stage2 configure fail${RESET}"
         exit -1
     fi
 
-    if ! cmake --build . --parallel 1; then
+    if ! cmake --build .; then
         echo -e "${BOLDRED}stage2 build fail${RESET}"
         exit -1
     fi
@@ -411,7 +436,7 @@ bootstrap() {
         echo -e "${BOLDRED}Differences found between jcc1 and jcc2!${RESET}"
     fi
 
-    if ! cmake $cmake_flags .. -DCMAKE_C_COMPILER=$(pwd)/jcc2 >/dev/null; then
+    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc2 >/dev/null; then
         echo -e "${BOLDRED}stage3 configure fail${RESET}"
         exit -1
     fi
@@ -431,4 +456,16 @@ bootstrap() {
     else
         echo -e "${BOLDRED}Differences found between jcc2 and jcc3!${RESET}"
     fi
+
+    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_FLAGS="-target rv32i-unknown-elf -isysroot /opt/riscv -isystem /opt/riscv/riscv64-unknown-elf/include" -DCMAKE_C_COMPILER=$(pwd)/jcc3 >/dev/null; then
+        echo -e "${BOLDRED}risc-v configure fail${RESET}"
+        exit -1
+    fi
+
+    if ! cmake --build . --parallel 1; then
+        echo -e "${BOLDRED}risc-v build fail${RESET}"
+        exit -1
+    fi
+
+    cp jcc jcc-rv32i
 }

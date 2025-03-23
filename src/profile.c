@@ -20,6 +20,7 @@ static unsigned long long get_time(void) {
 }
 #else
 static unsigned long long get_time(void) {
+#ifdef TIME_UTC
   struct timespec ts;
   invariant_assert(TIME_UTC == timespec_get(&ts, TIME_UTC),
                    "timespec_get failed");
@@ -27,6 +28,9 @@ static unsigned long long get_time(void) {
   DEBUG_ASSERT(ts.tv_nsec > 0, "expected pos ns");
 
   return ts.tv_sec * 1000000000 + ts.tv_nsec;
+#else
+  return 0;
+#endif
 }
 #endif
 
@@ -182,6 +186,11 @@ static void profiler_print_subregions(FILE *file,
 }
 
 void profiler_print(FILE *file) {
+#ifndef TIME_UTC
+  warn("profiling not supported on this system (TIME_UTC was not defined)");
+  return;
+#endif
+
   if (!regions || !vector_length(regions)) {
     fprintf(file, "No profiling available\n");
     return;

@@ -125,8 +125,7 @@ static bool get_target_for_args(enum compile_arch arch,
     break;
 #else
     err("Could not determine native platform for arm64 (OS_NAME=" OS_NAME ")");
-    exc = -1;
-    goto exit;
+    return false;
 #endif
   case COMPILE_ARCH_RV32I:
 #if OS_LINUX

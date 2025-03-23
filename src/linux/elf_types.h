@@ -106,7 +106,7 @@ typedef struct elf64_rela {
 } Elf64_Rela;
 
 #define ELF32_R_INFO(s, t) (((s) << 8) + (unsigned char)(t))
-#define ELF64_R_INFO(s, t) (((s) << 32) + ((t) & 0xFFFFFFFFL))
+#define ELF64_R_INFO(s, t) (((uint64_t)(s) << 32) + ((t) & 0xFFFFFFFFL))
 
 #define SHT_NULL 0
 #define SHT_PROGBITS 1
