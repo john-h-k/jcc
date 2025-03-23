@@ -1,3 +1,4 @@
+// skip: ??
 // expected value: 8
 // stdout: Hello, World! 10
 

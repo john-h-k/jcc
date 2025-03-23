@@ -1,7 +1,5 @@
 #include "preproc.h"
 
-#include <TargetConditionals.h>
-
 #include "alloc.h"
 #include "compiler.h"
 #include "diagnostics.h"
@@ -14,6 +12,7 @@
 #include "util.h"
 #include "vector.h"
 
+#include <TargetConditionals.h>
 #include <ctype.h>
 #include <stddef.h>
 #include <string.h>
@@ -235,7 +234,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
-    // needed for <TargetConditionals.h>   
+    // needed for <TargetConditionals.h>
     DEF_BUILTIN_NUM("TARGET_CPU_ARM64", "1");
     DEF_BUILTIN_NUM("TARGET_OS_MAC", "1");
 
@@ -246,7 +245,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     DEF_BUILTIN_NUM("_LP64", "1");
     break;
   case COMPILE_TARGET_MACOS_X86_64:
-    // needed for <TargetConditionals.h>   
+    // needed for <TargetConditionals.h>
     DEF_BUILTIN_NUM("TARGET_CPU_X86_64", "1");
     DEF_BUILTIN_NUM("TARGET_OS_MAC", "1");
 
@@ -1144,7 +1143,8 @@ static bool token_is_trivial(const struct preproc_token *token) {
 // tokens that shouldn't be stripped from an `#if` expression or similar
 static bool well_known_token(struct sized_str token) {
   // FIXME: from TargetConditionals
-  // 'The long term solution is to add suppport for __is_target_arch and __is_target_os'
+  // 'The long term solution is to add suppport for __is_target_arch and
+  // __is_target_os'
 
   static const char *well_known[] = {
       "defined", "has_include", "__has_include", "has_embed", "__has_embed",
@@ -2786,7 +2786,10 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                   }
 
                   fn_tok = (struct preproc_macro_fn_token){
-                      .ty = PREPROC_MACRO_FN_TOKEN_TY_VA_OPT, .opt = *def_tok};
+                      .ty = PREPROC_MACRO_FN_TOKEN_TY_VA_OPT, .opt = *prev};
+
+                  vector_push_back(tokens, &fn_tok);
+
                   continue;
                 }
               }
