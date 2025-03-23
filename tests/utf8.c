@@ -1,6 +1,6 @@
 // expected value: 1
 int main() {
-  int 你 = 1;
-  return 你;
+  int 😁 = 1;
+  return 😁;
 }
 
