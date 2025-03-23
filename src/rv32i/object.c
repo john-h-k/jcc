@@ -1,7 +1,6 @@
 #include "object.h"
 
 #include "../util.h"
-#include "isa.h"
 
 void rv32i_write_object(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");

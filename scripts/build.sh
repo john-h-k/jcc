@@ -91,6 +91,7 @@ configure() {
     archs=""
     no_san=""
     cc=""
+    fresh=""
 
     if [ -z "$generator" ]; then
         generator="$(_get_generator)"
@@ -103,12 +104,14 @@ configure() {
           exit 0
           ;;
         --clean)
-          clean
+              clean
           shift
+          fresh="--fresh"
           ;;
         --clean-all)
           clean-all
           shift
+          fresh="--fresh"
           ;;
         --no-san)
           no_san="1"
@@ -171,15 +174,19 @@ configure() {
     mkdir -p build
 
     echo -e "${BOLD}Build configuration: ${RESET}"
-    echo -e "${BOLD}    cc=$cc${RESET}"
-    echo -e "${BOLD}    cflags=$cflags${RESET}"
+    if [ -n "$cc" ]; then
+        echo -e "${BOLD}    cc=$cc${RESET}"
+    fi
+    if [ -n "$cflags" ]; then
+        echo -e "${BOLD}    cflags=$cflags${RESET}"
+    fi
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
     if [ -n "$arches" ]; then
-    echo -e "${BOLD}    architectures=$archs"
+        echo -e "${BOLD}    architectures=$archs"
     fi
     if [ -n "$profile_build" ]; then
-    echo -e "${BOLD}    profile_build=true"
+        echo -e "${BOLD}    profile_build=true"
     fi
     if [ -n "$default_target" ]; then
         echo -e "${BOLD}    default_target=$default_target${RESET}"
@@ -189,7 +196,9 @@ configure() {
     flags="$cflags"
 
     # ninja causes colours to get dropped, so force them
-    flags="$flags -fdiagnostics-color=always"
+    if ! [[ "$cc" == *"jcc"* ]]; then
+        flags="$flags -fdiagnostics-color=always"
+    fi
 
     if [ -z "$cc" ]; then
         cc=$(command -v clang &>/dev/null && echo clang || echo cc)
@@ -211,14 +220,17 @@ configure() {
     cd build
     # HACK: temp force clang as gcc super slow with ASAN
     # if ! (NO_SAN=$no_san cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
-    if ! (cmake -DNO_SAN="$no_san" -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
+    no_san_flag=$( [ -n "$no_san" ] && echo "-DNO_SAN=1" || echo "" )
+    if ! (cmake $fresh $no_san_flag -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
         exit -1
     fi
 }
 
 build() {
-    configure "$@"
+    if ! configure "$@"; then
+        echo -e "${BOLDRED}Configure failed!${RESET}"
+    fi
 
     num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
@@ -371,101 +383,79 @@ mini-bootstrap() {
 }
 
 bootstrap() {
+    stage="${1:-3}"
+
+    _stage_build() {
+        cc="$1"
+        shift
+        n="$1"
+        shift
+        flags="$@"
+
+        start=$(profile_begin)
+
+        # known issues with x64 emitter file; only build for aarch64/rv32i
+        if ! build "$@" --clean --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null; then
+            echo -e "${BOLDRED}stage$n build fail${RESET}"
+            exit 1
+        fi
+
+        cc_name=$(basename "$cc")
+        profile_end "stage$n (cc=$cc_name) took " $start
+
+        cp build/jcc "build/jcc$n"
+
+        echo -e "${BOLD}stage$n built to 'jcc$n'${RESET}"
+    }
+
     rm -f jcc0 jcc1
 
-    clang_start=$(profile_begin)
-
-    if ! build --clean-all --mode rel; then
-        echo -e "${BOLDRED}stage0 configure fail${RESET}"
+    if ! _stage_build cc 0 --mode release; then
         exit -1
     fi
 
-    profile_end "clang took " $clang_start
+    [ "$stage" -gt 0 ] || return 0
 
-    cd build
-
-    cp jcc jcc0
-    echo -e "${BOLD}stage0 built to 'jcc0'${RESET}"
-
-    rm jcc
-
-    generator="$(_get_generator)"
-
-    cmake_flags=(
-        "--fresh"
-        "-G"
-        "$generator"
-        "-DARCHITECTURES=aarch64;rv32i"
-    )   
-
-    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc0 >/dev/null; then
-        echo -e "${BOLDRED}stage1 configure fail${RESET}"
+    if ! _stage_build $(pwd)/build/jcc0 1; then
         exit -1
     fi
 
-    jcc_start=$(profile_begin)
+    [ "$stage" -gt 1 ] || return 0
 
-    if ! cmake --build .; then
-        echo -e "${BOLDRED}stage1 build fail${RESET}"
+    if ! _stage_build $(pwd)/build/jcc1 2; then
         exit -1
     fi
 
-    profile_end "JCC took " $jcc_start
-
-    cp jcc jcc1
-    echo -e "${BOLD}stage1 built to 'jcc1'${RESET}"
-   
-    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc1 >/dev/null; then
-        echo -e "${BOLDRED}stage2 configure fail${RESET}"
-        exit -1
-    fi
-
-    if ! cmake --build .; then
-        echo -e "${BOLDRED}stage2 build fail${RESET}"
-        exit -1
-    fi
-
-    cp jcc jcc2
-
-    echo -e "${BOLD}stage2 built to 'jcc2'${RESET}"
-    echo -e "${BOLD}Done!${RESET}"
-
-    if command diff jcc1 jcc2; then
+    if command diff build/jcc1 build/jcc2; then
         echo -e "${BOLDGREEN}jcc1 and jcc2 are the same!${RESET}"
     else
         echo -e "${BOLDRED}Differences found between jcc1 and jcc2!${RESET}"
     fi
 
-    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_COMPILER=$(pwd)/jcc2 >/dev/null; then
-        echo -e "${BOLDRED}stage3 configure fail${RESET}"
+    [ "$stage" -gt 2 ] || return 0
+
+    if ! _stage_build $(pwd)/build/jcc2 3; then
         exit -1
     fi
 
-    if ! cmake --build . --parallel 1; then
-        echo -e "${BOLDRED}stage3 build fail${RESET}"
-        exit -1
-    fi
-
-    cp jcc jcc3
-
-    echo -e "${BOLD}stage3 built to 'jcc3'${RESET}"
-    echo -e "${BOLD}Done!${RESET}"
-
-    if command diff jcc2 jcc3; then
+    if command diff build/jcc2 build/jcc3; then
         echo -e "${BOLDGREEN}jcc2 and jcc3 are the same!${RESET}"
     else
         echo -e "${BOLDRED}Differences found between jcc2 and jcc3!${RESET}"
     fi
 
-    if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_FLAGS="-target rv32i-unknown-elf -isysroot /opt/riscv -isystem /opt/riscv/riscv64-unknown-elf/include" -DCMAKE_C_COMPILER=$(pwd)/jcc3 >/dev/null; then
-        echo -e "${BOLDRED}risc-v configure fail${RESET}"
-        exit -1
-    fi
+    echo -e "${BOLD}Done!${RESET}"
 
-    if ! cmake --build . --parallel 1; then
-        echo -e "${BOLDRED}risc-v build fail${RESET}"
-        exit -1
-    fi
+    # build rv32i native compiler
+    # if ! cmake "${cmake_flags[@]}" .. -DCMAKE_C_FLAGS="-target rv32i-unknown-elf -isysroot /opt/riscv -isystem /opt/riscv/riscv64-unknown-elf/include" -DCMAKE_C_COMPILER=$(pwd)/jcc3 >/dev/null; then
+    #     echo -e "${BOLDRED}risc-v configure fail${RESET}"
+    #     exit -1
+    # fi
 
-    cp jcc jcc-rv32i
+    # if ! cmake --build . --parallel 1; then
+    #     echo -e "${BOLDRED}risc-v build fail${RESET}"
+    #     exit -1
+    # fi
+
+    # cp jcc jcc-rv32i
 }
