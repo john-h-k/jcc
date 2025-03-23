@@ -15,7 +15,5 @@ char *path_replace_ext(struct arena_allocator *arena, const char *path,
                        const char *ext);
 char *path_add_ext(struct arena_allocator *arena, const char *path,
                    const char *ext);
-char *read_path(struct arena_allocator *arena, const char *path);
-char *read_file(struct arena_allocator *arena, FILE *file);
 
 #endif

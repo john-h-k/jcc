@@ -16,6 +16,7 @@ set(
   src/deque.c
   src/hash.c
   src/bitset.c
+  src/fcache.c
 
   src/profile.c
 
@@ -140,7 +141,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
   
 
-  if(DEFINED NO_SAN AND NO_SAN STREQUAL "")
+  if(NOT DEFINED NO_SAN OR NO_SAN STREQUAL "")
     if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
       add_link_options(-fsanitize=address,undefined)
       add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all)

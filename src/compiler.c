@@ -43,7 +43,9 @@ struct compiler {
 };
 
 enum compiler_create_result
-create_compiler(struct program *program, const struct target *target,
+create_compiler(struct program *program,
+                struct fcache *fcache,
+                 const struct target *target,
                 struct compile_file output, const char *path,
                 const struct compile_args *args, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
@@ -61,6 +63,8 @@ create_compiler(struct program *program, const struct target *target,
       .sys_include_paths = args->sys_include_paths,
       .num_include_paths = args->num_include_paths,
       .include_paths = args->include_paths,
+      .num_defines = args->num_defines,
+      .defines = args->defines,
       .verbose = args->verbose,
       .fixed_timestamp = args->fixed_timestamp,
   };
@@ -69,7 +73,7 @@ create_compiler(struct program *program, const struct target *target,
   // inside but its because preproc is wrapped by the parser normally
   (*compiler)->preproc_diagnostics = compiler_diagnostics_create();
 
-  if (preproc_create(program, preproc_args, (*compiler)->preproc_diagnostics,
+  if (preproc_create(program, fcache, preproc_args, (*compiler)->preproc_diagnostics,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;

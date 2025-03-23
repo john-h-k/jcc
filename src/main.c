@@ -2,6 +2,8 @@
 #include "alloc.h"
 #include "args.h"
 #include "compiler.h"
+#include "fcache.h"
+#include "preproc.h"
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
@@ -143,7 +145,8 @@ static bool get_target_for_args(enum compile_arch arch,
   }
 }
 
-static const char *get_default_isysroot(struct arena_allocator *arena,
+static const char *get_default_isysroot(struct fcache *fcache,
+                                        struct arena_allocator *arena,
                                         enum compile_target target) {
   // requires target to have been resolved
   switch (target) {
@@ -156,18 +159,18 @@ static const char *get_default_isysroot(struct arena_allocator *arena,
 
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
-    FILE *p = popen("xcrun --show-sdk-path", "r");
-    invariant_assert(p, "xcrun failed!");
-    char *path = read_file(arena, p);
-
-    invariant_assert(path, "failed to read process");
-
-    size_t len = strlen(path);
-
-    if (len && path[len - 1] == '\n') {
-      // strip newline
-      path[len - 1] = '\0';
+    struct fcache_file sdk_path;
+    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --show-sdk-path"), &sdk_path)) {
+      BUG("xcrun call failed!");
     }
+
+    char *path = arena_alloc_strndup(arena, sdk_path.data, sdk_path.len);
+
+    if (sdk_path.len && sdk_path.data[sdk_path.len - 1] == '\n') {
+      // strip newline
+      path[sdk_path.len - 1] = '\0';
+    }
+
     return path;
 #else
     warn("no isysroot found!");
@@ -182,6 +185,7 @@ static const char *get_default_isysroot(struct arena_allocator *arena,
 
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
+                     struct fcache *fcache,
                      struct arena_allocator *arena,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
@@ -256,7 +260,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
 
   if (!args->isys_root) {
-    args->isys_root = get_default_isysroot(arena, args->target);
+    args->isys_root = get_default_isysroot(fcache, arena, args->target);
   }
 
   const char *target = string_target(args->target);
@@ -297,7 +301,33 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .use_graphcol_regalloc = args->use_graphcol_regalloc,
 
       .output = output,
+
+      .num_defines = args->define_macros.num_values,
+      .defines = arena_alloc(arena, sizeof(compile_args->defines[0]) * args->define_macros.num_values)
   };
+
+  for (size_t i = 0; i < args->define_macros.num_values; i++) {
+    const char *def_macro = args->define_macros.values[i];
+
+    const char *val_str = strchr(def_macro, '=');
+
+    struct sized_str name, value;
+    if (val_str) {
+      name = (struct sized_str){
+        .str = def_macro,
+        .len = val_str - def_macro
+      };
+      value = MK_SIZED(val_str + 1);
+    } else {
+      name = MK_SIZED(def_macro);
+      value = MK_SIZED("1");
+    }
+
+    compile_args->defines[i] = (struct preproc_define_macro){
+      .name = name,
+      .value = value
+    };
+  }
 
   *num_sources = args->num_values;
   *sources = args->values;
@@ -350,12 +380,15 @@ static int jcc_main(int argc, char **argv) {
 
   arena_allocator_create(&arena);
 
+  struct fcache *fcache;
+  fcache_create(arena, &fcache);
+
   struct parsed_args args;
   struct compile_args compile_args;
   size_t num_sources;
   const char **sources;
   enum parse_args_result parse_result = try_get_compile_args(
-      argc, argv, &args, arena, &compile_args, &num_sources, &sources);
+      argc, argv, &args, fcache, arena, &compile_args, &num_sources, &sources);
 
   switch (parse_result) {
   case PARSE_ARGS_RESULT_SUCCESS:
@@ -409,16 +442,17 @@ static int jcc_main(int argc, char **argv) {
 
     PROFILE_BEGIN(source_read);
 
-    const char *source;
+    struct fcache_file source;
+    bool success;
     if (!strcmp(source_path, "-")) {
-      source = read_file(arena, stdin);
+      success = fcache_read_stdin(fcache, &source);
     } else {
-      source = read_path(arena, source_path);
+      success = fcache_read_path(fcache, MK_SIZED(source_path), &source);
     }
 
     PROFILE_END(source_read);
 
-    if (!source) {
+    if (!success) {
       err("source file \"%s\" could not be read!", source_path);
       exc = COMPILE_RESULT_BAD_FILE;
       goto exit;
@@ -462,14 +496,15 @@ static int jcc_main(int argc, char **argv) {
       objects[i] = file.path;
     }
 
-    struct program program = {.text = source};
+    // TODO: make program contain length to to allow null chars
+    struct program program = {.text = source.data};
 
     disable_log();
     struct compiler *compiler;
 
     PROFILE_BEGIN(create_compiler);
 
-    if (create_compiler(&program, target, file, source_path, &compile_args,
+    if (create_compiler(&program, fcache, target, file, source_path, &compile_args,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
