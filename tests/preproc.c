@@ -29,7 +29,7 @@ int printf(const char *, ...);
 
 #define STR()
 
-#define PRINT(fmt, ...) printf(fmt, __VA_ARGS__)
+#define PRINT(fmt, ...) printf(fmt, ## __VA_ARGS__)
 
 #define NOP(x)
 #define NOP2(x) NOP(x)
@@ -43,6 +43,7 @@ int main() {
 
   int a = FOO;
 
+  PRINT("");
   PRINT("%s %s %d\n", "Hello,", "World!", 10);
 
 #if !(FIZZ && FIZZ + 7 == 8)
