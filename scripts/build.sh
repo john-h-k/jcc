@@ -201,7 +201,12 @@ configure() {
     fi
 
     if [ -z "$cc" ]; then
-        cc=$(command -v clang &>/dev/null && echo clang || echo cc)
+        # if ASan on try and use clang
+        if [[ "$mode" == "Debug" ]] && [ -z "$no_san" ] && command -v clang &>/dev/null; then
+            cc="clang"
+        else
+            cc="cc"
+        fi
     fi
 
     if [ -n "$profile_build" ]; then
@@ -218,8 +223,7 @@ configure() {
     fi
 
     cd build
-    # HACK: temp force clang as gcc super slow with ASAN
-    # if ! (NO_SAN=$no_san cmake -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER=clang -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode .. >/dev/null); then
+
     no_san_flag=$( [ -n "$no_san" ] && echo "-DNO_SAN=1" || echo "" )
     if ! (cmake $fresh $no_san_flag -DARCHITECTURES="$archs" -DCMAKE_C_COMPILER="$cc" -G "$generator" -DCMAKE_C_FLAGS="$flags" -DCMAKE_BUILD_TYPE=$mode ..); then
         echo -e "${BOLDRED}Configuring build failed!${RESET}"
@@ -392,10 +396,14 @@ bootstrap() {
         shift
         flags="$@"
 
+        # do a pre-configure so timing is more accurate
+        configure "$@" --clean --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null
+        cd ..
+
         start=$(profile_begin)
 
         # known issues with x64 emitter file; only build for aarch64/rv32i
-        if ! build "$@" --clean --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null; then
+        if ! build "$@" --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null; then
             echo -e "${BOLDRED}stage$n build fail${RESET}"
             exit 1
         fi
