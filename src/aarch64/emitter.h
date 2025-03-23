@@ -2,7 +2,6 @@
 #define AARCH64_EMITTER_H
 
 #include "codegen.h"
-#include "isa.h"
 
 #include <stddef.h>
 #include <stdlib.h>
