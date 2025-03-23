@@ -110,6 +110,7 @@ enum preproc_macro_fn_token_ty {
   PREPROC_MACRO_FN_TOKEN_TY_STRINGIFIED_PARAM,
   PREPROC_MACRO_FN_TOKEN_TY_VA_ARGS,
   PREPROC_MACRO_FN_TOKEN_TY_STRINGIFIED_VA_ARGS,
+  PREPROC_MACRO_FN_TOKEN_TY_VA_OPT,
 };
 
 struct preproc_macro_fn_token {
@@ -117,6 +118,7 @@ struct preproc_macro_fn_token {
 
   union {
     struct preproc_token token;
+    struct preproc_token opt;
     size_t param;
   };
 };
@@ -445,6 +447,19 @@ preproc_create(struct program *program, struct fcache *fcache,
           .value = {
               .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
               .token = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
+                        .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
+                        .text = define->value.str},
+          }};
+
+      hashtbl_insert(p->defines, &define->name, &def);
+    } else if (define->value.str[0] == '\"') {
+      struct preproc_define def = {
+          .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                   .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
+                   .text = define->name.str},
+          .value = {
+              .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
+              .token = {.ty = PREPROC_TOKEN_TY_STRING_LITERAL,
                         .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
                         .text = define->value.str},
           }};
@@ -1195,8 +1210,9 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
     return new_tok;
   }
   default:
-    BUG("unsupported pair for concatenating tokens (%s ## %s)",
-        preproc_token_name(token->ty), preproc_token_name(last->ty));
+    BUG("unsupported pair for concatenating tokens (line %zu) (%s ## %s)",
+        token->span.start.line, preproc_token_name(token->ty),
+        preproc_token_name(last->ty));
   }
 }
 
@@ -1423,6 +1439,7 @@ static bool try_expand_token(struct preproc *preproc,
         }
       }
 
+      size_t num_args = vector_length(args);
       if (!(vector_length(args) == macro_fn.num_params ||
             ((macro_fn.flags & PREPROC_MACRO_FN_FLAG_VARIADIC) &&
              vector_length(args) >= macro_fn.num_params))) {
@@ -1438,6 +1455,17 @@ static bool try_expand_token(struct preproc *preproc,
             vector_get(macro_fn.tokens, i - 1);
 
         switch (fn_tok->ty) {
+        case PREPROC_MACRO_FN_TOKEN_TY_VA_OPT: {
+          if (!(macro_fn.flags & PREPROC_MACRO_FN_FLAG_VARIADIC)) {
+            BUG("not variadic");
+            break;
+          }
+
+          if (num_args > macro_fn.num_params) {
+            vector_push_back(expanded_fn, &fn_tok->opt);
+          }
+          break;
+        }
         case PREPROC_MACRO_FN_TOKEN_TY_PARAM: {
           struct vector *arg_tokens =
               *(struct vector **)vector_get(args, fn_tok->param);
@@ -1474,7 +1502,6 @@ static bool try_expand_token(struct preproc *preproc,
             BUG("__VA_ARGS__ in non-variadic macro");
           }
 
-          size_t num_args = vector_length(args);
           if (num_args <= macro_fn.num_params) {
             struct preproc_token empty = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
                                           .text = "",
@@ -1516,7 +1543,6 @@ static bool try_expand_token(struct preproc *preproc,
             BUG("__VA_ARGS__ in non-variadic macro");
           }
 
-          size_t num_args = vector_length(args);
           for (size_t j = num_args; j > macro_fn.num_params; j--) {
             struct vector *arg_tokens =
                 *(struct vector **)vector_get(args, j - 1);
@@ -2684,6 +2710,57 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                     PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY) {
               stringify = true;
               continue;
+            }
+
+            if (def_tok->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+                def_tok->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+              // look for `, ## __VA_ARGS__`
+              if (i - first_def_tok >= 1) {
+                size_t pos = i - 1;
+
+                size_t num_prev = 0;
+                struct preproc_token *prev = NULL;
+                while (pos > first_def_tok) {
+                  prev = vector_get(directive_tokens, pos);
+
+                  pos--;
+                  num_prev++;
+
+                  if (!token_is_trivial(prev)) {
+                    break;
+                  }
+                }
+
+                pos = i + 1;
+
+                struct preproc_token *succ = NULL;
+                while (pos < num_directive_tokens) {
+                  succ = vector_get(directive_tokens, pos);
+
+                  pos++;
+
+                  if (!token_is_trivial(succ)) {
+                    break;
+                  }
+                }
+
+                if ((prev && prev->ty == PREPROC_TOKEN_TY_PUNCTUATOR &&
+                     prev->punctuator.ty ==
+                         PREPROC_TOKEN_PUNCTUATOR_TY_COMMA) &&
+                    (succ && text_span_len(&succ->span) == strlen("__VA_ARGS__") &&
+                     !strncmp(succ->text, "__VA_ARGS__",
+                              strlen("__VA_ARGS__")))) {
+
+                  // need to remove the preceding tokens
+                  for (size_t j = 0; j < num_prev; j++) {
+                    vector_pop(tokens);
+                  }
+
+                  fn_tok = (struct preproc_macro_fn_token){
+                      .ty = PREPROC_MACRO_FN_TOKEN_TY_VA_OPT, .opt = *def_tok};
+                  continue;
+                }
+              }
             }
 
             if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {

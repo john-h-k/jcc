@@ -230,6 +230,10 @@ VALUES_FN(c_standard, C_STANDARD)
   ARG_STRING_LIST(define_macros, "-D", "--define-macro",                       \
                   "Define `arg` as 1, or `arg=value` as `value`")              \
                                                                                \
+  /* FIXME: Not used */                                                                             \
+  ARG_STRING_LIST(warnings, "-W", "",                       \
+                  "Warning settings")              \
+                                                                               \
   ARG_STRING_LIST(                                                             \
       include_paths, "-I", "",                                                 \
       "Directories to search for `#include \" header\"` directives")           \
