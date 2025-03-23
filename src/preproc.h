@@ -4,6 +4,7 @@
 #include "compiler.h"
 #include "program.h"
 #include "diagnostics.h"
+#include "fcache.h"
 
 #include <stdio.h>
 
@@ -11,11 +12,19 @@ enum preproc_create_result { PREPROC_CREATE_RESULT_SUCCESS = 0 };
 
 struct preproc;
 
+struct preproc_define_macro {
+  struct sized_str name;
+  struct sized_str value;
+};
+
 struct preproc_create_args {
   bool verbose;
 
   enum compile_target target;
   const char *path;
+
+  size_t num_defines;
+  struct preproc_define_macro *defines;
 
   size_t num_sys_include_paths;
   const char **sys_include_paths;
@@ -28,6 +37,7 @@ struct preproc_create_args {
 };
 
 enum preproc_create_result preproc_create(struct program *program,
+                                          struct fcache *fcache,
                                           struct preproc_create_args args,
                                           struct compiler_diagnostics *diagnostics,
                                           struct preproc **preproc);

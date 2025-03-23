@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "compiler.h"
 #include "diagnostics.h"
+#include "fcache.h"
 #include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
@@ -34,6 +35,7 @@ struct preproc_text {
 };
 
 struct preproc {
+  struct fcache *fcache;
   struct arena_allocator *arena;
 
   // struct preproc_text
@@ -318,8 +320,27 @@ struct preproc_unexpanded_token {
   };
 };
 
+static bool is_newline(char c) { return c == '\n'; }
+
+static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
+
+static bool is_identifier_char(char c) {
+  return isalpha(c) || isdigit(c) || c == '_';
+}
+
+static bool is_first_identifier_char(char c) {
+  return is_identifier_char(c) && !isdigit(c);
+}
+
+static bool is_preproc_number_char(char c) {
+  // legal chars are letters, digits, underscores, periods, and exponents (not
+  // handled here)
+  return isalpha(c) || isdigit(c) || c == '_' || c == '.';
+}
+
 enum preproc_create_result
-preproc_create(struct program *program, struct preproc_create_args args,
+preproc_create(struct program *program, struct fcache *fcache,
+               struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
                struct preproc **preproc) {
   if (args.fixed_timestamp) {
@@ -359,6 +380,7 @@ preproc_create(struct program *program, struct preproc_create_args args,
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;
+  p->fcache = fcache;
   p->args = args;
   p->diagnostics = diagnostics;
 
@@ -397,6 +419,41 @@ preproc_create(struct program *program, struct preproc_create_args args,
   *preproc = p;
 
   preproc_create_builtin_macros(p, args.target);
+
+  for (size_t i = 0; i < args.num_defines; i++) {
+    struct preproc_define_macro *define = &args.defines[i];
+
+    // FIXME: properly tokenise
+    if (!define->value.str || is_first_identifier_char(define->value.str[0])) {
+      struct preproc_define def = {
+          .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                   .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
+                   .text = define->name.str},
+          .value = {
+              .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
+              .token = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                        .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
+                        .text = define->value.str},
+          }};
+
+      hashtbl_insert(p->defines, &define->name, &def);
+    } else if (isdigit(define->value.str[0])) {
+      struct preproc_define def = {
+          .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                   .span = MK_INVALID_TEXT_SPAN(0, define->name.len),
+                   .text = define->name.str},
+          .value = {
+              .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,
+              .token = {.ty = PREPROC_TOKEN_TY_PREPROC_NUMBER,
+                        .span = MK_INVALID_TEXT_SPAN(0, define->value.len),
+                        .text = define->value.str},
+          }};
+
+      hashtbl_insert(p->defines, &define->name, &def);
+    } else {
+      TODO("other -D tok types");
+    }
+  }
 
   return PREPROC_CREATE_RESULT_SUCCESS;
 }
@@ -452,24 +509,6 @@ static void find_multiline_comment_end(struct preproc_text *preproc_text,
   }
 
   // if not found, it will just push to end of file and next token will be EOF
-}
-
-static bool is_newline(char c) { return c == '\n'; }
-
-static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
-
-static bool is_identifier_char(char c) {
-  return isalpha(c) || isdigit(c) || c == '_';
-}
-
-static bool is_first_identifier_char(char c) {
-  return is_identifier_char(c) && !isdigit(c);
-}
-
-static bool is_preproc_number_char(char c) {
-  // legal chars are letters, digits, underscores, periods, and exponents (not
-  // handled here)
-  return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
 
 static bool try_consume(struct preproc_text *preproc_text, struct text_pos *pos,
@@ -1865,16 +1904,16 @@ static bool try_include_path(struct preproc *preproc, const char *path,
   bool found;
 
   switch (mode) {
-  case TRY_FIND_INCLUDE_MODE_READ:
-    *content = read_path(preproc->arena, path);
-    found = *content != NULL;
-    break;
-  case TRY_FIND_INCLUDE_MODE_TEST: {
-    FILE *file = fopen(path, "r");
-    fclose(file);
-    found = file != NULL;
+  case TRY_FIND_INCLUDE_MODE_READ: {
+    struct fcache_file file;
+    found = fcache_read_path(preproc->fcache, MK_SIZED(path), &file);
+    // FIXME: does not respect `len`
+    *content = file.data;
     break;
   }
+  case TRY_FIND_INCLUDE_MODE_TEST:
+    found = fcache_test_path(preproc->fcache, MK_SIZED(path));
+    break;
   }
 
   if (found) {

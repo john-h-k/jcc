@@ -1,6 +1,7 @@
 #ifndef HASH_H
 #define HASH_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -21,6 +22,7 @@ void hasher_hash_integer(struct hasher *hasher, unsigned long long value,
                          size_t byte_size);
 void hasher_hash_str(struct hasher *hasher, const char *value);
 void hasher_hash_bytes(struct hasher *hasher, const void *value, size_t length);
+void hasher_hash_bool(struct hasher *hasher, bool value);
 
 hash_t hasher_finish(struct hasher *hasher);
 

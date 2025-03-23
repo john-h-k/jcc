@@ -227,6 +227,9 @@ VALUES_FN(c_standard, C_STANDARD)
                                                                                \
   ARG_STRING_LIST(link_libraries, "-l", "", "Libraries to link against")       \
                                                                                \
+  ARG_STRING_LIST(define_macros, "-D", "--define-macro",                       \
+                  "Define `arg` as 1, or `arg=value` as `value`")              \
+                                                                               \
   ARG_STRING_LIST(                                                             \
       include_paths, "-I", "",                                                 \
       "Directories to search for `#include \" header\"` directives")           \
@@ -259,8 +262,7 @@ VALUES_FN(c_standard, C_STANDARD)
                                                                                \
   ARG_BOOL(profile, "", "--profile", "Run profiler")                           \
                                                                                \
-  /* ------------------------- Debug-only options                              \
-     ------------------------- */                                              \
+  /* ------------------------- Debug-only options ------------------------- */ \
                                                                                \
   ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
             "[DEBUG] Log level flags")                                         \

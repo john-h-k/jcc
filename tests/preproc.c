@@ -1,8 +1,13 @@
 // expected value: 8
-// stdout: hiHello, World! 10
+// stdout: Hello, World! 10
 
 #ifndef PREPROC_C
 #define PREPROC_C
+
+#if !defined(__JCC__) || !defined(__jcc__) || !__JCC__ || !__jcc__
+#error "__JCC__ and __jcc__ should be defined!"
+#endif
+
 
 #warning Hi test warning
 

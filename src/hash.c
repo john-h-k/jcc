@@ -214,6 +214,10 @@ void hasher_hash_bytes(struct hasher *hasher, const void *value,
   }
 }
 
+void hasher_hash_bool(struct hasher *hasher, bool value) {
+  hasher_hash_integer(hasher, value, sizeof(value));
+}
+
 hash_t hasher_finish(struct hasher *hasher) {
   if (hasher->sponge_len) {
     uint64_t lo = hasher->sponge0;

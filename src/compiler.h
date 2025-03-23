@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include "program.h"
+#include "fcache.h"
 
 #include <stdio.h>
 
@@ -104,6 +105,9 @@ struct compile_args {
 
   bool use_graphcol_regalloc;
 
+  size_t num_defines;
+  struct preproc_define_macro *defines;
+
   size_t num_sys_include_paths;
   const char **sys_include_paths;
 
@@ -128,7 +132,9 @@ enum compile_result {
 
 struct target;
 enum compiler_create_result
-create_compiler(struct program *program, const struct target *target,
+create_compiler(struct program *program,
+                struct fcache *fcache,
+                 const struct target *target,
                 struct compile_file output, const char *working_dir,
                 const struct compile_args *args, struct compiler **compiler);
 enum compile_result compile(struct compiler *compiler);
