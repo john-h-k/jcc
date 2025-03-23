@@ -2,6 +2,7 @@
 #define PROGRAM_H
 
 #include "hash.h"
+#include "util.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -12,6 +13,8 @@ struct program {
 };
 
 struct text_pos {
+  const char *file;
+
   size_t idx;
   size_t line;
   size_t col;
@@ -26,14 +29,14 @@ struct text_span {
 #define TEXT_POS_INVALID_COL (SIZE_MAX)
 #define TEXT_POS_INVALID_LINE (SIZE_MAX)
 
-#define MK_TEXT_SPAN(start, end)                                               \
-  (struct text_span) { (start), (end) }
+#define MK_TEXT_SPAN(start_pos, end_pos)                                               \
+  (struct text_span) { .start = (start_pos), .end = (end_pos) }
 
 #define MK_INVALID_TEXT_POS(idx)                                               \
-  (struct text_pos) { (idx), TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
-#define MK_INVALID_TEXT_SPAN(start, end)                                       \
+  (struct text_pos) { NULL, (idx), TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
+#define MK_INVALID_TEXT_SPAN(start_pos, end_pos)                                       \
   (struct text_span) {                                                         \
-    MK_INVALID_TEXT_POS((start)), MK_INVALID_TEXT_POS((end))                   \
+    .start = MK_INVALID_TEXT_POS((start_pos)), .end = MK_INVALID_TEXT_POS((end_pos))   \
   }
 
 #define TEXT_POS_INVALID(pos) ((pos).col == TEXT_POS_INVALID_COL)

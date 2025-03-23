@@ -649,7 +649,9 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
     ** corresponding to the type of the operand with signed integer type.
     */
     else {
-      result_ty.well_known = WKT_IS_SIGNED(lhs_ty->well_known) ? WKT_MAKE_UNSIGNED(lhs_ty->well_known) : WKT_MAKE_UNSIGNED(rhs_ty->well_known);
+      result_ty.well_known = WKT_IS_SIGNED(lhs_ty->well_known)
+                                 ? WKT_MAKE_UNSIGNED(lhs_ty->well_known)
+                                 : WKT_MAKE_UNSIGNED(rhs_ty->well_known);
     }
   }
 
@@ -2321,13 +2323,21 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
                                                 struct text_span context) {
   struct td_var_ty complete;
   if (!try_get_completed_aggregate(tchk, var_ty, &complete)) {
-    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-    compiler_diagnostics_add(
-        tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
-                               MK_INVALID_TEXT_POS(0),
-                               "incomplete type in member access"));
-    return TD_VAR_TY_UNKNOWN;
+    // TODO: need to allow extern / tentative decls here
+
+    // char *msg = arena_alloc_snprintf(tchk->arena,
+    //                                  "incomplete type '%.*s' in member access",
+    //                                  (int)var_ty->incomplete_aggregate.name.len,
+    //                                  var_ty->incomplete_aggregate.name.str);
+
+    // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    // compiler_diagnostics_add(
+    //     tchk->diagnostics,
+    //     MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
+    //                            MK_INVALID_TEXT_POS(0), msg));
+    // return TD_VAR_TY_UNKNOWN;
+    (void)context;
+    return *var_ty;
   }
 
   return complete;
