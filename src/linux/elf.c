@@ -1,6 +1,7 @@
 #include "elf.h"
 
 #include "../compiler.h"
+#include "../log.h"
 #include "../util.h"
 #include "../vector.h"
 #include "elf_types.h"
@@ -8,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 struct reloc_info {
   size_t num_text_reloc_instrs;
@@ -18,6 +20,8 @@ struct reloc_info {
   struct vector *const_data_relocs;
   struct vector *data_relocs;
 };
+
+static void safe_fseek_set(FILE *file, long offset);
 
 static void write_header_64(FILE *file, Elf64_Half e_machine,
                             Elf64_Word e_flags, Elf64_Off shoff) {
@@ -40,7 +44,7 @@ static void write_header_64(FILE *file, Elf64_Half e_machine,
   ehdr.e_shentsize = sizeof(Elf64_Shdr);
   ehdr.e_shnum = 10;
   ehdr.e_shstrndx = 9;
-  fseek(file, 0, SEEK_SET);
+  safe_fseek_set(file, 0);
   fwrite(&ehdr, sizeof(ehdr), 1, file);
 }
 
@@ -65,7 +69,7 @@ static void write_header_32(FILE *file, Elf32_Half e_machine,
   ehdr.e_shentsize = sizeof(Elf32_Shdr);
   ehdr.e_shnum = 10;
   ehdr.e_shstrndx = 9;
-  fseek(file, 0, SEEK_SET);
+  safe_fseek_set(file, 0);
   fwrite(&ehdr, sizeof(ehdr), 1, file);
 }
 
@@ -343,6 +347,38 @@ static void write_relocations_elf(FILE *file,
   }
 }
 
+static void safe_fseek_set(FILE *file, long offset) {
+  // this function is no longer needed as the writer is written to be contigous
+
+#ifdef __unix__
+  fseek(file, offset, SEEK_SET);
+  return;
+#else
+  long pos = ftell(file);
+
+  invariant_assert(pos != -1, "ftell failed but was needed for safe_fseek_set");
+
+  if (offset < pos) {
+    BUG("cant go back");
+    invariant_assert(fseek(file, offset, SEEK_SET),
+                     "fseek failed! (offset=%ld, pos=%ld)", offset, pos);
+    return;
+  }
+
+  if (!pos) {
+    return;
+  }
+
+  long rem = offset - pos;
+
+  for (long i = 0; i < rem; i++) {
+    fputc(0, file);
+  }
+
+  DEBUG_ASSERT(ftell(file) == offset, "seek failed?");
+#endif
+}
+
 static void write_elf_object(const struct build_object_args *args) {
   FILE *file = fopen(args->output, "wb");
   invariant_assert(file, "could not open object output file");
@@ -404,52 +440,65 @@ static void write_elf_object(const struct build_object_args *args) {
      .rela.text | .rela.const | .rela.data | .symtab | .strtab | .shstrtab |
      shdrs
   */
-  size_t offset = sizeof(Elf64_Ehdr);
-  size_t text_off = offset;
-  offset += total_text_size;
-  size_t const_off = offset;
-  offset += total_const_size;
-  size_t data_off = offset;
-  offset += total_data_size;
-  size_t rela_text_off = offset;
-  offset += info.num_text_reloc_instrs * sizeof(Elf64_Rela);
-  size_t rela_const_off = offset;
-  offset += info.num_const_data_reloc_instrs * sizeof(Elf64_Rela);
-  size_t rela_data_off = offset;
-  offset += info.num_data_reloc_instrs * sizeof(Elf64_Rela);
-  size_t symtab_off = offset;
-  offset += (args->num_entries + 1) * sizeof(Elf64_Sym);
-  size_t strtab_off = offset;
-  size_t total_sym_str = 1; /* initial null */
-  for (size_t i = 0; i < args->num_entries; i++) {
-    total_sym_str += strlen(args->entries[i].symbol.name) + 1;
-  }
-  offset += total_sym_str;
-  size_t shstr_off = offset;
+#define MK_OFFSETS(bit)                                                        \
+  offset = sizeof(Elf##bit##_Ehdr);                                            \
+  text_off = offset;                                                           \
+  offset += total_text_size;                                                   \
+  const_off = offset;                                                          \
+  offset += total_const_size;                                                  \
+  data_off = offset;                                                           \
+  offset += total_data_size;                                                   \
+  rela_text_off = offset;                                                      \
+  offset += info.num_text_reloc_instrs * sizeof(Elf##bit##_Rela);              \
+  rela_const_off = offset;                                                     \
+  offset += info.num_const_data_reloc_instrs * sizeof(Elf##bit##_Rela);        \
+  rela_data_off = offset;                                                      \
+  offset += info.num_data_reloc_instrs * sizeof(Elf##bit##_Rela);              \
+  symtab_off = offset;                                                         \
+  offset += (args->num_entries + 1) * sizeof(Elf##bit##_Sym);                  \
+  strtab_off = offset;                                                         \
+  total_sym_str = 1; /* initial null */                                        \
+  for (size_t i = 0; i < args->num_entries; i++) {                             \
+    total_sym_str += strlen(args->entries[i].symbol.name) + 1;                 \
+  }                                                                            \
+  offset += total_sym_str;                                                     \
+  shstr_off = offset;                                                          \
+                                                                               \
+  shstr_size = sizeof(shstrtab);                                               \
+  offset += shstr_size;                                                        \
+  shoff = offset;
 
   const char shstrtab[] = "\0.text\0.rodata\0.data\0.rela.text\0.rela."
                           "rodata\0.rela.data\0.symtab\0.strtab\0.shstrtab\0";
-  size_t shstr_size = sizeof(shstrtab);
-  offset += shstr_size;
-  size_t shoff = offset;
+  size_t offset, text_off, const_off, data_off, rela_text_off, total_sym_str, rela_const_off,
+      rela_data_off, symtab_off, strtab_off, shstr_size, shstr_off, shoff;
 
   switch (args->compile_args->target) {
-  case COMPILE_TARGET_LINUX_RV32I:
+  case COMPILE_TARGET_LINUX_RV32I: {
+    MK_OFFSETS(32);
     write_header_32(file, EM_RISCV, EF_RISCV_FLOAT_ABI_DOUBLE, shoff);
     break;
-  case COMPILE_TARGET_LINUX_ARM64:
+  }
+  case COMPILE_TARGET_LINUX_ARM64: {
+    MK_OFFSETS(64);
     write_header_64(file, EM_AARCH64, 0, shoff);
     break;
-  case COMPILE_TARGET_LINUX_X86_64:
+  }
+  case COMPILE_TARGET_LINUX_X86_64: {
+    MK_OFFSETS(64);
     write_header_64(file, EM_X86_64, 0, shoff);
     break;
+  }
   default:
     unsupported("unsupported arch for elf");
   }
 
   /* write section contents */
 
-  fseek(file, text_off, SEEK_SET);
+  size_t *sym_id_to_idx =
+      nonnull_malloc(sizeof(*sym_id_to_idx) * args->num_entries);
+
+  safe_fseek_set(file, text_off);
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
     if (e->ty == OBJECT_ENTRY_TY_FUNC) {
@@ -461,7 +510,7 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   /* .rodata */
-  fseek(file, const_off, SEEK_SET);
+  safe_fseek_set(file, const_off);
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
     if (e->ty == OBJECT_ENTRY_TY_CONST_DATA ||
@@ -475,7 +524,7 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   /* .data */
-  fseek(file, data_off, SEEK_SET);
+  safe_fseek_set(file, data_off);
   for (size_t i = 0; i < args->num_entries; i++) {
     const struct object_entry *e = &args->entries[i];
     if (e->ty == OBJECT_ENTRY_TY_MUT_DATA && e->data) {
@@ -486,30 +535,28 @@ static void write_elf_object(const struct build_object_args *args) {
     }
   }
 
-  /* symbol table */
-  fseek(file, symtab_off, SEEK_SET);
+  struct vector *symbols;
 
   // first null entry
   switch (args->compile_args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {
+    symbols = vector_create(sizeof(Elf32_Sym));
     Elf32_Sym sym;
     memset(&sym, 0, sizeof(sym));
-    fwrite(&sym, sizeof(sym), 1, file);
+    vector_push_back(symbols, &sym);
     break;
   }
   case COMPILE_TARGET_LINUX_ARM64:
   case COMPILE_TARGET_LINUX_X86_64: {
+    symbols = vector_create(sizeof(Elf64_Sym));
     Elf64_Sym sym;
     memset(&sym, 0, sizeof(sym));
-    fwrite(&sym, sizeof(sym), 1, file);
+    vector_push_back(symbols, &sym);
     break;
   }
   default:
     unsupported("unsupported arch for elf");
   }
-
-  size_t *sym_id_to_idx =
-      nonnull_malloc(sizeof(*sym_id_to_idx) * args->num_entries);
 
   size_t *sym_order = nonnull_malloc(sizeof(*sym_order) * args->num_entries);
 
@@ -518,6 +565,8 @@ static void write_elf_object(const struct build_object_args *args) {
   enum symbol_visibility sym_vises[3] = {SYMBOL_VISIBILITY_PRIVATE,
                                          SYMBOL_VISIBILITY_GLOBAL,
                                          SYMBOL_VISIBILITY_UNDEF};
+
+  size_t num_local = 0;
 
   size_t last_sym_idx = 1;
   size_t last_sym_pos = 0;
@@ -570,7 +619,8 @@ static void write_elf_object(const struct build_object_args *args) {
 
       switch (s->visibility) {
       case SYMBOL_VISIBILITY_PRIVATE:
-        stb = STB_GLOBAL;
+        stb = STB_LOCAL;
+        num_local++;
         break;
       case SYMBOL_VISIBILITY_GLOBAL:
       case SYMBOL_VISIBILITY_UNDEF:
@@ -597,7 +647,7 @@ static void write_elf_object(const struct build_object_args *args) {
                          .st_value = st_value,
                          .st_size = st_size,
                          .st_info = ELF32_ST_INFO(stb, stt)};
-        fwrite(&sym, sizeof(sym), 1, file);
+        vector_push_back(symbols, &sym);
         break;
       }
       case COMPILE_TARGET_LINUX_ARM64:
@@ -607,7 +657,7 @@ static void write_elf_object(const struct build_object_args *args) {
                          .st_value = st_value,
                          .st_size = st_size,
                          .st_info = ELF64_ST_INFO(stb, stt)};
-        fwrite(&sym, sizeof(sym), 1, file);
+        vector_push_back(symbols, &sym);
         break;
       }
       default:
@@ -619,18 +669,22 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   /* relocations */
-  fseek(file, rela_text_off, SEEK_SET);
+  safe_fseek_set(file, rela_text_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.text_relocs,
                         args->compile_args->target);
-  fseek(file, rela_const_off, SEEK_SET);
+  safe_fseek_set(file, rela_const_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.const_data_relocs,
                         args->compile_args->target);
-  fseek(file, rela_data_off, SEEK_SET);
+  safe_fseek_set(file, rela_data_off);
   write_relocations_elf(file, args, sym_id_to_idx, info.data_relocs,
                         args->compile_args->target);
 
+  /* symbol table */
+  safe_fseek_set(file, symtab_off);
+  fwrite(vector_head(symbols), 1, vector_byte_size(symbols), file);
+
   /* string table */
-  fseek(file, strtab_off, SEEK_SET);
+  safe_fseek_set(file, strtab_off);
   fputc(0, file);
   for (size_t i = 0; i < args->num_entries; i++) {
     size_t idx = sym_order[i];
@@ -639,7 +693,7 @@ static void write_elf_object(const struct build_object_args *args) {
   }
 
   /* section header string table */
-  fseek(file, shstr_off, SEEK_SET);
+  safe_fseek_set(file, shstr_off);
   fwrite(shstrtab, 1, shstr_size, file);
 
 #define MK_SHDR(sz)                                                            \
@@ -700,18 +754,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[7].sh_link = 8;                                                         \
   shdr[7].sh_addralign = 8;                                                    \
   shdr[7].sh_entsize = sizeof(Elf##sz##_Sym);                                  \
-                                                                               \
-  size_t local_count = 1; /* initial null symbol */                            \
-  for (size_t i = 0; i < args->num_entries; i++) {                             \
-    const struct symbol *s = &args->entries[i].symbol;                         \
-    if (s->visibility != SYMBOL_VISIBILITY_GLOBAL) {                           \
-      local_count++;                                                           \
-    }                                                                          \
-  }                                                                            \
-  (void)local_count;                                                           \
-  /* FIXME: why aren't local symbols working?                                  \
-     i think this is related to `l.` constants */                              \
-  shdr[7].sh_info = 1;                                                         \
+  shdr[7].sh_info = num_local + 1;                                             \
                                                                                \
   /* entry 9: .strtab */                                                       \
   shdr[8].sh_name = 64;                                                        \
@@ -727,7 +770,7 @@ static void write_elf_object(const struct build_object_args *args) {
   shdr[9].sh_size = shstr_size;                                                \
   shdr[9].sh_addralign = 1;                                                    \
                                                                                \
-  fseek(file, shoff, SEEK_SET);                                                \
+  safe_fseek_set(file, shoff);                                                 \
   fwrite(shdr, sizeof(shdr), 1, file);
 
   switch (args->compile_args->target) {
@@ -748,8 +791,11 @@ static void write_elf_object(const struct build_object_args *args) {
     unreachable();
   }
 
-  fclose(file);
+  if (fclose(file)) {
+    warn("closing %s failed!", args->output);
+  }
 
+  vector_free(&symbols);
   free(entry_offsets);
   free(sym_id_to_idx);
   free(sym_order);

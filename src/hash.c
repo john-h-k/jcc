@@ -43,7 +43,7 @@ struct hasher hasher_create(void) {
 }
 
 void hasher_hash_pointer(struct hasher *hasher, const void *value) {
-  hasher_hash_integer(hasher, (unsigned long long)value, sizeof(value));
+  hasher_hash_integer(hasher, (uintptr_t)value, sizeof(value));
 }
 
 void hasher_hash_integer(struct hasher *hasher, unsigned long long value,

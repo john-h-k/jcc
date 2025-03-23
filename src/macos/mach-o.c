@@ -5,7 +5,7 @@
 #include "../vector.h"
 
 // TODO: bring in needed types so this is portable
-#if defined(__JCC__) || __has_include(<mach/machine.h>)
+#if (defined(__JCC__) && OS_APPLE) || __has_include(<mach/machine.h>)
 #include <mach-o/loader.h>
 #include <mach/machine.h>
 // why do we need this when compiling with JCC?

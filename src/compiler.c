@@ -156,6 +156,18 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
     end_len = end.idx - point.idx;
   }
 
+#define DIAG_LINE_LIM 50
+
+  if (start.line == TEXT_POS_INVALID_LINE || end.line == TEXT_POS_INVALID_LINE) {
+    fprintf(stderr, "(unable to print due to invalid line pos, likely from macro expansion)");
+    return;
+  }
+
+  if (end.line - start.line > DIAG_LINE_LIM) {
+    fprintf(stderr, "(unable to print due to line lim %d, from line %zu to line %zu)", DIAG_LINE_LIM, start.line, end.line);
+    return;
+  }
+
   size_t line = 0;
   for (size_t i = 0; i < len; i++) {
     if (text[i] != '\n') {

@@ -195,12 +195,14 @@ static void parse_expected_token(struct parser *parser, enum lex_token_ty ty,
                                  struct text_span *span) {
   struct lex_token token;
   lex_peek_token(parser->lexer, &token);
+
+  if (span) {
+    *span = token.span;
+  }
+
   if (token.ty == ty) {
     lex_consume_token(parser->lexer, token);
 
-    if (span) {
-      *span = token.span;
-    }
     return;
   }
 
@@ -674,10 +676,13 @@ static bool parse_struct_or_union_specifier(
   struct text_pos end;
 
   enum ast_struct_or_union_specifier_ty ty;
-  if (parse_token(parser, LEX_TOKEN_TY_KW_STRUCT, NULL)) {
+  struct text_span end_span;
+  if (parse_token(parser, LEX_TOKEN_TY_KW_STRUCT, &end_span)) {
     ty = AST_STRUCT_OR_UNION_SPECIFIER_TY_STRUCT;
-  } else if (parse_token(parser, LEX_TOKEN_TY_KW_UNION, NULL)) {
+    end = end_span.end;
+  } else if (parse_token(parser, LEX_TOKEN_TY_KW_UNION, &end_span)) {
     ty = AST_STRUCT_OR_UNION_SPECIFIER_TY_UNION;
+    end = end_span.end;
   } else {
     return false;
   }

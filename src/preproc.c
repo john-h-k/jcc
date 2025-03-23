@@ -258,6 +258,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     DEF_BUILTIN_NUM("__riscv__", "1");
     DEF_BUILTIN_NUM("__LP32__", "1");
     DEF_BUILTIN_NUM("_LP32", "1");
+
+    DEF_BUILTIN_IDENT("__INT32_TYPE__", "int");
+    DEF_BUILTIN_IDENT("__INTPTR_TYPE__", "int");
     break;
   case COMPILE_TARGET_EEP:
     break;
@@ -1126,6 +1129,7 @@ static struct preproc_token preproc_concat(struct preproc *preproc,
 
     return new_tok;
   }
+  case TYPE_VAL(IDENTIFIER, PUNCTUATOR):
   case TYPE_VAL(IDENTIFIER, IDENTIFIER):
   case TYPE_VAL(IDENTIFIER, PREPROC_NUMBER):
   // because we process backwards, we have to accept `0 ## _bar`, because it
@@ -1383,8 +1387,9 @@ static bool try_expand_token(struct preproc *preproc,
       if (!(vector_length(args) == macro_fn.num_params ||
             ((macro_fn.flags & PREPROC_MACRO_FN_FLAG_VARIADIC) &&
              vector_length(args) >= macro_fn.num_params))) {
-        BUG("wrong number of args (%zu) for fn-like macro with %zu params",
-            vector_length(args), macro_fn.num_params);
+        BUG("wrong number of args (%zu) for fn-like macro %.*s with %zu params",
+            vector_length(args), (int)ident.len, ident.str,
+            macro_fn.num_params);
       }
 
       size_t num_tokens = vector_length(macro_fn.tokens);
@@ -1431,29 +1436,38 @@ static bool try_expand_token(struct preproc *preproc,
           }
 
           size_t num_args = vector_length(args);
-          for (size_t j = num_args; j > macro_fn.num_params; j--) {
-            struct vector *arg_tokens =
-                *(struct vector **)vector_get(args, j - 1);
+          if (num_args <= macro_fn.num_params) {
+            struct preproc_token empty = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                                          .text = "",
+                                          .span = MK_INVALID_TEXT_SPAN(0, 0)};
 
-            size_t num_arg_tokens = vector_length(arg_tokens);
-            for (size_t k = num_arg_tokens; k; k--) {
-              vector_push_back(expanded_fn, vector_get(arg_tokens, k - 1));
-            }
+            vector_push_back(expanded_fn, &empty);
+          } else {
+            for (size_t j = num_args; j > macro_fn.num_params; j--) {
+              struct vector *arg_tokens =
+                  *(struct vector **)vector_get(args, j - 1);
 
-            if (j - 1 != macro_fn.num_params) {
-              struct preproc_token space = {.ty = PREPROC_TOKEN_TY_WHITESPACE,
-                                            .text = " ",
-                                            .span = MK_INVALID_TEXT_SPAN(0, 1)};
+              size_t num_arg_tokens = vector_length(arg_tokens);
+              for (size_t k = num_arg_tokens; k; k--) {
+                vector_push_back(expanded_fn, vector_get(arg_tokens, k - 1));
+              }
 
-              vector_push_back(expanded_fn, &space);
+              if (j - 1 != macro_fn.num_params) {
+                struct preproc_token space = {.ty = PREPROC_TOKEN_TY_WHITESPACE,
+                                              .text = " ",
+                                              .span =
+                                                  MK_INVALID_TEXT_SPAN(0, 1)};
 
-              struct preproc_token comma = {
-                  .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
-                  .punctuator = {.ty = PREPROC_TOKEN_PUNCTUATOR_TY_COMMA},
-                  .text = ",",
-                  .span = MK_INVALID_TEXT_SPAN(0, 1)};
+                vector_push_back(expanded_fn, &space);
 
-              vector_push_back(expanded_fn, &comma);
+                struct preproc_token comma = {
+                    .ty = PREPROC_TOKEN_TY_PUNCTUATOR,
+                    .punctuator = {.ty = PREPROC_TOKEN_PUNCTUATOR_TY_COMMA},
+                    .text = ",",
+                    .span = MK_INVALID_TEXT_SPAN(0, 1)};
+
+                vector_push_back(expanded_fn, &comma);
+              }
             }
           }
           break;
@@ -2111,6 +2125,12 @@ static unsigned long long eval_atom(struct preproc *preproc,
         unsigned long long val =
             eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
         return -val;
+      }
+      case PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD: {
+        (*i)++;
+        unsigned long long val =
+            eval_expr(preproc, preproc_text, tokens, i, num_tokens, MAX_PREC);
+        return val;
       }
       case PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT: {
         (*i)++;

@@ -344,7 +344,7 @@ static void lower_fabs(struct ir_func *func, struct ir_op *op) {
                    op->unary_op.ty == IR_OP_UNARY_OP_TY_FABS,
                "called on invalid op");
 
-  size_t mask_cnst;
+  uint64_t mask_cnst;
   enum ir_var_primitive_ty integral;
   switch (op->unary_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F16:
@@ -383,7 +383,7 @@ static void lower_fneg(struct ir_func *func, struct ir_op *op) {
                    op->unary_op.ty == IR_OP_UNARY_OP_TY_FNEG,
                "called on invalid op");
 
-  size_t mask_cnst;
+  uint64_t mask_cnst;
   enum ir_var_primitive_ty integral;
   switch (op->unary_op.value->var_ty.primitive) {
   case IR_VAR_PRIMITIVE_TY_F16:
