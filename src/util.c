@@ -49,11 +49,14 @@ void util_debug_assert(bool b, const char *cond, const char *func,
 #define TRACE_SZ 32
 
 void debug_print_stack_trace(void) {
+  // TODO: on macOS use `atos` as `addr2line` does not exist
+
   void *base = NULL;
 
   FILE *fp = fopen("/proc/self/maps", "r");
   if (!fp) {
     fprintf(stderr, "failed to open /proc/self/maps: %s\n", strerror(errno));
+    return;
   } else {
 
     char line[256];

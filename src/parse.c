@@ -24,11 +24,12 @@ struct parser {
 
 enum parser_create_result parser_create(struct program *program,
                                         struct preproc *preproc,
+                                        enum compile_preproc_mode mode,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   arena_allocator_create(&p->arena);
-  if (lexer_create(program, preproc, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
+  if (lexer_create(program, preproc, mode, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }
@@ -2722,7 +2723,7 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
                        "'(' as condition must be wrapped in brackets", NULL);
 
   struct ast_expr expr;
-  if (!parse_expr(parser, &expr)) {
+  if (!parse_compoundexpr_as_expr(parser, &expr)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2784,7 +2785,7 @@ static bool parse_switchstmt(struct parser *parser,
   struct ast_expr ctrl_expr;
   if (!parse_token(parser, LEX_TOKEN_TY_KW_SWITCH, NULL) ||
       !parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) ||
-      !parse_expr(parser, &ctrl_expr) ||
+      !parse_compoundexpr_as_expr(parser, &ctrl_expr) ||
       !parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, NULL)) {
     lex_backtrack(parser->lexer, pos);
     return false;
@@ -2816,7 +2817,7 @@ static bool parse_whilestmt(struct parser *parser,
   }
 
   struct ast_expr expr;
-  if (!parse_expr(parser, &expr)) {
+  if (!parse_compoundexpr_as_expr(parser, &expr)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2863,7 +2864,7 @@ static bool parse_dowhilestmt(struct parser *parser,
   }
 
   struct ast_expr expr;
-  if (!parse_expr(parser, &expr)) {
+  if (!parse_compoundexpr_as_expr(parser, &expr)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2931,7 +2932,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
 
   // parse the condition if present, else a semicolon
   struct ast_expr cond;
-  if (parse_expr(parser, &cond)) {
+  if (parse_compoundexpr_as_expr(parser, &cond)) {
     for_stmt->cond = arena_alloc(parser->arena, sizeof(*for_stmt->cond));
     *for_stmt->cond = cond;
   } else {
@@ -4658,6 +4659,8 @@ DEBUG_FUNC(external_declaration, external_declaration) {
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {
+  // logic for respecting --log-syms is hard as we have not parsed all the way to identifiers
+
   struct ast_printstate state_ = {.indent = 0, .parser = parser};
 
   struct ast_printstate *state = &state_;
@@ -4665,8 +4668,10 @@ void debug_print_ast(struct parser *parser,
   AST_PRINTZ("PRINTING AST");
 
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
+    struct ast_external_declaration *decl = &translation_unit->external_declarations[i];
+
     DEBUG_CALL(external_declaration,
-               &translation_unit->external_declarations[i]);
+               decl);
   }
 
   AST_PRINTZ("");

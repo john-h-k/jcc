@@ -781,6 +781,7 @@ struct typechk_result td_typechk(struct typechk *tchk,
 void typechk_free(struct typechk **tchk);
 
 void debug_print_td(struct typechk *tchk,
+                    struct hashtbl *log_symbols,
                     struct td_translationunit *translation_unit);
 
 #endif

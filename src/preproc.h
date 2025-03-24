@@ -148,11 +148,14 @@ enum preproc_expand_token_flags {
   PREPROC_EXPAND_TOKEN_FLAG_NONE = 0,
 
   // expand undef tokens to zero (used by #if/#elif)
-  PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO = 1
+  PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO = 1,
 };
 
 void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                         enum preproc_expand_token_flags flags);
+
+void preproc_next_raw_token(struct preproc *preproc,
+                                   struct preproc_token *token);
 
 void preproc_process(struct preproc *preproc, FILE *file);
 

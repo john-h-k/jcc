@@ -48,6 +48,7 @@ enum compiler_create_result
 create_compiler(struct program *program, struct fcache *fcache,
                 const struct target *target, struct compile_file output,
                 const char *path, const struct compile_args *args,
+                enum compile_preproc_mode mode,
                 struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
@@ -82,7 +83,7 @@ create_compiler(struct program *program, struct fcache *fcache,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (parser_create(program, (*compiler)->preproc, &(*compiler)->parser) !=
+  if (parser_create(program, (*compiler)->preproc, mode, &(*compiler)->parser) !=
       PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -370,7 +371,7 @@ compile_stage_typechk(struct compiler *compiler,
   }
 
   if (log_enabled()) {
-    debug_print_td(compiler->typechk, &typechk_result->translation_unit);
+    debug_print_td(compiler->typechk, compiler->args.log_symbols, &typechk_result->translation_unit);
   }
 
   return COMPILE_RESULT_SUCCESS;

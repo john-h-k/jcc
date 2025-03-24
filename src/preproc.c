@@ -576,7 +576,7 @@ static bool try_consume2(struct preproc_text *preproc_text,
   return false;
 }
 
-static void preproc_next_raw_token(struct preproc *preproc,
+void preproc_next_raw_token(struct preproc *preproc,
                                    struct preproc_token *token) {
   struct preproc_text *preproc_text;
 
@@ -1908,6 +1908,10 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
         // "typedef __builtin_va_list va_list;\n"
         // TEMP:
+        "#define __builtin_va_arg(ap, type) ((type){0})\n"
+        "inline static void *__builtin_va_start(...) { return (void *)0; }\n"
+        "inline static void __builtin_va_end(...) { }\n"
+        "#define __builtin_va_copy(dst, src) (dst) = (src)\n"
 
         "#endif\n"
         "#endif\n";

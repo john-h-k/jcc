@@ -32,5 +32,13 @@ int main() {
     return 3;
   }
 
+  int g;
+  if (1)
+    g = 10, g++;
+
+  if (g != 11) {
+    return 4;
+  }
+
   return a + b;
 }

@@ -135,8 +135,8 @@ static void get_var_ref(struct ir_func_builder *irb,
 }
 
 static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
-                                 const struct ir_var_ty *l,
-                                 const struct ir_var_ty *r) {
+                                    const struct ir_var_ty *l,
+                                    const struct ir_var_ty *r) {
   // note: `l` is TO, `r` is FROM, (as this is in the context of `l <- r`)
 
   if (l->ty == IR_VAR_TY_TY_NONE) {
@@ -223,12 +223,13 @@ ir_primitive_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   }
 }
 
-static struct ir_var_ty ir_var_ty_for_td_var_ty(struct ir_unit *iru,
-                                             const struct td_var_ty *var_ty) {
+static struct ir_var_ty
+ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
+    BUG("shouldn't reach IR gen with unknown type");
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    BUG("shouldn't reach IR gen with unresolved type");
+    BUG("shouldn't reach IR gen with incomplete type");
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
@@ -565,7 +566,8 @@ static struct ir_op *alloc_binaryop(struct ir_func_builder *irb,
 
   bool is_fp = ir_var_ty_is_fp(&op->binary_op.lhs->var_ty);
 
-  bool is_sgn = args->lhs_ty.ty == TD_VAR_TY_TY_WELL_KNOWN && WKT_IS_SIGNED(args->lhs_ty.well_known);
+  bool is_sgn = args->lhs_ty.ty == TD_VAR_TY_TY_WELL_KNOWN &&
+                WKT_IS_SIGNED(args->lhs_ty.well_known);
   DEBUG_ASSERT(is_fp == ir_var_ty_is_fp(&op->binary_op.rhs->var_ty),
                "type mismatch between lhs/rhs");
   DEBUG_ASSERT(is_fp == ir_var_ty_is_fp(&op->binary_op.rhs->var_ty),
@@ -753,6 +755,11 @@ static struct ir_op *build_ir_for_compoundliteral(
     struct ir_func_builder *irb, struct ir_stmt **stmt, struct ir_op *address,
     enum build_compoundliteral_mode mode, struct td_expr *expr);
 
+static struct ir_op *build_ir_for_cnst(struct ir_func_builder *irb,
+                                       struct ir_stmt **stmt,
+                                       struct ir_var_ty var_ty,
+                                       struct td_expr *expr);
+
 static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
                                             struct ir_stmt **stmt,
                                             struct td_expr *expr) {
@@ -760,30 +767,28 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
   // so we do not build the expression
 
   switch (expr->ty) {
-  case TD_EXPR_TY_ARRAYACCESS: {
+  case TD_EXPR_TY_ARRAYACCESS:
     return build_ir_for_array_address(irb, stmt, expr->array_access.lhs,
                                       expr->array_access.rhs);
-  }
-  case TD_EXPR_TY_MEMBERACCESS: {
+  case TD_EXPR_TY_MEMBERACCESS:
     return build_ir_for_member_address(irb, stmt, expr->member_access.lhs,
                                        expr->member_access.member, NULL, NULL);
-  }
-  case TD_EXPR_TY_POINTERACCESS: {
+  case TD_EXPR_TY_POINTERACCESS:
     return build_ir_for_pointer_address(irb, stmt, expr->pointer_access.lhs,
                                         expr->pointer_access.member, NULL,
                                         NULL);
-  }
-  default:
-    break;
-  }
-
-  if (expr->ty == TD_EXPR_TY_UNARY_OP &&
-      expr->unary_op.ty == TD_UNARY_OP_TY_INDIRECTION) {
-    // &*, so cancel
-    return build_ir_for_expr(irb, stmt, expr->unary_op.expr);
-  }
-
-  if (expr->ty == TD_EXPR_TY_CALL) {
+  case TD_EXPR_TY_COMPOUND_LITERAL:
+    return build_ir_for_compoundliteral(irb, stmt, NULL,
+                                        BUILD_COMPOUNDLITERAL_MODE_ADDR, expr);
+  case TD_EXPR_TY_VAR:
+    return build_ir_for_addressof_var(irb, stmt, &expr->var);
+  case TD_EXPR_TY_CNST:
+    // must be string literal
+    // `&"foo"` is same as `"foo"`
+    DEBUG_ASSERT(expr->cnst.ty == TD_CNST_TY_STRING, "expected str for &cnst");
+    struct ir_var_ty ir_var_ty = ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
+    return build_ir_for_cnst(irb, stmt, ir_var_ty, expr);
+  case TD_EXPR_TY_CALL: {
     struct ir_op *value = build_ir_for_expr(irb, stmt, expr);
 
     // spill call, and address spill
@@ -803,17 +808,38 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
 
     return addr;
   }
+  case TD_EXPR_TY_UNARY_OP:
+    if (expr->unary_op.ty == TD_UNARY_OP_TY_INDIRECTION) {
+      // &*, so cancel
+      return build_ir_for_expr(irb, stmt, expr->unary_op.expr);
+    }
+    break;
+  case TD_EXPR_TY_COMPOUNDEXPR: {
+    // we can hit this if you do `(foo, bar)(args)`
+    // as it implicitly takes address of `bar` (even though `&(foo, bar)`) is
+    // not legal
 
-  if (expr->ty == TD_EXPR_TY_COMPOUND_LITERAL) {
-    return build_ir_for_compoundliteral(irb, stmt, NULL,
-                                        BUILD_COMPOUNDLITERAL_MODE_ADDR, expr);
+    struct td_compoundexpr *compound_expr = &expr->compound_expr;
+
+    DEBUG_ASSERT(compound_expr->num_exprs > 1,
+                 "compound expr must have >1 exprs");
+    for (size_t i = 0; i < compound_expr->num_exprs - 1; i++) {
+      build_ir_for_expr(irb, stmt, &compound_expr->exprs[i]);
+
+      // compound expressions create a sequence point
+      *stmt = ir_alloc_stmt(irb->func, (*stmt)->basicblock);
+    }
+
+    return build_ir_for_addressof(
+        irb, stmt, &compound_expr->exprs[compound_expr->num_exprs - 1]);
   }
 
-  if (expr->ty != TD_EXPR_TY_VAR) {
-    TODO("unknown type for addressof");
+  default:
+    break;
   }
 
-  return build_ir_for_addressof_var(irb, stmt, &expr->var);
+  TODO("unknown type for addressof (%d) (file %s line %zu)", expr->ty,
+       expr->span.start.file, expr->span.start.line);
 }
 
 static struct ir_op *build_ir_for_assg(struct ir_func_builder *irb,
@@ -2142,9 +2168,12 @@ static struct ir_op *build_ir_for_compoundliteral(
     enum build_compoundliteral_mode mode, struct td_expr *expr) {
   struct td_compound_literal *compound_literal = &expr->compound_literal;
 
-  if (mode == BUILD_COMPOUNDLITERAL_MODE_LOAD && td_var_ty_is_scalar_ty(&expr->var_ty)) {
-    DEBUG_ASSERT(expr->compound_literal.init_list.num_inits == 1, "expected 1 init");
-    return build_ir_for_expr(irb, stmt, &expr->compound_literal.init_list.inits->init->expr);
+  if (mode == BUILD_COMPOUNDLITERAL_MODE_LOAD &&
+      td_var_ty_is_scalar_ty(&expr->var_ty)) {
+    DEBUG_ASSERT(expr->compound_literal.init_list.num_inits == 1,
+                 "expected 1 init");
+    return build_ir_for_expr(
+        irb, stmt, &expr->compound_literal.init_list.inits->init->expr);
   }
 
   struct ir_var_ty var_ty =
@@ -2729,9 +2758,10 @@ build_ir_for_ret(struct ir_func_builder *irb, struct ir_stmt **stmt,
 
   struct ir_op *op = ir_alloc_op(irb->func, *stmt);
   op->ty = IR_OP_TY_RET;
-  op->var_ty = return_stmt && return_stmt->expr
-                   ? ir_var_ty_for_td_var_ty(irb->unit, &return_stmt->expr->var_ty)
-                   : IR_VAR_TY_NONE;
+  op->var_ty =
+      return_stmt && return_stmt->expr
+          ? ir_var_ty_for_td_var_ty(irb->unit, &return_stmt->expr->var_ty)
+          : IR_VAR_TY_NONE;
   op->ret.value = expr_op;
 
   op->stmt->basicblock->ty = IR_BASICBLOCK_TY_RET;
@@ -2840,20 +2870,19 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
     struct td_init_list_init *init = &init_list->inits[0];
 
     DEBUG_ASSERT(!init->designator_list, "scalar should not have designator");
-    DEBUG_ASSERT(init->init->ty == TD_INIT_TY_EXPR, "scalar should have expr init");
+    DEBUG_ASSERT(init->init->ty == TD_INIT_TY_EXPR,
+                 "scalar should have expr init");
 
     // BUG: this needs to write an op to var refs for phi gen
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &init->init->expr);
 
     if (address) {
-      struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      struct ir_op *store =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
 
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR,
-        .addr = address,
-        .value = value
-      };
+          .ty = IR_OP_STORE_TY_ADDR, .addr = address, .value = value};
     }
 
     return;
@@ -2917,7 +2946,8 @@ static void build_ir_for_init_list(struct ir_func_builder *irb,
   qsort(vector_head(init_ranges), vector_length(init_ranges),
         vector_element_size(init_ranges), sort_ranges_by_offset);
 
-  struct ir_var_ty var_ty = ir_var_ty_for_td_var_ty(irb->unit, &init_list->var_ty);
+  struct ir_var_ty var_ty =
+      ir_var_ty_for_td_var_ty(irb->unit, &init_list->var_ty);
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &var_ty);
 
   // add a "fake range" to cover the end of the struct
@@ -2976,15 +3006,18 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
     // this logic is BROKEN if a cast is needed (e.g `struct foo a = { .field =
     // (int){1} }`;
     if (init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
-      enum build_compoundliteral_mode mode = td_var_ty_is_scalar_ty(&init->expr.var_ty) ? BUILD_COMPOUNDLITERAL_MODE_LOAD : BUILD_COMPOUNDLITERAL_MODE_ADDR;
+      enum build_compoundliteral_mode mode =
+          td_var_ty_is_scalar_ty(&init->expr.var_ty)
+              ? BUILD_COMPOUNDLITERAL_MODE_LOAD
+              : BUILD_COMPOUNDLITERAL_MODE_ADDR;
 
-      struct ir_op *value = build_ir_for_compoundliteral(irb, stmt, start_address,
-                                   mode,
-                                   &init->expr);
+      struct ir_op *value = build_ir_for_compoundliteral(
+          irb, stmt, start_address, mode, &init->expr);
 
       // null signifies build_ir_for_var should not insert a STORE
-      // so if build_ir_for_compoundliteral did the writing (non scalar) return null
-      return mode == BUILD_COMPOUNDLITERAL_MODE_ADDR ? NULL : value; 
+      // so if build_ir_for_compoundliteral did the writing (non scalar) return
+      // null
+      return mode == BUILD_COMPOUNDLITERAL_MODE_ADDR ? NULL : value;
     } else {
       return build_ir_for_expr(irb, stmt, &init->expr);
     }
@@ -3006,7 +3039,16 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         enum td_storage_class_specifier storage_class,
                         enum td_function_specifier_flags func_specifiers,
                         struct td_var_declaration *decl) {
-  struct ir_var_ty var_ty = ir_var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
+  // `extern struct c` is allowed for an incomplete type
+  // so we need to handle that
+  struct ir_var_ty var_ty;
+  if (decl->var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    // HACK: just give it type PTR
+    // FIXME: this needs to be changed because it needs to encode alignment etc
+    var_ty = IR_VAR_TY_POINTER;
+  } else {
+    var_ty = ir_var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
+  }
 
   struct sized_str name = decl->var.identifier;
   const char *symbol_name;
@@ -3484,7 +3526,8 @@ static struct ir_func *build_ir_for_function(struct ir_unit *unit,
   struct var_refs *var_refs = var_refs_create();
   struct ir_func b = {
       .unit = unit,
-      .func_ty = ir_var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
+      .func_ty =
+          ir_var_ty_for_td_var_ty(unit, &def->var_declaration.var_ty).func,
       .name = arena_alloc_strndup(unit->arena, ident.str, ident.len),
       .arena = arena,
       .flags = IR_FUNC_FLAG_NONE,
@@ -3941,16 +3984,109 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
                                  const struct td_init_list *init_list,
                                  const struct td_var_ty *var_ty);
 
+static struct ir_var_value
+build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
+                                const struct td_expr *expr,
+                                const struct td_var_ty *var_ty);
+
 static struct ir_var_value build_ir_for_var_value_addr(
     struct ir_var_builder *irb, const struct td_expr *addr,
     const struct td_expr *offset, const struct td_var_ty *var_ty) {
   switch (addr->ty) {
   case TD_EXPR_TY_UNARY_OP: {
-    if (addr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF) {
+    switch (addr->unary_op.ty) {
+    case TD_UNARY_OP_TY_ADDRESSOF:
+      // allow `&(((Foo *)0)->bar)`, common for offsetof
+      if (addr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
+        struct td_pointeraccess *access = &addr->unary_op.expr->pointer_access;
+        if (access->lhs->ty == TD_EXPR_TY_CNST &&
+            access->lhs->cnst.ty == TD_CNST_TY_NUM &&
+            ap_val_iszero(access->lhs->cnst.num_value)) {
+
+          struct ir_var_ty member_ty;
+          bool is_bitfield;
+          struct ir_bitfield bitfield;
+          size_t offset_of = get_member_address_offset(
+              irb->unit, access->lhs->var_ty.pointer.underlying, access->member,
+              &member_ty, &is_bitfield, &bitfield, NULL);
+
+          DEBUG_ASSERT(!is_bitfield, "addr of bitfield");
+
+          return (struct ir_var_value){
+            .ty = IR_VAR_VALUE_TY_INT,
+            .var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty),
+            .int_value = offset_of
+          };
+        }
+      }
+
       return build_ir_for_var_value_addr(irb, addr->unary_op.expr, offset,
                                          var_ty);
+    case TD_UNARY_OP_TY_CAST:
+      return build_ir_for_var_value_unary_op(irb, addr, var_ty);
+    default:
+      BUG("non var addr of global (ty %d line %zu)", addr->ty,
+          addr->span.start.line);
     }
-    BUG("non var addr of global (ty %d)", addr->ty);
+  }
+
+  case TD_EXPR_TY_CNST: {
+    // occurs from e.g `static int *p = &(int){10}`;
+    struct ir_var_ty ir_var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty);
+    struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &ir_var_ty,
+                                       IR_GLB_DEF_TY_DEFINED, NULL);
+
+    // FIXME: the whole global code can be neatened because typechk does more
+    // stuff now e.g this _should_ always be a TD_EXPR_TY_CNST
+    size_t offset_cnst = 0;
+    if (offset) {
+      struct ir_var_value offset_value =
+          build_ir_for_var_value_expr(irb, offset, var_ty);
+
+      if (offset_value.ty != IR_VAR_VALUE_TY_INT) {
+        TODO("non-int global values offset");
+      }
+
+      struct td_var_ty underlying_td_var_ty =
+          td_var_ty_get_underlying(irb->tchk, var_ty);
+      struct ir_var_ty underlying_var_ty =
+          ir_var_ty_for_td_var_ty(irb->unit, &underlying_td_var_ty);
+      struct ir_var_ty_info info =
+          ir_var_ty_info(irb->unit, &underlying_var_ty);
+
+      offset_cnst = offset_value.int_value * info.size;
+    }
+
+    glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    *glb->var = (struct ir_var){
+        .unit = irb->unit,
+        .ty = IR_VAR_TY_DATA,
+        .var_ty = ir_var_ty,
+        .value = build_ir_for_var_value_expr(irb, addr, var_ty)};
+
+    return (struct ir_var_value){.ty = IR_VAR_VALUE_TY_ADDR,
+                                 .var_ty =
+                                     ir_var_ty_for_td_var_ty(irb->unit, var_ty),
+                                 .addr = {.glb = glb, .offset = offset_cnst}};
+  }
+
+  case TD_EXPR_TY_POINTERACCESS: {
+    struct ir_var_ty pointer_ty;
+    bool pointer_is_bitfield;
+    struct ir_bitfield pointer_bitfield;
+
+    struct td_var_ty underlying =
+        td_var_ty_get_underlying(irb->tchk, &addr->pointer_access.lhs->var_ty);
+
+    size_t field_offset = get_member_address_offset(
+        irb->unit, &underlying, addr->pointer_access.member, &pointer_ty,
+        &pointer_is_bitfield, &pointer_bitfield, NULL);
+
+    struct ir_var_value base_addr = build_ir_for_var_value_addr(
+        irb, addr->pointer_access.lhs, NULL, var_ty);
+
+    base_addr.addr.offset += field_offset;
+    return base_addr;
   }
 
   case TD_EXPR_TY_MEMBERACCESS: {
@@ -4100,7 +4236,19 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
         DEBUG_ASSERT(td_var_ty_is_integral_ty(to),
                      "non integral cast from ptr-like");
 
-        TODO("pointer -> int converts in statics");
+        // struct ir_var_ty integral = ir_var_ty_for_td_var_ty(irb->unit, to);
+        // struct ir_var_ty_info integral_info =
+        //     ir_var_ty_info(irb->unit, &integral);
+        // struct ir_var_ty_info ptr_info =
+        //     ir_var_ty_info(irb->unit, &IR_VAR_TY_POINTER);
+        // if (integral_info.size != ptr_info.size) {
+        //   TODO("should have been rejected by typechk, pointer (sz=%zu) -> non "
+        //        "pointer sized int (sz=%zu) in constant expr (line %zu)",
+        //        ptr_info.size, integral_info.size, expr->span.start.line);
+        // }
+
+        value.var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty);
+        return value;
       }
 
       TODO("unsupported cast in const expr");
