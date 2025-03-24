@@ -163,6 +163,14 @@ void lexer_free(struct lexer **lexer) {
   *lexer = NULL;
 }
 
+void lex_all(struct lexer *lexer) {
+  struct lex_token token;
+  do {
+    lex_peek_token(lexer, &token);
+    lex_consume_token(lexer, token);
+  } while (token.ty != LEX_TOKEN_TY_EOF);
+}
+
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,
    or keywords. This function converts identifiers into their "real" type */
 static enum lex_token_ty refine_ty(struct preproc_token *token) {
