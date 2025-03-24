@@ -31,6 +31,7 @@ int printf(const char *, ...);
 #define STR()
 
 #define PRINT(fmt, ...) printf(fmt, ## __VA_ARGS__)
+#define PRINT2(fmt, ...) printf(fmt __VA_OPT__(,) __VA_ARGS__)
 
 #define NOP(x)
 #define NOP2(x) NOP(x)

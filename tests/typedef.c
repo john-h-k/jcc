@@ -1,12 +1,12 @@
 // expected value: 7
 
-void baz(int *p) {
-  *p += 1;
+typedef int my_int;
+
+void baz(int *my_int) {
+  *my_int += 1;
 }
 
 typedef void *bazl;
-
-typedef int my_int;
 
 typedef void (*foo)(int *);
 
