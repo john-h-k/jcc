@@ -2668,10 +2668,9 @@ static struct td_expr type_assg(struct typechk *tchk,
 
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
-  // turn __FUNCTION__ into __func__
-
   struct sized_str name = identifier_str(tchk->parser, &var->identifier);
 
+  // turn __FUNCTION__ into __func__
   if (szstreq(name, MK_SIZED("__FUNCTION__"))) {
     name = MK_SIZED("__func__");
   }

@@ -1,5 +1,5 @@
 // skip: ??
-// expected value: 8
+// expected value: 20
 // stdout: Hello, World! 10
 
 #ifndef PREPROC_C
@@ -9,13 +9,9 @@
 #error "__JCC__ and __jcc__ should be defined!"
 #endif
 
-
 #warning Hi test warning
 
-#define FOO \
-\
-\
-(8)
+#define FOO (20)
 
 #define FIZZ 1
 
@@ -30,16 +26,26 @@ int printf(const char *, ...);
 
 #define STR()
 
-#define PRINT(fmt, ...) printf(fmt, ## __VA_ARGS__)
-#define PRINT2(fmt, ...) printf(fmt __VA_OPT__(,) __VA_ARGS__)
+#define PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define PRINT2(fmt, ...) printf(fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define NOP(x)
 #define NOP2(x) NOP(x)
 
+#define EXP1(exp) exp
+#define exp exp + 1
+
+#define MKSTR(s) #s
+#define foo 4
 #if TRUE(1)
+#if 1
 int main() {
   NOP(hello);
   NOP2(Hello);
+
+  if (EXP1(0)) {
+    return 1;
+  }
 
   EMPTY(hi, how are, you);
 
@@ -49,20 +55,25 @@ int main() {
   PRINT("%s %s %d\n", "Hello,", "World!", 10);
 
 #if !(FIZZ && FIZZ + 7 == 8)
-  return 1;
-#endif
-
-#if (FIZZ ? 0 : 1)
   return 2;
 #endif
 
-#if FIZZ ? !FIZZ ? 1 : 0 : 1
+#if (FIZZ ? 0 : 1)
   return 3;
 #endif
 
-#if BAR
- invalid c code;
+#if FIZZ ? !FIZZ ? 1 : 0 : 1
+  return 4;
 #endif
+
+#if BAR
+  invalid c code;
+#endif
+
+  const char *p = MKSTR(foo);
+  if (p[0] != 'f') {
+    return 5;
+  }
 
   /* logic here is something */
 
@@ -70,11 +81,11 @@ int main() {
   int k = 8777; // hello
 
 #if !defined(BAT) || !defined BAT
-  return 4;
+  return 6;
 #elif defined(BAT) && defined BAT
   return a;
 #else
-  return 5;
+  return 7;
 #endif
 }
 #endif
