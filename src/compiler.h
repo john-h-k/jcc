@@ -53,6 +53,14 @@ enum compile_log_flags {
   COMPILE_LOG_FLAGS_ALL = -1,
 };
 
+enum compile_language {
+  COMPILE_LANGUAGE_NONE,
+  COMPILE_LANGUAGE_C,
+  COMPILE_LANGUAGE_C_HEADER,
+  COMPILE_LANGUAGE_CPP_OUTPUT,
+  COMPILE_LANGUAGE_OBJECT,
+};
+
 enum compile_c_standard {
   COMPILE_C_STANDARD_C11,
   COMPILE_C_STANDARD_C17,

@@ -105,6 +105,12 @@ struct arg {
   ENUM_FN(COMPILE_C_STANDARD_C17, "c17")                                       \
   ENUM_FN(COMPILE_C_STANDARD_C23, "c23")
 
+#define LANGUAGE_ENUM_LIST                                                     \
+  ENUM_FN(COMPILE_LANGUAGE_C, "c")                                             \
+  ENUM_FN(COMPILE_LANGUAGE_C_HEADER, "c-header")                               \
+  ENUM_FN(COMPILE_LANGUAGE_CPP_OUTPUT, "cpp-output")                           \
+  ENUM_FN(COMPILE_LANGUAGE_OBJECT, "object")
+
 #define ENUM_FN(enum_value, str_value)                                         \
   if (strcmp(str, str_value) == 0) {                                           \
     *value = enum_value;                                                       \
@@ -152,6 +158,7 @@ PARSE_FN(opts_level, OPTS)
 PARSE_FN(arch, ARCH)
 PARSE_FN(target, TARGET)
 PARSE_FN(c_standard, C_STANDARD)
+PARSE_FN(language, LANGUAGE)
 
 #undef ENUM_FN
 
@@ -165,6 +172,7 @@ STRING_FN(opts_level, OPTS, "(invalid)")
 STRING_FN(arch, ARCH, "(invalid)")
 STRING_FN(target, TARGET, "(invalid)")
 STRING_FN(c_standard, C_STANDARD, "(invalid)")
+STRING_FN(language, LANGUAGE, "(invalid)")
 STRING_FN(log_level, LOG, "all")
 
 #undef ENUM_FN
@@ -183,6 +191,7 @@ VALUES_FN(opts_level, OPTS)
 VALUES_FN(arch, ARCH)
 VALUES_FN(target, TARGET)
 VALUES_FN(c_standard, C_STANDARD)
+VALUES_FN(language, LANGUAGE)
 
 #undef ENUM_FN
 
@@ -247,16 +256,19 @@ VALUES_FN(c_standard, C_STANDARD)
                                                                                \
   ARG_STRING(output, "-o", "", "Output file")
 
+#define INPUT_OPT_LIST                                                         \
+  ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
+             "C standard to use")                                              \
+                                                                               \
+  ARG_OPTION(enum compile_language, language, "-x", "", language, "The ")
+
 /* ------------------------- Target options ------------------------- */
 #define TARGET_OPT_LIST                                                        \
   ARG_OPTION(enum compile_arch, arch, "", "-arch", arch,                       \
              "Architecture to build for")                                      \
                                                                                \
   ARG_OPTION(enum compile_target, target, "", "-target", target,               \
-             "Target triple (arch-vendor-os)")                                 \
-                                                                               \
-  ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
-             "C standard to use")
+             "Target triple (arch-vendor-os)")
 
 /* ------------------------- Codegen options ------------------------- */
 #define CODEGEN_OPT_LIST                                                       \
@@ -293,6 +305,8 @@ VALUES_FN(c_standard, C_STANDARD)
 
 #define ARG_OPT_LIST                                                           \
   PREPROC_OPT_LIST                                                             \
+                                                                               \
+  INPUT_OPT_LIST                                                               \
                                                                                \
   WARNING_OPT_LIST                                                             \
                                                                                \

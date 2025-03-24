@@ -3,10 +3,10 @@
 #include "args.h"
 #include "compiler.h"
 #include "fcache.h"
-#include "preproc.h"
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
+#include "preproc.h"
 #include "profile.h"
 #include "program.h"
 #include "rv32i.h"
@@ -23,7 +23,8 @@
 
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
-  if (args->preproc_only || args->syntax_only || args->build_asm_file || args->build_object_file) {
+  if (args->preproc_only || args->syntax_only || args->build_asm_file ||
+      args->build_object_file) {
     return false;
   }
 
@@ -160,7 +161,8 @@ static const char *get_default_isysroot(struct fcache *fcache,
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
     struct fcache_file sdk_path;
-    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --show-sdk-path"), &sdk_path)) {
+    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --show-sdk-path"),
+                          &sdk_path)) {
       BUG("xcrun call failed!");
     }
 
@@ -185,8 +187,7 @@ static const char *get_default_isysroot(struct fcache *fcache,
 
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
-                     struct fcache *fcache,
-                     struct arena_allocator *arena,
+                     struct fcache *fcache, struct arena_allocator *arena,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
@@ -303,8 +304,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .output = output,
 
       .num_defines = args->define_macros.num_values,
-      .defines = arena_alloc(arena, sizeof(compile_args->defines[0]) * args->define_macros.num_values)
-  };
+      .defines = arena_alloc(arena, sizeof(compile_args->defines[0]) *
+                                        args->define_macros.num_values)};
 
   for (size_t i = 0; i < args->define_macros.num_values; i++) {
     const char *def_macro = args->define_macros.values[i];
@@ -313,20 +314,15 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     struct sized_str name, value;
     if (val_str) {
-      name = (struct sized_str){
-        .str = def_macro,
-        .len = val_str - def_macro
-      };
+      name = (struct sized_str){.str = def_macro, .len = val_str - def_macro};
       value = MK_SIZED(val_str + 1);
     } else {
       name = MK_SIZED(def_macro);
       value = MK_SIZED("1");
     }
 
-    compile_args->defines[i] = (struct preproc_define_macro){
-      .name = name,
-      .value = value
-    };
+    compile_args->defines[i] =
+        (struct preproc_define_macro){.name = name, .value = value};
   }
 
   *num_sources = args->num_values;
@@ -351,9 +347,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
 static int jcc_main(int argc, char **argv);
 
-static void signal_handle(UNUSED int signal) {
-  debug_print_stack_trace();
-}
+static void signal_handle(UNUSED int signal) { debug_print_stack_trace(); }
 
 int main(int argc, char **argv) {
   // enable_log();
@@ -376,6 +370,35 @@ int main(int argc, char **argv) {
 #endif
 
   return jcc_main(argc, argv);
+}
+
+// FIXME: in clang you can do `-x c foo.c -x object foo`
+// but our args are not positional
+static bool try_get_language_for_file(struct path_components components,
+                                      enum compile_language *language) {
+  if (!components.ext[0] || !strcmp(components.ext, "o")) {
+    // assume no extension or `.o` is object file
+    *language = COMPILE_LANGUAGE_OBJECT;
+    return true;
+  }
+
+  if (!strcmp(components.ext, "i")) {
+    // intermediate (already preprocessed) file
+    *language = COMPILE_LANGUAGE_CPP_OUTPUT;
+    return true;
+  }
+
+  if (!strcmp(components.ext, "h")) {
+    *language = COMPILE_LANGUAGE_C_HEADER;
+    return true;
+  }
+
+  if (!strcmp(components.ext, "c")) {
+    *language = COMPILE_LANGUAGE_C;
+    return true;
+  }
+
+  return false;
 }
 
 static int jcc_main(int argc, char **argv) {
@@ -433,21 +456,31 @@ static int jcc_main(int argc, char **argv) {
     if (!strcmp(source_path, "-")) {
       // stdin, fine
       info("reading source file from stdin\n");
-    } else if (!components.ext[0] || !strcmp(components.ext, "o")) {
-      // assume no extension or `.o` is object file
-      info("linking object file '%s", source_path);
-      objects[i] = source_path;
-      continue;
-    } else if (!strcmp(components.ext, "i")) {
-      // intermediate (already preprocessed) file
-      objects[i] = source_path;
-      mode = COMPILE_PREPROC_MODE_NO_PREPROC;
-    } else if (!strcmp(components.ext, "h")) {
-      warn("compiling header file '%s', is this intentional?", source_path);
-    } else if (strcmp(components.ext, "c")) {
+    }
+
+    enum compile_language language = args.language;
+    if (language == COMPILE_LANGUAGE_NONE &&
+        !try_get_language_for_file(components, &language)) {
       err("unrecognised file type \"%s\"", components.ext);
       exc = -1;
       goto exit;
+    }
+
+    switch (language) {
+    case COMPILE_LANGUAGE_C:
+      break;
+    case COMPILE_LANGUAGE_C_HEADER:
+      warn("compiling header file '%s', is this intentional?", source_path);
+      break;
+    case COMPILE_LANGUAGE_CPP_OUTPUT:
+      mode = COMPILE_PREPROC_MODE_NO_PREPROC;
+      break;
+    case COMPILE_LANGUAGE_OBJECT:
+      info("linking object file '%s", source_path);
+      objects[i] = source_path;
+      continue;
+    default:
+      unreachable();
     }
 
     struct profiler_region compile_region = profiler_begin_region(region);
@@ -516,8 +549,8 @@ static int jcc_main(int argc, char **argv) {
 
     PROFILE_BEGIN(create_compiler);
 
-    if (create_compiler(&program, fcache, target, file, source_path, &compile_args,
-                        mode,
+    if (create_compiler(&program, fcache, target, file, source_path,
+                        &compile_args, mode,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
