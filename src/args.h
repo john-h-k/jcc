@@ -202,19 +202,17 @@ VALUES_FN(c_standard, C_STANDARD)
   ARG_OPT(STRING_LIST, struct arg_string_list, name, sh, lo, desc, NULL, NULL, \
           NULL)
 
-#define ARG_OPT_LIST                                                           \
+/* ------------------------- Preprocessor options ------------------------- */
+#define PREPROC_OPT_LIST                                                       \
   ARG_BOOL(preprocess, "-E", "--preprocess",                                   \
            "Only run the preprocessor. If '-o' is not provided, this will "    \
            "output to stdout")                                                 \
-  ARG_BOOL(                                                                    \
-      assembly, "-S", "--assemble",                                            \
-      "Only run preprocessor and compiler; output assembly without linking")   \
-  ARG_BOOL(object, "-c", "--compile",                                          \
-           "Only run preprocessor and compiler; output object file without "   \
-           "linking")                                                          \
                                                                                \
-  ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
-           "Only run preprocessor, syntax, and typechecking stages")           \
+  ARG_BOOL(no_line_commands, "-P", "--no-line-commands",                       \
+           "Disable line markers in -E/--preprocess")                          \
+                                                                               \
+  ARG_STRING_LIST(define_macros, "-D", "--define-macro",                       \
+                  "Define `arg` as 1, or `arg=value` as `value`")              \
                                                                                \
   ARG_STRING(isys_root, "", "-isysroot",                                       \
              "Root directory for `#include <header>` directives")              \
@@ -222,39 +220,48 @@ VALUES_FN(c_standard, C_STANDARD)
   ARG_STRING_LIST(sys_include_paths, "", "-isystem",                           \
                   "Directories to search for `#include <header>` directives")  \
                                                                                \
-  /* FIXME: these are currently ignored */                                     \
-  ARG_STRING_LIST(linker_args, "", "-Wl,", "Arguments to pass to the linker")  \
-                                                                               \
-  ARG_STRING_LIST(link_libraries, "-l", "", "Libraries to link against")       \
-                                                                               \
-  ARG_STRING_LIST(define_macros, "-D", "--define-macro",                       \
-                  "Define `arg` as 1, or `arg=value` as `value`")              \
-                                                                               \
-  /* FIXME: Not used */                                                                             \
-  ARG_STRING_LIST(warnings, "-W", "",                       \
-                  "Warning settings")              \
-                                                                               \
   ARG_STRING_LIST(                                                             \
       include_paths, "-I", "",                                                 \
-      "Directories to search for `#include \" header\"` directives")           \
+      "Directories to search for `#include \" header\"` directives")
+
+/* ------------------------- Debug-only options ------------------------- */
+#define DEBUG_OPT_LIST                                                         \
+  ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
+            "[DEBUG] Log level flags")                                         \
                                                                                \
-  ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")           \
+  ARG_STRING_LIST(log_symbols, "", "--log-sym",                                \
+                  "[DEBUG] Symbols to log (default: all)")                     \
                                                                                \
-  ARG_BOOL(version, "-V", "--version", "Print version")                        \
+  ARG_STRING(timestamp, "", "-tm",                                             \
+             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")
+
+/* ------------------------- Output options ------------------------- */
+#define OUTPUT_OPT_LIST                                                        \
+  ARG_BOOL(                                                                    \
+      assembly, "-S", "--assemble",                                            \
+      "Only run preprocessor and compiler; output assembly without linking")   \
                                                                                \
-  ARG_BOOL(debug, "-g", "", "Debug info (currently does nothing)")             \
+  ARG_BOOL(object, "-c", "--compile",                                          \
+           "Only run preprocessor and compiler; output object file without "   \
+           "linking")                                                          \
                                                                                \
-  ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", opts_level,        \
-             "Optimisation level 0..3")                                        \
-                                                                               \
+  ARG_STRING(output, "-o", "", "Output file")
+
+/* ------------------------- Target options ------------------------- */
+#define TARGET_OPT_LIST                                                        \
   ARG_OPTION(enum compile_arch, arch, "", "-arch", arch,                       \
              "Architecture to build for")                                      \
+                                                                               \
   ARG_OPTION(enum compile_target, target, "", "-target", target,               \
              "Target triple (arch-vendor-os)")                                 \
-  ARG_STRING(output, "-o", "", "Output file")                                  \
                                                                                \
   ARG_OPTION(enum compile_c_standard, c_standard, "", "-std", c_standard,      \
-             "C standard to use")                                              \
+             "C standard to use")
+
+/* ------------------------- Codegen options ------------------------- */
+#define CODEGEN_OPT_LIST                                                       \
+  ARG_OPTION(enum compile_opts_level, opts, "-O", "--opts", opts_level,        \
+             "Optimisation level 0..3")                                        \
                                                                                \
   ARG_FLAGS(enum codegen_flags, codegen_flags, "-C", "--codegen",              \
             codegen_flags, "Codegen flags")                                    \
@@ -264,18 +271,48 @@ VALUES_FN(c_standard, C_STANDARD)
            "graph-colouring "                                                  \
            "based regalloc")                                                   \
                                                                                \
+  /* FIXME: ignored */                                                         \
+  ARG_BOOL(debug, "-g", "", "Debug info (currently does nothing)")
+
+/* ------------------------- Feature options ------------------------- */
+#define FEATURE_OPT_LIST                                                       \
+  ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
+           "Only run preprocessor, syntax, and typechecking stages")
+
+/* ------------------------- Warning options ------------------------- */
+#define WARNING_OPT_LIST                                                       \
+  /* FIXME: Not used */                                                        \
+  ARG_STRING_LIST(warnings, "-W", "", "Warning settings")
+
+/* ------------------------- Link options ------------------------- */
+#define LINK_OPT_LIST                                                          \
+  /* FIXME: these are currently ignored */                                     \
+  ARG_STRING_LIST(linker_args, "", "-Wl,", "Arguments to pass to the linker")  \
+                                                                               \
+  ARG_STRING_LIST(link_libraries, "-l", "", "Libraries to link against")
+
+#define ARG_OPT_LIST                                                           \
+  PREPROC_OPT_LIST                                                             \
+                                                                               \
+  WARNING_OPT_LIST                                                             \
+                                                                               \
+  FEATURE_OPT_LIST                                                             \
+                                                                               \
+  TARGET_OPT_LIST                                                              \
+                                                                               \
+  CODEGEN_OPT_LIST                                                             \
+                                                                               \
+  LINK_OPT_LIST                                                                \
+                                                                               \
+  OUTPUT_OPT_LIST                                                              \
+                                                                               \
+  ARG_BOOL(verbose, "-v", "--verbose", "Show all commands executed")           \
+                                                                               \
+  ARG_BOOL(version, "-V", "--version", "Print version")                        \
+                                                                               \
   ARG_BOOL(profile, "", "--profile", "Run profiler")                           \
                                                                                \
-  /* ------------------------- Debug-only options ------------------------- */ \
-                                                                               \
-  ARG_FLAGS(enum compile_log_flags, log_level, "-L", "--log", log_level,       \
-            "[DEBUG] Log level flags")                                         \
-                                                                               \
-  ARG_STRING_LIST(log_symbols, "", "--log-sym",                                \
-                  "[DEBUG] Symbols to log (default: all)")                     \
-                                                                               \
-  ARG_STRING(timestamp, "", "-tm",                                             \
-             "[DEBUG] Fixed timestamp to use for __DATE__ and __TIME__")
+  DEBUG_OPT_LIST
 
 struct parsed_args {
   int argc;
