@@ -1386,7 +1386,7 @@ static bool try_expand_token(struct preproc *preproc,
       bool seen_first_arg = false;
       while (true) {
         struct preproc_token next;
-        preproc_next_raw_token(preproc, &next);
+        preproc_next_token(preproc, &next, flags);
 
         if (next.ty == PREPROC_TOKEN_TY_EOF) {
           BUG("eof unexepctedly");
@@ -1490,7 +1490,7 @@ static bool try_expand_token(struct preproc *preproc,
           }
 
           if (num_args > macro_fn.num_params) {
-            expand_token(preproc, preproc_text, &fn_tok->opt, expanded_fn, flags);
+            vector_push_back(expanded_fn, &fn_tok->opt);
           }
           break;
         }
@@ -1502,7 +1502,7 @@ static bool try_expand_token(struct preproc *preproc,
 
           if (num_arg_tokens) {
             for (size_t k = num_arg_tokens; k; k--) {
-              expand_token(preproc, preproc_text, vector_get(arg_tokens, k - 1), expanded_fn, flags);
+              vector_push_back(expanded_fn, vector_get(arg_tokens, k - 1));
             }
           } else {
             struct preproc_token empty = {
@@ -1543,7 +1543,7 @@ static bool try_expand_token(struct preproc *preproc,
 
               size_t num_arg_tokens = vector_length(arg_tokens);
               for (size_t k = num_arg_tokens; k; k--) {
-                expand_token(preproc, preproc_text, vector_get(arg_tokens, k - 1), expanded_fn, flags);
+                vector_push_back(expanded_fn, vector_get(arg_tokens, k - 1));
               }
 
               if (j - 1 != macro_fn.num_params) {
@@ -1610,7 +1610,7 @@ static bool try_expand_token(struct preproc *preproc,
             continue;
           }
 
-          expand_token(preproc, preproc_text, def_tok, expanded_fn, flags);
+          vector_push_back(expanded_fn, def_tok);
           break;
         }
         }
@@ -1649,9 +1649,9 @@ static bool try_expand_token(struct preproc *preproc,
     }
 
     // reverse order
-    struct preproc_unexpanded_token end = {
+    struct preproc_unexpanded_token begin = {
         .ty = PREPROC_UNEXPANDED_TOKEN_TY_END_EXPAND, .ident = ident};
-    vector_push_back(preproc->unexpanded_buffer_tokens, &end);
+    vector_push_back(preproc->unexpanded_buffer_tokens, &begin);
 
     for (size_t i = 0; i < num_exp_tokens; i++) {
       struct preproc_token *tok = vector_get(expanded_fn, i);
@@ -1666,9 +1666,9 @@ static bool try_expand_token(struct preproc *preproc,
       vector_push_back(preproc->unexpanded_buffer_tokens, &unexp_tok);
     }
 
-    struct preproc_unexpanded_token begin = {
+    struct preproc_unexpanded_token end = {
         .ty = PREPROC_UNEXPANDED_TOKEN_TY_BEGIN_EXPAND, .ident = ident};
-    vector_push_back(preproc->unexpanded_buffer_tokens, &begin);
+    vector_push_back(preproc->unexpanded_buffer_tokens, &end);
 
     vector_free(&expanded_fn);
     vector_free(&concat_points);
