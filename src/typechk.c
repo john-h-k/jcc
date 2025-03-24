@@ -575,7 +575,9 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
                 rhs_ty->pointer.underlying->ty == TD_VAR_TY_TY_VOID) ||
                td_var_ty_is_integral_ty(rhs_ty)) {
       return *lhs_ty;
-    } else if (td_var_ty_eq(tchk, lhs_ty->pointer.underlying,
+    } else if (lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
+               rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
+               td_var_ty_eq(tchk, lhs_ty->pointer.underlying,
                             rhs_ty->pointer.underlying)) {
       return *lhs_ty;
     } else {
@@ -1876,6 +1878,8 @@ static struct td_expr type_ternary(struct typechk *tchk,
   *td_ternary.false_expr = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
 
+  (void)td_ternary.true_expr->ty;
+  (void)td_ternary.false_expr->ty;
   struct text_span context = ternary->span;
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
@@ -1890,6 +1894,10 @@ static struct td_expr type_ternary(struct typechk *tchk,
       .ty = TD_EXPR_TY_TERNARY, .var_ty = result_ty, .ternary = td_ternary};
 }
 
+static bool try_get_completed_aggregate(struct typechk *tchk,
+                                        const struct td_var_ty *var_ty,
+                                        struct td_var_ty *complete);
+
 static struct td_var_ty type_type_name(struct typechk *tchk,
                                        const struct ast_type_name *type_name) {
   struct td_specifiers specifiers =
@@ -1899,8 +1907,16 @@ static struct td_var_ty type_type_name(struct typechk *tchk,
                           TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS |
                           TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
-  return type_abstract_declarator(tchk, &specifiers,
-                                  &type_name->abstract_declarator);
+  struct td_var_ty var_ty = type_abstract_declarator(
+      tchk, &specifiers, &type_name->abstract_declarator);
+
+  if (var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    (void)try_get_completed_aggregate(tchk, &var_ty, &complete);
+    var_ty = complete;
+  }
+
+  return var_ty;
 }
 
 static struct td_arglist type_arglist(struct typechk *tchk,
@@ -2204,10 +2220,6 @@ static struct td_expr type_binary_op(struct typechk *tchk,
                           .binary_op = td_binary_op};
 }
 
-static bool try_get_completed_aggregate(struct typechk *tchk,
-                                        const struct td_var_ty *var_ty,
-                                        struct td_var_ty *complete);
-
 static struct td_expr
 type_arrayaccess(struct typechk *tchk,
                  const struct ast_arrayaccess *arrayaccess) {
@@ -2326,7 +2338,8 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
     // TODO: need to allow extern / tentative decls here
 
     // char *msg = arena_alloc_snprintf(tchk->arena,
-    //                                  "incomplete type '%.*s' in member access",
+    //                                  "incomplete type '%.*s' in member
+    //                                  access",
     //                                  (int)var_ty->incomplete_aggregate.name.len,
     //                                  var_ty->incomplete_aggregate.name.str);
 
@@ -2655,7 +2668,14 @@ static struct td_expr type_assg(struct typechk *tchk,
 
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
+  // turn __FUNCTION__ into __func__
+
   struct sized_str name = identifier_str(tchk->parser, &var->identifier);
+
+  if (szstreq(name, MK_SIZED("__FUNCTION__"))) {
+    name = MK_SIZED("__func__");
+  }
+
   struct var_table_entry *entry =
       vt_get_entry(&tchk->var_table, VAR_TABLE_NS_NONE, name);
 
@@ -2760,6 +2780,8 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
 
 static struct td_expr type_sizeof(struct typechk *tchk,
                                   const struct ast_sizeof *size_of) {
+  // TODO: here and alignof, generate diagnostic for incomplete type
+
   struct td_sizeof td_size_of;
   switch (size_of->ty) {
   case AST_SIZEOF_TY_TYPE:
@@ -3671,9 +3693,57 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
     return expr;
   }
 
+  case TD_EXPR_TY_POINTERACCESS: {
+    if (!is_addr) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr.span,
+              MK_INVALID_TEXT_POS(0),
+              "in a constant expression, the '->' operator can only be used in "
+              "an address-of expression"));
+      return (struct td_expr){
+          .ty = TD_EXPR_TY_INVALID,
+          .var_ty = TD_VAR_TY_UNKNOWN,
+          .span = expr.span,
+      };
+    }
+
+    struct td_expr res = {
+        .ty = TD_EXPR_TY_POINTERACCESS,
+        .var_ty = expr.var_ty,
+        .pointer_access =
+            (struct td_pointeraccess){
+                .lhs =
+                    arena_alloc(tchk->arena, sizeof(*res.pointer_access.lhs)),
+                .member = expr.pointer_access.member,
+            },
+        .span = expr.span,
+    };
+
+    *res.pointer_access.lhs =
+        type_static_init_expr(tchk, *expr.pointer_access.lhs,
+                              expr.pointer_access.lhs->var_ty, is_addr);
+      
+    return res;
+  }
+
   case TD_EXPR_TY_MEMBERACCESS: {
     if (!is_addr) {
-      goto generic_fail;
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr.span,
+              MK_INVALID_TEXT_POS(0),
+              "in a constant expression, the '.' operator can only be used in "
+              "an address-of expression"));
+      return (struct td_expr){
+          .ty = TD_EXPR_TY_INVALID,
+          .var_ty = TD_VAR_TY_UNKNOWN,
+          .span = expr.span,
+      };
     }
 
     struct td_expr res = {
@@ -3733,15 +3803,28 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       return addr;
     }
     case TD_UNARY_OP_TY_CAST:
-      if (expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
-          (expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER ||
+      if ((td_var_ty_is_integral_ty(&expr.var_ty) ||
+           expr.var_ty.ty == TD_VAR_TY_TY_POINTER) &&
+          (td_var_ty_is_integral_ty(&expr.unary_op.expr->var_ty) ||
+           expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_POINTER ||
            expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_ARRAY ||
            expr.unary_op.expr->var_ty.ty == TD_VAR_TY_TY_FUNC)) {
-        // pointer to pointer cast, fine
+        // pointer/int to pointer/int cast, fine
         return type_static_init_expr(tchk, *expr.unary_op.expr,
                                      expr.unary_op.expr->var_ty, is_addr);
       }
-      break;
+
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+                                 expr.span, MK_INVALID_TEXT_POS(0),
+                                 "invalid cast for constant expression"));
+      return (struct td_expr){
+          .ty = TD_EXPR_TY_INVALID,
+          .var_ty = TD_VAR_TY_UNKNOWN,
+          .span = expr.span,
+      };
     default:
       // invalid for some other reason
       break;
@@ -4578,6 +4661,7 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
       td_init.expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr);
       break;
     case TD_INIT_MODE_CONSTANT_EXPRS:
+      // FIXME: i think this might be wrong, as it needs to pass mode in case this is a compound literal
       td_init.expr = type_static_init_expr(
           tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr),
           *var_ty, false);
@@ -5868,7 +5952,7 @@ DEBUG_FUNC(external_declaration, external_declaration) {
   }
 }
 
-void debug_print_td(struct typechk *tchk,
+void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
                     struct td_translationunit *translation_unit) {
   struct td_printstate state_ = {.indent = 0, .tchk = tchk};
 
@@ -5877,8 +5961,40 @@ void debug_print_td(struct typechk *tchk,
   TD_PRINTZ("PRINTING TD");
 
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
-    DEBUG_CALL(external_declaration,
-               &translation_unit->external_declarations[i]);
+    struct td_external_declaration *decl =
+        &translation_unit->external_declarations[i];
+
+    if (log_symbols) {
+      // if we have `size_t a, b, c` and `--log-sym a`, it is okay to print them
+      // all
+      switch (decl->ty) {
+      case TD_EXTERNAL_DECLARATION_TY_DECLARATION: {
+        bool found = false;
+        for (size_t j = 0; j < decl->declaration.num_var_declarations; j++) {
+          if (hashtbl_lookup(
+                  log_symbols,
+                  &decl->declaration.var_declarations[j].var.identifier.str)) {
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          continue;
+        }
+        break;
+      }
+      case TD_EXTERNAL_DECLARATION_TY_FUNC_DEF:
+        if (!hashtbl_lookup(
+                log_symbols,
+                &decl->func_def.var_declaration.var.identifier.str)) {
+          continue;
+        }
+        break;
+      }
+    }
+
+    DEBUG_CALL(external_declaration, decl);
   }
 
   TD_PRINTZ("");

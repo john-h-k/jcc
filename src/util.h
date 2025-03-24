@@ -234,7 +234,7 @@ static inline void debug_print_stack_trace(void) {}
 
 #define TODO(...)                                                              \
   do {                                                                         \
-    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting  ", __VA_ARGS__);      \
+    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting:  ", __VA_ARGS__);      \
     EXIT_FAIL(-2);                                                             \
   } while (0);
 

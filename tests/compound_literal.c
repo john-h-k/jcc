@@ -33,7 +33,7 @@ int main() {
   }
 
   struct foo *p = &f;
-  *p = (struct foo){
+  p = &(struct foo){
     .a = 200,
     .b = (struct bar){
       .value = "world"

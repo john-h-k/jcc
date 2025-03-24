@@ -1,6 +1,7 @@
 #include "lex.h"
 
 #include "alloc.h"
+#include "compiler.h"
 #include "hashtbl.h"
 #include "log.h"
 #include "preproc.h"
@@ -25,12 +26,15 @@ struct lexer {
   struct text_pos text_pos;
 
   const char **associated_texts;
+
+  enum compile_preproc_mode mode;
 };
 
 static struct hashtbl *KEYWORDS = NULL;
 
 enum lex_create_result lexer_create(struct program *program,
                                     struct preproc *preproc,
+                                    enum compile_preproc_mode mode,
                                     struct lexer **lexer) {
   if (!KEYWORDS) {
     debug("building kw table");
@@ -137,6 +141,7 @@ enum lex_create_result lexer_create(struct program *program,
 
   l->program = program;
   l->preproc = preproc;
+  l->mode = mode;
 
   l->tokens = vector_create_in_arena(sizeof(struct lex_token), arena);
   l->pos = 0;
@@ -351,7 +356,7 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
         //   i += 3;
         //   continue;
         // } else {
-        //   PUSH_CHAR(text[i]);        
+        //   PUSH_CHAR(text[i]);
         // }
       } else {
         PUSH_CHAR(text[i]);
@@ -523,8 +528,15 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
 
     struct preproc_token preproc_token;
     do {
-      preproc_next_token(lexer->preproc, &preproc_token,
-                         PREPROC_EXPAND_TOKEN_FLAG_NONE);
+      switch (lexer->mode) {
+      case COMPILE_PREPROC_MODE_PREPROC:
+        preproc_next_token(lexer->preproc, &preproc_token,
+                           PREPROC_EXPAND_TOKEN_FLAG_NONE);
+        break;
+      case COMPILE_PREPROC_MODE_NO_PREPROC:
+        preproc_next_raw_token(lexer->preproc, &preproc_token);
+        break;
+      }
     } while (preproc_token.ty != PREPROC_TOKEN_TY_EOF &&
              !text_span_len(&preproc_token.span));
 

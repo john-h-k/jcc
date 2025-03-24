@@ -351,8 +351,14 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
 static int jcc_main(int argc, char **argv);
 
+static void signal_handle(UNUSED int signal) {
+  debug_print_stack_trace();
+}
+
 int main(int argc, char **argv) {
   // enable_log();
+
+  signal(SIGABRT, signal_handle);
 
   // we want to use the user's locale i think?
   setlocale(LC_ALL, "");
@@ -422,14 +428,20 @@ static int jcc_main(int argc, char **argv) {
 
     struct path_components components = path_components(arena, source_path);
 
+    enum compile_preproc_mode mode = COMPILE_PREPROC_MODE_PREPROC;
+
     if (!strcmp(source_path, "-")) {
       // stdin, fine
       info("reading source file from stdin\n");
-    } else if (!strcmp(components.ext, "o")) {
-      // is object file
+    } else if (!components.ext[0] || !strcmp(components.ext, "o")) {
+      // assume no extension or `.o` is object file
       info("linking object file '%s", source_path);
       objects[i] = source_path;
       continue;
+    } else if (!strcmp(components.ext, "i")) {
+      // intermediate (already preprocessed) file
+      objects[i] = source_path;
+      mode = COMPILE_PREPROC_MODE_NO_PREPROC;
     } else if (!strcmp(components.ext, "h")) {
       warn("compiling header file '%s', is this intentional?", source_path);
     } else if (strcmp(components.ext, "c")) {
@@ -505,6 +517,7 @@ static int jcc_main(int argc, char **argv) {
     PROFILE_BEGIN(create_compiler);
 
     if (create_compiler(&program, fcache, target, file, source_path, &compile_args,
+                        mode,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;

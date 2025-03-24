@@ -130,13 +130,22 @@ enum compile_result {
   COMPILE_RESULT_FAILURE
 };
 
+
+// used by lexer to decide if it uses preproc_next_token or preproc_next_raw_token
+enum compile_preproc_mode {
+  COMPILE_PREPROC_MODE_PREPROC,
+  COMPILE_PREPROC_MODE_NO_PREPROC,
+};
+
 struct target;
 enum compiler_create_result
 create_compiler(struct program *program,
                 struct fcache *fcache,
                  const struct target *target,
                 struct compile_file output, const char *working_dir,
-                const struct compile_args *args, struct compiler **compiler);
+                const struct compile_args *args,
+                  enum compile_preproc_mode mode,
+                 struct compiler **compiler);
 enum compile_result compile(struct compiler *compiler);
 void free_compiler(struct compiler **compiler);
 
