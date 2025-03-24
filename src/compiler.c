@@ -39,6 +39,7 @@ struct compiler {
   struct compile_args args;
   struct parser *parser;
   struct typechk *typechk;
+  enum compile_preproc_mode mode;
   const struct target *target;
 
   struct compile_file output;
@@ -48,14 +49,14 @@ enum compiler_create_result
 create_compiler(struct program *program, struct fcache *fcache,
                 const struct target *target, struct compile_file output,
                 const char *path, const struct compile_args *args,
-                enum compile_preproc_mode mode,
-                struct compiler **compiler) {
+                enum compile_preproc_mode mode, struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
   (*compiler)->fcache = fcache;
   (*compiler)->args = *args;
   (*compiler)->target = target;
   (*compiler)->output = output;
+  (*compiler)->mode = mode;
 
   (*compiler)->program = *program;
 
@@ -83,8 +84,8 @@ create_compiler(struct program *program, struct fcache *fcache,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (parser_create(program, (*compiler)->preproc, mode, &(*compiler)->parser) !=
-      PARSER_CREATE_RESULT_SUCCESS) {
+  if (parser_create(program, (*compiler)->preproc, mode,
+                    &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
@@ -295,7 +296,8 @@ compiler_print_diagnostics(struct compiler *compiler,
       break;
     }
 
-    fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file, span.start.line, span.start.col);
+    fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
+            span.start.line, span.start.col);
 
     switch (diagnostic.ty.severity) {
     case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
@@ -338,6 +340,25 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
+static enum compile_result compile_stage_lex(struct compiler *compiler,
+                                             enum compile_preproc_mode mode) {
+  // variadic dummy because takes no args but macro needs args
+
+  FILE *file = compiler_open_file(compiler->output);
+  if (!file) {
+    return COMPILE_RESULT_BAD_FILE;
+  }
+
+  struct lexer *lexer;
+  lexer_create(&compiler->program, compiler->preproc, mode, &lexer);
+
+  lex_all(lexer);
+
+  // TODO: lex can fail
+
+  return COMPILE_RESULT_SUCCESS;
+}
+
 static enum compile_result
 compile_stage_parse(struct compiler *compiler,
                     struct parse_result *parse_result) {
@@ -371,7 +392,8 @@ compile_stage_typechk(struct compiler *compiler,
   }
 
   if (log_enabled()) {
-    debug_print_td(compiler->typechk, compiler->args.log_symbols, &typechk_result->translation_unit);
+    debug_print_td(compiler->typechk, compiler->args.log_symbols,
+                   &typechk_result->translation_unit);
   }
 
   return COMPILE_RESULT_SUCCESS;
@@ -694,6 +716,16 @@ compile_stage_build_object(struct compiler *compiler,
   return COMPILE_RESULT_SUCCESS;
 }
 
+#define COMPILER_STAGE_NO_LOG(stage, lo, ...)                                  \
+  {                                                                            \
+    PROFILE_BEGIN(lo);                                                         \
+    enum compile_result result = compile_stage_##lo(compiler, __VA_ARGS__);    \
+    PROFILE_END(lo);                                                           \
+    if (result != COMPILE_RESULT_SUCCESS) {                                    \
+      return result;                                                           \
+    }                                                                          \
+  }
+
 #define COMPILER_STAGE(stage, lo, ...)                                         \
   {                                                                            \
     disable_log();                                                             \
@@ -703,12 +735,7 @@ compile_stage_build_object(struct compiler *compiler,
       BEGIN_STAGE(#stage);                                                     \
     }                                                                          \
                                                                                \
-    PROFILE_BEGIN(lo);                                                         \
-    enum compile_result result = compile_stage_##lo(compiler, __VA_ARGS__);    \
-    PROFILE_END(lo);                                                           \
-    if (result != COMPILE_RESULT_SUCCESS) {                                    \
-      return result;                                                           \
-    }                                                                          \
+    COMPILER_STAGE_NO_LOG(stage, lo, __VA_ARGS__);                             \
   }
 
 enum compile_result compile(struct compiler *compiler) {
@@ -716,6 +743,14 @@ enum compile_result compile(struct compiler *compiler) {
     // preproc is kept local as it is seperate to other stages
 
     COMPILER_STAGE(PREPROC, preproc, NULL);
+
+    return COMPILE_RESULT_SUCCESS;
+  }
+
+  if (compiler->args.lex_only) {
+    // only really used for profiling
+
+    COMPILER_STAGE_NO_LOG(LEX, lex, compiler->mode);
 
     return COMPILE_RESULT_SUCCESS;
   }

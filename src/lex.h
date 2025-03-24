@@ -178,6 +178,8 @@ enum lex_create_result lexer_create(struct program *program,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);
 
+void lex_all(struct lexer *lexer);
+
 struct lex_pos lex_get_position(struct lexer *lexer);
 void lex_backtrack(struct lexer *lexer, struct lex_pos position);
 

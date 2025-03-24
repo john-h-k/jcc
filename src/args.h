@@ -289,7 +289,10 @@ VALUES_FN(language, LANGUAGE)
 /* ------------------------- Feature options ------------------------- */
 #define FEATURE_OPT_LIST                                                       \
   ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
-           "Only run preprocessor, syntax, and typechecking stages")
+           "Only run preprocessor, syntax, and typechecking stages") \
+           \
+  ARG_BOOL(lex_only, "", "-flex-only",                                   \
+           "Only run preprocessor, and lexer")
 
 /* ------------------------- Warning options ------------------------- */
 #define WARNING_OPT_LIST                                                       \

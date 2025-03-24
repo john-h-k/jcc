@@ -105,6 +105,7 @@ struct compile_args {
   struct hashtbl *log_symbols;
 
   bool preproc_only;
+  bool lex_only;
   bool syntax_only;
   bool build_asm_file;
   bool build_object_file;
