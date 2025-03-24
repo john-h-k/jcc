@@ -362,11 +362,7 @@ build() {
 
 # In `debug` and `run`, `MallocNanoZone=0` gets rid of spurious meaningless warnings when address san is turned on on macOS
 
-run() {
-    mode=$(get_mode "$1")
-    [ -z "$mode" ] && mode="Debug" || shift  
-    build --mode "$mode" 1>&2
-
+_run() {
     jcc=$(readlink -f ./build/jcc)
     cd "$CALLER_DIR"
     if [[ $(uname) == "Darwin" ]]; then
@@ -379,6 +375,35 @@ run() {
 
     cd - > /dev/null
     return $exc
+}
+
+run() {
+    mode=$(get_mode "$1")
+    [ -z "$mode" ] && mode="Debug" || shift  
+    build --mode "$mode" 1>&2
+
+    _run "$@"
+}
+
+profile() {
+    region="$1"
+    shift
+
+    build --mode release
+
+    ITER=10
+    for ((i = 0; i < $ITER; i++ )); do
+        output=$(_run --profile "$@" 2>&1)
+
+        exc="$?"
+
+        echo "$output" | grep "$region"
+
+        if ! [ "$exc" == 0 ]; then
+            echo -e "${BOLDRED}Failed!${RESET}"
+            exit 1
+        fi
+    done
 }
 
 debug() {
