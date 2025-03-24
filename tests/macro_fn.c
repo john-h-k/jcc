@@ -14,9 +14,18 @@
 
 #define AB a ## b
 
+#define EXP1(l, r) l ## r
+
 int puts(const char *);
 
+#define foo bar
+
 int main() {
+  int EXP1(a_, foo) = 0;
+  if (a_foo) {
+    return 1;
+  }
+
   int ab = 0;
   int foo_ab = 1;
   int ab_bar = 2;
