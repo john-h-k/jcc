@@ -658,8 +658,14 @@ static bool parse_enum_specifier(struct parser *parser,
   return true;
 }
 
+enum type_specifier_mode {
+  TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+  TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS
+};
+
 static void parse_declaration_specifier_list(
     struct parser *parser,
+    enum type_specifier_mode mode,
     struct ast_declaration_specifier_list *specifier_list);
 
 static bool parse_declarator(struct parser *parser,
@@ -747,11 +753,6 @@ static bool parse_typedef_name(struct parser *parser,
   return true;
 }
 
-enum type_specifier_mode {
-  TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
-  TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS
-};
-
 static bool parse_type_specifier(struct parser *parser,
                                  struct ast_type_specifier *type_specifier,
                                  enum type_specifier_mode mode) {
@@ -823,6 +824,7 @@ static bool parse_decl_specifier(struct parser *parser,
 
 static void parse_declaration_specifier_list(
     struct parser *parser,
+    enum type_specifier_mode mode,
     struct ast_declaration_specifier_list *specifier_list) {
   struct vector *list = vector_create_in_arena(
       sizeof(*specifier_list->decl_specifiers), parser->arena);
@@ -838,8 +840,6 @@ static void parse_declaration_specifier_list(
   // because it will take `struct s1 { }` as a type qualifier, and then `s` as a
   // typedef name type qualifier so we do a hack if we have seen _any_ type
   // specifiers so far, we do not look for typedef names anymore
-
-  enum type_specifier_mode mode = TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS;
 
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct text_pos end = lex_get_last_text_pos(parser->lexer);
@@ -1051,7 +1051,7 @@ static bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
     return false;
   }
 
-  parse_declaration_specifier_list(parser, &pointer->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS, &pointer->specifier_list);
   pointer->span = MK_TEXT_SPAN(op.start, pointer->specifier_list.span.end);
   return true;
 }
@@ -1082,7 +1082,7 @@ parse_ast_array_declarator(struct parser *parser,
 
   struct text_pos start = open.start;
 
-  parse_declaration_specifier_list(parser, &array_declarator->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &array_declarator->specifier_list);
 
   enum ast_array_declarator_ty ty;
   if (parse_token(parser, LEX_TOKEN_TY_OP_MUL, NULL)) {
@@ -1421,7 +1421,7 @@ static bool parse_type_name(struct parser *parser,
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, &type_name->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &type_name->specifier_list);
   if (!type_name->specifier_list.num_decl_specifiers) {
     lex_backtrack(parser->lexer, pos);
     return false;
@@ -2522,7 +2522,7 @@ static bool parse_declaration(struct parser *parser,
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, &declaration->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &declaration->specifier_list);
 
   if (!declaration->specifier_list.num_decl_specifiers) {
     // need to back out early else parser will try and parse things like
@@ -3201,7 +3201,7 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
     lex_backtrack(parser->lexer, pos);
   }
 
-  parse_declaration_specifier_list(parser, &param->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &param->specifier_list);
 
   if (!param->specifier_list.num_decl_specifiers) {
     lex_backtrack(parser->lexer, pos);
@@ -3272,7 +3272,7 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, &func_def->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &func_def->specifier_list);
 
   if (!parse_declarator(parser, &func_def->declarator)) {
     lex_backtrack(parser->lexer, pos);
@@ -4628,6 +4628,13 @@ DEBUG_FUNC(paramlist, param_list) {
 }
 
 DEBUG_FUNC(funcdef, func_def) {
+  AST_PRINTZ("FUNCTION SIGNATURE ");
+  INDENT();
+  DEBUG_CALL(declaration_specifier_list, &func_def->specifier_list);
+  DEBUG_CALL(declarator, &func_def->declarator);
+  DEBUG_CALL(declaration_list, &func_def->declaration_list);
+  UNINDENT();
+
   AST_PRINTZ("FUNCTION DEFINITION ");
 
   INDENT();
