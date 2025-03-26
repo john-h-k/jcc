@@ -159,7 +159,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
 
   if (r->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty right;
-    if (try_get_completed_aggregate(tchk, r, &right)) {      
+    if (try_get_completed_aggregate(tchk, r, &right)) {
       return td_var_ty_compatible(tchk, l, &right, flags);
     }
   }
@@ -707,7 +707,8 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
              rhs->ty == TD_VAR_TY_TY_POINTER) {
     if (ty == TD_BINARY_OP_TY_SUB) {
       if (!td_var_ty_compatible(tchk, lhs->pointer.underlying,
-                        rhs->pointer.underlying, TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+                                rhs->pointer.underlying,
+                                TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
 
         // TODO: instead of setting this everywhere have a method that does it
         // all for us
@@ -3301,6 +3302,20 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
   }
 
   if (expr->ty == TD_EXPR_TY_UNARY_OP) {
+    if (expr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF && expr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
+      // need to recognise `&(((Ty)cnst)->member)` as an offsetof idiom (for `cnst + offsetof(Ty, member)`)
+      // explicit support is not needed, but may as well in case programs do it
+      // explicitly rather than using `offsetof` macro
+
+      struct td_val lhs;
+      if (!eval_constant_integral_expr(
+              tchk, expr->unary_op.expr->pointer_access.lhs, flags, &lhs)) {
+        return false;
+      }
+
+      TODO("tchk offsetof");
+    }
+
     struct td_val expr_value;
     if (!eval_constant_integral_expr(tchk, expr->unary_op.expr, flags,
                                      &expr_value)) {
@@ -3468,7 +3483,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
                                    "cannot use & in constant expr"));
       }
       return false;
-    case TD_UNARY_OP_TY_ADDRESSOF:
+    case TD_UNARY_OP_TY_ADDRESSOF: {
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
         compiler_diagnostics_add(
@@ -3478,6 +3493,7 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
                                    "cannot use & in constant expr"));
       }
       return false;
+    }
     }
   }
 

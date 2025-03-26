@@ -469,26 +469,43 @@ format() {
     fd '.*\.[hc]' src -x clang-format -style=file -i
 }
 
+# e.g for `jcc benchmark parse`, `benchmark` is a sub fn
+sub_fns=()
+
+_register_sub_fn() {
+    sub_fns+=("$1")
+}
+
 _invoke-subcommand() {
     local base name func
 
     base=$0
 
-    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    if [[ "$fn" == "-h" || "$fn" == "--help" ]]; then
         help
     fi
 
-    unset name
-    if [ -z "${1}" ]; then
+    unset func
+    func="$1"
+    shift
+
+    name="$func"
+
+    for sub in "${sub_fns[@]}"; do
+        if [ "$sub" = "$func" ]; then
+            name="$name $1"
+            func="$func-$1"
+            shift
+            break
+        fi
+    done
+
+    if [ -z "$func" ]; then
         echo "No subcommand provided; defaulting to 'help' subcommand..."
-        name="help"
+        func="help"
     fi
 
-    func=${name:="${1}"}
-
     if declare -f "${func}" >/dev/null 2>&1; then
-        shift 1 >/dev/null 2>&1
-
         "${func}" "${@}"
         return $?
     elif [[ $name == "help" ]]; then
@@ -512,7 +529,7 @@ _invoke-subcommand() {
             return $?
         fi
 
-        matches=( $(compgen -A function | grep "^$name" ) )
+        matches=( $(compgen -A function | grep "^$func" ) )
 
         if [ "${#matches[@]}" -eq "1" ]; then
             "${matches[0]}" "${@}"
@@ -538,5 +555,6 @@ cd "$(dirname "$0")"
 source ./scripts/profile.sh
 source ./scripts/prereqs.sh
 source ./scripts/build.sh
+source ./scripts/benchmark_parse.sh
 
 _invoke-subcommand "$@"
