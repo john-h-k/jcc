@@ -555,6 +555,6 @@ cd "$(dirname "$0")"
 source ./scripts/profile.sh
 source ./scripts/prereqs.sh
 source ./scripts/build.sh
-source ./scripts/benchmark_parse.sh
+source ./scripts/benchmark.sh
 
 _invoke-subcommand "$@"
