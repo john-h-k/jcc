@@ -136,6 +136,10 @@ bool td_var_ty_is_fp_ty(const struct td_var_ty *ty) {
   }
 }
 
+static bool try_get_completed_aggregate(struct typechk *tchk,
+                                        const struct td_var_ty *var_ty,
+                                        struct td_var_ty *complete);
+
 enum td_var_ty_compatible_flags {
   TD_VAR_TY_COMPATIBLE_FLAG_NONE = 0,
   TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT = 1 << 0
@@ -146,6 +150,19 @@ static bool td_var_ty_compatible(struct typechk *tchk,
                                  const struct td_var_ty *r,
                                  enum td_var_ty_compatible_flags flags) {
   struct td_var_ty left = *l;
+
+  if (left.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    if (try_get_completed_aggregate(tchk, l, &left)) {
+      return td_var_ty_compatible(tchk, &left, r, flags);
+    }
+  }
+
+  if (r->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty right;
+    if (try_get_completed_aggregate(tchk, r, &right)) {      
+      return td_var_ty_compatible(tchk, l, &right, flags);
+    }
+  }
 
   if (flags & TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT) {
     // arrays and functions decay to pointers
@@ -683,11 +700,14 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
     lhs_op_ty = *lhs;
     rhs_op_ty = *rhs;
     result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+  } else if (td_binary_op_is_comparison(ty)) {
+    lhs_op_ty = rhs_op_ty = *lhs;
+    result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
   } else if (lhs->ty == TD_VAR_TY_TY_POINTER &&
              rhs->ty == TD_VAR_TY_TY_POINTER) {
     if (ty == TD_BINARY_OP_TY_SUB) {
-      if (!td_var_ty_eq(tchk, lhs->pointer.underlying,
-                        rhs->pointer.underlying)) {
+      if (!td_var_ty_compatible(tchk, lhs->pointer.underlying,
+                        rhs->pointer.underlying, TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
 
         // TODO: instead of setting this everywhere have a method that does it
         // all for us
@@ -706,9 +726,6 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
         lhs_op_ty = rhs_op_ty = *lhs;
         result_ty = td_var_ty_pointer_sized_int(tchk, true);
       }
-    } else if (td_binary_op_is_comparison(ty)) {
-      lhs_op_ty = rhs_op_ty = *lhs;
-      result_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
     } else {
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
@@ -1614,6 +1631,30 @@ type_specifiers(struct typechk *tchk,
 
         specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_RESTRICT;
         break;
+      case AST_TYPE_QUALIFIER_NONNULL:
+        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_NONNULL) {
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
+                                     type_qualifier_duplicate, specifier.span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "duplicate nonnull flag"));
+        }
+
+        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_NONNULL;
+        break;
+      case AST_TYPE_QUALIFIER_NULLABLE:
+        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_NULLABLE) {
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
+                                     type_qualifier_duplicate, specifier.span,
+                                     MK_INVALID_TEXT_POS(0),
+                                     "duplicate nullable flag"));
+        }
+
+        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_NULLABLE;
+        break;
       }
       break;
     case AST_DECL_SPECIFIER_TY_FUNCTION_SPECIFIER:
@@ -1893,10 +1934,6 @@ static struct td_expr type_ternary(struct typechk *tchk,
   return (struct td_expr){
       .ty = TD_EXPR_TY_TERNARY, .var_ty = result_ty, .ternary = td_ternary};
 }
-
-static bool try_get_completed_aggregate(struct typechk *tchk,
-                                        const struct td_var_ty *var_ty,
-                                        struct td_var_ty *complete);
 
 static struct td_var_ty type_type_name(struct typechk *tchk,
                                        const struct ast_type_name *type_name) {
@@ -2288,7 +2325,7 @@ type_arrayaccess(struct typechk *tchk,
         MK_SEMANTIC_DIAGNOSTIC(
             POINTER_TYPES, pointer_types, arrayaccess->span,
             MK_INVALID_TEXT_POS(0),
-            "array access should have at least one pointer type"));
+            "array access should have at least one integral type"));
 
     *td_arrayaccess.rhs = *td_arrayaccess.rhs;
   } else {
@@ -3724,7 +3761,7 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
     *res.pointer_access.lhs =
         type_static_init_expr(tchk, *expr.pointer_access.lhs,
                               expr.pointer_access.lhs->var_ty, is_addr);
-      
+
     return res;
   }
 
@@ -4595,10 +4632,17 @@ static struct td_init_list type_init_list(struct typechk *tchk,
     }
   }
 
-  if (var_ty->ty == TD_VAR_TY_TY_ARRAY ||
-      var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
-    return type_init_list_for_aggregate_or_array(tchk, var_ty, init_list, mode,
-                                                 0, true, NULL);
+  struct td_var_ty complete;
+  if (var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    (void)try_get_completed_aggregate(tchk, var_ty, &complete);
+  } else {
+    complete = *var_ty;
+  }
+
+  if (complete.ty == TD_VAR_TY_TY_ARRAY ||
+      complete.ty == TD_VAR_TY_TY_AGGREGATE) {
+    return type_init_list_for_aggregate_or_array(tchk, &complete, init_list,
+                                                 mode, 0, true, NULL);
   }
 
   if (init_list->num_inits > 1) {
@@ -4660,7 +4704,8 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
       td_init.expr = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr);
       break;
     case TD_INIT_MODE_CONSTANT_EXPRS:
-      // FIXME: i think this might be wrong, as it needs to pass mode in case this is a compound literal
+      // FIXME: i think this might be wrong, as it needs to pass mode in case
+      // this is a compound literal
       td_init.expr = type_static_init_expr(
           tchk, type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, &init->expr),
           *var_ty, false);
