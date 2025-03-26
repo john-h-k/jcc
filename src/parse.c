@@ -29,7 +29,8 @@ enum parser_create_result parser_create(struct program *program,
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   arena_allocator_create(&p->arena);
-  if (lexer_create(program, preproc, mode, &p->lexer) != LEX_CREATE_RESULT_SUCCESS) {
+  if (lexer_create(program, preproc, mode, &p->lexer) !=
+      LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
   }
@@ -421,10 +422,10 @@ static void parse_expected_expr(struct parser *parser, struct ast_expr *expr,
 static bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
 static bool parse_compoundexpr_raw(struct parser *parser,
-                               struct ast_compoundexpr *compound_expr);
+                                   struct ast_compoundexpr *compound_expr);
 
 static bool parse_compoundexpr_as_expr(struct parser *parser,
-                               struct ast_expr *expr);
+                                       struct ast_expr *expr);
 
 static bool parse_attribute(struct parser *parser,
                             struct ast_attribute *attribute) {
@@ -665,8 +666,7 @@ enum type_specifier_mode {
 };
 
 static void parse_declaration_specifier_list(
-    struct parser *parser,
-    enum type_specifier_mode mode,
+    struct parser *parser, enum type_specifier_mode mode,
     struct ast_declaration_specifier_list *specifier_list);
 
 static bool parse_declarator(struct parser *parser,
@@ -824,8 +824,7 @@ static bool parse_decl_specifier(struct parser *parser,
 }
 
 static void parse_declaration_specifier_list(
-    struct parser *parser,
-    enum type_specifier_mode mode,
+    struct parser *parser, enum type_specifier_mode mode,
     struct ast_declaration_specifier_list *specifier_list) {
   struct vector *list = vector_create_in_arena(
       sizeof(*specifier_list->decl_specifiers), parser->arena);
@@ -1052,7 +1051,8 @@ static bool parse_pointer(struct parser *parser, struct ast_pointer *pointer) {
     return false;
   }
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS, &pointer->specifier_list);
+  parse_declaration_specifier_list(
+      parser, TYPE_SPECIFIER_MODE_DISALLOW_TYPEDEFS, &pointer->specifier_list);
   pointer->span = MK_TEXT_SPAN(op.start, pointer->specifier_list.span.end);
   return true;
 }
@@ -1083,7 +1083,8 @@ parse_ast_array_declarator(struct parser *parser,
 
   struct text_pos start = open.start;
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &array_declarator->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+                                   &array_declarator->specifier_list);
 
   enum ast_array_declarator_ty ty;
   if (parse_token(parser, LEX_TOKEN_TY_OP_MUL, NULL)) {
@@ -1333,6 +1334,26 @@ static void parse_direct_declarator_list(
       MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
 }
 
+static void parse_attribute_specifier_list(
+    struct parser *parser,
+    struct ast_attribute_specifier_list *attribute_specifier_list) {
+  struct text_pos start = lex_get_last_text_pos(parser->lexer);
+
+  struct vector *list = vector_create_in_arena(
+      sizeof(*attribute_specifier_list->attribute_specifiers), parser->arena);
+
+  struct ast_attribute_specifier attribute_specifier;
+
+  while (parse_attribute_specifier(parser, &attribute_specifier)) {
+    vector_push_back(list, &attribute_specifier);
+  }
+
+  attribute_specifier_list->attribute_specifiers = vector_head(list);
+  attribute_specifier_list->num_attribute_specifiers = vector_length(list);
+  attribute_specifier_list->span =
+      MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+}
+
 static bool parse_declarator(struct parser *parser,
                              struct ast_declarator *declarator) {
   struct lex_pos pos = lex_get_position(parser->lexer);
@@ -1341,9 +1362,7 @@ static bool parse_declarator(struct parser *parser,
   parse_pointer_list(parser, &declarator->pointer_list);
   parse_direct_declarator_list(parser, &declarator->direct_declarator_list);
 
-  if (!parse_attribute_specifier(parser, &declarator->attribute_specifier)) {
-    declarator->attribute_specifier = (struct ast_attribute_specifier){0};
-  }
+  parse_attribute_specifier_list(parser, &declarator->attribute_specifier_list);
 
   bool has_declarator =
       declarator->direct_declarator_list.num_direct_declarators;
@@ -1422,7 +1441,8 @@ static bool parse_type_name(struct parser *parser,
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &type_name->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+                                   &type_name->specifier_list);
   if (!type_name->specifier_list.num_decl_specifiers) {
     lex_backtrack(parser->lexer, pos);
     return false;
@@ -2480,14 +2500,13 @@ static bool parse_compoundexpr_as_expr(struct parser *parser,
     expr->compound_expr = compound_expr;
     expr->span = compound_expr.span;
   }
-  
+
   return true;
 }
 
 // parse a non-compound expression, ending with a semicolon
-static bool
-parse_compoundexpr_with_semicolon(struct parser *parser,
-                                  struct ast_expr *expr) {
+static bool parse_compoundexpr_with_semicolon(struct parser *parser,
+                                              struct ast_expr *expr) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
   if (parse_compoundexpr_as_expr(parser, expr) &&
@@ -2523,7 +2542,8 @@ static bool parse_declaration(struct parser *parser,
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &declaration->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+                                   &declaration->specifier_list);
 
   if (!declaration->specifier_list.num_decl_specifiers) {
     // need to back out early else parser will try and parse things like
@@ -3202,7 +3222,8 @@ static bool parse_param(struct parser *parser, struct ast_param *param) {
     lex_backtrack(parser->lexer, pos);
   }
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &param->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+                                   &param->specifier_list);
 
   if (!param->specifier_list.num_decl_specifiers) {
     lex_backtrack(parser->lexer, pos);
@@ -3273,7 +3294,8 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS, &func_def->specifier_list);
+  parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
+                                   &func_def->specifier_list);
 
   if (!parse_declarator(parser, &func_def->declarator)) {
     lex_backtrack(parser->lexer, pos);
@@ -3526,11 +3548,11 @@ DEBUG_FUNC(declaration_list, declaration_list) {
 #define AST_PRINT_IDENTIFIER(identifier)                                       \
   do {                                                                         \
     struct sized_str str = identifier_str(state->parser, identifier);          \
-    AST_PRINT("'%.*s'", (int)str.len, str.str);              \
+    AST_PRINT("'%.*s'", (int)str.len, str.str);                                \
     AST_PRINTZ("");                                                            \
   } while (0);
 
-#define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                                       \
+#define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                              \
   do {                                                                         \
     struct sized_str str = identifier_str(state->parser, identifier);          \
     AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
@@ -3800,12 +3822,18 @@ DEBUG_FUNC(direct_declarator_list, direct_declarator_list) {
 
 DEBUG_FUNC(attribute_specifier, attribute_specifier);
 
+DEBUG_FUNC(attribute_specifier_list, attribute_specifier_list) {
+  for (size_t i = 0; i < attribute_specifier_list->num_attribute_specifiers; i++) {
+    DEBUG_CALL(attribute_specifier, &attribute_specifier_list->attribute_specifiers[i]);
+  }
+}
+
 DEBUG_FUNC(declarator, declarator) {
   AST_PRINTZ("DECLARATOR");
   INDENT();
   DEBUG_CALL(pointer_list, &declarator->pointer_list);
   DEBUG_CALL(direct_declarator_list, &declarator->direct_declarator_list);
-  DEBUG_CALL(attribute_specifier, &declarator->attribute_specifier);
+  DEBUG_CALL(attribute_specifier_list, &declarator->attribute_specifier_list);
   UNINDENT();
 }
 
@@ -4659,7 +4687,8 @@ DEBUG_FUNC(external_declaration, external_declaration) {
 
 void debug_print_ast(struct parser *parser,
                      struct ast_translationunit *translation_unit) {
-  // logic for respecting --log-syms is hard as we have not parsed all the way to identifiers
+  // logic for respecting --log-syms is hard as we have not parsed all the way
+  // to identifiers
 
   struct ast_printstate state_ = {.indent = 0, .parser = parser};
 
@@ -4668,10 +4697,10 @@ void debug_print_ast(struct parser *parser,
   AST_PRINTZ("PRINTING AST");
 
   for (size_t i = 0; i < translation_unit->num_external_declarations; i++) {
-    struct ast_external_declaration *decl = &translation_unit->external_declarations[i];
+    struct ast_external_declaration *decl =
+        &translation_unit->external_declarations[i];
 
-    DEBUG_CALL(external_declaration,
-               decl);
+    DEBUG_CALL(external_declaration, decl);
   }
 
   AST_PRINTZ("");

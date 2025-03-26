@@ -44,6 +44,13 @@ struct ast_attribute_specifier {
   struct text_span span;
 };
 
+struct ast_attribute_specifier_list {
+  struct ast_attribute_specifier *attribute_specifiers;
+  size_t num_attribute_specifiers;
+
+  struct text_span span;
+};
+
 enum ast_storage_class_specifier {
   AST_STORAGE_CLASS_SPECIFIER_TYPEDEF,
   AST_STORAGE_CLASS_SPECIFIER_EXTERN,
@@ -118,10 +125,7 @@ enum ast_declarator_ty {
 struct ast_declarator {
   struct ast_pointer_list pointer_list;
   struct ast_direct_declarator_list direct_declarator_list;
-  // TODO: we actually want attribute_list_list
-  // __attribute__((foo, bar)) is an attribute_list
-  // __attribute__((foo)) __attribute__(bar) is an attribute_list_list
-  struct ast_attribute_specifier attribute_specifier;
+  struct ast_attribute_specifier_list attribute_specifier_list;
   struct ast_expr *bitfield_size;
 
   struct text_span span;
