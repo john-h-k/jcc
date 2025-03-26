@@ -1,6 +1,8 @@
 # clangd
 .cache/
 
+.tmp/
+
 build*/
 CMakeLists.txt.user
 CMakeCache.txt

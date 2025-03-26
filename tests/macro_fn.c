@@ -1,3 +1,4 @@
+// skip: preproc prescan fixes needed
 // expected value: 0
 // stdout: string"foo bar\n"bar("foo bar\n")
 

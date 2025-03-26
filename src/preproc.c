@@ -19,6 +19,11 @@
 #include <time.h>
 #include <wchar.h>
 
+#if __has_include(<arm_neon.h>) && 0
+#define USE_NEON 1
+#include <arm_neon.h>
+#endif
+
 struct preproc_text {
   struct text_pos pos;
 
@@ -174,32 +179,6 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 #define DEF_BUILTIN_IDENT(n, v)                                                \
   DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v))
 
-  // HACK: apple headers have __asm in them in weird locations. we define a
-  // macro here to get rid of that
-  // FIXME: this breaks other inline asm as it will silently vanish! should fix
-
-  {
-
-    size_t name_len = strlen("__asm");
-    struct sized_str ident = MK_SIZED("__asm");
-
-    struct preproc_define define = {
-        .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
-                 .span = MK_INVALID_TEXT_SPAN(0, name_len),
-                 .text = "__asm"},
-        .value = {.ty = PREPROC_DEFINE_VALUE_TY_MACRO_FN,
-                  .macro_fn = {.num_params = 0,
-                               .tokens = vector_create_in_arena(
-                                   sizeof(struct preproc_macro_fn_token),
-                                   preproc->arena),
-                               .flags = PREPROC_MACRO_FN_FLAG_VARIADIC}}};
-
-    hashtbl_insert(preproc->defines, &ident, &define);
-
-    ident = MK_SIZED("__asm__");
-    hashtbl_insert(preproc->defines, &ident, &define);
-  }
-
   // HACK: musl doesn't include `stdarg.h` so until we support
   // `__builtin_va_list`, just typedef it away
   // DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
@@ -272,8 +251,8 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
     DEF_BUILTIN_NUM("__riscv", "1");
     DEF_BUILTIN_NUM("__riscv32", "1");
     DEF_BUILTIN_NUM("__riscv__", "1");
-    DEF_BUILTIN_NUM("__LP32__", "1");
-    DEF_BUILTIN_NUM("_LP32", "1");
+    DEF_BUILTIN_NUM("__ILP32__", "1");
+    DEF_BUILTIN_NUM("_ILP32", "1");
 
     DEF_BUILTIN_IDENT("__INT32_TYPE__", "int");
     DEF_BUILTIN_IDENT("__INTPTR_TYPE__", "int");
@@ -337,7 +316,9 @@ struct preproc_unexpanded_token {
 
 static bool is_newline(char c) { return c == '\n'; }
 
+#if !USE_NEON
 static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
+#endif
 
 static bool is_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
@@ -577,7 +558,7 @@ static bool try_consume2(struct preproc_text *preproc_text,
 }
 
 void preproc_next_raw_token(struct preproc *preproc,
-                                   struct preproc_token *token) {
+                            struct preproc_token *token) {
   struct preproc_text *preproc_text;
 
   while (vector_length(preproc->texts)) {
@@ -655,10 +636,58 @@ void preproc_next_raw_token(struct preproc *preproc,
     return;
   }
 
+#if USE_NEON
+  // all our alignments are 16b aligned so safe to read
+  const char *text = preproc_text->text;
+
+  while (true) {
+    if ((text[0] == ' ' || text[0] == '\t') && text[1] != ' ') {
+      end.idx += 1;
+      end.col += 1;
+      break;
+    }
+
+    uint8x16_t input = vld1q_u8((const uint8_t *)(text + end.idx));
+
+    uint8x16_t is_space = vceqq_u8(input, vdupq_n_u8(' '));
+    uint8x16_t is_tab = vceqq_u8(input, vdupq_n_u8('\t'));
+    // uint8x16_t is_vtab = vceqq_u8(input, vdupq_n_u8('\\v'));
+    // uint8x16_t is_form = vceqq_u8(input, vdupq_n_u8('\\f'));
+
+    uint8x16_t mask = vorrq_u8(is_space, is_tab);
+    // mask = vorrq_u8(mask, is_vtab);
+    // mask = vorrq_u8(mask, is_form);
+
+    uint8x16_t shifted = vshrq_n_u8(mask, 7);
+    uint64x2_t mask64 = vreinterpretq_u64_u8(shifted);
+
+    uint64_t mask_lo = vgetq_lane_u64(mask64, 0);
+    uint64_t mask_hi = vgetq_lane_u64(mask64, 1);
+    // uint32_t cmask = ((uint16_t)mask_hi << 8) | (uint16_t)mask_lo;
+    uint16_t bitmask = 0;
+    bitmask |= (mask_lo  & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56;
+    bitmask |= ((mask_hi & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56) << 8;
+
+#if !__has_builtin(__builtin_ctz)
+#error "has neon but not __builtin_ctz?"
+#endif
+
+    int num_sp = __builtin_ctz(~bitmask);
+
+    end.idx += num_sp;
+    end.col += num_sp;
+
+    if (num_sp != 16) {
+      break;
+    }
+  }
+
+#else
   while (end.idx < preproc_text->len &&
          is_whitespace(preproc_text->text[end.idx])) {
     next_col(&end);
   }
+#endif
 
   if (start.idx != end.idx) {
     // we have processed whitespace
@@ -1890,9 +1919,9 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#else\n"
         "\n"
         // for some reason apple predefines it
-        "#if !defined(__APPLE__) && !defined(__MACH__)\n"
+        // "#if !defined(__APPLE__) && !defined(__MACH__)\n"
         "typedef void * va_list;\n"
-        "#endif\n"
+        // "#endif\n"
         "\n"
         "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
         "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"

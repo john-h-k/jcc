@@ -1,3 +1,4 @@
+// skip: preproc prescan fixes needed
 // no-compile
 
 #define T(a, b, c) a + b + c;

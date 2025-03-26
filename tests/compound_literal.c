@@ -40,18 +40,19 @@ int main() {
     }
   };
 
-  if (f.a != 200) {
+  if (p->a != 200) {
     return 4;
   }
 
-  if (f.b.value[0] != 'w') {
+  if (p->b.value[0] != 'w') {
     return 5;
   }
 
-  if (f.c) {
+  if (p->c) {
     return 6;
   }
 
+  p = &f;
   *p = (struct foo){
     .c = 1
   };
