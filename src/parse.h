@@ -68,6 +68,8 @@ enum ast_type_qualifier {
   AST_TYPE_QUALIFIER_CONST,
   AST_TYPE_QUALIFIER_VOLATILE,
   AST_TYPE_QUALIFIER_RESTRICT,
+  AST_TYPE_QUALIFIER_NONNULL,
+  AST_TYPE_QUALIFIER_NULLABLE,
 };
 
 struct ast_declaration_specifier_list {
@@ -122,10 +124,45 @@ enum ast_declarator_ty {
   AST_DECLARATOR_TY_POINTER,
 };
 
+enum ast_cnst_str_ty {
+  AST_CNST_STR_TY_ASCII,
+  AST_CNST_STR_TY_WIDE,
+};
+
+// we don't use sized_str
+// maybe we could, but just because the way we work with these strings is
+// different a seperate type is sort of useful
+struct ast_ascii_str {
+  char *value;
+  size_t len;
+};
+
+// it may be 16/32 bits but we store as 32
+struct ast_wide_str {
+  uint32_t *value;
+  size_t len;
+};
+
+struct ast_cnst_str {
+  enum ast_cnst_str_ty ty;
+
+  union {
+    struct ast_ascii_str ascii;
+    struct ast_wide_str wide;
+  };
+};
+
+struct ast_declarator_label {
+  // TODO: this should be string really
+  // FIXME: ignored!
+  struct ast_expr *label;
+};
+
 struct ast_declarator {
   struct ast_pointer_list pointer_list;
   struct ast_direct_declarator_list direct_declarator_list;
   struct ast_attribute_specifier_list attribute_specifier_list;
+  struct ast_declarator_label *declarator_label;
   struct ast_expr *bitfield_size;
 
   struct text_span span;
@@ -383,34 +420,6 @@ enum ast_cnst_ty {
 
   AST_CNST_TY_STR_LITERAL,
   AST_CNST_TY_WIDE_STR_LITERAL,
-};
-
-enum ast_cnst_str_ty {
-  AST_CNST_STR_TY_ASCII,
-  AST_CNST_STR_TY_WIDE,
-};
-
-// we don't use sized_str
-// maybe we could, but just because the way we work with these strings is
-// different a seperate type is sort of useful
-struct ast_ascii_str {
-  char *value;
-  size_t len;
-};
-
-// it may be 16/32 bits but we store as 32
-struct ast_wide_str {
-  uint32_t *value;
-  size_t len;
-};
-
-struct ast_cnst_str {
-  enum ast_cnst_str_ty ty;
-
-  union {
-    struct ast_ascii_str ascii;
-    struct ast_wide_str wide;
-  };
 };
 
 struct ast_cnst {

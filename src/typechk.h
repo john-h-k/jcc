@@ -34,6 +34,8 @@ enum td_type_qualifier_flags {
   TD_TYPE_QUALIFIER_FLAG_CONST = 1 << 0,
   TD_TYPE_QUALIFIER_FLAG_VOLATILE = 1 << 1,
   TD_TYPE_QUALIFIER_FLAG_RESTRICT = 1 << 2,
+  TD_TYPE_QUALIFIER_FLAG_NONNULL = 1 << 3,
+  TD_TYPE_QUALIFIER_FLAG_NULLABLE = 1 << 4,
 };
 
 enum well_known_ty {

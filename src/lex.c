@@ -51,16 +51,25 @@ enum lex_create_result lexer_create(struct program *program,
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
   } while (0);
 
-    KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
-
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
 
+    KEYWORD("_Nonnull", LEX_TOKEN_TY_KW_NONNULL);
+    KEYWORD("_Nullable", LEX_TOKEN_TY_KW_NULLABLE);
+    KEYWORD("asm", LEX_TOKEN_TY_KW_ASM);
+    KEYWORD("__asm", LEX_TOKEN_TY_KW_ASM);
+    KEYWORD("__asm__", LEX_TOKEN_TY_KW_ASM);
+
+    KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
+
     KEYWORD("typeof", LEX_TOKEN_TY_KW_TYPEOF);
     KEYWORD("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
+
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
+
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
     KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
+
     KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
     KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
     KEYWORD("break", LEX_TOKEN_TY_KW_BREAK);
@@ -737,6 +746,9 @@ const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
 
     CASE_RET(LEX_TOKEN_TY_ELLIPSIS)
 
+    CASE_RET(LEX_TOKEN_TY_KW_NONNULL)
+    CASE_RET(LEX_TOKEN_TY_KW_NULLABLE)
+    CASE_RET(LEX_TOKEN_TY_KW_ASM)
     CASE_RET(LEX_TOKEN_TY_KW_TYPEOF)
     CASE_RET(LEX_TOKEN_TY_KW_TYPEOF_UNQUAL)
     CASE_RET(LEX_TOKEN_TY_KW_GENERIC)

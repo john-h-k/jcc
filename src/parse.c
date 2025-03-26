@@ -292,6 +292,10 @@ static bool parse_type_qualifier(struct parser *parser,
     *qualifier = AST_TYPE_QUALIFIER_VOLATILE;
   } else if (token.ty == LEX_TOKEN_TY_KW_RESTRICT) {
     *qualifier = AST_TYPE_QUALIFIER_RESTRICT;
+  } else if (token.ty == LEX_TOKEN_TY_KW_NONNULL) {
+    *qualifier = AST_TYPE_QUALIFIER_NONNULL;
+  } else if (token.ty == LEX_TOKEN_TY_KW_NULLABLE) {
+    *qualifier = AST_TYPE_QUALIFIER_NULLABLE;
   } else {
     return false;
   }
@@ -1367,6 +1371,28 @@ static bool parse_declarator(struct parser *parser,
   bool has_declarator =
       declarator->direct_declarator_list.num_direct_declarators;
 
+  struct text_span asm_kw;
+  if (parse_token(parser, LEX_TOKEN_TY_KW_ASM, &asm_kw)) {
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, asm_kw.start,
+                         "'(' after asm keyword", NULL);
+
+    struct ast_expr expr;
+    parse_expected_expr(parser, &expr, "expected expr after asm keyword");
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, asm_kw.start,
+                         "')' after asm", NULL);
+
+    declarator->declarator_label =
+        arena_alloc(parser->arena, sizeof(*declarator->declarator_label));
+    *declarator->declarator_label = (struct ast_declarator_label){
+        .label = arena_alloc(parser->arena,
+                             sizeof(*declarator->declarator_label->label))};
+
+    *declarator->declarator_label->label = expr;
+  } else {
+    declarator->declarator_label = NULL;
+  }
+
   struct lex_pos end_of_declarator = lex_get_position(parser->lexer);
 
   struct ast_expr expr;
@@ -1942,13 +1968,13 @@ parse_compound_literal(struct parser *parser,
 static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
 
-  if (parse_atom_0(parser, expr)) {
+  if (parse_compound_literal(parser, &expr->compound_literal)) {
+    expr->ty = AST_EXPR_TY_COMPOUND_LITERAL;
     expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
     return true;
   }
 
-  if (parse_compound_literal(parser, &expr->compound_literal)) {
-    expr->ty = AST_EXPR_TY_COMPOUND_LITERAL;
+  if (parse_atom_0(parser, expr)) {
     expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
     return true;
   }
@@ -1977,7 +2003,6 @@ static bool parse_call(struct parser *parser, struct ast_expr *sub_expr,
 
 static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
                                struct ast_expr *expr) {
-  struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET, NULL)) {
@@ -1992,7 +2017,7 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
     expr->array_access.lhs = lhs;
     expr->array_access.rhs = rhs;
     expr->array_access.span =
-        MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+        MK_TEXT_SPAN(lhs->span.start, lex_get_last_text_pos(parser->lexer));
 
     expr->span = expr->array_access.span;
     return true;
@@ -2005,7 +2030,6 @@ static bool parse_array_access(struct parser *parser, struct ast_expr *lhs,
 static bool parse_member_access(struct parser *parser,
                                 struct ast_expr *sub_expr,
                                 struct ast_expr *expr) {
-  struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_DOT, NULL)) {
@@ -2021,7 +2045,7 @@ static bool parse_member_access(struct parser *parser,
   expr->member_access = (struct ast_memberaccess){
       .lhs = sub_expr,
       .member = token,
-      .span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer))};
+      .span = MK_TEXT_SPAN(sub_expr->span.start, lex_get_last_text_pos(parser->lexer))};
 
   expr->span = expr->member_access.span;
   return true;
@@ -2030,7 +2054,6 @@ static bool parse_member_access(struct parser *parser,
 static bool parse_pointer_access(struct parser *parser,
                                  struct ast_expr *sub_expr,
                                  struct ast_expr *expr) {
-  struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
   if (!parse_token(parser, LEX_TOKEN_TY_ARROW, NULL)) {
@@ -2046,7 +2069,7 @@ static bool parse_pointer_access(struct parser *parser,
   expr->pointer_access = (struct ast_pointeraccess){
       .lhs = sub_expr,
       .member = token,
-      .span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer))};
+      .span = MK_TEXT_SPAN(sub_expr->span.start, lex_get_last_text_pos(parser->lexer))};
 
   expr->span = expr->pointer_access.span;
   return true;
@@ -2294,8 +2317,6 @@ static bool parse_expr_precedence_aware(struct parser *parser,
                                         unsigned min_precedence,
                                         const struct ast_expr *atom,
                                         struct ast_expr *expr) {
-  struct text_pos start = lex_get_last_text_pos(parser->lexer);
-
   if (atom) {
     *expr = *atom;
   } else if (!parse_atom_3(parser, expr)) {
@@ -2345,7 +2366,7 @@ static bool parse_expr_precedence_aware(struct parser *parser,
     binary_op->rhs = arena_alloc(parser->arena, sizeof(*binary_op->rhs));
     *binary_op->rhs = rhs;
 
-    binary_op->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+    binary_op->span = MK_TEXT_SPAN(lhs.span.start, lex_get_last_text_pos(parser->lexer));
     expr->span = binary_op->span;
   }
 }
@@ -3487,6 +3508,12 @@ DEBUG_FUNC_ENUM(type_qualifier, type_qualifier) {
   case AST_TYPE_QUALIFIER_RESTRICT:
     AST_PRINTZ("RESTRICT");
     break;
+  case AST_TYPE_QUALIFIER_NONNULL:
+    AST_PRINTZ("NONNULL");
+    break;
+  case AST_TYPE_QUALIFIER_NULLABLE:
+    AST_PRINTZ("NULLABLE");
+    break;
   }
 }
 
@@ -3823,8 +3850,10 @@ DEBUG_FUNC(direct_declarator_list, direct_declarator_list) {
 DEBUG_FUNC(attribute_specifier, attribute_specifier);
 
 DEBUG_FUNC(attribute_specifier_list, attribute_specifier_list) {
-  for (size_t i = 0; i < attribute_specifier_list->num_attribute_specifiers; i++) {
-    DEBUG_CALL(attribute_specifier, &attribute_specifier_list->attribute_specifiers[i]);
+  for (size_t i = 0; i < attribute_specifier_list->num_attribute_specifiers;
+       i++) {
+    DEBUG_CALL(attribute_specifier,
+               &attribute_specifier_list->attribute_specifiers[i]);
   }
 }
 
