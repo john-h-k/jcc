@@ -2402,7 +2402,8 @@ static bool parse_ternary(struct parser *parser, const struct ast_expr *cond,
   *expr->ternary.cond = *cond;
   *expr->ternary.true_expr = true_expr;
   *expr->ternary.false_expr = false_expr;
-  expr->span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  expr->ternary.span = MK_TEXT_SPAN(start, lex_get_last_text_pos(parser->lexer));
+  expr->span = expr->ternary.span;
   return true;
 }
 

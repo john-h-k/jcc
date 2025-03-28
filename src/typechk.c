@@ -615,18 +615,16 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
       return *lhs_ty;
     } else if (lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
                rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
-               td_var_ty_eq(tchk, lhs_ty->pointer.underlying,
-                            rhs_ty->pointer.underlying)) {
+               td_var_ty_compatible(tchk, lhs_ty->pointer.underlying,
+                            rhs_ty->pointer.underlying, TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
       return *lhs_ty;
     } else {
-      // TEMP: false positives so disabled
-      (void)context;
-      // compiler_diagnostics_add(
-      //     tchk->diagnostics,
-      //     MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH,
-      //     pointer_type_mismatch,
-      //                            context, MK_INVALID_TEXT_POS(0),
-      //                            "pointer type mismatch"));
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(POINTER_TYPE_MISMATCH,
+          pointer_type_mismatch,
+                                 context, MK_INVALID_TEXT_POS(0),
+                                 "pointer type mismatch"));
     }
   }
 
@@ -1881,7 +1879,7 @@ type_specifiers(struct typechk *tchk,
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_CHAR) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_CHAR
-                          : WELL_KNOWN_TY_SIGNED_CHAR;
+                          : signed_count ? WELL_KNOWN_TY_SIGNED_CHAR : WELL_KNOWN_TY_CHAR;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw ==
                    AST_TYPE_SPECIFIER_KW_SHORT) {
@@ -1903,7 +1901,7 @@ type_specifiers(struct typechk *tchk,
 
         switch (last_specifier.type_specifier_kw) {
         case AST_TYPE_SPECIFIER_KW_CHAR:
-          wk = WELL_KNOWN_TY_SIGNED_CHAR;
+          wk = WELL_KNOWN_TY_CHAR;
           break;
         case AST_TYPE_SPECIFIER_KW_SHORT:
           wk = WELL_KNOWN_TY_SIGNED_SHORT;

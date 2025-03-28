@@ -403,7 +403,7 @@ bootstrap() {
         start=$(profile_begin)
 
         # known issues with x64 emitter file; only build for aarch64/rv32i
-        if ! build "$@" --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null; then
+        if ! build "$@" --enable-arch aarch64 --enable-arch rv32i --cc "$cc"; then
             echo -e "${BOLDRED}stage$n build fail${RESET}"
             exit 1
         fi
