@@ -165,8 +165,7 @@ static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  struct ir_var_ty ptr_ty  =
-      ir_var_ty_for_pointer_size(irb->unit);
+  struct ir_var_ty ptr_ty = ir_var_ty_for_pointer_size(irb->unit);
 
   struct ir_var_ty_info ptr_info = ir_var_ty_info(irb->unit, &ptr_ty);
   size_t pointer_size = ptr_info.size;
@@ -176,9 +175,11 @@ static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
     return true;
   }
 
-  if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(l) && ir_var_ty_info(irb->unit, l).size == pointer_size) ||
+  if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(l) &&
+        ir_var_ty_info(irb->unit, l).size == pointer_size) ||
        l->ty == IR_VAR_TY_TY_POINTER) &&
-      ((r->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(r) && ir_var_ty_info(irb->unit, r).size == pointer_size) ||
+      ((r->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(r) &&
+        ir_var_ty_info(irb->unit, r).size == pointer_size) ||
        r->ty == IR_VAR_TY_TY_POINTER)) {
     // same size int -> pointer needs no cast
     return false;
@@ -232,7 +233,9 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   case TD_VAR_TY_TY_UNKNOWN:
     BUG("shouldn't reach IR gen with unknown type");
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    BUG("shouldn't reach IR gen with incomplete type (%.*s)", (int)var_ty->incomplete_aggregate.name.len, var_ty->incomplete_aggregate.name.str);
+    BUG("shouldn't reach IR gen with incomplete type (%.*s)",
+        (int)var_ty->incomplete_aggregate.name.len,
+        var_ty->incomplete_aggregate.name.str);
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
@@ -789,7 +792,8 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     // must be string literal
     // `&"foo"` is same as `"foo"`
     DEBUG_ASSERT(expr->cnst.ty == TD_CNST_TY_STRING, "expected str for &cnst");
-    struct ir_var_ty ir_var_ty = ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
+    struct ir_var_ty ir_var_ty =
+        ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
     return build_ir_for_cnst(irb, stmt, ir_var_ty, expr);
   case TD_EXPR_TY_CALL: {
     struct ir_op *value = build_ir_for_expr(irb, stmt, expr);
@@ -948,8 +952,10 @@ static struct ir_op *build_ir_for_unaryop(struct ir_func_builder *irb,
         .assignee = unary_op->expr,
     };
 
-    struct td_expr td_expr = {
-        .ty = TD_EXPR_TY_ASSG, .var_ty = expr->var_ty, .assg = td_assg};
+    struct td_expr td_expr = {.ty = TD_EXPR_TY_ASSG,
+                              .var_ty = expr->var_ty,
+                              .assg = td_assg,
+                              .span = expr->span};
 
     struct ir_op *assg = build_ir_for_assg(irb, stmt, &td_expr);
 
@@ -3032,9 +3038,9 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
   }
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
-                                                  struct td_init *init,
-                                                  const struct td_var_ty *var_ty);
+static struct ir_var_value
+build_ir_for_var_value(struct ir_var_builder *irb, struct td_init *init,
+                       const struct td_var_ty *var_ty);
 
 static void
 build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
@@ -3866,9 +3872,9 @@ static size_t get_designator_offset(struct ir_unit *iru,
   return offset;
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
-                                                  struct td_init *init,
-                                                  const struct td_var_ty *var_ty);
+static struct ir_var_value
+build_ir_for_var_value(struct ir_var_builder *irb, struct td_init *init,
+                       const struct td_var_ty *var_ty);
 
 enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_STRUCT,
@@ -4016,10 +4022,9 @@ static struct ir_var_value build_ir_for_var_value_addr(
           DEBUG_ASSERT(!is_bitfield, "addr of bitfield");
 
           return (struct ir_var_value){
-            .ty = IR_VAR_VALUE_TY_INT,
-            .var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty),
-            .int_value = offset_of
-          };
+              .ty = IR_VAR_VALUE_TY_INT,
+              .var_ty = ir_var_ty_for_td_var_ty(irb->unit, var_ty),
+              .int_value = offset_of};
         }
       }
 
@@ -4245,7 +4250,8 @@ build_ir_for_var_value_unary_op(struct ir_var_builder *irb,
         // struct ir_var_ty_info ptr_info =
         //     ir_var_ty_info(irb->unit, &IR_VAR_TY_POINTER);
         // if (integral_info.size != ptr_info.size) {
-        //   TODO("should have been rejected by typechk, pointer (sz=%zu) -> non "
+        //   TODO("should have been rejected by typechk, pointer (sz=%zu) -> non
+        //   "
         //        "pointer sized int (sz=%zu) in constant expr (line %zu)",
         //        ptr_info.size, integral_info.size, expr->span.start.line);
         // }
@@ -4444,9 +4450,9 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
                                .value_list = value_list};
 }
 
-static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
-                                                  struct td_init *init,
-                                                  const struct td_var_ty *var_ty) {
+static struct ir_var_value
+build_ir_for_var_value(struct ir_var_builder *irb, struct td_init *init,
+                       const struct td_var_ty *var_ty) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR:
     return build_ir_for_var_value_expr(irb, &init->expr, &init->expr.var_ty);

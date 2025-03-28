@@ -541,6 +541,8 @@ struct td_declaration {
 
   size_t num_var_declarations;
   struct td_var_declaration *var_declarations;
+
+  struct text_span span;
 };
 
 /* Jump statements - `return`, `break`, `continue`, `goto` */
@@ -711,6 +713,8 @@ struct td_funcdef {
 
   struct td_var_declaration var_declaration;
   struct td_stmt body;
+
+  struct text_span span;
 };
 
 enum td_external_declaration_ty {
