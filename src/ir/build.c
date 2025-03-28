@@ -165,17 +165,20 @@ static bool ir_var_ty_needs_cast_op(struct ir_func_builder *irb,
     return false;
   }
 
-  enum ir_var_primitive_ty pointer_prim =
-      ir_var_ty_pointer_primitive_ty(irb->unit);
+  struct ir_var_ty ptr_ty  =
+      ir_var_ty_for_pointer_size(irb->unit);
+
+  struct ir_var_ty_info ptr_info = ir_var_ty_info(irb->unit, &ptr_ty);
+  size_t pointer_size = ptr_info.size;
 
   if (l->ty == IR_VAR_TY_TY_PRIMITIVE &&
       l->primitive == IR_VAR_PRIMITIVE_TY_I1) {
     return true;
   }
 
-  if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && l->primitive == pointer_prim) ||
+  if (((l->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(l) && ir_var_ty_info(irb->unit, l).size == pointer_size) ||
        l->ty == IR_VAR_TY_TY_POINTER) &&
-      ((r->ty == IR_VAR_TY_TY_PRIMITIVE && r->primitive == pointer_prim) ||
+      ((r->ty == IR_VAR_TY_TY_PRIMITIVE && ir_var_ty_is_integral(r) && ir_var_ty_info(irb->unit, r).size == pointer_size) ||
        r->ty == IR_VAR_TY_TY_POINTER)) {
     // same size int -> pointer needs no cast
     return false;
@@ -229,7 +232,7 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   case TD_VAR_TY_TY_UNKNOWN:
     BUG("shouldn't reach IR gen with unknown type");
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
-    BUG("shouldn't reach IR gen with incomplete type");
+    BUG("shouldn't reach IR gen with incomplete type (%.*s)", (int)var_ty->incomplete_aggregate.name.len, var_ty->incomplete_aggregate.name.str);
   case TD_VAR_TY_TY_AGGREGATE: {
     struct td_ty_aggregate aggregate = var_ty->aggregate;
 
@@ -3031,14 +3034,14 @@ static struct ir_op *build_ir_for_init(struct ir_func_builder *irb,
 
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
-                                                  struct td_var_ty *var_ty);
+                                                  const struct td_var_ty *var_ty);
 
 static void
 build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
                         enum td_storage_class_specifier storage_class,
                         enum td_function_specifier_flags func_specifiers,
-                        struct td_var_declaration *decl) {
+                        const struct td_var_declaration *decl) {
   // `extern struct c` is allowed for an incomplete type
   // so we need to handle that
   struct ir_var_ty var_ty;
@@ -3865,7 +3868,7 @@ static size_t get_designator_offset(struct ir_unit *iru,
 
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
-                                                  struct td_var_ty *var_ty);
+                                                  const struct td_var_ty *var_ty);
 
 enum init_list_layout_ty {
   INIT_LIST_LAYOUT_TY_STRUCT,
@@ -4443,7 +4446,7 @@ build_ir_for_var_value_init_list(struct ir_var_builder *irb,
 
 static struct ir_var_value build_ir_for_var_value(struct ir_var_builder *irb,
                                                   struct td_init *init,
-                                                  struct td_var_ty *var_ty) {
+                                                  const struct td_var_ty *var_ty) {
   switch (init->ty) {
   case TD_INIT_TY_EXPR:
     return build_ir_for_var_value_expr(irb, &init->expr, &init->expr.var_ty);
