@@ -576,6 +576,27 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
     return TD_VAR_TY_UNKNOWN;
   }
 
+  if (lhs_ty->ty == TD_VAR_TY_TY_ARRAY) {
+    struct td_var_ty lhs_ptr = td_var_ty_make_pointer(tchk, lhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty, context);
+  }
+
+  if (lhs_ty->ty == TD_VAR_TY_TY_FUNC) {
+    struct td_var_ty lhs_ptr = td_var_ty_make_pointer(tchk, lhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty, context);
+  }
+
+  if (rhs_ty->ty == TD_VAR_TY_TY_ARRAY) {
+    struct td_var_ty rhs_ptr = td_var_ty_make_pointer(tchk, rhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr, context);
+  }
+
+  if (rhs_ty->ty == TD_VAR_TY_TY_FUNC) {
+    struct td_var_ty rhs_ptr = td_var_ty_make_pointer(tchk, rhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr, context);
+  }
+
+
   if (lhs_ty->ty == TD_VAR_TY_TY_POINTER ||
       rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
     if (lhs_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
@@ -693,6 +714,22 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
 
   const struct td_var_ty *lhs = &lhs_expr->var_ty;
   const struct td_var_ty *rhs = &rhs_expr->var_ty;
+
+  if (lhs->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    if (try_get_completed_aggregate(tchk, lhs,
+                                      &complete)) {
+      lhs = &complete;
+    }
+  }
+
+  if (rhs->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    if (try_get_completed_aggregate(tchk, rhs,
+                                      &complete)) {
+      rhs = &complete;
+    }
+  }
 
   struct td_var_ty lhs_op_ty, rhs_op_ty, result_ty;
 
@@ -1245,7 +1282,8 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
   if (array_ty.array.underlying->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty complete;
-    (void)try_get_completed_aggregate(tchk, array_ty.array.underlying, &complete);
+    (void)try_get_completed_aggregate(tchk, array_ty.array.underlying,
+                                      &complete);
     *array_ty.array.underlying = complete;
   }
 
@@ -1412,6 +1450,13 @@ td_var_ty_for_typedef(struct typechk *tchk,
                                MK_INVALID_TEXT_POS(0),
                                "typedef name does not exist"));
     return TD_VAR_TY_UNKNOWN;
+  }
+  
+  if (entry->var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    if (try_get_completed_aggregate(tchk, entry->var_ty, &complete)) {
+      return complete;
+    }
   }
 
   return *entry->var_ty;
@@ -1932,8 +1977,6 @@ static struct td_expr type_ternary(struct typechk *tchk,
   *td_ternary.false_expr = perform_integer_promotion(
       tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, ternary->false_expr));
 
-  (void)td_ternary.true_expr->ty;
-  (void)td_ternary.false_expr->ty;
   struct text_span context = ternary->span;
   struct td_var_ty result_ty = resolve_usual_arithmetic_conversions(
       tchk, &td_ternary.true_expr->var_ty, &td_ternary.false_expr->var_ty,
@@ -1962,8 +2005,9 @@ static struct td_var_ty type_type_name(struct typechk *tchk,
 
   if (var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty complete;
-    (void)try_get_completed_aggregate(tchk, &var_ty, &complete);
-    var_ty = complete;
+    if (try_get_completed_aggregate(tchk, &var_ty, &complete)) {
+      var_ty = complete;
+    }
   }
 
   return var_ty;
@@ -2367,6 +2411,7 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
     // FIXME: ALSO needs to check scope
     // if (!entry || entry->var->scope != td_var_ty)
     if (!entry) {
+      *complete = *var_ty;
       return false;
     }
 
@@ -3379,7 +3424,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
         return false;
       }
 
-      struct td_var_ty *agg_ty = pointer_access->pointer_access.lhs->var_ty.pointer.underlying;
+      struct td_var_ty *agg_ty =
+          pointer_access->pointer_access.lhs->var_ty.pointer.underlying;
 
       DEBUG_ASSERT(agg_ty->ty == TD_VAR_TY_TY_AGGREGATE,
                    "expected aggregate (or to be err'd already)");
@@ -4453,7 +4499,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       .function_specifier_flags = specifiers.function,
       .var_declaration = declaration,
       .body = {.ty = TD_STMT_TY_COMPOUND,
-               .compound = type_compoundstmt(tchk, &func_def->body)}};
+               .compound = type_compoundstmt(tchk, &func_def->body)},
+      .span = func_def->span};
 
   // param scope
   tchk_pop_scope(tchk);
@@ -4775,10 +4822,14 @@ static struct td_init_list type_init_list(struct typechk *tchk,
         .designator_list = NULL,
         .init = arena_alloc(tchk->arena, sizeof(*scalar.inits[0].init))};
 
+    struct td_expr expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
+                                    &init_list->inits[0].init->expr);
+
+    expr = add_cast_if_needed(tchk, expr, *var_ty);
+
     *scalar.inits[0].init = (struct td_init){
         .ty = TD_INIT_TY_EXPR,
-        .expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
-                          &init_list->inits[0].init->expr),
+        .expr = expr,
     };
 
     return scalar;
@@ -4914,7 +4965,8 @@ static struct td_declaration type_init_declarator_list(
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
           arena_alloc(tchk->arena, sizeof(*td_declaration.var_declarations) *
-                                       declarator_list->num_init_declarators)};
+                                       declarator_list->num_init_declarators),
+      .span = declarator_list->span};
 
   for (size_t i = 0; i < declarator_list->num_init_declarators; i++) {
     td_declaration.var_declarations[i] = type_init_declarator(
