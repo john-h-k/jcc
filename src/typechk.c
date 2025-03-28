@@ -1243,6 +1243,12 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       arena_alloc(tchk->arena, sizeof(*array_ty.array.underlying));
   *array_ty.array.underlying = var_ty;
 
+  if (array_ty.array.underlying->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty complete;
+    (void)try_get_completed_aggregate(tchk, array_ty.array.underlying, &complete);
+    *array_ty.array.underlying = complete;
+  }
+
   return array_ty;
 }
 
@@ -1307,6 +1313,12 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
                                        .var_ty = param_var_ty};
       break;
     }
+    }
+
+    if (td_param->var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+      struct td_var_ty complete;
+      (void)try_get_completed_aggregate(tchk, &td_param->var_ty, &complete);
+      td_param->var_ty = complete;
     }
   }
 
@@ -2489,6 +2501,7 @@ type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
 
   *td_memberaccess.lhs =
       type_expr(tchk, TYPE_EXPR_FLAGS_NONE, memberaccess->lhs);
+
   td_memberaccess.lhs->var_ty = type_incomplete_var_ty(
       tchk, &td_memberaccess.lhs->var_ty, memberaccess->span);
 
@@ -3058,6 +3071,8 @@ static struct td_expr type_expr(struct typechk *tchk,
 struct td_var_ty_info {
   size_t size;
   size_t alignment;
+  size_t *offsets;
+  size_t num_offsets;
 };
 
 static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
@@ -3150,7 +3165,10 @@ static struct td_var_ty_info td_var_ty_info(struct typechk *tchk,
         size += info.size;
       }
 
-      return (struct td_var_ty_info){.size = size, .alignment = max_alignment};
+      return (struct td_var_ty_info){.size = size,
+                                     .alignment = max_alignment,
+                                     .offsets = offsets,
+                                     .num_offsets = num_fields};
     }
     case TD_TY_AGGREGATE_TY_UNION: {
       size_t max_alignment = 0;
@@ -3182,6 +3200,50 @@ struct td_val {
   struct td_var_ty var_ty;
   struct ap_val val;
 };
+
+static bool try_get_member_offset(struct typechk *tchk,
+                                  const struct td_var_ty *aggregate,
+                                  struct sized_str member_name,
+                                  struct text_span *context, size_t *offset) {
+  DEBUG_ASSERT(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
+
+  *offset = 0;
+
+  for (size_t member_idx = 0; member_idx < aggregate->aggregate.num_fields;
+       member_idx++) {
+    struct td_struct_field *field = &aggregate->aggregate.fields[member_idx];
+    if (!field->identifier.len) {
+      // anonymous field
+      size_t anon_member_offset;
+
+      if (!try_get_member_offset(tchk, &field->var_ty, member_name, context,
+                                 &anon_member_offset)) {
+        continue;
+      }
+
+      DEBUG_ASSERT(member_idx < aggregate->aggregate.num_fields,
+                   "member_idx out of range");
+
+      struct td_var_ty_info info = td_var_ty_info(tchk, aggregate, context);
+
+      // offsets are null for a union
+      *offset += anon_member_offset;
+      *offset += info.offsets ? info.offsets[member_idx] : 0;
+      return true;
+    } else if (szstreq(field->identifier, member_name)) {
+      DEBUG_ASSERT(member_idx < aggregate->aggregate.num_fields,
+                   "member_idx out of range");
+
+      struct td_var_ty_info info = td_var_ty_info(tchk, aggregate, context);
+
+      // offsets are null for a union
+      *offset += info.offsets ? info.offsets[member_idx] : 0;
+      return true;
+    }
+  }
+
+  return false;
+}
 
 static bool
 eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
@@ -3302,18 +3364,39 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
   }
 
   if (expr->ty == TD_EXPR_TY_UNARY_OP) {
-    if (expr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF && expr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
-      // need to recognise `&(((Ty)cnst)->member)` as an offsetof idiom (for `cnst + offsetof(Ty, member)`)
-      // explicit support is not needed, but may as well in case programs do it
-      // explicitly rather than using `offsetof` macro
+    if (expr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF &&
+        expr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
+      // need to recognise `&(((Ty)cnst)->member)` as an offsetof idiom (for
+      // `cnst + offsetof(Ty, member)`) explicit support is not needed, but may
+      // as well in case programs do it explicitly rather than using `offsetof`
+      // macro
+
+      struct td_expr *pointer_access = expr->unary_op.expr;
 
       struct td_val lhs;
-      if (!eval_constant_integral_expr(
-              tchk, expr->unary_op.expr->pointer_access.lhs, flags, &lhs)) {
+      if (!eval_constant_integral_expr(tchk, pointer_access->pointer_access.lhs,
+                                       flags, &lhs)) {
         return false;
       }
 
-      TODO("tchk offsetof");
+      struct td_var_ty *agg_ty = pointer_access->pointer_access.lhs->var_ty.pointer.underlying;
+
+      DEBUG_ASSERT(agg_ty->ty == TD_VAR_TY_TY_AGGREGATE,
+                   "expected aggregate (or to be err'd already)");
+
+      size_t offset = 0;
+      if (!try_get_member_offset(tchk, agg_ty,
+                                 pointer_access->pointer_access.member,
+                                 &pointer_access->span, &offset)) {
+        BUG("nonexistent member should have been caught already");
+      }
+
+      struct ap_val val =
+          ap_val_add(lhs.val, ap_val_from_ull(offset, lhs.val.ap_int.num_bits));
+
+      *value = (struct td_val){.var_ty = expr->var_ty, .val = val};
+
+      return true;
     }
 
     struct td_val expr_value;
