@@ -899,7 +899,7 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
   size_t num_errs = vector_length(state.errors);
 
   if (num_errs) {
-    fprintf(stderr, "*** IR VALIDATION FAILED ****\n\n");
+    fprintf(stderr, "***** IR VALIDATION FAILED *****\n\n");
 
     for (size_t i = 0; i < num_errs; i++) {
       struct ir_validate_error *error = vector_get(state.errors, i);
