@@ -912,6 +912,9 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
 
     vector_free(&state.errors);
 
+    // bug'ing out means we get a stacktrace (if possible) plus means we don't need to consider validation failure as a
+    // path in the rest of the compiler
+    // this is good, because it _isn't_, and failures are a bug within jcc
     BUG("VALIDATION FAILED");
   }
 
