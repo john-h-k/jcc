@@ -55,7 +55,7 @@ Consumers do not have access to the lexer itself, and can only interact with it 
 
 ### IR
 
-Due to the variety of different passes that must work with it (IR builder, optimisations, lowering, register allocation, codegen), and the need for performance, the type itself is provided publically. However, there are still several measures to minimise bugs and improve general hygiene. The `ir.h` file provides a large set of helper methods for many simple IR operations, such as adding new operations, detaching basicblocks, and pruning the IR graph. Additionally, there is an IR validation file (`validate.c`(https://github.com/john-h-k/jcc/tree/main/ir/validate.c)) which is ran after every single mutating IR pass, and performs extensive validation of the IR graph. A small set of the checks it implements:
+Due to the variety of different passes that must work with it (IR builder, optimisations, lowering, register allocation, codegen), and the need for performance, the type itself is provided publically. However, there are still several measures to minimise bugs and improve general hygiene. The `ir.h` file provides a large set of helper methods for many simple IR operations, such as adding new operations, detaching basicblocks, and pruning the IR graph. Additionally, there is an IR validation file [`validate.c`](https://github.com/john-h-k/jcc/tree/main/src/ir/validate.c)) which is ran after every single mutating IR pass, and performs extensive validation of the IR graph. A small set of the checks it implements:
 
 * Ensures all operations, statements, and basicblocks are correctly linked within the graph
 * Ensures that incompatible operation flags are not set
