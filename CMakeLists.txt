@@ -167,6 +167,16 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wpedantic
     -Weverything
 
+    -Wformat-security
+    -Wformat
+    -Wformat=2
+    -Wconversion
+    -Wimplicit-fallthrough
+
+    -Wimplicit
+    -Wincompatible-pointer-types
+    -Wint-conversion
+
     -Wno-error=unreachable-code
 
     -Wzero-as-null-pointer-constant
