@@ -418,6 +418,12 @@ bootstrap() {
 
     rm -f jcc0 jcc1
 
+    # for timing
+    if ! _stage_build cc 0 --no-san; then
+        exit -1
+    fi
+
+    # actual build
     if ! _stage_build cc 0 --mode release; then
         exit -1
     fi

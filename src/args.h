@@ -157,7 +157,18 @@ PARSE_FN(codegen_flags, CODEGEN_FLAG)
 PARSE_FN(opts_level, OPTS)
 PARSE_FN(arch, ARCH)
 PARSE_FN(target, TARGET)
-PARSE_FN(c_standard, C_STANDARD)
+
+inline static bool parse_c_standard(const char *str, int *value) {
+  C_STANDARD_ENUM_LIST;
+
+  if (strcmp(str, "c2x") == 0) {
+    *value = COMPILE_C_STANDARD_C23;
+    return true;
+  };
+
+  return false;
+}
+
 PARSE_FN(language, LANGUAGE)
 
 #undef ENUM_FN
@@ -288,10 +299,14 @@ VALUES_FN(language, LANGUAGE)
 
 /* ------------------------- Feature options ------------------------- */
 #define FEATURE_OPT_LIST                                                       \
-  ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
-           "Only run preprocessor, syntax, and typechecking stages")           \
+  ARG_BOOL(lex_only, "", "-flex-only",                                         \
+           "Only run preprocessor and lexer stages")                           \
                                                                                \
-  ARG_BOOL(lex_only, "", "-flex-only", "Only run preprocessor, and lexer")
+  ARG_BOOL(parse_only, "", "-fparse-only",                                     \
+           "Only run preprocessor and syntax stages")                          \
+                                                                               \
+  ARG_BOOL(syntax_only, "", "-fsyntax-only",                                   \
+           "Only run preprocessor, syntax, and typechecking stages")
 
 /* ------------------------- Warning options ------------------------- */
 #define WARNING_OPT_LIST                                                       \
