@@ -758,6 +758,10 @@ enum compile_result compile(struct compiler *compiler) {
   struct parse_result parse_result;
   COMPILER_STAGE(PARSE, parse, &parse_result);
 
+  if (compiler->args.parse_only) {
+    return COMPILE_RESULT_SUCCESS;
+  }
+
   struct typechk_result typechk_result;
   COMPILER_STAGE(TYPECHK, typechk, &parse_result, &typechk_result);
 

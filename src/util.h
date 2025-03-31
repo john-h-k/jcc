@@ -256,7 +256,9 @@ void util_debug_assert(bool b, const char *cond, const char *func,
 
 #endif
 
+#if __STDC_VERSION__ <= 201710L
 NORETURN void unreachable(void);
+#endif
 
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 

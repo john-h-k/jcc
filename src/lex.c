@@ -178,6 +178,8 @@ void lex_all(struct lexer *lexer) {
     lex_peek_token(lexer, &token);
     lex_consume_token(lexer, token);
   } while (token.ty != LEX_TOKEN_TY_EOF);
+
+  lexer->pos = 0;
 }
 
 /* The lexer parses identifiers, but these could be identifiers, typedef-names,

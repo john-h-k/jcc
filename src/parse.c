@@ -2200,6 +2200,14 @@ static bool parse_unary_prefix_op(struct parser *parser,
   case LEX_TOKEN_TY_OP_AND:
     unary_prefix_ty = AST_UNARY_OP_TY_ADDRESSOF;
     break;
+  case LEX_TOKEN_TY_OP_LOGICAL_AND:
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        parser->diagnostics,
+        MK_PARSER_DIAGNOSTIC(ADDR_LABEL, addr_label,
+                             token.span, token.span.start,
+                             "address of label not supported"));
+    break;
   default:
     // just pure expr
     has_unary_prefix = false;
@@ -2788,6 +2796,7 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
 }
 
 static bool parse_ifelsestmt(struct parser *parser,
+                             const struct ast_ifstmt *if_stmt,
                              struct ast_ifelsestmt *if_else_stmt) {
   // parse `if {}`, then try parse `else`
   // not perfectly efficient but more elegant
@@ -2795,18 +2804,16 @@ static bool parse_ifelsestmt(struct parser *parser,
   struct text_pos start = lex_get_last_text_pos(parser->lexer);
   struct lex_pos pos = lex_get_position(parser->lexer);
 
-  struct ast_ifstmt if_stmt;
   struct ast_stmt else_stmt;
-  if (!parse_ifstmt(parser, &if_stmt) ||
-      !parse_token(parser, LEX_TOKEN_TY_KW_ELSE, NULL) ||
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_ELSE, NULL) ||
       !parse_stmt(parser, &else_stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
 
-  if_else_stmt->cond = if_stmt.cond;
+  if_else_stmt->cond = if_stmt->cond;
   if_else_stmt->body = arena_alloc(parser->arena, sizeof(*if_else_stmt->body));
-  if_else_stmt->body = if_stmt.body;
+  if_else_stmt->body = if_stmt->body;
   if_else_stmt->else_body =
       arena_alloc(parser->arena, sizeof(*if_else_stmt->else_body));
   *if_else_stmt->else_body = else_stmt;
@@ -3046,16 +3053,18 @@ static bool parse_iterstmt(struct parser *parser,
 
 static bool parse_selectstmt(struct parser *parser,
                              struct ast_selectstmt *select_stmt) {
-  struct ast_ifelsestmt if_else_stmt;
-  if (parse_ifelsestmt(parser, &if_else_stmt)) {
-    select_stmt->ty = AST_SELECTSTMT_TY_IF_ELSE;
-    select_stmt->if_else_stmt = if_else_stmt;
-    select_stmt->span = if_else_stmt.span;
-    return true;
-  }
 
   struct ast_ifstmt if_stmt;
   if (parse_ifstmt(parser, &if_stmt)) {
+    struct ast_ifelsestmt if_else_stmt;
+
+    if (parse_ifelsestmt(parser, &if_stmt, &if_else_stmt)) {
+      select_stmt->ty = AST_SELECTSTMT_TY_IF_ELSE;
+      select_stmt->if_else_stmt = if_else_stmt;
+      select_stmt->span = if_else_stmt.span;
+      return true;
+    }
+
     select_stmt->ty = AST_SELECTSTMT_TY_IF;
     select_stmt->if_stmt = if_stmt;
     select_stmt->span = if_stmt.span;
