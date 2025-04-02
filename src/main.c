@@ -6,6 +6,7 @@
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
+#include "lsp/lsp.h"
 #include "preproc.h"
 #include "profile.h"
 #include "program.h"
@@ -404,6 +405,8 @@ static bool try_get_language_for_file(struct path_components components,
 }
 
 static int jcc_main(int argc, char **argv) {
+  lsp_run();
+
   int exc = 1;
 
   struct arena_allocator *arena = NULL;

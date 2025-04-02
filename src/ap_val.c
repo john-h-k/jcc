@@ -145,10 +145,10 @@ struct ap_int ap_int_not(struct ap_int value) {
   return value;
 }
 
-bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
+size_t ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
                       struct sized_str str, struct ap_int *ap_int) {
   if (!str.len) {
-    return false;
+    return 0;
   }
 
   size_t i = 0;
@@ -167,7 +167,7 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
   }
 
   if (i == str.len) {
-    return false;
+    return 0;
   }
 
   size_t rem = str.len - i - 1;
@@ -196,13 +196,19 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
       continue;
     }
 
+    // FIXME: for json parsing we need to exit out when we see these chars
+    // we need to more neatly unify json/ast parsing
+    if (ch == ',' || ch == ' ' || ch == ']' || ch == '}') {
+      break;
+    }
+
     // FIXME: should only allow as last chars
     if (tolower(ch) == 'l' || tolower(ch) == 'u') {
       break;
     }
 
     if (ch < '0') {
-      return false;
+      return 0;
     }
 
     char digit;
@@ -213,7 +219,7 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
     }
 
     if (digit > base) {
-      return false;
+      return 0;
     }
 
     ap_int_mul_into_i32(&value, base);
@@ -223,8 +229,10 @@ bool ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
   if (neg) {
     ap_int_negate_into(&value);
   }
+
   *ap_int = value;
-  return true;
+
+  return i;
 }
 
 bool ap_int_nonzero(struct ap_int value) {
@@ -377,14 +385,14 @@ struct ap_int ap_int_rshift(struct ap_int lhs, struct ap_int rhs) {
 
 /************************** ap_float **************************/
 
-bool ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
+size_t ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
                         struct sized_str str, struct ap_float *ap_float) {
   char *buf = arena_alloc_strndup(arena, str.str, str.len);
 
   char *end;
 
   if (!str.len) {
-    return false;
+    return 0;
   }
 
   char ch = (char)tolower(str.str[str.len - 1]);
@@ -408,7 +416,9 @@ bool ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
     str.len--;
   }
 
-  return parse_len == str.len;
+  // return parse_len == str.len;
+  // FIXME: this never fails
+  return parse_len;
 }
 
 struct ap_float ap_float_zero(enum ap_float_ty ty) {
@@ -759,26 +769,28 @@ struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty) {
   }
 }
 
-bool ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
+size_t ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
                           struct sized_str str, struct ap_val *ap_val) {
-  if (!ap_int_try_parse(arena, num_bits, str, &ap_val->ap_int)) {
+  size_t rd;
+  if (!(rd = ap_int_try_parse(arena, num_bits, str, &ap_val->ap_int))) {
     *ap_val = MK_AP_VAL_INVALID();
-    return false;
+    return 0;
   }
 
   ap_val->ty = AP_VAL_TY_INT;
-  return true;
+  return rd;
 }
 
-bool ap_val_try_parse_float(struct arena_allocator *arena, enum ap_float_ty ty,
+size_t ap_val_try_parse_float(struct arena_allocator *arena, enum ap_float_ty ty,
                             struct sized_str str, struct ap_val *ap_val) {
-  if (!ap_float_try_parse(arena, ty, str, &ap_val->ap_float)) {
+  size_t rd;
+  if (!(rd = ap_float_try_parse(arena, ty, str, &ap_val->ap_float))) {
     *ap_val = MK_AP_VAL_INVALID();
-    return false;
+    return 0;
   }
 
   ap_val->ty = AP_VAL_TY_FLOAT;
-  return true;
+  return rd;
 }
 
 void ap_val_fprintf(FILE *file, struct ap_val value) {
