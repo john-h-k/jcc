@@ -345,8 +345,8 @@ bs-diff() {
 
 
     cd "$CALLER_DIR"
-    "$(dirname $0)"/build/jcc0 "$@" 2>&1 > 0.txt
-    "$(dirname $0)"/build/jcc1 "$@" 2>&1 > 1.txt
+    "$SCRIPT_DIR"/build/jcc0 "$@" 2>&1 > 0.txt
+    "$SCRIPT_DIR"/build/jcc1 "$@" 2>&1 > 1.txt
 
     delta 0.txt 1.txt
 
@@ -508,7 +508,7 @@ _invoke-subcommand() {
     if declare -f "${func}" >/dev/null 2>&1; then
         "${func}" "${@}"
         return $?
-    elif [[ $name == "help" ]]; then
+    elif [[ $name == "help" || $name == "-h" || $name == "--help" ]]; then
         func_names=( $(compgen -A function ) )
         func_names=("${func_names[@]/_*}")
 
@@ -550,7 +550,15 @@ _invoke-subcommand() {
 
 export CALLER_DIR="$(pwd)/"
 export CALLER_DIR="${CALLER_DIR%/}/"
-cd "$(dirname "$0")"
+
+# handle symlink
+if readlink "$0"; then
+    SCRIPT_DIR="$(dirname "$(readlink "$0")")"
+else
+    SCRIPT_DIR="$(dirname "$0")"
+fi
+    
+cd "$SCRIPT_DIR"
 
 source ./scripts/profile.sh
 source ./scripts/prereqs.sh

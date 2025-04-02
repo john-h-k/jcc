@@ -17,6 +17,7 @@ set(
   src/hash.c
   src/bitset.c
   src/fcache.c
+  src/json.c
 
   src/profile.c
 
@@ -25,6 +26,8 @@ set(
   src/graphwriter.c
 
   src/ap_val.c
+
+  src/lsp/lsp.c
 
   src/compiler.c
   src/diagnostics.c
@@ -167,17 +170,21 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wpedantic
     -Weverything
 
-    -Wformat-security
-    -Wformat
-    -Wformat=2
-    -Wconversion
-    -Wimplicit-fallthrough
+    # -Wformat-security
+    # -Wformat
+    # -Wformat=2
+    # -Wconversion
+    # -Wimplicit-fallthrough
 
-    -Wimplicit
-    -Wincompatible-pointer-types
-    -Wint-conversion
+    # -Wimplicit
+    # -Wincompatible-pointer-types
+    # -Wint-conversion
 
     -Wno-error=unreachable-code
+
+    -Wno-switch-default
+    -Wno-pre-c11-compat
+    -Wno-c23-extensions
 
     -Wzero-as-null-pointer-constant
     -Wbool-conversion
