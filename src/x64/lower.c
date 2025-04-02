@@ -687,7 +687,7 @@ void x64_lower(struct ir_unit *unit) {
               lower_bitfield_insert(func, op);
               break;
             case IR_OP_TY_UNARY_OP:
-              if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
+              if (op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
                 lower_logical_not(func, op);
               }
               break;

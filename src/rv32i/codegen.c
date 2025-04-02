@@ -129,7 +129,7 @@ static size_t translate_reg_idx(size_t idx, enum ir_reg_ty ty) {
 static struct rv32i_reg codegen_reg(struct ir_op *op) {
   size_t idx = translate_reg_idx(op->reg.idx, op->reg.ty);
 
-  DEBUG_ASSERT(idx < 32, "got invalid reg idx (ty=%d, idx=%zu)", op->reg.ty,
+  DEBUG_ASSERT(idx < 32, "got invalid reg idx (ty=%u, idx=%zu)", op->reg.ty,
                op->reg.idx);
 
   if (op->var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
@@ -1411,7 +1411,7 @@ static void codegen_call_op(struct cg_state *state,
 
 static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
                        struct ir_op *op) {
-  trace("lowering op with id %zu, type %d", op->id, op->ty);
+  trace("lowering op with id %zu, type %u", op->id, op->ty);
   switch (op->ty) {
   case IR_OP_TY_UNDF:
   case IR_OP_TY_PHI:
@@ -1471,7 +1471,7 @@ static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
     break;
   }
   default: {
-    TODO("unsupported IR OP '%d'", op->ty);
+    TODO("unsupported IR OP '%u'", op->ty);
   }
   }
 }
@@ -1617,8 +1617,8 @@ void rv32i_codegen_end(struct cg_state *state) {
         if (last->succ) {
           DEBUG_ASSERT(last->succ->rv32i->ty == RV32I_INSTR_TY_JAL,
                        "expected jal after cond branch");
-          DEBUG_ASSERT(last->succ->rv32i->jal.target.ty |=
-                       RV32I_TARGET_TY_OFFSET == RV32I_INSTR_TY_JAL,
+          DEBUG_ASSERT(last->succ->rv32i->jal.target.ty !=
+                       RV32I_TARGET_TY_OFFSET,
                        "branch rewriting will break offset");
           jal = last->succ;
 

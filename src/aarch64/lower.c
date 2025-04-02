@@ -759,7 +759,7 @@ void aarch64_lower(struct ir_unit *unit) {
               op->bitfield_insert.value->flags |= IR_OP_FLAG_READS_DEST;
               break;
             case IR_OP_TY_UNARY_OP:
-              if (op->binary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
+              if (op->unary_op.ty == IR_OP_UNARY_OP_TY_LOGICAL_NOT) {
                 lower_logical_not(func, op);
               }
               break;

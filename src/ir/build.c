@@ -373,7 +373,7 @@ static struct ir_cast_info cast_ty_for_td_var_ty(struct ir_func_builder *irb,
 
   if (from_var_ty.ty != IR_VAR_TY_TY_PRIMITIVE ||
       to_var_ty.ty != IR_VAR_TY_TY_PRIMITIVE) {
-    TODO("casts for non prims/pointers (from %d -> %d)", from_var_ty.ty,
+    TODO("casts for non prims/pointers (from %u -> %u)", from_var_ty.ty,
          to_var_ty.ty);
   }
 
@@ -845,7 +845,7 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     break;
   }
 
-  TODO("unknown type for addressof (%d) (file %s line %zu)", expr->ty,
+  TODO("unknown type for addressof (%u) (file %s line %zu)", expr->ty,
        expr->span.start.file, expr->span.start.line);
 }
 
@@ -3227,7 +3227,7 @@ static void build_ir_for_auto_var(struct ir_func_builder *irb,
   if (lcl && assignment) {
     if (lcl->var_ty.ty == IR_VAR_TY_TY_ARRAY &&
         assignment->ty == IR_OP_TY_ADDR &&
-        assignment->addr.ty == IR_OP_LOAD_TY_GLB) {
+        assignment->addr.ty == IR_OP_ADDR_TY_GLB) {
       // `const char[] foo = "string literal"`
       // so need to load
       struct ir_glb *glb = assignment->addr.glb;
@@ -4033,7 +4033,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
     case TD_UNARY_OP_TY_CAST:
       return build_ir_for_var_value_unary_op(irb, addr, var_ty);
     default:
-      BUG("non var addr of global (ty %d line %zu)", addr->ty,
+      BUG("non var addr of global (ty %u line %zu)", addr->ty,
           addr->span.start.line);
     }
   }
@@ -4145,7 +4145,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
         build_ir_for_var_value_addr(irb, addr->array_access.lhs, NULL, var_ty);
 
     DEBUG_ASSERT(addr->array_access.rhs->ty == TD_EXPR_TY_CNST,
-                 "expected cnst rhs (got %d)", addr->array_access.rhs->ty);
+                 "expected cnst rhs (got %u)", addr->array_access.rhs->ty);
     struct td_cnst cnst = addr->array_access.rhs->cnst;
     DEBUG_ASSERT(cnst.ty == TD_CNST_TY_NUM &&
                      cnst.num_value.ty == AP_VAL_TY_INT,
@@ -4196,7 +4196,7 @@ static struct ir_var_value build_ir_for_var_value_addr(
         .addr = {.glb = ref->glb, .offset = offset_cnst}};
   }
   default:
-    BUG("non var addr of global (ty %d)", addr->ty);
+    BUG("non var addr of global (ty %u)", addr->ty);
   }
 }
 
