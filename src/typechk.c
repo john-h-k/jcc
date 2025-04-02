@@ -457,7 +457,7 @@ struct td_var_ty td_var_ty_get_underlying(UNUSED_ARG(struct typechk *tchk),
   case TD_VAR_TY_TY_ARRAY:
     return *ty_ref->array.underlying;
   default:
-    BUG("non pointer/array/tagged passed (type %d)", ty_ref->ty);
+    BUG("non pointer/array/tagged passed (type %u)", ty_ref->ty);
   }
 }
 
