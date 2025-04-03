@@ -5079,7 +5079,6 @@ typechk_create(const struct target *target, const struct compile_args *args,
 void typechk_free(struct typechk **tchk) {
   vt_free(&(*tchk)->ty_table);
   vt_free(&(*tchk)->var_table);
-  compiler_diagnostics_free(&(*tchk)->diagnostics);
 
   arena_allocator_free(&(*tchk)->arena);
   (*tchk)->arena = NULL;

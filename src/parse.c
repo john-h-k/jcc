@@ -12,15 +12,26 @@
 
 #include <string.h>
 
+enum parser_state {
+  PARSER_STATE_NORMAL,
+  PARSER_STATE_ERR,
+};
+
 struct parser {
   struct arena_allocator *arena;
   struct lexer *lexer;
 
   struct var_table ty_table;
 
+  enum parser_state state;
+
   enum parse_result_ty result_ty;
   struct compiler_diagnostics *diagnostics;
 };
+
+// root error is given back to the first call that enters error state
+// this prevents sub-errors clearing the error flag
+typedef enum { PARSER_ERR_NONE, PARSER_ERR_ROOT, PARSER_ERR_REENTRANT } err_state;
 
 enum parser_create_result
 parser_create(struct program program, struct preproc *preproc,
@@ -39,16 +50,37 @@ parser_create(struct program program, struct preproc *preproc,
   p->result_ty = PARSE_RESULT_TY_SUCCESS;
   p->ty_table = vt_create(p->arena);
   p->diagnostics = diagnostics;
+  p->state = PARSER_STATE_NORMAL;
 
   *parser = p;
 
   return PARSER_CREATE_RESULT_SUCCESS;
 }
 
+static err_state parser_err(struct parser *parser) {
+  if (parser->state == PARSER_STATE_ERR) {
+    return PARSER_ERR_REENTRANT;
+  }
+
+  parser->state = PARSER_STATE_ERR;
+  return PARSER_ERR_ROOT;
+}
+
+static void parser_clear_err(struct parser *parser, err_state state) {
+  if (state == PARSER_ERR_NONE) {
+    return;
+  }
+
+  DEBUG_ASSERT(parser->state == PARSER_STATE_ERR, "called when parser not in err state");
+
+  if (state == PARSER_ERR_ROOT) {
+    parser->state = PARSER_STATE_NORMAL;
+  }
+}
+
 void parser_free(struct parser **parser) {
   lexer_free(&(*parser)->lexer);
   vt_free(&(*parser)->ty_table);
-  compiler_diagnostics_free(&(*parser)->diagnostics);
 
   arena_allocator_free(&(*parser)->arena);
   (*parser)->arena = NULL;
@@ -2821,28 +2853,27 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
     return false;
   }
 
-  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start,
-                       "'(' as condition must be wrapped in brackets", NULL);
+  err_state st = PARSER_ERR_NONE;
+  if (!parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start,
+                       "'(' as condition must be wrapped in brackets", NULL)) {
+    st = parser_err(parser);
+  }
 
   struct ast_expr expr;
-  if (!parse_compoundexpr_as_expr(parser, &expr)) {
-    lex_backtrack(parser->lexer, pos);
-    return false;
-  }
+  parse_compoundexpr_as_expr(parser, &expr);
 
   parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, kw.start,
                        "')' as condition must be wrapped in brackets", NULL);
 
   struct ast_stmt stmt;
-  if (!parse_stmt(parser, &stmt)) {
-    lex_backtrack(parser->lexer, pos);
-    return false;
-  }
+  parse_stmt(parser, &stmt);
 
   if_stmt->cond = expr;
   if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
   *if_stmt->body = stmt;
   if_stmt->span = MK_TEXT_SPAN(kw.start, stmt.span.end);
+
+  parser_clear_err(parser, st);
 
   return true;
 }
