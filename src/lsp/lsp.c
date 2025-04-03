@@ -206,7 +206,8 @@ static void lsp_write_buf(struct lsp_ctx *ctx) {
 #define LSP_WRITE_MESSAGE(block)                                               \
   json_writer_write_begin_obj(ctx->writer);                                    \
   JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_SIZED("2.0"));                   \
-  {block};                                                                     \
+  do                                                                           \
+    block while (0);                                                           \
   json_writer_write_end_obj(ctx->writer);                                      \
   lsp_write_buf(ctx);
 
@@ -214,8 +215,7 @@ static void lsp_write_buf(struct lsp_ctx *ctx) {
 static void lsp_json_write_pos(struct lsp_ctx *ctx, struct text_pos pos) {
   struct json_writer *writer = ctx->writer;
 
-  json_writer_write_begin_obj(writer);
-  {
+  JSON_OBJECT(writer, NULL, {
     // FIXME: a few things to check here
     //   * are our lines starting at the same line as LSP expects (zero vs one
     //   indexing)
@@ -223,23 +223,20 @@ static void lsp_json_write_pos(struct lsp_ctx *ctx, struct text_pos pos) {
     //   columns
     JSON_WRITE_FIELD(writer, "line", pos.line);
     JSON_WRITE_FIELD(writer, "character", pos.col);
-  }
-  json_writer_write_end_obj(writer);
+  });
 }
 
 // Writes a `struct text_span` into a `Range` LSP type
 static void lsp_json_write_span(struct lsp_ctx *ctx, struct text_span span) {
   struct json_writer *writer = ctx->writer;
 
-  json_writer_write_begin_obj(writer);
-  {
+  JSON_OBJECT(writer, NULL, {
     JSON_WRITE_FIELD_NAME(writer, "start");
     lsp_json_write_pos(ctx, span.start);
 
     JSON_WRITE_FIELD_NAME(writer, "end");
     lsp_json_write_pos(ctx, span.end);
-  }
-  json_writer_write_end_obj(writer);
+  });
 }
 
 static void lsp_write_diagnostics(struct lsp_ctx *ctx,
@@ -253,7 +250,8 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx,
 
     json_writer_write_field_name(writer, MK_SIZED("params"));
     json_writer_write_begin_obj(writer);
-    {
+
+    JSON_OBJECT(writer, "params", {
       // PublishDiagnosticsParams
 
       JSON_WRITE_FIELD(writer, "uri", doc_ctx->doc.uri);
@@ -307,8 +305,7 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx,
 
       JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
       JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
-    }
-    json_writer_write_end_obj(writer);
+    });
   })
 }
 

@@ -93,15 +93,36 @@ void json_writer_write_end_arr(struct json_writer *writer);
 struct sized_str json_writer_get_buf(struct json_writer *writer);
 void json_writer_clear(struct json_writer *writer);
 
-#define JSON_OBJECT(writer, block)                                             \
-  json_writer_write_begin_obj(writer);                                         \
-  block;                                                                       \
-  json_writer_write_end_obj(writer);                                      \
+#ifdef __GNUC__
+#define FIX_MACRO_BLOCK(block)                                                 \
+  PUSH_NO_WARN("-Wcompound-token-split-by-macro");                             \
+  PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion");             \
+  (void)(block);                                                                     \
+  POP_NO_WARN();                                                               \
+  POP_NO_WARN();
+#else
+#define FIX_MACRO_BLOCK(block) block
+#endif
 
-#define JSON_ARRAY(writer, block)                                             \
-  json_writer_write_begin_arr(writer);                                         \
-  block;                                                                       \
-  json_writer_write_end_arr(writer);                                      \
+#define JSON_OBJECT(writer, name, block)                                       \
+  do {                                                                         \
+    if ((name) != NULL) {                                                      \
+      JSON_WRITE_FIELD_NAME((writer), (name));                                 \
+    }                                                                          \
+    json_writer_write_begin_obj((writer));                                     \
+    FIX_MACRO_BLOCK(block);                                                    \
+    json_writer_write_end_obj((writer));                                       \
+  } while (0);
+
+#define JSON_ARRAY(writer, name, block)                                        \
+  do {                                                                         \
+    if ((name) != NULL) {                                                      \
+      JSON_WRITE_FIELD_NAME((writer), (name));                                 \
+    }                                                                          \
+    json_writer_write_begin_arr((writer));                                     \
+    FIX_MACRO_BLOCK(block);                                                    \
+    json_writer_write_end_arr((writer));                                       \
+  } while (0);
 
 #define JSON_WRITE(writer, value)                                              \
   _Generic((value),                                                            \
@@ -112,7 +133,9 @@ void json_writer_clear(struct json_writer *writer);
       struct sized_str: json_writer_write_string)((writer), (value))
 
 #define JSON_WRITE_FIELD_NAME(writer, name)                                    \
-  json_writer_write_field_name((writer), MK_SIZED((name)));
+  do {                                                                         \
+    json_writer_write_field_name((writer), MK_SIZED((name)));                  \
+  } while (0);
 
 #define JSON_WRITE_FIELD(writer, name, value)                                  \
   do {                                                                         \
