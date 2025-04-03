@@ -2,6 +2,7 @@
 #define LSP_LSP_TYPES_H
 
 #include "../json.h"
+#include "../program.h"
 #include "../util.h"
 
 #include <stddef.h>
@@ -12,6 +13,12 @@ enum pos_encoding_kind {
   POS_ENCODING_KIND_UTF8,
   POS_ENCODING_KIND_UTF16,
   POS_ENCODING_KIND_UTF32,
+};
+
+enum text_doc_sync_kind {
+  TEXT_DOC_SYNC_KIND_NONE = 0,
+  TEXT_DOC_SYNC_KIND_FULL = 1,
+  TEXT_DOC_SYNC_KIND_INCREMENTAL = 2,
 };
 
 struct general_caps {
@@ -104,8 +111,34 @@ struct text_doc_id {
   struct sized_str uri;
 };
 
+struct ver_text_doc_id {
+  struct sized_str uri;
+  lsp_integer version;
+};
+
 struct didopen_textdoc_params {
   struct text_doc text_doc;
+};
+
+enum text_doc_change_ev_ty {
+  TEXT_DOC_CHANGE_EV_TY_INCREMENTAL,
+  TEXT_DOC_CHANGE_EV_TY_FULL,
+};
+
+struct text_doc_change_ev {
+  enum text_doc_change_ev_ty ty;
+
+  struct text_span span;
+  lsp_integer range_length;
+
+  struct sized_str text;
+};
+
+struct didchange_textdoc_params {
+  struct ver_text_doc_id text_doc;
+
+  size_t num_changes;
+  struct text_doc_change_ev *changes;
 };
 
 struct didclose_textdoc_params {
@@ -314,6 +347,7 @@ struct didclose_textdoc_params {
   REQ_METHOD(EXIT, "exit")                                                     \
                                                                                \
   REQ_METHOD(TEXTDOCUMENT_DIDOPEN, "textDocument/didOpen")                     \
+  REQ_METHOD(TEXTDOCUMENT_DIDCHANGE, "textDocument/didChange")                 \
   REQ_METHOD(TEXTDOCUMENT_DIDCLOSE, "textDocument/didClose")
 
 #define REQ_METHOD(name, _) REQ_MSG_METHOD_##name,
@@ -327,6 +361,7 @@ struct req_msg {
   union {
     struct init_params init_params;
     struct didopen_textdoc_params didopen_textdoc_params;
+    struct didchange_textdoc_params didchange_textdoc_params;
     struct didclose_textdoc_params didclose_textdoc_params;
   };
 };
