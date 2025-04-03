@@ -91,12 +91,12 @@ void debug_print_func_info(FILE *file, struct ir_unit *iru,
   do {                                                                         \
     struct ir_object ir_obj = IR_MK_OBJECT((obj));                             \
     debug_print_ir_object((file), &ir_obj);                                    \
-  } while (0);
+  } while (0)
 
 #define DEBUG_PRINT_IR(obj)                                                    \
   do {                                                                         \
     struct ir_object ir_obj = IR_MK_OBJECT((obj));                             \
     debug_print_ir_object(stderr, &ir_obj);                                    \
-  } while (0);
+  } while (0)
 
 #endif

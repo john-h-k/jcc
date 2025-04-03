@@ -40,7 +40,7 @@ struct validate_op_order_metadata {
     struct ir_validate_error error = {.err = (msg),                            \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
-  } while (0);
+  } while (0)
 
 #define VALIDATION_ERR(obj, fmt, ...)                                          \
   do {                                                                         \
@@ -49,12 +49,14 @@ struct validate_op_order_metadata {
     struct ir_validate_error error = {.err = msg,                              \
                                       .object = IR_MK_OBJECT((obj))};          \
     vector_push_back((state)->errors, &error);                                 \
-  } while (0);
+  } while (0)
 
 #define VALIDATION_CHECK(cond, obj, fmt, ...)                                  \
-  if (!(cond)) {                                                               \
-    VALIDATION_ERR((obj), (fmt), __VA_ARGS__);                                 \
-  }
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      VALIDATION_ERR((obj), (fmt), __VA_ARGS__);                               \
+    }                                                                          \
+  } while (0)
 
 #define VALIDATION_CHECKZ(cond, obj, msg)                                      \
   VALIDATION_CHECK((cond), (obj), IR_OBJECT_NAME((obj), " %zu: %s"),           \
@@ -912,8 +914,8 @@ void ir_validate(struct ir_unit *iru, enum ir_validate_flags flags) {
 
     vector_free(&state.errors);
 
-    // bug'ing out means we get a stacktrace (if possible) plus means we don't need to consider validation failure as a
-    // path in the rest of the compiler
+    // bug'ing out means we get a stacktrace (if possible) plus means we don't
+    // need to consider validation failure as a path in the rest of the compiler
     // this is good, because it _isn't_, and failures are a bug within jcc
     BUG("VALIDATION FAILED");
   }

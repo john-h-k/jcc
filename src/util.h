@@ -80,7 +80,8 @@ typedef unsigned _BitInt(128) uint128_t;
 #define FLAG_ENUM
 #endif
 
-#if (ASAN || MSAN || TSAN || UBSAN) && __has_include(<sanitizer/common_interface_defs.h>)
+#if (ASAN || MSAN || TSAN || UBSAN) &&                                         \
+    __has_include(<sanitizer/common_interface_defs.h>)
 #define SANITIZER_PRINT_STACK_TRACE
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
@@ -219,7 +220,7 @@ static inline void debug_print_stack_trace(void) {}
     vfprintf(file, format, v);                                                 \
     fprintf(file, "\n");                                                       \
     va_end(v);                                                                 \
-  } while (0);
+  } while (0)
 #endif
 
 #define MACRO_FMTPRINT(file, message, ...)                                     \
@@ -228,7 +229,7 @@ static inline void debug_print_stack_trace(void) {}
     fprintf(file, message);                                                    \
     fprintf(file, __VA_ARGS__);                                                \
     fprintf(file, "\n");                                                       \
-  } while (0);
+  } while (0)
 
 #define EXIT_FAIL(code)                                                        \
   debug_print_stack_trace();                                                   \
@@ -242,15 +243,15 @@ static inline void debug_print_stack_trace(void) {}
 
 #define TODO(...)                                                              \
   do {                                                                         \
-    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting:  ", __VA_ARGS__);      \
+    MACRO_FMTPRINT(stderr, "`TODO` hit, program exiting:  ", __VA_ARGS__);     \
     EXIT_FAIL(-2);                                                             \
-  } while (0);
+  } while (0)
 
 #define BUG(...)                                                               \
   do {                                                                         \
     MACRO_FMTPRINT(stderr, "`BUG` hit, program exiting:  ", __VA_ARGS__);      \
     EXIT_FAIL(-2);                                                             \
-  } while (0);
+  } while (0)
 
 #if NDEBUG
 #define DEBUG_ASSERT(b, ...) (void)(b)
@@ -280,7 +281,7 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 #else
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
 #endif
-    EXIT_FAIL(-1);
+    EXIT_FAIL(-1)
   }
 }
 
@@ -384,7 +385,6 @@ void fprint_str(FILE *file, const char *input, size_t len);
 void fprint_wstr(FILE *file, const uint32_t *input, size_t len);
 size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len);
 
-
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
 
 struct sized_str {
@@ -423,7 +423,15 @@ static inline int szstrcmp(struct sized_str l, struct sized_str r) {
   return cmp;
 }
 
-#define MK_SIZED(s) ((struct sized_str){(s), (s != NULL) ? strlen(s) : 0})
+#define MK_SIZED(s) ((struct sized_str){(s), ((s) != NULL) ? strlen((s)) : 0})
 #define MK_NULL_STR() ((struct sized_str){NULL, 0})
+
+// For some weird reason, clang has a bunch of issues with compound literals &
+// init lists in complex macros
+// we provide this objectively worse macro for those scenarios
+#define MK_SIZED_NAMED(name, s)                                                \
+  struct sized_str name;                                                       \
+  name.str = (s);                                                              \
+  name.len = (s) == NULL ? 0 : strlen((s));
 
 #endif

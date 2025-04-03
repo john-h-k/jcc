@@ -99,7 +99,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
 #define ARG_OPT(ty, struct_ty, name, _0, _1, _2, _3, string_fn, ...)           \
   longest_name = MAX(longest_name, strlen(#name));
 
-  ARG_OPT_LIST;
+  ARG_OPT_LIST
 
 #undef ARG_OPT
 
@@ -128,7 +128,7 @@ void debug_print_parsed_args(FILE *file, const struct parsed_args *args) {
     break;                                                                     \
   }
 
-  ARG_OPT_LIST;
+  ARG_OPT_LIST
 
 #undef ARG_OPT
 
@@ -203,7 +203,7 @@ static void print_help(void) {
 #define ARG_OPT(_0, _1, name, sh, lo, desc, _2, _3, ...)                       \
   print_opt(sh, lo, desc);
 
-  ARG_OPT_LIST;
+  ARG_OPT_LIST
 
 #undef ARG_OPT
 }
@@ -280,7 +280,7 @@ enum parse_args_result parse_args(int argc, char **argv,
     POP_NO_WARN();                                                             \
   } while (0);
 
-  ARG_OPT_LIST;
+  ARG_OPT_LIST
 
 #undef ARG_OPT
 

@@ -122,7 +122,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     (to) = __VA_ARGS__(from)->obj_val;                                         \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_INT(from, to, ...)                                              \
   do {                                                                         \
@@ -132,7 +132,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     (to) = __VA_ARGS__ ap_val_as_ll((from)->num_val);                          \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_STR(from, to, ...)                                              \
   do {                                                                         \
@@ -142,7 +142,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     (to) = (from)->str_val;                                                    \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_BOOL(from, to, ...)                                             \
   do {                                                                         \
@@ -152,7 +152,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     (to) = __VA_ARGS__(from)->bool_val;                                        \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_TYPE(from, to, ty_name)                                         \
   do {                                                                         \
@@ -160,7 +160,7 @@ struct didclose_textdoc_params {
       DE_FAIL("deserialization of type '" #ty_name "' failed");                \
       return false;                                                            \
     }                                                                          \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_INT_FIELD(object, name, camel, req)                             \
   do {                                                                         \
@@ -182,7 +182,7 @@ struct didclose_textdoc_params {
     } else {                                                                   \
       memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_STR_FIELD(object, name, camel, req)                             \
   do {                                                                         \
@@ -204,7 +204,7 @@ struct didclose_textdoc_params {
     } else {                                                                   \
       memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_BOOL_FIELD(object, name, camel, req)                            \
   do {                                                                         \
@@ -226,7 +226,7 @@ struct didclose_textdoc_params {
     } else {                                                                   \
       name = false;                                                            \
     }                                                                          \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_VALUE_FIELD(object, name, camel, req)                           \
   do {                                                                         \
@@ -239,7 +239,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     name = val;                                                                \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_OBJECT_FIELD(object, name, camel, req)                          \
   do {                                                                         \
@@ -257,7 +257,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     name = val ? &val->obj_val : NULL;                                         \
-  } while (0);
+  } while (0)
 
 #define TRY_DE_TYPE_FIELD(object, ty_name, name, camel, req)                   \
   do {                                                                         \
@@ -272,7 +272,7 @@ struct didclose_textdoc_params {
     if (val && !try_de_##ty_name(ctx, val, &name)) {                           \
       return false;                                                            \
     }                                                                          \
-  } while (0);
+  } while (0)
 
 // if using `TYPE` you pass the type as a variadic arg
 #define TRY_DE_ARRAY_FIELD(de_ty, object, name, num_name, camel, req, ...)     \
@@ -305,7 +305,7 @@ struct didclose_textdoc_params {
                                                                                \
     name = (void *)arr_vals;                                                   \
     num_name = arr->num_values;                                                \
-  } while (0);
+  } while (0)
 
 #define REQ_METHODS                                                            \
   REQ_METHOD(INITIALIZE, "initialize")                                         \

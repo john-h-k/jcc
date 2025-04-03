@@ -1,18 +1,3 @@
-# TEMP: disable eep/riscv folders
-If:
-  PathMatch: eep.*
-Index:
-  Background: Skip
-
----
-
-If:
-  PathMatch: tests.*
-Index:
-  Background: Skip
-
----
-
 # Flags for .h files
 If:
   PathMatch: .*\.h
@@ -28,3 +13,27 @@ If:
 
 CompileFlags:
   Add: [-xc]
+
+---
+
+If:
+  PathMatch: tests.*
+Index:
+  Background: Skip
+
+---
+
+# Inlays not playing nicely with macros
+If:
+  PathMatch: src/lsp/lsp.c
+
+InlayHints:
+  Enabled: No
+
+---
+
+# TEMP: disable eep/riscv folders
+If:
+  PathMatch: eep.*
+Index:
+  Background: Skip

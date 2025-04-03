@@ -32,50 +32,50 @@ DECL_LOG_FN(slog)
 #define err_nl(...)                                                            \
   do {                                                                         \
     fprintf(stderr, "\n");                                                     \
-  } while (0);
+  } while (0)
 
 #define err(...)                                                               \
   do {                                                                         \
-    fprintf(stderr, PR_RED PR_BOLD "ERROR: " PR_RESET PR_BOLD);                                 \
+    fprintf(stderr, PR_RED PR_BOLD "ERROR: " PR_RESET PR_BOLD);                \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET "\n");                                            \
-  } while (0);
+  } while (0)
 
 #define errsl(...)                                                             \
   do {                                                                         \
-    fprintf(stderr, PR_RED PR_BOLD "ERROR: " PR_RESET PR_BOLD);                                 \
+    fprintf(stderr, PR_RED PR_BOLD "ERROR: " PR_RESET PR_BOLD);                \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET);                                                 \
-  } while (0);
+  } while (0)
 
 #define warn_nl(...)                                                           \
   do {                                                                         \
     fprintf(stderr, "\n");                                                     \
-  } while (0);
+  } while (0)
 
 #define warn(...)                                                              \
   do {                                                                         \
-    fprintf(stderr, PR_YELLOW PR_BOLD "WARNING: " PR_RESET PR_BOLD);                            \
+    fprintf(stderr, PR_YELLOW PR_BOLD "WARNING: " PR_RESET PR_BOLD);           \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET "\n");                                            \
-  } while (0);
+  } while (0)
 
 #define warnsl(...)                                                            \
   do {                                                                         \
-    fprintf(stderr, PR_YELLOW PR_BOLD "WARNING: " PR_RESET PR_BOLD);                            \
+    fprintf(stderr, PR_YELLOW PR_BOLD "WARNING: " PR_RESET PR_BOLD);           \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET);                                                 \
-  } while (0);
+  } while (0)
 
 #define info(...)                                                              \
   do {                                                                         \
     if (!log_enabled()) {                                                      \
       break;                                                                   \
     }                                                                          \
-    fprintf(stderr, PR_GREEN PR_BOLD "INFO: " PR_RESET PR_BOLD);                                \
+    fprintf(stderr, PR_GREEN PR_BOLD "INFO: " PR_RESET PR_BOLD);               \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET "\n");                                            \
-  } while (0);
+  } while (0)
 
 #define debug_enabled() log_enabled()
 #define debug_nl()                                                             \
@@ -84,17 +84,17 @@ DECL_LOG_FN(slog)
       break;                                                                   \
     }                                                                          \
     fprintf(stderr, "\n");                                                     \
-  } while (0);
+  } while (0)
 
 #define debug(...)                                                             \
   do {                                                                         \
     if (!log_enabled()) {                                                      \
       break;                                                                   \
     }                                                                          \
-    fprintf(stderr, PR_WHITE PR_BOLD "DEBUG: " PR_RESET PR_BOLD);                                \
+    fprintf(stderr, PR_WHITE PR_BOLD "DEBUG: " PR_RESET PR_BOLD);              \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, PR_RESET "\n");                                            \
-  } while (0);
+  } while (0)
 
 #define tracenl()                                                              \
   do {                                                                         \
@@ -102,7 +102,7 @@ DECL_LOG_FN(slog)
       break;                                                                   \
     }                                                                          \
     fprintf(stderr, "\n");                                                     \
-  } while (0);
+  } while (0)
 
 #define trace(...)                                                             \
   do {                                                                         \
@@ -111,18 +111,18 @@ DECL_LOG_FN(slog)
     }                                                                          \
     fprintf(stderr, PR_WHITE PR_BOLD "TRACE: " PR_RESET __VA_ARGS__);          \
     fprintf(stderr, PR_RESET "\n");                                            \
-  } while (0);
+  } while (0)
 
 #define slog(...)                                                              \
   do {                                                                         \
     fprintf(stderr, __VA_ARGS__);                                              \
     fprintf(stderr, "\n");                                                     \
-  } while (0);
+  } while (0)
 
 #define slogsl(...)                                                            \
   do {                                                                         \
     fprintf(stderr, __VA_ARGS__);                                              \
-  } while (0);
+  } while (0)
 #endif
 
 #undef DECL_LOG_FN
