@@ -175,7 +175,8 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     # -Wformat
     # -Wformat=2
     # -Wconversion
-    # -Wimplicit-fallthrough
+    -Wimplicit-fallthrough
+    -Wswitch
 
     # -Wimplicit
     # -Wincompatible-pointer-types

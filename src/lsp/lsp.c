@@ -3,6 +3,7 @@
 #include "../alloc.h"
 #include "../hashtbl.h"
 #include "../json.h"
+#include "../log.h"
 #include "../vector.h"
 #include "lsp_types.h"
 
@@ -19,6 +20,8 @@ struct lsp_context {
   struct vector *read_buf;
   struct hashtbl *obj_props;
   struct json_writer *writer;
+
+  bool shutdown_recv;
 
   FILE *in;
   FILE *out;
@@ -79,12 +82,31 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
   }
 }
 
+static void lsp_handle_msg(struct lsp_context *context,
+                           const struct req_msg *msg) {
+  switch (msg->method) {
+  case REQ_MSG_METHOD_INITIALIZE:
+    BUG("duplicate initialize message");
+  case REQ_MSG_METHOD_SHUTDOWN:
+  case REQ_MSG_METHOD_EXIT:
+    BUG("shutdown/exit methods should have been handled");
+  case REQ_MSG_METHOD_INITIALIZED:
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
+    (void)context;
+    break;
+  }
+}
+
 static struct req_msg lsp_read_msg(struct lsp_context *context) {
   vector_clear(context->read_buf);
 
   FILE *in = context->in;
 
   int c;
+
+  // FIXME: use Content-Length header to read in one go
 
   // find open bracket
   while ((c = fgetc(in)) != EOF) {
@@ -193,7 +215,7 @@ static void lsp_write_server_caps(struct lsp_context *ctx,
   lsp_write_buf(ctx);
 }
 
-void lsp_run(void) {
+int lsp_run(void) {
   fprintf(stderr, "JCC LSP mode\n");
   fprintf(stderr, "This is intended for consumption by an editor\n\n");
 
@@ -210,6 +232,7 @@ void lsp_run(void) {
       .obj_props = hashtbl_create_sized_str_keyed_in_arena(
           arena, sizeof(struct sized_str)),
       .writer = json_writer_create(),
+      .shutdown_recv = false,
       .in = in,
       .out = out,
       .log = log};
@@ -227,5 +250,18 @@ void lsp_run(void) {
   while (true) {
     headers = lsp_read_headers(&context);
     msg = lsp_read_msg(&context);
+
+    switch (msg.method) {
+    case REQ_MSG_METHOD_SHUTDOWN:
+      context.shutdown_recv = true;
+
+      info("LSP shutting down...");
+      fprintf(stderr, "LSP shutting down...");
+      break;
+    case REQ_MSG_METHOD_EXIT:
+      return context.shutdown_recv ? 0 : 1;
+    default:
+      lsp_handle_msg(&context, &msg);
+    }
   }
 }

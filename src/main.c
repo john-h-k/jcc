@@ -403,7 +403,7 @@ static bool try_get_language_for_file(struct path_components components,
 }
 
 static int jcc_main(int argc, char **argv) {
-  lsp_run();
+  return lsp_run();
 
   int exc = 1;
 
