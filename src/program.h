@@ -21,6 +21,9 @@ struct text_pos {
   size_t col;
 };
 
+// FIXME: You cannot always rely on zero-length spans to have valid positions
+// (because they don't have a token to grab position from)
+// we should fix this
 struct text_span {
   struct text_pos start;
   struct text_pos end;

@@ -623,16 +623,14 @@ void lex_peek_token(struct lexer *lexer, struct lex_token *token) {
 // just hacking it into text pos as not to need to change `parse.c`
 struct lex_pos lex_get_position(struct lexer *lexer) {
   // shouldn't really be last tex pos... should be "next"
-  return (struct lex_pos){.id = lexer->pos,
-                          .text_pos = lex_get_last_text_pos(lexer)};
+  return (struct lex_pos){.id = lexer->pos};
 }
 
 void lex_backtrack(struct lexer *lexer, struct lex_pos position) {
   lexer->pos = position.id;
-  lexer->last_text_pos = position.text_pos;
 }
 
-struct text_pos lex_get_last_text_pos(const struct lexer *lexer) {
+struct text_pos lex_cur_pos(struct lexer *lexer) {
   return lexer->last_text_pos;
 }
 
