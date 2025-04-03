@@ -22,7 +22,7 @@ struct parser {
   struct compiler_diagnostics *diagnostics;
 };
 
-enum parser_create_result parser_create(struct program *program,
+enum parser_create_result parser_create(struct program program,
                                         struct preproc *preproc,
                                         enum compile_preproc_mode mode,
                                         struct compiler_diagnostics *diagnostics,

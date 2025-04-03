@@ -38,6 +38,8 @@
 
 /******************************** C Standard ********************************/
 
+// FIXME: switch to using comparison based ones everywhere (else we will stop using C23 features in C26 etc)
+
 #if __STDC_VERSION__ >= 202311L
 #define STDC_C23 1
 #elif __STDC_VERSION__ >= 201710L

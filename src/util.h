@@ -108,6 +108,14 @@ typedef unsigned _BitInt(128) uint128_t;
 #define ISPOW2(value) (popcntl((value)) == 1)
 #define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
 
+#if STDC_C23
+#define MAYBE_UNUSED [[maybe_unused]]
+#elif HAS_ATTRIBUTE(__maybe_unused__)
+#define MAYBE_UNUSED __attribute__((__maybe_unused__))
+#else
+#define MAYBE_UNUSED
+#endif
+
 #if STDC_C23 && __GNUC__
 #define UNUSED_ARG(arg) [gnu::unused] arg
 #define UNUSED [gnu::unused]
@@ -281,6 +289,8 @@ static inline void invariant_assert(bool b, const char *msg, ...) {
 #else
 #define BREAKPOINT() raise(SIGINT)
 #endif
+
+#define MEMCLR(x) memset((&x), 0, sizeof((x)))
 
 static inline unsigned long long rotateright64(unsigned long long value,
                                                unsigned int amount) {

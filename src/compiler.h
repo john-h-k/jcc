@@ -96,6 +96,9 @@ struct compile_file {
   };
 };
 
+#define COMPILE_FILE_NONE ((struct compile_file){.ty = COMPILE_FILE_TY_NONE})
+#define COMPILE_FILE_STDOUT ((struct compile_file){.ty = COMPILE_FILE_TY_STDOUT})
+
 FILE *compiler_open_file(struct compile_file file);
 
 struct compile_args {
@@ -106,6 +109,8 @@ struct compile_args {
   enum codegen_flags codegen_flags;
 
   struct hashtbl *log_symbols;
+
+  bool print_diagnostics;
 
   bool preproc_only;
   bool lex_only;
@@ -152,15 +157,22 @@ enum compile_preproc_mode {
 
 struct target;
 
+struct compiler_create_args {
+  struct program program;
+  struct fcache *fcache;
+  const struct target *target;
+  struct compile_file output;
+  const char *working_dir;
+  struct compile_args args;
+  enum compile_preproc_mode mode;
+};
+
 enum compiler_create_result
-compiler_create(struct program *program, struct fcache *fcache,
-                const struct target *target, struct compile_file output,
-                const char *working_dir, const struct compile_args *args,
-                enum compile_preproc_mode mode, struct compiler **compiler);
+compiler_create(const struct compiler_create_args *args, struct compiler **compiler);
 
 enum compile_result compile(struct compiler *compiler);
 
-struct compiler_diagnostics compiler_get_diagnostics(struct compiler *compiler);
+struct compiler_diagnostics *compiler_get_diagnostics(struct compiler *compiler);
 
 void free_compiler(struct compiler **compiler);
 

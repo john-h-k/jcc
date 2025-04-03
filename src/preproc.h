@@ -36,7 +36,7 @@ struct preproc_create_args {
   const char *fixed_timestamp;
 };
 
-enum preproc_create_result preproc_create(struct program *program,
+enum preproc_create_result preproc_create(struct program program,
                                           struct fcache *fcache,
                                           struct preproc_create_args args,
                                           struct compiler_diagnostics *diagnostics,

@@ -46,49 +46,46 @@ struct compiler {
 };
 
 enum compiler_create_result
-compiler_create(struct program *program, struct fcache *fcache,
-                const struct target *target, struct compile_file output,
-                const char *path, const struct compile_args *args,
-                enum compile_preproc_mode mode, struct compiler **compiler) {
+compiler_create(const struct compiler_create_args *args,
+                struct compiler **compiler) {
   *compiler = nonnull_malloc(sizeof(**compiler));
 
-  (*compiler)->fcache = fcache;
-  (*compiler)->args = *args;
-  (*compiler)->target = target;
-  (*compiler)->output = output;
-  (*compiler)->mode = mode;
+  (*compiler)->program = args->program;
+  (*compiler)->fcache = args->fcache;
+  (*compiler)->args = args->args;
+  (*compiler)->target = args->target;
+  (*compiler)->output = args->output;
+  (*compiler)->mode = args->mode;
   (*compiler)->diagnostics = compiler_diagnostics_create();
 
-  (*compiler)->program = *program;
-
   struct preproc_create_args preproc_args = {
-      .target = args->target,
-      .path = path,
-      .num_sys_include_paths = args->num_sys_include_paths,
-      .sys_include_paths = args->sys_include_paths,
-      .num_include_paths = args->num_include_paths,
-      .include_paths = args->include_paths,
-      .num_defines = args->num_defines,
-      .defines = args->defines,
-      .verbose = args->verbose,
-      .fixed_timestamp = args->fixed_timestamp,
+      .target = args->args.target,
+      .path = args->working_dir,
+      .num_sys_include_paths = args->args.num_sys_include_paths,
+      .sys_include_paths = args->args.sys_include_paths,
+      .num_include_paths = args->args.num_include_paths,
+      .include_paths = args->args.include_paths,
+      .num_defines = args->args.num_defines,
+      .defines = args->args.defines,
+      .verbose = args->args.verbose,
+      .fixed_timestamp = args->args.fixed_timestamp,
   };
 
-  if (preproc_create(program, fcache, preproc_args,
+  if (preproc_create(args->program, args->fcache, preproc_args,
                      (*compiler)->diagnostics,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (parser_create(program, (*compiler)->preproc, mode,
+  if (parser_create(args->program, (*compiler)->preproc, args->mode,
                     (*compiler)->diagnostics,
                     &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (typechk_create(target, args, (*compiler)->parser,
+  if (typechk_create(args->target, &args->args, (*compiler)->parser,
                      (*compiler)->diagnostics,
                      &(*compiler)->typechk) != TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
@@ -257,8 +254,11 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   }
 }
 
-static void
-compiler_print_diagnostics(struct compiler *compiler) {
+static void compiler_print_diagnostics(struct compiler *compiler) {
+  if (!compiler->args.print_diagnostics) {
+    return;
+  }
+
   struct compiler_diagnostics *diagnostics = compiler->diagnostics;
 
   struct compiler_diagnostics_iter iter =
@@ -266,33 +266,19 @@ compiler_print_diagnostics(struct compiler *compiler) {
   struct compiler_diagnostic diagnostic;
 
   while (compiler_diagnostics_iter_next(&iter, &diagnostic)) {
-    struct text_span span;
-    struct text_pos point;
+    struct text_span span = diagnostic.span;
+    struct text_pos point = diagnostic.point;
+    const char *message = diagnostic.message;
     bool has_pos;
-    const char *message;
 
     switch (diagnostic.ty.class) {
     case COMPILER_DIAGNOSTIC_CLASS_PREPROC:
-      has_pos = true;
-      message = diagnostic.preproc_diagnostic.message;
-      span = diagnostic.preproc_diagnostic.span;
-      point = diagnostic.preproc_diagnostic.point;
-      break;
     case COMPILER_DIAGNOSTIC_CLASS_PARSE:
-      has_pos = true;
-      message = diagnostic.parse_diagnostic.message;
-      span = diagnostic.parse_diagnostic.span;
-      point = diagnostic.parse_diagnostic.point;
-      break;
     case COMPILER_DIAGNOSTIC_CLASS_SEMANTIC:
       has_pos = true;
-      message = diagnostic.semantic_diagnostic.message;
-      span = diagnostic.semantic_diagnostic.span;
-      point = diagnostic.semantic_diagnostic.point;
       break;
     case COMPILER_DIAGNOSTIC_CLASS_INTERNAL:
       has_pos = false;
-      message = diagnostic.internal_diagnostic.message;
       break;
     }
 
@@ -352,7 +338,7 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
   }
 
   struct lexer *lexer;
-  lexer_create(&compiler->program, compiler->preproc, mode, &lexer);
+  lexer_create(compiler->program, compiler->preproc, mode, &lexer);
 
   lex_all(lexer);
 
@@ -722,7 +708,7 @@ compile_stage_build_object(struct compiler *compiler,
     PROFILE_BEGIN(lo);                                                         \
     enum compile_result result = compile_stage_##lo(compiler, __VA_ARGS__);    \
     PROFILE_END(lo);                                                           \
-    if (result != COMPILE_RESULT_SUCCESS) {                                 \
+    if (result != COMPILE_RESULT_SUCCESS) {                                    \
       return result;                                                           \
     }                                                                          \
   }
@@ -812,6 +798,11 @@ enum compile_result compile(struct compiler *compiler) {
   codegen_free(&codegen_unit);
 
   return COMPILE_RESULT_SUCCESS;
+}
+
+struct compiler_diagnostics *
+compiler_get_diagnostics(struct compiler *compiler) {
+  return compiler->diagnostics;
 }
 
 void free_compiler(struct compiler **compiler) {
