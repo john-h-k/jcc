@@ -8,7 +8,7 @@
 
 #include <ctype.h>
 
-struct json_context {
+struct json_ctx {
   struct arena_allocator *arena;
 };
 
@@ -24,7 +24,7 @@ static size_t json_parse_ws(struct sized_str *str) {
   return rd;
 }
 
-static struct sized_str process_raw_string(struct json_context *ctx,
+static struct sized_str process_raw_string(struct json_ctx *ctx,
                                            struct sized_str value) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
@@ -104,8 +104,7 @@ static struct sized_str process_raw_string(struct json_context *ctx,
   return (struct sized_str){.str = vector_head(buff), .len = str_len};
 }
 
-static size_t json_parse_chunk(struct json_context *context,
-                               struct sized_str str,
+static size_t json_parse_chunk(struct json_ctx *context, struct sized_str str,
                                struct json_result *result) {
   size_t rd = 0;
 
@@ -318,7 +317,7 @@ struct json_result json_parse(struct sized_str str) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
-  struct json_context ctx = {.arena = arena};
+  struct json_ctx ctx = {.arena = arena};
 
   struct json_result result;
   size_t rd = json_parse_chunk(&ctx, str, &result);
@@ -434,10 +433,17 @@ void json_writer_free(struct json_writer **writer) {
 }
 
 struct sized_str json_writer_get_buf(struct json_writer *writer) {
+  // NOTE: `clear` invalidates this buffer!
+
   return (struct sized_str){
       .str = vector_head(writer->buffer),
       .len = vector_length(writer->buffer),
   };
+}
+
+void json_writer_clear(struct json_writer *writer) {
+  vector_clear(writer->buffer);
+  writer->needs_sep = false;
 }
 
 void json_writer_write_null(struct json_writer *writer) {
@@ -559,4 +565,20 @@ void json_writer_write_begin_arr(struct json_writer *writer) {
 
 void json_writer_write_end_arr(struct json_writer *writer) {
   json_writer_end_agg(writer, ']');
+}
+
+const char *json_value_ty_name(enum json_value_ty ty) {
+  static const char *names[] = {
+    [JSON_VALUE_TY_NULL] = "null",
+    [JSON_VALUE_TY_BOOL] = "bool",
+    [JSON_VALUE_TY_NUMBER] = "number",
+    [JSON_VALUE_TY_STRING] = "string",
+    [JSON_VALUE_TY_ARRAY] = "array",
+    [JSON_VALUE_TY_OBJECT] = "object",
+  };
+
+  size_t idx = ty;
+  DEBUG_ASSERT(idx < ARR_LENGTH(names), "invalid json value ty");
+
+  return names[idx];
 }

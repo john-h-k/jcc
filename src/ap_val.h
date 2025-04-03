@@ -46,6 +46,7 @@ struct ap_int ap_int_not(struct ap_int value);
 
 // TODO: get rid of this so everything uses ap_val
 unsigned long long ap_int_as_ull(struct ap_int value);
+long long ap_int_as_ll(struct ap_int value);
 
 /************************** ap_float **************************/
 
@@ -122,7 +123,7 @@ struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits);
 bool ap_val_nonzero(struct ap_val value);
 bool ap_val_iszero(struct ap_val value);
 
-size_t ap_val_as_size_t(struct ap_val value);
+long long ap_val_as_ll(struct ap_val value);
 double ap_val_as_double(struct ap_val value);
 
 struct ap_val ap_val_add(struct ap_val lhs, struct ap_val rhs);

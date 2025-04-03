@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// TODO: kill this type
 struct program {
   const char *text;
 };

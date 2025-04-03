@@ -365,6 +365,17 @@ unsigned long long ap_int_as_ull(struct ap_int value) {
   return value.chunks[0];
 }
 
+long long ap_int_as_ll(struct ap_int value) {
+  if ((value.chunks[1] || value.chunks[2] || value.chunks[3]) &&
+      !(value.chunks[1] == ULLONG_MAX && value.chunks[2] == ULLONG_MAX &&
+        value.chunks[3] == ULLONG_MAX)) {
+    // if (value.chunks[1] || value.chunks[2] || value.chunks[3]) {
+    TODO("shifts for large/negative rhs");
+  }
+
+  return value.chunks[0];
+}
+
 struct ap_int ap_int_lshift(struct ap_int lhs, struct ap_int rhs) {
   CHECK_BIN();
 
@@ -817,7 +828,7 @@ void ap_val_fprintf(FILE *file, struct ap_val value) {
   }
 }
 
-size_t ap_val_as_size_t(struct ap_val value) {
+long long ap_val_as_ll(struct ap_val value) {
   DEBUG_ASSERT(value.ty == AP_VAL_TY_INT, "expected int");
   return ap_int_as_ull(value.ap_int);
 }

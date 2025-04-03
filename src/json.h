@@ -63,6 +63,8 @@ struct json_result {
   };
 };
 
+const char *json_value_ty_name(enum json_value_ty ty);
+
 struct json_result json_parse(struct sized_str str);
 void json_print_result(FILE *file, const struct json_result *result);
 void json_print_value(FILE *file, const struct json_value *value);
@@ -89,6 +91,17 @@ void json_writer_write_end_obj(struct json_writer *writer);
 void json_writer_write_begin_arr(struct json_writer *writer);
 void json_writer_write_end_arr(struct json_writer *writer);
 struct sized_str json_writer_get_buf(struct json_writer *writer);
+void json_writer_clear(struct json_writer *writer);
+
+#define JSON_OBJECT(writer, block)                                             \
+  json_writer_write_begin_obj(writer);                                         \
+  block;                                                                       \
+  json_writer_write_end_obj(writer);                                      \
+
+#define JSON_ARRAY(writer, block)                                             \
+  json_writer_write_begin_arr(writer);                                         \
+  block;                                                                       \
+  json_writer_write_end_arr(writer);                                      \
 
 #define JSON_WRITE(writer, value)                                              \
   _Generic((value),                                                            \
@@ -97,6 +110,9 @@ struct sized_str json_writer_get_buf(struct json_writer *writer);
       long long: json_writer_write_integer,                                    \
       double: json_writer_write_double,                                        \
       struct sized_str: json_writer_write_string)((writer), (value))
+
+#define JSON_WRITE_FIELD_NAME(writer, name)                                    \
+  json_writer_write_field_name((writer), MK_SIZED((name)));
 
 #define JSON_WRITE_FIELD(writer, name, value)                                  \
   do {                                                                         \

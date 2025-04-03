@@ -29,8 +29,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(WARN, "warn-directive", warn_directive, WARN_DIRECTIVE,              \
           const char *)                                                        \
   DIAG_FN(ERROR, "error-directive", error_directive, ERROR_DIRECTIVE,          \
-          const char *) \
-  DIAG_FN(ERROR, "bad-token-in-cond", bad_token_in_cond, BAD_TOKEN_IN_COND,          \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "bad-token-in-cond", bad_token_in_cond, BAD_TOKEN_IN_COND,    \
           const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
@@ -51,10 +51,10 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
-  DIAG_FN(WARN, "empty-init-c23", empty_init_c23,                \
-          EMPTY_INIT_C23, const char *)                                 \
-  DIAG_FN(WARN, "too-many-inits", too_many_inits,                \
-          TOO_MANY_INITS, const char *)                                 \
+  DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
+          const char *)                                                        \
+  DIAG_FN(WARN, "too-many-inits", too_many_inits, TOO_MANY_INITS,              \
+          const char *)                                                        \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
           POINTER_TYPE_MISMATCH, const char *)                                 \
   DIAG_FN(ERROR, "typecheck-sub-ptr-compatible", pointer_sub_types,            \
@@ -145,12 +145,6 @@ enum preproc_diagnostic_ty {
 
 struct preproc_diagnostic {
   enum preproc_diagnostic_ty ty;
-
-  // puts a caret here
-  struct text_pos point;
-  struct text_span span;
-
-  const char *message;
 };
 
 enum parse_diagnostic_ty {
@@ -163,12 +157,6 @@ enum parse_diagnostic_ty {
 
 struct parse_diagnostic {
   enum parse_diagnostic_ty ty;
-
-  // puts a caret here
-  struct text_pos point;
-  struct text_span span;
-
-  const char *message;
 };
 
 enum semantic_diagnostic_ty {
@@ -181,12 +169,6 @@ enum semantic_diagnostic_ty {
 
 struct semantic_diagnostic {
   enum semantic_diagnostic_ty ty;
-
-  // puts a caret here
-  struct text_pos point;
-  struct text_span span;
-
-  const char *message;
 };
 
 struct internal_diagnostic {
@@ -219,38 +201,38 @@ COMPILER_SEMANTIC_DIAGNOSTIC_LIST
 
 #undef DIAG_FN
 
-#define MK_PREPROC_DIAGNOSTIC(name, lo, span_val, point_val, value)             \
+#define MK_PREPROC_DIAGNOSTIC(name, lo, span_val, point_val, value)            \
   (struct compiler_diagnostic) {                                               \
-    .ty = DIAGNOSTIC_PREPROC_##name, .preproc_diagnostic = {                      \
-      .ty = PREPROC_DIAGNOSTIC_TY_##name,                                        \
-      .message = value,                                                        \
-      .span = span_val,                                                        \
-      .point = point_val,                                                      \
+    .message = value, .span = span_val, .point = point_val,                    \
+    .ty = DIAGNOSTIC_PREPROC_##name, .preproc_diagnostic = {                   \
+      .ty = PREPROC_DIAGNOSTIC_TY_##name,                                      \
     }                                                                          \
   }
 
 #define MK_PARSER_DIAGNOSTIC(name, lo, span_val, point_val, value)             \
   (struct compiler_diagnostic) {                                               \
+    .message = value, .span = span_val, .point = point_val,                    \
     .ty = DIAGNOSTIC_PARSER_##name, .parse_diagnostic = {                      \
       .ty = PARSE_DIAGNOSTIC_TY_##name,                                        \
-      .message = value,                                                        \
-      .span = span_val,                                                        \
-      .point = point_val,                                                      \
     }                                                                          \
   }
 
 #define MK_SEMANTIC_DIAGNOSTIC(name, lo, span_val, point_val, value)           \
   (struct compiler_diagnostic) {                                               \
+    .message = value, .span = span_val, .point = point_val,                    \
     .ty = DIAGNOSTIC_SEMANTIC_##name, .semantic_diagnostic = {                 \
       .ty = SEMANTIC_DIAGNOSTIC_TY_##name,                                     \
-      .message = value,                                                        \
-      .span = span_val,                                                        \
-      .point = point_val,                                                      \
     }                                                                          \
   }
 
 struct compiler_diagnostic {
   struct compiler_diagnostic_ty ty;
+
+  // puts a caret here
+  struct text_pos point;
+  struct text_span span;
+
+  const char *message;
 
   union {
     struct preproc_diagnostic preproc_diagnostic;

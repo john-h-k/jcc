@@ -15,7 +15,7 @@
 struct lexer {
   struct arena_allocator *arena;
 
-  struct program *program;
+  struct program program;
   struct preproc *preproc;
 
   // once we generate a token, we put it here
@@ -32,7 +32,7 @@ struct lexer {
 
 static struct hashtbl *KEYWORDS = NULL;
 
-enum lex_create_result lexer_create(struct program *program,
+enum lex_create_result lexer_create(struct program program,
                                     struct preproc *preproc,
                                     enum compile_preproc_mode mode,
                                     struct lexer **lexer) {

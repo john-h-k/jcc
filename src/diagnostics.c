@@ -42,30 +42,20 @@ struct compiler_diagnostics {
 static void hash_compiler_diagnostic(struct hasher *hasher, const void *obj) {
   const struct compiler_diagnostic *diag = obj;
 
-  if (diag->ty.class == COMPILER_DIAGNOSTIC_CLASS_PARSE) {
-    // prevents multiple errors on same line
-    // TODO: do better dedupe logic. the aim is to prevent duplicate errors when
-    // parser generates errors for the same thing twice due to different parsing
-    // paths
-    hasher_hash_integer(hasher, diag->parse_diagnostic.span.start.line,
-                        sizeof(diag->parse_diagnostic.span.start.line));
-  } else {
-    hasher_hash_integer(hasher, diag->ty.class, sizeof(diag->ty.class));
-    hasher_hash_integer(hasher, diag->ty.severity, sizeof(diag->ty.severity));
-  }
+  // prevents multiple errors on same line
+  // TODO: do better dedupe logic. the aim is to prevent duplicate errors when
+  // parser generates errors for the same thing twice due to different parsing
+  // paths
+  hasher_hash_integer(hasher, diag->span.start.line,
+                      sizeof(diag->span.start.line));
 }
 
 static bool eq_compiler_diagnostic(const void *l, const void *r) {
   const struct compiler_diagnostic *ld = l;
   const struct compiler_diagnostic *rd = r;
 
-  if (ld->ty.class == COMPILER_DIAGNOSTIC_CLASS_PARSE &&
-      rd->ty.class == ld->ty.class) {
-    return ld->parse_diagnostic.span.start.line ==
-           rd->parse_diagnostic.span.start.line;
-  } else {
-    return false;
-  }
+  return ld->span.start.line ==
+         rd->span.start.line;
 }
 
 struct compiler_diagnostics *compiler_diagnostics_create(void) {

@@ -175,7 +175,7 @@ struct lex_pos {
 
 struct lexer;
 
-enum lex_create_result lexer_create(struct program *program,
+enum lex_create_result lexer_create(struct program program,
                                     struct preproc *preproc,
                                     enum compile_preproc_mode mode,
                                     struct lexer **lexer);

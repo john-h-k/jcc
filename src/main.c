@@ -276,10 +276,13 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   // the original reason is that e.g `parsed_args` has an `arch` and a `target`
   // whereas `compile_args` only has `target`, but it is a hassle
   *compile_args = (struct compile_args){
+      // don't print diagnostics in LSP context (it will consume them itself)
+      .print_diagnostics = args->driver == JCC_DRIVER_COMPILER,
+
       .preproc_only = args->preprocess,
       .lex_only = args->lex_only,
       .parse_only = args->parse_only,
-      .syntax_only = args->syntax_only,
+      .syntax_only = args->syntax_only || args->driver == JCC_DRIVER_LSP,
       .build_asm_file = args->assembly,
       .build_object_file = args->object,
       .codegen_flags = args->codegen_flags,
@@ -589,9 +592,17 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 
     PROFILE_BEGIN(create_compiler);
 
-    if (compiler_create(&program, fcache, target, file, source_path,
-                        &compile_args, mode,
-                        &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
+    struct compiler_create_args comp_args = {
+      .program = program,
+      .fcache = fcache,
+      .target = target,
+      .args = compile_args,
+      .working_dir = source_path,
+      .mode = mode,
+      .output = file
+    };
+
+    if (compiler_create(&comp_args, &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
       goto exit;

@@ -335,7 +335,7 @@ static bool is_preproc_number_char(char c) {
 }
 
 enum preproc_create_result
-preproc_create(struct program *program, struct fcache *fcache,
+preproc_create(struct program program, struct fcache *fcache,
                struct preproc_create_args args,
                struct compiler_diagnostics *diagnostics,
                struct preproc **preproc) {
@@ -394,7 +394,7 @@ preproc_create(struct program *program, struct fcache *fcache,
 
   p->texts = vector_create(sizeof(struct preproc_text));
 
-  struct preproc_text text = create_preproc_text(p, program->text, args.path);
+  struct preproc_text text = create_preproc_text(p, program.text, args.path);
   vector_push_back(p->texts, &text);
 
   p->line_has_nontrivial_token = false;
