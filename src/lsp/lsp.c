@@ -35,29 +35,40 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
   struct lsp_headers headers = {.content_length = 0};
 
   while (true) {
-    int c0 = fgetc(in);
-    int c1 = fgetc(in);
-
-    if (c0 == '\r' && c1 == '\n') {
-      return headers;
-    }
-
     // header can't be more than 40 long i don't think
-    char buffer[64] = {(char)c0, (char)c1};
-    if (!fscanf(in, "%61[^:]: ", &buffer[2])) {
+    // so this _should_ be big enough
+    char buffer[128];
+    if (!fgets(buffer, sizeof(buffer), context->in)) {
       BUG("handle bad lsp message");
     }
 
-    fprintf(log, "Header %s\n", buffer);
+    if (buffer[0] == '\r' && buffer[1] == '\n') {
+      return headers;
+    }
+
+    size_t len = strlen(buffer);
+
+    char *brk = strchr(buffer, ':');
+    if (!brk) {
+      BUG("malformed header");
+    }
+
+    size_t header_len = brk - buffer;
+
+    fprintf(log, "Header %.*s\n", (int)header_len, buffer);
 
     // FIXME: should be case insensitive
-    if (!strcmp(buffer, "Content-Length")) {
-      // for some reason adding `\r\n` fails?
-      // either helix LSP isn't sending the second one or we are doing logic
-      // wrong
-      invariant_assert(fscanf(in, "%zu", &headers.content_length),
-                       "'Content-Length' had invalid value");
-    } else if (!strcmp(buffer, "Content-Type")) {
+    if (!strncmp(buffer, "Content-Length", header_len)) {
+      unsigned long long length;
+
+      size_t val_len = len - header_len - /* ': ' */ 2 - /* ending crlf */ 2;
+
+      if (!try_parse_integer(brk + 2, val_len, &length)) {
+        BUG("malformed Content-Length value");
+      }
+
+      headers.content_length = length;
+    } else if (!strncmp(buffer, "Content-Type", header_len)) {
       // ignore
       fprintf(log, "Content-Type: ");
 
@@ -99,44 +110,13 @@ static void lsp_handle_msg(struct lsp_context *context,
   }
 }
 
-static struct req_msg lsp_read_msg(struct lsp_context *context) {
+static struct req_msg lsp_read_msg(struct lsp_context *context,
+                                   const struct lsp_headers *headers) {
   vector_clear(context->read_buf);
+  vector_extend(context->read_buf, NULL, headers->content_length);
 
-  FILE *in = context->in;
-
-  int c;
-
-  // FIXME: use Content-Length header to read in one go
-
-  // find open bracket
-  while ((c = fgetc(in)) != EOF) {
-    if (c == '{') {
-      ungetc(c, in);
-      break;
-    }
-  }
-
-  int depth = 0;
-
-  // find match
-  while ((c = fgetc(in)) != EOF) {
-    vector_push_back(context->read_buf, &(char){(char)c});
-
-    switch (c) {
-    case '}':
-      depth--;
-      break;
-    case '{':
-      depth++;
-      break;
-    default:
-      break;
-    }
-
-    if (!depth) {
-      break;
-    }
-  }
+  fread(vector_head(context->read_buf), 1, headers->content_length,
+        context->in);
 
   fprintf(context->log, "object: \n");
   fprintf(context->log, "%.*s\n", (int)vector_length(context->read_buf),
@@ -192,7 +172,6 @@ static void lsp_write_server_caps(struct lsp_context *ctx,
       {
         // ServerInfo
 
-        // FIXME: need to check this is available
         JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
         JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
       }
@@ -222,10 +201,6 @@ int lsp_run(void) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
-  FILE *in = stdin;
-  FILE *out = stdout;
-  FILE *log = stderr;
-
   struct lsp_context context = {
       .arena = arena,
       .read_buf = vector_create_in_arena(sizeof(char), arena),
@@ -233,14 +208,12 @@ int lsp_run(void) {
           arena, sizeof(struct sized_str)),
       .writer = json_writer_create(),
       .shutdown_recv = false,
-      .in = in,
-      .out = out,
-      .log = log};
+      .in = stdin,
+      .out = stdout,
+      .log = stderr};
 
   struct lsp_headers headers = lsp_read_headers(&context);
-  (void)headers;
-
-  struct req_msg msg = lsp_read_msg(&context);
+  struct req_msg msg = lsp_read_msg(&context, &headers);
 
   invariant_assert(msg.method == REQ_MSG_METHOD_INITIALIZE,
                    "expected 'initialize' method as first message from client");
@@ -249,7 +222,7 @@ int lsp_run(void) {
 
   while (true) {
     headers = lsp_read_headers(&context);
-    msg = lsp_read_msg(&context);
+    msg = lsp_read_msg(&context, &headers);
 
     switch (msg.method) {
     case REQ_MSG_METHOD_SHUTDOWN:

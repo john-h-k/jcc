@@ -61,7 +61,7 @@ struct didclose_textdoc_params {
     if (val) {                                                                 \
       name = ap_val_as_size_t(val->num_val);                                   \
     } else {                                                                   \
-      memset(&name, 0, sizeof(name));                                           \
+      memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
   } while (0);
 
@@ -75,7 +75,7 @@ struct didclose_textdoc_params {
     if (val) {                                                                 \
       name = val->str_val;                                                     \
     } else {                                                                   \
-      memset(&name, 0, sizeof(name));                                           \
+      memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
   } while (0);
 
@@ -109,19 +109,24 @@ struct didclose_textdoc_params {
     if (val && !try_de_##ty_name(val, &name)) {                                \
       return false;                                                            \
     } else {                                                                   \
-      memset(&name, 0, sizeof(name));                                           \
+      memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
   } while (0);
 
-enum req_msg_method {
-  REQ_MSG_METHOD_INITIALIZE,
-  REQ_MSG_METHOD_INITIALIZED,
-  REQ_MSG_METHOD_SHUTDOWN,
-  REQ_MSG_METHOD_EXIT,
+#define REQ_METHODS                                                 \
+  REQ_METHOD(INITIALIZE, "initialize")                          \
+  REQ_METHOD(INITIALIZED, "initialized")                        \
+  REQ_METHOD(SHUTDOWN, "shutdown")                              \
+  REQ_METHOD(EXIT, "exit")                                      \
+                                                                               \
+  REQ_METHOD(TEXTDOCUMENT_DIDOPEN, "textDocument/didOpen")      \
+  REQ_METHOD(TEXTDOCUMENT_DIDCLOSE, "textDocument/didClose")
 
-  REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN,
-  REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE,
+#define REQ_METHOD(name, _) REQ_MSG_METHOD_ ## name,
+enum req_msg_method {
+  REQ_METHODS
 };
+#undef REQ_METHOD
 
 struct req_msg {
   size_t id;

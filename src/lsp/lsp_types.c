@@ -43,7 +43,7 @@ try_de_didopen_textdoc_params(const struct json_value *value,
 
 static bool
 try_de_didclose_textdoc_params(const struct json_value *value,
-                              struct didclose_textdoc_params *params) {
+                               struct didclose_textdoc_params *params) {
   *params = (struct didclose_textdoc_params){0};
 
   json_print_value(stderr, value);
@@ -121,13 +121,9 @@ bool try_de_req_msg(const struct json_value *value, struct req_msg *msg) {
     hashtbl_insert(METHODS, &k, &v);                                           \
   } while (0);
 
-    METHOD("initialize", REQ_MSG_METHOD_INITIALIZE);
-    METHOD("initialized", REQ_MSG_METHOD_INITIALIZED);
-    METHOD("shutdown", REQ_MSG_METHOD_SHUTDOWN);
-    METHOD("exit", REQ_MSG_METHOD_EXIT);
-
-    METHOD("textDocument/didOpen", REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN);
-    METHOD("textDocument/didClose", REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE);
+#define REQ_METHOD(name, str) METHOD(str, REQ_MSG_METHOD_##name);
+    REQ_METHODS
+#undef REQ_METHOD
   }
 
   *msg = (struct req_msg){0};
@@ -165,6 +161,7 @@ bool try_de_req_msg(const struct json_value *value, struct req_msg *msg) {
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
     return try_de_didopen_textdoc_params(params, &msg->didopen_textdoc_params);
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
-    return try_de_didclose_textdoc_params(params, &msg->didclose_textdoc_params);
+    return try_de_didclose_textdoc_params(params,
+                                          &msg->didclose_textdoc_params);
   }
 }

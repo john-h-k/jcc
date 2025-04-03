@@ -525,7 +525,7 @@ _invoke-subcommand() {
         # we should probably setup a scripts or bin folder to keep them and have a sep script there
         # but for now, do this "auto-run" if the first argument is a flag OR a file
         if [[ -f "$CALLER_DIR$func" || "$func" == -* ]]; then
-            run "${@}"
+            run "$func" "$@"
             return $?
         fi
 
