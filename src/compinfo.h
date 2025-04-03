@@ -6,6 +6,7 @@
 #endif
 
 #define JCC_VERSION "0.0.1"
+#define JCC_VERSION_INT 1
 
 // information about the compilation of JCC, e.g arch it was built for, OS, C
 // version

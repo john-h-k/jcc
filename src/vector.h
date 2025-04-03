@@ -10,7 +10,7 @@
     (num) = vector_length((vec));                                              \
     (p) = buf;                                                                 \
     vector_free(&(vec));                                                       \
-  } while (0);
+  } while (0)
 
 struct vector;
 
@@ -31,7 +31,7 @@ void vector_ensure_capacity(struct vector *v, size_t capacity);
 //     do {\
 //       typeof(data) d = data; \
 //       vector_push_back(v, &d); \
-//     } while (0);
+//     } while (0)
 //
 // (C11)
 //   #define VECTOR_PUSH_BACK(v, data) \

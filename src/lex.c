@@ -49,7 +49,7 @@ enum lex_create_result lexer_create(struct program program,
     };                                                                         \
     enum lex_token_ty v = ty;                                                  \
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
-  } while (0);
+  } while (0)
 
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
@@ -241,13 +241,15 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 
     if (char_escaped) {
 #define PUSH_CHAR(ch)                                                          \
-  if (is_wide) {                                                               \
-    int32_t pc = (uint32_t)(unsigned char)ch;                                  \
-    vector_push_back(buff, &pc);                                               \
-  } else {                                                                     \
-    char pc = (char)ch;                                                        \
-    vector_push_back(buff, &pc);                                               \
-  }
+  do {                                                                         \
+    if (is_wide) {                                                             \
+      int32_t pc = (uint32_t)(unsigned char)ch;                                \
+      vector_push_back(buff, &pc);                                             \
+    } else {                                                                   \
+      char pc = (char)ch;                                                      \
+      vector_push_back(buff, &pc);                                             \
+    }                                                                          \
+  } while (0)
 #define ADD_ESCAPED(ch, esc)                                                   \
   case ch: {                                                                   \
     PUSH_CHAR(esc);                                                            \

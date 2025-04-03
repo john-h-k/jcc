@@ -202,7 +202,7 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value, str
     };                                                                         \
     enum req_msg_method v = ty;                                                \
     hashtbl_insert(METHODS, &k, &v);                                           \
-  } while (0);
+  } while (0)
 
 #define REQ_METHOD(name, str) METHOD(str, REQ_MSG_METHOD_##name);
     REQ_METHODS

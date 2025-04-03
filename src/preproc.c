@@ -172,7 +172,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
         }};                                                                    \
                                                                                \
     hashtbl_insert(preproc->defines, &ident, &define);                         \
-  } while (0);
+  } while (0)
 
 #define DEF_BUILTIN_NUM(n, v)                                                  \
   DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v))
@@ -358,7 +358,7 @@ preproc_create(struct program program, struct fcache *fcache,
     };                                                                         \
     enum preproc_special_macro v = ty;                                         \
     hashtbl_insert(SPECIAL_MACROS, &k, &v);                                    \
-  } while (0);
+  } while (0)
 
     SPECIAL_MACRO("__FILE__", PREPROC_SPECIAL_MACRO_FILE);
     SPECIAL_MACRO("__LINE__", PREPROC_SPECIAL_MACRO_LINE);
@@ -3151,7 +3151,7 @@ static struct preproc_token preproc_stringify(struct preproc *preproc,
   for (size_t i = 0; i < num_tokens; i++) {
     struct preproc_token token = *(struct preproc_token *)vector_get(tokens, i);
 
-#define ADD_STR(str, len) add_escaped_str(buf, str, len);
+#define ADD_STR(str, len) add_escaped_str(buf, str, len)
 
     switch (token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:

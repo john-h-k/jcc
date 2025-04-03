@@ -3469,7 +3469,7 @@ struct ast_printstate {
   do {                                                                         \
     state->indent--;                                                           \
     DEBUG_ASSERT(state->indent >= 0, "indent negative!");                      \
-  } while (0);
+  } while (0)
 
 #define PUSH_INDENT()                                                          \
   int tmp_indent = state->indent;                                              \
@@ -3587,14 +3587,14 @@ DEBUG_FUNC(declaration_list, declaration_list) {
     struct sized_str str = identifier_str(state->parser, identifier);          \
     AST_PRINT("'%.*s'", (int)str.len, str.str);                                \
     AST_PRINTZ("");                                                            \
-  } while (0);
+  } while (0)
 
 #define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                              \
   do {                                                                         \
     struct sized_str str = identifier_str(state->parser, identifier);          \
     AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
     AST_PRINTZ("");                                                            \
-  } while (0);
+  } while (0)
 
 DEBUG_FUNC(struct_or_union_specifier, struct_or_union_specifier) {
   switch (struct_or_union_specifier->ty) {

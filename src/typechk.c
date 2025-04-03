@@ -193,7 +193,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
     return true;
   case TD_VAR_TY_TY_VOID:
   case TD_VAR_TY_TY_VARIADIC:
-    BUG("doesn't make sense")
+    BUG("doesn't make sense");
   case TD_VAR_TY_TY_WELL_KNOWN:
     return left.well_known == r->well_known;
   case TD_VAR_TY_TY_FUNC: {
@@ -3643,20 +3643,22 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     }
 
 #define CHECK_INT_OPS()                                                        \
-  if (lhs.val.ty == AP_VAL_TY_FLOAT || rhs.val.ty == AP_VAL_TY_FLOAT) {        \
-    if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {           \
-      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;                             \
-      compiler_diagnostics_add(                                                \
-          tchk->diagnostics,                                                   \
-          MK_SEMANTIC_DIAGNOSTIC(                                              \
-              FP_BITWISE, fp_bitwise, expr->span, MK_INVALID_TEXT_POS(0),      \
-              "cannot perform bitwise operations on floating-point types"));   \
-    }                                                                          \
+  do {                                                                         \
+    if (lhs.val.ty == AP_VAL_TY_FLOAT || rhs.val.ty == AP_VAL_TY_FLOAT) {      \
+      if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {         \
+        tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;                           \
+        compiler_diagnostics_add(                                              \
+            tchk->diagnostics,                                                 \
+            MK_SEMANTIC_DIAGNOSTIC(                                            \
+                FP_BITWISE, fp_bitwise, expr->span, MK_INVALID_TEXT_POS(0),    \
+                "cannot perform bitwise operations on floating-point types")); \
+      }                                                                        \
                                                                                \
-    *value = (struct td_val){.var_ty = TD_VAR_TY_UNKNOWN,                      \
-                             .val = MK_AP_VAL_INVALID()};                      \
-    return false;                                                              \
-  }
+      *value = (struct td_val){.var_ty = TD_VAR_TY_UNKNOWN,                    \
+                               .val = MK_AP_VAL_INVALID()};                    \
+      return false;                                                            \
+    }                                                                          \
+  } while (0)
 
     // FIXME: maybe wrong wrt sizes, definitely wrong wrt to signs
 
@@ -5173,9 +5175,15 @@ struct td_printstate {
 #define TD_PRINT_SAMELINE_Z_NOINDENT(fmt) slogsl(fmt)
 #define TD_PRINT_SAMELINE_NOINDENT(fmt, ...) slogsl(fmt, __VA_ARGS__)
 
-#define TD_PRINT_SAMELINE_Z(fmt) slogsl("%*s" fmt, state->indent * 4, "")
+#define TD_PRINT_SAMELINE_Z(fmt)                                               \
+  do {                                                                         \
+    slogsl("%*s" fmt, state->indent * 4, "");                                  \
+  } while (0)
+
 #define TD_PRINT_SAMELINE(fmt, ...)                                            \
-  slogsl("%*s" fmt, state->indent * 4, "", __VA_ARGS__)
+  do {                                                                         \
+    slogsl("%*s" fmt, state->indent * 4, "", __VA_ARGS__);                     \
+  } while (0)
 
 #define TD_PRINTZ(fmt) TD_PRINT_SAMELINE_Z(fmt "\n")
 #define TD_PRINT(fmt, ...) TD_PRINT_SAMELINE(fmt "\n", __VA_ARGS__)
@@ -5185,7 +5193,7 @@ struct td_printstate {
   do {                                                                         \
     state->indent--;                                                           \
     DEBUG_ASSERT(state->indent >= 0, "indent negative!");                      \
-  } while (0);
+  } while (0)
 
 #define PUSH_INDENT()                                                          \
   int tmp_indent = state->indent;                                              \
@@ -5230,9 +5238,9 @@ DEBUG_FUNC_ENUM(type_qualifier_flags, type_qualifier_flags) {
 }
 
 #define TD_PRINT_STR_SAMELINE(s)                                               \
-  TD_PRINT_SAMELINE_NOINDENT("'%.*s'\n", (int)(s).len, (s).str);
+  TD_PRINT_SAMELINE_NOINDENT("'%.*s'\n", (int)(s).len, (s).str)
 
-#define TD_PRINT_STR(s) TD_PRINT("'%.*s'\n", (int)(s).len, (s).str);
+#define TD_PRINT_STR(s) TD_PRINT("'%.*s'\n", (int)(s).len, (s).str)
 
 DEBUG_FUNC(var_ty, var_ty) {
   DEBUG_CALL(type_qualifier_flags, &var_ty->type_qualifiers);

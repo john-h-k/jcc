@@ -206,8 +206,7 @@ static void lsp_write_buf(struct lsp_ctx *ctx) {
 #define LSP_WRITE_MESSAGE(block)                                               \
   json_writer_write_begin_obj(ctx->writer);                                    \
   JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_SIZED("2.0"));                   \
-  do                                                                           \
-    block while (0);                                                           \
+  {block};                                                                     \
   json_writer_write_end_obj(ctx->writer);                                      \
   lsp_write_buf(ctx);
 
@@ -248,17 +247,13 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx,
     JSON_WRITE_FIELD(writer, "method",
                      MK_SIZED("textDocument/publishDiagnostics"));
 
-    json_writer_write_field_name(writer, MK_SIZED("params"));
-    json_writer_write_begin_obj(writer);
-
     JSON_OBJECT(writer, "params", {
       // PublishDiagnosticsParams
 
       JSON_WRITE_FIELD(writer, "uri", doc_ctx->doc.uri);
       JSON_WRITE_FIELD(writer, "version", doc_ctx->doc.version);
 
-      json_writer_write_begin_arr(writer);
-      {
+      JSON_ARRAY(writer, "diagnostics", {
         // Diagnostic[]
 
         struct compiler_diagnostics_iter iter =
@@ -273,38 +268,37 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx,
             continue;
           }
 
-          lsp_json_write_span(ctx, span);
+          JSON_OBJECT(writer, NULL, {
+            JSON_WRITE_FIELD_NAME(writer, "range");
+            lsp_json_write_span(ctx, span);
 
-          JSON_WRITE_FIELD_NAME(writer, "severity");
-          switch (diagnostic.ty.severity) {
-          case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
-            json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_ERROR);
-            break;
-          case COMPILER_DIAGNOSTIC_SEVERITY_WARN:
-            json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_WARNING);
-            break;
-          case COMPILER_DIAGNOSTIC_SEVERITY_INFO:
-            json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_INFO);
-            break;
-          }
+            JSON_WRITE_FIELD_NAME(writer, "severity");
+            switch (diagnostic.ty.severity) {
+            case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
+              json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_ERROR);
+              break;
+            case COMPILER_DIAGNOSTIC_SEVERITY_WARN:
+              json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_WARNING);
+              break;
+            case COMPILER_DIAGNOSTIC_SEVERITY_INFO:
+              json_writer_write_integer(writer, DIAGNOSTIC_SEVERITY_INFO);
+              break;
+            }
 
-          // TODO:
-          // code?: integer | string
-          // codeDescription?: CodeDescription;
+            // TODO:
+            // code?: integer | string
+            // codeDescription?: CodeDescription;
 
-          JSON_WRITE_FIELD(writer, "source", MK_SIZED("jcc"));
-          JSON_WRITE_FIELD(writer, "message", MK_SIZED(diagnostic.message));
+            JSON_WRITE_FIELD(writer, "source", MK_SIZED("jcc"));
+            JSON_WRITE_FIELD(writer, "message", MK_SIZED(diagnostic.message));
 
-          // tags?: DiagnosticTag[];
+            // tags?: DiagnosticTag[];
 
-          // relatedInformation?: DiagnosticRelatedInformation[];
-          // data?: LSPAny;
+            // relatedInformation?: DiagnosticRelatedInformation[];
+            // data?: LSPAny;
+          });
         }
-      }
-      json_writer_write_end_arr(writer);
-
-      JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
-      JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
+      });
     });
   })
 }
@@ -337,31 +331,22 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
 
     JSON_WRITE_FIELD(writer, "id", msg->id);
 
-    json_writer_write_field_name(writer, MK_SIZED("result"));
-    json_writer_write_begin_obj(writer);
-    {
+    JSON_OBJECT(writer, "result", {
       // InitializeResult
 
-      json_writer_write_field_name(writer, MK_SIZED("capabilities"));
-      json_writer_write_begin_obj(writer);
-      {
+      JSON_OBJECT(writer, "serverInfo", {
         // ServerInfo
 
         JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
         JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
-      }
-      json_writer_write_end_obj(writer);
+      });
 
-      json_writer_write_field_name(writer, MK_SIZED("capabilities"));
-      json_writer_write_begin_obj(writer);
-      {
+      JSON_OBJECT(writer, "capabilities", {
         // ServerCapabilities
 
         JSON_WRITE_FIELD(writer, "positionEncoding", pos_encoding_kind);
-      }
-      json_writer_write_end_obj(writer);
-    }
-    json_writer_write_end_obj(writer);
+      });
+    });
   })
 }
 
