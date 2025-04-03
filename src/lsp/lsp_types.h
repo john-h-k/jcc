@@ -157,17 +157,17 @@ struct didclose_textdoc_params {
     (to) = __VA_ARGS__(from)->obj_val;                                         \
   } while (0)
 
-#define TRY_DE_INT(from, to, ...)                                              \
+#define TRY_DE_INT(from, to)                                              \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_NUMBER) {                                  \
       DE_FAIL("expected int but found %s", json_value_ty_name((from)->ty));    \
       return false;                                                            \
     }                                                                          \
                                                                                \
-    (to) = __VA_ARGS__ ap_val_as_ll((from)->num_val);                          \
+    (to) = ap_val_as_ll((from)->num_val);                          \
   } while (0)
 
-#define TRY_DE_STR(from, to, ...)                                              \
+#define TRY_DE_STR(from, to)                                              \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_STRING) {                                  \
       DE_FAIL("expected string but found %s", json_value_ty_name((from)->ty)); \
@@ -177,14 +177,14 @@ struct didclose_textdoc_params {
     (to) = (from)->str_val;                                                    \
   } while (0)
 
-#define TRY_DE_BOOL(from, to, ...)                                             \
+#define TRY_DE_BOOL(from, to)                                             \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_BOOL) {                                    \
       DE_FAIL("expected bool but found %s", json_value_ty_name((from)->ty));   \
       return false;                                                            \
     }                                                                          \
                                                                                \
-    (to) = __VA_ARGS__(from)->bool_val;                                        \
+    (to) = (from)->bool_val;                                        \
   } while (0)
 
 #define TRY_DE_TYPE(from, to, ty_name)                                         \

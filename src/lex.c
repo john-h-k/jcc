@@ -589,6 +589,10 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_PUNCTUATOR:
+      if (preproc_token.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY || preproc_token.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+        continue;
+      }
+
       *token = (struct lex_token){
           .ty = preproc_punctuator_to_lex_token_ty(preproc_token.punctuator.ty),
           .text = preproc_token.text,
@@ -599,7 +603,8 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
     case PREPROC_TOKEN_TY_WHITESPACE:
       continue;
     case PREPROC_TOKEN_TY_DIRECTIVE:
-      BUG("directive token reached lexer");
+      continue;
+      // BUG("directive token reached lexer");
     case PREPROC_TOKEN_TY_OTHER:
       TODO("handler OTHER preproc tokens in lexer");
     }

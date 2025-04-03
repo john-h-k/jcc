@@ -387,20 +387,27 @@ run() {
 }
 
 profile() {
-    region="$1"
-    shift
+    case "$1" in
+        link|compile|preproc|lex)
+            region="$1"
+            shift
+            ;;
+    esac
 
     build --mode release
 
     ITER=10
     for ((i = 0; i < $ITER; i++ )); do
-        output=$(_run --profile "$@" 2>&1)
-
+        output=$(_run -c -o /dev/null --profile "$@" 2>&1)
         exc="$?"
 
-        echo "$output" | grep "$region"
+        if [[ -n "$region " ]]; then
+            echo "$output" | grep "$region"
+        else
+            echo "$output"
+        fi
 
-        if ! [ "$exc" == 0 ]; then
+        if ! [[ "$exc" == 0 ]]; then
             echo -e "${BOLDRED}Failed!${RESET}"
             exit 1
         fi

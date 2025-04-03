@@ -51,11 +51,31 @@ bool text_pos_eq(const void *l, const void *r);
 void hash_text_pos(struct hasher *hasher, const void *value);
 void hash_text_span(struct hasher *hasher, const void *value);
 
-size_t text_pos_len(struct text_pos start, struct text_pos end);
-size_t text_span_len(const struct text_span *span);
 
-void next_col(struct text_pos *pos);
+static inline size_t text_pos_len(struct text_pos start, struct text_pos end) {
+  return end.idx - start.idx;
+}
 
-void next_line(struct text_pos *pos);
+static inline size_t text_span_len(const struct text_span *span) {
+  return text_pos_len(span->start, span->end);
+}
+
+#define POS_CHECK(p)                                                           \
+  DEBUG_ASSERT((p).col != TEXT_POS_INVALID_COL, "invalid text pos")
+
+static inline void next_col(struct text_pos *pos) {
+  POS_CHECK(*pos);
+
+  pos->idx++;
+  pos->col++;
+}
+
+static inline void next_line(struct text_pos *pos) {
+  POS_CHECK(*pos);
+
+  pos->idx++;
+  pos->line++;
+  pos->col = 0;
+}
 
 #endif
