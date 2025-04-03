@@ -96,69 +96,94 @@ void debug_print_stack_trace(void) {
 }
 #endif
 
-#define PRINT_STR(get_ch, fn_prefix, literal_prefix)                           \
-  DEBUG_ASSERT(file, "null arg");                                              \
-                                                                               \
+#define PRINT_STR(get_ch, write_str, ret, fn_prefix, literal_prefix)           \
   if (!input) {                                                                \
-    fprintf(file, "(null)");                                                   \
-    return;                                                                    \
+    write_str("(null)");                                                       \
+    ret;                                                                       \
   }                                                                            \
                                                                                \
-  fprintf(file, #literal_prefix "\"");                                         \
+  write_str("\"");                                                             \
                                                                                \
   for (size_t i = 0; i < len;) {                                               \
     get_ch;                                                                    \
     switch (ch) {                                                              \
     case literal_prefix##'\0':                                                 \
-      fprintf(file, "\\0");                                                    \
+      write_str("\\0");                                                        \
       break;                                                                   \
     case literal_prefix##'\\':                                                 \
-      fprintf(file, "\\\\");                                                   \
+      write_str("\\\\");                                                       \
       break;                                                                   \
     case literal_prefix##'\"':                                                 \
-      fprintf(file, "\\\"");                                                   \
+      write_str("\\\"");                                                       \
       break;                                                                   \
     case literal_prefix##'\n':                                                 \
-      fprintf(file, "\\n");                                                    \
+      write_str("\\n");                                                        \
       break;                                                                   \
     case literal_prefix##'\t':                                                 \
-      fprintf(file, "\\t");                                                    \
+      write_str("\\t");                                                        \
       break;                                                                   \
     case literal_prefix##'\r':                                                 \
-      fprintf(file, "\\r");                                                    \
+      write_str("\\r");                                                        \
       break;                                                                   \
     case literal_prefix##'\b':                                                 \
-      fprintf(file, "\\b");                                                    \
+      write_str("\\b");                                                        \
       break;                                                                   \
     case literal_prefix##'\f':                                                 \
-      fprintf(file, "\\f");                                                    \
+      write_str("\\f");                                                        \
       break;                                                                   \
     case literal_prefix##'\v':                                                 \
-      fprintf(file, "\\v");                                                    \
+      write_str("\\v");                                                        \
       break;                                                                   \
     default:                                                                   \
       if (is##fn_prefix##print(ch)) {                                          \
-        fputc(((int32_t)ch < 128) ? (char)ch : '?', file);                     \
+        write_str("%c", ((int32_t)ch < 128) ? (char)ch : '?');                 \
       } else if ((int32_t)ch <= 0xFFFF) {                                      \
-        fprintf(file, "\\u%04x", (unsigned)ch);                                \
+        write_str("\\u%04x", (unsigned)ch);                                    \
       } else {                                                                 \
-        fprintf(file, "\\U%08x", (unsigned)ch);                                \
+        write_str("\\U%08x", (unsigned)ch);                                    \
       }                                                                        \
       break;                                                                   \
     }                                                                          \
   }                                                                            \
                                                                                \
-  fprintf(file, "\"");
+  write_str("\"");
 
 // explicit len because may contain null chars
 void fprint_str(FILE *file, const char *input, size_t len) {
-  PRINT_STR(char ch = input[i++], , );
+  DEBUG_ASSERT(file, "null arg");
+
+#define WRITE_STR(...) fprintf(file, __VA_ARGS__)
+  PRINT_STR(char ch = input[i++], WRITE_STR, return, , );
+#undef WRITE_STR
+}
+
+// explicit len because may contain null chars
+size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len) {
+  size_t res_len = 0;
+  size_t write;
+
+#define WRITE_STR(...)                                                         \
+  write = snprintf(buf, buf_sz, __VA_ARGS__);                                  \
+  res_len += write;                                                            \
+  if (buf) {                                                                   \
+    buf += write;                                                              \
+    buf_sz -= write;                                                           \
+  }
+  PRINT_STR(char ch = input[i++], WRITE_STR, return res_len, , );
+#undef WRITE_STR
+
+  return res_len;
 }
 
 // this takes BYTE length of string because thats the info we have easiest
 // access to throughout most of frontend
 void fprint_wstr(FILE *file, const uint32_t *input, size_t len) {
-  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch)); i++, w, L);
+  DEBUG_ASSERT(file, "null arg");
+
+#define WRITE_STR(...) fprintf(file, __VA_ARGS__)
+  PRINT_STR(int32_t ch; memcpy(&ch, input + i, sizeof(ch));
+            i++, WRITE_STR, return, w, L);
+#undef WRITE_STR
 }
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {

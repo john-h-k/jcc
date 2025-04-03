@@ -5,6 +5,8 @@
 #error "do not compile jcc as C++"
 #endif
 
+#define JCC_VERSION "0.0.1"
+
 // information about the compilation of JCC, e.g arch it was built for, OS, C
 // version
 

@@ -1,26 +1,24 @@
 #include "lsp.h"
 
 #include "../alloc.h"
-#include "../vector.h"
 #include "../hashtbl.h"
 #include "../json.h"
+#include "../vector.h"
 #include "lsp_types.h"
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <unistd.h>
 
 struct lsp_headers {
   size_t content_length;
-};
-
-struct lsp_msg {
-  int _foo;
 };
 
 struct lsp_context {
   struct arena_allocator *arena;
   struct vector *read_buf;
   struct hashtbl *obj_props;
+  struct json_writer *writer;
 
   FILE *in;
   FILE *out;
@@ -42,7 +40,7 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
     }
 
     // header can't be more than 40 long i don't think
-    char buffer[64] = { (char)c0, (char)c1 };
+    char buffer[64] = {(char)c0, (char)c1};
     if (!fscanf(in, "%61[^:]: ", &buffer[2])) {
       BUG("handle bad lsp message");
     }
@@ -52,7 +50,8 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
     // FIXME: should be case insensitive
     if (!strcmp(buffer, "Content-Length")) {
       // for some reason adding `\r\n` fails?
-      // either helix LSP isn't sending the second one or we are doing logic wrong
+      // either helix LSP isn't sending the second one or we are doing logic
+      // wrong
       invariant_assert(fscanf(in, "%zu", &headers.content_length),
                        "'Content-Length' had invalid value");
     } else if (!strcmp(buffer, "Content-Type")) {
@@ -69,7 +68,7 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
             break;
           }
 
-          ungetc(next, in);
+          invariant_assert(ungetc(next, in) != EOF, "ungetc failed");
         }
       }
 
@@ -80,7 +79,7 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
   }
 }
 
-static struct lsp_msg lsp_read_msg(struct lsp_context *context) {
+static struct req_msg lsp_read_msg(struct lsp_context *context) {
   vector_clear(context->read_buf);
 
   FILE *in = context->in;
@@ -102,14 +101,14 @@ static struct lsp_msg lsp_read_msg(struct lsp_context *context) {
     vector_push_back(context->read_buf, &(char){(char)c});
 
     switch (c) {
-      case '}':
-        depth--;
-        break;
-      case '{':
-        depth++;
-        break;
-      default:
-        break;
+    case '}':
+      depth--;
+      break;
+    case '{':
+      depth++;
+      break;
+    default:
+      break;
     }
 
     if (!depth) {
@@ -118,18 +117,80 @@ static struct lsp_msg lsp_read_msg(struct lsp_context *context) {
   }
 
   fprintf(context->log, "object: \n");
-  fprintf(context->log, "%.*s\n", (int)vector_length(context->read_buf), (char *)vector_head(context->read_buf));
+  fprintf(context->log, "%.*s\n", (int)vector_length(context->read_buf),
+          (char *)vector_head(context->read_buf));
   fprintf(context->log, "\n");
 
-  struct sized_str obj = {
-    .len = vector_length(context->read_buf),
-    .str = vector_head(context->read_buf)
-  };
+  struct sized_str obj = {.len = vector_length(context->read_buf),
+                          .str = vector_head(context->read_buf)};
 
   struct json_result result = json_parse(obj);
-  json_print(context->log, &result);
 
-  return (struct lsp_msg){0};
+  if (result.ty != JSON_RESULT_TY_VALUE) {
+    BUG("handle bad message format");
+  }
+
+  struct req_msg msg;
+  if (!try_de_req_msg(&result.value, &msg)) {
+    BUG("handle message deserialize failure");
+  }
+
+  return msg;
+}
+
+static void lsp_write_buf(struct lsp_context *ctx) {
+  struct sized_str res = json_writer_get_buf(ctx->writer);
+
+  fprintf(ctx->log, "%.*s\n", (int)res.len, res.str);
+
+  fprintf(ctx->out, "Content-Length: %zu\r\n", res.len);
+  fprintf(ctx->out, "\r\n");
+
+  fprintf(ctx->out, "%.*s", (int)res.len, res.str);
+  fflush(ctx->out);
+}
+
+static void lsp_write_server_caps(struct lsp_context *ctx,
+                                  const struct req_msg *msg) {
+  struct json_writer *writer = ctx->writer;
+
+  json_writer_write_begin_obj(writer);
+  {
+    // ResponseMessage
+
+    JSON_WRITE_FIELD(writer, "id", msg->id);
+
+    json_writer_write_field_name(writer, MK_SIZED("result"));
+    json_writer_write_begin_obj(writer);
+    {
+      // InitializeResult
+
+      json_writer_write_field_name(writer, MK_SIZED("capabilities"));
+      json_writer_write_begin_obj(writer);
+      {
+        // ServerInfo
+
+        // FIXME: need to check this is available
+        JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
+        JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
+      }
+      json_writer_write_end_obj(writer);
+
+      json_writer_write_field_name(writer, MK_SIZED("capabilities"));
+      json_writer_write_begin_obj(writer);
+      {
+        // ServerCapabilities
+
+        // FIXME: need to check this is available
+        JSON_WRITE_FIELD(writer, "positionEncoding", MK_SIZED("utf-8"));
+      }
+      json_writer_write_end_obj(writer);
+    }
+    json_writer_write_end_obj(writer);
+  }
+  json_writer_write_end_obj(writer);
+
+  lsp_write_buf(ctx);
 }
 
 void lsp_run(void) {
@@ -139,18 +200,32 @@ void lsp_run(void) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
-  struct lsp_context context = {.arena = arena,
-                                .read_buf =
-                                    vector_create_in_arena(sizeof(char), arena),
-                                .obj_props =
-                                    hashtbl_create_sized_str_keyed_in_arena(arena, sizeof(struct sized_str)),
-                                .in = stdin,
-                                .out = stdout,
-                                .log = stderr};
+  FILE *in = stdin;
+  FILE *out = stdout;
+  FILE *log = stderr;
+
+  struct lsp_context context = {
+      .arena = arena,
+      .read_buf = vector_create_in_arena(sizeof(char), arena),
+      .obj_props = hashtbl_create_sized_str_keyed_in_arena(
+          arena, sizeof(struct sized_str)),
+      .writer = json_writer_create(),
+      .in = in,
+      .out = out,
+      .log = log};
+
+  struct lsp_headers headers = lsp_read_headers(&context);
+  (void)headers;
+
+  struct req_msg msg = lsp_read_msg(&context);
+
+  invariant_assert(msg.method == REQ_MSG_METHOD_INITIALIZE,
+                   "expected 'initialize' method as first message from client");
+
+  lsp_write_server_caps(&context, &msg);
 
   while (true) {
-    UNUSED struct lsp_headers headers = lsp_read_headers(&context);
-    lsp_read_msg(&context);
-    break;
+    headers = lsp_read_headers(&context);
+    msg = lsp_read_msg(&context);
   }
 }
