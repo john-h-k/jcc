@@ -20,8 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define JCC_VERSION "0.0.1"
-
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
   if (args->preproc_only || args->lex_only || args->parse_only || args->syntax_only || args->build_asm_file ||

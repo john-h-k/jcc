@@ -28,6 +28,7 @@ set(
   src/ap_val.c
 
   src/lsp/lsp.c
+  src/lsp/lsp_types.c
 
   src/compiler.c
   src/diagnostics.c

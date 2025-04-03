@@ -122,6 +122,9 @@ struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits);
 bool ap_val_nonzero(struct ap_val value);
 bool ap_val_iszero(struct ap_val value);
 
+size_t ap_val_as_size_t(struct ap_val value);
+double ap_val_as_double(struct ap_val value);
+
 struct ap_val ap_val_add(struct ap_val lhs, struct ap_val rhs);
 struct ap_val ap_val_sub(struct ap_val lhs, struct ap_val rhs);
 struct ap_val ap_val_mul(struct ap_val lhs, struct ap_val rhs);

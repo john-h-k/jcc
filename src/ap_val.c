@@ -816,3 +816,13 @@ void ap_val_fprintf(FILE *file, struct ap_val value) {
     break;
   }
 }
+
+size_t ap_val_as_size_t(struct ap_val value) {
+  DEBUG_ASSERT(value.ty == AP_VAL_TY_INT, "expected int");
+  return ap_int_as_ull(value.ap_int);
+}
+
+double ap_val_as_double(struct ap_val value) {
+  DEBUG_ASSERT(value.ty == AP_VAL_TY_FLOAT, "expected float");
+  return (double)ap_float_as_ld(value.ap_float);
+}

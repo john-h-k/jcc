@@ -4,12 +4,6 @@
 #include "ap_val.h"
 #include "hashtbl.h"
 
-#define JSON_BOOL_FIELD
-#define JSON_NUMBER_FIELD
-#define JSON_STRING_FIELD
-#define JSON_ARRAY_FIELD
-#define JSON_OBJECT_FIELD
-
 enum json_value_ty {
   JSON_VALUE_TY_NULL,
   JSON_VALUE_TY_BOOL,
@@ -44,9 +38,12 @@ struct json_value {
 };
 
 #define JSON_MK_NULL() ((struct json_value){.ty = JSON_VALUE_TY_NULL})
-#define JSON_MK_BOOL(val) ((struct json_value){.ty = JSON_VALUE_TY_BOOL, .bool_val = (val)})
-#define JSON_MK_STR(val) ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = (val)})
-#define JSON_MK_STR_LIT(val) ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = MK_SIZED((val))})
+#define JSON_MK_BOOL(val)                                                      \
+  ((struct json_value){.ty = JSON_VALUE_TY_BOOL, .bool_val = (val)})
+#define JSON_MK_STR(val)                                                       \
+  ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = (val)})
+#define JSON_MK_STR_LIT(val)                                                   \
+  ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = MK_SIZED((val))})
 
 struct json_err {
   size_t pos;
@@ -68,5 +65,42 @@ struct json_result {
 
 struct json_result json_parse(struct sized_str str);
 void json_print(FILE *file, const struct json_result *result);
+
+struct json_writer;
+
+struct json_writer *json_writer_create(void);
+void json_writer_free(struct json_writer **writer);
+
+void json_writer_write_null(struct json_writer *writer);
+void json_writer_write_bool(struct json_writer *writer, bool value);
+
+void json_writer_write_integer(struct json_writer *writer, long long value);
+void json_writer_write_double(struct json_writer *writer, double value);
+
+void json_writer_write_string(struct json_writer *writer,
+                              struct sized_str value);
+
+void json_writer_write_begin_obj(struct json_writer *writer);
+void json_writer_write_field_name(struct json_writer *writer,
+                                  struct sized_str name);
+void json_writer_write_end_obj(struct json_writer *writer);
+
+void json_writer_write_begin_arr(struct json_writer *writer);
+void json_writer_write_end_arr(struct json_writer *writer);
+struct sized_str json_writer_get_buf(struct json_writer *writer);
+
+#define JSON_WRITE(writer, value)                                              \
+  _Generic((value),                                                            \
+      bool: json_writer_write_bool,                                            \
+      size_t: json_writer_write_integer,                                       \
+      long long: json_writer_write_integer,                                    \
+      double: json_writer_write_double,                                        \
+      struct sized_str: json_writer_write_string)((writer), (value))
+
+#define JSON_WRITE_FIELD(writer, name, value)                                  \
+  do {                                                                         \
+    json_writer_write_field_name((writer), MK_SIZED((name)));                  \
+    JSON_WRITE((writer), (value));                                             \
+  } while (0);
 
 #endif

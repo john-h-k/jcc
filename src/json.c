@@ -222,8 +222,9 @@ static size_t json_parse_chunk(struct json_context *context,
         (parse_rd = ap_val_try_parse_float(context->arena, AP_FLOAT_TY_F64, str,
                                            &num_val))) {
       rd += parse_rd;
-      *result =
-          (struct json_result){.ty = JSON_RESULT_TY_VALUE, .value = {.ty = JSON_VALUE_TY_NUMBER, .num_val = num_val}};
+      *result = (struct json_result){
+          .ty = JSON_RESULT_TY_VALUE,
+          .value = {.ty = JSON_VALUE_TY_NUMBER, .num_val = num_val}};
       return rd;
     }
     TODO("other (%c)", ch);
@@ -325,4 +326,150 @@ void json_print(FILE *file, const struct json_result *result) {
     fprintf(file, "JSON parse err at pos %zu\n", result->err.pos);
     break;
   }
+}
+
+struct json_writer {
+  struct vector *buffer;
+  bool needs_sep;
+};
+
+struct json_writer *json_writer_create(void) {
+  struct json_writer *writer = nonnull_malloc(sizeof(*writer));
+  writer->buffer = vector_create(sizeof(char));
+  writer->needs_sep = false;
+
+  return writer;
+}
+
+void json_writer_free(struct json_writer **writer) {
+  free(*writer);
+  *writer = NULL;
+}
+
+struct sized_str json_writer_get_buf(struct json_writer *writer) {
+  return (struct sized_str){
+      .str = vector_head(writer->buffer),
+      .len = vector_length(writer->buffer),
+  };
+}
+
+void json_writer_write_null(struct json_writer *writer) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  vector_extend(writer->buffer, "null", strlen("null"));
+  writer->needs_sep = true;
+}
+
+void json_writer_write_bool(struct json_writer *writer, bool value) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  if (value) {
+    vector_extend(writer->buffer, "true", strlen("true"));
+  } else {
+    vector_extend(writer->buffer, "false", strlen("false"));
+  }
+
+  writer->needs_sep = true;
+}
+
+PRINTF_ARGS(1)
+static void json_writer_snprintf(struct json_writer *writer, const char *format,
+                                 ...) {
+  va_list args, args_copy;
+
+  va_start(args, format);
+  va_copy(args_copy, args);
+
+  int len = vsnprintf(NULL, 0, format, args_copy);
+
+  va_end(args_copy);
+
+  DEBUG_ASSERT(len > 0, "vnsprintf call failed");
+
+  size_t tail = vector_length(writer->buffer);
+  vector_extend(writer->buffer, NULL, len);
+
+  vector_ensure_capacity(writer->buffer, vector_length(writer->buffer) + 1);
+
+  vsnprintf(vector_get(writer->buffer, tail), len + 1, format, args);
+
+  va_end(args);
+}
+
+void json_writer_write_integer(struct json_writer *writer, long long value) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  json_writer_snprintf(writer, "%lld", value);
+  writer->needs_sep = true;
+}
+
+void json_writer_write_double(struct json_writer *writer, double value) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  json_writer_snprintf(writer, "%f", value);
+  writer->needs_sep = true;
+}
+
+void json_writer_write_string(struct json_writer *writer,
+                              struct sized_str value) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  size_t len = sprint_str(NULL, 0, value.str, value.len);
+
+  size_t tail = vector_length(writer->buffer);
+  vector_extend(writer->buffer, NULL, len);
+
+  // ensure capacity is 1 greater, for the null char
+  vector_ensure_capacity(writer->buffer, vector_length(writer->buffer) + 1);
+
+  sprint_str(vector_get(writer->buffer, tail), len + 1, value.str, value.len);
+  writer->needs_sep = true;
+}
+
+void json_writer_write_field_name(struct json_writer *writer,
+                                  struct sized_str name) {
+  json_writer_write_string(writer, name);
+
+  writer->needs_sep = false;
+  vector_push_back(writer->buffer, &(char){':'});
+}
+
+static void json_writer_start_agg(struct json_writer *writer, char ch) {
+  if (writer->needs_sep) {
+    vector_push_back(writer->buffer, &(char){','});
+  }
+
+  vector_push_back(writer->buffer, &ch);
+  writer->needs_sep = false;
+}
+
+static void json_writer_end_agg(struct json_writer *writer, char ch) {
+  vector_push_back(writer->buffer, &ch);
+  writer->needs_sep = true;
+}
+
+void json_writer_write_begin_obj(struct json_writer *writer) {
+  json_writer_start_agg(writer, '{');
+}
+
+void json_writer_write_end_obj(struct json_writer *writer) {
+  json_writer_end_agg(writer, '}');
+}
+
+void json_writer_write_begin_arr(struct json_writer *writer) {
+  json_writer_start_agg(writer, '[');
+}
+
+void json_writer_write_end_arr(struct json_writer *writer) {
+  json_writer_end_agg(writer, ']');
 }
