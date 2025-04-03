@@ -157,7 +157,22 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   else()
     message(STATUS "Sanitisers disabled")
   endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_compile_options(
+    -O3
+    -mcpu=native
+    -funroll-loops
+  )
+
+  add_link_options(
+    -O3
+    -Wl,-dead_strip
+  )
+
+  add_compile_options(-flto)
+  add_link_options(-flto)
 endif()
+
 
 if(MSVC)
   add_compile_option(/W4 /WX)
