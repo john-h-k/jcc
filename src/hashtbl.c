@@ -185,7 +185,7 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
                               const void *data, hash_t hash);
 
 // when len >= buckets * max_fill, double bucket size and rebuild
-static const float MAX_FILL = 0.8f;
+static const float MAX_FILL = 0.4f;
 
 #define MIN_BUCKET_COUNT (8)
 

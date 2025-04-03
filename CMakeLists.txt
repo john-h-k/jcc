@@ -157,7 +157,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   else()
     message(STATUS "Sanitisers disabled")
   endif()
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  add_compile_options(-g)
+  add_link_options(-g3 -ldl)
+
   add_compile_options(
     -O3
     -mcpu=native
@@ -169,8 +172,10 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     -Wl,-dead_strip
   )
 
-  add_compile_options(-flto)
-  add_link_options(-flto)
+  # add_compile_options(-flto)
+  # add_link_options(-flto)
+  add_compile_options(-fno-lto)
+  add_link_options(-fno-lto)
 endif()
 
 
@@ -179,6 +184,10 @@ if(MSVC)
 elseif(CMAKE_C_COMPILER_ID STREQUAL "JCC")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
   message(STATUS "Building with AppleClang")
+
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
+  endif()
 
   add_compile_options(
     -Wall

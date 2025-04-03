@@ -4,7 +4,6 @@
 #include "compiler.h"
 #include "diagnostics.h"
 #include "fcache.h"
-#include "hash.h"
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
@@ -19,7 +18,7 @@
 #include <time.h>
 #include <wchar.h>
 
-#if __has_include(<arm_neon.h>) && 0
+#if __has_include(<arm_neon.h>)
 #define USE_NEON 1
 #include <arm_neon.h>
 #endif
@@ -316,9 +315,7 @@ struct preproc_unexpanded_token {
 
 static bool is_newline(char c) { return c == '\n'; }
 
-#if !USE_NEON
-static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
-#endif
+// static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
 
 static bool is_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
@@ -500,6 +497,118 @@ void preproc_free(struct preproc **preproc) {
   *preproc = NULL;
 }
 
+#if USE_NEON
+#include <arm_neon.h>
+#include <stddef.h>
+#include <stdint.h>
+
+static void find_multiline_comment_end(struct preproc_text *preproc_text,
+                                       struct text_pos *cur_pos) {
+  const char *text = preproc_text->text;
+  size_t len = preproc_text->len;
+
+  // Track total characters processed, number of newlines, and the col offset.
+  size_t total_chars = 0;
+  size_t lines = 0;
+  size_t chars_since_newline = cur_pos->col; // initial column count
+
+  while (cur_pos->idx + total_chars + 1 < len) {
+    if (cur_pos->idx + total_chars + 16 < len) {
+      const char *block_ptr = text + cur_pos->idx + total_chars;
+      uint8x16_t block = vld1q_u8((const uint8_t *)block_ptr);
+      uint8x16_t next;
+
+      if (cur_pos->idx + total_chars + 32 <= len) {
+        uint8x16_t block_next = vld1q_u8((const uint8_t *)(block_ptr + 16));
+        next = vextq_u8(block, block_next, 1);
+      } else {
+        uint8_t temp[16] = {0};
+        size_t rem = len - (cur_pos->idx + total_chars + 16);
+        for (size_t i = 0; i < rem; i++) {
+          temp[i] = block_ptr[16 + i];
+        }
+        next = vextq_u8(block, vld1q_u8(temp), 1);
+      }
+
+      // Look for '\n' and for '*' followed immediately by '/'.
+      uint8x16_t cmp_nl = vceqq_u8(block, vdupq_n_u8('\n'));
+      uint8x16_t cmp_star = vceqq_u8(block, vdupq_n_u8('*'));
+      uint8x16_t cmp_slash = vceqq_u8(next, vdupq_n_u8('/'));
+      uint8x16_t cmp_marker = vandq_u8(cmp_star, cmp_slash);
+
+      uint8_t nl[16], marker[16];
+      vst1q_u8(nl, cmp_nl);
+      vst1q_u8(marker, cmp_marker);
+
+      // Search for the first event in the block.
+      int event_idx = 16, event_type = 0; // 1 = newline, 2 = marker
+      for (int i = 0; i < 16; i++) {
+        if (nl[i] == 0xFF || marker[i] == 0xFF) {
+          event_idx = i;
+          event_type = (marker[i] == 0xFF) ? 2 : 1;
+          break;
+        }
+      }
+
+      if (event_idx < 16) {
+        // Process byte-by-byte up to the event.
+        for (int i = 0; i < event_idx; i++) {
+          char c = text[cur_pos->idx + total_chars];
+          total_chars++;
+          if (c == '\n') {
+            lines++;
+            chars_since_newline = 0;
+          } else {
+            chars_since_newline++;
+          }
+        }
+        // Now process the event byte.
+        if (event_type == 2) { // Found "*/"
+          total_chars += 2;    // skip '*' and '/'
+          chars_since_newline += 2;
+          cur_pos->idx += total_chars;
+          cur_pos->line += lines;
+          cur_pos->col = chars_since_newline;
+          return;
+        } else {         // Newline encountered
+          total_chars++; // process the newline
+          lines++;
+          chars_since_newline = 0;
+        }
+      } else {
+        // No event in block: update counters assuming no newlines.
+        total_chars += 16;
+        chars_since_newline += 16;
+      }
+    } else {
+      // Fallback scalar loop.
+      char c = text[cur_pos->idx + total_chars];
+      if (c == '\n') {
+        total_chars++;
+        lines++;
+        chars_since_newline = 0;
+      } else if (c == '*' && cur_pos->idx + total_chars + 1 < len &&
+                 text[cur_pos->idx + total_chars + 1] == '/') {
+        total_chars += 2;
+        chars_since_newline += 2;
+        cur_pos->idx += total_chars;
+        cur_pos->line += lines;
+        cur_pos->col = chars_since_newline;
+        return;
+      } else {
+        total_chars++;
+        chars_since_newline++;
+      }
+    }
+  }
+
+  // Marker not found; update position to EOF.
+  cur_pos->idx += total_chars;
+  cur_pos->line += lines;
+  cur_pos->col = chars_since_newline;
+}
+
+#else
 static void find_multiline_comment_end(struct preproc_text *preproc_text,
                                        struct text_pos *cur_pos) {
   while (/* token must be at least 2 chars */ cur_pos->idx + 1 <
@@ -519,6 +628,7 @@ static void find_multiline_comment_end(struct preproc_text *preproc_text,
 
   // if not found, it will just push to end of file and next token will be EOF
 }
+#endif
 
 static bool try_consume(struct preproc_text *preproc_text, struct text_pos *pos,
                         char c) {
@@ -578,6 +688,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     vector_pop(preproc->texts);
   }
 
+  const char *text = preproc_text->text;
+
   while (vector_length(preproc->unexpanded_buffer_tokens)) {
     struct preproc_unexpanded_token *unexp =
         vector_pop(preproc->unexpanded_buffer_tokens);
@@ -597,6 +709,7 @@ void preproc_next_raw_token(struct preproc *preproc,
 
   struct text_pos start = preproc_text->pos;
   struct text_pos end = start;
+  size_t len = preproc_text->len;
 
   if (start.idx >= preproc_text->len) {
     token->ty = PREPROC_TOKEN_TY_EOF;
@@ -606,9 +719,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     return;
   }
 
-  while (preproc_text->pos.idx + 1 < preproc_text->len &&
-         preproc_text->text[preproc_text->pos.idx] == '\\' &&
-         is_newline(preproc_text->text[preproc_text->pos.idx + 1])) {
+  while (end.idx + 1 < len && text[end.idx] == '\\' &&
+         is_newline(text[end.idx + 1])) {
     // literally just skip this, don't even generate a token
     next_col(&end);
     next_line(&end);
@@ -621,15 +733,14 @@ void preproc_next_raw_token(struct preproc *preproc,
     end = start;
   }
 
-  if (preproc_text->pos.idx < preproc_text->len &&
-      is_newline(preproc_text->text[preproc_text->pos.idx])) {
+  if (end.idx < len && is_newline(text[end.idx])) {
     next_line(&end);
 
     preproc->line_has_nontrivial_token = false;
     preproc->in_angle_string_context = false;
 
     token->ty = PREPROC_TOKEN_TY_NEWLINE;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -637,9 +748,6 @@ void preproc_next_raw_token(struct preproc *preproc,
   }
 
 #if USE_NEON
-  // all our alignments are 16b aligned so safe to read
-  const char *text = preproc_text->text;
-
   while (true) {
     if ((text[0] == ' ' || text[0] == '\t') && text[1] != ' ') {
       end.idx += 1;
@@ -665,8 +773,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     uint64_t mask_hi = vgetq_lane_u64(mask64, 1);
     // uint32_t cmask = ((uint16_t)mask_hi << 8) | (uint16_t)mask_lo;
     uint16_t bitmask = 0;
-    bitmask |= (mask_lo  & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56;
-    bitmask |= ((mask_hi & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56) << 8;
+    bitmask |= (mask_lo & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56;
+    bitmask |= ((mask_hi & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56)
+               << 8;
 
 #if !__has_builtin(__builtin_ctz)
 #error "has neon but not __builtin_ctz?"
@@ -683,8 +792,7 @@ void preproc_next_raw_token(struct preproc *preproc,
   }
 
 #else
-  while (end.idx < preproc_text->len &&
-         is_whitespace(preproc_text->text[end.idx])) {
+  while (end.idx < len && is_whitespace(text[end.idx])) {
     next_col(&end);
   }
 #endif
@@ -693,7 +801,7 @@ void preproc_next_raw_token(struct preproc *preproc,
     // we have processed whitespace
 
     token->ty = PREPROC_TOKEN_TY_WHITESPACE;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -705,53 +813,58 @@ void preproc_next_raw_token(struct preproc *preproc,
   bool line_has_nontrivial_token = preproc->line_has_nontrivial_token;
   preproc->line_has_nontrivial_token = true;
 
-  char c = preproc_text->text[end.idx];
+  char c = text[end.idx];
+  char c2 = text[end.idx + 1];
+  // short sh = *(const short *)(const void *)&text[end.idx];
 
-  if (c == '/' && end.idx + 1 < preproc_text->len &&
-      (preproc_text->text[end.idx + 1] == '/' ||
-       preproc_text->text[end.idx + 1] == '*')) {
-    // comment!
-    char comment_ty = preproc_text->text[end.idx + 1];
-
-    if (comment_ty == '/') {
-      while (end.idx < preproc_text->len &&
-             !is_newline(preproc_text->text[end.idx])) {
-        next_col(&end);
-      }
-    } else {
-      find_multiline_comment_end(preproc_text, &end);
+  // if (c == '/' && end.idx + 1 < len &&
+  //     (text[end.idx + 1] == '/' ||
+  //      text[end.idx + 1] == '*')) {
+  if (c == '/' && c2 == '/') {
+    while (end.idx < len && !is_newline(text[end.idx])) {
+      next_col(&end);
     }
 
     token->ty = PREPROC_TOKEN_TY_COMMENT;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
     return;
   }
 
+  if (c == '/' && c2 == '*') {
+    find_multiline_comment_end(preproc_text, &end);
+
+    token->ty = PREPROC_TOKEN_TY_COMMENT;
+    token->text = &text[start.idx];
+    token->span = (struct text_span){.start = start, .end = end};
+
+    preproc_text->pos = end;
+    return;
+  }
+
+  // FIXME: make sure there are excess null chars at end of string
+
   switch (c) {
   case 'L':
-    if (end.idx + 1 < preproc_text->len) {
-      char next = preproc_text->text[end.idx + 1];
+    char next = text[end.idx + 1];
 
-      if (next == '<' || next == '"' || next == '\'') {
-        c = next;
-        next_col(&end);
-        goto string_literal;
-      }
+    if (next == '<' || next == '"' || next == '\'') {
+      c = next;
+      next_col(&end);
+      goto string_literal;
     }
 
     // BUG: doesn't work on JCC
     // goto not_punctuator;
 
-    while (end.idx < preproc_text->len &&
-           is_identifier_char(preproc_text->text[end.idx])) {
+    while (end.idx < len && is_identifier_char(text[end.idx])) {
       next_col(&end);
     }
 
     token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -779,15 +892,14 @@ void preproc_next_raw_token(struct preproc *preproc,
     // BUG: doesn't work on JCC
     // for (size_t i = end.idx;
     //      i < preproc_text->len &&
-    //      !(!char_escaped && preproc_text->text[i] == end_char);
+    //      !(!char_escaped && text[i] == end_char);
     //      i++) {
     for (size_t i = end.idx;; i++) {
-      if (!(i < preproc_text->len &&
-            !(!char_escaped && preproc_text->text[i] == end_char))) {
+      if (!(i < len && !(!char_escaped && text[i] == end_char))) {
         break;
       }
       // next char is escaped if this char is a non-escaped backslash
-      char_escaped = !char_escaped && preproc_text->text[i] == '\\';
+      char_escaped = !char_escaped && text[i] == '\\';
       next_col(&end);
     }
 
@@ -795,7 +907,7 @@ void preproc_next_raw_token(struct preproc *preproc,
     next_col(&end);
 
     token->ty = PREPROC_TOKEN_TY_STRING_LITERAL;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -816,7 +928,7 @@ void preproc_next_raw_token(struct preproc *preproc,
           .ty = PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY};
     }
 
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -825,17 +937,15 @@ void preproc_next_raw_token(struct preproc *preproc,
 
   // we need to check for preproccessing number first as they can begin with `.`
   // and would be wrongly classed as punctuators
-  if (isdigit(c) || (end.idx + 1 < preproc_text->len && c == '.' &&
-                     isdigit(preproc_text->text[end.idx]))) {
+  if (isdigit(c) || (end.idx + 1 < len && c == '.' && isdigit(text[end.idx]))) {
     next_col(&end);
 
-    while (end.idx < preproc_text->len) {
-      char nc = preproc_text->text[end.idx];
+    while (end.idx < len) {
+      char nc = text[end.idx];
+      char sgn = text[end.idx + 1];
 
-      if (end.idx + 1 < preproc_text->len &&
-          (tolower(nc) == 'e' || tolower(nc) == 'p') &&
-          (preproc_text->text[end.idx + 1] == '+' ||
-           preproc_text->text[end.idx + 1] == '-')) {
+      if ((tolower(nc) == 'e' || tolower(nc) == 'p') &&
+          (sgn == '+' || sgn == '-')) {
         // need to check if it is an exponent
         next_col(&end);
         next_col(&end);
@@ -843,7 +953,7 @@ void preproc_next_raw_token(struct preproc *preproc,
         next_col(&end);
       } else {
         token->ty = PREPROC_TOKEN_TY_PREPROC_NUMBER;
-        token->text = &preproc_text->text[start.idx];
+        token->text = &text[start.idx];
         token->span = (struct text_span){.start = start, .end = end};
 
         preproc_text->pos = end;
@@ -947,7 +1057,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '!':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_NEQ;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_NOT;
@@ -955,7 +1066,7 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '=':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_EQ;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG;
@@ -963,9 +1074,10 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '&':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND_ASSG;
-    } else if (try_consume(preproc_text, &end, '&')) {
+    } else if (c2 == '&') {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_AND;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND;
@@ -973,9 +1085,10 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '|':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR_ASSG;
-    } else if (try_consume(preproc_text, &end, '|')) {
+    } else if (c2 == '|') {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR;
@@ -983,7 +1096,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '^':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR_ASSG;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_XOR;
@@ -991,9 +1105,11 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '+':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '+')) {
+    if (c2 == '+') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_INC;
-    } else if (try_consume(preproc_text, &end, '=')) {
+    } else if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD_ASSG;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ADD;
@@ -1001,11 +1117,14 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '-':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '-')) {
+    if (c2 == '-') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DEC;
-    } else if (try_consume(preproc_text, &end, '=')) {
+    } else if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB_ASSG;
-    } else if (try_consume(preproc_text, &end, '>')) {
+    } else if (c2 == '>') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_ARROW;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_SUB;
@@ -1013,7 +1132,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '*':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL_ASSG;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MUL;
@@ -1021,7 +1141,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '/':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV_ASSG;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_DIV;
@@ -1030,7 +1151,8 @@ void preproc_next_raw_token(struct preproc *preproc,
     break;
   case '%':
     next_col(&end);
-    if (try_consume(preproc_text, &end, '=')) {
+    if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD_ASSG;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD;
@@ -1042,7 +1164,7 @@ void preproc_next_raw_token(struct preproc *preproc,
   }
 
   *token = (struct preproc_token){.ty = PREPROC_TOKEN_TY_PUNCTUATOR,
-                                  .text = &preproc_text->text[start.idx],
+                                  .text = &text[start.idx],
                                   .span = {.start = start, .end = end},
                                   .punctuator = {.ty = punc_ty}};
 
@@ -1050,20 +1172,25 @@ void preproc_next_raw_token(struct preproc *preproc,
   return;
 
 not_punctuator: {
-  size_t rem = preproc_text->len - end.idx;
+  size_t rem = len - end.idx;
+  size_t read = 1;
 
   wchar_t wch;
-  size_t read = mbtowc(&wch, &preproc_text->text[end.idx], rem);
-  switch (read) {
-  case 0: // null char??
-  case (size_t)-1:
-  case (size_t)-2:
-    // invalid in some manner
-    goto other;
-  }
-
-  for (size_t i = 0; i < read; i++) {
+  if ((unsigned char)c < 128) {
     next_col(&end);
+  } else {
+    read = mbtowc(&wch, &text[end.idx], rem);
+    switch (read) {
+    case 0: // null char??
+    case (size_t)-1:
+    case (size_t)-2:
+      // invalid in some manner
+      goto other;
+    }
+
+    for (size_t i = 0; i < read; i++) {
+      next_col(&end);
+    }
   }
 
   // TODO: this logic will consider unicode whitespace etc as part of identifier
@@ -1071,27 +1198,36 @@ not_punctuator: {
   if (read > 1 || is_first_identifier_char(c)) {
     // all multi-byte chars accepted as identifier characters
 
-    while (end.idx < preproc_text->len) {
-      read = mbtowc(&wch, &preproc_text->text[end.idx], rem);
-      switch (read) {
-      case 0: // null char??
-      case (size_t)-1:
-      case (size_t)-2:
-        // invalid in some manner
-        goto other;
-      }
+    while (end.idx < len) {
+      c = text[end.idx];
+      if ((unsigned char)c < 128) {
+        if (!is_identifier_char(c)) {
+          break;
+        }
 
-      if (read == 1 && !is_identifier_char((char)wch)) {
-        break;
-      }
-
-      for (size_t i = 0; i < read; i++) {
         next_col(&end);
+      } else {
+        read = mbtowc(&wch, &text[end.idx], rem);
+        switch (read) {
+        case 0: // null char??
+        case (size_t)-1:
+        case (size_t)-2:
+          // invalid in some manner
+          goto other;
+        }
+
+        if (read == 1 && !is_identifier_char((char)wch)) {
+          break;
+        }
+
+        for (size_t i = 0; i < read; i++) {
+          next_col(&end);
+        }
       }
     }
 
     token->ty = PREPROC_TOKEN_TY_IDENTIFIER;
-    token->text = &preproc_text->text[start.idx];
+    token->text = &text[start.idx];
     token->span = (struct text_span){.start = start, .end = end};
 
     preproc_text->pos = end;
@@ -1101,7 +1237,7 @@ not_punctuator: {
 other:
   next_col(&end);
   token->ty = PREPROC_TOKEN_TY_OTHER;
-  token->text = &preproc_text->text[start.idx];
+  token->text = &text[start.idx];
   token->span = (struct text_span){.start = start, .end = end};
 
   preproc_text->pos = end;

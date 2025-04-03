@@ -2,9 +2,6 @@
 
 #include "util.h"
 
-#define POS_CHECK(p)                                                           \
-  DEBUG_ASSERT((p).col != TEXT_POS_INVALID_COL, "invalid text pos")
-
 bool text_pos_eq(const void *l, const void *r) {
   const struct text_pos *l_pos = l;
   const struct text_pos *r_pos = r;
@@ -38,27 +35,4 @@ void hash_text_span(struct hasher *hasher, const void *value) {
 
   hash_text_pos(hasher, &token->start);
   hash_text_pos(hasher, &token->end);
-}
-
-size_t text_pos_len(struct text_pos start, struct text_pos end) {
-  return end.idx - start.idx;
-}
-
-size_t text_span_len(const struct text_span *span) {
-  return text_pos_len(span->start, span->end);
-}
-
-void next_col(struct text_pos *pos) {
-  POS_CHECK(*pos);
-
-  pos->idx++;
-  pos->col++;
-}
-
-void next_line(struct text_pos *pos) {
-  POS_CHECK(*pos);
-
-  pos->idx++;
-  pos->line++;
-  pos->col = 0;
 }
