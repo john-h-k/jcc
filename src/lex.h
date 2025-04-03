@@ -170,7 +170,6 @@ struct lex_token {
 
 struct lex_pos {
   size_t id;
-  struct text_pos text_pos;
 };
 
 struct lexer;
@@ -189,9 +188,9 @@ void lex_backtrack(struct lexer *lexer, struct lex_pos position);
 void lex_peek_token(struct lexer *lexer, struct lex_token *token);
 void lex_consume_token(struct lexer *lexer, struct lex_token token);
 
-bool lexer_at_eof(struct lexer *lexer);
+struct text_pos lex_cur_pos(struct lexer *lexer);
 
-struct text_pos lex_get_last_text_pos(const struct lexer *lexer);
+bool lexer_at_eof(struct lexer *lexer);
 
 // returns the associated text for a token, or NULL
 // e.g
