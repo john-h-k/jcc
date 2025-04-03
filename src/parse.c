@@ -193,7 +193,7 @@ static bool op_info_for_token(const struct lex_token *token,
 // unlike `parse_token`, always ""succeeds"" (because we have enough context to
 // know what token is next, so we must know what to do after) but generates a
 // diagnostic if it fails to find it
-static void parse_expected_token(struct parser *parser, enum lex_token_ty ty,
+static bool parse_expected_token(struct parser *parser, enum lex_token_ty ty,
                                  struct text_pos start, const char *err,
                                  struct text_span *span) {
   struct lex_token token;
@@ -206,7 +206,7 @@ static void parse_expected_token(struct parser *parser, enum lex_token_ty ty,
   if (token.ty == ty) {
     lex_consume_token(parser->lexer, token);
 
-    return;
+    return true;
   }
 
   struct text_pos end = token.span.end;
@@ -228,15 +228,17 @@ static void parse_expected_token(struct parser *parser, enum lex_token_ty ty,
   if (span) {
     *span = MK_TEXT_SPAN(end, end);
   }
+
+  return false;
 }
 
-static void parse_expected_identifier(struct parser *parser,
+static bool parse_expected_identifier(struct parser *parser,
                                       struct lex_token *token,
                                       struct text_pos start, const char *err) {
   lex_peek_token(parser->lexer, token);
   if (token->ty == LEX_TOKEN_TY_IDENTIFIER) {
     lex_consume_token(parser->lexer, *token);
-    return;
+    return true;
   }
 
   parser->result_ty = PARSE_RESULT_TY_FAILURE;
@@ -245,8 +247,29 @@ static void parse_expected_identifier(struct parser *parser,
       MK_PARSER_DIAGNOSTIC(EXPECTED_TOKEN, expected_token,
                            MK_TEXT_SPAN(start, token->span.end),
                            token->span.end, err));
+
+  return false;
 }
 
+static bool parse_expr(struct parser *parser, struct ast_expr *expr);
+
+static bool parse_expected_expr(struct parser *parser, struct ast_expr *expr,
+                                const char *err) {
+  if (parse_expr(parser, expr)) {
+    return true;
+  }
+
+  struct lex_token token;
+  lex_peek_token(parser->lexer, &token);
+
+  parser->result_ty = PARSE_RESULT_TY_FAILURE;
+  compiler_diagnostics_add(parser->diagnostics,
+                           MK_PARSER_DIAGNOSTIC(EXPECTED_EXPR, expected_expr,
+                                                token.span, token.span.start,
+                                                err));
+
+    return false;
+}
 static bool parse_token(struct parser *parser, enum lex_token_ty ty,
                         struct text_span *span) {
   struct lex_token token;
@@ -420,10 +443,6 @@ static bool parse_type_specifier_kw(struct parser *parser,
     return false;
   }
 }
-
-static void parse_expected_expr(struct parser *parser, struct ast_expr *expr,
-                                const char *err);
-static bool parse_expr(struct parser *parser, struct ast_expr *expr);
 
 static bool parse_compoundexpr_raw(struct parser *parser,
                                    struct ast_compoundexpr *compound_expr);
@@ -2388,9 +2407,14 @@ static bool parse_expr_precedence_aware(struct parser *parser,
     }
 
     struct ast_expr rhs;
-    invariant_assert(
-        parse_expr_precedence_aware(parser, next_min_precedence, NULL, &rhs),
-        "expected parse failed");
+    if (!parse_expr_precedence_aware(parser, next_min_precedence, NULL, &rhs)) {
+      parser->result_ty = PARSE_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(parser->diagnostics,
+                               MK_PARSER_DIAGNOSTIC(EXPECTED_EXPR, expected_expr,
+                                                    MK_TEXT_SPAN(expr->span.start, lookahead.span.end), lookahead.span.end,
+                                                    "expected expression after binary operator"));
+      
+    }
 
     // slightly odd design where `expr` now contains lhs and `rhs` contains
     // `rhs` so we need to in-place modify `expr`
@@ -2475,22 +2499,6 @@ static bool parse_constant_expr(struct parser *parser, struct ast_expr *expr) {
   }
 
   return true;
-}
-
-static void parse_expected_expr(struct parser *parser, struct ast_expr *expr,
-                                const char *err) {
-  if (parse_expr(parser, expr)) {
-    return;
-  }
-
-  struct lex_token token;
-  lex_peek_token(parser->lexer, &token);
-
-  parser->result_ty = PARSE_RESULT_TY_FAILURE;
-  compiler_diagnostics_add(parser->diagnostics,
-                           MK_PARSER_DIAGNOSTIC(EXPECTED_EXPR, expected_expr,
-                                                token.span, token.span.start,
-                                                err));
 }
 
 // parse a non-compound expression
