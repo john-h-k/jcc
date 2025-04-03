@@ -33,12 +33,12 @@ struct compiler {
   struct arena_allocator *arena;
   struct fcache *fcache;
 
-  struct compiler_diagnostics *preproc_diagnostics;
   struct preproc *preproc;
   struct program program;
   struct compile_args args;
   struct parser *parser;
   struct typechk *typechk;
+  struct compiler_diagnostics *diagnostics;
   enum compile_preproc_mode mode;
   const struct target *target;
 
@@ -46,7 +46,7 @@ struct compiler {
 };
 
 enum compiler_create_result
-create_compiler(struct program *program, struct fcache *fcache,
+compiler_create(struct program *program, struct fcache *fcache,
                 const struct target *target, struct compile_file output,
                 const char *path, const struct compile_args *args,
                 enum compile_preproc_mode mode, struct compiler **compiler) {
@@ -57,6 +57,7 @@ create_compiler(struct program *program, struct fcache *fcache,
   (*compiler)->target = target;
   (*compiler)->output = output;
   (*compiler)->mode = mode;
+  (*compiler)->diagnostics = compiler_diagnostics_create();
 
   (*compiler)->program = *program;
 
@@ -73,24 +74,22 @@ create_compiler(struct program *program, struct fcache *fcache,
       .fixed_timestamp = args->fixed_timestamp,
   };
 
-  // slightly odd that we create it outside preproc when everything else does it
-  // inside but its because preproc is wrapped by the parser normally
-  (*compiler)->preproc_diagnostics = compiler_diagnostics_create();
-
   if (preproc_create(program, fcache, preproc_args,
-                     (*compiler)->preproc_diagnostics,
+                     (*compiler)->diagnostics,
                      &(*compiler)->preproc) != PREPROC_CREATE_RESULT_SUCCESS) {
     err("failed to create preproc");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
   if (parser_create(program, (*compiler)->preproc, mode,
+                    (*compiler)->diagnostics,
                     &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
   if (typechk_create(target, args, (*compiler)->parser,
+                     (*compiler)->diagnostics,
                      &(*compiler)->typechk) != TYPECHK_CREATE_RESULT_SUCCESS) {
     err("failed to create typechk");
     return COMPILER_CREATE_RESULT_FAILURE;
@@ -259,8 +258,9 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 }
 
 static void
-compiler_print_diagnostics(struct compiler *compiler,
-                           struct compiler_diagnostics *diagnostics) {
+compiler_print_diagnostics(struct compiler *compiler) {
+  struct compiler_diagnostics *diagnostics = compiler->diagnostics;
+
   struct compiler_diagnostics_iter iter =
       compiler_diagnostics_iter(diagnostics);
   struct compiler_diagnostic diagnostic;
@@ -318,6 +318,8 @@ compiler_print_diagnostics(struct compiler *compiler,
 
     fprintf(stderr, "\n");
   }
+
+  fflush(stderr);
 }
 
 static enum compile_result compile_stage_preproc(struct compiler *compiler,
@@ -335,7 +337,7 @@ static enum compile_result compile_stage_preproc(struct compiler *compiler,
   // TODO: preproc can fail
   preproc_process(compiler->preproc, file);
 
-  compiler_print_diagnostics(compiler, compiler->preproc_diagnostics);
+  compiler_print_diagnostics(compiler);
 
   return COMPILE_RESULT_SUCCESS;
 }
@@ -365,9 +367,8 @@ compile_stage_parse(struct compiler *compiler,
   *parse_result = parse(compiler->parser);
 
   // TODO: err out if preproc fails
-  compiler_print_diagnostics(compiler, compiler->preproc_diagnostics);
+  compiler_print_diagnostics(compiler);
 
-  compiler_print_diagnostics(compiler, parse_result->diagnostics);
   if (parse_result->ty == PARSE_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }
@@ -386,7 +387,7 @@ compile_stage_typechk(struct compiler *compiler,
   *typechk_result =
       td_typechk(compiler->typechk, &parse_result->translation_unit);
 
-  compiler_print_diagnostics(compiler, typechk_result->diagnostics);
+  compiler_print_diagnostics(compiler);
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }
@@ -721,7 +722,7 @@ compile_stage_build_object(struct compiler *compiler,
     PROFILE_BEGIN(lo);                                                         \
     enum compile_result result = compile_stage_##lo(compiler, __VA_ARGS__);    \
     PROFILE_END(lo);                                                           \
-    if (result != COMPILE_RESULT_SUCCESS) {                                    \
+    if (result != COMPILE_RESULT_SUCCESS) {                                 \
       return result;                                                           \
     }                                                                          \
   }
@@ -817,7 +818,7 @@ void free_compiler(struct compiler **compiler) {
   preproc_free(&(*compiler)->preproc);
   parser_free(&(*compiler)->parser);
   typechk_free(&(*compiler)->typechk);
-  compiler_diagnostics_free(&(*compiler)->preproc_diagnostics);
+  compiler_diagnostics_free(&(*compiler)->diagnostics);
   arena_allocator_free(&(*compiler)->arena);
 
   free(*compiler);

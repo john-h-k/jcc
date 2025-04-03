@@ -770,24 +770,22 @@ enum typechk_result_ty {
 struct typechk_result {
   enum typechk_result_ty ty;
 
-  struct compiler_diagnostics *diagnostics;
   struct td_translationunit translation_unit;
 };
 
 bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
                   const struct td_var_ty *r);
 
-enum typechk_create_result typechk_create(const struct target *target,
-                                          const struct compile_args *args,
-                                          struct parser *parser,
-                                          struct typechk **tchk);
+enum typechk_create_result
+typechk_create(const struct target *target, const struct compile_args *args,
+               struct parser *parser, struct compiler_diagnostics *diagnostics,
+               struct typechk **tchk);
 
 struct typechk_result td_typechk(struct typechk *tchk,
                                  struct ast_translationunit *translation_unit);
 void typechk_free(struct typechk **tchk);
 
-void debug_print_td(struct typechk *tchk,
-                    struct hashtbl *log_symbols,
+void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
                     struct td_translationunit *translation_unit);
 
 #endif

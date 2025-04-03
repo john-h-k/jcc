@@ -25,6 +25,7 @@ struct parser {
 enum parser_create_result parser_create(struct program *program,
                                         struct preproc *preproc,
                                         enum compile_preproc_mode mode,
+                                        struct compiler_diagnostics *diagnostics,
                                         struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
@@ -37,7 +38,7 @@ enum parser_create_result parser_create(struct program *program,
 
   p->result_ty = PARSE_RESULT_TY_SUCCESS;
   p->ty_table = vt_create(p->arena);
-  p->diagnostics = compiler_diagnostics_create();
+  p->diagnostics = diagnostics;
 
   *parser = p;
 
@@ -3429,7 +3430,6 @@ struct parse_result parse(struct parser *parser) {
   translation_unit.num_external_declarations = vector_length(declarations);
 
   struct parse_result result = {.ty = parser->result_ty,
-                                .diagnostics = parser->diagnostics,
                                 .translation_unit = translation_unit};
 
   return result;

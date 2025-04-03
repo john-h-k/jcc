@@ -995,13 +995,13 @@ enum parse_result_ty {
 struct parse_result {
   enum parse_result_ty ty;
 
-  struct compiler_diagnostics *diagnostics;
   struct ast_translationunit translation_unit;
 };
 
 enum parser_create_result parser_create(struct program *program,
                                         struct preproc *preproc,
                                         enum compile_preproc_mode mode,
+                                        struct compiler_diagnostics *diagnostics,
                                         struct parser **parser);
 
 struct parse_result parse(struct parser *parser);

@@ -24,6 +24,86 @@ static size_t json_parse_ws(struct sized_str *str) {
   return rd;
 }
 
+static struct sized_str process_raw_string(struct json_context *ctx,
+                                           struct sized_str value) {
+  // TODO: this i think will wrongly accept multilines
+  // FIXME: definitely wrong for wide strings
+
+  struct vector *buff = vector_create_in_arena(sizeof(char), ctx->arena);
+
+  size_t str_len = 0;
+  bool char_escaped = false;
+
+  for (size_t i = 0; i < value.len; i++) {
+    if (char_escaped) {
+#define PUSH_CHAR(ch)                                                          \
+  char pc = (char)ch;                                                          \
+  vector_push_back(buff, &pc);
+
+#define ADD_ESCAPED(ch, esc)                                                   \
+  case ch: {                                                                   \
+    PUSH_CHAR(esc);                                                            \
+    break;                                                                     \
+  }
+      if (value.str[i] == 'u') {
+        char u_buff[5] = {0};
+        memcpy(u_buff, &value.str[i + 1], 4);
+        i += 4;
+
+        unsigned long codepoint = strtoul(u_buff, NULL, 16);
+
+        if (codepoint <= 0x7F) {
+          char c = codepoint & 0x7F;
+          PUSH_CHAR(c);
+        } else if (codepoint <= 0x7FF) {
+          char c[2] = {(char)(0xC0 | ((codepoint >> 6) & 0x1F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
+          vector_extend(buff, c, 2);
+        } else if (codepoint <= 0xFFFF) {
+          char c[3] = {(char)(0xE0 | ((codepoint >> 12) & 0x0F)),
+                       (char)(0x80 | ((codepoint >> 6) & 0x3F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
+          vector_extend(buff, c, 3);
+        } else if (codepoint <= 0x10FFFF) {
+          char c[4] = {(char)(0xF0 | ((codepoint >> 18) & 0x07)),
+                       (char)(0x80 | ((codepoint >> 12) & 0x3F)),
+                       (char)(0x80 | ((codepoint >> 6) & 0x3F)),
+                       (char)(0x80 | (codepoint & 0x3F))};
+          vector_extend(buff, c, 4);
+        }
+      } else {
+        switch (value.str[i]) {
+          ADD_ESCAPED('b', '\b')
+          ADD_ESCAPED('f', '\f')
+          ADD_ESCAPED('n', '\n')
+          ADD_ESCAPED('r', '\r')
+          ADD_ESCAPED('t', '\t')
+          ADD_ESCAPED('\\', '\\')
+          ADD_ESCAPED('\'', '\'')
+          ADD_ESCAPED('/', '/')
+          ADD_ESCAPED('"', '"')
+        default:
+          TODO("\\x \\u \\U and \\octal escapes");
+          // either octal escape, or invalid
+        }
+      }
+
+#undef ADD_ESCAPED
+    } else if (value.str[i] != '\\') {
+      PUSH_CHAR(value.str[i]);
+    }
+
+    // next char is escaped if this char is a non-escaped backslash
+    char_escaped = !char_escaped && value.str[i] == '\\';
+  }
+
+  str_len = vector_byte_size(buff);
+
+  PUSH_CHAR(0);
+
+  return (struct sized_str){.str = vector_head(buff), .len = str_len};
+}
+
 static size_t json_parse_chunk(struct json_context *context,
                                struct sized_str str,
                                struct json_result *result) {
@@ -83,9 +163,11 @@ static size_t json_parse_chunk(struct json_context *context,
 
     struct sized_str val = {.str = str.str + 1, .len = len};
 
+    struct sized_str processed = process_raw_string(context, val);
+
     // TODO: process string for escapes
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
-                                   .value = JSON_MK_STR(val)};
+                                   .value = JSON_MK_STR(processed)};
     return rd + i;
   }
 
@@ -264,7 +346,7 @@ struct json_print_context {
 };
 
 static void json_print_value_part(struct json_print_context *ctx,
-                             const struct json_value *value) {
+                                  const struct json_value *value) {
   switch (value->ty) {
   case JSON_VALUE_TY_NULL:
     fprintf(ctx->file, "null");
@@ -314,7 +396,6 @@ static void json_print_value_part(struct json_print_context *ctx,
     break;
   }
 }
-
 
 void json_print_value(FILE *file, const struct json_value *value) {
   struct json_print_context ctx = {.file = file, .indent = 0};

@@ -1,5 +1,6 @@
 #include "args.h"
 
+#include "compiler.h"
 #include "hashtbl.h"
 #include "log.h"
 #include "util.h"
@@ -287,7 +288,24 @@ enum parse_args_result parse_args(int argc, char **argv,
 
   struct vector *values = vector_create(sizeof(char *));
 
-  for (size_t i = 1; i < (size_t)argc; i++) {
+  parsed->jcc = argc ? argv[0] : NULL;
+
+  size_t i = 1;
+
+  // default to compile driver
+  parsed->driver = JCC_DRIVER_COMPILER;
+
+  if (argc > 1) {
+    if (!strcmp(argv[1], "-lsp")) {
+      parsed->driver = JCC_DRIVER_LSP;
+      i++;
+    } else if (!strcmp(argv[1], "-jcc")) {
+      parsed->driver = JCC_DRIVER_COMPILER;
+      i++;
+    }
+  }
+
+  for (; i < (size_t)argc; i++) {
     char *s = argv[i];
     size_t len = strlen(s);
 

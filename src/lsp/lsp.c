@@ -1,7 +1,7 @@
 #include "lsp.h"
 
 #include "../alloc.h"
-#include "../hashtbl.h"
+#include "../compiler.h"
 #include "../json.h"
 #include "../log.h"
 #include "../vector.h"
@@ -18,8 +18,11 @@ struct lsp_headers {
 struct lsp_context {
   struct arena_allocator *arena;
   struct vector *read_buf;
-  struct hashtbl *obj_props;
   struct json_writer *writer;
+  struct fcache *fcache;
+  struct parsed_args args;
+  struct compile_args compile_args;
+  const struct target *target;
 
   bool shutdown_recv;
 
@@ -93,6 +96,25 @@ static struct lsp_headers lsp_read_headers(struct lsp_context *context) {
   }
 }
 
+static void lsp_parse_doc(struct lsp_context *context,
+                          const struct didopen_textdoc_params *doc) {
+  struct program program = {
+      // FIXME: not sized
+      .text = arena_alloc_strndup(context->arena, doc->text_doc.text.str,
+                                  doc->text_doc.text.len)};
+
+  // feels hacky
+  context->compile_args.syntax_only = true;
+
+  struct compiler *compiler;
+  compiler_create(&program, context->fcache, context->target,
+                  (struct compile_file){.ty = COMPILE_FILE_TY_NONE},
+                  context->args.jcc, &context->compile_args,
+                  COMPILE_PREPROC_MODE_PREPROC, &compiler);
+
+  compile(compiler);
+}
+
 static void lsp_handle_msg(struct lsp_context *context,
                            const struct req_msg *msg) {
   switch (msg->method) {
@@ -104,8 +126,9 @@ static void lsp_handle_msg(struct lsp_context *context,
   case REQ_MSG_METHOD_INITIALIZED:
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
+    lsp_parse_doc(context, &msg->didopen_textdoc_params);
+    break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
-    (void)context;
     break;
   }
 }
@@ -182,7 +205,6 @@ static void lsp_write_server_caps(struct lsp_context *ctx,
       {
         // ServerCapabilities
 
-        // FIXME: need to check this is available
         JSON_WRITE_FIELD(writer, "positionEncoding", MK_SIZED("utf-8"));
       }
       json_writer_write_end_obj(writer);
@@ -194,23 +216,24 @@ static void lsp_write_server_caps(struct lsp_context *ctx,
   lsp_write_buf(ctx);
 }
 
-int lsp_run(void) {
+int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
+            struct parsed_args args, struct compile_args compile_args,
+            const struct target *target) {
   fprintf(stderr, "JCC LSP mode\n");
   fprintf(stderr, "This is intended for consumption by an editor\n\n");
 
-  struct arena_allocator *arena;
-  arena_allocator_create(&arena);
-
-  struct lsp_context context = {
-      .arena = arena,
-      .read_buf = vector_create_in_arena(sizeof(char), arena),
-      .obj_props = hashtbl_create_sized_str_keyed_in_arena(
-          arena, sizeof(struct sized_str)),
-      .writer = json_writer_create(),
-      .shutdown_recv = false,
-      .in = stdin,
-      .out = stdout,
-      .log = stderr};
+  struct lsp_context context = {.arena = arena,
+                                .read_buf =
+                                    vector_create_in_arena(sizeof(char), arena),
+                                .writer = json_writer_create(),
+                                .compile_args = compile_args,
+                                .args = args,
+                                .fcache = fcache,
+                                .target = target,
+                                .shutdown_recv = false,
+                                .in = stdin,
+                                .out = stdout,
+                                .log = stderr};
 
   struct lsp_headers headers = lsp_read_headers(&context);
   struct req_msg msg = lsp_read_msg(&context, &headers);
