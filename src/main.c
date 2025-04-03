@@ -338,9 +338,20 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
     return PARSE_ARGS_RESULT_FAIL;
   }
 
-  if (!args->num_values) {
-    err("No sources provided");
-    return PARSE_ARGS_RESULT_FAIL;
+  switch (args->driver) {
+
+  case JCC_DRIVER_COMPILER:
+    if (!args->num_values) {
+      err("No sources provided");
+      return PARSE_ARGS_RESULT_FAIL;
+    }
+    break;
+  case JCC_DRIVER_LSP:
+    if (args->num_values) {
+      err("Cannot provide sources in lsp mode");
+      return PARSE_ARGS_RESULT_FAIL;
+    }
+    break;
   }
 
   return PARSE_ARGS_RESULT_SUCCESS;
@@ -402,46 +413,19 @@ static bool try_get_language_for_file(struct path_components components,
   return false;
 }
 
-enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_LSP };
+static int jcc_driver_lsp(struct arena_allocator *arena, struct fcache *fcache,
+                          struct parsed_args args,
+                          struct compile_args compile_args,
+                          const struct target *target);
 
-static enum jcc_driver parse_driver(int argc, char **argv) {
-  if (argc < 2) {
-    return JCC_DRIVER_COMPILER;
-  }
-
-  char *driver = argv[1];
-  if (!strcmp(driver, "-lsp")) {
-    return JCC_DRIVER_LSP;
-  }
-
-  if (!strcmp(driver, "-jcc")) {
-    return JCC_DRIVER_COMPILER;
-  }
-
-  return JCC_DRIVER_COMPILER;
-}
-
-
-static int jcc_driver_lsp(int argc, char **argv);
-static int jcc_driver_compiler(int argc, char **argv);
+static int jcc_driver_compiler(struct arena_allocator *arena,
+                               struct fcache *fcache, struct parsed_args args,
+                               struct compile_args compile_args,
+                               const struct target *target, size_t num_sources,
+                               const char **sources);
 
 static int jcc_main(int argc, char **argv) {
-  switch (parse_driver(argc, argv)) {
-  case JCC_DRIVER_COMPILER:
-    // FIXME: if `-jcc` passed manually it will get rejected by arg parse stage
-    return jcc_driver_compiler(argc, argv);
-  case JCC_DRIVER_LSP:
-    return jcc_driver_lsp(argc, argv);
-  }
-}
-
-static int jcc_driver_lsp(UNUSED int argc, UNUSED char **argv) { return lsp_run(); }
-
-static int jcc_driver_compiler(int argc, char **argv) {
-  int exc = 1;
-
   struct arena_allocator *arena = NULL;
-  char const **objects = NULL;
 
   arena_allocator_create(&arena);
 
@@ -459,20 +443,40 @@ static int jcc_driver_compiler(int argc, char **argv) {
   case PARSE_ARGS_RESULT_SUCCESS:
     break;
   case PARSE_ARGS_RESULT_HELP:
-    exc = 0;
-    goto exit;
+    return 0;
   case PARSE_ARGS_RESULT_FAIL:
-    exc = -1;
-    goto exit;
+    return 1;
   }
 
   const struct target *target = get_target(compile_args.target);
   if (!target) {
-    exc = -1;
-    goto exit;
+    return 1;
   }
 
-  objects = nonnull_malloc(sizeof(*objects) * num_sources);
+  switch (args.driver) {
+  case JCC_DRIVER_COMPILER:
+    return jcc_driver_compiler(arena, fcache, args, compile_args, target,
+                               num_sources, sources);
+  case JCC_DRIVER_LSP:
+    return jcc_driver_lsp(arena, fcache, args, compile_args, target);
+  }
+}
+
+static int jcc_driver_lsp(struct arena_allocator *arena, struct fcache *fcache,
+                          struct parsed_args args,
+                          struct compile_args compile_args,
+                          const struct target *target) {
+  return lsp_run(arena, fcache, args, compile_args, target);
+}
+
+static int jcc_driver_compiler(struct arena_allocator *arena,
+                               struct fcache *fcache, struct parsed_args args,
+                               struct compile_args compile_args,
+                               const struct target *target, size_t num_sources,
+                               const char **sources) {
+  int exc = 1;
+
+  const char **objects = nonnull_malloc(sizeof(*objects) * num_sources);
 
   info("beginning compilation stage...");
   for (size_t i = 0; i < num_sources; i++) {
@@ -585,7 +589,7 @@ static int jcc_driver_compiler(int argc, char **argv) {
 
     PROFILE_BEGIN(create_compiler);
 
-    if (create_compiler(&program, fcache, target, file, source_path,
+    if (compiler_create(&program, fcache, target, file, source_path,
                         &compile_args, mode,
                         &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");

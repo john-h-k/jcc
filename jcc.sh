@@ -13,7 +13,7 @@ help() {
   echo "jcc.sh COMMAND"
   echo ""
   echo "COMMANDS:"
-  echo  "   <none>       Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
+  echo "    <none>       Same as 'run', to allow using this script as CC or similar. Requires the first argument to be a valid file or begin with '-'"
   echo "    help         Show help"
   echo "    configure    Configure build"
   echo "    build        Build JCC"

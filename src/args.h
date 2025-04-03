@@ -351,6 +351,9 @@ struct parsed_args {
   int argc;
   char **argv;
 
+  char *jcc;
+  enum jcc_driver driver;
+
 #define ARG_OPT(_0, field_ty, name, ...) field_ty name;
 
   ARG_OPT_LIST

@@ -1,12 +1,15 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "program.h"
+#include "diagnostics.h"
 #include "fcache.h"
+#include "program.h"
 
 #include <stdio.h>
 
 struct compiler;
+
+enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_LSP };
 
 enum codegen_flags {
   CODEGEN_FLAG_NONE = 0,
@@ -140,23 +143,25 @@ enum compile_result {
   COMPILE_RESULT_FAILURE
 };
 
-
-// used by lexer to decide if it uses preproc_next_token or preproc_next_raw_token
+// used by lexer to decide if it uses preproc_next_token or
+// preproc_next_raw_token
 enum compile_preproc_mode {
   COMPILE_PREPROC_MODE_PREPROC,
   COMPILE_PREPROC_MODE_NO_PREPROC,
 };
 
 struct target;
+
 enum compiler_create_result
-create_compiler(struct program *program,
-                struct fcache *fcache,
-                 const struct target *target,
-                struct compile_file output, const char *working_dir,
-                const struct compile_args *args,
-                  enum compile_preproc_mode mode,
-                 struct compiler **compiler);
+compiler_create(struct program *program, struct fcache *fcache,
+                const struct target *target, struct compile_file output,
+                const char *working_dir, const struct compile_args *args,
+                enum compile_preproc_mode mode, struct compiler **compiler);
+
 enum compile_result compile(struct compiler *compiler);
+
+struct compiler_diagnostics compiler_get_diagnostics(struct compiler *compiler);
+
 void free_compiler(struct compiler **compiler);
 
 #endif

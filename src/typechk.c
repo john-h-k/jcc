@@ -577,25 +577,32 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
   }
 
   if (lhs_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    struct td_var_ty lhs_ptr = td_var_ty_make_pointer(tchk, lhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
-    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty, context);
+    struct td_var_ty lhs_ptr = td_var_ty_make_pointer(
+        tchk, lhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty,
+                                                context);
   }
 
   if (lhs_ty->ty == TD_VAR_TY_TY_FUNC) {
-    struct td_var_ty lhs_ptr = td_var_ty_make_pointer(tchk, lhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
-    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty, context);
+    struct td_var_ty lhs_ptr =
+        td_var_ty_make_pointer(tchk, lhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, &lhs_ptr, rhs_ty,
+                                                context);
   }
 
   if (rhs_ty->ty == TD_VAR_TY_TY_ARRAY) {
-    struct td_var_ty rhs_ptr = td_var_ty_make_pointer(tchk, rhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
-    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr, context);
+    struct td_var_ty rhs_ptr = td_var_ty_make_pointer(
+        tchk, rhs_ty->array.underlying, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr,
+                                                context);
   }
 
   if (rhs_ty->ty == TD_VAR_TY_TY_FUNC) {
-    struct td_var_ty rhs_ptr = td_var_ty_make_pointer(tchk, rhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
-    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr, context);
+    struct td_var_ty rhs_ptr =
+        td_var_ty_make_pointer(tchk, rhs_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+    return resolve_usual_arithmetic_conversions(tchk, lhs_ty, &rhs_ptr,
+                                                context);
   }
-
 
   if (lhs_ty->ty == TD_VAR_TY_TY_POINTER ||
       rhs_ty->ty == TD_VAR_TY_TY_POINTER) {
@@ -616,7 +623,8 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
     } else if (lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
                rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
                td_var_ty_compatible(tchk, lhs_ty->pointer.underlying,
-                            rhs_ty->pointer.underlying, TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+                                    rhs_ty->pointer.underlying,
+                                    TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
       return *lhs_ty;
     } else {
       // compiler_diagnostics_add(
@@ -715,16 +723,14 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
 
   if (lhs->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty complete;
-    if (try_get_completed_aggregate(tchk, lhs,
-                                      &complete)) {
+    if (try_get_completed_aggregate(tchk, lhs, &complete)) {
       lhs = &complete;
     }
   }
 
   if (rhs->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty complete;
-    if (try_get_completed_aggregate(tchk, rhs,
-                                      &complete)) {
+    if (try_get_completed_aggregate(tchk, rhs, &complete)) {
       rhs = &complete;
     }
   }
@@ -1449,7 +1455,7 @@ td_var_ty_for_typedef(struct typechk *tchk,
                                "typedef name does not exist"));
     return TD_VAR_TY_UNKNOWN;
   }
-  
+
   if (entry->var_ty->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
     struct td_var_ty complete;
     if (try_get_completed_aggregate(tchk, entry->var_ty, &complete)) {
@@ -1879,7 +1885,8 @@ type_specifiers(struct typechk *tchk,
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_CHAR) {
       wk = unsigned_count ? WELL_KNOWN_TY_UNSIGNED_CHAR
-                          : signed_count ? WELL_KNOWN_TY_SIGNED_CHAR : WELL_KNOWN_TY_CHAR;
+           : signed_count ? WELL_KNOWN_TY_SIGNED_CHAR
+                          : WELL_KNOWN_TY_CHAR;
     } else if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
                last_specifier.type_specifier_kw ==
                    AST_TYPE_SPECIFIER_KW_SHORT) {
@@ -5043,10 +5050,10 @@ static struct td_external_declaration type_external_declaration(
   }
 }
 
-enum typechk_create_result typechk_create(const struct target *target,
-                                          const struct compile_args *args,
-                                          struct parser *parser,
-                                          struct typechk **tchk) {
+enum typechk_create_result
+typechk_create(const struct target *target, const struct compile_args *args,
+               struct parser *parser, struct compiler_diagnostics *diagnostics,
+               struct typechk **tchk) {
   struct typechk *t = nonnull_malloc(sizeof(*t));
 
   struct arena_allocator *arena;
@@ -5060,7 +5067,7 @@ enum typechk_create_result typechk_create(const struct target *target,
                         .ty_table = vt_create(arena),
                         .var_table = vt_create(arena),
                         .result_ty = TYPECHK_RESULT_TY_SUCCESS,
-                        .diagnostics = compiler_diagnostics_create()};
+                        .diagnostics = diagnostics};
 
   *tchk = t;
 
@@ -5146,7 +5153,6 @@ struct typechk_result td_typechk(struct typechk *tchk,
   td_translation_unit.num_external_declarations = head;
 
   return (struct typechk_result){.ty = tchk->result_ty,
-                                 .diagnostics = tchk->diagnostics,
                                  .translation_unit = td_translation_unit};
 }
 
