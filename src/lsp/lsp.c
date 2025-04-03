@@ -64,8 +64,6 @@ static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
 
     size_t header_len = brk - buffer;
 
-    fprintf(log, "Header %.*s\n", (int)header_len, buffer);
-
     // FIXME: should be case insensitive
     if (!strncmp(buffer, "Content-Length", header_len)) {
       unsigned long long length;
@@ -139,22 +137,12 @@ static void lsp_parse_doc(struct lsp_ctx *ctx,
   lsp_write_diagnostics(ctx, &doc_ctx, diagnostics);
 }
 
-static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
-  switch (msg->method) {
-  case REQ_MSG_METHOD_INITIALIZE:
-    BUG("duplicate initialize message");
-  case REQ_MSG_METHOD_SHUTDOWN:
-  case REQ_MSG_METHOD_EXIT:
-    BUG("shutdown/exit methods should have been handled");
-  case REQ_MSG_METHOD_INITIALIZED:
-    break;
-  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
-    lsp_parse_doc(ctx, &msg->didopen_textdoc_params);
-    break;
-  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
-    break;
-  }
-}
+#define LSP_WRITE_MESSAGE(block)                                               \
+  json_writer_write_begin_obj(ctx->writer);                                    \
+  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_SIZED("2.0"));                   \
+  {block};                                                                     \
+  json_writer_write_end_obj(ctx->writer);                                      \
+  lsp_write_buf(ctx);
 
 static struct req_msg lsp_read_msg(struct lsp_ctx *ctx) {
   struct lsp_headers headers = lsp_read_headers(ctx);
@@ -199,16 +187,6 @@ static void lsp_write_buf(struct lsp_ctx *ctx) {
   // safe to clear buffer now
   json_writer_clear(ctx->writer);
 }
-
-// nice trick:
-// you can use `for (int a = 0; !a; a++, <CODE>)` to run code _after_ a block
-
-#define LSP_WRITE_MESSAGE(block)                                               \
-  json_writer_write_begin_obj(ctx->writer);                                    \
-  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_SIZED("2.0"));                   \
-  {block};                                                                     \
-  json_writer_write_end_obj(ctx->writer);                                      \
-  lsp_write_buf(ctx);
 
 // Writes a `struct text_pos` into a `Position` LSP type
 static void lsp_json_write_pos(struct lsp_ctx *ctx, struct text_pos pos) {
@@ -366,6 +344,35 @@ static void lsp_handle_init(struct lsp_ctx *ctx) {
                    "expected response to be an 'initialized' method");
 }
 
+static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
+  switch (msg->method) {
+  case REQ_MSG_METHOD_INITIALIZE:
+    BUG("duplicate initialize message");
+  case REQ_MSG_METHOD_SHUTDOWN:
+    ctx->shutdown_recv = true;
+
+    LSP_WRITE_MESSAGE({
+      JSON_WRITE_FIELD(ctx->writer, "id", msg->id);
+      JSON_WRITE_FIELD(ctx->writer, "result", JSON_NULL);
+
+      // apparently we are meant to set code & message?
+    });
+
+    info("LSP shutting down...");
+    fprintf(stderr, "LSP shutting down...");
+    break;
+
+  case REQ_MSG_METHOD_EXIT:
+    BUG("exit method should have been handled");
+  case REQ_MSG_METHOD_INITIALIZED:
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
+    lsp_parse_doc(ctx, &msg->didopen_textdoc_params);
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
+    break;
+  }
+}
 int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
             struct parsed_args args, struct compile_args compile_args,
             const struct target *target) {
@@ -390,12 +397,6 @@ int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
     struct req_msg msg = lsp_read_msg(&ctx);
 
     switch (msg.method) {
-    case REQ_MSG_METHOD_SHUTDOWN:
-      ctx.shutdown_recv = true;
-
-      info("LSP shutting down...");
-      fprintf(stderr, "LSP shutting down...");
-      break;
     case REQ_MSG_METHOD_EXIT:
       return ctx.shutdown_recv ? 0 : 1;
     default:

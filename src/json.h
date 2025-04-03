@@ -4,6 +4,9 @@
 #include "ap_val.h"
 #include "hashtbl.h"
 
+struct json_null_t { char placeholder; };
+#define JSON_NULL ((struct json_null_t){0})
+
 enum json_value_ty {
   JSON_VALUE_TY_NULL,
   JSON_VALUE_TY_BOOL,
@@ -74,7 +77,7 @@ struct json_writer;
 struct json_writer *json_writer_create(void);
 void json_writer_free(struct json_writer **writer);
 
-void json_writer_write_null(struct json_writer *writer);
+void json_writer_write_null(struct json_writer *writer, UNUSED struct json_null_t null);
 void json_writer_write_bool(struct json_writer *writer, bool value);
 
 void json_writer_write_integer(struct json_writer *writer, long long value);
@@ -115,6 +118,7 @@ void json_writer_clear(struct json_writer *writer);
 
 #define JSON_WRITE(writer, value)                                              \
   _Generic((value),                                                            \
+      struct json_null_t: json_writer_write_null,                                            \
       bool: json_writer_write_bool,                                            \
       size_t: json_writer_write_integer,                                       \
       long long: json_writer_write_integer,                                    \
