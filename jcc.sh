@@ -379,8 +379,9 @@ _run() {
 
 run() {
     mode=$(get_mode "$1")
-    [ -z "$mode" ] && mode="Debug" || shift  
-    build --mode "$mode" 1>&2
+    mode_flag=""
+    [ -n "$mode" ] && { mode_flag="--mode $mode"; shift; }
+    build $mode_flag 1>&2
 
     _run "$@"
 }

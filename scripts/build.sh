@@ -232,6 +232,9 @@ configure() {
 }
 
 build() {
+    # hmm... eval'ing an env var is a bit dodgy
+    eval "set -- $JCC_BUILD_FLAGS \"\$@\""
+
     if ! configure "$@"; then
         echo -e "${BOLDRED}Configure failed!${RESET}"
     fi
