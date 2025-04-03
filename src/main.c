@@ -22,8 +22,8 @@
 
 static bool target_needs_linking(const struct compile_args *args,
                                  const struct target *target) {
-  if (args->preproc_only || args->lex_only || args->parse_only || args->syntax_only || args->build_asm_file ||
-      args->build_object_file) {
+  if (args->preproc_only || args->lex_only || args->parse_only ||
+      args->syntax_only || args->build_asm_file || args->build_object_file) {
     return false;
   }
 
@@ -402,9 +402,42 @@ static bool try_get_language_for_file(struct path_components components,
   return false;
 }
 
-static int jcc_main(int argc, char **argv) {
-  return lsp_run();
+enum jcc_driver { JCC_DRIVER_COMPILER, JCC_DRIVER_LSP };
 
+static enum jcc_driver parse_driver(int argc, char **argv) {
+  if (argc < 2) {
+    return JCC_DRIVER_COMPILER;
+  }
+
+  char *driver = argv[1];
+  if (!strcmp(driver, "-lsp")) {
+    return JCC_DRIVER_LSP;
+  }
+
+  if (!strcmp(driver, "-jcc")) {
+    return JCC_DRIVER_COMPILER;
+  }
+
+  return JCC_DRIVER_COMPILER;
+}
+
+
+static int jcc_driver_lsp(int argc, char **argv);
+static int jcc_driver_compiler(int argc, char **argv);
+
+static int jcc_main(int argc, char **argv) {
+  switch (parse_driver(argc, argv)) {
+  case JCC_DRIVER_COMPILER:
+    // FIXME: if `-jcc` passed manually it will get rejected by arg parse stage
+    return jcc_driver_compiler(argc, argv);
+  case JCC_DRIVER_LSP:
+    return jcc_driver_lsp(argc, argv);
+  }
+}
+
+static int jcc_driver_lsp(UNUSED int argc, UNUSED char **argv) { return lsp_run(); }
+
+static int jcc_driver_compiler(int argc, char **argv) {
   int exc = 1;
 
   struct arena_allocator *arena = NULL;

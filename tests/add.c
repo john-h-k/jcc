@@ -2,8 +2,8 @@
 
 int puts(const char *);
 int main() {
-  goto *&&x;
+  // goto *&&x;
 
-  [[gnu::assume( ({x: puts("hi")}) )]]
+  // [[gnu::assume( ({x: puts("hi")}) )]]
   return 9 + 7;
 }
