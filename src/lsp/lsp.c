@@ -19,7 +19,13 @@ struct lsp_ctx {
   struct arena_allocator *arena;
   struct vector *read_buf;
   struct json_writer *writer;
+
+  // hmm, ideally we would use fcache for all the file caching stuff but it
+  // doesn't currently have the capabilities for modifying docs
   struct fcache *fcache;
+  // sized_str (uri) : lsp_doc
+  struct hashtbl *docs;
+
   struct parsed_args args;
   struct compile_args compile_args;
   const struct target *target;
@@ -33,7 +39,7 @@ struct lsp_ctx {
   FILE *log;
 };
 
-struct lsp_doc_ctx {
+struct lsp_doc {
   struct text_doc doc;
 };
 
@@ -100,16 +106,14 @@ static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
   }
 }
 
-static void lsp_write_diagnostics(struct lsp_ctx *ctx,
-                                  struct lsp_doc_ctx *doc_ctx,
+static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc,
                                   struct compiler_diagnostics *diagnostics);
 
-static void lsp_parse_doc(struct lsp_ctx *ctx,
-                          const struct didopen_textdoc_params *doc) {
+static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc doc) {
   struct program program = {
       // FIXME: not sized
-      .text = arena_alloc_strndup(ctx->arena, doc->text_doc.text.str,
-                                  doc->text_doc.text.len)};
+      .text =
+          arena_alloc_strndup(ctx->arena, doc.doc.text.str, doc.doc.text.len)};
 
   struct compiler_create_args comp_args = {
       .program = program,
@@ -132,9 +136,51 @@ static void lsp_parse_doc(struct lsp_ctx *ctx,
 
   struct compiler_diagnostics *diagnostics = compiler_get_diagnostics(compiler);
 
-  struct lsp_doc_ctx doc_ctx = {.doc = doc->text_doc};
+  lsp_write_diagnostics(ctx, &doc, diagnostics);
+}
 
-  lsp_write_diagnostics(ctx, &doc_ctx, diagnostics);
+static void lsp_parse_opened_doc(struct lsp_ctx *ctx,
+                                 const struct didopen_textdoc_params *params) {
+  struct lsp_doc doc = {.doc = params->text_doc};
+
+  hashtbl_insert(ctx->docs, &params->text_doc.uri, &doc);
+
+  lsp_parse_doc(ctx, doc);
+}
+
+static void
+lsp_parse_changed_doc(struct lsp_ctx *ctx,
+                      const struct didchange_textdoc_params *params) {
+  struct lsp_doc *doc = hashtbl_lookup(ctx->docs, &params->text_doc.uri);
+
+  invariant_assert(doc, "doc did not exist (should have been opened by "
+                        "previous textDocument/didOpen call)");
+
+  if (doc->doc.version > params->text_doc.version) {
+    return;
+  }
+
+  doc->doc.version = params->text_doc.version;
+
+  // now we have to apply the changes
+  for (size_t i = 0; i < params->num_changes; i++) {
+    const struct text_doc_change_ev *ev = &params->changes[i];
+
+    switch (ev->ty) {
+    case TEXT_DOC_CHANGE_EV_TY_INCREMENTAL:
+      TODO("incremental changes");
+    case TEXT_DOC_CHANGE_EV_TY_FULL:
+      doc->doc.text = ev->text;
+      break;
+    }
+  }
+
+  lsp_parse_doc(ctx, *doc);
+}
+
+static void lsp_close_doc(struct lsp_ctx *ctx,
+                          const struct didclose_textdoc_params *params) {
+  hashtbl_remove(ctx->docs, &params->text_doc.uri);
 }
 
 #define LSP_WRITE_MESSAGE(block)                                               \
@@ -216,8 +262,7 @@ static void lsp_json_write_span(struct lsp_ctx *ctx, struct text_span span) {
   });
 }
 
-static void lsp_write_diagnostics(struct lsp_ctx *ctx,
-                                  struct lsp_doc_ctx *doc_ctx,
+static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc_ctx,
                                   struct compiler_diagnostics *diagnostics) {
   struct json_writer *writer = ctx->writer;
 
@@ -323,6 +368,14 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
         // ServerCapabilities
 
         JSON_WRITE_FIELD(writer, "positionEncoding", pos_encoding_kind);
+
+        JSON_OBJECT(writer, "textDocumentSync", {
+          // TextDocumentSyncOptions
+
+          // in C11 we need to force to bool so _Generic picks the right thing (sigh)
+          JSON_WRITE_FIELD(writer, "openClose", (bool)true);
+          JSON_WRITE_FIELD(writer, "change", TEXT_DOC_CHANGE_EV_TY_FULL);
+        });
       });
     });
   })
@@ -367,9 +420,13 @@ static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
   case REQ_MSG_METHOD_INITIALIZED:
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
-    lsp_parse_doc(ctx, &msg->didopen_textdoc_params);
+    lsp_parse_opened_doc(ctx, &msg->didopen_textdoc_params);
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCHANGE:
+    lsp_parse_changed_doc(ctx, &msg->didchange_textdoc_params);
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
+    lsp_close_doc(ctx, &msg->didclose_textdoc_params);
     break;
   }
 }
@@ -381,6 +438,8 @@ int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
 
   struct lsp_ctx ctx = {.arena = arena,
                         .read_buf = vector_create_in_arena(sizeof(char), arena),
+                        .docs = hashtbl_create_sized_str_keyed_in_arena(
+                            arena, sizeof(struct lsp_doc)),
                         .writer = json_writer_create(),
                         .compile_args = compile_args,
                         .args = args,

@@ -14,6 +14,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+// I _want_ to do this but feel like it may have some unknown side effects
+// #ifdef true
+// #undef true
+// #define true ((bool)1)
+// #endif
+
+// #ifdef false
+// #undef false
+// #define false ((bool)0)
+// #endif
+
 typedef ptrdiff_t ssize_t;
 
 #ifdef __JCC__
