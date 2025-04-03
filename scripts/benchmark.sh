@@ -42,10 +42,11 @@ _benchmark() {
     }
 
     if [ -z "$sources" ]; then
-        # sources="$sources,.tmp/huge.c"
-        sources="$sources,.tmp/sqlite3/sqlite-amalgamation-3490100/sqlite3.c"
-        _mk_sqlite3
         # _mk_huge
+        # sources="$sources,.tmp/huge.c"
+
+        _mk_sqlite3
+        sources="$SCRIPT_DIR/.tmp/sqlite3/sqlite-amalgamation-3490100/sqlite3.c"
     fi
 
     clean-all
