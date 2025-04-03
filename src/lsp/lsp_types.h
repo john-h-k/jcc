@@ -32,6 +32,25 @@ struct init_params {
   size_t num_workspace_folders;
 };
 
+struct text_doc {
+  struct sized_str uri;
+  struct sized_str language_id;
+  size_t version;
+  struct sized_str text;
+};
+
+struct text_doc_id {
+  struct sized_str uri;
+};
+
+struct didopen_textdoc_params {
+  struct text_doc text_doc;
+};
+
+struct didclose_textdoc_params {
+  struct text_doc_id text_doc;
+};
+
 #define TRY_DE_SIZE_T(name, camel, req)                                        \
   do {                                                                         \
     struct sized_str name_str = MK_SIZED(camel);                               \
@@ -97,6 +116,11 @@ struct init_params {
 enum req_msg_method {
   REQ_MSG_METHOD_INITIALIZE,
   REQ_MSG_METHOD_INITIALIZED,
+  REQ_MSG_METHOD_SHUTDOWN,
+  REQ_MSG_METHOD_EXIT,
+
+  REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN,
+  REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE,
 };
 
 struct req_msg {
@@ -105,6 +129,8 @@ struct req_msg {
 
   union {
     struct init_params init_params;
+    struct didopen_textdoc_params didopen_textdoc_params;
+    struct didclose_textdoc_params didclose_textdoc_params;
   };
 };
 

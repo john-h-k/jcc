@@ -15,12 +15,60 @@ static bool try_de_client_caps(const struct json_value *value,
   return true;
 }
 
+static bool
+try_de_didopen_textdoc_params(const struct json_value *value,
+                              struct didopen_textdoc_params *params) {
+  *params = (struct didopen_textdoc_params){0};
+
+  json_print_value(stderr, value);
+
+  if (value->ty != JSON_VALUE_TY_OBJECT) {
+    return false;
+  }
+
+  const struct json_object *object = &value->obj_val;
+
+  const struct json_object *doc;
+  TRY_DE_OBJECT(doc, "textDocument", true);
+
+  object = doc;
+
+  TRY_DE_STR(params->text_doc.uri, "uri", true);
+  TRY_DE_STR(params->text_doc.language_id, "languageId", true);
+  TRY_DE_SIZE_T(params->text_doc.version, "version", true);
+  TRY_DE_STR(params->text_doc.text, "text", true);
+
+  return true;
+}
+
+static bool
+try_de_didclose_textdoc_params(const struct json_value *value,
+                              struct didclose_textdoc_params *params) {
+  *params = (struct didclose_textdoc_params){0};
+
+  json_print_value(stderr, value);
+
+  if (value->ty != JSON_VALUE_TY_OBJECT) {
+    return false;
+  }
+
+  const struct json_object *object = &value->obj_val;
+
+  const struct json_object *doc;
+  TRY_DE_OBJECT(doc, "textDocument", true);
+
+  object = doc;
+
+  TRY_DE_STR(params->text_doc.uri, "uri", true);
+
+  return true;
+}
+
 static bool try_de_init_params(const struct json_value *value,
                                struct init_params *params) {
   *params = (struct init_params){0};
 
   if (value->ty != JSON_VALUE_TY_OBJECT) {
-    fprintf(stderr, "not obj\n");
     return false;
   }
 
@@ -75,17 +123,23 @@ bool try_de_req_msg(const struct json_value *value, struct req_msg *msg) {
 
     METHOD("initialize", REQ_MSG_METHOD_INITIALIZE);
     METHOD("initialized", REQ_MSG_METHOD_INITIALIZED);
+    METHOD("shutdown", REQ_MSG_METHOD_SHUTDOWN);
+    METHOD("exit", REQ_MSG_METHOD_EXIT);
+
+    METHOD("textDocument/didOpen", REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN);
+    METHOD("textDocument/didClose", REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE);
   }
 
   *msg = (struct req_msg){0};
 
   if (value->ty != JSON_VALUE_TY_OBJECT) {
+    BUG("not object?");
     return false;
   }
 
   const struct json_object *object = &value->obj_val;
 
-  TRY_DE_SIZE_T(msg->id, "id", true);
+  TRY_DE_SIZE_T(msg->id, "id", false);
 
   struct sized_str method;
   TRY_DE_STR(method, "method", true);
@@ -95,6 +149,7 @@ bool try_de_req_msg(const struct json_value *value, struct req_msg *msg) {
 
   enum req_msg_method *p = hashtbl_lookup(METHODS, &method);
   if (!p) {
+    BUG("unknown message '%.*s'", (int)method.len, method.str);
     return false;
   }
 
@@ -104,6 +159,12 @@ bool try_de_req_msg(const struct json_value *value, struct req_msg *msg) {
   case REQ_MSG_METHOD_INITIALIZE:
     return try_de_init_params(params, &msg->init_params);
   case REQ_MSG_METHOD_INITIALIZED:
+  case REQ_MSG_METHOD_SHUTDOWN:
+  case REQ_MSG_METHOD_EXIT:
     return msg;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDOPEN:
+    return try_de_didopen_textdoc_params(params, &msg->didopen_textdoc_params);
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
+    return try_de_didclose_textdoc_params(params, &msg->didclose_textdoc_params);
   }
 }

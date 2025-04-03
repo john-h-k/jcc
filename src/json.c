@@ -263,7 +263,7 @@ struct json_print_context {
   size_t indent;
 };
 
-static void json_print_value(struct json_print_context *ctx,
+static void json_print_value_part(struct json_print_context *ctx,
                              const struct json_value *value) {
   switch (value->ty) {
   case JSON_VALUE_TY_NULL:
@@ -284,7 +284,7 @@ static void json_print_value(struct json_print_context *ctx,
     ctx->indent++;
     for (size_t i = 0; i < value->arr_val.num_values; i++) {
       fprintf(ctx->file, "%*s", (int)(ctx->indent * 2), "");
-      json_print_value(ctx, &value->arr_val.values[i]);
+      json_print_value_part(ctx, &value->arr_val.values[i]);
       fprintf(ctx->file, ",\n");
     }
     ctx->indent--;
@@ -304,7 +304,7 @@ static void json_print_value(struct json_print_context *ctx,
 
       fprintf(ctx->file, "%*s", (int)(ctx->indent * 2), "");
       fprintf(ctx->file, "\"%.*s\": ", (int)name->len, name->str);
-      json_print_value(ctx, field);
+      json_print_value_part(ctx, field);
       fprintf(ctx->file, ",\n");
     }
     ctx->indent--;
@@ -315,12 +315,18 @@ static void json_print_value(struct json_print_context *ctx,
   }
 }
 
-void json_print(FILE *file, const struct json_result *result) {
+
+void json_print_value(FILE *file, const struct json_value *value) {
   struct json_print_context ctx = {.file = file, .indent = 0};
 
+  json_print_value_part(&ctx, value);
+  fprintf(file, "\n");
+}
+
+void json_print_result(FILE *file, const struct json_result *result) {
   switch (result->ty) {
   case JSON_RESULT_TY_VALUE:
-    json_print_value(&ctx, &result->value);
+    json_print_value(file, &result->value);
     break;
   case JSON_RESULT_TY_ERR:
     fprintf(file, "JSON parse err at pos %zu\n", result->err.pos);

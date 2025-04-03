@@ -64,7 +64,8 @@ struct json_result {
 };
 
 struct json_result json_parse(struct sized_str str);
-void json_print(FILE *file, const struct json_result *result);
+void json_print_result(FILE *file, const struct json_result *result);
+void json_print_value(FILE *file, const struct json_value *value);
 
 struct json_writer;
 
