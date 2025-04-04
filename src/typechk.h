@@ -436,12 +436,7 @@ enum td_sizeof_ty {
 };
 
 struct td_sizeof {
-  enum td_sizeof_ty ty;
-
-  union {
-    struct td_expr *expr;
-    struct td_var_ty var_ty;
-  };
+  struct td_var_ty var_ty;
 };
 
 struct td_alignof {

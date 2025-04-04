@@ -34,6 +34,7 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
+  DIAG_FN(ERROR, "decl-not-stmt", decl_not_stmt, DECL_NOT_STMT, const char *)           \
   DIAG_FN(ERROR, "syntax-err", syntax_err, SYNTAX_ERR, const char *)           \
   DIAG_FN(ERROR, "addr-label", addr_label, ADDR_LABEL, const char *)           \
   DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN,             \
@@ -71,13 +72,13 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "typecheck-no-member", no_member, NO_MEMBER, const char *)    \
   DIAG_FN(ERROR, "typecheck-no-var", no_var, NO_VAR, const char *)             \
   DIAG_FN(ERROR, "typecheck-fp-bitwise", fp_bitwise, FP_BITWISE, const char *) \
+  DIAG_FN(ERROR, "typecheck-cast", cast, CAST, const char *)                    \
   DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL, const char *)           \
-  DIAG_FN(WARN, "typecheck-cast", cast, CAST, const char *)                    \
-  DIAG_FN(WARN, "typecheck-static-assert-message", static_assert_message,      \
+  DIAG_FN(ERROR, "typecheck-static-assert-message", static_assert_message,      \
           STATIC_ASSERT_MESSAGE, const char *)                                 \
-  DIAG_FN(WARN, "typecheck-static-assert", static_assert, STATIC_ASSERT,       \
+  DIAG_FN(ERROR, "typecheck-static-assert", static_assert, STATIC_ASSERT,       \
           const char *)                                                        \
-  DIAG_FN(WARN, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,    \
+  DIAG_FN(ERROR, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,    \
           const char *)                                                        \
                                                                                \
   DIAG_FN(ERROR, "generic-no-match", generic_no_match, GENERIC_NO_MATCH,       \

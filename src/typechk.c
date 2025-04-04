@@ -433,6 +433,9 @@ struct td_var_ty td_var_ty_pointer_sized_int(struct typechk *tchk,
   return (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known = wkt};
 }
 
+static char *tchk_type_name(struct typechk *tchk,
+                            const struct td_var_ty *var_ty);
+
 struct td_var_ty
 td_var_ty_make_pointer(struct typechk *tchk, const struct td_var_ty *var_ty,
                        enum td_type_qualifier_flags qualifiers) {
@@ -495,32 +498,248 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
   return td_expr;
 }
 
-static bool is_cast_needed(struct typechk *tchk, const struct td_var_ty *var_ty,
-                           const struct td_var_ty *target_ty) {
-  if (target_ty->ty == TD_VAR_TY_TY_UNKNOWN ||
-      var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
-    return false;
+static char *tchk_base_type_name(struct typechk *tchk,
+                                 const struct td_var_ty *var_ty) {
+  const char *kw;
+  struct sized_str name;
+
+  switch (var_ty->ty) {
+  case TD_VAR_TY_TY_UNKNOWN:
+    return "<err-ty>";
+  case TD_VAR_TY_TY_VOID:
+    return "void";
+  case TD_VAR_TY_TY_WELL_KNOWN:
+    switch (var_ty->well_known) {
+    case WELL_KNOWN_TY_CHAR:
+      return "char";
+    case WELL_KNOWN_TY_SIGNED_CHAR:
+      return "signed char";
+    case WELL_KNOWN_TY_UNSIGNED_CHAR:
+      return "unsigned char";
+    case WELL_KNOWN_TY_SIGNED_SHORT:
+      return "short";
+    case WELL_KNOWN_TY_UNSIGNED_SHORT:
+      return "unsigned short";
+    case WELL_KNOWN_TY_SIGNED_INT:
+      return "int";
+    case WELL_KNOWN_TY_UNSIGNED_INT:
+      return "unsigned int";
+    case WELL_KNOWN_TY_SIGNED_LONG:
+      return "long";
+    case WELL_KNOWN_TY_UNSIGNED_LONG:
+      return "unsigned long";
+    case WELL_KNOWN_TY_SIGNED_LONG_LONG:
+      return "long long";
+    case WELL_KNOWN_TY_UNSIGNED_LONG_LONG:
+      return "unsigned long long";
+    case WELL_KNOWN_TY_INT128:
+      return "int128";
+    case WELL_KNOWN_TY_UINT128:
+      return "uint128";
+    case WELL_KNOWN_TY_BOOL:
+      return "bool";
+    case WELL_KNOWN_TY_HALF:
+      // hmm, we probably want to show `__Fp16` or what is actually used
+      // (same for typedefs)
+      return "half";
+    case WELL_KNOWN_TY_FLOAT:
+      return "float";
+    case WELL_KNOWN_TY_DOUBLE:
+      return "double";
+    case WELL_KNOWN_TY_LONG_DOUBLE:
+      return "long double";
+    }
+  case TD_VAR_TY_TY_FUNC: {
+    // FIXME: this is wrong, e.g it will do `**(char bar())` instead of `char
+    // (**bar)`
+    const char *ret_name = tchk_type_name(tchk, var_ty->func.ret);
+
+    char *base = arena_alloc_snprintf(tchk->arena, "%s (", ret_name);
+    for (size_t i = 0; i < var_ty->func.num_params; i++) {
+      if (i + 1 == var_ty->func.num_params) {
+        base = arena_alloc_snprintf(
+            tchk->arena, "%s)",
+            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+      } else {
+        base = arena_alloc_snprintf(
+            tchk->arena, "%s, ",
+            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+      }
+    }
+
+    return base;
+  }
+  case TD_VAR_TY_TY_POINTER: {
+    const char *el_name = tchk_type_name(tchk, var_ty->array.underlying);
+    return arena_alloc_snprintf(tchk->arena, "%s *", el_name);
+  }
+  case TD_VAR_TY_TY_ARRAY: {
+    const char *el_name = tchk_type_name(tchk, var_ty->array.underlying);
+    return arena_alloc_snprintf(tchk->arena, "%s[%zu]", el_name,
+                                var_ty->array.size);
   }
 
-  return !td_var_ty_eq(tchk, var_ty, target_ty);
+  case TD_VAR_TY_TY_VARIADIC:
+    return "...";
+  case TD_VAR_TY_TY_AGGREGATE:
+    switch (var_ty->aggregate.ty) {
+    case TD_TY_AGGREGATE_TY_STRUCT:
+      kw = "struct";
+      break;
+    case TD_TY_AGGREGATE_TY_UNION:
+      kw = "union";
+      break;
+    }
+
+    // FIXME: will print <anonymous> type name for anonymous types
+    name = var_ty->aggregate.name;
+    goto named;
+  case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    switch (var_ty->incomplete_aggregate.ty) {
+    case TD_TY_AGGREGATE_TY_STRUCT:
+      kw = "struct";
+      break;
+    case TD_TY_AGGREGATE_TY_UNION:
+      kw = "union";
+      break;
+    }
+    name = var_ty->incomplete_aggregate.name;
+    goto named;
+
+  named: {
+    return arena_alloc_snprintf(tchk->arena, "%s %.*s", kw, (int)name.len,
+                                name.str);
+  }
+  }
+}
+
+// returns qualifiers _with a trailing space_
+static char *tchk_qualifiers_name(struct typechk *tchk,
+                                  enum td_type_qualifier_flags flags) {
+
+  if (!flags) {
+    return "";
+  }
+
+  size_t len = 0;
+#define TQUAL(name, str)                                                       \
+  if ((flags & (name))) {                                                      \
+    len += strlen((str)) + 1;                                                  \
+  }
+
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_CONST, "const")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_VOLATILE, "volatile")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_RESTRICT, "restrict")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_NULLABLE, "_Optional")
+
+#undef TQUAL
+
+  char *buf = arena_alloc(tchk->arena, len + 1);
+  size_t head = 0;
+
+#define TQUAL(name, str)                                                       \
+  if ((flags & (name))) {                                                      \
+    strcpy(&buf[head], str " ");                                               \
+    head += strlen((str)) + 1;                                                 \
+  }
+
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_CONST, "const")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_VOLATILE, "volatile")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_RESTRICT, "restrict")
+  TQUAL(TD_TYPE_QUALIFIER_FLAG_NULLABLE, "_Optional")
+
+#undef TQUAL
+
+  buf[head++] = '\0';
+  DEBUG_ASSERT(head == len + 1, "str buf sizing went wrong (head %zu expected %zu)", head, len + 1);
+
+  return buf;
+}
+
+static char *tchk_type_name(struct typechk *tchk,
+                            const struct td_var_ty *var_ty) {
+
+  return arena_alloc_snprintf(
+      tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
+      tchk_base_type_name(tchk, var_ty));
+}
+
+enum cast_ty { CAST_TY_NONE, CAST_TY_CAST, CAST_TY_ERR };
+
+static enum cast_ty is_cast_needed(struct typechk *tchk,
+                                   const struct td_var_ty *var_ty,
+                                   const struct td_var_ty *target_ty) {
+  if (target_ty->ty == TD_VAR_TY_TY_UNKNOWN ||
+      var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
+    return CAST_TY_NONE;
+  }
+
+  if (td_var_ty_compatible(tchk, var_ty, target_ty,
+                           TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
+    return CAST_TY_NONE;
+  }
+
+  if (td_var_ty_is_integral_ty(target_ty)) {
+    if (td_var_ty_is_integral_ty(var_ty) || td_var_ty_is_fp_ty(var_ty) ||
+        var_ty->ty == TD_VAR_TY_TY_POINTER) {
+      return CAST_TY_CAST;
+    }
+
+    return CAST_TY_ERR;
+  }
+
+  if (td_var_ty_is_fp_ty(target_ty)) {
+    if (td_var_ty_is_integral_ty(var_ty) || td_var_ty_is_fp_ty(var_ty)) {
+      return CAST_TY_CAST;
+    }
+
+    return CAST_TY_ERR;
+  }
+
+  if (target_ty->ty == TD_VAR_TY_TY_POINTER) {
+    if (td_var_ty_is_integral_ty(var_ty) ||
+        var_ty->ty == TD_VAR_TY_TY_POINTER ||
+        var_ty->ty == TD_VAR_TY_TY_ARRAY || var_ty->ty == TD_VAR_TY_TY_FUNC) {
+      return CAST_TY_CAST;
+    }
+
+    return CAST_TY_ERR;
+  }
+
+  return CAST_TY_CAST;
 }
 
 static struct td_expr add_cast_if_needed(struct typechk *tchk,
+                                         struct text_span context,
                                          struct td_expr expr,
                                          struct td_var_ty target_ty) {
   if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
       target_ty.ty == TD_VAR_TY_TY_ARRAY) {
     // HACK: change the string literal type to array so ir build knows to have
     // it inline
+    // do we need to do this in explicit casts (`type_cast`) too?
     expr.var_ty = target_ty;
     return expr;
   }
 
-  if (is_cast_needed(tchk, &expr.var_ty, &target_ty)) {
+  switch (is_cast_needed(tchk, &expr.var_ty, &target_ty)) {
+  case CAST_TY_NONE:
+    return expr;
+  case CAST_TY_CAST:
     return add_cast_expr(tchk, expr, target_ty);
-  }
+  case CAST_TY_ERR:
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            CAST, cast, context, MK_INVALID_TEXT_POS(0),
+            arena_alloc_snprintf(tchk->arena,
+                                 "cast is not legal (from '%s' to '%s')",
+                                 tchk_type_name(tchk, &expr.var_ty),
+                                 tchk_type_name(tchk, &target_ty))));
 
-  return expr;
+    return expr;
+  }
 }
 
 // turns long long to long on LP64, and long to int on LP32
@@ -821,7 +1040,6 @@ struct assg_ty_map {
 struct td_specifiers {
   enum td_storage_class_specifier storage;
   enum td_function_specifier_flags function;
-  enum td_type_qualifier_flags qualifier_flags;
   struct td_var_ty type_specifier;
 };
 
@@ -1382,7 +1600,7 @@ static struct td_var_ty type_abstract_declarator_inner(
         tchk, &pointer->specifier_list, TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS);
 
     var_ty =
-        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.qualifier_flags);
+        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
   }
 
   ssize_t inner_idx = -1;
@@ -1488,7 +1706,7 @@ static struct td_var_declaration type_declarator_inner(
         tchk, &pointer->specifier_list, TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS);
 
     var_ty =
-        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.qualifier_flags);
+        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
   }
 
   bool found_ident = false;
@@ -1585,6 +1803,10 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
   return declaration;
 }
 
+static struct td_var_ty
+type_type_or_expr(struct typechk *tchk,
+                  const struct ast_type_or_expr *type_or_expr);
+
 static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
@@ -1592,8 +1814,9 @@ type_specifiers(struct typechk *tchk,
   struct td_specifiers specifiers = {
       .storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
       .function = TD_FUNCTION_SPECIFIER_FLAG_NONE,
-      .qualifier_flags = TD_TYPE_QUALIFIER_FLAG_NONE,
       .type_specifier = TD_VAR_TY_UNKNOWN};
+
+  enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
   int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
   int type_specifier_count = 0;
@@ -1658,7 +1881,7 @@ type_specifiers(struct typechk *tchk,
 
       switch (specifier.type_qualifier) {
       case AST_TYPE_QUALIFIER_CONST:
-        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_CONST) {
+        if (type_qualifiers & TD_TYPE_QUALIFIER_FLAG_CONST) {
           compiler_diagnostics_add(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
@@ -1667,10 +1890,10 @@ type_specifiers(struct typechk *tchk,
                                      "duplicate const flag"));
         }
 
-        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_CONST;
+        type_qualifiers |= TD_TYPE_QUALIFIER_FLAG_CONST;
         break;
       case AST_TYPE_QUALIFIER_VOLATILE:
-        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_VOLATILE) {
+        if (type_qualifiers & TD_TYPE_QUALIFIER_FLAG_VOLATILE) {
           compiler_diagnostics_add(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
@@ -1679,10 +1902,10 @@ type_specifiers(struct typechk *tchk,
                                      "duplicate volatile flag"));
         }
 
-        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_VOLATILE;
+        type_qualifiers |= TD_TYPE_QUALIFIER_FLAG_VOLATILE;
         break;
       case AST_TYPE_QUALIFIER_RESTRICT:
-        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_RESTRICT) {
+        if (type_qualifiers & TD_TYPE_QUALIFIER_FLAG_RESTRICT) {
           compiler_diagnostics_add(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
@@ -1691,10 +1914,10 @@ type_specifiers(struct typechk *tchk,
                                      "duplicate restrict flag"));
         }
 
-        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_RESTRICT;
+        type_qualifiers |= TD_TYPE_QUALIFIER_FLAG_RESTRICT;
         break;
       case AST_TYPE_QUALIFIER_NONNULL:
-        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_NONNULL) {
+        if (type_qualifiers & TD_TYPE_QUALIFIER_FLAG_NONNULL) {
           compiler_diagnostics_add(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
@@ -1703,10 +1926,10 @@ type_specifiers(struct typechk *tchk,
                                      "duplicate nonnull flag"));
         }
 
-        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_NONNULL;
+        type_qualifiers |= TD_TYPE_QUALIFIER_FLAG_NONNULL;
         break;
       case AST_TYPE_QUALIFIER_NULLABLE:
-        if (specifiers.qualifier_flags & TD_TYPE_QUALIFIER_FLAG_NULLABLE) {
+        if (type_qualifiers & TD_TYPE_QUALIFIER_FLAG_NULLABLE) {
           compiler_diagnostics_add(
               tchk->diagnostics,
               MK_SEMANTIC_DIAGNOSTIC(TYPE_QUALIFIER_DUPLICATE,
@@ -1715,7 +1938,7 @@ type_specifiers(struct typechk *tchk,
                                      "duplicate nullable flag"));
         }
 
-        specifiers.qualifier_flags |= TD_TYPE_QUALIFIER_FLAG_NULLABLE;
+        type_qualifiers |= TD_TYPE_QUALIFIER_FLAG_NULLABLE;
         break;
       }
       break;
@@ -1951,9 +2174,20 @@ type_specifiers(struct typechk *tchk,
         specifiers.type_specifier =
             td_var_ty_for_typedef(tchk, &last_specifier.typedef_name);
         break;
+      case AST_TYPE_SPECIFIER_TYPEOF: {
+        specifiers.type_specifier = type_type_or_expr(tchk, &last_specifier.type_of);
+        break;
+      }
+      case AST_TYPE_SPECIFIER_TYPEOF_UNQUAL: {
+        specifiers.type_specifier = type_type_or_expr(tchk, &last_specifier.type_of_unqual);
+        specifiers.type_specifier.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
+        break;
+      }
       }
     }
   }
+
+  specifiers.type_specifier.type_qualifiers |= type_qualifiers;
 
   return specifiers;
 }
@@ -1988,9 +2222,9 @@ static struct td_expr type_ternary(struct typechk *tchk,
       context);
 
   *td_ternary.true_expr =
-      add_cast_if_needed(tchk, *td_ternary.true_expr, result_ty);
-  *td_ternary.false_expr =
-      add_cast_if_needed(tchk, *td_ternary.false_expr, result_ty);
+      add_cast_if_needed(tchk, ternary->span, *td_ternary.true_expr, result_ty);
+  *td_ternary.false_expr = add_cast_if_needed(
+      tchk, ternary->span, *td_ternary.false_expr, result_ty);
 
   return (struct td_expr){
       .ty = TD_EXPR_TY_TERNARY, .var_ty = result_ty, .ternary = td_ternary};
@@ -2087,7 +2321,8 @@ static struct td_expr type_call(struct typechk *tchk,
 
     if (param_ty.ty != TD_VAR_TY_TY_ARRAY) {
       td_call.arg_list.args[i] =
-          add_cast_if_needed(tchk, td_call.arg_list.args[i], param_ty);
+          add_cast_if_needed(tchk, td_call.arg_list.args[i].span,
+                             td_call.arg_list.args[i], param_ty);
     }
   }
 
@@ -2218,10 +2453,28 @@ static struct td_expr type_unary_op(struct typechk *tchk,
     break;
   case AST_UNARY_OP_TY_CAST: {
     td_unary_op.ty = TD_UNARY_OP_TY_CAST;
+
     struct td_var_ty target_ty =
         type_type_name(tchk, &unary_op->cast.type_name);
 
-    return add_cast_expr(tchk, expr, target_ty);
+    switch (is_cast_needed(tchk, &expr.var_ty, &target_ty)) {
+    case CAST_TY_NONE:
+      return expr;
+    case CAST_TY_CAST:
+      return add_cast_expr(tchk, expr, target_ty);
+    case CAST_TY_ERR:
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              CAST, cast, expr.span, MK_INVALID_TEXT_POS(0),
+              arena_alloc_snprintf(tchk->arena,
+                                   "cast is not legal (from '%s' to '%s')",
+                                   tchk_type_name(tchk, &expr.var_ty),
+                                   tchk_type_name(tchk, &target_ty))));
+
+      return expr;
+    }
   }
   }
 
@@ -2309,10 +2562,10 @@ static struct td_expr type_binary_op(struct typechk *tchk,
       resolve_binary_op_types(tchk, td_binary_op.lhs, td_binary_op.rhs,
                               td_binary_op.ty, binary_op->span);
 
-  *td_binary_op.lhs =
-      add_cast_if_needed(tchk, *td_binary_op.lhs, op_tys.lhs_op_ty);
-  *td_binary_op.rhs =
-      add_cast_if_needed(tchk, *td_binary_op.rhs, op_tys.rhs_op_ty);
+  *td_binary_op.lhs = add_cast_if_needed(tchk, binary_op->span,
+                                         *td_binary_op.lhs, op_tys.lhs_op_ty);
+  *td_binary_op.rhs = add_cast_if_needed(tchk, binary_op->span,
+                                         *td_binary_op.rhs, op_tys.rhs_op_ty);
 
   return (struct td_expr){.ty = TD_EXPR_TY_BINARY_OP,
                           .var_ty = op_tys.result_ty,
@@ -2393,8 +2646,8 @@ type_arrayaccess(struct typechk *tchk,
   } else {
     struct td_var_ty pointer_ty = td_var_ty_pointer_sized_int(tchk, false);
 
-    *td_arrayaccess.rhs =
-        add_cast_if_needed(tchk, *td_arrayaccess.rhs, pointer_ty);
+    *td_arrayaccess.rhs = add_cast_if_needed(tchk, arrayaccess->span,
+                                             *td_arrayaccess.rhs, pointer_ty);
   }
 
   return (struct td_expr){.ty = TD_EXPR_TY_ARRAYACCESS,
@@ -2743,7 +2996,8 @@ static struct td_expr type_assg(struct typechk *tchk,
     struct td_binary_op_tys tys = resolve_binary_op_types(
         tchk, &promoted_assignee, td_assg.expr, bin_op, assg->span);
 
-    *td_assg.expr = add_cast_if_needed(tchk, *td_assg.expr, tys.rhs_op_ty);
+    *td_assg.expr =
+        add_cast_if_needed(tchk, assg->span, *td_assg.expr, tys.rhs_op_ty);
 
     td_assg.assignee_var_ty = tys.lhs_op_ty;
     td_assg.result_var_ty = tys.result_ty;
@@ -2752,8 +3006,8 @@ static struct td_expr type_assg(struct typechk *tchk,
     td_assg.cast_result =
         is_cast_needed(tchk, &tys.result_ty, &td_assg.assignee->var_ty);
   } else {
-    *td_assg.expr =
-        add_cast_if_needed(tchk, *td_assg.expr, td_assg.assignee->var_ty);
+    *td_assg.expr = add_cast_if_needed(tchk, assg->span, *td_assg.expr,
+                                       td_assg.assignee->var_ty);
 
     td_assg.assignee_var_ty = td_assg.assignee->var_ty;
     td_assg.result_var_ty = td_assg.expr->var_ty;
@@ -2878,27 +3132,28 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
       .ty = TD_EXPR_TY_CNST, .var_ty = var_ty, .cnst = td_cnst};
 }
 
+static struct td_var_ty
+type_type_or_expr(struct typechk *tchk,
+                  const struct ast_type_or_expr *type_or_expr) {
+  switch (type_or_expr->ty) {
+  case AST_TYPE_OR_EXPR_TY_TYPE:
+    return type_type_name(tchk, type_or_expr->type_name);
+  case AST_TYPE_OR_EXPR_TY_EXPR:
+    return type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
+                     type_or_expr->expr)
+        .var_ty;
+  }
+}
+
 static struct td_expr type_sizeof(struct typechk *tchk,
                                   const struct ast_sizeof *size_of) {
   // TODO: here and alignof, generate diagnostic for incomplete type
 
-  struct td_sizeof td_size_of;
-  switch (size_of->ty) {
-  case AST_SIZEOF_TY_TYPE:
-    td_size_of.ty = TD_SIZEOF_TY_TYPE;
-    td_size_of.var_ty = type_type_name(tchk, &size_of->type_name);
-    break;
-  case AST_SIZEOF_TY_EXPR:
-    td_size_of.ty = TD_SIZEOF_TY_EXPR;
-    td_size_of.expr = arena_alloc(tchk->arena, sizeof(*td_size_of.expr));
-    *td_size_of.expr =
-        type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY, size_of->expr);
-    break;
-  }
+  struct td_var_ty var_ty = type_type_or_expr(tchk, &size_of->type_or_expr);
 
   return (struct td_expr){.ty = TD_EXPR_TY_SIZEOF,
                           .var_ty = td_var_ty_pointer_sized_int(tchk, false),
-                          .size_of = td_size_of};
+                          .size_of = {.var_ty = var_ty}};
 }
 
 static struct td_expr type_alignof(struct typechk *tchk,
@@ -2979,7 +3234,7 @@ static struct td_expr type_generic(struct typechk *tchk,
       struct td_var_ty assoc_var_ty =
           type_type_name(tchk, &association->type_name);
 
-      if (td_var_ty_compatible(tchk, &ctrl.var_ty, &assoc_var_ty,
+      if (td_var_ty_compatible(tchk, &assoc_var_ty, &ctrl.var_ty,
                                TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
         if (selected_association) {
           tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
@@ -3326,17 +3581,8 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
   }
 
   if (expr->ty == TD_EXPR_TY_SIZEOF) {
-    struct td_var_ty var_ty;
-    switch (expr->size_of.ty) {
-    case TD_SIZEOF_TY_TYPE:
-      var_ty = expr->size_of.var_ty;
-      break;
-    case TD_SIZEOF_TY_EXPR:
-      var_ty = expr->size_of.expr->var_ty;
-      break;
-    }
-
-    struct td_var_ty_info info = td_var_ty_info(tchk, &var_ty, &expr->span);
+    struct td_var_ty_info info =
+        td_var_ty_info(tchk, &expr->size_of.var_ty, &expr->span);
 
     *value = (struct td_val){.var_ty = expr->var_ty,
                              .val = ap_val_from_ull(info.size, 32)};
@@ -3586,10 +3832,14 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     bad_cast:
       if (flags & EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_EMIT_DIAGNOSTICS) {
         tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-        compiler_diagnostics_add(tchk->diagnostics,
-                                 MK_SEMANTIC_DIAGNOSTIC(CAST, cast, expr->span,
-                                                        MK_INVALID_TEXT_POS(0),
-                                                        "invalid cast"));
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(
+                CAST, cast, expr->span, MK_INVALID_TEXT_POS(0),
+                arena_alloc_snprintf(
+                    tchk->arena, "cast is not legal (from '%s' to '%s')",
+                    tchk_type_name(tchk, &expr->var_ty),
+                    tchk_type_name(tchk, &expr->unary_op.cast.var_ty))));
       }
       return false;
 
@@ -3823,7 +4073,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
     return expr;
   }
 
-  expr = add_cast_if_needed(tchk, expr, target_ty);
+  // FIXME: think this func should take a context span and use that
+  expr = add_cast_if_needed(tchk, expr.span, expr, target_ty);
 
   struct td_val cnst_value;
   if (eval_constant_integral_expr(
@@ -4267,7 +4518,7 @@ static struct td_jumpstmt type_jumpstmt(struct typechk *tchk,
           .expr = arena_alloc(tchk->arena, sizeof(*td_jump.return_stmt.expr))};
 
       *td_jump.return_stmt.expr = add_cast_if_needed(
-          tchk,
+          tchk, jumpstmt->span,
           type_expr(tchk, TYPE_EXPR_FLAGS_NONE, jumpstmt->return_stmt.expr),
           tchk->ret_ty);
     } else {
@@ -4515,7 +4766,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   return td_funcdef;
 }
 
-static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
+static struct td_init type_init(struct typechk *tchk, struct text_span context,
+                                struct td_var_ty *var_ty,
                                 const struct ast_init *init,
                                 enum td_init_mode mode);
 
@@ -4596,7 +4848,8 @@ type_init_list_init(struct typechk *tchk, const struct td_var_ty *var_ty,
   }
 
   *td_init_list_init.init =
-      type_init(tchk, &init_list_var_ty, init_list_init->init, mode);
+      type_init(tchk, init_list_init->span, &init_list_var_ty,
+                init_list_init->init, mode);
 
   return td_init_list_init;
 }
@@ -4646,7 +4899,8 @@ type_init_list_for_scalar(struct typechk *tchk, const struct td_var_ty *var_ty,
   switch (init->ty) {
   case AST_INIT_TY_EXPR:
     return add_cast_if_needed(
-        tchk, type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), res_var_ty);
+        tchk, init_list_init->span,
+        type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &init->expr), res_var_ty);
   case AST_INIT_TY_INIT_LIST:
     return type_init_list_for_scalar(tchk, &res_var_ty, &init->init_list, mode);
   }
@@ -4832,7 +5086,8 @@ static struct td_init_list type_init_list(struct typechk *tchk,
     struct td_expr expr = type_expr(tchk, TYPE_EXPR_FLAGS_ARRAYS_DONT_DECAY,
                                     &init_list->inits[0].init->expr);
 
-    expr = add_cast_if_needed(tchk, expr, *var_ty);
+    expr =
+        add_cast_if_needed(tchk, init_list->inits[0].init->span, expr, *var_ty);
 
     *scalar.inits[0].init = (struct td_init){
         .ty = TD_INIT_TY_EXPR,
@@ -4847,7 +5102,8 @@ static struct td_init_list type_init_list(struct typechk *tchk,
   }
 }
 
-static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
+static struct td_init type_init(struct typechk *tchk, struct text_span context,
+                                struct td_var_ty *var_ty,
                                 const struct ast_init *init,
                                 enum td_init_mode mode) {
   struct td_init td_init;
@@ -4891,7 +5147,7 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
       break;
     }
 
-    td_init.expr = add_cast_if_needed(tchk, td_init.expr, *var_ty);
+    td_init.expr = add_cast_if_needed(tchk, context, td_init.expr, *var_ty);
 
     break;
   case AST_INIT_TY_INIT_LIST:
@@ -4910,7 +5166,7 @@ static struct td_init type_init(struct typechk *tchk, struct td_var_ty *var_ty,
 }
 
 static struct td_var_declaration
-type_init_declarator(struct typechk *tchk,
+type_init_declarator(struct typechk *tchk, struct text_span context,
                      const struct td_specifiers *specifiers,
                      const struct ast_init_declarator *init_declarator,
                      enum td_declarator_mode mode) {
@@ -4951,8 +5207,8 @@ type_init_declarator(struct typechk *tchk,
     enum td_init_mode init_mode = mode == TD_DECLARATOR_MODE_STATIC
                                       ? TD_INIT_MODE_CONSTANT_EXPRS
                                       : TD_INIT_MODE_NORMAL;
-    struct td_init init =
-        type_init(tchk, &td_var_decl.var_ty, init_declarator->init, init_mode);
+    struct td_init init = type_init(tchk, context, &td_var_decl.var_ty,
+                                    init_declarator->init, init_mode);
 
     td_var_decl.init = arena_alloc(tchk->arena, sizeof(*td_var_decl.init));
     *td_var_decl.init = init;
@@ -4962,7 +5218,8 @@ type_init_declarator(struct typechk *tchk,
 }
 
 static struct td_declaration type_init_declarator_list(
-    struct typechk *tchk, const struct td_specifiers *specifiers,
+    struct typechk *tchk, struct text_span context,
+    const struct td_specifiers *specifiers,
     const struct ast_init_declarator_list *declarator_list,
     enum td_declarator_mode mode) {
   struct td_declaration td_declaration = {
@@ -4977,7 +5234,7 @@ static struct td_declaration type_init_declarator_list(
 
   for (size_t i = 0; i < declarator_list->num_init_declarators; i++) {
     td_declaration.var_declarations[i] = type_init_declarator(
-        tchk, specifiers, &declarator_list->init_declarators[i], mode);
+        tchk, context, specifiers, &declarator_list->init_declarators[i], mode);
   }
 
   return td_declaration;
@@ -5016,7 +5273,9 @@ type_declaration(struct typechk *tchk,
     }
   }
 
-  return type_init_declarator_list(tchk, &specifiers,
+  // TODO: if one declarator (e.g `float a = bar`), highlight whole thing
+  // else highlight just the failure (currently we are always highlighting all)
+  return type_init_declarator_list(tchk, declaration->span, &specifiers,
                                    &declaration->declarator_list, mode);
 }
 
@@ -5027,7 +5286,7 @@ type_struct_declaration(struct typechk *tchk,
       tchk, &declaration->specifier_list,
       TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS | TD_SPECIFIER_ALLOW_TYPE_SPECIFIERS);
 
-  return type_init_declarator_list(tchk, &specifiers,
+  return type_init_declarator_list(tchk, declaration->span, &specifiers,
                                    &declaration->declarator_list,
                                    TD_DECLARATOR_MODE_STRUCT);
 }
@@ -5769,14 +6028,7 @@ DEBUG_FUNC(sizeof, size_of) {
   TD_PRINTZ("SIZEOF");
 
   INDENT();
-  switch (size_of->ty) {
-  case TD_SIZEOF_TY_TYPE:
-    DEBUG_CALL(var_ty, &size_of->var_ty);
-    break;
-  case TD_SIZEOF_TY_EXPR:
-    DEBUG_CALL(expr, size_of->expr);
-    break;
-  }
+  DEBUG_CALL(var_ty, &size_of->var_ty);
   UNINDENT();
 }
 

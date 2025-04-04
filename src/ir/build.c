@@ -1105,15 +1105,7 @@ static struct ir_op *build_ir_for_sizeof(struct ir_func_builder *irb,
   struct td_sizeof *size_of = &expr->size_of;
   struct ir_var_ty var_ty = ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
 
-  struct ir_var_ty size_var_ty;
-  switch (size_of->ty) {
-  case TD_SIZEOF_TY_TYPE:
-    size_var_ty = ir_var_ty_for_td_var_ty(irb->unit, &size_of->var_ty);
-    break;
-  case TD_SIZEOF_TY_EXPR:
-    size_var_ty = ir_var_ty_for_td_var_ty(irb->unit, &size_of->expr->var_ty);
-    break;
-  }
+  struct ir_var_ty size_var_ty = ir_var_ty_for_td_var_ty(irb->unit, &size_of->var_ty);
 
   struct ir_var_ty_info info = ir_var_ty_info(irb->unit, &size_var_ty);
 

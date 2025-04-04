@@ -232,13 +232,6 @@ struct ast_enum_specifier {
   struct text_span span;
 };
 
-enum ast_type_specifier_ty {
-  AST_TYPE_SPECIFIER_TY_KW,
-  AST_TYPE_SPECIFIER_STRUCT_OR_UNION,
-  AST_TYPE_SPECIFIER_ENUM,
-  AST_TYPE_SPECIFIER_TYPEDEF_NAME
-};
-
 enum ast_type_specifier_kw {
   AST_TYPE_SPECIFIER_KW_VOID,
   AST_TYPE_SPECIFIER_KW_CHAR,
@@ -258,6 +251,31 @@ enum ast_type_specifier_kw {
   AST_TYPE_SPECIFIER_KW_UINT128,
 };
 
+enum ast_type_or_expr_ty {
+  AST_TYPE_OR_EXPR_TY_TYPE,
+  AST_TYPE_OR_EXPR_TY_EXPR,
+};
+
+struct ast_type_or_expr {
+  enum ast_type_or_expr_ty ty;
+
+  union {
+    struct ast_expr *expr;
+    struct ast_type_name *type_name;
+  };
+
+  struct text_span span;
+};
+
+enum ast_type_specifier_ty {
+  AST_TYPE_SPECIFIER_TY_KW,
+  AST_TYPE_SPECIFIER_STRUCT_OR_UNION,
+  AST_TYPE_SPECIFIER_ENUM,
+  AST_TYPE_SPECIFIER_TYPEDEF_NAME,
+  AST_TYPE_SPECIFIER_TYPEOF,
+  AST_TYPE_SPECIFIER_TYPEOF_UNQUAL,
+};
+
 struct ast_type_specifier {
   enum ast_type_specifier_ty ty;
 
@@ -266,6 +284,8 @@ struct ast_type_specifier {
     struct ast_struct_or_union_specifier struct_or_union_specifier;
     struct ast_enum_specifier enum_specifier;
     struct lex_token typedef_name;
+    struct ast_type_or_expr type_of;
+    struct ast_type_or_expr type_of_unqual;
   };
 
   struct text_span span;
@@ -605,19 +625,10 @@ struct ast_pointeraccess {
   struct text_span span;
 };
 
-enum ast_sizeof_ty {
-  AST_SIZEOF_TY_TYPE,
-  AST_SIZEOF_TY_EXPR,
-};
-
 struct ast_sizeof {
-  enum ast_sizeof_ty ty;
+  enum ast_type_or_expr_ty ty;
 
-  union {
-    struct ast_expr *expr;
-    struct ast_type_name type_name;
-  };
-
+  struct ast_type_or_expr type_or_expr;
   struct text_span span;
 };
 
@@ -998,11 +1009,10 @@ struct parse_result {
   struct ast_translationunit translation_unit;
 };
 
-enum parser_create_result parser_create(struct program program,
-                                        struct preproc *preproc,
-                                        enum compile_preproc_mode mode,
-                                        struct compiler_diagnostics *diagnostics,
-                                        struct parser **parser);
+enum parser_create_result
+parser_create(struct program program, struct preproc *preproc,
+              enum compile_preproc_mode mode,
+              struct compiler_diagnostics *diagnostics, struct parser **parser);
 
 struct parse_result parse(struct parser *parser);
 
