@@ -315,7 +315,7 @@ struct preproc_unexpanded_token {
 
 static bool is_newline(char c) { return c == '\n'; }
 
-// static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
+static bool is_whitespace(char c) { return isspace(c) && !is_newline(c); }
 
 static bool is_identifier_char(char c) {
   return isalpha(c) || isdigit(c) || c == '_';
@@ -497,120 +497,8 @@ void preproc_free(struct preproc **preproc) {
   *preproc = NULL;
 }
 
-#if USE_NEON
-#include <arm_neon.h>
-#include <stddef.h>
-#include <stdint.h>
-
-static void find_multiline_comment_end(struct preproc_text *preproc_text,
-                                       struct text_pos *cur_pos) {
-  const char *text = preproc_text->text;
-  size_t len = preproc_text->len;
-
-  // Track total characters processed, number of newlines, and the col offset.
-  size_t total_chars = 0;
-  size_t lines = 0;
-  size_t chars_since_newline = cur_pos->col; // initial column count
-
-  while (cur_pos->idx + total_chars + 1 < len) {
-    if (cur_pos->idx + total_chars + 16 < len) {
-      const char *block_ptr = text + cur_pos->idx + total_chars;
-      uint8x16_t block = vld1q_u8((const uint8_t *)block_ptr);
-      uint8x16_t next;
-
-      if (cur_pos->idx + total_chars + 32 <= len) {
-        uint8x16_t block_next = vld1q_u8((const uint8_t *)(block_ptr + 16));
-        next = vextq_u8(block, block_next, 1);
-      } else {
-        uint8_t temp[16] = {0};
-        size_t rem = len - (cur_pos->idx + total_chars + 16);
-        for (size_t i = 0; i < rem; i++) {
-          temp[i] = block_ptr[16 + i];
-        }
-        next = vextq_u8(block, vld1q_u8(temp), 1);
-      }
-
-      // Look for '\n' and for '*' followed immediately by '/'.
-      uint8x16_t cmp_nl = vceqq_u8(block, vdupq_n_u8('\n'));
-      uint8x16_t cmp_star = vceqq_u8(block, vdupq_n_u8('*'));
-      uint8x16_t cmp_slash = vceqq_u8(next, vdupq_n_u8('/'));
-      uint8x16_t cmp_marker = vandq_u8(cmp_star, cmp_slash);
-
-      uint8_t nl[16], marker[16];
-      vst1q_u8(nl, cmp_nl);
-      vst1q_u8(marker, cmp_marker);
-
-      // Search for the first event in the block.
-      int event_idx = 16, event_type = 0; // 1 = newline, 2 = marker
-      for (int i = 0; i < 16; i++) {
-        if (nl[i] == 0xFF || marker[i] == 0xFF) {
-          event_idx = i;
-          event_type = (marker[i] == 0xFF) ? 2 : 1;
-          break;
-        }
-      }
-
-      if (event_idx < 16) {
-        // Process byte-by-byte up to the event.
-        for (int i = 0; i < event_idx; i++) {
-          char c = text[cur_pos->idx + total_chars];
-          total_chars++;
-          if (c == '\n') {
-            lines++;
-            chars_since_newline = 0;
-          } else {
-            chars_since_newline++;
-          }
-        }
-        // Now process the event byte.
-        if (event_type == 2) { // Found "*/"
-          total_chars += 2;    // skip '*' and '/'
-          chars_since_newline += 2;
-          cur_pos->idx += total_chars;
-          cur_pos->line += lines;
-          cur_pos->col = chars_since_newline;
-          return;
-        } else {         // Newline encountered
-          total_chars++; // process the newline
-          lines++;
-          chars_since_newline = 0;
-        }
-      } else {
-        // No event in block: update counters assuming no newlines.
-        total_chars += 16;
-        chars_since_newline += 16;
-      }
-    } else {
-      // Fallback scalar loop.
-      char c = text[cur_pos->idx + total_chars];
-      if (c == '\n') {
-        total_chars++;
-        lines++;
-        chars_since_newline = 0;
-      } else if (c == '*' && cur_pos->idx + total_chars + 1 < len &&
-                 text[cur_pos->idx + total_chars + 1] == '/') {
-        total_chars += 2;
-        chars_since_newline += 2;
-        cur_pos->idx += total_chars;
-        cur_pos->line += lines;
-        cur_pos->col = chars_since_newline;
-        return;
-      } else {
-        total_chars++;
-        chars_since_newline++;
-      }
-    }
-  }
-
-  // Marker not found; update position to EOF.
-  cur_pos->idx += total_chars;
-  cur_pos->line += lines;
-  cur_pos->col = chars_since_newline;
-}
-
-#else
-static void find_multiline_comment_end(struct preproc_text *preproc_text,
-                                       struct text_pos *cur_pos) {
+static void find_multiline_comment_end_scalar(struct preproc_text *preproc_text,
+                                              struct text_pos *cur_pos) {
   while (/* token must be at least 2 chars */ cur_pos->idx + 1 <
          preproc_text->len) {
     if (preproc_text->text[cur_pos->idx] == '\n') {
@@ -627,6 +515,161 @@ static void find_multiline_comment_end(struct preproc_text *preproc_text,
   }
 
   // if not found, it will just push to end of file and next token will be EOF
+}
+
+#if USE_NEON
+#include <arm_neon.h>
+#include <stddef.h>
+#include <stdint.h>
+
+void find_multiline_comment_end(struct preproc_text *preproc_text,
+                                       struct text_pos *cur_pos);
+
+void find_multiline_comment_end(struct preproc_text *preproc_text,
+                                       struct text_pos *cur_pos) {
+  const unsigned char *text =
+      (const unsigned char *)preproc_text->text + cur_pos->idx;
+  size_t len = preproc_text->len;
+
+  // uint8x16_t indices = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  // 16};
+  uint8x16_t indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+
+#define BLOCK_SZ 64
+
+  size_t rem = len - cur_pos->idx;
+  size_t nb = rem / BLOCK_SZ;
+
+  bool trail = false;
+  for (size_t i = 0; i < nb; i++) {
+#define DO(id)                                                                 \
+  uint8x16_t v##id = vld1q_u8(text);                                           \
+  uint8x16_t s##id = vextq_u8(v##id, vdupq_n_u8(0), 1);                        \
+  uint8x16_t eq_star##id = vceqq_u8(v##id, vdupq_n_u8('*'));                   \
+  uint8x16_t eq_slash##id = vceqq_u8(s##id, vdupq_n_u8('/'));                  \
+  uint8x16_t match##id = vandq_u8(eq_star##id, eq_slash##id);                  \
+  uint8x16_t masked##id = vbslq_u8(match##id, indices, vdupq_n_u8(0xFF));      \
+  uint8_t min##id = vminvq_u8(masked##id);                                     \
+  if (min##id != 0xFF) {                                                       \
+    cur_pos->idx += min##id + 1;                                               \
+    return;                                                                    \
+  }                                                                            \
+  text += 16;                                                                  \
+  cur_pos->idx += 16;
+
+    // DO(0);
+    // DO(1);
+    // DO(2);
+    // DO(3);
+
+    {
+      uint8x16_t v0 = vld1q_u8(text);
+
+      if (trail && vgetq_lane_u8(v0, 0) == '/') {
+        cur_pos->idx++;
+        return;
+      }
+
+      text += 16;
+      uint8x16_t s0 = vextq_u8(v0, vdupq_n_u8(0), 1);
+      uint8x16_t eq_star0 = vceqq_u8(v0, vdupq_n_u8('*'));
+      uint8x16_t eq_slash0 = vceqq_u8(s0, vdupq_n_u8('/'));
+
+      uint8x16_t match0 = vandq_u8(eq_star0, eq_slash0);
+      uint8x16_t masked0 = vbslq_u8(match0, indices, vdupq_n_u8(0xFF));
+      uint8_t min0 = vminvq_u8(masked0);
+      if (min0 != 0xFF) {
+        cur_pos->idx += min0 + 2;
+        return;
+      }
+
+      trail = vgetq_lane_u8(eq_star0, 15);
+      cur_pos->idx += 16;
+    }
+
+    {
+      uint8x16_t v1 = vld1q_u8(text);
+
+      if (trail && vgetq_lane_u8(v1, 0) == '/') {
+        cur_pos->idx++;
+        return;
+      }
+      text += 16;
+      uint8x16_t s1 = vextq_u8(v1, vdupq_n_u8(0), 1);
+      uint8x16_t eq_star1 = vceqq_u8(v1, vdupq_n_u8('*'));
+      uint8x16_t eq_slash1 = vceqq_u8(s1, vdupq_n_u8('/'));
+      uint8x16_t match1 = vandq_u8(eq_star1, eq_slash1);
+      uint8x16_t masked1 = vbslq_u8(match1, indices, vdupq_n_u8(0xFF));
+      uint8_t min1 = vminvq_u8(masked1);
+      if (min1 != 0xFF) {
+        cur_pos->idx += min1 + 2;
+        return;
+      }
+
+      trail = vgetq_lane_u8(eq_star1, 15);
+      cur_pos->idx += 16;
+    }
+
+    {
+      uint8x16_t v2 = vld1q_u8(text);
+      text += 16;
+      uint8x16_t s2 = vextq_u8(v2, vdupq_n_u8(0), 1);
+      uint8x16_t eq_star2 = vceqq_u8(v2, vdupq_n_u8('*'));
+      uint8x16_t eq_slash2 = vceqq_u8(s2, vdupq_n_u8('/'));
+      uint8x16_t match2 = vandq_u8(eq_star2, eq_slash2);
+      uint8x16_t masked2 = vbslq_u8(match2, indices, vdupq_n_u8(0xFF));
+      uint8_t min2 = vminvq_u8(masked2);
+      if (min2 != 0xFF) {
+        cur_pos->idx += min2 + 2;
+        return;
+      }
+
+      trail = vgetq_lane_u8(eq_star2, 15);
+      cur_pos->idx += 16;
+    }
+
+    {
+      uint8x16_t v3 = vld1q_u8(text);
+
+      if (trail && vgetq_lane_u8(v3, 0) == '/') {
+        cur_pos->idx++;
+        return;
+      }
+
+      text += 16;
+
+      uint8x16_t s3 = vextq_u8(v3, vdupq_n_u8(0), 1);
+      uint8x16_t eq_star3 = vceqq_u8(v3, vdupq_n_u8('*'));
+      uint8x16_t eq_slash3 = vceqq_u8(s3, vdupq_n_u8('/'));
+
+      uint8x16_t match3 = vandq_u8(eq_star3, eq_slash3);
+      uint8x16_t masked3 = vbslq_u8(match3, indices, vdupq_n_u8(0xFF));
+      uint8_t min3 = vminvq_u8(masked3);
+      if (min3 != 0xFF) {
+        cur_pos->idx += min3 + 2;
+        return;
+      }
+
+      trail = vgetq_lane_u8(eq_star3, 15);
+      cur_pos->idx += 16;
+    }
+
+#undef DO
+  }
+
+#undef BLOCK_SZ
+
+  if (trail) {
+    cur_pos->idx--;
+  }
+
+  find_multiline_comment_end_scalar(preproc_text, cur_pos);
+}
+
+#else
+static void find_multiline_comment_end(struct preproc_text *preproc_text,
+                                       struct text_pos *cur_pos) {
+  find_multiline_comment_end_scalar(preproc_text, cur_pos);
 }
 #endif
 
@@ -747,55 +790,9 @@ void preproc_next_raw_token(struct preproc *preproc,
     return;
   }
 
-#if USE_NEON
-  while (true) {
-    if ((text[0] == ' ' || text[0] == '\t') && text[1] != ' ') {
-      end.idx += 1;
-      end.col += 1;
-      break;
-    }
-
-    uint8x16_t input = vld1q_u8((const uint8_t *)(text + end.idx));
-
-    uint8x16_t is_space = vceqq_u8(input, vdupq_n_u8(' '));
-    uint8x16_t is_tab = vceqq_u8(input, vdupq_n_u8('\t'));
-    // uint8x16_t is_vtab = vceqq_u8(input, vdupq_n_u8('\\v'));
-    // uint8x16_t is_form = vceqq_u8(input, vdupq_n_u8('\\f'));
-
-    uint8x16_t mask = vorrq_u8(is_space, is_tab);
-    // mask = vorrq_u8(mask, is_vtab);
-    // mask = vorrq_u8(mask, is_form);
-
-    uint8x16_t shifted = vshrq_n_u8(mask, 7);
-    uint64x2_t mask64 = vreinterpretq_u64_u8(shifted);
-
-    uint64_t mask_lo = vgetq_lane_u64(mask64, 0);
-    uint64_t mask_hi = vgetq_lane_u64(mask64, 1);
-    // uint32_t cmask = ((uint16_t)mask_hi << 8) | (uint16_t)mask_lo;
-    uint16_t bitmask = 0;
-    bitmask |= (mask_lo & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56;
-    bitmask |= ((mask_hi & 0x0101010101010101ULL) * 0x0102040810204080ULL >> 56)
-               << 8;
-
-#if !__has_builtin(__builtin_ctz)
-#error "has neon but not __builtin_ctz?"
-#endif
-
-    int num_sp = __builtin_ctz(~bitmask);
-
-    end.idx += num_sp;
-    end.col += num_sp;
-
-    if (num_sp != 16) {
-      break;
-    }
-  }
-
-#else
   while (end.idx < len && is_whitespace(text[end.idx])) {
     next_col(&end);
   }
-#endif
 
   if (start.idx != end.idx) {
     // we have processed whitespace
@@ -815,11 +812,7 @@ void preproc_next_raw_token(struct preproc *preproc,
 
   char c = text[end.idx];
   char c2 = text[end.idx + 1];
-  // short sh = *(const short *)(const void *)&text[end.idx];
 
-  // if (c == '/' && end.idx + 1 < len &&
-  //     (text[end.idx + 1] == '/' ||
-  //      text[end.idx + 1] == '*')) {
   if (c == '/' && c2 == '/') {
     while (end.idx < len && !is_newline(text[end.idx])) {
       next_col(&end);
@@ -834,6 +827,8 @@ void preproc_next_raw_token(struct preproc *preproc,
   }
 
   if (c == '/' && c2 == '*') {
+    next_col(&end);
+    next_col(&end);
     find_multiline_comment_end(preproc_text, &end);
 
     token->ty = PREPROC_TOKEN_TY_COMMENT;
@@ -1067,6 +1062,7 @@ void preproc_next_raw_token(struct preproc *preproc,
   case '=':
     next_col(&end);
     if (c2 == '=') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_EQ;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_ASSG;
@@ -1078,6 +1074,7 @@ void preproc_next_raw_token(struct preproc *preproc,
       next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND_ASSG;
     } else if (c2 == '&') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_AND;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_AND;
@@ -1089,6 +1086,7 @@ void preproc_next_raw_token(struct preproc *preproc,
       next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR_ASSG;
     } else if (c2 == '|') {
+      next_col(&end);
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_LOGICAL_OR;
     } else {
       punc_ty = PREPROC_TOKEN_PUNCTUATOR_TY_OP_OR;
