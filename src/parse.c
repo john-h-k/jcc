@@ -31,7 +31,11 @@ struct parser {
 
 // root error is given back to the first call that enters error state
 // this prevents sub-errors clearing the error flag
-typedef enum { PARSER_ERR_NONE, PARSER_ERR_ROOT, PARSER_ERR_REENTRANT } err_state;
+typedef enum {
+  PARSER_ERR_NONE,
+  PARSER_ERR_ROOT,
+  PARSER_ERR_REENTRANT
+} err_state;
 
 enum parser_create_result
 parser_create(struct program program, struct preproc *preproc,
@@ -71,7 +75,8 @@ static void parser_clear_err(struct parser *parser, err_state state) {
     return;
   }
 
-  DEBUG_ASSERT(parser->state == PARSER_STATE_ERR, "called when parser not in err state");
+  DEBUG_ASSERT(parser->state == PARSER_STATE_ERR,
+               "called when parser not in err state");
 
   if (state == PARSER_ERR_ROOT) {
     parser->state = PARSER_STATE_NORMAL;
@@ -300,7 +305,7 @@ static bool parse_expected_expr(struct parser *parser, struct ast_expr *expr,
                                                 token.span, token.span.start,
                                                 err));
 
-    return false;
+  return false;
 }
 static bool parse_token(struct parser *parser, enum lex_token_ty ty,
                         struct text_span *span) {
@@ -459,10 +464,6 @@ static bool parse_type_specifier_kw(struct parser *parser,
     lex_consume_token(parser->lexer, token);
     *wkt = AST_TYPE_SPECIFIER_KW_UNSIGNED;
     return true;
-  // case LEX_TOKEN_TY_KW_BOOL:
-  //   consume_token(parser->lexer, token);
-  //   *wkt = AST_TYPE_SPECIFIER_KW_BOOL;
-  //   return true;
   // case LEX_TOKEN_TY_KW_COMPLEX:
   //   consume_token(parser->lexer, token);
   //   *wkt = AST_TYPE_SPECIFIER_KW_COMPLEX;
@@ -818,6 +819,49 @@ static bool parse_typedef_name(struct parser *parser,
   return true;
 }
 
+enum parse_type_or_expr_mode {
+  PARSE_TYPE_OR_EXPR_MODE_NORMAL,
+  PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS,
+};
+
+static void parse_type_or_expr(struct parser *parser, struct text_span context,
+                               enum parse_type_or_expr_mode mode,
+                               struct ast_type_or_expr *type_or_expr);
+
+static bool parse_typeof_specifier(struct parser *parser,
+                                   struct ast_type_specifier *type_specifier) {
+
+  struct lex_token token;
+  lex_peek_token(parser->lexer, &token);
+
+  // spec says its either `type ( expr )` or `typeof ( type ) `
+  // i assume `type` means `type-name`?
+  switch (token.ty) {
+  case LEX_TOKEN_TY_KW_TYPEOF:
+    type_specifier->ty = AST_TYPE_SPECIFIER_TYPEOF;
+
+    lex_consume_token(parser->lexer, token);
+    parse_type_or_expr(parser, token.span,
+                       PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS,
+                       &type_specifier->type_of);
+
+    type_specifier->span = type_specifier->type_of_unqual.span;
+    return true;
+  case LEX_TOKEN_TY_KW_TYPEOF_UNQUAL:
+    type_specifier->ty = AST_TYPE_SPECIFIER_TYPEOF_UNQUAL;
+
+    lex_consume_token(parser->lexer, token);
+    parse_type_or_expr(parser, token.span,
+                       PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS,
+                       &type_specifier->type_of_unqual);
+
+    type_specifier->span = type_specifier->type_of_unqual.span;
+    return true;
+  default:
+    return false;
+  }
+}
+
 static bool parse_type_specifier(struct parser *parser,
                                  struct ast_type_specifier *type_specifier,
                                  enum type_specifier_mode mode) {
@@ -825,6 +869,10 @@ static bool parse_type_specifier(struct parser *parser,
   if (parse_type_specifier_kw(parser, &type_specifier->type_specifier_kw,
                               &type_specifier->span)) {
     type_specifier->ty = AST_TYPE_SPECIFIER_TY_KW;
+    return true;
+  }
+
+  if (parse_typeof_specifier(parser, type_specifier)) {
     return true;
   }
 
@@ -1139,11 +1187,23 @@ static void parse_pointer_list(struct parser *parser,
   struct vector *list =
       vector_create_in_arena(sizeof(*pointer_list->pointers), parser->arena);
 
+  bool first = true;
+  struct text_pos start = lex_cur_pos(parser->lexer);
+  struct text_pos end = start;
+
   struct ast_pointer pointer;
   while (parse_pointer(parser, &pointer)) {
+    if (first) {
+      first = false;
+      start = pointer.span.start;
+    }
+
+    end = pointer.span.end;
+
     vector_push_back(list, &pointer);
   }
 
+  pointer_list->span = MK_TEXT_SPAN(start, end);
   pointer_list->pointers = vector_head(list);
   pointer_list->num_pointers = vector_length(list);
 }
@@ -1529,7 +1589,8 @@ static bool parse_init_declarator(struct parser *parser,
     end = init_declarator->declarator.span.end;
   }
 
-  init_declarator->span = MK_TEXT_SPAN(init_declarator->span.start, end);
+  init_declarator->span =
+      MK_TEXT_SPAN(init_declarator->declarator.span.start, end);
   return true;
 }
 
@@ -2320,45 +2381,74 @@ static bool parse_unary_prefix_op(struct parser *parser,
   return true;
 }
 
-static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
-  struct lex_pos pos = lex_get_position(parser->lexer);
-
-  struct text_span start, end;
-  if (!parse_token(parser, LEX_TOKEN_TY_KW_SIZEOF, &start)) {
-    lex_backtrack(parser->lexer, pos);
-    return false;
-  }
-
+static void parse_type_or_expr(struct parser *parser, struct text_span context,
+                               enum parse_type_or_expr_mode mode,
+                               struct ast_type_or_expr *type_or_expr) {
   // because of how sizeof works, we need to try and parse `sizeof(<ty_ref>)`
   // first else, something like `sizeof(char) + sizeof(short)` will be
   // resolves as `sizeof( (char) + sizeof(short) )` that is, the size of
   // `+sizeof(short)` cast to `char`
 
-  struct lex_pos post_sizeof_pos = lex_get_position(parser->lexer);
+  struct lex_pos pos = lex_get_position(parser->lexer);
 
+  struct text_span end;
+  struct ast_type_name type_name;
   if (parse_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, NULL) &&
-      parse_type_name(parser, &expr->size_of.type_name) &&
+      parse_type_name(parser, &type_name) &&
       parse_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, &end)) {
-    expr->ty = AST_EXPR_TY_SIZEOF;
-    expr->size_of.ty = AST_SIZEOF_TY_TYPE;
-    expr->span = MK_TEXT_SPAN(start.start, end.end);
-    return true;
-  }
-
-  lex_backtrack(parser->lexer, post_sizeof_pos);
-
-  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
-  if (parse_atom_3(parser, sub_expr)) {
-    expr->ty = AST_EXPR_TY_SIZEOF;
-    expr->size_of =
-        (struct ast_sizeof){.ty = AST_SIZEOF_TY_EXPR, .expr = sub_expr};
-
-    expr->span = MK_TEXT_SPAN(start.start, sub_expr->span.end);
-    return true;
+    type_or_expr->ty = AST_TYPE_OR_EXPR_TY_TYPE;
+    type_or_expr->type_name =
+        arena_alloc(parser->arena, sizeof(*type_or_expr->type_name));
+    *type_or_expr->type_name = type_name;
+    type_or_expr->span = MK_TEXT_SPAN(context.start, end.end);
+    return;
   }
 
   lex_backtrack(parser->lexer, pos);
-  return false;
+
+  struct ast_expr *sub_expr = arena_alloc(parser->arena, sizeof(*sub_expr));
+
+  if (mode == PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS) {
+    // FIXME: provide what keyword is causing the err in the message
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, context.start,
+                         "`(` for expr", NULL);
+  }
+
+  if (!parse_atom_3(parser, sub_expr)) {
+    sub_expr->ty = AST_EXPR_TY_INVALID;
+    sub_expr->span = context;    
+
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        parser->diagnostics,
+        MK_PARSER_DIAGNOSTIC(EXPECTED_EXPR, expected_expr, context, context.end,
+                             "expected expression or type-name"));
+  }
+
+  type_or_expr->ty = AST_TYPE_OR_EXPR_TY_EXPR;
+  type_or_expr->expr = sub_expr;
+
+  type_or_expr->span = MK_TEXT_SPAN(context.start, sub_expr->span.end);
+
+  if (mode == PARSE_TYPE_OR_EXPR_MODE_EXPR_NEEDS_PARENS) {
+    // FIXME: provide what keyword is causing the err in the message
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, sub_expr->span.end,
+                         "`)` after expr", NULL);
+  }
+}
+
+static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
+  struct text_span start;
+  if (!parse_token(parser, LEX_TOKEN_TY_KW_SIZEOF, &start)) {
+    return false;
+  }
+
+  parse_type_or_expr(parser, start, PARSE_TYPE_OR_EXPR_MODE_NORMAL,
+                     &expr->size_of.type_or_expr);
+  expr->size_of.span = expr->size_of.type_or_expr.span;
+  expr->span = expr->size_of.span;
+
+  return true;
 }
 
 static bool parse_alignof(struct parser *parser, struct ast_expr *expr) {
@@ -2441,11 +2531,12 @@ static bool parse_expr_precedence_aware(struct parser *parser,
     struct ast_expr rhs;
     if (!parse_expr_precedence_aware(parser, next_min_precedence, NULL, &rhs)) {
       parser->result_ty = PARSE_RESULT_TY_FAILURE;
-      compiler_diagnostics_add(parser->diagnostics,
-                               MK_PARSER_DIAGNOSTIC(EXPECTED_EXPR, expected_expr,
-                                                    MK_TEXT_SPAN(expr->span.start, lookahead.span.end), lookahead.span.end,
-                                                    "expected expression after binary operator"));
-      
+      compiler_diagnostics_add(
+          parser->diagnostics,
+          MK_PARSER_DIAGNOSTIC(
+              EXPECTED_EXPR, expected_expr,
+              MK_TEXT_SPAN(expr->span.start, lookahead.span.end),
+              lookahead.span.end, "expected expression after binary operator"));
     }
 
     // slightly odd design where `expr` now contains lhs and `rhs` contains
@@ -2806,7 +2897,13 @@ static bool parse_jumpstmt(struct parser *parser,
   return false;
 }
 
-static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt);
+enum parse_stmt_mode {
+  PARSE_STMT_MODE_DECL_OR_STMT,
+  PARSE_STMT_MODE_NO_DECL,
+};
+
+static bool parse_stmt(struct parser *parser, enum parse_stmt_mode mode,
+                       struct ast_stmt *stmt);
 
 static bool parse_labeledstmt(struct parser *parser,
                               struct ast_labeledstmt *labeled_stmt) {
@@ -2833,7 +2930,7 @@ static bool parse_labeledstmt(struct parser *parser,
 
   struct ast_stmt stmt;
   if (!parse_token(parser, LEX_TOKEN_TY_COLON, NULL) ||
-      !parse_stmt(parser, &stmt)) {
+      !parse_stmt(parser, PARSE_STMT_MODE_DECL_OR_STMT, &stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2855,7 +2952,8 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
 
   err_state st = PARSER_ERR_NONE;
   if (!parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, kw.start,
-                       "'(' as condition must be wrapped in brackets", NULL)) {
+                            "'(' as condition must be wrapped in brackets",
+                            NULL)) {
     st = parser_err(parser);
   }
 
@@ -2866,7 +2964,10 @@ static bool parse_ifstmt(struct parser *parser, struct ast_ifstmt *if_stmt) {
                        "')' as condition must be wrapped in brackets", NULL);
 
   struct ast_stmt stmt;
-  parse_stmt(parser, &stmt);
+  parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &stmt);
+
+  if (stmt.ty == AST_STMT_TY_DECLARATION) {
+  }
 
   if_stmt->cond = expr;
   if_stmt->body = arena_alloc(parser->arena, sizeof(*if_stmt->body));
@@ -2888,7 +2989,7 @@ static bool parse_ifelsestmt(struct parser *parser,
 
   struct ast_stmt else_stmt;
   if (!parse_token(parser, LEX_TOKEN_TY_KW_ELSE, NULL) ||
-      !parse_stmt(parser, &else_stmt)) {
+      !parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &else_stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2921,7 +3022,7 @@ static bool parse_switchstmt(struct parser *parser,
   }
 
   struct ast_stmt stmt;
-  if (!parse_stmt(parser, &stmt)) {
+  if (!parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2957,7 +3058,7 @@ static bool parse_whilestmt(struct parser *parser,
   }
 
   struct ast_stmt stmt;
-  if (!parse_stmt(parser, &stmt)) {
+  if (!parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -2981,7 +3082,7 @@ static bool parse_dowhilestmt(struct parser *parser,
   }
 
   struct ast_stmt stmt;
-  if (!parse_stmt(parser, &stmt)) {
+  if (!parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &stmt)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -3090,7 +3191,7 @@ static bool parse_forstmt(struct parser *parser, struct ast_forstmt *for_stmt) {
   }
 
   struct ast_stmt body;
-  if (!parse_stmt(parser, &body)) {
+  if (!parse_stmt(parser, PARSE_STMT_MODE_NO_DECL, &body)) {
     lex_backtrack(parser->lexer, pos);
     return false;
   }
@@ -3198,7 +3299,8 @@ static bool parse_staticassert(struct parser *parser,
 static bool parse_compoundstmt(struct parser *parser,
                                struct ast_compoundstmt *compound_stmt);
 
-static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
+static bool parse_stmt(struct parser *parser, enum parse_stmt_mode mode,
+                       struct ast_stmt *stmt) {
   struct lex_pos pos = lex_get_position(parser->lexer);
 
   struct text_span null_span;
@@ -3222,6 +3324,16 @@ static bool parse_stmt(struct parser *parser, struct ast_stmt *stmt) {
     stmt->ty = AST_STMT_TY_DECLARATION;
     stmt->declaration = declaration;
     stmt->span = declaration.span;
+
+    if (mode == PARSE_STMT_MODE_NO_DECL) {
+      parser->result_ty = PARSE_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          parser->diagnostics,
+          MK_PARSER_DIAGNOSTIC(
+              SYNTAX_ERR, syntax_err, declaration.span, declaration.span.start,
+              "declaration statement not legal here (wrap it in '{}')"));
+    }
+
     return true;
   }
 
@@ -3298,7 +3410,7 @@ static bool parse_compoundstmt(struct parser *parser,
       vector_create_in_arena(sizeof(struct ast_stmt), parser->arena);
   {
     struct ast_stmt stmt;
-    while (parse_stmt(parser, &stmt)) {
+    while (parse_stmt(parser, PARSE_STMT_MODE_DECL_OR_STMT, &stmt)) {
       if (first) {
         first = false;
         start = stmt.span.start;
@@ -3441,7 +3553,8 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
     return false;
   }
 
-  func_def->span = MK_TEXT_SPAN(func_def->specifier_list.span.start, func_def->body.span.end);
+  func_def->span = MK_TEXT_SPAN(func_def->specifier_list.span.start,
+                                func_def->body.span.end);
   return true;
 }
 
@@ -3753,6 +3866,8 @@ DEBUG_FUNC(enum_specifier, enum_specifier) {
   }
 }
 
+DEBUG_FUNC(type_or_expr, type_or_expr);
+
 DEBUG_FUNC(type_specifier, type_specifier) {
   AST_PRINTZ("TYPE SPECIFIER");
   INDENT();
@@ -3771,6 +3886,13 @@ DEBUG_FUNC(type_specifier, type_specifier) {
     AST_PRINT_SAMELINE_Z("TYPEDEF ");
     AST_PRINT_IDENTIFIER_SAMELINE(&type_specifier->typedef_name);
     break;
+  case AST_TYPE_SPECIFIER_TYPEOF:
+    AST_PRINTZ("TYPEOF");
+    DEBUG_CALL(type_or_expr, &type_specifier->type_of);
+    break;
+  case AST_TYPE_SPECIFIER_TYPEOF_UNQUAL:
+    AST_PRINTZ("TYPEOF_UNQUAL");
+    DEBUG_CALL(type_or_expr, &type_specifier->type_of_unqual);
   }
   UNINDENT();
 }
@@ -4362,18 +4484,22 @@ DEBUG_FUNC(init_list, init_list) {
   UNINDENT();
 }
 
+DEBUG_FUNC(type_or_expr, type_or_expr) {
+  switch (type_or_expr->ty) {
+  case AST_TYPE_OR_EXPR_TY_TYPE:
+    DEBUG_CALL(type_name, type_or_expr->type_name);
+    break;
+  case AST_TYPE_OR_EXPR_TY_EXPR:
+    DEBUG_CALL(expr, type_or_expr->expr);
+    break;
+  }
+}
+
 DEBUG_FUNC(sizeof, size_of) {
   AST_PRINTZ("SIZEOF");
 
   INDENT();
-  switch (size_of->ty) {
-  case AST_SIZEOF_TY_TYPE:
-    DEBUG_CALL(type_name, &size_of->type_name);
-    break;
-  case AST_SIZEOF_TY_EXPR:
-    DEBUG_CALL(expr, size_of->expr);
-    break;
-  }
+  DEBUG_CALL(type_or_expr, &size_of->type_or_expr);
   UNINDENT();
 }
 
