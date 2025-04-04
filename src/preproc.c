@@ -523,138 +523,71 @@ static void find_multiline_comment_end_scalar(struct preproc_text *preproc_text,
 #include <stdint.h>
 
 void find_multiline_comment_end(struct preproc_text *preproc_text,
-                                       struct text_pos *cur_pos);
+                                struct text_pos *cur_pos);
 
 void find_multiline_comment_end(struct preproc_text *preproc_text,
-                                       struct text_pos *cur_pos) {
+                                struct text_pos *cur_pos) {
   const unsigned char *text =
       (const unsigned char *)preproc_text->text + cur_pos->idx;
   size_t len = preproc_text->len;
 
-  // uint8x16_t indices = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-  // 16};
-  uint8x16_t indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  uint8x16_t indices0 = {0, 1, 2,  3,  4,  5,  6,  7,
+                                  8, 9, 10, 11, 12, 13, 14, 15};
+  uint8x16_t indices1 = {16, 17, 18, 19, 20, 21, 22, 23,
+                                  24, 25, 26, 27, 28, 29, 30, 31};
 
-#define BLOCK_SZ 64
+#define BLOCK_SZ 32
 
   size_t rem = len - cur_pos->idx;
   size_t nb = rem / BLOCK_SZ;
 
-  bool trail = false;
+  uint8_t trail = 0;
   for (size_t i = 0; i < nb; i++) {
-#define DO(id)                                                                 \
-  uint8x16_t v##id = vld1q_u8(text);                                           \
-  uint8x16_t s##id = vextq_u8(v##id, vdupq_n_u8(0), 1);                        \
-  uint8x16_t eq_star##id = vceqq_u8(v##id, vdupq_n_u8('*'));                   \
-  uint8x16_t eq_slash##id = vceqq_u8(s##id, vdupq_n_u8('/'));                  \
-  uint8x16_t match##id = vandq_u8(eq_star##id, eq_slash##id);                  \
-  uint8x16_t masked##id = vbslq_u8(match##id, indices, vdupq_n_u8(0xFF));      \
-  uint8_t min##id = vminvq_u8(masked##id);                                     \
-  if (min##id != 0xFF) {                                                       \
-    cur_pos->idx += min##id + 1;                                               \
-    return;                                                                    \
-  }                                                                            \
-  text += 16;                                                                  \
-  cur_pos->idx += 16;
+    uint8x16_t v0 = vld1q_u8(text);
+    uint8x16_t v1 = vld1q_u8(text + 16);
 
-    // DO(0);
-    // DO(1);
-    // DO(2);
-    // DO(3);
+    uint8x16_t eq_star0 = vceqq_u8(v0, vdupq_n_u8('*'));
+    uint8x16_t eq_star1 = vceqq_u8(v1, vdupq_n_u8('*'));
 
-    {
-      uint8x16_t v0 = vld1q_u8(text);
-
-      if (trail && vgetq_lane_u8(v0, 0) == '/') {
-        cur_pos->idx++;
-        return;
-      }
-
-      text += 16;
-      uint8x16_t s0 = vextq_u8(v0, vdupq_n_u8(0), 1);
-      uint8x16_t eq_star0 = vceqq_u8(v0, vdupq_n_u8('*'));
-      uint8x16_t eq_slash0 = vceqq_u8(s0, vdupq_n_u8('/'));
-
-      uint8x16_t match0 = vandq_u8(eq_star0, eq_slash0);
-      uint8x16_t masked0 = vbslq_u8(match0, indices, vdupq_n_u8(0xFF));
-      uint8_t min0 = vminvq_u8(masked0);
-      if (min0 != 0xFF) {
-        cur_pos->idx += min0 + 2;
-        return;
-      }
-
-      trail = vgetq_lane_u8(eq_star0, 15);
-      cur_pos->idx += 16;
+    if (trail && vgetq_lane_u8(v0, 0) == '/') {
+      cur_pos->idx += 1;
+      return;
     }
 
-    {
-      uint8x16_t v1 = vld1q_u8(text);
-
-      if (trail && vgetq_lane_u8(v1, 0) == '/') {
-        cur_pos->idx++;
-        return;
-      }
-      text += 16;
-      uint8x16_t s1 = vextq_u8(v1, vdupq_n_u8(0), 1);
-      uint8x16_t eq_star1 = vceqq_u8(v1, vdupq_n_u8('*'));
-      uint8x16_t eq_slash1 = vceqq_u8(s1, vdupq_n_u8('/'));
-      uint8x16_t match1 = vandq_u8(eq_star1, eq_slash1);
-      uint8x16_t masked1 = vbslq_u8(match1, indices, vdupq_n_u8(0xFF));
-      uint8_t min1 = vminvq_u8(masked1);
-      if (min1 != 0xFF) {
-        cur_pos->idx += min1 + 2;
-        return;
-      }
-
-      trail = vgetq_lane_u8(eq_star1, 15);
-      cur_pos->idx += 16;
+    if (vgetq_lane_u8(eq_star0, 15) && vgetq_lane_u8(v1, 0) == '/') {
+      cur_pos->idx += 16 + 1;
+      return;
     }
 
-    {
-      uint8x16_t v2 = vld1q_u8(text);
-      text += 16;
-      uint8x16_t s2 = vextq_u8(v2, vdupq_n_u8(0), 1);
-      uint8x16_t eq_star2 = vceqq_u8(v2, vdupq_n_u8('*'));
-      uint8x16_t eq_slash2 = vceqq_u8(s2, vdupq_n_u8('/'));
-      uint8x16_t match2 = vandq_u8(eq_star2, eq_slash2);
-      uint8x16_t masked2 = vbslq_u8(match2, indices, vdupq_n_u8(0xFF));
-      uint8_t min2 = vminvq_u8(masked2);
-      if (min2 != 0xFF) {
-        cur_pos->idx += min2 + 2;
-        return;
-      }
+    trail = vgetq_lane_u8(eq_star1, 15);
 
-      trail = vgetq_lane_u8(eq_star2, 15);
-      cur_pos->idx += 16;
+    uint8x16_t s0 = vextq_u8(v0, vdupq_n_u8(0), 1);
+    uint8x16_t s1 = vextq_u8(v1, vdupq_n_u8(0), 1);
+
+    uint8x16_t eq_slash0 = vceqq_u8(s0, vdupq_n_u8('/'));
+    uint8x16_t eq_slash1 = vceqq_u8(s1, vdupq_n_u8('/'));
+
+    uint8x16_t match0 = vandq_u8(eq_star0, eq_slash0);
+    uint8x16_t match1 = vandq_u8(eq_star1, eq_slash1);
+
+    uint8x16_t masked0 = vbslq_u8(match0, indices0, vdupq_n_u8(0xFF));
+    uint8x16_t masked1 = vbslq_u8(match1, indices1, vdupq_n_u8(0xFF));
+
+    uint8_t min0 = vminvq_u8(masked0);
+    uint8_t min1 = vminvq_u8(masked1);
+
+    if (min0 != 0xFF) {
+      cur_pos->idx += min0 + 2;
+      return;
     }
 
-    {
-      uint8x16_t v3 = vld1q_u8(text);
-
-      if (trail && vgetq_lane_u8(v3, 0) == '/') {
-        cur_pos->idx++;
-        return;
-      }
-
-      text += 16;
-
-      uint8x16_t s3 = vextq_u8(v3, vdupq_n_u8(0), 1);
-      uint8x16_t eq_star3 = vceqq_u8(v3, vdupq_n_u8('*'));
-      uint8x16_t eq_slash3 = vceqq_u8(s3, vdupq_n_u8('/'));
-
-      uint8x16_t match3 = vandq_u8(eq_star3, eq_slash3);
-      uint8x16_t masked3 = vbslq_u8(match3, indices, vdupq_n_u8(0xFF));
-      uint8_t min3 = vminvq_u8(masked3);
-      if (min3 != 0xFF) {
-        cur_pos->idx += min3 + 2;
-        return;
-      }
-
-      trail = vgetq_lane_u8(eq_star3, 15);
-      cur_pos->idx += 16;
+    if (min1 != 0xFF) {
+      cur_pos->idx += min1 + 2;
+      return;
     }
 
-#undef DO
+    text += BLOCK_SZ;
+    cur_pos->idx += BLOCK_SZ;
   }
 
 #undef BLOCK_SZ
