@@ -158,8 +158,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Sanitisers disabled")
   endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-  add_compile_options(-g)
-  add_link_options(-g3 -ldl)
+  # add_compile_options(-g)
+  # add_link_options(-g3 -ldl)
 
   add_compile_options(
     -O3
