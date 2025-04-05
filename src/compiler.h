@@ -118,6 +118,7 @@ struct compile_args {
   bool syntax_only;
   bool build_asm_file;
   bool build_object_file;
+  bool warnings_as_errors;
 
   bool verbose;
 

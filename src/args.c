@@ -329,25 +329,26 @@ enum parse_args_result parse_args(int argc, char **argv,
     if (!values_only && len && s[0] == '-') {
       char *value = NULL;
 
-      size_t lookup_len = MIN(len, 2);
+      value = strchr(s, '=');
 
-      const char *comma = strchr(s, ',');
-      if (comma) {
-        lookup_len = comma - s + 1;
-      }
-
-      struct sized_str lookup_str = {.len = lookup_len, .str = s};
+      struct sized_str lookup_str = {.len = value ? value - s : len, .str = s};
 
       struct arg *arg = hashtbl_lookup(opts, &lookup_str);
-      if (arg) {
-        value = len > lookup_len ? &s[lookup_len] : NULL;
-      } else {
-        value = strchr(s, '=');
 
-        lookup_str =
-            (struct sized_str){.len = value ? value - s : len, .str = s};
+      if (!arg) {
+        size_t lookup_len = MIN(len, 2);
+
+        const char *comma = strchr(s, ',');
+        if (comma) {
+          lookup_len = comma - s + 1;
+        }
+
+        lookup_str = (struct sized_str){.len = lookup_len, .str = s};
 
         arg = hashtbl_lookup(opts, &lookup_str);
+        if (arg) {
+          value = len > lookup_len ? &s[lookup_len] : NULL;
+        }
       }
 
       if (!arg) {
