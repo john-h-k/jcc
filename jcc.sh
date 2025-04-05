@@ -473,13 +473,13 @@ cfg() {
 }
 
 format() {
-    [ -n "$(git status --porcelain)" ] && {
+    [ -n "$(git status --porcelain -- '*.c' '*.h')" ] && {
         echo "git changes present, not formatting"
         return 1
     }
 
     echo "Formatting..."
-    fd '.*\.[hc]' src -x clang-format -style=file -i
+    fd '.*\.[hc]' src -x clang-format --style=file -i
 
     # strip trailing whitespace on all folders not just src
     fd -e c -e h -x sed -i '' -E 's/[[:space:]]+$//' {}
