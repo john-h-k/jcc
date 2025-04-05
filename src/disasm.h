@@ -1,7 +1,9 @@
 #ifndef DISASM_H
 #define DISASM_H
 
-// dumps using `objdump -d `, works for macOS
-void objdump_debug_disasm(const char *filename, const char *output);
+#include "compiler.h"
+
+// dumps using `objdump -d `
+void objdump_debug_disasm(enum compile_target target, const char *filename, const char *output);
 
 #endif

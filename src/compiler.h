@@ -35,6 +35,39 @@ enum compile_target {
   COMPILE_TARGET_EEP,
 };
 
+enum compile_platform {
+  COMPILE_PLATFORM_MACOS,
+  COMPILE_PLATFORM_LINUX,
+};
+
+static inline void compile_target_decomp(enum compile_target target, enum compile_arch *arch,
+                           enum compile_platform *platform) {
+  switch (target) {
+  case COMPILE_TARGET_MACOS_ARM64:
+    *arch = COMPILE_ARCH_ARM64;
+    *platform = COMPILE_PLATFORM_MACOS;
+    break;
+  case COMPILE_TARGET_MACOS_X86_64:
+    *arch = COMPILE_ARCH_X86_64;
+    *platform = COMPILE_PLATFORM_MACOS;
+    break;
+  case COMPILE_TARGET_LINUX_ARM64:
+    *arch = COMPILE_ARCH_ARM64;
+    *platform = COMPILE_PLATFORM_LINUX;
+    break;
+  case COMPILE_TARGET_LINUX_X86_64:
+    *arch = COMPILE_ARCH_X86_64;
+    *platform = COMPILE_PLATFORM_MACOS;
+    break;
+  case COMPILE_TARGET_LINUX_RV32I:
+    *arch = COMPILE_ARCH_RV32I;
+    *platform = COMPILE_PLATFORM_LINUX;
+    break;
+  case COMPILE_TARGET_EEP:
+    BUG("eep");
+  }
+}
+
 enum compile_log_flags {
   COMPILE_LOG_FLAGS_NONE = 0,
   COMPILE_LOG_FLAGS_ARGS = 1 << 0,
@@ -97,7 +130,8 @@ struct compile_file {
 };
 
 #define COMPILE_FILE_NONE ((struct compile_file){.ty = COMPILE_FILE_TY_NONE})
-#define COMPILE_FILE_STDOUT ((struct compile_file){.ty = COMPILE_FILE_TY_STDOUT})
+#define COMPILE_FILE_STDOUT                                                    \
+  ((struct compile_file){.ty = COMPILE_FILE_TY_STDOUT})
 
 FILE *compiler_open_file(struct compile_file file);
 
@@ -169,11 +203,13 @@ struct compiler_create_args {
 };
 
 enum compiler_create_result
-compiler_create(const struct compiler_create_args *args, struct compiler **compiler);
+compiler_create(const struct compiler_create_args *args,
+                struct compiler **compiler);
 
 enum compile_result compile(struct compiler *compiler);
 
-struct compiler_diagnostics *compiler_get_diagnostics(struct compiler *compiler);
+struct compiler_diagnostics *
+compiler_get_diagnostics(struct compiler *compiler);
 
 void free_compiler(struct compiler **compiler);
 

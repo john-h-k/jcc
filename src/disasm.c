@@ -1,35 +1,57 @@
 #include "disasm.h"
 
+#include "alloc.h"
+#include "compiler.h"
 #include "log.h"
+#include "syscmd.h"
 #include "util.h"
 
 #include <stdlib.h>
 
-void objdump_debug_disasm(const char *filename, const char *output) {
-  // static const char COMMAND[] = "objdump --macho --no-show-raw-insn -d ";
-  // macho mode causes some instructions to show wrongly (half instructions)
-  static const char COMMAND[] = "objdump -M intel --no-show-raw-insn -r -d ";
-  // static const char COMMAND[] = "riscv64-unknown-elf-objdump
-  // --no-show-raw-insn -r -d ";
+void objdump_debug_disasm(enum compile_target target, const char *filename,
+                          const char *output) {
+  // tmp arena
+  struct arena_allocator *arena;
+  arena_allocator_create(&arena);
 
-  char *command;
-
-  if (output) {
-    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + strlen(" > ") +
-                             strlen(output) + 1);
-    strcpy(command, COMMAND);
-    strcat(command, filename);
-    strcat(command, " > ");
-    strcat(command, output);
+  struct syscmd *cmd;
+  if (target == COMPILE_TARGET_LINUX_RV32I) {
+    cmd = syscmd_create(arena, "riscv64-unknown-elf-objdump");
   } else {
-    command = nonnull_malloc(sizeof COMMAND + strlen(filename) + 1);
-    strcpy(command, COMMAND);
-    strcat(command, filename);
+    cmd = syscmd_create(arena, "objdump");
   }
 
-  if (system(command)) {
+  syscmd_add_arg(cmd, "--disassemble");
+  syscmd_add_arg(cmd, "--reloc");
+
+  enum compile_arch arch;
+  enum compile_platform platform;
+
+  compile_target_decomp(target, &arch, &platform);
+
+  switch (arch) {
+  case COMPILE_ARCH_X86_64:
+    // intel syntax
+    syscmd_add_arg_val(cmd, "-M", "intel");
+    break;
+  case COMPILE_ARCH_ARM64:
+  case COMPILE_ARCH_RV32I:
+    break;
+  case COMPILE_ARCH_EEP:
+    BUG("eep");
+  case COMPILE_ARCH_NATIVE:
+    unreachable();
+  }
+
+  syscmd_add_arg(cmd, filename);
+
+  if (output) {
+    syscmd_set_stdout_path(cmd, SYSCMD_BUF_FLAG_NONE, output);
+  }
+
+  if (syscmd_exec(&cmd)) {
     warn("`debug_disasm` failed");
   }
 
-  free(command);
+  arena_allocator_free(&arena);
 }

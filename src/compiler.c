@@ -721,7 +721,7 @@ compile_stage_build_object(struct compiler *compiler,
     if (!compiler->target->debug_disasm) {
       warn("DISASM not supported for current target");
     } else {
-      compiler->target->debug_disasm(args.output, NULL);
+      compiler->target->debug_disasm(compiler->args.target, args.output, NULL);
     }
   }
 

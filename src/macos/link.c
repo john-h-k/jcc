@@ -2,7 +2,10 @@
 
 #include "../alloc.h"
 #include "../compiler.h"
+#include "../log.h"
+#include "../syscmd.h"
 #include "../util.h"
+#include "../profile.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,91 +15,57 @@ macos_link_objects_with_ld(const struct link_args *args) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
+  // TODO: we already calculate sdk path in preprocessor
+  // so we should reuse that
+  struct syscmd *sdk_cmd = syscmd_create(arena, "xcrun");
+  syscmd_add_arg_val(sdk_cmd, "-sdk", "macosx");
+  syscmd_add_arg(sdk_cmd, "--show-sdk-path");
+
+
+  char *sdk_path;
+  syscmd_set_stdout(sdk_cmd, SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE, &sdk_path);
+
+  PROFILE_BEGIN(sdk);
+  if (syscmd_exec(&sdk_cmd)) {
+    err("xcrun call failed!");
+    return LINK_RESULT_FAILURE;
+  }
+  PROFILE_END(sdk);
+
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
-  const char *template =
-      "ld -lSystem -lc -dynamic -syslibroot $(xcrun -sdk macosx "
-      "--show-sdk-path) -ld_classic";
 
-  // super inefficient here
+  struct syscmd *cmd = syscmd_create(arena, "ld");
+  syscmd_add_arg(cmd, "-lSystem");
+  syscmd_add_arg(cmd, "-lc");
+  syscmd_add_arg(cmd, "-dynamic");
+  syscmd_add_arg_val(cmd, "-syslibroot", sdk_path);
+  syscmd_add_arg(cmd, "-ld_classic");
 
-  size_t template_size = strlen(template);
-  size_t total_size = template_size;
-  total_size++;
-  for (size_t i = 0; i < args->num_objects; i++) {
-    // seperator plus quotes
-    total_size += 5;
-    total_size += strlen(args->objects[i]);
-  }
-
-  total_size += /* " -o " */ 4 + 2 + strlen(args->output);
-
-  for (size_t i = 0; i < args->num_linker_args; i++) {
-    // seperator plus quotes
-    total_size += strlen(args->linker_args[i]);
-
-    if (i + 1 != args->num_linker_args) {
-      total_size++;
-    }
-  }
-
-  total_size++; // null terminator
-
-  char *buff = arena_alloc(arena, total_size);
-
-  size_t head = 0;
-  strcpy(&buff[head], template);
-  head += template_size;
-
-  strcpy(&buff[head], " -o '");
-  head += 5;
-  strcpy(&buff[head], args->output);
-  head += strlen(args->output);
-  buff[head++] = '\'';
-
-  buff[head++] = ' ';
+  syscmd_add_arg_val(cmd, "-o", args->output);
 
   for (size_t i = 0; i < args->num_objects; i++) {
-    if (args->objects[i][0] != '/' && args->objects[i][0] != '.') {
-      buff[head++] = '.';
-      buff[head++] = '/';
-    } else {
-      buff[head++] = ' ';
-      buff[head++] = ' ';
-    }
-    buff[head++] = '\'';
-    strcpy(&buff[head], args->objects[i]);
-    head += strlen(args->objects[i]);
-    buff[head++] = '\'';
-    buff[head++] = ' ';
+    syscmd_add_arg(cmd, args->objects[i]);
   }
 
   for (size_t i = 0; i < args->num_linker_args; i++) {
-    // seperator plus quotes
-    strcpy(&buff[head], args->linker_args[i]);
-    head += strlen(args->linker_args[i]);
-
-    if (i + 1 != args->num_linker_args) {
-      buff[head++] = ' ';
-    }
+    syscmd_add_arg(cmd, args->linker_args[i]);
   }
-
-  buff[head++] = '\0';
-
-  DEBUG_ASSERT(head == total_size, "string buffer calculations went wrong!");
 
   if (args->args->verbose) {
-    fprintf(stderr, "Linux link:\n%s\n", buff);
+    fprintf(stderr, "link command (platform=macos):\n");
+    syscmd_write_cmd(cmd, stderr);
+  } else {
+    syscmd_set_stdout_path(cmd, SYSCMD_BUF_FLAG_NONE, "/dev/null");
   }
-  int ret_code = system(buff);
+
+  PROFILE_BEGIN(lk);
+  int ret_code = syscmd_exec(&cmd);
+  PROFILE_END(lk);
 
   arena_allocator_free(&arena);
 
-  if (!ret_code) {
-    return LINK_RESULT_SUCCESS;
-  } else {
-    return LINK_RESULT_FAILURE;
-  }
+  return ret_code == 0 ? LINK_RESULT_SUCCESS : LINK_RESULT_FAILURE;
 }
 
 enum link_result macos_link_objects(const struct link_args *args) {

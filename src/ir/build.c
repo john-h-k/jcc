@@ -1141,11 +1141,14 @@ static struct ir_op *build_ir_for_alignof(struct ir_func_builder *irb,
 static struct ir_var_str build_ir_str(const struct td_cnst *cnst,
                                       struct ir_var_ty *char_ty,
                                       bool *is_data) {
-
   switch (cnst->str_value.ty) {
   case TD_CNST_STR_TY_ASCII:
     // data if contains null char
-    *is_data = strlen(cnst->str_value.ascii.value) < cnst->str_value.ascii.len;
+    struct sized_str sized = {
+      .str = cnst->str_value.ascii.value,
+      .len = cnst->str_value.ascii.len,
+    };
+    *is_data = !szstr_nullsafe(sized);
     *char_ty = IR_VAR_TY_I8;
     return (struct ir_var_str){
         .value = cnst->str_value.ascii.value,

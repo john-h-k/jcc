@@ -186,7 +186,7 @@ static const char *get_default_isysroot(struct fcache *fcache,
 
 static enum parse_args_result
 try_get_compile_args(int argc, char **argv, struct parsed_args *args,
-                     struct fcache *fcache, struct arena_allocator *arena,
+                     struct arena_allocator *arena, struct fcache **fcache,
                      struct compile_args *compile_args, size_t *num_sources,
                      const char ***sources) {
   enum parse_args_result result = parse_args(argc, argv, args);
@@ -199,12 +199,13 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   }
 
   if (args->version || args->verbose) {
-    fprintf(args->version ? stdout : stderr, "jcc version %s\n"
-           "John Kelly <johnharrykelly@gmail.com>\n"
-           "location:  %s\n"
-           "OS_NAME:   %s\n"
-           "ARCH_NAME: %s\n",
-           JCC_VERSION, argv[0], OS_NAME, ARCH_NAME);
+    fprintf(args->version ? stdout : stderr,
+            "jcc version %s\n"
+            "John Kelly <johnharrykelly@gmail.com>\n"
+            "location:  %s\n"
+            "OS_NAME:   %s\n"
+            "ARCH_NAME: %s\n",
+            JCC_VERSION, argv[0], OS_NAME, ARCH_NAME);
 
 #ifdef JCC_DEFAULT_TARGET
 #define MKSTR_INNER(x) #x
@@ -216,6 +217,17 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       return PARSE_ARGS_RESULT_HELP;
     }
   }
+
+  enum fcache_flags fcache_flags = FCACHE_FLAG_NONE;
+  switch (args->driver) {
+  case JCC_DRIVER_COMPILER:
+    fcache_flags |= FCACHE_FLAG_ASSUME_CONSTANT;
+    break;
+  case JCC_DRIVER_LSP:
+    break;
+  }
+
+  fcache_create(arena, fcache_flags, fcache);
 
   struct hashtbl *log_symbols = NULL;
 
@@ -260,7 +272,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       arena_alloc(arena, sizeof(*sys_include_paths) * num_sys_include_paths);
 
   if (!args->isys_root) {
-    args->isys_root = get_default_isysroot(fcache, arena, args->target);
+    args->isys_root = get_default_isysroot(*fcache, arena, args->target);
   }
 
   const char *target = string_target(args->target);
@@ -320,7 +332,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     struct sized_str name, value;
     if (val_str) {
-      name = (struct sized_str){.str = def_macro, .len = (size_t)(val_str - def_macro)};
+      name = (struct sized_str){.str = def_macro,
+                                .len = (size_t)(val_str - def_macro)};
       value = MK_SIZED(val_str + 1);
     } else {
       name = MK_SIZED(def_macro);
@@ -435,14 +448,12 @@ static int jcc_main(int argc, char **argv) {
   arena_allocator_create(&arena);
 
   struct fcache *fcache;
-  fcache_create(arena, &fcache);
-
   struct parsed_args args;
   struct compile_args compile_args;
   size_t num_sources;
   const char **sources;
   enum parse_args_result parse_result = try_get_compile_args(
-      argc, argv, &args, fcache, arena, &compile_args, &num_sources, &sources);
+      argc, argv, &args, arena, &fcache, &compile_args, &num_sources, &sources);
 
   switch (parse_result) {
   case PARSE_ARGS_RESULT_SUCCESS:
@@ -642,7 +653,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 
     struct link_args link_args = {.args = &compile_args,
                                   .linker_args = args.linker_args.values,
-                                  .num_linker_args = args.linker_args.num_values,
+                                  .num_linker_args =
+                                      args.linker_args.num_values,
                                   .objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};

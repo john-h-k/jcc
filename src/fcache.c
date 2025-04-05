@@ -11,6 +11,7 @@ struct fcache_key {
 
 struct fcache {
   struct arena_allocator *arena;
+  enum fcache_flags flags;
   struct hashtbl *cache;
 };
 
@@ -28,11 +29,13 @@ static bool eq_fcache_key(const void *l, const void *r) {
   return lc->ty == rc->ty && szstreq(lc->key, rc->key);
 }
 
-void fcache_create(struct arena_allocator *arena, struct fcache **fcache) {
+void fcache_create(struct arena_allocator *arena, enum fcache_flags flags,
+                   struct fcache **fcache) {
   *fcache = arena_alloc(arena, sizeof(**fcache));
 
   **fcache = (struct fcache){
       .arena = arena,
+      .flags = flags,
       .cache = hashtbl_create_in_arena(arena, sizeof(struct fcache_key),
                                        sizeof(struct fcache_file),
                                        hash_fcache_key, eq_fcache_key)};
@@ -77,12 +80,15 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
 
 static bool fcache_read(struct fcache *fcache, struct fcache_key key,
                         struct fcache_file *file, enum fc_mode mode) {
-  struct fcache_file *cache = hashtbl_lookup(fcache->cache, &key);
-  if (cache) {
-    if (file) {
-      *file = *cache;
+  // TODO: caching (via mtime) even when flag not present
+  if (fcache->flags & FCACHE_FLAG_ASSUME_CONSTANT) {
+    struct fcache_file *cache = hashtbl_lookup(fcache->cache, &key);
+    if (cache) {
+      if (file) {
+        *file = *cache;
+      }
+      return true;
     }
-    return true;
   }
 
   // FIXME: assert the sized_str has no null chars in it

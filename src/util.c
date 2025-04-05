@@ -89,9 +89,9 @@ void debug_print_stack_trace(void) {
              "addr2line -C -i -f -p -s -a -e /proc/%d/exe +%p", getpid(),
              relative_addr);
 
-    if (system(command) == -1) {
-      fprintf(stderr, "  (failed to run addr2line: %s)\n", strerror(errno));
-    }
+    // if (system_f(command) == -1) {
+    //   fprintf(stderr, "  (failed to run addr2line: %s)\n", strerror(errno));
+    // }
   }
 }
 #endif

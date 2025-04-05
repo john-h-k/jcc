@@ -18,6 +18,7 @@ set(
   src/bitset.c
   src/fcache.c
   src/json.c
+  src/syscmd.c
 
   src/profile.c
 
@@ -82,7 +83,7 @@ endif()
 
 if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")
   message(STATUS "Enabling all architectures")
-  # add_definitions(-DJCC_ALL)
+  add_definitions(-DJCC_ALL)
   add_definitions(-DJCC_AARCH64)
   add_definitions(-DJCC_X64)
   add_definitions(-DJCC_RV32I)
