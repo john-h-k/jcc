@@ -1409,7 +1409,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 }
 
 static struct td_var_declaration
-type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
+type_declarator(struct typechk *tchk, struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
                 const struct ast_init *init, enum td_declarator_mode mode);
 
@@ -1593,6 +1593,12 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   return array_ty;
 }
 
+static void move_attrs(struct td_var_attrs *dest, struct td_var_attrs *src) {
+  dest->weak = src->weak;
+  dest->format = src->format;
+  *src = (struct td_var_attrs){0};
+}
+
 static struct td_var_ty
 type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
                      struct ast_func_declarator *func_declarator) {
@@ -1602,16 +1608,6 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
 
   func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
   *func_ty.func.ret = var_ty;
-
-  // put prefix attributes on the func itself
-  // but merge
-  if (!func_ty.attrs.weak) {
-    func_ty.attrs.weak = var_ty.attrs.weak;
-  }
-  if (!func_ty.attrs.format) {
-    func_ty.attrs.format = var_ty.attrs.format;
-  }
-  func_ty.func.ret->attrs = (struct td_var_attrs){0};
 
   struct ast_paramlist *param_list = func_declarator->param_list;
 
@@ -1781,9 +1777,11 @@ struct td_declarator {
 };
 
 static struct td_var_declaration type_declarator_inner(
-    struct typechk *tchk, const struct td_var_ty *outer_var_ty,
+    struct typechk *tchk, struct td_var_ty *outer_var_ty,
     const struct ast_declarator *declarator, const struct ast_init *init) {
   struct td_var_declaration var_decl;
+
+  struct td_var_attrs *first_attrs = &outer_var_ty->attrs;
 
   struct td_var_ty var_ty = *outer_var_ty;
 
@@ -1845,6 +1843,8 @@ static struct td_var_declaration type_declarator_inner(
     case AST_DIRECT_DECLARATOR_TY_FUNC_DECLARATOR: {
       var_ty = type_func_declarator(tchk, var_ty,
                                     direct_declarator->func_declarator);
+
+      move_attrs(&var_ty.attrs, first_attrs);
       break;
     }
     }
@@ -1883,7 +1883,7 @@ static void type_attribute_specifier_list(
 }
 
 static struct td_var_declaration
-type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
+type_declarator(struct typechk *tchk, struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
                 const struct ast_init *init, enum td_declarator_mode mode) {
 
@@ -3090,7 +3090,8 @@ static struct td_expr type_call(struct typechk *tchk,
               if (!td_var_ty_compatible(
                       tchk, arg_ty, &TD_VAR_TY_WELL_KNOWN_SIGNED_INT,
                       TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_ALL |
-                          TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE | TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
+                          TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE |
+                          TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
 
                 compiler_diagnostics_add(
                     tchk->diagnostics,
@@ -3127,7 +3128,8 @@ static struct td_expr type_call(struct typechk *tchk,
               if (!td_var_ty_compatible(
                       tchk, arg_ty, &TD_VAR_TY_WELL_KNOWN_SIGNED_INT,
                       TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_ALL |
-                          TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE | TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
+                          TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE |
+                          TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
 
                 compiler_diagnostics_add(
                     tchk->diagnostics,
@@ -3162,7 +3164,8 @@ static struct td_expr type_call(struct typechk *tchk,
             if (!td_var_ty_compatible(
                     tchk, arg_ty, &exp_ty,
                     TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_ALL |
-                          TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE | TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
+                        TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RECURSIVE |
+                        TD_VAR_TY_COMPATIBLE_FLAG_CANONICALIZE)) {
 
               compiler_diagnostics_add(
                   tchk->diagnostics,
@@ -4140,7 +4143,10 @@ static struct td_expr type_generic(struct typechk *tchk,
           MK_SEMANTIC_DIAGNOSTIC(
               DUPLICATE_GENERIC_DEFAULT, duplicate_generic_default,
               generic->span, MK_INVALID_TEXT_POS(0),
-              arena_alloc_snprintf(tchk->arena, "no association matched type '%s' and no default found", tchk_type_name(tchk, &ctrl_var_ty))));
+              arena_alloc_snprintf(
+                  tchk->arena,
+                  "no association matched type '%s' and no default found",
+                  tchk_type_name(tchk, &ctrl_var_ty))));
 
       return (struct td_expr){.ty = TD_EXPR_TY_INVALID,
                               .var_ty = TD_VAR_TY_UNKNOWN};
@@ -6054,7 +6060,7 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
 
 static struct td_var_declaration
 type_init_declarator(struct typechk *tchk, struct text_span context,
-                     const struct td_specifiers *specifiers,
+                     struct td_specifiers *specifiers,
                      const struct ast_init_declarator *init_declarator,
                      enum td_declarator_mode mode) {
   struct td_var_declaration td_var_decl =
@@ -6115,7 +6121,7 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
 
 static struct td_declaration type_init_declarator_list(
     struct typechk *tchk, struct text_span context,
-    const struct td_specifiers *specifiers,
+    struct td_specifiers *specifiers,
     const struct ast_init_declarator_list *declarator_list,
     enum td_declarator_mode mode) {
   struct td_declaration td_declaration = {

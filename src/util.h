@@ -42,8 +42,10 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 
 #if STDC_C23 && __GNUC__
-#define PRINTF_ARGS(idx) [gnu::format(printf, idx + 1, idx + 2)]
-#elif __GNUC__
+#define PRINTF_ARGS(idx) [[gnu::format(printf, idx + 1, idx + 2)]]
+#elif STDC_C23 && __JCC__
+#define PRINTF_ARGS(idx) [[jcc::format(printf, idx + 1, idx + 2)]]
+#elif __GNUC__ || __JCC__
 #define PRINTF_ARGS(idx) __attribute__((format(printf, idx + 1, idx + 2)))
 #else
 #define PRINTF_ARGS(idx)
