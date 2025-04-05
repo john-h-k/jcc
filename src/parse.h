@@ -436,6 +436,8 @@ enum ast_cnst_ty {
   AST_CNST_TY_DOUBLE,
   AST_CNST_TY_LONG_DOUBLE,
 
+  AST_CNST_TY_BOOL,
+
   AST_CNST_TY_CHAR,
   AST_CNST_TY_WIDE_CHAR,
 
@@ -1012,6 +1014,7 @@ struct parse_result {
 
 enum parser_create_result
 parser_create(struct program program, struct preproc *preproc,
+                      enum compile_c_standard c_standard,
               enum compile_preproc_mode mode,
               struct compiler_diagnostics *diagnostics, struct parser **parser);
 

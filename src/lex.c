@@ -33,6 +33,7 @@ static struct hashtbl *KEYWORDS = NULL;
 
 enum lex_create_result lexer_create(struct program program,
                                     struct preproc *preproc,
+                                    enum compile_c_standard c_standard,
                                     enum compile_preproc_mode mode,
                                     struct lexer **lexer) {
   if (!KEYWORDS) {
@@ -50,10 +51,10 @@ enum lex_create_result lexer_create(struct program program,
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
   } while (0)
 
-#define KEYWORD_WITH_ALIASES(kw, ty) \
-  KEYWORD(kw, ty); \
-  KEYWORD("__" kw, ty); \
-  KEYWORD("__" kw "__", ty); \
+#define KEYWORD_WITH_ALIASES(kw, ty)                                           \
+  KEYWORD(kw, ty);                                                             \
+  KEYWORD("__" kw, ty);                                                        \
+  KEYWORD("__" kw "__", ty);
 
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
@@ -65,13 +66,18 @@ enum lex_create_result lexer_create(struct program program,
 
     KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
-    KEYWORD_WITH_ALIASES("typeof", LEX_TOKEN_TY_KW_TYPEOF);
-    KEYWORD_WITH_ALIASES("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
+    if (c_standard >= COMPILE_C_STANDARD_C23) {
+      KEYWORD_WITH_ALIASES("typeof", LEX_TOKEN_TY_KW_TYPEOF);
+      KEYWORD_WITH_ALIASES("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
+    }
 
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
 
     KEYWORD("_Static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
-    KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
+
+    if (c_standard >= COMPILE_C_STANDARD_C23) {
+      KEYWORD("static_assert", LEX_TOKEN_TY_KW_STATICASSERT);
+    }
 
     KEYWORD("_Noreturn", LEX_TOKEN_TY_KW_NORETURN);
     KEYWORD("goto", LEX_TOKEN_TY_KW_GOTO);
@@ -93,8 +99,10 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN);
     KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER);
 
+    // const does not have `__const__` variant as that is an attribute
+    KEYWORD("const", LEX_TOKEN_TY_KW_CONST);
+    KEYWORD("__const", LEX_TOKEN_TY_KW_CONST);
     KEYWORD_WITH_ALIASES("inline", LEX_TOKEN_TY_KW_INLINE);
-    KEYWORD_WITH_ALIASES("const", LEX_TOKEN_TY_KW_CONST);
     KEYWORD_WITH_ALIASES("volatile", LEX_TOKEN_TY_KW_VOLATILE);
     KEYWORD_WITH_ALIASES("restrict", LEX_TOKEN_TY_KW_RESTRICT);
 
@@ -102,7 +110,12 @@ enum lex_create_result lexer_create(struct program program,
 
     KEYWORD("_Bool", LEX_TOKEN_TY_KW_BOOL);
     // TODO: only allow for C23 (similar with alignof)
-    KEYWORD("bool", LEX_TOKEN_TY_KW_BOOL);
+
+    if (c_standard >= COMPILE_C_STANDARD_C23) {
+      KEYWORD("bool", LEX_TOKEN_TY_KW_BOOL);
+      KEYWORD("true", LEX_TOKEN_TY_KW_TRUE);
+      KEYWORD("false", LEX_TOKEN_TY_KW_FALSE);
+    }
 
     // required by macOS
     KEYWORD("__uint128_t", LEX_TOKEN_TY_KW_UINT128);
@@ -124,10 +137,13 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("union", LEX_TOKEN_TY_KW_UNION);
 
     KEYWORD("sizeof", LEX_TOKEN_TY_KW_SIZEOF);
-    KEYWORD("alignof", LEX_TOKEN_TY_KW_ALIGNOF);
     KEYWORD("_Alignof", LEX_TOKEN_TY_KW_ALIGNOF);
-    KEYWORD("alignas", LEX_TOKEN_TY_KW_ALIGNAS);
     KEYWORD("_Alignas", LEX_TOKEN_TY_KW_ALIGNAS);
+
+    if (c_standard >= COMPILE_C_STANDARD_C23) {
+      KEYWORD("alignof", LEX_TOKEN_TY_KW_ALIGNOF);
+      KEYWORD("alignas", LEX_TOKEN_TY_KW_ALIGNAS);
+    }
 
 #undef KEYWORD
 
@@ -757,6 +773,8 @@ const char *lex_token_name(UNUSED_ARG(const struct lexer *lexer),
     CASE_RET(LEX_TOKEN_TY_KW_GENERIC)
     CASE_RET(LEX_TOKEN_TY_KW_STATICASSERT)
     CASE_RET(LEX_TOKEN_TY_KW_BOOL)
+    CASE_RET(LEX_TOKEN_TY_KW_TRUE)
+    CASE_RET(LEX_TOKEN_TY_KW_FALSE)
     CASE_RET(LEX_TOKEN_TY_KW_UINT128)
     CASE_RET(LEX_TOKEN_TY_KW_NORETURN)
     CASE_RET(LEX_TOKEN_TY_KW_ATTRIBUTE)
