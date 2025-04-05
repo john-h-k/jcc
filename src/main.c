@@ -279,6 +279,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       // don't print diagnostics in LSP context (it will consume them itself)
       .print_diagnostics = args->driver == JCC_DRIVER_COMPILER,
 
+      .warnings_as_errors = args->warnings_as_error,
+
       .preproc_only = args->preprocess,
       .lex_only = args->lex_only,
       .parse_only = args->parse_only,

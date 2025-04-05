@@ -56,7 +56,11 @@ compiler_create(const struct compiler_create_args *args,
   (*compiler)->target = args->target;
   (*compiler)->output = args->output;
   (*compiler)->mode = args->mode;
-  (*compiler)->diagnostics = compiler_diagnostics_create();
+
+  struct compiler_diagnostics_args diag_args = {
+      .warnings_as_errors = args->args.warnings_as_errors};
+
+  (*compiler)->diagnostics = compiler_diagnostics_create(diag_args);
 
   struct preproc_create_args preproc_args = {
       .target = args->args.target,
@@ -285,19 +289,38 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
     fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
             span.start.line, span.start.col);
 
+    bool werror = false;
+    const char *prefix = "";
+
     switch (diagnostic.ty.severity) {
     case COMPILER_DIAGNOSTIC_SEVERITY_ERROR:
       fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
       break;
     case COMPILER_DIAGNOSTIC_SEVERITY_WARN:
-      fprintf(stderr, PR_BOLD PR_MAGENTA "warning: " PR_RESET);
+      prefix = "-W";
+      if (compiler->args.warnings_as_errors) {
+        fprintf(stderr, PR_BOLD PR_RED "error: " PR_RESET);
+        werror = true;
+      } else {
+        fprintf(stderr, PR_BOLD PR_MAGENTA "warning: " PR_RESET);
+      }
       break;
     case COMPILER_DIAGNOSTIC_SEVERITY_INFO:
       fprintf(stderr, PR_BOLD PR_WHITE "info: " PR_RESET);
       break;
     }
 
-    fprintf(stderr, PR_BOLD PR_WHITE "%s\n" PR_RESET, message);
+    fprintf(stderr, PR_BOLD PR_WHITE "%s",  message);
+
+    fprintf(stderr, " [");
+    if (werror) {
+      fprintf(stderr, "-Werror,");
+    }
+    
+    fprintf(stderr, "%s%s", prefix, diagnostic.ty.name);
+    fprintf(stderr, "]\n" PR_RESET);
+
+    
     if (has_pos) {
       compiler_print_diagnostics_context(compiler, span, point);
     }

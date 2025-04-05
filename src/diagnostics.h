@@ -186,6 +186,7 @@ struct internal_diagnostic {
 struct compiler_diagnostic_ty {
   enum compiler_diagnostic_class class;
   enum compiler_diagnostic_severity severity;
+  const char *name;
 };
 
 #define DIAG_FN(_0, _1, name, enum, ty)                                        \
@@ -250,9 +251,13 @@ struct compiler_diagnostic {
   };
 };
 
+struct compiler_diagnostics_args {
+  bool warnings_as_errors;
+};
+
 struct compiler_diagnostics;
 
-struct compiler_diagnostics *compiler_diagnostics_create(void);
+struct compiler_diagnostics *compiler_diagnostics_create(struct compiler_diagnostics_args args);
 void compiler_diagnostics_add(struct compiler_diagnostics *diagnostics,
                               struct compiler_diagnostic diagnostic);
 void compiler_diagnostics_free(struct compiler_diagnostics **diagnostics);
@@ -261,6 +266,8 @@ struct compiler_diagnostics_iter {
   struct compiler_diagnostics *diagnostics;
   size_t idx;
 };
+
+bool compiler_diagnostics_err(struct compiler_diagnostics *diagnostics);
 
 struct compiler_diagnostics_iter
 compiler_diagnostics_iter(struct compiler_diagnostics *diagnostics);

@@ -1577,7 +1577,13 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   *func_ty.func.ret = var_ty;
 
   // put prefix attributes on the func itself
-  func_ty.attrs = var_ty.attrs;
+  // but merge
+  if (!func_ty.attrs.weak) {
+    func_ty.attrs.weak = var_ty.attrs.weak;
+  }
+  if (!func_ty.attrs.format) {
+    func_ty.attrs.format = var_ty.attrs.format;
+  }
   func_ty.func.ret->attrs = (struct td_var_attrs){0};
 
   struct ast_paramlist *param_list = func_declarator->param_list;
@@ -1833,6 +1839,20 @@ static struct td_var_declaration type_declarator_inner(
   }
 }
 
+static void
+type_attribute_list(struct typechk *tchk,
+                                const struct ast_attribute_list *attribute_list,
+                                struct td_var_attrs *attrs);
+
+static void
+type_attribute_specifier_list(struct typechk *tchk,
+                                const struct ast_attribute_specifier_list *attribute_specifier_list,
+                                struct td_var_attrs *attrs) {
+  for (size_t i = 0; i < attribute_specifier_list->num_attribute_specifiers; i++) {
+    type_attribute_list(tchk, &attribute_specifier_list->attribute_specifiers[i].attribute_list, attrs);
+  }
+}
+
 static struct td_var_declaration
 type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
                 const struct ast_declarator *declarator,
@@ -1841,6 +1861,8 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
   // TODO: handle storage class/qualifier/function specifiers
   struct td_var_declaration declaration = type_declarator_inner(
       tchk, &specifiers->type_specifier, declarator, init);
+
+  type_attribute_specifier_list(tchk, &declarator->attribute_specifier_list, &declaration.var_ty.attrs);
 
   if (declarator->bitfield_size) {
     if (mode == TD_DECLARATOR_MODE_NORMAL) {
@@ -1901,7 +1923,9 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
       identifier_str(tchk->parser, &archetype_expr->var.identifier);
   struct sized_str normalized = normalize_attr_ident(archetype_name);
 
-  if (!szstreq(normalized, MK_SIZED("printf"))) {
+  if (szstreq(normalized, MK_SIZED("scanf"))) {
+    return (struct td_attr_format){0};
+  } else if (!szstreq(normalized, MK_SIZED("printf"))) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
@@ -1934,10 +1958,9 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
 // writes into vector as a single specifier list may contain many attribute
 // lists so more efficient
 static void
-type_declaration_attribute_list(struct typechk *tchk,
+type_attribute_list(struct typechk *tchk,
                                 const struct ast_attribute_list *attribute_list,
                                 struct td_var_attrs *attrs) {
-
   for (size_t j = 0; j < attribute_list->num_attributes; j++) {
     struct ast_attribute *attr = &attribute_list->attributes[j];
 
@@ -1946,7 +1969,8 @@ type_declaration_attribute_list(struct typechk *tchk,
       continue;
     case AST_ATTRIBUTE_TY_NAMED:
     case AST_ATTRIBUTE_TY_PARAMETERIZED: {
-      bool silent_ignore = false;
+      // TODO: when we support many more, default this to false
+      bool silent_ignore = true;
       if (attr->prefix) {
         struct sized_str prefix = identifier_str(tchk->parser, attr->prefix);
         struct sized_str prefix_norm = normalize_attr_ident(prefix);
@@ -1954,7 +1978,7 @@ type_declaration_attribute_list(struct typechk *tchk,
         // currently the prefix is not used, but we ignore unknown ones and
         // ignore unknown attributes from gcc/clang
         if (szstreq(prefix_norm, MK_SIZED("jcc"))) {
-          // nothing!
+          silent_ignore = false;
         } else if (szstreq(prefix_norm, MK_SIZED("gnu"))) {
           silent_ignore = true;
         } else if (szstreq(prefix_norm, MK_SIZED("clang"))) {
@@ -1978,7 +2002,7 @@ type_declaration_attribute_list(struct typechk *tchk,
             tchk->diagnostics,
             MK_SEMANTIC_DIAGNOSTIC(UNRECOGNISED_ATTR, unrecognised_attr,
                                    attr->span, MK_INVALID_TEXT_POS(0),
-                                   "unrecognised attribute ignored"));
+                                   arena_alloc_snprintf(tchk->arena, "unrecognised attribute '%.*s' ignored", (int)name.len, name.str)));
       }
       break;
     }
@@ -2012,7 +2036,7 @@ type_specifiers(struct typechk *tchk,
 
     switch (specifier.ty) {
     case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
-      type_declaration_attribute_list(
+      type_attribute_list(
           tchk, &specifier.attribute_specifier.attribute_list,
           &specifiers.type_specifier.attrs);
       break;
@@ -2673,6 +2697,7 @@ parse_printf_argspec_value(const char *str, size_t *idx, size_t len) {
   }
 
   if (str[*idx] == '*') {
+    (*idx)++;
     return (struct printf_argspec_value){.ty = PRINTF_ARGSPEC_VALUE_TY_VAR};
   } else if (isdigit(str[*idx])) {
     int cnst = str[(*idx)++] - '0';
@@ -2736,7 +2761,7 @@ static struct printf_args parse_printf_format(struct typechk *tchk,
         c = fmt.value[i];
 
         if (c == '.') {
-          i++;
+            i++;
           argspec.precision =
               parse_printf_argspec_value(fmt.value, &i, fmt.len);
         }
@@ -2747,7 +2772,7 @@ static struct printf_args parse_printf_format(struct typechk *tchk,
       argspec.specifier = parse_printf_argspec_specifier(fmt.value, i, fmt.len);
     }
 
-    argspec.len = i - argspec.offset;
+    argspec.len = i - argspec.offset + 1;
     vector_push_back(argspecs, &argspec);
   }
 
@@ -2822,6 +2847,10 @@ static struct td_expr type_call(struct typechk *tchk,
     case TD_ATTR_FORMAT_ARCHETYPE_PRINTF: {
       DEBUG_ASSERT(format->string_index, "string index should never be zero");
 
+      if (format->string_index > td_call.arg_list.num_args) {
+        break;
+      }
+
       struct td_expr *format_str =
           &td_call.arg_list.args[format->string_index - 1];
 
@@ -2863,8 +2892,11 @@ static struct td_expr type_call(struct typechk *tchk,
             .end = format_str->span.end,
         };
 
-        span.start.col += arg_spec->offset;
-        span.start.idx += arg_spec->offset;
+        // get span in the thing
+        // HACK: just add one to skip quote (won't work with wide strings, but the rest wont work either)
+
+        span.start.col += arg_spec->offset + 1;
+        span.start.idx += arg_spec->offset + 1;
         span.end.col = span.start.col + arg_spec->len;
         span.end.idx = span.start.idx + arg_spec->len;
 
@@ -2940,13 +2972,12 @@ static struct td_expr type_call(struct typechk *tchk,
               compiler_diagnostics_add(
                   tchk->diagnostics,
                   MK_SEMANTIC_DIAGNOSTIC(
-                      BAD_PRINTF_ARGS, bad_printf_args, call->arg_list.span,
-                      MK_INVALID_TEXT_POS(0),
+                      BAD_PRINTF_ARGS, bad_printf_args, span, span.end,
                       arena_alloc_snprintf(tchk->arena,
                                            "printf specifier expects type '%s' "
                                            "but type '%s' was provided",
-                                           tchk_type_name(tchk, arg_ty),
-                                           tchk_type_name(tchk, &exp_ty))));
+                                           tchk_type_name(tchk, &exp_ty),
+                                           tchk_type_name(tchk, arg_ty))));
             }
 
             arg_idx += num_spec_args;
@@ -6080,6 +6111,10 @@ struct typechk_result td_typechk(struct typechk *tchk,
   // slightly overallocates (bc it allocates for static_asserts) but shouldn't
   // matter
   td_translation_unit.num_external_declarations = head;
+
+  if (compiler_diagnostics_err(tchk->diagnostics)) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+  }
 
   return (struct typechk_result){.ty = tchk->result_ty,
                                  .translation_unit = td_translation_unit};

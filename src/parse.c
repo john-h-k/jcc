@@ -3673,6 +3673,10 @@ struct parse_result parse(struct parser *parser) {
 
   struct ast_translationunit translation_unit;
 
+  if (compiler_diagnostics_err(parser->diagnostics)) {
+    parser->result_ty = PARSE_RESULT_TY_FAILURE;
+  }
+
   translation_unit.external_declarations = vector_head(declarations);
   translation_unit.num_external_declarations = vector_length(declarations);
 
