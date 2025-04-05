@@ -78,7 +78,7 @@ set(
 # TODO: add a more granular system for including targets
 
 if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
-    set(CMAKE_C_COMPILER_ID "JCC" CACHE STRING "Custom compiler ID" FORCE)
+    set(CMAKE_C_COMPILER_ID "JCC")
 endif()
 
 if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")

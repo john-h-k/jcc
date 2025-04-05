@@ -8,6 +8,7 @@
 #include "io.h"
 #include "log.h"
 #include "program.h"
+#include "util.h"
 #include "vector.h"
 
 #include <TargetConditionals.h>
@@ -146,16 +147,23 @@ struct preproc_define_value {
   };
 };
 
+enum preproc_define_flags {
+  PREPROC_DEFINE_FLAG_NONE = 0,
+  // e.g `defined`, `__has_include`
+  PREPROC_DEFINE_FLAG_WELL_KNOWN = 1 << 0,
+};
+
 struct preproc_define {
   struct preproc_token name;
   struct preproc_define_value value;
+  enum preproc_define_flags flags;
 };
 
 static void preproc_create_builtin_macros(struct preproc *preproc,
                                           enum compile_target target) {
   // FIXME: vectors leak, vector should probably be arena-based
 
-#define DEF_BUILTIN(tok_ty, n, v)                                              \
+#define DEF_BUILTIN(tok_ty, n, v, f)                                           \
   do {                                                                         \
     size_t name_len = strlen((n));                                             \
     struct sized_str ident = {.str = (n), .len = name_len};                    \
@@ -164,24 +172,46 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
         .name = {.ty = tok_ty,                                                 \
                  .span = MK_INVALID_TEXT_SPAN(0, name_len),                    \
                  .text = (n)},                                                 \
-        .value = {                                                             \
-            .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,                               \
-            .token = {.ty = tok_ty,                                            \
-                      .span = MK_INVALID_TEXT_SPAN(0, strlen((v))),            \
-                      .text = (v)},                                            \
-        }};                                                                    \
+        .value =                                                               \
+            {                                                                  \
+                .ty = PREPROC_DEFINE_VALUE_TY_TOKEN,                           \
+                .token = {.ty = tok_ty,                                        \
+                          .span = MK_INVALID_TEXT_SPAN(0, strlen((v))),        \
+                          .text = (v)},                                        \
+            },                                                                 \
+        .flags = f};                                                           \
                                                                                \
     hashtbl_insert(preproc->defines, &ident, &define);                         \
   } while (0)
 
 #define DEF_BUILTIN_NUM(n, v)                                                  \
-  DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v))
+  DEF_BUILTIN(PREPROC_TOKEN_TY_PREPROC_NUMBER, (n), (v),                       \
+              PREPROC_DEFINE_FLAG_NONE)
 #define DEF_BUILTIN_IDENT(n, v)                                                \
-  DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v))
+  DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (v), PREPROC_DEFINE_FLAG_NONE)
+
+#define DEF_BUILTIN_WELL_KNOWN(n)                                              \
+  DEF_BUILTIN(PREPROC_TOKEN_TY_IDENTIFIER, (n), (n),                           \
+              PREPROC_DEFINE_FLAG_WELL_KNOWN)
 
   // HACK: musl doesn't include `stdarg.h` so until we support
   // `__builtin_va_list`, just typedef it away
   // DEF_BUILTIN_IDENT("__builtin_va_list", "void *");
+
+  DEF_BUILTIN_WELL_KNOWN("defined");
+  DEF_BUILTIN_WELL_KNOWN("has_include");
+  DEF_BUILTIN_WELL_KNOWN("__has_include");
+  // DEF_BUILTIN_WELL_KNOWN("has_embed");
+  // DEF_BUILTIN_WELL_KNOWN("__has_embed");
+  // DEF_BUILTIN_WELL_KNOWN("__has_feature");
+  // DEF_BUILTIN_WELL_KNOWN("__has_builtin");
+  // DEF_BUILTIN_WELL_KNOWN("__has_attribute");
+  // DEF_BUILTIN_WELL_KNOWN("__has_c_attribute");
+  // DEF_BUILTIN_WELL_KNOWN("__has_extension");
+  // needed because clang headers do not properly avoid it
+  // TODO: have more flexible solution to this (so we can ignore arbitary
+  // __foo type macros)
+  DEF_BUILTIN_WELL_KNOWN("__building_module");
 
   DEF_BUILTIN_IDENT("__extension__", "");
 
@@ -221,6 +251,9 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   DEF_BUILTIN_NUM("__STDC_NO_COMPLEX__", "1");
   DEF_BUILTIN_NUM("__STDC_NO_THREADS__", "1");
   DEF_BUILTIN_NUM("__STDC_NO_VLA__", "1");
+
+  // currently all backends are little endian
+  DEF_BUILTIN_NUM("__LITTLE_ENDIAN__", "1");
 
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
@@ -776,7 +809,7 @@ void preproc_next_raw_token(struct preproc *preproc,
   // FIXME: make sure there are excess null chars at end of string
 
   switch (c) {
-  case 'L':
+  case 'L': {
     char next = text[end.idx + 1];
 
     if (next == '<' || next == '"' || next == '\'') {
@@ -798,7 +831,7 @@ void preproc_next_raw_token(struct preproc *preproc,
 
     preproc_text->pos = end;
     return;
-
+  }
   case '<':
   case '"':
   case '\'':
@@ -1237,31 +1270,7 @@ static bool token_is_trivial(const struct preproc_token *token) {
          token->ty == PREPROC_TOKEN_TY_COMMENT;
 }
 
-// tokens that shouldn't be stripped from an `#if` expression or similar
-static bool well_known_token(struct sized_str token) {
-  // FIXME: from TargetConditionals
-  // 'The long term solution is to add suppport for __is_target_arch and
-  // __is_target_os'
-
-  static const char *well_known[] = {
-      "defined", "has_include", "__has_include", "has_embed", "__has_embed",
-      "__has_feature", "__has_builtin", "__has_attribute", "__has_c_attribute",
-      "__has_extension",
-      // needed because clang headers do not properly avoid it
-      // TODO: have more flexible solution to this (so we can ignore arbitary
-      // __foo type macros)
-      "__building_module"};
-
-  for (size_t i = 0; i < ARR_LENGTH(well_known); i++) {
-    // FIXME: there are a few strncmp here which should really use
-    // max(lhs, rhs) as the len to prevent false prefix matching
-    if (!strncmp(token.str, well_known[i], strlen(well_known[i]))) {
-      return true;
-    }
-  }
-
-  return false;
-}
+static bool well_known_token(struct preproc *preproc, struct sized_str ident);
 
 static struct preproc_token preproc_concat(struct preproc *preproc,
                                            struct preproc_token *token,
@@ -1422,7 +1431,8 @@ static bool try_expand_token(struct preproc *preproc,
 
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
 
-  if (macro) {
+  // well known macros arent expanded they just are "defined"
+  if (macro && !(macro->flags & PREPROC_DEFINE_FLAG_WELL_KNOWN)) {
     // TODO: lookup/insert pair can be made more efficient
     if (hashtbl_lookup(preproc->parents, &ident)) {
       // already seen this macro, do not expand it again
@@ -1467,9 +1477,11 @@ static bool try_expand_token(struct preproc *preproc,
           vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
       vector_push_back(args, &arg);
 
+      enum preproc_expand_token_flags macro_expand_flags = flags &~ PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO;
+
       // first need to take the arguments
       struct preproc_token open;
-      preproc_next_nontrivial_token(preproc, &open, flags);
+      preproc_next_nontrivial_token(preproc, &open, macro_expand_flags);
 
       if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
           open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
@@ -1483,7 +1495,7 @@ static bool try_expand_token(struct preproc *preproc,
       bool seen_first_arg = false;
       while (true) {
         struct preproc_token next;
-        preproc_next_token(preproc, &next, flags);
+        preproc_next_token(preproc, &next, macro_expand_flags);
 
         if (next.ty == PREPROC_TOKEN_TY_EOF) {
           BUG("eof unexepctedly");
@@ -1872,7 +1884,7 @@ static bool try_expand_token(struct preproc *preproc,
     return true;
   }
 
-  if (well_known_token(ident)) {
+  if (well_known_token(preproc, ident)) {
     // mark to not expand symbols until we end this check
     preproc->keep_next_token = true;
     vector_push_back(buffer, token);
@@ -2157,6 +2169,7 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
     // in newline
     if (token.ty == PREPROC_TOKEN_TY_NEWLINE ||
         token.ty == PREPROC_TOKEN_TY_EOF) {
+      preproc->in_angle_string_context = false;
       break;
     }
 
@@ -2194,11 +2207,19 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 }
 
 static struct preproc_define *get_define(struct preproc *preproc,
-                                         struct preproc_token def_name) {
-  struct sized_str ident = {.str = def_name.text,
-                            .len = text_span_len(&def_name.span)};
-
+                                         struct sized_str ident) {
   return hashtbl_lookup(preproc->defines, &ident);
+}
+
+// tokens that shouldn't be stripped from an `#if` expression or similar
+static bool well_known_token(struct preproc *preproc, struct sized_str ident) {
+  // FIXME: from TargetConditionals
+  // 'The long term solution is to add suppport for __is_target_arch and
+  // __is_target_os'
+
+  struct preproc_define *define = get_define(preproc, ident);
+
+  return define && (define->flags & PREPROC_DEFINE_FLAG_WELL_KNOWN);
 }
 
 static int op_precedence(enum preproc_token_punctuator_ty ty) {
@@ -2264,6 +2285,35 @@ static unsigned long long eval_expr(struct preproc *preproc,
                                     struct preproc_text *preproc_text,
                                     struct vector *tokens, size_t *i,
                                     size_t num_tokens, int min_prec);
+
+static unsigned long long eval_has_query(struct preproc *preproc,
+                                         struct preproc_text *preproc_text,
+                                         struct preproc_token *token,
+                                         struct preproc_token *value) {
+  struct sized_str token_str = {.str = token->text,
+                                .len = text_span_len(&token->span)};
+  token_str = szstr_strip_prefix(token_str, MK_SIZED("__"));
+
+  if (szstreq(token_str, MK_SIZED("defined"))) {
+    struct sized_str value_str = {.str = value->text,
+                                  .len = text_span_len(&value->span)};
+
+    return get_define(preproc, value_str) ? 1 : 0;
+  } else if (szstreq(token_str, MK_SIZED("has_include"))) {
+    struct include_path include_path = get_include_path(preproc, value);
+    struct include_info include_info =
+        try_find_include(preproc, preproc_text, include_path.filename,
+                         include_path.is_angle, TRY_FIND_INCLUDE_MODE_TEST);
+
+    return include_info.path != NULL;
+  } else if (szstreq(token_str, MK_SIZED("has_feature"))) {
+    return 0;
+  } else {
+    warn("unknown identifier '%.*s' in preproc",
+         (int)text_span_len(&token->span), token->text);
+    return 0;
+  }
+}
 
 static unsigned long long eval_atom(struct preproc *preproc,
                                     struct preproc_text *preproc_text,
@@ -2387,28 +2437,12 @@ static unsigned long long eval_atom(struct preproc *preproc,
 
       if (next->ty != PREPROC_TOKEN_TY_IDENTIFIER &&
           next->ty != PREPROC_TOKEN_TY_STRING_LITERAL) {
-        BUG("expected identifier after `defined/__has_feature etc(`");
+        BUG("expected identifier after `defined/__has_feature` etc (found "
+            "'%.*s')",
+            (int)text_span_len(&next->span), next->text);
       }
 
-#define STREQ(a, b) (!strncmp((a), (b), strlen((b))))
-
-      if (STREQ(token->text, "defined")) {
-        return get_define(preproc, *next) ? 1 : 0;
-      } else if (STREQ(token->text, "__has_include") ||
-                 STREQ(token->text, "has_include")) {
-        struct include_path include_path = get_include_path(preproc, next);
-        struct include_info include_info =
-            try_find_include(preproc, preproc_text, include_path.filename,
-                             include_path.is_angle, TRY_FIND_INCLUDE_MODE_READ);
-
-        return include_info.path != NULL;
-      } else if (STREQ(token->text, "__has_feature")) {
-        return 0;
-      } else {
-        warn("unknown identifier '%.*s' in preproc",
-             (int)text_span_len(&token->span), token->text);
-        return 0;
-      }
+      return eval_has_query(preproc, preproc_text, token, next);
     }
     case PREPROC_TOKEN_TY_WHITESPACE:
     case PREPROC_TOKEN_TY_COMMENT:
@@ -2676,8 +2710,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         bool now_enabled = false;
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
-          now_enabled = get_define(
-              preproc, *(struct preproc_token *)vector_head(directive_tokens));
+          struct preproc_token *def_name = vector_head(directive_tokens);
+          struct sized_str def_str = {.str = def_name->text,
+                                      .len =
+                                          (int)text_span_len(&def_name->span)};
+          now_enabled = get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2686,10 +2723,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         bool now_enabled = false;
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
-          now_enabled = !get_define(
-              preproc,
-
-              *(struct preproc_token *)vector_head(directive_tokens));
+          struct preproc_token *def_name = vector_head(directive_tokens);
+          struct sized_str def_str = {.str = def_name->text,
+                                      .len =
+                                          (int)text_span_len(&def_name->span)};
+          now_enabled = !get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2741,8 +2779,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (cond_done) {
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
-          bool now_enabled = get_define(
-              preproc, *(struct preproc_token *)vector_head(directive_tokens));
+          struct preproc_token *def_name = vector_head(directive_tokens);
+          struct sized_str def_str = {.str = def_name->text,
+                                      .len =
+                                          (int)text_span_len(&def_name->span)};
+          bool now_enabled = get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
           *(bool *)vector_get(preproc_text->enabled, num_enabled - 2) =
@@ -2755,8 +2796,11 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (cond_done) {
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
-          bool now_enabled = !get_define(
-              preproc, *(struct preproc_token *)vector_head(directive_tokens));
+          struct preproc_token *def_name = vector_head(directive_tokens);
+          struct sized_str def_str = {.str = def_name->text,
+                                      .len =
+                                          (int)text_span_len(&def_name->span)};
+          bool now_enabled = !get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
           *(bool *)vector_get(preproc_text->enabled, num_enabled - 2) =

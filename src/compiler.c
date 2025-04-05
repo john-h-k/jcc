@@ -152,8 +152,8 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
     return;
   }
 
-  const char *text = compiler->program.text;
-  size_t len = strlen(text);
+  const char *text = file.data;
+  size_t len = file.len;
 
   DEBUG_ASSERT(end.line >= start.line, "end line %zu was before start line %zu",
                end.line, start.line);
