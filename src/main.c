@@ -153,14 +153,14 @@ static const char *get_default_isysroot(struct fcache *fcache,
   case COMPILE_TARGET_MACOS_ARM64:
   case COMPILE_TARGET_MACOS_X86_64: {
     const char *env = getenv("SDKROOT");
-    if (env) {
+    if (env && env[0]) {
       return env;
     }
 
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
     struct fcache_file sdk_path;
-    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --show-sdk-path"),
+    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --sdk macosx --show-sdk-path"),
                           &sdk_path)) {
       BUG("xcrun call failed!");
     }
@@ -313,6 +313,8 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .fixed_timestamp = args->timestamp,
       .sys_include_paths = sys_include_paths,
       .num_sys_include_paths = num_sys_include_paths,
+
+      .sys_root = args->isys_root,
 
       .include_paths = args->include_paths.values,
       .num_include_paths = args->include_paths.num_values,
@@ -651,7 +653,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
       BUG("linking to stdout/stderr not supported");
     }
 
-    struct link_args link_args = {.args = &compile_args,
+    struct link_args link_args = {.fcache = fcache,
+                                  .args = &compile_args,
                                   .linker_args = args.linker_args.values,
                                   .num_linker_args =
                                       args.linker_args.num_values,

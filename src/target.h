@@ -136,6 +136,7 @@ struct reg_info {
 };
 
 struct link_args {
+  struct fcache *fcache;
   const struct compile_args *args;
 
   char **linker_args;

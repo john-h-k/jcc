@@ -161,6 +161,7 @@ struct compile_args {
   size_t num_defines;
   struct preproc_define_macro *defines;
 
+  const char *sys_root;
   size_t num_sys_include_paths;
   const char **sys_include_paths;
 
