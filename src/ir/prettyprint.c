@@ -1036,8 +1036,8 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru, struct ir_var_value *var_value,
-                                     bool top) {
+static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru,
+                                     struct ir_var_value *var_value, bool top) {
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR: {
     struct ir_var_ty var_ty = var_value->var_ty;
@@ -1273,7 +1273,26 @@ void debug_print_glb(FILE *file, struct ir_glb *glb,
     break;
   }
 
-  fprintf(file, "]\n");
+  fprintf(file, "]");
+
+  if (glb->flags) {
+    fprintf(file, " [ ");
+
+    bool first = true;
+#define PRINT_FLAG(name, str)                                                  \
+  if (glb->flags & IR_GLB_FLAG_##name) {                                       \
+    fprintf(file, first ? "." str : ", ." str);                                \
+    first = false;                                                             \
+  }
+
+    PRINT_FLAG(WEAK, "weak");
+
+#undef PRINT_FLAG
+
+    fprintf(file, " ] ");
+  }
+
+  fprintf(file, "\n");
 
   if (glb->def_ty == IR_GLB_DEF_TY_DEFINED) {
     switch (glb->ty) {

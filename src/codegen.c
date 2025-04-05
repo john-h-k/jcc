@@ -273,6 +273,29 @@ static void codegen_write_var_value(struct ir_unit *iru, struct vector *relocs,
   }
 }
 
+static struct symbol codegen_symbol(struct ir_glb *glb, enum symbol_ty ty,
+                                    const char *name) {
+  enum symbol_flags flags = SYMBOL_FLAG_NONE;
+
+  if (glb->flags & IR_GLB_FLAG_WEAK) {
+    flags |= SYMBOL_FLAG_WEAK;
+  }
+
+  enum symbol_visibility visibility;
+  if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
+    visibility = SYMBOL_VISIBILITY_UNDEF;
+  } else {
+    visibility = glb->linkage == IR_LINKAGE_EXTERNAL
+                     ? SYMBOL_VISIBILITY_GLOBAL
+                     : SYMBOL_VISIBILITY_PRIVATE;
+  }
+
+  struct symbol symbol = {
+      .ty = ty, .name = name, .flags = flags, .visibility = visibility};
+
+  return symbol;
+}
+
 static struct cg_entry codegen_var_data(struct ir_unit *ir, size_t id,
                                         const char *name, struct ir_glb *glb) {
   enum symbol_ty symbol_ty;
@@ -309,11 +332,7 @@ static struct cg_entry codegen_var_data(struct ir_unit *ir, size_t id,
     CLONE_AND_FREE_VECTOR(ir->arena, relocs, codegen_data.num_relocs,
                           codegen_data.relocs);
 
-    struct symbol symbol = {.ty = symbol_ty,
-                            .name = name,
-                            .visibility = glb->linkage == IR_LINKAGE_EXTERNAL
-                                              ? SYMBOL_VISIBILITY_GLOBAL
-                                              : SYMBOL_VISIBILITY_PRIVATE};
+    struct symbol symbol = codegen_symbol(glb, symbol_ty, name);
 
     return (struct cg_entry){.ty = entry_ty,
                              .glb_id = id,
@@ -372,11 +391,7 @@ static struct cg_entry codegen_func(struct cg_unit *unit, struct ir_glb *glb,
 
   const char *name = unit->target->mangle(unit->arena, glb->name);
 
-  struct symbol symbol = {.ty = SYMBOL_TY_FUNC,
-                          .name = name,
-                          .visibility = glb->linkage == IR_LINKAGE_EXTERNAL
-                                            ? SYMBOL_VISIBILITY_GLOBAL
-                                            : SYMBOL_VISIBILITY_PRIVATE};
+  struct symbol symbol = codegen_symbol(glb, SYMBOL_TY_FUNC, name);
 
   struct cg_entry entry = {.ty = CG_ENTRY_TY_FUNC,
                            .alignment = unit->target->function_alignment,
@@ -454,9 +469,8 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
     while (glb) {
       if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
         const char *name = unit->target->mangle(unit->arena, glb->name);
-        struct symbol symbol = {.ty = SYMBOL_TY_DECL,
-                                .name = name,
-                                .visibility = SYMBOL_VISIBILITY_UNDEF};
+
+        struct symbol symbol = codegen_symbol(glb, SYMBOL_TY_DECL, name);
 
         codegen_unit->entries[i] = (struct cg_entry){.ty = CG_ENTRY_TY_DECL,
                                                      .alignment = 0,
@@ -482,12 +496,7 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
           char *data = arena_alloc(unit->arena, len);
           memcpy(data, glb->var->value.str_value.value, len);
 
-          struct symbol symbol = {.ty = SYMBOL_TY_STRING,
-                                  .name = name,
-                                  .visibility =
-                                      glb->linkage == IR_LINKAGE_EXTERNAL
-                                          ? SYMBOL_VISIBILITY_GLOBAL
-                                          : SYMBOL_VISIBILITY_PRIVATE};
+          struct symbol symbol = codegen_symbol(glb, SYMBOL_TY_STRING, name);
 
           codegen_unit->entries[i] =
               (struct cg_entry){.ty = CG_ENTRY_TY_STRING,

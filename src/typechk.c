@@ -748,7 +748,8 @@ static struct td_expr add_cast_if_needed(struct typechk *tchk,
                                          struct td_var_ty target_ty) {
   if (expr.var_ty.ty == TD_VAR_TY_TY_FUNC) {
     // decay to ptr
-    expr.var_ty = td_var_ty_make_pointer(tchk, &expr.var_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+    expr.var_ty =
+        td_var_ty_make_pointer(tchk, &expr.var_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
   }
 
   if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
@@ -1082,6 +1083,10 @@ struct assg_ty_map {
 struct td_specifiers {
   enum td_storage_class_specifier storage;
   enum td_function_specifier_flags function;
+
+  struct td_declaration_attr *attrs;
+  size_t num_attrs;
+
   struct td_var_ty type_specifier;
 };
 
@@ -1853,10 +1858,14 @@ static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
                 enum td_specifier_allow allow) {
-  struct td_specifiers specifiers = {.storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
-                                     .function =
-                                         TD_FUNCTION_SPECIFIER_FLAG_NONE,
-                                     .type_specifier = TD_VAR_TY_UNKNOWN};
+  struct td_specifiers specifiers = {
+      .storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
+      .function = TD_FUNCTION_SPECIFIER_FLAG_NONE,
+      .type_specifier = TD_VAR_TY_UNKNOWN,
+  };
+
+  struct vector *attrs =
+      vector_create_in_arena(sizeof(struct td_declaration_attr), tchk->arena);
 
   enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
@@ -1870,7 +1879,36 @@ type_specifiers(struct typechk *tchk,
 
     switch (specifier.ty) {
     case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
-      // TODO: attributes
+      for (size_t j = 0;
+           j < specifier.attribute_specifier.attribute_list.num_attributes;
+           j++) {
+
+        struct ast_attribute *attr =
+            &specifier.attribute_specifier.attribute_list.attributes[j];
+
+        switch (attr->ty) {
+        case AST_ATTRIBUTE_TY_EMPTY:
+          continue;
+        case AST_ATTRIBUTE_TY_NAMED:
+        case AST_ATTRIBUTE_TY_PARAMETERIZED: {
+          struct sized_str name = identifier_str(tchk->parser, &attr->name);
+          if (szstreq(name, MK_SIZED("weak")) ||
+              szstreq(name, MK_SIZED("weak_import"))) {
+            struct td_declaration_attr weak_attr = {
+              .ty = TD_DECLARATION_ATTR_TY_WEAK
+            };
+            vector_push_back(attrs, &weak_attr);
+          } else {
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(UNRECOGNISED_ATTR, unrecognised_attr,
+                                       attr->span, MK_INVALID_TEXT_POS(0),
+                                       "unrecognised attribute"));
+          }
+          break;
+        }
+        }
+      }
       break;
     case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS)) {
@@ -2232,6 +2270,9 @@ type_specifiers(struct typechk *tchk,
   }
 
   specifiers.type_specifier.type_qualifiers |= type_qualifiers;
+
+  specifiers.attrs = vector_head(attrs);
+  specifiers.num_attrs = vector_length(attrs);
 
   return specifiers;
 }
@@ -2734,20 +2775,17 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
   if (!try_get_completed_aggregate(tchk, var_ty, &complete)) {
     // TODO: need to allow extern / tentative decls here
 
-    // char *msg = arena_alloc_snprintf(tchk->arena,
-    //                                  "incomplete type '%.*s' in member
-    //                                  access",
-    //                                  (int)var_ty->incomplete_aggregate.name.len,
-    //                                  var_ty->incomplete_aggregate.name.str);
+    char *msg = arena_alloc_snprintf(
+        tchk->arena, "incomplete type '%.*s' cannot be used here",
+        (int)var_ty->incomplete_aggregate.name.len,
+        var_ty->incomplete_aggregate.name.str);
 
-    // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
-    // compiler_diagnostics_add(
-    //     tchk->diagnostics,
-    //     MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
-    //                            MK_INVALID_TEXT_POS(0), msg));
-    // return TD_VAR_TY_UNKNOWN;
-    (void)context;
-    return *var_ty;
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type, context,
+                               MK_INVALID_TEXT_POS(0), msg));
+    return TD_VAR_TY_UNKNOWN;
   }
 
   return complete;
@@ -2758,7 +2796,8 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
                                          struct sized_str member_name,
                                          struct td_var_ty *member_var_ty) {
   if (var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
-    return false;
+    *member_var_ty = TD_VAR_TY_UNKNOWN;
+    return true;
   }
 
   DEBUG_ASSERT(var_ty->ty == TD_VAR_TY_TY_AGGREGATE, "non aggregate");
@@ -4806,6 +4845,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   struct td_funcdef td_funcdef = {
       .storage_class_specifier = specifiers.storage,
       .function_specifier_flags = specifiers.function,
+      .attrs = specifiers.attrs,
+      .num_attrs = specifiers.num_attrs,
       .var_declaration = declaration,
       .body = {.ty = TD_STMT_TY_COMPOUND,
                .compound = type_compoundstmt(tchk, &func_def->body)},
@@ -5252,9 +5293,9 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
     entry = vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE,
                             td_var_decl.var.identifier);
 
-    if (td_var_decl.var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
-      td_var_decl.var_ty = get_completed_aggregate(tchk, &td_var_decl.var_ty,
-                                                   init_declarator->span);
+    if (specifiers->storage != TD_STORAGE_CLASS_SPECIFIER_EXTERN) {
+      td_var_decl.var_ty =
+          type_incomplete_var_ty(tchk, &td_var_decl.var_ty, context);
     }
   }
 
@@ -5268,10 +5309,18 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
           tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(
-              INIT_IN_AGGREGATE, init_in_aggregate, init_declarator->init->span,
-              MK_INVALID_TEXT_POS(0),
-              "struct/union must have an identifier or a decl list"));
+          MK_SEMANTIC_DIAGNOSTIC(INIT_IN_AGGREGATE, init_in_aggregate,
+                                 init_declarator->init->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "struct/union cannot have an initializer"));
+    } else if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_EXTERN) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(INIT_IN_EXTERN, init_in_extern,
+                                 init_declarator->init->span,
+                                 MK_INVALID_TEXT_POS(0),
+                                 "extern decl cannot have an initializer"));
     }
 
     enum td_init_mode init_mode = mode == TD_DECLARATOR_MODE_STATIC
@@ -5296,6 +5345,8 @@ static struct td_declaration type_init_declarator_list(
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .function_specifier_flags = specifiers->function,
+      .attrs = specifiers->attrs,
+      .num_attrs = specifiers->num_attrs,
       .base_ty = specifiers->type_specifier,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =

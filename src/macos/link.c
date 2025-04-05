@@ -30,6 +30,16 @@ macos_link_objects_with_ld(const struct link_args *args) {
   }
 
   total_size += /* " -o " */ 4 + 2 + strlen(args->output);
+
+  for (size_t i = 0; i < args->num_linker_args; i++) {
+    // seperator plus quotes
+    total_size += strlen(args->linker_args[i]);
+
+    if (i + 1 != args->num_linker_args) {
+      total_size++;
+    }
+  }
+
   total_size++; // null terminator
 
   char *buff = arena_alloc(arena, total_size);
@@ -59,6 +69,16 @@ macos_link_objects_with_ld(const struct link_args *args) {
     head += strlen(args->objects[i]);
     buff[head++] = '\'';
     buff[head++] = ' ';
+  }
+
+  for (size_t i = 0; i < args->num_linker_args; i++) {
+    // seperator plus quotes
+    strcpy(&buff[head], args->linker_args[i]);
+    head += strlen(args->linker_args[i]);
+
+    if (i + 1 != args->num_linker_args) {
+      buff[head++] = ' ';
+    }
   }
 
   buff[head++] = '\0';

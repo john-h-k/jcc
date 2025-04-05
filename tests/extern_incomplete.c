@@ -1,10 +1,11 @@
-// skip: needs second file for extern val (link fails)
 // expected value: 0
+// flags: -Wl,-U,_foo
 
 struct c;
 
+__attribute__((weak))
 extern struct c foo;
 
 int main() {
-  struct c* p = &foo;  
+  return (int)(long)&foo;
 }

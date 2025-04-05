@@ -199,7 +199,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
   }
 
   if (args->version || args->verbose) {
-    printf("jcc version %s\n"
+    fprintf(args->version ? stdout : stderr, "jcc version %s\n"
            "John Kelly <johnharrykelly@gmail.com>\n"
            "location:  %s\n"
            "OS_NAME:   %s\n"
@@ -592,17 +592,16 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 
     PROFILE_BEGIN(create_compiler);
 
-    struct compiler_create_args comp_args = {
-      .program = program,
-      .fcache = fcache,
-      .target = target,
-      .args = compile_args,
-      .working_dir = source_path,
-      .mode = mode,
-      .output = file
-    };
+    struct compiler_create_args comp_args = {.program = program,
+                                             .fcache = fcache,
+                                             .target = target,
+                                             .args = compile_args,
+                                             .working_dir = source_path,
+                                             .mode = mode,
+                                             .output = file};
 
-    if (compiler_create(&comp_args, &compiler) != COMPILER_CREATE_RESULT_SUCCESS) {
+    if (compiler_create(&comp_args, &compiler) !=
+        COMPILER_CREATE_RESULT_SUCCESS) {
       err("failed to create compiler");
       exc = -1;
       goto exit;
@@ -640,6 +639,8 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
     }
 
     struct link_args link_args = {.args = &compile_args,
+                                  .linker_args = args.linker_args.values,
+                                  .num_linker_args = args.linker_args.num_values,
                                   .objects = (const char *const *)objects,
                                   .num_objects = num_sources,
                                   .output = output};

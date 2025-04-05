@@ -528,9 +528,20 @@ struct td_var_declaration {
   unsigned long long bitfield_width;
 };
 
+enum td_declaration_attr_ty {
+  TD_DECLARATION_ATTR_TY_WEAK
+};
+
+struct td_declaration_attr {
+  enum td_declaration_attr_ty ty;
+};
+
 struct td_declaration {
   enum td_storage_class_specifier storage_class_specifier;
   enum td_function_specifier_flags function_specifier_flags;
+
+  struct td_declaration_attr *attrs;
+  size_t num_attrs;
 
   struct td_var_ty base_ty;
 
@@ -705,6 +716,9 @@ struct td_declaration_list {
 struct td_funcdef {
   enum td_storage_class_specifier storage_class_specifier;
   enum td_function_specifier_flags function_specifier_flags;
+
+  struct td_declaration_attr *attrs;
+  size_t num_attrs;
 
   struct td_var_declaration var_declaration;
   struct td_stmt body;

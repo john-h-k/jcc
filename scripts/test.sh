@@ -396,13 +396,14 @@ run_tests() {
         echo -ne "$status" "$@" '\0' > "$fifo"
       }
 
+      flags=""
       if [ -n "$ASSEMBLER" ]; then
         build_command() {
           obj_files=()
 
           for file in "${files[@]}"; do
             asm=$(tmpname "$pid.$(basename "$file").s")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -S -o "$asm" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj=$(tmpname "$pid.$(basename "$file").o")
@@ -426,7 +427,7 @@ run_tests() {
 
           for file in "${files[@]}"; do
             obj=$(tmpname "$pid.$(basename "$file").o")
-            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
+            timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -c -o "$obj" -std=c23 -tm "$tm" "$file" \
               || return $?
 
             obj_files+=("$obj")
@@ -440,7 +441,7 @@ run_tests() {
         }
       else
         build_command() {
-          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
+          timeout -k $BUILD_TIMEOUT $BUILD_TIMEOUT "$JCC" $flags "${args[@]}" "${group_args[@]}" -o "$output" -std=c23 -tm "$tm" "${files[@]}"
           return $?
         }
       fi
@@ -461,6 +462,10 @@ run_tests() {
       fi
 
       rm -f -- "$output"
+
+      expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
+      stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
+      flags=$(grep -i "flags" "$file" | head -1 | sed -n 's/^\/\/ flags: //p')
 
       first_line=$(head -n 1 "$file")
       if [[ "$first_line" == "// no-compile" ]]; then
@@ -486,9 +491,6 @@ run_tests() {
         send_status skip "$prefix'$file' skipped due to architecture (test: $target_arch, runner: $arch)"
         continue
       fi
-
-      expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
-      stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
 
       if [ -z "$stdout" ]; then
         stdout=$(grep -i "stdout" "$file" | head -1 | sed -n 's/^\/\/ stdout: //p')

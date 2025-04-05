@@ -785,6 +785,11 @@ enum ir_glb_def_ty {
   IR_GLB_DEF_TY_TENTATIVE
 };
 
+enum ir_glb_flags {
+  IR_GLB_FLAG_NONE = 0,
+  IR_GLB_FLAG_WEAK = 1 << 0,
+};
+
 enum ir_linkage { IR_LINKAGE_NONE, IR_LINKAGE_INTERNAL, IR_LINKAGE_EXTERNAL };
 
 struct ir_glb {
@@ -793,6 +798,8 @@ struct ir_glb {
   enum ir_glb_ty ty;
   enum ir_glb_def_ty def_ty;
   enum ir_linkage linkage;
+
+  enum ir_glb_flags flags;
 
   struct ir_glb *pred;
   struct ir_glb *succ;
