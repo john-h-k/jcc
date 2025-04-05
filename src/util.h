@@ -423,6 +423,31 @@ static inline bool szstr_prefix(struct sized_str str, struct sized_str prefix) {
   return !memcmp(str.str, prefix.str, prefix.len);
 }
 
+static inline bool szstr_suffix(struct sized_str str, struct sized_str suffix) {
+  if (str.len < suffix.len) {
+    return false;
+  }
+
+  return !memcmp(str.str + str.len - suffix.len, suffix.str, suffix.len);
+}
+
+static inline struct sized_str szstr_strip_prefix(struct sized_str str, struct sized_str prefix) {
+  if (szstr_prefix(str, prefix)) {
+    str.len -= prefix.len;
+    str.str += prefix.len;
+  }
+
+  return str;
+}
+
+static inline struct sized_str szstr_strip_suffix(struct sized_str str, struct sized_str suffix) {
+  if (szstr_suffix(str, suffix)) {
+    str.len -= suffix.len;
+  }
+
+  return str;
+}
+
 static inline int szstrcmp(struct sized_str l, struct sized_str r) {
   size_t len = (l.len < r.len) ? l.len : r.len;
   int cmp = memcmp(l.str, r.str, len);

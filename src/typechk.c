@@ -13,8 +13,15 @@
 #include "var_table.h"
 #include "vector.h"
 
+#include <ctype.h>
+
 struct td_var_ty TD_VAR_TY_UNKNOWN = {.ty = TD_VAR_TY_TY_UNKNOWN};
 struct td_var_ty TD_VAR_TY_VOID = {.ty = TD_VAR_TY_TY_VOID};
+struct td_var_ty TD_VAR_TY_VOID_POINTER = {
+    .ty = TD_VAR_TY_TY_POINTER, .pointer = {.underlying = &TD_VAR_TY_VOID}};
+struct td_var_ty TD_VAR_TY_CHAR_POINTER = {
+    .ty = TD_VAR_TY_TY_POINTER,
+    .pointer = {.underlying = &TD_VAR_TY_WELL_KNOWN_CHAR}};
 struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER = {
     .ty = TD_VAR_TY_TY_POINTER,
     .type_qualifiers = TD_TYPE_QUALIFIER_FLAG_CONST,
@@ -143,7 +150,10 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
 enum td_var_ty_compatible_flags {
   TD_VAR_TY_COMPATIBLE_FLAG_NONE = 0,
   TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS = 1 << 0,
-  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS = 1 << 1
+  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS = 1 << 1,
+  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_ALL =
+      TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS |
+      TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS
 };
 
 static struct td_var_ty
@@ -1084,9 +1094,6 @@ struct td_specifiers {
   enum td_storage_class_specifier storage;
   enum td_function_specifier_flags function;
 
-  struct td_declaration_attr *attrs;
-  size_t num_attrs;
-
   struct td_var_ty type_specifier;
 };
 
@@ -1569,6 +1576,10 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
   func_ty.func.ret = arena_alloc(tchk->arena, sizeof(*func_ty.func.ret));
   *func_ty.func.ret = var_ty;
 
+  // put prefix attributes on the func itself
+  func_ty.attrs = var_ty.attrs;
+  func_ty.func.ret->attrs = (struct td_var_attrs){0};
+
   struct ast_paramlist *param_list = func_declarator->param_list;
 
   size_t num_params;
@@ -1759,6 +1770,8 @@ static struct td_var_declaration type_declarator_inner(
   bool found_ident = false;
   ssize_t inner_idx = -1;
 
+  // FIXME: we need to properly copy attributes from base type to inner types
+
   for (size_t i = decl_list.num_direct_declarators; i; i--) {
     struct ast_direct_declarator *direct_declarator =
         &decl_list.direct_declarators[i - 1];
@@ -1850,6 +1863,129 @@ type_declarator(struct typechk *tchk, const struct td_specifiers *specifiers,
   return declaration;
 }
 
+static struct sized_str normalize_attr_ident(struct sized_str name) {
+  name = szstr_strip_prefix(name, MK_SIZED("__"));
+  name = szstr_strip_suffix(name, MK_SIZED("__"));
+  return name;
+}
+
+static struct td_attr_format
+type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
+  if (attribute->num_params != 3) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            BAD_PARAM_COUNT, bad_param_count, attribute->span,
+            MK_INVALID_TEXT_POS(0),
+            arena_alloc_snprintf(tchk->arena, "expected 3 params, found %zu",
+                                 attribute->num_params)));
+
+    return (struct td_attr_format){0};
+  }
+
+  struct ast_expr *archetype_expr = attribute->params[0].expr;
+  if (archetype_expr->ty != AST_EXPR_TY_VAR) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            EXPECTED_VAR, expected_var, archetype_expr->span,
+            MK_INVALID_TEXT_POS(0),
+            "first argument to 'format' attribute should be an identifier"));
+
+    return (struct td_attr_format){0};
+  }
+
+  struct sized_str archetype_name =
+      identifier_str(tchk->parser, &archetype_expr->var.identifier);
+  struct sized_str normalized = normalize_attr_ident(archetype_name);
+
+  if (!szstreq(normalized, MK_SIZED("printf"))) {
+    tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    compiler_diagnostics_add(
+        tchk->diagnostics,
+        MK_SEMANTIC_DIAGNOSTIC(
+            UNRECOGNISED_ATTR, unrecognised_attr, archetype_expr->span,
+            MK_INVALID_TEXT_POS(0),
+            arena_alloc_snprintf(
+                tchk->arena,
+                "unrecognised format type '%.*s', (expected 'printf')",
+                (int)archetype_name.len, archetype_name.str)));
+
+    return (struct td_attr_format){0};
+  }
+
+  enum td_attr_format_archetype archetype = TD_ATTR_FORMAT_ARCHETYPE_PRINTF;
+
+  unsigned long long string_index_expr =
+      type_constant_integral_expr(tchk, attribute->params[1].expr);
+
+  // TODO: validate within bounds for function applied + `string_index` not zero
+
+  unsigned long long first_to_check_expr =
+      type_constant_integral_expr(tchk, attribute->params[2].expr);
+
+  return (struct td_attr_format){.archetype = archetype,
+                                 .string_index = string_index_expr,
+                                 .first_to_check = first_to_check_expr};
+}
+
+// writes into vector as a single specifier list may contain many attribute
+// lists so more efficient
+static void
+type_declaration_attribute_list(struct typechk *tchk,
+                                const struct ast_attribute_list *attribute_list,
+                                struct td_var_attrs *attrs) {
+
+  for (size_t j = 0; j < attribute_list->num_attributes; j++) {
+    struct ast_attribute *attr = &attribute_list->attributes[j];
+
+    switch (attr->ty) {
+    case AST_ATTRIBUTE_TY_EMPTY:
+      continue;
+    case AST_ATTRIBUTE_TY_NAMED:
+    case AST_ATTRIBUTE_TY_PARAMETERIZED: {
+      bool silent_ignore = false;
+      if (attr->prefix) {
+        struct sized_str prefix = identifier_str(tchk->parser, attr->prefix);
+        struct sized_str prefix_norm = normalize_attr_ident(prefix);
+
+        // currently the prefix is not used, but we ignore unknown ones and
+        // ignore unknown attributes from gcc/clang
+        if (szstreq(prefix_norm, MK_SIZED("jcc"))) {
+          // nothing!
+        } else if (szstreq(prefix_norm, MK_SIZED("gnu"))) {
+          silent_ignore = true;
+        } else if (szstreq(prefix_norm, MK_SIZED("clang"))) {
+          silent_ignore = true;
+        } else {
+          continue;
+        }
+      }
+
+      struct sized_str name = identifier_str(tchk->parser, &attr->name);
+      name = normalize_attr_ident(name);
+
+      if (szstreq(name, MK_SIZED("weak")) ||
+          szstreq(name, MK_SIZED("weak_import"))) {
+        attrs->weak = true;
+      } else if (szstreq(name, MK_SIZED("format"))) {
+        attrs->format = arena_alloc(tchk->arena, sizeof(*attrs->format));
+        *attrs->format = type_attr_format(tchk, attr);
+      } else if (!silent_ignore) {
+        compiler_diagnostics_add(
+            tchk->diagnostics,
+            MK_SEMANTIC_DIAGNOSTIC(UNRECOGNISED_ATTR, unrecognised_attr,
+                                   attr->span, MK_INVALID_TEXT_POS(0),
+                                   "unrecognised attribute ignored"));
+      }
+      break;
+    }
+    }
+  }
+}
+
 static struct td_var_ty
 type_type_or_expr(struct typechk *tchk,
                   const struct ast_type_or_expr *type_or_expr);
@@ -1864,9 +2000,6 @@ type_specifiers(struct typechk *tchk,
       .type_specifier = TD_VAR_TY_UNKNOWN,
   };
 
-  struct vector *attrs =
-      vector_create_in_arena(sizeof(struct td_declaration_attr), tchk->arena);
-
   enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
   int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
@@ -1879,36 +2012,9 @@ type_specifiers(struct typechk *tchk,
 
     switch (specifier.ty) {
     case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
-      for (size_t j = 0;
-           j < specifier.attribute_specifier.attribute_list.num_attributes;
-           j++) {
-
-        struct ast_attribute *attr =
-            &specifier.attribute_specifier.attribute_list.attributes[j];
-
-        switch (attr->ty) {
-        case AST_ATTRIBUTE_TY_EMPTY:
-          continue;
-        case AST_ATTRIBUTE_TY_NAMED:
-        case AST_ATTRIBUTE_TY_PARAMETERIZED: {
-          struct sized_str name = identifier_str(tchk->parser, &attr->name);
-          if (szstreq(name, MK_SIZED("weak")) ||
-              szstreq(name, MK_SIZED("weak_import"))) {
-            struct td_declaration_attr weak_attr = {
-              .ty = TD_DECLARATION_ATTR_TY_WEAK
-            };
-            vector_push_back(attrs, &weak_attr);
-          } else {
-            compiler_diagnostics_add(
-                tchk->diagnostics,
-                MK_SEMANTIC_DIAGNOSTIC(UNRECOGNISED_ATTR, unrecognised_attr,
-                                       attr->span, MK_INVALID_TEXT_POS(0),
-                                       "unrecognised attribute"));
-          }
-          break;
-        }
-        }
-      }
+      type_declaration_attribute_list(
+          tchk, &specifier.attribute_specifier.attribute_list,
+          &specifiers.type_specifier.attrs);
       break;
     case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS)) {
@@ -2197,12 +2303,12 @@ type_specifiers(struct typechk *tchk,
                           : WELL_KNOWN_TY_SIGNED_SHORT;
     }
 
-    specifiers.type_specifier =
-        (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known = wk};
+    specifiers.type_specifier.ty = TD_VAR_TY_TY_WELL_KNOWN;
+    specifiers.type_specifier.well_known = wk;
   } else if (remaining) {
     if (last_specifier.ty == AST_TYPE_SPECIFIER_TY_KW &&
         last_specifier.type_specifier_kw == AST_TYPE_SPECIFIER_KW_VOID) {
-      specifiers.type_specifier = (struct td_var_ty){.ty = TD_VAR_TY_TY_VOID};
+      specifiers.type_specifier.ty = TD_VAR_TY_TY_VOID;
 
     } else {
       switch (last_specifier.ty) {
@@ -2238,8 +2344,8 @@ type_specifiers(struct typechk *tchk,
           TODO("other type specifiers");
         }
 
-        specifiers.type_specifier =
-            (struct td_var_ty){.ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known = wk};
+        specifiers.type_specifier.ty = TD_VAR_TY_TY_WELL_KNOWN;
+        specifiers.type_specifier.well_known = wk;
         break;
       }
       case AST_TYPE_SPECIFIER_STRUCT_OR_UNION:
@@ -2270,9 +2376,6 @@ type_specifiers(struct typechk *tchk,
   }
 
   specifiers.type_specifier.type_qualifiers |= type_qualifiers;
-
-  specifiers.attrs = vector_head(attrs);
-  specifiers.num_attrs = vector_length(attrs);
 
   return specifiers;
 }
@@ -2352,6 +2455,306 @@ static struct td_arglist type_arglist(struct typechk *tchk,
   return td_arg_list;
 }
 
+enum printf_argspec_flags {
+  PRINTF_ARGSPEC_FLAG_NONE = 0,
+  PRINTF_ARGSPEC_FLAG_LJUST = 1 << 0,
+  PRINTF_ARGSPEC_FLAG_SIGN = 1 << 1,
+  PRINTF_ARGSPEC_FLAG_SPACE = 1 << 2,
+  PRINTF_ARGSPEC_FLAG_ALT = 1 << 3,
+  PRINTF_ARGSPEC_FLAG_LEADING_ZEROS = 1 << 4,
+};
+
+enum printf_argspec_value_ty {
+  PRINTF_ARGSPEC_VALUE_TY_NONE,
+  PRINTF_ARGSPEC_VALUE_TY_CNST,
+  PRINTF_ARGSPEC_VALUE_TY_VAR,
+};
+
+struct printf_argspec_value {
+  enum printf_argspec_value_ty ty;
+
+  union {
+    int cnst;
+  };
+};
+
+enum printf_argspec_length_mod {
+  PRINTF_ARGSPEC_LENGTH_MOD_NONE,
+  PRINTF_ARGSPEC_LENGTH_MOD_HH,
+  PRINTF_ARGSPEC_LENGTH_MOD_H,
+  PRINTF_ARGSPEC_LENGTH_MOD_L,
+  PRINTF_ARGSPEC_LENGTH_MOD_LL,
+  PRINTF_ARGSPEC_LENGTH_MOD_J,
+  PRINTF_ARGSPEC_LENGTH_MOD_Z,
+  PRINTF_ARGSPEC_LENGTH_MOD_T,
+
+  PRINTF_ARGSPEC_LENGTH_MOD_L_UP,
+};
+
+enum printf_argspec_specifier {
+  PRINTF_ARGSPEC_SPECIFIER_INVALID,
+
+  // %
+  PRINTF_ARGSPEC_SPECIFIER_LITERAL_PERCENT,
+
+  // c
+  PRINTF_ARGSPEC_SPECIFIER_CHAR,
+
+  // s
+  PRINTF_ARGSPEC_SPECIFIER_STRING,
+
+  // d/i
+  PRINTF_ARGSPEC_SPECIFIER_SIGNED_INT,
+
+  // o
+  PRINTF_ARGSPEC_SPECIFIER_OCTAL_UNSIGNED_INT,
+
+  // x/X
+  PRINTF_ARGSPEC_SPECIFIER_HEX_UNSIGNED_INT,
+
+  // u
+  PRINTF_ARGSPEC_SPECIFIER_UNSIGNED_INT,
+
+  // f/F
+  PRINTF_ARGSPEC_SPECIFIER_FLOAT,
+
+  // e/E
+  PRINTF_ARGSPEC_SPECIFIER_EXP_FLOAT,
+
+  // a/A
+  PRINTF_ARGSPEC_SPECIFIER_HEX_EXP_FLOAT,
+
+  // g/G
+  PRINTF_ARGSPEC_SPECIFIER_VAR_FLOAT,
+
+  // n
+  PRINTF_ARGSPEC_SPECIFIER_NUM_WRITTEN,
+
+  // p
+  PRINTF_ARGSPEC_SPECIFIER_POINTER,
+};
+
+struct printf_argspec {
+  size_t offset;
+  size_t specifier_offset;
+  size_t len;
+
+  enum printf_argspec_flags flags;
+  struct printf_argspec_value min_width;
+  struct printf_argspec_value precision;
+  enum printf_argspec_length_mod length_mod;
+  enum printf_argspec_specifier specifier;
+};
+
+struct printf_args {
+  struct printf_argspec *argspecs;
+  size_t num_argspecs;
+};
+
+static enum printf_argspec_length_mod
+parse_printf_argspec_length_mod(const char *str, size_t *idx, size_t len) {
+  if (*idx >= len) {
+    return PRINTF_ARGSPEC_LENGTH_MOD_NONE;
+  }
+
+  switch (str[*idx]) {
+  case 'h': {
+    (*idx)++;
+
+    if (*idx + 1 < len && str[*idx + 1] == 'h') {
+      (*idx)++;
+      return PRINTF_ARGSPEC_LENGTH_MOD_HH;
+    }
+    return PRINTF_ARGSPEC_LENGTH_MOD_H;
+  }
+  case 'l': {
+    (*idx)++;
+
+    if (*idx + 1 < len && str[*idx + 1] == 'l') {
+      (*idx)++;
+      return PRINTF_ARGSPEC_LENGTH_MOD_LL;
+    }
+    return PRINTF_ARGSPEC_LENGTH_MOD_L;
+  }
+  case 'j': {
+    (*idx)++;
+    return PRINTF_ARGSPEC_LENGTH_MOD_J;
+  }
+  case 'z': {
+    (*idx)++;
+    return PRINTF_ARGSPEC_LENGTH_MOD_Z;
+  }
+  case 't': {
+    (*idx)++;
+    return PRINTF_ARGSPEC_LENGTH_MOD_T;
+  }
+  case 'L': {
+    (*idx)++;
+    return PRINTF_ARGSPEC_LENGTH_MOD_L_UP;
+  }
+  default:
+    return PRINTF_ARGSPEC_LENGTH_MOD_NONE;
+  }
+}
+
+static enum printf_argspec_specifier
+parse_printf_argspec_specifier(const char *str, size_t idx, size_t len) {
+  if (idx >= len) {
+    return PRINTF_ARGSPEC_SPECIFIER_INVALID;
+  }
+
+  switch (str[idx]) {
+  case 'c':
+    return PRINTF_ARGSPEC_SPECIFIER_CHAR;
+  case 's':
+    return PRINTF_ARGSPEC_SPECIFIER_STRING;
+
+  case 'd':
+  case 'i':
+    return PRINTF_ARGSPEC_SPECIFIER_SIGNED_INT;
+
+  case 'o':
+    return PRINTF_ARGSPEC_SPECIFIER_OCTAL_UNSIGNED_INT;
+  case 'x':
+  case 'X':
+    return PRINTF_ARGSPEC_SPECIFIER_HEX_UNSIGNED_INT;
+  case 'u':
+    return PRINTF_ARGSPEC_SPECIFIER_UNSIGNED_INT;
+
+  case 'f':
+  case 'F':
+    return PRINTF_ARGSPEC_SPECIFIER_FLOAT;
+  case 'e':
+  case 'E':
+    return PRINTF_ARGSPEC_SPECIFIER_EXP_FLOAT;
+  case 'a':
+  case 'A':
+    return PRINTF_ARGSPEC_SPECIFIER_HEX_EXP_FLOAT;
+  case 'g':
+  case 'G':
+    return PRINTF_ARGSPEC_SPECIFIER_VAR_FLOAT;
+
+  case 'n':
+    return PRINTF_ARGSPEC_SPECIFIER_NUM_WRITTEN;
+
+  case 'p':
+    return PRINTF_ARGSPEC_SPECIFIER_POINTER;
+
+  default:
+    return PRINTF_ARGSPEC_SPECIFIER_INVALID;
+  }
+}
+static enum printf_argspec_flags
+parse_printf_argspec_flag(const char *str, size_t idx, size_t len) {
+  if (idx >= len) {
+    return PRINTF_ARGSPEC_FLAG_NONE;
+  }
+
+  switch (str[idx]) {
+  case '-':
+    return PRINTF_ARGSPEC_FLAG_LJUST;
+  case '+':
+    return PRINTF_ARGSPEC_FLAG_SIGN;
+  case ' ':
+    return PRINTF_ARGSPEC_FLAG_SPACE;
+  case '#':
+    return PRINTF_ARGSPEC_FLAG_ALT;
+  case '0':
+    return PRINTF_ARGSPEC_FLAG_LEADING_ZEROS;
+  default:
+    return PRINTF_ARGSPEC_FLAG_NONE;
+  }
+}
+
+static struct printf_argspec_value
+parse_printf_argspec_value(const char *str, size_t *idx, size_t len) {
+  if (*idx >= len) {
+    return (struct printf_argspec_value){.ty = PRINTF_ARGSPEC_VALUE_TY_NONE};
+  }
+
+  if (str[*idx] == '*') {
+    return (struct printf_argspec_value){.ty = PRINTF_ARGSPEC_VALUE_TY_VAR};
+  } else if (isdigit(str[*idx])) {
+    int cnst = str[(*idx)++] - '0';
+
+    while (isdigit(str[*idx] && *idx < len)) {
+      cnst *= 10;
+      cnst += str[(*idx)] - '0';
+
+      (*idx)++;
+    }
+
+    return (struct printf_argspec_value){.ty = PRINTF_ARGSPEC_VALUE_TY_CNST,
+                                         .cnst = cnst};
+  }
+
+  return (struct printf_argspec_value){.ty = PRINTF_ARGSPEC_VALUE_TY_NONE};
+}
+
+static struct printf_args parse_printf_format(struct typechk *tchk,
+                                              struct td_ascii_str fmt) {
+  struct vector *argspecs =
+      vector_create_in_arena(sizeof(struct printf_argspec), tchk->arena);
+
+  for (size_t i = 0; i < fmt.len; i++) {
+    unsigned char c = fmt.value[i];
+
+    if (c >= 128 || c != '%') {
+      continue;
+    }
+
+    struct printf_argspec argspec = {.offset = i};
+
+    if (i + 1 >= fmt.len) {
+      argspec.specifier = PRINTF_ARGSPEC_SPECIFIER_INVALID;
+    } else {
+      i++;
+
+      while (i < fmt.len) {
+        enum printf_argspec_flags flag =
+            parse_printf_argspec_flag(fmt.value, i, fmt.len);
+
+        if (flag == PRINTF_ARGSPEC_FLAG_NONE) {
+          break;
+        }
+
+        argspec.flags |= flag;
+        i++;
+      }
+
+      if (argspec.flags & PRINTF_ARGSPEC_FLAG_SIGN) {
+        argspec.flags &= ~PRINTF_ARGSPEC_FLAG_SPACE;
+      }
+
+      if (argspec.flags & PRINTF_ARGSPEC_FLAG_LEADING_ZEROS) {
+        argspec.flags &= ~PRINTF_ARGSPEC_FLAG_LJUST;
+      }
+
+      argspec.min_width = parse_printf_argspec_value(fmt.value, &i, fmt.len);
+
+      if (i < fmt.len) {
+        c = fmt.value[i];
+
+        if (c == '.') {
+          i++;
+          argspec.precision =
+              parse_printf_argspec_value(fmt.value, &i, fmt.len);
+        }
+      }
+
+      argspec.length_mod =
+          parse_printf_argspec_length_mod(fmt.value, &i, fmt.len);
+      argspec.specifier = parse_printf_argspec_specifier(fmt.value, i, fmt.len);
+    }
+
+    argspec.len = i - argspec.offset;
+    vector_push_back(argspecs, &argspec);
+  }
+
+  return (struct printf_args){.argspecs = vector_head(argspecs),
+                              .num_argspecs = vector_length(argspecs)};
+}
+
 static struct td_expr type_call(struct typechk *tchk,
                                 const struct ast_call *call) {
   struct td_call td_call = {
@@ -2361,6 +2764,7 @@ static struct td_expr type_call(struct typechk *tchk,
   *td_call.target = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, call->target);
 
   struct td_var_ty target_var_ty = td_call.target->var_ty;
+
   if (target_var_ty.ty == TD_VAR_TY_TY_POINTER) {
     // one level of implicit deref is allowed for functions
     // e.g directly calling a function pointer as `foo()`
@@ -2408,6 +2812,150 @@ static struct td_expr type_call(struct typechk *tchk,
       td_call.arg_list.args[i] =
           add_cast_if_needed(tchk, td_call.arg_list.args[i].span,
                              td_call.arg_list.args[i], param_ty);
+    }
+  }
+
+  // FIXME: need a hashtbl or similar for good attr lookup
+  const struct td_attr_format *format = target_var_ty.attrs.format;
+  if (format) {
+    switch (format->archetype) {
+    case TD_ATTR_FORMAT_ARCHETYPE_PRINTF: {
+      DEBUG_ASSERT(format->string_index, "string index should never be zero");
+
+      struct td_expr *format_str =
+          &td_call.arg_list.args[format->string_index - 1];
+
+      while (format_str->ty == TD_EXPR_TY_UNARY_OP &&
+             format_str->unary_op.ty == TD_UNARY_OP_TY_CAST) {
+        format_str = format_str->unary_op.expr;
+      }
+
+      // TODO: add warning opt for this
+      bool warn_printf_non_literal = false;
+
+      if (format_str->ty == TD_EXPR_TY_CNST &&
+          format_str->cnst.ty == TD_CNST_TY_STRING) {
+        if (format_str->cnst.str_value.ty == TD_CNST_STR_TY_WIDE) {
+          if (warn_printf_non_literal) {
+            BUG("diag for wide str as printf arg");
+          }
+
+          break;
+        }
+      } else {
+        if (warn_printf_non_literal) {
+          BUG("diag for non str as printf arg");
+        }
+
+        break;
+      }
+
+      struct td_ascii_str str = format_str->cnst.str_value.ascii;
+      struct printf_args args = parse_printf_format(tchk, str);
+
+      bool arg_diag = false;
+      size_t arg_idx = format->first_to_check - 1;
+      for (size_t i = 0; i < args.num_argspecs; i++) {
+        const struct printf_argspec *arg_spec = &args.argspecs[i];
+
+        struct text_span span = {
+            .start = format_str->span.start,
+            .end = format_str->span.end,
+        };
+
+        span.start.col += arg_spec->offset;
+        span.start.idx += arg_spec->offset;
+        span.end.col = span.start.col + arg_spec->len;
+        span.end.idx = span.start.idx + arg_spec->len;
+
+        // we can do more validation, currently very basic
+
+        struct td_var_ty exp_ty = TD_VAR_TY_UNKNOWN;
+        size_t num_spec_args = 0;
+
+        switch (arg_spec->specifier) {
+        case PRINTF_ARGSPEC_SPECIFIER_INVALID:
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(BAD_PRINTF_SPECIFIER, bad_printf_specifier,
+                                     span, span.end,
+                                     "invalid printf specifier"));
+
+          continue;
+        case PRINTF_ARGSPEC_SPECIFIER_LITERAL_PERCENT:
+          continue;
+
+        // TODO: proper validation of combinations and flags
+        case PRINTF_ARGSPEC_SPECIFIER_CHAR:
+        case PRINTF_ARGSPEC_SPECIFIER_SIGNED_INT:
+          exp_ty = TD_VAR_TY_WELL_KNOWN_SIGNED_INT;
+          num_spec_args = 1;
+          break;
+        case PRINTF_ARGSPEC_SPECIFIER_STRING:
+          exp_ty = TD_VAR_TY_CHAR_POINTER;
+          num_spec_args = 1;
+          break;
+        case PRINTF_ARGSPEC_SPECIFIER_OCTAL_UNSIGNED_INT:
+        case PRINTF_ARGSPEC_SPECIFIER_HEX_UNSIGNED_INT:
+        case PRINTF_ARGSPEC_SPECIFIER_UNSIGNED_INT:
+          exp_ty = TD_VAR_TY_WELL_KNOWN_UNSIGNED_INT;
+          num_spec_args = 1;
+          break;
+        case PRINTF_ARGSPEC_SPECIFIER_FLOAT:
+        case PRINTF_ARGSPEC_SPECIFIER_EXP_FLOAT:
+        case PRINTF_ARGSPEC_SPECIFIER_HEX_EXP_FLOAT:
+        case PRINTF_ARGSPEC_SPECIFIER_VAR_FLOAT:
+          exp_ty = TD_VAR_TY_WELL_KNOWN_UNSIGNED_INT;
+          num_spec_args = 1;
+          break;
+        case PRINTF_ARGSPEC_SPECIFIER_NUM_WRITTEN:
+          // exp_ty = TD_VAR_TY_WELL_KNOWN_UNSIGNED_INT;
+          num_spec_args = 1;
+          break;
+        case PRINTF_ARGSPEC_SPECIFIER_POINTER:
+          exp_ty = TD_VAR_TY_VOID_POINTER;
+          num_spec_args = 1;
+          break;
+        }
+
+        if (format->first_to_check) {
+          if (arg_idx + num_spec_args > td_call.arg_list.num_args &&
+              !arg_diag) {
+            arg_diag = true;
+
+            compiler_diagnostics_add(
+                tchk->diagnostics,
+                MK_SEMANTIC_DIAGNOSTIC(BAD_PRINTF_ARGS, bad_printf_args,
+                                       call->arg_list.span,
+                                       MK_INVALID_TEXT_POS(0),
+                                       "printf format string specified more "
+                                       "arguments than provided"));
+          } else {
+            const struct td_var_ty *arg_ty =
+                &td_call.arg_list.args[arg_idx].var_ty;
+            if (!td_var_ty_compatible(
+                    tchk, arg_ty, &exp_ty,
+                    TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_ALL)) {
+
+              compiler_diagnostics_add(
+                  tchk->diagnostics,
+                  MK_SEMANTIC_DIAGNOSTIC(
+                      BAD_PRINTF_ARGS, bad_printf_args, call->arg_list.span,
+                      MK_INVALID_TEXT_POS(0),
+                      arena_alloc_snprintf(tchk->arena,
+                                           "printf specifier expects type '%s' "
+                                           "but type '%s' was provided",
+                                           tchk_type_name(tchk, arg_ty),
+                                           tchk_type_name(tchk, &exp_ty))));
+            }
+
+            arg_idx += num_spec_args;
+          }
+        }
+      }
+
+      break;
+    }
     }
   }
 
@@ -3176,8 +3724,8 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     break;
 
   case AST_CNST_TY_STR_LITERAL:
-    // FIXME: we have duplication, both the cnst ty and the enum ty encode ascii
-    // vs wide
+    // FIXME: we have duplication, both the cnst ty and the enum ty encode
+    // ascii vs wide
     DEBUG_ASSERT(cnst->str_value.ty == AST_CNST_STR_TY_ASCII, "expected ascii");
 
     // FIXME: lifetimes
@@ -3191,8 +3739,8 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     var_ty = TD_VAR_TY_CONST_CHAR_POINTER;
     break;
   case AST_CNST_TY_WIDE_STR_LITERAL:
-    // FIXME: we have duplication, both the cnst ty and the enum ty encode ascii
-    // vs wide
+    // FIXME: we have duplication, both the cnst ty and the enum ty encode
+    // ascii vs wide
     DEBUG_ASSERT(cnst->str_value.ty == AST_CNST_STR_TY_WIDE, "expected wide");
 
     td_cnst.ty = TD_CNST_TY_STRING;
@@ -3383,7 +3931,8 @@ static struct td_expr type_expr(struct typechk *tchk,
 
   switch (expr->ty) {
   case AST_EXPR_TY_INVALID:
-    BUG("INVALID expr type should not reach typechk (should trigger diagnostic "
+    BUG("INVALID expr type should not reach typechk (should trigger "
+        "diagnostic "
         "-> trigger parse fail)");
     break;
   case AST_EXPR_TY_GENERIC:
@@ -3746,9 +4295,9 @@ eval_constant_integral_expr(struct typechk *tchk, const struct td_expr *expr,
     if (expr->unary_op.ty == TD_UNARY_OP_TY_ADDRESSOF &&
         expr->unary_op.expr->ty == TD_EXPR_TY_POINTERACCESS) {
       // need to recognise `&(((Ty)cnst)->member)` as an offsetof idiom (for
-      // `cnst + offsetof(Ty, member)`) explicit support is not needed, but may
-      // as well in case programs do it explicitly rather than using `offsetof`
-      // macro
+      // `cnst + offsetof(Ty, member)`) explicit support is not needed, but
+      // may as well in case programs do it explicitly rather than using
+      // `offsetof` macro
 
       struct td_expr *pointer_access = expr->unary_op.expr;
 
@@ -4149,8 +4698,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
                       // whether we are in an addressing node and so array
                       // access + member access are legal
                       bool is_addr) {
-  // FIXME: i think casting logic in here may be inadequate (ie need more calls
-  // to add_cast_if_needed)
+  // FIXME: i think casting logic in here may be inadequate (ie need more
+  // calls to add_cast_if_needed)
 
   if (expr.ty == TD_EXPR_TY_CNST && expr.cnst.ty == TD_CNST_TY_STRING) {
     return expr;
@@ -4163,7 +4712,8 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
   if (eval_constant_integral_expr(
           tchk, &expr, EVAL_CONSTANT_INTEGRAL_EXPR_FLAG_NONE, &cnst_value)) {
 
-    // FIXME: types are wrong here, it is hacked in because this returns td_expr
+    // FIXME: types are wrong here, it is hacked in because this returns
+    // td_expr
     switch (cnst_value.val.ty) {
     case AP_VAL_TY_INVALID:
       return (struct td_expr){
@@ -4220,11 +4770,11 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
           tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(
-              BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr.span,
-              MK_INVALID_TEXT_POS(0),
-              "in a constant expression, the '->' operator can only be used in "
-              "an address-of expression"));
+          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+                                 expr.span, MK_INVALID_TEXT_POS(0),
+                                 "in a constant expression, the '->' "
+                                 "operator can only be used in "
+                                 "an address-of expression"));
       return (struct td_expr){
           .ty = TD_EXPR_TY_INVALID,
           .var_ty = TD_VAR_TY_UNKNOWN,
@@ -4256,11 +4806,11 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
       compiler_diagnostics_add(
           tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(
-              BAD_STATIC_INIT_EXPR, bad_static_init_expr, expr.span,
-              MK_INVALID_TEXT_POS(0),
-              "in a constant expression, the '.' operator can only be used in "
-              "an address-of expression"));
+          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
+                                 expr.span, MK_INVALID_TEXT_POS(0),
+                                 "in a constant expression, the '.' operator "
+                                 "can only be used in "
+                                 "an address-of expression"));
       return (struct td_expr){
           .ty = TD_EXPR_TY_INVALID,
           .var_ty = TD_VAR_TY_UNKNOWN,
@@ -4845,8 +5395,6 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   struct td_funcdef td_funcdef = {
       .storage_class_specifier = specifiers.storage,
       .function_specifier_flags = specifiers.function,
-      .attrs = specifiers.attrs,
-      .num_attrs = specifiers.num_attrs,
       .var_declaration = declaration,
       .body = {.ty = TD_STMT_TY_COMPOUND,
                .compound = type_compoundstmt(tchk, &func_def->body)},
@@ -5345,8 +5893,6 @@ static struct td_declaration type_init_declarator_list(
   struct td_declaration td_declaration = {
       .storage_class_specifier = specifiers->storage,
       .function_specifier_flags = specifiers->function,
-      .attrs = specifiers->attrs,
-      .num_attrs = specifiers->num_attrs,
       .base_ty = specifiers->type_specifier,
       .num_var_declarations = declarator_list->num_init_declarators,
       .var_declarations =
@@ -5396,7 +5942,8 @@ type_declaration(struct typechk *tchk,
   }
 
   // TODO: if one declarator (e.g `float a = bar`), highlight whole thing
-  // else highlight just the failure (currently we are always highlighting all)
+  // else highlight just the failure (currently we are always highlighting
+  // all)
   return type_init_declarator_list(tchk, declaration->span, &specifiers,
                                    &declaration->declarator_list, mode);
 }
@@ -6545,8 +7092,8 @@ void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
         &translation_unit->external_declarations[i];
 
     if (log_symbols) {
-      // if we have `size_t a, b, c` and `--log-sym a`, it is okay to print them
-      // all
+      // if we have `size_t a, b, c` and `--log-sym a`, it is okay to print
+      // them all
       switch (decl->ty) {
       case TD_EXTERNAL_DECLARATION_TY_DECLARATION: {
         bool found = false;
