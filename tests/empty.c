@@ -1,5 +1,5 @@
 // expected value: 88
 
-int main() {  
+int main() {
   return 88;
 }
