@@ -2024,6 +2024,7 @@ type_specifiers(struct typechk *tchk,
       .type_specifier = TD_VAR_TY_UNKNOWN,
   };
 
+  struct td_var_attrs attrs = {0};
   enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
   int long_count = 0, int_count = 0, signed_count = 0, unsigned_count = 0;
@@ -2038,7 +2039,7 @@ type_specifiers(struct typechk *tchk,
     case AST_DECL_SPECIFIER_TY_ATTRIBUTE_SPECIFIER:
       type_attribute_list(
           tchk, &specifier.attribute_specifier.attribute_list,
-          &specifiers.type_specifier.attrs);
+          &attrs);
       break;
     case AST_DECL_SPECIFIER_TY_STORAGE_CLASS_SPECIFIER:
       if (!(allow & TD_SPECIFIER_ALLOW_STORAGE_CLASS_SPECIFIERS)) {
@@ -2392,11 +2393,21 @@ type_specifiers(struct typechk *tchk,
       case AST_TYPE_SPECIFIER_TYPEOF_UNQUAL: {
         specifiers.type_specifier =
             type_type_or_expr(tchk, &last_specifier.type_of_unqual);
+
         specifiers.type_specifier.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
         break;
       }
       }
     }
+  }
+
+  // TODO: merge with this in type_func_declarator as a general "merge attrs" fn
+  if (!specifiers.type_specifier.attrs.weak) {
+    specifiers.type_specifier.attrs.weak = attrs.weak;
+  }
+
+  if (!specifiers.type_specifier.attrs.format) {
+    specifiers.type_specifier.attrs.format = attrs.format;
   }
 
   specifiers.type_specifier.type_qualifiers |= type_qualifiers;
@@ -5975,6 +5986,7 @@ type_declaration(struct typechk *tchk,
   // TODO: if one declarator (e.g `float a = bar`), highlight whole thing
   // else highlight just the failure (currently we are always highlighting
   // all)
+
   return type_init_declarator_list(tchk, declaration->span, &specifiers,
                                    &declaration->declarator_list, mode);
 }
