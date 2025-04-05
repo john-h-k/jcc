@@ -193,8 +193,19 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   DEF_BUILTIN_NUM("__STDC__", "1");
 
+  switch (preproc->args.c_standard) {
+  case COMPILE_C_STANDARD_C11:
+    DEF_BUILTIN_NUM("__STDC_VERSION__", "201112L");
+    break;
+  case COMPILE_C_STANDARD_C17:
+    DEF_BUILTIN_NUM("__STDC_VERSION__", "201710L");
+    break;
+  case COMPILE_C_STANDARD_C23:
+    DEF_BUILTIN_NUM("__STDC_VERSION__", "202311L");
+    break;
+  }
+
   // TODO: support different version targets. This is C11
-  DEF_BUILTIN_NUM("__STDC_VERSION__", "201112L");
   DEF_BUILTIN_NUM("__STDC_HOSTED__", "1");
 
   DEF_BUILTIN_NUM("__STDC_UTF_16__", "1");

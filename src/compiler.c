@@ -65,6 +65,7 @@ compiler_create(const struct compiler_create_args *args,
   struct preproc_create_args preproc_args = {
       .target = args->args.target,
       .path = args->working_dir,
+      .c_standard = args->args.c_standard,
       .num_sys_include_paths = args->args.num_sys_include_paths,
       .sys_include_paths = args->args.sys_include_paths,
       .num_include_paths = args->args.num_include_paths,
