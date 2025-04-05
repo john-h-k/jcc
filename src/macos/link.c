@@ -2,10 +2,7 @@
 
 #include "../alloc.h"
 #include "../compiler.h"
-#include "../log.h"
 #include "../syscmd.h"
-#include "../util.h"
-#include "../profile.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,23 +12,10 @@ macos_link_objects_with_ld(const struct link_args *args) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
-  // TODO: we already calculate sdk path in preprocessor
-  // so we should reuse that
-  struct syscmd *sdk_cmd = syscmd_create(arena, "xcrun");
-  syscmd_add_arg_val(sdk_cmd, "-sdk", "macosx");
-  syscmd_add_arg(sdk_cmd, "--show-sdk-path");
-
-  char *sdk_path;
-  syscmd_set_stdout(sdk_cmd, SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE, &sdk_path);
-
-  if (syscmd_exec(&sdk_cmd)) {
-    err("xcrun call failed!");
-    return LINK_RESULT_FAILURE;
-  }
+  const char *sdk_path = args->args->sys_root;
 
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
-
   struct syscmd *cmd = syscmd_create(arena, "ld");
   syscmd_add_arg(cmd, "-lSystem");
   syscmd_add_arg(cmd, "-lc");

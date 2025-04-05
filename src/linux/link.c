@@ -44,8 +44,8 @@ enum link_result linux_link_objects(const struct link_args *args) {
     // need a way to get the riscv paths xplat
     cmd = syscmd_create(arena,"riscv64-unknown-elf-ld");
 
-    syscmd_add_arg_val(cmd, "-plugin", "/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/12.2.0/liblto_plugin.so");
-    syscmd_add_arg(cmd, "-plugin-opt=/opt/riscv/bin/../libexec/gcc/riscv64-unknown-elf/12.2.0/lto-wrapper");
+    syscmd_add_arg_val(cmd, "-plugin", "/opt/riscv/libexec/gcc/riscv64-unknown-elf/12.2.0/liblto_plugin.so");
+    syscmd_add_arg(cmd, "-plugin-opt=/opt/riscv/libexec/gcc/riscv64-unknown-elf/12.2.0/lto-wrapper");
     syscmd_add_arg(cmd, "-plugin-opt=-fresolution=/tmp/ccI4xWdp.res");
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lgcc");
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lc");
@@ -53,15 +53,15 @@ enum link_result linux_link_objects(const struct link_args *args) {
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lgcc");
     syscmd_add_arg(cmd, "--sysroot=/opt/riscv/bin/../riscv64-unknown-elf");
     syscmd_add_arg(cmd, "-melf32lriscv");
-    syscmd_add_arg(cmd, "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d/crt0.o");
-    syscmd_add_arg(cmd, "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/crtbegin.o");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../riscv64-unknown-elf/lib/rv32imfd/ilp32d");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../lib/gcc");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib");
-    syscmd_add_arg(cmd, "-L/opt/riscv/bin/../riscv64-unknown-elf/lib");
+    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d/crt0.o");
+    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/crtbegin.o");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d");
+    syscmd_add_arg(cmd, "-L/opt/riscv/riscv64-unknown-elf/lib/rv32imfd/ilp32d");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib");
+    syscmd_add_arg(cmd, "-L/opt/riscv/riscv64-unknown-elf/lib");
     break;
   default:
     unsupported("bad target for linux linker");
