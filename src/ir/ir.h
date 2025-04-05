@@ -716,9 +716,9 @@ struct ir_basicblock {
 };
 
 enum ir_func_flags {
-  IR_FUNC_FLAG_NONE = 0u,
-  IR_FUNC_FLAG_MAKES_CALL = 1u,
-  IR_FUNC_FLAG_NEEDS_SSP = 2u
+  IR_FUNC_FLAG_NONE = 0,
+  IR_FUNC_FLAG_MAKES_CALL = 1 << 0,
+  IR_FUNC_FLAG_NEEDS_SSP = 1 << 1
 };
 
 enum ir_var_data_ty {
