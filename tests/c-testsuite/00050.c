@@ -28,6 +28,6 @@ main()
 		return 4;
 	if(v.s.b != 5)
 		return 5;
-	
+
 	return 0;
 }

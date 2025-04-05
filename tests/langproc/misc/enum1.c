@@ -1,5 +1,5 @@
 enum X{
-    vv 
+    vv
 };
 
 int g()

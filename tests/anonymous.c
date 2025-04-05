@@ -9,7 +9,7 @@ struct foo {
     // this should not clash
     int b;
   };
-  
+
   union {
     int b;
     int c;

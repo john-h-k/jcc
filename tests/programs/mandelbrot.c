@@ -9,7 +9,7 @@ int mandelbrot(double real, double imag) {
 	for (int i = 0; i < limit; ++i) {
 		double r2 = zReal * zReal;
 		double i2 = zImag * zImag;
-		
+
 		if (r2 + i2 > 4.0) return i;
 
 		zImag = 2.0 * zReal * zImag + imag;
@@ -19,25 +19,25 @@ int mandelbrot(double real, double imag) {
 }
 
 int main() {
-	
-	int width = 171; //number of characters fitting horizontally on my screen 
+
+	int width = 171; //number of characters fitting horizontally on my screen
 	int heigth = 45; //number of characters fitting vertically on my screen
-		
+
 	double x_start = -2.0;
 	double x_fin = 1.0;
 	double y_start = -1.0;
 	double y_fin = 1.0;
-	
+
 	//~ double x_start = -0.25;
 	//~ double x_fin = 0.05;
 	//~ double y_start = -0.95;
 	//~ double y_fin = -0.75;
-	
+
 	//~ double x_start = -0.13;
 	//~ double x_fin = -0.085;
 	//~ double y_start = -0.91;
 	//~ double y_fin = -0.88;
-	
+
 	double dx = (x_fin - x_start)/(width - 1);
 	double dy = (y_fin - y_start)/(heigth - 1);
 
@@ -61,12 +61,12 @@ int main() {
 
 	for (int i = 0; i < heigth; i++) {
 		for (int j = 0; j < width; j++) {
-			
+
 			double x = x_start + j*dx; // current real value
 			double y = y_fin - i*dy; // current imaginary value
-			
+
 			int value = mandelbrot(x,y);
-			
+
 			if (value == 100) {printf(" ");}
 			else if (value > 90) {printf("%s%s", red, char_);}
 			else if (value > 70) {printf("%s%s", l_red, char_);}
@@ -80,7 +80,7 @@ int main() {
 			else if (value > 2) {printf("%s%s", blue, char_);}
 			else if (value > 1) {printf("%s%s", magenta, char_);}
 			else {printf("%s%s", l_magenta,char_);}
-			
+
 			printf("\033[0m");
 		}
 		printf("\n");;

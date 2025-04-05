@@ -9,6 +9,6 @@ int main() {
   if (e != 0xFF) {
     return 1;
   }
-  
+
   return c;
 }

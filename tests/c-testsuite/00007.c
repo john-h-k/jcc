@@ -2,7 +2,7 @@ int
 main()
 {
 	int x;
-	
+
 	x = 1;
 	for(x = 10; x; x = x - 1)
 		;
