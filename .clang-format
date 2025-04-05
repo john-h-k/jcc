@@ -4,5 +4,3 @@ IndentWidth: 2
 ---
 # also configures for C
 Language: Cpp
-
-IncludeBlocks: Regroup
