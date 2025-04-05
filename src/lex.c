@@ -243,7 +243,7 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 #define PUSH_CHAR(ch)                                                          \
   do {                                                                         \
     if (is_wide) {                                                             \
-      int32_t pc = (uint32_t)(unsigned char)ch;                                \
+      uint32_t pc = (uint32_t)(unsigned char)ch;                                \
       vector_push_back(buff, &pc);                                             \
     } else {                                                                   \
       char pc = (char)ch;                                                      \
@@ -340,17 +340,17 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 
       if (is_wide) {
         wchar_t wide;
-        size_t read = mbtowc(&wide, &text[i], len - i);
+        int read = mbtowc(&wide, &text[i], len - i);
 
         static_assert(sizeof(wide) == sizeof(int32_t),
                       "only supports 4byte wide char");
 
-        if (read == (size_t)-1 || read == (size_t)-2) {
+        if (read == -1 || read == -2) {
           TODO("handle wbtowc fails in wide str/char literal lexing");
         }
 
         if (read) {
-          i += read - 1;
+          i += (size_t)(read - 1);
           vector_push_back(buff, &wide);
         } else {
           int32_t nl = 0;

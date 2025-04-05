@@ -320,7 +320,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     struct sized_str name, value;
     if (val_str) {
-      name = (struct sized_str){.str = def_macro, .len = val_str - def_macro};
+      name = (struct sized_str){.str = def_macro, .len = (size_t)(val_str - def_macro)};
       value = MK_SIZED(val_str + 1);
     } else {
       name = MK_SIZED(def_macro);

@@ -68,7 +68,7 @@ static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
       BUG("malformed header");
     }
 
-    size_t header_len = brk - buffer;
+    size_t header_len = (size_t)(brk - buffer);
 
     // FIXME: should be case insensitive
     if (!strncmp(buffer, "Content-Length", header_len)) {
@@ -244,8 +244,8 @@ static void lsp_json_write_pos(struct lsp_ctx *ctx, struct text_pos pos) {
     //   indexing)
     //   * characters may not line up when UTF text is present as we do byte
     //   columns
-    JSON_WRITE_FIELD(writer, "line", pos.line);
-    JSON_WRITE_FIELD(writer, "character", pos.col);
+    JSON_WRITE_FIELD(writer, "line", (int)pos.line);
+    JSON_WRITE_FIELD(writer, "character", (int)pos.col);
   });
 }
 

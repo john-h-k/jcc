@@ -81,7 +81,26 @@ if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
 endif()
 
 if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")
+  message(STATUS "Enabling all architectures")
   add_definitions(-DJCC_ALL)
+
+  list(APPEND SOURCE_FILES
+    src/aarch64/codegen.c
+    src/aarch64/lower.c
+    src/aarch64/emit.c
+    src/aarch64/emitter.c
+
+    src/x64/codegen.c
+    src/x64/lower.c
+    src/x64/emit.c
+    src/x64/emitter.c
+
+    src/rv32i/codegen.c
+    src/rv32i/lower.c
+    src/rv32i/emit.c
+    src/rv32i/emitter.c
+    src/rv32i/object.c
+  )
 endif()
 
 foreach(arch IN LISTS ARCHITECTURES)
@@ -178,10 +197,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "JCC")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
   message(STATUS "Building with AppleClang")
 
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
-  endif()
-
   add_compile_options(
     -Wall
     -Wextra
@@ -215,6 +230,7 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wmissing-field-initializers
 
     # i would _like_ to enable this, but it causes errors everywhere flag enums are used
+    # -Wsign-conversion
     -Wno-sign-conversion
 
     -Wno-missing-noreturn

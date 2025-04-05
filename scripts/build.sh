@@ -182,7 +182,7 @@ configure() {
     fi
     echo -e "${BOLD}    mode=$mode${RESET}"
     echo -e "${BOLD}    generator=$generator${RESET}"
-    if [ -n "$arches" ]; then
+    if [ -n "$archs" ]; then
         echo -e "${BOLD}    architectures=$archs"
     fi
     if [ -n "$profile_build" ]; then

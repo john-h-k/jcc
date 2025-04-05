@@ -166,5 +166,5 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
 
   content[fsize] = '\0';
   *buf = content;
-  *buf_len = fsize + 1;
+  *buf_len = (size_t)(fsize + 1);
 }

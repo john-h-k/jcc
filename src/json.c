@@ -488,7 +488,7 @@ static void json_writer_snprintf(struct json_writer *writer, const char *format,
   DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
   size_t tail = vector_length(writer->buffer);
-  vector_extend(writer->buffer, NULL, len);
+  vector_extend(writer->buffer, NULL, (size_t)len);
 
   vector_ensure_capacity(writer->buffer, vector_length(writer->buffer) + 1);
 

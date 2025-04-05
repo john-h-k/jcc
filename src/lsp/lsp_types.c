@@ -17,8 +17,8 @@ TRY_DE_STRUCT(text_pos, pos) {
   const struct json_object *object;
   TRY_DE_OBJECT(value, object, &);
 
-  TRY_DE_INT_FIELD(object, pos->line, "line", true);
-  TRY_DE_INT_FIELD(object, pos->col, "character", true);
+  TRY_DE_UINT_FIELD(object, pos->line, "line", true);
+  TRY_DE_UINT_FIELD(object, pos->col, "character", true);
 
   return true;
 }
