@@ -54,6 +54,8 @@ enum compiler_diagnostic_class {
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
   DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
           const char *)                                                        \
+  DIAG_FN(WARN, "unrecognised-attribute", unrecognised_attr, UNRECOGNISED_ATTR,              \
+          const char *)                                                        \
   DIAG_FN(WARN, "too-many-inits", too_many_inits, TOO_MANY_INITS,              \
           const char *)                                                        \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
@@ -103,6 +105,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "struct-or-union-identifier-or-list", aggregate_type,         \
           AGGREGATE_TYPE, const char *)                                        \
   DIAG_FN(ERROR, "init-in-aggregate", init_in_aggregate, INIT_IN_AGGREGATE,    \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "init-in-extern", init_in_extern, INIT_IN_EXTERN,    \
           const char *)                                                        \
   DIAG_FN(ERROR, "array-init-type", array_init_type, ARRAY_INIT_TYPE,          \
           const char *)                                                        \

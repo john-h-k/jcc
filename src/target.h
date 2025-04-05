@@ -50,11 +50,18 @@ enum symbol_visibility {
   SYMBOL_VISIBILITY_UNDEF,
 };
 
+enum symbol_flags {
+  SYMBOL_FLAG_NONE = 0,
+  SYMBOL_FLAG_WEAK = 1 << 0,
+};
+
 struct symbol {
   enum symbol_ty ty;
 
   enum symbol_visibility visibility;
   const char *name;
+
+  enum symbol_flags flags;
 };
 
 struct external_symbol {
@@ -130,6 +137,10 @@ struct reg_info {
 
 struct link_args {
   const struct compile_args *args;
+
+  char **linker_args;
+  size_t num_linker_args;
+
   const char *const *objects;
   size_t num_objects;
 

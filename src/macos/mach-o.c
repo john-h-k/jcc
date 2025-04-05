@@ -547,6 +547,7 @@ static void write_segment_command(FILE *file,
     uint8_t n_sect = NO_SECT;
     uint64_t n_value = 0;
     uint8_t n_type = 0;
+    uint16_t n_desc = 0;
 
     if (symbol->visibility != SYMBOL_VISIBILITY_UNDEF) {
       switch (symbol->ty) {
@@ -577,12 +578,24 @@ static void write_segment_command(FILE *file,
 
     switch (symbol->visibility) {
     case SYMBOL_VISIBILITY_GLOBAL:
+      if (symbol->flags & SYMBOL_FLAG_WEAK) {
+        n_desc |= N_WEAK_DEF;
+      }
+
       n_type = N_SECT | N_EXT;
       break;
     case SYMBOL_VISIBILITY_PRIVATE:
+      if (symbol->flags & SYMBOL_FLAG_WEAK) {
+        n_desc |= N_WEAK_DEF;
+      }
+
       n_type = N_SECT;
       break;
     case SYMBOL_VISIBILITY_UNDEF:
+      if (symbol->flags & SYMBOL_FLAG_WEAK) {
+        n_desc |= N_WEAK_REF;
+      }
+
       n_type = N_EXT | N_UNDF;
       break;
     }
@@ -591,7 +604,7 @@ static void write_segment_command(FILE *file,
     nlist.n_un.n_strx = str_off;
     nlist.n_type = n_type;
     nlist.n_sect = n_sect;
-    nlist.n_desc = 0;
+    nlist.n_desc = n_desc;
     nlist.n_value = n_value;
 
     str_off += strlen(symbol->name) + 1;
