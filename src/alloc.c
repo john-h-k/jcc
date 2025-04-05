@@ -108,6 +108,10 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
 PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...) {
+  if (!format || !format[0]) {
+    return arena_alloc_strdup(allocator, "");
+  }
+
 #ifdef __JCC__
   (void)allocator;
   (void)format;
@@ -123,7 +127,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
 
   va_end(args_copy);
 
-  DEBUG_ASSERT(len > 0, "vnsprintf call failed");
+  DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
   char *buf = arena_alloc(allocator, len + 1);
 

@@ -237,6 +237,8 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wno-assign-enum
     # TODO: remove binary literals in source
     -Wno-gnu-binary-literal
+
+    -fstrict-enums
   )
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
   # nothing for now

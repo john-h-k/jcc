@@ -142,16 +142,35 @@ static bool try_get_completed_aggregate(struct typechk *tchk,
 
 enum td_var_ty_compatible_flags {
   TD_VAR_TY_COMPATIBLE_FLAG_NONE = 0,
-  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT = 1 << 0
+  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS = 1 << 0,
+  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS = 1 << 1
 };
+
+static struct td_var_ty
+td_var_ty_lvalue_convert(struct typechk *tchk, const struct td_var_ty *var_ty) {
+  // arrays and functions decay to pointers
+  // const/volatile/restrict qualifiers stripped
+
+  struct td_var_ty lvalue_cvt = *var_ty;
+  lvalue_cvt.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
+
+  if (lvalue_cvt.ty == TD_VAR_TY_TY_ARRAY) {
+    lvalue_cvt = td_var_ty_make_pointer(tchk, lvalue_cvt.array.underlying,
+                                        TD_TYPE_QUALIFIER_FLAG_NONE);
+  } else if (lvalue_cvt.ty == TD_VAR_TY_TY_FUNC) {
+    lvalue_cvt =
+        td_var_ty_make_pointer(tchk, &lvalue_cvt, TD_TYPE_QUALIFIER_FLAG_NONE);
+  }
+
+  return lvalue_cvt;
+}
 
 static bool td_var_ty_compatible(struct typechk *tchk,
                                  const struct td_var_ty *l,
                                  const struct td_var_ty *r,
                                  enum td_var_ty_compatible_flags flags) {
-  struct td_var_ty left = *l;
-
-  if (left.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+  if (l->ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
+    struct td_var_ty left = *l;
     if (try_get_completed_aggregate(tchk, l, &left)) {
       return td_var_ty_compatible(tchk, &left, r, flags);
     }
@@ -164,40 +183,39 @@ static bool td_var_ty_compatible(struct typechk *tchk,
     }
   }
 
-  if (flags & TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT) {
-    // arrays and functions decay to pointers
-    // const/volatile/restrict qualifiers stripped
-
-    left.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
-
-    if (left.ty == TD_VAR_TY_TY_ARRAY) {
-      left = td_var_ty_make_pointer(tchk, left.array.underlying,
-                                    TD_TYPE_QUALIFIER_FLAG_NONE);
-    } else if (left.ty == TD_VAR_TY_TY_FUNC) {
-      left = td_var_ty_make_pointer(tchk, &left, TD_TYPE_QUALIFIER_FLAG_NONE);
-    }
+  if (flags & TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS) {
+    struct td_var_ty left = td_var_ty_lvalue_convert(tchk, l);
+    return td_var_ty_compatible(
+        tchk, &left, r, flags & ~TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS);
   }
 
-  if (left.type_qualifiers != r->type_qualifiers) {
+  if (flags & TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS) {
+    struct td_var_ty right = td_var_ty_lvalue_convert(tchk, r);
+    return td_var_ty_compatible(
+        tchk, l, &right, flags & ~TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS);
+  }
+
+  if (l->type_qualifiers != r->type_qualifiers) {
     return false;
   }
 
-  if (left.ty != r->ty) {
+  if (l->ty != r->ty) {
     // possible bug source: what if one is incomplete aggregate and one is
     // complete aggregate? this will return false but maybe shouldn't
     return false;
   }
 
-  switch (left.ty) {
+  switch (l->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
     return true;
   case TD_VAR_TY_TY_VOID:
+    return true;
   case TD_VAR_TY_TY_VARIADIC:
     BUG("doesn't make sense");
   case TD_VAR_TY_TY_WELL_KNOWN:
-    return left.well_known == r->well_known;
+    return l->well_known == r->well_known;
   case TD_VAR_TY_TY_FUNC: {
-    struct td_ty_func l_func = left.func;
+    struct td_ty_func l_func = l->func;
     struct td_ty_func r_func = r->func;
 
     if (!td_var_ty_compatible(tchk, l_func.ret, r_func.ret,
@@ -233,9 +251,17 @@ static bool td_var_ty_compatible(struct typechk *tchk,
 
     size_t num_params = l_func.num_params;
     for (size_t i = 0; i < num_params; i++) {
-      if (!td_var_ty_compatible(tchk, &l_func.params[i].var_ty,
-                                &r_func.params[i].var_ty,
-                                TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+      const struct td_var_ty *lp = &l_func.params[i].var_ty;
+      const struct td_var_ty *rp = &r_func.params[i].var_ty;
+
+      if (lp->ty == TD_VAR_TY_TY_VARIADIC || rp->ty == TD_VAR_TY_TY_VARIADIC) {
+        continue;
+      }
+
+      if (!td_var_ty_compatible(
+              tchk, lp, rp,
+              TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS |
+                  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS)) {
         return false;
       }
     }
@@ -245,6 +271,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
   case TD_VAR_TY_TY_POINTER: {
     struct td_var_ty l_underlying = td_var_ty_get_underlying(tchk, l);
     struct td_var_ty r_underlying = td_var_ty_get_underlying(tchk, r);
+
     return td_var_ty_compatible(tchk, &l_underlying, &r_underlying,
                                 TD_VAR_TY_COMPATIBLE_FLAG_NONE);
   }
@@ -651,14 +678,15 @@ static char *tchk_qualifiers_name(struct typechk *tchk,
 #undef TQUAL
 
   buf[head++] = '\0';
-  DEBUG_ASSERT(head == len + 1, "str buf sizing went wrong (head %zu expected %zu)", head, len + 1);
+  DEBUG_ASSERT(head == len + 1,
+               "str buf sizing went wrong (head %zu expected %zu)", head,
+               len + 1);
 
   return buf;
 }
 
 static char *tchk_type_name(struct typechk *tchk,
                             const struct td_var_ty *var_ty) {
-
   return arena_alloc_snprintf(
       tchk->arena, "%s%s", tchk_qualifiers_name(tchk, var_ty->type_qualifiers),
       tchk_base_type_name(tchk, var_ty));
@@ -674,8 +702,13 @@ static enum cast_ty is_cast_needed(struct typechk *tchk,
     return CAST_TY_NONE;
   }
 
+  if (target_ty->ty == TD_VAR_TY_TY_VOID) {
+    return CAST_TY_NONE;
+  }
+
   if (td_var_ty_compatible(tchk, var_ty, target_ty,
-                           TD_VAR_TY_COMPATIBLE_FLAG_NONE)) {
+                           TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS |
+                               TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS)) {
     return CAST_TY_NONE;
   }
 
@@ -706,15 +739,22 @@ static enum cast_ty is_cast_needed(struct typechk *tchk,
     return CAST_TY_ERR;
   }
 
-  return CAST_TY_CAST;
+  return CAST_TY_ERR;
 }
 
 static struct td_expr add_cast_if_needed(struct typechk *tchk,
                                          struct text_span context,
                                          struct td_expr expr,
                                          struct td_var_ty target_ty) {
+  if (expr.var_ty.ty == TD_VAR_TY_TY_FUNC) {
+    // decay to ptr
+    expr.var_ty = td_var_ty_make_pointer(tchk, &expr.var_ty, TD_TYPE_QUALIFIER_FLAG_NONE);
+  }
+
   if (expr.ty == TD_EXPR_TY_CNST && expr.var_ty.ty == TD_VAR_TY_TY_POINTER &&
       target_ty.ty == TD_VAR_TY_TY_ARRAY) {
+    // FIXME: should validate rhs here
+
     // HACK: change the string literal type to array so ir build knows to have
     // it inline
     // do we need to do this in explicit casts (`type_cast`) too?
@@ -841,9 +881,10 @@ static struct td_var_ty resolve_usual_arithmetic_conversions(
       return *lhs_ty;
     } else if (lhs_ty->ty == TD_VAR_TY_TY_POINTER &&
                rhs_ty->ty == TD_VAR_TY_TY_POINTER &&
-               td_var_ty_compatible(tchk, lhs_ty->pointer.underlying,
-                                    rhs_ty->pointer.underlying,
-                                    TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+               td_var_ty_compatible(
+                   tchk, lhs_ty->pointer.underlying, rhs_ty->pointer.underlying,
+                   TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS |
+                       TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS)) {
       return *lhs_ty;
     } else {
       // compiler_diagnostics_add(
@@ -966,9 +1007,10 @@ resolve_binary_op_types(struct typechk *tchk, const struct td_expr *lhs_expr,
   } else if (lhs->ty == TD_VAR_TY_TY_POINTER &&
              rhs->ty == TD_VAR_TY_TY_POINTER) {
     if (ty == TD_BINARY_OP_TY_SUB) {
-      if (!td_var_ty_compatible(tchk, lhs->pointer.underlying,
-                                rhs->pointer.underlying,
-                                TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+      if (!td_var_ty_compatible(
+              tchk, lhs->pointer.underlying, rhs->pointer.underlying,
+              TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS |
+                  TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_RHS)) {
 
         // TODO: instead of setting this everywhere have a method that does it
         // all for us
@@ -1599,8 +1641,8 @@ static struct td_var_ty type_abstract_declarator_inner(
     struct td_specifiers ptr_specifiers = type_specifiers(
         tchk, &pointer->specifier_list, TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS);
 
-    var_ty =
-        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
+    var_ty = td_var_ty_make_pointer(
+        tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
   }
 
   ssize_t inner_idx = -1;
@@ -1705,8 +1747,8 @@ static struct td_var_declaration type_declarator_inner(
     struct td_specifiers ptr_specifiers = type_specifiers(
         tchk, &pointer->specifier_list, TD_SPECIFIER_ALLOW_TYPE_QUALIFIERS);
 
-    var_ty =
-        td_var_ty_make_pointer(tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
+    var_ty = td_var_ty_make_pointer(
+        tchk, &var_ty, ptr_specifiers.type_specifier.type_qualifiers);
   }
 
   bool found_ident = false;
@@ -1811,10 +1853,10 @@ static struct td_specifiers
 type_specifiers(struct typechk *tchk,
                 const struct ast_declaration_specifier_list *list,
                 enum td_specifier_allow allow) {
-  struct td_specifiers specifiers = {
-      .storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
-      .function = TD_FUNCTION_SPECIFIER_FLAG_NONE,
-      .type_specifier = TD_VAR_TY_UNKNOWN};
+  struct td_specifiers specifiers = {.storage = TD_STORAGE_CLASS_SPECIFIER_NONE,
+                                     .function =
+                                         TD_FUNCTION_SPECIFIER_FLAG_NONE,
+                                     .type_specifier = TD_VAR_TY_UNKNOWN};
 
   enum td_type_qualifier_flags type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
 
@@ -2175,11 +2217,13 @@ type_specifiers(struct typechk *tchk,
             td_var_ty_for_typedef(tchk, &last_specifier.typedef_name);
         break;
       case AST_TYPE_SPECIFIER_TYPEOF: {
-        specifiers.type_specifier = type_type_or_expr(tchk, &last_specifier.type_of);
+        specifiers.type_specifier =
+            type_type_or_expr(tchk, &last_specifier.type_of);
         break;
       }
       case AST_TYPE_SPECIFIER_TYPEOF_UNQUAL: {
-        specifiers.type_specifier = type_type_or_expr(tchk, &last_specifier.type_of_unqual);
+        specifiers.type_specifier =
+            type_type_or_expr(tchk, &last_specifier.type_of_unqual);
         specifiers.type_specifier.type_qualifiers = TD_TYPE_QUALIFIER_FLAG_NONE;
         break;
       }
@@ -3235,7 +3279,7 @@ static struct td_expr type_generic(struct typechk *tchk,
           type_type_name(tchk, &association->type_name);
 
       if (td_var_ty_compatible(tchk, &assoc_var_ty, &ctrl.var_ty,
-                               TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT)) {
+                               TD_VAR_TY_COMPATIBLE_FLAG_LVALUE_CONVERT_LHS)) {
         if (selected_association) {
           tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
           compiler_diagnostics_add(
@@ -4254,11 +4298,18 @@ type_static_init_expr(struct typechk *tchk, struct td_expr expr,
       }
 
       tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+
       compiler_diagnostics_add(
           tchk->diagnostics,
-          MK_SEMANTIC_DIAGNOSTIC(BAD_STATIC_INIT_EXPR, bad_static_init_expr,
-                                 expr.span, MK_INVALID_TEXT_POS(0),
-                                 "invalid cast for constant expression"));
+          MK_SEMANTIC_DIAGNOSTIC(
+              CAST, cast, expr.span, MK_INVALID_TEXT_POS(0),
+              arena_alloc_snprintf(
+                  tchk->arena,
+                  "cast is not legal in constant expression (from '%s' to "
+                  "'%s')",
+                  tchk_type_name(tchk, &expr.var_ty),
+                  tchk_type_name(tchk, &expr.unary_op.expr->var_ty))));
+
       return (struct td_expr){
           .ty = TD_EXPR_TY_INVALID,
           .var_ty = TD_VAR_TY_UNKNOWN,
@@ -5127,24 +5178,43 @@ static struct td_init type_init(struct typechk *tchk, struct text_span context,
 
     if (td_init.expr.ty == TD_EXPR_TY_CNST &&
         td_init.expr.cnst.ty == TD_CNST_TY_STRING) {
-      // if the desired type is not pointer, we must be in a context where it
-      // is an array
-      if (var_ty->ty != TD_VAR_TY_TY_POINTER) {
-        // FIXME: mutating existing
-        struct td_cnst_str str = td_init.expr.cnst.str_value;
-        td_init.expr.var_ty = (struct td_var_ty){
-            .ty = TD_VAR_TY_TY_ARRAY,
-            .array = {.size = str.ty == TD_CNST_STR_TY_ASCII ? str.ascii.len
-                                                             : str.wide.len,
-                      .underlying = arena_alloc(
-                          tchk->arena,
-                          sizeof(*td_init.expr.var_ty.array.underlying))}};
 
-        *td_init.expr.var_ty.array.underlying = var_ty->ty == TD_VAR_TY_TY_ARRAY
-                                                    ? *var_ty->array.underlying
-                                                    : *var_ty;
+      if (var_ty->ty == TD_VAR_TY_TY_WELL_KNOWN) {
+        if ((td_init.expr.cnst.str_value.ty == TD_CNST_STR_TY_ASCII &&
+             (var_ty->well_known == WELL_KNOWN_TY_CHAR ||
+              var_ty->well_known == WELL_KNOWN_TY_SIGNED_CHAR ||
+              var_ty->well_known == WELL_KNOWN_TY_UNSIGNED_CHAR)) ||
+            (td_init.expr.cnst.str_value.ty == TD_CNST_STR_TY_WIDE &&
+             (var_ty->well_known == WELL_KNOWN_TY_SIGNED_INT ||
+              var_ty->well_known == WELL_KNOWN_TY_UNSIGNED_INT))) {
+          // FIXME: mutating existing
+          struct td_cnst_str str = td_init.expr.cnst.str_value;
+          td_init.expr.var_ty = (struct td_var_ty){
+              .ty = TD_VAR_TY_TY_ARRAY,
+              .array = {.size = str.ty == TD_CNST_STR_TY_ASCII ? str.ascii.len
+                                                               : str.wide.len,
+                        .underlying = arena_alloc(
+                            tchk->arena,
+                            sizeof(*td_init.expr.var_ty.array.underlying))}};
+
+          *td_init.expr.var_ty.array.underlying =
+              var_ty->ty == TD_VAR_TY_TY_ARRAY ? *var_ty->array.underlying
+                                               : *var_ty;
+        } else {
+
+          tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+          compiler_diagnostics_add(
+              tchk->diagnostics,
+              MK_SEMANTIC_DIAGNOSTIC(
+                  CAST, cast, context, MK_INVALID_TEXT_POS(0),
+                  arena_alloc_snprintf(
+                      tchk->arena, "cast is not legal (from '%s' to '%s')",
+                      tchk_type_name(tchk, &td_init.expr.var_ty),
+                      tchk_type_name(tchk, var_ty))));
+        }
+
+        break;
       }
-      break;
     }
 
     td_init.expr = add_cast_if_needed(tchk, context, td_init.expr, *var_ty);
@@ -5207,6 +5277,7 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
     enum td_init_mode init_mode = mode == TD_DECLARATOR_MODE_STATIC
                                       ? TD_INIT_MODE_CONSTANT_EXPRS
                                       : TD_INIT_MODE_NORMAL;
+
     struct td_init init = type_init(tchk, context, &td_var_decl.var_ty,
                                     init_declarator->init, init_mode);
 

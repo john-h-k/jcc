@@ -472,6 +472,10 @@ void json_writer_write_bool(struct json_writer *writer, bool value) {
 PRINTF_ARGS(1)
 static void json_writer_snprintf(struct json_writer *writer, const char *format,
                                  ...) {
+  if (!format || !format[0]) {
+    return;
+  }
+
   va_list args, args_copy;
 
   va_start(args, format);
@@ -481,7 +485,7 @@ static void json_writer_snprintf(struct json_writer *writer, const char *format,
 
   va_end(args_copy);
 
-  DEBUG_ASSERT(len > 0, "vnsprintf call failed");
+  DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
   size_t tail = vector_length(writer->buffer);
   vector_extend(writer->buffer, NULL, len);

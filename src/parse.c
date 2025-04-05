@@ -2445,6 +2445,8 @@ static bool parse_sizeof(struct parser *parser, struct ast_expr *expr) {
 
   parse_type_or_expr(parser, start, PARSE_TYPE_OR_EXPR_MODE_NORMAL,
                      &expr->size_of.type_or_expr);
+
+  expr->ty = AST_EXPR_TY_SIZEOF;
   expr->size_of.span = expr->size_of.type_or_expr.span;
   expr->span = expr->size_of.span;
 

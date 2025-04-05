@@ -1036,7 +1036,7 @@ void debug_print_ir_func(FILE *file, struct ir_func *irb,
   debug_visit_ir(irb, &FILE_WRITER_CALLBACKS, &metadata);
 }
 
-static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
+static void debug_print_ir_var_value(FILE *file, struct ir_unit *iru, struct ir_var_value *var_value,
                                      bool top) {
   switch (var_value->ty) {
   case IR_VAR_VALUE_TY_STR: {
@@ -1087,10 +1087,13 @@ static void debug_print_ir_var_value(FILE *file, struct ir_var_value *var_value,
       }
       struct ir_var_value *sub_value = &var_value->value_list.values[i];
 
-      debug_print_ir_var_value(file, sub_value, false);
+      debug_print_ir_var_value(file, iru, sub_value, false);
 
       if (sub_value->ty != IR_VAR_VALUE_TY_VALUE_LIST) {
-        fprintf(file, ",  OFFSET=%zu\n", var_value->value_list.offsets[i]);
+        fprintf(file, "; OFFSET=%zu", var_value->value_list.offsets[i]);
+        fprintf(file, ", ");
+        debug_print_var_ty_string(file, iru, &sub_value->var_ty);
+        fprintf(file, "\n");
       }
     }
     if (top) {
@@ -1117,7 +1120,7 @@ void debug_print_ir_var(FILE *file, struct ir_var *var) {
 
   debug_print_var_ty_string(file, var->unit, &var->var_ty);
   fprintf(file, " = ");
-  debug_print_ir_var_value(file, &var->value, true);
+  debug_print_ir_var_value(file, var->unit, &var->value, true);
   fprintf(file, "\n\n");
 }
 
