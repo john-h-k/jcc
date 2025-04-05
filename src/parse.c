@@ -510,8 +510,7 @@ static bool parse_attribute(struct parser *parser,
   lex_peek_token(parser->lexer, &next);
   if (next.ty == LEX_TOKEN_TY_COLON) {
     lex_consume_token(parser->lexer, next);
-    parse_expected_token(parser, LEX_TOKEN_TY_COLON,
-                         identifier.span.start,
+    parse_expected_token(parser, LEX_TOKEN_TY_COLON, identifier.span.start,
                          "'::' not ':' after attribute prefix", NULL);
 
     attribute->prefix = arena_alloc(parser->arena, sizeof(*attribute->prefix));

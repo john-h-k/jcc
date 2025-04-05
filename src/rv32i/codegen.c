@@ -1618,7 +1618,7 @@ void rv32i_codegen_end(struct cg_state *state) {
           DEBUG_ASSERT(last->succ->rv32i->ty == RV32I_INSTR_TY_JAL,
                        "expected jal after cond branch");
           DEBUG_ASSERT(last->succ->rv32i->jal.target.ty !=
-                       RV32I_TARGET_TY_OFFSET,
+                           RV32I_TARGET_TY_OFFSET,
                        "branch rewriting will break offset");
           jal = last->succ;
 

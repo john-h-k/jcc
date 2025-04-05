@@ -406,7 +406,8 @@ preproc_create(struct program program, struct fcache *fcache,
       p->arena, sizeof(struct preproc_define));
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
-  p->buffer_tokens = vector_create_in_arena(sizeof(struct preproc_token), arena);
+  p->buffer_tokens =
+      vector_create_in_arena(sizeof(struct preproc_token), arena);
   p->unexpanded_buffer_tokens =
       vector_create_in_arena(sizeof(struct preproc_unexpanded_token), arena);
   p->parents = hashtbl_create_sized_str_keyed_in_arena(p->arena, 0);

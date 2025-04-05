@@ -243,7 +243,7 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 #define PUSH_CHAR(ch)                                                          \
   do {                                                                         \
     if (is_wide) {                                                             \
-      uint32_t pc = (uint32_t)(unsigned char)ch;                                \
+      uint32_t pc = (uint32_t)(unsigned char)ch;                               \
       vector_push_back(buff, &pc);                                             \
     } else {                                                                   \
       char pc = (char)ch;                                                      \

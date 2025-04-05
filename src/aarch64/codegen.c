@@ -1376,7 +1376,8 @@ static void codegen_binary_op(struct cg_state *state,
   case IR_OP_BINARY_OP_TY_ULTEQ:
   case IR_OP_BINARY_OP_TY_SLTEQ:
     CONTAINED_OP(addsub, SUBS, subs);
-    if (instr->aarch64->ty == AARCH64_INSTR_TY_SUBS_IMM && instr->aarch64->addsub_imm.imm == SIZE_MAX) {
+    if (instr->aarch64->ty == AARCH64_INSTR_TY_SUBS_IMM &&
+        instr->aarch64->addsub_imm.imm == SIZE_MAX) {
       printf("op %zu\n", op->id);
     }
     break;
@@ -2219,7 +2220,6 @@ static void check_reg_type_callback(struct instr *instr, struct aarch64_reg reg,
 
   data->last = instr;
 }
-
 
 void aarch64_codegen_end(struct cg_state *state) {
   // codegen is now done

@@ -3,7 +3,8 @@
 
 #include "alloc.h"
 
-// fcache is the type used for managing and caching files used by various parts of the compiler
+// fcache is the type used for managing and caching files used by various parts
+// of the compiler
 struct fcache;
 
 enum fcache_flags {
@@ -22,13 +23,16 @@ struct fcache_file {
   size_t len;
 };
 
-void fcache_create(struct arena_allocator *arena, enum fcache_flags flags, struct fcache **fcache);
+void fcache_create(struct arena_allocator *arena, enum fcache_flags flags,
+                   struct fcache **fcache);
 
 bool fcache_read_stdin(struct fcache *fcache, struct fcache_file *file);
 
 bool fcache_test_path(struct fcache *fcache, struct sized_str path);
 
-bool fcache_read_path(struct fcache *fcache, struct sized_str path, struct fcache_file *file);
-bool fcache_read_proc(struct fcache *fcache, struct sized_str proc, struct fcache_file *file);
+bool fcache_read_path(struct fcache *fcache, struct sized_str path,
+                      struct fcache_file *file);
+bool fcache_read_proc(struct fcache *fcache, struct sized_str proc,
+                      struct fcache_file *file);
 
 #endif

@@ -1728,7 +1728,8 @@ struct ir_op *ir_insert_before_op(struct ir_func *irb,
                                   struct ir_op *insert_before, enum ir_op_ty ty,
                                   struct ir_var_ty var_ty) {
   DEBUG_ASSERT(insert_before, "invalid insertion point!");
-  DEBUG_ASSERT((insert_before->ty == IR_OP_TY_PHI) == (ty == IR_OP_TY_PHI), "cannot insert non phi before phi/phi before non phi");
+  DEBUG_ASSERT((insert_before->ty == IR_OP_TY_PHI) == (ty == IR_OP_TY_PHI),
+               "cannot insert non phi before phi/phi before non phi");
 
   struct ir_op *op = arena_alloc(irb->arena, sizeof(*op));
 

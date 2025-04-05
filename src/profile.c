@@ -98,13 +98,15 @@ struct profiler_region profiler_begin_multi_region(const char *name) {
 void profiler_end_multi_region(struct profiler_region region) {
   unsigned long long end = get_time();
 
-  struct profiler_multi_region_data *data = hashtbl_lookup(MULTI_REGIONS, &region.name);
+  struct profiler_multi_region_data *data =
+      hashtbl_lookup(MULTI_REGIONS, &region.name);
 
   DEBUG_ASSERT(data, "multi-region '%s' did not exist!", region.name);
 
   struct profiler_span *span = vector_get(data->spans, region.idx);
 
-  DEBUG_ASSERT(!span->ended, "span %zu in multi-region '%s' already ended!", region.idx, region.name);
+  DEBUG_ASSERT(!span->ended, "span %zu in multi-region '%s' already ended!",
+               region.idx, region.name);
 
   span->end = end;
   span->ended = true;

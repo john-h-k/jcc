@@ -34,7 +34,7 @@ enum compiler_diagnostic_class {
           const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
-  DIAG_FN(ERROR, "decl-not-stmt", decl_not_stmt, DECL_NOT_STMT, const char *)           \
+  DIAG_FN(ERROR, "decl-not-stmt", decl_not_stmt, DECL_NOT_STMT, const char *)  \
   DIAG_FN(ERROR, "syntax-err", syntax_err, SYNTAX_ERR, const char *)           \
   DIAG_FN(ERROR, "addr-label", addr_label, ADDR_LABEL, const char *)           \
   DIAG_FN(ERROR, "expected-token", expected_token, EXPECTED_TOKEN,             \
@@ -54,8 +54,8 @@ enum compiler_diagnostic_class {
 #define COMPILER_SEMANTIC_DIAGNOSTIC_LIST                                      \
   DIAG_FN(WARN, "empty-init-c23", empty_init_c23, EMPTY_INIT_C23,              \
           const char *)                                                        \
-  DIAG_FN(WARN, "unrecognised-attribute", unrecognised_attr, UNRECOGNISED_ATTR,              \
-          const char *)                                                        \
+  DIAG_FN(WARN, "unrecognised-attribute", unrecognised_attr,                   \
+          UNRECOGNISED_ATTR, const char *)                                     \
   DIAG_FN(WARN, "too-many-inits", too_many_inits, TOO_MANY_INITS,              \
           const char *)                                                        \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
@@ -72,18 +72,21 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "typecheck-incomplete-type", incomplete_type,                 \
           INCOMPLETE_TYPE, const char *)                                       \
   DIAG_FN(ERROR, "typecheck-no-member", no_member, NO_MEMBER, const char *)    \
-  DIAG_FN(WARN, "typecheck-bad-printf-args", bad_printf_args, BAD_PRINTF_ARGS, const char *)             \
-  DIAG_FN(WARN, "typecheck-bad-printf-specifier", bad_printf_specifier, BAD_PRINTF_SPECIFIER, const char *)             \
-  DIAG_FN(ERROR, "typecheck-no-var", no_var, NO_VAR, const char *)             \
-  DIAG_FN(ERROR, "typecheck-expected-var", expected_var, EXPECTED_VAR, const char *)             \
-  DIAG_FN(ERROR, "typecheck-fp-bitwise", fp_bitwise, FP_BITWISE, const char *) \
-  DIAG_FN(ERROR, "typecheck-cast", cast, CAST, const char *)                    \
-  DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL, const char *)           \
-  DIAG_FN(ERROR, "typecheck-static-assert-message", static_assert_message,      \
-          STATIC_ASSERT_MESSAGE, const char *)                                 \
-  DIAG_FN(ERROR, "typecheck-static-assert", static_assert, STATIC_ASSERT,       \
+  DIAG_FN(WARN, "typecheck-bad-printf-args", bad_printf_args, BAD_PRINTF_ARGS, \
           const char *)                                                        \
-  DIAG_FN(ERROR, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,    \
+  DIAG_FN(WARN, "typecheck-bad-printf-specifier", bad_printf_specifier,        \
+          BAD_PRINTF_SPECIFIER, const char *)                                  \
+  DIAG_FN(ERROR, "typecheck-no-var", no_var, NO_VAR, const char *)             \
+  DIAG_FN(ERROR, "typecheck-expected-var", expected_var, EXPECTED_VAR,         \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "typecheck-fp-bitwise", fp_bitwise, FP_BITWISE, const char *) \
+  DIAG_FN(ERROR, "typecheck-cast", cast, CAST, const char *)                   \
+  DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL, const char *)           \
+  DIAG_FN(ERROR, "typecheck-static-assert-message", static_assert_message,     \
+          STATIC_ASSERT_MESSAGE, const char *)                                 \
+  DIAG_FN(ERROR, "typecheck-static-assert", static_assert, STATIC_ASSERT,      \
+          const char *)                                                        \
+  DIAG_FN(ERROR, "typecheck-not-assignable", not_assignable, NOT_ASSIGNABLE,   \
           const char *)                                                        \
                                                                                \
   DIAG_FN(ERROR, "generic-no-match", generic_no_match, GENERIC_NO_MATCH,       \
@@ -109,7 +112,7 @@ enum compiler_diagnostic_class {
           AGGREGATE_TYPE, const char *)                                        \
   DIAG_FN(ERROR, "init-in-aggregate", init_in_aggregate, INIT_IN_AGGREGATE,    \
           const char *)                                                        \
-  DIAG_FN(ERROR, "init-in-extern", init_in_extern, INIT_IN_EXTERN,    \
+  DIAG_FN(ERROR, "init-in-extern", init_in_extern, INIT_IN_EXTERN,             \
           const char *)                                                        \
   DIAG_FN(ERROR, "array-init-type", array_init_type, ARRAY_INIT_TYPE,          \
           const char *)                                                        \
@@ -257,7 +260,8 @@ struct compiler_diagnostics_args {
 
 struct compiler_diagnostics;
 
-struct compiler_diagnostics *compiler_diagnostics_create(struct compiler_diagnostics_args args);
+struct compiler_diagnostics *
+compiler_diagnostics_create(struct compiler_diagnostics_args args);
 void compiler_diagnostics_add(struct compiler_diagnostics *diagnostics,
                               struct compiler_diagnostic diagnostic);
 void compiler_diagnostics_free(struct compiler_diagnostics **diagnostics);

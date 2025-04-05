@@ -160,7 +160,8 @@ static const char *get_default_isysroot(struct fcache *fcache,
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
     struct fcache_file sdk_path;
-    if (!fcache_read_proc(fcache, MK_SIZED("xcrun --sdk macosx --show-sdk-path"),
+    if (!fcache_read_proc(fcache,
+                          MK_SIZED("xcrun --sdk macosx --show-sdk-path"),
                           &sdk_path)) {
       BUG("xcrun call failed!");
     }

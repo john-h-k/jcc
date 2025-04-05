@@ -40,8 +40,9 @@ enum compile_platform {
   COMPILE_PLATFORM_LINUX,
 };
 
-static inline void compile_target_decomp(enum compile_target target, enum compile_arch *arch,
-                           enum compile_platform *platform) {
+static inline void compile_target_decomp(enum compile_target target,
+                                         enum compile_arch *arch,
+                                         enum compile_platform *platform) {
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
     *arch = COMPILE_ARCH_ARM64;

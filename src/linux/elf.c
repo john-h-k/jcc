@@ -470,8 +470,9 @@ static void write_elf_object(const struct build_object_args *args) {
 
   const char shstrtab[] = "\0.text\0.rodata\0.data\0.rela.text\0.rela."
                           "rodata\0.rela.data\0.symtab\0.strtab\0.shstrtab\0";
-  size_t offset, text_off, const_off, data_off, rela_text_off, total_sym_str, rela_const_off,
-      rela_data_off, symtab_off, strtab_off, shstr_size, shstr_off, shoff;
+  size_t offset, text_off, const_off, data_off, rela_text_off, total_sym_str,
+      rela_const_off, rela_data_off, symtab_off, strtab_off, shstr_size,
+      shstr_off, shoff;
 
   switch (args->compile_args->target) {
   case COMPILE_TARGET_LINUX_RV32I: {

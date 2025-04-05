@@ -289,8 +289,8 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
     fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
             span.start.line, span.start.col);
 
-    // this is currently never set to true, because diagnostics.c sets level to ERROR when -Werror is enabled
-    // so LSP also sees errors
+    // this is currently never set to true, because diagnostics.c sets level to
+    // ERROR when -Werror is enabled so LSP also sees errors
     bool werror = false;
     const char *prefix = "";
 
@@ -312,17 +312,16 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
       break;
     }
 
-    fprintf(stderr, PR_BOLD PR_WHITE "%s",  message);
+    fprintf(stderr, PR_BOLD PR_WHITE "%s", message);
 
     fprintf(stderr, " [");
     if (werror) {
       fprintf(stderr, "-Werror,");
     }
-    
+
     fprintf(stderr, "%s%s", prefix, diagnostic.ty.name);
     fprintf(stderr, "]\n" PR_RESET);
 
-    
     if (has_pos) {
       compiler_print_diagnostics_context(compiler, span, point);
     }

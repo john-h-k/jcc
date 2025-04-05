@@ -134,8 +134,16 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 
 #if __GNUC__ || __clang__
-#define ERR_EXPR(msg) PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion") (void)({ static_assert(0, msg); 0; }) POP_NO_WARN()
-#define ERR_EXPR_COND(cond, msg) PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion") (void)({ static_assert(cond, msg); 0; }) POP_NO_WARN()
+#define ERR_EXPR(msg)                                                          \
+  PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion")(void)({      \
+    static_assert(0, msg);                                                     \
+    0;                                                                         \
+  })POP_NO_WARN()
+#define ERR_EXPR_COND(cond, msg)                                               \
+  PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion")(void)({      \
+    static_assert(cond, msg);                                                  \
+    0;                                                                         \
+  })POP_NO_WARN()
 #else
 #define ERR_EXPR(msg) ((void)sizeof(char[-1]))
 #define ERR_EXPR_COND(cond, msg) ((void)sizeof(char[(cond) ? 1 : -1]))
@@ -143,8 +151,10 @@ typedef unsigned _BitInt(128) uint128_t;
 
 /********** Banned functions **********/
 
-#define system(...) (ERR_EXPR("'system' is banned, use 'syscmd' type instead"), 0)
-#define fscanf(...) (ERR_EXPR("'fscanf' is banned, causes all sorts of cache problems"), 0)
+#define system(...)                                                            \
+  (ERR_EXPR("'system' is banned, use 'syscmd' type instead"), 0)
+#define fscanf(...)                                                            \
+  (ERR_EXPR("'fscanf' is banned, causes all sorts of cache problems"), 0)
 
 /**************************************/
 
@@ -185,8 +195,8 @@ typedef unsigned _BitInt(128) uint128_t;
 // fails on one-length arrays, but that is okay because who uses one-length
 // arrays ensures it is not a pointer type
 #define ARR_LENGTH(a)                                                          \
-  (ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                            \
-                  "ARR_LENGTH macro used with pointer or one-len array"),     \
+  (ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                             \
+                 "ARR_LENGTH macro used with pointer or one-len array"),       \
    sizeof((a)) / sizeof((a)[0]))
 
 static inline size_t num_digits(size_t num) {

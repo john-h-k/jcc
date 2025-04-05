@@ -36,16 +36,21 @@ enum link_result linux_link_objects(const struct link_args *args) {
     syscmd_add_arg(cmd, "-L/usr/lib/x86_64-linux-gnu");
     syscmd_add_arg(cmd, "-L/lib");
     syscmd_add_arg(cmd, "-L/usr/lib");
-    syscmd_add_arg_val(cmd, "--no-as-needed", "/usr/lib/x86_64-linux-gnu/crt1.o");
-    syscmd_add_arg_val(cmd, "--no-as-needed", "/usr/lib/x86_64-linux-gnu/crtn.o");
+    syscmd_add_arg_val(cmd, "--no-as-needed",
+                       "/usr/lib/x86_64-linux-gnu/crt1.o");
+    syscmd_add_arg_val(cmd, "--no-as-needed",
+                       "/usr/lib/x86_64-linux-gnu/crtn.o");
     break;
   case COMPILE_TARGET_LINUX_RV32I:
     // FIXME: this will only work on mac
     // need a way to get the riscv paths xplat
-    cmd = syscmd_create(arena,"riscv64-unknown-elf-ld");
+    cmd = syscmd_create(arena, "riscv64-unknown-elf-ld");
 
-    syscmd_add_arg_val(cmd, "-plugin", "/opt/riscv/libexec/gcc/riscv64-unknown-elf/12.2.0/liblto_plugin.so");
-    syscmd_add_arg(cmd, "-plugin-opt=/opt/riscv/libexec/gcc/riscv64-unknown-elf/12.2.0/lto-wrapper");
+    syscmd_add_arg_val(
+        cmd, "-plugin",
+        "/opt/riscv/libexec/gcc/riscv64-unknown-elf/12.2.0/liblto_plugin.so");
+    syscmd_add_arg(cmd, "-plugin-opt=/opt/riscv/libexec/gcc/"
+                        "riscv64-unknown-elf/12.2.0/lto-wrapper");
     syscmd_add_arg(cmd, "-plugin-opt=-fresolution=/tmp/ccI4xWdp.res");
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lgcc");
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lc");
@@ -53,14 +58,19 @@ enum link_result linux_link_objects(const struct link_args *args) {
     syscmd_add_arg(cmd, "-plugin-opt=-pass-through=-lgcc");
     syscmd_add_arg(cmd, "--sysroot=/opt/riscv/bin/../riscv64-unknown-elf");
     syscmd_add_arg(cmd, "-melf32lriscv");
-    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d/crt0.o");
-    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/crtbegin.o");
-    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d");
-    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib/rv32imfd/ilp32d");
+    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../"
+                        "../../riscv64-unknown-elf/lib/rv32imfd/ilp32d/crt0.o");
+    syscmd_add_arg(cmd, "/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/"
+                        "rv32imfd/ilp32d/crtbegin.o");
+    syscmd_add_arg(
+        cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../"
+                        "../../riscv64-unknown-elf/lib/rv32imfd/ilp32d");
     syscmd_add_arg(cmd, "-L/opt/riscv/riscv64-unknown-elf/lib/rv32imfd/ilp32d");
     syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0");
     syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc");
-    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../../../riscv64-unknown-elf/lib");
+    syscmd_add_arg(cmd, "-L/opt/riscv/lib/gcc/riscv64-unknown-elf/12.2.0/../../"
+                        "../../riscv64-unknown-elf/lib");
     syscmd_add_arg(cmd, "-L/opt/riscv/riscv64-unknown-elf/lib");
     break;
   default:
@@ -93,12 +103,12 @@ enum link_result linux_link_objects(const struct link_args *args) {
     syscmd_add_arg(cmd, "--end-group");
 
     syscmd_add_arg(cmd, "-lgcc");
-    syscmd_add_arg(cmd, "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/rv32imfd/ilp32d/crtend.o");
+    syscmd_add_arg(cmd, "/opt/riscv/bin/../lib/gcc/riscv64-unknown-elf/12.2.0/"
+                        "rv32imfd/ilp32d/crtend.o");
     break;
   default:
     unreachable();
   }
-
 
   if (args->args->verbose) {
     fprintf(stderr, "link command (platform=linux):\n");

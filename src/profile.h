@@ -14,10 +14,11 @@
       profiler_begin_region(#name);
 #define PROFILE_END(name) profiler_end_region(profiler_##name##_region);
 
-#define PROFILE_BEGIN_MULTI(name)                                                    \
+#define PROFILE_BEGIN_MULTI(name)                                              \
   struct profiler_region profiler_##name##_region =                            \
       profiler_begin_multi_region(#name);
-#define PROFILE_END_MULTI(name) profiler_end_multi_region(profiler_##name##_region);
+#define PROFILE_END_MULTI(name)                                                \
+  profiler_end_multi_region(profiler_##name##_region);
 
 #define PROFILE(name, code)                                                    \
   PROFILE_BEGIN(name);                                                         \

@@ -1145,8 +1145,8 @@ static struct ir_var_str build_ir_str(const struct td_cnst *cnst,
   case TD_CNST_STR_TY_ASCII:
     // data if contains null char
     struct sized_str sized = {
-      .str = cnst->str_value.ascii.value,
-      .len = cnst->str_value.ascii.len,
+        .str = cnst->str_value.ascii.value,
+        .len = cnst->str_value.ascii.len,
     };
     *is_data = !szstr_nullsafe(sized);
     *char_ty = IR_VAR_TY_I8;
@@ -3940,7 +3940,8 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
 
     switch (init->init->ty) {
     case TD_INIT_TY_EXPR: {
-      if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL && !td_var_ty_is_scalar_ty(&init->init->expr.var_ty)) {
+      if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL &&
+          !td_var_ty_is_scalar_ty(&init->init->expr.var_ty)) {
         // again broken if cast needed
         DEBUG_ASSERT(
             td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty),

@@ -64,17 +64,17 @@ static struct var_table_entry *add_entry(struct var_table_scope *scope,
   return entry;
 }
 
-struct var_table_entry *
-vt_create_top_level_entry(struct var_table *var_table,
-                                 enum var_table_ns ns, struct sized_str name) {
+struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
+                                                  enum var_table_ns ns,
+                                                  struct sized_str name) {
   struct var_table_scope *first = vector_head(var_table->scopes);
 
   return add_entry(first, ns, name);
 }
 
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
-                                               enum var_table_ns ns,
-                                               struct sized_str name) {
+                                        enum var_table_ns ns,
+                                        struct sized_str name) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
 
   return add_entry(last, ns, name);
@@ -104,9 +104,9 @@ void vt_pop_scope(struct var_table *var_table) {
   vector_pop(var_table->scopes);
 }
 
-struct var_table_entry *
-vt_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
-                              struct sized_str name) {
+struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
+                                               enum var_table_ns ns,
+                                               struct sized_str name) {
   DEBUG_ASSERT(name.str, "name must be non-null");
 
   struct var_table_entry *entry = vt_get_entry(var_table, ns, name);
@@ -122,8 +122,8 @@ vt_get_or_create_entry(struct var_table *var_table, enum var_table_ns ns,
 }
 
 struct var_table_entry *vt_get_entry(struct var_table *var_table,
-                                            enum var_table_ns ns,
-                                            struct sized_str name) {
+                                     enum var_table_ns ns,
+                                     struct sized_str name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
