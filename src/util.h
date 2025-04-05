@@ -4,6 +4,7 @@
 // TODO: seperate bool/noreturn and other version-dependent stuff into its own
 // header
 
+#include <assert.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -83,9 +84,42 @@ typedef unsigned _BitInt(128) uint128_t;
 
 #if STDC_C23
 #define NORETURN [[noreturn]]
+#define DEPRECATED [[deprecated]]
+#define FALLTHROUGH [[fallthrough]]
+#define MAYBE_UNUSED [[maybe_unused]]
+#define NODISCARD [[no_discard]]
+#define UNSEQUENCED [[unsequenced]]
+#define REPRODUCIBLE [[reproducible]]
 #else
 #include <stdnoreturn.h>
 #define NORETURN noreturn
+
+#if HAS_ATTRIBUTE(__fallthrough__)
+#define FALLTHROUGH __attribute__((__fallthrough__))
+#else
+#define FALLTHROUGH
+#endif
+
+#if HAS_ATTRIBUTE(__deprecated__)
+#define DEPRECATED __attribute__((__deprecated__))
+#else
+#define DEPRECATED
+#endif
+
+#if HAS_ATTRIBUTE(__maybe_unused__)
+#define MAYBE_UNUSED __attribute__((__maybe_unused__))
+#else
+#define MAYBE_UNUSED
+#endif
+
+#if HAS_ATTRIBUTE(__warn_unused_result__)
+#define NODISCARD __attribute__((__warn_unused_result__))
+#else
+#define NODISCARD
+#endif
+
+#define UNSEQUENCED
+#define REPRODUCIBLE
 #endif
 
 #if __GNUC__ && STDC_23
@@ -99,16 +133,38 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NOINLINE
 #endif
 
+#if __GNUC__ || __clang__
+#define ERR_EXPR(msg) PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion") (void)({ static_assert(0, msg); 0; }) POP_NO_WARN()
+#define ERR_EXPR_COND(cond, msg) PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion") (void)({ static_assert(cond, msg); 0; }) POP_NO_WARN()
+#else
+#define ERR_EXPR(msg) ((void)sizeof(char[-1]))
+#define ERR_EXPR_COND(cond, msg) ((void)sizeof(char[(cond) ? 1 : -1]))
+#endif
+
+/********** Banned functions **********/
+
+#define system(...) (ERR_EXPR("'system' is banned, use 'syscmd' type instead"), 0)
+#define fscanf(...) (ERR_EXPR("'fscanf' is banned, causes all sorts of cache problems"), 0)
+
+/**************************************/
+
+#ifndef NDEBUG
+
+#if HAS_BUILTIN(__builtin_dump_struct)
+#define dbg(x) __builtin_dump_struct((x))
+#else
+#define dbg(x) ERR_EXPR("dbg macro not supported on this compiler")
+#endif
+
+#endif
+
 #define ROUND_UP(value, pow2) (((value) + ((pow2) - 1ull)) & ~((pow2) - 1ull))
 
 #define ISPOW2(value) (popcntl((value)) == 1)
 #define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
 
 #if STDC_C23
-#define MAYBE_UNUSED [[maybe_unused]]
-#elif HAS_ATTRIBUTE(__maybe_unused__)
-#define MAYBE_UNUSED __attribute__((__maybe_unused__))
-#else
+// nothing, already defined
 #define MAYBE_UNUSED
 #endif
 
@@ -129,10 +185,8 @@ typedef unsigned _BitInt(128) uint128_t;
 // fails on one-length arrays, but that is okay because who uses one-length
 // arrays ensures it is not a pointer type
 #define ARR_LENGTH(a)                                                          \
-  ((void)sizeof(struct {                                                       \
-     int _your_array_is_a_pointer_or_one_length                                \
-         [(sizeof((a)) / sizeof((a)[0])) > 1 ? 1 : -1];                        \
-   }),                                                                         \
+  (ERR_EXPR_COND(sizeof((a)) / sizeof((a)[0]) > 1,                            \
+                  "ARR_LENGTH macro used with pointer or one-len array"),     \
    sizeof((a)) / sizeof((a)[0]))
 
 static inline size_t num_digits(size_t num) {
@@ -387,6 +441,10 @@ struct sized_str {
   size_t len;
 };
 
+static inline bool szstr_nullsafe(struct sized_str str) {
+  return !memchr(str.str, 0, str.len);
+}
+
 static inline bool szstreq(struct sized_str l, struct sized_str r) {
   if (l.len != r.len) {
     return false;
@@ -415,7 +473,8 @@ static inline bool szstr_suffix(struct sized_str str, struct sized_str suffix) {
   return !memcmp(str.str + str.len - suffix.len, suffix.str, suffix.len);
 }
 
-static inline struct sized_str szstr_strip_prefix(struct sized_str str, struct sized_str prefix) {
+static inline struct sized_str szstr_strip_prefix(struct sized_str str,
+                                                  struct sized_str prefix) {
   if (szstr_prefix(str, prefix)) {
     str.len -= prefix.len;
     str.str += prefix.len;
@@ -424,7 +483,8 @@ static inline struct sized_str szstr_strip_prefix(struct sized_str str, struct s
   return str;
 }
 
-static inline struct sized_str szstr_strip_suffix(struct sized_str str, struct sized_str suffix) {
+static inline struct sized_str szstr_strip_suffix(struct sized_str str,
+                                                  struct sized_str suffix) {
   if (szstr_suffix(str, suffix)) {
     str.len -= suffix.len;
   }
@@ -445,13 +505,5 @@ static inline int szstrcmp(struct sized_str l, struct sized_str r) {
 
 #define MK_SIZED(s) ((struct sized_str){(s), ((s) != NULL) ? strlen((s)) : 0})
 #define MK_NULL_STR() ((struct sized_str){NULL, 0})
-
-// For some weird reason, clang has a bunch of issues with compound literals &
-// init lists in complex macros
-// we provide this objectively worse macro for those scenarios
-#define MK_SIZED_NAMED(name, s)                                                \
-  struct sized_str name;                                                       \
-  name.str = (s);                                                              \
-  name.len = (s) == NULL ? 0 : strlen((s));
 
 #endif

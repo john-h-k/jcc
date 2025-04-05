@@ -160,7 +160,7 @@ struct cg_unit;
 typedef struct emitted_unit (*emit_function)(const struct cg_unit *unit);
 typedef void (*build_object)(const struct build_object_args *args);
 typedef enum link_result (*link_objects)(const struct link_args *args);
-typedef void (*debug_disasm)(const char *filename, const char *output);
+typedef void (*debug_disasm)(enum compile_target target, const char *filename, const char *output);
 typedef void (*debug_print_codegen)(FILE *file, struct cg_unit *unit);
 
 enum target_id {
