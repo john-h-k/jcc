@@ -531,10 +531,9 @@ void find_multiline_comment_end(struct preproc_text *preproc_text,
       (const unsigned char *)preproc_text->text + cur_pos->idx;
   size_t len = preproc_text->len;
 
-  uint8x16_t indices0 = {0, 1, 2,  3,  4,  5,  6,  7,
-                                  8, 9, 10, 11, 12, 13, 14, 15};
+  uint8x16_t indices0 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   uint8x16_t indices1 = {16, 17, 18, 19, 20, 21, 22, 23,
-                                  24, 25, 26, 27, 28, 29, 30, 31};
+                         24, 25, 26, 27, 28, 29, 30, 31};
 
 #define BLOCK_SZ 32
 
@@ -2432,7 +2431,6 @@ static unsigned long long eval_expr(struct preproc *preproc,
                                     struct vector *tokens, size_t *i,
                                     size_t num_tokens, int min_prec) {
   long long value = eval_atom(preproc, preproc_text, tokens, i, num_tokens);
-
   for (; *i < num_tokens;) {
     struct preproc_token *token = vector_get(tokens, *i);
 
@@ -2455,14 +2453,21 @@ static unsigned long long eval_expr(struct preproc *preproc,
                                 "bad token in preprocessor condition"));
       return 0;
     case PREPROC_TOKEN_TY_PUNCTUATOR: {
-      if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET ||
-          token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COLON) {
+      if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CLOSE_BRACKET) {
+        return value;
+      }
 
+      if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_COLON) {
         (*i)--;
         return value;
       }
 
       if (token->punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_QMARK) {
+        if (min_prec == MAX_PREC) {
+          (*i)--;
+          return value;
+        }
+
         long long ternary_lhs =
             eval_expr(preproc, preproc_text, tokens, i, num_tokens, 0);
 

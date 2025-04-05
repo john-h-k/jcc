@@ -3937,11 +3937,12 @@ static void build_init_list_layout_entry(struct ir_unit *iru,
 
     switch (init->init->ty) {
     case TD_INIT_TY_EXPR: {
-      if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL) {
+      if (init->init->expr.ty == TD_EXPR_TY_COMPOUND_LITERAL && !td_var_ty_is_scalar_ty(&init->init->expr.var_ty)) {
         // again broken if cast needed
         DEBUG_ASSERT(
             td_var_ty_eq(iru->tchk, &member_ty, &init->init->expr.var_ty),
             "todo handle non equal tys");
+
         build_init_list_layout_entry(
             iru, &init->init->expr.compound_literal.init_list, &member_ty,
             init_offset, inits);

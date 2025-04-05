@@ -5,7 +5,6 @@
 int printf(const char *, ...);
 
 int main() {
-  int a = b + 10;
   printf("Hello, World!\n");
   return 0;
 }
