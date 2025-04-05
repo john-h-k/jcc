@@ -81,18 +81,12 @@ if("${CMAKE_C_COMPILER_ID}" STREQUAL "")
 endif()
 
 if(NOT DEFINED ARCHITECTURES OR "${ARCHITECTURES}" STREQUAL "")
-  set(ARCHITECTURES "aarch64;rv32i;x64")
-
-  if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-    add_definitions(-DJCC_ALL)
-  endif()
+  add_definitions(-DJCC_ALL)
 endif()
 
 foreach(arch IN LISTS ARCHITECTURES)
   if("${arch}" STREQUAL "aarch64")
-    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-      add_definitions(-DJCC_AARCH64)
-    endif()
+    add_definitions(-DJCC_AARCH64)
 
     list(APPEND SOURCE_FILES
       src/aarch64/codegen.c
@@ -101,9 +95,7 @@ foreach(arch IN LISTS ARCHITECTURES)
       src/aarch64/emitter.c
     )
   elseif("${arch}" STREQUAL "x64")
-    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-      add_definitions(-DJCC_X64)
-    endif()
+    add_definitions(-DJCC_X64)
 
     list(APPEND SOURCE_FILES
       src/x64/codegen.c
@@ -112,9 +104,7 @@ foreach(arch IN LISTS ARCHITECTURES)
       src/x64/emitter.c
     )
   elseif("${arch}" STREQUAL "rv32i")
-    if(NOT CMAKE_C_COMPILER_ID STREQUAL "JCC")
-      add_definitions(-DJCC_RV32I)
-    endif()
+    add_definitions(-DJCC_RV32I)
 
     list(APPEND SOURCE_FILES
       src/rv32i/codegen.c
@@ -182,6 +172,9 @@ endif()
 if(MSVC)
   add_compile_option(/W4 /WX)
 elseif(CMAKE_C_COMPILER_ID STREQUAL "JCC")
+  add_compile_options(
+    -Werror
+  )
 elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
   message(STATUS "Building with AppleClang")
 

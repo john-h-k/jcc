@@ -27,24 +27,6 @@
 
 typedef ptrdiff_t ssize_t;
 
-#ifdef __JCC__
-// don't yet support -D flag so just do this
-// #define JCC_ALL
-// x64 emitter very very slow so ignore for now
-#ifndef JCC_AARCH64
-#define JCC_AARCH64
-#endif
-
-#ifndef JCC_RV32I
-#define JCC_RV32I
-
-#ifdef JCC_X64
-#error "JCC fails on x64 emitter file"
-#endif
-#endif
-
-#endif
-
 #include "compinfo.h"
 
 #ifdef INT128_C
