@@ -635,9 +635,10 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 
     profiler_end_region(compile_region);
 
-    // enable_log();
-
+    // this can be non-trivially slow and maybe isn't worth doing
+    PROFILE_BEGIN(free_compiler);
     free_compiler(&compiler);
+    PROFILE_END(free_compiler);
   }
 
   if (target_needs_linking(&compile_args, target)) {

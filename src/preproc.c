@@ -391,7 +391,7 @@ preproc_create(struct program program, struct fcache *fcache,
     }
   }
 
-  p->texts = vector_create(sizeof(struct preproc_text));
+  p->texts = vector_create_in_arena(sizeof(struct preproc_text), arena);
 
   struct preproc_text text = create_preproc_text(p, program.text, args.path);
   vector_push_back(p->texts, &text);
@@ -406,9 +406,9 @@ preproc_create(struct program program, struct fcache *fcache,
       p->arena, sizeof(struct preproc_define));
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
-  p->buffer_tokens = vector_create(sizeof(struct preproc_token));
+  p->buffer_tokens = vector_create_in_arena(sizeof(struct preproc_token), arena);
   p->unexpanded_buffer_tokens =
-      vector_create(sizeof(struct preproc_unexpanded_token));
+      vector_create_in_arena(sizeof(struct preproc_unexpanded_token), arena);
   p->parents = hashtbl_create_sized_str_keyed_in_arena(p->arena, 0);
 
   *preproc = p;
@@ -467,30 +467,6 @@ preproc_create(struct program program, struct fcache *fcache,
 }
 
 void preproc_free(struct preproc **preproc) {
-  struct hashtbl_iter *defines = hashtbl_iter((*preproc)->defines);
-  struct hashtbl_entry entry;
-  while (hashtbl_iter_next(defines, &entry)) {
-    struct preproc_define *define = entry.data;
-
-    if (define->value.ty == PREPROC_DEFINE_VALUE_TY_TOKEN_VEC) {
-      vector_free(&define->value.vec);
-    } else if (define->value.ty == PREPROC_DEFINE_VALUE_TY_MACRO_FN) {
-      vector_free(&define->value.macro_fn.tokens);
-    }
-  }
-
-  hashtbl_free(&(*preproc)->defines);
-
-  size_t num_texts = vector_length((*preproc)->texts);
-  for (size_t i = 0; i < num_texts; i++) {
-    struct preproc_text *text = vector_get((*preproc)->texts, i);
-    vector_free(&text->enabled);
-  }
-
-  vector_free(&(*preproc)->texts);
-  vector_free(&(*preproc)->buffer_tokens);
-  vector_free(&(*preproc)->unexpanded_buffer_tokens);
-
   arena_allocator_free(&(*preproc)->arena);
 
   (*preproc)->arena = NULL;

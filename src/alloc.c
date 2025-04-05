@@ -1,5 +1,6 @@
 #include "alloc.h"
 
+#include "profile.h"
 #include "util.h"
 #include "vector.h"
 
