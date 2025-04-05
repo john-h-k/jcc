@@ -30,7 +30,7 @@ TRY_DE_STRUCT(text_span, span) {
 
   const struct json_object *object;
   TRY_DE_OBJECT(value, object, &);
-  
+
   TRY_DE_TYPE_FIELD(object, text_pos, span->start, "start", true);
   TRY_DE_TYPE_FIELD(object, text_pos, span->end, "end", true);
 
@@ -45,13 +45,12 @@ TRY_DE_STRUCT(definition_textdoc_params, params) {
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
-  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true); 
+  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true);
 
   TRY_DE_TYPE_FIELD(object, text_pos, params->pos, "position", true);
 
   return true;
 }
-
 
 TRY_DE_STRUCT(type_definition_textdoc_params, params) {
   *params = (struct type_definition_textdoc_params){0};
@@ -61,7 +60,7 @@ TRY_DE_STRUCT(type_definition_textdoc_params, params) {
 
   const struct json_object *doc;
   TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
-  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true); 
+  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true);
 
   TRY_DE_TYPE_FIELD(object, text_pos, params->pos, "position", true);
 
@@ -358,9 +357,9 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value,
                                           &msg->didclose_textdoc_params);
   case REQ_MSG_METHOD_TEXTDOCUMENT_DEFINITION:
     return try_de_definition_textdoc_params(ctx, params,
-                                          &msg->definition_textdoc_params);
+                                            &msg->definition_textdoc_params);
   case REQ_MSG_METHOD_TEXTDOCUMENT_TYPEDEFINITION:
-    return try_de_type_definition_textdoc_params(ctx, params,
-                                          &msg->type_definition_textdoc_params);
+    return try_de_type_definition_textdoc_params(
+        ctx, params, &msg->type_definition_textdoc_params);
   }
 }

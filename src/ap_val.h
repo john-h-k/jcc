@@ -16,7 +16,7 @@ struct ap_int ap_int_zero(size_t num_bits);
 struct ap_int ap_int_one(size_t num_bits);
 
 size_t ap_int_try_parse(struct arena_allocator *arena, size_t num_bits,
-                      struct sized_str str, struct ap_int *ap_int);
+                        struct sized_str str, struct ap_int *ap_int);
 
 void ap_int_set(struct ap_int *ap_int, signed long long value);
 
@@ -71,7 +71,7 @@ struct ap_float ap_float_zero(enum ap_float_ty ty);
 struct ap_float ap_float_one(enum ap_float_ty ty);
 
 size_t ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
-                        struct sized_str str, struct ap_float *ap_float);
+                          struct sized_str str, struct ap_float *ap_float);
 
 struct ap_float ap_float_add(struct ap_float lhs, struct ap_float rhs);
 struct ap_float ap_float_sub(struct ap_float lhs, struct ap_float rhs);
@@ -155,9 +155,10 @@ struct ap_val ap_val_to_int(struct ap_val value, size_t num_bits);
 struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty);
 
 size_t ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
-                          struct sized_str str, struct ap_val *ap_val);
-size_t ap_val_try_parse_float(struct arena_allocator *arena, enum ap_float_ty ty,
                             struct sized_str str, struct ap_val *ap_val);
+size_t ap_val_try_parse_float(struct arena_allocator *arena,
+                              enum ap_float_ty ty, struct sized_str str,
+                              struct ap_val *ap_val);
 
 void ap_val_fprintf(FILE *file, struct ap_val value);
 

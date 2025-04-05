@@ -39,7 +39,8 @@
 
 /******************************** C Standard ********************************/
 
-// FIXME: switch to using comparison based ones everywhere (else we will stop using C23 features in C26 etc)
+// FIXME: switch to using comparison based ones everywhere (else we will stop
+// using C23 features in C26 etc)
 
 #if __STDC_VERSION__ >= 202311L
 #define STDC_C23 1
@@ -103,8 +104,8 @@
 #define TSAN 1
 #endif
 
-// NOTE: for reasons, there is no __SANITIZE_UNDEFINED__, and so we cannot detect
-// this on GCC
+// NOTE: for reasons, there is no __SANITIZE_UNDEFINED__, and so we cannot
+// detect this on GCC
 #if HAS_FEATURE(undefined_behavior_sanitizer) ||                               \
     defined(UNDEFINED_BEHAVIOR_SANITIZER)
 #define UBSAN 1

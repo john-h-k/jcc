@@ -164,7 +164,7 @@ int syscmd_exec(struct syscmd **syscmd) {
     posix_spawn_file_actions_addclose(&actions, stdout_pipe[0]);
   } else if (s->stdout_redir) {
     int stdout_fd = syscmd_open_fd(s->stdout_redir);
-    
+
     posix_spawn_file_actions_adddup2(&actions, stdout_fd, STDOUT_FILENO);
     posix_spawn_file_actions_addclose(&actions, stdout_fd);
   }
@@ -175,7 +175,7 @@ int syscmd_exec(struct syscmd **syscmd) {
     posix_spawn_file_actions_addclose(&actions, stderr_pipe[0]);
   } else if (s->stderr_redir) {
     int stderr_fd = syscmd_open_fd(s->stderr_redir);
-    
+
     posix_spawn_file_actions_adddup2(&actions, stderr_fd, STDERR_FILENO);
     posix_spawn_file_actions_addclose(&actions, stderr_fd);
   }

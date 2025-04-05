@@ -251,7 +251,7 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
     // if ((ir_var_ty_is_aggregate(var_ty) ||
     //      (variadic && ir_var_ty_is_fp(var_ty))) &&
     //     ngrn < 8) {
-        // dw_size <= (8 - ngrn)) {
+    // dw_size <= (8 - ngrn)) {
     if (dw_size <= 2 && ngrn < 8) {
       size_t rem = MIN(dw_size, 8 - ngrn);
       struct ir_param_info param_info = {

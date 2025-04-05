@@ -33,14 +33,15 @@ struct text_span {
 #define TEXT_POS_INVALID_COL (SIZE_MAX)
 #define TEXT_POS_INVALID_LINE (SIZE_MAX)
 
-#define MK_TEXT_SPAN(start_pos, end_pos)                                               \
+#define MK_TEXT_SPAN(start_pos, end_pos)                                       \
   (struct text_span) { .start = (start_pos), .end = (end_pos) }
 
 #define MK_INVALID_TEXT_POS(idx)                                               \
   (struct text_pos) { NULL, (idx), TEXT_POS_INVALID_LINE, TEXT_POS_INVALID_COL }
-#define MK_INVALID_TEXT_SPAN(start_pos, end_pos)                                       \
+#define MK_INVALID_TEXT_SPAN(start_pos, end_pos)                               \
   (struct text_span) {                                                         \
-    .start = MK_INVALID_TEXT_POS((start_pos)), .end = MK_INVALID_TEXT_POS((end_pos))   \
+    .start = MK_INVALID_TEXT_POS((start_pos)),                                 \
+    .end = MK_INVALID_TEXT_POS((end_pos))                                      \
   }
 
 #define TEXT_POS_INVALID(pos) ((pos).col == TEXT_POS_INVALID_COL)
@@ -50,7 +51,6 @@ bool text_pos_eq(const void *l, const void *r);
 
 void hash_text_pos(struct hasher *hasher, const void *value);
 void hash_text_span(struct hasher *hasher, const void *value);
-
 
 static inline size_t text_pos_len(struct text_pos start, struct text_pos end) {
   return end.idx - start.idx;

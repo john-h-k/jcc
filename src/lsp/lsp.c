@@ -372,7 +372,8 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
         JSON_OBJECT(writer, "textDocumentSync", {
           // TextDocumentSyncOptions
 
-          // in C11 we need to force to bool so _Generic picks the right thing (sigh)
+          // in C11 we need to force to bool so _Generic picks the right thing
+          // (sigh)
           JSON_WRITE_FIELD(writer, "openClose", (bool)true);
           JSON_WRITE_FIELD(writer, "change", TEXT_DOC_CHANGE_EV_TY_FULL);
         });
@@ -399,11 +400,14 @@ static void lsp_handle_init(struct lsp_ctx *ctx) {
 
 START_NO_UNUSED_ARGS
 
-static void lsp_goto_def(struct lsp_ctx *ctx, const struct definition_textdoc_params *params) {
+static void lsp_goto_def(struct lsp_ctx *ctx,
+                         const struct definition_textdoc_params *params) {
   TODO("goto def");
 }
 
-static void lsp_goto_type_def(struct lsp_ctx *ctx, const struct type_definition_textdoc_params *params) {
+static void
+lsp_goto_type_def(struct lsp_ctx *ctx,
+                  const struct type_definition_textdoc_params *params) {
   TODO("goto def");
 }
 

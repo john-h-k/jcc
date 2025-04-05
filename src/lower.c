@@ -1489,8 +1489,8 @@ static void lower_call_registers(struct ir_func *func, struct ir_op *op) {
               off->addr_offset =
                   (struct ir_op_addr_offset){.base = addr, .offset = 4};
 
-              struct ir_op *load = ir_insert_after_op(
-                  func, off, IR_OP_TY_LOAD, IR_VAR_TY_I32);
+              struct ir_op *load =
+                  ir_insert_after_op(func, off, IR_OP_TY_LOAD, IR_VAR_TY_I32);
               load->load =
                   (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = off};
 

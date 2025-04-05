@@ -193,7 +193,8 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   struct vector *buckets = hashtbl->buckets;
   size_t num_buckets = vector_length(buckets);
 
-  size_t new_num_buckets = num_buckets < MIN_BUCKET_COUNT ? MIN_BUCKET_COUNT : num_buckets * 2;
+  size_t new_num_buckets =
+      num_buckets < MIN_BUCKET_COUNT ? MIN_BUCKET_COUNT : num_buckets * 2;
 
   hashtbl->len = 0;
   hashtbl->buckets =

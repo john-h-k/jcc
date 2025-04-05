@@ -446,7 +446,8 @@ void json_writer_clear(struct json_writer *writer) {
   writer->needs_sep = false;
 }
 
-void json_writer_write_null(struct json_writer *writer, UNUSED struct json_null_t null) {
+void json_writer_write_null(struct json_writer *writer,
+                            UNUSED struct json_null_t null) {
   if (writer->needs_sep) {
     vector_push_back(writer->buffer, &(char){','});
   }
@@ -573,12 +574,9 @@ void json_writer_write_end_arr(struct json_writer *writer) {
 
 const char *json_value_ty_name(enum json_value_ty ty) {
   static const char *names[] = {
-    [JSON_VALUE_TY_NULL] = "null",
-    [JSON_VALUE_TY_BOOL] = "bool",
-    [JSON_VALUE_TY_NUMBER] = "number",
-    [JSON_VALUE_TY_STRING] = "string",
-    [JSON_VALUE_TY_ARRAY] = "array",
-    [JSON_VALUE_TY_OBJECT] = "object",
+      [JSON_VALUE_TY_NULL] = "null",     [JSON_VALUE_TY_BOOL] = "bool",
+      [JSON_VALUE_TY_NUMBER] = "number", [JSON_VALUE_TY_STRING] = "string",
+      [JSON_VALUE_TY_ARRAY] = "array",   [JSON_VALUE_TY_OBJECT] = "object",
   };
 
   size_t idx = ty;

@@ -140,10 +140,7 @@ enum td_var_ty_ty {
 
 // FIXME: this is probably bad for perf (full of pointers when sparsely full)
 
-
-enum td_attr_format_archetype {
-  TD_ATTR_FORMAT_ARCHETYPE_PRINTF
-};
+enum td_attr_format_archetype { TD_ATTR_FORMAT_ARCHETYPE_PRINTF };
 
 struct td_attr_format {
   enum td_attr_format_archetype archetype;

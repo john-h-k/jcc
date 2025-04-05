@@ -311,7 +311,7 @@ VALUES_FN(language, LANGUAGE)
 /* ------------------------- Warning options ------------------------- */
 #define WARNING_OPT_LIST                                                       \
   /* FIXME: Not used */                                                        \
-  ARG_BOOL(warnings_as_error, "", "-Werror", "Error on warnings")       \
+  ARG_BOOL(warnings_as_error, "", "-Werror", "Error on warnings")              \
   ARG_STRING_LIST(warnings, "-W", "", "Warning settings")                      \
                                                                                \
   ARG_BOOL(no_warnings, "-w", "--no-warnings", "Disable all warnings")

@@ -379,8 +379,8 @@ static void write_segment_command(FILE *file,
   const_data.size = total_const_size;
   const_data.offset = segment.fileoff + text.size + cstrings.size;
   const_data.align = ILOG2(const_align);
-  const_data.reloff = text.reloff + (RELOC_INFO_SIZE *
-                                     info.num_text_reloc_instrs);
+  const_data.reloff =
+      text.reloff + (RELOC_INFO_SIZE * info.num_text_reloc_instrs);
   const_data.nreloc = info.num_const_data_reloc_instrs;
   const_data.flags = S_REGULAR;
   const_data.reserved1 = 0;
@@ -395,8 +395,8 @@ static void write_segment_command(FILE *file,
   data.size = total_data_size;
   data.offset = segment.fileoff + text.size + cstrings.size + const_data.size;
   data.align = ILOG2(data_align);
-  data.reloff = const_data.reloff + (RELOC_INFO_SIZE *
-                                     info.num_const_data_reloc_instrs);
+  data.reloff =
+      const_data.reloff + (RELOC_INFO_SIZE * info.num_const_data_reloc_instrs);
   data.nreloc = info.num_data_reloc_instrs;
   data.flags = S_REGULAR;
   data.reserved1 = 0;
@@ -415,8 +415,7 @@ static void write_segment_command(FILE *file,
   memset(&symtab, 0, sizeof(symtab));
   symtab.cmd = LC_SYMTAB;
   symtab.cmdsize = sizeof(symtab);
-  symtab.symoff =
-      relocs_offset + RELOC_INFO_SIZE * total_reloc_instrs;
+  symtab.symoff = relocs_offset + RELOC_INFO_SIZE * total_reloc_instrs;
   symtab.nsyms = args->num_entries;
   symtab.stroff = symtab.symoff + sizeof(struct nlist_64) * symtab.nsyms;
 

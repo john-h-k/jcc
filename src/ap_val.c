@@ -146,7 +146,7 @@ struct ap_int ap_int_not(struct ap_int value) {
 }
 
 size_t ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
-                      struct sized_str str, struct ap_int *ap_int) {
+                        struct sized_str str, struct ap_int *ap_int) {
   if (!str.len) {
     return 0;
   }
@@ -397,7 +397,7 @@ struct ap_int ap_int_rshift(struct ap_int lhs, struct ap_int rhs) {
 /************************** ap_float **************************/
 
 size_t ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
-                        struct sized_str str, struct ap_float *ap_float) {
+                          struct sized_str str, struct ap_float *ap_float) {
   char *buf = arena_alloc_strndup(arena, str.str, str.len);
 
   char *end;
@@ -589,9 +589,9 @@ struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits) {
   DEBUG_ASSERT((lhs).ty == (rhs).ty, "ap_val type mismatch");                  \
   switch ((lhs).ty) {                                                          \
   case AP_VAL_TY_INT:                                                          \
-    return ap_val_from_ull(ap_int_##op((lhs).ap_int, (rhs).ap_int), 1);           \
+    return ap_val_from_ull(ap_int_##op((lhs).ap_int, (rhs).ap_int), 1);        \
   case AP_VAL_TY_FLOAT:                                                        \
-    return ap_val_from_ull(ap_float_##op((lhs).ap_float, (rhs).ap_float), 1);     \
+    return ap_val_from_ull(ap_float_##op((lhs).ap_float, (rhs).ap_float), 1);  \
   case AP_VAL_TY_INVALID:                                                      \
     unreachable();                                                             \
   }
@@ -781,7 +781,7 @@ struct ap_val ap_val_to_float(struct ap_val value, enum ap_float_ty ty) {
 }
 
 size_t ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
-                          struct sized_str str, struct ap_val *ap_val) {
+                            struct sized_str str, struct ap_val *ap_val) {
   size_t rd;
   if (!(rd = ap_int_try_parse(arena, num_bits, str, &ap_val->ap_int))) {
     *ap_val = MK_AP_VAL_INVALID();
@@ -792,8 +792,9 @@ size_t ap_val_try_parse_int(struct arena_allocator *arena, size_t num_bits,
   return rd;
 }
 
-size_t ap_val_try_parse_float(struct arena_allocator *arena, enum ap_float_ty ty,
-                            struct sized_str str, struct ap_val *ap_val) {
+size_t ap_val_try_parse_float(struct arena_allocator *arena,
+                              enum ap_float_ty ty, struct sized_str str,
+                              struct ap_val *ap_val) {
   size_t rd;
   if (!(rd = ap_float_try_parse(arena, ty, str, &ap_val->ap_float))) {
     *ap_val = MK_AP_VAL_INVALID();

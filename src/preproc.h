@@ -2,9 +2,9 @@
 #define PREPROC_H
 
 #include "compiler.h"
-#include "program.h"
 #include "diagnostics.h"
 #include "fcache.h"
+#include "program.h"
 
 #include <stdio.h>
 
@@ -36,11 +36,11 @@ struct preproc_create_args {
   const char *fixed_timestamp;
 };
 
-enum preproc_create_result preproc_create(struct program program,
-                                          struct fcache *fcache,
-                                          struct preproc_create_args args,
-                                          struct compiler_diagnostics *diagnostics,
-                                          struct preproc **preproc);
+enum preproc_create_result
+preproc_create(struct program program, struct fcache *fcache,
+               struct preproc_create_args args,
+               struct compiler_diagnostics *diagnostics,
+               struct preproc **preproc);
 
 struct preprocessed_program {
   const char *text;
@@ -155,7 +155,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
                         enum preproc_expand_token_flags flags);
 
 void preproc_next_raw_token(struct preproc *preproc,
-                                   struct preproc_token *token);
+                            struct preproc_token *token);
 
 void preproc_process(struct preproc *preproc, FILE *file);
 

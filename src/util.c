@@ -165,10 +165,10 @@ size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len) {
 #define WRITE_STR(...)                                                         \
   write = snprintf(buf, buf_sz, __VA_ARGS__);                                  \
   DEBUG_ASSERT(write >= 0, "snprintf call failed");                            \
-  res_len += (size_t)write;                                                            \
+  res_len += (size_t)write;                                                    \
   if (buf) {                                                                   \
     buf += write;                                                              \
-    buf_sz -= (size_t)write;                                                           \
+    buf_sz -= (size_t)write;                                                   \
   }
   PRINT_STR(char ch = input[i++], WRITE_STR, return res_len, , );
 #undef WRITE_STR

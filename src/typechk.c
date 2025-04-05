@@ -1776,9 +1776,10 @@ struct td_declarator {
   const char *identifier;
 };
 
-static struct td_var_declaration type_declarator_inner(
-    struct typechk *tchk, struct td_var_ty *outer_var_ty,
-    const struct ast_declarator *declarator, const struct ast_init *init) {
+static struct td_var_declaration
+type_declarator_inner(struct typechk *tchk, struct td_var_ty *outer_var_ty,
+                      const struct ast_declarator *declarator,
+                      const struct ast_init *init) {
   struct td_var_declaration var_decl;
 
   struct td_var_attrs *first_attrs = &outer_var_ty->attrs;
