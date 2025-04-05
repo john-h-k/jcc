@@ -31,8 +31,8 @@ struct arg_string_list {
   char **values;
 };
 
-typedef bool (*try_parse_arg)(const char *, int *);
-typedef const char *(*string_arg)(int);
+typedef bool (*try_parse_arg)(const char *, unsigned *);
+typedef const char *(*string_arg)(unsigned);
 typedef void (*values_arg)(const char ***, size_t *);
 
 struct arg {
@@ -50,8 +50,8 @@ struct arg {
 
   union {
     bool *arg_bool;
-    int *arg_option;
-    int *arg_flags;
+    unsigned *arg_option;
+    unsigned *arg_flags;
     const char **arg_string;
     struct arg_string_list *arg_string_list;
   };
@@ -118,13 +118,13 @@ struct arg {
   }
 
 #define PARSE_FN(name, enum_name)                                              \
-  inline static bool parse_##name(const char *str, int *value) {               \
+  inline static bool parse_##name(const char *str, unsigned *value) {               \
     enum_name##_ENUM_LIST;                                                     \
     return false;                                                              \
   }
 
 #define STRING_FN(name, enum_name, default)                                    \
-  inline static const char *string_##name(int value) {                         \
+  inline static const char *string_##name(unsigned value) {                         \
     enum_name##_ENUM_LIST;                                                     \
     return default;                                                            \
   }
@@ -137,7 +137,8 @@ struct arg {
     *num_values = ARR_LENGTH(enum_values);                                     \
   }
 
-inline static bool parse_log_level(const char *str, int *value) {
+inline static bool parse_log_level(const char *str, unsigned *v) {
+  int *value = (int *)v;
   LOG_ENUM_LIST;
 
   if (strcmp(str, "ir.all") == 0) {
@@ -158,7 +159,7 @@ PARSE_FN(opts_level, OPTS)
 PARSE_FN(arch, ARCH)
 PARSE_FN(target, TARGET)
 
-inline static bool parse_c_standard(const char *str, int *value) {
+inline static bool parse_c_standard(const char *str, unsigned *value) {
   C_STANDARD_ENUM_LIST;
 
   if (strcmp(str, "c2x") == 0) {
@@ -174,7 +175,7 @@ PARSE_FN(language, LANGUAGE)
 #undef ENUM_FN
 
 #define ENUM_FN(enum_value, str_value)                                         \
-  if (value == enum_value) {                                                   \
+  if (value == (unsigned)enum_value) {                                                   \
     return str_value;                                                          \
   }
 

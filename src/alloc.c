@@ -129,7 +129,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
 
   DEBUG_ASSERT(len >= 0, "vnsprintf call failed");
 
-  char *buf = arena_alloc(allocator, len + 1);
+  char *buf = arena_alloc(allocator, (size_t)(len + 1));
 
   if (!buf) {
     va_end(args);

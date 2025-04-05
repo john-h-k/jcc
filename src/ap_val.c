@@ -108,13 +108,13 @@ struct ap_int ap_int_div(struct ap_int lhs, struct ap_int rhs) {
   return res;
 }
 
-static void ap_int_mul_into_i32(struct ap_int *a, int m) {
+static void ap_int_mul_into_i32(struct ap_int *a, unsigned m) {
   CHECK64(*a);
 
   a->chunks[0] *= m;
 }
 
-static void ap_int_add_into_i32(struct ap_int *a, int addend) {
+static void ap_int_add_into_i32(struct ap_int *a, unsigned addend) {
   a->chunks[0] += addend;
 }
 
@@ -127,7 +127,7 @@ void ap_int_set(struct ap_int *ap_int, signed long long value) {
 
 static void ap_int_negate_into(struct ap_int *value) {
   *value = (struct ap_int){.num_bits = value->num_bits,
-                           .chunks[0] = -(int64_t)value->chunks[0]};
+                           .chunks[0] = (uint64_t)-(int64_t)value->chunks[0]};
 }
 
 struct ap_int ap_int_negate(struct ap_int value) {
@@ -171,7 +171,7 @@ size_t ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
   }
 
   size_t rem = str.len - i - 1;
-  int base = 10;
+  unsigned base = 10;
 
   if (rem >= 2 && str.str[i] == '0' && str.str[i + 1] == 'x') {
     i += 2;
@@ -211,11 +211,11 @@ size_t ap_int_try_parse(UNUSED struct arena_allocator *arena, size_t num_bits,
       return 0;
     }
 
-    char digit;
+    unsigned digit;
     if (ch <= '9') {
-      digit = ch - '0';
+      digit = (unsigned)(ch - '0');
     } else {
-      digit = (char)(10 + (toupper(ch)) - 'A');
+      digit = (unsigned)(10 + (toupper(ch)) - 'A');
     }
 
     if (digit > base) {
@@ -373,7 +373,7 @@ long long ap_int_as_ll(struct ap_int value) {
     TODO("shifts for large/negative rhs");
   }
 
-  return value.chunks[0];
+  return (long long)value.chunks[0];
 }
 
 struct ap_int ap_int_lshift(struct ap_int lhs, struct ap_int rhs) {
@@ -422,7 +422,7 @@ size_t ap_float_try_parse(struct arena_allocator *arena, enum ap_float_ty ty,
     break;
   }
 
-  size_t parse_len = end - buf;
+  size_t parse_len = (size_t)(end - buf);
   if (has_suf) {
     str.len--;
   }
@@ -553,7 +553,7 @@ long double ap_float_as_ld(struct ap_float value) {
 // FIXME: this method is INHERENTLY BROKEN because it cannot handle sign
 struct ap_val ap_val_from_ull(unsigned long long value, size_t num_bits) {
   struct ap_int ap_int = {.num_bits = num_bits};
-  ap_int_set(&ap_int, value);
+  ap_int_set(&ap_int, (long long)value);
 
   return MK_AP_VAL_INT(ap_int);
 }
@@ -829,6 +829,11 @@ void ap_val_fprintf(FILE *file, struct ap_val value) {
 }
 
 long long ap_val_as_ll(struct ap_val value) {
+  DEBUG_ASSERT(value.ty == AP_VAL_TY_INT, "expected int");
+  return ap_int_as_ll(value.ap_int);
+}
+
+unsigned long long ap_val_as_ull(struct ap_val value) {
   DEBUG_ASSERT(value.ty == AP_VAL_TY_INT, "expected int");
   return ap_int_as_ull(value.ap_int);
 }

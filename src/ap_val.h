@@ -124,6 +124,7 @@ bool ap_val_nonzero(struct ap_val value);
 bool ap_val_iszero(struct ap_val value);
 
 long long ap_val_as_ll(struct ap_val value);
+unsigned long long ap_val_as_ull(struct ap_val value);
 double ap_val_as_double(struct ap_val value);
 
 struct ap_val ap_val_add(struct ap_val lhs, struct ap_val rhs);

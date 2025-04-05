@@ -75,13 +75,13 @@ void debug_print_stack_trace(void) {
   }
 
   void *buffer[TRACE_SZ];
-  size_t size = backtrace(buffer, TRACE_SZ);
+  int size = backtrace(buffer, TRACE_SZ);
 
   fprintf(stderr, "\nSTACK TRACE:\n");
-  for (size_t i = 0; i < size; i++) {
+  for (int i = 0; i < size; i++) {
     void *relative_addr = (void *)((char *)buffer[i] - (char *)base);
 
-    fprintf(stderr, "  [%zu] %p", i, relative_addr);
+    fprintf(stderr, "  [%zu] %p", (size_t)i, relative_addr);
 
     char command[256];
     snprintf(command, sizeof(command),
@@ -160,14 +160,15 @@ void fprint_str(FILE *file, const char *input, size_t len) {
 // explicit len because may contain null chars
 size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len) {
   size_t res_len = 0;
-  size_t write;
+  int write;
 
 #define WRITE_STR(...)                                                         \
   write = snprintf(buf, buf_sz, __VA_ARGS__);                                  \
-  res_len += write;                                                            \
+  DEBUG_ASSERT(write >= 0, "snprintf call failed");                            \
+  res_len += (size_t)write;                                                            \
   if (buf) {                                                                   \
     buf += write;                                                              \
-    buf_sz -= write;                                                           \
+    buf_sz -= (size_t)write;                                                           \
   }
   PRINT_STR(char ch = input[i++], WRITE_STR, return res_len, , );
 #undef WRITE_STR
@@ -266,8 +267,8 @@ bool try_parse_integer(const char *str, size_t len, unsigned long long *value) {
       return false;
     }
 
-    cur *= base;
-    cur += digit;
+    cur *= (unsigned long long)base;
+    cur += (unsigned long long)digit;
   }
 
   *value = neg && cur ? ULLONG_MAX - (cur - 1) : cur;

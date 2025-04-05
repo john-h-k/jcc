@@ -209,7 +209,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
 
     if (line >= start.line) {
       const char *next = strchr(&text[i + 1], '\n');
-      size_t line_len = next - &text[i + 1];
+      size_t line_len = (size_t)(next - &text[i + 1]);
 
       size_t offset = 7 + num_digits(line + 1);
       fprintf(stderr, "    %zu | %.*s\n", line + 1, (int)line_len,

@@ -217,6 +217,28 @@ struct didclose_textdoc_params {
     }                                                                          \
   } while (0)
 
+#define TRY_DE_UINT_FIELD(object, name, camel, req)                             \
+  do {                                                                         \
+    struct sized_str name_str = MK_SIZED(camel);                               \
+    struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
+                                                                               \
+    if (req && !val) {                                                         \
+      DE_FAIL("field '%s' required but not present", camel);                   \
+      return false;                                                            \
+    }                                                                          \
+                                                                               \
+    if (val && val->ty != JSON_VALUE_TY_NUMBER) {                              \
+      DE_FAIL("expected number but found %s", json_value_ty_name(val->ty));    \
+      return false;                                                            \
+    }                                                                          \
+                                                                               \
+    if (val) {                                                                 \
+      name = ap_val_as_ull(val->num_val);                                       \
+    } else {                                                                   \
+      memset(&name, 0, sizeof(name));                                          \
+    }                                                                          \
+  } while (0)
+
 #define TRY_DE_STR_FIELD(object, name, camel, req)                             \
   do {                                                                         \
     struct sized_str name_str = MK_SIZED(camel);                               \
@@ -355,7 +377,7 @@ enum req_msg_method { REQ_METHODS };
 #undef REQ_METHOD
 
 struct req_msg {
-  size_t id;
+  lsp_integer id;
   enum req_msg_method method;
 
   union {

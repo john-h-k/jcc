@@ -10,13 +10,13 @@
 #include <string.h>
 
 static void debug_print_arg_bool(FILE *file, const bool *arg_bool,
-                                 const char *(*string_fn)(int value)) {
+                                 const char *(*string_fn)(unsigned value)) {
   DEBUG_ASSERT(!string_fn, "string fn does not make sense for bool");
   fprintf(file, "      %s\n", *arg_bool ? "true" : "false");
 }
 
 static void debug_print_arg_string(FILE *file, const char *const *arg_string,
-                                   const char *(*string_fn)(int value)) {
+                                   const char *(*string_fn)(unsigned value)) {
   DEBUG_ASSERT(!string_fn, "string fn does not make sense for string");
   fprintf(file, "      %s\n", *arg_string);
 }
@@ -24,7 +24,7 @@ static void debug_print_arg_string(FILE *file, const char *const *arg_string,
 static void
 debug_print_arg_string_list(FILE *file,
                             const struct arg_string_list *arg_string_list,
-                            const char *(*string_fn)(int value)) {
+                            const char *(*string_fn)(unsigned value)) {
   DEBUG_ASSERT(!string_fn, "string fn does not make sense for string list");
   fprintf(file, "      ");
 
@@ -44,27 +44,27 @@ debug_print_arg_string_list(FILE *file,
   fprintf(file, "\n");
 }
 
-static void debug_print_arg_option(FILE *file, const int *arg_option,
-                                   const char *(*string_fn)(int value)) {
+static void debug_print_arg_option(FILE *file, const unsigned *arg_option,
+                                   const char *(*string_fn)(unsigned value)) {
   DEBUG_ASSERT(string_fn, "string fn required for option");
   fprintf(file, "      %s\n",
           *arg_option == 0 ? "(none)" : string_fn(*arg_option));
 }
 
-static void debug_print_arg_flags(FILE *file, const int *arg_flags,
-                                  const char *(*string_fn)(int value)) {
+static void debug_print_arg_flags(FILE *file, const unsigned *arg_flags,
+                                  const char *(*string_fn)(unsigned value)) {
   DEBUG_ASSERT(string_fn, "string fn required for flags");
   fprintf(file, "      ");
 
-  int value = *arg_flags;
+  unsigned value = *arg_flags;
 
-  if (!value || value == -1) {
+  if (!value || value == (unsigned)-1) {
     fprintf(file, "%s", string_fn(value));
   } else {
     while (value) {
       int idx = tzcnt(value);
 
-      int flag = value & (1 << idx);
+      unsigned flag = value & (1 << idx);
       value &= ~flag;
 
       fprintf(file, "%s", string_fn(flag));
@@ -235,10 +235,10 @@ enum parse_args_result parse_args(int argc, char **argv,
 
 #define ARG_OPT(arg_ty, struct_ty, arg_name, sh, lo, desc, parse_fn,           \
                 string_fn, values_fn)                                          \
-  DEBUG_ASSERT(sh[0] || lo[0], "must have short or long option");              \
-  DEBUG_ASSERT(!sh[0] || (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),        \
+  DEBUG_ASSERT(sh[0] | lo[0], "must have short or long option");              \
+  DEBUG_ASSERT(!sh[0] | (sh[0] == '-' && (bool)sh[1] && !(bool)sh[2]),        \
                "short option must begin '-' and be exactly two chars");        \
-  DEBUG_ASSERT(!lo[0] || (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),         \
+  DEBUG_ASSERT(!lo[0] | (lo[0] == '-' && (bool)lo[1] && (bool)lo[2]),         \
                "long option must begin '-' and be at least three chars");      \
   do {                                                                         \
     struct arg arg = {.ty = ARG_TY_##arg_ty,                                   \
@@ -257,10 +257,10 @@ enum parse_args_result parse_args(int argc, char **argv,
       arg.arg_bool = (bool *)&parsed->arg_name;                                \
       break;                                                                   \
     case ARG_TY_OPTION:                                                        \
-      arg.arg_option = (int *)&parsed->arg_name;                               \
+      arg.arg_option = (unsigned *)&parsed->arg_name;                               \
       break;                                                                   \
     case ARG_TY_FLAGS:                                                         \
-      arg.arg_flags = (int *)&parsed->arg_name;                                \
+      arg.arg_flags = (unsigned *)&parsed->arg_name;                                \
       break;                                                                   \
     case ARG_TY_STRING:                                                        \
       arg.arg_string = (const char **)&parsed->arg_name;                       \
@@ -331,7 +331,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
       value = strchr(s, '=');
 
-      struct sized_str lookup_str = {.len = value ? value - s : len, .str = s};
+      struct sized_str lookup_str = {.len = value ? (size_t)(value - s) : len, .str = s};
 
       struct arg *arg = hashtbl_lookup(opts, &lookup_str);
 
@@ -340,7 +340,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
         const char *comma = strchr(s, ',');
         if (comma) {
-          lookup_len = comma - s + 1;
+          lookup_len = (size_t)(comma - s + 1);
         }
 
         lookup_str = (struct sized_str){.len = lookup_len, .str = s};
@@ -403,14 +403,14 @@ enum parse_args_result parse_args(int argc, char **argv,
 
           char *buf = NULL;
           if (next) {
-            size_t val_len = next - value;
+            size_t val_len = (size_t)(next - value);
             // FIXME: strdup could return null via malloc?
             buf = strndup(value, val_len);
 
             value = buf;
           }
 
-          int flag = 0;
+          unsigned flag = 0;
           if (!arg->try_parse(value, &flag)) {
             bad_value(arg, lookup_str, value);
             goto fail;
@@ -423,7 +423,7 @@ enum parse_args_result parse_args(int argc, char **argv,
           // allow `-1` as a duplicate flag as it just means "all"
           // will allow duplicate flags if _all_ have been given, but this is
           // okay
-          if (((flag != -1) == (*arg->arg_flags != -1)) &&
+          if (((flag != (unsigned)-1) == (*arg->arg_flags != (unsigned)-1)) &&
               *arg->arg_flags & flag) {
             err("Duplicate options '%.*s'\n", (int)lookup_str.len,
                 lookup_str.str);
@@ -464,7 +464,7 @@ enum parse_args_result parse_args(int argc, char **argv,
           char *next = strchr(value, ',');
 
           if (next) {
-            size_t val_len = next - value;
+            size_t val_len = (size_t)(next - value);
 
             value = strndup(value, val_len);
           } else {
