@@ -53,9 +53,9 @@ enum lex_create_result lexer_create(struct program program,
 
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
-
     KEYWORD("_Nonnull", LEX_TOKEN_TY_KW_NONNULL);
     KEYWORD("_Nullable", LEX_TOKEN_TY_KW_NULLABLE);
+    KEYWORD("_Optional", LEX_TOKEN_TY_KW_NULLABLE);
     KEYWORD("asm", LEX_TOKEN_TY_KW_ASM);
     KEYWORD("__asm", LEX_TOKEN_TY_KW_ASM);
     KEYWORD("__asm__", LEX_TOKEN_TY_KW_ASM);
@@ -589,7 +589,9 @@ static void lex_next_token(struct lexer *lexer, struct lex_token *token) {
                                   .span = preproc_token.span};
       return;
     case PREPROC_TOKEN_TY_PUNCTUATOR:
-      if (preproc_token.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY || preproc_token.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
+      if (preproc_token.punctuator.ty ==
+              PREPROC_TOKEN_PUNCTUATOR_TY_STRINGIFY ||
+          preproc_token.punctuator.ty == PREPROC_TOKEN_PUNCTUATOR_TY_CONCAT) {
         continue;
       }
 
