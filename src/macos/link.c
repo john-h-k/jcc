@@ -21,16 +21,13 @@ macos_link_objects_with_ld(const struct link_args *args) {
   syscmd_add_arg_val(sdk_cmd, "-sdk", "macosx");
   syscmd_add_arg(sdk_cmd, "--show-sdk-path");
 
-
   char *sdk_path;
   syscmd_set_stdout(sdk_cmd, SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE, &sdk_path);
 
-  PROFILE_BEGIN(sdk);
   if (syscmd_exec(&sdk_cmd)) {
     err("xcrun call failed!");
     return LINK_RESULT_FAILURE;
   }
-  PROFILE_END(sdk);
 
   // FIXME: support non `ld_classic` - requires arch and platform_version
   // -arch arm64 -platform_version macos 14.0.0 14.4"
@@ -59,9 +56,7 @@ macos_link_objects_with_ld(const struct link_args *args) {
     syscmd_set_stdout_path(cmd, SYSCMD_BUF_FLAG_NONE, "/dev/null");
   }
 
-  PROFILE_BEGIN(lk);
   int ret_code = syscmd_exec(&cmd);
-  PROFILE_END(lk);
 
   arena_allocator_free(&arena);
 

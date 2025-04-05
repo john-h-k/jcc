@@ -35,10 +35,10 @@ struct syscmd *syscmd_create(struct arena_allocator *arena,
                              const char *process) {
   struct syscmd *syscmd = arena_alloc(arena, sizeof(*syscmd));
 
-  *syscmd =
-      (struct syscmd){.arena = arena,
-                      .process = process,
-                      .args = vector_create_in_arena(sizeof(const char *), arena)};
+  *syscmd = (struct syscmd){
+      .arena = arena,
+      .process = process,
+      .args = vector_create_in_arena(sizeof(const char *), arena)};
 
   // first arg is process name (even though we explicitly pass the process)
   vector_push_back(syscmd->args, &process);
@@ -58,26 +58,30 @@ void syscmd_add_arg_val(struct syscmd *syscmd, const char *arg0,
   syscmd_add_arg(syscmd, arg1);
 }
 
-void syscmd_set_stdout_path(struct syscmd *syscmd, enum syscmd_buf_flags flags, const char *output) {
+void syscmd_set_stdout_path(struct syscmd *syscmd, enum syscmd_buf_flags flags,
+                            const char *output) {
   syscmd->stdout_buf = NULL;
   syscmd->stdout_flags = flags;
   syscmd->stdout_redir = output;
 }
 
-void syscmd_set_stderr_path(struct syscmd *syscmd, enum syscmd_buf_flags flags, const char *output) {
+void syscmd_set_stderr_path(struct syscmd *syscmd, enum syscmd_buf_flags flags,
+                            const char *output) {
   syscmd->stderr_buf = NULL;
   syscmd->stderr_flags = flags;
   syscmd->stderr_redir = output;
 }
 
-void syscmd_set_stdout(struct syscmd *syscmd, enum syscmd_buf_flags flags, char **buf) {
+void syscmd_set_stdout(struct syscmd *syscmd, enum syscmd_buf_flags flags,
+                       char **buf) {
   *buf = NULL;
   syscmd->stdout_redir = NULL;
   syscmd->stdout_flags = flags;
   syscmd->stdout_buf = buf;
 }
 
-void syscmd_set_stderr(struct syscmd *syscmd, enum syscmd_buf_flags flags, char **buf) {
+void syscmd_set_stderr(struct syscmd *syscmd, enum syscmd_buf_flags flags,
+                       char **buf) {
   *buf = NULL;
   syscmd->stderr_flags = flags;
   syscmd->stderr_redir = NULL;
@@ -108,6 +112,98 @@ static int syscmd_open_fd(const char *output) {
 
   return fd;
 }
+
+static char *syscmd_read_pipe(struct syscmd *cmd, enum syscmd_buf_flags flags,
+                              int pipe[static 2]) {
+  close(pipe[1]);
+
+  struct vector *content = vector_create_in_arena(sizeof(char), cmd->arena);
+
+  char buf[4096];
+  ssize_t n;
+  bool last_nl = false;
+  while ((n = read(pipe[0], buf, sizeof(buf) - 1)) > 0) {
+    last_nl = n && buf[n - 1] == '\n';
+    buf[n] = '\0';
+    vector_extend(content, buf, n);
+  }
+
+  close(pipe[0]);
+
+  if ((flags & SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE) && last_nl) {
+    char *c = vector_tail(content);
+    *c = '\0';
+  } else {
+    vector_push_back(content, &(char){0});
+  }
+
+  return vector_head(content);
+}
+
+#if __has_include(<spawn.h>)
+
+#include <spawn.h>
+
+extern char **environ;
+
+int syscmd_exec(struct syscmd **syscmd) {
+  struct syscmd *s = *syscmd;
+
+  vector_push_back(s->args, &(char *){NULL});
+  char **args = vector_head(s->args);
+
+  int stdout_pipe[2];
+  int stderr_pipe[2];
+
+  posix_spawn_file_actions_t actions;
+  posix_spawn_file_actions_init(&actions);
+
+  if (s->stdout_buf) {
+    pipe(stdout_pipe);
+    posix_spawn_file_actions_adddup2(&actions, stdout_pipe[1], STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stdout_pipe[0]);
+  } else if (s->stdout_redir) {
+    int stdout_fd = syscmd_open_fd(s->stdout_redir);
+    
+    posix_spawn_file_actions_adddup2(&actions, stdout_fd, STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stdout_fd);
+  }
+
+  if (s->stderr_buf) {
+    pipe(stderr_pipe);
+    posix_spawn_file_actions_adddup2(&actions, stderr_pipe[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stderr_pipe[0]);
+  } else if (s->stderr_redir) {
+    int stderr_fd = syscmd_open_fd(s->stderr_redir);
+    
+    posix_spawn_file_actions_adddup2(&actions, stderr_fd, STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&actions, stderr_fd);
+  }
+
+  int status;
+
+  pid_t pid;
+  if (posix_spawnp(&pid, s->process, &actions, NULL, args, environ) != 0) {
+    BUG("spawnp failed");
+  }
+
+  if (waitpid(pid, &status, 0) == -1) {
+    BUG("waitpid failed");
+  }
+
+  if (s->stdout_buf) {
+    *s->stdout_buf = syscmd_read_pipe(s, s->stdout_flags, stdout_pipe);
+  }
+
+  if (s->stderr_buf) {
+    *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
+  }
+
+  *syscmd = NULL;
+  return status;
+}
+
+#else
 
 static void syscmd_child_redir(int redir_fd, const char *output) {
   int fd = syscmd_open_fd(output);
@@ -166,60 +262,17 @@ int syscmd_exec(struct syscmd **syscmd) {
   // FIXME: is it safe to assume no null chars?
 
   if (s->stdout_buf) {
-    close(stdout_pipe[1]);
-
-    struct vector *stdout_content =
-        vector_create_in_arena(sizeof(char), s->arena);
-
-    char buf[4096];
-    ssize_t n;
-    bool last_nl = false;
-    while ((n = read(stdout_pipe[0], buf, sizeof(buf) - 1)) > 0) {
-      last_nl = n && buf[n - 1] == '\n';
-      buf[n] = '\0';
-      vector_extend(stdout_content, buf, n);
-    }
-
-    close(stdout_pipe[0]);
-
-    if ((s->stdout_flags & SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE) && last_nl) {
-      char *c = vector_tail(stdout_content);
-      *c = '\0';
-    } else {
-      vector_push_back(stdout_content, &(char){0});
-    }
-
-    *s->stdout_buf = vector_head(stdout_content);
+    *s->stdout_buf = syscmd_read_pipe(s, s->stdout_flags, stdout_pipe);
   }
 
   if (s->stderr_buf) {
-    close(stderr_pipe[1]);
-
-    struct vector *stderr_content =
-        vector_create_in_arena(sizeof(char), s->arena);
-
-    char buf[4096];
-    ssize_t n;
-    bool last_nl = false;
-    while ((n = read(stderr_pipe[0], buf, sizeof(buf) - 1)) > 0) {
-      last_nl = n && buf[n - 1] == '\n';
-      buf[n] = '\0';
-      vector_extend(stderr_content, buf, n);
-    }
-    close(stderr_pipe[0]);
-
-    if ((s->stderr_flags & SYSCMD_BUF_FLAG_STRIP_TRAILING_NEWLINE) && last_nl) {
-      char *c = vector_tail(stderr_content);
-      *c = '\0';
-    } else {
-      vector_push_back(stderr_content, &(char){0});
-    }
-
-    *s->stderr_buf = vector_head(stderr_content);
+    *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
   }
 
   *syscmd = NULL;
   return status;
 }
+
+#endif
 
 #endif
