@@ -37,6 +37,37 @@ TRY_DE_STRUCT(text_span, span) {
   return true;
 }
 
+TRY_DE_STRUCT(definition_textdoc_params, params) {
+  *params = (struct definition_textdoc_params){0};
+
+  const struct json_object *object;
+  TRY_DE_OBJECT(value, object, &);
+
+  const struct json_object *doc;
+  TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
+  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true); 
+
+  TRY_DE_TYPE_FIELD(object, text_pos, params->pos, "position", true);
+
+  return true;
+}
+
+
+TRY_DE_STRUCT(type_definition_textdoc_params, params) {
+  *params = (struct type_definition_textdoc_params){0};
+
+  const struct json_object *object;
+  TRY_DE_OBJECT(value, object, &);
+
+  const struct json_object *doc;
+  TRY_DE_OBJECT_FIELD(object, doc, "textDocument", true);
+  TRY_DE_STR_FIELD(doc, params->text_doc.uri, "uri", true); 
+
+  TRY_DE_TYPE_FIELD(object, text_pos, params->pos, "position", true);
+
+  return true;
+}
+
 TRY_DE_STRUCT(text_doc_change_ev, ev) {
   *ev = (struct text_doc_change_ev){0};
 
@@ -325,5 +356,11 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value,
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
     return try_de_didclose_textdoc_params(ctx, params,
                                           &msg->didclose_textdoc_params);
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DEFINITION:
+    return try_de_definition_textdoc_params(ctx, params,
+                                          &msg->definition_textdoc_params);
+  case REQ_MSG_METHOD_TEXTDOCUMENT_TYPEDEFINITION:
+    return try_de_type_definition_textdoc_params(ctx, params,
+                                          &msg->type_definition_textdoc_params);
   }
 }

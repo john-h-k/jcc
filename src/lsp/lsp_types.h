@@ -145,6 +145,16 @@ struct didclose_textdoc_params {
   struct text_doc_id text_doc;
 };
 
+struct definition_textdoc_params {
+  struct text_doc_id text_doc;
+  struct text_pos pos;
+};
+
+struct type_definition_textdoc_params {
+  struct text_doc_id text_doc;
+  struct text_pos pos;
+};
+
 #define DE_FAIL(...) BUG(__VA_ARGS__)
 
 #define TRY_DE_OBJECT(from, to, ...)                                           \
@@ -157,17 +167,17 @@ struct didclose_textdoc_params {
     (to) = __VA_ARGS__(from)->obj_val;                                         \
   } while (0)
 
-#define TRY_DE_INT(from, to)                                              \
+#define TRY_DE_INT(from, to)                                                   \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_NUMBER) {                                  \
       DE_FAIL("expected int but found %s", json_value_ty_name((from)->ty));    \
       return false;                                                            \
     }                                                                          \
                                                                                \
-    (to) = ap_val_as_ll((from)->num_val);                          \
+    (to) = ap_val_as_ll((from)->num_val);                                      \
   } while (0)
 
-#define TRY_DE_STR(from, to)                                              \
+#define TRY_DE_STR(from, to)                                                   \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_STRING) {                                  \
       DE_FAIL("expected string but found %s", json_value_ty_name((from)->ty)); \
@@ -177,14 +187,14 @@ struct didclose_textdoc_params {
     (to) = (from)->str_val;                                                    \
   } while (0)
 
-#define TRY_DE_BOOL(from, to)                                             \
+#define TRY_DE_BOOL(from, to)                                                  \
   do {                                                                         \
     if ((from)->ty != JSON_VALUE_TY_BOOL) {                                    \
       DE_FAIL("expected bool but found %s", json_value_ty_name((from)->ty));   \
       return false;                                                            \
     }                                                                          \
                                                                                \
-    (to) = (from)->bool_val;                                        \
+    (to) = (from)->bool_val;                                                   \
   } while (0)
 
 #define TRY_DE_TYPE(from, to, ty_name)                                         \
@@ -217,7 +227,7 @@ struct didclose_textdoc_params {
     }                                                                          \
   } while (0)
 
-#define TRY_DE_UINT_FIELD(object, name, camel, req)                             \
+#define TRY_DE_UINT_FIELD(object, name, camel, req)                            \
   do {                                                                         \
     struct sized_str name_str = MK_SIZED(camel);                               \
     struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
@@ -233,7 +243,7 @@ struct didclose_textdoc_params {
     }                                                                          \
                                                                                \
     if (val) {                                                                 \
-      name = ap_val_as_ull(val->num_val);                                       \
+      name = ap_val_as_ull(val->num_val);                                      \
     } else {                                                                   \
       memset(&name, 0, sizeof(name));                                          \
     }                                                                          \
@@ -370,7 +380,9 @@ struct didclose_textdoc_params {
                                                                                \
   REQ_METHOD(TEXTDOCUMENT_DIDOPEN, "textDocument/didOpen")                     \
   REQ_METHOD(TEXTDOCUMENT_DIDCHANGE, "textDocument/didChange")                 \
-  REQ_METHOD(TEXTDOCUMENT_DIDCLOSE, "textDocument/didClose")
+  REQ_METHOD(TEXTDOCUMENT_DIDCLOSE, "textDocument/didClose")                   \
+  REQ_METHOD(TEXTDOCUMENT_DEFINITION, "textDocument/definition")               \
+  REQ_METHOD(TEXTDOCUMENT_TYPEDEFINITION, "textDocument/typeDefinition")
 
 #define REQ_METHOD(name, _) REQ_MSG_METHOD_##name,
 enum req_msg_method { REQ_METHODS };
@@ -385,6 +397,8 @@ struct req_msg {
     struct didopen_textdoc_params didopen_textdoc_params;
     struct didchange_textdoc_params didchange_textdoc_params;
     struct didclose_textdoc_params didclose_textdoc_params;
+    struct definition_textdoc_params definition_textdoc_params;
+    struct type_definition_textdoc_params type_definition_textdoc_params;
   };
 };
 

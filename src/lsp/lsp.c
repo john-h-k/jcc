@@ -397,6 +397,18 @@ static void lsp_handle_init(struct lsp_ctx *ctx) {
                    "expected response to be an 'initialized' method");
 }
 
+START_NO_UNUSED_ARGS
+
+static void lsp_goto_def(struct lsp_ctx *ctx, const struct definition_textdoc_params *params) {
+  TODO("goto def");
+}
+
+static void lsp_goto_type_def(struct lsp_ctx *ctx, const struct type_definition_textdoc_params *params) {
+  TODO("goto def");
+}
+
+END_NO_UNUSED_ARGS
+
 static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
   switch (msg->method) {
   case REQ_MSG_METHOD_INITIALIZE:
@@ -427,6 +439,12 @@ static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DIDCLOSE:
     lsp_close_doc(ctx, &msg->didclose_textdoc_params);
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_DEFINITION:
+    lsp_goto_def(ctx, &msg->definition_textdoc_params);
+    break;
+  case REQ_MSG_METHOD_TEXTDOCUMENT_TYPEDEFINITION:
+    lsp_goto_type_def(ctx, &msg->type_definition_textdoc_params);
     break;
   }
 }
