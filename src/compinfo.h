@@ -43,9 +43,7 @@
 #define STDC18 201710L
 #define STDC11 201112L
 
-#define STDC __STDC_VERSION__
-
-#define STDC_MIN(v) STDC >= (v)
+#define STDC_MIN(v) __STDC_VERSION__ >= (v)
 #define STDC_MIN_23 STDC_MIN(STDC23)
 
 #if __STDC_VERSION__ < STDC11

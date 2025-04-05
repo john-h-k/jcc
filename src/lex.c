@@ -50,19 +50,23 @@ enum lex_create_result lexer_create(struct program program,
     hashtbl_insert(KEYWORDS, &k, &v);                                          \
   } while (0)
 
+#define KEYWORD_WITH_ALIASES(kw, ty) \
+  KEYWORD(kw, ty); \
+  KEYWORD("__" kw, ty); \
+  KEYWORD("__" kw "__", ty); \
+
     // We falsely reserve some keywords here i believe (e.g banning `align` in
     // C11)
     KEYWORD("_Nonnull", LEX_TOKEN_TY_KW_NONNULL);
     KEYWORD("_Nullable", LEX_TOKEN_TY_KW_NULLABLE);
     KEYWORD("_Optional", LEX_TOKEN_TY_KW_NULLABLE);
-    KEYWORD("asm", LEX_TOKEN_TY_KW_ASM);
-    KEYWORD("__asm", LEX_TOKEN_TY_KW_ASM);
-    KEYWORD("__asm__", LEX_TOKEN_TY_KW_ASM);
+
+    KEYWORD_WITH_ALIASES("asm", LEX_TOKEN_TY_KW_ASM);
 
     KEYWORD("__attribute__", LEX_TOKEN_TY_KW_ATTRIBUTE);
 
-    KEYWORD("typeof", LEX_TOKEN_TY_KW_TYPEOF);
-    KEYWORD("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
+    KEYWORD_WITH_ALIASES("typeof", LEX_TOKEN_TY_KW_TYPEOF);
+    KEYWORD_WITH_ALIASES("typeof_unqual", LEX_TOKEN_TY_KW_TYPEOF_UNQUAL);
 
     KEYWORD("_Generic", LEX_TOKEN_TY_KW_GENERIC);
 
@@ -89,15 +93,10 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("extern", LEX_TOKEN_TY_KW_EXTERN);
     KEYWORD("register", LEX_TOKEN_TY_KW_REGISTER);
 
-    KEYWORD("inline", LEX_TOKEN_TY_KW_INLINE);
-
-    KEYWORD("const", LEX_TOKEN_TY_KW_CONST);
-    KEYWORD("volatile", LEX_TOKEN_TY_KW_VOLATILE);
-    KEYWORD("restrict", LEX_TOKEN_TY_KW_RESTRICT);
-
-    // TODO: indicate non standard to user
-    KEYWORD("__restrict", LEX_TOKEN_TY_KW_RESTRICT);
-    KEYWORD("__inline", LEX_TOKEN_TY_KW_INLINE);
+    KEYWORD_WITH_ALIASES("inline", LEX_TOKEN_TY_KW_INLINE);
+    KEYWORD_WITH_ALIASES("const", LEX_TOKEN_TY_KW_CONST);
+    KEYWORD_WITH_ALIASES("volatile", LEX_TOKEN_TY_KW_VOLATILE);
+    KEYWORD_WITH_ALIASES("restrict", LEX_TOKEN_TY_KW_RESTRICT);
 
     KEYWORD("void", LEX_TOKEN_TY_KW_VOID);
 
@@ -117,12 +116,8 @@ enum lex_create_result lexer_create(struct program program,
     KEYWORD("int", LEX_TOKEN_TY_KW_INT);
     KEYWORD("long", LEX_TOKEN_TY_KW_LONG);
 
-    // needed on linux?
-    KEYWORD("__unsigned__", LEX_TOKEN_TY_KW_UNSIGNED);
-    KEYWORD("__signed__", LEX_TOKEN_TY_KW_SIGNED);
-
-    KEYWORD("unsigned", LEX_TOKEN_TY_KW_UNSIGNED);
-    KEYWORD("signed", LEX_TOKEN_TY_KW_SIGNED);
+    KEYWORD_WITH_ALIASES("unsigned", LEX_TOKEN_TY_KW_UNSIGNED);
+    KEYWORD_WITH_ALIASES("signed", LEX_TOKEN_TY_KW_SIGNED);
 
     KEYWORD("enum", LEX_TOKEN_TY_KW_ENUM);
     KEYWORD("struct", LEX_TOKEN_TY_KW_STRUCT);
