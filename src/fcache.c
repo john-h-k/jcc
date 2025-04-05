@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "hashtbl.h"
+#include "profile.h"
 #include "util.h"
 
 struct fcache_key {
@@ -92,6 +93,10 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   // FIXME: assert the sized_str has no null chars in it
+  DEBUG_ASSERT(szstr_nullsafe(key.key), "fcache doesn't support null chars");
+
+  PROFILE_BEGIN_MULTI(fcache_read);
+
   FILE *f;
   switch (key.ty) {
   case F_TY_PROC:
@@ -106,6 +111,7 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   if (!f) {
+    PROFILE_END_MULTI(fcache_read);
     return false;
   }
 
@@ -124,6 +130,7 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
     hashtbl_insert(fcache->cache, &key, file);
   }
 
+  PROFILE_END_MULTI(fcache_read);
   return true;
 }
 
