@@ -3040,7 +3040,6 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         struct var_refs *var_refs,
                         enum td_storage_class_specifier storage_class,
                         enum td_function_specifier_flags func_specifiers,
-                        struct td_declaration_attr *attrs, size_t num_attrs,
                         const struct td_var_declaration *decl) {
   // `extern struct c` is allowed for an incomplete type
   // so we need to handle that
@@ -3125,14 +3124,8 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
 
   struct ir_glb *glb = ref->glb;
 
-  for (size_t i = 0; i < num_attrs; i++) {
-    const struct td_declaration_attr *attr = &attrs[i];
-
-    switch (attr->ty) {
-    case TD_DECLARATION_ATTR_TY_WEAK:
-      glb->flags |= IR_GLB_FLAG_WEAK;
-      break;
-    }
+  if (decl->var_ty.attrs.weak) {
+    glb->flags |= IR_GLB_FLAG_WEAK;
   }
 
   glb->def_ty = def_ty;
@@ -3174,10 +3167,10 @@ build_ir_for_global_declaration(struct ir_var_builder *irb,
       continue;
     }
 
-    build_ir_for_global_var(
-        irb, func, var_refs, declaration->storage_class_specifier,
-        declaration->function_specifier_flags, declaration->attrs,
-        declaration->num_attrs, &declaration->var_declarations[i]);
+    build_ir_for_global_var(irb, func, var_refs,
+                            declaration->storage_class_specifier,
+                            declaration->function_specifier_flags,
+                            &declaration->var_declarations[i]);
   }
 }
 
@@ -3284,8 +3277,7 @@ static void build_ir_for_declaration(struct ir_func_builder *irb,
 
       build_ir_for_global_var(&builder, irb->func, irb->var_refs,
                               declaration->storage_class_specifier,
-                              declaration->function_specifier_flags,
-                              declaration->attrs, declaration->num_attrs, decl);
+                              declaration->function_specifier_flags, decl);
     }
   }
 }
@@ -4542,10 +4534,9 @@ build_ir_for_translationunit(const struct target *target, struct typechk *tchk,
 
       struct td_funcdef *def = &external_declaration->func_def;
 
-      build_ir_for_global_var(&var_builder, NULL, global_var_refs,
-                              def->storage_class_specifier,
-                              def->function_specifier_flags, def->attrs,
-                              def->num_attrs, &def->var_declaration);
+      build_ir_for_global_var(
+          &var_builder, NULL, global_var_refs, def->storage_class_specifier,
+          def->function_specifier_flags, &def->var_declaration);
 
       struct ir_func *func =
           build_ir_for_function(iru, arena, def, global_var_refs, flags);

@@ -138,10 +138,49 @@ enum td_var_ty_ty {
   // TD_VAR_TY_TY_TYPEDEF_NAME,
 };
 
+// FIXME: this is probably bad for perf (full of pointers when sparsely full)
+
+
+enum td_attr_format_archetype {
+  TD_ATTR_FORMAT_ARCHETYPE_PRINTF
+};
+
+struct td_attr_format {
+  enum td_attr_format_archetype archetype;
+
+  // these are indexed from ONE
+  size_t string_index;
+  size_t first_to_check;
+};
+
+enum td_declaration_attr_ty {
+  TD_DECLARATION_ATTR_TY_WEAK,
+  TD_DECLARATION_ATTR_TY_FORMAT
+};
+
+struct td_declaration_attr {
+  enum td_declaration_attr_ty ty;
+
+  union {
+    struct td_attr_format format;
+  };
+};
+
+struct td_declaration_attr_list {
+  struct td_declaration_attr *attrs;
+  size_t num_attrs;
+};
+
+struct td_var_attrs {
+  struct td_attr_format *format;
+  bool weak;
+};
+
 struct td_var_ty {
   enum td_var_ty_ty ty;
 
   enum td_type_qualifier_flags type_qualifiers;
+  struct td_var_attrs attrs;
 
   union {
     enum well_known_ty well_known;
@@ -176,6 +215,8 @@ struct td_ty_param {
 
 extern struct td_var_ty TD_VAR_TY_UNKNOWN;
 extern struct td_var_ty TD_VAR_TY_VOID;
+extern struct td_var_ty TD_VAR_TY_VOID_POINTER;
+extern struct td_var_ty TD_VAR_TY_CHAR_POINTER;
 extern struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER;
 
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_CHAR;
@@ -528,20 +569,9 @@ struct td_var_declaration {
   unsigned long long bitfield_width;
 };
 
-enum td_declaration_attr_ty {
-  TD_DECLARATION_ATTR_TY_WEAK
-};
-
-struct td_declaration_attr {
-  enum td_declaration_attr_ty ty;
-};
-
 struct td_declaration {
   enum td_storage_class_specifier storage_class_specifier;
   enum td_function_specifier_flags function_specifier_flags;
-
-  struct td_declaration_attr *attrs;
-  size_t num_attrs;
 
   struct td_var_ty base_ty;
 
@@ -716,9 +746,6 @@ struct td_declaration_list {
 struct td_funcdef {
   enum td_storage_class_specifier storage_class_specifier;
   enum td_function_specifier_flags function_specifier_flags;
-
-  struct td_declaration_attr *attrs;
-  size_t num_attrs;
 
   struct td_var_declaration var_declaration;
   struct td_stmt body;

@@ -24,6 +24,7 @@ struct ast_attribute_param {
 struct ast_attribute {
   enum ast_attribute_ty ty;
 
+  struct lex_token *prefix;
   struct lex_token name;
   struct ast_attribute_param *params;
   size_t num_params;

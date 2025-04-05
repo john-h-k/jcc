@@ -504,6 +504,23 @@ static bool parse_attribute(struct parser *parser,
   parse_expected_identifier(parser, &identifier, identifier.span.start,
                             "expected attribute to start with identifier");
 
+  attribute->prefix = NULL;
+
+  struct lex_token next;
+  lex_peek_token(parser->lexer, &next);
+  if (next.ty == LEX_TOKEN_TY_COLON) {
+    lex_consume_token(parser->lexer, next);
+    parse_expected_token(parser, LEX_TOKEN_TY_COLON,
+                         identifier.span.start,
+                         "'::' not ':' after attribute prefix", NULL);
+
+    attribute->prefix = arena_alloc(parser->arena, sizeof(*attribute->prefix));
+    *attribute->prefix = identifier;
+
+    parse_expected_identifier(parser, &identifier, identifier.span.start,
+                              "expected attribute to start with identifier");
+  }
+
   struct lex_token open;
   lex_peek_token(parser->lexer, &open);
   if (open.ty != LEX_TOKEN_TY_OPEN_BRACKET) {
@@ -588,26 +605,41 @@ static bool parse_attribute_list(struct parser *parser,
 static bool
 parse_attribute_specifier(struct parser *parser,
                           struct ast_attribute_specifier *attribute_specifier) {
+  struct lex_pos pos = lex_get_position(parser->lexer);
+
   struct text_span kw_span;
-  if (!parse_token(parser, LEX_TOKEN_TY_KW_ATTRIBUTE, &kw_span)) {
-    return false;
-  }
 
   struct text_pos start = kw_span.start;
-
-  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start,
-                       "`((` after `__attribute__` keyword", NULL);
-  parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start,
-                       "`((` after `__attribute__` keyword", NULL);
-
-  parse_attribute_list(parser, &attribute_specifier->attribute_list);
-
-  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start,
-                       "`))` after attribute list", NULL);
-
   struct text_span end;
-  parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start,
-                       "`))` after attribute list", &end);
+
+  if (parse_token(parser, LEX_TOKEN_TY_KW_ATTRIBUTE, &kw_span)) {
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start,
+                         "`((` after `__attribute__` keyword", NULL);
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, start,
+                         "`((` after `__attribute__` keyword", NULL);
+
+    parse_attribute_list(parser, &attribute_specifier->attribute_list);
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start,
+                         "`))` after attribute list", NULL);
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, start,
+                         "`))` after attribute list", &end);
+  } else if (parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET, &kw_span) &&
+             parse_token(parser, LEX_TOKEN_TY_OPEN_SQUARE_BRACKET, NULL)) {
+
+    parse_attribute_list(parser, &attribute_specifier->attribute_list);
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET, start,
+                         "`]]` after attribute list", NULL);
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_SQUARE_BRACKET, start,
+                         "`]]` after attribute list", &end);
+
+  } else {
+    lex_backtrack(parser->lexer, pos);
+    return false;
+  }
 
   attribute_specifier->span = MK_TEXT_SPAN(kw_span.start, end.end);
   return true;
@@ -2416,7 +2448,7 @@ static void parse_type_or_expr(struct parser *parser, struct text_span context,
 
   if (!parse_atom_3(parser, sub_expr)) {
     sub_expr->ty = AST_EXPR_TY_INVALID;
-    sub_expr->span = context;    
+    sub_expr->span = context;
 
     parser->result_ty = PARSE_RESULT_TY_FAILURE;
     compiler_diagnostics_add(

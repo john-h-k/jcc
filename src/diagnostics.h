@@ -72,7 +72,10 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "typecheck-incomplete-type", incomplete_type,                 \
           INCOMPLETE_TYPE, const char *)                                       \
   DIAG_FN(ERROR, "typecheck-no-member", no_member, NO_MEMBER, const char *)    \
+  DIAG_FN(WARN, "typecheck-bad-printf-args", bad_printf_args, BAD_PRINTF_ARGS, const char *)             \
+  DIAG_FN(WARN, "typecheck-bad-printf-specifier", bad_printf_specifier, BAD_PRINTF_SPECIFIER, const char *)             \
   DIAG_FN(ERROR, "typecheck-no-var", no_var, NO_VAR, const char *)             \
+  DIAG_FN(ERROR, "typecheck-expected-var", expected_var, EXPECTED_VAR, const char *)             \
   DIAG_FN(ERROR, "typecheck-fp-bitwise", fp_bitwise, FP_BITWISE, const char *) \
   DIAG_FN(ERROR, "typecheck-cast", cast, CAST, const char *)                    \
   DIAG_FN(WARN, "typecheck-no-decl", no_decl, NO_DECL, const char *)           \
