@@ -34,6 +34,7 @@ struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER = {
   struct td_var_ty TD_VAR_TY_WELL_KNOWN_##name = {                             \
       .ty = TD_VAR_TY_TY_WELL_KNOWN, .well_known = WELL_KNOWN_TY_##name}
 
+MAKE_WKT(BOOL);
 MAKE_WKT(CHAR);
 MAKE_WKT(SIGNED_CHAR);
 MAKE_WKT(UNSIGNED_CHAR);
@@ -3927,6 +3928,12 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     jump
 
   switch (cnst->ty) {
+    case AST_CNST_TY_BOOL:
+      var_ty = TD_VAR_TY_WELL_KNOWN_BOOL;
+      td_cnst.ty = TD_CNST_TY_NUM;
+      td_cnst.num_value = cnst->num_value;
+      break;
+
     CNST_TY_ENTRY(SIGNED_INT, goto integral);
     CNST_TY_ENTRY(UNSIGNED_INT, goto integral);
     CNST_TY_ENTRY(SIGNED_LONG, goto integral);

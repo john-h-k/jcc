@@ -110,6 +110,8 @@ enum lex_token_ty {
 
   LEX_TOKEN_TY_KW_VOID,
   LEX_TOKEN_TY_KW_BOOL,
+  LEX_TOKEN_TY_KW_TRUE,
+  LEX_TOKEN_TY_KW_FALSE,
 
   LEX_TOKEN_TY_KW_UINT128,
   LEX_TOKEN_TY_KW_HALF,
@@ -176,6 +178,7 @@ struct lexer;
 
 enum lex_create_result lexer_create(struct program program,
                                     struct preproc *preproc,
+                                    enum compile_c_standard c_standard,
                                     enum compile_preproc_mode mode,
                                     struct lexer **lexer);
 void lexer_free(struct lexer **lexer);

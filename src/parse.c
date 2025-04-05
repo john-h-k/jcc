@@ -37,15 +37,14 @@ typedef enum {
   PARSER_ERR_REENTRANT
 } err_state;
 
-enum parser_create_result
-parser_create(struct program program, struct preproc *preproc,
-              enum compile_preproc_mode mode,
-              struct compiler_diagnostics *diagnostics,
-              struct parser **parser) {
+enum parser_create_result parser_create(
+    struct program program, struct preproc *preproc,
+    enum compile_c_standard c_standard, enum compile_preproc_mode mode,
+    struct compiler_diagnostics *diagnostics, struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
   arena_allocator_create(&p->arena);
-  if (lexer_create(program, preproc, mode, &p->lexer) !=
+  if (lexer_create(program, preproc, c_standard, mode, &p->lexer) !=
       LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");
     return PARSER_CREATE_RESULT_FAILURE;
@@ -1888,9 +1887,54 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
   return true;
 }
 
+static bool parse_bool_cnst(struct parser *parser,
+                            struct lex_token *token, struct ast_cnst *cnst) {
+  switch (token->ty) {
+  case LEX_TOKEN_TY_KW_TRUE:
+    cnst->ty = AST_CNST_TY_BOOL;
+    cnst->num_value = ap_val_from_ull(1, 1);
+    cnst->span = token->span;
+    lex_consume_token(parser->lexer, *token);
+    return true;
+  case LEX_TOKEN_TY_KW_FALSE:
+    cnst->ty = AST_CNST_TY_BOOL;
+    cnst->num_value = ap_val_from_ull(0, 1);
+    cnst->span = token->span;
+    lex_consume_token(parser->lexer, *token);
+    return true;
+  default:
+    return false;
+  }
+}
+
 static bool parse_cnst(struct parser *parser, struct ast_cnst *cnst) {
-  return parse_str_cnst(parser, cnst) || parse_int_cnst(parser, cnst) ||
-         parse_char_cnst(parser, cnst) || parse_float_cnst(parser, cnst);
+  struct lex_token token;
+  lex_peek_token(parser->lexer, &token);
+
+  switch (token.ty) {
+  case LEX_TOKEN_TY_SIGNED_INT_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_INT_LITERAL:
+  case LEX_TOKEN_TY_SIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_LONG_LITERAL:
+  case LEX_TOKEN_TY_SIGNED_LONG_LONG_LITERAL:
+  case LEX_TOKEN_TY_UNSIGNED_LONG_LONG_LITERAL:
+    return parse_int_cnst(parser, cnst);
+  case LEX_TOKEN_TY_ASCII_CHAR_LITERAL:
+  case LEX_TOKEN_TY_ASCII_WIDE_CHAR_LITERAL:
+    return parse_char_cnst(parser, cnst);
+  case LEX_TOKEN_TY_FLOAT_LITERAL:
+  case LEX_TOKEN_TY_DOUBLE_LITERAL:
+  case LEX_TOKEN_TY_LONG_DOUBLE_LITERAL:
+    return parse_float_cnst(parser, cnst);
+  case LEX_TOKEN_TY_KW_TRUE:
+  case LEX_TOKEN_TY_KW_FALSE:
+    return parse_bool_cnst(parser, &token, cnst);
+  case LEX_TOKEN_TY_ASCII_STR_LITERAL:
+  case LEX_TOKEN_TY_ASCII_WIDE_STR_LITERAL:
+    return parse_str_cnst(parser, cnst);
+  default:
+    return false;
+  }
 }
 
 static bool parse_expr(struct parser *parser, struct ast_expr *expr);
@@ -3943,6 +3987,9 @@ DEBUG_FUNC(var, var) {
 
 DEBUG_FUNC(cnst, cnst) {
   switch (cnst->ty) {
+  case AST_CNST_TY_BOOL:
+    AST_PRINT("CONSTANT %s", ap_val_nonzero(cnst->num_value) ? "true" : "false");
+    break;
   case AST_CNST_TY_SIGNED_INT:
   case AST_CNST_TY_UNSIGNED_INT:
   case AST_CNST_TY_SIGNED_LONG:

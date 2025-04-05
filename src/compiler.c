@@ -83,7 +83,7 @@ compiler_create(const struct compiler_create_args *args,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  if (parser_create(args->program, (*compiler)->preproc, args->mode,
+  if (parser_create(args->program, (*compiler)->preproc, args->args.c_standard, args->mode,
                     (*compiler)->diagnostics,
                     &(*compiler)->parser) != PARSER_CREATE_RESULT_SUCCESS) {
     err("failed to create parser");
@@ -363,7 +363,7 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
   }
 
   struct lexer *lexer;
-  lexer_create(compiler->program, compiler->preproc, mode, &lexer);
+  lexer_create(compiler->program, compiler->preproc, compiler->args.c_standard, mode, &lexer);
 
   lex_all(lexer);
 
