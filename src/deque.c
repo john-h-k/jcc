@@ -1,6 +1,6 @@
-#include "deque.h"
-
 #include "util.h"
+
+#include "deque.h"
 
 #include <math.h>
 

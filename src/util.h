@@ -36,15 +36,15 @@ typedef ptrdiff_t ssize_t;
 #define HAS_INT128 1
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
-#elif STDC_C23 && BITINT_MAXWIDTH >= 128
+#elif STDC_MIN(STDC_23) && BITINT_MAXWIDTH >= 128
 typedef _BitInt(128) int128_t;
 typedef unsigned _BitInt(128) uint128_t;
 #define HAS_INT128 1
 #endif
 
-#if STDC_C23 && __GNUC__
+#if STDC_MIN_23 && __GNUC__
 #define PRINTF_ARGS(idx) [[gnu::format(printf, idx + 1, idx + 2)]]
-#elif STDC_C23 && __JCC__
+#elif STDC_MIN_23 && __JCC__
 #define PRINTF_ARGS(idx) [[jcc::format(printf, idx + 1, idx + 2)]]
 #elif __GNUC__ || __JCC__
 #define PRINTF_ARGS(idx) __attribute__((format(printf, idx + 1, idx + 2)))
@@ -52,7 +52,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define PRINTF_ARGS(idx)
 #endif
 
-#if STDC_C23 && __GNUC__
+#if STDC_MIN_23 && __GNUC__
 #define COLD [gnu::cold]
 #elif __GNUC__
 #define COLD __attribute__((cold))
@@ -68,7 +68,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define UNLIKELY(x) x
 #endif
 
-#if STDC_C23 && HAS_C_ATTRIBUTE(flag_enum)
+#if STDC_MIN_23 && HAS_C_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM [gnu::flag_enum]
 #elif HAS_ATTRIBUTE(flag_enum)
 #define FLAG_ENUM __attribute__((flag_enum))
@@ -82,7 +82,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
 
-#if STDC_C23
+#if STDC_MIN_23
 #define NORETURN [[noreturn]]
 #define DEPRECATED [[deprecated]]
 #define FALLTHROUGH [[fallthrough]]
@@ -122,7 +122,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define REPRODUCIBLE
 #endif
 
-#if __GNUC__ && STDC_23
+#if __GNUC__ && STDC_MIN_23
 #define TRYFORCEINLINE [[gnu::always_inline]] inline
 #define NOINLINE [[gnu::noinline]]
 #elif __GNUC__
@@ -177,12 +177,7 @@ typedef unsigned _BitInt(128) uint128_t;
 #define ISPOW2(value) (popcntl((value)) == 1)
 #define ILOG2(value) (sizeof(unsigned long long) * 8 - 1 - lzcnt((value)))
 
-#if STDC_C23
-// nothing, already defined
-#define MAYBE_UNUSED
-#endif
-
-#if STDC_C23 && __GNUC__
+#if STDC_MIN_23 && __GNUC__
 #define UNUSED_ARG(arg) [gnu::unused] arg
 #define UNUSED [gnu::unused]
 #elif __GNUC__

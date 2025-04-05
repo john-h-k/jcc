@@ -1,8 +1,6 @@
 #include "lower.h"
 
 #include "../aarch64.h"
-#include "../lower.h"
-#include "../util.h"
 #include "../vector.h"
 
 static void lower_logical_not(struct ir_func *func, struct ir_op *op) {
