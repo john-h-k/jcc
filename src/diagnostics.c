@@ -48,6 +48,10 @@ static void hash_compiler_diagnostic(struct hasher *hasher, const void *obj) {
   // paths
   hasher_hash_integer(hasher, diag->span.start.line,
                       sizeof(diag->span.start.line));
+  hasher_hash_integer(hasher, diag->ty.class,
+                      sizeof(diag->ty.class));
+  hasher_hash_integer(hasher, diag->ty.severity,
+                      sizeof(diag->ty.severity));
 }
 
 static bool eq_compiler_diagnostic(const void *l, const void *r) {
@@ -55,7 +59,7 @@ static bool eq_compiler_diagnostic(const void *l, const void *r) {
   const struct compiler_diagnostic *rd = r;
 
   return ld->span.start.line ==
-         rd->span.start.line;
+         rd->span.start.line && ld->ty.class == rd->ty.class && ld->ty.severity == rd->ty.severity;
 }
 
 struct compiler_diagnostics *compiler_diagnostics_create(void) {
