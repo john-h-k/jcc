@@ -2,10 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
-#include "ir/prettyprint.h"
-#include "ir/validate.h"
 #include "target.h"
-#include "util.h"
 #include "vector.h"
 
 static void remove_critical_edges(struct ir_func *irb) {

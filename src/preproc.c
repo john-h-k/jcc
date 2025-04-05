@@ -8,7 +8,6 @@
 #include "io.h"
 #include "log.h"
 #include "program.h"
-#include "util.h"
 #include "vector.h"
 
 #include <TargetConditionals.h>

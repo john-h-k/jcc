@@ -42,14 +42,22 @@
 // FIXME: switch to using comparison based ones everywhere (else we will stop
 // using C23 features in C26 etc)
 
-#if __STDC_VERSION__ >= 202311L
-#define STDC_C23 1
-#elif __STDC_VERSION__ >= 201710L
-#define STDC_C18 1
-#elif __STDC_VERSION__ == 201112L
-#define STDC_C11 1
-#else
-#error "jcc only supports C11 or later"
+#define STDC23 202311L
+#define STDC18 201710L
+#define STDC11 201112L
+
+#define STDC __STDC_VERSION__
+
+#define STDC_MIN(v) STDC >= (v)
+#define STDC_MIN_23 STDC_MIN(STDC23)
+
+#if __STDC_VERSION__ < STDC11
+#define EXPAND_INNER(x) "jcc only supports C11 or later (__STDC_VERSION__ is '" #x "')"
+#define EXPAND(x) EXPAND_INNER(x)
+#pragma message(EXPAND(__STDC_VERSION__))
+#error "C11 compiler requirement not met"
+#undef EXPAND
+#undef EXPAND_INNER
 #endif
 
 /********************************* Compiler *********************************/
@@ -66,18 +74,14 @@
 #pragma message "unrecognised compiler"
 #endif
 
-#if STDC_C23
+#if __STDC_VERSION__ > STDC23
+#pragma message "C version is unknown, but newer than C23"
+#elif __STDC_VERSION__ > STDC18
 #pragma message "C version is C23"
-#elif STDC_C18
-#pragma message "C version is C28"
-#elif STDC_C11
-#pragma message "C version is C11"
+#elif __STDC_VERSION__ > STDC18
+#pragma message "C version is C18"
 #else
-#define EXPAND_INNER(x) "unrecognised C version '" #x "'"
-#define EXPAND(x) EXPAND_INNER(x)
-#pragma message(EXPAND(__STDC_VERSION__))
-#undef EXPAND
-#undef EXPAND_INNER
+#pragma message "C version is C11"
 #endif
 
 #endif

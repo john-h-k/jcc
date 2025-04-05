@@ -6,7 +6,6 @@
 #include "log.h"
 #include "preproc.h"
 #include "program.h"
-#include "util.h"
 #include "vector.h"
 
 #include <assert.h>
