@@ -22,7 +22,7 @@ void joe()
       printf("uh-oh\n");
    }
 
-outer:    
+outer:
 
    printf("done\n");
 }
@@ -36,7 +36,7 @@ void henry()
 
    {
       int b;
-inner:    
+inner:
       b = 1234;
       printf("b = %d\n", b);
    }

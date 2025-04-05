@@ -15,7 +15,7 @@ main()
 		return 2;
 	if(z != 3)
 		return 3;
-	
+
 	e = x;
 	return e;
 }

@@ -17,7 +17,7 @@ int main() {
   }
 
   *p = true;
-  
+
   if (!*p) {
     return 3;
   }

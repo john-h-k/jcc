@@ -14,7 +14,7 @@ static void kb_wait_1(void)
 	 would wreak havoc to the cond-expression because there's no
 	 jump-around emitted, the whole statement expression really
 	 needs to not generate code (perhaps except useless forward jumps).  */
-      (1 ? 
+      (1 ?
        printf("timeout=%ld\n", timeout) :
        ({
 	int i = 1;

@@ -4,7 +4,7 @@
 /* By Terry R. McConnell (12/2/97) */
 /* Compile: cc -o hanoi hanoi.c */
 
-/* This program does no error checking. But then, if it's right, 
+/* This program does no error checking. But then, if it's right,
    it's right ... right ? */
 
 
@@ -19,7 +19,7 @@
    spike the Universe will come to an end in a large thunderclap.
 
    This paraphrases the original legend due to DeParville, La Nature, Paris 1884,
-   Part I, 285-286. For this and further information see: Mathematical 
+   Part I, 285-286. For this and further information see: Mathematical
    Recreations & Essays, W.W. Rouse Ball, MacMillan, NewYork, 11th Ed. 1967,
    303-305.
  *
@@ -40,7 +40,7 @@
 /* These are the three towers. For example if the state of A is 0,1,3,4, that
  * means that there are three discs on A of sizes 1, 3, and 4. (Think of right
  * as being the "down" direction.) */
-int A[N], B[N], C[N]; 
+int A[N], B[N], C[N];
 
 void Hanoi(int,int*,int*,int*);
 
@@ -93,7 +93,7 @@ void Hanoi(int n,int *source, int *dest, int *spare)
 
    Hanoi(n-1,source,spare,dest);
    Move(source,dest);
-   Hanoi(n-1,spare,dest,source);	
+   Hanoi(n-1,spare,dest,source);
    return;
 }
 

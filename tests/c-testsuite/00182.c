@@ -1,9 +1,9 @@
 /* example from http://barnyard.syr.edu/quickies/led.c */
 
 /* led.c: print out number as if on 7 line led display. I.e., write integer
-   given on command line like this:  
-      _   _       _  
-   |  _|  _| |_| |_  
+   given on command line like this:
+      _   _       _
+   |  _|  _| |_| |_
    | |_   _|   |  _| etc.
 
    We assume the terminal behaves like a classical teletype. So the top
@@ -35,7 +35,7 @@ cursor to a previous line.
 #define NO_MAIN
 
 
-/* Print the top line of the digit d into buffer. 
+/* Print the top line of the digit d into buffer.
    Does not null terminate buffer. */
 
 void topline(int d, char *p){
@@ -61,7 +61,7 @@ void topline(int d, char *p){
    *p++=' ';
 }
 
-/* Print the middle line of the digit d into the buffer. 
+/* Print the middle line of the digit d into the buffer.
    Does not null terminate. */
 
 void midline(int d, char *p){
@@ -79,7 +79,7 @@ void midline(int d, char *p){
          *p++='|';
          break;
       default:
-         *p++=' ';	
+         *p++=' ';
    }
    switch(d){
 
@@ -134,7 +134,7 @@ void botline(int d, char *p){
          *p++='|';
          break;
       default:
-         *p++=' ';	
+         *p++=' ';
    }
    switch(d){
 

@@ -9,6 +9,6 @@ main()
 		return 2;
 	if (a[2] != 2)
 		return 3;
-	
+
 	return 0;
 }

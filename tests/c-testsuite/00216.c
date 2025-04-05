@@ -219,7 +219,7 @@ void test_multi_relocs(void)
   for (i = 0; i < sizeof(table)/sizeof(table[0]); i++)
     table[i]();
 }
-
+
 /* Following is from GCC gcc.c-torture/execute/20050613-1.c.  */
 
 struct SEA { int i; int j; int k; int l; };
@@ -252,7 +252,7 @@ test_zero_init (void)
   test_correct_filling (&d.a);
   return 0;
 }
-
+
 int main()
 {
   print(ce);

@@ -19,7 +19,7 @@ int var(int num, ...) {
   va_start(a, num);
   va_list b;
   va_copy(b, a);
-  
+
   int sum = 0;
   for (int i = 0; i < num; i++) {
     int l = va_arg(a, int);

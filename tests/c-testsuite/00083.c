@@ -5,7 +5,7 @@ one(int a)
 {
 	if (a != 1)
 		return 1;
-	
+
 	return 0;
 }
 
@@ -16,7 +16,7 @@ two(int a, int b)
 		return 1;
 	if (b != 2)
 		return 1;
-	
+
 	return 0;
 }
 
@@ -29,7 +29,7 @@ three(int a, int b, int c)
 		return 1;
 	if (c != 3)
 		return 1;
-	
+
 	return 0;
 }
 
@@ -42,6 +42,6 @@ main()
 		return 3;
 	if (CALL(three, 1, 2, 3))
 		return 4;
-	
+
 	return 0;
 }
