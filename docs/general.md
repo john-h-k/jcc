@@ -15,7 +15,7 @@ The two most important utility files are:
 
 * [`util.h`](https://github.com/john-h-k/jcc/tree/main/src/util.h) & [`util.c`](https://github.com/john-h-k/jcc/tree/main/src/util.c)
   - Contains general purpose utilities
-  - Most attributes (such as `__attribute__(format(printf))` defined as `PRINTF_ARGS` macro) are defined here in a cross-compiler manner
+  - Most attributes (such as `__attribute__((format(printf)))` defined as `PRINTF_ARGS` macro) are defined here in a cross-compiler manner
   - Additionally, the various assertion and failure methods are in this file
     - `DEBUG_ASSERT(cond, msg)` - Standard debug assertion
     - `invariant_assert(cond, msg)` - An assertion that is included in all modes
