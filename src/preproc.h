@@ -21,6 +21,7 @@ struct preproc_create_args {
   bool verbose;
 
   enum compile_target target;
+  enum compile_c_standard c_standard;
   const char *path;
 
   size_t num_defines;

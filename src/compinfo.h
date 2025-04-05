@@ -39,9 +39,6 @@
 
 /******************************** C Standard ********************************/
 
-// FIXME: switch to using comparison based ones everywhere (else we will stop
-// using C23 features in C26 etc)
-
 #define STDC23 202311L
 #define STDC18 201710L
 #define STDC11 201112L
