@@ -4,16 +4,8 @@
 #include "../util.h"
 #include "../vector.h"
 
-// TODO: bring in needed types so this is portable
-#if __has_include(<mach/machine.h>)
-#include <mach-o/loader.h>
-#include <mach/machine.h>
-// why do we need this when compiling with JCC?
-#include <mach-o/arm64/reloc.h>
-#include <mach-o/nlist.h>
-#include <mach-o/reloc.h>
-#include <mach-o/x86_64/reloc.h>
-#include <mach/vm_prot.h>
+#include "mach-o_types.h"
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -639,11 +631,3 @@ void write_macho(const struct build_object_args *args) {
 
   fclose(file);
 }
-
-#else
-
-void write_macho(UNUSED const struct build_object_args *args) {
-  unsupported("mach-o not supported target for this system");
-}
-
-#endif
