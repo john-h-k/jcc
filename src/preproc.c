@@ -21,6 +21,8 @@
 #if __has_include(<arm_neon.h>)
 #define USE_NEON 1
 #include <arm_neon.h>
+#include <stddef.h>
+#include <stdint.h>
 #endif
 
 struct preproc_text {
@@ -517,11 +519,8 @@ static void find_multiline_comment_end_scalar(struct preproc_text *preproc_text,
   // if not found, it will just push to end of file and next token will be EOF
 }
 
-#if USE_NEON
-#include <arm_neon.h>
-#include <stddef.h>
-#include <stdint.h>
-
+// disabled as does not correctly handle newlines
+#if USE_NEON && 0
 void find_multiline_comment_end(struct preproc_text *preproc_text,
                                 struct text_pos *cur_pos);
 
@@ -545,6 +544,17 @@ void find_multiline_comment_end(struct preproc_text *preproc_text,
     uint8x16_t v0 = vld1q_u8(text);
     uint8x16_t v1 = vld1q_u8(text + 16);
 
+    uint8x16_t eq_nl0 = vceqq_u8(v0, vdupq_n_u8('\n'));
+    uint8x16_t eq_nl1 = vceqq_u8(v1, vdupq_n_u8('\n'));
+
+    uint16x8_t widen0_0 = vpaddlq_u8(eq_nl0);
+    uint32x4_t widen0_1 = vpaddlq_u16(widen0_0);
+    uint64x2_t widen0_2 = vpaddlq_u32(widen0_1);
+
+    uint16x8_t widen1_0 = vpaddlq_u8(eq_nl1);
+    uint32x4_t widen1_1 = vpaddlq_u16(widen1_0);
+    uint64x2_t widen1_2 = vpaddlq_u32(widen1_1);
+
     uint8x16_t eq_star0 = vceqq_u8(v0, vdupq_n_u8('*'));
     uint8x16_t eq_star1 = vceqq_u8(v1, vdupq_n_u8('*'));
 
@@ -553,10 +563,14 @@ void find_multiline_comment_end(struct preproc_text *preproc_text,
       return;
     }
 
+    cur_pos->line += vgetq_lane_u64(widen0_2, 0) + vgetq_lane_u64(widen0_2, 1);
+
     if (vgetq_lane_u8(eq_star0, 15) && vgetq_lane_u8(v1, 0) == '/') {
       cur_pos->idx += 16 + 1;
       return;
     }
+
+    cur_pos->line += vgetq_lane_u64(widen1_2, 0) + vgetq_lane_u64(widen1_2, 1);
 
     trail = vgetq_lane_u8(eq_star1, 15);
 
@@ -567,6 +581,7 @@ void find_multiline_comment_end(struct preproc_text *preproc_text,
     uint8x16_t eq_slash1 = vceqq_u8(s1, vdupq_n_u8('/'));
 
     uint8x16_t match0 = vandq_u8(eq_star0, eq_slash0);
+
     uint8x16_t match1 = vandq_u8(eq_star1, eq_slash1);
 
     uint8x16_t masked0 = vbslq_u8(match0, indices0, vdupq_n_u8(0xFF));

@@ -217,6 +217,7 @@ extern struct td_var_ty TD_VAR_TY_UNKNOWN;
 extern struct td_var_ty TD_VAR_TY_VOID;
 extern struct td_var_ty TD_VAR_TY_VOID_POINTER;
 extern struct td_var_ty TD_VAR_TY_CHAR_POINTER;
+extern struct td_var_ty TD_VAR_TY_INT_POINTER;
 extern struct td_var_ty TD_VAR_TY_CONST_CHAR_POINTER;
 
 extern struct td_var_ty TD_VAR_TY_WELL_KNOWN_CHAR;

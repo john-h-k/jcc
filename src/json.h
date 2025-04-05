@@ -4,7 +4,9 @@
 #include "ap_val.h"
 #include "hashtbl.h"
 
-struct json_null_t { char placeholder; };
+struct json_null_t {
+  char placeholder;
+};
 #define JSON_NULL ((struct json_null_t){0})
 
 enum json_value_ty {
@@ -77,7 +79,8 @@ struct json_writer;
 struct json_writer *json_writer_create(void);
 void json_writer_free(struct json_writer **writer);
 
-void json_writer_write_null(struct json_writer *writer, UNUSED struct json_null_t null);
+void json_writer_write_null(struct json_writer *writer,
+                            UNUSED struct json_null_t null);
 void json_writer_write_bool(struct json_writer *writer, bool value);
 
 void json_writer_write_integer(struct json_writer *writer, long long value);
@@ -102,7 +105,7 @@ void json_writer_clear(struct json_writer *writer);
       JSON_WRITE_FIELD_NAME((writer), (name));                                 \
     }                                                                          \
     json_writer_write_begin_obj((writer));                                     \
-    {block};                                                                    \
+    {block};                                                                   \
     json_writer_write_end_obj((writer));                                       \
   } while (0)
 
@@ -112,17 +115,18 @@ void json_writer_clear(struct json_writer *writer);
       JSON_WRITE_FIELD_NAME((writer), (name));                                 \
     }                                                                          \
     json_writer_write_begin_arr((writer));                                     \
-    {block};                                                                    \
+    {block};                                                                   \
     json_writer_write_end_arr((writer));                                       \
   } while (0)
 
 #define JSON_WRITE(writer, value)                                              \
   _Generic((value),                                                            \
-      struct json_null_t: json_writer_write_null,                                            \
+      struct json_null_t: json_writer_write_null,                              \
       bool: json_writer_write_bool,                                            \
       size_t: json_writer_write_integer,                                       \
       long long: json_writer_write_integer,                                    \
-      int: json_writer_write_integer,                                    \
+      unsigned: json_writer_write_integer,                                     \
+      int: json_writer_write_integer,                                          \
       double: json_writer_write_double,                                        \
       struct sized_str: json_writer_write_string)((writer), (value))
 

@@ -16,7 +16,7 @@ void write_eep(const struct build_object_args *args) {
 
   for (size_t i = 0; i < num_instrs; i++) {
     fprintf(file, "0x%02zx ", i);
-    fprintf(file, "0x%04x", instr[i]);
+    fprintf(file, "0x%04x", (unsigned)instr[i]);
     fprintf(file, "\n");
   }
 

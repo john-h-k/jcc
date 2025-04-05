@@ -20,7 +20,7 @@ void rv32i_write_object(const struct build_object_args *args) {
 
     // fwrite(data, 1, entry->len_data, file);
     for (size_t j = 0; j < entry->len_data; j++) {
-      fprintf(file, "%02x ", data[j]);
+      fprintf(file, "%02x ", (unsigned)data[j]);
 
       if (j && j % 32 == 0) {
         fprintf(file, "\n");
