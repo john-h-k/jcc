@@ -161,7 +161,11 @@ typedef unsigned _BitInt(128) uint128_t;
 #ifndef NDEBUG
 
 #if HAS_BUILTIN(__builtin_dump_struct)
-#define dbg(x) __builtin_dump_struct((x))
+#define dbg(x) \
+  PUSH_NO_WARN("-Wformat-pedantic") \
+  __builtin_dump_struct(&(x), fprintf, stderr) \
+  POP_NO_WARN()
+
 #else
 #define dbg(x) ERR_EXPR("dbg macro not supported on this compiler")
 #endif
