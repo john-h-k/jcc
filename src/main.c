@@ -293,6 +293,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
       .print_diagnostics = args->driver == JCC_DRIVER_COMPILER,
 
       .warnings_as_errors = args->warnings_as_error,
+      .no_warnings = args->no_warnings,
 
       .preproc_only = args->preprocess,
       .lex_only = args->lex_only,

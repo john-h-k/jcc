@@ -291,6 +291,10 @@ static void compiler_print_diagnostics(struct compiler *compiler) {
       break;
     }
 
+    if (diagnostic.ty.severity == COMPILER_DIAGNOSTIC_SEVERITY_WARN  && compiler->args.no_warnings) {
+      continue;
+    }
+
     fprintf(stderr, PR_BOLD PR_WHITE "%s:%zu:%zu: " PR_RESET, span.start.file,
             span.start.line, span.start.col);
 

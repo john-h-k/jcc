@@ -1,3 +1,5 @@
+// flags: --no-warnings
+
 #include <stdio.h>
 #include <string.h>
 
