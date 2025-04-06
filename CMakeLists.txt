@@ -221,8 +221,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -Wno-error=unreachable-code
 
     -Wno-switch-default
-    -Wno-pre-c11-compat
-    -Wno-c23-extensions
 
     -Wzero-as-null-pointer-constant
     -Wbool-conversion
@@ -253,6 +251,16 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
 
     -fstrict-enums
   )
+
+  check_c_compiler_flag("-Wno-pre-c11-compat" HAS_C11_COMPAT_WARN)
+  if(HAS_C11_COMPAT_WARN)
+    add_compile_options(-Wno-pre-c11-compat)
+  endif()
+
+  check_c_compiler_flag("-Wno-c23-extensions" HAS_C23_EXT_WARN)
+  if(HAS_C23_EXT_WARN)
+    add_compile_options(-Wno-c23-extensions)
+  endif()
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
   # nothing for now
 elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
