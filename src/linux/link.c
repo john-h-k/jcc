@@ -89,11 +89,11 @@ enum link_result linux_link_objects(const struct link_args *args) {
 
   switch (args->args->target) {
   case COMPILE_TARGET_LINUX_ARM64:
-  case COMPILE_TARGET_LINUX_RV32I:
+  case COMPILE_TARGET_LINUX_X86_64:
     syscmd_add_arg(cmd, "-lc");
     syscmd_add_arg(cmd, "-lm");
     break;
-  case COMPILE_TARGET_LINUX_X86_64:
+  case COMPILE_TARGET_LINUX_RV32I:
     syscmd_add_arg(cmd, "-lgcc");
 
     syscmd_add_arg(cmd, "--start-group");
