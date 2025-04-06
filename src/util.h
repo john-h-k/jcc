@@ -133,6 +133,10 @@ typedef unsigned _BitInt(128) uint128_t;
 #define NOINLINE
 #endif
 
+#define CONST_CAST(x)                                                          \
+  PUSH_NO_WARN("-Wcast-qual")                                                  \
+  (x) POP_NO_WARN()
+
 #if __GNUC__ || __clang__
 #define ERR_EXPR(msg)                                                          \
   PUSH_NO_WARN("-Wgnu-statement-expression-from-macro-expansion")(void)({      \
@@ -161,10 +165,9 @@ typedef unsigned _BitInt(128) uint128_t;
 #ifndef NDEBUG
 
 #if HAS_BUILTIN(__builtin_dump_struct)
-#define dbg(x) \
-  PUSH_NO_WARN("-Wformat-pedantic") \
-  __builtin_dump_struct(&(x), fprintf, stderr) \
-  POP_NO_WARN()
+#define dbg(x)                                                                 \
+  PUSH_NO_WARN("-Wformat-pedantic")                                            \
+  __builtin_dump_struct(&(x), fprintf, stderr) POP_NO_WARN()
 
 #else
 #define dbg(x) ERR_EXPR("dbg macro not supported on this compiler")
