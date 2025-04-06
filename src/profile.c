@@ -87,6 +87,9 @@ struct profiler_region profiler_begin_multi_region(const char *name) {
   size_t idx = vector_length(region->spans);
   struct profiler_span *span = vector_push_back(region->spans, NULL);
 
+  // leak in profiler is fine because it runs until end of app
+  LSAN_IGNORE(span);
+
   unsigned long long start = get_time();
 
   span->start = start;
