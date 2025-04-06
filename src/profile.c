@@ -73,16 +73,22 @@ static void profiler_init(void) {
   }
 }
 
-struct profiler_region profiler_begin_multi_region(const char *name) {
-  profiler_init();
-
-  struct profiler_multi_region_data init = {
+static void write_spans(void *p, void *name) {
+  struct profiler_multi_region_data *init = p;
+  *init = (struct profiler_multi_region_data){
       .name = name,
       // hmm, do we want to do this? maybe we should use
       // `hashtbl_lookup_or_insert_with`
       .spans = vector_create(sizeof(struct profiler_span))};
+}
+
+struct profiler_region profiler_begin_multi_region(const char *name) {
+  profiler_init();
+
+  LSAN_IGNORE(init.spans);
+
   struct profiler_multi_region_data *region =
-      hashtbl_lookup_or_insert(MULTI_REGIONS, &name, &init);
+      hashtbl_lookup_or_insert_with(MULTI_REGIONS, &name, &write_spans, CONST_CAST((void *)name));
 
   size_t idx = vector_length(region->spans);
   struct profiler_span *span = vector_push_back(region->spans, NULL);

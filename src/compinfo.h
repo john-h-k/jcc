@@ -93,8 +93,7 @@
 #define ASAN 1
 #endif
 
-// asan seems to imply lsan?
-#if ASAN || HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
+#if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
     defined(__SANITIZE_LEAK__)
 #define LSAN 1
 
