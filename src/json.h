@@ -124,7 +124,9 @@ void json_writer_clear(struct json_writer *writer);
       struct json_null_t: json_writer_write_null,                              \
       bool: json_writer_write_bool,                                            \
       size_t: json_writer_write_integer,                                       \
+      long: json_writer_write_integer,                                    \
       long long: json_writer_write_integer,                                    \
+      int: json_writer_write_integer,                                     \
       unsigned: json_writer_write_integer,                                     \
       int: json_writer_write_integer,                                          \
       double: json_writer_write_double,                                        \
