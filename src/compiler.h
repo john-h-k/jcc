@@ -210,6 +210,10 @@ compiler_create(const struct compiler_create_args *args,
 
 enum compile_result compile(struct compiler *compiler);
 
+struct typechk;
+struct typechk_result;
+void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct typechk_result *result);
+
 struct compiler_diagnostics *
 compiler_get_diagnostics(struct compiler *compiler);
 
