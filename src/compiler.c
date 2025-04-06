@@ -859,6 +859,7 @@ void free_compiler(struct compiler **compiler) {
   parser_free(&(*compiler)->parser);
   typechk_free(&(*compiler)->typechk);
   compiler_diagnostics_free(&(*compiler)->diagnostics);
+  arena_allocator_free(&(*compiler)->arena);
 
   free(*compiler);
   *compiler = NULL;
