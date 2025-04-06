@@ -1,4 +1,4 @@
-// skip: ??
+// skip: stringify needs to prevent prescan
 // expected value: 20
 // stdout: Hello, World! 10
 
