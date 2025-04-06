@@ -252,6 +252,8 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
     -fstrict-enums
   )
 
+  include(CheckCCompilerFlag)
+
   check_c_compiler_flag("-Wno-pre-c11-compat" HAS_C11_COMPAT_WARN)
   if(HAS_C11_COMPAT_WARN)
     add_compile_options(-Wno-pre-c11-compat)
