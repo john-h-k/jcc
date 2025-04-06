@@ -31,6 +31,8 @@ enum compiler_diagnostic_class {
   DIAG_FN(ERROR, "error-directive", error_directive, ERROR_DIRECTIVE,          \
           const char *)                                                        \
   DIAG_FN(ERROR, "bad-token-in-cond", bad_token_in_cond, BAD_TOKEN_IN_COND,    \
+          const char *) \
+  DIAG_FN(ERROR, "bad-token-in-query", bad_token_in_query, BAD_TOKEN_IN_QUERY,    \
           const char *)
 
 #define COMPILER_PARSE_DIAGNOSTIC_LIST                                         \
