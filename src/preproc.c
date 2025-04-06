@@ -17,7 +17,7 @@
 #include <time.h>
 #include <wchar.h>
 
-#if __has_include(<arm_neon.h>)
+#if ARCH_AARCH64 && __has_include(<arm_neon.h>)
 #define USE_NEON 1
 #include <arm_neon.h>
 #include <stddef.h>
