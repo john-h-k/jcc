@@ -1,4 +1,4 @@
-// skip: not yet implemented
+// expected value: 0
 
 struct foo bar();
 

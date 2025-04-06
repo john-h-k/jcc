@@ -227,12 +227,17 @@ ir_primitive_ty_for_well_known_ty(struct ir_unit *iru, enum well_known_ty wkt) {
   }
 }
 
+
 static struct ir_var_ty
-ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
+ir_var_ty_for_td_var_ty_impl(struct ir_unit *iru, const struct td_var_ty *var_ty, bool allow_incomplete) {
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
     BUG("shouldn't reach IR gen with unknown type");
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE:
+    if (allow_incomplete) {
+      // FIXME: is this okay? we just lie and say pointer
+      return IR_VAR_TY_POINTER;
+    }
     BUG("shouldn't reach IR gen with incomplete type (%.*s)",
         (int)var_ty->incomplete_aggregate.name.len,
         var_ty->incomplete_aggregate.name.str);
@@ -251,7 +256,7 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
         // handle nested types
 
         ty.aggregate.fields[i] =
-            ir_var_ty_for_td_var_ty(iru, &aggregate.fields[i].var_ty);
+            ir_var_ty_for_td_var_ty_impl(iru, &aggregate.fields[i].var_ty, allow_incomplete);
       }
       break;
     case TD_TY_AGGREGATE_TY_UNION:
@@ -264,7 +269,7 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
         // handle nested types
 
         ty.aggregate.fields[i] =
-            ir_var_ty_for_td_var_ty(iru, &aggregate.fields[i].var_ty);
+            ir_var_ty_for_td_var_ty_impl(iru, &aggregate.fields[i].var_ty, allow_incomplete);
       }
       break;
     }
@@ -287,7 +292,7 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
     struct ir_var_ty ty;
     ty.ty = IR_VAR_TY_TY_FUNC;
     ty.func.ret_ty = arena_alloc(iru->arena, sizeof(*ty.func.ret_ty));
-    *ty.func.ret_ty = ir_var_ty_for_td_var_ty(iru, var_ty->func.ret);
+    *ty.func.ret_ty = ir_var_ty_for_td_var_ty_impl(iru, var_ty->func.ret, allow_incomplete);
 
     // from IR onwards, variadic is no longer a param of the function but
     // instead a flag
@@ -302,7 +307,7 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
 
     for (size_t i = 0; i < ty.func.num_params; i++) {
       ty.func.params[i] =
-          ir_var_ty_for_td_var_ty(iru, &var_ty->func.params[i].var_ty);
+          ir_var_ty_for_td_var_ty_impl(iru, &var_ty->func.params[i].var_ty, allow_incomplete);
     }
 
     return ty;
@@ -312,11 +317,21 @@ ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
   }
   case TD_VAR_TY_TY_ARRAY: {
     struct ir_var_ty underlying =
-        ir_var_ty_for_td_var_ty(iru, var_ty->array.underlying);
+        ir_var_ty_for_td_var_ty_impl(iru, var_ty->array.underlying, allow_incomplete);
 
     return ir_var_ty_make_array(iru, &underlying, var_ty->array.size);
   }
   }
+}
+
+static struct ir_var_ty
+ir_var_ty_for_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
+  return ir_var_ty_for_td_var_ty_impl(iru, var_ty, false);
+}
+
+static struct ir_var_ty
+ir_var_ty_for_decl_td_var_ty(struct ir_unit *iru, const struct td_var_ty *var_ty) {
+  return ir_var_ty_for_td_var_ty_impl(iru, var_ty, true);
 }
 
 UNUSED struct ir_var_ty static var_ty_return_ty_for_td_var_ty(
@@ -3046,14 +3061,7 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         const struct td_var_declaration *decl) {
   // `extern struct c` is allowed for an incomplete type
   // so we need to handle that
-  struct ir_var_ty var_ty;
-  if (decl->var_ty.ty == TD_VAR_TY_TY_INCOMPLETE_AGGREGATE) {
-    // HACK: just give it type PTR
-    // FIXME: this needs to be changed because it needs to encode alignment etc
-    var_ty = IR_VAR_TY_POINTER;
-  } else {
-    var_ty = ir_var_ty_for_td_var_ty(irb->unit, &decl->var_ty);
-  }
+  struct ir_var_ty var_ty = ir_var_ty_for_decl_td_var_ty(irb->unit, &decl->var_ty);
 
   struct sized_str name = decl->var.identifier;
   const char *symbol_name;
