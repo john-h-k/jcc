@@ -71,6 +71,7 @@ struct preproc {
   bool concat_next_token;
 
   // if a defined/__has_feature etc was just seen, we don't expand until end
+  struct sized_str query_ident;
   bool keep_next_token;
 
   // after a `defined(SYM` symbol, we need to know to look to strip the close
@@ -201,13 +202,16 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
   DEF_BUILTIN_WELL_KNOWN("defined");
   DEF_BUILTIN_WELL_KNOWN("has_include");
   DEF_BUILTIN_WELL_KNOWN("__has_include");
-  // DEF_BUILTIN_WELL_KNOWN("has_embed");
-  // DEF_BUILTIN_WELL_KNOWN("__has_embed");
-  // DEF_BUILTIN_WELL_KNOWN("__has_feature");
-  // DEF_BUILTIN_WELL_KNOWN("__has_builtin");
-  // DEF_BUILTIN_WELL_KNOWN("__has_attribute");
-  // DEF_BUILTIN_WELL_KNOWN("__has_c_attribute");
-  // DEF_BUILTIN_WELL_KNOWN("__has_extension");
+
+  // TODO: implement these
+  DEF_BUILTIN_WELL_KNOWN("has_embed");
+  DEF_BUILTIN_WELL_KNOWN("__has_embed");
+  DEF_BUILTIN_WELL_KNOWN("__has_feature");
+  DEF_BUILTIN_WELL_KNOWN("__has_builtin");
+  DEF_BUILTIN_WELL_KNOWN("__has_attribute");
+  DEF_BUILTIN_WELL_KNOWN("__has_c_attribute");
+  DEF_BUILTIN_WELL_KNOWN("__has_extension");
+
   // needed because clang headers do not properly avoid it
   // TODO: have more flexible solution to this (so we can ignore arbitary
   // __foo type macros)
@@ -1372,7 +1376,14 @@ static bool try_expand_token(struct preproc *preproc,
       preproc->keep_next_token = false;
       return true;
     } else {
-      BUG("bad token type in `defined` or similar construct");
+      compiler_diagnostics_add(
+          preproc->diagnostics,
+          MK_PREPROC_DIAGNOSTIC(
+              BAD_TOKEN_IN_QUERY, bad_token_in_query, token->span,
+              MK_INVALID_TEXT_POS(0),
+              arena_alloc_snprintf(
+                  preproc->arena, "bad token in preprocessor query '%.*s'",
+                  (int)preproc->query_ident.len, preproc->query_ident.str)));
     }
   }
 
@@ -1477,7 +1488,8 @@ static bool try_expand_token(struct preproc *preproc,
           vector_create_in_arena(sizeof(struct preproc_token), preproc->arena);
       vector_push_back(args, &arg);
 
-      enum preproc_expand_token_flags macro_expand_flags = flags &~ PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO;
+      enum preproc_expand_token_flags macro_expand_flags =
+          flags & ~PREPROC_EXPAND_TOKEN_FLAG_UNDEF_ZERO;
 
       // first need to take the arguments
       struct preproc_token open;
@@ -1887,6 +1899,7 @@ static bool try_expand_token(struct preproc *preproc,
   if (well_known_token(preproc, ident)) {
     // mark to not expand symbols until we end this check
     preproc->keep_next_token = true;
+    preproc->query_ident = ident;
     vector_push_back(buffer, token);
     return true;
   }
@@ -2253,7 +2266,7 @@ static int op_precedence(enum preproc_token_punctuator_ty ty) {
   case PREPROC_TOKEN_PUNCTUATOR_TY_OP_MOD:
     return 10;
   default:
-    BUG("bad token ty");
+    return -1;
   }
 }
 
@@ -2309,8 +2322,9 @@ static unsigned long long eval_has_query(struct preproc *preproc,
   } else if (szstreq(token_str, MK_SIZED("has_feature"))) {
     return 0;
   } else {
-    warn("unknown identifier '%.*s' in preproc",
-         (int)text_span_len(&token->span), token->text);
+    // __has_attribute etc not implemented
+    // warn("unknown identifier '%.*s' in preproc",
+    //      (int)text_span_len(&token->span), token->text);
     return 0;
   }
 }
@@ -2525,6 +2539,19 @@ static unsigned long long eval_expr(struct preproc *preproc,
       }
 
       int precedence = op_precedence(token->punctuator.ty);
+
+      if (precedence == -1) {
+        compiler_diagnostics_add(
+            preproc->diagnostics,
+            MK_PREPROC_DIAGNOSTIC(
+                BAD_TOKEN_IN_COND, bad_token_in_cond, token->span,
+                MK_INVALID_TEXT_POS(0),
+                arena_alloc_snprintf(
+                    preproc->arena, "bad token in preprocessor condition '%.*s'",
+                    (int)text_span_len(&token->span), token->text)));
+
+        return 0;
+      }
 
       if (precedence < min_prec) {
         (*i)--;
