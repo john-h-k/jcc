@@ -3520,21 +3520,6 @@ static void validate_op_tys_callback(struct ir_op **op,
   }
 }
 
-static void hash_td_var(struct hasher *hasher, const void *o) {
-  const struct td_var *var = o;
-
-  hashtbl_hash_sized_str(hasher, &var->identifier);
-  hasher_hash_integer(hasher, var->scope, sizeof(var->scope));
-}
-
-static bool eq_td_var(const void *l, const void *r) {
-  const struct td_var *vl = l;
-  const struct td_var *vr = r;
-
-  return vl->scope == vr->scope && vl->ty == vr->ty &&
-         szstreq(vl->identifier, vr->identifier);
-}
-
 static struct ir_func *build_ir_for_function(struct ir_unit *unit,
                                              struct arena_allocator *arena,
                                              struct td_funcdef *def,

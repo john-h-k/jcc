@@ -106,6 +106,12 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
   return cp;
 }
 
+struct sized_str arena_alloc_szstrdup(struct arena_allocator *allocator, struct sized_str str) {
+  char *cp = arena_alloc(allocator, str.len);
+  memcpy(cp, str.str, str.len);
+  return (struct sized_str){.str = cp, .len = str.len};
+}
+
 PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,
                            const char *format, ...) {

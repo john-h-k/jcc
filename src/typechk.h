@@ -208,6 +208,7 @@ struct td_struct_field {
 struct td_ty_param {
   struct td_var_ty var_ty;
   struct sized_str identifier;
+  struct text_span span;
 };
 
 extern struct td_var_ty TD_VAR_TY_UNKNOWN;
@@ -261,6 +262,8 @@ struct td_var {
   union {
     int enumerator;
   };
+
+  struct text_span span;
 };
 
 struct td_param {
@@ -566,6 +569,8 @@ struct td_var_declaration {
   struct td_init *init;
 
   unsigned long long bitfield_width;
+
+  struct text_span span;
 };
 
 struct td_declaration {
@@ -733,6 +738,8 @@ struct td_stmt {
     struct td_iterstmt iter;
     struct td_labeledstmt labeled;
   };
+
+  struct text_span span;
 };
 
 /* Function definitions and declarations */
@@ -820,7 +827,31 @@ struct typechk_result td_typechk(struct typechk *tchk,
                                  struct ast_translationunit *translation_unit);
 void typechk_free(struct typechk **tchk);
 
+enum td_node_ty {
+  TD_NODE_TY_EXPR,
+  TD_NODE_TY_STMT,
+  TD_NODE_TY_VAR_DECL,
+};
+
+struct td_node {
+  enum td_node_ty ty;
+
+  union {
+    const struct td_expr *expr;
+    const struct td_stmt *stmt;
+    const struct td_var_declaration *var_decl;
+  };
+
+  struct text_span span;
+};
+
+typedef void (td_walk_callback)(const struct td_node *node, void *metadata);
+void td_walk(struct typechk *tchk, const struct td_translationunit *unit, td_walk_callback cb, void *metadata);
+
 void debug_print_td(struct typechk *tchk, struct hashtbl *log_symbols,
                     struct td_translationunit *translation_unit);
+
+void hash_td_var(struct hasher *hasher, const void *o);
+bool eq_td_var(const void *l, const void *r);
 
 #endif

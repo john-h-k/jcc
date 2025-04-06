@@ -42,6 +42,9 @@ struct compiler {
   enum compile_preproc_mode mode;
   const struct target *target;
 
+  bool typechk_success;
+  struct typechk_result typechk_result;
+
   struct compile_file output;
 };
 
@@ -56,6 +59,7 @@ compiler_create(const struct compiler_create_args *args,
   (*compiler)->target = args->target;
   (*compiler)->output = args->output;
   (*compiler)->mode = args->mode;
+  (*compiler)->typechk_success = false;
 
   struct compiler_diagnostics_args diag_args = {
       .warnings_as_errors = args->args.warnings_as_errors};
@@ -375,6 +379,8 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
 static enum compile_result
 compile_stage_parse(struct compiler *compiler,
                     struct parse_result *parse_result) {
+  compiler->typechk_success = false;
+
   *parse_result = parse(compiler->parser);
 
   // TODO: err out if preproc fails
@@ -398,10 +404,14 @@ compile_stage_typechk(struct compiler *compiler,
   *typechk_result =
       td_typechk(compiler->typechk, &parse_result->translation_unit);
 
+  compiler->typechk_result = *typechk_result;
+
   compiler_print_diagnostics(compiler);
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }
+
+  compiler->typechk_success = true;
 
   if (log_enabled()) {
     debug_print_td(compiler->typechk, compiler->args.log_symbols,
@@ -825,6 +835,16 @@ enum compile_result compile(struct compiler *compiler) {
   return COMPILE_RESULT_SUCCESS;
 }
 
+void compiler_get_tchk(struct compiler *compiler, struct typechk **tchk, struct typechk_result *result) {
+  if (!compiler->typechk_success) {
+    *tchk = NULL;
+    return;
+  }
+
+  *tchk = compiler->typechk;
+  *result = compiler->typechk_result;
+}
+
 struct compiler_diagnostics *
 compiler_get_diagnostics(struct compiler *compiler) {
   return compiler->diagnostics;
@@ -835,7 +855,6 @@ void free_compiler(struct compiler **compiler) {
   parser_free(&(*compiler)->parser);
   typechk_free(&(*compiler)->typechk);
   compiler_diagnostics_free(&(*compiler)->diagnostics);
-  arena_allocator_free(&(*compiler)->arena);
 
   free(*compiler);
   *compiler = NULL;

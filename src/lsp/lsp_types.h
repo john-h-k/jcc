@@ -56,8 +56,20 @@ struct pub_diagnostics_caps {
   bool data_support;
 };
 
+struct definition_caps {
+  bool dynamic_registration;
+  bool link_support;
+};
+
+struct type_definition_caps {
+  bool dynamic_registration;
+  bool link_support;
+};
+
 struct text_doc_caps {
   struct pub_diagnostics_caps publish_diagnostics;
+  struct definition_caps definitions;
+  struct type_definition_caps type_definitions;
 };
 
 struct window_caps {

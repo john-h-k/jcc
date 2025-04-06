@@ -4,6 +4,7 @@
 #include "../compiler.h"
 #include "../json.h"
 #include "../log.h"
+#include "../typechk.h"
 #include "../vector.h"
 #include "lsp_types.h"
 
@@ -41,6 +42,7 @@ struct lsp_ctx {
 
 struct lsp_doc {
   struct text_doc doc;
+  struct compiler *compiler;
 };
 
 static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
@@ -109,11 +111,11 @@ static struct lsp_headers lsp_read_headers(struct lsp_ctx *ctx) {
 static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc,
                                   struct compiler_diagnostics *diagnostics);
 
-static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc doc) {
+static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc *doc) {
   struct program program = {
       // FIXME: not sized
-      .text =
-          arena_alloc_strndup(ctx->arena, doc.doc.text.str, doc.doc.text.len)};
+      .text = arena_alloc_strndup(ctx->arena, doc->doc.text.str,
+                                  doc->doc.text.len)};
 
   struct compiler_create_args comp_args = {
       .program = program,
@@ -126,32 +128,44 @@ static void lsp_parse_doc(struct lsp_ctx *ctx, struct lsp_doc doc) {
       .output = COMPILE_FILE_NONE,
   };
 
-  struct compiler *compiler;
-  if (compiler_create(&comp_args, &compiler) !=
+  if (doc->compiler) {
+    free_compiler(&doc->compiler);
+  }
+
+  if (compiler_create(&comp_args, &doc->compiler) !=
       COMPILER_CREATE_RESULT_SUCCESS) {
     BUG("handle compiler create failure");
   }
 
-  compile(compiler);
+  compile(doc->compiler);
 
-  struct compiler_diagnostics *diagnostics = compiler_get_diagnostics(compiler);
+  struct compiler_diagnostics *diagnostics =
+      compiler_get_diagnostics(doc->compiler);
 
-  lsp_write_diagnostics(ctx, &doc, diagnostics);
+  lsp_write_diagnostics(ctx, doc, diagnostics);
 }
 
 static void lsp_parse_opened_doc(struct lsp_ctx *ctx,
                                  const struct didopen_textdoc_params *params) {
   struct lsp_doc doc = {.doc = params->text_doc};
+  lsp_parse_doc(ctx, &doc);
 
   hashtbl_insert(ctx->docs, &params->text_doc.uri, &doc);
+}
 
-  lsp_parse_doc(ctx, doc);
+static struct lsp_doc *lsp_get_doc(struct lsp_ctx *ctx, struct sized_str uri) {
+  struct lsp_doc *doc = hashtbl_lookup(ctx->docs, &uri);
+
+  invariant_assert(doc, "doc did not exist (should have been opened by "
+                        "previous textDocument/didOpen call)");
+
+  return doc;
 }
 
 static void
 lsp_parse_changed_doc(struct lsp_ctx *ctx,
                       const struct didchange_textdoc_params *params) {
-  struct lsp_doc *doc = hashtbl_lookup(ctx->docs, &params->text_doc.uri);
+  struct lsp_doc *doc = lsp_get_doc(ctx, params->text_doc.uri);
 
   invariant_assert(doc, "doc did not exist (should have been opened by "
                         "previous textDocument/didOpen call)");
@@ -175,7 +189,7 @@ lsp_parse_changed_doc(struct lsp_ctx *ctx,
     }
   }
 
-  lsp_parse_doc(ctx, *doc);
+  lsp_parse_doc(ctx, doc);
 }
 
 static void lsp_close_doc(struct lsp_ctx *ctx,
@@ -377,6 +391,19 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
           JSON_WRITE_FIELD(writer, "openClose", (bool)true);
           JSON_WRITE_FIELD(writer, "change", TEXT_DOC_CHANGE_EV_TY_FULL);
         });
+
+        // we don't support dynamic registration or progress, so just write bool
+        // JSON_OBJECT(writer, "definitionProvider", {
+        //     // DefinitionOptions
+        // });
+
+        // JSON_OBJECT(writer, "typeDefinitionProvider", {
+        //     // TypeDefinitionRegistrationOptions
+
+        // });
+
+        JSON_WRITE_FIELD(writer, "definitionProvider", (bool)true);
+        JSON_WRITE_FIELD(writer, "typeDefinitionProvider", (bool)true);
       });
     });
   })
@@ -398,12 +425,130 @@ static void lsp_handle_init(struct lsp_ctx *ctx) {
                    "expected response to be an 'initialized' method");
 }
 
-START_NO_UNUSED_ARGS
+struct build_def_data {
+  struct vector *locs;
+  struct hashtbl *defs;
+};
 
-static void lsp_goto_def(struct lsp_ctx *ctx,
-                         const struct definition_textdoc_params *params) {
-  TODO("goto def");
+static void build_def_cb(const struct td_node *node, void *metadata) {
+  struct build_def_data *data = metadata;
+
+  // TODO: support decls
+  switch (node->ty) {
+  case TD_NODE_TY_EXPR: {
+    const struct td_expr *expr = node->expr;
+    if (expr->ty == TD_EXPR_TY_VAR) {
+      fprintf(stderr, "var l %zu %.*s\n", expr->span.start.line, (int)expr->var.identifier.len, expr->var.identifier.str);
+      vector_push_back(data->locs, node);
+    }
+    break;
+  }
+  case TD_NODE_TY_VAR_DECL: {
+    const struct td_var_declaration *var_decl = node->var_decl;
+    struct text_span span = var_decl->var.span;
+    fprintf(stderr, "add decl %.*s\n", (int)var_decl->var.identifier.len, var_decl->var.identifier.str);
+    hashtbl_insert(data->defs, &var_decl->var, &span);
+    break;
+  }
+  default:
+    break;
+  }
 }
+
+static int compare_text_spans(const void *l, const void *r) {
+  const struct td_node *ls = l;
+  const struct td_node *rs = r;
+
+  const struct text_pos *l_start = &ls->span.start;
+  const struct text_pos *r_start = &rs->span.start;
+
+  if (l_start->idx > r_start->idx) {
+    return 1;
+  } else if (l_start->idx == r_start->idx) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+static void lsp_goto_def(struct lsp_ctx *ctx, lsp_integer id,
+                         const struct definition_textdoc_params *params) {
+  struct lsp_doc *doc = lsp_get_doc(ctx, params->text_doc.uri);
+
+  struct compiler *compiler = doc->compiler;
+
+  struct typechk *tchk;
+  struct typechk_result result;
+  compiler_get_tchk(compiler, &tchk, &result);
+
+  if (!tchk) {
+    LSP_WRITE_MESSAGE({
+      JSON_WRITE_FIELD(ctx->writer, "id", id);
+      JSON_WRITE_FIELD(ctx->writer, "result", JSON_NULL);
+    });
+
+    return;
+  }
+
+  struct build_def_data data = {
+      .locs = vector_create_in_arena(sizeof(struct td_node), ctx->arena),
+      .defs = hashtbl_create_in_arena(ctx->arena, sizeof(struct td_var),
+                                      sizeof(struct text_span), hash_td_var,
+                                      eq_td_var)};
+  td_walk(tchk, &result.translation_unit, build_def_cb, &data);
+
+  size_t num_locs = vector_length(data.locs);
+
+  qsort(vector_head(data.locs), num_locs, sizeof(struct td_node),
+        compare_text_spans);
+
+  const struct td_var *var = NULL;
+
+  // FIXME: linear search
+  for (size_t i = 0; i < num_locs; i++) {
+    struct td_node *node = vector_get(data.locs, i);
+
+    struct text_pos start = node->span.start;
+    struct text_pos end = node->span.end;
+
+    if ((end.line > params->pos.line || (end.line == params->pos.line &&
+        end.col > params->pos.col)) && (start.line < params->pos.line || (start.line == params->pos.line && start.col <= params->pos.col))) {
+      var = &node->var_decl->var;
+      break;
+    }
+  }
+
+  struct text_span *def = NULL;
+  if (var) {
+    fprintf(stderr, "lookup def %.*s\n", (int)var->identifier.len, var->identifier.str);
+    def = hashtbl_lookup(data.defs, var);
+  }
+
+  if (!def) {
+    LSP_WRITE_MESSAGE({
+      JSON_WRITE_FIELD(ctx->writer, "id", id);
+      JSON_WRITE_FIELD(ctx->writer, "result", JSON_NULL);
+    });
+    return;
+  }
+
+  LSP_WRITE_MESSAGE({
+    JSON_WRITE_FIELD(ctx->writer, "id", id);
+    JSON_OBJECT(ctx->writer, "result", {
+      if (def->start.file) {
+        char *uri = arena_alloc_snprintf(ctx->arena, "file://%s", def->start.file);
+        JSON_WRITE_FIELD(ctx->writer, "uri", MK_SIZED(uri));
+      } else {
+        JSON_WRITE_FIELD(ctx->writer, "uri", params->text_doc.uri);
+      }
+
+      JSON_WRITE_FIELD_NAME(ctx->writer, "range");
+      lsp_json_write_span(ctx, *def);
+    });
+  });
+}
+
+START_NO_UNUSED_ARGS
 
 static void
 lsp_goto_type_def(struct lsp_ctx *ctx,
@@ -445,7 +590,7 @@ static void lsp_handle_msg(struct lsp_ctx *ctx, const struct req_msg *msg) {
     lsp_close_doc(ctx, &msg->didclose_textdoc_params);
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_DEFINITION:
-    lsp_goto_def(ctx, &msg->definition_textdoc_params);
+    lsp_goto_def(ctx, msg->id, &msg->definition_textdoc_params);
     break;
   case REQ_MSG_METHOD_TEXTDOCUMENT_TYPEDEFINITION:
     lsp_goto_type_def(ctx, &msg->type_definition_textdoc_params);

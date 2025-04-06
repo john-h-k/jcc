@@ -1195,7 +1195,9 @@ td_var_ty_for_enum(struct typechk *tchk,
 
   struct td_var ty_var = {.ty = TD_VAR_VAR_TY_VAR,
                           .identifier = name,
-                          .scope = vt_cur_scope(&tchk->ty_table)};
+                          .scope = vt_cur_scope(&tchk->ty_table),
+                          .span = specifier->span
+                        };
 
   struct var_table_entry *ty_entry =
       vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
@@ -1236,7 +1238,9 @@ td_var_ty_for_enum(struct typechk *tchk,
       struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
                            .identifier = enum_name,
                            .scope = vt_cur_scope(&tchk->var_table),
-                           .enumerator = value};
+                           .enumerator = value,
+                           .span = enumerator->span
+                         };
 
       struct var_table_entry *entry;
       // enums have same behaviour as types, but are in the var table
@@ -1352,6 +1356,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                     .ty = TD_VAR_VAR_TY_VAR,
                     .identifier = MK_NULL_STR(),
                     .scope = vt_cur_scope(&tchk->var_table),
+                    .span = td_decl.span
                 },
             .var_ty = td_decl.base_ty,
             .init = NULL,
@@ -1398,7 +1403,9 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
                                                         : VAR_TABLE_NS_UNION;
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
-                       .scope = vt_cur_scope(&tchk->ty_table)};
+                       .scope = vt_cur_scope(&tchk->ty_table),
+                       .span = specifier->span
+                     };
 
   entry = vt_get_or_create_entry(&tchk->ty_table, ns, name);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
@@ -1439,9 +1446,9 @@ static size_t td_num_init_fields(const struct td_var_ty *var_ty) {
   return 1;
 }
 
-static void td_walk_init_list(struct td_var_ty *var_ty,
-                              const struct ast_init_list *init_list,
-                              size_t *idx) {
+static void tchk_walk_init_list(struct td_var_ty *var_ty,
+                                const struct ast_init_list *init_list,
+                                size_t *idx) {
   if (var_ty->ty != TD_VAR_TY_TY_ARRAY &&
       (var_ty->ty != TD_VAR_TY_TY_AGGREGATE ||
        (var_ty->ty == TD_VAR_TY_TY_AGGREGATE &&
@@ -1451,11 +1458,11 @@ static void td_walk_init_list(struct td_var_ty *var_ty,
 
   if (var_ty->ty == TD_VAR_TY_TY_AGGREGATE) {
     for (size_t i = 0; i < var_ty->aggregate.num_fields; i++) {
-      td_walk_init_list(&var_ty->aggregate.fields[i].var_ty, init_list, idx);
+      tchk_walk_init_list(&var_ty->aggregate.fields[i].var_ty, init_list, idx);
     }
   } else {
     for (size_t i = 0; i < var_ty->array.size; i++) {
-      td_walk_init_list(var_ty->array.underlying, init_list, idx);
+      tchk_walk_init_list(var_ty->array.underlying, init_list, idx);
     }
   }
 }
@@ -1563,7 +1570,7 @@ type_array_declarator(struct typechk *tchk, struct td_var_ty var_ty,
             break;
           }
         } else if (init_list_init->init->ty != AST_INIT_TY_INIT_LIST) {
-          td_walk_init_list(&var_ty, init_list, &idx);
+          tchk_walk_init_list(&var_ty, init_list, &idx);
         } else {
           idx++;
         }
@@ -1650,7 +1657,9 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
           type_declarator(tchk, &param_specifiers, &param->declarator, NULL,
                           TD_DECLARATOR_MODE_NORMAL);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
-                                       .var_ty = param_decl.var_ty};
+                                       .var_ty = param_decl.var_ty,
+                                       .span = param_decl.var.span
+                                     };
       break;
     }
     case AST_PARAM_TY_ABSTRACT_DECL: {
@@ -1817,6 +1826,7 @@ type_declarator_inner(struct typechk *tchk, struct td_var_ty *outer_var_ty,
           .scope = vt_cur_scope(&tchk->var_table),
           .identifier =
               identifier_str(tchk->parser, &direct_declarator->identifier),
+          .span = direct_declarator->identifier.span
       };
       found_ident = true;
       break;
@@ -1914,6 +1924,7 @@ type_declarator(struct typechk *tchk, struct td_specifiers *specifiers,
     declaration.ty = TD_VAR_DECLARATION_TY_VAR;
   }
 
+  declaration.span = declarator->span;
   return declaration;
 }
 
@@ -3910,7 +3921,9 @@ static struct td_expr type_var(struct typechk *tchk,
     var_ty = TD_VAR_TY_UNKNOWN;
     td_var = (struct td_var){.ty = TD_VAR_VAR_TY_VAR,
                              .identifier = name,
-                             .scope = vt_cur_scope(&tchk->ty_table)};
+                             .scope = vt_cur_scope(&tchk->ty_table),
+                             .span = MK_INVALID_TEXT_SPAN2()
+                           };
   }
 
   return (struct td_expr){
@@ -3928,11 +3941,11 @@ static struct td_expr type_cnst(UNUSED_ARG(struct typechk *tchk),
     jump
 
   switch (cnst->ty) {
-    case AST_CNST_TY_BOOL:
-      var_ty = TD_VAR_TY_WELL_KNOWN_BOOL;
-      td_cnst.ty = TD_CNST_TY_NUM;
-      td_cnst.num_value = cnst->num_value;
-      break;
+  case AST_CNST_TY_BOOL:
+    var_ty = TD_VAR_TY_WELL_KNOWN_BOOL;
+    td_cnst.ty = TD_CNST_TY_NUM;
+    td_cnst.num_value = cnst->num_value;
+    break;
 
     CNST_TY_ENTRY(SIGNED_INT, goto integral);
     CNST_TY_ENTRY(UNSIGNED_INT, goto integral);
@@ -5534,6 +5547,7 @@ static struct td_stmt type_stmt(struct typechk *tchk,
                                .select = type_selectstmt(tchk, &stmt->select)};
   }
 
+  td_stmt.span = stmt->span;
   return td_stmt;
 }
 
@@ -5602,6 +5616,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
         .ty = TD_VAR_VAR_TY_VAR,
         .identifier = identifier,
         .scope = SCOPE_PARAMS,
+        .span = param->span
     };
 
     struct var_table_entry *entry =
@@ -5625,6 +5640,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       .ty = TD_VAR_VAR_TY_VAR,
       .identifier = MK_SIZED("__func__"),
       .scope = SCOPE_PARAMS,
+      .span = MK_INVALID_TEXT_SPAN2()
   };
 
   struct var_table_entry *entry =
@@ -6331,6 +6347,245 @@ struct typechk_result td_typechk(struct typechk *tchk,
   return (struct typechk_result){.ty = tchk->result_ty,
                                  .translation_unit = td_translation_unit};
 }
+
+#define CB_EXPR(val)                                                           \
+  td_walk_node(tchk, &(struct td_node){.ty = TD_NODE_TY_EXPR, .span = (val)->span, .expr = (val)},  \
+               cb, metadata)
+#define CB_DECL(val)                                                           \
+  td_walk_node(                                                                \
+      tchk, &(struct td_node){.ty = TD_NODE_TY_VAR_DECL, .span = (val)->span, .var_decl = (val)},   \
+      cb, metadata)
+#define CB_STMT(val)                                                           \
+  td_walk_node(tchk, &(struct td_node){.ty = TD_NODE_TY_STMT, .span = (val)->span, .stmt = (val)},  \
+               cb, metadata)
+
+static void td_walk_node(struct typechk *tchk, const struct td_node *node,
+                         td_walk_callback cb, void *metadata);
+
+static void td_walk_init_list(struct typechk *tchk,
+                              const struct td_init_list *init_list,
+                              td_walk_callback cb, void *metadata) {
+
+  for (size_t i = 0; i < init_list->num_inits; i++) {
+    const struct td_init *init = init_list->inits[i].init;
+    switch (init->ty) {
+    case TD_INIT_TY_EXPR:
+      CB_EXPR(&init->expr);
+      break;
+    case TD_INIT_TY_INIT_LIST:
+      td_walk_init_list(tchk, &init->init_list, cb, metadata);
+      break;
+    }
+  }
+}
+
+void hash_td_var(struct hasher *hasher, const void *o) {
+  const struct td_var *var = o;
+
+  hashtbl_hash_sized_str(hasher, &var->identifier);
+  hasher_hash_integer(hasher, var->scope, sizeof(var->scope));
+}
+
+bool eq_td_var(const void *l, const void *r) {
+  const struct td_var *vl = l;
+  const struct td_var *vr = r;
+
+  return vl->scope == vr->scope && vl->ty == vr->ty &&
+         szstreq(vl->identifier, vr->identifier);
+}
+
+static void td_walk_node(struct typechk *tchk, const struct td_node *node,
+                         td_walk_callback cb, void *metadata) {
+  cb(node, metadata);
+
+  switch (node->ty) {
+  case TD_NODE_TY_EXPR: {
+    const struct td_expr *expr = node->expr;
+
+    switch (expr->ty) {
+    case TD_EXPR_TY_INVALID:
+    case TD_EXPR_TY_TERNARY:
+      CB_EXPR(expr->ternary.cond);
+      CB_EXPR(expr->ternary.true_expr);
+      CB_EXPR(expr->ternary.false_expr);
+      break;
+    case TD_EXPR_TY_CALL:
+      CB_EXPR(expr->call.target);
+      for (size_t i = 0; i < expr->call.arg_list.num_args; i++) {
+        CB_EXPR(&expr->call.arg_list.args[i]);
+      }
+      break;
+    case TD_EXPR_TY_UNARY_OP:
+      CB_EXPR(expr->unary_op.expr);
+      break;
+    case TD_EXPR_TY_BINARY_OP:
+      CB_EXPR(expr->binary_op.lhs);
+      CB_EXPR(expr->binary_op.rhs);
+      break;
+    case TD_EXPR_TY_ARRAYACCESS:
+      CB_EXPR(expr->array_access.lhs);
+      CB_EXPR(expr->array_access.rhs);
+      break;
+    case TD_EXPR_TY_MEMBERACCESS:
+      CB_EXPR(expr->member_access.lhs);
+      break;
+    case TD_EXPR_TY_POINTERACCESS:
+      CB_EXPR(expr->pointer_access.lhs);
+      break;
+    case TD_EXPR_TY_ASSG:
+      CB_EXPR(expr->assg.expr);
+      CB_EXPR(expr->assg.assignee);
+      break;
+    case TD_EXPR_TY_VAR:
+    case TD_EXPR_TY_CNST:
+      break;
+    case TD_EXPR_TY_COMPOUNDEXPR:
+      for (size_t i = 0; i < expr->compound_expr.num_exprs; i++) {
+        CB_EXPR(&expr->compound_expr.exprs[i]);
+      }
+      break;
+    case TD_EXPR_TY_SIZEOF:
+      // hmm, because we have typed it away we lose the expression itself...
+      // maybe we need to keep the expr here
+    case TD_EXPR_TY_ALIGNOF:
+      break;
+    case TD_EXPR_TY_COMPOUND_LITERAL:
+      td_walk_init_list(tchk, &expr->compound_literal.init_list, cb, metadata);
+      break;
+    }
+
+    break;
+  }
+  case TD_NODE_TY_STMT: {
+    const struct td_stmt *stmt = node->stmt;
+
+    switch (stmt->ty) {
+    case TD_STMT_TY_NULL:
+      break;
+    case TD_STMT_TY_DECLARATION:
+      for (size_t i = 0; i < stmt->declaration.num_var_declarations; i++) {
+        CB_DECL(&stmt->declaration.var_declarations[i]);
+      }
+      break;
+    case TD_STMT_TY_LABELED:
+      CB_STMT(stmt->labeled.stmt);
+      break;
+    case TD_STMT_TY_EXPR:
+      CB_EXPR(&stmt->expr);
+      break;
+    case TD_STMT_TY_COMPOUND:
+      for (size_t i = 0; i < stmt->compound.num_stmts; i++) {
+        CB_STMT(&stmt->compound.stmts[i]);
+      }
+      break;
+    case TD_STMT_TY_JUMP:
+      switch (stmt->jump.ty) {
+      case TD_JUMPSTMT_TY_BREAK:
+      case TD_JUMPSTMT_TY_CONTINUE:
+      case TD_JUMPSTMT_TY_GOTO:
+        break;
+      case TD_JUMPSTMT_TY_RETURN:
+        if (stmt->jump.return_stmt.expr) {
+          CB_EXPR(stmt->jump.return_stmt.expr);
+        }
+        break;
+      }
+      break;
+    case TD_STMT_TY_ITER:
+      switch (stmt->iter.ty) {
+      case TD_ITERSTMT_TY_WHILE:
+        CB_EXPR(&stmt->iter.while_stmt.cond);
+        CB_STMT(stmt->iter.while_stmt.body);
+        break;
+      case TD_ITERSTMT_TY_DO_WHILE:
+        CB_EXPR(&stmt->iter.do_while_stmt.cond);
+        CB_STMT(stmt->iter.do_while_stmt.body);
+        break;
+      case TD_ITERSTMT_TY_FOR:
+        if (stmt->iter.for_stmt.init) {
+          switch (stmt->iter.for_stmt.init->ty) {
+          case TD_DECLARATION_OR_EXPR_TY_DECL:
+            for (size_t i = 0;
+                 i < stmt->iter.for_stmt.init->decl.num_var_declarations; i++) {
+              CB_DECL(&stmt->iter.for_stmt.init->decl.var_declarations[i]);
+            }
+            break;
+          case TD_DECLARATION_OR_EXPR_TY_EXPR:
+            CB_EXPR(&stmt->iter.for_stmt.init->expr);
+            break;
+          }
+        }
+
+        if (stmt->iter.for_stmt.cond) {
+          CB_EXPR(stmt->iter.for_stmt.cond);
+        }
+
+        if (stmt->iter.for_stmt.iter) {
+          CB_EXPR(stmt->iter.for_stmt.iter);
+        }
+
+        CB_STMT(stmt->iter.for_stmt.body);
+        break;
+      }
+      break;
+    case TD_STMT_TY_SELECT:
+      switch (stmt->select.ty) {
+      case TD_SELECTSTMT_TY_IF:
+        CB_EXPR(&stmt->select.if_stmt.cond);
+        CB_STMT(stmt->select.if_stmt.body);
+        break;
+      case TD_SELECTSTMT_TY_IF_ELSE:
+        CB_EXPR(&stmt->select.if_else_stmt.cond);
+        CB_STMT(stmt->select.if_else_stmt.body);
+        CB_STMT(stmt->select.if_else_stmt.else_body);
+        break;
+      case TD_SELECTSTMT_TY_SWITCH:
+        CB_EXPR(&stmt->select.switch_stmt.ctrl_expr);
+        CB_STMT(stmt->select.switch_stmt.body);
+        break;
+      }
+      break;
+    }
+    break;
+  }
+  case TD_NODE_TY_VAR_DECL: {
+    if (node->var_decl->init) {
+      switch (node->var_decl->init->ty) {
+      case TD_INIT_TY_EXPR:
+        CB_EXPR(&node->var_decl->init->expr);
+        break;
+      case TD_INIT_TY_INIT_LIST:
+        td_walk_init_list(tchk, &node->var_decl->init->init_list, cb, metadata);
+        break;
+      }
+    }
+    break;
+  }
+  }
+}
+
+void td_walk(struct typechk *tchk, const struct td_translationunit *unit,
+             td_walk_callback cb, void *metadata) {
+  for (size_t i = 0; i < unit->num_external_declarations; i++) {
+    struct td_external_declaration *decl = &unit->external_declarations[i];
+
+    switch (decl->ty) {
+    case TD_EXTERNAL_DECLARATION_TY_DECLARATION:
+      for (size_t j = 0; j < decl->declaration.num_var_declarations; j++) {
+        CB_DECL(&decl->declaration.var_declarations[j]);
+      }
+      break;
+    case TD_EXTERNAL_DECLARATION_TY_FUNC_DEF:
+      CB_DECL(&decl->func_def.var_declaration);
+      CB_STMT(&decl->func_def.body);
+      break;
+    }
+  }
+}
+
+#undef CB_EXPR
+#undef CB_DECL
+#undef CB_STMT
 
 struct td_printstate {
   struct typechk *tchk;

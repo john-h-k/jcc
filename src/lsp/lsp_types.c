@@ -176,6 +176,30 @@ TRY_DE_STRUCT(pub_diagnostics_caps, caps) {
   return true;
 }
 
+TRY_DE_STRUCT(definition_caps, caps) {
+  *caps = (struct definition_caps){0};
+
+  const struct json_object *object;
+  TRY_DE_OBJECT(value, object, &);
+
+  TRY_DE_BOOL_FIELD(object, caps->dynamic_registration, "dynamicRegistration", false);
+  TRY_DE_BOOL_FIELD(object, caps->link_support, "linkSupport", false);
+
+  return true;
+}
+
+TRY_DE_STRUCT(type_definition_caps, caps) {
+  *caps = (struct type_definition_caps){0};
+
+  const struct json_object *object;
+  TRY_DE_OBJECT(value, object, &);
+
+  TRY_DE_BOOL_FIELD(object, caps->dynamic_registration, "dynamicRegistration", false);
+  TRY_DE_BOOL_FIELD(object, caps->link_support, "linkSupport", false);
+
+  return true;
+}
+
 TRY_DE_STRUCT(text_doc_caps, caps) {
   *caps = (struct text_doc_caps){0};
 
@@ -184,6 +208,10 @@ TRY_DE_STRUCT(text_doc_caps, caps) {
 
   TRY_DE_TYPE_FIELD(object, pub_diagnostics_caps, caps->publish_diagnostics,
                     "publishDiagnostics", false);
+  TRY_DE_TYPE_FIELD(object, definition_caps, caps->definitions,
+                    "definition", false);
+  TRY_DE_TYPE_FIELD(object, type_definition_caps, caps->type_definitions,
+                    "typeDefinition", false);
 
   return true;
 }
