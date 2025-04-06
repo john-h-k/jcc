@@ -26,7 +26,6 @@ help() {
   echo "    test         Run tests"
   echo "    test-all     Run tests with all optimisation levels"
   echo "    format       Format codebase"
-  echo "    layout       Show code distribution"
   echo "    find-unused  Finds symbols that can be made static"
   echo "    as           Assemble and show output for file"
   echo "    langproc     (Temporary) Show output for langproc test"
@@ -236,8 +235,9 @@ layout() {
         echo "$total"
     }
 
-    categories=("preproc" "lex" "parse" "ir" "opts" "lower" "targets" "objects" "tests")
-    paths=("src/preproc.h src/preproc.c"
+    categories=("lsp" "preproc" "lex" "parse" "ir" "opts" "lower" "targets" "objects" "tests")
+    paths=("src/lsp"
+           "src/preproc.h src/preproc.c"
            "src/lex.h src/lex.c"
            "src/parse.h src/parse.c src/typechk.h src/typechk.c"
            "src/ir"
