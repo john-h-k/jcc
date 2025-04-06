@@ -1157,7 +1157,7 @@ static struct ir_var_str build_ir_str(const struct td_cnst *cnst,
                                       struct ir_var_ty *char_ty,
                                       bool *is_data) {
   switch (cnst->str_value.ty) {
-  case TD_CNST_STR_TY_ASCII:
+  case TD_CNST_STR_TY_ASCII: {
     // data if contains null char
     struct sized_str sized = {
         .str = cnst->str_value.ascii.value,
@@ -1169,6 +1169,7 @@ static struct ir_var_str build_ir_str(const struct td_cnst *cnst,
         .value = cnst->str_value.ascii.value,
         .len = cnst->str_value.ascii.len,
     };
+  }
   case TD_CNST_STR_TY_WIDE:
     *is_data = true;
     *char_ty = IR_VAR_TY_I32;
