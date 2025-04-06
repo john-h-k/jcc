@@ -201,6 +201,8 @@ int syscmd_exec(struct syscmd **syscmd) {
     *s->stderr_buf = syscmd_read_pipe(s, s->stderr_flags, stderr_pipe);
   }
 
+  posix_spawn_file_actions_destroy(&actions);
+
   *syscmd = NULL;
   return status;
 }
