@@ -93,14 +93,15 @@
 #define ASAN 1
 #endif
 
-#if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
+// asan seems to imply lsan?
+#if ASAN || HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
     defined(__SANITIZE_LEAK__)
 #define LSAN 1
 
 void __lsan_ignore_object(const void* p);
-#define LSAN_IGNORE(obj) __lsan_ignore_object(p)
+#define LSAN_IGNORE(p) __lsan_ignore_object(p)
 #else
-#define LSAN_IGNORE(obj)
+#define LSAN_IGNORE(p)
 #endif
 
 #if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
