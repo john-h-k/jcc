@@ -93,6 +93,16 @@
 #define ASAN 1
 #endif
 
+#if HAS_FEATURE(leak_sanitizer) || defined(LEAK_SANITIZER) ||            \
+    defined(__SANITIZE_LEAK__)
+#define LSAN 1
+
+void __lsan_ignore_object(const void* p);
+#define LSAN_IGNORE(obj) __lsan_ignore_object(p)
+#else
+#define LSAN_IGNORE(obj)
+#endif
+
 #if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
     defined(__SANITIZE_HWADDRESS__)
 #define HWASAN 1
@@ -112,7 +122,7 @@
 #define UBSAN 0
 #endif
 
-#if MSAN || ASAN || HWASAN || TSAN
+#if MSAN || ASAN || LSAN || HWASAN || TSAN
 #define SAN 1
 #endif
 
