@@ -624,13 +624,13 @@ static void codegen_binary_op(struct cg_state *state,
     goto set_fp_cmp;
 
   case IR_OP_BINARY_OP_TY_FGT:
-    instr_ty = SEL_FP_INSTR(RV32I_INSTR_TY_FLE);
+    instr_ty = SEL_FP_INSTR(RV32I_INSTR_TY_FLT);
     invert_cond = true;
     invert_res = false;
     goto set_fp_cmp;
 
   case IR_OP_BINARY_OP_TY_FGTEQ:
-    instr_ty = SEL_FP_INSTR(RV32I_INSTR_TY_FLT);
+    instr_ty = SEL_FP_INSTR(RV32I_INSTR_TY_FLE);
     invert_cond = true;
     invert_res = false;
     goto set_fp_cmp;
