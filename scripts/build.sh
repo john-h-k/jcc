@@ -203,7 +203,7 @@ configure() {
     if [ -z "$cc" ]; then
         # if ASan on try and use clang
         if [[ "$mode" == "Debug" ]] && [ -z "$no_san" ] && command -v clang &>/dev/null; then
-            cc="clang"
+           { cc --version 2>/dev/null | grep clang; } && cc="cc" || cc="clang"
         else
             cc="cc"
         fi
