@@ -140,9 +140,11 @@ static char *syscmd_read_pipe(struct syscmd *cmd, enum syscmd_buf_flags flags,
   return vector_head(content);
 }
 
-#if __has_include(<spawn.h>)
+#if __has_include(<spawn.h>) && __has_include(<sys/types.h>) && __has_include(<sys/wait.h>)
 
 #include <spawn.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 extern char **environ;
 
