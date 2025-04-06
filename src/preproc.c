@@ -11,7 +11,6 @@
 #include "util.h"
 #include "vector.h"
 
-#include <TargetConditionals.h>
 #include <ctype.h>
 #include <stddef.h>
 #include <string.h>
