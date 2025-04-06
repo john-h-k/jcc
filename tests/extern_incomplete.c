@@ -1,5 +1,6 @@
 // expected value: 0
-// flags: -Wl,-U,_foo
+// flags-darwin: -Wl,-U,_foo
+// flags-linux: -Wl,--unresolved-symbols=ignore-all
 
 struct c;
 

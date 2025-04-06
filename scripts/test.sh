@@ -466,6 +466,9 @@ run_tests() {
       expected=$(grep -i "expected value:" "$file" | head -1 | grep -Eo '[0-9]+')
       stdin=$(grep -i "stdin" "$file" | head -1 | sed -n 's/^\/\/ stdin: //p')
       flags=$(grep -i "flags" "$file" | head -1 | sed -n 's/^\/\/ flags: //p')
+      os_flags=$(grep -i "flags-$(uname)" "$file" | head -1 | sed -n "s/^\/\/ flags-[^:]*: //p")
+
+      flags="$([ -n "$flags" ] && echo "$flags $os_flags" || echo "$os_flags")"
 
       first_line=$(head -n 1 "$file")
       if [[ "$first_line" == "// no-compile" ]]; then
