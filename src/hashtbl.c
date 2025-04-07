@@ -421,7 +421,6 @@ hashtbl_lookup_with_entry(struct hashtbl *hashtbl,
                "hashtbl version %zu less than entry version %zu", hashtbl->ver,
                entry->ver);
   if (entry->ver == hashtbl->ver) {
-    // printf("skipped read (%zu %zu)\n", entry->ver, hashtbl->ver);
     return *entry;
   }
 

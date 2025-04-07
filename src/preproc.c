@@ -1440,12 +1440,10 @@ static bool try_expand_token(struct preproc *preproc,
   struct sized_str ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
-  PROFILE_BEGIN_MULTI(macro_lookup);
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
-  PROFILE_END_MULTI(macro_lookup);
-
   // well known macros arent expanded they just are "defined"
   if (macro && !(macro->flags & PREPROC_DEFINE_FLAG_WELL_KNOWN)) {
+    PROFILE_CREATE_MULTI(macro_expand);
     PROFILE_BEGIN_MULTI(macro_expand);
 
     // TODO: lookup/insert pair can be made more efficient

@@ -80,16 +80,7 @@ static void profiler_init(void) {
   }
 }
 
-static void write_spans(void *p, void *name) {
-  struct profiler_multi_region_data *init = p;
-  *init = (struct profiler_multi_region_data){
-      .name = name,
-      // hmm, do we want to do this? maybe we should use
-      // `hashtbl_lookup_or_insert_with`
-      .spans = vector_create(sizeof(struct profiler_span))};
-}
-
-struct profiler_region profiler_begin_multi_region(const char *name) {
+struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_multi_region *multi_region) {
 #ifdef PROFILE_SELF
   unsigned long long prof_start = get_time();
 #endif
@@ -98,9 +89,23 @@ struct profiler_region profiler_begin_multi_region(const char *name) {
 
   LSAN_IGNORE(init.spans);
 
-  struct hashtbl_entry entry =
-      hashtbl_lookup_entry_or_insert_with(MULTI_REGIONS, &name, &write_spans, CONST_CAST((void *)name));
-  struct profiler_multi_region_data *region = entry.data;
+  struct hashtbl_entry entry;
+  struct profiler_multi_region_data *region;
+  if (UNLIKELY(!multi_region->entry.key)) {
+    // TODO: validate no other regions exist with this name (this will overwrite)
+    entry = hashtbl_lookup_entry_or_insert(MULTI_REGIONS, &multi_region->name, NULL);
+    multi_region->entry = entry;
+
+    region = entry.data;
+
+    region->name = multi_region->name;
+    region->spans = vector_create(sizeof(struct profiler_span));
+  } else {
+    entry = hashtbl_lookup_with_entry(MULTI_REGIONS, &multi_region->name, &multi_region->entry);
+    region = entry.data;
+
+    multi_region->entry = entry;
+  }
 
   size_t idx = vector_length(region->spans);
   struct profiler_span *span = vector_push_back(region->spans, NULL);
@@ -116,10 +121,10 @@ struct profiler_region profiler_begin_multi_region(const char *name) {
   span->start = start;
   span->ended = false;
 
-  return (struct profiler_region){.name = name, .entry = entry, .idx = idx};
+  return (struct profiler_multi_region_inst){.name = multi_region->name, .entry = entry, .idx = idx};
 }
 
-void profiler_end_multi_region(struct profiler_region region) {
+void profiler_end_multi_region(struct profiler_multi_region_inst region) {
   unsigned long long end = get_time();
 
   struct hashtbl_entry entry =
@@ -330,7 +335,9 @@ void profiler_print(FILE *file) {
 #ifdef PROFILE_SELF
   double profiler_start_elapsed = 0;
   double profiler_end_elapsed = 0;
+  double profiler_span_elapsed = 0;
   double profiler_total_elapsed = 0;
+  size_t num_profiles = 0;
 #endif
 
   struct hashtbl_iter *iter = hashtbl_iter(MULTI_REGIONS);
@@ -347,6 +354,7 @@ void profiler_print(FILE *file) {
       if (!span->ended && !warned) {
         warned = true;
         warn("Unended profiler span in multi-region '%s'", data->name);
+        continue;
       }
 
       elapsed += profiler_elapsed_nanos(*span);
@@ -356,7 +364,9 @@ void profiler_print(FILE *file) {
         profiler_elapsed_self_nanos(*span, &start, &end, &total);
         profiler_start_elapsed += start;
         profiler_end_elapsed += end;
+        profiler_span_elapsed += profiler_elapsed_nanos(*span);
         profiler_total_elapsed += total;
+        num_profiles++;
       #endif
     }
 
@@ -368,13 +378,21 @@ void profiler_print(FILE *file) {
 #ifdef PROFILE_SELF
   fprintf(file, "\nPROFILER OVERHEAD:");
 
-  fprintf(file, "\n");
-  fprintf(file, "        start: ");
-  print_time(file, profiler_start_elapsed);
+  double start_avg = profiler_start_elapsed / num_profiles;
+  double span_avg = profiler_span_elapsed / num_profiles;
+  double end_avg = profiler_end_elapsed / num_profiles;
 
   fprintf(file, "\n");
-  fprintf(file, "        end: ");
-  print_time(file, profiler_end_elapsed);
+  fprintf(file, "        start_avg: ");
+  print_time(file, start_avg);
+
+  fprintf(file, "\n");
+  fprintf(file, "        span_avg: ");
+  print_time(file, span_avg);
+  fprintf(file, "\n");
+
+  fprintf(file, "        end_avg: ");
+  print_time(file, end_avg);
   fprintf(file, "\n");
 
   double overhead_proportion = (profiler_start_elapsed + profiler_end_elapsed) / profiler_total_elapsed;
