@@ -307,8 +307,14 @@ void profiler_print(FILE *file) {
 
     size_t num_spans = vector_length(data->spans);
     double elapsed = 0;
+    bool warned = false;
     for (size_t i = 0; i < num_spans; i++) {
       struct profiler_span *span = vector_get(data->spans, i);
+
+      if (!span->ended && !warned) {
+        warned = true;
+        warn("Unended profiler span in multi-region '%s'", data->name);
+      }
 
       elapsed += profiler_elapsed_nanos(*span);
     }

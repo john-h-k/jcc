@@ -185,7 +185,7 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
                               const void *data, hash_t hash);
 
 // when len >= buckets * max_fill, double bucket size and rebuild
-static const float MAX_FILL = 0.4f;
+static const float MAX_FILL = 0.7f;
 
 #define MIN_BUCKET_COUNT (8)
 
@@ -291,16 +291,35 @@ void hashtbl_insert_with_hash(struct hashtbl *hashtbl, const void *key,
   }
 }
 
-void hashtbl_insert(struct hashtbl *hashtbl, const void *key,
-                    const void *data) {
+static hash_t hashtbl_hash(const struct hashtbl *restrict hashtbl,
+                           const void *key) {
+  if (hashtbl->key_size <= sizeof(hash_t) && !hashtbl->hash_fn) {
+    hash_t hash;
+    memcpy(&hash, key, hashtbl->key_size);
+    return hash;
+  }
+
   struct hasher hasher = hasher_create();
+
   if (hashtbl->hash_fn) {
     hashtbl->hash_fn(&hasher, key);
   } else {
     hasher_hash_bytes(&hasher, key, hashtbl->key_size);
   }
+  return hasher_finish(&hasher);
+}
 
-  hash_t hash = hasher_finish(&hasher);
+static bool hashtbl_eq(struct hashtbl *hashtbl, const void *lkey, const void *rkey) {
+  if (hashtbl->eq_fn) {
+    return hashtbl->eq_fn(lkey, rkey);
+  } else {
+    return memcmp(lkey, rkey, hashtbl->key_size) == 0;
+  }
+}
+
+void hashtbl_insert(struct hashtbl *hashtbl, const void *key,
+                    const void *data) {
+  hash_t hash = hashtbl_hash(hashtbl, key);
 
   hashtbl_insert_with_hash(hashtbl, key, data, hash);
 }
@@ -325,14 +344,7 @@ hashtbl_lookup_triple_with_hash(struct hashtbl *hashtbl, const void *key,
     void *triple = vector_get(bucket->elems, i);
     void *key_entry = (char *)triple + sizeof(hash_t);
 
-    bool eq;
-    if (hashtbl->eq_fn) {
-      eq = hashtbl->eq_fn(key, key_entry);
-    } else {
-      eq = memcmp(key, key_entry, hashtbl->key_size) == 0;
-    }
-
-    if (eq) {
+    if (hashtbl_eq(hashtbl, key, key_entry)) {
       return (struct lookup_internal){
           .triple = triple, .hash = hash, .bucket = bucket, .idx = i};
     }
@@ -344,14 +356,7 @@ hashtbl_lookup_triple_with_hash(struct hashtbl *hashtbl, const void *key,
 
 static struct lookup_internal hashtbl_lookup_triple(struct hashtbl *hashtbl,
                                                     const void *key) {
-  struct hasher hasher = hasher_create();
-  if (hashtbl->hash_fn) {
-    hashtbl->hash_fn(&hasher, key);
-  } else {
-    hasher_hash_bytes(&hasher, key, hashtbl->key_size);
-  }
-  hash_t hash = hasher_finish(&hasher);
-
+  hash_t hash = hashtbl_hash(hashtbl, key);
   return hashtbl_lookup_triple_with_hash(hashtbl, key, hash);
 }
 
