@@ -7,6 +7,7 @@
 #include "hashtbl.h"
 #include "io.h"
 #include "log.h"
+#include "profile.h"
 #include "program.h"
 #include "util.h"
 #include "vector.h"
@@ -1439,13 +1440,18 @@ static bool try_expand_token(struct preproc *preproc,
   struct sized_str ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
+  PROFILE_BEGIN_MULTI(macro_lookup);
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
+  PROFILE_END_MULTI(macro_lookup);
 
   // well known macros arent expanded they just are "defined"
   if (macro && !(macro->flags & PREPROC_DEFINE_FLAG_WELL_KNOWN)) {
+    PROFILE_BEGIN_MULTI(macro_expand);
+
     // TODO: lookup/insert pair can be made more efficient
     if (hashtbl_lookup(preproc->parents, &ident)) {
       // already seen this macro, do not expand it again
+      PROFILE_END_MULTI(macro_expand);
       return false;
     }
 
@@ -1497,6 +1503,7 @@ static bool try_expand_token(struct preproc *preproc,
       if (open.ty != PREPROC_TOKEN_TY_PUNCTUATOR ||
           open.punctuator.ty != PREPROC_TOKEN_PUNCTUATOR_TY_OPEN_BRACKET) {
         vector_push_back(buffer, &open);
+        PROFILE_END_MULTI(macro_expand);
         return false;
       }
 
@@ -1793,6 +1800,7 @@ static bool try_expand_token(struct preproc *preproc,
     vector_free(&expanded_fn);
     vector_free(&concat_points);
 
+    PROFILE_END_MULTI(macro_expand);
     return true;
   }
 
