@@ -19,6 +19,9 @@ struct hashtbl {
   size_t key_size;
   size_t element_size;
 
+  // increments whenever hashtbl pointers are invalidated
+  size_t ver;
+
   struct vector *buckets;
 
   size_t len;
@@ -29,6 +32,10 @@ struct hashtbl_iter {
   size_t bucket_idx;
   size_t elem_idx;
 };
+
+void hashtbl_invalidate_entries(struct hashtbl *hashtbl) {
+  hashtbl->ver++;
+}
 
 struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
                                hash_fn hash_fn, eq_fn eq_fn) {
@@ -61,6 +68,7 @@ struct hashtbl *hashtbl_create_in_arena(struct arena_allocator *arena,
   tbl->eq_fn = eq_fn;
   tbl->buckets = vector_create_in_arena(sizeof(struct bucket), arena);
   tbl->len = 0;
+  tbl->ver = 0;
 
   // add one bucket because it makes lookup/insertion easier
   // is this a price we are happy to pay? can be reworked to not do this
@@ -103,6 +111,18 @@ void hashtbl_free(struct hashtbl **hashtbl) {
 
   free(*hashtbl);
   *hashtbl = NULL;
+}
+
+static struct hashtbl_entry hashtbl_mk_entry(struct hashtbl *hashtbl,
+                                             void *triple) {
+  if (triple) {
+    return (struct hashtbl_entry){.key = (char *)triple + sizeof(hash_t),
+                                  .data = (char *)triple + sizeof(hash_t) +
+                                          hashtbl->key_size,
+                                  .ver = hashtbl->ver};
+  } else {
+    return (struct hashtbl_entry){0};
+  }
 }
 
 struct hashtbl_iter *hashtbl_iter(struct hashtbl *hashtbl) {
@@ -156,10 +176,7 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
     hashtbl_iter->bucket_idx++;
   }
 
-  *entry = (struct hashtbl_entry){
-      .key = (char *)triple + sizeof(hash_t),
-      .data = (char *)triple + sizeof(hash_t) + hashtbl->key_size,
-  };
+  *entry = hashtbl_mk_entry(hashtbl, triple);
 
   return true;
 
@@ -190,6 +207,8 @@ static const float MAX_FILL = 0.7f;
 #define MIN_BUCKET_COUNT (8)
 
 static void hashtbl_rebuild(struct hashtbl *hashtbl) {
+  size_t ver = hashtbl->ver;
+
   struct vector *buckets = hashtbl->buckets;
   size_t num_buckets = vector_length(buckets);
 
@@ -231,6 +250,8 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   }
 
   vector_free(&buckets);
+
+  hashtbl->ver = ver + 1;
 }
 
 struct lookup_internal {
@@ -261,6 +282,7 @@ hashtbl_insert_with_lookup(struct hashtbl *hashtbl, const void *key,
     lookup.triple = vector_push_back(bucket->elems, NULL);
 
     hashtbl->len++;
+    hashtbl->ver++;
   }
 
   memcpy(lookup.triple, &lookup.hash, sizeof(lookup.hash));
@@ -309,7 +331,8 @@ static hash_t hashtbl_hash(const struct hashtbl *restrict hashtbl,
   return hasher_finish(&hasher);
 }
 
-static bool hashtbl_eq(struct hashtbl *hashtbl, const void *lkey, const void *rkey) {
+static bool hashtbl_eq(struct hashtbl *hashtbl, const void *lkey,
+                       const void *rkey) {
   if (hashtbl->eq_fn) {
     return hashtbl->eq_fn(lkey, rkey);
   } else {
@@ -364,6 +387,7 @@ void hashtbl_remove(struct hashtbl *hashtbl, const void *key) {
   struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
 
   if (lookup.triple) {
+    hashtbl->ver++;
     vector_remove_at(lookup.bucket->elems, lookup.idx);
   }
 }
@@ -382,6 +406,28 @@ void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key) {
   }
 }
 
+struct hashtbl_entry hashtbl_lookup_entry(struct hashtbl *hashtbl,
+                                          const void *key) {
+  struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
+
+  return hashtbl_mk_entry(hashtbl, lookup.triple);
+}
+
+struct hashtbl_entry
+hashtbl_lookup_with_entry(struct hashtbl *hashtbl,
+                          const void *key,
+                          const struct hashtbl_entry *entry) {
+  DEBUG_ASSERT(hashtbl->ver >= entry->ver,
+               "hashtbl version %zu less than entry version %zu", hashtbl->ver,
+               entry->ver);
+  if (entry->ver == hashtbl->ver) {
+    // printf("skipped read (%zu %zu)\n", entry->ver, hashtbl->ver);
+    return *entry;
+  }
+
+  return hashtbl_lookup_entry(hashtbl, key);
+}
+
 void *hashtbl_lookup_or_insert(struct hashtbl *hashtbl, const void *key,
                                void *data) {
   struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
@@ -391,6 +437,18 @@ void *hashtbl_lookup_or_insert(struct hashtbl *hashtbl, const void *key,
   }
 
   return (char *)lookup.triple + sizeof(hash_t) + hashtbl->key_size;
+}
+
+struct hashtbl_entry hashtbl_lookup_entry_or_insert(struct hashtbl *hashtbl,
+                                                    const void *key,
+                                                    void *data) {
+  struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
+
+  if (!lookup.triple) {
+    lookup = hashtbl_insert_with_lookup(hashtbl, key, data, lookup);
+  }
+
+  return hashtbl_mk_entry(hashtbl, lookup.triple);
 }
 
 void *hashtbl_lookup_or_insert_with(struct hashtbl *hashtbl, const void *key,
@@ -405,6 +463,21 @@ void *hashtbl_lookup_or_insert_with(struct hashtbl *hashtbl, const void *key,
   }
 
   return (char *)lookup.triple + sizeof(hash_t) + hashtbl->key_size;
+}
+
+struct hashtbl_entry
+hashtbl_lookup_entry_or_insert_with(struct hashtbl *hashtbl, const void *key,
+                                    hashtbl_data_fn fn, void *metadata) {
+  struct lookup_internal lookup = hashtbl_lookup_triple(hashtbl, key);
+
+  if (!lookup.triple) {
+    lookup = hashtbl_insert_with_lookup(hashtbl, key, NULL, lookup);
+
+    void *data = (char *)lookup.triple + sizeof(hash_t) + hashtbl->key_size;
+    fn(data, metadata);
+  }
+
+  return hashtbl_mk_entry(hashtbl, lookup.triple);
 }
 
 void hashtbl_hash_sized_str(struct hasher *hasher, const void *value) {
