@@ -9,13 +9,13 @@ struct eep_instr;
 struct rv32i_instr;
 struct x64_instr;
 
-struct instr {
+struct cg_instr {
   size_t id;
 
   struct ir_op *op;
 
-  struct instr *pred;
-  struct instr *succ;
+  struct cg_instr *pred;
+  struct cg_instr *succ;
 
   struct cg_basicblock *basicblock;
 
@@ -37,8 +37,8 @@ struct cg_basicblock {
 
   struct ir_basicblock *ir_basicblock;
 
-  struct instr *first;
-  struct instr *last;
+  struct cg_instr *first;
+  struct cg_instr *last;
 
   struct cg_basicblock *pred;
   struct cg_basicblock *succ;
@@ -103,11 +103,11 @@ struct cg_unit {
 };
 
 // returns the next instr that can be jumped to (ie skips empty blocks)
-struct instr *cg_get_next_instr(struct cg_basicblock *target);
+struct cg_instr *cg_get_next_instr(struct cg_basicblock *target);
 
 struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
                                           struct ir_basicblock *ir_basicblock);
-struct instr *cg_alloc_instr(struct cg_func *func,
+struct cg_instr *cg_alloc_instr(struct cg_func *func,
                              struct cg_basicblock *basicblock);
 
 void cg_detach_basicblock(struct cg_func *func,

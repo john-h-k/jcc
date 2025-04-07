@@ -416,7 +416,7 @@ struct x64_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 enum x64_instr_class instr_class(enum x64_instr_ty ty);
 
-typedef void(walk_regs_callback)(struct instr *instr, struct x64_reg reg,
+typedef void(walk_regs_callback)(struct cg_instr *instr, struct x64_reg reg,
                                  enum x64_reg_usage_ty usage_ty,
                                  void *metadata);
 void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
@@ -428,7 +428,7 @@ void x64_codegen_basicblock(struct cg_state *state,
 void x64_codegen_end(struct cg_state *state);
 
 void x64_debug_print_instr(FILE *file, const struct cg_func *func,
-                           const struct instr *instr);
+                           const struct cg_instr *instr);
 void x64_debug_print_codegen(FILE *file, struct cg_unit *unit);
 
 #endif

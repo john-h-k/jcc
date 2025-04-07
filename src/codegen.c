@@ -1,9 +1,7 @@
 #include "codegen.h"
 
-#include "aarch64/isa.h"
 #include "alloc.h"
 #include "ir/ir.h"
-#include "program.h"
 #include "target.h"
 #include "util.h"
 #include "vector.h"
@@ -29,7 +27,7 @@ void cg_rebuild_ids(struct cg_func *func) {
   while (basicblock) {
     basicblock->id = next_basicblock_id++;
 
-    struct instr *instr = basicblock->first;
+    struct cg_instr *instr = basicblock->first;
 
     while (instr) {
       instr->id = next_instr_id++;
@@ -41,7 +39,7 @@ void cg_rebuild_ids(struct cg_func *func) {
   }
 }
 
-struct instr *cg_get_next_instr(struct cg_basicblock *target) {
+struct cg_instr *cg_get_next_instr(struct cg_basicblock *target) {
   while (!target->first) {
     target = target->succ;
   }
@@ -81,9 +79,9 @@ struct cg_basicblock *cg_alloc_basicblock(struct cg_func *func,
   return basicblock;
 }
 
-struct instr *cg_alloc_instr(struct cg_func *func,
+struct cg_instr *cg_alloc_instr(struct cg_func *func,
                              struct cg_basicblock *basicblock) {
-  struct instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
+  struct cg_instr *instr = arena_alloc(func->unit->arena, sizeof(*instr));
 
   if (!basicblock->first) {
     basicblock->first = instr;
@@ -355,7 +353,7 @@ void cg_detach_basicblock(struct cg_func *func,
                    "for `cg_builder`");
 
   size_t instr_count = 0;
-  struct instr *instr = basicblock->first;
+  struct cg_instr *instr = basicblock->first;
   while (instr) {
     instr_count++;
 

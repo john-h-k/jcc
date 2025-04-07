@@ -15,7 +15,7 @@ struct emit_state {
 };
 
 static void emit_instr(const struct emit_state *state,
-                       const struct instr *instr) {
+                       const struct cg_instr *instr) {
 
 #define EMIT(up, lo)                                                           \
   case RV32I_INSTR_TY_##up:                                                    \
@@ -174,7 +174,7 @@ struct emitted_unit rv32i_emit(const struct cg_unit *unit) {
 
       struct cg_basicblock *basicblock = func->first;
       while (basicblock) {
-        struct instr *instr = basicblock->first;
+        struct cg_instr *instr = basicblock->first;
         while (instr) {
           size_t pos = rv32i_emit_bytesize(state.emitter);
 

@@ -31,12 +31,12 @@ struct emit_state {
 };
 
 struct local_reloc_info {
-  struct instr *target;
+  struct cg_instr *target;
   struct x64_target_reloc reloc;
 };
 
 static void emit_instr(const struct emit_state *state,
-                       const struct instr *instr) {
+                       const struct cg_instr *instr) {
 #define EMIT(up, lo)                                                           \
   case X64_INSTR_TY_##up:                                                      \
     x64_emit_##lo(state->emitter, instr->x64->lo);                             \
@@ -237,7 +237,7 @@ struct emitted_unit x64_emit(const struct cg_unit *unit) {
 
       struct cg_basicblock *basicblock = func->first;
       while (basicblock) {
-        struct instr *instr = basicblock->first;
+        struct cg_instr *instr = basicblock->first;
         while (instr) {
           DEBUG_ASSERT(x64_emitted_count(emitter) == instr->id,
                        "expected emitted count to be same as instr id");
