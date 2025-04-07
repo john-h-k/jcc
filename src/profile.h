@@ -6,9 +6,21 @@
 
 #include <stdio.h>
 
+// ********** PROFILER **********
+// * Regions are non re-entrant parts of code used for profiling "sections" e.g linking
+//   - `PROFILE_BEGIN(ident)` and `PROFILE_END(ident)`
+//   - `ident` must be an actual identifier token, not a string (as it uses it to construct variables)
+// * Multi-regions are used for profiling sections that are executed many times (e.g individual functions) 
+//   - `PROFILE_CREATE_MULTI(ident)` creates the metadata needed
+//   - `PROFILE_BEGIN_MULTI(ident)` and `PROFILE_END_MULTI(ident)` are used to enter and exit a multi-region
+// * The macro `PROFILE_SELF` can be defined to get the profiler to show overhead information about the profiling itself
+//   - Profiling times will _not_ include this overhead, but profiling sections containing it will
+// ******************************
+
 // this is all done by globals so we don't need to pass around stuff
 // (A) watch out for thread safety
 // (B) is this bad?
+
 
 #define PROFILE_BEGIN(name)                                                    \
   struct profiler_region profiler_##name##_region =                            \
