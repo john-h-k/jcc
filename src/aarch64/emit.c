@@ -30,7 +30,7 @@ struct emit_state {
 };
 
 static void emit_instr(const struct emit_state *state,
-                       const struct instr *instr) {
+                       const struct cg_instr *instr) {
   switch (instr->aarch64->ty) {
   case AARCH64_INSTR_TY_ADDS:
     aarch64_emit_adds(state->emitter, instr->aarch64->adds);
@@ -343,7 +343,7 @@ struct emitted_unit aarch64_emit(const struct cg_unit *unit) {
 
       struct cg_basicblock *basicblock = func->first;
       while (basicblock) {
-        struct instr *instr = basicblock->first;
+        struct cg_instr *instr = basicblock->first;
         while (instr) {
           size_t pos = aarch64_emit_bytesize(state.emitter);
 

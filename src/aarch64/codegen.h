@@ -533,7 +533,7 @@ size_t aarch64_reg_size(enum aarch64_reg_ty reg_ty);
 
 enum aarch64_instr_class instr_class(enum aarch64_instr_ty ty);
 
-typedef void(walk_regs_callback)(struct instr *instr, struct aarch64_reg reg,
+typedef void(walk_regs_callback)(struct cg_instr *instr, struct aarch64_reg reg,
                                  enum aarch64_reg_usage_ty usage_ty,
                                  void *metadata);
 void walk_regs(const struct cg_func *func, walk_regs_callback *cb,

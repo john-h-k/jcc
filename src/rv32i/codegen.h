@@ -374,7 +374,7 @@ struct rv32i_reg get_full_reg_for_ir_reg(struct ir_reg reg);
 
 enum rv32i_instr_class instr_class(enum rv32i_instr_ty ty);
 
-typedef void(walk_regs_callback)(struct instr *instr, struct rv32i_reg reg,
+typedef void(walk_regs_callback)(struct cg_instr *instr, struct rv32i_reg reg,
                                  enum rv32i_reg_usage_ty usage_ty,
                                  void *metadata);
 void walk_regs(const struct cg_func *func, walk_regs_callback *cb,
