@@ -13,6 +13,8 @@ struct hashtbl_iter;
 struct hashtbl_entry {
   const void *key;
   void *data;
+
+  size_t ver;
 };
 
 typedef void (*hash_fn)(struct hasher *hasher, const void *obj);
@@ -46,14 +48,28 @@ bool hashtbl_iter_next(struct hashtbl_iter *hashtbl_iter,
 
 void hashtbl_insert(struct hashtbl *hashtbl, const void *key, const void *data);
 void hashtbl_remove(struct hashtbl *hashtbl, const void *key);
+
 void *hashtbl_lookup(struct hashtbl *hashtbl, const void *key);
+
+struct hashtbl_entry hashtbl_lookup_entry(struct hashtbl *hashtbl, const void *key);
+struct hashtbl_entry hashtbl_lookup_with_entry(struct hashtbl *hashtbl, const void *key, const struct hashtbl_entry *entry);
 
 void *hashtbl_lookup_or_insert(struct hashtbl *hashtbl, const void *key,
                                void *data);
 
+struct hashtbl_entry hashtbl_lookup_entry_or_insert(struct hashtbl *hashtbl, const void *key,
+                               void *data);
+
+
+void hashtbl_invalidate_entries(struct hashtbl *hashtbl);
+
 // given a pointer to data and should write to it
 typedef void hashtbl_data_fn(void *data, void *metadata);
 void *hashtbl_lookup_or_insert_with(struct hashtbl *hashtbl, const void *key,
+                                    hashtbl_data_fn fn, void *metadata);
+
+struct hashtbl_entry
+hashtbl_lookup_entry_or_insert_with(struct hashtbl *hashtbl, const void *key,
                                     hashtbl_data_fn fn, void *metadata);
 
 // Often hash tables are keyed by either a standard C string, or a C string with

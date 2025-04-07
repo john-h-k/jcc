@@ -394,7 +394,7 @@ profile() {
             ;;
     esac
 
-    build --mode release
+    build --mode release || return $?
 
     ITER=10
     for ((i = 0; i < $ITER; i++ )); do

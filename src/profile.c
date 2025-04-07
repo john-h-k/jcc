@@ -38,10 +38,17 @@ static unsigned long long get_time(void) {
 static struct vector *REGIONS = NULL;
 static struct hashtbl *MULTI_REGIONS = NULL;
 
+#define PROFILE_SELF
+
 struct profiler_span {
   bool ended;
   unsigned long long start;
   unsigned long long end;
+
+#ifdef PROFILE_SELF
+  unsigned long long prof_start;
+  unsigned long long prof_end;
+#endif
 };
 
 struct profiler_multi_region_data {
@@ -83,12 +90,17 @@ static void write_spans(void *p, void *name) {
 }
 
 struct profiler_region profiler_begin_multi_region(const char *name) {
+#ifdef PROFILE_SELF
+  unsigned long long prof_start = get_time();
+#endif
+
   profiler_init();
 
   LSAN_IGNORE(init.spans);
 
-  struct profiler_multi_region_data *region =
-      hashtbl_lookup_or_insert_with(MULTI_REGIONS, &name, &write_spans, CONST_CAST((void *)name));
+  struct hashtbl_entry entry =
+      hashtbl_lookup_entry_or_insert_with(MULTI_REGIONS, &name, &write_spans, CONST_CAST((void *)name));
+  struct profiler_multi_region_data *region = entry.data;
 
   size_t idx = vector_length(region->spans);
   struct profiler_span *span = vector_push_back(region->spans, NULL);
@@ -98,24 +110,33 @@ struct profiler_region profiler_begin_multi_region(const char *name) {
 
   unsigned long long start = get_time();
 
+#ifdef PROFILE_SELF
+  span->prof_start = prof_start;
+#endif
   span->start = start;
   span->ended = false;
 
-  return (struct profiler_region){.name = name, .idx = idx};
+  return (struct profiler_region){.name = name, .entry = entry, .idx = idx};
 }
 
 void profiler_end_multi_region(struct profiler_region region) {
   unsigned long long end = get_time();
 
-  struct profiler_multi_region_data *data =
-      hashtbl_lookup(MULTI_REGIONS, &region.name);
+  struct hashtbl_entry entry =
+      hashtbl_lookup_with_entry(MULTI_REGIONS, &region.name, &region.entry);
+  struct profiler_multi_region_data *data = entry.data;
 
-  DEBUG_ASSERT(data, "multi-region '%s' did not exist!", region.name);
+  DEBUG_ASSERT(data, "multi-region '%s' did not exist!", (const char *)entry.key);
 
   struct profiler_span *span = vector_get(data->spans, region.idx);
 
   DEBUG_ASSERT(!span->ended, "span %zu in multi-region '%s' already ended!",
-               region.idx, region.name);
+               region.idx, (const char *)entry.key);
+
+#ifdef PROFILE_SELF
+  unsigned long long prof_end = get_time();
+  span->prof_end = prof_end;
+#endif
 
   span->end = end;
   span->ended = true;
@@ -163,6 +184,12 @@ static void print_time(FILE *file, double nanos) {
 
 static double profiler_elapsed_nanos(struct profiler_span span) {
   return (double)span.end - (double)span.start;
+}
+
+static void profiler_elapsed_self_nanos(struct profiler_span span, double *start, double *end, double *total) {
+  *start = (double)span.start - (double)span.prof_start;
+  *end = (double)span.prof_end - (double)span.end;
+  *total = (double)span.prof_end - (double)span.prof_start;
 }
 
 static void profiler_print_region(FILE *file, size_t depth,
@@ -300,6 +327,12 @@ void profiler_print(FILE *file) {
   fprintf(file, "\nMULTI-REGIONS:");
   fprintf(file, "\n");
 
+#ifdef PROFILE_SELF
+  double profiler_start_elapsed = 0;
+  double profiler_end_elapsed = 0;
+  double profiler_total_elapsed = 0;
+#endif
+
   struct hashtbl_iter *iter = hashtbl_iter(MULTI_REGIONS);
   struct hashtbl_entry entry;
   while (hashtbl_iter_next(iter, &entry)) {
@@ -317,10 +350,39 @@ void profiler_print(FILE *file) {
       }
 
       elapsed += profiler_elapsed_nanos(*span);
+
+      #ifdef PROFILE_SELF
+        double start, end, total;
+        profiler_elapsed_self_nanos(*span, &start, &end, &total);
+        profiler_start_elapsed += start;
+        profiler_end_elapsed += end;
+        profiler_total_elapsed += total;
+      #endif
     }
 
     fprintf(file, "        %s: ", data->name);
     print_time(file, elapsed);
     fprintf(file, "\n");
   }
+
+#ifdef PROFILE_SELF
+  fprintf(file, "\nPROFILER OVERHEAD:");
+
+  fprintf(file, "\n");
+  fprintf(file, "        start: ");
+  print_time(file, profiler_start_elapsed);
+
+  fprintf(file, "\n");
+  fprintf(file, "        end: ");
+  print_time(file, profiler_end_elapsed);
+  fprintf(file, "\n");
+
+  double overhead_proportion = (profiler_start_elapsed + profiler_end_elapsed) / profiler_total_elapsed;
+
+  fprintf(file, "        ");
+  fprintf(file, "(total profiling time ");
+  print_time(file, profiler_total_elapsed);
+  fprintf(file, ", overhead ~%.2f%%)\n\n", overhead_proportion * 100);
+  fprintf(file, "\n");
+#endif
 }

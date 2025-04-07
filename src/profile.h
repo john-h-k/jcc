@@ -1,6 +1,7 @@
 #ifndef PROFILE_H
 #define PROFILE_H
 
+#include "hashtbl.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -27,6 +28,7 @@
 
 struct profiler_region {
   const char *name;
+  struct hashtbl_entry entry;
   size_t idx;
 };
 
