@@ -95,6 +95,7 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   // FIXME: assert the sized_str has no null chars in it
   DEBUG_ASSERT(szstr_nullsafe(key.key), "fcache doesn't support null chars");
 
+  PROFILE_CREATE_MULTI(fcache_read);
   PROFILE_BEGIN_MULTI(fcache_read);
 
   FILE *f;
