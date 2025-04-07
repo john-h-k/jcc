@@ -38,8 +38,6 @@ static unsigned long long get_time(void) {
 static struct vector *REGIONS = NULL;
 static struct hashtbl *MULTI_REGIONS = NULL;
 
-#define PROFILE_SELF
-
 struct profiler_span {
   bool ended;
   unsigned long long start;
@@ -191,11 +189,13 @@ static double profiler_elapsed_nanos(struct profiler_span span) {
   return (double)span.end - (double)span.start;
 }
 
+#ifdef PROFILE_SELF
 static void profiler_elapsed_self_nanos(struct profiler_span span, double *start, double *end, double *total) {
   *start = (double)span.start - (double)span.prof_start;
   *end = (double)span.prof_end - (double)span.end;
   *total = (double)span.prof_end - (double)span.prof_start;
 }
+#endif
 
 static void profiler_print_region(FILE *file, size_t depth,
                                   struct profiler_region_data *region,
