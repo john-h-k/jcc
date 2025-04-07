@@ -420,6 +420,7 @@ hashtbl_lookup_with_entry(struct hashtbl *hashtbl,
   DEBUG_ASSERT(hashtbl->ver >= entry->ver,
                "hashtbl version %zu less than entry version %zu", hashtbl->ver,
                entry->ver);
+
   if (entry->ver == hashtbl->ver) {
     return *entry;
   }
