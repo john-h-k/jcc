@@ -1395,7 +1395,7 @@ static void codegen_binary_op(struct cg_state *state,
                                       .immr = imms + 1,
                                       .imms = imms};
       } else {
-        *cg_instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
       }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_LSLV;
@@ -1420,7 +1420,7 @@ static void codegen_binary_op(struct cg_state *state,
                                       .immr = immr,
                                       .imms = size * 8 - 1};
       } else {
-        *cg_instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
       }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_ASRV;
@@ -1446,7 +1446,7 @@ static void codegen_binary_op(struct cg_state *state,
                                       .immr = immr,
                                       .imms = size * 8 - 1};
       } else {
-        *cg_instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
+        *instr->aarch64 = MOV_ALIAS(dest, codegen_reg(lhs_op));
       }
     } else {
       instr->aarch64->ty = AARCH64_INSTR_TY_LSRV;
@@ -1679,7 +1679,7 @@ static void codegen_uconv_op(struct cg_state *state,
                              struct cg_basicblock *basicblock,
                              struct aarch64_reg source,
                              struct aarch64_reg dest) {
-  struct instr *instr = cg_alloc_instr(state->func, basicblock);
+  struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
   instr->aarch64->ty = AARCH64_INSTR_TY_UCVTF;
   instr->aarch64->fcvt =
       (struct aarch64_reg_1_source){.dest = dest, .source = source};
@@ -1689,7 +1689,7 @@ static void codegen_sconv_op(struct cg_state *state,
                              struct cg_basicblock *basicblock,
                              struct aarch64_reg source,
                              struct aarch64_reg dest) {
-  struct instr *instr = cg_alloc_instr(state->func, basicblock);
+  struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
   instr->aarch64->ty = AARCH64_INSTR_TY_SCVTF;
   instr->aarch64->fcvt =
       (struct aarch64_reg_1_source){.dest = dest, .source = source};
@@ -1828,7 +1828,7 @@ static void codegen_call_op(struct cg_state *state,
                             struct ir_op *op) {
   invariant_assert(op->call.func_ty.ty == IR_VAR_TY_TY_FUNC, "non-func");
 
-  struct instr *instr = cg_alloc_instr(state->func, basicblock);
+  struct cg_instr *instr = cg_alloc_instr(state->func, basicblock);
   if (op->call.target->flags & IR_OP_FLAG_CONTAINED) {
     instr->aarch64->ty = AARCH64_INSTR_TY_BL;
     instr->aarch64->bl = (struct aarch64_branch){.target = NULL};
@@ -2006,7 +2006,7 @@ static void codegen_op(struct cg_state *state, struct cg_basicblock *basicblock,
 }
 
 // static void codegen_nop(struct codegen_state *state) {
-//   struct instr *instr = alloc_instr(state->func);
+//   struct cg_instr *instr = alloc_instr(state->func);
 
 //   instr->aarch64->ty = AARCH64_INSTR_TY_NOP;
 // }
