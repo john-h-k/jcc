@@ -834,7 +834,7 @@ static bool parse_typedef_name(struct parser *parser,
     return false;
   }
 
-  struct sized_str name = identifier_str(parser, &identifier);
+  ustr_t name = identifier_str(parser, &identifier);
 
   struct var_table_entry *entry =
       vt_get_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF, name);
@@ -1705,7 +1705,7 @@ static bool parse_float_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return false;
   }
 
-  struct sized_str literal = lex_associated_text(parser->lexer, &token);
+  ustr_t literal = lex_associated_text(parser->lexer, &token);
 
   DEBUG_ASSERT(literal.len, "literal_len was 0");
 
@@ -1741,7 +1741,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     ty = AST_CNST_TY_CHAR;
     num_bits = 8;
 
-    struct sized_str literal =
+    ustr_t literal =
         lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
     int_value = (unsigned long long)literal.str[0];
@@ -1751,7 +1751,7 @@ static bool parse_char_cnst(struct parser *parser, struct ast_cnst *cnst) {
     ty = AST_CNST_TY_SIGNED_INT;
     num_bits = 32;
 
-    struct sized_str literal =
+    ustr_t literal =
         lex_strlike_associated_text(parser->lexer, &token);
     DEBUG_ASSERT(literal.len, "literal_len was 0");
 
@@ -1802,7 +1802,7 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return false;
   }
 
-  struct sized_str literal = lex_associated_text(parser->lexer, &token);
+  ustr_t literal = lex_associated_text(parser->lexer, &token);
   DEBUG_ASSERT(literal.len, "literal_len was 0");
 
   lex_consume_token(parser->lexer, token);
@@ -1848,7 +1848,7 @@ static bool parse_str_cnst(struct parser *parser, struct ast_cnst *cnst) {
       cnst->ty = AST_CNST_TY_STR_LITERAL;
     }
 
-    struct sized_str str = lex_strlike_associated_text(parser->lexer, &token);
+    ustr_t str = lex_strlike_associated_text(parser->lexer, &token);
     vector_extend(strings, str.str, str.len);
 
     end = token.span.end;
@@ -2802,7 +2802,7 @@ static void add_typedefs_to_table(
         &direct_decl_list->direct_declarators[i];
 
     if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_IDENTIFIER) {
-      struct sized_str name = identifier_str(parser, &direct_decl->identifier);
+      ustr_t name = identifier_str(parser, &direct_decl->identifier);
 
       vt_create_entry(&parser->ty_table, VAR_TABLE_NS_TYPEDEF, name);
     } else if (direct_decl->ty == AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR) {
@@ -3639,7 +3639,7 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   text_pos_len((token).start, (token).end),                                    \
       text_pos_len((token).start, (token).end), lexer->text[(token).start.idx]
 
-struct sized_str identifier_str(struct parser *parser,
+ustr_t identifier_str(struct parser *parser,
                                 const struct lex_token *token) {
   return lex_associated_text(parser->lexer, token);
 }
@@ -3878,14 +3878,14 @@ DEBUG_FUNC(declaration_list, declaration_list) {
 
 #define AST_PRINT_IDENTIFIER(identifier)                                       \
   do {                                                                         \
-    struct sized_str str = identifier_str(state->parser, identifier);          \
+    ustr_t str = identifier_str(state->parser, identifier);          \
     AST_PRINT("'%.*s'", (int)str.len, str.str);                                \
     AST_PRINTZ("");                                                            \
   } while (0)
 
 #define AST_PRINT_IDENTIFIER_SAMELINE(identifier)                              \
   do {                                                                         \
-    struct sized_str str = identifier_str(state->parser, identifier);          \
+    ustr_t str = identifier_str(state->parser, identifier);          \
     AST_PRINT_SAMELINE_NOINDENT("'%.*s'", (int)str.len, str.str);              \
     AST_PRINTZ("");                                                            \
   } while (0)

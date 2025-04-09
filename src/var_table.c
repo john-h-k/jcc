@@ -7,7 +7,7 @@
 #include "vector.h"
 
 struct var_key {
-  struct sized_str identifier;
+  ustr_t identifier;
   enum var_table_ns ns;
 };
 
@@ -27,7 +27,7 @@ static bool eq_var_key(const void *l, const void *r) {
     return false;
   }
 
-  return szstreq(sl->identifier, sr->identifier);
+  return ustr_eq(sl->identifier, sr->identifier);
 }
 
 static struct var_table_scope *var_table_scope_create(struct var_table *table,
@@ -53,7 +53,7 @@ struct var_table vt_create(struct arena_allocator *arena) {
 
 static struct var_table_entry *add_entry(struct var_table_scope *scope,
                                          enum var_table_ns ns,
-                                         struct sized_str name) {
+                                         ustr_t name) {
   struct var_key key = {.identifier = name, .ns = ns};
 
   struct var_table_entry *entry =
@@ -66,7 +66,7 @@ static struct var_table_entry *add_entry(struct var_table_scope *scope,
 
 struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
                                                   enum var_table_ns ns,
-                                                  struct sized_str name) {
+                                                  ustr_t name) {
   struct var_table_scope *first = vector_head(var_table->scopes);
 
   return add_entry(first, ns, name);
@@ -74,7 +74,7 @@ struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
 
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
                                         enum var_table_ns ns,
-                                        struct sized_str name) {
+                                        ustr_t name) {
   struct var_table_scope *last = vector_tail(var_table->scopes);
 
   return add_entry(last, ns, name);
@@ -106,7 +106,7 @@ void vt_pop_scope(struct var_table *var_table) {
 
 struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,
-                                               struct sized_str name) {
+                                               ustr_t name) {
   DEBUG_ASSERT(name.str, "name must be non-null");
 
   struct var_table_entry *entry = vt_get_entry(var_table, ns, name);
@@ -123,7 +123,7 @@ struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
 
 struct var_table_entry *vt_get_entry(struct var_table *var_table,
                                      enum var_table_ns ns,
-                                     struct sized_str name) {
+                                     ustr_t name) {
   // super inefficient, TODO: make efficient
   // does linear scan for entry at current scope, if that fails, tries at
   // higher scope, until scope is global then creates new entry
@@ -136,7 +136,7 @@ struct var_table_entry *vt_get_entry(struct var_table *var_table,
     struct var_table_entry *entry = hashtbl_lookup(scope->entries, &key);
 
     if (entry) {
-      DEBUG_ASSERT(szstreq(entry->name, name), "names should have been equal");
+      DEBUG_ASSERT(ustr_eq(entry->name, name), "names should have been equal");
       return entry;
     }
   }

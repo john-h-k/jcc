@@ -97,7 +97,7 @@ enum td_ty_aggregate_ty {
 struct td_ty_aggregate {
   enum td_ty_aggregate_ty ty;
 
-  struct sized_str name;
+  ustr_t name;
 
   struct td_struct_field *fields;
   size_t num_fields;
@@ -106,7 +106,7 @@ struct td_ty_aggregate {
 struct td_ty_incomplete_aggregate {
   enum td_ty_aggregate_ty ty;
 
-  struct sized_str name;
+  ustr_t name;
 };
 
 enum td_ty_func_ty {
@@ -195,7 +195,7 @@ enum td_struct_field_flags {
 };
 
 struct td_struct_field {
-  struct sized_str identifier;
+  ustr_t identifier;
   struct td_var_ty var_ty;
 
   enum td_struct_field_flags flags;
@@ -207,7 +207,7 @@ struct td_struct_field {
 
 struct td_ty_param {
   struct td_var_ty var_ty;
-  struct sized_str identifier;
+  ustr_t identifier;
   struct text_span span;
 };
 
@@ -256,7 +256,7 @@ enum td_var_var_ty {
 struct td_var {
   enum td_var_var_ty ty;
 
-  struct sized_str identifier;
+  ustr_t identifier;
   int scope;
 
   union {
@@ -267,7 +267,7 @@ struct td_var {
 };
 
 struct td_param {
-  struct sized_str name;
+  ustr_t name;
 
   struct td_var_ty var_ty;
 };
@@ -405,7 +405,7 @@ struct td_designator {
   struct td_var_ty var_ty;
 
   union {
-    struct sized_str field;
+    ustr_t field;
     unsigned long long index;
   };
 };
@@ -465,12 +465,12 @@ struct td_arrayaccess {
 
 struct td_memberaccess {
   struct td_expr *lhs;
-  struct sized_str member;
+  ustr_t member;
 };
 
 struct td_pointeraccess {
   struct td_expr *lhs;
-  struct sized_str member;
+  ustr_t member;
 };
 
 enum td_sizeof_ty {
@@ -592,7 +592,7 @@ struct td_returnstmt {
 };
 
 struct td_gotostmt {
-  struct sized_str label;
+  ustr_t label;
 };
 
 enum td_jumpstmt_ty {
@@ -627,7 +627,7 @@ struct td_labeledstmt {
 
   union {
     unsigned long long cnst;
-    struct sized_str label;
+    ustr_t label;
   };
 };
 

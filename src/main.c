@@ -334,9 +334,9 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     const char *val_str = strchr(def_macro, '=');
 
-    struct sized_str name, value;
+    ustr_t name, value;
     if (val_str) {
-      name = (struct sized_str){.str = def_macro,
+      name = (ustr_t){.str = def_macro,
                                 .len = (size_t)(val_str - def_macro)};
       value = MK_SIZED(val_str + 1);
     } else {

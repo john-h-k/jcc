@@ -13,8 +13,8 @@ enum preproc_create_result { PREPROC_CREATE_RESULT_SUCCESS = 0 };
 struct preproc;
 
 struct preproc_define_macro {
-  struct sized_str name;
-  struct sized_str value;
+  ustr_t name;
+  ustr_t value;
 };
 
 struct preproc_create_args {

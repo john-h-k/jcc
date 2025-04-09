@@ -448,16 +448,23 @@ size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len);
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
 
-struct sized_str {
+// would like to use `char8_t` for `ustr_t` eventually (but causes lots of conflicting type errors)
+// #if STDC_MIN_23
+// #include <uchar.h>
+// #else
+// typedef unsigned char char8_t;
+// #endif
+
+typedef struct {
   const char *str;
   size_t len;
-};
+} ustr_t;
 
-static inline bool szstr_nullsafe(struct sized_str str) {
+static inline bool ustr_nullsafe(ustr_t str) {
   return !memchr(str.str, 0, str.len);
 }
 
-static inline bool szstreq(struct sized_str l, struct sized_str r) {
+static inline bool ustr_eq(ustr_t l, ustr_t r) {
   if (l.len != r.len) {
     return false;
   }
@@ -469,7 +476,7 @@ static inline bool szstreq(struct sized_str l, struct sized_str r) {
   return !memcmp(l.str, r.str, l.len);
 }
 
-static inline bool szstr_prefix(struct sized_str str, struct sized_str prefix) {
+static inline bool ustr_prefix(ustr_t str, ustr_t prefix) {
   if (str.len < prefix.len) {
     return false;
   }
@@ -477,7 +484,7 @@ static inline bool szstr_prefix(struct sized_str str, struct sized_str prefix) {
   return !memcmp(str.str, prefix.str, prefix.len);
 }
 
-static inline bool szstr_suffix(struct sized_str str, struct sized_str suffix) {
+static inline bool ustr_suffix(ustr_t str, ustr_t suffix) {
   if (str.len < suffix.len) {
     return false;
   }
@@ -485,9 +492,9 @@ static inline bool szstr_suffix(struct sized_str str, struct sized_str suffix) {
   return !memcmp(str.str + str.len - suffix.len, suffix.str, suffix.len);
 }
 
-static inline struct sized_str szstr_strip_prefix(struct sized_str str,
-                                                  struct sized_str prefix) {
-  if (szstr_prefix(str, prefix)) {
+static inline ustr_t ustr_strip_prefix(ustr_t str,
+                                                  ustr_t prefix) {
+  if (ustr_prefix(str, prefix)) {
     str.len -= prefix.len;
     str.str += prefix.len;
   }
@@ -495,16 +502,16 @@ static inline struct sized_str szstr_strip_prefix(struct sized_str str,
   return str;
 }
 
-static inline struct sized_str szstr_strip_suffix(struct sized_str str,
-                                                  struct sized_str suffix) {
-  if (szstr_suffix(str, suffix)) {
+static inline ustr_t ustr_strip_suffix(ustr_t str,
+                                                  ustr_t suffix) {
+  if (ustr_suffix(str, suffix)) {
     str.len -= suffix.len;
   }
 
   return str;
 }
 
-static inline int szstrcmp(struct sized_str l, struct sized_str r) {
+static inline int ustr_cmp(ustr_t l, ustr_t r) {
   size_t len = (l.len < r.len) ? l.len : r.len;
   int cmp = memcmp(l.str, r.str, len);
 
@@ -515,7 +522,7 @@ static inline int szstrcmp(struct sized_str l, struct sized_str r) {
   return cmp;
 }
 
-#define MK_SIZED(s) ((struct sized_str){(s), ((s) != NULL) ? strlen((s)) : 0})
-#define MK_NULL_STR() ((struct sized_str){NULL, 0})
+#define MK_SIZED(s) ((ustr_t){(s), ((s) != NULL) ? strlen((s)) : 0})
+#define MK_NULL_STR() ((ustr_t){NULL, 0})
 
 #endif

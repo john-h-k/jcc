@@ -21,7 +21,7 @@ void *arena_alloc_strndup(struct arena_allocator *allocator, const char *str,
                           size_t len);
 void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str);
 
-struct sized_str arena_alloc_szstrdup(struct arena_allocator *allocator, struct sized_str str);
+ustr_t arena_alloc_szstrdup(struct arena_allocator *allocator, ustr_t str);
 
 PRINTF_ARGS(1)
 char *arena_alloc_snprintf(struct arena_allocator *allocator,

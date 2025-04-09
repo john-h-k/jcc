@@ -361,7 +361,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
 
     // aggregate types are the same iff they have the same name or come from the
     // same declaration we give anonymous types a name per-declaration
-    return szstreq(l_agg.name, r_agg.name);
+    return ustr_eq(l_agg.name, r_agg.name);
   }
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE: {
     // same logic as for aggregate
@@ -372,7 +372,7 @@ static bool td_var_ty_compatible(struct typechk *tchk,
       return false;
     }
 
-    return szstreq(l_agg.name, r_agg.name);
+    return ustr_eq(l_agg.name, r_agg.name);
   }
   }
 }
@@ -451,7 +451,7 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
     // aggregate types are the same iff they have the same name or come from the
     // same declaration we give anonymous types a name per-declaration
-    return szstreq(l_agg.name, r_agg.name);
+    return ustr_eq(l_agg.name, r_agg.name);
   }
   case TD_VAR_TY_TY_INCOMPLETE_AGGREGATE: {
     struct td_ty_incomplete_aggregate l_agg = l->incomplete_aggregate;
@@ -463,7 +463,7 @@ bool td_var_ty_eq(struct typechk *tchk, const struct td_var_ty *l,
 
     // aggregate types are the same iff they have the same name or come from the
     // same declaration we give anonymous types a name per-declaration
-    return szstreq(l_agg.name, r_agg.name);
+    return ustr_eq(l_agg.name, r_agg.name);
   }
   }
 }
@@ -588,7 +588,7 @@ static struct td_expr add_cast_expr(struct typechk *tchk, struct td_expr expr,
 static char *tchk_base_type_name(struct typechk *tchk,
                                  const struct td_var_ty *var_ty) {
   const char *kw;
-  struct sized_str name;
+  ustr_t name;
 
   switch (var_ty->ty) {
   case TD_VAR_TY_TY_UNKNOWN:
@@ -1165,11 +1165,11 @@ type_specifiers(struct typechk *tchk,
 
 enum sign_state { SIGN_STATE_NONE, SIGN_STATE_SIGNED, SIGN_STATE_UNSIGNED };
 
-static bool is_anonymous_name(struct sized_str name) {
-  return szstr_prefix(name, MK_SIZED("<anonymous>"));
+static bool is_anonymous_name(ustr_t name) {
+  return ustr_prefix(name, MK_SIZED("<anonymous>"));
 }
 
-static struct sized_str anonymous_name(struct typechk *tchk) {
+static ustr_t anonymous_name(struct typechk *tchk) {
   size_t id = tchk->next_anonymous_type_name_id++;
   size_t char_size = num_digits(id);
   size_t len_prefix = strlen("<anonymous>");
@@ -1179,14 +1179,14 @@ static struct sized_str anonymous_name(struct typechk *tchk) {
   snprintf(buff, len, "<anonymous>%zu", id);
   buff[len] = '\0';
 
-  return (struct sized_str){buff, len};
+  return (ustr_t){buff, len};
 }
 
 static struct td_var_ty
 td_var_ty_for_enum(struct typechk *tchk,
                    const struct ast_enum_specifier *specifier) {
 
-  struct sized_str name;
+  ustr_t name;
   if (specifier->identifier) {
     name = identifier_str(tchk->parser, specifier->identifier);
   } else {
@@ -1233,7 +1233,7 @@ td_var_ty_for_enum(struct typechk *tchk,
         value = i ? last_value + 1 : 0;
       }
 
-      struct sized_str enum_name =
+      ustr_t enum_name =
           identifier_str(tchk->parser, &enumerator->identifier);
       struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
                            .identifier = enum_name,
@@ -1292,7 +1292,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
     break;
   }
 
-  struct sized_str name;
+  ustr_t name;
   if (specifier->identifier) {
     name = identifier_str(tchk->parser, specifier->identifier);
   } else {
@@ -1928,9 +1928,9 @@ type_declarator(struct typechk *tchk, struct td_specifiers *specifiers,
   return declaration;
 }
 
-static struct sized_str normalize_attr_ident(struct sized_str name) {
-  name = szstr_strip_prefix(name, MK_SIZED("__"));
-  name = szstr_strip_suffix(name, MK_SIZED("__"));
+static ustr_t normalize_attr_ident(ustr_t name) {
+  name = ustr_strip_prefix(name, MK_SIZED("__"));
+  name = ustr_strip_suffix(name, MK_SIZED("__"));
   return name;
 }
 
@@ -1962,13 +1962,13 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
     return (struct td_attr_format){0};
   }
 
-  struct sized_str archetype_name =
+  ustr_t archetype_name =
       identifier_str(tchk->parser, &archetype_expr->var.identifier);
-  struct sized_str normalized = normalize_attr_ident(archetype_name);
+  ustr_t normalized = normalize_attr_ident(archetype_name);
 
-  if (szstreq(normalized, MK_SIZED("scanf"))) {
+  if (ustr_eq(normalized, MK_SIZED("scanf"))) {
     return (struct td_attr_format){0};
-  } else if (!szstreq(normalized, MK_SIZED("printf"))) {
+  } else if (!ustr_eq(normalized, MK_SIZED("printf"))) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
@@ -2014,29 +2014,29 @@ static void type_attribute_list(struct typechk *tchk,
       // TODO: when we support many more, default this to false
       bool silent_ignore = true;
       if (attr->prefix) {
-        struct sized_str prefix = identifier_str(tchk->parser, attr->prefix);
-        struct sized_str prefix_norm = normalize_attr_ident(prefix);
+        ustr_t prefix = identifier_str(tchk->parser, attr->prefix);
+        ustr_t prefix_norm = normalize_attr_ident(prefix);
 
         // currently the prefix is not used, but we ignore unknown ones and
         // ignore unknown attributes from gcc/clang
-        if (szstreq(prefix_norm, MK_SIZED("jcc"))) {
+        if (ustr_eq(prefix_norm, MK_SIZED("jcc"))) {
           silent_ignore = false;
-        } else if (szstreq(prefix_norm, MK_SIZED("gnu"))) {
+        } else if (ustr_eq(prefix_norm, MK_SIZED("gnu"))) {
           silent_ignore = true;
-        } else if (szstreq(prefix_norm, MK_SIZED("clang"))) {
+        } else if (ustr_eq(prefix_norm, MK_SIZED("clang"))) {
           silent_ignore = true;
         } else {
           continue;
         }
       }
 
-      struct sized_str name = identifier_str(tchk->parser, &attr->name);
+      ustr_t name = identifier_str(tchk->parser, &attr->name);
       name = normalize_attr_ident(name);
 
-      if (szstreq(name, MK_SIZED("weak")) ||
-          szstreq(name, MK_SIZED("weak_import"))) {
+      if (ustr_eq(name, MK_SIZED("weak")) ||
+          ustr_eq(name, MK_SIZED("weak_import"))) {
         attrs->weak = true;
-      } else if (szstreq(name, MK_SIZED("format"))) {
+      } else if (ustr_eq(name, MK_SIZED("format"))) {
         attrs->format = arena_alloc(tchk->arena, sizeof(*attrs->format));
         *attrs->format = type_attr_format(tchk, attr);
       } else if (!silent_ignore) {
@@ -3583,7 +3583,7 @@ static struct td_var_ty get_completed_aggregate(struct typechk *tchk,
 
 static bool try_resolve_member_access_ty(struct typechk *tchk,
                                          const struct td_var_ty *var_ty,
-                                         struct sized_str member_name,
+                                         ustr_t member_name,
                                          struct td_var_ty *member_var_ty) {
   if (var_ty->ty == TD_VAR_TY_TY_UNKNOWN) {
     *member_var_ty = TD_VAR_TY_UNKNOWN;
@@ -3600,7 +3600,7 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
                                        member_var_ty)) {
         return true;
       }
-    } else if (szstreq(field->identifier, member_name)) {
+    } else if (ustr_eq(field->identifier, member_name)) {
       *member_var_ty = field->var_ty;
       return true;
     }
@@ -3611,7 +3611,7 @@ static bool try_resolve_member_access_ty(struct typechk *tchk,
 
 static bool try_get_member_idx(struct typechk *tchk,
                                const struct td_var_ty *td_var_ty,
-                               struct sized_str member_name, size_t *member_idx,
+                               ustr_t member_name, size_t *member_idx,
                                struct text_span context) {
 
   const struct td_var_ty var_ty =
@@ -3625,7 +3625,7 @@ static bool try_get_member_idx(struct typechk *tchk,
                              context)) {
         return true;
       }
-    } else if (szstreq(field->identifier, member_name)) {
+    } else if (ustr_eq(field->identifier, member_name)) {
       *member_idx = i;
       return true;
     }
@@ -3681,7 +3681,7 @@ type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
   td_memberaccess.lhs->var_ty = type_incomplete_var_ty(
       tchk, &td_memberaccess.lhs->var_ty, memberaccess->span);
 
-  struct sized_str member_name =
+  ustr_t member_name =
       identifier_str(tchk->parser, &memberaccess->member);
 
   struct td_var_ty var_ty;
@@ -3751,7 +3751,7 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
     td_pointeraccess.lhs->var_ty = TD_VAR_TY_UNKNOWN;
   }
 
-  struct sized_str pointer_name =
+  ustr_t pointer_name =
       identifier_str(tchk->parser, &pointeraccess->member);
 
   struct td_var_ty underlying =
@@ -3896,10 +3896,10 @@ static struct td_expr type_assg(struct typechk *tchk,
 
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
-  struct sized_str name = identifier_str(tchk->parser, &var->identifier);
+  ustr_t name = identifier_str(tchk->parser, &var->identifier);
 
   // turn __FUNCTION__ into __func__
-  if (szstreq(name, MK_SIZED("__FUNCTION__"))) {
+  if (ustr_eq(name, MK_SIZED("__FUNCTION__"))) {
     name = MK_SIZED("__func__");
   }
 
@@ -4395,7 +4395,7 @@ struct td_val {
 
 static bool try_get_member_offset(struct typechk *tchk,
                                   const struct td_var_ty *aggregate,
-                                  struct sized_str member_name,
+                                  ustr_t member_name,
                                   struct text_span *context, size_t *offset) {
   DEBUG_ASSERT(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
 
@@ -4422,7 +4422,7 @@ static bool try_get_member_offset(struct typechk *tchk,
       *offset += anon_member_offset;
       *offset += info.offsets ? info.offsets[member_idx] : 0;
       return true;
-    } else if (szstreq(field->identifier, member_name)) {
+    } else if (ustr_eq(field->identifier, member_name)) {
       DEBUG_ASSERT(member_idx < aggregate->aggregate.num_fields,
                    "member_idx out of range");
 
@@ -5606,7 +5606,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   for (size_t i = 0; i < declaration.var_ty.func.num_params; i++) {
     struct td_ty_param *param = &declaration.var_ty.func.params[i];
 
-    struct sized_str identifier = param->identifier;
+    ustr_t identifier = param->identifier;
 
     if (!identifier.len) {
       continue;
@@ -5674,7 +5674,7 @@ type_designator(struct typechk *tchk, const struct td_var_ty *var_ty,
                 const struct ast_designator *designator) {
   switch (designator->ty) {
   case AST_DESIGNATOR_TY_FIELD: {
-    struct sized_str field = identifier_str(tchk->parser, &designator->field);
+    ustr_t field = identifier_str(tchk->parser, &designator->field);
 
     struct td_var_ty field_ty;
     if (!try_resolve_member_access_ty(tchk, var_ty, field, &field_ty)) {
@@ -6391,7 +6391,7 @@ bool eq_td_var(const void *l, const void *r) {
   const struct td_var *vr = r;
 
   return vl->scope == vr->scope && vl->ty == vr->ty &&
-         szstreq(vl->identifier, vr->identifier);
+         ustr_eq(vl->identifier, vr->identifier);
 }
 
 static void td_walk_node(struct typechk *tchk, const struct td_node *node,
