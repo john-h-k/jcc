@@ -176,8 +176,6 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
 
     } while ((read = fread(head, 1, READ_BUF_SZ, file)) > 0);
 
-    fclose(file);
-
     content[len] = '\0';
 
     *buf = content;
@@ -189,7 +187,6 @@ static void read_file_content(struct fcache *fcache, FILE *file, char **buf,
 
   char *content = arena_alloc(fcache->arena, (unsigned long)fsize + 1);
   size_t read = fread(content, 1, (unsigned long)fsize, file);
-  fclose(file);
 
   if (read != (size_t)fsize) {
     *buf = NULL;
