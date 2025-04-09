@@ -100,7 +100,7 @@
 void __lsan_ignore_object(const void* p);
 #define LSAN_IGNORE(p) __lsan_ignore_object(p)
 #else
-#define LSAN_IGNORE(p)
+#define LSAN_IGNORE(p) ((void)(p))
 #endif
 
 #if HAS_FEATURE(hwaddress_sanitizer) || defined(HWADDRESS_SANITIZER) ||        \
