@@ -182,7 +182,7 @@ void *arena_alloc_strdup(struct arena_allocator *allocator, const char *str) {
   return cp;
 }
 
-ustr_t arena_alloc_szstrdup(struct arena_allocator *allocator, ustr_t str) {
+ustr_t arena_alloc_ustrdup(struct arena_allocator *allocator, ustr_t str) {
   char *cp = arena_alloc(allocator, str.len);
   memcpy(cp, str.str, str.len);
   return (ustr_t){.str = cp, .len = str.len};
