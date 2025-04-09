@@ -15,7 +15,7 @@ static void hash_var_key(struct hasher *hasher, const void *value) {
   const struct var_key *s = value;
 
   // TODO: having parser/typechk used sized str would improve efficiency
-  hashtbl_hash_sized_str(hasher, &s->identifier);
+  hashtbl_hash_ustr(hasher, &s->identifier);
   hasher_hash_integer(hasher, s->ns, sizeof(s->ns));
 }
 

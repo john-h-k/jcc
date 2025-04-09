@@ -418,7 +418,7 @@ preproc_create(struct program program, struct fcache *fcache,
   info("beginning preproc stage");
 
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("preproc", &arena);
 
   struct preproc *p = nonnull_malloc(sizeof(*p));
   p->arena = arena;

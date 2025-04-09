@@ -449,7 +449,7 @@ static int jcc_driver_compiler(struct arena_allocator *arena,
 static int jcc_main(int argc, char **argv) {
   struct arena_allocator *arena = NULL;
 
-  arena_allocator_create(&arena);
+  arena_allocator_create("main", &arena);
 
   struct fcache *fcache;
   struct parsed_args args;
@@ -689,9 +689,15 @@ exit:
     profiler_print(stderr);
   }
 
+  char *b = arena_alloc(arena, 11);
+  b[10] = 11;
+
   if (arena) {
     arena_allocator_free(&arena);
   }
+
+  // char z = *b;
+  // (void)z;
 
   if (objects) {
     free(objects);

@@ -458,7 +458,7 @@ struct cg_unit *codegen(struct ir_unit *unit, enum codegen_flags flags) {
       .entries = arena_alloc(unit->arena,
                              unit->num_globals * sizeof(struct cg_entry))};
 
-  arena_allocator_create(&codegen_unit->arena);
+  arena_allocator_create("codegen", &codegen_unit->arena);
 
   struct ir_glb *glb = unit->first_global;
 

@@ -6246,7 +6246,7 @@ typechk_create(const struct target *target, const struct compile_args *args,
   struct typechk *t = nonnull_malloc(sizeof(*t));
 
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("typechk", &arena);
 
   *t = (struct typechk){.arena = arena,
                         .args = args,
@@ -6382,7 +6382,7 @@ static void td_walk_init_list(struct typechk *tchk,
 void hash_td_var(struct hasher *hasher, const void *o) {
   const struct td_var *var = o;
 
-  hashtbl_hash_sized_str(hasher, &var->identifier);
+  hashtbl_hash_ustr(hasher, &var->identifier);
   hasher_hash_integer(hasher, var->scope, sizeof(var->scope));
 }
 

@@ -78,7 +78,7 @@ hashtbl_lookup_entry_or_insert_with(struct hashtbl *hashtbl, const void *key,
 void hashtbl_hash_str(struct hasher *hasher, const void *obj);
 bool hashtbl_eq_str(const void *l, const void *r);
 
-void hashtbl_hash_sized_str(struct hasher *hasher, const void *value);
-bool hashtbl_eq_sized_str(const void *l, const void *r);
+void hashtbl_hash_ustr(struct hasher *hasher, const void *value);
+bool hashtbl_eq_ustr(const void *l, const void *r);
 
 #endif
