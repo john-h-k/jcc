@@ -131,8 +131,8 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
     file->data = data;
 
     // clone becaue fcache may outlive callers
-    key.key = arena_alloc_szstrdup(fcache->arena, key.key);
-    file->name = arena_alloc_szstrdup(fcache->arena, file->name);
+    key.key = arena_alloc_ustrdup(fcache->arena, key.key);
+    file->name = arena_alloc_ustrdup(fcache->arena, file->name);
 
     hashtbl_insert(fcache->cache, &key, file);
   }
