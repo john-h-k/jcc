@@ -48,7 +48,7 @@ struct json_value {
 #define JSON_MK_STR(val)                                                       \
   ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = (val)})
 #define JSON_MK_STR_LIT(val)                                                   \
-  ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = MK_SIZED((val))})
+  ((struct json_value){.ty = JSON_VALUE_TY_STRING, .str_val = MK_USTR((val))})
 
 struct json_err {
   size_t pos;
@@ -133,12 +133,12 @@ void json_writer_clear(struct json_writer *writer);
 
 #define JSON_WRITE_FIELD_NAME(writer, name)                                    \
   do {                                                                         \
-    json_writer_write_field_name((writer), MK_SIZED((name)));                  \
+    json_writer_write_field_name((writer), MK_USTR((name)));                  \
   } while (0)
 
 #define JSON_WRITE_FIELD(writer, name, value)                                  \
   do {                                                                         \
-    json_writer_write_field_name((writer), MK_SIZED((name)));                  \
+    json_writer_write_field_name((writer), MK_USTR((name)));                  \
     JSON_WRITE((writer), (value));                                             \
   } while (0)
 

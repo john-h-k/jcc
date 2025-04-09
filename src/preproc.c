@@ -2091,13 +2091,13 @@ static bool try_include_path(struct preproc *preproc, const char *path,
   switch (mode) {
   case TRY_FIND_INCLUDE_MODE_READ: {
     struct fcache_file file;
-    found = fcache_read_path(preproc->fcache, MK_SIZED(path), &file);
+    found = fcache_read_path(preproc->fcache, MK_USTR(path), &file);
     // FIXME: does not respect `len`
     *content = file.data;
     break;
   }
   case TRY_FIND_INCLUDE_MODE_TEST:
-    found = fcache_test_path(preproc->fcache, MK_SIZED(path));
+    found = fcache_test_path(preproc->fcache, MK_USTR(path));
     break;
   }
 
@@ -2310,21 +2310,21 @@ static unsigned long long eval_has_query(struct preproc *preproc,
                                          struct preproc_token *value) {
   ustr_t token_str = {.str = token->text,
                                 .len = text_span_len(&token->span)};
-  token_str = ustr_strip_prefix(token_str, MK_SIZED("__"));
+  token_str = ustr_strip_prefix(token_str, MK_USTR("__"));
 
-  if (ustr_eq(token_str, MK_SIZED("defined"))) {
+  if (ustr_eq(token_str, MK_USTR("defined"))) {
     ustr_t value_str = {.str = value->text,
                                   .len = text_span_len(&value->span)};
 
     return get_define(preproc, value_str) ? 1 : 0;
-  } else if (ustr_eq(token_str, MK_SIZED("has_include"))) {
+  } else if (ustr_eq(token_str, MK_USTR("has_include"))) {
     struct include_path include_path = get_include_path(preproc, value);
     struct include_info include_info =
         try_find_include(preproc, preproc_text, include_path.filename,
                          include_path.is_angle, TRY_FIND_INCLUDE_MODE_TEST);
 
     return include_info.path != NULL;
-  } else if (ustr_eq(token_str, MK_SIZED("has_feature"))) {
+  } else if (ustr_eq(token_str, MK_USTR("has_feature"))) {
     return 0;
   } else {
     // __has_attribute etc not implemented

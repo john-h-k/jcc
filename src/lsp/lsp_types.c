@@ -76,7 +76,7 @@ TRY_DE_STRUCT(text_doc_change_ev, ev) {
   TRY_DE_STR_FIELD(object, ev->text, "text", true);
 
   // FIXME: we do a double lookup here
-  if (hashtbl_lookup(object->fields, &MK_SIZED("range"))) {
+  if (hashtbl_lookup(object->fields, &MK_USTR("range"))) {
     ev->ty = TEXT_DOC_CHANGE_EV_TY_INCREMENTAL;
     TRY_DE_TYPE_FIELD(object, text_span, ev->span, "range", true);
     TRY_DE_INT_FIELD(object, ev->range_length, "rangeLength", false);
@@ -232,17 +232,17 @@ TRY_DE_ENUM(pos_encoding_kind, kind) {
   ustr_t ident;
   TRY_DE_STR(value, ident);
 
-  if (ustr_eq(ident, MK_SIZED("utf-8"))) {
+  if (ustr_eq(ident, MK_USTR("utf-8"))) {
     *kind = POS_ENCODING_KIND_UTF8;
     return true;
   }
 
-  if (ustr_eq(ident, MK_SIZED("utf-16"))) {
+  if (ustr_eq(ident, MK_USTR("utf-16"))) {
     *kind = POS_ENCODING_KIND_UTF16;
     return true;
   }
 
-  if (ustr_eq(ident, MK_SIZED("utf-32"))) {
+  if (ustr_eq(ident, MK_USTR("utf-32"))) {
     *kind = POS_ENCODING_KIND_UTF32;
     return true;
   }

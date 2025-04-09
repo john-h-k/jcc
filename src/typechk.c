@@ -1166,7 +1166,7 @@ type_specifiers(struct typechk *tchk,
 enum sign_state { SIGN_STATE_NONE, SIGN_STATE_SIGNED, SIGN_STATE_UNSIGNED };
 
 static bool is_anonymous_name(ustr_t name) {
-  return ustr_prefix(name, MK_SIZED("<anonymous>"));
+  return ustr_prefix(name, MK_USTR("<anonymous>"));
 }
 
 static ustr_t anonymous_name(struct typechk *tchk) {
@@ -1354,7 +1354,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
             .var =
                 {
                     .ty = TD_VAR_VAR_TY_VAR,
-                    .identifier = MK_NULL_STR(),
+                    .identifier = MK_NULL_USTR(),
                     .scope = vt_cur_scope(&tchk->var_table),
                     .span = td_decl.span
                 },
@@ -1666,7 +1666,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
       struct td_var_ty param_var_ty = type_abstract_declarator(
           tchk, &param_specifiers, &param->abstract_declarator);
 
-      *td_param = (struct td_ty_param){.identifier = MK_NULL_STR(),
+      *td_param = (struct td_ty_param){.identifier = MK_NULL_USTR(),
                                        .var_ty = param_var_ty};
       break;
     }
@@ -1929,8 +1929,8 @@ type_declarator(struct typechk *tchk, struct td_specifiers *specifiers,
 }
 
 static ustr_t normalize_attr_ident(ustr_t name) {
-  name = ustr_strip_prefix(name, MK_SIZED("__"));
-  name = ustr_strip_suffix(name, MK_SIZED("__"));
+  name = ustr_strip_prefix(name, MK_USTR("__"));
+  name = ustr_strip_suffix(name, MK_USTR("__"));
   return name;
 }
 
@@ -1966,9 +1966,9 @@ type_attr_format(struct typechk *tchk, const struct ast_attribute *attribute) {
       identifier_str(tchk->parser, &archetype_expr->var.identifier);
   ustr_t normalized = normalize_attr_ident(archetype_name);
 
-  if (ustr_eq(normalized, MK_SIZED("scanf"))) {
+  if (ustr_eq(normalized, MK_USTR("scanf"))) {
     return (struct td_attr_format){0};
-  } else if (!ustr_eq(normalized, MK_SIZED("printf"))) {
+  } else if (!ustr_eq(normalized, MK_USTR("printf"))) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
@@ -2019,11 +2019,11 @@ static void type_attribute_list(struct typechk *tchk,
 
         // currently the prefix is not used, but we ignore unknown ones and
         // ignore unknown attributes from gcc/clang
-        if (ustr_eq(prefix_norm, MK_SIZED("jcc"))) {
+        if (ustr_eq(prefix_norm, MK_USTR("jcc"))) {
           silent_ignore = false;
-        } else if (ustr_eq(prefix_norm, MK_SIZED("gnu"))) {
+        } else if (ustr_eq(prefix_norm, MK_USTR("gnu"))) {
           silent_ignore = true;
-        } else if (ustr_eq(prefix_norm, MK_SIZED("clang"))) {
+        } else if (ustr_eq(prefix_norm, MK_USTR("clang"))) {
           silent_ignore = true;
         } else {
           continue;
@@ -2033,10 +2033,10 @@ static void type_attribute_list(struct typechk *tchk,
       ustr_t name = identifier_str(tchk->parser, &attr->name);
       name = normalize_attr_ident(name);
 
-      if (ustr_eq(name, MK_SIZED("weak")) ||
-          ustr_eq(name, MK_SIZED("weak_import"))) {
+      if (ustr_eq(name, MK_USTR("weak")) ||
+          ustr_eq(name, MK_USTR("weak_import"))) {
         attrs->weak = true;
-      } else if (ustr_eq(name, MK_SIZED("format"))) {
+      } else if (ustr_eq(name, MK_USTR("format"))) {
         attrs->format = arena_alloc(tchk->arena, sizeof(*attrs->format));
         *attrs->format = type_attr_format(tchk, attr);
       } else if (!silent_ignore) {
@@ -3899,8 +3899,8 @@ static struct td_expr type_var(struct typechk *tchk,
   ustr_t name = identifier_str(tchk->parser, &var->identifier);
 
   // turn __FUNCTION__ into __func__
-  if (ustr_eq(name, MK_SIZED("__FUNCTION__"))) {
-    name = MK_SIZED("__func__");
+  if (ustr_eq(name, MK_USTR("__FUNCTION__"))) {
+    name = MK_USTR("__func__");
   }
 
   struct var_table_entry *entry =
@@ -5638,7 +5638,7 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   // push the magic "__func__" variable
   struct td_var var = {
       .ty = TD_VAR_VAR_TY_VAR,
-      .identifier = MK_SIZED("__func__"),
+      .identifier = MK_USTR("__func__"),
       .scope = SCOPE_PARAMS,
       .span = MK_INVALID_TEXT_SPAN2()
   };

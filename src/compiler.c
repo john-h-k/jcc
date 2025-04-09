@@ -151,7 +151,7 @@ static void compiler_print_diagnostics_context(struct compiler *compiler,
   // TODO: handle span that crosses file
 
   if (!span.start.file ||
-      !fcache_read_path(compiler->fcache, MK_SIZED(span.start.file), &file)) {
+      !fcache_read_path(compiler->fcache, MK_USTR(span.start.file), &file)) {
     fprintf(stderr, "(could not read function file %s)", span.start.file);
     return;
   }

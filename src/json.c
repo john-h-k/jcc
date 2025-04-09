@@ -116,19 +116,19 @@ static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
 
   rd += json_parse_ws(&str);
 
-  if (ustr_prefix(str, MK_SIZED("null"))) {
+  if (ustr_prefix(str, MK_USTR("null"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_NULL()};
     return rd + strlen("null");
   }
 
-  if (ustr_prefix(str, MK_SIZED("true"))) {
+  if (ustr_prefix(str, MK_USTR("true"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_BOOL(true)};
     return rd + strlen("true");
   }
 
-  if (ustr_prefix(str, MK_SIZED("false"))) {
+  if (ustr_prefix(str, MK_USTR("false"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_BOOL(false)};
     return rd + strlen("false");

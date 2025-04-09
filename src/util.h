@@ -522,7 +522,7 @@ static inline int ustr_cmp(ustr_t l, ustr_t r) {
   return cmp;
 }
 
-#define MK_SIZED(s) ((ustr_t){(s), ((s) != NULL) ? strlen((s)) : 0})
-#define MK_NULL_STR() ((ustr_t){NULL, 0})
+#define MK_USTR(s) ((ustr_t){(s), ((s) != NULL) ? strlen((s)) : 0})
+#define MK_NULL_USTR() ((ustr_t){NULL, 0})
 
 #endif

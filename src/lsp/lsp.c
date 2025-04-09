@@ -199,7 +199,7 @@ static void lsp_close_doc(struct lsp_ctx *ctx,
 
 #define LSP_WRITE_MESSAGE(block)                                               \
   json_writer_write_begin_obj(ctx->writer);                                    \
-  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_SIZED("2.0"));                   \
+  JSON_WRITE_FIELD(ctx->writer, "jsonrpc", MK_USTR("2.0"));                   \
   {block};                                                                     \
   json_writer_write_end_obj(ctx->writer);                                      \
   lsp_write_buf(ctx);
@@ -282,7 +282,7 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc_ctx,
 
   LSP_WRITE_MESSAGE({
     JSON_WRITE_FIELD(writer, "method",
-                     MK_SIZED("textDocument/publishDiagnostics"));
+                     MK_USTR("textDocument/publishDiagnostics"));
 
     JSON_OBJECT(writer, "params", {
       // PublishDiagnosticsParams
@@ -326,8 +326,8 @@ static void lsp_write_diagnostics(struct lsp_ctx *ctx, struct lsp_doc *doc_ctx,
             // code?: integer | string
             // codeDescription?: CodeDescription;
 
-            JSON_WRITE_FIELD(writer, "source", MK_SIZED("jcc"));
-            JSON_WRITE_FIELD(writer, "message", MK_SIZED(diagnostic.message));
+            JSON_WRITE_FIELD(writer, "source", MK_USTR("jcc"));
+            JSON_WRITE_FIELD(writer, "message", MK_USTR(diagnostic.message));
 
             // tags?: DiagnosticTag[];
 
@@ -359,7 +359,7 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
     TODO("support clients that dont allow utf-8");
   }
 
-  ustr_t pos_encoding_kind = MK_SIZED("utf-8");
+  ustr_t pos_encoding_kind = MK_USTR("utf-8");
 
   struct json_writer *writer = ctx->writer;
 
@@ -374,8 +374,8 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
       JSON_OBJECT(writer, "serverInfo", {
         // ServerInfo
 
-        JSON_WRITE_FIELD(writer, "name", MK_SIZED("jcc-lsp"));
-        JSON_WRITE_FIELD(writer, "version", MK_SIZED(JCC_VERSION));
+        JSON_WRITE_FIELD(writer, "name", MK_USTR("jcc-lsp"));
+        JSON_WRITE_FIELD(writer, "version", MK_USTR(JCC_VERSION));
       });
 
       JSON_OBJECT(writer, "capabilities", {
@@ -537,7 +537,7 @@ static void lsp_goto_def(struct lsp_ctx *ctx, lsp_integer id,
     JSON_OBJECT(ctx->writer, "result", {
       if (def->start.file) {
         char *uri = arena_alloc_snprintf(ctx->arena, "file://%s", def->start.file);
-        JSON_WRITE_FIELD(ctx->writer, "uri", MK_SIZED(uri));
+        JSON_WRITE_FIELD(ctx->writer, "uri", MK_USTR(uri));
       } else {
         JSON_WRITE_FIELD(ctx->writer, "uri", params->text_doc.uri);
       }
