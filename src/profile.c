@@ -85,8 +85,6 @@ struct profiler_multi_region_inst profiler_begin_multi_region(struct profiler_mu
 
   profiler_init();
 
-  LSAN_IGNORE(init.spans);
-
   struct hashtbl_entry entry;
   struct profiler_multi_region_data *region;
   if (UNLIKELY(!multi_region->entry.key)) {
