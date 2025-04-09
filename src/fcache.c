@@ -123,6 +123,8 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   if (mode == FC_MODE_READ) {
+    DEBUG_ASSERT(file, "file null");
+
     char *data;
     read_file_content(fcache, f, &data, &file->len);
 
@@ -133,6 +135,18 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
     file->name = arena_alloc_szstrdup(fcache->arena, file->name);
 
     hashtbl_insert(fcache->cache, &key, file);
+  }
+
+  // TODO: check return values
+  switch (key.ty) {
+  case F_TY_PROC:
+    pclose(f);
+    break;
+  case F_TY_PATH:
+    fclose(f);
+    break;
+  case F_TY_STDIN:
+    break;
   }
 
   PROFILE_END_MULTI(fcache_read);

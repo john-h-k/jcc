@@ -82,8 +82,15 @@ typedef unsigned _BitInt(128) uint128_t;
 #include <sanitizer/common_interface_defs.h> // __sanitizer_print_stack_trace
 #endif
 
+#if __has_feature(attribute_analyzer_noreturn)
+#define NORETURN __attribute__((__noreturn__, __analyzer_noreturn__))
+#endif
+
 #if STDC_MIN_23
+#ifndef NORETURN
 #define NORETURN [[noreturn]]
+#endif
+
 #define DEPRECATED [[deprecated]]
 #define FALLTHROUGH [[fallthrough]]
 #define MAYBE_UNUSED [[maybe_unused]]
@@ -91,8 +98,10 @@ typedef unsigned _BitInt(128) uint128_t;
 #define UNSEQUENCED [[unsequenced]]
 #define REPRODUCIBLE [[reproducible]]
 #else
+#ifndef NORETURN
 #include <stdnoreturn.h>
 #define NORETURN noreturn
+#endif
 
 #if HAS_ATTRIBUTE(__fallthrough__)
 #define FALLTHROUGH __attribute__((__fallthrough__))
@@ -317,12 +326,19 @@ static inline void debug_print_stack_trace(void) {}
 #if NDEBUG
 #define DEBUG_ASSERT(b, ...) (void)(b)
 #else
-#define DEBUG_ASSERT(b, ...)                                                   \
-  util_debug_assert(b, #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-PRINTF_ARGS(5)
-void util_debug_assert(bool b, const char *cond, const char *func,
-                       const char *file, int line, const char *msg, ...);
+// hmm, this does not return the value so can't be used inline to replace an expression 
+// don't think there is a better way to achieve
+//   * DEBUG_ASSERT is valid as an expression
+//   * DEBUG_ASSERT is understood by clang analyzer
+//   * DEBUG_ASSERT does not double evaluate its arguments
+#define DEBUG_ASSERT(b, ...)                                                   \
+  (LIKELY(!!(b)) ? 0 : (util_debug_assert_fail(#b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0))
+
+PRINTF_ARGS(4)
+NORETURN void util_debug_assert_fail(const char *cond, const char *func,
+                                     const char *file, int line,
+                                     const char *msg, ...);
 
 #endif
 
@@ -448,12 +464,9 @@ size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len);
 
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
 
-// would like to use `char8_t` for `ustr_t` eventually (but causes lots of conflicting type errors)
-// #if STDC_MIN_23
-// #include <uchar.h>
-// #else
-// typedef unsigned char char8_t;
-// #endif
+// would like to use `char8_t` for `ustr_t` eventually (but causes lots of
+// conflicting type errors) #if STDC_MIN_23 #include <uchar.h> #else typedef
+// unsigned char char8_t; #endif
 
 typedef struct {
   const char *str;
@@ -492,8 +505,7 @@ static inline bool ustr_suffix(ustr_t str, ustr_t suffix) {
   return !memcmp(str.str + str.len - suffix.len, suffix.str, suffix.len);
 }
 
-static inline ustr_t ustr_strip_prefix(ustr_t str,
-                                                  ustr_t prefix) {
+static inline ustr_t ustr_strip_prefix(ustr_t str, ustr_t prefix) {
   if (ustr_prefix(str, prefix)) {
     str.len -= prefix.len;
     str.str += prefix.len;
@@ -502,8 +514,7 @@ static inline ustr_t ustr_strip_prefix(ustr_t str,
   return str;
 }
 
-static inline ustr_t ustr_strip_suffix(ustr_t str,
-                                                  ustr_t suffix) {
+static inline ustr_t ustr_strip_suffix(ustr_t str, ustr_t suffix) {
   if (ustr_suffix(str, suffix)) {
     str.len -= suffix.len;
   }
