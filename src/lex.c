@@ -43,7 +43,7 @@ enum lex_create_result lexer_create(struct program program,
 
 #define KEYWORD(kw, ty)                                                        \
   do {                                                                         \
-    struct sized_str k = {                                                     \
+    ustr_t k = {                                                     \
         .str = kw,                                                             \
         .len = strlen(kw),                                                     \
     };                                                                         \
@@ -203,7 +203,7 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
 
   DEBUG_ASSERT(KEYWORDS, "keywords should have been built");
 
-  struct sized_str key = {.str = token->text,
+  ustr_t key = {.str = token->text,
                           .len = text_span_len(&token->span)};
 
   enum lex_token_ty *kw_ty = hashtbl_lookup(KEYWORDS, &key);
@@ -215,7 +215,7 @@ static enum lex_token_ty refine_ty(struct preproc_token *token) {
   return LEX_TOKEN_TY_IDENTIFIER;
 }
 
-static struct sized_str process_raw_string(const struct lexer *lexer,
+static ustr_t process_raw_string(const struct lexer *lexer,
                                            const struct lex_token *token) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
@@ -402,7 +402,7 @@ static struct sized_str process_raw_string(const struct lexer *lexer,
 
   PUSH_CHAR(0);
 
-  return (struct sized_str){.str = vector_head(buff), .len = str_len};
+  return (ustr_t){.str = vector_head(buff), .len = str_len};
 }
 
 bool lexer_at_eof(struct lexer *lexer) {
@@ -667,12 +667,12 @@ void lex_consume_token(struct lexer *lexer, struct lex_token token) {
   lexer->last_text_pos = token.span.end;
 }
 
-struct sized_str lex_strlike_associated_text(const struct lexer *lexer,
+ustr_t lex_strlike_associated_text(const struct lexer *lexer,
                                              const struct lex_token *token) {
   return process_raw_string(lexer, token);
 }
 
-struct sized_str lex_associated_text(const struct lexer *lexer,
+ustr_t lex_associated_text(const struct lexer *lexer,
                                      const struct lex_token *token) {
   switch (token->ty) {
   case LEX_TOKEN_TY_ASCII_STR_LITERAL:
@@ -694,10 +694,10 @@ struct sized_str lex_associated_text(const struct lexer *lexer,
     char *p = arena_alloc(lexer->arena, len + 1);
     memcpy(p, token->text, len);
     p[len] = '\0';
-    return (struct sized_str){p, len};
+    return (ustr_t){p, len};
   }
   case LEX_TOKEN_TY_ELLIPSIS:
-    return (struct sized_str){"...", 3};
+    return (ustr_t){"...", 3};
   default:
     BUG("associated text did not make sense for token '%s'",
         lex_token_name(lexer, token));

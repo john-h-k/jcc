@@ -17,7 +17,7 @@ enum fcache_flags {
 
 struct fcache_file {
   // size_t id;
-  struct sized_str name;
+  ustr_t name;
 
   const char *data;
   size_t len;
@@ -28,11 +28,11 @@ void fcache_create(struct arena_allocator *arena, enum fcache_flags flags,
 
 bool fcache_read_stdin(struct fcache *fcache, struct fcache_file *file);
 
-bool fcache_test_path(struct fcache *fcache, struct sized_str path);
+bool fcache_test_path(struct fcache *fcache, ustr_t path);
 
-bool fcache_read_path(struct fcache *fcache, struct sized_str path,
+bool fcache_read_path(struct fcache *fcache, ustr_t path,
                       struct fcache_file *file);
-bool fcache_read_proc(struct fcache *fcache, struct sized_str proc,
+bool fcache_read_proc(struct fcache *fcache, ustr_t proc,
                       struct fcache_file *file);
 
 #endif

@@ -8,7 +8,7 @@ struct var_refs;
 
 // TODO: use hashing/interning instead for efficiency
 struct var_key {
-  struct sized_str name;
+  ustr_t name;
   int scope;
   struct ir_basicblock *basicblock;
 };

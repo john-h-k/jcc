@@ -25,7 +25,9 @@ The two most important utility files are:
     - `BREAKPOINT()` - When ran in debugger, breakpoint at this location
     - `debug_print_stack_trace()` - This will either print the stack trace via the sanitiser library, or use `addr2line` to attempt to build one. All of the above assertions and failure methods call this method, so assertion failures provide full stacktraces, which is exceptionally useful for debugging
 
-  - It also defines the `struct sized_str` type, which is used across the compiler instead of `const char *`
+  - It also defines the `ustr_t` type, which is used across the compiler instead of `const char *`
+    - Uses a typedef (unlike most types) because it is used frequently and is more of a primitive than a struct
+    - Represents a UTF-8 string
     - Allows handling of strings which contain null characters
     - More performant by eliminating frequent `strlen` calls
   

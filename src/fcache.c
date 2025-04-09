@@ -7,7 +7,7 @@
 
 struct fcache_key {
   enum f_ty { F_TY_PATH, F_TY_PROC, F_TY_STDIN } ty;
-  struct sized_str key;
+  ustr_t key;
 };
 
 struct fcache {
@@ -27,7 +27,7 @@ static bool eq_fcache_key(const void *l, const void *r) {
   const struct fcache_key *lc = l;
   const struct fcache_key *rc = r;
 
-  return lc->ty == rc->ty && szstreq(lc->key, rc->key);
+  return lc->ty == rc->ty && ustr_eq(lc->key, rc->key);
 }
 
 void fcache_create(struct arena_allocator *arena, enum fcache_flags flags,
@@ -50,7 +50,7 @@ enum fc_mode {
 static bool fcache_read(struct fcache *fcache, struct fcache_key key,
                         struct fcache_file *file, enum fc_mode mode);
 
-bool fcache_test_path(struct fcache *fcache, struct sized_str path) {
+bool fcache_test_path(struct fcache *fcache, ustr_t path) {
   struct fcache_key key = {F_TY_PATH, .key = path};
 
   return fcache_read(fcache, key, NULL, FC_MODE_TEST);
@@ -62,14 +62,14 @@ bool fcache_read_stdin(struct fcache *fcache, struct fcache_file *file) {
   return fcache_read(fcache, key, file, FC_MODE_READ);
 }
 
-bool fcache_read_path(struct fcache *fcache, struct sized_str path,
+bool fcache_read_path(struct fcache *fcache, ustr_t path,
                       struct fcache_file *file) {
   struct fcache_key key = {F_TY_PATH, .key = path};
 
   return fcache_read(fcache, key, file, FC_MODE_READ);
 }
 
-bool fcache_read_proc(struct fcache *fcache, struct sized_str proc,
+bool fcache_read_proc(struct fcache *fcache, ustr_t proc,
                       struct fcache_file *file) {
   struct fcache_key key = {F_TY_PROC, .key = proc};
 
@@ -93,7 +93,7 @@ static bool fcache_read(struct fcache *fcache, struct fcache_key key,
   }
 
   // FIXME: assert the sized_str has no null chars in it
-  DEBUG_ASSERT(szstr_nullsafe(key.key), "fcache doesn't support null chars");
+  DEBUG_ASSERT(ustr_nullsafe(key.key), "fcache doesn't support null chars");
 
   PROFILE_CREATE_MULTI(fcache_read);
   PROFILE_BEGIN_MULTI(fcache_read);

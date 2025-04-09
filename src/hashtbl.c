@@ -90,7 +90,7 @@ struct hashtbl *hashtbl_create_str_keyed_in_arena(struct arena_allocator *arena,
 struct hashtbl *
 hashtbl_create_sized_str_keyed_in_arena(struct arena_allocator *arena,
                                         size_t element_size) {
-  return hashtbl_create_in_arena(arena, sizeof(struct sized_str), element_size,
+  return hashtbl_create_in_arena(arena, sizeof(ustr_t), element_size,
                                  hashtbl_hash_sized_str, hashtbl_eq_sized_str);
 }
 
@@ -481,15 +481,15 @@ hashtbl_lookup_entry_or_insert_with(struct hashtbl *hashtbl, const void *key,
 }
 
 void hashtbl_hash_sized_str(struct hasher *hasher, const void *value) {
-  const struct sized_str *s = value;
+  const ustr_t *s = value;
 
   hasher_hash_bytes(hasher, s->str, s->len);
   hasher_hash_integer(hasher, s->len, sizeof(s->len));
 }
 
 bool hashtbl_eq_sized_str(const void *l, const void *r) {
-  const struct sized_str *sl = l;
-  const struct sized_str *sr = r;
+  const ustr_t *sl = l;
+  const ustr_t *sr = r;
 
-  return szstreq(*sl, *sr);
+  return ustr_eq(*sl, *sr);
 }

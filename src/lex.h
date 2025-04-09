@@ -200,10 +200,10 @@ bool lexer_at_eof(struct lexer *lexer);
 // * `token.ty == LEX_TOKEN_TY_OPEN_PAREN`, this returns NULL
 // * `token.ty == LEX_TOKEN_TY_IDENTIFIER`, this returns the identifier
 // TODO: maybe make this so it doesn't copy, and returns string length as well
-struct sized_str lex_associated_text(const struct lexer *lexer,
+ustr_t lex_associated_text(const struct lexer *lexer,
                                      const struct lex_token *token);
 
-struct sized_str lex_strlike_associated_text(const struct lexer *lexer,
+ustr_t lex_strlike_associated_text(const struct lexer *lexer,
                                              const struct lex_token *token);
 
 const char *lex_token_name(const struct lexer *lexer,

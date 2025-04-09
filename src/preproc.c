@@ -51,7 +51,7 @@ struct preproc {
   struct vector *unexpanded_buffer_tokens;
   struct vector *buffer_tokens;
 
-  // struct sized_str, struct preproc_define
+  // ustr_t, struct preproc_define
   struct hashtbl *defines;
 
   // stores current macros we are expanding in to prevent recursion
@@ -71,7 +71,7 @@ struct preproc {
   bool concat_next_token;
 
   // if a defined/__has_feature etc was just seen, we don't expand until end
-  struct sized_str query_ident;
+  ustr_t query_ident;
   bool keep_next_token;
 
   // after a `defined(SYM` symbol, we need to know to look to strip the close
@@ -167,7 +167,7 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 #define DEF_BUILTIN(tok_ty, n, v, f)                                           \
   do {                                                                         \
     size_t name_len = strlen((n));                                             \
-    struct sized_str ident = {.str = (n), .len = name_len};                    \
+    ustr_t ident = {.str = (n), .len = name_len};                    \
                                                                                \
     struct preproc_define define = {                                           \
         .name = {.ty = tok_ty,                                                 \
@@ -357,7 +357,7 @@ struct preproc_unexpanded_token {
   enum preproc_unexpanded_token_ty ty;
 
   union {
-    struct sized_str ident;
+    ustr_t ident;
     struct preproc_token token;
   };
 };
@@ -398,7 +398,7 @@ preproc_create(struct program program, struct fcache *fcache,
 
 #define SPECIAL_MACRO(kw, ty)                                                  \
   do {                                                                         \
-    struct sized_str k = {                                                     \
+    ustr_t k = {                                                     \
         .str = kw,                                                             \
         .len = strlen(kw),                                                     \
     };                                                                         \
@@ -1274,7 +1274,7 @@ static bool token_is_trivial(const struct preproc_token *token) {
          token->ty == PREPROC_TOKEN_TY_COMMENT;
 }
 
-static bool well_known_token(struct preproc *preproc, struct sized_str ident);
+static bool well_known_token(struct preproc *preproc, ustr_t ident);
 
 static struct preproc_token preproc_concat(struct preproc *preproc,
                                            struct preproc_token *token,
@@ -1437,7 +1437,7 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   // if identifier is a macro do something else
-  struct sized_str ident = {.str = token->text,
+  ustr_t ident = {.str = token->text,
                             .len = text_span_len(&token->span)};
 
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
@@ -2225,12 +2225,12 @@ static void preproc_tokens_til_eol(struct preproc *preproc,
 }
 
 static struct preproc_define *get_define(struct preproc *preproc,
-                                         struct sized_str ident) {
+                                         ustr_t ident) {
   return hashtbl_lookup(preproc->defines, &ident);
 }
 
 // tokens that shouldn't be stripped from an `#if` expression or similar
-static bool well_known_token(struct preproc *preproc, struct sized_str ident) {
+static bool well_known_token(struct preproc *preproc, ustr_t ident) {
   // FIXME: from TargetConditionals
   // 'The long term solution is to add suppport for __is_target_arch and
   // __is_target_os'
@@ -2308,23 +2308,23 @@ static unsigned long long eval_has_query(struct preproc *preproc,
                                          struct preproc_text *preproc_text,
                                          struct preproc_token *token,
                                          struct preproc_token *value) {
-  struct sized_str token_str = {.str = token->text,
+  ustr_t token_str = {.str = token->text,
                                 .len = text_span_len(&token->span)};
-  token_str = szstr_strip_prefix(token_str, MK_SIZED("__"));
+  token_str = ustr_strip_prefix(token_str, MK_SIZED("__"));
 
-  if (szstreq(token_str, MK_SIZED("defined"))) {
-    struct sized_str value_str = {.str = value->text,
+  if (ustr_eq(token_str, MK_SIZED("defined"))) {
+    ustr_t value_str = {.str = value->text,
                                   .len = text_span_len(&value->span)};
 
     return get_define(preproc, value_str) ? 1 : 0;
-  } else if (szstreq(token_str, MK_SIZED("has_include"))) {
+  } else if (ustr_eq(token_str, MK_SIZED("has_include"))) {
     struct include_path include_path = get_include_path(preproc, value);
     struct include_info include_info =
         try_find_include(preproc, preproc_text, include_path.filename,
                          include_path.is_angle, TRY_FIND_INCLUDE_MODE_TEST);
 
     return include_info.path != NULL;
-  } else if (szstreq(token_str, MK_SIZED("has_feature"))) {
+  } else if (ustr_eq(token_str, MK_SIZED("has_feature"))) {
     return 0;
   } else {
     // __has_attribute etc not implemented
@@ -2743,7 +2743,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
-          struct sized_str def_str = {.str = def_name->text,
+          ustr_t def_str = {.str = def_name->text,
                                       .len =
                                           (int)text_span_len(&def_name->span)};
           now_enabled = get_define(preproc, def_str);
@@ -2756,7 +2756,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         if (enabled) {
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
-          struct sized_str def_str = {.str = def_name->text,
+          ustr_t def_str = {.str = def_name->text,
                                       .len =
                                           (int)text_span_len(&def_name->span)};
           now_enabled = !get_define(preproc, def_str);
@@ -2812,7 +2812,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
-          struct sized_str def_str = {.str = def_name->text,
+          ustr_t def_str = {.str = def_name->text,
                                       .len =
                                           (int)text_span_len(&def_name->span)};
           bool now_enabled = get_define(preproc, def_str);
@@ -2829,7 +2829,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           *(bool *)vector_tail(preproc_text->enabled) = false;
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
-          struct sized_str def_str = {.str = def_name->text,
+          ustr_t def_str = {.str = def_name->text,
                                       .len =
                                           (int)text_span_len(&def_name->span)};
           bool now_enabled = !get_define(preproc, def_str);
@@ -2887,7 +2887,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             tok = vector_get(directive_tokens, first_def_tok++);
 
             if (tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
-              struct sized_str ident = {.len = text_span_len(&tok->span),
+              ustr_t ident = {.len = text_span_len(&tok->span),
                                         .str = tok->text};
 
               hashtbl_insert(params, &ident, &param_idx);
@@ -2979,7 +2979,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             }
 
             if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
-              struct sized_str ident = {.len = text_span_len(&def_tok->span),
+              ustr_t ident = {.len = text_span_len(&def_tok->span),
                                         .str = def_tok->text};
 
               size_t *idx = hashtbl_lookup(params, &ident);
@@ -3051,7 +3051,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
         vector_remove_range(directive_tokens, 0, first_def_tok);
 
-        struct sized_str ident = {.str = def_name.text,
+        ustr_t ident = {.str = def_name.text,
                                   .len = text_span_len(&def_name.span)};
 
         // don't free them
@@ -3077,7 +3077,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         struct preproc_token def_name =
             *(struct preproc_token *)vector_head(directive_tokens);
 
-        struct sized_str ident = {.str = def_name.text,
+        ustr_t ident = {.str = def_name.text,
                                   .len = text_span_len(&def_name.span)};
 
         // FIXME: inefficient lookup + remove

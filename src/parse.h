@@ -1022,7 +1022,7 @@ struct parse_result parse(struct parser *parser);
 
 void parser_free(struct parser **parser);
 
-struct sized_str identifier_str(struct parser *parser,
+ustr_t identifier_str(struct parser *parser,
                                 const struct lex_token *token);
 
 void debug_print_ast(struct parser *parser,

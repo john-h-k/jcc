@@ -19,7 +19,7 @@ enum var_table_ns {
 
 struct var_table_entry {
   enum var_table_ns ns;
-  struct sized_str name;
+  ustr_t name;
   int scope;
 
   struct td_var_ty *var_ty;
@@ -46,10 +46,10 @@ void vt_free(struct var_table *var_table);
 
 struct var_table_entry *vt_create_top_level_entry(struct var_table *var_table,
                                                   enum var_table_ns ns,
-                                                  struct sized_str name);
+                                                  ustr_t name);
 struct var_table_entry *vt_create_entry(struct var_table *var_table,
                                         enum var_table_ns ns,
-                                        struct sized_str name);
+                                        ustr_t name);
 
 int vt_cur_scope(struct var_table *var_table);
 
@@ -58,11 +58,11 @@ void vt_pop_scope(struct var_table *var_table);
 
 struct var_table_entry *vt_get_entry(struct var_table *var_table,
                                      enum var_table_ns ns,
-                                     struct sized_str name);
+                                     ustr_t name);
 
 struct var_table_entry *vt_get_or_create_entry(struct var_table *var_table,
                                                enum var_table_ns ns,
-                                               struct sized_str name);
+                                               ustr_t name);
 
 typedef void (*debug_print_entries_callback)(FILE *file,
                                              struct var_table_entry *entry,

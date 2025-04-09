@@ -12,7 +12,7 @@ struct json_ctx {
   struct arena_allocator *arena;
 };
 
-static size_t json_parse_ws(struct sized_str *str) {
+static size_t json_parse_ws(ustr_t *str) {
   size_t rd = 0;
 
   while (str->len && isspace(str->str[0])) {
@@ -24,8 +24,8 @@ static size_t json_parse_ws(struct sized_str *str) {
   return rd;
 }
 
-static struct sized_str process_raw_string(struct json_ctx *ctx,
-                                           struct sized_str value) {
+static ustr_t process_raw_string(struct json_ctx *ctx,
+                                           ustr_t value) {
   // TODO: this i think will wrongly accept multilines
   // FIXME: definitely wrong for wide strings
 
@@ -101,10 +101,10 @@ static struct sized_str process_raw_string(struct json_ctx *ctx,
 
   PUSH_CHAR(0);
 
-  return (struct sized_str){.str = vector_head(buff), .len = str_len};
+  return (ustr_t){.str = vector_head(buff), .len = str_len};
 }
 
-static size_t json_parse_chunk(struct json_ctx *context, struct sized_str str,
+static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
                                struct json_result *result) {
   size_t rd = 0;
 
@@ -116,19 +116,19 @@ static size_t json_parse_chunk(struct json_ctx *context, struct sized_str str,
 
   rd += json_parse_ws(&str);
 
-  if (szstr_prefix(str, MK_SIZED("null"))) {
+  if (ustr_prefix(str, MK_SIZED("null"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_NULL()};
     return rd + strlen("null");
   }
 
-  if (szstr_prefix(str, MK_SIZED("true"))) {
+  if (ustr_prefix(str, MK_SIZED("true"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_BOOL(true)};
     return rd + strlen("true");
   }
 
-  if (szstr_prefix(str, MK_SIZED("false"))) {
+  if (ustr_prefix(str, MK_SIZED("false"))) {
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
                                    .value = JSON_MK_BOOL(false)};
     return rd + strlen("false");
@@ -160,9 +160,9 @@ static size_t json_parse_chunk(struct json_ctx *context, struct sized_str str,
       char_escaped = !char_escaped && str.str[i] == '\\';
     }
 
-    struct sized_str val = {.str = str.str + 1, .len = len};
+    ustr_t val = {.str = str.str + 1, .len = len};
 
-    struct sized_str processed = process_raw_string(context, val);
+    ustr_t processed = process_raw_string(context, val);
 
     // TODO: process string for escapes
     *result = (struct json_result){.ty = JSON_RESULT_TY_VALUE,
@@ -313,7 +313,7 @@ static size_t json_parse_chunk(struct json_ctx *context, struct sized_str str,
   }
 }
 
-struct json_result json_parse(struct sized_str str) {
+struct json_result json_parse(ustr_t str) {
   struct arena_allocator *arena;
   arena_allocator_create(&arena);
 
@@ -380,7 +380,7 @@ static void json_print_value_part(struct json_print_context *ctx,
     struct hashtbl_iter *iter = hashtbl_iter(value->obj_val.fields);
     struct hashtbl_entry entry;
     while (hashtbl_iter_next(iter, &entry)) {
-      const struct sized_str *name = entry.key;
+      const ustr_t *name = entry.key;
       const struct json_value *field = entry.data;
 
       fprintf(ctx->file, "%*s", (int)(ctx->indent * 2), "");
@@ -432,10 +432,10 @@ void json_writer_free(struct json_writer **writer) {
   *writer = NULL;
 }
 
-struct sized_str json_writer_get_buf(struct json_writer *writer) {
+ustr_t json_writer_get_buf(struct json_writer *writer) {
   // NOTE: `clear` invalidates this buffer!
 
-  return (struct sized_str){
+  return (ustr_t){
       .str = vector_head(writer->buffer),
       .len = vector_length(writer->buffer),
   };
@@ -517,7 +517,7 @@ void json_writer_write_double(struct json_writer *writer, double value) {
 }
 
 void json_writer_write_string(struct json_writer *writer,
-                              struct sized_str value) {
+                              ustr_t value) {
   if (writer->needs_sep) {
     vector_push_back(writer->buffer, &(char){','});
   }
@@ -535,7 +535,7 @@ void json_writer_write_string(struct json_writer *writer,
 }
 
 void json_writer_write_field_name(struct json_writer *writer,
-                                  struct sized_str name) {
+                                  ustr_t name) {
   json_writer_write_string(writer, name);
 
   writer->needs_sep = false;

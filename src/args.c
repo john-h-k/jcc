@@ -208,7 +208,7 @@ static void print_help(void) {
 #undef ARG_OPT
 }
 
-static void bad_value(struct arg *arg, struct sized_str lookup_str,
+static void bad_value(struct arg *arg, ustr_t lookup_str,
                       const char *value) {
   errsl("Invalid value '%s' for option '%.*s'. Valid values: ", value,
         (int)lookup_str.len, lookup_str.str);
@@ -270,11 +270,11 @@ enum parse_args_result parse_args(int argc, char **argv,
       break;                                                                   \
     }                                                                          \
     if (sh[0]) {                                                               \
-      struct sized_str full_sh = {.str = sh, .len = strlen(sh)};               \
+      ustr_t full_sh = {.str = sh, .len = strlen(sh)};               \
       hashtbl_insert(opts, &full_sh, &arg);                                    \
     }                                                                          \
     if (lo[0]) {                                                               \
-      struct sized_str full_lo = {.str = lo, .len = strlen(lo)};               \
+      ustr_t full_lo = {.str = lo, .len = strlen(lo)};               \
       hashtbl_insert(opts, &full_lo, &arg);                                    \
     }                                                                          \
     POP_NO_WARN();                                                             \
@@ -331,7 +331,7 @@ enum parse_args_result parse_args(int argc, char **argv,
 
       value = strchr(s, '=');
 
-      struct sized_str lookup_str = {.len = value ? value - s : len, .str = s};
+      ustr_t lookup_str = {.len = value ? value - s : len, .str = s};
 
       struct arg *arg = hashtbl_lookup(opts, &lookup_str);
 
@@ -343,7 +343,7 @@ enum parse_args_result parse_args(int argc, char **argv,
           lookup_len = comma - s + 1;
         }
 
-        lookup_str = (struct sized_str){.len = lookup_len, .str = s};
+        lookup_str = (ustr_t){.len = lookup_len, .str = s};
 
         arg = hashtbl_lookup(opts, &lookup_str);
         if (arg) {

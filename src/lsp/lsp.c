@@ -153,7 +153,7 @@ static void lsp_parse_opened_doc(struct lsp_ctx *ctx,
   hashtbl_insert(ctx->docs, &params->text_doc.uri, &doc);
 }
 
-static struct lsp_doc *lsp_get_doc(struct lsp_ctx *ctx, struct sized_str uri) {
+static struct lsp_doc *lsp_get_doc(struct lsp_ctx *ctx, ustr_t uri) {
   struct lsp_doc *doc = hashtbl_lookup(ctx->docs, &uri);
 
   invariant_assert(doc, "doc did not exist (should have been opened by "
@@ -212,7 +212,7 @@ static struct req_msg lsp_read_msg(struct lsp_ctx *ctx) {
 
   fread(vector_head(ctx->read_buf), 1, headers.content_length, ctx->in);
 
-  struct sized_str obj = {.len = vector_length(ctx->read_buf),
+  ustr_t obj = {.len = vector_length(ctx->read_buf),
                           .str = vector_head(ctx->read_buf)};
 
   struct json_result result = json_parse(obj);
@@ -234,7 +234,7 @@ static struct req_msg lsp_read_msg(struct lsp_ctx *ctx) {
 }
 
 static void lsp_write_buf(struct lsp_ctx *ctx) {
-  struct sized_str res = json_writer_get_buf(ctx->writer);
+  ustr_t res = json_writer_get_buf(ctx->writer);
 
   fprintf(ctx->log, "%.*s\n", (int)res.len, res.str);
 
@@ -359,7 +359,7 @@ static void lsp_write_server_caps(struct lsp_ctx *ctx,
     TODO("support clients that dont allow utf-8");
   }
 
-  struct sized_str pos_encoding_kind = MK_SIZED("utf-8");
+  ustr_t pos_encoding_kind = MK_SIZED("utf-8");
 
   struct json_writer *writer = ctx->writer;
 

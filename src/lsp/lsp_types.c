@@ -229,20 +229,20 @@ TRY_DE_STRUCT(window_caps, caps) {
 }
 
 TRY_DE_ENUM(pos_encoding_kind, kind) {
-  struct sized_str ident;
+  ustr_t ident;
   TRY_DE_STR(value, ident);
 
-  if (szstreq(ident, MK_SIZED("utf-8"))) {
+  if (ustr_eq(ident, MK_SIZED("utf-8"))) {
     *kind = POS_ENCODING_KIND_UTF8;
     return true;
   }
 
-  if (szstreq(ident, MK_SIZED("utf-16"))) {
+  if (ustr_eq(ident, MK_SIZED("utf-16"))) {
     *kind = POS_ENCODING_KIND_UTF16;
     return true;
   }
 
-  if (szstreq(ident, MK_SIZED("utf-32"))) {
+  if (ustr_eq(ident, MK_SIZED("utf-32"))) {
     *kind = POS_ENCODING_KIND_UTF32;
     return true;
   }
@@ -330,7 +330,7 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value,
 
 #define METHOD(name, ty)                                                       \
   do {                                                                         \
-    struct sized_str k = {                                                     \
+    ustr_t k = {                                                     \
         .str = name,                                                           \
         .len = strlen(name),                                                   \
     };                                                                         \
@@ -353,7 +353,7 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value,
 
   TRY_DE_INT_FIELD(object, msg->id, "id", false);
 
-  struct sized_str method;
+  ustr_t method;
   TRY_DE_STR_FIELD(object, method, "method", true);
 
   const struct json_value *params;
