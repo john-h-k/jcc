@@ -61,8 +61,8 @@ typedef unsigned _BitInt(128) uint128_t;
 #endif
 
 #if __GNUC__ || __clang__
-#define LIKELY(x) __builtin_expect(x, 1)
-#define UNLIKELY(x) __builtin_expect(x, 0)
+#define LIKELY(x) __builtin_expect((x), 1)
+#define UNLIKELY(x) __builtin_expect((x), 0)
 #else
 #define LIKELY(x) x
 #define UNLIKELY(x) x
@@ -332,23 +332,32 @@ static inline void debug_print_stack_trace(void) {}
 //   * DEBUG_ASSERT is valid as an expression
 //   * DEBUG_ASSERT is understood by clang analyzer
 //   * DEBUG_ASSERT does not double evaluate its arguments
-#define DEBUG_ASSERT(b, ...)                                                   \
-  (LIKELY(!!(b)) ? 0 : (util_debug_assert_fail(#b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0))
 
-PRINTF_ARGS(4)
-NORETURN void util_debug_assert_fail(const char *cond, const char *func,
+#if __has_feature(attribute_analyzer_noreturn) && 0
+#define DEBUG_ASSERT(b, ...) (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__), assert((b)), 0)
+// BUG workout why these fail in JCC
+// #define DEBUG_ASSERT(b, ...)                                                   \
+// ((b) ? 0 : (util_debug_assert_fail((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0))
+// ((b) ? 0 : ((b) && (util_debug_assert_fail(#b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0)))
+#else
+#define DEBUG_ASSERT(b, ...) util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#endif
+
+PRINTF_ARGS(5)
+void util_debug_assert(bool b, const char *cond, const char *func,
                                      const char *file, int line,
                                      const char *msg, ...);
 
 #endif
 
-#if __STDC_VERSION__ <= 201710L
+#if __STDC_VERSION__ <= 201710L && !defined(unreachable)
 NORETURN void unreachable(void);
 #endif
 
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 
 // present in all mode, always causes program exit if fails
+// FIXME: clang static analyzer does not recognise this as an assertion function
 PRINTF_ARGS(1)
 static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {

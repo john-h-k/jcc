@@ -370,12 +370,14 @@ static enum compile_result compile_stage_lex(struct compiler *compiler,
     return COMPILE_RESULT_BAD_FILE;
   }
 
+  // TODO: lex can fail, also this doesn't match structure of rest of compiler (where create and free are outside of these functions)
+
   struct lexer *lexer;
   lexer_create(compiler->program, compiler->preproc, compiler->args.c_standard, mode, &lexer);
 
   lex_all(lexer);
 
-  // TODO: lex can fail
+  lexer_free(&lexer);
 
   return COMPILE_RESULT_SUCCESS;
 }

@@ -20,10 +20,14 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
 }
 
 #ifndef NDEBUG
-void util_debug_assert_fail(const char *cond, const char *func,
-                       const char *file, int line, const char *msg, ...) {
-  fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ",
-          file, line, func, cond);
+void util_debug_assert(bool b, const char *cond, const char *func,
+                            const char *file, int line, const char *msg, ...) {
+  if (b) {
+    return;
+  }
+
+  fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
+          line, func, cond);
 #ifdef __JCC__
   // print raw message
   fprintf(stderr, "%s\n", msg);

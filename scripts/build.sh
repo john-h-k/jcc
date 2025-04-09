@@ -104,7 +104,7 @@ configure() {
           exit 0
           ;;
         --clean)
-              clean
+          clean
           shift
           fresh="--fresh"
           ;;
@@ -241,7 +241,7 @@ build() {
 
     num_procs=$(nproc 2> /dev/null || sysctl -n hw.physicalcpu 2> /dev/null || { echo -e "${BOLDYELLOW}Could not find core count; defaulting to 4${RESET}" >&2; echo 4; }; )
 
-    if ! cmake --build . --parallel $num_procs; then
+    if ! cmake --build . --parallel "$num_proc"; then
         echo -e "${BOLDRED}Build failed!${RESET}"
         exit -1
     fi
@@ -400,7 +400,7 @@ bootstrap() {
         flags="$@"
 
         # do a pre-configure so timing is more accurate
-        configure "$@" --clean --enable-arch aarch64 --enable-arch rv32i --cc "$cc" > /dev/null
+        configure "$@" --clean --enable-arch aarch64 --enable-arch rv32i --cc "$cc"
         cd ..
 
         start=$(profile_begin)
@@ -421,10 +421,10 @@ bootstrap() {
 
     rm -f jcc0 jcc1
 
-    # for timing
-    if ! _stage_build cc 0 --no-san; then
-        exit -1
-    fi
+    # # for timing
+    # if ! _stage_build cc 0 --no-san; then
+    #     exit -1
+    # fi
 
     # actual build
     if ! _stage_build cc 0 --mode release; then
