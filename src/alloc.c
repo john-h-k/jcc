@@ -227,7 +227,7 @@ char *arena_alloc_snprintf(struct arena_allocator *allocator,
 }
 
 void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
-  if (!ptr) {
+  if (!ptr || !size) {
     return arena_alloc(allocator, size);
   }
 
@@ -241,10 +241,13 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
   __asan_unpoison_memory_region(metadata, sizeof(*metadata));
   __asan_unpoison_memory_region(ptr, MIN(size, metadata->size));
 #endif
+
   memcpy(new, ptr, MIN(size, metadata->size));
+
 #ifdef ASAN
   __asan_poison_memory_region(metadata, sizeof(*metadata));
 #endif
+
   return new;
 }
 
