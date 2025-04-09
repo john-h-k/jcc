@@ -174,7 +174,7 @@ static hash_t hasher_hash_long(const char *data, size_t length, uint64_t s0,
 
   if (remainder) {
     remainder = MAX(remainder, 16);
-    return hasher_hash_med((data + length) - remainder, length, s0, s1,
+    return hasher_hash_med((data + length) - remainder, remainder, s0, s1,
                            fold_seed);
   } else {
     return s0 ^ s1;

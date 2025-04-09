@@ -10,7 +10,7 @@
 static enum link_result
 macos_link_objects_with_ld(const struct link_args *args) {
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("macos_link", &arena);
 
   const char *sdk_path = args->args->sys_root;
 

@@ -1,10 +1,13 @@
 #include "alloc.h"
 
-#include "profile.h"
 #include "util.h"
 #include "vector.h"
 
 #include <stdlib.h>
+
+#ifdef ASAN
+#include <sanitizer/asan_interface.h>
+#endif
 
 #ifdef ALWAYS_MALLOC
 #define BLOCK_SIZE (0)
@@ -15,6 +18,7 @@
 struct arena;
 
 struct arena_allocator {
+  const char *name;
   struct arena *first;
   struct arena *last;
 
@@ -41,10 +45,61 @@ struct arena {
 
 #define ALIGNMENT (16)
 
+#ifdef ASAN
+struct allocator_info {
+  const char *name;
+  void *base;
+  void *end;
+};
+
+static struct vector *ALLOCATORS = NULL;
+
+static void arena_asan_error(const char *report) {
+  // DEBUG_ASSERT(__asan_report_present(), "wot");
+  // void *addr = __asan_get_report_address();
+
+  // HACK: `__asan_get_report_address` doesn't seem to work? so parse string lol
+  const char *addr_str = strstr(report, "on address ");
+  unsigned long long addr_val = 0;
+
+  if (addr_str) {
+    addr_str += strlen("on address ");
+  }
+
+  const char *addr_end = strchr(addr_str, ' ');
+  if (!addr_end ||
+      !try_parse_integer(addr_str, addr_end - addr_str, &addr_val)) {
+    return;
+  }
+
+  void *addr = (void *)addr_val;
+
+  size_t num_allocators = vector_length(ALLOCATORS);
+  if (!ALLOCATORS || !addr) {
+    return;
+  }
+
+  for (size_t i = 0; i < num_allocators; i++) {
+    struct allocator_info *alloc = vector_get(ALLOCATORS, i);
+
+    void *base = alloc->base;
+    void *end = alloc->end;
+
+    if (addr >= base && addr <= end) {
+      fprintf(stderr,
+              PR_RED PR_BOLD "\nError occurred in arena '%s'\n\n" PR_RESET,
+              alloc->name);
+    }
+  }
+}
+#endif
+
 struct arena new_arena(struct arena_allocator *allocator, size_t size);
 
-void arena_allocator_create(struct arena_allocator **allocator) {
-  struct arena_allocator value = {.first = NULL,
+void arena_allocator_create(const char *name,
+                            struct arena_allocator **allocator) {
+  struct arena_allocator value = {.name = name,
+                                  .first = NULL,
                                   .last = NULL,
                                   .large_allocs =
                                       vector_create(sizeof(void *))};
@@ -57,6 +112,16 @@ void arena_allocator_create(struct arena_allocator **allocator) {
   *p->last = new_arena(p, BLOCK_SIZE);
 
   p->first = p->last;
+
+#ifdef ASAN
+  // FIXME: thread safety
+  static bool init = false;
+  if (!init) {
+    init = true;
+    ALLOCATORS = vector_create(sizeof(struct allocator_info));
+    __asan_set_error_report_callback(arena_asan_error);
+  }
+#endif
 }
 
 void arena_allocator_free(struct arena_allocator **allocator) {
@@ -71,7 +136,18 @@ void arena_allocator_free(struct arena_allocator **allocator) {
   struct arena *arena = (*allocator)->first;
 
   while (arena) {
+#ifdef ASAN
+    struct allocator_info info = {
+        .name = (*allocator)->name,
+        .base = arena->block,
+        .end = arena->block + arena->size,
+    };
+
+    vector_push_back(ALLOCATORS, &info);
+#endif
+
     void *p = arena;
+
     free(arena->block);
 
     arena = arena->succ;
@@ -160,7 +236,15 @@ void *arena_realloc(struct arena_allocator *allocator, void *ptr, size_t size) {
 
   void *new = arena_alloc(allocator, size);
 
+  // need to unpoison due to alignment bytes
+#ifdef ASAN
+  __asan_unpoison_memory_region(metadata, sizeof(*metadata));
+  __asan_unpoison_memory_region(ptr, MIN(size, metadata->size));
+#endif
   memcpy(new, ptr, MIN(size, metadata->size));
+#ifdef ASAN
+  __asan_poison_memory_region(metadata, sizeof(*metadata));
+#endif
   return new;
 }
 
@@ -249,13 +333,24 @@ bool try_alloc_in_arena(struct arena *arena, size_t size, void **allocation) {
 
   *allocation = &arena->block[arena->pos];
 
+#ifdef ASAN
+  __asan_unpoison_memory_region(*allocation, sizeof(struct alloc_metadata));
+#endif
   struct alloc_metadata *metadata = (struct alloc_metadata *)*allocation;
   metadata->arena = arena;
   metadata->size = size;
+#ifdef ASAN
+  __asan_poison_memory_region(*allocation, sizeof(struct alloc_metadata));
+#endif
 
   *allocation = metadata + 1;
 
   arena->pos += adj_size;
+
+#ifdef ASAN
+  __asan_unpoison_memory_region(*allocation, size);
+#endif
+
   return true;
 }
 
@@ -266,6 +361,10 @@ struct arena new_arena(struct arena_allocator *allocator, size_t size) {
                         .block = nonnull_malloc(size),
                         .pos = 0,
                         .size = size};
+
+#ifdef ASAN
+  __asan_poison_memory_region(arena.block, arena.size);
+#endif
 
   return arena;
 }

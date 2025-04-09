@@ -153,7 +153,7 @@ enum lex_create_result lexer_create(struct program program,
   info("beginning lex stage");
 
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("lexer", &arena);
 
   struct lexer *l = nonnull_malloc(sizeof(*l));
   l->arena = arena;

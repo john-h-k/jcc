@@ -43,7 +43,7 @@ enum parser_create_result parser_create(
     struct compiler_diagnostics *diagnostics, struct parser **parser) {
   struct parser *p = nonnull_malloc(sizeof(*p));
 
-  arena_allocator_create(&p->arena);
+  arena_allocator_create("parser", &p->arena);
   if (lexer_create(program, preproc, c_standard, mode, &p->lexer) !=
       LEX_CREATE_RESULT_SUCCESS) {
     err("failed to create lexer");

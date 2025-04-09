@@ -315,7 +315,7 @@ static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
 
 struct json_result json_parse(ustr_t str) {
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("json_parse", &arena);
 
   struct json_ctx ctx = {.arena = arena};
 

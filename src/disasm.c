@@ -12,7 +12,7 @@ void objdump_debug_disasm(enum compile_target target, const char *filename,
                           const char *output) {
   // tmp arena
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("disasm", &arena);
 
   struct syscmd *cmd;
   if (target == COMPILE_TARGET_LINUX_RV32I) {

@@ -20,7 +20,7 @@ static void hash_fcache_key(struct hasher *hasher, const void *obj) {
   const struct fcache_key *value = obj;
 
   hasher_hash_integer(hasher, value->ty, sizeof(value->ty));
-  hashtbl_hash_sized_str(hasher, &value->key);
+  hashtbl_hash_ustr(hasher, &value->key);
 }
 
 static bool eq_fcache_key(const void *l, const void *r) {

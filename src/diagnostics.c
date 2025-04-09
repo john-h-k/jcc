@@ -72,7 +72,7 @@ static bool eq_compiler_diagnostic(const void *l, const void *r) {
 struct compiler_diagnostics *
 compiler_diagnostics_create(struct compiler_diagnostics_args args) {
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("diagnostics", &arena);
 
   struct compiler_diagnostics *d = arena_alloc(arena, sizeof(*d));
   *d = (struct compiler_diagnostics){

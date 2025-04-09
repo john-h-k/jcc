@@ -101,7 +101,7 @@ compiler_create(const struct compiler_create_args *args,
     return COMPILER_CREATE_RESULT_FAILURE;
   }
 
-  arena_allocator_create(&(*compiler)->arena);
+  arena_allocator_create("compiler", &(*compiler)->arena);
 
   return COMPILER_CREATE_RESULT_SUCCESS;
 }

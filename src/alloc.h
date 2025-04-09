@@ -6,7 +6,7 @@
 /* Allocator which progressively grows and is freed in one go */
 struct arena_allocator;
 
-void arena_allocator_create(struct arena_allocator **allocator);
+void arena_allocator_create(const char *name, struct arena_allocator **allocator);
 void arena_allocator_free(struct arena_allocator **allocator);
 
 /* Alloc word-aligned block in arena */

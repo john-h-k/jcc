@@ -10,7 +10,7 @@
 
 enum link_result linux_link_objects(const struct link_args *args) {
   struct arena_allocator *arena;
-  arena_allocator_create(&arena);
+  arena_allocator_create("linux_link", &arena);
 
   struct syscmd *cmd;
 
