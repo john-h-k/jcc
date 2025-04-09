@@ -389,7 +389,7 @@ int main(int argc, char **argv) {
   signal(SIGABRT, signal_handle);
 
   // we want to use the user's locale i think?
-  setlocale(LC_ALL, "");
+  LSAN_IGNORE(setlocale(LC_ALL, ""));
 
 #if SAN && OS_APPLE
   // sanitizer running causes spurious 'malloc: nano zone abandoned due to

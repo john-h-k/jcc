@@ -327,26 +327,30 @@ static inline void debug_print_stack_trace(void) {}
 #define DEBUG_ASSERT(b, ...) (void)(b)
 #else
 
-// hmm, this does not return the value so can't be used inline to replace an expression 
-// don't think there is a better way to achieve
+// hmm, this does not return the value so can't be used inline to replace an
+// expression don't think there is a better way to achieve
 //   * DEBUG_ASSERT is valid as an expression
 //   * DEBUG_ASSERT is understood by clang analyzer
 //   * DEBUG_ASSERT does not double evaluate its arguments
 
 #if __has_feature(attribute_analyzer_noreturn) && 0
-#define DEBUG_ASSERT(b, ...) (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__), assert((b)), 0)
+#define DEBUG_ASSERT(b, ...)                                                   \
+  (util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__),      \
+   assert((b)), 0)
 // BUG workout why these fail in JCC
-// #define DEBUG_ASSERT(b, ...)                                                   \
-// ((b) ? 0 : (util_debug_assert_fail((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0))
-// ((b) ? 0 : ((b) && (util_debug_assert_fail(#b, __func__, __FILE__, __LINE__, __VA_ARGS__), 0)))
+// #define DEBUG_ASSERT(b, ...) \
+// ((b) ? 0 : (util_debug_assert_fail((b), #b, __func__, __FILE__, __LINE__,
+// __VA_ARGS__), 0))
+// ((b) ? 0 : ((b) && (util_debug_assert_fail(#b, __func__, __FILE__, __LINE__,
+// __VA_ARGS__), 0)))
 #else
-#define DEBUG_ASSERT(b, ...) util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#define DEBUG_ASSERT(b, ...)                                                   \
+  util_debug_assert((b), #b, __func__, __FILE__, __LINE__, __VA_ARGS__)
 #endif
 
 PRINTF_ARGS(5)
 void util_debug_assert(bool b, const char *cond, const char *func,
-                                     const char *file, int line,
-                                     const char *msg, ...);
+                       const char *file, int line, const char *msg, ...);
 
 #endif
 
@@ -474,8 +478,13 @@ size_t sprint_str(char *buf, size_t buf_sz, const char *input, size_t len);
 bool try_parse_integer(const char *str, size_t len, unsigned long long *value);
 
 // would like to use `char8_t` for `ustr_t` eventually (but causes lots of
-// conflicting type errors) #if STDC_MIN_23 #include <uchar.h> #else typedef
-// unsigned char char8_t; #endif
+// conflicting type errors atm)
+
+// #if STDC_MIN_23
+// #include <uchar.h>
+// #else typedef
+// unsigned char char8_t;
+// #endif
 
 typedef struct {
   const char *str;
