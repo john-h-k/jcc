@@ -57,7 +57,7 @@ bool fcache_test_path(struct fcache *fcache, ustr_t path) {
 }
 
 bool fcache_read_stdin(struct fcache *fcache, struct fcache_file *file) {
-  struct fcache_key key = {.ty = F_TY_STDIN, .key = MK_NULL_STR()};
+  struct fcache_key key = {.ty = F_TY_STDIN, .key = MK_NULL_USTR()};
 
   return fcache_read(fcache, key, file, FC_MODE_READ);
 }

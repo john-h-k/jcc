@@ -1425,14 +1425,14 @@ static struct ir_op *build_ir_for_var(struct ir_func_builder *irb,
                                       struct ir_stmt **stmt,
                                       struct ir_var_ty var_ty,
                                       struct td_var *var) {
-  if (ustr_eq(var->identifier, MK_SIZED("__func__"))) {
+  if (ustr_eq(var->identifier, MK_USTR("__func__"))) {
     if (!irb->func_name_cnst) {
       const char *value = irb->func->name;
       struct ir_var_ty str_var_ty = ir_var_ty_make_array(
           irb->unit, &IR_VAR_TY_I8, strlen(irb->func->name) + 1);
       const char *name =
           mangle_static_name(&(struct ir_var_builder){.arena = irb->arena},
-                             irb->func, MK_SIZED("__func__"));
+                             irb->func, MK_USTR("__func__"));
 
       struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &str_var_ty,
                                          IR_GLB_DEF_TY_DEFINED, name);
@@ -1595,9 +1595,9 @@ static struct ir_op *build_ir_for_intrinsic(struct ir_func_builder *irb,
 
   struct ir_var_ty ret_ty = ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
 
-  if (ustr_eq(var.identifier, MK_SIZED("fabs")) ||
-      ustr_eq(var.identifier, MK_SIZED("fabsf")) ||
-      ustr_eq(var.identifier, MK_SIZED("fabsl"))) {
+  if (ustr_eq(var.identifier, MK_USTR("fabs")) ||
+      ustr_eq(var.identifier, MK_USTR("fabsf")) ||
+      ustr_eq(var.identifier, MK_USTR("fabsl"))) {
     DEBUG_ASSERT(call->arg_list.num_args == 1, "more than 1 arg to fabs");
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);
@@ -1608,9 +1608,9 @@ static struct ir_op *build_ir_for_intrinsic(struct ir_func_builder *irb,
         (struct ir_op_unary_op){.ty = IR_OP_UNARY_OP_TY_FABS, .value = value};
 
     return op;
-  } else if (ustr_eq(var.identifier, MK_SIZED("sqrt")) ||
-             ustr_eq(var.identifier, MK_SIZED("sqrtf")) ||
-             ustr_eq(var.identifier, MK_SIZED("sqrtl"))) {
+  } else if (ustr_eq(var.identifier, MK_USTR("sqrt")) ||
+             ustr_eq(var.identifier, MK_USTR("sqrtf")) ||
+             ustr_eq(var.identifier, MK_USTR("sqrtl"))) {
     DEBUG_ASSERT(call->arg_list.num_args == 1, "more than 1 arg to fabs");
 
     struct ir_op *value = build_ir_for_expr(irb, stmt, &call->arg_list.args[0]);

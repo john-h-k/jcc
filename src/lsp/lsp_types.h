@@ -219,7 +219,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_INT_FIELD(object, name, camel, req)                             \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
                                                                                \
     if (req && !val) {                                                         \
@@ -241,7 +241,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_UINT_FIELD(object, name, camel, req)                            \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
                                                                                \
     if (req && !val) {                                                         \
@@ -263,7 +263,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_STR_FIELD(object, name, camel, req)                             \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
                                                                                \
     if (req && !val) {                                                         \
@@ -285,7 +285,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_BOOL_FIELD(object, name, camel, req)                            \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     struct json_value *val = hashtbl_lookup(object->fields, &name_str);        \
                                                                                \
     if (req && !val) {                                                         \
@@ -307,7 +307,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_VALUE_FIELD(object, name, camel, req)                           \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     const struct json_value *val = hashtbl_lookup(object->fields, &name_str);  \
                                                                                \
     if (req && !val) {                                                         \
@@ -320,7 +320,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_OBJECT_FIELD(object, name, camel, req)                          \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     const struct json_value *val = hashtbl_lookup(object->fields, &name_str);  \
                                                                                \
     if (req && !val) {                                                         \
@@ -338,7 +338,7 @@ struct type_definition_textdoc_params {
 
 #define TRY_DE_TYPE_FIELD(object, ty_name, name, camel, req)                   \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     const struct json_value *val = hashtbl_lookup(object->fields, &name_str);  \
                                                                                \
     if (req && !val) {                                                         \
@@ -354,7 +354,7 @@ struct type_definition_textdoc_params {
 // if using `TYPE` you pass the type as a variadic arg
 #define TRY_DE_ARRAY_FIELD(de_ty, object, name, num_name, camel, req, ...)     \
   do {                                                                         \
-    ustr_t name_str = MK_SIZED(camel);                               \
+    ustr_t name_str = MK_USTR(camel);                               \
     const struct json_value *val = hashtbl_lookup(object->fields, &name_str);  \
                                                                                \
     if (req && !val) {                                                         \
