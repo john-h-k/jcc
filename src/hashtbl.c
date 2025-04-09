@@ -206,6 +206,17 @@ static const float MAX_FILL = 0.7f;
 
 #define MIN_BUCKET_COUNT (8)
 
+static struct bucket *hashtbl_create_bucket(struct hashtbl *hashtbl) {
+  size_t triple_size =
+      sizeof(hash_t) + hashtbl->key_size + hashtbl->element_size;
+  triple_size = ROUND_UP(triple_size, 8);
+
+  struct bucket bucket = {
+      .elems = vector_create_in_arena(triple_size, hashtbl->arena)};
+
+  return vector_push_back(hashtbl->buckets, &bucket);
+}
+
 static void hashtbl_rebuild(struct hashtbl *hashtbl) {
   size_t ver = hashtbl->ver;
 
@@ -220,15 +231,8 @@ static void hashtbl_rebuild(struct hashtbl *hashtbl) {
       vector_create_in_arena(sizeof(struct bucket), hashtbl->arena);
   vector_ensure_capacity(hashtbl->buckets, new_num_buckets);
 
-  size_t triple_size =
-      sizeof(hash_t) + hashtbl->key_size + hashtbl->element_size;
-  triple_size = ROUND_UP(triple_size, 8);
-
   for (size_t i = 0; i < new_num_buckets; i++) {
-    struct bucket bucket = {
-        .elems = vector_create_in_arena(triple_size, hashtbl->arena)};
-
-    vector_push_back(hashtbl->buckets, &bucket);
+    hashtbl_create_bucket(hashtbl);
   }
 
   for (size_t i = 0; i < num_buckets; i++) {
@@ -278,6 +282,10 @@ hashtbl_insert_with_lookup(struct hashtbl *hashtbl, const void *key,
                            const void *data, struct lookup_internal lookup) {
 
   if (!lookup.triple) {
+    if (!lookup.bucket) {
+      lookup.bucket = hashtbl_create_bucket(hashtbl);
+    }
+
     struct bucket *bucket = lookup.bucket;
     lookup.triple = vector_push_back(bucket->elems, NULL);
 

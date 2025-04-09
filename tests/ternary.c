@@ -10,6 +10,10 @@ struct baz get() {
 
 struct baz glb = {1};
 
+void foo(void) {
+  glb.val++;
+}
+
 int main() {
   int lhs = 1;
   int rhs = 2;
@@ -40,6 +44,17 @@ int main() {
   int *p = (a ? &a : 0);
   if (*p != a) {
     return 100;
+  }
+
+  glb.val = 0;
+  int z = 0;
+  (a) ? z : (foo(), 0);
+  if (glb.val) {
+    return 4;
+  }
+  (a) ? (foo(), 0) : z;
+  if (glb.val != 1) {
+    return 5;
   }
 
   return a ? a ? a ? 7 : 8 : 9 : 10;
