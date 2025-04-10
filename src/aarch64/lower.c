@@ -723,6 +723,42 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }
 
+static void lower_va_args(struct ir_func *func) {
+  switch (func->unit->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    // nop 
+    break;
+  default:
+    BUG("");
+    break;
+  }
+}
+
+static void lower_va_start(struct ir_func *func, struct ir_op *op) {
+  struct ir_lcl *stack_base = ir_add_local(func, &IR_VAR_TY_POINTER);
+  stack_base->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+  stack_base->alloc = (struct ir_lcl_alloc){
+    .offset = 0
+  };
+
+  stack_base->flags |= IR_LCL_FLAG_PARAM;
+
+  struct ir_op *addr = op->va_start.list_addr;
+
+  struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  sp->addr = (struct ir_op_addr){
+    .ty = IR_OP_ADDR_TY_LCL,
+    .lcl = stack_base
+  };
+
+  struct ir_op *store = ir_insert_after_op(func, sp, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+  store->store = (struct ir_op_store){
+    .ty = IR_OP_STORE_TY_ADDR,
+    .addr = addr,
+    .value = sp
+  };
+}
+
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -737,6 +773,10 @@ void aarch64_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
+      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+        lower_va_args(func);
+      }
+
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -746,6 +786,9 @@ void aarch64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
+            case IR_OP_TY_VA_START:
+              lower_va_start(func, op);
+              break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
                 lower_fp_cnst(func, op);

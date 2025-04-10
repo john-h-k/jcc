@@ -1688,6 +1688,7 @@ void lower(struct ir_unit *unit) {
               BUG("unknown op!");
             case IR_OP_TY_UNDF:
             case IR_OP_TY_CNST:
+            case IR_OP_TY_VA_START:
             case IR_OP_TY_PHI:
             case IR_OP_TY_UNARY_OP:
             case IR_OP_TY_BINARY_OP:

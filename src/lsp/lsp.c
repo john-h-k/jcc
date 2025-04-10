@@ -605,7 +605,7 @@ int lsp_run(struct arena_allocator *arena, struct fcache *fcache,
 
   struct lsp_ctx ctx = {.arena = arena,
                         .read_buf = vector_create_in_arena(sizeof(char), arena),
-                        .docs = hashtbl_create_sized_str_keyed_in_arena(
+                        .docs = hashtbl_create_ustr_keyed_in_arena(
                             arena, sizeof(struct lsp_doc)),
                         .writer = json_writer_create(),
                         .compile_args = compile_args,

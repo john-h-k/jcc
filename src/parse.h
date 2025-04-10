@@ -668,6 +668,13 @@ struct ast_generic {
   struct text_span span;
 };
 
+struct ast_va_arg {
+  struct ast_expr *list;
+  struct ast_type_name type;
+
+  struct text_span span;
+};
+
 enum ast_expr_ty {
   AST_EXPR_TY_INVALID,
 
@@ -686,6 +693,7 @@ enum ast_expr_ty {
   AST_EXPR_TY_SIZEOF,
   AST_EXPR_TY_ALIGNOF,
   AST_EXPR_TY_COMPOUND_LITERAL,
+  AST_EXPR_TY_VA_ARG,
 };
 
 struct ast_expr {
@@ -707,6 +715,7 @@ struct ast_expr {
     struct ast_memberaccess member_access;
     struct ast_pointeraccess pointer_access;
     struct ast_compound_literal compound_literal;
+    struct ast_va_arg va_arg;
   };
 
   struct text_span span;

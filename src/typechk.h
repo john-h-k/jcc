@@ -500,10 +500,21 @@ struct td_compound_literal {
   struct td_init_list init_list;
 };
 
+struct td_va_arg {
+  struct td_expr *list;
+  struct td_var_ty var_ty;
+};
+
+struct td_builtin {
+  ustr_t identifier;
+};
+
 enum td_expr_ty {
   TD_EXPR_TY_INVALID,
   TD_EXPR_TY_TERNARY,
   TD_EXPR_TY_CALL,
+  TD_EXPR_TY_BUILTIN,
+  TD_EXPR_TY_VA_ARG,
   TD_EXPR_TY_UNARY_OP,
   TD_EXPR_TY_BINARY_OP,
   TD_EXPR_TY_ARRAYACCESS,
@@ -533,6 +544,8 @@ struct td_expr {
     struct td_binary_op binary_op;
     struct td_assg assg;
     struct td_call call;
+    struct td_builtin builtin;
+    struct td_va_arg va_arg;
     struct td_arrayaccess array_access;
     struct td_memberaccess member_access;
     struct td_pointeraccess pointer_access;

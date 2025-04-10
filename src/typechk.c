@@ -2,8 +2,10 @@
 
 #include "alloc.h"
 #include "ap_val.h"
+#include "builtins.h"
 #include "compiler.h"
 #include "diagnostics.h"
+#include "hashtbl.h"
 #include "lex.h"
 #include "log.h"
 #include "parse.h"
@@ -71,6 +73,8 @@ struct typechk {
 
   // types (e.g declared structs)
   struct var_table ty_table;
+
+  struct hashtbl *builtin_fns;
 
   enum typechk_result_ty result_ty;
   struct compiler_diagnostics *diagnostics;
@@ -641,16 +645,16 @@ static char *tchk_base_type_name(struct typechk *tchk,
     // (**bar)`
     const char *ret_name = tchk_type_name(tchk, var_ty->func.ret);
 
-    char *base = arena_alloc_snprintf(tchk->arena, "%s (", ret_name);
+    char *base = arena_alloc_snprintf(tchk->arena, "%s (*)(", ret_name);
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       if (i + 1 == var_ty->func.num_params) {
         base = arena_alloc_snprintf(
-            tchk->arena, "%s)",
-            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+            tchk->arena, "%s%s)",
+            base, tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       } else {
         base = arena_alloc_snprintf(
-            tchk->arena, "%s, ",
-            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+            tchk->arena, "%s%s, ",
+            base, tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       }
     }
 
@@ -1196,8 +1200,7 @@ td_var_ty_for_enum(struct typechk *tchk,
   struct td_var ty_var = {.ty = TD_VAR_VAR_TY_VAR,
                           .identifier = name,
                           .scope = vt_cur_scope(&tchk->ty_table),
-                          .span = specifier->span
-                        };
+                          .span = specifier->span};
 
   struct var_table_entry *ty_entry =
       vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_ENUM, name);
@@ -1233,14 +1236,12 @@ td_var_ty_for_enum(struct typechk *tchk,
         value = i ? last_value + 1 : 0;
       }
 
-      ustr_t enum_name =
-          identifier_str(tchk->parser, &enumerator->identifier);
+      ustr_t enum_name = identifier_str(tchk->parser, &enumerator->identifier);
       struct td_var var = {.ty = TD_VAR_VAR_TY_ENUMERATOR,
                            .identifier = enum_name,
                            .scope = vt_cur_scope(&tchk->var_table),
                            .enumerator = value,
-                           .span = enumerator->span
-                         };
+                           .span = enumerator->span};
 
       struct var_table_entry *entry;
       // enums have same behaviour as types, but are in the var table
@@ -1351,13 +1352,10 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
 
         struct td_var_declaration anon_decl = {
             .ty = TD_VAR_DECLARATION_TY_VAR,
-            .var =
-                {
-                    .ty = TD_VAR_VAR_TY_VAR,
+            .var = {.ty = TD_VAR_VAR_TY_VAR,
                     .identifier = MK_NULL_USTR(),
                     .scope = vt_cur_scope(&tchk->var_table),
-                    .span = td_decl.span
-                },
+                    .span = td_decl.span},
             .var_ty = td_decl.base_ty,
             .init = NULL,
         };
@@ -1404,8 +1402,7 @@ static struct td_var_ty td_var_ty_for_struct_or_union(
   struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
                        .identifier = name,
                        .scope = vt_cur_scope(&tchk->ty_table),
-                       .span = specifier->span
-                     };
+                       .span = specifier->span};
 
   entry = vt_get_or_create_entry(&tchk->ty_table, ns, name);
   entry->var = arena_alloc(tchk->arena, sizeof(*entry->var));
@@ -1658,8 +1655,7 @@ type_func_declarator(struct typechk *tchk, struct td_var_ty var_ty,
                           TD_DECLARATOR_MODE_NORMAL);
       *td_param = (struct td_ty_param){.identifier = param_decl.var.identifier,
                                        .var_ty = param_decl.var_ty,
-                                       .span = param_decl.var.span
-                                     };
+                                       .span = param_decl.var.span};
       break;
     }
     case AST_PARAM_TY_ABSTRACT_DECL: {
@@ -1757,17 +1753,19 @@ static struct td_var_ty type_abstract_declarator(
 static struct td_var_ty
 td_var_ty_for_typedef(struct typechk *tchk,
                       const struct lex_token *identifier) {
+  ustr_t name = identifier_str(tchk->parser, identifier);
   struct var_table_entry *entry =
-      vt_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
-                   identifier_str(tchk->parser, identifier));
+      vt_get_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF, name);
 
   if (!entry) {
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(BAD_TYPEDEF, bad_typedef, identifier->span,
-                               MK_INVALID_TEXT_POS(0),
-                               "typedef name does not exist"));
+        MK_SEMANTIC_DIAGNOSTIC(
+            BAD_TYPEDEF, bad_typedef, identifier->span, MK_INVALID_TEXT_POS(0),
+            arena_alloc_snprintf(tchk->arena,
+                                 "typedef name '%.*s' does not exist",
+                                 (int)name.len, name.str)));
     return TD_VAR_TY_UNKNOWN;
   }
 
@@ -1826,8 +1824,7 @@ type_declarator_inner(struct typechk *tchk, struct td_var_ty *outer_var_ty,
           .scope = vt_cur_scope(&tchk->var_table),
           .identifier =
               identifier_str(tchk->parser, &direct_declarator->identifier),
-          .span = direct_declarator->identifier.span
-      };
+          .span = direct_declarator->identifier.span};
       found_ident = true;
       break;
     case AST_DIRECT_DECLARATOR_TY_PAREN_DECLARATOR: {
@@ -2858,7 +2855,8 @@ static struct td_expr type_call(struct typechk *tchk,
     compiler_diagnostics_add(
         tchk->diagnostics,
         MK_SEMANTIC_DIAGNOSTIC(FN_NOT_CALLABLE, fn_not_callable, call->span,
-                               MK_INVALID_TEXT_POS(0), "can't call non func"));
+                               MK_INVALID_TEXT_POS(0),
+                               arena_alloc_snprintf(tchk->arena, "can't call non func expression with ty '%s'", tchk_type_name(tchk, &target_var_ty))));
 
     return (struct td_expr){
         .ty = TD_EXPR_TY_CALL, .var_ty = TD_VAR_TY_UNKNOWN, .call = td_call};
@@ -3219,8 +3217,10 @@ static bool td_expr_is_lvalue(UNUSED struct typechk *tchk,
   case TD_EXPR_TY_ASSG:
   case TD_EXPR_TY_COMPOUNDEXPR:
   case TD_EXPR_TY_VAR:
+  case TD_EXPR_TY_BUILTIN:
     return true;
   case TD_EXPR_TY_CALL:
+  case TD_EXPR_TY_VA_ARG:
   case TD_EXPR_TY_TERNARY:
   case TD_EXPR_TY_BINARY_OP:
   case TD_EXPR_TY_CNST:
@@ -3681,8 +3681,7 @@ type_memberaccess(struct typechk *tchk, enum type_expr_flags flags,
   td_memberaccess.lhs->var_ty = type_incomplete_var_ty(
       tchk, &td_memberaccess.lhs->var_ty, memberaccess->span);
 
-  ustr_t member_name =
-      identifier_str(tchk->parser, &memberaccess->member);
+  ustr_t member_name = identifier_str(tchk->parser, &memberaccess->member);
 
   struct td_var_ty var_ty;
   if (!try_resolve_member_access_ty(tchk, &td_memberaccess.lhs->var_ty,
@@ -3751,8 +3750,7 @@ type_pointeraccess(struct typechk *tchk, enum type_expr_flags flags,
     td_pointeraccess.lhs->var_ty = TD_VAR_TY_UNKNOWN;
   }
 
-  ustr_t pointer_name =
-      identifier_str(tchk->parser, &pointeraccess->member);
+  ustr_t pointer_name = identifier_str(tchk->parser, &pointeraccess->member);
 
   struct td_var_ty underlying =
       td_var_ty_get_underlying(tchk, &td_pointeraccess.lhs->var_ty);
@@ -3894,6 +3892,11 @@ static struct td_expr type_assg(struct typechk *tchk,
       .ty = TD_EXPR_TY_ASSG, .var_ty = var_ty, .assg = td_assg};
 }
 
+struct td_builtin_fn {
+  struct builtin_fn_spec spec;
+  struct td_var_ty var_ty;
+};
+
 static struct td_expr type_var(struct typechk *tchk,
                                const struct ast_var *var) {
   ustr_t name = identifier_str(tchk->parser, &var->identifier);
@@ -3912,6 +3915,14 @@ static struct td_expr type_var(struct typechk *tchk,
     var_ty = *entry->var_ty;
     td_var = *entry->var;
   } else {
+    // check for builtin late so code can shadow them without breaking
+    struct td_builtin_fn *builtin = hashtbl_lookup(tchk->builtin_fns, &name);
+    if (builtin) {
+      return (struct td_expr){.ty = TD_EXPR_TY_BUILTIN,
+                              .var_ty = builtin->var_ty,
+                              .builtin = {.identifier = name}};
+    }
+
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(tchk->diagnostics,
                              MK_SEMANTIC_DIAGNOSTIC(NO_VAR, no_var, var->span,
@@ -3922,8 +3933,7 @@ static struct td_expr type_var(struct typechk *tchk,
     td_var = (struct td_var){.ty = TD_VAR_VAR_TY_VAR,
                              .identifier = name,
                              .scope = vt_cur_scope(&tchk->ty_table),
-                             .span = MK_INVALID_TEXT_SPAN2()
-                           };
+                             .span = MK_INVALID_TEXT_SPAN2()};
   }
 
   return (struct td_expr){
@@ -4179,6 +4189,17 @@ static struct td_expr type_generic(struct typechk *tchk,
   return type_expr(tchk, TYPE_EXPR_FLAGS_NONE, &selected_association->expr);
 }
 
+static struct td_expr type_va_arg(struct typechk *tchk,
+                                  const struct ast_va_arg *va_arg) {
+  struct td_expr list = type_expr(tchk, TYPE_EXPR_FLAGS_NONE, va_arg->list);
+  struct td_var_ty type = type_type_name(tchk, &va_arg->type);
+
+  return (struct td_expr){
+      .ty = TD_EXPR_TY_VA_ARG,
+      .va_arg = {.list = arena_alloc_init(tchk->arena, sizeof(list), &list),
+                 .var_ty = type}};
+}
+
 static struct td_expr type_expr(struct typechk *tchk,
                                 enum type_expr_flags flags,
                                 const struct ast_expr *expr) {
@@ -4189,6 +4210,9 @@ static struct td_expr type_expr(struct typechk *tchk,
     BUG("INVALID expr type should not reach typechk (should trigger "
         "diagnostic "
         "-> trigger parse fail)");
+    break;
+  case AST_EXPR_TY_VA_ARG:
+    td_expr = type_va_arg(tchk, &expr->va_arg);
     break;
   case AST_EXPR_TY_GENERIC:
     td_expr = type_generic(tchk, &expr->generic);
@@ -4395,8 +4419,8 @@ struct td_val {
 
 static bool try_get_member_offset(struct typechk *tchk,
                                   const struct td_var_ty *aggregate,
-                                  ustr_t member_name,
-                                  struct text_span *context, size_t *offset) {
+                                  ustr_t member_name, struct text_span *context,
+                                  size_t *offset) {
   DEBUG_ASSERT(aggregate->ty == TD_VAR_TY_TY_AGGREGATE, "expected aggregate");
 
   *offset = 0;
@@ -5612,12 +5636,10 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       continue;
     }
 
-    struct td_var var = {
-        .ty = TD_VAR_VAR_TY_VAR,
-        .identifier = identifier,
-        .scope = SCOPE_PARAMS,
-        .span = param->span
-    };
+    struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
+                         .identifier = identifier,
+                         .scope = SCOPE_PARAMS,
+                         .span = param->span};
 
     struct var_table_entry *entry =
         vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, identifier);
@@ -5636,12 +5658,10 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
   }
 
   // push the magic "__func__" variable
-  struct td_var var = {
-      .ty = TD_VAR_VAR_TY_VAR,
-      .identifier = MK_USTR("__func__"),
-      .scope = SCOPE_PARAMS,
-      .span = MK_INVALID_TEXT_SPAN2()
-  };
+  struct td_var var = {.ty = TD_VAR_VAR_TY_VAR,
+                       .identifier = MK_USTR("__func__"),
+                       .scope = SCOPE_PARAMS,
+                       .span = MK_INVALID_TEXT_SPAN2()};
 
   struct var_table_entry *entry =
       vt_create_entry(&tchk->var_table, VAR_TABLE_NS_NONE, var.identifier);
@@ -6239,6 +6259,49 @@ static struct td_external_declaration type_external_declaration(
   }
 }
 
+static struct td_var_ty
+tchk_builtin_ty_spec(struct typechk *tchk,
+                     const struct builtin_type_spec *ty_spec) {
+  switch (ty_spec->ty) {
+  case BUILTIN_TYPE_SPEC_TY_ANY:
+  case BUILTIN_TYPE_SPEC_TY_BUILTIN:
+    TODO("");
+    break;
+  case BUILTIN_TYPE_SPEC_TY_VA_LIST:
+    return *tchk->target->tys.va_list_var_ty;
+  case BUILTIN_TYPE_SPEC_TY_TD_VAR_TY:
+    return *ty_spec->td_var_ty;
+  }
+}
+
+static void tchk_add_builtin_fn(struct typechk *tchk, ustr_t name,
+                                const struct builtin_fn_spec *fn) {
+  struct td_var_ty ret = tchk_builtin_ty_spec(tchk, &fn->ret);
+
+  struct td_var_ty builtin_fn_ty = {
+      .ty = TD_VAR_TY_TY_FUNC,
+      .func = {.ty = TD_TY_FUNC_TY_KNOWN_ARGS,
+               .ret = arena_alloc_init(tchk->arena,
+                                       sizeof(*builtin_fn_ty.func.ret), &ret),
+               .params =
+                   arena_alloc(tchk->arena, sizeof(*builtin_fn_ty.func.params) *
+                                                fn->num_params),
+               .num_params = fn->num_params}};
+
+  for (size_t i = 0; i < fn->num_params; i++) {
+    const struct builtin_type_spec *param_ty = &fn->params[i];
+
+    builtin_fn_ty.func.params[i] =
+        (struct td_ty_param){.identifier = MK_USTR("<builtin param>"),
+                             .var_ty = tchk_builtin_ty_spec(tchk, param_ty),
+                             .span = MK_INVALID_TEXT_SPAN2()};
+  }
+
+  struct td_builtin_fn info = {.spec = *fn, .var_ty = builtin_fn_ty};
+
+  hashtbl_insert(tchk->builtin_fns, &name, &info);
+}
+
 enum typechk_create_result
 typechk_create(const struct target *target, const struct compile_args *args,
                struct parser *parser, struct compiler_diagnostics *diagnostics,
@@ -6253,10 +6316,34 @@ typechk_create(const struct target *target, const struct compile_args *args,
                         .parser = parser,
                         .target = target,
                         .next_anonymous_type_name_id = 0,
+                        .builtin_fns = hashtbl_create_ustr_keyed_in_arena(
+                            arena, sizeof(struct td_builtin_fn)),
                         .ty_table = vt_create(arena),
                         .var_table = vt_create(arena),
                         .result_ty = TYPECHK_RESULT_TY_SUCCESS,
                         .diagnostics = diagnostics};
+
+  struct var_table_entry *entry = vt_create_entry(
+      &t->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_va_list"));
+
+  entry->var = arena_alloc_init(
+      t->arena, sizeof(*entry->var),
+      &(struct td_var){.ty = TD_VAR_VAR_TY_VAR,
+                       .identifier = MK_USTR("__builtin_va_list"),
+                       .scope = SCOPE_GLOBAL,
+                       .span = MK_INVALID_TEXT_SPAN2()});
+
+  entry->var_ty = arena_alloc_init(t->arena, sizeof(*entry->var_ty),
+                                   target->tys.va_list_var_ty);
+
+#define BUILTIN_TY(...)
+#define BUILTIN_FN(name, ...)                                                  \
+  tchk_add_builtin_fn(t, MK_USTR("__builtin_" #name), &builtin_##name);
+
+  BUILTINS_LIST;
+
+#undef BUILTIN_FN
+#undef BUILTIN_TY
 
   *tchk = t;
 
@@ -6349,14 +6436,20 @@ struct typechk_result td_typechk(struct typechk *tchk,
 }
 
 #define CB_EXPR(val)                                                           \
-  td_walk_node(tchk, &(struct td_node){.ty = TD_NODE_TY_EXPR, .span = (val)->span, .expr = (val)},  \
+  td_walk_node(tchk,                                                           \
+               &(struct td_node){                                              \
+                   .ty = TD_NODE_TY_EXPR, .span = (val)->span, .expr = (val)}, \
                cb, metadata)
 #define CB_DECL(val)                                                           \
-  td_walk_node(                                                                \
-      tchk, &(struct td_node){.ty = TD_NODE_TY_VAR_DECL, .span = (val)->span, .var_decl = (val)},   \
-      cb, metadata)
+  td_walk_node(tchk,                                                           \
+               &(struct td_node){.ty = TD_NODE_TY_VAR_DECL,                    \
+                                 .span = (val)->span,                          \
+                                 .var_decl = (val)},                           \
+               cb, metadata)
 #define CB_STMT(val)                                                           \
-  td_walk_node(tchk, &(struct td_node){.ty = TD_NODE_TY_STMT, .span = (val)->span, .stmt = (val)},  \
+  td_walk_node(tchk,                                                           \
+               &(struct td_node){                                              \
+                   .ty = TD_NODE_TY_STMT, .span = (val)->span, .stmt = (val)}, \
                cb, metadata)
 
 static void td_walk_node(struct typechk *tchk, const struct td_node *node,
@@ -6404,6 +6497,11 @@ static void td_walk_node(struct typechk *tchk, const struct td_node *node,
 
     switch (expr->ty) {
     case TD_EXPR_TY_INVALID:
+    case TD_EXPR_TY_BUILTIN:
+      break;
+    case TD_EXPR_TY_VA_ARG:
+      CB_EXPR(expr->va_arg.list);
+      break;
     case TD_EXPR_TY_TERNARY:
       CB_EXPR(expr->ternary.cond);
       CB_EXPR(expr->ternary.true_expr);
@@ -7239,6 +7337,21 @@ DEBUG_FUNC(compound_literal, compound_literal) {
   UNINDENT();
 }
 
+DEBUG_FUNC(va_arg, va_arg) {
+  TD_PRINTZ("VA_ARG");
+
+  INDENT();
+  TD_PRINTZ("VA_LIST");
+  DEBUG_CALL(expr, va_arg->list);
+  TD_PRINTZ("TYPE");
+  DEBUG_CALL(var_ty, &va_arg->var_ty);
+  UNINDENT();
+}
+
+DEBUG_FUNC(builtin, builtin) {
+  TD_PRINT("BUILTIN '%.*s'", (int)builtin->identifier.len, builtin->identifier.str);
+}
+
 DEBUG_FUNC(expr, expr) {
   TD_PRINTZ("EXPRESSION");
 
@@ -7247,6 +7360,12 @@ DEBUG_FUNC(expr, expr) {
   switch (expr->ty) {
   case TD_EXPR_TY_INVALID:
     TD_PRINTZ("INVALID");
+    break;
+  case TD_EXPR_TY_BUILTIN:
+    DEBUG_CALL(builtin, &expr->builtin);
+    break;
+  case TD_EXPR_TY_VA_ARG:
+    DEBUG_CALL(va_arg, &expr->va_arg);
     break;
   case TD_EXPR_TY_TERNARY:
     DEBUG_CALL(ternary, &expr->ternary);

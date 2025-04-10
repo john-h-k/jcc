@@ -25,7 +25,7 @@ struct hashtbl *hashtbl_create(size_t key_size, size_t element_size,
 
 struct hashtbl *hashtbl_create_str_keyed(size_t element_size);
 
-struct hashtbl *hashtbl_create_sized_str_keyed(size_t element_size);
+struct hashtbl *hashtbl_create_ustr_keyed(size_t element_size);
 
 struct hashtbl *hashtbl_create_in_arena(struct arena_allocator *arena,
                                         size_t key_size, size_t element_size,
@@ -35,7 +35,7 @@ struct hashtbl *hashtbl_create_str_keyed_in_arena(struct arena_allocator *arena,
                                                   size_t element_size);
 
 struct hashtbl *
-hashtbl_create_sized_str_keyed_in_arena(struct arena_allocator *arena,
+hashtbl_create_ustr_keyed_in_arena(struct arena_allocator *arena,
                                         size_t element_size);
 
 void hashtbl_free(struct hashtbl **hashtbl);

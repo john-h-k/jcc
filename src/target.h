@@ -219,9 +219,14 @@ struct codegen_info {
   target_codegen codegen_end;
 };
 
+struct target_tys {
+  const struct td_var_ty *va_list_var_ty;
+};
+
 struct target {
   enum target_id target_id;
   enum target_lp_sz lp_sz;
+  struct target_tys tys;
   struct reg_info reg_info;
   size_t function_alignment;
   mangle mangle;

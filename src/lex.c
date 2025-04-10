@@ -39,7 +39,7 @@ enum lex_create_result lexer_create(struct program program,
   if (!KEYWORDS) {
     debug("building kw table");
 
-    KEYWORDS = hashtbl_create_sized_str_keyed(sizeof(enum lex_token_ty));
+    KEYWORDS = hashtbl_create_ustr_keyed(sizeof(enum lex_token_ty));
 
 #define KEYWORD(kw, ty)                                                        \
   do {                                                                         \

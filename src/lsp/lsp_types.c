@@ -326,7 +326,7 @@ bool try_de_req_msg(struct json_de_ctx *ctx, const struct json_value *value,
   if (!METHODS) {
     debug("building method table");
 
-    METHODS = hashtbl_create_sized_str_keyed(sizeof(enum req_msg_method));
+    METHODS = hashtbl_create_ustr_keyed(sizeof(enum req_msg_method));
 
 #define METHOD(name, ty)                                                       \
   do {                                                                         \
