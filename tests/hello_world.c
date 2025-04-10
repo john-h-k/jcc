@@ -4,7 +4,11 @@
 // #include <stdio.h>
 // int printf(const char *, ...);
 
+#include <stdlib.h>
+
 __DARWIN_OS_INLINE
+
+foo
 
 #if !defined(__DARWIN_OS_INLINE)
 # if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
