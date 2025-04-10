@@ -56,7 +56,7 @@ enum parser_create_result parser_create(
   p->diagnostics = diagnostics;
   p->state = PARSER_STATE_NORMAL;
 
-#define BUILTIN_TY(name, ...) \
+#define BUILTIN_TY(name) \
   do { \
       vt_create_entry(&p->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_" # name)); \
   } while (0);
