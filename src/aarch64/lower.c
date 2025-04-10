@@ -729,7 +729,7 @@ static void lower_va_args(struct ir_func *func) {
     // nop 
     break;
   default:
-    BUG("");
+    TODO("");
     break;
   }
 }
@@ -757,6 +757,50 @@ static void lower_va_start(struct ir_func *func, struct ir_op *op) {
     .addr = addr,
     .value = sp
   };
+}
+
+static void lower_va_arg(struct ir_func *func, struct ir_op *op) {
+  switch (func->unit->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS: {
+    // FIXME: phi gen in build doesnt respect the fact that `va_arg` writes to the `va_list`
+
+    struct ir_var_ty var_ty = op->va_arg.arg_ty;
+
+    struct ir_op *addr = op->va_arg.list_addr;
+
+    struct ir_op *list = ir_insert_before_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_POINTER);
+    list->load = (struct ir_op_load){
+      .ty = IR_OP_LOAD_TY_ADDR,
+      .addr = addr
+    };
+
+    struct ir_op *load = ir_replace_op(func, op, IR_OP_TY_LOAD, var_ty);
+    load->load = (struct ir_op_load){
+      .ty = IR_OP_LOAD_TY_ADDR,
+      .addr = list
+    };
+
+    size_t size = ir_var_ty_info(func->unit, &var_ty).size;
+
+    struct ir_op *offset = ir_insert_after_op(func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    offset->addr_offset = (struct ir_op_addr_offset){
+      .base = list,
+      .offset = ROUND_UP(size, 8)
+    };
+
+    struct ir_op *store = ir_insert_after_op(func, offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store->store = (struct ir_op_store){
+      .ty = IR_OP_STORE_TY_ADDR,
+      .addr = addr,
+      .value = offset
+    };
+
+    break;
+  }
+  default:
+    TODO("");
+    break;
+  }
 }
 
 void aarch64_lower(struct ir_unit *unit) {
@@ -788,6 +832,9 @@ void aarch64_lower(struct ir_unit *unit) {
             switch (op->ty) {
             case IR_OP_TY_VA_START:
               lower_va_start(func, op);
+              break;
+            case IR_OP_TY_VA_ARG:
+              lower_va_arg(func, op);
               break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {

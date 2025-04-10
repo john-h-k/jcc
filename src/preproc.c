@@ -2019,6 +2019,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         // for some reason apple predefines it
         "#if defined(__APPLE__) || defined(__MACH__)\n"
         "typedef __builtin_va_list __darwin_va_list;\n"
+        "typedef __darwin_va_list va_list;\n"
         "#else\n"
         "typedef __builtin_va_list va_list;\n"
         "#endif\n"

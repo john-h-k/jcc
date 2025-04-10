@@ -163,6 +163,7 @@ bool ir_op_has_side_effects(const struct ir_op *op) {
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE:
   case IR_OP_TY_VA_START:
+  case IR_OP_TY_VA_ARG:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
   case IR_OP_TY_STORE_BITFIELD:
@@ -190,6 +191,7 @@ bool ir_op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_BITFIELD_INSERT:
   case IR_OP_TY_BITFIELD_EXTRACT:
   case IR_OP_TY_ADDR:
+  case IR_OP_TY_VA_ARG:
   case IR_OP_TY_ADDR_OFFSET:
     return true;
   case IR_OP_TY_CALL:
@@ -224,6 +226,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_GATHER:
   case IR_OP_TY_MOV:
   case IR_OP_TY_VA_START:
+  case IR_OP_TY_VA_ARG:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
@@ -333,6 +336,9 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_VA_ARG:
+    cb(&op->va_arg.list_addr, IR_OP_USE_TY_DEREF, cb_metadata);
     break;
   case IR_OP_TY_VA_START:
     cb(&op->va_start.list_addr, IR_OP_USE_TY_DEREF, cb_metadata);
@@ -461,6 +467,9 @@ void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_VA_ARG:
+    ir_walk_op(op->va_arg.list_addr, cb, cb_metadata);
     break;
   case IR_OP_TY_VA_START:
     ir_walk_op(op->va_start.list_addr, cb, cb_metadata);
