@@ -335,7 +335,7 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM_IMM_SIB(opc, reg, addr, imm)                                   \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
+  (((unsigned)imm) < 128 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
                       ? MOV_MEM_IMM8_REX_SIB((opc), (reg), (addr), (imm))      \
                       : MOV_MEM_IMM8_SIB((opc), (reg), (addr), (imm)))         \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
@@ -343,7 +343,7 @@ struct x64_raw_instr {
        : MOV_MEM_IMM32_SIB((opc), (reg), (addr), (imm)))
 
 #define MOV_MEM_IMM_NOSIB(opc, reg, addr, imm)                                 \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
+  (((unsigned)imm) < 128 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
                       ? MOV_MEM_IMM8_REX((opc), (reg), (addr), (imm))          \
                       : MOV_MEM_IMM8((opc), (reg), (addr), (imm)))             \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
@@ -420,7 +420,7 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOVZX_MEM_IMM_SIB(opc0, opc1, reg, addr, imm)                          \
-  ((imm) < 256                                                                 \
+  (((unsigned)imm) < 128                                                                 \
        ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                                \
               ? MOVZX_MEM_IMM8_REX_SIB(opc0, opc1, (reg), (addr), (imm))       \
               : MOVZX_MEM_IMM8_SIB(opc0, opc1, (reg), (addr), (imm)))          \
@@ -429,7 +429,7 @@ struct x64_raw_instr {
        : MOVZX_MEM_IMM32_SIB(opc0, opc1, (reg), (addr), (imm)))
 
 #define MOVZX_MEM_IMM_NOSIB(opc0, opc1, reg, addr, imm)                        \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
+  (((unsigned)imm) < 128 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
                       ? MOVZX_MEM_IMM8_REX(opc0, opc1, (reg), (addr), (imm))   \
                       : MOVZX_MEM_IMM8(opc0, opc1, (reg), (addr), (imm)))      \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
@@ -519,7 +519,7 @@ struct x64_raw_instr {
                IMM_BYTES32((imm))}})
 
 #define MOV_MEM16_IMM_SIB(opc, reg, addr, imm)                                 \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
+  (((unsigned)imm) < 128 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
                       ? MOV_MEM16_IMM8_REX_SIB((opc), (reg), (addr), (imm))    \
                       : MOV_MEM16_IMM8_SIB((opc), (reg), (addr), (imm)))       \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
@@ -527,7 +527,7 @@ struct x64_raw_instr {
        : MOV_MEM16_IMM32_SIB((opc), (reg), (addr), (imm)))
 
 #define MOV_MEM16_IMM_NOSIB(opc, reg, addr, imm)                               \
-  ((imm) < 256 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
+  (((unsigned)imm) < 128 ? (NEEDS_REX((reg)) || NEEDS_REX((addr))                        \
                       ? MOV_MEM16_IMM8_REX((opc), (reg), (addr), (imm))        \
                       : MOV_MEM16_IMM8((opc), (reg), (addr), (imm)))           \
    : (NEEDS_REX((reg)) || NEEDS_REX((addr)))                                   \
@@ -550,7 +550,7 @@ struct x64_raw_instr {
 #define JMP_REL32(disp)                                                        \
   ((struct x64_raw_instr){.len = 5, .buff = {0xE9, IMM_BYTES32(disp)}})
 
-// #define JMP_REL(disp) (disp) < 256 ? JMP_REL8((disp)) : JMP_REL32((disp))
+// #define JMP_REL(disp) (disp) < 128 ? JMP_REL8((disp)) : JMP_REL32((disp))
 #define JMP_REL() JMP_REL32((size_t)(0x0))
 
 #define JMP_REG_BASE(reg)                                                      \
@@ -571,7 +571,7 @@ struct x64_raw_instr {
   ((struct x64_raw_instr){.len = 6,                                            \
                           .buff = {0x0F, 0x80 + U8(cc), IMM_BYTES32(disp)}})
 
-// #define JMP_COND_REL(cc, disp) (disp) < 256 ? JMP_COND_REL8((cc), (disp)) :
+// #define JMP_COND_REL(cc, disp) (disp) < 128 ? JMP_COND_REL8((cc), (disp)) :
 // JMP_COND_REL32((cc), (disp))
 #define JMP_COND_REL(cc) JMP_COND_REL32((cc), (0x0))
 
@@ -645,7 +645,7 @@ struct x64_raw_instr {
 
 #define LEA_REG64(dest, index, base, scale, offset)                            \
   ((offset) == 0 ? LEA_REG64_IMM0((dest), (index), (base), (scale), (offset))  \
-   : ((offset) < 256)                                                          \
+   : ((offset) < 128)                                                          \
        ? LEA_REG64_IMM8((dest), (index), (base), (scale), (offset))            \
        : LEA_REG64_IMM32((dest), (index), (base), (scale), (offset)))
 
@@ -677,7 +677,7 @@ struct x64_raw_instr {
 
 #define LEA_NOIDX_REG64(dest, base, offset)                                    \
   ((offset) == 0      ? LEA_NOIDX_REG64_IMM0((dest), (base), (offset))         \
-   : ((offset) < 256) ? LEA_NOIDX_REG64_IMM8((dest), (base), (offset))         \
+   : ((offset) < 128) ? LEA_NOIDX_REG64_IMM8((dest), (base), (offset))         \
                       : LEA_NOIDX_REG64_IMM32((dest), (base), (offset)))
 
 #define LEA_NOIDX_REG64_IMM0(dest, base, offset)                               \
