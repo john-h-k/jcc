@@ -418,6 +418,7 @@ compile_stage_typechk(struct compiler *compiler,
   }
 
   compiler_print_diagnostics(compiler);
+
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }

@@ -5638,6 +5638,8 @@ static struct td_funcdef type_funcdef(struct typechk *tchk,
       type_declarator(tchk, &specifiers, &func_def->declarator, NULL,
                       TD_DECLARATOR_MODE_NORMAL);
 
+  DEBUG_ASSERT(declaration.var_ty.ty == TD_VAR_TY_TY_FUNC, "expected func");
+
   struct var_table_entry *func_entry = vt_create_entry(
       &tchk->var_table, VAR_TABLE_NS_NONE, declaration.var.identifier);
   func_entry->var = arena_alloc(tchk->arena, sizeof(*func_entry->var));
@@ -6143,7 +6145,7 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
               NO_IDENT, no_ident, init_declarator->init->span,
               MK_INVALID_TEXT_POS(0), "declaration must have identifier"));
     }
-    
+
     return td_var_decl;
   }
 
