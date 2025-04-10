@@ -5,7 +5,6 @@
 #include "../target.h"
 #include "../util.h"
 #include "../vector.h"
-#include "prettyprint.h"
 
 enum ir_var_primitive_ty ir_var_ty_pointer_primitive_ty(struct ir_unit *iru) {
   switch (iru->target->lp_sz) {
@@ -163,6 +162,7 @@ bool ir_op_has_side_effects(const struct ir_op *op) {
            !ir_reg_eq(op->reg, op->mov.value->reg);
   case IR_OP_TY_CALL:
   case IR_OP_TY_STORE:
+  case IR_OP_TY_VA_START:
   case IR_OP_TY_MEM_SET:
   case IR_OP_TY_MEM_COPY:
   case IR_OP_TY_STORE_BITFIELD:
@@ -195,6 +195,7 @@ bool ir_op_produces_value(const struct ir_op *op) {
   case IR_OP_TY_CALL:
     return op->var_ty.ty != IR_VAR_TY_TY_NONE;
   case IR_OP_TY_STORE:
+  case IR_OP_TY_VA_START:
   case IR_OP_TY_STORE_BITFIELD:
   case IR_OP_TY_BR_COND:
   case IR_OP_TY_BR_SWITCH:
@@ -222,6 +223,7 @@ bool ir_op_is_branch(enum ir_op_ty ty) {
   case IR_OP_TY_PHI:
   case IR_OP_TY_GATHER:
   case IR_OP_TY_MOV:
+  case IR_OP_TY_VA_START:
   case IR_OP_TY_CNST:
   case IR_OP_TY_BINARY_OP:
   case IR_OP_TY_UNARY_OP:
@@ -331,6 +333,9 @@ void ir_walk_op_uses(struct ir_op *op, ir_walk_op_uses_callback *cb,
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_VA_START:
+    cb(&op->va_start.list_addr, IR_OP_USE_TY_DEREF, cb_metadata);
     break;
   case IR_OP_TY_GATHER:
     for (size_t i = 0; i < op->gather.num_values; i++) {
@@ -456,6 +461,9 @@ void ir_walk_op(struct ir_op *op, ir_walk_op_callback *cb, void *cb_metadata) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
   case IR_OP_TY_UNDF:
+    break;
+  case IR_OP_TY_VA_START:
+    ir_walk_op(op->va_start.list_addr, cb, cb_metadata);
     break;
   case IR_OP_TY_GATHER:
     for (size_t i = 0; i < op->gather.num_values; i++) {

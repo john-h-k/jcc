@@ -18,6 +18,10 @@ const struct target RV32I_LINUX_TARGET = {
     TARGET_ID_RV32I_LINUX,
     TARGET_LP_SZ_LP32,
     {
+        // TODO:
+        .va_list_var_ty = NULL
+    },
+    {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 4,
                          .num_volatile = 15,

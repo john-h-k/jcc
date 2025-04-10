@@ -394,7 +394,7 @@ preproc_create(struct program program, struct fcache *fcache,
     debug("building special macro table");
 
     SPECIAL_MACROS =
-        hashtbl_create_sized_str_keyed(sizeof(enum preproc_special_macro));
+        hashtbl_create_ustr_keyed(sizeof(enum preproc_special_macro));
 
 #define SPECIAL_MACRO(kw, ty)                                                  \
   do {                                                                         \
@@ -449,7 +449,7 @@ preproc_create(struct program program, struct fcache *fcache,
   p->keep_next_token = false;
   p->waiting_for_close = false;
 
-  p->defines = hashtbl_create_sized_str_keyed_in_arena(
+  p->defines = hashtbl_create_ustr_keyed_in_arena(
       p->arena, sizeof(struct preproc_define));
 
   // tokens that have appeared (e.g from a macro) and need to be processed next
@@ -457,7 +457,7 @@ preproc_create(struct program program, struct fcache *fcache,
       vector_create_in_arena(sizeof(struct preproc_token), arena);
   p->unexpanded_buffer_tokens =
       vector_create_in_arena(sizeof(struct preproc_unexpanded_token), arena);
-  p->parents = hashtbl_create_sized_str_keyed_in_arena(p->arena, 0);
+  p->parents = hashtbl_create_ustr_keyed_in_arena(p->arena, 0);
 
   *preproc = p;
 
@@ -2021,11 +2021,11 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "typedef void * va_list;\n"
         // "#endif\n"
         "\n"
-        "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
+        // "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
         "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
-        "#else\n"
-        "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
-        "#endif\n"
+        // "#else\n"
+        // "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
+        // "#endif\n"
         "\n"
         "#undef va_end\n"
         "#undef va_arg\n"
@@ -2874,7 +2874,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           first_def_tok++;
           // fn-like macro
 
-          struct hashtbl *params = hashtbl_create_sized_str_keyed_in_arena(
+          struct hashtbl *params = hashtbl_create_ustr_keyed_in_arena(
               preproc->arena, sizeof(size_t));
 
           size_t param_idx = 0;

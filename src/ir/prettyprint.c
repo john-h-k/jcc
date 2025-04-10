@@ -363,6 +363,10 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
   switch (op->ty) {
   case IR_OP_TY_UNKNOWN:
     BUG("unknown op!");
+  case IR_OP_TY_VA_START:
+    fprintf(file, "va_start ");
+    debug_print_op_use(file, irb, op->va_start.list_addr);
+    break;
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
     break;

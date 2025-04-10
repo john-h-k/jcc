@@ -9,6 +9,7 @@
 #include "macos/link.h"
 #include "macos/mach-o.h"
 #include "target.h"
+#include "typechk.h"
 
 #if !defined(JCC_ALL) && !defined(JCC_AARCH64)
 
@@ -23,6 +24,9 @@ const struct target AARCH64_MACOS_TARGET = {
     TARGET_ID_AARCH64_MACOS,
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
+    {
+        .va_list_var_ty = &TD_VAR_TY_CHAR_POINTER
+    },
     {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 8,
@@ -60,6 +64,10 @@ const struct target AARCH64_LINUX_TARGET = {
     TARGET_ID_AARCH64_LINUX,
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
+    {
+        // TODO:
+        .va_list_var_ty = NULL
+    },
     {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 8,

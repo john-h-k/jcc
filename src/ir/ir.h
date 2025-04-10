@@ -45,6 +45,8 @@ enum ir_op_ty {
   // gathers a set of SSA values into an aggregate
   IR_OP_TY_GATHER,
 
+  IR_OP_TY_VA_START,
+
   // Low-level operations that only occur after lowering
   // IR_OP_TY_STORE_REG,
   // IR_OP_TY_LOAD_REG,
@@ -556,6 +558,10 @@ struct ir_op_write_info {
   struct ir_reg writes[4];
 };
 
+struct ir_op_va_start {
+  struct ir_op *list_addr;
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -587,6 +593,7 @@ struct ir_op {
     struct ir_op_gather gather;
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;
+    struct ir_op_va_start va_start;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
      * condition */
     struct ir_op_phi phi;
@@ -718,7 +725,8 @@ struct ir_basicblock {
 enum ir_func_flags {
   IR_FUNC_FLAG_NONE = 0,
   IR_FUNC_FLAG_MAKES_CALL = 1 << 0,
-  IR_FUNC_FLAG_NEEDS_SSP = 1 << 1
+  IR_FUNC_FLAG_NEEDS_SSP = 1 << 1,
+  IR_FUNC_FLAG_USES_VA_ARGS = 1 << 2
 };
 
 enum ir_var_data_ty {

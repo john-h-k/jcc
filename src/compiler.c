@@ -389,15 +389,15 @@ compile_stage_parse(struct compiler *compiler,
 
   *parse_result = parse(compiler->parser);
 
+  if (log_enabled()) {
+    debug_print_ast(compiler->parser, &parse_result->translation_unit);
+  }
+
   // TODO: err out if preproc fails
   compiler_print_diagnostics(compiler);
 
   if (parse_result->ty == PARSE_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
-  }
-
-  if (log_enabled()) {
-    debug_print_ast(compiler->parser, &parse_result->translation_unit);
   }
 
   return COMPILE_RESULT_SUCCESS;
@@ -412,17 +412,17 @@ compile_stage_typechk(struct compiler *compiler,
 
   compiler->typechk_result = *typechk_result;
 
+  if (log_enabled()) {
+    debug_print_td(compiler->typechk, compiler->args.log_symbols,
+                   &typechk_result->translation_unit);
+  }
+
   compiler_print_diagnostics(compiler);
   if (typechk_result->ty == TYPECHK_RESULT_TY_FAILURE) {
     return COMPILE_RESULT_FAILURE;
   }
 
   compiler->typechk_success = true;
-
-  if (log_enabled()) {
-    debug_print_td(compiler->typechk, compiler->args.log_symbols,
-                   &typechk_result->translation_unit);
-  }
 
   return COMPILE_RESULT_SUCCESS;
 }

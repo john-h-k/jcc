@@ -6,6 +6,7 @@
 #include "lex.h"
 #include "log.h"
 #include "program.h"
+#include "builtins.h"
 #include "util.h"
 #include "var_table.h"
 #include "vector.h"
@@ -54,6 +55,17 @@ enum parser_create_result parser_create(
   p->ty_table = vt_create(p->arena);
   p->diagnostics = diagnostics;
   p->state = PARSER_STATE_NORMAL;
+
+#define BUILTIN_TY(name, ...) \
+  do { \
+      vt_create_entry(&p->ty_table, VAR_TABLE_NS_TYPEDEF, MK_USTR("__builtin_" # name)); \
+  } while (0);
+#define BUILTIN_FN(...)
+
+  BUILTINS_LIST;
+
+#undef BUILTIN_FN
+#undef BUILTIN_TY
 
   *parser = p;
 
@@ -2199,6 +2211,30 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   if (parse_compound_literal(parser, &expr->compound_literal)) {
     expr->ty = AST_EXPR_TY_COMPOUND_LITERAL;
     expr->span = expr->compound_literal.span;
+    return true;
+  }
+
+  struct lex_token token;
+  lex_peek_token(parser->lexer, &token);
+  if (token.ty == LEX_TOKEN_TY_IDENTIFIER && ustr_eq(identifier_str(parser, &token), MK_USTR("__builtin_va_arg"))) {
+    struct ast_expr list;
+    parse_expected_expr(parser, &list, "expression after 'va_arg'");
+
+    struct ast_type_name type;
+    if (!parse_type_name(parser, &type)) {
+      BUG("diagnostic on no typename after va_arg call");
+    }
+
+    expr->ty = AST_EXPR_TY_VA_ARG;
+    expr->va_arg = (struct ast_va_arg){
+      .list = arena_alloc(parser->arena, sizeof(*expr->va_arg.list)),
+      .type = type,
+      .span = MK_TEXT_SPAN(token.span.start, type.span.end)
+    };
+
+    *expr->va_arg.list = list;
+    expr->span = expr->va_arg.span;
+
     return true;
   }
 
@@ -4661,6 +4697,17 @@ DEBUG_FUNC(generic, generic) {
   UNINDENT();
 }
 
+DEBUG_FUNC(va_arg, va_arg) {
+  AST_PRINTZ("VA_ARG");
+
+  INDENT();
+  AST_PRINTZ("VA_LIST");
+  DEBUG_CALL(expr, va_arg->list);
+  AST_PRINTZ("TYPE");
+  DEBUG_CALL(type_name, &va_arg->type);
+  UNINDENT();
+}
+
 DEBUG_FUNC(expr, expr) {
   AST_PRINTZ("EXPRESSION");
 
@@ -4668,6 +4715,9 @@ DEBUG_FUNC(expr, expr) {
   switch (expr->ty) {
   case AST_EXPR_TY_INVALID:
     AST_PRINTZ("<INVALID>");
+    break;
+  case AST_EXPR_TY_VA_ARG:
+    DEBUG_CALL(va_arg, &expr->va_arg);
     break;
   case AST_EXPR_TY_GENERIC:
     DEBUG_CALL(generic, &expr->generic);

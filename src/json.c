@@ -229,7 +229,7 @@ static size_t json_parse_chunk(struct json_ctx *context, ustr_t str,
     rd += json_parse_ws(&str);
 
     // object
-    struct hashtbl *fields = hashtbl_create_sized_str_keyed_in_arena(
+    struct hashtbl *fields = hashtbl_create_ustr_keyed_in_arena(
         context->arena, sizeof(struct json_value));
 
     while (true) {

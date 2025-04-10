@@ -1,10 +1,12 @@
 #include "x64.h"
 
+#include "ir/ir.h"
 #include "linux/elf.h"
 #include "linux/link.h"
 #include "macos/link.h"
 #include "macos/mach-o.h"
 #include "target.h"
+#include "typechk.h"
 #include "x64/codegen.h"
 #include "x64/lower.h"
 
@@ -18,6 +20,9 @@ const struct target X64_LINUX_TARGET = {.target_id = TARGET_ID_NOT_SUPPORTED};
 const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
+    {
+        .va_list_var_ty = &TD_VAR_TY_CHAR_POINTER
+    },
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,
@@ -51,6 +56,10 @@ const struct target X64_MACOS_TARGET = {
 const struct target X64_LINUX_TARGET = {
     TARGET_ID_X64_LINUX,
     TARGET_LP_SZ_LP64,
+    {
+        // TODO:
+        .va_list_var_ty = NULL
+    },
     {
         .ssp = 7,
         .gp_registers = {.max_reg_size = 8,

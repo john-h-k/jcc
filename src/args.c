@@ -229,7 +229,7 @@ static void bad_value(struct arg *arg, ustr_t lookup_str,
 
 enum parse_args_result parse_args(int argc, char **argv,
                                   struct parsed_args *parsed) {
-  struct hashtbl *opts = hashtbl_create_sized_str_keyed(sizeof(struct arg));
+  struct hashtbl *opts = hashtbl_create_ustr_keyed(sizeof(struct arg));
 
   *parsed = (struct parsed_args){.argc = argc, .argv = argv, .values = NULL};
 
