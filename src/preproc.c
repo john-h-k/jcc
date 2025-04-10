@@ -152,6 +152,10 @@ enum preproc_define_flags {
   PREPROC_DEFINE_FLAG_NONE = 0,
   // e.g `defined`, `__has_include`
   PREPROC_DEFINE_FLAG_WELL_KNOWN = 1 << 0,
+
+  // can be overriden without error
+  // primarily used for macros that fix bugs in system headers
+  PREPROC_DEFINE_FLAG_WEAK = 1 << 1,
 };
 
 struct preproc_define {
@@ -167,10 +171,10 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 #define DEF_BUILTIN(tok_ty, n, v, f)                                           \
   do {                                                                         \
     size_t name_len = strlen((n));                                             \
-    ustr_t ident = {.str = (n), .len = name_len};                    \
+    ustr_t ident = {.str = (n), .len = name_len};                              \
                                                                                \
     struct preproc_define define = {                                           \
-        .name = {.ty = tok_ty,                                                 \
+        .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,                            \
                  .span = MK_INVALID_TEXT_SPAN(0, name_len),                    \
                  .text = (n)},                                                 \
         .value =                                                               \
@@ -258,6 +262,37 @@ static void preproc_create_builtin_macros(struct preproc *preproc,
 
   // currently all backends are little endian
   DEF_BUILTIN_NUM("__LITTLE_ENDIAN__", "1");
+
+  if (target == COMPILE_TARGET_MACOS_ARM64 ||
+      target == COMPILE_TARGET_MACOS_X86_64) {
+    // on older SDKs `__DARWIN_OS_INLINE` is not properly defined
+
+    struct preproc_define define = {
+        .name = {.ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                 .span = MK_INVALID_TEXT_SPAN(0, strlen("__DARWIN_OS_INLINE")),
+                 .text = "__DARWIN_OS_INLINE"},
+        .value =
+            {
+                .ty = PREPROC_DEFINE_VALUE_TY_TOKEN_VEC,
+                .vec = vector_create_in_arena(sizeof(struct preproc_token),
+                                              preproc->arena),
+            },
+        .flags = PREPROC_DEFINE_FLAG_WEAK};
+
+    vector_push_back(define.value.vec,
+                     &(struct preproc_token){
+                         .ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                         .span = MK_INVALID_TEXT_SPAN(0, strlen("static")),
+                         .text = "static"});
+
+    vector_push_back(define.value.vec,
+                     &(struct preproc_token){
+                         .ty = PREPROC_TOKEN_TY_IDENTIFIER,
+                         .span = MK_INVALID_TEXT_SPAN(0, strlen("inline")),
+                         .text = "inline"});
+
+    hashtbl_insert(preproc->defines, &MK_USTR("__DARWIN_OS_INLINE"), &define);
+  }
 
   switch (target) {
   case COMPILE_TARGET_MACOS_ARM64:
@@ -398,7 +433,7 @@ preproc_create(struct program program, struct fcache *fcache,
 
 #define SPECIAL_MACRO(kw, ty)                                                  \
   do {                                                                         \
-    ustr_t k = {                                                     \
+    ustr_t k = {                                                               \
         .str = kw,                                                             \
         .len = strlen(kw),                                                     \
     };                                                                         \
@@ -1437,8 +1472,7 @@ static bool try_expand_token(struct preproc *preproc,
   }
 
   // if identifier is a macro do something else
-  ustr_t ident = {.str = token->text,
-                            .len = text_span_len(&token->span)};
+  ustr_t ident = {.str = token->text, .len = text_span_len(&token->span)};
 
   struct preproc_define *macro = hashtbl_lookup(preproc->defines, &ident);
   // well known macros arent expanded they just are "defined"
@@ -2120,9 +2154,11 @@ static struct include_info try_find_include(struct preproc *preproc,
 
   if (preproc->args.verbose && mode == TRY_FIND_INCLUDE_MODE_READ) {
     if (is_angle) {
-      fprintf(stderr, "preproc: including <%s> from %s\n", filename, preproc_text->file);
+      fprintf(stderr, "preproc: including <%s> from %s\n", filename,
+              preproc_text->file);
     } else {
-      fprintf(stderr, "preproc: including \"%s\" from %s\n", filename, preproc_text->file);
+      fprintf(stderr, "preproc: including \"%s\" from %s\n", filename,
+              preproc_text->file);
     }
   }
 
@@ -2306,13 +2342,11 @@ static unsigned long long eval_has_query(struct preproc *preproc,
                                          struct preproc_text *preproc_text,
                                          struct preproc_token *token,
                                          struct preproc_token *value) {
-  ustr_t token_str = {.str = token->text,
-                                .len = text_span_len(&token->span)};
+  ustr_t token_str = {.str = token->text, .len = text_span_len(&token->span)};
   token_str = ustr_strip_prefix(token_str, MK_USTR("__"));
 
   if (ustr_eq(token_str, MK_USTR("defined"))) {
-    ustr_t value_str = {.str = value->text,
-                                  .len = text_span_len(&value->span)};
+    ustr_t value_str = {.str = value->text, .len = text_span_len(&value->span)};
 
     return get_define(preproc, value_str) ? 1 : 0;
   } else if (ustr_eq(token_str, MK_USTR("has_include"))) {
@@ -2550,7 +2584,8 @@ static unsigned long long eval_expr(struct preproc *preproc,
                 BAD_TOKEN_IN_COND, bad_token_in_cond, token->span,
                 MK_INVALID_TEXT_POS(0),
                 arena_alloc_snprintf(
-                    preproc->arena, "bad token in preprocessor condition '%.*s'",
+                    preproc->arena,
+                    "bad token in preprocessor condition '%.*s'",
                     (int)text_span_len(&token->span), token->text)));
 
         return 0;
@@ -2742,8 +2777,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
           ustr_t def_str = {.str = def_name->text,
-                                      .len =
-                                          (int)text_span_len(&def_name->span)};
+                            .len = (int)text_span_len(&def_name->span)};
           now_enabled = get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2755,8 +2789,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
           UNEXPANDED_DIR_TOKENS();
           struct preproc_token *def_name = vector_head(directive_tokens);
           ustr_t def_str = {.str = def_name->text,
-                                      .len =
-                                          (int)text_span_len(&def_name->span)};
+                            .len = (int)text_span_len(&def_name->span)};
           now_enabled = !get_define(preproc, def_str);
         }
         vector_push_back(preproc_text->enabled, &now_enabled);
@@ -2811,8 +2844,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
           ustr_t def_str = {.str = def_name->text,
-                                      .len =
-                                          (int)text_span_len(&def_name->span)};
+                            .len = (int)text_span_len(&def_name->span)};
           bool now_enabled = get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
@@ -2828,8 +2860,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         } else {
           struct preproc_token *def_name = vector_head(directive_tokens);
           ustr_t def_str = {.str = def_name->text,
-                                      .len =
-                                          (int)text_span_len(&def_name->span)};
+                            .len = (int)text_span_len(&def_name->span)};
           bool now_enabled = !get_define(preproc, def_str);
           *(bool *)vector_tail(preproc_text->enabled) =
               outer_enabled && now_enabled;
@@ -2886,7 +2917,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
             if (tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
               ustr_t ident = {.len = text_span_len(&tok->span),
-                                        .str = tok->text};
+                              .str = tok->text};
 
               hashtbl_insert(params, &ident, &param_idx);
               param_idx++;
@@ -2978,7 +3009,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
 
             if (def_tok->ty == PREPROC_TOKEN_TY_IDENTIFIER) {
               ustr_t ident = {.len = text_span_len(&def_tok->span),
-                                        .str = def_tok->text};
+                              .str = def_tok->text};
 
               size_t *idx = hashtbl_lookup(params, &ident);
               if (idx) {
@@ -3050,7 +3081,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
         vector_remove_range(directive_tokens, 0, first_def_tok);
 
         ustr_t ident = {.str = def_name.text,
-                                  .len = text_span_len(&def_name.span)};
+                        .len = text_span_len(&def_name.span)};
 
         // don't free them
         directive_tokens = NULL;
@@ -3076,7 +3107,7 @@ void preproc_next_token(struct preproc *preproc, struct preproc_token *token,
             *(struct preproc_token *)vector_head(directive_tokens);
 
         ustr_t ident = {.str = def_name.text,
-                                  .len = text_span_len(&def_name.span)};
+                        .len = text_span_len(&def_name.span)};
 
         // FIXME: inefficient lookup + remove
         struct preproc_define *def = hashtbl_lookup(preproc->defines, &ident);
@@ -3354,6 +3385,7 @@ void preproc_process(struct preproc *preproc, FILE *file) {
   bool first = true;
   bool last_was_newline = true;
   bool last_was_whitespace = true;
+  bool needs_whitespace = false;
 
   do {
     preproc_next_token(preproc, &token, PREPROC_EXPAND_TOKEN_FLAG_NONE);
@@ -3361,8 +3393,21 @@ void preproc_process(struct preproc *preproc, FILE *file) {
     int len = (int)text_span_len(&token.span);
 
     if (!len) {
+      fprintf(file, " ");
       continue;
     }
+
+    if (needs_whitespace) {
+      if (token.ty != PREPROC_TOKEN_TY_NEWLINE && token.ty != PREPROC_TOKEN_TY_WHITESPACE) {
+        fprintf(file, " ");
+      } else {
+        last_was_newline = false;
+        last_was_whitespace = false;
+      }
+    }
+
+    // FIXME: hmm think this logic might be broken
+    needs_whitespace = token.ty == PREPROC_TOKEN_TY_IDENTIFIER || token.ty == PREPROC_TOKEN_TY_PREPROC_NUMBER;
 
     switch (token.ty) {
     case PREPROC_TOKEN_TY_UNKNOWN:

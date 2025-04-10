@@ -3662,6 +3662,11 @@ static bool parse_funcdef(struct parser *parser, struct ast_funcdef *func_def) {
   parse_declaration_specifier_list(parser, TYPE_SPECIFIER_MODE_ALLOW_TYPEDEFS,
                                    &func_def->specifier_list);
 
+  if (!func_def->specifier_list.num_decl_specifiers) {
+    lex_backtrack(parser->lexer, pos);
+    return false;
+  }
+
   if (!parse_declarator(parser, &func_def->declarator)) {
     lex_backtrack(parser->lexer, pos);
     return false;
