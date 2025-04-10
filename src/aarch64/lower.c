@@ -762,7 +762,7 @@ static void lower_va_start(struct ir_func *func, struct ir_op *op) {
 static void lower_va_arg(struct ir_func *func, struct ir_op *op) {
   switch (func->unit->target->target_id) {
   case TARGET_ID_AARCH64_MACOS: {
-    // FIXME: phi gen in build doesnt respect the fact that `va_arg` writes to the `va_list`
+    // because a `va_arg` op takes the _address_ of the va_arg list, we can update it
 
     struct ir_var_ty var_ty = op->va_arg.arg_ty;
 

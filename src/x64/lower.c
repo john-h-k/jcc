@@ -417,15 +417,6 @@ static void lower_fneg(struct ir_func *func, struct ir_op *op) {
   op->binary_op.rhs = fp_mask;
 }
 
-// variable shifts require both operands to be the same size, as they use the
-// same register this is fine, because we can just "fake" the type required and
-// get the correct behaviour
-static void lower_shift(UNUSED struct ir_func *func, struct ir_op *op) {
-  struct ir_op_binary_op *binary_op = &op->binary_op;
-
-  binary_op->rhs->var_ty = binary_op->lhs->var_ty;
-}
-
 static void lower_comparison(struct ir_func *irb, struct ir_op *op) {
   invariant_assert(op->ty == IR_OP_TY_BINARY_OP &&
                        ir_binary_op_is_comparison(op->binary_op.ty),
@@ -692,15 +683,6 @@ void x64_lower(struct ir_unit *unit) {
               }
               break;
             case IR_OP_TY_BINARY_OP:
-              switch (op->binary_op.ty) {
-              case IR_OP_BINARY_OP_TY_SRSHIFT:
-              case IR_OP_BINARY_OP_TY_LSHIFT:
-              case IR_OP_BINARY_OP_TY_URSHIFT:
-                lower_shift(func, op);
-                break;
-              default:
-                break;
-              }
               break;
             default:
               break;

@@ -1,4 +1,5 @@
 // expected value: 220
+// arch: aarch64
 
 #include <stdarg.h>
 

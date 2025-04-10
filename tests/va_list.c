@@ -1,4 +1,5 @@
 // expected value: 0
+// arch: aarch64
 // stdout: Hello, 10Hello, 10
 
 typedef __builtin_va_list va_list;

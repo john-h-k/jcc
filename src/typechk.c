@@ -649,12 +649,12 @@ static char *tchk_base_type_name(struct typechk *tchk,
     for (size_t i = 0; i < var_ty->func.num_params; i++) {
       if (i + 1 == var_ty->func.num_params) {
         base = arena_alloc_snprintf(
-            tchk->arena, "%s%s)",
-            base, tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+            tchk->arena, "%s%s)", base,
+            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       } else {
         base = arena_alloc_snprintf(
-            tchk->arena, "%s%s, ",
-            base, tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
+            tchk->arena, "%s%s, ", base,
+            tchk_type_name(tchk, &var_ty->func.params[i].var_ty));
       }
     }
 
@@ -1859,7 +1859,26 @@ type_declarator_inner(struct typechk *tchk, struct td_var_ty *outer_var_ty,
     }
   }
 
-  invariant_assert(found_ident, "decl without identifier?");
+  if (!found_ident) {
+    // `unsigned int foo : 1, : 2` is legal
+
+    var_decl.init = NULL;
+    var_decl.var_ty = var_ty;
+    var_decl.var = (struct td_var){// FIXME: other fields
+                                   .ty = TD_VAR_VAR_TY_VAR,
+                                   .scope = vt_cur_scope(&tchk->var_table),
+                                   .identifier = MK_NULL_USTR(),
+                                   .span = MK_INVALID_TEXT_SPAN2()};
+
+    // tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+    // compiler_diagnostics_add(
+    //     tchk->diagnostics,
+    //     MK_SEMANTIC_DIAGNOSTIC(INCOMPLETE_TYPE, incomplete_type,
+    //                            declarator->span, MK_INVALID_TEXT_POS(0),
+    //                            "no identifier in declaration"));
+
+    return var_decl;
+  }
 
   if (inner_idx != -1) {
     struct ast_direct_declarator *direct_declarator =
@@ -2854,9 +2873,12 @@ static struct td_expr type_call(struct typechk *tchk,
     tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
     compiler_diagnostics_add(
         tchk->diagnostics,
-        MK_SEMANTIC_DIAGNOSTIC(FN_NOT_CALLABLE, fn_not_callable, call->span,
-                               MK_INVALID_TEXT_POS(0),
-                               arena_alloc_snprintf(tchk->arena, "can't call non func expression with ty '%s'", tchk_type_name(tchk, &target_var_ty))));
+        MK_SEMANTIC_DIAGNOSTIC(
+            FN_NOT_CALLABLE, fn_not_callable, call->span,
+            MK_INVALID_TEXT_POS(0),
+            arena_alloc_snprintf(tchk->arena,
+                                 "can't call non func expression with ty '%s'",
+                                 tchk_type_name(tchk, &target_var_ty))));
 
     return (struct td_expr){
         .ty = TD_EXPR_TY_CALL, .var_ty = TD_VAR_TY_UNKNOWN, .call = td_call};
@@ -6112,6 +6134,19 @@ type_init_declarator(struct typechk *tchk, struct text_span context,
       type_declarator(tchk, specifiers, &init_declarator->declarator,
                       init_declarator->init, mode);
 
+  if (!td_var_decl.var.identifier.len) {
+    if (mode != TD_DECLARATOR_MODE_STRUCT) {
+      tchk->result_ty = TYPECHK_RESULT_TY_FAILURE;
+      compiler_diagnostics_add(
+          tchk->diagnostics,
+          MK_SEMANTIC_DIAGNOSTIC(
+              NO_IDENT, no_ident, init_declarator->init->span,
+              MK_INVALID_TEXT_POS(0), "declaration must have identifier"));
+    }
+    
+    return td_var_decl;
+  }
+
   struct var_table_entry *entry;
   if (specifiers->storage == TD_STORAGE_CLASS_SPECIFIER_TYPEDEF) {
     entry = vt_create_entry(&tchk->ty_table, VAR_TABLE_NS_TYPEDEF,
@@ -7345,7 +7380,8 @@ DEBUG_FUNC(va_arg, va_arg) {
 }
 
 DEBUG_FUNC(builtin, builtin) {
-  TD_PRINT("BUILTIN '%.*s'", (int)builtin->identifier.len, builtin->identifier.str);
+  TD_PRINT("BUILTIN '%.*s'", (int)builtin->identifier.len,
+           builtin->identifier.str);
 }
 
 DEBUG_FUNC(expr, expr) {
