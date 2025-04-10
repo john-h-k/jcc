@@ -3136,7 +3136,6 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
 
   ustr_t name = decl->var.identifier;
   const char *symbol_name;
-  fprintf(stderr, "building %.*s\n", (int)name.len, name.str);
   if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC &&
       var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
