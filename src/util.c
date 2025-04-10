@@ -11,11 +11,7 @@ NORETURN void unreachable(void) {
 }
 
 PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...) {
-#ifdef __JCC__
-  fprintf(stderr, "unsupported: %s\n", msg);
-#else
   FMTPRINT(stderr, "unsupported: ", msg);
-#endif
   EXIT_FAIL(-2);
 }
 
@@ -28,16 +24,11 @@ void util_debug_assert(bool b, const char *cond, const char *func,
 
   fprintf(stderr, "DEBUG_ASSERT failed %s:%d in %s: \nexpected `%s`    ", file,
           line, func, cond);
-#ifdef __JCC__
-  // print raw message
-  fprintf(stderr, "%s\n", msg);
-#else
   va_list v;
   va_start(v, msg);
   vfprintf(stderr, msg, v);
   fprintf(stderr, "\n");
   va_end(v);
-#endif
   EXIT_FAIL(-1);
 }
 #endif

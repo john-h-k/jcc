@@ -266,14 +266,6 @@ static inline void debug_print_stack_trace(void) {}
 #define PR_WHITE "\x1B[37m"
 #define PR_BOLD "\033[1m"
 
-// TEMP:
-#ifdef __JCC__
-#undef va_start
-#define va_start(...)
-#undef va_end
-#define va_end(...)
-#endif
-
 #define START_NO_UNUSED_ARGS PUSH_NO_WARN("-Wunused-parameter")
 #define END_NO_UNUSED_ARGS POP_NO_WARN()
 
@@ -282,9 +274,6 @@ static inline void debug_print_stack_trace(void) {}
 #define SIZE_T_MAX (static_assert(false, "use SIZE_MAX instead"))
 #endif
 
-#ifdef __JCC__
-#define FMTPRINT(file, message, format) TODO("jcc va_arg");
-#else
 #define FMTPRINT(file, message, format)                                        \
   do {                                                                         \
     va_list v;                                                                 \
@@ -294,7 +283,6 @@ static inline void debug_print_stack_trace(void) {}
     fprintf(file, "\n");                                                       \
     va_end(v);                                                                 \
   } while (0)
-#endif
 
 #define MACRO_FMTPRINT(file, message, ...)                                     \
   do {                                                                         \
@@ -368,12 +356,7 @@ PRINTF_ARGS(0) NORETURN void unsupported(const char *msg, ...);
 PRINTF_ARGS(1)
 static inline void invariant_assert(bool b, const char *msg, ...) {
   if (!b) {
-#ifdef __JCC__
-    // doesn't support varargs
-    fprintf(stderr, "invariant_assertion failed, program exiting: %s", msg);
-#else
     FMTPRINT(stderr, "invariant_assertion failed, program exiting: ", msg);
-#endif
     EXIT_FAIL(-1)
   }
 }
