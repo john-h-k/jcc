@@ -7,6 +7,7 @@
 #include "rv32i/emit.h"
 #include "rv32i/lower.h"
 #include "target.h"
+#include "typechk.h"
 
 #if !defined(JCC_ALL) && !defined(JCC_RV32I)
 
@@ -19,7 +20,7 @@ const struct target RV32I_LINUX_TARGET = {
     TARGET_LP_SZ_LP32,
     {
         // TODO:
-        .va_list_var_ty = NULL
+        .va_list_var_ty = &TD_VAR_TY_UNKNOWN
     },
     {
         .ssp = 9,
