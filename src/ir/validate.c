@@ -322,6 +322,8 @@ static void ir_validate_op(struct ir_validate_state *state,
     BUG("should not have unknown ops");
   case IR_OP_TY_VA_START:
     break;
+  case IR_OP_TY_VA_ARG:
+    break;
   case IR_OP_TY_PHI:
     VALIDATION_CHECKZ(op->phi.num_values > 1, op, "phi with <2 operands");
 

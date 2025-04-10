@@ -46,6 +46,7 @@ enum ir_op_ty {
   IR_OP_TY_GATHER,
 
   IR_OP_TY_VA_START,
+  IR_OP_TY_VA_ARG,
 
   // Low-level operations that only occur after lowering
   // IR_OP_TY_STORE_REG,
@@ -562,6 +563,11 @@ struct ir_op_va_start {
   struct ir_op *list_addr;
 };
 
+struct ir_op_va_arg {
+  struct ir_var_ty arg_ty;
+  struct ir_op *list_addr;
+};
+
 struct ir_op {
   size_t id;
   enum ir_op_ty ty;
@@ -594,6 +600,7 @@ struct ir_op {
     struct ir_op_br_cond br_cond;
     struct ir_op_br_switch br_switch;
     struct ir_op_va_start va_start;
+    struct ir_op_va_arg va_arg;
     /* br has no entry, as its target is on `ir_basicblock` and it has no
      * condition */
     struct ir_op_phi phi;

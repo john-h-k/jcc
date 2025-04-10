@@ -2271,14 +2271,21 @@ static struct ir_op *build_ir_for_compoundliteral(
   return address;
 }
 
-START_NO_UNUSED_ARGS
 static struct ir_op *build_ir_for_va_arg(struct ir_func_builder *irb,
                                          struct ir_stmt **stmt,
-                                         struct ir_var_ty var_ty,
                                          struct td_va_arg *va_arg) {
-  TODO("");
+  struct ir_op *list_addr = build_ir_for_addressof(irb, stmt, va_arg->list);
+
+  struct ir_var_ty var_ty = ir_var_ty_for_td_var_ty(irb->unit, &va_arg->var_ty);
+
+  struct ir_op *op = ir_append_op(irb->func, *stmt, IR_OP_TY_VA_ARG, var_ty);
+  op->va_arg = (struct ir_op_va_arg){
+    .arg_ty = var_ty,
+    .list_addr = list_addr
+  };
+
+  return op;
 }
-END_NO_UNUSED_ARGS
 
 static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
                                        struct ir_stmt **stmt,
@@ -2294,7 +2301,7 @@ static struct ir_op *build_ir_for_expr(struct ir_func_builder *irb,
     BUG("builtin should have been handled by call");
     break;
   case TD_EXPR_TY_VA_ARG:
-    op = build_ir_for_va_arg(irb, stmt, var_ty, &expr->va_arg);
+    op = build_ir_for_va_arg(irb, stmt, &expr->va_arg);
     break;
   case TD_EXPR_TY_TERNARY:
     op = build_ir_for_ternary(irb, stmt, var_ty, &expr->ternary);
@@ -3567,6 +3574,9 @@ static void validate_op_tys_callback(struct ir_op **op,
     break;
   case IR_OP_TY_ADDR:
     res_ty = IR_VAR_TY_POINTER;
+    break;
+  case IR_OP_TY_VA_ARG:
+    res_ty = (*op)->va_arg.arg_ty;
     break;
   case IR_OP_TY_LOAD:
   case IR_OP_TY_LOAD_BITFIELD:

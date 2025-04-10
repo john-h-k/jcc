@@ -2217,13 +2217,21 @@ static bool parse_atom_1(struct parser *parser, struct ast_expr *expr) {
   struct lex_token token;
   lex_peek_token(parser->lexer, &token);
   if (token.ty == LEX_TOKEN_TY_IDENTIFIER && ustr_eq(identifier_str(parser, &token), MK_USTR("__builtin_va_arg"))) {
+    lex_consume_token(parser->lexer, token);
+
+    parse_expected_token(parser, LEX_TOKEN_TY_OPEN_BRACKET, token.span.start, "'(' after va_list", NULL);
+
     struct ast_expr list;
     parse_expected_expr(parser, &list, "expression after 'va_arg'");
+
+    parse_expected_token(parser, LEX_TOKEN_TY_COMMA, token.span.start, "',' after va_arg list argument", NULL);
 
     struct ast_type_name type;
     if (!parse_type_name(parser, &type)) {
       BUG("diagnostic on no typename after va_arg call");
     }
+
+    parse_expected_token(parser, LEX_TOKEN_TY_CLOSE_BRACKET, token.span.start, "')' after va_list", NULL);
 
     expr->ty = AST_EXPR_TY_VA_ARG;
     expr->va_arg = (struct ast_va_arg){

@@ -4196,6 +4196,7 @@ static struct td_expr type_va_arg(struct typechk *tchk,
 
   return (struct td_expr){
       .ty = TD_EXPR_TY_VA_ARG,
+      .var_ty = type,
       .va_arg = {.list = arena_alloc_init(tchk->arena, sizeof(list), &list),
                  .var_ty = type}};
 }

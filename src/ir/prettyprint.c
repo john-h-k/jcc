@@ -367,6 +367,12 @@ static void debug_print_op_with_ctx(FILE *file, struct ir_func *irb,
     fprintf(file, "va_start ");
     debug_print_op_use(file, irb, op->va_start.list_addr);
     break;
+  case IR_OP_TY_VA_ARG:
+    fprintf(file, "va_arg ");
+    debug_print_var_ty_string(file, irb->unit, &op->va_arg.arg_ty);
+    fprintf(file, ", ");
+    debug_print_op_use(file, irb, op->va_arg.list_addr);
+    break;
   case IR_OP_TY_UNDF:
     fprintf(file, "UNDF");
     break;
