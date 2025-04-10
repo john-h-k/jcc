@@ -3131,12 +3131,12 @@ build_ir_for_global_var(struct ir_var_builder *irb, struct ir_func *func,
                         const struct td_var_declaration *decl) {
   // `extern struct c` is allowed for an incomplete type
   // so we need to handle that
+  fprintf(stderr, "building %.*s\n", (int)decl->var.identifier.len, decl->var.identifier.str);
   struct ir_var_ty var_ty =
       ir_var_ty_for_decl_td_var_ty(irb->unit, &decl->var_ty);
 
   ustr_t name = decl->var.identifier;
   const char *symbol_name;
-  fprintf(stderr, "building %.*s\n", (int)name.len, name.str);
   if (storage_class == TD_STORAGE_CLASS_SPECIFIER_STATIC &&
       var_ty.ty != IR_VAR_TY_TY_FUNC) {
     symbol_name = mangle_static_name(irb, func, name);
