@@ -18,7 +18,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: grep -r __DARWIN_OS_INLINE $(xcrun --show-sdk-path)
+        # run: grep -r __DARWIN_OS_INLINE $(xcrun --show-sdk-path)
+        run: ./jcc.sh ci-test ./tests/c-testsuite/00040.c -arch x86_64 -- -v
         # run: ./jcc.sh ci-test -arch x86_64
 
 
