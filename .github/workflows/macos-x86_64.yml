@@ -19,7 +19,8 @@ jobs:
 
       - name: Run tests
         # run: grep -r __DARWIN_OS_INLINE $(xcrun --show-sdk-path)
-        run: ./jcc.sh ci-test ./tests/hello_world.c -arch x86_64 -- -v
+        run: ./jcc.sh run -E ./tests/hello_world.c -arch x86_64 -v
+        # run: ./jcc.sh ci-test ./tests/hello_world.c -arch x86_64 -- -v
         # run: ./jcc.sh ci-test -arch x86_64
 
 
