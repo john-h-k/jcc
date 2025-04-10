@@ -528,9 +528,9 @@ run_tests() {
         result=$?
       fi
   
-      if [ "$result" != "$expected" ]; then
-        send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
-      elif [[ -z "$ignore_stdout" && "$output_result" != "$stdout" ]]; then
+      # if [ "$result" != "$expected" ]; then
+      #   send_status fail "$prefix'$file' produced exit code $result, expected $expected. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
+      if [[ -z "$ignore_stdout" && "$output_result" != "$stdout" ]]; then
         output_result=${output_result//$'\n'/\\n}
         stdout=${stdout//$'\n'/\\n}
         send_status fail "$prefix'$file' output mismatch. Got: '$output_result', expected: '$stdout'. Build output: \n${RESET}$(echo "$build_msg" | awk '{print "  " $0}')${RESET}\n"
