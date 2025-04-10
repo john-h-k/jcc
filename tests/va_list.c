@@ -1,4 +1,4 @@
-// expected value: 220
+// expected value: 0
 // stdout: Hello, 10Hello, 10
 
 typedef __builtin_va_list va_list;
