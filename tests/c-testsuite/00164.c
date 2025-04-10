@@ -18,6 +18,7 @@ int main()
    e = 0;
    f = 1;
 
+   printf("hi\n");
    printf("%d\n", c + d);
    printf("%d\n", (y = c + d));
    printf("%d\n", e || e && f);
