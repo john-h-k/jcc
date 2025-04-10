@@ -2120,9 +2120,9 @@ static struct include_info try_find_include(struct preproc *preproc,
 
   if (preproc->args.verbose && mode == TRY_FIND_INCLUDE_MODE_READ) {
     if (is_angle) {
-      fprintf(stderr, "preproc: including <%s>\n", filename);
+      fprintf(stderr, "preproc: including <%s> from %s\n", filename, preproc_text->file);
     } else {
-      fprintf(stderr, "preproc: including \"%s\"\n", filename);
+      fprintf(stderr, "preproc: including \"%s\" from %s\n", filename, preproc_text->file);
     }
   }
 
