@@ -160,8 +160,7 @@ static const char *get_default_isysroot(struct fcache *fcache,
 #if OS_APPLE
     // POSIX!! not C-std. we should have an alternatie
     struct fcache_file sdk_path;
-    if (!fcache_read_proc(fcache,
-                          MK_USTR("xcrun --sdk macosx --show-sdk-path"),
+    if (!fcache_read_proc(fcache, MK_USTR("xcrun --sdk macosx --show-sdk-path"),
                           &sdk_path)) {
       BUG("xcrun call failed!");
     }
@@ -336,8 +335,7 @@ try_get_compile_args(int argc, char **argv, struct parsed_args *args,
 
     ustr_t name, value;
     if (val_str) {
-      name = (ustr_t){.str = def_macro,
-                                .len = (size_t)(val_str - def_macro)};
+      name = (ustr_t){.str = def_macro, .len = (size_t)(val_str - def_macro)};
       value = MK_USTR(val_str + 1);
     } else {
       name = MK_USTR(def_macro);

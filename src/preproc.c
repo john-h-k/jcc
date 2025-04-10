@@ -2006,7 +2006,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define STDARG_H\n"
         "\n"
         // libc
-        "#define __gnuc_va_list void *\n"
+        "#define __gnuc_va_list __builtin_va_list *\n"
         "#ifdef __GLIBC__\n"
         "#endif\n"
         "\n"
@@ -2017,12 +2017,14 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#else\n"
         "\n"
         // for some reason apple predefines it
-        // "#if !defined(__APPLE__) && !defined(__MACH__)\n"
-        "typedef void * va_list;\n"
-        // "#endif\n"
+        "#if defined(__APPLE__) || defined(__MACH__)\n"
+        "typedef __builtin_va_list __darwin_va_list;\n"
+        "#else\n"
+        "typedef __builtin_va_list va_list;\n"
+        "#endif\n"
         "\n"
         // "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L\n"
-        "#define va_start(ap, ...) __builtin_va_start(ap, 0)\n"
+        "#define va_start(ap, ...) __builtin_va_start(ap)\n"
         // "#else\n"
         // "#define va_start(ap, param) __builtin_va_start(ap, param)\n"
         // "#endif\n"
@@ -2033,12 +2035,7 @@ static bool try_include_path(struct preproc *preproc, const char *path,
         "#define va_end(ap) __builtin_va_end(ap)\n"
         "#define va_arg(ap, type) __builtin_va_arg(ap, type)\n"
         "#define va_copy(dest, src) __builtin_va_copy(dest, src)\n"
-        // "typedef __builtin_va_list va_list;\n"
         // TEMP:
-        "#define __builtin_va_arg(ap, type) ((type){0})\n"
-        "inline static void *__builtin_va_start(...) { return (void *)0; }\n"
-        "inline static void __builtin_va_end(...) { }\n"
-        "#define __builtin_va_copy(dst, src) (dst) = (src)\n"
 
         "#endif\n"
         "#endif\n";

@@ -20,6 +20,9 @@ void var(const char *restrict format, ...) {
 
   vprintf(format, a);
   vprintf(format, b);
+
+  va_end(a);
+  va_end(b);
 }
 
 int main() {

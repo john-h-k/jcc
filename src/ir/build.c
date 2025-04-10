@@ -838,6 +838,17 @@ static struct ir_op *build_ir_for_addressof(struct ir_func_builder *irb,
     if (expr->unary_op.ty == TD_UNARY_OP_TY_INDIRECTION) {
       // &*, so cancel
       return build_ir_for_expr(irb, stmt, expr->unary_op.expr);
+    } else if (expr->unary_op.ty == TD_UNARY_OP_TY_CAST) {
+      struct ir_var_ty from_ty =
+          ir_var_ty_for_td_var_ty(irb->unit, &expr->unary_op.cast.var_ty);
+      struct ir_var_ty to_ty =
+          ir_var_ty_for_td_var_ty(irb->unit, &expr->var_ty);
+
+      if (ir_var_ty_needs_cast_op(irb, &to_ty, &from_ty)) {
+        BUG("can't take addressof cast op that requires conversion");
+      }
+
+      return build_ir_for_addressof(irb, stmt, expr->unary_op.expr);
     }
     break;
   case TD_EXPR_TY_COMPOUNDEXPR: {
@@ -1648,10 +1659,9 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
       struct td_expr *list = &call->arg_list.args[0];
       struct ir_op *list_addr = build_ir_for_addressof(irb, stmt, list);
 
-      struct ir_op *va_start = ir_append_op(irb->func, *stmt, IR_OP_TY_VA_START, IR_VAR_TY_NONE);
-      va_start->va_start = (struct ir_op_va_start){
-        .list_addr = list_addr
-      };
+      struct ir_op *va_start =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_VA_START, IR_VAR_TY_NONE);
+      va_start->va_start = (struct ir_op_va_start){.list_addr = list_addr};
       return va_start;
     } else if (ustr_eq(builtin, MK_USTR("__builtin_va_end"))) {
       // nop
@@ -1664,12 +1674,10 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
       struct ir_op *lhs_addr = build_ir_for_addressof(irb, stmt, lhs);
       struct ir_op *rhs_op = build_ir_for_expr(irb, stmt, rhs);
 
-      struct ir_op *store = ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+      struct ir_op *store =
+          ir_append_op(irb->func, *stmt, IR_OP_TY_STORE, IR_VAR_TY_NONE);
       store->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR,
-        .addr = lhs_addr,
-        .value = rhs_op
-      };
+          .ty = IR_OP_STORE_TY_ADDR, .addr = lhs_addr, .value = rhs_op};
 
       return store;
     } else {
