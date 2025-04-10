@@ -21,7 +21,7 @@ const struct target X64_MACOS_TARGET = {
     TARGET_ID_X64_MACOS,
     TARGET_LP_SZ_LP64,
     {
-        .va_list_var_ty = &TD_VAR_TY_UNKNOWN
+        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER
     },
     {
         .ssp = 7,
