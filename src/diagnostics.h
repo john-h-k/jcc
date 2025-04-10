@@ -60,6 +60,8 @@ enum compiler_diagnostic_class {
           UNRECOGNISED_ATTR, const char *)                                     \
   DIAG_FN(WARN, "too-many-inits", too_many_inits, TOO_MANY_INITS,              \
           const char *)                                                        \
+  DIAG_FN(WARN, "no-ident", no_ident,                \
+          NO_IDENT, const char *)                                 \
   DIAG_FN(WARN, "pointer-type-mismatch", pointer_type_mismatch,                \
           POINTER_TYPE_MISMATCH, const char *)                                 \
   DIAG_FN(ERROR, "typecheck-sub-ptr-compatible", pointer_sub_types,            \

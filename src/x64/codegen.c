@@ -1308,16 +1308,6 @@ enum x64_reg_attr_flags reg_attr_flags(struct x64_reg reg) {
   }
 }
 
-// reg 9 is not part of calling convention
-// and all registers have already been saved
-// so this is always safe
-// same with reg 10, which we use if a register branch target is needed for
-// `blr`
-#define GP_TMP_REG_IDX ((size_t)9)
-#define CALL_REG_IDX ((size_t)0)
-#define ADDR_REG_IDX ((size_t)11)
-#define FP_TMP_REG_IDX ((size_t)16)
-
 // FIXME: apple do things differently!!!
 
 #define INTEGRAL_OR_PTRLIKE(var_ty)                                            \

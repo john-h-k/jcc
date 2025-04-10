@@ -584,7 +584,7 @@ struct x64_raw_instr {
        : ((struct x64_raw_instr){                                              \
              .len = 4,                                                         \
              .buff = {REX((size_t)1, (size_t)0, (size_t)0,                     \
-                          (size_t)(((dest).idx) > 8)),                         \
+                          (size_t)(((dest).idx) > 7)),                         \
                       0x0F, 0x90 + U8(cc),                                     \
                       MODRM(MOD_REG, (size_t)0, (size_t)((dest).idx) % 8)}}))
 
@@ -629,8 +629,8 @@ struct x64_raw_instr {
 #define CALL_REG(reg)                                                          \
   ((reg).idx ? ((struct x64_raw_instr){                                        \
                    .len = 3,                                                   \
-                   .buff = {REX((size_t)1, (size_t)((reg).idx > 7), (size_t)0, \
-                                (size_t)(0)),                                  \
+                   .buff = {REX((size_t)1, (size_t)0, (size_t)0,               \
+                                (size_t)((reg).idx > 7)),                      \
                             0xFF, MODRM(MOD_REG, (size_t)2, (reg).idx % 8)}})  \
              : ((struct x64_raw_instr){                                        \
                    .len = 2,                                                   \
