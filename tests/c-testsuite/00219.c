@@ -1,5 +1,3 @@
-// skip: not yet implemented
-
 #include <stdio.h>
 
 const int a = 0;

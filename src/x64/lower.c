@@ -866,6 +866,28 @@ static void lower_va_arg(UNUSED struct ir_func *func, UNUSED struct ir_op *op) {
   TODO("x64 va_arg");
 }
 
+void x64_lower_variadic(struct ir_func *func) {
+  struct ir_lcl *save_lcl = NULL;
+  if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+    save_lcl = lower_va_args(func);
+  }
+
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    switch (op->ty) {
+    case IR_OP_TY_VA_START:
+      lower_va_start(func, save_lcl, op);
+      break;
+    case IR_OP_TY_VA_ARG:
+      lower_va_arg(func, op);
+      break;
+    default:
+      break;
+    }
+  }
+}
 void x64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -879,11 +901,6 @@ void x64_lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
-
-      struct ir_lcl *save_lcl = NULL;
-      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
-        save_lcl = lower_va_args(func);
-      }
 
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
@@ -899,12 +916,8 @@ void x64_lower(struct ir_unit *unit) {
             case IR_OP_TY_UNDF:
             case IR_OP_TY_PHI:
             case IR_OP_TY_RET:
-              break;
             case IR_OP_TY_VA_START:
-              lower_va_start(func, save_lcl, op);
-              break;
             case IR_OP_TY_VA_ARG:
-              lower_va_arg(func, op);
               break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {

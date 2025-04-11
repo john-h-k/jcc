@@ -151,10 +151,6 @@ struct link_args {
 enum link_result { LINK_RESULT_SUCCESS, LINK_RESULT_FAILURE };
 
 typedef const char *(*mangle)(struct arena_allocator *arena, const char *name);
-typedef void (*target_lower)(struct ir_unit *unit);
-typedef struct ir_func_info (*target_lower_func_ty)(
-    struct ir_func *func, struct ir_var_func_ty func_ty, struct ir_op **args,
-    size_t num_args);
 
 struct cg_unit;
 
@@ -219,6 +215,19 @@ struct codegen_info {
   target_codegen codegen_end;
 };
 
+typedef void (*target_lower_variadic)(struct ir_func *func);
+typedef void (*target_lower)(struct ir_unit *unit);
+typedef struct ir_func_info (*target_lower_func_ty)(
+    struct ir_func *func, struct ir_var_func_ty func_ty, struct ir_op **args,
+    size_t num_args);
+
+struct lower_info {
+  // variadics must be lowered early
+  target_lower_variadic lower_variadic;
+  target_lower lower;
+  target_lower_func_ty lower_func_ty;
+};
+
 enum target_variadic_info_flags {
   TARGET_VARIADIC_INFO_FLAG_NONE = 0,
 
@@ -239,8 +248,7 @@ struct target {
   struct reg_info reg_info;
   size_t function_alignment;
   mangle mangle;
-  target_lower lower;
-  target_lower_func_ty lower_func_ty;
+  struct lower_info lower;
   struct codegen_info codegen;
   emit_function emit_function;
   build_object build_object;

@@ -552,7 +552,13 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
     struct ir_var_ty_info info = ir_var_ty_info(func->unit, var_ty);
 
-    if (info.size > 16) {
+    size_t num_hfa_members;
+    size_t hfa_member_size;
+    struct ir_var_ty member_ty;
+    bool is_hfa = try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
+                                  &hfa_member_size);
+
+    if (info.size > 16 && !is_hfa) {
       // copy to mem
       var_ty = &IR_VAR_TY_POINTER;
       ty = IR_PARAM_INFO_TY_POINTER;
@@ -562,10 +568,6 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
     if (ir_var_ty_is_aggregate(var_ty)) {
       info.size = ROUND_UP(info.size, 8);
     }
-
-    size_t num_hfa_members;
-    size_t hfa_member_size;
-    struct ir_var_ty member_ty;
 
     if (!variadic || !variadics_on_stack) {
       if (ir_var_ty_is_fp(var_ty) && nsrn < 8) {
@@ -582,8 +584,7 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
         vector_push_back(param_infos, &param_info);
         nsrn++;
         continue;
-      } else if (try_get_hfa_info(func, var_ty, &member_ty, &num_hfa_members,
-                                  &hfa_member_size)) {
+      } else if (is_hfa) {
         if (nsrn + num_hfa_members <= 8) {
           struct ir_param_info param_info = {
               .ty = IR_PARAM_INFO_TY_REGISTER,
@@ -786,8 +787,8 @@ static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
   struct ir_op *movs = func->first->first->last;
-  struct ir_op *base = ir_insert_after_op(func, movs,
-                                          IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  struct ir_op *base =
+      ir_insert_after_op(func, movs, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
   struct ir_op *last = base;
@@ -825,8 +826,8 @@ static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
 
     struct ir_op *addr =
         ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-    addr->addr_offset =
-        (struct ir_op_addr_offset){.base = base, .offset = gp_save_sz + idx * 16};
+    addr->addr_offset = (struct ir_op_addr_offset){
+        .base = base, .offset = gp_save_sz + idx * 16};
 
     struct ir_op *value =
         ir_insert_after_op(func, movs, IR_OP_TY_MOV, IR_VAR_TY_F64);
@@ -927,13 +928,13 @@ static void lower_va_start_generic(struct ir_func *func,
     gp_save_base->addr =
         (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_info.lcl};
 
-    struct ir_op *gp_save_end =
-        ir_insert_after_op(func, gp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    struct ir_op *gp_save_end = ir_insert_after_op(
+        func, gp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     gp_save_end->addr_offset = (struct ir_op_addr_offset){
         .base = gp_save_base, .offset = save_info.gp_save_sz};
 
-    struct ir_op *addr_gr_top =
-        ir_insert_after_op(func, gp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    struct ir_op *addr_gr_top = ir_insert_after_op(
+        func, gp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     addr_gr_top->addr_offset =
         (struct ir_op_addr_offset){.base = addr, .offset = 8};
 
@@ -946,19 +947,21 @@ static void lower_va_start_generic(struct ir_func *func,
   }
 
   {
-    // list->vr_top = <fp_save + fp_size> (which is <gp_save + gp_size + fp_size>)
+    // list->vr_top = <fp_save + fp_size> (which is <gp_save + gp_size +
+    // fp_size>)
     struct ir_op *fp_save_base =
         ir_insert_after_op(func, last, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     fp_save_base->addr =
         (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_info.lcl};
 
-    struct ir_op *fp_save_end =
-        ir_insert_after_op(func, fp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    struct ir_op *fp_save_end = ir_insert_after_op(
+        func, fp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     fp_save_end->addr_offset = (struct ir_op_addr_offset){
-        .base = fp_save_base, .offset = save_info.gp_save_sz + save_info.fp_save_sz};
+        .base = fp_save_base,
+        .offset = save_info.gp_save_sz + save_info.fp_save_sz};
 
-    struct ir_op *addr_vr_top =
-        ir_insert_after_op(func, fp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    struct ir_op *addr_vr_top = ir_insert_after_op(
+        func, fp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     addr_vr_top->addr_offset =
         (struct ir_op_addr_offset){.base = addr, .offset = 16};
 
@@ -1077,6 +1080,28 @@ static void lower_va_arg(struct ir_func *func, struct ir_op *op) {
   }
 }
 
+void aarch64_lower_variadic(struct ir_func *func) {
+  struct ir_aarch64_save_info save_info = {0};
+  if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+    save_info = lower_va_args(func);
+  }
+
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    switch (op->ty) {
+    case IR_OP_TY_VA_START:
+      lower_va_start(func, save_info, op);
+      break;
+    case IR_OP_TY_VA_ARG:
+      lower_va_arg(func, op);
+      break;
+    default:
+      break;
+    }
+  }
+}
 void aarch64_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
   while (glb) {
@@ -1091,11 +1116,6 @@ void aarch64_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      struct ir_aarch64_save_info save_info = {0};
-      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
-        save_info = lower_va_args(func);
-      }
-
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -1105,12 +1125,6 @@ void aarch64_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_VA_START:
-              lower_va_start(func, save_info, op);
-              break;
-            case IR_OP_TY_VA_ARG:
-              lower_va_arg(func, op);
-              break;
             case IR_OP_TY_CNST: {
               if (op->cnst.ty == IR_OP_CNST_TY_FLT) {
                 lower_fp_cnst(func, op);

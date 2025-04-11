@@ -15,6 +15,8 @@ struct ap_int {
 struct ap_int ap_int_zero(size_t num_bits);
 struct ap_int ap_int_one(size_t num_bits);
 
+bool ap_int_fits_in(struct ap_int ap_int, size_t num_bits);
+
 size_t ap_int_try_parse(struct arena_allocator *arena, size_t num_bits,
                         ustr_t str, struct ap_int *ap_int);
 

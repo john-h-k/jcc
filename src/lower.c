@@ -2,6 +2,7 @@
 
 #include "bit_twiddle.h"
 #include "ir/ir.h"
+#include "ir/prettyprint.h"
 #include "target.h"
 #include "vector.h"
 
@@ -973,7 +974,7 @@ static void lower_params(struct ir_func *func) {
 
 void lower_call(struct ir_func *func, const struct ir_op_use_map *use_map,
                 struct ir_op *op) {
-  struct ir_func_info func_info = func->unit->target->lower_func_ty(
+  struct ir_func_info func_info = func->unit->target->lower.lower_func_ty(
       func, op->call.func_ty.func, op->call.args, op->call.num_args);
 
   struct vector *new_args = vector_create(sizeof(struct ir_op *));
@@ -1602,7 +1603,7 @@ void lower_abi(struct ir_unit *unit) {
       // TODO: make this lowering global (and call a target-specific
       // function) and also do it for undef symbols
       struct ir_func_info info =
-          unit->target->lower_func_ty(func, func->func_ty, NULL, 0);
+          unit->target->lower.lower_func_ty(func, func->func_ty, NULL, 0);
       func->func_ty = info.func_ty;
       func->call_info = info.call_info;
 
@@ -1628,6 +1629,8 @@ void lower_abi(struct ir_unit *unit) {
 }
 
 void lower(struct ir_unit *unit) {
+  const struct lower_info *lower_info = &unit->target->lower;
+
   struct ir_glb *glb = unit->first_global;
   while (glb) {
     if (glb->def_ty == IR_GLB_DEF_TY_UNDEFINED) {
@@ -1640,9 +1643,12 @@ void lower(struct ir_unit *unit) {
       break;
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
+
       struct ir_basicblock *basicblock = func->first;
 
       lower_params_registers(func);
+
+      lower_info->lower_variadic(func);
 
       struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
 
@@ -1753,8 +1759,8 @@ void lower(struct ir_unit *unit) {
   lower_pointers(unit);
 
   // now target-specific lowering
-  if (unit->target->lower) {
-    unit->target->lower(unit);
+  if (lower_info->lower) {
+    lower_info->lower(unit);
   }
 
   // lower again, in case target lowering introduced any

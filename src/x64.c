@@ -88,8 +88,11 @@ const struct target X64_MACOS_TARGET = {
     },
     X64_FUNCTION_ALIGNMENT,
     x64_macos_mangle,
-    x64_lower,
-    x64_lower_func_ty,
+    {
+        x64_lower_variadic,
+        x64_lower,
+        x64_lower_func_ty,
+    },
     {
         .ty = CODEGEN_UNIT_TY_X64,
         .instr_sz = sizeof(struct x64_instr),
@@ -122,8 +125,11 @@ const struct target X64_LINUX_TARGET = {
     },
     X64_FUNCTION_ALIGNMENT,
     x64_linux_mangle,
-    x64_lower,
-    x64_lower_func_ty,
+    {
+        x64_lower_variadic,
+        x64_lower,
+        x64_lower_func_ty,
+    },
     {
         .ty = CODEGEN_UNIT_TY_X64,
         .instr_sz = sizeof(struct x64_instr),

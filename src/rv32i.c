@@ -36,8 +36,11 @@ const struct target RV32I_LINUX_TARGET = {
     },
     RV32I_FUNCTION_ALIGNMENT,
     rv32i_mangle,
-    rv32i_lower,
-    rv32i_lower_func_ty,
+    {
+        rv32i_lower_variadic,
+        rv32i_lower,
+        rv32i_lower_func_ty,
+    },
     {
         .ty = CODEGEN_UNIT_TY_RV32I,
         .instr_sz = sizeof(struct rv32i_instr),

@@ -42,8 +42,11 @@ const struct target AARCH64_MACOS_TARGET = {
     },
     AARCH64_FUNCTION_ALIGNMENT,
     aarch64_macos_mangle,
-    aarch64_lower,
-    aarch64_lower_func_ty,
+    {
+        aarch64_lower_variadic,
+        aarch64_lower,
+        aarch64_lower_func_ty,
+    },
     {
         .ty = CODEGEN_UNIT_TY_AARCH64,
         .instr_sz = sizeof(struct aarch64_instr),
@@ -133,8 +136,11 @@ const struct target AARCH64_LINUX_TARGET = {
     },
     AARCH64_FUNCTION_ALIGNMENT,
     aarch64_linux_mangle,
-    aarch64_lower,
-    aarch64_lower_func_ty,
+    {
+        aarch64_lower_variadic,
+        aarch64_lower,
+        aarch64_lower_func_ty,
+    },
     {
         .ty = CODEGEN_UNIT_TY_AARCH64,
         .instr_sz = sizeof(struct aarch64_instr),

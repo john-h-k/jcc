@@ -4,6 +4,7 @@
 #include "../ir/ir.h"
 
 // performs platform specific lowering transformations to the IR
+void x64_lower_variadic(struct ir_func *func);
 void x64_lower(struct ir_unit *unit);
 
 struct ir_func_info x64_lower_func_ty(struct ir_func *func,
