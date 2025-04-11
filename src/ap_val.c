@@ -21,6 +21,14 @@ struct ap_int ap_int_one(size_t num_bits) {
   return (struct ap_int){.num_bits = num_bits, .chunks[0] = 1};
 }
 
+bool ap_int_fits_in(struct ap_int ap_int, size_t num_bits) {
+  size_t chunk = ap_int.chunks[0];
+
+  unsigned long long rem = chunk >> num_bits;
+
+  return rem == 0 || rem == (unsigned long long)-1;
+}
+
 #define CHECK64(v) DEBUG_ASSERT((v).num_bits <= 64, ">64 bit ap_int");
 #define CHECK_SAME(lhs, rhs)                                                   \
   DEBUG_ASSERT((lhs).num_bits == (rhs).num_bits, "ap_int bit count mismatch");

@@ -314,12 +314,10 @@ struct ir_func_info rv32i_lower_func_ty(struct ir_func *func,
 
   *new_func_ty.ret_ty = ret_ty;
 
-  struct ir_call_info call_info = {
-      .ret = ret_info,
-      .stack_size = nsaa,
-      .num_gp_used = ngrn,
-      .num_fp_used = nsrn
-  };
+  struct ir_call_info call_info = {.ret = ret_info,
+                                   .stack_size = nsaa,
+                                   .num_gp_used = ngrn,
+                                   .num_fp_used = nsrn};
 
   CLONE_AND_FREE_VECTOR(func->arena, params, new_func_ty.num_params,
                         new_func_ty.params);
@@ -530,12 +528,13 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
                                   .num_elements = save_sz,
                               }};
 
-  // FIXME: this local must be _directly_ beneath SP but we can't easily cause that here
+  // FIXME: this local must be _directly_ beneath SP but we can't easily cause
+  // that here
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
   struct ir_op *movs = func->first->first->last;
-  struct ir_op *base = ir_insert_after_op(func, movs,
-                                          IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  struct ir_op *base =
+      ir_insert_after_op(func, movs, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
   struct ir_op *last = base;
@@ -583,14 +582,16 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
   struct ir_op *value;
   if (func->call_info.num_gp_used < 8) {
     // fp - <reg save size>
-    // (which is just the save_lcl because ABI requires the save to be directly after SP)
+    // (which is just the save_lcl because ABI requires the save to be directly
+    // after SP)
 
     value = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     value->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
   } else if (func->call_info.stack_size) {
     // fp + <stack used by named args>
 
-    struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    struct ir_op *sp =
+        ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
     sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_lcl};
 
     value =
@@ -607,11 +608,33 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
       ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
   store->store = (struct ir_op_store){
       .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
-
 }
 
 static void lower_va_arg(UNUSED struct ir_func *func, UNUSED struct ir_op *op) {
   TODO("x64 va_arg");
+}
+
+void rv32i_lower_variadic(struct ir_func *func) {
+  struct ir_lcl *save_lcl = NULL;
+  if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+    save_lcl = lower_va_args(func);
+  }
+
+  struct ir_func_iter iter = ir_func_iter(func, IR_FUNC_ITER_FLAG_NONE);
+
+  struct ir_op *op;
+  while (ir_func_iter_next(&iter, &op)) {
+    switch (op->ty) {
+    case IR_OP_TY_VA_START:
+      lower_va_start(func, save_lcl, op);
+      break;
+    case IR_OP_TY_VA_ARG:
+      lower_va_arg(func, op);
+      break;
+    default:
+      break;
+    }
+  }
 }
 
 void rv32i_lower(struct ir_unit *unit) {
@@ -629,11 +652,6 @@ void rv32i_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
-      struct ir_lcl *save_lcl = NULL;
-      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
-        save_lcl = lower_va_args(func);
-      }
-
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -643,12 +661,6 @@ void rv32i_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
-            case IR_OP_TY_VA_START:
-              lower_va_start(func, save_lcl, op);
-              break;
-            case IR_OP_TY_VA_ARG:
-              lower_va_arg(func, op);
-              break;
             case IR_OP_TY_BR_COND:
               lower_br_cond(func, op);
               break;

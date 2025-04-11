@@ -1683,10 +1683,8 @@ static struct ir_op *build_ir_for_call(struct ir_func_builder *irb,
 
         struct ir_op *load =
             ir_append_op(irb->func, *stmt, IR_OP_TY_LOAD, load_ty);
-        load->load = (struct ir_op_load){
-          .ty = IR_OP_LOAD_TY_ADDR,
-          .addr = rhs_op
-        };
+        load->load =
+            (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = rhs_op};
 
         rhs_op = load;
       }
@@ -2695,6 +2693,7 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
 
   struct ir_basicblock *before_cond_basicblock = basicblock;
   struct ir_basicblock *before_body_basicblock = basicblock;
+  struct ir_basicblock *after_cond_basicblock = basicblock;
 
   if (for_stmt->init) {
     struct ir_stmt *init_stmt =
@@ -2703,6 +2702,7 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
 
     before_cond_basicblock = init_stmt->basicblock;
     before_body_basicblock = init_stmt->basicblock;
+    after_cond_basicblock = init_stmt->basicblock;
   }
 
   if (for_stmt->cond) {
@@ -2726,7 +2726,8 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
     cond_br->var_ty = IR_VAR_TY_NONE;
     cond_br->br_cond.cond = cond;
 
-    before_body_basicblock = cond_stmt->basicblock;
+    before_body_basicblock = cond_basicblock;
+    after_cond_basicblock = cond_stmt->basicblock;
   } else {
     struct ir_stmt *to_body_stmt =
         ir_alloc_stmt(irb->func, before_body_basicblock);
@@ -2736,7 +2737,7 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   }
 
   struct ir_basicblock *body_basicblock = ir_alloc_basicblock(irb->func);
-  ir_make_basicblock_merge(irb->func, before_body_basicblock, body_basicblock);
+  ir_make_basicblock_merge(irb->func, after_cond_basicblock, body_basicblock);
 
   if (!for_stmt->cond) {
     before_body_basicblock = body_basicblock;
@@ -2773,7 +2774,7 @@ static struct ir_loop build_ir_for_forstmt(struct ir_func_builder *irb,
   struct ir_basicblock *after_body_basicblock = ir_alloc_basicblock(irb->func);
 
   if (for_stmt->cond) {
-    ir_make_basicblock_split(irb->func, before_body_basicblock, body_basicblock,
+    ir_make_basicblock_split(irb->func, after_cond_basicblock, body_basicblock,
                              after_body_basicblock);
   }
 
@@ -4241,9 +4242,23 @@ static struct ir_var_value build_ir_for_var_value_addr(
   }
 
   case TD_EXPR_TY_COMPOUND_LITERAL: {
-    TODO("compound literal glb");
+    // struct ir_var_ty glb_var_ty =
+    //     ir_var_ty_for_td_var_ty(irb->unit, &addr->var_ty);
+    // struct ir_glb *glb = ir_add_global(irb->unit, IR_GLB_TY_DATA, &glb_var_ty,
+    //                                    IR_GLB_DEF_TY_DEFINED, "tmp");
+
+    return build_ir_for_var_value_init_list(
+        irb, &addr->compound_literal.init_list, &addr->var_ty);
+
     // struct ir_var_value var_value = build_ir_for_var_value_init_list(
     //     irb, &addr->compound_literal.init_list, &addr->var_ty);
+
+    // glb->var = arena_alloc(irb->arena, sizeof(*glb->var));
+    // *glb->var = (struct ir_var){.unit = irb->unit,
+    //                             .ty = IR_VAR_TY_DATA,
+    //                             .var_ty = glb->var_ty,
+    //                             .value = var_value};
+    // return glb;
   }
 
   case TD_EXPR_TY_VAR: {

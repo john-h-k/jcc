@@ -2775,9 +2775,9 @@ parse_printf_argspec_value(const char *str, size_t *idx, size_t len) {
   } else if (isdigit(str[*idx])) {
     int cnst = str[(*idx)++] - '0';
 
-    while (isdigit(str[*idx] && *idx < len)) {
+    while (isdigit(str[*idx]) && *idx < len) {
       cnst *= 10;
-      cnst += str[(*idx)] - '0';
+      cnst += str[*idx] - '0';
 
       (*idx)++;
     }
@@ -2961,6 +2961,7 @@ static struct td_expr type_call(struct typechk *tchk,
 
       bool arg_diag = false;
       size_t arg_idx = format->first_to_check - 1;
+
       for (size_t i = 0; i < args.num_argspecs; i++) {
         const struct printf_argspec *arg_spec = &args.argspecs[i];
 
@@ -3180,17 +3181,18 @@ static struct td_expr type_call(struct typechk *tchk,
             arg_idx++;
           }
 
-          if (arg_idx + num_spec_args > td_call.arg_list.num_args &&
-              !arg_diag) {
-            arg_diag = true;
+          if (arg_idx + num_spec_args > td_call.arg_list.num_args) {
+            if (!arg_diag) {
+              arg_diag = true;
 
-            compiler_diagnostics_add(
-                tchk->diagnostics,
-                MK_SEMANTIC_DIAGNOSTIC(BAD_PRINTF_ARGS, bad_printf_args,
-                                       call->arg_list.span,
-                                       MK_INVALID_TEXT_POS(0),
-                                       "printf format string specified more "
-                                       "arguments than provided"));
+              compiler_diagnostics_add(
+                  tchk->diagnostics,
+                  MK_SEMANTIC_DIAGNOSTIC(BAD_PRINTF_ARGS, bad_printf_args,
+                                         call->arg_list.span,
+                                         MK_INVALID_TEXT_POS(0),
+                                         "printf format string specified more "
+                                         "arguments than provided"));
+            }
           } else {
             const struct td_var_ty *arg_ty =
                 &td_call.arg_list.args[arg_idx].var_ty;

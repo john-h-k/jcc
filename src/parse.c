@@ -1832,6 +1832,13 @@ static bool parse_int_cnst(struct parser *parser, struct ast_cnst *cnst) {
     return true;
   }
 
+  // FIXME: this logic is hacky and not right in edge cases
+  if (ty == AST_CNST_TY_SIGNED_INT && !ap_int_fits_in(cnst->num_value.ap_int, 31)) {
+    cnst->ty = AST_CNST_TY_SIGNED_LONG_LONG;
+  } else if (ty == AST_CNST_TY_UNSIGNED_INT && !ap_int_fits_in(cnst->num_value.ap_int, 32)) {
+    cnst->ty = AST_CNST_TY_UNSIGNED_LONG_LONG;
+  }
+
   return true;
 }
 
