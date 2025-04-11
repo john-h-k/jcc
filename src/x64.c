@@ -18,6 +18,15 @@ const struct target X64_LINUX_TARGET = {.target_id = TARGET_ID_NOT_SUPPORTED};
 
 #else
 
+// struct __va_list_tag {
+//    unsigned *gp_offset;
+//    unsigned *fp_offset;
+//    void *overflow_arg_area;
+//    void *reg_save_area;
+// };
+//
+// typedef __builtin_va_list __va_list_tag[1]
+
 const static struct td_var_ty X64_VA_LIST_TAG_TY = {
     .ty = TD_VAR_TY_TY_AGGREGATE,
     .aggregate = {

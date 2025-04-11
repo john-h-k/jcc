@@ -230,11 +230,11 @@ static void try_contain_binary_op(struct ir_func *func, struct ir_op *op) {
     } else {
       op->binary_op.lhs = ir_alloc_contained_op(func, lhs, op);
     }
-  } else if (supports_rhs_contained &&
-             (rhs->ty == IR_OP_TY_CNST &&
-              (ir_var_ty_is_integral(&rhs->var_ty) ||
-               (ir_var_ty_is_fp(&rhs->var_ty) && rhs->cnst.flt_value == 0.0l)) &&
-              fits_in_alu_imm(rhs->cnst.int_value))) {
+  } else if (supports_rhs_contained && (rhs->ty == IR_OP_TY_CNST &&
+                                        (ir_var_ty_is_integral(&rhs->var_ty) ||
+                                         (ir_var_ty_is_fp(&rhs->var_ty) &&
+                                          rhs->cnst.flt_value == 0.0l)) &&
+                                        fits_in_alu_imm(rhs->cnst.int_value))) {
     op->binary_op.rhs = ir_alloc_contained_op(func, rhs, op);
   }
 }
@@ -713,7 +713,10 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
 
   *new_func_ty.ret_ty = ret_ty;
 
-  struct ir_call_info call_info = {.ret = ret_info, .stack_size = nsaa};
+  struct ir_call_info call_info = {.ret = ret_info,
+                                   .stack_size = nsaa,
+                                   .num_gp_used = ngrn,
+                                   .num_fp_used = nsrn};
 
   CLONE_AND_FREE_VECTOR(func->arena, params, new_func_ty.num_params,
                         new_func_ty.params);
@@ -723,77 +726,349 @@ struct ir_func_info aarch64_lower_func_ty(struct ir_func *func,
   return (struct ir_func_info){.func_ty = new_func_ty, .call_info = call_info};
 }
 
-static void lower_va_args(struct ir_func *func) {
-  switch (func->unit->target->target_id) {
-  case TARGET_ID_AARCH64_MACOS:
-    // nop 
-    break;
-  default:
-    TODO("");
-    break;
-  }
-}
+static void lower_va_start_macos(struct ir_func *func, struct ir_op *op) {
+  // TODO: replace the magic 'IR_LCL_FLAG_PARAM and negative offset' with a
+  // proper "offset" type that can be pos/neg relative to sp or fp
 
-static void lower_va_start(struct ir_func *func, struct ir_op *op) {
   struct ir_lcl *stack_base = ir_add_local(func, &IR_VAR_TY_POINTER);
   stack_base->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
-  stack_base->alloc = (struct ir_lcl_alloc){
-    .offset = 0
-  };
+  stack_base->alloc = (struct ir_lcl_alloc){.offset = 0};
 
   stack_base->flags |= IR_LCL_FLAG_PARAM;
 
   struct ir_op *addr = op->va_start.list_addr;
 
   struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
-  sp->addr = (struct ir_op_addr){
-    .ty = IR_OP_ADDR_TY_LCL,
-    .lcl = stack_base
-  };
+  sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = stack_base};
 
-  struct ir_op *store = ir_insert_after_op(func, sp, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+  struct ir_op *value;
+  if (func->call_info.stack_size) {
+    value =
+        ir_insert_after_op(func, sp, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    value->addr_offset = (struct ir_op_addr_offset){
+        .base = sp, .offset = func->call_info.stack_size};
+  } else {
+    value = sp;
+  }
+
+  struct ir_op *store =
+      ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
   store->store = (struct ir_op_store){
-    .ty = IR_OP_STORE_TY_ADDR,
-    .addr = addr,
-    .value = sp
-  };
+      .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = sp};
+}
+
+struct ir_aarch64_save_info {
+  struct ir_lcl *lcl;
+  size_t gp_save_sz;
+  size_t fp_save_sz;
+};
+
+static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
+  struct ir_call_info info = func->call_info;
+
+  size_t gp_save_sz = ((8 - info.num_gp_used) * 8);
+  size_t fp_save_sz = ((8 - info.num_gp_used) * 16);
+  size_t save_sz = gp_save_sz + fp_save_sz;
+
+  DEBUG_ASSERT(save_sz % 8 == 0, "because we use type I64 for alignment, "
+                                 "save_sz must be divisible by 8");
+  save_sz = save_sz / 8;
+
+  struct ir_var_ty *el_ty =
+      arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I64);
+  struct ir_var_ty save_ty = {.ty = IR_VAR_TY_TY_ARRAY,
+                              .array = {
+                                  // TODO: make constant ptr
+                                  .underlying = el_ty,
+                                  .num_elements = save_sz,
+                              }};
+
+  struct ir_lcl *lcl = ir_add_local(func, &save_ty);
+
+  struct ir_op *movs = func->first->first->last;
+
+  struct ir_op *base = ir_insert_after_op(func, movs,
+                                          IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+  struct ir_op *last = base;
+
+  // need to save all the registers in args
+  for (size_t i = info.num_gp_used, idx = 0; i < 8; i++, idx++) {
+    struct ir_op *addr;
+
+    if (i) {
+      addr = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                IR_VAR_TY_POINTER);
+      addr->addr_offset =
+          (struct ir_op_addr_offset){.base = base, .offset = idx * 8};
+    } else {
+      addr = base;
+    }
+
+    struct ir_op *value =
+        ir_insert_after_op(func, movs, IR_OP_TY_MOV, IR_VAR_TY_I64);
+    value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
+    value->mov = (struct ir_op_mov){.value = NULL};
+    value->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i};
+    movs = value;
+
+    struct ir_op *save =
+        ir_insert_after_op(func, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
+    last = save;
+  }
+
+  for (size_t i = info.num_fp_used, idx = 0; i < 8; i++, idx++) {
+    // TODO: save vector
+
+    struct ir_op *addr =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    addr->addr_offset =
+        (struct ir_op_addr_offset){.base = base, .offset = gp_save_sz + idx * 16};
+
+    struct ir_op *value =
+        ir_insert_after_op(func, movs, IR_OP_TY_MOV, IR_VAR_TY_F64);
+    value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
+    value->mov = (struct ir_op_mov){.value = NULL};
+    value->reg = (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i};
+    movs = value;
+
+    struct ir_op *save =
+        ir_insert_after_op(func, addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
+    last = save;
+  }
+
+  return (struct ir_aarch64_save_info){
+      .lcl = lcl, .gp_save_sz = gp_save_sz, .fp_save_sz = fp_save_sz};
+}
+
+static void lower_va_start_generic(struct ir_func *func,
+                                   struct ir_aarch64_save_info save_info,
+                                   struct ir_op *op) {
+  // The va_start macro initializes the structure as follows:
+  //
+  //   * __stack
+  //     - set to the address following the last (highest addressed) named
+  //     incoming argument on the stack, rounded upwards to a multiple of 8
+  //     bytes, or if there are no named arguments on the stack, then the value
+  //     of the stack pointer when the function was entered.
+  //
+  //   * __gr_top
+  //     - set to the address of the byte immediately following the general
+  //     register argument save area, the end of the save area being aligned to
+  //     a 16 byte boundary.
+  //
+  //   * __vr_top
+  //     - set to the address of the byte immediately following the FP/SIMD
+  //     register argument save area, the end of the save area being aligned to
+  //     a 16 byte boundary.
+  //
+  //   * __gr_offs
+  //     - set to 0 – ((8 – named_gr) * 8).
+  //
+  //   * __vr_offs
+  //     - set to 0 – ((8 – named_vr) * 16).
+
+  DEBUG_ASSERT(save_info.lcl,
+               "expected save_lcl to exist (maybe "
+               "IR_FUNC_FLAG_USES_VA_ARGS was not set correctly)");
+
+  struct ir_lcl *stack_base = ir_add_local(func, &IR_VAR_TY_POINTER);
+  stack_base->alloc_ty = IR_LCL_ALLOC_TY_FIXED;
+  stack_base->alloc = (struct ir_lcl_alloc){.offset = 0};
+
+  stack_base->flags |= IR_LCL_FLAG_PARAM;
+
+  struct ir_op *addr = op->va_start.list_addr;
+
+  struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = stack_base};
+
+  struct ir_call_info info = func->call_info;
+
+  struct ir_op *last = sp;
+
+  // OPT: don't need to initialize vr_top/vr_offs if we know no FP registers are
+  // ever used from `va_arg`
+
+  {
+    // list->stack = fp + <stack space used by named args>
+
+    size_t stack_offset = info.stack_size;
+
+    struct ir_op *stack_value;
+    if (stack_offset) {
+      stack_value = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                       IR_VAR_TY_POINTER);
+      stack_value->addr_offset =
+          (struct ir_op_addr_offset){.base = sp, .offset = stack_offset};
+    } else {
+      stack_value = sp;
+    }
+
+    struct ir_op *store_stack =
+        ir_insert_after_op(func, stack_value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_stack->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = stack_value};
+
+    last = store_stack;
+  }
+
+  {
+    // list->gr_top = <gp_save + gp_size>
+
+    struct ir_op *gp_save_base =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    gp_save_base->addr =
+        (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_info.lcl};
+
+    struct ir_op *gp_save_end =
+        ir_insert_after_op(func, gp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    gp_save_end->addr_offset = (struct ir_op_addr_offset){
+        .base = gp_save_base, .offset = save_info.gp_save_sz};
+
+    struct ir_op *addr_gr_top =
+        ir_insert_after_op(func, gp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    addr_gr_top->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 8};
+
+    struct ir_op *store_gr_top =
+        ir_insert_after_op(func, addr_gr_top, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_gr_top->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr_gr_top, .value = gp_save_end};
+
+    last = store_gr_top;
+  }
+
+  {
+    // list->vr_top = <fp_save + fp_size> (which is <gp_save + gp_size + fp_size>)
+    struct ir_op *fp_save_base =
+        ir_insert_after_op(func, last, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+    fp_save_base->addr =
+        (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = save_info.lcl};
+
+    struct ir_op *fp_save_end =
+        ir_insert_after_op(func, fp_save_base, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    fp_save_end->addr_offset = (struct ir_op_addr_offset){
+        .base = fp_save_base, .offset = save_info.gp_save_sz + save_info.fp_save_sz};
+
+    struct ir_op *addr_vr_top =
+        ir_insert_after_op(func, fp_save_end, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    addr_vr_top->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 16};
+
+    struct ir_op *store_vr_top =
+        ir_insert_after_op(func, addr_vr_top, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_vr_top->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr_vr_top, .value = fp_save_end};
+
+    last = store_vr_top;
+  }
+
+  {
+    // list->gr_offs = 0 – ((8 – named_gr) * 8)
+
+    ssize_t gr_offs = 0 - ((8 - info.num_gp_used) * 8);
+
+    struct ir_op *gr_off_value =
+        ir_insert_after_op(func, last, IR_OP_TY_CNST, IR_VAR_TY_POINTER);
+    ir_mk_integral_constant(func->unit, gr_off_value, IR_VAR_PRIMITIVE_TY_I32,
+                            (unsigned long long)gr_offs);
+
+    struct ir_op *gr_off_addr = ir_insert_after_op(
+        func, gr_off_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    gr_off_addr->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 24};
+
+    struct ir_op *store_gr_off =
+        ir_insert_after_op(func, gr_off_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_gr_off->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = gr_off_addr, .value = gr_off_value};
+
+    last = store_gr_off;
+  }
+
+  {
+    // list->vr_offs = 0 – ((8 – named_vr) * 16)
+
+    ssize_t vr_offs = 0 - ((8 - info.num_fp_used) * 16);
+
+    struct ir_op *vr_off_value =
+        ir_insert_after_op(func, last, IR_OP_TY_CNST, IR_VAR_TY_POINTER);
+    ir_mk_integral_constant(func->unit, vr_off_value, IR_VAR_PRIMITIVE_TY_I32,
+                            (unsigned long long)vr_offs);
+
+    struct ir_op *vr_off_addr = ir_insert_after_op(
+        func, vr_off_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    vr_off_addr->addr_offset =
+        (struct ir_op_addr_offset){.base = addr, .offset = 28};
+
+    struct ir_op *store_vr_off =
+        ir_insert_after_op(func, vr_off_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    store_vr_off->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = vr_off_addr, .value = vr_off_value};
+
+    last = store_vr_off;
+  }
+}
+
+static struct ir_aarch64_save_info lower_va_args(struct ir_func *func) {
+  switch (func->unit->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    // nop
+    return (struct ir_aarch64_save_info){0};
+  default:
+    return lower_va_args_generic(func);
+  }
+}
+
+static void lower_va_start(struct ir_func *func,
+                           struct ir_aarch64_save_info save_info,
+                           struct ir_op *op) {
+  switch (func->unit->target->target_id) {
+  case TARGET_ID_AARCH64_MACOS:
+    lower_va_start_macos(func, op);
+    break;
+  default:
+    lower_va_start_generic(func, save_info, op);
+    break;
+  }
 }
 
 static void lower_va_arg(struct ir_func *func, struct ir_op *op) {
   switch (func->unit->target->target_id) {
   case TARGET_ID_AARCH64_MACOS: {
-    // because a `va_arg` op takes the _address_ of the va_arg list, we can update it
+    // because a `va_arg` op takes the _address_ of the va_arg list, we can
+    // update it
 
     struct ir_var_ty var_ty = op->va_arg.arg_ty;
 
     struct ir_op *addr = op->va_arg.list_addr;
 
-    struct ir_op *list = ir_insert_before_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_POINTER);
-    list->load = (struct ir_op_load){
-      .ty = IR_OP_LOAD_TY_ADDR,
-      .addr = addr
-    };
+    struct ir_op *list =
+        ir_insert_before_op(func, op, IR_OP_TY_LOAD, IR_VAR_TY_POINTER);
+    list->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = addr};
 
     struct ir_op *load = ir_replace_op(func, op, IR_OP_TY_LOAD, var_ty);
-    load->load = (struct ir_op_load){
-      .ty = IR_OP_LOAD_TY_ADDR,
-      .addr = list
-    };
+    load->load = (struct ir_op_load){.ty = IR_OP_LOAD_TY_ADDR, .addr = list};
 
     size_t size = ir_var_ty_info(func->unit, &var_ty).size;
 
-    struct ir_op *offset = ir_insert_after_op(func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-    offset->addr_offset = (struct ir_op_addr_offset){
-      .base = list,
-      .offset = ROUND_UP(size, 8)
-    };
+    struct ir_op *offset =
+        ir_insert_after_op(func, load, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+    offset->addr_offset =
+        (struct ir_op_addr_offset){.base = list, .offset = ROUND_UP(size, 8)};
 
-    struct ir_op *store = ir_insert_after_op(func, offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    struct ir_op *store =
+        ir_insert_after_op(func, offset, IR_OP_TY_STORE, IR_VAR_TY_NONE);
     store->store = (struct ir_op_store){
-      .ty = IR_OP_STORE_TY_ADDR,
-      .addr = addr,
-      .value = offset
-    };
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = offset};
 
     break;
   }
@@ -817,8 +1092,9 @@ void aarch64_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
+      struct ir_aarch64_save_info save_info = {0};
       if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
-        lower_va_args(func);
+        save_info = lower_va_args(func);
       }
 
       struct ir_basicblock *basicblock = func->first;
@@ -831,7 +1107,7 @@ void aarch64_lower(struct ir_unit *unit) {
           while (op) {
             switch (op->ty) {
             case IR_OP_TY_VA_START:
-              lower_va_start(func, op);
+              lower_va_start(func, save_info, op);
               break;
             case IR_OP_TY_VA_ARG:
               lower_va_arg(func, op);

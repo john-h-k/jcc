@@ -24,10 +24,8 @@ const struct target AARCH64_MACOS_TARGET = {
     TARGET_ID_AARCH64_MACOS,
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
-    {
-        .va_list_var_ty = &TD_VAR_TY_VOID_POINTER,
-        .flags = TARGET_VARIADIC_INFO_FLAG_NONE
-    },
+    {.va_list_var_ty = &TD_VAR_TY_VOID_POINTER,
+     .flags = TARGET_VARIADIC_INFO_FLAG_NONE},
     {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 8,
@@ -61,15 +59,64 @@ const struct target AARCH64_MACOS_TARGET = {
     aarch64_debug_print_codegen,
     NULL};
 
+// struct __va_list {
+//    void *__stack;
+//    void *__gr_top;
+//    void *__vr_top;
+//    int   __gr_offs;
+//    int   __vr_offs;
+// };
+//
+// typedef __builtin_va_list __va_list
+
+const static struct td_var_ty AARCH64_VA_LIST_TAG_TY =
+    {.ty = TD_VAR_TY_TY_AGGREGATE,
+     .aggregate = {
+         .ty = TD_TY_AGGREGATE_TY_STRUCT,
+         .name = MK_USTR(""),
+         .num_fields = 5,
+         .fields =
+             (struct td_struct_field[5]){
+                 [0] =
+                     {
+                         .identifier = MK_USTR("__stack"),
+                         .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
+                                    .pointer = {.underlying = &TD_VAR_TY_VOID}},
+                     },
+                 [1] =
+                     {
+                         .identifier = MK_USTR("__gr_top"),
+                         .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
+                                    .pointer = {.underlying = &TD_VAR_TY_VOID}},
+                     },
+                 [2] =
+                     {
+                         .identifier = MK_USTR("__vr_top"),
+                         .var_ty = {.ty = TD_VAR_TY_TY_POINTER,
+                                    .pointer = {.underlying = &TD_VAR_TY_VOID}},
+                     },
+                 [3] =
+                     {
+                         .identifier = MK_USTR("__gr_offs"),
+                         .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
+                                    .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
+                     },
+                 [4] =
+                     {
+                         .identifier = MK_USTR("__vr_offs"),
+                         .var_ty = {.ty = TD_VAR_TY_TY_WELL_KNOWN,
+                                    .well_known = WELL_KNOWN_TY_UNSIGNED_INT},
+                     },
+
+             }}};
+
 const struct target AARCH64_LINUX_TARGET = {
     TARGET_ID_AARCH64_LINUX,
     TARGET_LP_SZ_LP64,
     // x0..x30 excluding x18
-    {
-        // TODO:
-        .va_list_var_ty = &TD_VAR_TY_UNKNOWN,
-        .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF
-    },
+    {// TODO:
+     .va_list_var_ty = &AARCH64_VA_LIST_TAG_TY,
+     .flags = TARGET_VARIADIC_INFO_FLAG_NONE},
     {
         .ssp = 9,
         .gp_registers = {.max_reg_size = 8,

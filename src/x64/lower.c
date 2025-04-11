@@ -311,6 +311,8 @@ struct ir_func_info x64_lower_func_ty(struct ir_func *func,
       .ret = ret_info,
       .stack_size = nsaa,
       .num_variadics = nsrn,
+      .num_gp_used = ngrn,
+      .num_fp_used = nsrn,
       .flags = (func_ty.flags & IR_VAR_FUNC_TY_FLAG_VARIADIC)
                    ? IR_CALL_INFO_FLAG_NUM_VARIADIC
                    : IR_CALL_INFO_FLAG_NONE,
@@ -622,8 +624,10 @@ static void lower_fp_cnst(struct ir_func *func, struct ir_op *op) {
 
 // FIXME: use RAX value to only save required XMM registers + more registers for
 // APX
-#define REG_SAVE_SIZE (6 * 8 + 8 * 16)
+#define REG_SAVE_SIZE (6 * 8 + 16 * 16)
 #define REG_SAVE_FP_OFFSET (6 * 8)
+#define REG_GP_USED (6 * 8)
+#define REG_FP_USED REG_SAVE_FP_OFFSET + (8 * 16)
 
 static struct ir_lcl *lower_va_args(struct ir_func *func) {
   DEBUG_ASSERT(REG_SAVE_SIZE % 8 == 0, "because we use type I64 for alignment, "
@@ -642,18 +646,20 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
   struct ir_op *base = ir_insert_after_op(func, func->first->first->last,
-                                           IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+                                          IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
   struct ir_op *last = base;
 
+  struct ir_call_info info = func->call_info;
+
   // need to save all the registers in args
-  for (size_t i = 0; i < 6; i++) {
+  for (size_t i = info.num_gp_used; i < 6; i++) {
     struct ir_op *addr;
 
     if (i) {
-      addr =
-          ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+      addr = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                IR_VAR_TY_POINTER);
       addr->addr_offset =
           (struct ir_op_addr_offset){.base = base, .offset = i * 8};
     } else {
@@ -661,39 +667,41 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
     }
 
     struct ir_op *value =
-          ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_I64);
+        ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_I64);
     value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
-    value->mov = (struct ir_op_mov){
-      .value = NULL
-    };
+    value->mov = (struct ir_op_mov){.value = NULL};
     value->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i};
 
     struct ir_op *save =
-          ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-    save->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+        ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
 
     last = save;
   }
 
-  for (size_t i = 0; i < 8; i++) {
+  // FIXME: the SysV spec has enough space and pretends there are 16 SIMD registers used for stack
+  // but in reality it only uses 8?
+  // we will save them all just in case, but is this needed?
+  // FIXME: use `rax` to determine how many of these to save
+  for (size_t i = info.num_fp_used; i < 16; i++) {
     // TODO: save vector
 
     struct ir_op *addr =
         ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
-    addr->addr_offset =
-        (struct ir_op_addr_offset){.base = base, .offset = REG_SAVE_FP_OFFSET + i * 16};
+    addr->addr_offset = (struct ir_op_addr_offset){
+        .base = base, .offset = REG_SAVE_FP_OFFSET + i * 16};
 
     struct ir_op *value =
-          ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_F64);
+        ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_F64);
     value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
-    value->mov = (struct ir_op_mov){
-      .value = NULL
-    };
+    value->mov = (struct ir_op_mov){.value = NULL};
     value->reg = (struct ir_reg){.ty = IR_REG_TY_FP, .idx = i};
 
     struct ir_op *save =
-          ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-    save->store = (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+        ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
 
     last = save;
   }
@@ -740,34 +748,47 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
   struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   sp->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = stack_base};
 
-  struct ir_op *last = NULL;
+  struct ir_call_info info = func->call_info;
+
+  struct ir_op *last = sp;
   {
-    // list->gp_offset = 0
+    // list->gp_offset = <num gp registers used by named args * 8>
 
-    struct ir_op *zero =
-        ir_insert_after_op(func, sp, IR_OP_TY_CNST, IR_VAR_TY_I32);
-    ir_mk_integral_constant(func->unit, zero,
-                            IR_VAR_PRIMITIVE_TY_I32,8);
-    // ir_mk_zero_constant(func->unit, zero, &IR_VAR_TY_I32);
+    size_t gp_offset = MIN(6 * 8, info.num_gp_used * 8);
 
-    struct ir_op *store_gp_offset =
-        ir_insert_after_op(func, zero, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    DEBUG_ASSERT(gp_offset == REG_GP_USED || info.stack_size == 0,
+                 "stack used but not all gp reg?");
+
+    struct ir_op *gp_offset_value =
+        ir_insert_after_op(func, last, IR_OP_TY_CNST, IR_VAR_TY_I32);
+    ir_mk_integral_constant(func->unit, gp_offset_value,
+                            IR_VAR_PRIMITIVE_TY_I32, gp_offset);
+
+    struct ir_op *store_gp_offset = ir_insert_after_op(
+        func, gp_offset_value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
     store_gp_offset->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = zero};
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = gp_offset_value};
 
     last = store_gp_offset;
   }
 
   {
-    // list->fp_offset = REG_SAVE_FP_OFFSET
+    // list->fp_offset = REG_SAVE_FP_OFFSET + <num fp registers used by named
+    // args * 16>
+
+    size_t fp_offset =
+        REG_SAVE_FP_OFFSET + MIN(16 * 16, info.num_fp_used * 16);
+
+    DEBUG_ASSERT(fp_offset == REG_FP_USED || info.stack_size == 0,
+                 "stack used but not all fp reg?");
 
     struct ir_op *fp_offset_value =
-        ir_insert_after_op(func, sp, IR_OP_TY_CNST, IR_VAR_TY_I32);
+        ir_insert_after_op(func, last, IR_OP_TY_CNST, IR_VAR_TY_I32);
     ir_mk_integral_constant(func->unit, fp_offset_value,
-                            IR_VAR_PRIMITIVE_TY_I32, REG_SAVE_FP_OFFSET);
+                            IR_VAR_PRIMITIVE_TY_I32, fp_offset);
 
     struct ir_op *addr_fp_offset =
-        ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
+        ir_insert_after_op(func, fp_offset_value, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
     addr_fp_offset->addr_offset =
         (struct ir_op_addr_offset){.base = addr, .offset = 4};
 
@@ -781,7 +802,21 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
   }
 
   {
-    // list->overflow_arg_area = fp
+    // list->overflow_arg_area = fp + <stack space used by named args>
+
+    size_t stack_offset = info.stack_size;
+
+    struct ir_op *overflow_arg_value;
+    if (stack_offset) {
+      overflow_arg_value = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                              IR_VAR_TY_POINTER);
+      overflow_arg_value->addr_offset =
+          (struct ir_op_addr_offset){.base = sp, .offset = stack_offset};
+
+      last = overflow_arg_value;
+    } else {
+      overflow_arg_value = sp;
+    }
 
     struct ir_op *overflow_arg_addr =
         ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET, IR_VAR_TY_POINTER);
@@ -790,8 +825,10 @@ static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
 
     struct ir_op *store_overflow_arg = ir_insert_after_op(
         func, overflow_arg_addr, IR_OP_TY_STORE, IR_VAR_TY_NONE);
-    store_overflow_arg->store = (struct ir_op_store){
-        .ty = IR_OP_STORE_TY_ADDR, .addr = overflow_arg_addr, .value = sp};
+    store_overflow_arg->store =
+        (struct ir_op_store){.ty = IR_OP_STORE_TY_ADDR,
+                             .addr = overflow_arg_addr,
+                             .value = overflow_arg_value};
 
     last = store_overflow_arg;
   }
