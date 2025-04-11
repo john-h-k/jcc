@@ -786,7 +786,6 @@ static struct ir_aarch64_save_info lower_va_args_generic(struct ir_func *func) {
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
   struct ir_op *movs = func->first->first->last;
-
   struct ir_op *base = ir_insert_after_op(func, movs,
                                           IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};

@@ -533,7 +533,8 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
   // FIXME: this local must be _directly_ beneath SP but we can't easily cause that here
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
-  struct ir_op *base = ir_insert_after_op(func, func->first->first->last,
+  struct ir_op *movs = func->first->first->last;
+  struct ir_op *base = ir_insert_after_op(func, movs,
                                           IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
   base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
 
@@ -549,18 +550,20 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
                                 IR_VAR_TY_POINTER);
       addr->addr_offset =
           (struct ir_op_addr_offset){.base = base, .offset = idx * 4};
+      last = addr;
     } else {
       addr = base;
     }
 
     struct ir_op *value =
-        ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_I32);
+        ir_insert_after_op(func, movs, IR_OP_TY_MOV, IR_VAR_TY_I32);
     value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
     value->mov = (struct ir_op_mov){.value = NULL};
     value->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i};
+    movs = value;
 
     struct ir_op *save =
-        ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+        ir_insert_after_op(func, last, IR_OP_TY_STORE, IR_VAR_TY_NONE);
     save->store = (struct ir_op_store){
         .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
 
