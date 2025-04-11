@@ -507,6 +507,85 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   }
 }
 
+// FIXME: use RAX value to only save required XMM registers + more registers for
+// APX
+#define REG_SAVE_SIZE (8 * 4)
+
+static struct ir_lcl *lower_va_args(struct ir_func *func) {
+  DEBUG_ASSERT(REG_SAVE_SIZE % 4 == 0, "because we use type I32 for alignment, "
+                                       "REG_SAVE_SIZE must be divisible by 4");
+  size_t save_sz = REG_SAVE_SIZE / 4;
+
+  struct ir_var_ty *el_ty =
+      arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I32);
+  struct ir_var_ty save_ty = {.ty = IR_VAR_TY_TY_ARRAY,
+                              .array = {
+                                  // TODO: make constant ptr
+                                  .underlying = el_ty,
+                                  .num_elements = save_sz,
+                              }};
+
+  struct ir_lcl *lcl = ir_add_local(func, &save_ty);
+
+  struct ir_op *base = ir_insert_after_op(func, func->first->first->last,
+                                          IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  base->addr = (struct ir_op_addr){.ty = IR_OP_ADDR_TY_LCL, .lcl = lcl};
+
+  struct ir_op *last = base;
+
+  // need to save all the registers in args
+  for (size_t i = 0; i < 8; i++) {
+    struct ir_op *addr;
+
+    if (i) {
+      addr = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
+                                IR_VAR_TY_POINTER);
+      addr->addr_offset =
+          (struct ir_op_addr_offset){.base = base, .offset = i * 4};
+    } else {
+      addr = base;
+    }
+
+    struct ir_op *value =
+        ir_insert_after_op(func, addr, IR_OP_TY_MOV, IR_VAR_TY_I32);
+    value->flags |= IR_OP_FLAG_PARAM | IR_OP_FLAG_FIXED_REG;
+    value->mov = (struct ir_op_mov){.value = NULL};
+    value->reg = (struct ir_reg){.ty = IR_REG_TY_INTEGRAL, .idx = i};
+
+    struct ir_op *save =
+        ir_insert_after_op(func, value, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+    save->store = (struct ir_op_store){
+        .ty = IR_OP_STORE_TY_ADDR, .addr = addr, .value = value};
+
+    last = save;
+  }
+
+  return lcl;
+}
+
+static void lower_va_start(struct ir_func *func, struct ir_lcl *save_lcl,
+                           struct ir_op *op) {
+
+  struct ir_op *addr = op->va_start.list_addr;
+
+  struct ir_op *sp = ir_replace_op(func, op, IR_OP_TY_ADDR, IR_VAR_TY_POINTER);
+  sp->addr = (struct ir_op_addr){
+    .ty = IR_OP_ADDR_TY_LCL,
+    .lcl = save_lcl
+  };
+
+  struct ir_op *store = ir_insert_after_op(func, sp, IR_OP_TY_STORE, IR_VAR_TY_NONE);
+  store->store = (struct ir_op_store){
+    .ty = IR_OP_STORE_TY_ADDR,
+    .addr = addr,
+    .value = sp
+  };
+}
+
+static void lower_va_arg(UNUSED struct ir_func *func, UNUSED struct ir_op *op) {
+  TODO("x64 va_arg");
+}
+
 void rv32i_lower(struct ir_unit *unit) {
   struct ir_glb *glb = unit->first_global;
 
@@ -522,6 +601,11 @@ void rv32i_lower(struct ir_unit *unit) {
     case IR_GLB_TY_FUNC: {
       struct ir_func *func = glb->func;
 
+      struct ir_lcl *save_lcl = NULL;
+      if (func->flags & IR_FUNC_FLAG_USES_VA_ARGS) {
+        save_lcl = lower_va_args(func);
+      }
+
       struct ir_basicblock *basicblock = func->first;
       while (basicblock) {
         struct ir_stmt *stmt = basicblock->first;
@@ -531,6 +615,12 @@ void rv32i_lower(struct ir_unit *unit) {
 
           while (op) {
             switch (op->ty) {
+            case IR_OP_TY_VA_START:
+              lower_va_start(func, save_lcl, op);
+              break;
+            case IR_OP_TY_VA_ARG:
+              lower_va_arg(func, op);
+              break;
             case IR_OP_TY_BR_COND:
               lower_br_cond(func, op);
               break;
