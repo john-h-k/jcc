@@ -512,14 +512,14 @@ static void try_contain_store(struct ir_func *func, struct ir_op *op) {
   }
 }
 
-// FIXME: use RAX value to only save required XMM registers + more registers for
-// APX
-#define REG_SAVE_SIZE (8 * 4)
-
 static struct ir_lcl *lower_va_args(struct ir_func *func) {
-  DEBUG_ASSERT(REG_SAVE_SIZE % 4 == 0, "because we use type I32 for alignment, "
-                                       "REG_SAVE_SIZE must be divisible by 4");
-  size_t save_sz = REG_SAVE_SIZE / 4;
+  struct ir_call_info info = func->call_info;
+
+  size_t save_sz = ((8 - info.num_gp_used) * 4);
+
+  DEBUG_ASSERT(save_sz % 4 == 0, "because we use type I64 for alignment, "
+                                 "save_sz must be divisible by 8");
+  save_sz = save_sz / 4;
 
   struct ir_var_ty *el_ty =
       arena_alloc_init(func->arena, sizeof(*el_ty), &IR_VAR_TY_I32);
@@ -530,6 +530,7 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
                                   .num_elements = save_sz,
                               }};
 
+  // FIXME: this local must be _directly_ beneath SP but we can't easily cause that here
   struct ir_lcl *lcl = ir_add_local(func, &save_ty);
 
   struct ir_op *base = ir_insert_after_op(func, func->first->first->last,
@@ -539,14 +540,15 @@ static struct ir_lcl *lower_va_args(struct ir_func *func) {
   struct ir_op *last = base;
 
   // need to save all the registers in args
-  for (size_t i = 0; i < 8; i++) {
+  // only integer registers are used for variadics
+  for (size_t i = info.num_gp_used, idx = 0; i < 8; i++, idx++) {
     struct ir_op *addr;
 
     if (i) {
       addr = ir_insert_after_op(func, last, IR_OP_TY_ADDR_OFFSET,
                                 IR_VAR_TY_POINTER);
       addr->addr_offset =
-          (struct ir_op_addr_offset){.base = base, .offset = i * 4};
+          (struct ir_op_addr_offset){.base = base, .offset = idx * 4};
     } else {
       addr = base;
     }
