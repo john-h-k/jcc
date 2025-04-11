@@ -1,10 +1,7 @@
 #ifndef X64_H
 #define X64_H
 
-#include "disasm.h"
 #include "target.h"
-#include "x64/emit.h"
-#include "x64/lower.h"
 
 #define X64_FUNCTION_ALIGNMENT (4)
 #define X64_STACK_ALIGNMENT (16)

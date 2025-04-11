@@ -1139,7 +1139,7 @@ struct ir_op *ir_alloc_fixed_reg_source_op(struct ir_func *irb,
                                            struct ir_reg reg);
 
 void ir_mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
-                         struct ir_var_ty *var_ty);
+                         const struct ir_var_ty *var_ty);
 
 void ir_mk_floating_zero_constant(struct ir_unit *iru, struct ir_op *op,
                                   enum ir_var_primitive_ty ty);

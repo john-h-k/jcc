@@ -20,7 +20,8 @@ const struct target RV32I_LINUX_TARGET = {
     TARGET_LP_SZ_LP32,
     {
         // TODO:
-        .va_list_var_ty = &TD_VAR_TY_UNKNOWN
+        .va_list_var_ty = &TD_VAR_TY_UNKNOWN,
+        .flags = TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF
     },
     {
         .ssp = 9,

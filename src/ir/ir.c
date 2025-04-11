@@ -2094,7 +2094,7 @@ struct ir_op *ir_alloc_fixed_reg_source_op(struct ir_func *irb,
 }
 
 void ir_mk_zero_constant(struct ir_unit *iru, struct ir_op *op,
-                         struct ir_var_ty *var_ty) {
+                         const struct ir_var_ty *var_ty) {
   switch (var_ty->ty) {
   case IR_VAR_TY_TY_PRIMITIVE:
     if (ir_primitive_ty_is_fp(var_ty->primitive)) {

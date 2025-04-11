@@ -219,14 +219,23 @@ struct codegen_info {
   target_codegen codegen_end;
 };
 
-struct target_tys {
+enum target_variadic_info_flags {
+  TARGET_VARIADIC_INFO_FLAG_NONE = 0,
+
+  // e.g if `va_list` is an array, then this is true
+  // this indicates that `va_copy` must load its rhs
+  TARGET_VARIADIC_INFO_FLAG_VA_LIST_BYREF = 1 << 0,
+};
+
+struct target_variadic_info {
   const struct td_var_ty *va_list_var_ty;
+  enum target_variadic_info_flags flags;
 };
 
 struct target {
   enum target_id target_id;
   enum target_lp_sz lp_sz;
-  struct target_tys tys;
+  struct target_variadic_info variadic_info;
   struct reg_info reg_info;
   size_t function_alignment;
   mangle mangle;
